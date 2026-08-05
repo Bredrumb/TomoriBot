@@ -1,5 +1,3 @@
-// locales/ja/commands/personal.ts
-
 export default {
   personal: {
     description: `あなたの個人的な設定を管理します`,
@@ -33,7 +31,7 @@ export default {
         endpoint_url_description: `ベースURL。例: http://localhost:5001/v1。既存ラベル再利用時は任意（継承）。`,
         auth_token_description: `保護されたエンドポイント用のBearerトークン（任意）。`,
         success_title: `個人用カスタムエンドポイントを追加しました`,
-        success_description: `**{display_name}** を個人ラベル **{label}** の **{capability}** として追加しました。`,
+        success_description: `**{display_name}** を個人ラベル **{label}** の **{capability}** として追加し、個人用の現在の **{capability}** ルーティングに設定しました。`,
       },
       edit: {
         description: `登録済みの個人用カスタムエンドポイントを編集します。`,
@@ -87,7 +85,9 @@ export default {
         capability_description: `このモデルを追加するOpenRouter機能リストを選びます。`,
         model_name_description: `登録する正確なOpenRouterモデルコードネーム。`,
         success_title: `個人用OpenRouterモデルを追加しました`,
-        success_description: `OpenRouterの{capability}モデル \`{model_name}\` を個人用プロバイダー一覧に登録しました。この機能の通常のOpenRouterモデル選択に表示されます。`,
+        success_description: `OpenRouterの{capability}モデル \`{model_name}\` を個人用プロバイダー一覧に登録し、現在の個人用{capability}モデルに設定しました。`,
+        missing_provider_title: `個人用OpenRouterプロバイダーが保存されていません`,
+        missing_provider_description: `モデルは登録されましたが、個人用OpenRouterの保存済み認証情報がないため有効化できませんでした。先に \`/personal provider add\` でOpenRouterを追加してください。`,
         already_registered_title: `既に登録されています`,
         already_registered_description: `OpenRouterの{capability}モデル \`{model_name}\` は個人用プロバイダー一覧に既に登録されています。`,
         already_available_title: `最初から利用可能です`,
@@ -133,7 +133,7 @@ export default {
       },
     },
     provider: {
-      description: `あなたの個人AIプロバイダーを管理します。`,
+      description: `全サーバーで自分のリクエストに使う個人AIプロバイダーを管理します。`,
       no_saved_title: `個人プロバイダーがありません`,
       no_saved_description: `保存された個人プロバイダーがまだありません。\`/personal provider add\` で追加してください。`,
       capability_text: `テキスト`,
@@ -142,83 +142,123 @@ export default {
       capability_video: `動画`,
       capability_vision: `ビジョン`,
       model_success_title: `個人モデルを更新しました`,
+      scope_notice: `この設定はあなた自身のリクエストにのみ影響しますが、私を使うすべてのサーバーに引き継がれます。`,
+      routing_personal: `個人 / {provider}`,
+      routing_server_default: `サーバー既定`,
+      activation_confirm_title: `個人上書きを有効にしますか？`,
+      activation_confirm_description: `私を使うすべてのサーバーで、個人の **{capability}** プロバイダーが有効になります。**この設定はあなた自身のリクエストにのみ影響し、このサーバーの他のメンバーには影響しません。**あなたのリクエストは各サーバーの既定{capability}モデルではなく **{provider}** の \`{model}\` を使用します。
+
+続行しますか？`,
+      activation_confirm_continue: `はい、有効にします`,
+      activation_confirm_cancel: `いいえ、キャンセル`,
+      activation_cancelled_title: `変更はありません`,
+      activation_cancelled_description: `保存されなかったため、個人ルーティングは変更されていません。`,
       add: {
-        description: `個人用プロバイダーAPIキーを追加または更新します。`,
+        description: `APIキーを保存し、既定の個人テキストモデルを全サーバーで有効化します。`,
         modal_title: `個人プロバイダーを追加`,
         provider_label: `プロバイダー`,
-        provider_description: `自分用に保存するプロバイダーを選択してください。`,
+        provider_description: `全サーバーで自分のリクエストに使うプロバイダーを選択してください。`,
         provider_placeholder: `プロバイダーを選択...`,
         api_key_label: `APIキー`,
-        api_key_description: `あなたのメッセージに使うAPIキーを入力してください。`,
+        api_key_description: `あなた自身のリクエストにのみ使用するAPIキーです。他の人には使われません。`,
         api_key_placeholder: `APIキーを貼り付け`,
         already_existing_suffix: `保存済み`,
         custom_deprecated_description: `/personal custom-endpoint add に移動しました。リダイレクト案内を見るときだけ選択してください。`,
         custom_moved_title: `カスタムエンドポイントは移動しました`,
         custom_moved_description: `旧来のカスタムエンドポイント用プロバイダーフローは非推奨です。{custom_models_add_command} でエンドポイントを登録し、{model_text_command} で有効化してください。更新後の案内は {help_custom_models_command} を参照してください。`,
         success_title: `個人プロバイダーを保存しました`,
-        success_description: `{provider} を個人プロバイダー保管庫に追加しました。次に \`/personal provider toggle-models\` でモデル選択と有効化を行ってください。`,
-        updated_description: `{provider} の個人プロバイダー設定を更新しました。`,
+        success_description: `{provider} を個人プロバイダー保管庫に追加し、個人の **テキスト** 上書きを \`{model_name}\` で有効にしました。
+
+{scope_notice}
+
+どの機能で個人上書きを使うかは \`/personal provider toggle-models\` で選択できます。`,
+        updated_description: `{provider} の個人プロバイダー設定を更新し、個人の **テキスト** 上書きを \`{model_name}\` で有効にしました。
+
+{scope_notice}`,
+        rotated_description: `保存済みの {provider} 認証情報を更新しました。個人の **テキスト** 上書きは \`{model_name}\` のまま有効です。
+
+{scope_notice}`,
       },
       remove: {
-        description: `保存済みの個人プロバイダーを削除します。`,
+        description: `全サーバー共通の個人プロバイダー設定を削除します。`,
         no_saved_title: `個人プロバイダーがありません`,
         no_saved_description: `削除できる個人プロバイダーがありません。`,
         picker_title: `個人プロバイダーを削除`,
-        picker_description: `削除する個人プロバイダーを選択してください。`,
+        picker_description: `削除する個人プロバイダーを選択してください。このサーバーだけでなく全サーバーから削除されます。`,
         success_title: `個人プロバイダーを削除しました`,
-        success_description: `個人 {provider} 設定を削除しました。`,
+        success_description: `個人 {provider} 設定を全サーバーから削除しました。担当していた機能は各サーバーの既定に戻ります（そのサーバーが個人プロバイダーを必須にしている場合を除く）。`,
       },
       "model-text": {
-        description: `個人プロバイダーのテキストモデルを選択します。`,
+        description: `全サーバーで使う個人テキストモデルを選択して有効化します。`,
       },
       "model-embedding": {
-        description: `個人プロバイダーの埋め込みモデルを選択します。`,
+        description: `全サーバーで使う個人埋め込みモデルを選択して有効化します。`,
       },
       "model-image": {
-        description: `個人プロバイダーの画像モデルを選択します。`,
+        description: `全サーバーで使う個人画像モデルを選択して有効化します。`,
       },
       "model-video": {
-        description: `個人プロバイダーの動画モデルを選択します。`,
+        description: `全サーバーで使う個人動画モデルを選択して有効化します。`,
       },
       "model-vision": {
-        description: `個人プロバイダーのビジョンモデルを選択します。`,
+        description: `全サーバーで使う個人ビジョンモデルを選択して有効化します。`,
       },
       model_text: {
-        success_description: `個人テキストプロバイダーを {provider} の \`{model}\` に設定しました。`,
+        success_description: `**テキスト** は個人の {provider} プロバイダー（\`{model}\`）にルーティングされます。
+
+{scope_notice}`,
       },
       model_embedding: {
-        success_description: `個人埋め込みプロバイダーを {provider} の \`{model}\` に設定しました。`,
+        success_description: `**埋め込み** は個人の {provider} プロバイダー（\`{model}\`）にルーティングされます。
+
+{scope_notice}`,
       },
       model_image: {
-        success_description: `個人画像プロバイダーを {provider} の \`{model}\` に設定しました。`,
+        success_description: `**画像** は個人の {provider} プロバイダー（\`{model}\`）にルーティングされます。
+
+{scope_notice}`,
       },
       model_video: {
-        success_description: `個人動画プロバイダーを {provider} の \`{model}\` に設定しました。`,
+        success_description: `**動画** は個人の {provider} プロバイダー（\`{model}\`）にルーティングされます。
+
+{scope_notice}`,
       },
       model_vision: {
-        success_description: `個人ビジョンプロバイダーを {provider} の \`{model}\` に設定しました。`,
+        success_description: `**ビジョン** は個人の {provider} プロバイダー（\`{model}\`）にルーティングされます。
+
+{scope_notice}`,
       },
       "toggle-models": {
-        description: `どの機能で個人プロバイダーを使うか切り替えます。`,
+        description: `どの機能でサーバー既定ではなく個人プロバイダーを使うか選択します。`,
         modal_title: `個人プロバイダー機能の切り替え`,
         group_label: `機能`,
-        group_description: `個人プロバイダーへルーティングしたい機能をチェックしてください。`,
+        group_description: `チェックした機能は全サーバーで個人上書きになります。チェックを外した機能は各サーバーの既定に戻ります。`,
         provider_description: `割り当てプロバイダー: {provider}`,
-        none_set_description: `未設定 — 先にモデルを選択してください`,
+        none_set_description: `サーバー既定。\`/personal provider model-\` でモデルを選ぶと個人上書きが有効になります。`,
         missing_model_title: `モデルが必要です`,
         missing_model_description: `{capability} にはまだ個人モデルが設定されていません。`,
         success_title: `個人ルーティングを更新しました`,
         success_description: `個人機能のルーティングを更新しました。
 
-{active_summary}`,
+{active_summary}
+
+{scope_notice}`,
+        confirm_title: `個人上書きを有効にしますか？`,
+        confirm_description: `私を使うすべてのサーバーで、次の機能がサーバー既定から個人プロバイダーへ切り替わります。**この設定はあなた自身のリクエストにのみ影響し、このサーバーの他のメンバーには影響しません:**
+
+{newly_enabled}
+
+続行しますか？`,
       },
     },
     model: {
-      description: `個人モデルのフェイルオーバーを管理します。`,
+      description: `個人プロバイダー上書きのモデル設定を管理します。`,
       fallback: {
-        description: `有効な個人テキストプロバイダーのフォールバックモデルを設定し、なしで各スロットをクリアできます。`,
+        description: `個人テキスト上書きのフォールバックモデルを設定し、なしで各スロットをクリアできます。`,
         no_provider_title: `有効な個人テキストプロバイダーがありません`,
-        no_provider_description: `先に \`/personal provider model-text\` と \`/personal provider toggle-models\` で個人テキストプロバイダーを有効化してください。`,
+        no_provider_description: `先に \`/personal provider add\` または \`/personal provider model-text\` で個人テキスト上書きを有効化してください。`,
+        primary_conflict_title: `選択が無効です`,
+        primary_conflict_description: `選択したフォールバックモデルの一つ以上が、このプロバイダーの個人プライマリモデル \`{model}\` と一致しています。別のモデルを選択してください。`,
         success_title: `個人フォールバックを更新しました`,
         success_description: `個人 {provider} テキストプロバイダーのフォールバックモデルを更新しました。
 
@@ -228,12 +268,14 @@ export default {
       },
     },
     parameters: {
-      description: `個人プロバイダーのサンプラー設定を調整します。`,
+      description: `このサーバーではなく、個人プロバイダーのサンプラー設定を調整します。`,
       provider_description: `任意: 保存済みの個人プロバイダーを選択します。未指定の場合は有効な個人テキストプロバイダーを使用します。`,
       no_provider_title: `個人プロバイダーが選択されていません`,
       no_provider_description: `先に個人プロバイダーを保存するか、個人テキストプロバイダーを有効化してください。`,
       success_title: `個人サンプラーを更新しました`,
-      success_description: `{provider} の個人サンプラー設定を更新しました: {settings}`,
+      success_description: `{provider} の個人サンプラー設定を更新しました: {settings}
+
+これらのサンプラーは全サーバーであなた自身のリクエストにのみ適用されます。このサーバーの設定は変更されていません。`,
     },
     config: {
       description: `個人設定データを管理します。`,
@@ -284,6 +326,20 @@ export default {
       already_set_description: `あなたの言語設定は既に \`{value}\` に設定されています。`,
       success_title: `言語が更新されました`,
       success_description: `あなたのインターフェース言語が \`{previous_value}\` から \`{value}\` に変更されました。`,
+    },
+    timezone: {
+      description: `UTCからの個人タイムゾーンオフセットを設定します。`,
+      value_description: `UTCオフセット（時間、-12〜+14）。省略すると個人タイムゾーンをクリアします。`,
+      already_set_title: `変更はありません`,
+      already_set_description: `あなたの個人タイムゾーンは既に \`{timezone}\` に設定されています。`,
+      already_cleared_title: `タイムゾーン未設定`,
+      already_cleared_description: `現在、個人タイムゾーンは設定されていません。`,
+      cleared_title: `個人タイムゾーンをクリアしました`,
+      cleared_description: `個人タイムゾーンをクリアしました。サーバーのタイムゾーンを使用します。`,
+      success_title: `個人タイムゾーンが更新されました`,
+      success_description: `あなたの個人タイムゾーンが \`{previous_timezone}\` から \`{timezone}\` に変更されました。`,
+      success_new_title: `個人タイムゾーンを設定しました`,
+      success_new_description: `あなたの個人タイムゾーンが \`{timezone}\` に設定されました。`,
     },
     nickname: {
       description: `私があなたを呼ぶ名前を変更します。`,

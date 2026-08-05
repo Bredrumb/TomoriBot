@@ -9,10 +9,13 @@ interface Issue {
 const issueList: Issue[] = [];
 
 // Intentional export exclusions: these tables hold resettable telemetry/counters,
-// not portable server/persona configuration.
+// not portable server/persona configuration. stat_counters is the same class of
+// high-frequency runtime telemetry (it omits the `_runtime_state` suffix only
+// because it is a per-day counter table, not a single-row state row).
 const RUNTIME_STATE_EXPORT_EXCLUDED_TABLES = new Set([
   "api_key_rotation_runtime_state",
   "persona_autoch_runtime_state",
+  "stat_counters",
 ]);
 
 function addIssue(check: string, message: string): void {
@@ -204,8 +207,13 @@ function extractObjectKeysFromBody(body: string): Set<string> {
   return keys;
 }
 
+function findConstDeclarationIndex(content: string, name: string, initializerPattern = ""): number {
+  const declaration = new RegExp(`(?:export\\s+)?const\\s+${name}\\s*=\\s*${initializerPattern}`).exec(content);
+  return declaration?.index ?? -1;
+}
+
 function extractDirectZodObjectKeys(content: string, exportName: string): Set<string> | null {
-  const declarationIndex = content.indexOf(`export const ${exportName} = z.object(`);
+  const declarationIndex = findConstDeclarationIndex(content, exportName, "z\\.object\\(");
   if (declarationIndex === -1) return null;
 
   const openIndex = content.indexOf("{", declarationIndex);
@@ -224,7 +232,7 @@ function extractDirectZodObjectKeys(content: string, exportName: string): Set<st
 }
 
 function extractComposedZodObjectKeys(content: string, exportName: string, seen: Set<string>): Set<string> | null {
-  const declarationIndex = content.indexOf(`export const ${exportName} =`);
+  const declarationIndex = findConstDeclarationIndex(content, exportName);
   if (declarationIndex === -1) return null;
 
   const statementEnd = findStatementEnd(content, declarationIndex);
@@ -287,7 +295,7 @@ function extractZodObjectKeys(content: string, exportName: string, seen = new Se
   const composedKeys = extractComposedZodObjectKeys(content, exportName, seen);
   if (composedKeys) return composedKeys;
 
-  addIssue("zod-schema", `Could not find exported Zod object ${exportName}`);
+  addIssue("zod-schema", `Could not find Zod object ${exportName}`);
   return new Set();
 }
 
@@ -740,11 +748,11 @@ function checkRuntimeStateExportExclusions(schemaSql: string): void {
  * where column growth is justified by their access pattern.
  *
  * Exemptions:
- *   server_capabilities_configs — uniform boolean cluster iterated by
+ *   server_capabilities_configs: uniform boolean cluster iterated by
  *     PERMISSION_DEFINITIONS array; growth is structurally uniform.
- *   saved_provider_configs — atomic snapshot table; all columns are written
+ *   saved_provider_configs: atomic snapshot table; all columns are written
  *     together as a unit by /server save-provider.
- *   server_chat_configs — aggregate /config + /model parameter surface;
+ *   server_chat_configs: aggregate /config + /model parameter surface;
  *     each column maps to exactly one command option knob.
  */
 async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void> {
@@ -775,7 +783,6 @@ async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void>
         continue;
       }
 
-      // End of CREATE TABLE body
       if (trimmed === ");") {
         if (!EXEMPT_TABLES.has(currentTable) && columnCount > COLUMN_THRESHOLD) {
           console.warn(
@@ -789,7 +796,6 @@ async function checkConfigsColumnThreshold(migrationsDir: string): Promise<void>
       }
 
       if (!trimmed || trimmed.startsWith("--")) continue;
-      // Skip SQL constraint-level lines (not column definitions)
       if (/^(CONSTRAINT|PRIMARY\s+KEY|UNIQUE\b|CHECK\s*\(|FOREIGN\s+KEY)/i.test(trimmed)) continue;
 
       columnCount++;

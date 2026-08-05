@@ -139,7 +139,7 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_1) contains an image. Current model cannot see images, please do not describe or claim to see the image contents. The media ID can still be used with tools that accept media references.]",
+      text: '[System: This message (ID: media_1) contains an image. Current model cannot see images, please do not describe or claim to see the image contents. If you need to see images, tell the user to setup `/model vision` or to use a different model with the "vision" capability. The media ID can still be used with tools that accept media references.]',
     });
   });
 
@@ -153,7 +153,7 @@ describe("resolveMediaForModel", () => {
     expect(resolved[0].parts[1].type).toBe("text");
   });
 
-  test("uses the increase_media_context hint for viewable out-of-window media", async () => {
+  test("points at the reply escape hatch for viewable out-of-window media", async () => {
     const base = [
       imageItem({
         parts: [{ type: "text", text: "Alice: old photo" }],
@@ -164,7 +164,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "image/png",
             mediaId: "media_4",
             withinWindow: false,
-            extendBy: 7,
             filename: "old.png",
           },
         ],
@@ -175,12 +174,12 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_4) contained 1 image - use increase_media_context with extend_by=7 to view]",
+      text: "[System: This message (ID: media_4) contained 1 image, but it is outside the current media context window. Ask the user to reply to that message if you need to see it. The media ID can still be used with tools that accept media references.]",
     });
     expect(resolved[0].parts[1]).toEqual({ type: "text", text: "Alice: old photo" });
   });
 
-  test("uses the increase_media_context hint for viewable out-of-window videos", async () => {
+  test("points at the reply escape hatch for viewable out-of-window videos", async () => {
     const base = [
       videoItem({
         parts: [{ type: "text", text: "Alice: old clip" }],
@@ -191,7 +190,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "video/mp4",
             mediaId: "media_9",
             withinWindow: false,
-            extendBy: 3,
             filename: "old.mp4",
           },
         ],
@@ -202,7 +200,7 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_9) contained 1 video - use increase_media_context with extend_by=3 to view]",
+      text: "[System: This message (ID: media_9) contained 1 video, but it is outside the current media context window. Ask the user to reply to that message if you need to see it. The media ID can still be used with tools that accept media references.]",
     });
     expect(resolved[0].parts[1]).toEqual({ type: "text", text: "Alice: old clip" });
   });
@@ -284,7 +282,7 @@ describe("resolveMediaForModel", () => {
 
     expect(resolved[0].parts[0]).toEqual({
       type: "text",
-      text: "[System: This message (ID: media_10) contains a GIF. Current model cannot see images, please do not describe or claim to see the image contents. The media ID can still be used with tools that accept media references.]",
+      text: '[System: This message (ID: media_10) contains a GIF. Current model cannot see images, please do not describe or claim to see the image contents. If you need to see images, tell the user to setup `/model vision` or to use a different model with the "vision" capability. The media ID can still be used with tools that accept media references.]',
     });
   });
 

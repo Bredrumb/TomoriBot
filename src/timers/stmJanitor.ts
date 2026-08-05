@@ -8,10 +8,10 @@
  *
  * The janitor is intentionally lightweight: one DELETE per run, triggered by
  * a setInterval on the existing timer infrastructure. It does NOT touch the
- * in-process cache — those entries expire via the normal TTL path.
+ * in-process cache: those entries expire via the normal TTL path.
  */
 
-import { sql } from "@/utils/db/client";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { log } from "@/utils/misc/logger";
 
 const STM_JANITOR_RETENTION_DAYS = Number.parseInt(process.env.STM_JANITOR_RETENTION_DAYS || "90", 10);
@@ -22,25 +22,12 @@ const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 let intervalId: NodeJS.Timeout | null = null;
 
 /**
- * Deletes short_term_memories rows that have not been updated within the
- * configured retention window. Returns the number of rows deleted.
- */
-async function runPurge(): Promise<number> {
-  const rows = await sql`
-    DELETE FROM short_term_memories
-    WHERE updated_at < NOW() - (${STM_JANITOR_RETENTION_DAYS} || ' days')::INTERVAL
-    RETURNING stm_id
-  `;
-  return rows.length;
-}
-
-/**
  * Runs one janitor cycle, logging the outcome.
  * Errors are caught so a failed purge never kills the interval.
  */
 async function tick(): Promise<void> {
   try {
-    const deleted = await runPurge();
+    const deleted = await shortTermMemoryRepository.purgeStaleEntries(STM_JANITOR_RETENTION_DAYS);
     if (deleted > 0) {
       log.info(`[STM janitor] Purged ${deleted} stale short_term_memories row${deleted === 1 ? "" : "s"}`);
     }
@@ -50,7 +37,7 @@ async function tick(): Promise<void> {
 }
 
 /**
- * Starts the STM janitor interval. Safe to call multiple times — subsequent
+ * Starts the STM janitor interval. Safe to call multiple times: subsequent
  * calls are no-ops if already running.
  *
  * @param intervalMs - Optional override; defaults to once per day.
@@ -73,9 +60,6 @@ export function initializeStmJanitor(intervalMs?: number): void {
   );
 }
 
-/**
- * Stops the STM janitor interval. No-op if not running.
- */
 export function stopStmJanitor(): void {
   if (intervalId !== null) {
     clearInterval(intervalId);

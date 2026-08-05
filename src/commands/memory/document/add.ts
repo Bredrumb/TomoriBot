@@ -41,7 +41,6 @@ const DEFAULT_DOCUMENT_SCOPE: DocumentScope = "persona";
 const DOCUMENT_PERSONA_MODAL_ID = "teach_document_persona_modal";
 const DOCUMENT_PERSONA_SELECT_ID = "persona_select";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("add")
@@ -110,7 +109,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -138,7 +136,6 @@ export async function execute(
       return;
     }
 
-    // 2. Check memory guard
     const memCheck = memoryGuard.checkMemory();
     if (memCheck.status === "critical") {
       await interaction.reply({
@@ -153,23 +150,6 @@ export async function execute(
       return;
     }
 
-    // 3. Reserve document quota (per-user)
-    const quotaReserve = reserveDocumentQuota(interaction.user.id);
-    if (!quotaReserve.allowed) {
-      const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "rate_limit.error_quota_exceeded_title",
-        descriptionKey: "rate_limit.error_quota_exceeded_description",
-        descriptionVars: {
-          reset_time: resetTime,
-        },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    // 4. Check blacklist for guild contexts
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (interaction.guild) {
       const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
@@ -184,7 +164,6 @@ export async function execute(
       }
     }
 
-    // 5. Load server's Tomori state
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -198,7 +177,7 @@ export async function execute(
     const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
     tomoriState = overlayResult.tomoriState;
 
-    // 6. Check teaching permission (reuse server memory setting)
+    // Check teaching permission (reuse server memory setting)
     if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.teach.document.teaching_disabled_title",
@@ -209,7 +188,6 @@ export async function execute(
       return;
     }
 
-    // 7. Validate embedding model configuration
     let embeddingCreds: ResolvedCredentials;
     try {
       embeddingCreds = await resolveCapabilityCredentials(tomoriState.server_id, "embedding", {
@@ -262,7 +240,6 @@ export async function execute(
       return;
     }
 
-    // 8. Validate document name and parse optional channel tags
     const nameInput = interaction.options.getString("name", true).trim();
     const channelsInput = interaction.options.getString("channels");
     const channelTags: string[] = channelsInput
@@ -291,7 +268,6 @@ export async function execute(
       return;
     }
 
-    // 9. Resolve document scope
     const scopeInput = interaction.options.getString("scope");
     const scope: DocumentScope = scopeInput === "serverwide" ? "serverwide" : DEFAULT_DOCUMENT_SCOPE;
     let scopeLabel = localizer(locale, "commands.teach.document.scope_label_serverwide");
@@ -366,7 +342,6 @@ export async function execute(
       });
     }
 
-    // 10. Check duplicate document name in selected scope
     const duplicateExists = await serverMemoryRepository.documentExistsByName(
       tomoriState.server_id,
       targetPersonaId,
@@ -383,7 +358,6 @@ export async function execute(
       return;
     }
 
-    // 11. Enforce document count limit for selected scope
     const docCount = await serverMemoryRepository.countDocumentsScoped(tomoriState.server_id, targetPersonaId);
     if (docCount >= memoryLimits.maxDocumentsPerServer) {
       await replyInfoEmbed(responseInteraction, locale, {
@@ -529,6 +503,24 @@ export async function execute(
             )
             .setColor(ColorCode.ERROR),
         ],
+      });
+      return;
+    }
+
+    // Reserve document quota now that all validation has passed: earlier placement
+    // would burn the user's daily slot on credential/limit errors that never produce
+    // a document.
+    const quotaReserve = reserveDocumentQuota(interaction.user.id);
+    if (!quotaReserve.allowed) {
+      const resetTime = quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown";
+      await replyInfoEmbed(responseInteraction, locale, {
+        titleKey: "rate_limit.error_quota_exceeded_title",
+        descriptionKey: "rate_limit.error_quota_exceeded_description",
+        descriptionVars: {
+          reset_time: resetTime,
+        },
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }

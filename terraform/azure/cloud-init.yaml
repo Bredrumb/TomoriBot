@@ -1,0 +1,57 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+write_files:
+  - path: /usr/local/sbin/tomoribot-setup-swap.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      if ! grep -qE '^/swapfile\s+' /etc/fstab; then
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+      fi
+
+      if [ ! -f /swapfile ]; then
+        fallocate -l 3G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=3072
+        chmod 600 /swapfile
+        mkswap /swapfile
+      fi
+
+      if ! swapon --show=NAME --noheadings | grep -qx '/swapfile'; then
+        swapon /swapfile
+      fi
+  - path: /etc/sysctl.d/99-tomoribot-swap.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      vm.swappiness=20
+  - path: /etc/docker/daemon.json
+    owner: root:root
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        },
+        "live-restore": true,
+        "no-new-privileges": true
+      }
+
+runcmd:
+  - mkdir -p /etc/tomoribot
+  - chmod 0700 /etc/tomoribot
+  - /usr/local/sbin/tomoribot-setup-swap.sh
+  - sysctl --system
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/docker.asc
+  - gpg --dearmor -o /etc/apt/keyrings/docker.gpg /tmp/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.gpg
+  - bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list'
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq ufw
+  - systemctl enable --now docker

@@ -1,5 +1,3 @@
-// locales/en-US/commands/tool.ts
-
 export default {
   tool: {
     ping: {
@@ -148,9 +146,9 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       add_to_docs_error_description: `Could not save the summary to document memory.`,
     },
     refresh: {
-      description: `Clears the recent conversation history.`,
+      description: `Clear conversation history (this channel only).`,
       title: `🧹 Conversation History Cleared`,
-      response: `All messages above this one will now be ignored.\n This channel's STM has also been cleared.`,
+      response: `All messages above this one will now be ignored.\n This channel's [STM](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm) has also been cleared.`,
       footer: `Delete this embed to allow older messages above to be included again.`,
     },
     status: {
@@ -321,6 +319,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       field_user_byok_enabled: `Enabled. Members need their own personal provider for user-triggered messages. Toggle with {toggle_command}.`,
       field_user_byok_disabled: `Disabled. User-triggered messages can still fall back to the server provider. Toggle with {toggle_command}.`,
       field_tool_use: `Tool Use`,
+      field_verbatim_tool_calling: `Verbatim Tool-Calling`,
       field_prompt_snapshot: `Prompt Snapshot`,
       field_short_term_memory: `Short-Term Memory`,
       field_stm_privacy_bypass: `STM Privacy Bypass`,

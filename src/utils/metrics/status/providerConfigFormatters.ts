@@ -3,7 +3,7 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { formatConfiguredEntryNames } from "@/utils/metrics/providerStats";
 
-export function getOptionalApiServiceDisplayName(serviceName: string, locale: string): string {
+function getOptionalApiServiceDisplayName(serviceName: string, locale: string): string {
   switch (serviceName) {
     case "brave-search":
       return localizer(locale, "commands.tool.status.optional_api_service_brave");
@@ -19,7 +19,7 @@ export function formatOptionalApiKeys(serviceNames: string[], locale: string): s
   return formatConfiguredEntryNames(labels, locale);
 }
 
-export function getHiddenNoticeLabels(hiddenKeys: readonly string[], locale: string): string[] {
+function getHiddenNoticeLabels(hiddenKeys: readonly string[], locale: string): string[] {
   return hiddenKeys
     .map((key) => {
       const definition = TOOL_NOTICE_DEFINITIONS.find((entry) => entry.key === key);

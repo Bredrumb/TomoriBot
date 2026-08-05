@@ -1,5 +1,6 @@
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
+import { normalizeZaiRequestSamplingParams } from "@/providers/zai/zaiRequestParams";
 import { buildZaiThinkingRequest } from "@/utils/provider/thinkingControl";
 
 export interface ZaiStreamConfig extends OpenAICompatibleStreamConfig {
@@ -35,13 +36,14 @@ export class ZaiStreamAdapter extends OpenAICompatibleStreamAdapter {
           delete requestBody.presence_penalty;
           delete requestBody.frequency_penalty;
         }
+        normalizeZaiRequestSamplingParams(requestBody);
 
-        // 2. Enable tool streaming when tools are present
+        // Enable tool streaming when tools are present
         if (Array.isArray(requestBody.tools) && requestBody.tools.length > 0) {
           requestBody.tool_stream = true;
         }
 
-        // 3. Assistant prefix-completion is applied by the shared seam in
+        // Assistant prefix-completion is applied by the shared seam in
         //    OpenAICompatibleStreamAdapter (providerRequiresPrefixCompletion → "zai").
       },
     });

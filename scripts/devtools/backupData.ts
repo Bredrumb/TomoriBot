@@ -1,17 +1,16 @@
 import { sql } from "bun";
 import { log } from "@/utils/misc/logger";
 import { config } from "dotenv";
-import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { resolveBackupsRoot, runDataBackup } from "@/utils/backup/dataBackup";
+import { existsSync, copyFileSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 config();
 
-// ---------------------------------------------------------------------------
 // scripts/devtools/backupData.ts
 //   bun run backup                            → create a bundle in backups/
 //   bun run restore-backup --latest           → restore from the newest bundle
 //   bun run restore-backup --from <dir>       → restore from a specific bundle
-// ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
 const mode = args[0];
@@ -26,9 +25,6 @@ if (mode !== "--backup" && mode !== "--restore") {
   process.exit(1);
 }
 
-// ---------------------------------------------------------------------------
-// Shared helper: build DATABASE_URL from .env vars
-// ---------------------------------------------------------------------------
 
 async function runExternalCommand(
   command: string,
@@ -48,10 +44,6 @@ async function runExternalCommand(
 
 function resolveEnvPath(): string {
   return process.env.TOMORI_ENV_FILE ? resolve(process.env.TOMORI_ENV_FILE) : join(process.cwd(), ".env");
-}
-
-function resolveBackupsRoot(): string {
-  return process.env.TOMORI_BACKUP_DIR ? resolve(process.env.TOMORI_BACKUP_DIR) : join(process.cwd(), "backups");
 }
 
 /**
@@ -76,89 +68,11 @@ function resolveDatabaseUrl(): string {
   return `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-// ---------------------------------------------------------------------------
-// --backup mode
-// ---------------------------------------------------------------------------
 
-/**
- * Creates a timestamped transfer bundle containing:
- *   - database.sql   — full pg_dump of the current database
- *   - config.env     — copy of the current .env file
- *   - bundle_info.json — metadata for validation on restore
- *
- * Output directory: backups/backup_YYYY-MM-DD_HH-MM-SS/
- */
 async function runBackup(): Promise<void> {
-  log.section("📦 TRANSFER BACKUP");
-  log.info("Creating a migration bundle with your database and config...");
-
-  // 1. Locate the .env file
-  const envPath = resolveEnvPath();
-  if (!existsSync(envPath)) {
-    log.error(`Environment file not found: ${envPath}. Cannot bundle config.`);
-    process.exit(1);
-  }
-
-  // 2. Create the backups/ output directory
-  const backupsRoot = resolveBackupsRoot();
-  if (!existsSync(backupsRoot)) {
-    mkdirSync(backupsRoot, { recursive: true });
-  }
-
-  // 3. Build a timestamped bundle directory name
-  const timestamp = new Date().toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_");
-  const bundleDir = join(backupsRoot, `backup_${timestamp}`);
-  mkdirSync(bundleDir, { recursive: true });
-
-  const dbDumpPath = join(bundleDir, "database.sql");
-  const envBackupPath = join(bundleDir, "config.env");
-  const manifestPath = join(bundleDir, "bundle_info.json");
-
-  log.info(`Bundle directory: ${bundleDir}`);
-
-  // 4. Dump the database
-  const dbUrl = resolveDatabaseUrl();
-  log.info("Running pg_dump...");
-  try {
-    await runExternalCommand("pg_dump", [dbUrl, "--clean", "--if-exists", "-f", dbDumpPath]);
-    log.success("Database dump completed.");
-  } catch (_error) {
-    log.error("pg_dump failed. Ensure pg_dump is installed and in your PATH.");
-    log.info("  Windows: install PostgreSQL from https://www.postgresql.org/download/windows/");
-    log.info("  macOS:   brew install postgresql");
-    log.info("  Linux:   sudo apt-get install postgresql-client");
-    process.exit(1);
-  }
-
-  // 5. Copy .env
-  copyFileSync(envPath, envBackupPath);
-  log.success("Config (.env) copied.");
-
-  // 6. Write bundle manifest
-  const { version } = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8")) as {
-    version: string;
-  };
-  const manifest = {
-    createdAt: new Date().toISOString(),
-    botVersion: version,
-    files: ["database.sql", "config.env"],
-  };
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-
-  log.section("✅ Bundle Created!");
-  log.info(`Location:    ${bundleDir}`);
-  log.info("Contents:");
-  log.info("  database.sql     — PostgreSQL dump (restore with: bun run restore-backup)");
-  log.info("  config.env       — Copy of your .env (review before restoring!)");
-  log.info("  bundle_info.json — Bundle metadata");
-  log.info("");
-  log.info("To restore on a new install:");
-  log.info(`  bun run restore-backup --from ${bundleDir}`);
+  await runDataBackup({ backupType: "manual" });
 }
 
-// ---------------------------------------------------------------------------
-// --restore mode
-// ---------------------------------------------------------------------------
 
 /**
  * Restores a TomoriBot install from a transfer bundle created by --backup.
@@ -175,12 +89,13 @@ async function runBackup(): Promise<void> {
 async function runRestore(bundlePath: string): Promise<void> {
   log.section("♻️ TRANSFER RESTORE");
 
-  // 1. Ensure DATABASE_URL is set so the sql tag can connect for the pre-restore check
-  if (!process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = resolveDatabaseUrl();
-  }
+  // Resolve and pin the target before restoring config from the source bundle.
+  // The bundled config may contain source-machine POSTGRES_* values, but both the
+  // preflight query and psql must continue targeting the database selected when
+  // this process started (including values injected by runWithSecrets.ts).
+  const targetDatabaseUrl = resolveDatabaseUrl();
+  process.env.DATABASE_URL = targetDatabaseUrl;
 
-  // 2. Validate bundle directory
   const bundleDir = resolve(bundlePath);
   if (!existsSync(bundleDir)) {
     log.error(`Bundle directory not found: ${bundleDir}`);
@@ -203,7 +118,6 @@ async function runRestore(bundlePath: string): Promise<void> {
     }
   }
 
-  // 2. Show bundle manifest
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
     createdAt: string;
     botVersion: string;
@@ -212,7 +126,6 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.info(`Bot version:    ${manifest.botVersion}`);
   log.info(`Bundle path:    ${bundleDir}`);
 
-  // 3. Check whether the target database already has tables
   const existingTables = await sql<{ tablename: string }[]>`
 		SELECT tablename FROM pg_tables WHERE schemaname = 'public'
 	`;
@@ -251,7 +164,6 @@ async function runRestore(bundlePath: string): Promise<void> {
     log.info("Proceeding with forced restore into non-empty database...");
   }
 
-  // 4. Warn about remaining side effects and ask for final confirmation
   log.section("⚠️ WARNING — Read before continuing");
   log.info("Restoring will:");
   log.info("  1. Overwrite your local .env with the bundled config.env.");
@@ -279,11 +191,9 @@ async function runRestore(bundlePath: string): Promise<void> {
     process.exit(0);
   }
 
-  // 4. Restore .env
   const localEnvPath = resolveEnvPath();
   const envAlreadyExists = existsSync(localEnvPath);
   if (envAlreadyExists) {
-    // Back up existing .env before overwriting
     const backupEnvPath = `${localEnvPath}.bak`;
     copyFileSync(localEnvPath, backupEnvPath);
     log.info(`Existing environment file backed up to: ${backupEnvPath}`);
@@ -291,15 +201,19 @@ async function runRestore(bundlePath: string): Promise<void> {
   copyFileSync(envBackupPath, localEnvPath);
   log.success(".env restored from bundle.");
 
-  // Re-load env so DATABASE_URL picks up the restored values
-  config({ override: true });
-
-  // 5. Restore database
-  const dbUrl = resolveDatabaseUrl();
   log.info("Restoring database from dump (running psql)...");
   try {
     const nullDevice = process.platform === "win32" ? "NUL" : "/dev/null";
-    await runExternalCommand("psql", ["--quiet", "-o", nullDevice, dbUrl, "-v", "ON_ERROR_STOP=1", "-f", dbDumpPath]);
+    await runExternalCommand("psql", [
+      "--quiet",
+      "-o",
+      nullDevice,
+      targetDatabaseUrl,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-f",
+      dbDumpPath,
+    ]);
     log.success("Database restored successfully.");
   } catch (_error) {
     log.error("psql restore failed. Ensure psql is installed and in your PATH.");
@@ -312,13 +226,10 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.section("✅ Restore Complete!");
   log.info("Next steps:");
   log.info("  1. Update POSTGRES_*, DISCORD_TOKEN, and CRYPTO_SECRET in .env if they differ on this machine.");
-  log.info("  2. Run `bun install` to ensure dependencies are up to date.");
+  log.info("  2. Run `bun install --frozen-lockfile` to restore the locked dependencies.");
   log.info("  3. Start the bot with `bun run dev` or `bun run start`.");
 }
 
-// ---------------------------------------------------------------------------
-// --latest helper: resolve the most recent bundle in backups/
-// ---------------------------------------------------------------------------
 
 /**
  * Scans the backups/ directory and returns the path of the most recently
@@ -335,7 +246,6 @@ function resolveLatestBundle(): string {
     process.exit(1);
   }
 
-  // Filter to only transfer_* subdirectories and sort descending by name
   const bundles = readdirSync(backupsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.startsWith("backup_"))
     .map((entry) => entry.name)
@@ -352,16 +262,12 @@ function resolveLatestBundle(): string {
   return latest;
 }
 
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
 
 let entryPromise: Promise<void>;
 
 if (mode === "--backup") {
   entryPromise = runBackup();
 } else {
-  // --restore mode: accept either --latest or --from <dir>
   const useLatest = args.includes("--latest");
   const fromIndex = args.indexOf("--from");
 

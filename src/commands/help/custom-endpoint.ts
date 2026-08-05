@@ -1,9 +1,8 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, UserRow } from "@/types/db/schema";
-import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
-import { replyPaginatedStatusPages } from "@/utils/discord/ui/statusComponents";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -42,6 +41,7 @@ export async function execute(
       await replySummaryEmbed(interaction, locale, {
         titleKey: "commands.help.custom_models.title",
         descriptionKey: "commands.help.custom_models.description_body",
+        docsPath: DOCS_PATHS.CUSTOM_ENDPOINTS,
         color: ColorCode.INFO,
         fields: [
           {
@@ -62,20 +62,10 @@ export async function execute(
           },
           {
             nameKey: "commands.help.custom_models.selection_field",
-            value: localizer(locale, "commands.help.custom_models.selection_value", {
+            value: localizer(locale, "commands.help.custom_models.selection_summary_value", {
               text_command: commandRegistry.getCommandMention("model", "text"),
               image_command: commandRegistry.getCommandMention("model", "image"),
               video_command: commandRegistry.getCommandMention("model", "video"),
-            }),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.custom_models.labels_field",
-            value: localizer(locale, "commands.help.custom_models.labels_value", {
-              server_remove_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "remove"),
-              server_provider_remove_command: commandRegistry.getCommandMention("provider", "remove"),
-              personal_remove_command: commandRegistry.getCommandMention("personal", "custom-endpoint", "remove"),
-              personal_provider_remove_command: commandRegistry.getCommandMention("personal", "provider", "remove"),
             }),
             inline: false,
           },
@@ -86,108 +76,24 @@ export async function execute(
     }
 
     if (endpoint === "comfyui") {
-      const pages: SummaryEmbedOptions[] = [
-        {
-          titleKey: "commands.help.custom_models.comfyui_page1_title",
-          descriptionKey: "commands.help.custom_models.comfyui_page1_description",
-          color: ColorCode.INFO,
-          fields: [
-            {
-              nameKey: "commands.help.custom_models.comfyui_page1_workflow_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page1_workflow_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page1_placeholders_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page1_placeholders_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page1_export_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page1_export_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page1_register_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page1_register_value", {
-                server_add_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "add"),
-                personal_add_command: commandRegistry.getCommandMention("personal", "custom-endpoint", "add"),
-                image_command: commandRegistry.getCommandMention("model", "image"),
-                video_command: commandRegistry.getCommandMention("model", "video"),
-              }),
-              inline: false,
-            },
-          ],
-        },
-        {
-          titleKey: "commands.help.custom_models.comfyui_page2_title",
-          descriptionKey: "commands.help.custom_models.comfyui_page2_description",
-          color: ColorCode.INFO,
-          fields: [
-            {
-              nameKey: "commands.help.custom_models.comfyui_page2_core_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page2_core_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page2_numeric_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page2_numeric_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page2_video_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page2_video_value"),
-              inline: false,
-            },
-          ],
-        },
-        {
-          titleKey: "commands.help.custom_models.comfyui_page3_title",
-          descriptionKey: "commands.help.custom_models.comfyui_page3_description",
-          color: ColorCode.INFO,
-          fields: [
-            {
-              nameKey: "commands.help.custom_models.comfyui_page3_image_refs_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page3_image_refs_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page3_reference_tokens_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page3_reference_tokens_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page3_reference_note_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page3_reference_note_value"),
-              inline: false,
-            },
-          ],
-        },
-        {
-          titleKey: "commands.help.custom_models.comfyui_page4_title",
-          descriptionKey: "commands.help.custom_models.comfyui_page4_description",
-          color: ColorCode.INFO,
-          fields: [
-            {
-              nameKey: "commands.help.custom_models.comfyui_page4_video_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page4_video_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page4_output_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page4_output_value"),
-              inline: false,
-            },
-            {
-              nameKey: "commands.help.custom_models.comfyui_page4_metadata_field",
-              value: localizer(locale, "commands.help.custom_models.comfyui_page4_metadata_value"),
-              inline: false,
-            },
-          ],
-        },
-      ];
-
-      await replyPaginatedStatusPages(interaction, locale, pages, MessageFlags.Ephemeral);
+      await replySummaryEmbed(interaction, locale, {
+        titleKey: "commands.help.custom_models.comfyui_page1_title",
+        descriptionKey: "commands.help.custom_models.comfyui_summary_description",
+        docsPath: DOCS_PATHS.COMFYUI_SETUP,
+        color: ColorCode.INFO,
+        fields: [
+          {
+            nameKey: "commands.help.custom_models.comfyui_summary_register_field",
+            value: localizer(locale, "commands.help.custom_models.comfyui_summary_register_value", {
+              server_add_command: commandRegistry.getCommandMention("provider", "custom-endpoint", "add"),
+              personal_add_command: commandRegistry.getCommandMention("personal", "custom-endpoint", "add"),
+              image_command: commandRegistry.getCommandMention("model", "image"),
+              video_command: commandRegistry.getCommandMention("model", "video"),
+            }),
+            inline: false,
+          },
+        ],
+      });
       return;
     }
 

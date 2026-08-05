@@ -11,6 +11,7 @@ import { formatRenderModifierWebhookName, normalizeRenderModifierName } from "@/
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { log } from "@/utils/misc/logger";
 import { normalizePersonaSpriteKey } from "@/utils/persona/sprites";
+import { collectParticipantTargetIndex, targetAliasesForPurpose } from "@/utils/text/participants/targetIndex";
 import {
   isLocalPersonaAvatarPath,
   loadStoredPersonaAvatarDataUri,
@@ -46,7 +47,7 @@ export type CopiedRenderTarget = {
   /**
    * True only for identity sprites. Identity sprites already use a distinct
    * decorated "Sprite (Persona)" webhook name, so the zero-width group-break
-   * marker (applied to clean-named non-identity sprites) must not be appended —
+   * marker (applied to clean-named non-identity sprites) must not be appended, so
    * a trailing marker would break the decorated-name round-trip in
    * resolveRenderModifierSourcePersona.
    */
@@ -157,6 +158,57 @@ async function collectCopiedRenderCandidates(context: StreamContext): Promise<Co
     return [];
   });
 
+  const targetIndex = collectParticipantTargetIndex(context.contextItems);
+  if (targetIndex.targets.length > 0) {
+    const personasById = new Map(
+      personas.flatMap((persona) =>
+        typeof persona.persona_id === "number" ? [[persona.persona_id, persona] as const] : [],
+      ),
+    );
+    for (const target of targetIndex.targets) {
+      const copiedAliases = targetAliasesForPurpose(target, "copied_identity").map((alias) => alias.value);
+      if (copiedAliases.length === 0) continue;
+      if (target.key.kind === "persona") {
+        if (target.key.personaId === context.tomoriState.persona_id) continue;
+        const persona = personasById.get(target.key.personaId);
+        if (!persona) continue;
+        addCandidate(candidatesByKey, {
+          kind: "persona",
+          key: target.serializedKey,
+          displayName: target.displayLabel,
+          persona,
+        });
+        continue;
+      }
+      if (
+        target.key.kind === "discord_user" &&
+        target.inParticipantContext &&
+        target.targetId &&
+        isDiscordSnowflake(target.targetId)
+      ) {
+        addCandidate(candidatesByKey, {
+          kind: "user",
+          key: target.serializedKey,
+          displayName: target.displayLabel,
+          aliases: copiedAliases,
+          userId: target.targetId,
+        });
+      }
+    }
+    if (!targetIndex.personaCatalogComplete) {
+      for (const persona of personas) {
+        if (persona.persona_id == null || persona.persona_id === context.tomoriState.persona_id) continue;
+        addCandidate(candidatesByKey, {
+          kind: "persona",
+          key: `persona:${persona.persona_id}`,
+          displayName: persona.persona_nickname,
+          persona,
+        });
+      }
+    }
+    return [...candidatesByKey.values()];
+  }
+
   for (const persona of personas) {
     if (persona.persona_id == null || persona.persona_id === context.tomoriState.persona_id) {
       continue;
@@ -184,6 +236,31 @@ async function collectCopiedRenderCandidates(context: StreamContext): Promise<Co
   }
 
   return [...candidatesByKey.values()];
+}
+
+/**
+ * Collects every speaker name the model could plausibly leak as a turn label: other personas in
+ * the guild (nickname) and users referenced in the conversation (display label + aliases). The
+ * active persona is excluded (collectCopiedRenderCandidates skips it), since its labels are
+ * handled by the render-modifier parse and own-name stripping.
+ *
+ * Used by the stream segment processor's opening-label leak guard to decide whether a plain
+ * "Name:" opening is a known participant (a leak) or ordinary prose ("Note:", "TL;DR:").
+ *
+ * @param context - Active stream context (provides guild + conversation user references)
+ * @returns Known speaker names, un-normalized (callers compare via matchesRenderModifierName)
+ */
+export async function collectKnownSpeakerNames(context: StreamContext): Promise<string[]> {
+  const names: string[] = [];
+  for (const candidate of await collectCopiedRenderCandidates(context)) {
+    names.push(candidate.displayName);
+    if (candidate.kind === "user") {
+      names.push(...candidate.aliases);
+    } else {
+      names.push(candidate.persona.persona_nickname);
+    }
+  }
+  return names;
 }
 
 export async function resolveCopiedRenderModifierTarget(
@@ -287,6 +364,7 @@ export async function resolveSpriteRenderModifierTarget(
           spriteRecord: {
             personaId,
             spriteName: sprite.sprite_name,
+            isIdentity: sprite.is_identity,
           },
           isIdentitySprite: sprite.is_identity,
         }

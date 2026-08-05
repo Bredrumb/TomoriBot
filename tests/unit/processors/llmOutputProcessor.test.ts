@@ -7,8 +7,7 @@ import {
   truncateBeforeGenericSpeakerLine,
 } from "@/utils/text/processors/llmOutputProcessor";
 import { isAllowedRenderModifierSpeakerLabel } from "@/utils/discord/renderModifierParser";
-
-// ─── cleanLLMOutput ─────────────────────────────────────────────────────────
+import { buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 
 const PRESERVE_UNRESOLVED_EMOJI_SHORTCODES_ENV = "EMOJI_PRESERVE_UNRESOLVED_SHORTCODES";
 
@@ -95,12 +94,29 @@ describe("cleanLLMOutput", () => {
     expect(cleaned).toContain("<:NagatoroSmug:1382568815900098660>");
     expect(cleaned).toContain("Staying up late.");
   });
+
+  it("preserves known persona @trigger text after normal output cleanup", () => {
+    const personaMentionMap = buildPersonaMentionCatalog([
+      { persona_nickname: "Shy Tomori", trigger_words: ["lilya"] },
+    ]).mentionMap;
+    const cleaned = cleanLLMOutput(
+      "Tomori: I should ask @(Shy Tomori).",
+      "Tomori",
+      [],
+      true,
+      new Map(),
+      new Set(),
+      undefined,
+      [],
+      personaMentionMap,
+    );
+
+    expect(cleaned).toBe("I should ask @lilya.");
+  });
 });
 
-// ─── stripLeakedOwnNameLabels ────────────────────────────────────────────────
-
 describe("stripLeakedOwnNameLabels", () => {
-  // Branch A: the model opened its turn with its own label — real speech. The starter is dropped
+  // Branch A: the model opened its turn with its own label: real speech. The starter is dropped
   // and any *later* self-labels are collapsed at their turn boundary, PRESERVING preceding text.
   describe("opened with own label (real turn — keep preceding, collapse later labels)", () => {
     it("removes the starter label", () => {
@@ -154,7 +170,7 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
-  // Branch B: the model did NOT open with its own label — content before the first leak-shaped
+  // Branch B: the model did NOT open with its own label: content before the first leak-shaped
   // label is a leaked "thought" and is dropped, keeping only the real response.
   describe("did not open with own label (leaked thought — cut the preamble)", () => {
     it("cuts a thought glued to the re-introduction label", () => {
@@ -219,6 +235,106 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 
+  // Identity-macro labels: the model sometimes labels its own turn with the template syntax
+  // ("{bot}:") instead of the resolved name. Stripped only at the opening; mid-text macros are
+  // legitimate content whenever the persona is drafting a preset or system prompt for a user.
+  describe("identity-macro opening labels", () => {
+    it("peels a leading {bot} label", () => {
+      expect(stripLeakedOwnNameLabels("{bot}: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a leading double-brace {{char}} label", () => {
+      expect(stripLeakedOwnNameLabels("{{char}}: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a leading bold macro label", () => {
+      expect(stripLeakedOwnNameLabels("**{bot}:** hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a mixed macro + real-name opening chain", () => {
+      expect(stripLeakedOwnNameLabels("{bot}: Tomori: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("peels a leading {user} label rather than posting it verbatim", () => {
+      expect(stripLeakedOwnNameLabels("{user}: hello there", "Tomori").trim()).toBe("hello there");
+    });
+
+    it("preserves macros in drafted prose that does not open with a macro label", () => {
+      const draft = "Sure! Here's a preset:\n{{char}}: Hi!\n{{user}}: Hey.";
+      expect(stripLeakedOwnNameLabels(draft, "Tomori")).toBe(draft);
+    });
+
+    it("preserves a macro used inline mid-sentence", () => {
+      const text = "Use {bot} to refer to yourself and {user} for the target.";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+
+    it("preserves a fenced preset draft opening with a macro label", () => {
+      const draft = "```\n{{char}}: Hi!\n```";
+      expect(stripLeakedOwnNameLabels(draft, "Tomori")).toBe(draft);
+    });
+
+    it("does not treat an unrelated braced word as a turn label", () => {
+      const text = "{persona}: not an identity macro";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+  });
+
+  /**
+   * Safety net for the decorated render-modifier grammar ("Tomori (silly):"). Only a label opening a
+   * segment is consumed by parseLeadingRenderModifier; one stranded mid-body because a buffer
+   * boundary shifted used to reach Discord as visible text.
+   */
+  describe("decorated render-modifier labels", () => {
+    it("strips a stranded mid-body label while keeping the reply before it", () => {
+      expect(stripLeakedOwnNameLabels("bet sending the vibes.\ntomori (silly): double message", "tomori")).toBe(
+        "bet sending the vibes.\ndouble message",
+      );
+    });
+
+    it("removes a decorated starter label", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (shy): h-hello", "Tomori").trim()).toBe("h-hello");
+    });
+
+    it("removes a decorated alias starter without exposing it to the preamble branch", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (angry): actual reply", "Lilya", ["Tomori"]).trim()).toBe("actual reply");
+    });
+
+    it("keeps an alias-decorated first line when a plain active-name label follows", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (angry): first reply\nLilya: second reply", "Lilya", ["Tomori"])).toBe(
+        "first reply\nsecond reply",
+      );
+    });
+
+    it("matches full-width colons and bold decorated labels", () => {
+      expect(stripLeakedOwnNameLabels("Tomori (shy)： h-hello", "Tomori").trim()).toBe("h-hello");
+      expect(stripLeakedOwnNameLabels("**Tomori (shy):** h-hello", "Tomori").trim()).toBe("h-hello");
+      expect(stripLeakedOwnNameLabels("**Tomori (shy)**： h-hello", "Tomori").trim()).toBe("h-hello");
+    });
+
+    /**
+     * Opening decorated must land on branch A. On branch B the leaked-preamble pass cuts everything
+     * before the label it matches, which would delete the real reply preceding a stray one.
+     */
+    it("keeps text preceding a stranded label rather than treating it as a leaked preamble", () => {
+      const result = stripLeakedOwnNameLabels("first real line here.\nTomori (mad): second line", "Tomori");
+
+      expect(result).toContain("first real line here.");
+      expect(result).toContain("second line");
+      expect(result).not.toContain("(mad)");
+    });
+
+    it("leaves another character's decorated label alone so quoted dialogue survives", () => {
+      const text = "I don't think Ren would say\nRen (lovestruck): I love you!\nbecause that's weird";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+
+    it("does not strip a parenthetical that is not a label", () => {
+      const text = "Tomori (the one you know) is here";
+      expect(stripLeakedOwnNameLabels(text, "Tomori")).toBe(text);
+    });
+  });
+
   describe("preserves legitimate Name: usages", () => {
     it("does not strip a hyphen list item", () => {
       const text = "Power levels:\n- Tsukushi: 100\n- Bella: 80";
@@ -260,7 +376,7 @@ describe("stripLeakedOwnNameLabels", () => {
     });
 
     it("does not mangle an emoji named exactly like the persona", () => {
-      // "<:Tomori:id>" contains "Tomori:" preceded by a colon — excluded from the glued char so the
+      // "<:Tomori:id>" contains "Tomori:" preceded by a colon, so excluded from the glued char so the
       // emoji is preserved, while the genuinely leaked label after ">" is still collapsed.
       expect(stripLeakedOwnNameLabels("Tomori: hi <:Tomori:123456789012345678> there", "Tomori").trim()).toBe(
         "hi <:Tomori:123456789012345678> there",
@@ -276,8 +392,6 @@ describe("stripLeakedOwnNameLabels", () => {
     });
   });
 });
-
-// ─── findMarkdownCodeRanges ──────────────────────────────────────────────────
 
 describe("findMarkdownCodeRanges", () => {
   it("returns empty array when no backticks present", () => {
@@ -337,8 +451,6 @@ describe("findMarkdownCodeRanges", () => {
   });
 });
 
-// ─── isGenericSpeakerStopLabel ───────────────────────────────────────────────
-
 describe("isGenericSpeakerStopLabel", () => {
   describe("valid speaker labels", () => {
     it("accepts 'User'", () => {
@@ -379,8 +491,6 @@ describe("isGenericSpeakerStopLabel", () => {
     });
   });
 });
-
-// ─── truncateBeforeGenericSpeakerLine ────────────────────────────────────────
 
 describe("truncateBeforeGenericSpeakerLine", () => {
   describe("no speaker present — pass through unchanged", () => {

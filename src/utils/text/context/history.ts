@@ -13,30 +13,6 @@ export const MEDIA_IMAGE_MESSAGE_LIMIT = (() => {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 3;
 })();
 
-export function buildMediaDescription(msg: SimplifiedMessageForContext): string {
-  const imageCount = msg.imageAttachments.length;
-  const videoCount = msg.videoAttachments.length;
-  const hasGif = msg.imageAttachments.some((att) => att.mimeType?.includes("gif"));
-
-  const mediaParts: string[] = [];
-
-  if (imageCount > 0) {
-    if (hasGif && imageCount === 1) {
-      mediaParts.push("1 GIF");
-    } else if (hasGif) {
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""} (including GIF)`);
-    } else {
-      mediaParts.push(`${imageCount} image${imageCount > 1 ? "s" : ""}`);
-    }
-  }
-
-  if (videoCount > 0) {
-    mediaParts.push(`${videoCount} video${videoCount > 1 ? "s" : ""}`);
-  }
-
-  return mediaParts.join(" and ");
-}
-
 export function buildMediaAttributionText(msg: SimplifiedMessageForContext, authorName: string): string {
   const imageCount = msg.imageAttachments.length;
   const videoCount = msg.videoAttachments.length;
@@ -151,7 +127,7 @@ export function getLastImageOccurrenceIndices(
 
 const UTC_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-export function formatRelativeTime(diffMs: number): string {
+function formatRelativeTime(diffMs: number): string {
   const seconds = Math.floor(diffMs / 1000);
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
@@ -257,7 +233,7 @@ export async function getUserPresenceDetails(
 
     if (member.presence.activities && member.presence.activities.length > 0) {
       const activityDetails = member.presence.activities.map((activity) => {
-        // 1. Diagnostic log so we can see exactly what the gateway delivered
+        // Diagnostic log so we can see exactly what the gateway delivered
         //    (useful for third-party RPC apps like Last.fm whose payload shape changes upstream)
         const largeText = activity.assets?.largeText?.trim() || null;
         const smallText = activity.assets?.smallText?.trim() || null;
@@ -265,7 +241,6 @@ export async function getUserPresenceDetails(
           `Activity found for ${member?.user.username}: type=${activity.type} name="${activity.name}" details="${activity.details ?? ""}" state="${activity.state ?? ""}" emoji="${activity.emoji?.name ?? ""}" largeText="${largeText ?? ""}" smallText="${smallText ?? ""}" appId="${activity.applicationId ?? ""}"`,
         );
 
-        // 2. Compose extra fields once so each case can surface asset text uniformly
         const timeSpent = getTimeSpent(activity.timestamps?.start, activity.timestamps?.end);
         const appendAssetText = (base: string): string => {
           const extras: string[] = [];
@@ -276,7 +251,6 @@ export async function getUserPresenceDetails(
 
         switch (activity.type) {
           case ActivityType.Playing: {
-            // Surface details, state, and any asset hover text
             const segments: string[] = [`Playing ${activity.name}`];
             if (activity.details) segments.push(activity.details);
             if (activity.state) segments.push(activity.state);
@@ -298,7 +272,7 @@ export async function getUserPresenceDetails(
           case ActivityType.Watching:
             return appendAssetText(`Watching ${activity.name}`) + timeSpent;
           case ActivityType.Custom: {
-            // Custom Status — some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
+            // Custom Status: some RPC clients (e.g. Last.fm) ride this slot with details/assets populated
             const parts: string[] = [];
             if (activity.emoji?.name) parts.push(activity.emoji.name);
             if (activity.state) parts.push(activity.state);

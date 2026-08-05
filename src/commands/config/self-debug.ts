@@ -7,7 +7,6 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("self-debug")
@@ -31,10 +30,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Toggles whether Tomori includes her own error embeds in context as [System: ...].
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,

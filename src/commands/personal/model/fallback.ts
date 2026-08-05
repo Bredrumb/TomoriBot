@@ -1,9 +1,7 @@
 import type { ChatInputCommandInteraction, ButtonInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from "discord.js";
-import { createStandardEmbed } from "@/utils/discord/embedHelper";
+import { MessageFlags } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { safeReply } from "@/utils/discord/safeReply";
-import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
@@ -11,7 +9,6 @@ import type {
   ErrorContext,
   LlmRow,
   UserRow,
-  SavedProviderConfigRow,
   FallbackModelRef,
   FallbackEntry,
   CustomEndpointRow,
@@ -19,10 +16,23 @@ import type {
 import type { SelectOption } from "@/types/discord/modal";
 
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { replyLegacyOpenRouterOtherModelMoved } from "@/utils/discord/openrouterModelMigrationNotice";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import { getFallbackModelRefKey, getPrimaryFallbackRefKeys } from "@/utils/provider/fallbackModelIdentity";
+import { resolveActivePersonalProviderModelSelections } from "@/utils/provider/personalProviderHelpers";
+import {
+  beginAnchorPrivateWorkflow,
+  buildPersonaWorkflowNotice,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/anchorWorkflow";
+import {
+  acquireModalOptionRange,
+  acquireModelModalOpener,
+  buildOpenRouterMovedNotice,
+  buildOpenSelectorPayload,
+  buildProviderPickerPayload,
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 
 const SLOT_IDS = [
   "fallback_slot_1",
@@ -40,6 +50,10 @@ const SLOT_LABEL_KEYS = [
 ] as const;
 const CLEAR_SLOT_VALUE = "__none__";
 const CUSTOM_ENDPOINT_VALUE_PREFIX = "ce:";
+/** Custom-id root for this command's anchor provider picker / opener buttons. */
+const ID_ROOT = "personal_model_fallback";
+// One of Discord's 25 select options is reserved for the explicit "None" / clear choice,
+// which is re-prepended to every page so only 24 models fit per range.
 const ITEMS_PER_PAGE = 24;
 
 function getLocalizedDescription(model: LlmRow, locale: string): string {
@@ -99,7 +113,6 @@ function buildSlotPlaceholder(
     });
   }
 
-  // Custom endpoint
   const epLabel = `${entry.endpoint.label}:${entry.endpoint.model_name ?? entry.endpoint.label}`;
   const parsed = parseCustomProvider(selectedProvider);
   const selectedLabel = parsed?.label ?? null;
@@ -136,36 +149,45 @@ export async function execute(
     return;
   }
 
+  // Anchor one-message controller, tracked so the outer catch can render an
+  // unexpected-error terminal on the same ephemeral message.
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
+
   try {
-    // 1. Load all personal text providers and present the picker.
-    //    UserSavedProviderConfigRow shares the `provider` field that promptForSavedProvider reads,
-    //    so the cast is safe — the picker only uses that field to build button labels.
     const savedProviders = await loadUserSavedProvidersForCapability(userData.user_id, "text");
-    if (savedProviders.length === 0) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.personal.model.fallback.no_provider_title",
-        descriptionKey: "commands.personal.model.fallback.no_provider_description",
-        color: ColorCode.WARN,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+    const currentSelections =
+      savedProviders.length > 1 ? await resolveActivePersonalProviderModelSelections(savedProviders, "text") : [];
+    const initialPayload =
+      savedProviders.length === 0
+        ? buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.personal.model.fallback.no_provider_title",
+            descriptionKey: "commands.personal.model.fallback.no_provider_description",
+            color: ColorCode.WARN,
+          })
+        : savedProviders.length === 1
+          ? buildOpenSelectorPayload(locale, `${ID_ROOT}_open`)
+          : buildProviderPickerPayload(
+              locale,
+              ID_ROOT,
+              savedProviders.map((row) => row.provider),
+              currentSelections,
+            );
 
-    const providerSelection = await promptForSavedProvider(
-      interaction,
-      locale,
-      savedProviders as unknown as SavedProviderConfigRow[],
-    );
-    if (!providerSelection) return;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
+    if (savedProviders.length === 0) return;
 
-    const selectedProvider = providerSelection.provider;
-    const responseInteraction = providerSelection.interaction;
+    const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, ID_ROOT);
+    if (!opener) return;
+    const selectedProvider = opener.provider;
+    // The button the modal will finally open from. The range step (if any) consumes this
+    // one and hands back the range button in its place.
+    let modalButton: ButtonInteraction = opener.button;
 
-    // 2. Find the selected provider's config row to read existing fallback_model_refs
     const selectedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
     const existingRefs = selectedConfig?.fallback_model_refs ?? [];
 
-    // 3. Resolve existing refs into a typed fallback chain for placeholder display
     const llmRefIds = existingRefs.filter((r) => r.type === "llm").map((r) => r.id);
     const epRefIds = existingRefs.filter((r) => r.type === "custom_endpoint").map((r) => r.id);
     const [refLlms, refEndpoints] = await Promise.all([
@@ -185,7 +207,6 @@ export async function execute(
       })
       .filter((e): e is FallbackEntry => e !== null);
 
-    // 4. Load model options for the selected provider
     let availableModels: LlmRow[] = [];
     let availableEndpoints: CustomEndpointRow[] = [];
     let allModelOptions: SelectOption[];
@@ -197,12 +218,14 @@ export async function execute(
       availableEndpoints = label ? allEndpoints.filter((ep) => ep.label === label && ep.capability === "text") : [];
 
       if (availableEndpoints.length === 0) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.fallback.no_models_title",
-          descriptionKey: "commands.model.fallback.no_models_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
+        await phase.useButton(modalButton).replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.fallback.no_models_title",
+            descriptionKey: "commands.model.fallback.no_models_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
@@ -219,12 +242,14 @@ export async function execute(
         })) ?? [];
 
       if (availableModels.length === 0) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.fallback.no_models_title",
-          descriptionKey: "commands.model.fallback.no_models_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
+        await phase.useButton(modalButton).replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.model.fallback.no_models_title",
+            descriptionKey: "commands.model.fallback.no_models_description",
+            color: ColorCode.ERROR,
+          }),
+        );
         return;
       }
 
@@ -240,7 +265,6 @@ export async function execute(
       }));
     }
 
-    // 5. Build per-slot placeholders
     const currentFallbackPlaceholders = SLOT_IDS.map((_, index) =>
       buildSlotPlaceholder(locale, existingChain[index] ?? null, existingRefs[index] ?? null, selectedProvider),
     );
@@ -251,85 +275,43 @@ export async function execute(
       description: safeSelectOptionText(localizer(locale, "commands.model.fallback.clear_option_description")),
     };
 
-    // 6. Pagination if needed
-    let optionsForModal = allModelOptions;
-    let modalInteraction: ChatInputCommandInteraction | ButtonInteraction = responseInteraction;
-
+    // Past 24 models the user picks a range on the anchor message first. This modal
+    //    can't use the engine's own >25 bridge: it has five selects over one shared list
+    //    (the bridge slices only the first) and reserves a slot for the clear option.
+    let optionsForModal: SelectOption[];
     if (allModelOptions.length > ITEMS_PER_PAGE) {
-      const totalPages = Math.ceil(allModelOptions.length / ITEMS_PER_PAGE);
-      const pageButtons = Array.from({ length: Math.min(totalPages, 9) }, (_, index) =>
-        new ButtonBuilder()
-          .setCustomId(`personal_fallback_page_${index + 1}`)
-          .setLabel((index + 1).toString())
-          .setStyle(ButtonStyle.Primary),
+      const range = await acquireModalOptionRange(
+        phase,
+        modalButton,
+        interaction.user.id,
+        locale,
+        allModelOptions.length,
+        ITEMS_PER_PAGE,
       );
-
-      const pageSelectEmbed = createStandardEmbed(locale, {
-        titleKey: "general.pagination.select_page_title",
-        descriptionKey: "general.pagination.select_page_description",
-        descriptionVars: { totalItems: allModelOptions.length, totalPages },
-        color: ColorCode.INFO,
-      });
-
-      const pageSelectMessage = providerSelection.pickerInteraction
-        ? await (responseInteraction as ButtonInteraction).editReply({
-            embeds: [pageSelectEmbed],
-            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(...pageButtons)],
-          })
-        : await interaction.reply({
-            embeds: [pageSelectEmbed],
-            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(...pageButtons)],
-            flags: MessageFlags.Ephemeral,
-          });
-
-      try {
-        const pageButtonInteraction = await pageSelectMessage.awaitMessageComponent({
-          filter: (componentInteraction) =>
-            componentInteraction.user.id === interaction.user.id &&
-            componentInteraction.customId.startsWith("personal_fallback_page_"),
-          time: 300000,
-        });
-        const selectedPage = Number.parseInt(pageButtonInteraction.customId.replace("personal_fallback_page_", ""), 10);
-        const startIndex = (selectedPage - 1) * ITEMS_PER_PAGE;
-        optionsForModal = [clearOption, ...allModelOptions.slice(startIndex, startIndex + ITEMS_PER_PAGE)];
-        modalInteraction = pageButtonInteraction as ButtonInteraction;
-      } catch {
-        await safeReply(
-          interaction.editReply({ embeds: [], components: [] }),
-          "personal fallback model timeout cleanup",
-        );
-        return;
-      }
-    }
-
-    if (allModelOptions.length <= ITEMS_PER_PAGE) {
+      if (!range) return;
+      modalButton = range.button;
+      optionsForModal = [clearOption, ...allModelOptions.slice(range.start, range.end)];
+    } else {
       optionsForModal = [clearOption, ...allModelOptions];
     }
 
-    const modalResult = await promptWithRawModal(
-      modalInteraction,
-      locale,
-      {
-        modalCustomId: `personal_model_fallback_modal_${interaction.id}`,
-        modalTitleKey: "commands.model.fallback.modal_title",
-        components: SLOT_IDS.map((customId, index) => ({
-          customId,
-          labelKey: SLOT_LABEL_KEYS[index],
-          placeholder: currentFallbackPlaceholders[index],
-          required: false,
-          options: optionsForModal,
-        })),
-      },
-      MessageFlags.Ephemeral,
-    );
+    const modalPhase = await openAnchorModal(phase, modalButton, locale, {
+      modalCustomId: `personal_model_fallback_modal_${interaction.id}`,
+      modalTitleKey: "commands.model.fallback.modal_title",
+      components: SLOT_IDS.map((customId, index) => ({
+        customId,
+        labelKey: SLOT_LABEL_KEYS[index],
+        placeholder: currentFallbackPlaceholders[index],
+        required: false,
+        options: optionsForModal,
+      })),
+    });
+    if (!modalPhase) return;
 
-    if (modalResult.outcome !== "submit" || !modalResult.interaction) {
-      return;
-    }
+    // Acknowledge the modal submit within 3s; every terminal below edits in place.
+    const work = await modalPhase.beginInPlaceWork();
+    const values = modalPhase.values;
 
-    const values = modalResult.values ?? {};
-
-    // 7. Build lookup maps
     const resolvedModelMap = new Map<number, LlmRow>();
     for (const m of availableModels) {
       if (m.llm_id !== undefined) resolvedModelMap.set(m.llm_id, m);
@@ -349,83 +331,104 @@ export async function execute(
       }
     }
 
-    // 8. Per-slot merge: blank = keep existing, __none__ = clear, value = update
+    // Per-slot merge: blank = keep existing, __none__ = clear, value = update
     const mergedRefs: FallbackModelRef[] = [];
+    // Refs the user picked in this submission, as opposed to inherited from untouched slots.
+    const submittedKeys = new Set<string>();
     for (let i = 0; i < 5; i++) {
       const raw = (values[SLOT_IDS[i]] ?? "").trim();
 
       if (raw === "") {
         if (existingRefs[i]) mergedRefs.push(existingRefs[i]);
       } else if (raw === CLEAR_SLOT_VALUE) {
-        // Explicit clear — skip
       } else if (raw.startsWith(CUSTOM_ENDPOINT_VALUE_PREFIX)) {
         const epId = Number.parseInt(raw.slice(CUSTOM_ENDPOINT_VALUE_PREFIX.length), 10);
-        if (!Number.isNaN(epId)) mergedRefs.push({ type: "custom_endpoint", id: epId });
+        if (!Number.isNaN(epId)) {
+          mergedRefs.push({ type: "custom_endpoint", id: epId });
+          submittedKeys.add(`custom_endpoint:${epId}`);
+        }
       } else {
         if (selectedProvider === "openrouter" && raw === "other-model") {
-          await replyLegacyOpenRouterOtherModelMoved(modalResult.interaction, locale, "personal");
+          await work.message.replace(buildOpenRouterMovedNotice(locale, "personal"));
           return;
         }
         const match = availableModels.find((model) => model.llm_codename === raw);
-        if (match?.llm_id !== undefined) mergedRefs.push({ type: "llm", id: match.llm_id });
+        if (match?.llm_id !== undefined) {
+          mergedRefs.push({ type: "llm", id: match.llm_id });
+          submittedKeys.add(`llm:${match.llm_id}`);
+        }
       }
     }
 
-    // 9. Deduplicate by type+id
     const seen = new Set<string>();
-    const finalRefs: FallbackModelRef[] = [];
+    const dedupedRefs: FallbackModelRef[] = [];
     for (const ref of mergedRefs) {
-      const key = `${ref.type}:${ref.id}`;
+      const key = getFallbackModelRefKey(ref);
       if (!seen.has(key)) {
         seen.add(key);
-        finalRefs.push(ref);
+        dedupedRefs.push(ref);
       }
     }
 
-    // 10. Validate: no fallback can duplicate the primary model of the selected provider config
+    // A fallback equal to the primary is meaningless, so it never survives the write. Only a
+    // pick made in this submission is worth an error; an inherited duplicate (the primary was
+    // promoted after this chain was saved) is dropped silently, since erroring on it would
+    // reject every submission until the user found and cleared that untouched slot.
     const primaryLlmId = selectedConfig?.llm_id ?? null;
-    if (primaryLlmId && finalRefs.some((r) => r.type === "llm" && r.id === primaryLlmId)) {
-      const primaryModel = resolvedModelMap.get(primaryLlmId);
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "commands.model.fallback.primary_conflict_title",
-        descriptionKey: "commands.model.fallback.primary_conflict_description",
-        descriptionVars: { model: primaryModel?.llm_codename ?? `#${primaryLlmId}` },
-        color: ColorCode.ERROR,
-      });
+    const primaryKeys = getPrimaryFallbackRefKeys(primaryLlmId, resolvedEndpointMap.values());
+    if ([...submittedKeys].some((key) => primaryKeys.has(key))) {
+      const primaryModel = primaryLlmId ? resolvedModelMap.get(primaryLlmId) : undefined;
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.personal.model.fallback.primary_conflict_title",
+          descriptionKey: "commands.personal.model.fallback.primary_conflict_description",
+          descriptionVars: { model: primaryModel?.llm_codename ?? `#${primaryLlmId}` },
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
+    const finalRefs = dedupedRefs.filter((ref) => !primaryKeys.has(getFallbackModelRefKey(ref)));
 
     if (!selectedConfig) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    // 11. Write — update only fallback refs on the selected provider config
     const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, {
       ...selectedConfig,
       fallback_model_refs: finalRefs,
     });
     if (!writeOk) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    // 12. Success embed
     if (finalRefs.length === 0) {
-      await replyInfoEmbed(modalResult.interaction, locale, {
-        titleKey: "commands.personal.model.fallback.cleared_title",
-        descriptionKey: "commands.personal.model.fallback.cleared_description",
-        descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
-        color: ColorCode.SUCCESS,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.personal.model.fallback.cleared_title",
+          descriptionKey: "commands.personal.model.fallback.cleared_description",
+          descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
+          color: ColorCode.SUCCESS,
+        }),
+      );
       return;
     }
 
@@ -443,15 +446,18 @@ export async function execute(
       })
       .join("\n");
 
-    await replyInfoEmbed(modalResult.interaction, locale, {
-      titleKey: "commands.personal.model.fallback.success_title",
-      descriptionKey: "commands.personal.model.fallback.success_description",
-      descriptionVars: {
-        model_list: modelList,
-        provider: getProviderDisplayName(selectedProvider),
-      },
-      color: ColorCode.SUCCESS,
-    });
+    await work.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.personal.model.fallback.success_title",
+        descriptionKey: "commands.personal.model.fallback.success_description",
+        descriptionVars: {
+          model_list: modelList,
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.SUCCESS,
+      }),
+    );
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
@@ -463,6 +469,23 @@ export async function execute(
       },
     };
     await log.error("Error executing /personal model fallback", error as Error, context);
+
+    // Render the unexpected-error terminal on the anchor message; fall back to a fresh
+    // reply only if the message is already gone (fatal) or was never created.
+    if (anchorMessage) {
+      try {
+        await anchorMessage.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+        return;
+      } catch {}
+    }
+
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

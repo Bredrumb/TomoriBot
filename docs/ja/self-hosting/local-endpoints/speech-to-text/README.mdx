@@ -1,0 +1,38 @@
+---
+title: "Speech-to-Text（ローカルエンジン）"
+sidebar:
+  label: "概要"
+  groupLabel: "Speech-to-Text"
+  order: 8
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBotは、Speech-to-Textを`transcription`カスタムエンドポイント機能として扱います。有効なtranscriptionエンドポイントが存在する場合、音声添付ファイルはバックグラウンドで文字起こしされ、会話コンテキストに追加されます。
+
+表示される文字起こしの投稿は別です。`/speech transcripts`は、ボイスメッセージの文字起こしをチャットに表示して投稿するかどうかのみを制御します。バックグラウンドのSTTを有効または無効にすることはありません。
+
+## 利用可能なエンジン
+
+<CardGrid>
+  <LinkCard title="WhisperX" href="/ja/self-hosting/local-endpoints/speech-to-text/whisperx/"
+    description="servers/sttにあるリファレンスWhisperXサーバーを使用した、初心者向けのローカル文字起こしです。" />
+  <LinkCard title="whisper.cpp" href="/ja/self-hosting/local-endpoints/speech-to-text/whispercpp/"
+    description="OpenAI互換の文字起こしエンドポイントを公開している場合は、軽量なwhisper.cpp HTTPサーバーを使用します。" />
+  <LinkCard title="KoboldCPP" href="/ja/self-hosting/local-endpoints/speech-to-text/koboldcpp/"
+    description="ビルドがOpenAI互換の音声文字起こしを公開している場合は、KoboldCPPのWhisperベースのSTTを使用します。" />
+</CardGrid>
+
+## セットアップ手順
+
+1. 上記のエンジンガイドからSTTサーバーを1つ起動します。
+2. `/provider custom-endpoint add`を実行し、capabilityに`transcription`を、api styleに`openai-compatible-transcription`を使用して登録します。
+3. 今後、登録済みのSTTエンドポイントを切り替える場合にのみ`/model transcription`を使用します。
+
+## 文字起こしの流れ
+
+transcriptionエンドポイントが有効な場合、TomoriBotはサポートされている音声添付ファイルをバックグラウンドで読み取り、チャットコンテキストに文字起こしを追加します。ペルソナの割り当ては必要ありません。
+
+文字起こしをチャットに表示して投稿したい場合にのみ、`/speech transcripts`を使用してください。
+
+ElevenLabsのユーザーは`/speech elevenlabs`を使用する必要があります。これにより、speechと一緒にtranscriptionが登録されます。

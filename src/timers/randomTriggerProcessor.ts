@@ -6,6 +6,7 @@ import { serverScheduleRepository } from "@/utils/db/repositories";
 import type { RandomTriggerRow, TomoriState } from "../types/db/schema";
 import { tomoriChat, suppressNextSelfReply } from "../events/messageCreate/tomoriChat";
 import { getCachedAllPersonas } from "../utils/cache/tomoriStateCache";
+import { runWithErrorContext } from "@/utils/misc/errorContextStore";
 
 export class RandomTriggerProcessor {
   private readonly client: Client;
@@ -33,6 +34,18 @@ export class RandomTriggerProcessor {
   }
 
   private async executeTrigger(trigger: RandomTriggerRow): Promise<void> {
+    return runWithErrorContext(
+      {
+        source: "random_trigger",
+        sourceDetail: trigger.trigger_id != null ? String(trigger.trigger_id) : undefined,
+        serverId: trigger.server_id,
+        channelDiscId: trigger.channel_disc_id,
+      },
+      () => this.executeTriggerInContext(trigger),
+    );
+  }
+
+  private async executeTriggerInContext(trigger: RandomTriggerRow): Promise<void> {
     const triggerId = trigger.trigger_id ?? 0;
     let consecutiveFailures = trigger.consecutive_failures ?? 0;
 

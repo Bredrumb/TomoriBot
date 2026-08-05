@@ -7,14 +7,14 @@ import { healthTracker } from "@/utils/misc/healthTracker";
  * Called before any other init so Cloud Run's startup probe can bind the port
  * before the rest of initialization completes.
  *
- * Returns 503 during startup (before Discord connects) — expected and safe.
+ * Returns 503 during startup (before Discord connects), so expected and safe.
  * Returns 200 only when the Discord client is ready and the WebSocket is healthy.
  *
  * @param port - Port to bind (defaults to PORT env var, fallback 8080)
  */
 export function startHealthServer(port: number): void {
   const server = createServer((req, res) => {
-    if (req.method === "GET" && req.url === "/health") {
+    if (req.method === "GET" && (req.url === "/health" || req.url === "/healthz")) {
       const healthStatus = healthTracker.getHealthStatus();
       const statusCode = healthStatus.healthy ? 200 : 503;
 

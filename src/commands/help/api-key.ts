@@ -7,6 +7,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help api-key subcommand
@@ -72,10 +73,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help api-key command
  * Displays provider-specific API key setup instructions
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -86,7 +83,6 @@ export async function execute(
   try {
     const provider = interaction.options.getString("provider", true);
 
-    // Get command mentions for cross-references
     const configBraveapiSetMention = commandRegistry.getCommandMention("optional-key", "brave", "set");
     const configSetupMention = commandRegistry.getCommandMention("config", "setup");
     const configApikeySetMention = commandRegistry.getCommandMention("provider", "add");
@@ -401,10 +397,15 @@ export async function execute(
         throw new Error(`Unknown provider: ${provider}`);
     }
 
-    // Use replySummaryEmbed to show provider-specific guide
+    embedOptions.docsPath =
+      provider === "custom"
+        ? DOCS_PATHS.CUSTOM_ENDPOINTS
+        : provider === "elevenlabs"
+          ? DOCS_PATHS.TTS
+          : DOCS_PATHS.API_KEYS;
+
     await replySummaryEmbed(interaction, locale, embedOptions, MessageFlags.Ephemeral);
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -415,7 +416,6 @@ export async function execute(
     };
     await log.error("Error executing /help api-key command", error as Error, context);
 
-    // Inform user of error (ephemeral)
     const errorMessage = localizer(locale, "general.errors.unknown_error_description");
     try {
       if (interaction.replied || interaction.deferred) {
@@ -430,7 +430,6 @@ export async function execute(
         });
       }
     } catch (replyError) {
-      // Log if even the error reply fails
       log.error("Failed to send error reply for /help api-key", replyError, context);
     }
   }

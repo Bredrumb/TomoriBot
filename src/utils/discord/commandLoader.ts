@@ -43,6 +43,19 @@ export type CommandExecuteFunction = (
 export type CommandExecutionMap = Map<string, Map<string, CommandExecuteFunction>>;
 
 /**
+ * One row of the command catalog (the full universe of registered commands).
+ * `commandName` is the space-joined full path: identical to what
+ * `handleCommands.ts` records as `stat_counters.metric_key` for `command_used`,
+ * so the catalog JOINs directly against the stat table with no remapping.
+ */
+export interface CommandCatalogEntry {
+  /** Space-joined full path, e.g. "update", "config humanizer", "server welcome-channel set". */
+  commandName: string;
+  /** Top-level command/category name (first path segment). */
+  category: string;
+}
+
+/**
  * Map for command cooldowns (category -> duration)
  */
 export type CommandCooldownMap = Map<string, number>;
@@ -88,7 +101,7 @@ type DirectoryItem = {
 };
 
 // Categories that are completely restricted to guilds only
-const GUILD_ONLY_CATEGORIES: string[] = ["server", "conditioning"];
+const GUILD_ONLY_CATEGORIES: string[] = ["server", "conditioning", "stats"];
 // Categories that require manage permissions in guild context
 const MANAGER_ONLY_CATEGORIES = [
   "config",
@@ -97,6 +110,7 @@ const MANAGER_ONLY_CATEGORIES = [
   "mcp",
   "capabilities",
   "nsfw",
+  "openrouter",
   "optional-key",
   "server",
 ];
@@ -245,8 +259,6 @@ async function getCommandFiles(directory: string): Promise<string[]> {
 
 /**
  * Helper function to apply localizations to a command/subcommand and its options/choices
- * @param configuredCommand - The configured command/subcommand builder
- * @param categoryName - The category name
  * @param subcommandPath - Optional subcommand path (flat: 'name', grouped: 'group.name')
  * @param availableLocales - Array of available locale codes
  */
@@ -256,7 +268,6 @@ function applyCommandLocalizations(
   subcommandPath: string | null,
   availableLocales: string[],
 ): void {
-  // 1. Apply command/subcommand description localizations
   const localizationKey = subcommandPath
     ? `commands.${categoryName}.${subcommandPath}.description`
     : `commands.${categoryName}.description`;
@@ -273,12 +284,10 @@ function applyCommandLocalizations(
     configuredCommand.setDescriptionLocalizations(subcommandLocalizationsMap);
   }
 
-  // 2. Apply option description localizations
   if (configuredCommand.options) {
     for (const option of configuredCommand.options) {
       const optionName = getOptionName(option);
       if (optionName) {
-        // Build localization key for option description
         const commandPath = subcommandPath ? `${categoryName}.${subcommandPath}` : categoryName;
         const optionLocalizationKey = `commands.${commandPath}.${optionName}_description`;
         const optionLocalizationsMap: { [key: string]: string } = {};
@@ -298,12 +307,10 @@ function applyCommandLocalizations(
           }
         }
 
-        // Apply option description localizations if we have any
         if (Object.keys(optionLocalizationsMap).length > 0) {
           applyOptionDescriptionLocalizations(option, optionLocalizationsMap);
         }
 
-        // 3. Apply choice name localizations
         const optionChoices = getOptionChoices(option);
         if (optionChoices.length > 0) {
           for (const choice of optionChoices) {
@@ -341,7 +348,6 @@ function applyCommandLocalizations(
               }
             }
 
-            // Apply choice name localizations if we have any
             if (Object.keys(choiceLocalizationsMap).length > 0) {
               choice.name_localizations = choiceLocalizationsMap;
             }
@@ -396,7 +402,7 @@ export async function isCommandModuleEnabledForRegistration(
  * the same command modules. Because ES module evaluation interleaves across
  * `await` points, the second loader could observe a command module that the
  * first had begun but not finished evaluating, reading an export binding while
- * it was still in its Temporal Dead Zone — surfacing as
+ * it was still in its Temporal Dead Zone: surfacing as
  * "Cannot access 'configureSubcommand' before initialization" and silently
  * skipping that command. Memoizing the promise makes every caller await one
  * shared evaluation, eliminating the race.
@@ -417,7 +423,7 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
   if (!cachedCommandDataPromise) {
     cachedCommandDataPromise = loadCommandDataUncached()
       .then((result) => {
-        // 1. An empty execution map means the load failed catastrophically
+        // An empty execution map means the load failed catastrophically
         //    (see the catch block in loadCommandDataUncached). Drop the cached
         //    promise so the next caller re-attempts a full load.
         if (result.executionMap.size === 0) {
@@ -426,7 +432,7 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
         return result;
       })
       .catch((error) => {
-        // 2. Never persist a rejected load — allow retries.
+        // Never persist a rejected load, so allow retries.
         cachedCommandDataPromise = null;
         throw error;
       });
@@ -434,8 +440,42 @@ export function loadCommandData(): Promise<LoadCommandDataResult> {
   return cachedCommandDataPromise;
 }
 
+/**
+ * Flattens the execution map into the full list of registered command paths.
+ *
+ * Produces exactly the space-joined format `handleCommands.ts` records for the
+ * `command_used` metric, so the resulting catalog JOINs 1:1 against
+ * `stat_counters.metric_key`:
+ *   - root command      → `category`                     (e.g. "update")
+ *   - flat subcommand   → `category subcommand`          (e.g. "config humanizer")
+ *   - grouped subcommand→ `category group subcommand`    (e.g. "server welcome-channel set")
+ *
+ * This is the single source of truth for "which commands exist", derived from the
+ * loaded modules (never a hardcoded list), so the persisted catalog cannot drift.
+ *
+ * @returns One {@link CommandCatalogEntry} per registered (sub)command.
+ */
+export function getCommandCatalogEntries(executionMap: CommandExecutionMap): CommandCatalogEntry[] {
+  const entries: CommandCatalogEntry[] = [];
+
+  for (const [category, subMap] of executionMap) {
+    for (const subKey of subMap.keys()) {
+      // Root commands live under a single sentinel key; the path is just the name.
+      if (subKey === ROOT_COMMAND_EXECUTION_KEY) {
+        entries.push({ commandName: category, category });
+        continue;
+      }
+      // Grouped subcommands use a "group.subcommand" key (exactly one dot);
+      //    flat subcommands have no dot. Replacing the first dot with a space
+      //    yields the space-joined path for both shapes.
+      entries.push({ commandName: `${category} ${subKey.replace(".", " ")}`, category });
+    }
+  }
+
+  return entries;
+}
+
 async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
-  // Initialize our maps
   const executionMap: CommandExecutionMap = new Map();
   const cooldownMap: CommandCooldownMap = new Map();
   // This will store our category builders (one per directory)
@@ -445,25 +485,19 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
   try {
     // Get available locales for auto-localization (exclude en-US as it's the base locale)
     const availableLocales = getSupportedLocales().filter((locale) => locale !== "en-US");
-    // 1. Get all command category directories
     const commandsPath = path.join(process.cwd(), "src", "commands");
     const categoryDirs = await getCommandDirectories(commandsPath);
 
-    // 2. Process each category directory
     for (const categoryDir of categoryDirs) {
       const categoryName = path.basename(categoryDir);
       log.info(`Processing category: ${categoryName}`);
 
-      // 3. Create or get the SlashCommandBuilder for this category
       let categoryBuilder = builders.get(categoryName) as SlashCommandBuilder | undefined;
       if (!categoryBuilder) {
-        // Initialize a new builder for this category
-        // Get category description from localizations (try to find 'commands.<category>.description')
         const categoryDescription =
           localizeWithAliases("en-US", `commands.${categoryName}.description`) || `${categoryName} commands`; // Fallback if no localization exists
 
         const categoryLocalizationsMap: { [key: string]: string } = {};
-        // Check all available locales for category description
         for (const locale of availableLocales) {
           const localizedDesc = localizeWithAliases(locale, `commands.${categoryName}.description`);
           if (localizedDesc && localizedDesc !== `commands.${categoryName}.description`) {
@@ -487,7 +521,6 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
           log.info("Applied age restriction to /nsfw");
         }
 
-        // Add localizations if we have any
         if (Object.keys(categoryLocalizationsMap).length > 0) {
           categoryBuilder.setDescriptionLocalizations(categoryLocalizationsMap);
         }
@@ -496,20 +529,19 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
         executionMap.set(categoryName, new Map()); // Initialize subcommand map
       }
 
-      // 4. Get all items (files and directories) in this category
+      // Get all items (files and directories) in this category
       const items = await readVisibleDirectory(categoryDir);
 
-      // 5. Process each item (file or directory)
+      // Process each item (file or directory)
       for (const item of items) {
         const itemPath = path.join(categoryDir, item.name);
 
-        // 6. Handle subcommand groups (directories)
+        // Handle subcommand groups (directories)
         if (item.isDirectory) {
           const groupName = item.name;
           log.info(`Processing subcommand group: ${categoryName}/${groupName}`);
 
           try {
-            // Get all command files in this group
             const groupCommandFiles = await getCommandFiles(itemPath);
 
             // Pre-load all command modules asynchronously to support top-level await
@@ -546,15 +578,12 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
               continue;
             }
 
-            // Add subcommand group to category
             categoryBuilder.addSubcommandGroup((group: SlashCommandSubcommandGroupBuilder) => {
-              // Get group description from localizations
               const groupLocalizationKey = `commands.${categoryName}.${groupName}.description`;
               const groupDescription = localizeWithAliases("en-US", groupLocalizationKey) || `${groupName} commands`;
 
               group.setName(groupName).setDescription(groupDescription);
 
-              // Apply group description localizations
               const groupLocalizationsMap: { [key: string]: string } = {};
               for (const locale of availableLocales) {
                 const localizedDesc = localizeWithAliases(locale, groupLocalizationKey);
@@ -566,10 +595,8 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
                 group.setDescriptionLocalizations(groupLocalizationsMap);
               }
 
-              // Process each loaded command in the group
               for (const { file: commandFile, module: commandModule } of loadedModules) {
                 try {
-                  // Validate exports
                   if (!commandModule.configureSubcommand || !commandModule.execute) {
                     log.warn(`Command at ${commandFile} is missing required exports`);
                     continue;
@@ -579,12 +606,10 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
                   const execute = commandModule.execute;
                   let subcommandName = "";
 
-                  // Add subcommand to group
                   group.addSubcommand((subcommand: SlashCommandSubcommandBuilder) => {
                     const configuredSubcommand = configureSubcommand(subcommand);
                     subcommandName = configuredSubcommand.name;
 
-                    // Apply subcommand localizations
                     if (subcommandName) {
                       applyCommandLocalizations(
                         configuredSubcommand,
@@ -639,7 +664,7 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
             await log.error(`Failed to load command group ${groupName}:`, error, context);
           }
         }
-        // 7. Handle flat subcommands (direct .ts files)
+        // Handle flat subcommands (direct .ts files)
         else if (item.isFile && itemPath.endsWith(".ts")) {
           const commandFile = itemPath;
 
@@ -667,14 +692,10 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
             // Use a temporary variable to store the subcommand name
             let subcommandName = "";
 
-            // Add the subcommand to the category builder
             categoryBuilder.addSubcommand((subcommand: SlashCommandSubcommandBuilder) => {
-              // Call the module's configureSubcommand function and capture its result
               const configuredSubcommand = configureSubcommand(subcommand);
-              // Get the name that was set
               subcommandName = configuredSubcommand.name;
 
-              // Apply subcommand localizations
               if (subcommandName) {
                 applyCommandLocalizations(configuredSubcommand, categoryName, subcommandName, availableLocales);
               }
@@ -775,7 +796,6 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
       }
     }
 
-    // Convert builders to the registration data array
     const registrationData = Array.from(builders.values()).map((builder) => builder.toJSON() as ApplicationCommandData);
 
     log.success(`Successfully loaded ${commandCount} commands in ${builders.size} top-level command definitions`);

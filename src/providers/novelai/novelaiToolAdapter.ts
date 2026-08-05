@@ -49,9 +49,6 @@ interface OpenAIObjectSchema extends OpenAIParameterSchema {
 export class NovelaiToolAdapter implements MCPCapableToolAdapter {
   private static instance: NovelaiToolAdapter;
 
-  /**
-   * Get singleton instance
-   */
   static getInstance(): NovelaiToolAdapter {
     if (!NovelaiToolAdapter.instance) {
       NovelaiToolAdapter.instance = new NovelaiToolAdapter();
@@ -59,18 +56,12 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
     return NovelaiToolAdapter.instance;
   }
 
-  /**
-   * Get the provider name this adapter supports
-   * @returns Provider identifier
-   */
   getProviderName(): string {
     return "novelai";
   }
 
   /**
    * Convert a generic tool to OpenAI function declaration format
-   * @param tool - The generic tool to convert
-   * @returns OpenAI-compatible function declaration
    */
   convertTool(tool: Tool): Record<string, unknown> {
     try {
@@ -91,7 +82,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Convert tool result back to OpenAI-specific format
-   * @param result - The generic tool result
    * @returns OpenAI-specific result format
    */
   convertResult(result: ToolResult): Record<string, unknown> {
@@ -137,8 +127,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Convert multiple tools to OpenAI tools array format
-   * @param tools - Array of generic tools
-   * @returns OpenAI tools configuration
    */
   convertToolsArray(tools: Tool[]): Array<Record<string, unknown>> {
     if (tools.length === 0) {
@@ -159,10 +147,8 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
   /**
    * Get all available tools (built-in + MCP) in provider-specific format
    * Implementation of MCPCapableToolAdapter interface
-   * @param builtInTools - Array of built-in tools
    * @param serverId - Optional Discord server ID for server-specific tool selection
    * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   * @returns Combined provider-specific tools configuration
    */
   async getAllToolsInProviderFormat(
     builtInTools: Tool[],
@@ -174,10 +160,8 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Get all available tools (built-in + MCP) in OpenAI tools format
-   * @param builtInTools - Array of built-in tools
    * @param serverId - Optional Discord server ID for server-specific tool selection
    * @param allowedMCPFunctions - Optional pre-filtered list of MCP function names to include
-   * @returns Combined OpenAI tools configuration
    */
   async getAllToolsInOpenAIFormat(
     builtInTools: Tool[],
@@ -187,19 +171,18 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // Brave-key dance removed — unified web_search is gated centrally.
+      // Brave-key dance removed: unified web_search is gated centrally.
       if (builtInTools.length > 0) {
         const builtInToolsFormatted = this.convertToolsArray(builtInTools);
         allTools.push(...builtInToolsFormatted);
         log.info(`NovelAI adapter: Converted ${builtInTools.length} built-in tools`);
       }
 
-      // Add MCP tools if available
       const mcpManager = getMCPManager();
       if (mcpManager.isReady() && allowedMCPFunctions) {
         let addedMCPToolsCount = 0;
 
-        // MCP functions disabled for NovelAI GLM — either redundant with
+        // MCP functions disabled for NovelAI GLM because either redundant with
         // other providers or too token-expensive for GLM's strict prompt budget.
         // "fetch" is the dedicated fetch MCP server; "fetch-url" is DDG's variant.
         // Note: brave_* names are no longer LLM-visible (replaced by unified
@@ -268,7 +251,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Check if a function name belongs to an MCP server
-   * @param functionName - The function name to check
    * @returns Promise<boolean> - True if the function is from an MCP server
    */
   async isMCPFunction(functionName: string): Promise<boolean> {
@@ -300,10 +282,7 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Execute an MCP function and return the result
-   * @param functionName - The MCP function to execute
-   * @param args - Function arguments
    * @param context - Optional tool context for additional information
-   * @returns Promise<TypedMCPToolResult> - Typed MCP tool execution result
    */
   async executeMCPFunction(
     functionName: string,
@@ -331,7 +310,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
 
   /**
    * Validate that a tool is compatible with this provider
-   * @param tool - The tool to validate
    * @returns boolean - True if compatible
    */
   validateToolCompatibility(tool: Tool): boolean {
@@ -344,7 +322,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
         return false;
       }
 
-      // Validate parameter types are supported
       for (const [paramName, paramSchema] of Object.entries(tool.parameters.properties)) {
         if (!this.isSupportedParameterSchema(paramSchema)) {
           log.warn(`Tool '${tool.name}' has unsupported parameter schema (param: ${paramName})`);
@@ -412,10 +389,6 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
   }
 }
 
-/**
- * Get singleton instance of the NovelAI tool adapter
- * @returns NovelAI tool adapter instance
- */
 export function getNovelaiToolAdapter(): NovelaiToolAdapter {
   return NovelaiToolAdapter.getInstance();
 }

@@ -1,173 +1,61 @@
 import {
   MessageFlags,
   type ChatInputCommandInteraction,
-  type ButtonInteraction,
-  type ModalSubmitInteraction,
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { localizer } from "@/utils/text/localizer";
-import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithPaginatedModal,
-  safeSelectOptionText,
-} from "@/utils/discord/ui/modals";
-import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
-import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository } from "@/utils/db/repositories";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasSampleDialogues } from "@/utils/discord/ui/personaEligibility";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+import { ColorCode, log } from "@/utils/misc/logger";
+import { localizer } from "@/utils/text/localizer";
 
-// Rule 20: Constants for static values at the top
 const MODAL_CUSTOM_ID = "forget_sampledialogue_modal";
 const DIALOGUE_SELECT_ID = "dialogue_select";
 
-/**
- * Repairs mismatched sample dialogue arrays by truncating both to the shorter length.
- * This heals corruption caused by the old array_remove() bug which could remove
- * duplicate values from one array but not the other, breaking alignment.
- * @param personaId - The tomori ID to repair
- * @param inLength - Current length of sample_dialogues_in
- * @param outLength - Current length of sample_dialogues_out
- * @returns The repaired [in, out] arrays, or null if repair failed
- */
 async function repairMismatchedDialogues(
   personaId: number,
   inLength: number,
   outLength: number,
+  serverDiscId: string,
 ): Promise<{ repairedIn: string[]; repairedOut: string[] } | null> {
-  // Truncate both arrays to the shorter length to restore alignment
   const safeLength = Math.min(inLength, outLength);
-
   log.warn(
     `Self-healing: truncating sample dialogues for tomori ${personaId} from (in: ${inLength}, out: ${outLength}) to ${safeLength} pairs`,
   );
-
   const repaired = await personaRepository.repairSampleDialogues(personaId, safeLength);
   if (!repaired) {
     log.error(`Self-healing failed: no rows returned for tomori ${personaId}`);
     return null;
   }
-
+  invalidateTomoriStateCache(serverDiscId);
   log.success(`Self-healing complete: sample dialogues for tomori ${personaId} repaired to ${safeLength} pairs`);
   return repaired;
 }
 
-/**
- * Helper function to perform sample dialogue removal from database
- * @param tomoriState - Current Tomori state
- * @param selectedIndex - Index of the dialogue pair to remove
- * @param currentIn - Current input dialogues array
- * @param currentOut - Current output dialogues array
- * @param userData - User data
- * @param replyInteraction - Interaction to reply to (can be modal or pagination)
- * @param locale - User locale
- */
-async function performSampleDialogueRemoval(
-  tomoriState: TomoriState,
-  selectedIndex: number,
-  currentIn: string[],
-  currentOut: string[],
-  userData: UserRow,
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
-  locale: string,
-  suppressSuccessReply = false,
-): Promise<boolean> {
-  if (tomoriState.persona_id === undefined) {
-    await log.error("Cannot remove sample dialogue for persona without persona_id");
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return false;
-  }
-
-  // Get the item being removed (for display purposes)
-  const itemToRemoveIn = currentIn[selectedIndex];
-  const itemToRemoveOut = currentOut[selectedIndex];
-
-  // Convert 0-based JS index to 1-based PostgreSQL ordinality
-  const pgIndex = selectedIndex + 1;
-
-  const removed = await personaRepository.removeSampleDialoguePairAt(tomoriState.persona_id, pgIndex);
-
-  if (!removed) {
-    // Log error specific to this update failure
-    const context: ErrorContext = {
-      personaId: tomoriState.persona_id,
-      serverId: tomoriState.server_id,
-      userId: userData.user_id,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "forget sampledialogue",
-        selectedIndex,
-      },
-    };
-
-    await log.error(
-      "Failed to update sample_dialogues in personas table",
-      new Error("Database update returned no rows"),
-      context,
-    );
-
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return false;
-  }
-
-  // Invalidate cache so next message gets fresh config
-  if (replyInteraction.guildId) {
-    invalidateTomoriStateCache(replyInteraction.guildId);
-  }
-
-  // Log success and show success message
-  log.success(
-    `Removed sample dialogue pair at index ${selectedIndex} for tomori ${tomoriState.persona_id} by user ${userData.user_disc_id}`,
-  );
-
-  if (!suppressSuccessReply) {
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "commands.forget.sampledialogue.success_title",
-      descriptionKey: "commands.forget.sampledialogue.success_description",
-      descriptionVars: {
-        input: itemToRemoveIn.length > 50 ? `${itemToRemoveIn.slice(0, 50)}...` : itemToRemoveIn,
-        output: itemToRemoveOut.length > 50 ? `${itemToRemoveOut.slice(0, 50)}...` : itemToRemoveOut,
-      },
-      color: ColorCode.SUCCESS,
-    });
-  }
-
-  return true;
-}
-
-// Rule 21: Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("remove")
     .setDescription(localizer("en-US", "commands.persona.sample-dialogue.remove.description"));
 
-/**
- * Rule 1: JSDoc comment for exported function
- * Removes a sample dialogue pair from Tomori's memory using a paginated embed
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
- */
+/** Removes a sample-dialogue pair from a selected persona. */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -178,14 +66,17 @@ export async function execute(
     return;
   }
 
-  // Define state and result variables outside try for catch block context
+  const serverDiscId = interaction.guild?.id ?? interaction.user.id;
   let tomoriState: TomoriState | null = null;
-  let selectedPersona: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
+  const workflowState: {
+    selectedPersona: TomoriState | null;
+    message: PersonaWorkflowMessageController | null;
+  } = { selectedPersona: null, message: null };
 
   try {
-    // 2. Load server's Tomori state (Rule 17)
-    tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -196,8 +87,7 @@ export async function execute(
       return;
     }
 
-    // Select target persona via paginated selector
-    const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -208,183 +98,188 @@ export async function execute(
       return;
     }
 
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    while (true) {
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
+    // Pre-picker eligibility guard shared with the workflow filter and the
+    // post-selection backstop below (all via `hasSampleDialogues`).
+    const eligiblePersonas = allPersonas.filter(hasSampleDialogues);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.sampledialogue.no_dialogues_title",
+        descriptionKey: "commands.forget.sampledialogue.no_dialogues",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
       });
-
-      if (!personaSelection.success) {
-        return;
-      }
-      if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-        return;
-      }
-
-      personaSelectionInteraction = personaSelection.interaction;
-      selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
-
-      // Check if user has Manage Server permission - admins can bypass teaching restriction
-      const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
-
-      // 4. Check if teaching is enabled - FIX: Access through config object
-      if (!tomoriState.config.sampledialogue_memteaching_enabled && !hasManagePermission) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.teach.sampledialogue.teaching_disabled_title",
-          descriptionKey: "commands.teach.sampledialogue.teaching_disabled_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      // 5. Get the current dialogue pairs
-      let currentIn = selectedPersona.sample_dialogues_in ?? [];
-      let currentOut = selectedPersona.sample_dialogues_out ?? [];
-
-      // 6. Self-heal mismatched arrays before checking emptiness
-      // This repairs corruption from the old array_remove() bug
-      if (currentIn.length !== currentOut.length && currentIn.length > 0 && currentOut.length > 0) {
-        const repaired = await repairMismatchedDialogues(
-          selectedPersona.persona_id,
-          currentIn.length,
-          currentOut.length,
-        );
-        if (repaired) {
-          currentIn = repaired.repairedIn;
-          currentOut = repaired.repairedOut;
-          // Invalidate cache so subsequent operations see repaired data
-          if (interaction.guildId) {
-            invalidateTomoriStateCache(interaction.guildId);
-          }
-        }
-      }
-
-      // 7. Check if there are any dialogues to remove after potential repair
-      if (currentIn.length === 0 || currentIn.length !== currentOut.length) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "commands.forget.sampledialogue.no_dialogues_title",
-          "commands.forget.sampledialogue.no_dialogues",
-          ColorCode.WARN,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
-
-      // 8. Create dialogue select options for the modal
-      const dialogueSelectOptions: SelectOption[] = currentIn.map((input, index) => {
-        const output = currentOut[index];
-        const truncatedInput = safeSelectOptionText(input, 50);
-        const truncatedOutput = safeSelectOptionText(output, 50);
-        //const fullDisplay = `User: "${truncatedInput}" → Bot: "${truncatedOutput}"`;
-
-        return {
-          label: safeSelectOptionText(truncatedInput),
-          value: index.toString(),
-          description: safeSelectOptionText(truncatedOutput),
-        };
-      });
-
-      // 9. Show the paginated modal with dialogue selection
-      const modalResult = await promptWithPaginatedModal(personaSelectionInteraction, locale, {
-        modalCustomId: MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.forget.sampledialogue.modal_title",
-        components: [
-          {
-            customId: DIALOGUE_SELECT_ID,
-            labelKey: "commands.forget.sampledialogue.select_label",
-            descriptionKey: "commands.forget.sampledialogue.select_description",
-            placeholder: "commands.forget.sampledialogue.select_placeholder",
-            required: true,
-            options: dialogueSelectOptions,
-          },
-        ],
-      });
-
-      // 10. Handle modal outcome - keep the persona picker loop alive when the modal closes
-      if (modalResult.outcome !== "submit") {
-        log.info(`Sample dialogue deletion modal ${modalResult.outcome} for user ${userData.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      // 11. Extract values from the modal
-      const modalSubmitInteraction = modalResult.interaction;
-      const selectedIndexStr = modalResult.values?.[DIALOGUE_SELECT_ID];
-
-      // Safety checks (should never be null after submit outcome)
-      if (!modalSubmitInteraction || !selectedIndexStr) {
-        log.error("Modal result unexpectedly missing interaction or values");
-        return;
-      }
-
-      const selectedIndex = Number.parseInt(selectedIndexStr, 10);
-
-      // 12. Perform the database update using the helper function - let helper manage interaction state
-      const removalSucceeded = await performSampleDialogueRemoval(
-        selectedPersona,
-        selectedIndex,
-        currentIn,
-        currentOut,
-        userData,
-        modalSubmitInteraction,
-        locale,
-        true,
-      );
-      if (!removalSucceeded) {
-        return;
-      }
-      await acknowledgeModalSubmitForRefresh(modalSubmitInteraction);
-      await replyComponentsV2Status(
-        interaction,
-        locale,
-        "commands.forget.sampledialogue.success_title",
-        "commands.forget.sampledialogue.success_description",
-        ColorCode.SUCCESS,
-        {
-          input:
-            currentIn[selectedIndex].length > 50
-              ? `${currentIn[selectedIndex].slice(0, 50)}...`
-              : currentIn[selectedIndex],
-          output:
-            currentOut[selectedIndex].length > 50
-              ? `${currentOut[selectedIndex].slice(0, 50)}...`
-              : currentOut[selectedIndex],
-        },
-        "general.pagination.reloading_persona_picker",
-      );
+      return;
     }
+
+    const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      eligibility: {
+        isEligible: hasSampleDialogues,
+        emptyTitleKey: "commands.forget.sampledialogue.no_dialogues_title",
+        emptyDescriptionKey: "commands.forget.sampledialogue.no_dialogues",
+        itemsLabelKey: "general.persona_workflow.items.sample_dialogues",
+      },
+      onSelected: async (selection) => {
+        workflowState.selectedPersona = selection.persona;
+        workflowState.message = selection.message;
+        const personaId = selection.persona.persona_id;
+
+        if (!personaId) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        if (!tomoriState?.config.sampledialogue_memteaching_enabled && !hasManagePermission) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.teach.sampledialogue.teaching_disabled_title",
+              descriptionKey: "commands.teach.sampledialogue.teaching_disabled_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
+
+        // Concurrency backstop reusing the shared predicate (both input and
+        // output arrays must be non-empty, identical to the picker filter).
+        let currentIn = [...(selection.persona.sample_dialogues_in ?? [])];
+        let currentOut = [...(selection.persona.sample_dialogues_out ?? [])];
+        if (!hasSampleDialogues(selection.persona)) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.forget.sampledialogue.no_dialogues_title",
+              descriptionKey: "commands.forget.sampledialogue.no_dialogues",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        const modalResult = await selection.openModal(async () => {
+          if (currentIn.length !== currentOut.length) {
+            const repaired = await repairMismatchedDialogues(
+              personaId,
+              currentIn.length,
+              currentOut.length,
+              serverDiscId,
+            );
+            if (!repaired) throw new Error("Failed to repair mismatched sample dialogues");
+            currentIn = repaired.repairedIn;
+            currentOut = repaired.repairedOut;
+            selection.persona.sample_dialogues_in = repaired.repairedIn;
+            selection.persona.sample_dialogues_out = repaired.repairedOut;
+          }
+
+          const options: SelectOption[] = currentIn.map((input, index) => ({
+            label: safeSelectOptionText(input, 50),
+            value: index.toString(),
+            description: safeSelectOptionText(currentOut[index] ?? "", 50),
+          }));
+          return {
+            modalCustomId: MODAL_CUSTOM_ID,
+            modalTitleKey: "commands.forget.sampledialogue.modal_title",
+            components: [
+              {
+                customId: DIALOGUE_SELECT_ID,
+                labelKey: "commands.forget.sampledialogue.select_label",
+                descriptionKey: "commands.forget.sampledialogue.select_description",
+                placeholder: "commands.forget.sampledialogue.select_placeholder",
+                required: true,
+                options,
+              },
+            ],
+          };
+        });
+        if (modalResult.outcome !== "submitted") {
+          log.info(`Sample dialogue deletion modal ${modalResult.outcome} for user ${userData.user_id}`);
+          return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+        }
+
+        const work = await modalResult.phase.beginInPlaceWork();
+        const selectedValue = modalResult.phase.values[DIALOGUE_SELECT_ID];
+        const selectedIndex = Number.parseInt(selectedValue ?? "", 10);
+        const itemToRemoveIn = currentIn[selectedIndex];
+        const itemToRemoveOut = currentOut[selectedIndex];
+        if (!Number.isInteger(selectedIndex) || itemToRemoveIn === undefined || itemToRemoveOut === undefined) {
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        const removed = await personaRepository.removeSampleDialoguePairAt(personaId, selectedIndex + 1);
+        if (!removed) {
+          const context: ErrorContext = {
+            personaId,
+            serverId: selection.persona.server_id,
+            userId: userData.user_id,
+            errorType: "DatabaseUpdateError",
+            metadata: { command: "forget sampledialogue", selectedIndex },
+          };
+          await log.error(
+            "Failed to update sample_dialogues in personas table",
+            new Error("Database update returned no rows"),
+            context,
+          );
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.update_failed_title",
+              descriptionKey: "general.errors.update_failed_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
+
+        invalidateTomoriStateCache(serverDiscId);
+        log.success(
+          `Removed sample dialogue pair at index ${selectedIndex} for tomori ${personaId} by user ${userData.user_disc_id}`,
+        );
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.forget.sampledialogue.success_title",
+            descriptionKey: "commands.forget.sampledialogue.success_description",
+            descriptionVars: {
+              input: itemToRemoveIn.length > 50 ? `${itemToRemoveIn.slice(0, 50)}...` : itemToRemoveIn,
+              output: itemToRemoveOut.length > 50 ? `${itemToRemoveOut.slice(0, 50)}...` : itemToRemoveOut,
+            },
+            footerKey: "general.pagination.reloading_persona_picker",
+            color: ColorCode.SUCCESS,
+          }),
+        );
+        const refreshedPersonas = await personaRepository.loadAllForServer(serverDiscId);
+        return retryPersonaWorkflow(refreshedPersonas);
+      },
+    });
   } catch (error) {
-    // 15. Catch unexpected errors
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: workflowState.selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "forget sampledialogue",
@@ -398,12 +293,18 @@ export async function execute(
       context,
     );
 
-    // 16. Inform user of unknown error, prioritizing unacknowledged button interaction
-    const errorReplyTarget =
-      personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction;
-    await replyInfoEmbed(errorReplyTarget, locale, {
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

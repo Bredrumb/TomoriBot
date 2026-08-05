@@ -1,6 +1,6 @@
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 
-export type FetchEngineName = "crawl4ai" | "mcp_fetch";
+export type FetchEngineName = "crawl4ai" | "safe_http";
 
 export interface FetchOpts {
   maxLength?: number;

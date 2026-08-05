@@ -1,0 +1,67 @@
+---
+// Screenshot-forward "marketing" card for landing/task-router surfaces, where a real
+// image sells the feature better than an icon (Starlight's built-in <Card> only
+// supports named icons). Used by the introduction landing page's feature-card deck.
+//
+// Props:
+// - title: heading rendered under the image.
+// - img:   root-relative image URL served from apps/docs/public/ (e.g. "/img/1.png").
+//          Production serves apps/docs/dist, so images must live under public/.
+// - href:  optional navigation target; when set the whole card becomes a link.
+//
+// The card body text is passed as the default <slot/>.
+//
+// Reserve this component for evergreen landing/task-router grids; prefer the built-in
+// <Card>/<CardGrid>/<LinkCard> for deep reference pages likely to drift with the UI.
+interface Props {
+  title: string;
+  img: string;
+  href?: string;
+}
+const { title, img, href } = Astro.props;
+const Tag = href ? "a" : "div";
+---
+
+<Tag class="feature-card" href={href}>
+  <img src={img} alt={title} loading="lazy" />
+  <div class="feature-card__body">
+    <h3 class="feature-card__title">{title}</h3>
+    <p class="feature-card__text"><slot /></p>
+  </div>
+</Tag>
+
+<style>
+  .feature-card {
+    display: block;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: var(--sl-color-black);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+  .feature-card:hover {
+    border-color: var(--sl-color-accent);
+    transform: translateY(-3px);
+  }
+  .feature-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+  .feature-card__body {
+    padding: 1rem;
+  }
+  .feature-card__title {
+    margin: 0 0 0.35rem;
+    font-size: var(--sl-text-h4);
+    line-height: 1.2;
+  }
+  .feature-card__text {
+    margin: 0;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+</style>

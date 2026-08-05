@@ -7,6 +7,7 @@ import type {
   TextChannel,
 } from "discord.js";
 import { replaceMentionHandles } from "@/utils/text/processors/mentionProcessor";
+import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 
 /**
  * Channel shape accepted by {@link resolveGuildMentions}. Matches both `StreamContext.channel`
@@ -80,6 +81,7 @@ export async function resolveGuildMentions(
   channel: MentionResolvableChannel,
   mentionMap: Map<string, string[]>,
   mentionIdSet: Set<string>,
+  personaMentionMap?: ReadonlyMap<string, string>,
 ): Promise<string> {
   if (!text.includes("@")) return text;
   if (!("guild" in channel)) return text;
@@ -98,7 +100,7 @@ export async function resolveGuildMentions(
   }
 
   for (const handle of handles) {
-    const normalizedHandle = handle.toLowerCase();
+    const normalizedHandle = normalizeParticipantAlias(handle);
     const existing = mentionMap.get(normalizedHandle);
     if (existing?.length === 1) continue;
     if (existing && existing.length > 1) continue;
@@ -106,7 +108,9 @@ export async function resolveGuildMentions(
     const results = await guild.members.search({ query: handle, limit: 5 }).catch(() => null);
     if (!results || results.size === 0) continue;
 
-    const exactUsernameMatches = results.filter((member) => member.user.username.toLowerCase() === normalizedHandle);
+    const exactUsernameMatches = results.filter(
+      (member) => normalizeParticipantAlias(member.user.username) === normalizedHandle,
+    );
     if (exactUsernameMatches.size === 1) {
       const member = exactUsernameMatches.first();
       if (member) {
@@ -116,7 +120,9 @@ export async function resolveGuildMentions(
       continue;
     }
 
-    const exactGlobalMatches = results.filter((member) => member.user.globalName?.toLowerCase() === normalizedHandle);
+    const exactGlobalMatches = results.filter(
+      (member) => !!member.user.globalName && normalizeParticipantAlias(member.user.globalName) === normalizedHandle,
+    );
     if (exactGlobalMatches.size === 1) {
       const member = exactGlobalMatches.first();
       if (member) {
@@ -126,7 +132,9 @@ export async function resolveGuildMentions(
       continue;
     }
 
-    const exactNicknameMatches = results.filter((member) => member.nickname?.toLowerCase() === normalizedHandle);
+    const exactNicknameMatches = results.filter(
+      (member) => !!member.nickname && normalizeParticipantAlias(member.nickname) === normalizedHandle,
+    );
     if (exactNicknameMatches.size === 1) {
       const member = exactNicknameMatches.first();
       if (member) {
@@ -136,5 +144,5 @@ export async function resolveGuildMentions(
     }
   }
 
-  return replaceMentionHandles(text, mentionMap, mentionIdSet);
+  return replaceMentionHandles(text, mentionMap, mentionIdSet, personaMentionMap);
 }

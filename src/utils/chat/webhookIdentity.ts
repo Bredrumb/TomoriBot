@@ -66,11 +66,11 @@ export function getCachedImpersonatedUserIdForWebhook(webhookId: string | null |
   return cachedRelay.userId;
 }
 
-export function normalizeIdentityName(value?: string | null): string {
+function normalizeIdentityName(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-export function normalizeAvatarUrlForMatch(value?: string | null): string | null {
+function normalizeAvatarUrlForMatch(value?: string | null): string | null {
   if (!value) {
     return null;
   }
@@ -83,6 +83,40 @@ export function normalizeAvatarUrlForMatch(value?: string | null): string | null
     const trimmed = value.split("?")[0]?.trim();
     return trimmed || null;
   }
+}
+
+function resolvePersonaByWebhookName(
+  rawWebhookName: string | null | undefined,
+  personaByNickname: Map<string, TomoriState>,
+): TomoriState | null {
+  if (!rawWebhookName || extractBridgeUserId(rawWebhookName)) {
+    return null;
+  }
+
+  const webhookName = stripBridgePrefix(rawWebhookName);
+  const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByNickname);
+  return renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)) ?? null;
+}
+
+export function resolvePersonaForMessage(
+  message: Message,
+  allPersonas: readonly TomoriState[],
+  clientUserId?: string | null,
+): TomoriState | null {
+  if (!message.webhookId) {
+    return clientUserId && message.author.id === clientUserId
+      ? (allPersonas.find((persona) => !persona.is_alter) ?? null)
+      : null;
+  }
+
+  const personaByNickname = new Map<string, TomoriState>();
+  for (const persona of allPersonas) {
+    const nicknameKey = persona.persona_nickname ? normalizeRenderModifierName(persona.persona_nickname) : "";
+    if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
+    personaByNickname.set(nicknameKey, persona);
+  }
+
+  return resolvePersonaByWebhookName(message.author.username, personaByNickname);
 }
 
 function resolveImpersonatedUserIdByWebhookIdentity(
@@ -182,14 +216,9 @@ export function resolveReferencedWebhookTarget(
 
   const cachedRelay = getCachedWebhookRelay(referenceMessage.webhookId);
   const rawWebhookName = referenceMessage.author.username;
-  if (rawWebhookName && !extractBridgeUserId(rawWebhookName)) {
-    const webhookName = stripBridgePrefix(rawWebhookName);
-    const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByNickname);
-    const matchedPersona =
-      renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName));
-    if (matchedPersona) {
-      return { replyPersona: matchedPersona, impersonatedUserId: null };
-    }
+  const matchedPersona = resolvePersonaByWebhookName(rawWebhookName, personaByNickname);
+  if (matchedPersona) {
+    return { replyPersona: matchedPersona, impersonatedUserId: null };
   }
 
   if (cachedRelay?.kind === "user_impersonation") {

@@ -15,7 +15,7 @@
 import { config } from "dotenv";
 import { sql } from "bun";
 
-// Load .env before importing keyManager — ES module imports are hoisted
+// Load .env before importing keyManager because ES module imports are hoisted
 // above runtime code, so keyManager would read an empty process.env if
 // we imported it statically at the top of this file.
 config();
@@ -36,7 +36,6 @@ function getPostgresUrl(): string {
     return process.env.POSTGRES_URL;
   }
 
-  // Otherwise, build URL from components
   const host = process.env.POSTGRES_HOST || "localhost";
   const port = process.env.POSTGRES_PORT || "5432";
   const user = process.env.POSTGRES_USER || "postgres";
@@ -79,10 +78,8 @@ async function rotateAllKeys() {
       .join(", ")}\n`,
   );
 
-  // 1. Find all keys not on current version
   const oldKeys: OldKeyRow[] = [];
 
-  // Check opt_api_keys table
   try {
     const optApiKeys = await sql`
 			SELECT opt_api_key_id, server_id, service_name, api_key, key_version
@@ -104,7 +101,6 @@ async function rotateAllKeys() {
     console.error("❌ Failed to query opt_api_keys:", error);
   }
 
-  // 2. Check if there's anything to rotate
   if (oldKeys.length === 0) {
     console.log(`✅ All keys are already on the current version (V${currentVersion})`);
     console.log("   No rotation needed!\n");
@@ -113,7 +109,6 @@ async function rotateAllKeys() {
 
   console.log(`Found ${oldKeys.length} keys to rotate:\n`);
 
-  // Group by table for display
   const byTable = oldKeys.reduce(
     (acc, key) => {
       acc[key.table] = (acc[key.table] || 0) + 1;
@@ -131,7 +126,6 @@ async function rotateAllKeys() {
   if (isDryRun) {
     console.log("📋 Keys that would be rotated:\n");
     for (const key of oldKeys.slice(0, 10)) {
-      // Show first 10
       console.log(`   V${key.key_version} → V${currentVersion}: ${key.table} (${key.identifier})`);
     }
     if (oldKeys.length > 10) {
@@ -141,7 +135,6 @@ async function rotateAllKeys() {
     return;
   }
 
-  // 3. Perform rotation
   console.log("🔄 Starting rotation...\n");
 
   let successCount = 0;
@@ -150,13 +143,10 @@ async function rotateAllKeys() {
 
   for (const oldKey of oldKeys) {
     try {
-      // Decrypt with old version
       const plaintext = await decryptApiKey(oldKey.api_key, oldKey.key_version);
 
-      // Encrypt with current version
       const { encrypted, version } = await encryptApiKey(plaintext);
 
-      // Update database based on table
       if (oldKey.table === "opt_api_keys") {
         await sql`
 					UPDATE opt_api_keys
@@ -178,7 +168,6 @@ async function rotateAllKeys() {
     }
   }
 
-  // 4. Summary
   console.log("\n=== Rotation Summary ===\n");
   console.log(`   ✅ Succeeded: ${successCount}`);
   console.log(`   ❌ Failed: ${failCount}`);
@@ -187,7 +176,6 @@ async function rotateAllKeys() {
   if (failCount > 0) {
     console.log("⚠️  Some keys failed to rotate. Details:");
     for (const { key, error } of errors.slice(0, 5)) {
-      // Show first 5 errors
       console.log(`   - ${key.table} (${key.identifier}): ${error instanceof Error ? error.message : error}`);
     }
     if (errors.length > 5) {

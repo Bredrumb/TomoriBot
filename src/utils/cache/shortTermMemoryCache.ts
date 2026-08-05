@@ -61,7 +61,7 @@ export interface ShortTermMemoryEntry {
   /** Discord channel ID */
   channelId: string;
 
-  /** Parent channel ID when channelId is a thread — used for privacy/RP inheritance checks */
+  /** Parent channel ID when channelId is a thread , so used for privacy/RP inheritance checks */
   parentChannelId?: string | null;
 
   /** Optional channel name (for same-server channel mentions) */
@@ -88,27 +88,22 @@ interface CacheStats {
   expirations: number;
 }
 
-// Environment variables for configuration
 const CRUDE_CONVERSATION_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_TTL_HOURS || "12", 10);
 export const STM_MAX_CATEGORIES = Number.parseInt(process.env.STM_MAX_CATEGORIES || "5", 10);
 const SUMMARY_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS || "24", 10);
 const MAX_SUMMARY_LENGTH = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH || "1500", 10);
 const MAX_MESSAGES_PER_CHANNEL = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL || "10", 10);
 
-// Convert hours to milliseconds
 const CRUDE_CONVERSATION_TTL_MS = CRUDE_CONVERSATION_TTL_HOURS * 60 * 60 * 1000;
 const SUMMARY_TTL_MS = SUMMARY_TTL_HOURS * 60 * 60 * 1000;
 
-// Export constants for use in tools and context builders
 export { MAX_SUMMARY_LENGTH };
 
 const USER_CACHE_PREFIX = "shortterm:user";
 const SERVER_CACHE_PREFIX = "shortterm:server";
 
-// In-memory cache: Map<scope:key, ShortTermMemoryEntry>
 const cache = new Map<string, ShortTermMemoryEntry>();
 
-// Cache statistics
 const stats: CacheStats = {
   hits: 0,
   misses: 0,
@@ -117,12 +112,12 @@ const stats: CacheStats = {
   expirations: 0,
 };
 
-// In-flight DB hydrations keyed by cache key — prevents duplicate reads and allows awaiting.
+// In-flight DB hydrations keyed by cache key: prevents duplicate reads and allows awaiting.
 const pendingHydrations = new Map<string, Promise<void>>();
 
 // Servers/users whose full STM row set has been bulk-loaded from the DB this process.
 // After the one-shot bulk warm, every live STM write updates the cache directly, so we
-// never need to re-query — this guards against re-running the bulk SELECT each turn.
+// never need to re-query: this guards against re-running the bulk SELECT each turn.
 const bulkWarmedServers = new Set<string>();
 const bulkWarmedUsers = new Set<string>();
 
@@ -131,7 +126,7 @@ const STM_CONFLICT = `(scope_kind, COALESCE(server_disc_id, ''), COALESCE(user_d
 
 /**
  * Ensures a short_term_memories row exists for the given scope identity.
- * Does NOT overwrite existing categories, summary, or counters — safe to call
+ * Does NOT overwrite existing categories, summary, or counters: safe to call
  * on every conversation turn to guarantee the row is present before later updates.
  */
 async function ensureStmRow(
@@ -351,14 +346,12 @@ function getServerCacheKey(serverId: string, channelId: string, personaId?: numb
 
 /**
  * Check if a cache entry has expired based on TTL
- * @param entry - The cache entry to check
  * @returns True if expired, false otherwise
  */
 function isExpired(entry: ShortTermMemoryEntry): boolean {
   const now = Date.now();
   const age = now - entry.lastUpdated;
 
-  // If summary exists, use summary TTL; otherwise use crude conversation TTL
   const ttl = entry.summary ? SUMMARY_TTL_MS : CRUDE_CONVERSATION_TTL_MS;
 
   return age > ttl;
@@ -366,19 +359,15 @@ function isExpired(entry: ShortTermMemoryEntry): boolean {
 
 /**
  * Format a timestamp as a relative time string
- * @param timestamp - Unix timestamp in milliseconds
- * @returns Human-readable relative time (e.g., "2 hours ago", "just now")
  */
 export function getRelativeTimestamp(timestamp: number): string {
   const now = Date.now();
   const diffMs = now - timestamp;
 
-  // Convert to different units
   const diffMinutes = Math.floor(diffMs / (60 * 1000));
   const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
   const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
 
-  // Format based on age
   if (diffMinutes < 1) {
     return "just now";
   }
@@ -587,7 +576,7 @@ export async function preWarmStmEntry(
  * Bulk-warms every persisted server-scoped STM row for a guild into the cache in a single
  * query. Call this (with await) before the synchronous `getShortTermMemoriesForServer`
  * read so cross-channel recall is available on the FIRST turn after a restart instead of
- * the second — the single-key pre-warm only covers the current channel, but cross-channel
+ * the second: the single-key pre-warm only covers the current channel, but cross-channel
  * recall needs every channel's row.
  *
  * One-shot per server per process: once warmed, live STM writes keep the cache current,
@@ -698,7 +687,6 @@ function updateSummaryForKey(
 }
 
 /**
- * Store a short-term memory for a user in a channel
  *
  * @param userId - Discord user ID
  * @param channelId - Discord channel ID
@@ -737,8 +725,6 @@ export function storeShortTermMemory(
     const limitedMessages = messages.slice(-MAX_MESSAGES_PER_CHANNEL);
     const resolvedPersonaId = personaId ?? null;
     const resolvedLineageId = personaLineageId ?? null;
-
-    // 1. Write to in-memory cache for both scopes
     storeMemoryEntry(
       getUserCacheKey(userId, channelId, personaId),
       channelId,
@@ -765,7 +751,7 @@ export function storeShortTermMemory(
       );
     }
 
-    // 2. Ensure durable rows exist (fire-and-forget; DO NOTHING on conflict to preserve categories/summary)
+    // Ensure durable rows exist (fire-and-forget; DO NOTHING on conflict to preserve categories/summary)
     const serverDiscId = serverId !== "DM" ? serverId : null;
     void ensureStmRow("user", serverDiscId, userId, channelId, resolvedPersonaId, resolvedLineageId).catch((err) =>
       log.warn("[shortTermMemoryCache] Failed to persist user STM row", { error: err }),
@@ -793,7 +779,6 @@ export function storeShortTermMemory(
  * @param userId - Discord user ID
  * @param excludeChannelId - Optional channel ID to exclude (e.g., current channel)
  * @param personaLineageId - Optional persona lineage ID to filter by (only returns entries matching this lineage)
- * @returns Array of non-expired memory entries
  */
 export function getShortTermMemoriesForUser(
   userId: string,
@@ -818,7 +803,6 @@ export function getShortTermMemoriesForUser(
  * @param serverId - Discord server ID
  * @param excludeChannelId - Optional channel ID to exclude (e.g., current channel)
  * @param personaLineageId - Optional persona lineage ID to filter by
- * @returns Array of non-expired memory entries
  */
 export function getShortTermMemoriesForServer(
   serverId: string,
@@ -902,17 +886,6 @@ export function getShortTermMemoryForServerChannel(
 }
 
 /**
- * Backwards-compatible alias for user-scoped channel lookup
- */
-export function getShortTermMemoryForChannel(
-  userId: string,
-  channelId: string,
-  personaId?: number | null,
-): ShortTermMemoryEntry | undefined {
-  return getShortTermMemoryForUserChannel(userId, channelId, personaId);
-}
-
-/**
  * Update the summary for short-term memory entries (used by update_short_term_memory tool)
  *
  * @param userId - Discord user ID
@@ -947,8 +920,6 @@ export function updateShortTermMemorySummary(
     const truncatedSummary = summary.length > MAX_SUMMARY_LENGTH ? summary.slice(0, MAX_SUMMARY_LENGTH) : summary;
     const resolvedPersonaId = personaId ?? null;
     const resolvedLineageId = personaLineageId ?? null;
-
-    // 1. Update in-memory cache
     updateSummaryForKey(
       getUserCacheKey(userId, channelId, personaId),
       truncatedSummary,
@@ -975,7 +946,7 @@ export function updateShortTermMemorySummary(
       );
     }
 
-    // 2. Persist to DB after successful cache update (CLAUDE.md rule 5)
+    // Persist to DB after successful cache update (CLAUDE.md rule 5)
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     void upsertStmSummary(
       "user",
@@ -1049,7 +1020,7 @@ export function invalidateShortTermMemory(
 }
 
 /**
- * Durably clear a short-term memory summary — evicts cache AND nulls the
+ * Durably clear a short-term memory summary: evicts cache and nulls the
  * summary column in the DB so the cleared state survives cache misses.
  *
  * @param userId - Discord user ID
@@ -1064,10 +1035,10 @@ export function clearShortTermMemorySummary(
   serverId?: string,
 ): void {
   try {
-    // 1. Evict in-memory cache entries (identical to invalidateShortTermMemory)
     invalidateShortTermMemory(userId, channelId, personaId, serverId);
 
-    // 2. Persist the clear to the DB so hydrateEntryFromDb won't resurrect the old summary
+    // Eviction alone is not durable: hydrateEntryFromDb would resurrect the old
+    // summary on the next cache miss, so the clear must also reach the DB.
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     const resolvedPersonaId = personaId ?? null;
     void clearStmSummary("user", serverDiscId, userId, channelId, resolvedPersonaId).catch((err) =>
@@ -1099,7 +1070,6 @@ export function clearShortTermMemoryForChannel(channelId: string): void {
   try {
     let clearedCount = 0;
 
-    // Find and delete all entries for this channel (across all users)
     for (const [key, entry] of cache.entries()) {
       if (entry.channelId === channelId) {
         cache.delete(key);
@@ -1164,7 +1134,6 @@ export function clearShortTermMemoryForUser(userId: string): void {
   try {
     let clearedCount = 0;
 
-    // Find and delete all user-scoped entries for this user
     for (const key of cache.keys()) {
       if (key.startsWith(`${USER_CACHE_PREFIX}:${userId}:`)) {
         cache.delete(key);
@@ -1189,7 +1158,6 @@ export function clearExpiredEntries(): void {
   try {
     let expiredCount = 0;
 
-    // Iterate and remove expired entries
     for (const [key, entry] of cache.entries()) {
       if (isExpired(entry)) {
         cache.delete(key);
@@ -1227,7 +1195,6 @@ export function clearShortTermMemoryCache(): void {
 /**
  * Get cache statistics for monitoring performance
  *
- * @returns Cache hit/miss/store/invalidation/expiration stats
  */
 export function getShortTermMemoryCacheStats(): CacheStats & {
   size: number;
@@ -1278,8 +1245,6 @@ export async function updateShortTermMemoryCategories(
 
     const resolvedPersonaId = personaId ?? null;
     const resolvedLineageId = personaLineageId ?? null;
-
-    // 1. Update in-memory cache for both scopes
     const userKey = getUserCacheKey(userId, channelId, personaId);
     let userEntry = cache.get(userKey);
     if (!userEntry) {
@@ -1320,7 +1285,7 @@ export async function updateShortTermMemoryCategories(
       cache.set(serverKey, serverEntry);
     }
 
-    // 2. Persist to DB after cache is updated (CLAUDE.md rule 5)
+    // Persist to DB after cache is updated (CLAUDE.md rule 5)
     const serverDiscId = serverId && serverId !== "DM" ? serverId : null;
     await upsertStmCategories(
       "user",
@@ -1369,14 +1334,10 @@ export async function incrementStmTurnCounter(
     const cacheKey = serverId
       ? getServerCacheKey(serverId, channelId, personaId)
       : getUserCacheKey(userId ?? "", channelId, personaId);
-
-    // 1. Increment in-memory entry if present
     const entry = cache.get(cacheKey);
     if (entry) {
       entry.turnsSinceRefresh = (entry.turnsSinceRefresh ?? 0) + 1;
     }
-
-    // 2. Persist increment to DB
     await incrementStmCounter(scopeKind, serverId, userId, channelId, resolvedPersonaId, null);
   } catch (error) {
     log.error("[shortTermMemoryCache] Failed to increment STM turn counter", error, {
@@ -1408,15 +1369,11 @@ export async function resetStmTurnCounter(
     const cacheKey = serverId
       ? getServerCacheKey(serverId, channelId, personaId)
       : getUserCacheKey(userId ?? "", channelId, personaId);
-
-    // 1. Reset in-memory entry if present
     const entry = cache.get(cacheKey);
     if (entry) {
       entry.lastRefreshedTurn = (entry.lastRefreshedTurn ?? 0) + 1;
       entry.turnsSinceRefresh = 0;
     }
-
-    // 2. Persist reset to DB
     await resetStmCounter(scopeKind, serverId, userId, channelId, resolvedPersonaId, null);
   } catch (error) {
     log.error("[shortTermMemoryCache] Failed to reset STM turn counter", error, {

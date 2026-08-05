@@ -10,34 +10,42 @@ export async function* streamOpenAICompatibleSseChunks(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let completed = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        completed = true;
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine.startsWith(":")) {
+          continue;
+        }
+
+        if (!trimmedLine.startsWith("data:")) {
+          continue;
+        }
+
+        const data = trimmedLine.slice(5).trim();
+        if (data === "[DONE]") {
+          continue;
+        }
+
+        yield JSON.parse(data) as OpenAICompatibleStreamChunk;
+      }
     }
-
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine || trimmedLine.startsWith(":")) {
-        continue;
-      }
-
-      if (!trimmedLine.startsWith("data:")) {
-        continue;
-      }
-
-      const data = trimmedLine.slice(5).trim();
-      if (data === "[DONE]") {
-        continue;
-      }
-
-      yield JSON.parse(data) as OpenAICompatibleStreamChunk;
+  } finally {
+    if (!completed) {
+      await reader.cancel().catch(() => undefined);
     }
   }
 }

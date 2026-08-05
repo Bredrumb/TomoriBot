@@ -40,7 +40,6 @@ function flatten(obj: unknown, prefix = ""): Record<string, string> {
  * (URLs, version strings) are excluded from the "likely English" check.
  */
 function looksLikeEnglish(value: string): boolean {
-  // Strip placeholders like {seconds}, URLs, emojis, numbers, punctuation
   const stripped = value
     .replace(/\{[^}]+\}/g, "") // remove {placeholders}
     .replace(/https?:\/\/\S+/g, "") // remove URLs
@@ -50,11 +49,9 @@ function looksLikeEnglish(value: string): boolean {
 
   if (stripped.length === 0) return false; // nothing meaningful left
 
-  // Count Latin vs Japanese/CJK characters
   const latinCount = (stripped.match(/[a-zA-Z]/g) ?? []).length;
   const cjkCount = (stripped.match(/[\u3000-\u9FFF\uFF00-\uFFEF]/g) ?? []).length;
 
-  // Flag as "likely English" if the string has Latin chars but no CJK
   return latinCount > 0 && cjkCount === 0;
 }
 
@@ -122,7 +119,6 @@ export interface StaleEntry {
  * The locale directory structure is: src/locales/{locale}/*.ts (category files).
  * Each category file exports a default object whose top-level keys are merged.
  *
- * @param localeName - Locale identifier, e.g. "en-US" or "ja"
  * @returns Merged locale object containing all keys from all category slices
  */
 async function loadMergedLocale(localeName: string): Promise<Record<string, unknown>> {
@@ -168,7 +164,7 @@ async function findStaleTranslations(): Promise<StaleEntry[]> {
 }
 
 /**
- * Main entry — two modes:
+ * Main entry: two modes:
  *   (default)     Print a compact human-readable review list to the console
  *   --export      Write a JSON file for use with the translation script
  */
@@ -186,7 +182,6 @@ async function main(): Promise<void> {
   log.info(`  • ${likelyEnglish.length} keys with Japanese value that appears to be English text`);
 
   if (!doExport) {
-    // Human-readable review: print grouped by prefix
     const grouped = new Map<string, StaleEntry[]>();
     for (const entry of stale) {
       const prefix = entry.key.split(".").slice(0, 3).join(".");

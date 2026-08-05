@@ -2,7 +2,6 @@ import type {
   GeneratePresetParams,
   PresetGenerationResult,
   CompactConversationResult,
-  CompactRoleplayResult,
   ProviderCompactSummaryRequest as ProviderCapabilityCompactSummaryRequest,
   ProviderPresetGenerationRequest as ProviderCapabilityPresetGenerationRequest,
   StructuredOutputResult,
@@ -98,19 +97,6 @@ export async function generateConversationSummaryForProvider(
   return await capability.generateConversationSummary(request);
 }
 
-export async function generateRoleplaySummaryForProvider(
-  request: ProviderCompactSummaryRequest,
-): Promise<CompactRoleplayResult> {
-  const capability = await resolveConversationCompactionCapability(request.providerName);
-  if (!capability) {
-    return {
-      error: `Roleplay compaction is not implemented for provider ${request.providerName}.`,
-    };
-  }
-
-  return await capability.generateRoleplaySummary(request);
-}
-
 export async function callExpressionInitializationForProvider(
   request: ProviderExpressionInitializationRequest,
 ): Promise<StructuredOutputResult<ExpressionBatchResult>> {
@@ -138,13 +124,28 @@ export async function callExpressionInitializationForProvider(
   );
 }
 
+/**
+ * Outcome of a single history-extraction window.
+ *
+ * Distinguishes a genuine empty result (`ok: true` with zero entries) from a real
+ * failure, so callers can tell "this window held nothing worth extracting" apart from
+ * "the model/provider could not produce structured output". Collapsing both into an
+ * empty array is what previously surfaced provider errors as "No Facts Extracted".
+ */
+export type HistoryExtractionOutcome =
+  /** `discarded` counts entries the model returned that could not be validated. */
+  | { ok: true; entries: HistoryMemoryEntry[]; discarded: number }
+  /** `unsupported`: provider exposes no structured-output capability at all. `failed`: the call itself errored. */
+  | { ok: false; reason: "unsupported" | "failed"; error: string };
+
 export async function extractHistoryWindowForProvider(
   request: ProviderHistoryExtractionRequest,
-): Promise<HistoryMemoryEntry[]> {
+): Promise<HistoryExtractionOutcome> {
   const capability = await resolveStructuredOutputCapability(request.providerName);
   if (!capability) {
-    log.warn(`History extraction is not implemented for provider ${request.providerName}.`);
-    return [];
+    const error = `History extraction is not implemented for provider ${request.providerName}.`;
+    log.warn(error);
+    return { ok: false, reason: "unsupported", error };
   }
 
   const responseSchema = buildHistoryExtractionResponseSchema();
@@ -162,9 +163,15 @@ export async function extractHistoryWindowForProvider(
   const result = await capability.callStructuredJSON(structuredRequest, responseSchema, HistoryExtractionResultSchema);
 
   if (result.success) {
-    return result.data.memories;
+    if (result.data.discarded > 0) {
+      log.warn(
+        `History extraction (${request.providerName}) discarded ${result.data.discarded} malformed ` +
+          `entries, keeping ${result.data.memories.length}.`,
+      );
+    }
+    return { ok: true, entries: result.data.memories, discarded: result.data.discarded };
   }
 
   log.warn(`History extraction failed (${request.providerName}): ${result.error}`);
-  return [];
+  return { ok: false, reason: "failed", error: result.error };
 }

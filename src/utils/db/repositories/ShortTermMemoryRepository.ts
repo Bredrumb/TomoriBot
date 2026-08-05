@@ -1,7 +1,7 @@
 /**
- * ShortTermMemoryRepository — manages in-conversation short-term working memory.
+ * ShortTermMemoryRepository: manages in-conversation short-term working memory.
  *
- * Architecture (post migration 035):
+ * Architecture (post migration 051):
  *   - Per-channel durable state (categories, summary, turn counters) lives in
  *     `short_term_memories` and is kept hot by shortTermMemoryCache.ts via
  *     read-through / write-through. State methods here delegate to the cache.
@@ -22,7 +22,6 @@ import {
   getShortTermMemoriesForServer,
   getShortTermMemoryForUserChannel,
   getShortTermMemoryForServerChannel,
-  getShortTermMemoryForChannel,
   updateShortTermMemorySummary,
   updateShortTermMemoryCategories,
   incrementStmTurnCounter,
@@ -37,7 +36,7 @@ import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
 /**
- * Exported shape for STM config (config only — per-channel state is excluded).
+ * Exported shape for STM config (config only: per-channel state is excluded).
  * Consumed by the Phase 6 export pipeline and `/server config export`.
  */
 export type ShortTermMemoryExportShape = {
@@ -103,9 +102,9 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
    * falls back to server-scoped).
    */
   getForChannel(
-    ...args: Parameters<typeof getShortTermMemoryForChannel>
-  ): ReturnType<typeof getShortTermMemoryForChannel> {
-    return getShortTermMemoryForChannel(...args);
+    ...args: Parameters<typeof getShortTermMemoryForUserChannel>
+  ): ReturnType<typeof getShortTermMemoryForUserChannel> {
+    return getShortTermMemoryForUserChannel(...args);
   }
 
   // ── cache-delegating writes ────────────────────────────────────────────────
@@ -181,7 +180,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     clearShortTermMemoryForUser(userId);
   }
 
-  // ── config DB reads ────────────────────────────────────────────────────────
 
   /**
    * Loads the STM config row for a server. Returns null when not yet set up.
@@ -246,7 +244,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     }
   }
 
-  // ── config DB writes ───────────────────────────────────────────────────────
 
   /**
    * Upserts the STM config row for a server (insert on first save, update thereafter).
@@ -320,7 +317,23 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
+
+  /**
+   * Deletes durable `short_term_memories` rows untouched for longer than the
+   * retention window, returning how many were removed. Cache entries are left
+   * alone because they age out on their own TTL.
+   *
+   * @param retentionDays - Age threshold in days
+   */
+  async purgeStaleEntries(retentionDays: number): Promise<number> {
+    const rows = await sql`
+      DELETE FROM short_term_memories
+      WHERE updated_at < NOW() - (${retentionDays} || ' days')::INTERVAL
+      RETURNING stm_id
+    `;
+    return rows.length;
+  }
+
 
   /**
    * Exports STM config (cadence, render mode, prompt overrides, category definitions)
@@ -402,5 +415,5 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const shortTermMemoryRepository = new ShortTermMemoryRepository();

@@ -9,6 +9,7 @@ sidebar:
 ## Files
 
 - `src/index.ts` — orchestrator (calls init modules in order)
+- `src/init/backup.ts` — non-production automatic data backup gate
 - `src/init/healthServer.ts` — health HTTP server
 - `src/init/secrets.ts` — secrets loading + key manager init
 - `src/init/discord.ts` — Discord client construction + error handlers
@@ -21,10 +22,11 @@ sidebar:
 ## Startup Sequence
 
 1. Load `.env` (`dotenv`); resolve `AppEnvironment`.
-2. In production: bind health HTTP server on `$PORT` (default 8080) — returns 503 until Discord ready.
-3. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
-4. Construct Discord client with intents + sweepers; register process/client error handlers.
-5. Initialize database:
+2. In non-production: run the automatic data backup gate before secrets, Discord, or database initialization. It creates a full `backupData.ts`-compatible bundle when the latest data backup was made by another bot version or is older than `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (default 24). Only automatic bundles count toward `TOMORI_AUTO_BACKUP_MAX` retention (default 5); manual `bun run backup` bundles are never pruned by this gate.
+3. In production: bind health HTTP server on `$PORT` (default 8080) — returns 503 until Discord ready.
+4. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
+5. Construct Discord client with intents + sweepers; register process/client error handlers.
+6. Initialize database:
    - run narrow pre-schema legacy rename bridges for known table renames that would otherwise conflict with fresh `schema.sql`
      - The persona rename bridge (`runPreSchemaPersonaRenameBridge`) also self-heals **rollback artifacts**: running pre-rename code against an already-migrated database re-materializes legacy tables (`tomoris`, `tomori_presets`, `tomori_configs`) as empty shells via their old `CREATE TABLE IF NOT EXISTS` schema. When an empty legacy table coexists with its populated renamed counterpart, the bridge drops the empty shell (logged via `log.warn`) and continues. A **non-empty** legacy table coexisting with the renamed table is treated as an ambiguous data fork and still throws, requiring human inspection before boot. This runs on every startup (unlike run-once migrations), so the fix survives repeated rollback/merge cycles.
    - run `src/db/schema.sql`
@@ -33,27 +35,28 @@ sidebar:
    - run typed seed catalogs in order: models, personas, system prompts, NovelAI presets
    - run pending numbered migrations from `src/db/migrations/` (fresh databases instead record every historical migration as applied via `markAllMigrationsApplied`, because `schema.sql` already embodies the final shape)
      - Because `schema.sql` is applied *before* the migration runner, a legacy untracked production database (still carrying `tomori_configs`, never seen by the runner) reaches the historical "expand + backfill" migrations with the split tables already in their final post-migration shape. The data-mover backfills that copy out of the god table (`002`, `003`, `004`, `007`) therefore detect whether the destination still has the pre-`021` image-tag columns (`nai_style_tags`/`nai_tags`/`nai_char_tags`) or the post-`021` ones (`image_default_positive_tags`/`physical_appearance_tags`) and write the matching column set. Without this guard the backfill fails with `column "nai_style_tags" of relation "server_novelai_imagegen_configs" does not exist` (42703). Migration `021` reconciles the rename afterwards, so no tag data is lost.
-6. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
-7. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
-8. Initialize tool registry (`initializeTools`).
-9. Initialize localization (`initializeLocalizer`).
-10. Initialize model caches:
+7. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
+8. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
+9. Initialize tool registry (`initializeTools`).
+10. Initialize localization (`initializeLocalizer`).
+11. Initialize model caches:
     - LLM cache (`initializeLLMCache`)
     - OpenRouter capability cache (`initializeOpenRouterCapabilityCache`)
-11. Preload preset avatar cache from DB presets.
-12. Initialize Matrix bridge (optional; non-fatal on failure).
-13. Attach all event listeners (`eventHandler(client)`).
-14. Register post-ready startup hooks (deferred until `clientReady`):
+12. Preload preset avatar cache from DB presets.
+13. Initialize Matrix bridge (optional; non-fatal on failure).
+14. Attach all event listeners (`eventHandler(client)`).
+15. Register post-ready startup hooks (deferred until `clientReady`):
     - health tracker init
     - scheduled work coordinator init (reminders + random triggers)
     - memory monitor init
     - cache metrics logger init
-15. Initialize upload quota cleanup scheduler.
-16. `await client.login(DISCORD_TOKEN)` inside a try/catch — a `DisallowedIntents` rejection (privileged intent requested without approval) is logged as an actionable misconfiguration and exits, rather than leaving the process alive but disconnected.
+16. Initialize upload quota cleanup scheduler.
+17. `await client.login(DISCORD_TOKEN)` inside a try/catch — a `DisallowedIntents` rejection (privileged intent requested without approval) is logged as an actionable misconfiguration and exits, rather than leaving the process alive but disconnected.
 
 ## Error Criticality
 
 - Fatal (process exits):
+  - due automatic startup backup failure in non-production
   - database init failure
   - tool registry init failure
   - Discord login failure (including `DisallowedIntents` for an unapproved privileged intent)

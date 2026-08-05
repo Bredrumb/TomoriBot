@@ -6,6 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help matrix subcommand
@@ -17,10 +18,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help matrix command
  * Displays Matrix bridge setup and limitation guidance
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -39,6 +36,7 @@ export async function execute(
       {
         titleKey: "commands.help.matrix.title",
         descriptionKey: "commands.help.matrix.embed_description",
+        docsPath: DOCS_PATHS.MATRIX_BRIDGE,
         color: ColorCode.INFO,
         fields: [
           {

@@ -153,15 +153,14 @@ SELECT add_column_if_not_exists('personas', 'preset_language', 'TEXT');
 UPDATE personas SET is_pointer = false WHERE is_pointer IS NULL;
 ALTER TABLE personas ALTER COLUMN is_pointer SET DEFAULT false;
 ALTER TABLE personas ALTER COLUMN is_pointer SET NOT NULL;
--- physical_appearance_tags: Public imageboard-style physical appearance tags for image generation
-SELECT add_column_if_not_exists('personas', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
--- nai_char_ref_url: Stored reference image URL/path for NovelAI character consistency
-SELECT add_column_if_not_exists('personas', 'nai_char_ref_url', 'TEXT');
 -- applied_avatar_hash: preset_avatar_hash last PATCHed onto this persona's guild
 -- member avatar by the main-avatar fan-out reconciler (migration 033). NULL = never synced.
 SELECT add_column_if_not_exists('personas', 'applied_avatar_hash', 'TEXT');
 -- elevenlabs_voice_id / elevenlabs_voice_name were added here (March 2026) and
 -- dropped by migration 010_complete_speech_voice_migration.sql (Phase 6 Step #14.2).
+-- physical_appearance_tags and nai_char_ref_url were added here and later
+-- moved to persona_imagegen_configs; personas mirrors were dropped by
+-- migration 046_drop_persona_mirror_columns.sql.
 
 CREATE TABLE IF NOT EXISTS persona_attributes (
   attribute_id SERIAL PRIMARY KEY,
@@ -545,6 +544,10 @@ ON CONFLICT (persona_id) DO NOTHING;
 SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled', 'BOOLEAN', 'true');
 SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled', 'BOOLEAN', 'true');
 
+-- Add per-persona humanizer degree override (July 2026).
+-- NULL inherits the server-wide server_chat_configs.humanizer_degree.
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_degree', 'INT', NULL, 'CHECK (humanizer_degree BETWEEN 0 AND 3)');
+
 -- Add server_id column for server-scoped configs (January 2026)
 
 -- Add hide_impersonation_embeds permission (February 2026)
@@ -825,39 +828,19 @@ CREATE INDEX IF NOT EXISTS idx_users_disc_id ON users(user_disc_id);
 -- Add registration_locale column for user region analytics
 SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 
--- Add cross-server short-term memory sharing opt-in (Phase 1: Short-term memory system)
-SELECT add_column_if_not_exists('users', 'shortterm_cache_crossserver_opt_in', 'BOOLEAN', 'false');
-
--- User-specific public imageboard-style physical appearance tags for image generation
-SELECT add_column_if_not_exists('users', 'physical_appearance_tags', 'TEXT[]', 'ARRAY[]::TEXT[]');
--- User-specific NovelAI character reference image (March 2026)
-SELECT add_column_if_not_exists('users', 'nai_char_ref_url', 'TEXT');
--- User-specific prompt used during /bot impersonate user-mode replies (March 2026)
-SELECT add_column_if_not_exists('users', 'impersonation_prompt', 'TEXT');
--- Personal deliberate trigger mode (April 2026) - User-scoped DTM tri-state: 'off', 'follow' (default), 'on'
--- If column exists as BOOLEAN (old schema), convert to TEXT preserving intent (true → 'on', false → 'follow')
--- If column does not exist, add it as TEXT directly
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'users' AND column_name = 'personal_dtm' AND data_type = 'boolean'
-  ) THEN
-    ALTER TABLE users ALTER COLUMN personal_dtm DROP DEFAULT;
-    ALTER TABLE users ALTER COLUMN personal_dtm TYPE TEXT
-      USING CASE WHEN personal_dtm = TRUE THEN 'on' ELSE 'follow' END;
-    ALTER TABLE users ALTER COLUMN personal_dtm SET DEFAULT 'follow';
-  ELSIF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'users' AND column_name = 'personal_dtm'
-  ) THEN
-    ALTER TABLE users ADD COLUMN personal_dtm TEXT DEFAULT 'follow';
-  END IF;
-END;
-$$;
+-- User personalization mirror columns were removed from users by migration
+-- 044_drop_user_personalization_mirror_columns.sql. The live fields are:
+--   user_personalization_configs.shortterm_cache_crossserver_opt_in
+--   user_personalization_configs.physical_appearance_tags
+--   user_personalization_configs.nai_char_ref_url
+--   user_personalization_configs.impersonation_prompt
+--   user_personalization_configs.personal_dtm
 
 -- Personal deliberate tool mode (May 2026) - User-scoped tri-state: 'off', 'follow' (default), 'on'
 SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
+
+-- Personal timezone offset (June 2026) - NULL = not set / not opted in; mirrors server timezone range (-12..+14)
+SELECT add_column_if_not_exists('users', 'timezone_offset', 'SMALLINT');
 
 -- Create updated_at trigger for users table
 DROP TRIGGER IF EXISTS update_users_timestamp ON users;
@@ -1544,6 +1527,9 @@ SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
+-- Delivery retries must not replace reminder_time because recurring schedules use it as their cadence anchor.
+SELECT add_column_if_not_exists('reminders', 'next_attempt_at', 'TIMESTAMP WITH TIME ZONE');
+SELECT add_column_if_not_exists('reminders', 'delivery_retry_count', 'INTEGER', '0', 'NOT NULL');
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1561,8 +1547,10 @@ END $$;
 -- Create index for efficient reminder queries
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_reminders_server_id ON reminders(server_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_effective_due_time
+  ON reminders((COALESCE(next_attempt_at, reminder_time)));
 
--- Removed updated_at trigger for reminders table (never updated after creation, only INSERT/DELETE)
+-- Reminder writes set updated_at explicitly, so this table does not need a general update trigger.
 DROP TRIGGER IF EXISTS update_reminders_timestamp ON reminders;
 
 -- Drop deprecated columns 
@@ -2060,11 +2048,8 @@ CREATE TRIGGER update_channel_llm_overrides_timestamp
 -- Stars are Erato-only (injected only when model = llama-3-erato-v1).
 -- ============================================================================
 
-SELECT add_column_if_not_exists('personas', 'nai_attg_author', 'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_title',  'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_tags',   'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_genre',  'TEXT', NULL);
-SELECT add_column_if_not_exists('personas', 'nai_attg_stars',  'SMALLINT', NULL);
+-- personas.nai_attg_* mirrors were moved to persona_textgen_configs and
+-- dropped by migration 046_drop_persona_mirror_columns.sql.
 -- ============================================================================
 -- NOVELAI SAMPLING PRESETS (March 2026)
 -- Stores per-model preset configs (Kayra and Erato) with human-readable
@@ -2470,9 +2455,8 @@ CREATE TRIGGER update_user_saved_provider_configs_timestamp
 -- depth=0 means "at the very bottom" (after all fetched messages).
 -- depth=N means N messages above the bottom; clamped to top if N > total.
 -- ============================================================
--- Per-persona note (on personas)
-SELECT add_column_if_not_exists('personas', 'context_note', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('personas', 'context_note_depth', 'INTEGER', '0');
+-- Per-persona note lives in persona_context_note_configs. The old personas
+-- mirrors were dropped by migration 046_drop_persona_mirror_columns.sql.
 
 -- ============================================================
 -- Voice / TTS feature toggles (March 2026)
@@ -2507,24 +2491,9 @@ CREATE TABLE IF NOT EXISTS voice_samples (
 
 CREATE INDEX IF NOT EXISTS idx_voice_samples_server ON voice_samples(server_id);
 
-SELECT add_column_if_not_exists('personas', 'speech_voice_sample_id', 'INTEGER', 'NULL');
-SELECT add_column_if_not_exists('personas', 'speech_voice_id', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('personas', 'speech_voice_name', 'TEXT', 'NULL');
-SELECT add_column_if_not_exists('personas', 'speech_voice_design_prompt', 'TEXT', 'NULL');
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'personas_speech_voice_sample_id_fkey'
-  ) THEN
-    ALTER TABLE personas
-    ADD CONSTRAINT personas_speech_voice_sample_id_fkey
-    FOREIGN KEY (speech_voice_sample_id)
-    REFERENCES voice_samples(sample_id)
-    ON DELETE SET NULL;
-  END IF;
-END $$;
+-- Per-persona voice assignment lives in persona_voice_configs. The old
+-- personas.speech_voice_* mirrors and FK were dropped by
+-- migration 046_drop_persona_mirror_columns.sql.
 
 -- Max output tokens override (April 2026)
 -- User-configurable generation length cap per saved provider. NULL = use provider default (8192 or hardcoded fallback).
@@ -2677,8 +2646,10 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   videogen_enabled       BOOLEAN NOT NULL DEFAULT false,
   voice_message_enabled  BOOLEAN NOT NULL DEFAULT true,
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
+  time_awareness_enabled BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
   short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
+  verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -2884,8 +2855,8 @@ CREATE TRIGGER update_persona_textgen_configs_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================
--- User Personalization Configs (migration 004)
--- User-scoped personalization fields extracted from the users table.
+-- User Personalization Configs (migration 004; completed by migrations 043/044)
+-- Current source for user-scoped personalization fields extracted from users.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS user_personalization_configs (
@@ -2934,7 +2905,7 @@ CREATE TRIGGER update_channel_prompt_overrides_timestamp
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================================
--- STM CUSTOMIZATION (migration 035)
+-- STM CUSTOMIZATION (migration 051)
 -- Durable per-server STM config, ordered category definitions, and per-scope
 -- durable state rows. The in-process cache is write-through over short_term_memories.
 -- ============================================================================
@@ -2942,7 +2913,7 @@ CREATE TRIGGER update_channel_prompt_overrides_timestamp
 CREATE TABLE IF NOT EXISTS server_stm_configs (
   server_id                 INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
   refresh_cadence           INT         NOT NULL DEFAULT 5,
-  render_mode               TEXT        NOT NULL DEFAULT 'supersede'
+  render_mode               TEXT        NOT NULL DEFAULT 'crude_summary'
                                           CHECK (render_mode IN ('supersede', 'crude_summary')),
   crude_message_count       INT         NOT NULL DEFAULT 6,
   tool_description_override TEXT,
@@ -3023,3 +2994,51 @@ DROP TRIGGER IF EXISTS update_channel_context_notes_timestamp ON channel_context
 CREATE TRIGGER update_channel_context_notes_timestamp
     BEFORE UPDATE ON channel_context_notes
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================================
+-- Stat counters (migration 035)
+-- Pre-aggregated daily usage telemetry: one row per
+-- (server, user, persona lineage, metric, metric_key, day), incremented by
+-- UPSERT. count is a generic accumulator (events add 1; token/cost metrics add
+-- the turn's token delta). persona_lineage_id is the cross-server persona
+-- identity anchor (BIGINT, 0 sentinel for persona-agnostic metrics, mirroring
+-- personal_memories / conditioning_history). user_id is the internal users FK.
+-- High-frequency runtime telemetry: FK cascades, never exported.
+-- Never index count or last_at — keeping mutating columns out of all indexes
+-- preserves Postgres HOT updates on hot counter rows. See plans/stat-tracking.md.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS stat_counters (
+  server_id          INT         NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  user_id            INT         NOT NULL REFERENCES users(user_id)     ON DELETE CASCADE,
+  persona_lineage_id BIGINT      NOT NULL DEFAULT 0,  -- 0 sentinel = persona-agnostic metric
+  metric             TEXT        NOT NULL,            -- enum-like metric name (see plan §5)
+  metric_key         TEXT        NOT NULL DEFAULT '', -- command name / model id / hour / '' for scalars
+  bucket             DATE        NOT NULL,            -- CURRENT_DATE at write time (daily grain)
+  count              BIGINT      NOT NULL DEFAULT 0,  -- generic accumulator (events or token deltas)
+  first_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (server_id, user_id, persona_lineage_id, metric, metric_key, bucket)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stat_counters_server_metric_bucket
+  ON stat_counters(server_id, metric, bucket);
+CREATE INDEX IF NOT EXISTS idx_stat_counters_user_metric_bucket
+  ON stat_counters(user_id, metric, bucket);
+CREATE INDEX IF NOT EXISTS idx_stat_counters_user_lineage_metric
+  ON stat_counters(user_id, persona_lineage_id, metric);
+
+-- ============================================================================
+-- command_catalog — dimension table holding the full universe of registered
+-- commands (see migration 049). stat_counters only gains a command_used row once
+-- a command is invoked, so never-used commands are absent there; this table lets
+-- a LEFT JOIN report every command with COALESCE(count, 0). command_name is the
+-- same space-joined full path stat_counters.metric_key stores. The bot
+-- self-populates it on startup from loadCommandData() (04_syncCommandCatalog +
+-- StatRepository.syncCommandCatalog), so it never drifts from the code.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS command_catalog (
+  command_name   TEXT        PRIMARY KEY,          -- space-joined full path (= stat_counters.metric_key)
+  category       TEXT        NOT NULL,             -- top-level command/category name
+  first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_synced_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

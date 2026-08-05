@@ -6,11 +6,11 @@ type ComfyUiDiagnosticAsset = {
   subfolder?: string;
 };
 
-export function isComfyUiInpaintMaskAsset(asset: ComfyUiDiagnosticAsset): boolean {
+function isComfyUiInpaintMaskAsset(asset: ComfyUiDiagnosticAsset): boolean {
   return asset.filename.toLowerCase().startsWith(COMFYUI_INPAINT_MASK_FILENAME_PREFIX);
 }
 
-export function isComfyUiInpaintResultDebugAsset(asset: ComfyUiDiagnosticAsset): boolean {
+function isComfyUiInpaintResultDebugAsset(asset: ComfyUiDiagnosticAsset): boolean {
   return asset.filename.toLowerCase().startsWith(COMFYUI_INPAINT_RESULT_DEBUG_FILENAME_PREFIX);
 }
 

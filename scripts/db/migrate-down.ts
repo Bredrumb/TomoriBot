@@ -6,11 +6,11 @@
  * forward runner will re-apply them on the next boot.
  *
  * Unlike the forward runner (which executes automatically at startup via
- * initializeDatabase.ts), rollback is ALWAYS manual and never runs on boot —
+ * initializeDatabase.ts), rollback is ALWAYS manual and never runs on boot:
  * down migrations are typically lossy (DROP TABLE / DROP COLUMN), so undoing a
  * migration must be a deliberate, explicit act.
  *
- * IMPORTANT — run this while still checked out on the branch that introduced the
+ * IMPORTANT: run this while still checked out on the branch that introduced the
  * migration. The rollback reads NNN_description.down.sql from disk; once you
  * switch branches those files disappear and the rollback can no longer execute.
  *
@@ -57,7 +57,7 @@ const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
 
 interface MigrationFile {
   version: number;
-  /** Stem without extension, e.g. "035_stm_customization". The schema_migrations key. */
+  /** Stem without extension, e.g. "051_stm_customization". The schema_migrations key. */
   name: string;
   /** Absolute path to the paired NNN_description.down.sql rollback file. */
   downPath: string;
@@ -144,7 +144,7 @@ function parseArgs(): { lastCount?: number; fromVersion?: number; confirmed: boo
     return { lastCount: count, confirmed };
   }
 
-  // Positional version or full name stem (e.g. "035" or "035_stm_customization").
+  // Positional version or full name stem (e.g. "051" or "051_stm_customization").
   const positional = argv.find((a) => !a.startsWith("-"));
   if (!positional) {
     log.error("Provide a target version (e.g. 034) or --last[=N]. See script header for usage.");
@@ -170,15 +170,14 @@ async function main(): Promise<void> {
   const filesByName = await scanMigrationFiles();
   const appliedNames = await getAppliedNames();
 
-  // 1. Resolve applied migrations that also still have files on disk (rollback
+  // Only rollback migrations that still have files on disk (rollback
   //    needs the .down.sql), sorted DESCENDING so dependents undo before deps.
   const appliedWithFiles = [...appliedNames]
     .map((name) => filesByName.get(name))
     .filter((m): m is MigrationFile => m !== undefined)
     .sort((a, b) => b.version - a.version);
 
-  // 2. Select the rollback set from the parsed target.
-  let targets: MigrationFile[];
+    let targets: MigrationFile[];
   if (lastCount !== undefined) {
     targets = appliedWithFiles.slice(0, lastCount);
   } else {
@@ -190,7 +189,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // 3. Verify every target actually has a rollback file before touching anything.
+  // Guard: Ensure rollback files exist before starting destructive operations.
   for (const t of targets) {
     const exists = await readFile(t.downPath).then(
       () => true,
@@ -203,7 +202,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // 4. Print the ordered plan. Down migrations are typically destructive, so make
+  // Down migrations are typically destructive; print the ordered plan for review.
   //    the consequence explicit before any execution.
   log.section(`Rollback plan (${targets.length} migration(s), newest first):`);
   for (const t of targets) {
@@ -216,8 +215,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // 5. Execute in descending version order.
-  for (const t of targets) {
+    for (const t of targets) {
     log.info(`Rolling back: ${t.name}`);
     try {
       await rollbackOne(t);

@@ -1,20 +1,18 @@
-// locales/en-US/commands/help.ts
-
 export default {
   help: {
     "personal-provider": {
       description: `Learn how personal providers work.`,
       title: `Personal Providers`,
-      description_body: `Personal providers let your messages use your own API keys and models instead of the server's defaults.`,
+      description_body: `Personal providers let your own requests use your own API keys and models instead of a server's shared defaults.`,
       setup_field: `Setup`,
-      setup_value: `1. Run {add_command} to save a provider.
-2. Run {model_command} to choose a model.
-3. Run {toggle_command} to turn that capability on.`,
+      setup_value: `1. {add_command} saves a provider and immediately enables your personal **Text** model.
+2. {model_command} is optional. Use it only if you want a different text model than the default from step 1.
+3. {toggle_command} turns each capability's personal override on or off.`,
       behavior_field: `Behavior`,
-      behavior_value: `When enabled, your personal provider overrides the server for that capability. Thought logs attribute those turns, and you can tune them with {samplers_command} and {fallback_command}.`,
+      behavior_value: `An enabled capability overrides the server default for your requests only, across every server where you use TomoriBot. Selecting a model already enables that capability, so step 3 is mainly how you turn one back off. Thought logs attribute those turns, and you can tune them with {samplers_command} and {fallback_command}.`,
       byok_field: `BYOK Servers`,
       byok_value: `Servers can require member-provided providers with {byok_command}. If that mode is enabled, user-triggered messages need your personal provider before I can answer.`,
-      footer: `Your personal providers apply across every server you use TomoriBot in.`,
+      footer: `Server defaults live in /provider and /model. Personal overrides affect only your requests, in every server you use TomoriBot in.`,
     },
     custom_models: {
       description: `Learn how custom endpoints work.`,
@@ -29,6 +27,7 @@ export default {
       personal_value: `Use {add_command} to register your own labeled endpoint and {remove_command} to remove selected capabilities from it.`,
       selection_field: `Selecting Them`,
       selection_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}; if the label has several models for that capability, a picker lets you choose one. Vision-capable text endpoints also appear in \`/model vision\`. Re-run the add command with the same label and capability but a different model name to register an additional model on that connection (its endpoint URL and API style are inherited).`,
+      selection_summary_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}. If that label has several models for the same capability, TomoriBot will ask which one to use.`,
       labels_field: `Labels And Removal`,
       labels_value: `A label groups every capability under one custom provider bundle. {server_remove_command} and {personal_remove_command} remove only the capabilities you uncheck. {server_provider_remove_command} and {personal_provider_remove_command} delete the whole labeled bundle.`,
       comfyui_page1_title: `ComfyUI Setup`,
@@ -65,12 +64,17 @@ export default {
       comfyui_page4_output_value: `TomoriBot still downloads only the first saved output, so the workflow must produce a real saved image or video file. Preview-only nodes are not enough. If the workflow saves multiple outputs, TomoriBot will return the first one ComfyUI reports in history.`,
       comfyui_page4_metadata_field: `extra_pnginfo Metadata`,
       comfyui_page4_metadata_value: `TomoriBot also sends resolved values in \`extra_pnginfo\`, including prompt, model, mode, aspect ratio, width, height, size, reference-image count, and video-specific duration/resolution/audio fields. That is useful if you prefer a custom ComfyUI node that reads execution metadata instead of JSON placeholders.`,
+      comfyui_summary_description: `ComfyUI custom endpoints let TomoriBot queue your saved image or video workflow and return the first saved output. The full setup guide covers workflow export, placeholders, reference images, polling, and output rules.`,
+      comfyui_summary_register_field: `Register And Activate`,
+      comfyui_summary_register_value: `Register the endpoint with {server_add_command} or {personal_add_command}, then select its label from {image_command} or {video_command}. Use the docs button for the full ComfyUI workflow setup.`,
     },
     speech: {
       description: `Learn how speech generation works.`,
       engine_description: `Choose a speech engine guide.`,
       docs_title: `Full Docs`,
-      docs_description: `See the [TTS docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/tts) and the [servers README](https://github.com/Bredrumb/TomoriBot/blob/main/servers/tts/README.md) on GitHub for copy-paste setup commands and wrapper notes.`,
+      docs_description: `See the [TTS docs](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#text-to-speech) and [local TTS setup guides](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/) for setup commands and wrapper notes.`,
+      summary_title: `Using Speech`,
+      summary_description: `For local voice cloning, register a speech endpoint with {custom_endpoint_add}, pick it with {model_speech}, upload a sample with {voice_add}, then assign it with {voice_assign}. For ElevenLabs, run {elevenlabs}. VoiceDesign setups use {voice_design_set}.`,
       overview: {
         title: `Speech Setup Overview`,
         description: `Speech endpoints let TomoriBot send native Discord voice messages using either a local clone server or ElevenLabs. For local voice cloning, any audio format is accepted (auto-converted to mono WAV). It is recommended to use 10-20 second clips with no background music.`,
@@ -91,7 +95,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
-1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from the GitHub repository to your machine.
+1. Follow the [local TTS setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/chatterbox/) to prepare the server.
 2. Navigate to the downloaded \`chatterbox\` folder, then create and activate a Python \`.venv\`.
 3. Install numpy first (build dep): \`pip install numpy\`, then install \`requirements.txt\`.
 4. *(GPU only)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -108,7 +112,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
 • SoX installed system-wide (Windows: \`scoop install sox\`, macOS: \`brew install sox\`)
 • CUDA 12.x + drivers (optional, for GPU)
 
-1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from GitHub to your machine.
+1. Follow the [local TTS setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/qwen3tts/) to prepare the server.
 2. Navigate to the downloaded \`qwen3tts\` folder, create and activate a Python \`.venv\`.
 3. Install \`requirements.txt\`.
 4. *(GPU)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -123,7 +127,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
-1. Download the [TTS servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/tts) from the GitHub repository to your machine.
+1. Follow the [local TTS setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/irodoritts/) to prepare the server.
 2. Navigate to the downloaded \`irodoritts\` folder, then create and activate a Python \`.venv\`.
 3. Install \`requirements.txt\`.
 4. Install irodori-tts via the patch script (upstream packaging bugs require this):
@@ -145,12 +149,14 @@ Linux/macOS: \`bash install-irodori.sh\`
       description: `Learn how audio transcription works.`,
       engine_description: `Choose a transcription engine guide.`,
       docs_title: `Full Docs`,
-      docs_description: `See the [Transcription docs](https://github.com/Bredrumb/TomoriBot/tree/main/docs/integrations/transcription) and [STT README](https://github.com/Bredrumb/TomoriBot/blob/main/servers/stt/README.md) on GitHub.`,
+      docs_description: `See the [STT docs](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#speech-to-text) and [local STT setup guides](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/).`,
+      summary_title: `Using Transcription`,
+      summary_description: `Register a transcription endpoint with {custom_endpoint_add}, choose it with {model_transcription}, and use {speech_transcripts} only if you want transcripts visibly posted. ElevenLabs users can run {elevenlabs}.`,
       overview: {
         title: `Transcription Setup Overview`,
         description: `Transcription endpoints turn user audio attachments into text for background conversation context. Visible transcript posting is controlled separately by {speech_transcripts}.`,
         steps_title: `Recommended Path`,
-        steps_description: `Start with WhisperX: run the reference server in \`servers/stt\`, register it with {custom_endpoint_add}, then select it with {model_transcription}. ElevenLabs users can run {elevenlabs}.
+        steps_description: `Start with WhisperX: follow the local STT setup guide, register it with {custom_endpoint_add}, then select it with {model_transcription}. ElevenLabs users can run {elevenlabs}.
 
 **Per-engine setup guides:**
 • WhisperX → \`/help transcription engine:WhisperX\`
@@ -166,7 +172,7 @@ Linux/macOS: \`bash install-irodori.sh\`
 • FFmpeg installed system-wide (required for audio decoding)
 • CUDA 12.x + drivers (optional, for GPU acceleration)
 
-1. Download the [STT servers](https://github.com/Bredrumb/TomoriBot/tree/main/servers/stt) from the GitHub repository to your machine.
+1. Follow the [local STT setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/whisperx/) to prepare the server.
 2. Navigate to the downloaded \`stt\` folder, then create and activate a Python \`.venv\`.
 3. Install \`requirements-whisperx.txt\`.
 4. *(GPU only)* Reinstall PyTorch with CUDA support:
@@ -207,6 +213,14 @@ Transcription supports ~100 languages (auto-detected).`,
       description: `Shows what TomoriBot can do`,
       title: `TomoriBot Features (Version {version})`,
       embed_description: `Here's everything I'm capable of:`,
+      summary_chat_title: `Chatting And Personas`,
+      summary_chat_description: `TomoriBot can respond through trigger words, mentions, replies, alter personas, webhook identities, and configurable persona behavior.`,
+      summary_knowledge_title: `Knowledge And Memory`,
+      summary_knowledge_description: `Personal memories, server memories, document knowledge, short-term memory, and privacy controls let servers decide what context TomoriBot may use.`,
+      summary_capabilities_title: `Tools And Media`,
+      summary_capabilities_description: `TomoriBot can use tools for web/search, scheduling, media analysis, image/video generation, voice messages, transcription, and MCP or custom endpoint integrations.`,
+      summary_reference_title: `Admin And Reference`,
+      summary_reference_description: `Provider setup, model choices, server controls, age-restricted commands, stats, Matrix bridging, and the generated command reference are all covered in the docs.`,
       vision_title: `Vision & Media`,
       vision_description: `- I can see and analyze images, videos, stickers, and emojis
 - I can watch YouTube videos from links
@@ -225,14 +239,14 @@ Transcription supports ~100 languages (auto-detected).`,
       memory_title: `Memory & Personalization`,
       memory_description: `- I can remember personal facts about you and server-wide information, persisting across conversations
 - Personal memories persist across servers (try talking to me in another server!)
-- I also keep STM (short-term memory) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
+- I also keep [STM (short-term memory)](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
 - Change what I call you using \`/personal nickname\`
 - Use \`/memory\` and \`/persona\` commands to manually add or remove memories and persona data
 - I can use server emojis and stickers more accurately after registration with \`/server expressions initialize\`
 - Full invisibility is available via \`/personal privacy\` if you want to be completely unseen by me
 - Learn more with \`/help memory\``,
       time_title: `Time Awareness`,
-      time_description: `- I know what time it currently is in the server (via \`/config timezone\`)
+      time_description: `- I know what time it currently is in the server (via \`/server timezone\`)
 - I can set up reminders for you (try asking me to remind you about something!)
 - Recurrent reminders and tasks are supported and are persona-specific, just tell me to do something`,
       alter_title: `Alter Personas`,
@@ -280,16 +294,10 @@ Transcription supports ~100 languages (auto-detected).`,
       step1_title: `Step 1: Get an API Key`,
       step1_description: `TomoriBot supports multiple AI providers. You'll need an API key from one of them.
 - Use {helpApikey} to learn how to get one
-  - **Google Gemini**: general-purpose, free tier, runs all features
-  - **OpenRouter**: access to many AI models in one place
-  - **NovelAI**: uncensored role-playing and storytelling
-  - **DeepSeek**: cost-effective reasoning models
-  - **NVIDIA NIM**: hosted NVIDIA models
-  - **Anthropic**: Claude models
-  - **Vertex AI**: Google Cloud models via ADC
-  - **Vertex AI Express**: Google Cloud API-key BYOK via Express Mode (Preview, Gemini subset)
-  - **Z.ai (Zhipu)**: Chinese AI models with a coding plan ⚠️ *ToS restricts usage to coding/agent scenarios only*
-  - **Custom**: any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.)
+  - **Google Gemini** *(recommended)*: general-purpose, free usage, runs all features
+  - **DeepSeek** *(recommended)*: a very cheap and uncensored alternative
+  - **OpenRouter**: paid, reliable access to many AI models in one place
+  - **NovelAI**: uncensored role-playing, storytelling, and image generation
 - Do **NOT** share this API key with anyone else
 - Custom endpoints can add a Bearer auth token after setup via {configApiKeySet}`,
       step2_title: `Step 2: Run the Setup Command`,
@@ -506,7 +514,7 @@ Use {helpCustomModels} for the full command guide, supported endpoint types, and
 4. Copy this API key into {configSetup} or {configApikeySet}`,
       nvidia_important_title: `Important Notes:`,
       nvidia_important_description: `- Text and embeddings use NVIDIA's hosted \`integrate.api.nvidia.com\` surface
-- Native image generation uses NVIDIA's hosted \`ai.api.nvidia.com\` Stability endpoint`,
+- Native image generation uses NVIDIA's hosted \`ai.api.nvidia.com\` FLUX endpoint`,
       nvidia_footer: `After setting up this provider, you may change text, embedding, and image models with {configModel}, {configModelEmbedding}, and {configModelImage}`,
       zai_title: `Setting Up Z.ai API Key`,
       zai_description: `Z.ai provides access to the GLM family through a general API and a separate coding endpoint.
@@ -552,7 +560,7 @@ Use {helpCustomModels} for the full command guide, supported endpoint types, and
       vertex_title: `Setting Up Google Vertex AI`,
       vertex_description: `Google Vertex AI provides enterprise-grade access to Gemini models through Google Cloud.
 - Uses Application Default Credentials (ADC) for authentication, no API key to manage
-- Best for developers or users running TomoriBot locally on their PC
+- Uses local gcloud ADC or a hosted workload identity/service account
 - [Vertex AI Documentation](https://cloud.google.com/vertex-ai/docs)`,
       vertex_getting_key_title: `Configuration:`,
       vertex_getting_key_description: `**Step 1: Install the [Google Cloud CLI](https://cloud.google.com/cli)**
@@ -580,8 +588,8 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Example: \`my-vertex-project-12345::global\``,
       vertex_important_title: `Important Notes:`,
       vertex_important_description: `- The stored value is **configuration** (project + location), not a credential secret
-- All Vertex requests use your PC's Google Cloud CLI identity
-- ⚠️ Projects starting with \`gen-lang-client-\` are auto-generated by Google AI Studio and **will not work** with Vertex AI. Create a proper project using the steps above.
+- All Vertex requests use the host's Application Default Credentials identity
+- An AI Studio API key alone does not authenticate this provider. The project must have billing and the Vertex AI API enabled, and the host identity needs Vertex access.
 - Supports chat, tool calling, streaming, structured output, compaction, embeddings, and preset generation`,
       vertex_footer: `After setting up this provider, you may change its default model with {configModel}`,
       vertexexpress_title: `Setting Up Google Vertex AI Express`,
@@ -658,7 +666,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Use \`/memory document remove\` or \`/memory history remove\` to remove stored documents
 - Requires an embedding model configured via \`/model embedding\``,
       shortterm_title: `Short-Term Memory`,
-      shortterm_description: `In addition to persistent memories, I keep STM (short-term memory) of recent conversations:
+      shortterm_description: `In addition to persistent memories, I keep [STM (short-term memory)](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm) of recent conversations:
 - Recent messages are cached per channel, and each persona carries the latest STM across channels within the same server
 - I can automatically summarize older conversations to keep context efficient
 - **Cross-server sharing** is opt-in: use {personalStm} with the \`crossserver\` option to let me reference your own conversations from other servers
@@ -710,7 +718,7 @@ Unknown placeholders are stripped automatically.`,
     spotlight: {
       description: `Learn what personal spotlight does and how to use it`,
       title: `Personal Spotlight Guide`,
-      embed_description: `Personal spotlight lets you narrow which personas *you* can trigger in one channel, and optionally assign one persona to auto-trigger for your own messages there.`,
+      embed_description: `[Personal spotlight](https://docs.tomoribot.app/features/knowledge/personalization/#personal-spotlight) lets you narrow which personas *you* can trigger in one channel, and optionally assign one persona to auto-trigger for your own messages there.`,
       what_title: `What It Does`,
       what_description: `- Spotlight is scoped to **you + one channel**
 - It does not affect other users
@@ -743,7 +751,7 @@ If you set **hours = 0**, the spotlight stays until you remove it manually.`,
     "deliberate-trigger-mode": {
       description: `Learn how deliberate trigger mode changes message triggering`,
       title: `Deliberate Trigger Mode Guide`,
-      embed_description: `Deliberate Trigger Mode (DTM) changes how explicit persona triggers are recognized, especially for plain trigger words.`,
+      embed_description: `[Deliberate Trigger Mode (DTM)](https://docs.tomoribot.app/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode) changes how explicit persona triggers are recognized, especially for plain trigger words.`,
       normal_title: `Normal Triggering`,
       normal_description: `When DTM is off, I can normally be triggered by:
 - Plain trigger words in a message
@@ -773,6 +781,12 @@ This means users must invoke personas more deliberately instead of accidentally 
       description: `Learn how to customize TomoriBot's personality and behavior`,
       embed1_title: `Customizing TomoriBot`,
       embed1_description: `TomoriBot is highly customizable! This is about **how I behave** (personality, tone, settings). For **what I remember** (facts, memories), see {helpMemory} instead!`,
+      summary_personas_title: `Personas`,
+      summary_personas_description: `Use {personaCreate} or {personaGenerate} to create a persona, then refine it with {personaAttributeAdd} and {personaSampleDialogueAdd}. Personas can be switched, exported, imported, and used as separate alter identities.`,
+      summary_behavior_title: `Behavior Settings`,
+      summary_behavior_description: `Use {configModel}, {configHumanizer}, {configSystemPromptSet}, and {capabilitiesManage} for model selection, humanlike delivery, system instructions, and feature access.`,
+      summary_server_title: `Server Boundaries`,
+      summary_server_description: `Admins can combine persona limits, whitelisted channels such as {serverWhitelistChannel}, auto-trigger settings, cooldowns, and role permissions to control where and how TomoriBot responds.`,
       embed1_personas_title: `Personality Personas`,
       embed1_personas_description: `Control my core personality and behavior:
 
@@ -874,7 +888,7 @@ API Keys:
 
 Personalization:
 - {configRename} - Change what I refer to myself as
-- {configTimezone} - Set timezone for time-aware responses and reminders
+- {configTimezone} - Set server timezone for time-aware responses and reminders
 - {configPermissions} - Toggle my features on/off (including image generation)
 - {configUncensors} - Configure uncensored output options
 - {personalPrivacy} - Control your visibility to me (full invisibility option available)
@@ -910,10 +924,12 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 If an MCP server requires no authentication, leave the **Auth Token** field blank. Some servers may use a different auth format — check the server's documentation for details.
 
 Your auth token is encrypted at rest and never shown in plain text after saving.`,
+      online_summary_description: `Use {configMcpAdd} to register a publicly reachable HTTPS MCP server. Auth tokens are encrypted after saving; check the docs for provider-specific connection URL notes.`,
       local_title: `Adding a Local MCP (Self-Hosted Only)`,
       local_description: `Local MCP servers are **only supported on self-hosted TomoriBot instances**. The public hosted bot requires HTTPS and blocks local/private addresses for security.
 
 If you are running your own instance, point the URL to your local server (e.g. \`http://localhost:3000/sse\`). No auth token is needed for local servers.`,
+      local_summary_description: `Local MCP servers are self-host only because the public bot blocks local/private addresses. The docs explain how to run a local MCP and register its URL.`,
       removing_title: `Removing an MCP Server`,
       removing_description: `Use {configMcpRemove} to unregister a server at any time. Removing it immediately disconnects the server and frees up a slot for a new one.`,
       security_title: `Security Warning`,
@@ -952,7 +968,7 @@ If a command is restricted and the channel isn't marked NSFW, you won't be able 
     "deliberate-tool-mode": {
       description: `Learn how deliberate tool mode changes tool availability`,
       title: `Deliberate Tool Mode Guide`,
-      embed_description: `Deliberate Tool Mode keeps tool declarations out of ordinary chat turns unless the message looks like it needs a tool.`,
+      embed_description: `[Deliberate Tool Mode](https://docs.tomoribot.app/features/capabilities/tools-and-extensions/#deliberate-tool-mode) keeps tool declarations out of ordinary chat turns unless the message looks like it needs a tool.`,
       what_title: `What It Does`,
       what_description: `When deliberate tool mode is active, I first check the message for explicit tool intent. If no intent is found, tool declarations are removed for that turn, which reduces prompt size and helps smaller/local models answer faster.`,
       intent_title: `What Counts As Tool Intent`,

@@ -1,6 +1,8 @@
+import type { Sticker } from "discord.js";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import { ToolRegistry } from "@/tools/toolRegistry";
+import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
@@ -20,14 +22,23 @@ import {
   buildRevealedMessageMetadataTailDirective,
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
+import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
 
 const MAX_FUNCTION_CALL_ITERATIONS = parseIntegerEnvFlag(process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS, 100, 1);
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
 const MAX_CONSECUTIVE_TOOL_ERRORS = parseIntegerEnvFlag(process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS, 5, 1);
+const NAI_TOOL_FAILURE_RETRY_THRESHOLD = parseIntegerEnvFlag(process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD, 3, 1);
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
+// After the SDK-call watchdog aborts a stalled stream, how long to wait for the abandoned
+// `streamToDiscord` promise to actually settle before returning. `Promise.race` does not cancel the
+// loser and `abort()` only tears down the HTTP request, so a Discord send it already dispatched can
+// still be in flight; waiting for it guarantees that send is recorded in `deliveredMessageRefs`
+// before the fallback path's superseded-message cleanup runs, so it cannot leak past cleanup.
+const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_ABANDONED_SETTLE_TIMEOUT_MS, 5000, 0);
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
+const TOOL_FAILURE_NOTICE_LIMIT = 1800;
 
 export interface ToolLoopParams {
   context: ChatTurnContext;
@@ -50,6 +61,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let finalText = "";
   let detailsText = "";
   let consecutiveToolErrors = 0;
+  let naiConsecutiveToolFailures = 0;
+  let selectedStickerToSend: Sticker | null = null;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
@@ -74,7 +87,15 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         resetChannelFollowUpCount(params.context.channel.id);
         finalText = streamResult.accumulatedText ?? finalText;
         detailsText = mergeDetails(detailsText, streamResult.detailsContent);
-        return buildResult("completed", params.context, streamResults, finalText, detailsText, thoughtLog);
+        return buildResult(
+          "completed",
+          params.context,
+          streamResults,
+          finalText,
+          detailsText,
+          thoughtLog,
+          selectedStickerToSend ?? undefined,
+        );
       case "error":
       case "timeout":
         resetChannelFollowUpCount(params.context.channel.id);
@@ -84,6 +105,10 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       case "stopped_by_user":
         queueStopResponseIfPresent(params.context);
         resetChannelFollowUpCount(params.context.channel.id);
+        // Text already delivered before the stop still has to reach short-term memory, or Tomori
+        // forgets what it just said in the channel whenever a turn is cut short.
+        finalText = streamResult.accumulatedText ?? finalText;
+        detailsText = mergeDetails(detailsText, streamResult.detailsContent);
         return buildResult("stopped_by_user", params.context, streamResults, finalText, detailsText, thoughtLog);
       case "follow_up_interrupt":
         incrementChannelFollowUpCount(params.context.channel.id);
@@ -94,6 +119,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         const toolOutcome = await executeToolCall(params, streamResult, iteration);
         if (toolOutcome.kind === "restart") {
           consecutiveToolErrors = 0;
+          naiConsecutiveToolFailures = 0;
           continue;
         }
         if (toolOutcome.kind === "abort") {
@@ -101,8 +127,16 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         }
 
         functionHistory.push(toolOutcome.historyEntry);
+        // Visible text emitted before the tool call now lives on that history
+        // entry's assistant tool-call turn. Remove the same buffered parts from
+        // the trailing prefill so providers do not receive it a second time.
+        accumulatedModelParts.length = 0;
+        if (toolOutcome.stickerSelection !== undefined) {
+          selectedStickerToSend = toolOutcome.stickerSelection;
+        }
         if (toolOutcome.success) {
           consecutiveToolErrors = 0;
+          naiConsecutiveToolFailures = 0;
         } else {
           consecutiveToolErrors += 1;
           if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
@@ -111,7 +145,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           }
         }
 
-        if (toolOutcome.endTurn || shouldEndAfterPreToolText(params.provider, streamResult, toolOutcome.functionName)) {
+        if (toolOutcome.endTurn) {
           return buildResult(
             "completed",
             params.context,
@@ -119,7 +153,59 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             streamResult.accumulatedText ?? finalText,
             detailsText,
             thoughtLog,
+            selectedStickerToSend ?? undefined,
           );
+        }
+
+        const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
+        const providerName = params.provider.getInfo().name;
+        if (!toolOutcome.success && hasPreToolText && providerIsApiFamily(providerName, "novelai")) {
+          naiConsecutiveToolFailures += 1;
+          if (naiConsecutiveToolFailures >= NAI_TOOL_FAILURE_RETRY_THRESHOLD) {
+            log.warn(
+              `NovelAI GLM: Tool "${toolOutcome.functionName}" failed ${naiConsecutiveToolFailures} consecutive times after text was sent — showing error embed and ending turn`,
+            );
+            await emitNaiToolRetryExhausted(params.context);
+            return buildResult(
+              "completed",
+              params.context,
+              streamResults,
+              streamResult.accumulatedText ?? finalText,
+              detailsText,
+              thoughtLog,
+              selectedStickerToSend ?? undefined,
+            );
+          }
+
+          params.context.streamingContext.suppressTextOutput = true;
+          log.info(
+            `NovelAI GLM: Tool "${toolOutcome.functionName}" failed (attempt ${naiConsecutiveToolFailures}/${NAI_TOOL_FAILURE_RETRY_THRESHOLD}) — suppressing text output for retry`,
+          );
+          continue;
+        }
+
+        if (
+          toolOutcome.success &&
+          (await shouldEndAfterPreToolText(
+            params.provider,
+            streamResult,
+            toolOutcome.functionName,
+            params.tomoriState.server_id,
+          ))
+        ) {
+          return buildResult(
+            "completed",
+            params.context,
+            streamResults,
+            streamResult.accumulatedText ?? finalText,
+            detailsText,
+            thoughtLog,
+            selectedStickerToSend ?? undefined,
+          );
+        }
+
+        if (toolOutcome.success && hasPreToolText && providerIsApiFamily(providerName, "novelai")) {
+          params.context.streamingContext.suppressTextOutput = false;
         }
         break;
       }
@@ -135,9 +221,10 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
       color: ColorCode.WARN,
       titleKey: "genai.max_iterations_title",
       descriptionKey: "genai.max_iterations_streaming_description",
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context"],
     });
   }
+  selectedStickerToSend = null;
   return buildResult("timeout", params.context, streamResults, finalText, detailsText, thoughtLog);
 }
 
@@ -171,28 +258,32 @@ async function streamOnce(
   const isSceneTurn = Boolean(params.context.turn.lockedTurn.admission.incoming.sceneTurn);
   const replyToMessage = params.context.isFromQueue && !isSceneTurn ? params.context.message : undefined;
 
+  // Keep a handle to the provider call so the timeout branch can await it settling. Under
+  // Promise.race the loser is otherwise abandoned (never awaited); its rejection is still observed
+  // by race's internal handlers, so holding this reference does not create an unhandled rejection.
+  const streamPromise = params.provider.streamToDiscord(
+    params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
+    params.context.client,
+    params.tomoriState,
+    params.providerConfig,
+    params.context.contextItems,
+    accumulatedModelParts,
+    params.context.emojiStrings,
+    functionHistory.length > 0 ? functionHistory : undefined,
+    undefined,
+    replyToMessage,
+    params.context.streamingContext,
+    params.context.locale,
+    params.context.responseTarget?.webhook,
+    params.context.responseTarget?.personaAvatarUrl,
+    params.context.responseTarget?.personaUsername,
+    params.context.responseTarget?.prefixStrippingName,
+  );
+
   try {
     return await Promise.race([
-      params.provider.streamToDiscord(
-        params.context.channel as Parameters<LLMProvider["streamToDiscord"]>[0],
-        params.context.client,
-        params.tomoriState,
-        params.providerConfig,
-        params.context.contextItems,
-        accumulatedModelParts,
-        params.context.emojiStrings,
-        functionHistory.length > 0 ? functionHistory : undefined,
-        undefined,
-        replyToMessage,
-        params.context.streamingContext,
-        params.context.locale,
-        params.context.responseTarget?.webhook,
-        params.context.responseTarget?.personaAvatarUrl,
-        params.context.responseTarget?.personaUsername,
-        params.context.responseTarget?.prefixStrippingName,
-      ),
+      streamPromise,
       new Promise<never>((_, reject) => {
-        // Register the kill callback with the lock entry so external callers can trigger it.
         killStream = (reason: Error) => {
           abortController.abort();
           reject(reason);
@@ -202,6 +293,20 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
+      // A pending stop request (e.g. /bot kill) makes this a terminal stop; no fallback runs, so
+      // no superseded-message cleanup will consume in-flight sends. Return immediately; settling
+      // here would just make the kill wait out the abandoned stream for no benefit.
+      if (StreamOrchestrator.hasStopRequest(channelId)) {
+        return { status: "stopped_by_user" };
+      }
+
+      // Genuine timeout → the fallback path may run. The stream was aborted, not cancelled: wait
+      // (bounded) for it to actually settle so any Discord send it had already dispatched is recorded
+      // in `deliveredMessageRefs` BEFORE the fallback path's superseded-message cleanup runs. Without
+      // this, a late straggler would land after cleanup and be misattributed to the surviving
+      // fallback attempt; leaving the exact orphaned partial message this feature exists to remove.
+      await settleAbandonedStream(streamPromise);
+
       if (!params.context.streamingContext.suppressUserErrors) {
         await sendStandardEmbed(
           params.context.channel as Parameters<typeof sendStandardEmbed>[0],
@@ -228,6 +333,36 @@ async function streamOnce(
   }
 }
 
+/**
+ * Waits for an aborted-but-abandoned `streamToDiscord` promise to settle, bounded by
+ * {@link STREAM_ABANDONED_SETTLE_TIMEOUT_MS} so a genuinely hung send cannot block the fallback path
+ * indefinitely. After `abortController.abort()` the provider generator throws promptly, so in the
+ * common (stalled-provider) case this resolves almost immediately; the wait only matters when a
+ * Discord send was mid-flight when the watchdog fired, and it exists solely so that send is recorded
+ * before the caller proceeds. The promise's outcome is intentionally ignored.
+ * @param streamPromise - The abandoned provider call to let settle.
+ */
+async function settleAbandonedStream(streamPromise: Promise<unknown>): Promise<void> {
+  if (STREAM_ABANDONED_SETTLE_TIMEOUT_MS <= 0) {
+    return;
+  }
+  let guardTimer: ReturnType<typeof setTimeout> | null = null;
+  const settleGuard = new Promise<void>((resolve) => {
+    guardTimer = setTimeout(resolve, STREAM_ABANDONED_SETTLE_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([
+      streamPromise.then(
+        () => undefined,
+        () => undefined,
+      ),
+      settleGuard,
+    ]);
+  } finally {
+    if (guardTimer) clearTimeout(guardTimer);
+  }
+}
+
 async function executeToolCall(
   params: ToolLoopParams,
   streamResult: StreamResult,
@@ -240,6 +375,7 @@ async function executeToolCall(
       functionName: string;
       success: boolean;
       endTurn: boolean;
+      stickerSelection?: Sticker | null;
       historyEntry: ToolHistoryEntry;
     }
 > {
@@ -254,7 +390,7 @@ async function executeToolCall(
     return { kind: "abort", status: "error" };
   }
 
-  if (StreamOrchestrator.hasStopRequest(params.context.channel.id)) {
+  if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
 
@@ -283,7 +419,7 @@ async function executeToolCall(
     abortSignal: turnAbortSignal,
   };
 
-  // 1. Deliberate-tool-mode allowlist enforcement. When mode is active and
+  // Deliberate-tool-mode allowlist enforcement. When mode is active and
   // the model attempts a tool that wasn't exposed for this turn, short-circuit
   // with a synthetic failure response (visible to the model) so it can adapt.
   const allowedNames = params.context.streamingContext.deliberateToolAllowedNames;
@@ -293,7 +429,6 @@ async function executeToolCall(
 
   const startedAt = Date.now();
 
-  // Build a promise that resolves immediately if /bot kill fires (turn abort signal).
   const killPromise: Promise<ToolResult> | null = turnAbortSignal
     ? new Promise<ToolResult>((resolve) => {
         if (turnAbortSignal.aborted) {
@@ -333,8 +468,8 @@ async function executeToolCall(
         ...(killPromise ? [killPromise] : []),
       ]);
 
-  // If /bot kill fired, exit the turn immediately — don't feed the failed result back to the model.
-  if (StreamOrchestrator.hasStopRequest(params.context.channel.id)) {
+  // If /bot kill fired, exit the turn immediately; don't feed the failed result back to the model.
+  if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
 
@@ -347,7 +482,41 @@ async function executeToolCall(
   }
   log.info(`Function call completed: ${functionName} (${Date.now() - startedAt}ms)`);
 
-  // 2. When deliberate-tool-mode admitted the tool via a specific trigger,
+  // Record tool usage at the single tool-dispatch chokepoint (covers every
+  // built-in / REST / MCP tool). metric_key is the tool name, so per-tool
+  // breakdowns (web search, sticker, memory, reminder, …) fall out for free.
+  // Only successful, non-blocked calls count. Fire-and-forget so stat tracking
+  // never adds latency; DMs are skipped (server_id is a NOT NULL FK).
+  if (toolResult.success && !isBlockedByDeliberateAllowlist && !params.context.isDMChannel) {
+    const serverId = params.tomoriState.server_id;
+    const userId = params.context.triggererUserId;
+    if (serverId && userId) {
+      const lineageId = params.context.currentPersona.persona_lineage_id ?? params.tomoriState.persona_lineage_id ?? 0;
+      // userId is carried on the context (resolved once at turn planning), so no
+      // per-tool-call DB lookup: recordStat just buffers in memory.
+      // The per-sticker `sticker_used` breakdown is deliberately NOT recorded here:
+      // selection only queues a sticker, and the send happens post-turn. It is recorded
+      // on confirmed delivery in postTurnEffects.recordStickerDelivery instead.
+      try {
+        statRepository.recordStat({
+          serverId,
+          userId,
+          lineageId,
+          metric: "tool_used",
+          metricKey: functionName,
+        });
+      } catch (statError) {
+        log.warn(`Failed to record tool_used stat for ${functionName}: ${statError}`);
+      }
+    }
+  }
+
+  // When a tool call fails, surface a hidden thought-log notice explaining why.
+  if (!toolResult.success) {
+    await emitFailedToolCallThoughtLog(toolContext, functionName, functionCall.args ?? {}, toolResult);
+  }
+
+  // When deliberate-tool-mode admitted the tool via a specific trigger,
   // post a hidden notice (thought-log only) explaining why it fired.
   const deliberateToolTriggerMatch = params.context.deliberateToolTriggerMatchByToolName.get(functionName);
   if (params.context.deliberateToolModeActive && deliberateToolTriggerMatch && !isBlockedByDeliberateAllowlist) {
@@ -370,6 +539,22 @@ async function executeToolCall(
     return { kind: "restart" };
   }
 
+  if (functionName === "update_short_term_memory" && toolResult.success) {
+    params.context.streamingContext.disableShortTermMemoryUpdate = true;
+    log.info("Short-term memory updated — disabling further STM calls for this turn");
+  }
+
+  let stickerSelection: Sticker | null | undefined;
+  if (functionName === "select_sticker_for_response") {
+    const stickerData = toolResult.data as { status?: string; sticker_id?: string; sticker_name?: string } | undefined;
+    if (stickerData?.status === "sticker_selected_successfully") {
+      stickerSelection = params.context.guild?.stickers.cache.get(stickerData.sticker_id ?? "") ?? null;
+      log.success(`Sticker '${stickerData.sticker_name}' selected for sending`);
+    } else {
+      stickerSelection = null;
+    }
+  }
+
   const functionResponse = toolResult.success
     ? ((toolResult.data as Record<string, unknown>) ?? { status: "completed" })
     : {
@@ -378,11 +563,21 @@ async function executeToolCall(
         tool_name: functionName,
       };
 
+  // Preserve any visible text streamed before this tool call so the follow-up
+  // provider call knows it was already sent to Discord and doesn't repeat it.
+  const preToolCallTextParts = buildPreToolCallTextParts(streamResult);
+  if (preToolCallTextParts) {
+    log.info(
+      `Preserving ${preToolCallTextParts.length} pre-tool-call text part(s) in function history to prevent repetition`,
+    );
+  }
+
   return {
     kind: "history",
     functionName,
     success: toolResult.success,
     endTurn: toolResult.endTurn === true,
+    stickerSelection,
     historyEntry: {
       functionCall,
       functionResponse: {
@@ -392,8 +587,82 @@ async function executeToolCall(
         },
       },
       imageMetadata: toolResult.imageMetadata,
+      preToolCallTextParts,
     },
   };
+}
+
+/**
+ * Builds the pre-tool-call text parts for a function-call history entry.
+ *
+ * `streamResult.accumulatedText` is this stream iteration's visible text at the
+ * function-call boundary (each iteration gets a fresh stream state, so earlier
+ * iterations' text is carried by their own history entries). Provider adapters
+ * merge these parts into the synthetic assistant tool-call turn on the next call.
+ */
+function buildPreToolCallTextParts(streamResult: StreamResult): Array<Record<string, unknown>> | undefined {
+  const text = streamResult.accumulatedText;
+  return text?.trim() ? [{ type: "text", text }] : undefined;
+}
+
+async function emitFailedToolCallThoughtLog(
+  context: ToolContext,
+  functionName: string,
+  args: Record<string, unknown>,
+  toolResult: ToolResult,
+): Promise<void> {
+  const noticeContext: ToolContext = {
+    ...context,
+    suppressProgressNotices: false,
+  };
+
+  await routeHiddenToolNotice(
+    noticeContext,
+    {
+      color: ColorCode.ERROR,
+      titleKey: "genai.thought_log.title",
+      description: buildFailedToolCallDescription(functionName, args, toolResult),
+    },
+    "Failed tool call thought-log notice",
+  );
+}
+
+function buildFailedToolCallDescription(
+  functionName: string,
+  args: Record<string, unknown>,
+  toolResult: ToolResult,
+): string {
+  const reason = toolResult.message || toolResult.error || "Tool execution failed without specific error.";
+  const details = safeStringifyToolFailureDetails({
+    args,
+    data: toolResult.data,
+  });
+  const lines = [`Tool \`${functionName}\` failed.`, `Reason: ${reason}`];
+  if (details) {
+    lines.push("", "Details:", codeBlock(truncateToolFailureNotice(details)));
+  }
+
+  return lines.join("\n");
+}
+
+function safeStringifyToolFailureDetails(value: unknown): string | undefined {
+  try {
+    const json = JSON.stringify(value, null, 2);
+    return json === undefined || json === "{}" ? undefined : json;
+  } catch {
+    return String(value);
+  }
+}
+
+function truncateToolFailureNotice(value: string): string {
+  if (value.length <= TOOL_FAILURE_NOTICE_LIMIT) {
+    return value;
+  }
+  return `${value.slice(0, TOOL_FAILURE_NOTICE_LIMIT - 3)}...`;
+}
+
+function codeBlock(value: string): string {
+  return `\`\`\`json\n${value.replace(/```/g, "`\u200b``")}\n\`\`\``;
 }
 
 function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): boolean {
@@ -417,7 +686,7 @@ function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): bo
     );
   }
 
-  const enhancedContextItem = record.enhanced_context_item;
+  const enhancedContextItem = resolveEnhancedContextItem(record, type);
   if (enhancedContextItem && typeof enhancedContextItem === "object") {
     params.context.contextItems.push(enhancedContextItem as ChatTurnContext["contextItems"][number]);
   }
@@ -429,11 +698,65 @@ function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): bo
   return true;
 }
 
-function shouldEndAfterPreToolText(provider: LLMProvider, streamResult: StreamResult, functionName: string): boolean {
+/**
+ * Resolves the enrichment payload from either transport: inline `enhanced_context_item`,
+ * or `pending_context_key` for tools whose payload is too heavy to sit in `ToolResult.data`.
+ */
+function resolveEnhancedContextItem(record: Record<string, unknown>, type: string): unknown {
+  const pendingContextKey = typeof record.pending_context_key === "string" ? record.pending_context_key : undefined;
+  if (!pendingContextKey) return record.enhanced_context_item;
+
+  const stashedItem = takeEnhancedContextItem(pendingContextKey);
+  if (!stashedItem) {
+    log.warn(
+      `Enhanced-context restart '${type}' referenced pending key ${pendingContextKey}, but no payload was stashed. The enriched media will be missing from this turn.`,
+    );
+  }
+  return stashedItem ?? record.enhanced_context_item;
+}
+
+async function shouldEndAfterPreToolText(
+  provider: LLMProvider,
+  streamResult: StreamResult,
+  functionName: string,
+  serverId: number | undefined,
+): Promise<boolean> {
   const hasPreToolText = (streamResult.accumulatedText ?? "").trim().length > 0;
   if (!hasPreToolText) return false;
   const providerName = provider.getInfo().name;
-  return providerIsApiFamily(providerName, "novelai") || TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName);
+  const applies =
+    providerIsApiFamily(providerName, "novelai") || TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT.has(functionName);
+  if (!applies) return false;
+  if (functionName === "update_short_term_memory") return true;
+  return !(await ToolRegistry.requiresFollowUp(functionName, providerName, serverId));
+}
+
+async function emitNaiToolRetryExhausted(context: ChatTurnContext): Promise<void> {
+  await sendStandardEmbed(
+    context.channel as Parameters<typeof sendStandardEmbed>[0],
+    context.locale,
+    {
+      color: ColorCode.ERROR,
+      titleKey: "genai.nai_tool_retry_exhausted_title",
+      descriptionKey: "genai.nai_tool_retry_exhausted_description",
+    },
+    {
+      webhook: context.responseTarget?.webhook,
+      personaUsername: context.responseTarget?.personaUsername,
+      personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
+    },
+  );
+}
+
+function shouldAbortToolCallForStopRequest(channelId: string): boolean {
+  if (!StreamOrchestrator.hasStopRequest(channelId)) return false;
+  if (!StreamOrchestrator.isFollowUpRequest(channelId)) return true;
+
+  log.info(
+    `Follow-up request found during tool execution for channel ${channelId}. Clearing interrupt to preserve tool chain progress — follow-up is queued.`,
+  );
+  StreamOrchestrator.clearStopRequest(channelId);
+  return false;
 }
 
 async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
@@ -451,7 +774,7 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
       color: ColorCode.ERROR,
       titleKey: "genai.tool_error_loop_title",
       descriptionKey: "genai.tool_error_loop_description",
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context"],
     },
     {
       webhook: context.responseTarget?.webhook,
@@ -463,7 +786,11 @@ async function emitToolErrorLoop(context: ChatTurnContext): Promise<void> {
 
 function queueStopResponseIfPresent(context: ChatTurnContext): void {
   const stopContext = StreamOrchestrator.getAndClearStopContext(context.channel.id);
-  if (!stopContext) return;
+  if (!stopContext) {
+    StreamOrchestrator.clearStopRequest(context.channel.id);
+    return;
+  }
+
   queueStopResponseAtFront({
     channelId: context.channel.id,
     message: stopContext.originalStopMessage,
@@ -481,6 +808,7 @@ function buildResult(
   responseText: string,
   detailsText: string,
   thoughtLog: GenerationTurnResult["thoughtLog"],
+  selectedSticker?: Sticker,
 ): GenerationTurnResult {
   const text = detailsText.trim()
     ? `${responseText.trim()}\n\n[Scene Metadata]\n${detailsText.trim()}`
@@ -501,6 +829,7 @@ function buildResult(
         : [],
     thoughtLog,
     thoughtLogOwner: thoughtLog ? resolveThoughtLogOwner(context) : undefined,
+    selectedSticker,
   };
 }
 

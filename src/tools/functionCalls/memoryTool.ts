@@ -44,17 +44,14 @@ export class MemoryTool extends BaseTool {
 
   /**
    * Check if memory tool is available for the given provider
-   * @param _provider - LLM provider name (unused)
    * @returns True if provider supports memory functionality
    */
   isAvailableFor(_provider: string): boolean {
-    // Memory functionality works with all providers
     return true;
   }
 
   /**
    * Check if self-teaching functionality is enabled in Tomori config
-   * @param context - Tool execution context
    * @returns True if self-teaching is enabled
    */
   protected isEnabled(context: ToolContext): boolean {
@@ -64,13 +61,8 @@ export class MemoryTool extends BaseTool {
   /**
    * Execute memory storage
    * @param args - Arguments containing memory details
-   * @param context - Tool execution context
-   * @returns Promise resolving to tool result
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
-    // Real implementation extracted from tomoriChat.ts:1068-1340
-
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -83,7 +75,6 @@ export class MemoryTool extends BaseTool {
       };
     }
 
-    // Check if tool is enabled
     if (!this.isEnabled(context)) {
       return {
         success: false,
@@ -95,7 +86,6 @@ export class MemoryTool extends BaseTool {
       };
     }
 
-    // Extract arguments (from tomoriChat.ts:1070-1076)
     let memoryContentArg = args.memory_content as string;
     const memoryScopeArg = args.memory_scope as "server_wide" | "target_user";
     const targetUserArg = args.target_user as string | undefined;
@@ -104,19 +94,16 @@ export class MemoryTool extends BaseTool {
     const requestedTargetUser =
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
-    // Import database functions
     const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
     const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
 
-    // Import memory validation and repository singletons
     const { validateMemoryContent } = await import("@/utils/misc/memoryLimits");
     const { personalMemoryRepository, serverMemoryRepository, userRepository } = await import(
       "@/utils/db/repositories"
     );
 
-    // Critical state validation (from tomoriChat.ts:1078-1104)
     const tomoriState = context.tomoriState;
     const resolvedUserId = context.message?.author?.id || context.userId;
     const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
@@ -145,7 +132,6 @@ export class MemoryTool extends BaseTool {
     const personaNickname =
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
 
-    // Validate memory content (from tomoriChat.ts:1105-1113)
     if (typeof memoryContentArg !== "string" || !memoryContentArg.trim()) {
       return {
         success: false,
@@ -157,7 +143,6 @@ export class MemoryTool extends BaseTool {
       };
     }
 
-    // Validate memory scope (from tomoriChat.ts:1114-1122)
     if (typeof memoryScopeArg !== "string" || !["server_wide", "target_user"].includes(memoryScopeArg)) {
       return {
         success: false,
@@ -239,7 +224,7 @@ export class MemoryTool extends BaseTool {
       }
     }
 
-    // Sanitize unknown {word} placeholders (e.g. {bredrumb}) — the LLM sometimes wraps
+    // Sanitize unknown {word} placeholders (e.g. {bredrumb}), so the LLM sometimes wraps
     // usernames in braces imitating {user}. Strip the braces so the name appears plainly.
     const memoryContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
 
@@ -279,9 +264,7 @@ export class MemoryTool extends BaseTool {
     }
 
     if (effectiveScope === "server_wide") {
-      // Server-wide memory handling (from tomoriChat.ts:1127-1179)
       try {
-        // Check server memory limit before adding
         const serverLimitCheck = await serverMemoryRepository.checkServerMemoryLimit(
           tomoriState.server_id,
           tomoriState.persona_lineage_id,
@@ -326,7 +309,6 @@ export class MemoryTool extends BaseTool {
             tomoriState?.config.personal_memories_enabled,
           );
 
-          // Send a notification notice to the channel.
           // The expand helper attaches a "Show Full Memory" button when the
           // processed content exceeds 200 chars (the embed truncation threshold),
           // letting users read the full memory ephemerally without channel clutter.
@@ -394,11 +376,7 @@ export class MemoryTool extends BaseTool {
         };
       }
     } else if (effectiveScope === "target_user") {
-      // User-specific memory handling (from tomoriChat.ts:1180-1339)
-      // Note: bot self-target check is handled above via auto-fallback to server_wide scope.
-
       try {
-        // Load target user (from tomoriChat.ts:1204-1206)
         const targetUserRow = await userRepository.loadByDiscordId(resolvedTargetUserId as string);
 
         if (!targetUserRow?.user_id) {
@@ -588,6 +566,4 @@ export class MemoryTool extends BaseTool {
       },
     };
   }
-
-  // Removed unused helper methods - functionality moved to main execute method
 }

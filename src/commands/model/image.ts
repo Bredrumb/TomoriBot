@@ -4,18 +4,27 @@ import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
-import type { SelectOption } from "@/types/discord/modal";
-import { promptForSavedProvider, replaceProviderPickerWithInfo } from "@/utils/discord/providerPicker";
+import {
+  beginAnchorPrivateWorkflow,
+  buildPersonaWorkflowNotice,
+  type PersonaWorkflowInPlacePhase,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/anchorWorkflow";
+import {
+  acquireModelModalOpener,
+  buildNoProvidersPayload,
+  buildOpenSelectorPayload,
+  buildProviderPickerPayload,
+  openAnchorModal,
+} from "@/utils/discord/ui/anchorModelFlow";
 import { configRepository, llmModelRepo } from "@/utils/db/repositories";
 import { getDiffusionModelById } from "@/utils/image/naiDiffusionModels";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { promptCustomModelSelection } from "@/utils/provider/customModelPicker";
 import { getProviderDisplayName, getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_model_image_modal";
 const MODEL_SELECT_ID = "model_select";
 
@@ -83,7 +92,6 @@ function getImageModelDisplayName(
   return description && description.length > 0 ? description : null;
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("image")
@@ -111,10 +119,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Changes Tomori's image diffusion model
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -122,7 +126,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -132,7 +135,6 @@ export async function execute(
     return;
   }
 
-  // 2. Load the Tomori state for this server
   const tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -172,163 +174,96 @@ export async function execute(
     return;
   }
 
-  // Track modal submit interaction and selected model for error handling in catch block
-  let modalSubmitInteraction: import("discord.js").ModalSubmitInteraction | undefined;
-  let selectedModel: ImageDiffusionModelRow | null = null; // For error context and logic
-  let responseInteraction: ChatInputCommandInteraction | import("discord.js").ButtonInteraction = interaction;
-  let providerSelection: Awaited<ReturnType<typeof promptForSavedProvider>> = null;
+  // Anchor one-message controller, tracked so the outer catch can render an
+  // unexpected-error terminal on the same ephemeral message.
+  let selectedModel: ImageDiffusionModelRow | null = null;
+  let anchorMessage: PersonaWorkflowMessageController | null = null;
 
   try {
     const savedProviders = await loadSavedProvidersForCapability(tomoriState.server_id, "image");
+    const idRoot = "model_image";
 
+    // Open the anchor message with the right initial control for the provider count.
     const hasNaiProviders = savedProviders.some(
       (provider) => getStaticProviderInfo(provider.provider)?.featureSupport.imageGeneration === "nai-pipeline",
     );
-    const pickerOptions = hasNaiProviders
-      ? {
-          additionalDescription: localizer(locale, "commands.model.image.nai_picker_note"),
-        }
-      : undefined;
-    providerSelection = await promptForSavedProvider(interaction, locale, savedProviders, pickerOptions);
+    const currentImageModels = await Promise.all(
+      [tomoriState.config.diffusion_model_id, tomoriState.config.nai_diffusion_model_id]
+        .filter((modelId): modelId is number => typeof modelId === "number")
+        .map((modelId) => llmModelRepo.loadDiffusionModelById(modelId)),
+    );
+    const currentPrimary = currentImageModels.find((model) => model) ?? null;
+    const currentModel =
+      getImageModelDisplayName(currentPrimary) ?? localizer(locale, "commands.model.image.current_none");
+    const currentProvider = currentPrimary?.provider ?? localizer(locale, "general.unknown");
+    const initialPayload =
+      savedProviders.length === 0
+        ? buildNoProvidersPayload(locale)
+        : savedProviders.length === 1
+          ? buildOpenSelectorPayload(locale, `${idRoot}_open`)
+          : buildProviderPickerPayload(
+              locale,
+              idRoot,
+              savedProviders.map((p) => p.provider),
+              [{ model: currentModel, provider: currentProvider }],
+              { note: hasNaiProviders ? localizer(locale, "commands.model.image.nai_picker_note") : undefined },
+            );
 
-    if (!providerSelection) {
-      return;
-    }
-    const selectedProvider = providerSelection.provider;
-    responseInteraction = providerSelection.interaction;
+    const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
+    anchorMessage = phase.message;
+    if (savedProviders.length === 0) return;
 
-    if (isCustomProvider(selectedProvider)) {
-      const selectedSavedConfig = savedProviders.find((row) => row.provider.toLowerCase() === selectedProvider) ?? null;
-      const customAvailableModels = selectedSavedConfig
-        ? ((await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
-            kind: "server",
-            ownerId: tomoriState.server_id,
-          })) ?? [])
-        : [];
-      const customModelChoices = customAvailableModels.filter(
-        (model): model is typeof model & { diffusion_model_id: number } =>
-          model.diffusion_model_id !== undefined && model.diffusion_model_id !== null,
-      );
-      if (!selectedSavedConfig || customModelChoices.length === 0) {
-        await replyInfoEmbed(responseInteraction, locale, {
-          titleKey: "commands.model.image.no_models_title",
-          descriptionKey: "commands.model.image.no_models_description",
-          descriptionVars: {
-            provider: getProviderDisplayName(selectedProvider),
-          },
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
+    // Resolve the provider and the unacknowledged button the modal opens from.
+    const opener = await acquireModelModalOpener(phase, interaction.user.id, locale, savedProviders, idRoot);
+    if (!opener) return;
+    const selectedProvider = opener.provider;
+    const isCustom = isCustomProvider(selectedProvider);
 
-      // Single registered model activates directly; multiple show a string-select picker.
-      const selection = await promptCustomModelSelection({
-        interaction: responseInteraction,
-        locale,
-        choices: customModelChoices.map((model) => ({
-          model,
-          value: model.diffusion_model_id.toString(),
-          label: getImageModelDisplayName(model) ?? model.codename,
-          description: getLocalizedDescription(model, userData.language_pref),
-        })),
-        modalCustomId: "config_model_image_custom_modal",
-        modalTitleKey: "commands.model.image.modal_title",
-        selectLabelKey: "commands.model.image.select_label",
-        selectDescriptionKey: "commands.model.image.select_description",
-        selectPlaceholderKey: "commands.model.image.select_placeholder",
-      });
-      if (!selection) return;
-
-      const selectedConfiguredModel = selection.model;
-      const customReplyTarget = selection.submitInteraction ?? responseInteraction;
-      const selectedModelId = selectedConfiguredModel.diffusion_model_id;
-      const currentSelectedId = tomoriState.config.diffusion_model_id ?? null;
-      const selectedModelName =
-        getImageModelDisplayName(selectedConfiguredModel) ?? getProviderDisplayName(selectedProvider);
-
-      if (selectedModelId === currentSelectedId) {
-        await replyInfoEmbed(customReplyTarget, locale, {
-          titleKey: "commands.model.image.already_selected_title",
-          descriptionKey: "commands.model.image.already_selected_description",
-          descriptionVars: {
-            model_name: selectedModelName,
-          },
-          color: ColorCode.WARN,
-        });
-        return;
-      }
-
-      const previousModel = currentSelectedId ? await getDiffusionModelById(currentSelectedId) : null;
-      const updated = await configRepository.updateModelConfig(tomoriState.server_id, {
-        diffusion_model_id: selectedModelId,
-      });
-
-      if (!updated) {
-        await replyInfoEmbed(customReplyTarget, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-      await replyInfoEmbed(customReplyTarget, locale, {
-        titleKey: "commands.model.image.success_title",
-        descriptionKey: "commands.model.image.success_description",
-        descriptionVars: {
-          model_name: selectedModelName,
-          previous_model:
-            getImageModelDisplayName(previousModel) ?? localizer(locale, "commands.model.image.current_none"),
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.SUCCESS,
-      });
-      return;
-    }
-
-    const availableModels =
+    // Load this provider's diffusion models (custom + regular share the list).
+    const availableModels = (
       (await llmModelRepo.loadAvailableDiffusionModels(selectedProvider, false, {
         kind: "server",
         ownerId: tomoriState.server_id,
-      })) ?? [];
+      })) ?? []
+    ).filter(
+      (model): model is typeof model & { diffusion_model_id: number } =>
+        model.diffusion_model_id !== undefined && model.diffusion_model_id !== null,
+    );
+    type ImageModelChoice = (typeof availableModels)[number];
 
-    if (!availableModels.length) {
-      await replyInfoEmbed(responseInteraction, locale, {
-        titleKey: "commands.model.image.no_models_title",
-        descriptionKey: "commands.model.image.no_models_description",
-        descriptionVars: {
-          provider: getProviderDisplayName(selectedProvider),
-        },
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
+    if (availableModels.length === 0) {
+      await phase.useButton(opener.button).replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.image.no_models_title",
+          descriptionKey: "commands.model.image.no_models_description",
+          descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
+    // Regular NAI-pipeline providers write the NAI slot; custom always uses the standard slot.
     const imageGenerationStyle = getStaticProviderInfo(selectedProvider)?.featureSupport.imageGeneration ?? "none";
-    const targetColumn = imageGenerationStyle === "nai-pipeline" ? "nai_diffusion_model_id" : "diffusion_model_id";
+    const targetColumn =
+      !isCustom && imageGenerationStyle === "nai-pipeline" ? "nai_diffusion_model_id" : "diffusion_model_id";
     const currentSelectedId =
       targetColumn === "nai_diffusion_model_id"
-        ? tomoriState.config.nai_diffusion_model_id
-        : tomoriState.config.diffusion_model_id;
+        ? (tomoriState.config.nai_diffusion_model_id ?? null)
+        : (tomoriState.config.diffusion_model_id ?? null);
 
-    // 5. Create model options for the select menu using localized descriptions
-    const modelSelectOptions: SelectOption[] = availableModels
-      .filter((model) => model.diffusion_model_id !== undefined && model.diffusion_model_id !== null)
-      .map((model) => ({
-        label: safeSelectOptionText(model.codename), // Use codename as display label
-        value: safeSelectOptionText((model.diffusion_model_id ?? 0).toString()), // Use diffusion_model_id as value
-        description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)), // Use locale-specific description with flags
-      }));
-
-    // 6. Show the modal with model selection
-    const modalResult = await promptWithRawModal(
-      responseInteraction,
-      locale,
-      {
-        modalCustomId: MODAL_CUSTOM_ID,
+    // Acquire the selected model. A custom provider with a single registered model
+    //    activates directly (no modal); otherwise a string-select modal is shown in place.
+    let work: PersonaWorkflowInPlacePhase;
+    let chosenModel: ImageModelChoice | null;
+    if (isCustom && availableModels.length === 1) {
+      work = await phase.useButton(opener.button).beginInPlaceWork();
+      chosenModel = availableModels[0];
+    } else {
+      // >25 models route through the anchor range selector automatically.
+      const modalPhase = await openAnchorModal(phase, opener.button, locale, {
+        modalCustomId: isCustom ? "config_model_image_custom_modal" : MODAL_CUSTOM_ID,
         modalTitleKey: "commands.model.image.modal_title",
         components: [
           {
@@ -337,78 +272,57 @@ export async function execute(
             descriptionKey: "commands.model.image.select_description",
             placeholder: "commands.model.image.select_placeholder",
             required: true,
-            options: modelSelectOptions,
+            options: availableModels.map((model) => ({
+              label: safeSelectOptionText(model.codename),
+              value: safeSelectOptionText(model.diffusion_model_id.toString()),
+              description: safeSelectOptionText(getLocalizedDescription(model, userData.language_pref)),
+            })),
           },
         ],
-      },
-      MessageFlags.Ephemeral, // Auto-defer with ephemeral flag
-    );
-
-    // 7. Handle modal outcome
-    if (modalResult.outcome !== "submit") {
-      log.info(`Image model selection modal ${modalResult.outcome} for user ${userData.user_id}`);
-      return;
+      });
+      if (!modalPhase) return;
+      work = await modalPhase.beginInPlaceWork();
+      const selectedId = Number.parseInt(modalPhase.values[MODEL_SELECT_ID], 10);
+      chosenModel = availableModels.find((model) => model.diffusion_model_id === selectedId) ?? null;
     }
+    selectedModel = chosenModel;
 
-    // Extract values from the modal
-    // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    modalSubmitInteraction = modalResult.interaction!;
-    // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    const selectedModelIdStr = modalResult.values![MODEL_SELECT_ID];
-
-    // 8. Find the selected model details by diffusion_model_id
-    const selectedModelId = Number.parseInt(selectedModelIdStr, 10);
-    selectedModel = availableModels.find((model) => model.diffusion_model_id === selectedModelId) ?? null;
-
-    if (!selectedModel?.diffusion_model_id) {
-      const context: ErrorContext = {
-        personaId: tomoriState.persona_id,
-        serverId: tomoriState.server_id,
-        userId: userData.user_id,
-        errorType: "CommandExecutionError",
-        metadata: {
-          command: "model image",
-          guildId: interaction.guild?.id ?? interaction.user.id,
-          requestedModelId: selectedModelIdStr,
-          availableModels: availableModels.map((m) => m.diffusion_model_id),
-        },
-      };
-      // Log the error even if it seems impossible due to modal choices
-      await log.error(
-        "Selected model ID not found in available diffusion models from DB",
-        new Error("Invalid model selection despite modal choices"),
-        context,
+    if (!chosenModel) {
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.invalid_option_title",
+          descriptionKey: "commands.model.image.invalid_model_description",
+          color: ColorCode.ERROR,
+        }),
       );
-
-      await modalSubmitInteraction.editReply({
-        content: localizer(locale, "commands.model.image.invalid_model_description"),
-      });
       return;
     }
 
-    // 9. Check if this is the same as the current model
-    if (selectedModel.diffusion_model_id === currentSelectedId) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "commands.model.image.already_selected_title",
-        descriptionKey: "commands.model.image.already_selected_description",
-        descriptionVars: {
-          model_name: selectedModel.codename,
-        },
-        color: ColorCode.WARN,
-      });
+    const selectedModelName = getImageModelDisplayName(chosenModel) ?? getProviderDisplayName(selectedProvider);
+
+    if (chosenModel.diffusion_model_id === currentSelectedId) {
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "commands.model.image.already_selected_title",
+          descriptionKey: "commands.model.image.already_selected_description",
+          descriptionVars: { model_name: selectedModelName },
+          color: ColorCode.WARN,
+        }),
+      );
       return;
     }
 
-    // 10. Update the config in the database via the repository
+    const previousModel = currentSelectedId ? await getDiffusionModelById(currentSelectedId) : null;
     const updated =
       targetColumn === "nai_diffusion_model_id"
         ? await configRepository.updateNovelaiImagegenConfig(tomoriState.server_id, {
-            nai_diffusion_model_id: selectedModel.diffusion_model_id,
+            nai_diffusion_model_id: chosenModel.diffusion_model_id,
           })
         : await configRepository.updateModelConfig(tomoriState.server_id, {
-            diffusion_model_id: selectedModel.diffusion_model_id,
+            diffusion_model_id: chosenModel.diffusion_model_id,
           });
-
     if (!updated) {
       const context: ErrorContext = {
         personaId: tomoriState.persona_id,
@@ -418,8 +332,8 @@ export async function execute(
         metadata: {
           command: "model image",
           guildId: interaction.guild?.id ?? interaction.user.id,
-          selectedModelCodename: selectedModel.codename,
-          targetDiffusionModelId: selectedModel.diffusion_model_id,
+          selectedModelCodename: chosenModel.codename,
+          targetDiffusionModelId: chosenModel.diffusion_model_id,
         },
       };
       await log.error(
@@ -427,42 +341,33 @@ export async function execute(
         new Error("Database update returned no rows"),
         context,
       );
-
-      await replyInfoEmbed(modalSubmitInteraction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
+      await work.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.update_failed_title",
+          descriptionKey: "general.errors.update_failed_description",
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
-    // 12. Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-
-    // 13. Success message
-    const previousModel = currentSelectedId ? await getDiffusionModelById(currentSelectedId) : null;
-
-    const successOptions = {
-      titleKey: "commands.model.image.success_title",
-      descriptionKey: "commands.model.image.success_description",
-      descriptionVars: {
-        model_name: selectedModel.codename,
-        previous_model:
-          getImageModelDisplayName(previousModel) ?? localizer(locale, "commands.model.image.current_none"),
-        provider: getProviderDisplayName(selectedProvider),
-      },
-      color: ColorCode.SUCCESS,
-    } as const;
-
-    const replacedPicker =
-      modalSubmitInteraction &&
-      (await replaceProviderPickerWithInfo(providerSelection, modalSubmitInteraction, locale, successOptions));
-
-    if (!replacedPicker) {
-      await replyInfoEmbed(modalSubmitInteraction, locale, successOptions);
-    }
+    await work.message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.model.image.success_title",
+        descriptionKey: "commands.model.image.success_description",
+        descriptionVars: {
+          model_name: selectedModelName,
+          previous_model:
+            getImageModelDisplayName(previousModel) ?? localizer(locale, "commands.model.image.current_none"),
+          provider: getProviderDisplayName(selectedProvider),
+        },
+        color: ColorCode.SUCCESS,
+      }),
+    );
   } catch (error) {
-    // 13. Log error with context
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -485,10 +390,23 @@ export async function execute(
     };
     await log.error(`Error executing /model image for user ${userData.user_disc_id}`, error as Error, context);
 
-    // 14. Inform user of unknown error
-    // Use modalSubmitInteraction if available (error after modal), otherwise interaction (error during modal)
-    const replyTarget = modalSubmitInteraction ?? responseInteraction;
-    await replyInfoEmbed(replyTarget, locale, {
+    // Render the unexpected-error terminal on the anchor message; fall back to a fresh
+    // reply only if the message is already gone (fatal) or was never created.
+    if (anchorMessage) {
+      try {
+        await anchorMessage.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+        return;
+      } catch {}
+    }
+
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

@@ -8,6 +8,7 @@ import {
   normalizeOpenAICompatibleProviderError,
 } from "@/providers/openaiCompatible/openaiCompatibleErrorFormatter";
 import { streamOpenAICompatibleSseChunks } from "@/providers/openaiCompatible/openaiCompatibleSse";
+import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import type {
   OpenAICompatibleAccumulatedToolCall,
   OpenAICompatibleStreamAdapterOptions,
@@ -15,7 +16,20 @@ import type {
   OpenAICompatibleStreamConfig,
   OpenAICompatibleToolCallDelta,
 } from "@/providers/openaiCompatible/openaiCompatibleTypes";
+import {
+  buildDegradationAttempts,
+  buildImageStripAttempt,
+  buildTargetedAttempt,
+  classifyDegradableError,
+  extractRejectedParams,
+  isMultimodalRejectionError,
+  MAX_TARGETED_DEGRADATION_ATTEMPTS,
+  stripImageBlocksWithNotice,
+  type DegradableErrorInput,
+  type DegradableErrorKind,
+} from "@/providers/utils/paramDegradation";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
+import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 import {
   applyAssistantPrefixCompletion,
   CONVERSATION_START_USER_TEXT,
@@ -37,11 +51,11 @@ import type {
 import { BaseStreamAdapter } from "@/types/stream/interfaces";
 import { log } from "@/utils/misc/logger";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
+import { isProviderModelErrorMessage } from "@/utils/provider/providerErrorClassification";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import { localizer } from "@/utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 import {
   collectRenderModifierSourceNames,
   isAllowedRenderModifierSpeakerLabel,
@@ -85,9 +99,9 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.pendingThinkBlockThoughtText = "";
     this.reasoningContentSpillGuard.reset();
-    // 1. Build a persona-label matcher used as a fallback `</think>` closer.
+    // Build a persona-label matcher used as a fallback `</think>` closer.
     //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
-    //    (half/full-width colon). Required at a line boundary to keep false positives low —
+    //    (half/full-width colon). Required at a line boundary to keep false positives low because
     //    mid-sentence mentions like "as Nerine would" won't trigger.
     const personaName = context.tomoriState.persona_nickname?.trim();
     const personaSpeakerLabelRegex = personaName
@@ -121,6 +135,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       currentTurnModelParts: context.currentTurnModelParts,
       functionInteractionHistory: context.functionInteractionHistory,
       seesImages: openAICompatibleConfig.seesImages ?? false,
+      requiresReasoningContentReplay: this.options.requiresReasoningContentReplay,
       supportsSystemRole,
     });
 
@@ -158,6 +173,7 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         model: config.model,
         messages,
         stream: true,
+        stream_options: { include_usage: true },
       };
       if (!isParamDisabled(disabledParams, "temperature")) {
         requestBody.temperature = config.temperature;
@@ -242,125 +258,244 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         context,
       });
 
-      const effectiveTemperatureLabel = "temperature" in requestBody ? String(config.temperature) : "omitted";
-      const effectiveTopPLabel =
-        openAICompatibleConfig.topP !== undefined && "top_p" in requestBody
-          ? String(openAICompatibleConfig.topP)
-          : "omitted";
-      const effectiveTopKLabel =
-        openAICompatibleConfig.topK !== undefined && "top_k" in requestBody
-          ? String(openAICompatibleConfig.topK)
-          : "omitted";
+      const effectiveTemperatureLabel = "temperature" in requestBody ? String(requestBody.temperature) : "omitted";
+      const effectiveTopPLabel = "top_p" in requestBody ? String(requestBody.top_p) : "omitted";
+      const effectiveTopKLabel = "top_k" in requestBody ? String(requestBody.top_k) : "omitted";
       const effectiveFrequencyPenaltyLabel =
-        openAICompatibleConfig.frequencyPenalty !== undefined && "frequency_penalty" in requestBody
-          ? String(openAICompatibleConfig.frequencyPenalty)
-          : "omitted";
+        "frequency_penalty" in requestBody ? String(requestBody.frequency_penalty) : "omitted";
       const effectivePresencePenaltyLabel =
-        openAICompatibleConfig.presencePenalty !== undefined && "presence_penalty" in requestBody
-          ? String(openAICompatibleConfig.presencePenalty)
-          : "omitted";
-      const effectiveMinPLabel =
-        openAICompatibleConfig.minP !== undefined && "min_p" in requestBody
-          ? String(openAICompatibleConfig.minP)
-          : "omitted";
+        "presence_penalty" in requestBody ? String(requestBody.presence_penalty) : "omitted";
+      const effectiveMinPLabel = "min_p" in requestBody ? String(requestBody.min_p) : "omitted";
       log.info(
         `${this.options.adapterName}: Sampling params - temp: ${effectiveTemperatureLabel}, top_p: ${effectiveTopPLabel}, top_k: ${effectiveTopKLabel}, freq_penalty: ${effectiveFrequencyPenaltyLabel}, pres_penalty: ${effectivePresencePenaltyLabel}, rep_penalty: ${openAICompatibleConfig.repetitionPenalty ?? "default"}, min_p: ${effectiveMinPLabel}, logit_bias: ${Object.keys(openAICompatibleConfig.logitBias ?? {}).length}`,
       );
 
-      // Create AbortController and link to external abort signal (SDK call timeout)
-      const controller = new AbortController();
-      if (context.abortSignal) {
-        if (context.abortSignal.aborted) {
-          controller.abort();
-        } else {
-          context.abortSignal.addEventListener("abort", () => controller.abort(), { once: true });
-        }
-      }
-
       const fetchImpl = this.options.providerName === "custom" ? fetchUserRemoteUrl : fetch;
-
-      let response = await fetchImpl(apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
+      const attempts = buildDegradationAttempts(requestBody, {
+        mandatoryKeys: new Set(["model", "messages", "stream", ...(this.options.mandatoryBodyKeys ?? [])]),
+        stripImages: (attemptMessages) =>
+          Array.isArray(attemptMessages)
+            ? stripImageBlocksWithNotice(attemptMessages as Array<Record<string, unknown>>)
+            : attemptMessages,
       });
+      const attemptedSerializedBodies = new Set<string>();
+      let targetedAttemptCount = 0;
+      const queueTargetedAttempt = (
+        currentIndex: number,
+        currentBody: Record<string, unknown>,
+        errorMessage: string,
+      ): boolean => {
+        if (targetedAttemptCount >= MAX_TARGETED_DEGRADATION_ATTEMPTS) {
+          return false;
+        }
 
-      let responseErrorText: string | null = null;
-      if (!response.ok) {
-        responseErrorText = await response.text();
+        const rejectedParams = extractRejectedParams(errorMessage, currentBody);
+        if (rejectedParams.length === 0) return false;
 
-        if (requestBody.stop && this.options.shouldRetryWithoutStop?.(response.status, responseErrorText)) {
-          log.warn(`${this.options.adapterName}: Endpoint rejected stop parameter; retrying request without stop`);
+        const targetedAttempt = buildTargetedAttempt(currentBody, rejectedParams);
+        const serialized = JSON.stringify(targetedAttempt.body);
+        if (attemptedSerializedBodies.has(serialized)) return false;
 
-          const retryBody = { ...requestBody };
-          delete retryBody.stop;
+        const duplicateIndex = attempts.findIndex(
+          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+        );
+        if (duplicateIndex !== -1) {
+          attempts.splice(duplicateIndex, 1);
+        }
+        attempts.splice(currentIndex + 1, 0, targetedAttempt);
+        targetedAttemptCount += 1;
+        return true;
+      };
+      // A multimodal rejection (e.g. vLLM without --enable-multimodal returns a
+      // 500) means every payload that still carries image blocks will fail the
+      // same way, so jump straight to the image-strip attempt instead of walking
+      // the sampler-probe rungs first. The strip injects a text notice per
+      // message so the model stays aware images were attached.
+      let imageStripAttemptQueued = false;
+      const queueImageStripAttempt = (
+        currentIndex: number,
+        currentBody: Record<string, unknown>,
+        errorMessage: string,
+      ): boolean => {
+        if (imageStripAttemptQueued || !isMultimodalRejectionError(errorMessage)) {
+          return false;
+        }
 
-          response = await fetchImpl(apiUrl, {
+        const imageStripAttempt = buildImageStripAttempt(currentBody);
+        if (!imageStripAttempt) return false;
+
+        const serialized = JSON.stringify(imageStripAttempt.body);
+        if (attemptedSerializedBodies.has(serialized)) return false;
+
+        const duplicateIndex = attempts.findIndex(
+          (queuedAttempt, index) => index > currentIndex && JSON.stringify(queuedAttempt.body) === serialized,
+        );
+        if (duplicateIndex !== -1) {
+          attempts.splice(duplicateIndex, 1);
+        }
+        attempts.splice(currentIndex + 1, 0, imageStripAttempt);
+        imageStripAttemptQueued = true;
+        return true;
+      };
+      let completedAttempt = false;
+      attemptLoop: for (let i = 0; i < attempts.length; i++) {
+        const attempt = attempts[i];
+        const isRetry = i > 0;
+        attemptedSerializedBodies.add(JSON.stringify(attempt.body));
+
+        if (isRetry) {
+          log.warn(
+            `${this.options.adapterName}: Request retry with degraded payload: ${attempt.label} (${config.model})`,
+          );
+        }
+
+        const extraClassifiers = [
+          ({ statusCode, message }: DegradableErrorInput) =>
+            "stream_options" in attempt.body &&
+            (statusCode === 400 || statusCode === 422) &&
+            message.toLowerCase().includes("stream_options"),
+          ...(this.options.shouldRetryWithoutStop && "stop" in attempt.body
+            ? [
+                ({ statusCode, message }: DegradableErrorInput) =>
+                  statusCode !== null && this.options.shouldRetryWithoutStop?.(statusCode, message) === true,
+              ]
+            : []),
+        ];
+        const currentController = new AbortController();
+        const externalAbortListener = () => currentController.abort();
+        if (context.abortSignal?.aborted) {
+          currentController.abort();
+        } else {
+          context.abortSignal?.addEventListener("abort", externalAbortListener, { once: true });
+        }
+
+        try {
+          const response = await fetchImpl(apiUrl, {
             method: "POST",
             headers,
-            body: JSON.stringify(retryBody),
-            signal: controller.signal,
+            body: JSON.stringify(attempt.body),
+            signal: currentController.signal,
           });
 
-          responseErrorText = response.ok ? null : await response.text();
-        }
-      }
-
-      if (!response.ok) {
-        throw createOpenAICompatibleHttpError(response.status, response.statusText, responseErrorText ?? "");
-      }
-
-      for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
-        const sanitizedChunk = this.stripThinkBlocksFromChunkContent(chunk);
-        const spillGuardedChunk = this.applyReasoningContentSpillGuard(sanitizedChunk);
-        const chunksToEmit = this.splitChunkWithTextAndToolSignals(spillGuardedChunk);
-
-        for (const chunkToEmit of chunksToEmit) {
-          const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
-          const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
-
-          if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
-            yield this.wrapChunk(
-              {
-                choices: [
-                  {
-                    index: 0,
-                    delta: {
-                      content: this.speakerGuardPendingTail,
-                    },
-                  },
-                ],
-              },
-              config.model,
-            );
-            this.speakerGuardPendingTail = "";
-          }
-
-          const hasMeaningfulData = Boolean(
-            guardResult.chunk.error ||
-              guardResult.chunk.usage ||
-              (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
-          );
-          if (!hasMeaningfulData) {
-            if (guardResult.stopTriggered) {
+          if (!response.ok) {
+            const responseErrorText = await response.text();
+            // A message that names a droppable request param is sufficient evidence on
+            // its own, so retry even when the generic status/wording classifier misses.
+            // `degradeOn502` stays off: a direct provider's 502 is an outage, not a
+            // parameter incompatibility, and should fail fast into key/model fallback.
+            const queuedTargeted = queueTargetedAttempt(i, attempt.body, responseErrorText);
+            const queuedImageStrip = queueImageStripAttempt(i, attempt.body, responseErrorText);
+            const degradationKind = classifyDegradableError({
+              statusCode: response.status,
+              message: responseErrorText,
+              extraClassifiers,
+            });
+            if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
               log.warn(
-                `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                `${this.options.adapterName}: Endpoint returned ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} on attempt '${attempt.label}', trying fallback payload`,
+                { model: config.model, errorMessage: responseErrorText },
               );
-              return;
+              continue;
             }
-            continue;
+
+            throw createOpenAICompatibleHttpError(response.status, response.statusText, responseErrorText);
           }
 
-          yield this.wrapChunk(guardResult.chunk, config.model);
+          let committedToAttempt = false;
+          let recoveryLogged = false;
+          const logRecovery = () => {
+            if (!isRetry || recoveryLogged) return;
+            recoveryLogged = true;
+            log.warn(`${this.options.adapterName}: Request recovered after retry: ${attempt.label} (${config.model})`);
+          };
 
-          if (guardResult.stopTriggered) {
-            log.warn(
-              `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
-            );
-            return;
+          for await (const chunk of streamOpenAICompatibleSseChunks(response)) {
+            const midStreamError = this.getMidStreamError(chunk);
+            if (midStreamError && !committedToAttempt) {
+              // Same rule as the fetch path: a message naming droppable params
+              // justifies a retry even without a generic classifier match.
+              const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
+              const queuedImageStrip = queueImageStripAttempt(i, attempt.body, midStreamError.message);
+              const degradationKind = classifyDegradableError({
+                ...midStreamError,
+                extraClassifiers,
+              });
+              if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
+                log.warn(
+                  `${this.options.adapterName}: Received ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                  { model: config.model, errorMessage: midStreamError.message },
+                );
+                currentController.abort();
+                this.resetPerAttemptState(personaSpeakerLabelRegex);
+                continue attemptLoop;
+              }
+            }
+
+            const sanitizedChunk = this.stripThinkBlocksFromChunkContent(chunk);
+            const spillGuardedChunk = this.applyReasoningContentSpillGuard(sanitizedChunk);
+            const chunksToEmit = this.splitChunkWithTextAndToolSignals(spillGuardedChunk);
+
+            for (const chunkToEmit of chunksToEmit) {
+              const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(chunkToEmit);
+              const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
+              if (this.isMeaningfulCommitmentChunk(guardResult.chunk) && !committedToAttempt) {
+                committedToAttempt = true;
+                logRecovery();
+              }
+
+              if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
+                yield this.wrapChunk(
+                  {
+                    choices: [
+                      {
+                        index: 0,
+                        delta: {
+                          content: this.speakerGuardPendingTail,
+                        },
+                      },
+                    ],
+                  },
+                  config.model,
+                );
+                this.speakerGuardPendingTail = "";
+              }
+
+              const hasMeaningfulData = Boolean(
+                guardResult.chunk.error ||
+                  guardResult.chunk.usage ||
+                  (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
+              );
+              if (!hasMeaningfulData) {
+                if (guardResult.stopTriggered) {
+                  log.warn(
+                    `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                  );
+                  return;
+                }
+                continue;
+              }
+
+              yield this.wrapChunk(guardResult.chunk, config.model);
+
+              if (guardResult.stopTriggered) {
+                log.warn(
+                  `${this.options.adapterName}: Speaker guard stopped generation at "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                );
+                return;
+              }
+            }
           }
+
+          logRecovery();
+          completedAttempt = true;
+          break;
+        } finally {
+          context.abortSignal?.removeEventListener("abort", externalAbortListener);
         }
+      }
+
+      if (!completedAttempt) {
+        throw new Error(`${this.options.adapterName}: Request failed before completing a response stream`);
       }
 
       const flushedSpillChunk = this.flushReasoningContentSpillGuardToChunk(config.model);
@@ -425,12 +560,20 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     const openAIChunk = chunk.data as OpenAICompatibleStreamChunk;
 
     if ("error" in openAIChunk && openAIChunk.error) {
+      const errorMessage = openAIChunk.error.message || `${this.options.errorMessagePrefix}: provider API error`;
+      const isModelError = isProviderModelErrorMessage(errorMessage);
       return this.attachPendingThoughts({
         type: "error",
         error: {
-          type: "api_error",
-          message: openAIChunk.error.message || `${this.options.errorMessagePrefix}: provider API error`,
-          code: openAIChunk.error.code !== undefined ? String(openAIChunk.error.code) : "unknown",
+          type: isModelError ? "model_error" : "api_error",
+          message: errorMessage,
+          code: isModelError
+            ? openAIChunk.error.code !== undefined
+              ? `${String(openAIChunk.error.code)}_model`
+              : "model_error"
+            : openAIChunk.error.code !== undefined
+              ? String(openAIChunk.error.code)
+              : "unknown",
           retryable: false,
           originalError: openAIChunk.error,
         },
@@ -439,9 +582,18 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
 
     const choice = openAIChunk.choices?.[0];
     if (!choice) {
+      // With `stream_options.include_usage`, the API emits a final chunk that has
+      // empty `choices` but carries `usage`. Surface that usage (the orchestrator
+      // captures it from any chunk's metadata) instead of dropping it here.
+      const trailingMetadata: Record<string, unknown> = {};
+      if (openAIChunk.usage) {
+        trailingMetadata.usage = openAIChunk.usage;
+        log.info(`${this.options.adapterName}: Usage ${openAIChunk.usage.total_tokens ?? "unknown"} total tokens`);
+      }
       return this.attachPendingThoughts({
         type: "text",
         content: "",
+        metadata: Object.keys(trailingMetadata).length > 0 ? trailingMetadata : undefined,
       });
     }
 
@@ -564,26 +716,8 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     });
   }
 
-  extractFunctionCall(chunk: RawStreamChunk): FunctionCall | null {
-    const openAIChunk = chunk.data as OpenAICompatibleStreamChunk;
-    const choice = openAIChunk.choices?.[0];
-    if (!choice?.delta?.tool_calls || choice.delta.tool_calls.length === 0) {
-      return null;
-    }
-
-    const toolCall = choice.delta.tool_calls[0];
-    if (!toolCall.function) {
-      return null;
-    }
-
-    return {
-      name: toolCall.function.name || "",
-      args: toolCall.function.arguments ? JSON.parse(toolCall.function.arguments) : {},
-    };
-  }
-
   handleProviderError(error: unknown): ProviderError {
-    log.error(`${this.options.adapterName}: Provider error`, error as Error);
+    logRawProviderError(this.options.adapterName, error);
     return normalizeOpenAICompatibleProviderError(error, {
       errorMessagePrefix: this.options.errorMessagePrefix,
     });
@@ -594,11 +728,66 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
       localeNamespace: this.options.localeNamespace,
       fallbackMessage: localizer(locale, `${this.options.localeNamespace}.unknown_default_message`),
       connectionRefusedMessage: localizer(locale, `${this.options.localeNamespace}.connection_refused`),
+      appendDetailsForCodes: this.options.appendErrorDetailsForCodes,
     });
   }
 
   private wrapChunk(chunk: OpenAICompatibleStreamChunk, model: string): RawStreamChunk {
     return this.createRawChunk(chunk, { model });
+  }
+
+  /** Reset every mutable field that can be touched before an SSE attempt commits. */
+  private resetPerAttemptState(personaSpeakerLabelRegex: RegExp | null): void {
+    this.toolCallAccumulator.clear();
+    this.speakerGuardPendingTail = "";
+    this.streamedTextTail = "";
+    this.accumulatedReasoningContent = "";
+    this.pendingThinkBlockThoughtText = "";
+    this.reasoningContentSpillGuard.reset();
+    this.thinkBlockStripper.reset(personaSpeakerLabelRegex);
+  }
+
+  private getMidStreamError(chunk: OpenAICompatibleStreamChunk): DegradableErrorInput | null {
+    if (!chunk.error) return null;
+    const numericCode = typeof chunk.error.code === "number" ? chunk.error.code : Number(chunk.error.code);
+    return {
+      statusCode: Number.isFinite(numericCode) ? numericCode : null,
+      message: chunk.error.message || `${this.options.errorMessagePrefix}: provider API error`,
+    };
+  }
+
+  /** Text, reasoning, tool-call deltas, and usage are the stream commitment point. */
+  private isMeaningfulCommitmentChunk(chunk: OpenAICompatibleStreamChunk): boolean {
+    if (chunk.usage || this.pendingThinkBlockThoughtText.length > 0) return true;
+    const delta = chunk.choices?.[0]?.delta;
+    if (!delta) return false;
+    return Boolean(
+      (typeof delta.content === "string" && delta.content.length > 0) ||
+        (typeof delta.reasoning_content === "string" && delta.reasoning_content.length > 0) ||
+        (delta.tool_calls && delta.tool_calls.length > 0),
+    );
+  }
+
+  private describeDegradationKind(kind: DegradableErrorKind): string {
+    switch (kind) {
+      case "generic_400":
+        return "generic HTTP 400";
+      case "parameter_rejection_400":
+        return "parameter rejection (400)";
+      case "no_endpoints_404":
+        return "no endpoints found (404)";
+      case "backend_incompatible_502":
+        return "backend incompatible with parameters (502)";
+      case "provider_specific":
+        return "provider-specific parameter rejection";
+    }
+  }
+
+  /** Log label for whichever signal made the failed attempt eligible for a retry. */
+  private describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
+    if (kind) return this.describeDegradationKind(kind);
+    if (queuedImageStrip) return "a multimodal/image-input rejection";
+    return "an error naming request parameters";
   }
 
   private stripThinkBlocksFromChunkContent(chunk: OpenAICompatibleStreamChunk): OpenAICompatibleStreamChunk {

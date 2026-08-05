@@ -330,7 +330,6 @@ async function main(): Promise<void> {
     await runCommand("bun run backup", ["bun", "run", "backup"], commandEnv);
     const backupBundleDir = assertBackupBundleCreated();
     await runCommand("bun run backup:personas", ["bun", "run", "backup:personas"], commandEnv);
-    await runCommand("bun run backup:memories", ["bun", "run", "backup:memories"], commandEnv);
     await runCommand("bun run audit-keys", ["bun", "run", "audit-keys"], commandEnv);
     await runCommand("bun run rotate-keys --dry-run", ["bun", "run", "rotate-keys", "--dry-run"], commandEnv);
 

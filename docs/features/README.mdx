@@ -1,0 +1,75 @@
+---
+title: "Features"
+sidebar:
+  label: "Overview"
+  groupLabel: "Features"
+  order: 2
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Everything TomoriBot can do, grouped by what you're trying to accomplish. Each card links
+to a full guide. Prefer to see it in Discord? Run `/help features` for the live capability
+list, or `/help` to browse every command.
+
+## Chatting & Personality
+
+<CardGrid>
+  <LinkCard title="Chatting & Triggers" href="/features/chatting-personality/chatting-and-triggers/"
+    description="Mentions, trigger words, auto-trigger, and deliberate trigger mode — how she decides when to reply." />
+  <LinkCard title="Multiple Personas" href="/features/chatting-personality/multiple-personas/"
+    description="Create, generate, and switch personas; alter characters with their own triggers and webhook avatars." />
+  <LinkCard title="Behavior Tweaking" href="/features/chatting-personality/behavior-tweaking/"
+    description="Capabilities and high-value config: what TomoriBot is allowed to do and how she generates." />
+</CardGrid>
+
+## Knowledge
+
+<CardGrid>
+  <LinkCard title="Memory" href="/features/knowledge/memory/"
+    description="Personal and server memories, tagging, short-term memory, and a document knowledge base." />
+  <LinkCard title="Personalization" href="/features/knowledge/personalization/"
+    description="Your own providers (BYOK), timezone, prompts, personal spotlight, and privacy." />
+  <LinkCard title="Data Handling" href="/features/knowledge/data-handling/"
+    description="Export, import, and delete your data — plus exactly what she stores." />
+</CardGrid>
+
+## Capabilities
+
+<CardGrid>
+  <LinkCard title="Tools & Extensions" href="/features/capabilities/tools-and-extensions/"
+    description="Built-in agentic tools, web search, MCP servers, and deliberate tool mode." />
+  <LinkCard title="Scheduled Tasks" href="/features/capabilities/scheduled-tasks/"
+    description="One-time and recurring reminders and self-tasks — just ask her." />
+  <LinkCard title="Media Generation" href="/features/capabilities/media-generation/"
+    description="Generate images, short videos, and spoken voice messages directly in chat." />
+</CardGrid>
+
+## Setup & Administration
+
+<CardGrid>
+  <LinkCard title="Providers & Models" href="/features/setup-administration/providers-and-models/"
+    description="API keys per provider, custom endpoints, and the full supported-provider matrix." />
+  <LinkCard title="Server Moderation" href="/features/setup-administration/server-moderation/"
+    description="Thought logs, quotas, whitelists, and BYOK-required mode — admin cost and safety controls." />
+  <LinkCard title="Age-Restricted Commands" href="/features/setup-administration/age-restricted-commands/"
+    description="Uncensored output and adult media behind Discord's age gate — how to opt in and where it works." />
+  <LinkCard title="Stats & Insights" href="/features/setup-administration/stats-and-insights/"
+    description="Usage tracking and shareable infographic cards." />
+</CardGrid>
+
+## Integrations
+
+<CardGrid>
+  <LinkCard title="Matrix Bridge" href="/features/integrations/matrix-bridge/"
+    description="Link a Matrix room to a Discord channel and chat from either side." />
+  <LinkCard title="SillyTavern Support" href="/features/integrations/sillytavern-support/"
+    description="Import SillyTavern prompt presets and character cards." />
+</CardGrid>
+
+## Reference
+
+<CardGrid>
+  <LinkCard title="Command Reference" href="/features/command-reference/"
+    description="Every slash command in one grouped, searchable table." />
+</CardGrid>

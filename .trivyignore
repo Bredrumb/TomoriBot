@@ -1,4 +1,12 @@
+# Justifications and retirement conditions: docs/contributing/dependency-security-policy.md
+
 # Known issue: fast-xml-parser
 # Required by AWS SDK v3. Upgrade to v5 breaks functionality.
 # Risk is low as input comes from trusted AWS endpoints.
 CVE-2026-25128
+
+# Known issue: ip-address (no CVE assigned, GHSA only)
+# Reached only via matrix-appservice-bridge > ip-cidr, and no ip-cidr release runs on a
+# patched ip-address: v10 removed bigInteger(), which ip-cidr needs at 20+ call sites.
+# Risk is low as the only consumer is ProvisioningApi, which TomoriBot never constructs.
+GHSA-mwp4-54f8-5fhr

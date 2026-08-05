@@ -1,5 +1,3 @@
-// locales/en-US/commands/capabilities.ts
-
 export default {
   capabilities: {
     description: `Manage tool use and specific features.`,
@@ -19,6 +17,7 @@ export default {
       managemessage_option: `Manage Messages`,
       threadcreation_option: `Create Threads`,
       userblocking_option: `Persona User Blocking`,
+      timeawareness_option: `Better Time Awareness`,
       imagegen_option: `Image Generation`,
       videogen_option: `Video Generation`,
       hiderespondembed_option: `Hide Response Embeds`,
@@ -33,6 +32,7 @@ export default {
       managemessage_desc: `Allow pinning any recent message and editing/deleting recent bot or character messages`,
       threadcreation_desc: `Create public threads and send a starter message`,
       userblocking_desc: `Allow personas to mute/block users`,
+      timeawareness_desc: `Notice reunions and calendar-day gaps in recent messages`,
       imagegen_desc: `Generate images on request`,
       videogen_desc: `Generate short videos on request`,
       hiderespondembed_desc: `Hide /bot respond success embed`,

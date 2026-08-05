@@ -53,12 +53,10 @@ export class MemoryMonitor {
       });
     });
 
-    // Run immediately on start
     this.checkMemoryStatus().catch((error) => {
       log.error("Error during initial memory check on monitor start:", error);
     });
 
-    // Set up interval for regular checks
     this.intervalId = setInterval(() => {
       this.checkMemoryStatus().catch((error) => {
         log.error("Error during scheduled memory check:", error);
@@ -112,7 +110,6 @@ export class MemoryMonitor {
           log.success(`Memory status recovered to SAFE: ${summary}`);
         }
 
-        // Update last status
         this.lastStatus = currentStatus;
       }
     } catch (error) {
@@ -161,9 +158,6 @@ export function initializeMemoryMonitor(clientOrPollIntervalMs?: Client | number
   log.success("Memory monitoring system initialized");
 }
 
-/**
- * Stops the memory monitoring system
- */
 export function stopMemoryMonitor(): void {
   if (memoryMonitorInstance) {
     memoryMonitorInstance.stop();
@@ -172,9 +166,6 @@ export function stopMemoryMonitor(): void {
   }
 }
 
-/**
- * Gets the status of the memory monitoring system
- */
 export function getMemoryMonitorStatus(): {
   isRunning: boolean;
   intervalMs: number;

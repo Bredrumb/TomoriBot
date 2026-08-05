@@ -8,6 +8,7 @@ import {
   type OpenRouterModelCapability,
   registerOpenRouterModelForScope,
 } from "@/utils/provider/openrouterModelRegistry";
+import { activateServerOpenRouterModelForCapability } from "@/utils/provider/providerActivation";
 import { localizer } from "@/utils/text/localizer";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -89,7 +90,30 @@ export async function execute(
           color: ColorCode.WARN,
         });
         return;
-      case "registered":
+      case "registered": {
+        const activationResult = await activateServerOpenRouterModelForCapability({
+          serverId: tomoriState.server_id,
+          serverDiscId: interaction.guild?.id ?? interaction.user.id,
+          tomoriState,
+          capability,
+          modelId: result.model.modelId,
+          modelName: result.model.codename,
+        });
+        if (activationResult.status !== "activated") {
+          await replyInfoEmbed(interaction, locale, {
+            titleKey:
+              activationResult.status === "missing_provider"
+                ? "commands.openrouter.models.add.missing_provider_title"
+                : "general.errors.update_failed_title",
+            descriptionKey:
+              activationResult.status === "missing_provider"
+                ? "commands.openrouter.models.add.missing_provider_description"
+                : "general.errors.update_failed_description",
+            color: activationResult.status === "missing_provider" ? ColorCode.WARN : ColorCode.ERROR,
+          });
+          return;
+        }
+
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.openrouter.models.add.success_title",
           descriptionKey: "commands.openrouter.models.add.success_description",
@@ -97,6 +121,7 @@ export async function execute(
           color: ColorCode.SUCCESS,
         });
         return;
+      }
     }
   } catch (error) {
     const context: ErrorContext = {

@@ -12,10 +12,6 @@ const DEFAULT_HIGH_BUDGET_TOKENS = 8192;
 const GOOGLE_GEMINI_25_PRO_MIN_BUDGET = 128;
 const GOOGLE_GEMINI_25_FLASH_LITE_MIN_BUDGET = 512;
 
-export interface ThinkingLevelSource {
-  thinking_level?: string | null;
-}
-
 export interface AnthropicThinkingRequest {
   thinking?: {
     type: "adaptive" | "disabled";
@@ -46,6 +42,9 @@ export interface CustomThinkingRequest {
   reasoning_effort?: "none" | "low" | "medium" | "high";
 }
 
+type ProviderEffortLevel = "low" | "medium" | "high";
+type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel;
+
 function parseBudgetEnv(name: string, fallback: number): number {
   const raw = Number.parseInt(process.env[name] ?? String(fallback), 10);
   return Number.isFinite(raw) && raw > 0 ? raw : fallback;
@@ -53,6 +52,8 @@ function parseBudgetEnv(name: string, fallback: number): number {
 
 function getLevelBudget(level: Exclude<ThinkingLevelValue, "auto" | "none">): number {
   switch (level) {
+    case "minimal":
+      return 1;
     case "low":
       return parseBudgetEnv("THINKING_LEVEL_BUDGET_LOW_TOKENS", DEFAULT_LOW_BUDGET_TOKENS);
     case "medium":
@@ -115,11 +116,19 @@ function looksLikeOllamaEndpoint(endpointUrl: string): boolean {
   }
 }
 
-export function resolveConfiguredThinkingLevel(value: string | null | undefined): ThinkingLevelValue {
+function toProviderEffortLevel(level: Exclude<ThinkingLevelValue, "auto" | "none">): ProviderEffortLevel {
+  return level === "minimal" ? "low" : level;
+}
+
+function toProviderReasoningEffortLevel(level: Exclude<ThinkingLevelValue, "auto">): ProviderReasoningEffortLevel {
+  return level === "none" ? "none" : toProviderEffortLevel(level);
+}
+
+function resolveConfiguredThinkingLevel(value: string | null | undefined): ThinkingLevelValue {
   return value && isThinkingLevelValue(value) ? value : DEFAULT_THINKING_LEVEL;
 }
 
-export function resolveEffectiveThinkingLevel(
+function resolveEffectiveThinkingLevel(
   configuredLevel: string | null | undefined,
   forceReason?: boolean,
 ): ThinkingLevelValue {
@@ -179,6 +188,10 @@ export function buildGoogleThinkingConfig(
     };
   }
 
+  if (effectiveLevel === "minimal") {
+    return { thinkingLevel: ThinkingLevel.MINIMAL };
+  }
+
   if (effectiveLevel === "low") {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
@@ -231,7 +244,7 @@ export function buildAnthropicThinkingRequest(
 
   return {
     thinking: { type: "adaptive" },
-    output_config: { effort: effectiveLevel },
+    output_config: { effort: toProviderEffortLevel(effectiveLevel) },
     omitSampling: true,
   };
 }
@@ -247,7 +260,7 @@ export function buildOpenRouterReasoningRequest(
 
   return {
     reasoning: {
-      effort: effectiveLevel,
+      effort: toProviderReasoningEffortLevel(effectiveLevel),
     },
   };
 }
@@ -311,7 +324,7 @@ export function buildCustomThinkingRequest(
   }
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
-  return { reasoning_effort: effectiveLevel };
+  return { reasoning_effort: toProviderReasoningEffortLevel(effectiveLevel) };
 }
 
 export function getNovelAiThinkingDirective(

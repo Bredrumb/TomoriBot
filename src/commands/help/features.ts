@@ -5,6 +5,7 @@ import type { ErrorContext } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 import { version } from "../../../package.json";
 
 /**
@@ -17,10 +18,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help features command
  * Displays TomoriBot's capabilities and features
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -29,7 +26,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Use replySummaryEmbed to show structured help info
     await replySummaryEmbed(
       interaction,
       locale,
@@ -37,61 +33,27 @@ export async function execute(
         titleKey: "commands.help.features.title",
         titleVars: { version },
         descriptionKey: "commands.help.features.embed_description",
+        docsPath: DOCS_PATHS.FEATURES,
         color: ColorCode.INFO,
         fields: [
           {
-            nameKey: "commands.help.features.vision_title",
-            value: localizer(locale, "commands.help.features.vision_description"),
+            nameKey: "commands.help.features.summary_chat_title",
+            value: localizer(locale, "commands.help.features.summary_chat_description"),
             inline: false,
           },
           {
-            nameKey: "commands.help.features.search_title",
-            value: localizer(locale, "commands.help.features.search_description"),
+            nameKey: "commands.help.features.summary_knowledge_title",
+            value: localizer(locale, "commands.help.features.summary_knowledge_description"),
             inline: false,
           },
           {
-            nameKey: "commands.help.features.personality_title",
-            value: localizer(locale, "commands.help.features.personality_description"),
+            nameKey: "commands.help.features.summary_capabilities_title",
+            value: localizer(locale, "commands.help.features.summary_capabilities_description"),
             inline: false,
           },
           {
-            nameKey: "commands.help.features.memory_title",
-            value: localizer(locale, "commands.help.features.memory_description"),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.features.time_title",
-            value: localizer(locale, "commands.help.features.time_description"),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.features.alter_title",
-            value: localizer(locale, "commands.help.features.alter_description"),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.features.expressions_title",
-            value: localizer(locale, "commands.help.features.expressions_description"),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.features.documents_title",
-            value: localizer(locale, "commands.help.features.documents_description"),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.features.impersonation_title",
-            value: localizer(locale, "commands.help.features.impersonation_description"),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.features.imagegen_title",
-            value: localizer(locale, "commands.help.features.imagegen_description"),
-            inline: false,
-          },
-          {
-            nameKey: "commands.help.features.videogen_title",
-            value: localizer(locale, "commands.help.features.videogen_description"),
+            nameKey: "commands.help.features.summary_reference_title",
+            value: localizer(locale, "commands.help.features.summary_reference_description"),
             inline: false,
           },
         ],
@@ -100,7 +62,6 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -111,7 +72,6 @@ export async function execute(
     };
     await log.error("Error executing /help features command", error as Error, context);
 
-    // Inform user of error (ephemeral)
     const errorMessage = localizer(locale, "general.errors.unknown_error_description");
     try {
       if (interaction.replied || interaction.deferred) {
@@ -126,7 +86,6 @@ export async function execute(
         });
       }
     } catch (replyError) {
-      // Log if even the error reply fails
       log.error("Failed to send error reply for /help features", replyError, context);
     }
   }

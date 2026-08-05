@@ -22,7 +22,7 @@ import {
 } from "discord.js";
 import type { ErrorContext, ServerStmConfigRow, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { shortTermMemoryRepository } from "@/utils/db/repositories";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
@@ -45,7 +45,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /server stm prompt-edit command.
  * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
  * @param userData - Invoking user's row
  * @param locale - Resolved locale for the interaction
  */
@@ -55,7 +54,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Guild-only — STM prompts are server-scoped config (validation before try-catch).
+  // STM prompts are server-scoped config.
   if (!interaction.guild || !interaction.guildId) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -69,7 +68,7 @@ export async function execute(
   let tomoriState: Awaited<ReturnType<typeof getCachedTomoriState>> = null;
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
   try {
-    // 2. Resolve the internal numeric server_id (cached, stays within the 3s window).
+    // Resolve the internal numeric server_id (cached, stays within the 3s window).
     tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -81,9 +80,9 @@ export async function execute(
       return;
     }
 
-    // 3. Load any existing overrides and category definitions to prefill the modal. Each
-    //    field shows the effective content — the stored override if one exists, or the seed
-    //    default otherwise — so the operator always sees what is currently active. The nudge
+    // Each
+    //    field shows the effective content: the stored override if one exists, or the seed
+    //    default otherwise: so the operator always sees what is currently active. The nudge
     //    seed is mode-aware: category mode prefills SEED_CATEGORY_UPDATE_HINT (which
     //    contains {category_labels}) so the macro is visible and editable. Clearing a field
     //    and submitting still resets it to the seed default (empty → null in step 6).
@@ -95,7 +94,7 @@ export async function execute(
     const isCategoryMode =
       categoryRows.length > 0 && !(categoryRows.length === 1 && categoryRows[0].label.toLowerCase() === "summary");
 
-    // 4. Show the modal — two optional Paragraph inputs. Do NOT deferReply first
+    // Show the modal: two optional Paragraph inputs. Do NOT deferReply first
     //    (Pattern 3); arg 4 auto-defers the submit interaction.
     const modalResult = await promptWithRawModal(
       interaction,
@@ -136,14 +135,14 @@ export async function execute(
       return;
     }
 
-    // 5. ASSIGN (not declare) modalSubmitInteraction; safety check after.
+    // ASSIGN (not declare) modalSubmitInteraction; safety check after.
     modalSubmitInteraction = modalResult.interaction;
     if (!modalSubmitInteraction) {
       log.error("Server STM prompt-edit modal submit interaction is undefined after successful submit");
       return;
     }
 
-    // 6. Build the patch. Empty (after trim) → null = reset to seed default; non-empty → override.
+    // Build the patch. Empty (after trim) → null = reset to seed default; non-empty → override.
     const toolDescription = modalResult.values?.[TOOL_DESCRIPTION_ID]?.trim() || null;
     const updateNudge = modalResult.values?.[UPDATE_NUDGE_ID]?.trim() || null;
 
@@ -152,7 +151,7 @@ export async function execute(
       update_nudge_override: updateNudge,
     };
 
-    // 7. Upsert (INSERT … ON CONFLICT) — see parameters.ts for why upsert over UPDATE.
+    // Upsert (INSERT … ON CONFLICT): see parameters.ts for why upsert over UPDATE.
     const saved = await shortTermMemoryRepository.upsertStmConfig(tomoriState.server_id, patch);
     if (!saved) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -164,10 +163,8 @@ export async function execute(
       return;
     }
 
-    // 8. No cache invalidation needed — STM prompt overrides are read fresh from the DB
+    // No cache invalidation needed: STM prompt overrides are read fresh from the DB
     //    each turn by memories.ts; they are not held in any cache.
-
-    // 9. Report which fields are now custom vs. using the seed default.
     const customCount = [toolDescription, updateNudge].filter((value) => value !== null).length;
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.server.stm.prompt-edit.success_title",

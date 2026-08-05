@@ -27,6 +27,12 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 
 const MODAL_CUSTOM_ID = "server_channel_prompt_modal";
 const MODE_RADIO_ID = "channel_prompt_mode";
@@ -80,9 +86,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Execute the /server channel-prompt command.
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param userData - Invoking user's row
  * @param locale - Resolved locale for the interaction
  */
 export async function execute(
@@ -91,7 +94,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Guild-only — a channel picker is meaningless in DMs (validation before try-catch).
+  // Guild-only: a channel picker is meaningless in DMs (validation before try-catch).
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -102,10 +105,9 @@ export async function execute(
     return;
   }
 
-  // 2. Read the target channel option.
   const selectedChannel = interaction.options.getChannel("channel", true);
 
-  // 3. Load server state (cached) before showing the modal — stays within the 3s window.
+  // Load server state (cached) before showing the modal, so stays within the 3s window.
   const tomoriState = await getCachedTomoriState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -117,11 +119,10 @@ export async function execute(
     return;
   }
 
-  // 4. Declare modalSubmitInteraction outside try-catch for error-path replies.
+  // Declare modalSubmitInteraction outside try-catch for error-path replies.
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
 
   try {
-    // 5. Load any existing override for this channel to prefill the modal.
     const existing = await getCachedChannelPrompt(tomoriState.server_id, selectedChannel.id);
     const existingParts = splitPromptIntoModalParts(
       existing?.prompt ?? null,
@@ -130,7 +131,7 @@ export async function execute(
     );
     const prefillMode = existing?.mode ?? DEFAULT_MODE;
 
-    // 6. Show the modal — 4 text parts (all optional; empty submit removes) + mode radio.
+    // Show the modal: 4 text parts (all optional; empty submit removes) + mode radio.
     //    Do NOT deferReply before this call (Pattern 3). Arg 4 auto-defers the submit.
     const modalResult = await promptWithRawModal(
       interaction,
@@ -194,14 +195,13 @@ export async function execute(
       return;
     }
 
-    // 7. ASSIGN (not declare) modalSubmitInteraction; safety check after.
+    // ASSIGN (not declare) modalSubmitInteraction; safety check after.
     modalSubmitInteraction = modalResult.interaction;
     if (!modalSubmitInteraction) {
       log.error("Channel-prompt modal submit interaction is undefined after successful submit");
       return;
     }
 
-    // 8. Combine the 4 parts and read the selected mode.
     const channelPrompt = combineModalPromptParts(
       [
         modalResult.values?.channel_prompt_part1 || "",
@@ -214,7 +214,7 @@ export async function execute(
     const mode: ChannelPromptMode = modalResult.values?.[MODE_RADIO_ID] === "replace" ? "replace" : "append";
     const channelMention = `<#${selectedChannel.id}>`;
 
-    // 9. Empty submit → remove the override (or report there was none).
+    // Empty submit → remove the override (or report there was none).
     if (!channelPrompt) {
       if (!existing) {
         await replyInfoEmbed(modalSubmitInteraction, locale, {
@@ -249,7 +249,7 @@ export async function execute(
       return;
     }
 
-    // 10. Non-empty → upsert the override (repo invalidates the channel cache on success).
+    // Non-empty → upsert the override (repo invalidates the channel cache on success).
     const saved = await channelPromptRepo.setChannelPromptOverride(
       tomoriState.server_id,
       selectedChannel.id,
@@ -266,21 +266,23 @@ export async function execute(
       return;
     }
 
-    // 11. Success — show the resolved mode + a short preview.
     const modeLabel = localizer(
       locale,
       mode === "replace"
         ? "commands.server.channel-prompt.mode_replace_label"
         : "commands.server.channel-prompt.mode_append_label",
     );
+    const preview = buildTextPreview(channelPrompt, CONFIRMATION_PREVIEW_BUDGET);
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.server.channel-prompt.saved_title",
       descriptionKey: "commands.server.channel-prompt.saved_description",
       descriptionVars: {
         channel: channelMention,
         mode: modeLabel,
-        preview: channelPrompt.substring(0, 200),
+        preview: preview.text,
       },
+      footerKey: textPreviewFooterKey(preview),
+      footerVars: textPreviewFooterVars(preview),
       color: ColorCode.SUCCESS,
       flags: MessageFlags.Ephemeral,
     });

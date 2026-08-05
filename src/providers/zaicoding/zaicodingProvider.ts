@@ -8,6 +8,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { zaicodingProviderInfo } from "@/providers/zaicoding/providerInfo";
 import { ZaicodingStreamAdapter, type ZaicodingStreamConfig } from "@/providers/zaicoding/zaicodingStreamAdapter";
 import { getZaicodingToolAdapter } from "@/providers/zaicoding/zaicodingToolAdapter";
@@ -55,6 +56,7 @@ import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
@@ -195,31 +197,14 @@ export class ZaicodingProvider
         totalCount,
       } = await getAvailableToolsWithMCP("zaicoding", toolStateForContext);
 
-      let finalBuiltInTools = availableBuiltInTools;
+      let finalBuiltInTools = applyStreamContextAvailability({
+        providerLabel: "Z.ai Coding provider",
+        provider: "zaicoding",
+        builtInTools: availableBuiltInTools,
+        streamContext: streamingContext,
+        tomoriState,
+      });
       let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "zaicoding" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState,
-          locale: "en-US",
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("zaicoding", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied Z.ai Coding streaming context filtering: ${availableBuiltInTools.length} -> ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
 
       ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
         providerLabel: "Z.ai Coding provider",
@@ -264,7 +249,6 @@ export class ZaicodingProvider
       ...samplingParams,
     };
 
-    // Attach runtime logit_bias map if the server has any active entries for this model
     const runtimeLogitBias = buildRuntimeLogitBiasMapForLlm(tomoriState.config.llm_logit_biases ?? [], tomoriState.llm);
     if (Object.keys(runtimeLogitBias).length > 0) {
       config.logitBias = runtimeLogitBias;
@@ -325,7 +309,8 @@ export class ZaicodingProvider
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "zaicoding",
         channel,
         client,
         initialInteraction,
@@ -335,23 +320,13 @@ export class ZaicodingProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "zaicoding",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new ZaicodingStreamAdapter();

@@ -4,7 +4,11 @@ import { log } from "@/utils/misc/logger";
 import { cleanLLMOutput, truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { filterDuplicateCustomEmojis } from "@/utils/text/emojiPenalty";
 import { extractMarkdownTableSegments } from "@/utils/text/markdownTable";
-import { ORPHAN_PUNCTUATION_REGEX, PREFILL_WHITESPACE_SENTINEL } from "@/utils/discord/stream/constants";
+import {
+  MAX_EMPTY_RESPONSE_RETRIES,
+  ORPHAN_PUNCTUATION_REGEX,
+  PREFILL_WHITESPACE_SENTINEL,
+} from "@/utils/discord/stream/constants";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { resolveGuildMentions } from "@/utils/discord/stream/mentionResolver";
 import type {
@@ -15,18 +19,38 @@ import type {
 import {
   collectRenderModifierSourceNames,
   isAllowedRenderModifierSpeakerLabel,
+  type LeadingGenericSpeakerLabelMatch,
+  matchesRenderModifierName,
+  parseLeadingGenericSpeakerLabel,
   parseLeadingRenderModifier,
 } from "@/utils/discord/renderModifierParser";
 import {
+  collectKnownSpeakerNames,
   resolveCopiedRenderModifierTarget,
   resolveSpriteRenderModifierTarget,
+  type SpriteRenderModifierResolution,
 } from "@/utils/discord/renderModifierResolver";
+import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
+import { normalizePersonaSpriteKey } from "@/utils/persona/sprites";
+import { advanceChannelSpriteGroupParity } from "@/utils/discord/stream/channelDeliveryContinuity";
 import { isUserImpersonationStreamContext } from "@/utils/discord/stream/uiUpdater";
 
 type StreamSegmentProcessorDependencies = {
   delivery: StreamMessageDelivery;
   requestStop: (channelId: string, requesterId?: string) => boolean;
 };
+
+/**
+ * Loose detector for "something that LOOKS like a decorated speaker label": a parenthesized
+ * group followed by a colon, anywhere near the head of a segment. Deliberately far more
+ * permissive than parseLeadingRenderModifier (no name allowlist, not anchored to the start)
+ * so the diagnostic below fires precisely on the cases where the strict parser refused text
+ * a human would call a sprite label.
+ */
+const SUSPECTED_RENDER_MODIFIER_LABEL_RE = /\([^()\n\r:：]{1,64}\)\s*[:：]/;
+
+/** How much of a segment to echo into the diagnostic line. */
+const RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS = 80;
 
 /**
  * Owns normalization and routing for flushed stream text segments before Discord delivery.
@@ -57,18 +81,35 @@ export class StreamSegmentProcessor {
     if (trimmedGuard === "..") return;
 
     let workingSegment = segment;
+    // Track whether orphan punctuation was spliced onto the front, since that mutation
+    // happens BEFORE the anchored render-modifier parse and can single-handedly defeat it.
+    let orphanPrefixApplied: string | undefined;
     if (state.pendingOrphanPunctuation) {
       log.info(`Stream Orphan: Prepending held "${state.pendingOrphanPunctuation}" to next segment`);
+      orphanPrefixApplied = state.pendingOrphanPunctuation;
       workingSegment = `${state.pendingOrphanPunctuation}${segment}`;
       state.pendingOrphanPunctuation = undefined;
     }
 
     const renderModifierSourceNames = collectRenderModifierSourceNames(textConfig.botName, textConfig.botNameAliases);
+    const renderModifierChainSourceNames = collectRenderModifierChainSourceNames(textConfig, renderModifierSourceNames);
     let deliveryOptions: StreamDeliveryOptions | undefined;
     const canUseRenderModifier = !state.isInsideCodeBlock && !isUserImpersonationStreamContext(context);
     const renderModifierMatch = canUseRenderModifier
-      ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames)
+      ? parseLeadingRenderModifier(workingSegment, renderModifierSourceNames, renderModifierChainSourceNames)
       : null;
+    this.logUnparsedRenderModifierLabel({
+      renderModifierMatch: Boolean(renderModifierMatch),
+      canUseRenderModifier,
+      orphanPrefixApplied,
+      rawSegment: segment,
+      workingSegment,
+      context,
+      state,
+      textConfig,
+      renderModifierSourceNames,
+      renderModifierChainSourceNames,
+    });
     if (renderModifierMatch) {
       const sourceDisplayName = context.tomoriState.persona_nickname || textConfig.botName;
       workingSegment = renderModifierMatch.body;
@@ -84,9 +125,9 @@ export class StreamSegmentProcessor {
           : await resolveCopiedRenderModifierTarget(renderModifierMatch.modifier, context, sourceDisplayName);
 
       if (renderTarget) {
-        // Non-identity sprites all share the clean persona username, so Discord —
+        // Non-identity sprites all share the clean persona username, so Discord, so
         // which groups consecutive webhook messages by webhook + username and
-        // ignores the per-message avatar — would render back-to-back sprites under
+        // ignores the per-message avatar, so would render back-to-back sprites under
         // the first sprite's avatar. When a sprite change would collide with the
         // previous message's clean name, fall back to the decorated
         // "Persona (sprite)" name for that one message so Discord treats it as a
@@ -98,7 +139,8 @@ export class StreamSegmentProcessor {
                 renderTarget.identity,
                 renderTarget.contextLabel,
                 renderTarget.spriteRecord.spriteName,
-                state,
+                context.channel.id,
+                context.channel.lastMessageId,
               )
             : renderTarget.identity;
         // The accumulated-text prefix keeps the decorated "Name (modifier): "
@@ -114,6 +156,7 @@ export class StreamSegmentProcessor {
           spriteRecord: renderTarget.spriteRecord,
         };
       } else {
+        await this.logUnresolvedRenderModifierTarget(renderModifierMatch.modifier, spriteResolution.status, context);
         state.activeRenderModifier = undefined;
       }
     } else if (canUseRenderModifier && state.activeRenderModifier) {
@@ -121,6 +164,41 @@ export class StreamSegmentProcessor {
         identityOverride: state.activeRenderModifier.identity,
         spriteRecord: state.activeRenderModifier.spriteRecord,
       };
+    }
+
+    // Opening-label leak guard: a response that OPENS with a speaker label the render-modifier
+    // parse refused (e.g. "Chris (smug): ...": a user name in the persona's decorated-label
+    // grammar) would otherwise reach Discord verbatim, because the generic speaker guard
+    // exempts the opening line and stripLeakedOwnNameLabels only covers the active persona.
+    // Runs regardless of llm_stop_speaker_pattern_enabled: the shapes it fires on are
+    // unambiguous leaks, unlike the broader mid-text guard.
+    if (
+      !renderModifierMatch &&
+      canUseRenderModifier &&
+      !state.accumulatedText.trim() &&
+      !state.pendingAggregatedText.trim()
+    ) {
+      const leak = await this.matchLeadingSpeakerLeak(workingSegment, context, renderModifierSourceNames);
+      if (leak) {
+        const retryCount = context.emptyResponseRetryCount ?? 0;
+        if (retryCount < MAX_EMPTY_RESPONSE_RETRIES) {
+          // Budget remains: discard the whole attempt. The speaker_guard stop with nothing
+          //    sent classifies the turn as empty_response, and maybeScheduleEmptyResponseRetry
+          //    regenerates with the "reply only as {persona}" directive injected.
+          log.warn(
+            `Stream opening-label leak guard: discarding response opening with "${leak.matchedPrefix.trim()}" (retry ${retryCount + 1}/${MAX_EMPTY_RESPONSE_RETRIES} will be scheduled)`,
+          );
+          this.deps.requestStop(context.channel.id, "speaker_guard");
+          return;
+        }
+        // Budget exhausted: better a stripped reply than silence, so drop the leaked label
+        //    and deliver the body as the active persona.
+        log.warn(
+          `Stream opening-label leak guard: retry budget exhausted, stripping leaked label "${leak.matchedPrefix.trim()}" and delivering body`,
+        );
+        workingSegment = leak.body;
+        if (!workingSegment.trim()) return;
+      }
     }
 
     const wasPrefillInjected = state.prefillInjected;
@@ -143,6 +221,7 @@ export class StreamSegmentProcessor {
         sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
       },
       textConfig.botNameAliases,
+      textConfig.personaMentionMap,
     );
 
     const segmentMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
@@ -154,6 +233,7 @@ export class StreamSegmentProcessor {
       context.channel,
       segmentMentionMap,
       segmentMentionIdSet,
+      textConfig.personaMentionMap,
     );
     if (
       normalizedLeadingWhitespace &&
@@ -196,7 +276,7 @@ export class StreamSegmentProcessor {
     // Copied identities (impersonating a user / another persona) expire at the end
     // of their line so the bot reverts to itself on the next line. Persona sprites
     // instead persist across newlines until a *different* sprite/identity label
-    // appears, because an expression is a sustained visual state — e.g.
+    // appears, because an expression is a sustained visual state: e.g.
     //   "Touko (mad): ARGGHHH!\nFine... I'll do it"
     // keeps the "mad" sprite for the second line, and switching only happens when
     // a new "Touko (regret):" label is declared. Sprites (including is_identity
@@ -271,6 +351,102 @@ export class StreamSegmentProcessor {
   }
 
   /**
+   * Diagnostic probe for sprite/render-modifier labels that leak into Discord as literal text.
+   *
+   * A successful `parseLeadingRenderModifier` always strips the label from the segment, so a
+   * label visible in the delivered message proves the parse returned null. This logs every
+   * input that decision depends on, letting a leaked label be attributed to exactly one of:
+   *
+   * - `isInsideCodeBlock` / `isUserImpersonation` vetoing render modifiers outright.
+   * - A name mismatch: the label's speaker name is absent from the allowlist built from
+   *    `botName` + `botNameAliases`.
+   * - Anchor loss: text (notably re-attached orphan punctuation) sits ahead of the label,
+   *    so the `^\s*`-anchored pattern cannot reach it.
+   *
+   * Fires only when the strict parse failed AND the segment still looks like it carried a
+   * decorated label, so ordinary prose never triggers it.
+   *
+   */
+  private logUnparsedRenderModifierLabel(args: {
+    renderModifierMatch: boolean;
+    canUseRenderModifier: boolean;
+    orphanPrefixApplied: string | undefined;
+    rawSegment: string;
+    workingSegment: string;
+    context: StreamContext;
+    state: StreamState;
+    textConfig: TextProcessingConfig;
+    renderModifierSourceNames: readonly string[];
+    renderModifierChainSourceNames: readonly string[];
+  }): void {
+    // Only interesting when the strict parser declined text that still looks like a label.
+    if (args.renderModifierMatch) return;
+    const labelHead = args.workingSegment.slice(0, RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS);
+    if (!SUSPECTED_RENDER_MODIFIER_LABEL_RE.test(labelHead)) return;
+
+    // Echo raw vs working separately so an orphan-punctuation splice is visible as a diff.
+    log.warn(
+      `Stream RenderModifier Diagnostic: leading label not parsed in channel ${args.context.channel.id}. ` +
+        `canUseRenderModifier=${args.canUseRenderModifier} ` +
+        `isInsideCodeBlock=${args.state.isInsideCodeBlock} ` +
+        `isUserImpersonation=${isUserImpersonationStreamContext(args.context)} ` +
+        `isAlter=${args.context.tomoriState.is_alter} ` +
+        `personaNickname=${JSON.stringify(args.context.tomoriState.persona_nickname)} ` +
+        `botName=${JSON.stringify(args.textConfig.botName)} ` +
+        `sourceNames=${JSON.stringify(args.renderModifierSourceNames)} ` +
+        `chainSourceNames=${JSON.stringify(args.renderModifierChainSourceNames)} ` +
+        `orphanPrefixApplied=${JSON.stringify(args.orphanPrefixApplied ?? null)} ` +
+        `rawSegmentHead=${JSON.stringify(args.rawSegment.slice(0, RENDER_MODIFIER_DIAGNOSTIC_HEAD_CHARS))} ` +
+        `workingSegmentHead=${JSON.stringify(labelHead)}`,
+    );
+  }
+
+  /**
+   * Diagnostic probe for the silent-drop branch: the model emitted a well-formed
+   * "Name (modifier):" label, the parser accepted it and stripped it, but neither a sprite
+   * nor a copied identity resolved. The message then ships under the default identity with
+   * no sprite and no trace: visually identical to the model never having tried.
+   *
+   * Logs the persona the sprite lookup was performed against alongside that persona's actual
+   * sprite keys, which distinguishes the two candidate causes:
+   *
+   * - Wrong persona, so `personaId` is not the persona the model was told to speak as, so its
+   *    sprite keys can never match (the failure mode expected on queued/chained turns).
+   * - Right persona, unknown label: the model invented a sprite key, or the sprite exists
+   *    but its avatar is unusable (`resolveSpriteIdentity` returning null).
+   *
+   * @param modifier - The modifier text the model used, e.g. "mad"
+   * @param spriteStatus - Whether the sprite lookup matched before identity resolution
+   * @param context - Active stream context (supplies the persona used for the lookup)
+   */
+  private async logUnresolvedRenderModifierTarget(
+    modifier: string,
+    spriteStatus: SpriteRenderModifierResolution["status"],
+    context: StreamContext,
+  ): Promise<void> {
+    const personaId = context.tomoriState.persona_id;
+    // Read back the sprite roster actually visible to the lookup; a cache miss here is
+    //    itself a finding, so failures degrade to an explicit marker rather than throwing.
+    let availableSpriteKeys: string[] | "lookup_failed" = "lookup_failed";
+    if (typeof personaId === "number") {
+      availableSpriteKeys = await getCachedPersonaSprites(personaId)
+        .then((sprites) => sprites.map((sprite) => sprite.sprite_key))
+        .catch(() => "lookup_failed" as const);
+    }
+
+    log.warn(
+      `Stream RenderModifier Diagnostic: label parsed but no render target resolved in channel ${context.channel.id}. ` +
+        `modifier=${JSON.stringify(modifier)} ` +
+        `normalizedSpriteKey=${JSON.stringify(normalizePersonaSpriteKey(modifier))} ` +
+        `spriteStatus=${spriteStatus} ` +
+        `personaId=${personaId ?? "null"} ` +
+        `personaNickname=${JSON.stringify(context.tomoriState.persona_nickname)} ` +
+        `isAlter=${context.tomoriState.is_alter} ` +
+        `availableSpriteKeys=${JSON.stringify(availableSpriteKeys)}`,
+    );
+  }
+
+  /**
    * Returns the sprite identity with its webhook username chosen to avoid Discord's
    * consecutive-message grouping collapsing different sprites under one avatar.
    *
@@ -283,26 +459,70 @@ export class StreamSegmentProcessor {
    * merge. A parity toggle flipped on each sprite change guarantees that adjacent
    * different-sprite messages alternate clean/decorated and therefore never match;
    * same-sprite runs keep an identical username and still group naturally.
+   *
+   * The alternation is tracked per CHANNEL, not per stream. Discord's grouping spans turns,
+   * so bookkeeping held in `StreamState` was reset at every turn boundary and let a queued
+   * turn's first sprite collide with the previous turn's last sprite. That per-turn reset also
+   * used to stand in for adjacency, which is now tested directly via the channel's last message
+   * id, so the suffix no longer appears after someone else has already broken the group.
+   * See {@link advanceChannelSpriteGroupParity}.
    */
   private resolveSpriteGroupBreakIdentity(
     identity: ResolvedWebhookIdentity,
     decoratedUsername: string,
     spriteKey: string,
-    state: StreamState,
+    channelId: string,
+    channelLastMessageId: string | null,
   ): ResolvedWebhookIdentity {
-    // 1. Flip parity only when switching away from a *previous* sprite. Skipping the
-    //    very first sprite (no prior key) keeps it on the clean name.
-    if (state.lastDeliveredSpriteKey !== undefined && state.lastDeliveredSpriteKey !== spriteKey) {
-      state.spriteGroupParity = !state.spriteGroupParity;
-    }
-    state.lastDeliveredSpriteKey = spriteKey;
-
-    // 2. The "false" half keeps the clean persona name; the "true" half uses the
+    // The "false" half keeps the clean persona name; the "true" half uses the
     //    decorated "Persona (sprite)" name so it reads as a distinct Discord author.
-    if (!state.spriteGroupParity) {
+    if (!advanceChannelSpriteGroupParity(channelId, spriteKey, channelLastMessageId)) {
       return identity;
     }
     return { ...identity, username: decoratedUsername };
+  }
+
+  /**
+   * Detects a leaked speaker label at the start of a response segment: a label the
+   * render-modifier parse already refused (its source name is not the active persona/aliases).
+   *
+   * Firing rules, per shape:
+   * 1. Decorated "Name (modifier):": always a leak. The parenthetical grammar belongs
+   *    exclusively to the active persona (sprites, copied identities), so ANY other name using
+   *    it is the model cross-breeding history label formats ("Chris (smug): ...").
+   * 2. Plain "Name:": a leak only when Name is a known conversation participant (another
+   *    persona or a user in the conversation). Ordinary prose openings ("Note:", "TL;DR:")
+   *    never match a participant and pass through untouched.
+   *
+   * A leading chain of the persona's own plain labels ("Tomori: Chris (smug): hi") is peeled
+   * before deciding, since those are stripped later by cleanLLMOutput anyway.
+   *
+   * @returns The leaked-label match (body = text after the label), or null when clean
+   */
+  private async matchLeadingSpeakerLeak(
+    segment: string,
+    context: StreamContext,
+    allowedSourceNames: readonly string[],
+  ): Promise<LeadingGenericSpeakerLabelMatch | null> {
+    // Peel allowed plain self-labels ("Tomori:") so a leak hiding behind them is still seen.
+    let working = segment;
+    let match = parseLeadingGenericSpeakerLabel(working);
+    while (match && !match.modifier && matchesRenderModifierName(match.sourceName, allowedSourceNames)) {
+      working = match.body;
+      match = parseLeadingGenericSpeakerLabel(working);
+    }
+    if (!match) return null;
+
+    // A decorated label with an allowed source name is upstream's business (the render-modifier
+    //    parse consumes it, including failed sprite resolutions), so never treat it as a leak here.
+    if (matchesRenderModifierName(match.sourceName, allowedSourceNames)) return null;
+
+    // Decorated + disallowed name: unambiguous leak.
+    if (match.modifier) return match;
+
+    // Plain label: only a leak when the name belongs to a known conversation participant.
+    const knownNames = await collectKnownSpeakerNames(context);
+    return matchesRenderModifierName(match.sourceName, knownNames) ? match : null;
   }
 
   public async prepareOutputPrefill(
@@ -326,6 +546,7 @@ export class StreamSegmentProcessor {
         sanitizeEnabled: textConfig.uncensorSanitizeEnabled,
       },
       textConfig.botNameAliases,
+      textConfig.personaMentionMap,
     );
 
     const prefillMentionMap = textConfig.mentionMap ?? new Map<string, string[]>();
@@ -337,6 +558,7 @@ export class StreamSegmentProcessor {
       context.channel,
       prefillMentionMap,
       prefillMentionIdSet,
+      textConfig.personaMentionMap,
     );
     if (!resolvedPrefill.trim()) return;
 
@@ -414,4 +636,18 @@ export class StreamSegmentProcessor {
 
     return "";
   }
+}
+
+function collectRenderModifierChainSourceNames(
+  textConfig: TextProcessingConfig,
+  activeSourceNames: readonly string[],
+): string[] {
+  const knownPersonaLabels: string[] = [];
+  if (textConfig.personaMentionMap) {
+    for (const [alias, trigger] of textConfig.personaMentionMap) {
+      knownPersonaLabels.push(alias, trigger);
+    }
+  }
+
+  return collectRenderModifierSourceNames(textConfig.botName, [...activeSourceNames, ...knownPersonaLabels]);
 }

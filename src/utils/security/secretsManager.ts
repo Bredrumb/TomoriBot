@@ -13,7 +13,8 @@ import { log } from "@/utils/misc/logger";
  * - CRYPTO_SECRET_V1, V2, etc. for key rotation support
  * - DISCORD_WEBHOOK_URL for logging webhooks
  * - AVATAR_GCS_BUCKET / VOICE_SAMPLE_GCS_* for GCP Cloud Storage (GCP deployments)
- * - AVATAR_S3_BUCKET / CHARREF_S3_* for AWS S3 (AWS deployments)
+ * - AVATAR_S3_* / VOICE_SAMPLE_S3_* / CHARREF_S3_* for S3-compatible object storage
+ * - S3_ENDPOINT and AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY for R2 or other S3-compatible backends
  */
 export interface TomoriSecrets {
   DISCORD_TOKEN: string;
@@ -34,19 +35,24 @@ export interface TomoriSecrets {
   VOICE_SAMPLE_GCS_PREFIX?: string;
   VOICE_SAMPLE_PUBLIC_BASE_URL?: string;
   // AWS S3 storage (set when deployed to AWS)
+  AWS_ACCESS_KEY_ID?: string;
+  AWS_SECRET_ACCESS_KEY?: string;
+  S3_ENDPOINT?: string;
   AVATAR_S3_BUCKET?: string;
   AVATAR_S3_REGION?: string;
   AVATAR_S3_PREFIX?: string;
+  VOICE_SAMPLE_S3_BUCKET?: string;
+  VOICE_SAMPLE_S3_REGION?: string;
+  VOICE_SAMPLE_S3_PREFIX?: string;
   CHARREF_S3_BUCKET?: string;
   CHARREF_S3_REGION?: string;
   CHARREF_S3_PREFIX?: string;
   CHARREF_PUBLIC_BASE_URL?: string;
-  // Matrix Appservice Bridge (optional — leave unset to disable the bridge entirely)
   MATRIX_HOMESERVER_URL?: string; // e.g., http://localhost:8448 or https://your-hs.example.com
   MATRIX_ACCESS_TOKEN?: string; // Appservice token (as_token) used to authenticate to the homeserver
   MATRIX_BOT_USER_ID?: string; // e.g., @tomoribot:yourdomain.com
   MATRIX_SERVER_NAME?: string; // Homeserver domain (e.g., localhost or yourdomain.com)
-  MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token) — homeserver sends this to verify its identity
+  MATRIX_HS_TOKEN?: string; // Homeserver token (hs_token): homeserver sends this to verify its identity
   MATRIX_APPSERVICE_PUBLIC_URL?: string; // Optional callback URL used in appservice registration for remote homeservers
   TOPGG_TOKEN?: string; // Optional: Top.gg API token for posting server stats
   CONTAINER_MEMORY_LIMIT_MB?: string; // Optional: Container memory limit in MB (default: 1024)
@@ -58,14 +64,15 @@ export interface TomoriSecrets {
  *
  * Resolution order:
  * 1. Development / test-production → process.env (dotenv)
- * 2. Production + GCP_SECRET_FILE set → mounted GCP Secret Manager volume file (JSON)
- * 3. Production (fallback) → AWS Secrets Manager API call
+ * 2. Production + SECRET_FILE set → mounted JSON secret file
+ * 3. Production + GCP_SECRET_FILE set → mounted GCP Secret Manager volume file (JSON, legacy fallback)
+ * 4. Production (fallback) → AWS Secrets Manager API call
  *
- * GCP file path:
- * - Cloud Run mounts the secret at /run/secrets/<secret_id> (configured in cloud-run.tf)
- * - GCP_SECRET_FILE env var points to that path
+ * Mounted secret file path:
+ * - Azure compose mounts the JSON secret at /run/secrets/tomoribot.json and sets SECRET_FILE to that path
+ * - Cloud Run mounts the secret at /run/secrets/<secret_id> and sets GCP_SECRET_FILE to that path
  * - File content is identical JSON shape to the AWS secret string
- * - No SDK call needed — plain fs.readFileSync
+ * - No SDK call needed: plain fs.readFileSync
  *
  * AWS Configuration:
  * - AWS_REGION environment variable (defaults to "us-east-1")
@@ -91,7 +98,6 @@ export interface TomoriSecrets {
  * process.env.POSTGRES_HOST = secrets.POSTGRES_HOST;
  */
 export async function getAppSecrets(): Promise<TomoriSecrets> {
-  // Default to 'development' if RUN_ENV is not set (safe for local users)
   const runEnv = process.env.RUN_ENV || "development";
   const isProduction = runEnv === "production";
   const isTestProduction = process.env.TEST_PRODUCTION === "true";
@@ -118,7 +124,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Optional fields — read from process.env matching the same keys as the JSON secret blob
+    // Optional fields: read from process.env matching the same keys as the JSON secret blob
     const optionalEnvFields: (keyof TomoriSecrets)[] = [
       "DISCORD_WEBHOOK_URL",
       "AVATAR_GCS_BUCKET",
@@ -126,9 +132,15 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       "VOICE_SAMPLE_GCS_BUCKET",
       "VOICE_SAMPLE_GCS_PREFIX",
       "VOICE_SAMPLE_PUBLIC_BASE_URL",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "S3_ENDPOINT",
       "AVATAR_S3_BUCKET",
       "AVATAR_S3_REGION",
       "AVATAR_S3_PREFIX",
+      "VOICE_SAMPLE_S3_BUCKET",
+      "VOICE_SAMPLE_S3_REGION",
+      "VOICE_SAMPLE_S3_PREFIX",
       "CHARREF_S3_BUCKET",
       "CHARREF_S3_REGION",
       "CHARREF_S3_PREFIX",
@@ -149,26 +161,25 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Validate required fields
     validateRequiredSecrets(secrets);
 
     return secrets;
   }
 
-  // Production + GCP: Read from the Secret Manager volume file mounted by Cloud Run
-  const gcpSecretFile = process.env.GCP_SECRET_FILE;
-  if (gcpSecretFile) {
-    log.info(`Reading secrets from GCP Secret Manager file: ${gcpSecretFile}`);
+  // Production + mounted JSON secret file: SECRET_FILE is provider-neutral;
+  // GCP_SECRET_FILE remains a fallback so the live Cloud Run deployment is unchanged.
+  const secretFile = process.env.SECRET_FILE?.trim() || process.env.GCP_SECRET_FILE?.trim();
+  if (secretFile) {
+    log.info(`Reading secrets from mounted JSON secret file: ${secretFile}`);
     try {
-      // 1. Read and parse the JSON blob written by Cloud Run's secret volume mount
-      const fileContent = await Bun.file(gcpSecretFile).text();
+      // Read and parse the JSON blob written by the platform secret mount
+      const fileContent = await Bun.file(secretFile).text();
       if (!fileContent) {
-        throw new Error(`GCP secret file "${gcpSecretFile}" is empty. Ensure the secret version is populated.`);
+        throw new Error(`Secret file "${secretFile}" is empty. Ensure the secret version is populated.`);
       }
 
       const rawSecrets = JSON.parse(fileContent);
 
-      // 2. Build TomoriSecrets object from the parsed JSON
       const secrets: TomoriSecrets = {
         DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
         POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -179,7 +190,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
       };
 
-      // 3. Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+      // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
       for (const key of Object.keys(rawSecrets)) {
         if (key.startsWith("CRYPTO_SECRET_V")) {
           secrets[key] = rawSecrets[key];
@@ -187,7 +198,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // 4. Optional fields — same shape as AWS secret blob
+      // Optional fields: same shape as AWS secret blob
       const optionalFields: (keyof TomoriSecrets)[] = [
         "DISCORD_WEBHOOK_URL",
         "AVATAR_GCS_BUCKET",
@@ -195,9 +206,15 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         "VOICE_SAMPLE_GCS_BUCKET",
         "VOICE_SAMPLE_GCS_PREFIX",
         "VOICE_SAMPLE_PUBLIC_BASE_URL",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "S3_ENDPOINT",
         "AVATAR_S3_BUCKET",
         "AVATAR_S3_REGION",
         "AVATAR_S3_PREFIX",
+        "VOICE_SAMPLE_S3_BUCKET",
+        "VOICE_SAMPLE_S3_REGION",
+        "VOICE_SAMPLE_S3_PREFIX",
         "CHARREF_S3_BUCKET",
         "CHARREF_S3_REGION",
         "CHARREF_S3_PREFIX",
@@ -218,23 +235,20 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
         }
       }
 
-      // 5. Validate required fields
       validateRequiredSecrets(secrets);
 
-      log.info("Successfully loaded secrets from GCP Secret Manager file");
+      log.info("Successfully loaded secrets from mounted JSON secret file");
 
       return secrets;
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new Error(
-          `GCP secret file "${gcpSecretFile}" contains invalid JSON. ` +
-            `Re-populate the secret with a valid JSON object.`,
+          `Secret file "${secretFile}" contains invalid JSON. Re-populate the secret with a valid JSON object.`,
         );
       }
 
-      // Re-throw with context for file-not-found and other I/O errors
       log.error(
-        "Failed to read secrets from GCP Secret Manager file",
+        "Failed to read secrets from mounted JSON secret file",
         error instanceof Error ? error : new Error(String(error)),
       );
 
@@ -247,24 +261,20 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
   log.info(`Fetching secrets from AWS Secrets Manager (production mode, region: ${awsRegion})`);
 
   try {
-    // 1. Create AWS Secrets Manager client with configurable region
     const client = new SecretsManagerClient({ region: awsRegion });
 
-    // 2. Fetch secret value
     const command = new GetSecretValueCommand({
       SecretId: "tomoribot/production",
     });
 
     const response = await client.send(command);
 
-    // 3. Parse SecretString as JSON
     if (!response.SecretString) {
       throw new Error("AWS Secrets Manager returned empty SecretString. Ensure the secret contains a JSON object.");
     }
 
     const rawSecrets = JSON.parse(response.SecretString);
 
-    // 4. Build TomoriSecrets object
     const secrets: TomoriSecrets = {
       DISCORD_TOKEN: rawSecrets.DISCORD_TOKEN,
       POSTGRES_HOST: rawSecrets.POSTGRES_HOST,
@@ -275,7 +285,7 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       CRYPTO_SECRET: rawSecrets.CRYPTO_SECRET,
     };
 
-    // 5. Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
+    // Auto-detect key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
     // This allows for unlimited key rotation versions
     for (const key of Object.keys(rawSecrets)) {
       if (key.startsWith("CRYPTO_SECRET_V")) {
@@ -284,7 +294,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // 6. Optional fields
     const optionalFields: (keyof TomoriSecrets)[] = [
       "DISCORD_WEBHOOK_URL",
       "AVATAR_GCS_BUCKET",
@@ -292,9 +301,15 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       "VOICE_SAMPLE_GCS_BUCKET",
       "VOICE_SAMPLE_GCS_PREFIX",
       "VOICE_SAMPLE_PUBLIC_BASE_URL",
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "S3_ENDPOINT",
       "AVATAR_S3_BUCKET",
       "AVATAR_S3_REGION",
       "AVATAR_S3_PREFIX",
+      "VOICE_SAMPLE_S3_BUCKET",
+      "VOICE_SAMPLE_S3_REGION",
+      "VOICE_SAMPLE_S3_PREFIX",
       "CHARREF_S3_BUCKET",
       "CHARREF_S3_REGION",
       "CHARREF_S3_PREFIX",
@@ -315,7 +330,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // 7. Validate required fields
     validateRequiredSecrets(secrets);
 
     log.info("Successfully loaded secrets from AWS Secrets Manager");
@@ -346,7 +360,6 @@ export async function getAppSecrets(): Promise<TomoriSecrets> {
       }
     }
 
-    // Re-throw with context
     log.error(
       "Failed to fetch secrets from AWS Secrets Manager",
       error instanceof Error ? error : new Error(String(error)),

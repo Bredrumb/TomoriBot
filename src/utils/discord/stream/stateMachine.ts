@@ -29,6 +29,7 @@ import {
   getAndClearStopContext,
   getStopReason,
   hasStopRequest,
+  INTERNAL_STOP_REQUESTER_IDS,
   isFollowUpRequest,
   isSilentSpeakerGuardStop,
   peekStopRequest,
@@ -38,6 +39,7 @@ import {
 } from "@/utils/discord/stream/stopRequests";
 import { isUserImpersonationStreamContext, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
 import { createStreamTextProcessingConfig } from "@/utils/discord/stream/textConfig";
+import { normalizeProviderUsage } from "@/utils/text/tokenEstimate";
 import { appendChunkThoughts, buildThoughtLogPayload, wasEmptyStreamResponse } from "@/utils/discord/stream/thoughtLog";
 import { ColorCode, log } from "@/utils/misc/logger";
 
@@ -135,12 +137,14 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       const streamGenerator = provider.startStream(config, context);
       const preStreamStop = await this.tryResolvePreStreamStop(context);
       if (preStreamStop) {
+        this.clearInactivityTimer(state);
         return preStreamStop;
       }
 
       for await (const rawChunk of streamGenerator) {
-        const stopResult = await this.tryResolveLoopStop(state, config, context, textConfig);
+        const stopResult = await this.tryResolveLoopStop(state, config, context, textConfig, metrics);
         if (stopResult) {
+          this.clearInactivityTimer(state);
           return stopResult;
         }
 
@@ -168,6 +172,16 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         if (processedChunk.type === "done" && processedChunk.metadata) {
           terminalDoneMetadata = processedChunk.metadata;
         }
+        // Capture real provider usage from whichever chunk carries it: not only
+        // the terminal `done`. OpenAI `include_usage` emits usage on a separate
+        // trailing chunk and Anthropic clobbers its done metadata, so relying on
+        // terminalDoneMetadata alone would miss both. Latest non-null wins.
+        if (processedChunk.metadata?.usage) {
+          const normalizedUsage = normalizeProviderUsage(processedChunk.metadata.usage);
+          if (normalizedUsage) {
+            state.usage = normalizedUsage;
+          }
+        }
 
         const result = await this.handleProcessedChunk(
           processedChunk,
@@ -183,6 +197,15 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         if (result.status !== "continue") {
           this.clearInactivityTimer(state);
           return result;
+        }
+
+        // Delivery-side stops (send/flush limit) are raised while this chunk was written out.
+        // Resolving them here rather than on the next iteration avoids awaiting one more chunk
+        // that the provider would keep generating tokens for.
+        const deliveryStopResult = await this.tryResolveLoopStop(state, config, context, textConfig, metrics);
+        if (deliveryStopResult) {
+          this.clearInactivityTimer(state);
+          return deliveryStopResult;
         }
       }
 
@@ -242,6 +265,7 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     config: StreamConfig,
     context: StreamContext,
     textConfig: TextProcessingConfig,
+    metrics: StreamMetrics,
   ): Promise<StreamResult | null> {
     if (!hasStopRequest(context.channel.id)) {
       return null;
@@ -283,7 +307,18 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       return { status: "empty_response", data: { emptyResponseReason: "speaker_guard" } };
     }
 
-    return { status: "stopped_by_user", stopReason };
+    // Carry the same payload `completeStreamAfterProviderEnd` assembles. A stop is an early return
+    // out of the loop, so without this the turn's delivered text, usage, thoughts and sprite records
+    // never reach short-term memory, stat recording, or the thought log.
+    return {
+      status: "stopped_by_user",
+      stopReason,
+      accumulatedText: state.accumulatedText,
+      detailsContent: state.detailsSegments.length > 0 ? state.detailsSegments.join("\n\n") : undefined,
+      thoughtLog: buildThoughtLogPayload(state, Date.now() - metrics.startTime),
+      spritesShown: state.spritesShown.length > 0 ? [...state.spritesShown] : undefined,
+      usage: state.usage,
+    };
   }
 
   private async handleProcessedChunk(
@@ -316,6 +351,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
             accumulatedText: state.accumulatedText,
             detailsContent: state.detailsSegments.length > 0 ? state.detailsSegments.join("\n\n") : undefined,
             thoughtLog: buildThoughtLogPayload(state, Date.now() - metrics.startTime),
+            spritesShown: state.spritesShown.length > 0 ? [...state.spritesShown] : undefined,
+            usage: state.usage,
           };
         }
         break;
@@ -408,7 +445,11 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     }
 
     await this.bufferFlusher.flushFinalBuffer(state, textConfig, typingConfig, context);
-    if (peekStopRequest(context.channel.id)?.requesterId === "speaker_guard") {
+    // The final flush can itself trip a delivery cap, and this path returns "completed", which no
+    // downstream consumer treats as a stop. An uncleared internal request would survive the turn
+    // and abort the next stream at its pre-stream check. `clearStopRequest` preserves any request
+    // carrying a stopContext, so a real user stop awaiting its follow-up is untouched.
+    if (INTERNAL_STOP_REQUESTER_IDS.has(peekStopRequest(context.channel.id)?.requesterId ?? "")) {
       clearStopRequest(context.channel.id);
     }
 
@@ -424,6 +465,8 @@ export class StreamOrchestrator implements IStreamOrchestrator {
       detailsContent: state.detailsSegments.length > 0 ? state.detailsSegments.join("\n\n") : undefined,
       thoughtLog: buildThoughtLogPayload(state, metrics.endTime - metrics.startTime),
       data: terminalDoneMetadata,
+      spritesShown: state.spritesShown.length > 0 ? [...state.spritesShown] : undefined,
+      usage: state.usage,
     };
   }
 

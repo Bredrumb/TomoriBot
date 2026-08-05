@@ -3,7 +3,7 @@
  * Tunes the server-wide STM behavior knobs that govern the refresh nudge and how
  * structured memory renders into context:
  *   - refresh-cadence  → bot turns between refresh nudges (default 5)
- *   - render-mode      → "supersede" (Mode A, default) or "crude_summary" (Mode B)
+ *   - render-mode      → "crude_summary" (Mode B, default) or "supersede" (Mode A)
  *   - crude-messages   → how many recent crude messages render into crude context
  *   - nudge-depth      → dialogue depth at which the nudge is injected (0 = tail)
  *
@@ -20,7 +20,7 @@ import {
 } from "discord.js";
 import type { ErrorContext, ServerStmConfigRow, UserRow } from "@/types/db/schema";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { shortTermMemoryRepository } from "@/utils/db/repositories";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
@@ -116,7 +116,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /server stm parameters command.
  * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
  * @param userData - Invoking user's row
  * @param locale - Resolved locale for the interaction
  */
@@ -126,7 +125,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Guild-only — STM config is server-scoped (validation before try-catch).
+  // STM config is server-scoped.
   if (!interaction.guild || !interaction.guildId) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -136,8 +135,6 @@ export async function execute(
     });
     return;
   }
-
-  // 2. Read the optional knobs up-front (none required).
   const refreshCadence = interaction.options.getInteger("refresh-cadence");
   const renderMode = interaction.options.getString("render-mode");
   const crudeMessages = interaction.options.getInteger("crude-messages");
@@ -146,7 +143,7 @@ export async function execute(
 
   let tomoriState: Awaited<ReturnType<typeof getCachedTomoriState>> = null;
   try {
-    // 3. Resolve the internal numeric server_id (cached, stays within the 3s window).
+    // Resolve the internal numeric server_id (cached, stays within the 3s window).
     tomoriState = await getCachedTomoriState(interaction.guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -158,10 +155,8 @@ export async function execute(
       return;
     }
 
-    // 4. Defer (ephemeral) — the write + re-read are two DB round-trips.
+    // Defer (ephemeral): the write + re-read are two DB round-trips.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    // 5. Build the patch from only the supplied options.
     const patch: Partial<Omit<ServerStmConfigRow, "server_id">> = {};
     if (refreshCadence !== null) patch.refresh_cadence = refreshCadence;
     if (renderMode !== null) patch.render_mode = renderMode as ServerStmConfigRow["render_mode"];
@@ -169,16 +164,16 @@ export async function execute(
     if (nudgeDepth !== null) patch.nudge_injection_depth = nudgeDepth;
     if (contentDepth !== null) patch.content_injection_depth = contentDepth;
 
-    // 6. Nothing supplied → just show the current effective settings (no write).
+    // Nothing supplied → just show the current effective settings (no write).
     if (Object.keys(patch).length === 0) {
       const current = await shortTermMemoryRepository.getStmConfig(tomoriState.server_id);
       await replyEffectiveSettings(interaction, locale, current, "commands.server.stm.parameters.unchanged_title");
       return;
     }
 
-    // 7. Upsert the config. We use the repository upsert (INSERT … ON CONFLICT) rather
+    // Upsert the config. We use the repository upsert (INSERT … ON CONFLICT) rather
     //    than ConfigRepository.updateStmConfig (UPDATE-only) because servers created
-    //    after migration 035 have no server_stm_configs row yet — an UPDATE would no-op.
+    //    after migration 051 have no server_stm_configs row yet: an UPDATE would no-op.
     const saved = await shortTermMemoryRepository.upsertStmConfig(tomoriState.server_id, patch);
     if (!saved) {
       await replyInfoEmbed(interaction, locale, {
@@ -189,13 +184,11 @@ export async function execute(
       return;
     }
 
-    // 8. No cache invalidation is needed here. STM *config* is not cached — memories.ts
-    //    reads getStmConfig() fresh from the DB on every turn — so render-mode and
+    // No cache invalidation is needed here. STM *config* is not cached: memories.ts
+    //    reads getStmConfig() fresh from the DB on every turn: so render-mode and
     //    crude-count changes take effect immediately. The per-channel STM *state* cache
     //    holds categories/summary/crude turns, which are orthogonal to these knobs;
     //    evicting it would only discard in-memory crude conversation for no benefit.
-
-    // 9. Re-read the now-effective config and echo it back.
     const effective = await shortTermMemoryRepository.getStmConfig(tomoriState.server_id);
     await replyEffectiveSettings(interaction, locale, effective, "commands.server.stm.parameters.success_title");
 
@@ -249,7 +242,7 @@ async function replyEffectiveSettings(
       ? localizer(locale, "commands.server.stm.parameters.refresh_cadence_1")
       : localizer(locale, "commands.server.stm.parameters.refresh_cadence_x", { count: effectiveCadence.toString() });
 
-  // depth 0 is the default "tail" position — show a friendly label for it.
+  // depth 0 is the default "tail" position: show a friendly label for it.
   const nudgeDepthStr =
     effectiveNudgeDepth === 0
       ? localizer(locale, "commands.server.stm.parameters.nudge_depth_tail")

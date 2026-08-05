@@ -1,7 +1,15 @@
-// locales/ja/commands/server.ts
-
 export default {
   server: {
+    timezone: {
+      description: `サーバーのUTCオフセットを設定します（デフォルト: 0 / UTC）。`,
+      value_description: `UTCオフセット（時間、デフォルト: 0）。例: 8、-5、0、9`,
+      invalid_value_title: `無効なタイムゾーンオフセット`,
+      invalid_value_description: `タイムゾーンオフセットは {min} から {max} 時間の間でなければなりません。`,
+      already_set_title: `タイムゾーンは既に設定済みです`,
+      already_set_description: `タイムゾーンは既に \`{timezone}\` に設定されています。`,
+      success_title: `タイムゾーンが更新されました`,
+      success_description: `サーバーのタイムゾーンが \`{previous_timezone}\` から \`{timezone}\` に変更されました。`,
+    },
     "user-byok": {
       description: `このサーバーのメンバー持ち込みプロバイダーモードを管理します。`,
       toggle: {

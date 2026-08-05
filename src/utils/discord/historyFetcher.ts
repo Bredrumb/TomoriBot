@@ -1,112 +1,53 @@
 /**
  * Channel history fetcher for the /memory history import command.
- * Fetches messages backward from the latest message in a channel,
- * stopping at a refresh marker or the configured message limit.
+ * Fetches a single bounded batch of messages chronologically after a user-supplied
+ * anchor message ID, sized to fit within Discord's 15-minute interaction window.
  */
 
-import type { TextBasedChannel, Message, Collection, Snowflake } from "discord.js";
-import { messageContainsRefreshMarker } from "@/utils/discord/embedDetection";
+import type { TextBasedChannel, Message } from "discord.js";
 import { log } from "@/utils/misc/logger";
 
 /** Maximum messages Discord allows per fetch call */
 const DISCORD_FETCH_BATCH_SIZE = 100;
 
-/** Result of a history fetch operation */
-export interface FetchedHistoryResult {
-  /** Messages in chronological order (oldest first) */
+/** Result of a single forward-paginated history fetch */
+export interface FetchedHistoryAfterResult {
+  /** Messages in chronological order (oldest first), sorted defensively by createdTimestamp */
   messages: Message[];
 
-  /** Total number of messages fetched before filtering */
-  totalFetched: number;
-
-  /** Whether the fetch stopped because a refresh marker was found */
-  hitRefreshMarker: boolean;
-
-  /** Whether the fetch stopped because the max message limit was reached */
-  hitMaxLimit: boolean;
+  /** True if Discord returned fewer messages than the requested limit, meaning no more messages exist after the batch */
+  reachedEnd: boolean;
 }
 
 /**
- * Fetches channel messages backward from the latest position until a refresh
- * marker embed is found or the maximum message limit is reached.
+ * Fetches up to `limit` messages immediately after the given anchor message ID
+ * in chronological order.
  *
- * Messages are returned in chronological order (oldest first).
- * The refresh marker message itself is NOT included in the results.
+ * Discord's `messages.fetch({ after, limit })` returns the messages closest to
+ * the anchor (oldest of the "after" range), in descending-ID order; we sort by
+ * `createdTimestamp` ascending to guarantee chronological ordering regardless of
+ * any quirks in the underlying collection iteration.
  *
- * @param channel - The Discord text channel to fetch from
- * @param maxMessages - Maximum number of messages to fetch
- * @returns Fetch result with messages, count, and stop reason
+ * @param startMessageId - Snowflake of the anchor message (NOT included in result)
+ * @param limit - Maximum number of messages to fetch (1-100, capped by Discord)
  */
-export async function fetchHistoryUntilMarker(
+export async function fetchHistoryAfter(
   channel: TextBasedChannel,
-  maxMessages: number,
-): Promise<FetchedHistoryResult> {
-  const accumulated: Message[] = [];
-  let lastMessageId: string | undefined;
-  let hitRefreshMarker = false;
-  let hitMaxLimit = false;
-  let totalFetched = 0;
+  startMessageId: string,
+  limit: number,
+): Promise<FetchedHistoryAfterResult> {
+  const effectiveLimit = Math.min(Math.max(1, limit), DISCORD_FETCH_BATCH_SIZE);
 
-  while (accumulated.length < maxMessages) {
-    // 1. Calculate how many more messages we need
-    const remaining = maxMessages - accumulated.length;
-    const batchSize = Math.min(remaining, DISCORD_FETCH_BATCH_SIZE);
-
-    // 2. Fetch a batch of messages (newest first from Discord API)
-    const fetchOptions: { limit: number; before?: string } = {
-      limit: batchSize,
-    };
-    if (lastMessageId) {
-      fetchOptions.before = lastMessageId;
-    }
-
-    let batch: Collection<Snowflake, Message>;
-    try {
-      batch = await channel.messages.fetch(fetchOptions);
-    } catch (fetchError) {
-      log.warn(`Failed to fetch messages from channel ${channel.id}: ${fetchError}`);
-      break;
-    }
-
-    // 3. If no more messages, stop
-    if (batch.size === 0) break;
-
-    totalFetched += batch.size;
-
-    // 4. Process batch (Discord returns newest first, so iterate in order)
-    for (const [, msg] of batch) {
-      // Check for refresh marker in this message's embeds
-      if (msg.embeds.length > 0 && messageContainsRefreshMarker(msg.embeds)) {
-        hitRefreshMarker = true;
-        break;
-      }
-
-      accumulated.push(msg);
-
-      if (accumulated.length >= maxMessages) {
-        hitMaxLimit = true;
-        break;
-      }
-    }
-
-    // 5. Stop if we hit a marker or limit
-    if (hitRefreshMarker || hitMaxLimit) break;
-
-    // 6. Update cursor to the oldest message in this batch for next iteration
-    const batchArray = [...batch.values()];
-    lastMessageId = batchArray[batchArray.length - 1].id;
-
-    // 7. If batch was smaller than requested, we've exhausted the channel
-    if (batch.size < batchSize) break;
+  let batch: Awaited<ReturnType<typeof channel.messages.fetch>>;
+  try {
+    batch = await channel.messages.fetch({ after: startMessageId, limit: effectiveLimit });
+  } catch (fetchError) {
+    log.warn(`Failed to fetch messages after ${startMessageId} in channel ${channel.id}: ${fetchError}`);
+    return { messages: [], reachedEnd: true };
   }
 
-  // Reverse to chronological order (oldest first)
-  accumulated.reverse();
+  const messages = [...batch.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+  const reachedEnd = batch.size < effectiveLimit;
 
-  return {
-    messages: accumulated,
-    totalFetched,
-    hitRefreshMarker,
-    hitMaxLimit,
-  };
+  return { messages, reachedEnd };
 }

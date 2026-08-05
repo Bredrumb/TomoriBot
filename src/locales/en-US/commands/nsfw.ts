@@ -1,5 +1,3 @@
-// locales/en-US/commands/nsfw.ts
-
 export default {
   nsfw: {
     description: `Age-restricted commands and settings.`,

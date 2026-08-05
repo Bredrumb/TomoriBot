@@ -1,5 +1,3 @@
-// locales/en-US/commands/teach.ts
-
 export default {
   teach: {
     sampledialogue: {
@@ -97,7 +95,7 @@ export default {
       main_persona_description: `Main Persona`,
       alter_persona_description: `Alter Persona`,
       rag_disabled_title: `Document RAG Disabled`,
-      rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector in your database and restart me to enable it (see README.md).`,
+      rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector in your database and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/self-hosting/manual-setup/)).`,
       teaching_disabled_title: `Document Teaching Disabled`,
       teaching_disabled_description: `Members are not currently allowed to add or remove documents on this server. A server member with \`Manage Server\` permissions can enable this using \`/server member-permissions\`.`,
       no_embedding_model_title: `No Embedding Model Set`,

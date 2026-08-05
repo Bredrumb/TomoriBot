@@ -13,6 +13,7 @@ export class NvidiaStreamAdapter extends OpenAICompatibleStreamAdapter {
       adapterName: "NvidiaStreamAdapter",
       localeNamespace: ["genai", "nvidia"].join("."),
       errorMessagePrefix: "NVIDIA API error",
+      appendErrorDetailsForCodes: ["500"],
       resolveApiUrl: (config) => {
         if (!config.endpointUrl) {
           throw new Error("NVIDIA endpoint URL is required");

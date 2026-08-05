@@ -1,5 +1,5 @@
 /**
- * Regression harness — UserRepository domain.
+ * Regression harness: UserRepository domain.
  *
  * Covers: loadUserRow, registerUser, setPrivacyLevel, updateUser,
  * loadUserRowsByNormalizedNickname.
@@ -22,8 +22,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  // ── reads ────────────────────────────────────────────────────────────────
-
   it("loadUserRow returns null for a non-existent user", async () => {
     const result = await userRepository.loadByDiscordId("_rt_nonexistent_9999");
     expect(result).toBeNull();
@@ -42,8 +40,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     expect(match).not.toBeUndefined();
   });
 
-  // ── writes ───────────────────────────────────────────────────────────────
-
   it("registerUser creates a new user row", async () => {
     const user = await userRepository.register(FIXTURE_IDS.regUserDiscId, "_rt_reg_name", "en");
     expect(user).not.toBeNull();
@@ -54,7 +50,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
   it("registerUser is idempotent — re-registering returns existing row", async () => {
     const first = await userRepository.register(FIXTURE_IDS.regUserDiscId, "_rt_reg_name", "en");
     const second = await userRepository.register(FIXTURE_IDS.regUserDiscId, "_rt_different_name", "en");
-    // Existing nickname should NOT be overwritten (ON CONFLICT DO NOTHING semantics)
     expect(second?.user_id).toBe(first?.user_id);
     expect(second?.user_nickname).toBe("_rt_reg_name");
   });
@@ -77,7 +72,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User — regression", () => {
     expect(updated?.user_nickname).toBe("_rt_renamed");
   });
 
-  // ── regression guard ─────────────────────────────────────────────────────
   // Deliberately skip this test in normal runs; enable it manually to verify the
   // harness detects regressions. To prove it works: add "WHERE 1=0" to the
   // loadUserRow SELECT and confirm this test fails.

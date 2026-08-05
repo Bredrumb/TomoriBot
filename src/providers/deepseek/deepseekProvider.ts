@@ -8,6 +8,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { deepseekProviderInfo } from "@/providers/deepseek/providerInfo";
 import { DeepseekStreamAdapter, type DeepseekStreamConfig } from "@/providers/deepseek/deepseekStreamAdapter";
 import { getDeepseekToolAdapter } from "@/providers/deepseek/deepseekToolAdapter";
@@ -53,6 +54,7 @@ import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
@@ -169,31 +171,14 @@ export class DeepseekProvider
         totalCount,
       } = await getAvailableToolsWithMCP("deepseek", toolStateForContext);
 
-      let finalBuiltInTools = availableBuiltInTools;
+      let finalBuiltInTools = applyStreamContextAvailability({
+        providerLabel: "DeepSeek provider",
+        provider: "deepseek",
+        builtInTools: availableBuiltInTools,
+        streamContext: streamingContext,
+        tomoriState,
+      });
       let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "deepseek" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState,
-          locale: "en-US",
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("deepseek", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied DeepSeek streaming context filtering: ${availableBuiltInTools.length} -> ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
 
       ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
         providerLabel: "DeepSeek provider",
@@ -238,7 +223,6 @@ export class DeepseekProvider
       ...samplingParams,
     };
 
-    // Attach runtime logit_bias map if the server has any active entries for this model
     const runtimeLogitBias = buildRuntimeLogitBiasMapForLlm(tomoriState.config.llm_logit_biases ?? [], tomoriState.llm);
     if (Object.keys(runtimeLogitBias).length > 0) {
       config.logitBias = runtimeLogitBias;
@@ -303,7 +287,8 @@ export class DeepseekProvider
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "deepseek",
         channel,
         client,
         initialInteraction,
@@ -313,25 +298,13 @@ export class DeepseekProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "deepseek",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-
-        // External abort signal for SDK call timeout cancellation
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new DeepseekStreamAdapter();

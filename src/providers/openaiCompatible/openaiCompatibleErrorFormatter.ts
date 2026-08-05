@@ -1,4 +1,5 @@
 import type { ProviderError } from "@/types/stream/interfaces";
+import { isProviderModelErrorMessage } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
 
 interface ParsedOpenAICompatibleErrorPayload {
@@ -10,6 +11,7 @@ interface CreateErrorDescriptionOptions {
   localeNamespace: string;
   fallbackMessage: string;
   connectionRefusedMessage?: string;
+  appendDetailsForCodes?: readonly string[];
 }
 
 interface NormalizeProviderErrorOptions {
@@ -78,6 +80,12 @@ export function normalizeOpenAICompatibleProviderError(
     }
   }
 
+  if (isProviderModelErrorMessage(errorMessage)) {
+    errorType = "model_error";
+    errorCode = errorCode === "unknown" ? "model_error" : `${errorCode}_model`;
+    retryable = false;
+  }
+
   const normalizedMessage = errorMessage.toLowerCase();
   if (normalizedMessage.includes("econnrefused") || normalizedMessage.includes("connection refused")) {
     errorType = "api_error";
@@ -112,6 +120,9 @@ export function createOpenAICompatibleErrorDescription(
 
   let messageKey: string;
   switch (error.type) {
+    case "model_error":
+      messageKey = "model_error_default_message";
+      break;
     case "rate_limit":
       messageKey = "429_default_message";
       break;
@@ -119,7 +130,7 @@ export function createOpenAICompatibleErrorDescription(
       messageKey = "408_default_message";
       break;
     case "provider_overloaded":
-      messageKey = "503_default_message";
+      messageKey = `${errorCode}_default_message`;
       break;
     case "api_error":
       messageKey = `${errorCode}_default_message`;
@@ -131,21 +142,65 @@ export function createOpenAICompatibleErrorDescription(
 
   const localeKey = `${options.localeNamespace}.${messageKey}`;
   let message = localizer(locale, localeKey);
+  let detailsAppended = false;
 
-  if (message === localeKey) {
-    message = localizer(locale, `${options.localeNamespace}.unknown_default_message`);
-
-    if (message === `${options.localeNamespace}.unknown_default_message`) {
-      message = options.fallbackMessage;
+  if (error.type === "model_error") {
+    const details = getProviderErrorDisplayMessage(error);
+    if (message === localeKey) {
+      message = localizer(locale, "genai.stream.model_error_description");
+    }
+    if (details && !message.includes(details)) {
+      message += `\n\n**Details:**\n${details}`;
+      detailsAppended = true;
+    }
+  } else {
+    if (message === localeKey && error.type === "provider_overloaded") {
+      // A namespace with no entry for this 5xx still knows the provider is overloaded, so borrow its
+      // 503 string when it has one and otherwise the shared cross-provider string. Without the shared
+      // step, a namespace carrying no 5xx entries at all (deepseek, custom, zai) renders every
+      // overload as "An unexpected error occurred", which reads as a bug on our side.
+      message =
+        resolveLocalizedOrNull(locale, `${options.localeNamespace}.503_default_message`) ??
+        resolveLocalizedOrNull(locale, "genai.stream.provider_overloaded_description") ??
+        localeKey;
     }
 
-    const maxErrorLength = 500;
-    const errorSnippet =
-      error.message.length > maxErrorLength ? `${error.message.substring(0, maxErrorLength)}...` : error.message;
-    message += `\n\n**Details:**\n${errorSnippet}`;
+    if (message === localeKey) {
+      message = localizer(locale, `${options.localeNamespace}.unknown_default_message`);
+
+      if (message === `${options.localeNamespace}.unknown_default_message`) {
+        message = options.fallbackMessage;
+      }
+
+      message = appendProviderErrorDetails(message, error);
+      detailsAppended = true;
+    }
+  }
+
+  if (!detailsAppended && options.appendDetailsForCodes?.includes(errorCode)) {
+    message = appendProviderErrorDetails(message, error);
   }
 
   return `Error Code ${errorCode}: ${message}`;
+}
+
+/**
+ * Localizes a key, returning null instead of the key itself when no string is defined for it.
+ */
+function resolveLocalizedOrNull(locale: string, key: string): string | null {
+  const value = localizer(locale, key);
+  return value === key ? null : value;
+}
+
+function appendProviderErrorDetails(message: string, error: ProviderError): string {
+  const maxErrorLength = 500;
+  const detail = error.message.trim();
+  if (!detail || message.includes(detail)) {
+    return message;
+  }
+
+  const errorSnippet = detail.length > maxErrorLength ? `${detail.substring(0, maxErrorLength)}...` : detail;
+  return `${message}\n\n**Details:**\n${errorSnippet}`;
 }
 
 function parseOpenAICompatibleErrorPayload(errorText: string): ParsedOpenAICompatibleErrorPayload {
@@ -158,12 +213,21 @@ function parseOpenAICompatibleErrorPayload(errorText: string): ParsedOpenAICompa
     const nestedError =
       parsed.error && typeof parsed.error === "object" ? (parsed.error as Record<string, unknown>) : parsed;
 
+    const detailMessage =
+      typeof parsed.detail === "string"
+        ? parsed.detail
+        : parsed.detail !== undefined
+          ? JSON.stringify(parsed.detail)
+          : undefined;
+
     const message =
       typeof nestedError.message === "string"
         ? nestedError.message
         : typeof parsed.message === "string"
           ? parsed.message
-          : errorText;
+          : detailMessage
+            ? detailMessage
+            : errorText;
 
     const codeValue =
       typeof nestedError.code === "string" || typeof nestedError.code === "number"
@@ -181,4 +245,13 @@ function parseOpenAICompatibleErrorPayload(errorText: string): ParsedOpenAICompa
       message: errorText,
     };
   }
+}
+
+function getProviderErrorDisplayMessage(error: ProviderError): string | null {
+  const maxErrorLength = 1200;
+  const detail = error.userMessage?.trim() || error.message.trim();
+  if (!detail) {
+    return null;
+  }
+  return detail.length > maxErrorLength ? `${detail.substring(0, maxErrorLength)}...` : detail;
 }

@@ -13,10 +13,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'privacy' command
  * Shows a link to the Privacy Policy on GitHub with dynamic locale support
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -24,12 +20,10 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Build GitHub URL dynamically based on user's locale
   // Since language_pref only contains officially supported locales,
   // we can directly use it without availability checks
   const githubUrl = `https://github.com/Bredrumb/TomoriBot/blob/main/legal/${locale}/privacy-policy.md`;
 
-  // 2. Create embed with title, description, and link
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.legal.privacy.title"))
     .setDescription(localizer(locale, "commands.legal.privacy.description_text"))
@@ -40,7 +34,6 @@ export async function execute(
     .setColor(ColorCode.INFO)
     .setTimestamp();
 
-  // 5. Send ephemeral reply
   await interaction.reply({
     embeds: [embed],
     flags: MessageFlags.Ephemeral,

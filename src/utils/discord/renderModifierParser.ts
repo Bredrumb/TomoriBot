@@ -16,6 +16,14 @@ export type LeadingRenderModifierMatch = RenderModifierName & {
   matchedPrefix: string;
 };
 
+export type LeadingGenericSpeakerLabelMatch = {
+  sourceName: string;
+  /** Present for the decorated "Name (modifier):" shape; absent for a plain "Name:" label. */
+  modifier?: string;
+  body: string;
+  matchedPrefix: string;
+};
+
 export function normalizeRenderModifierName(value: string): string {
   return normalizeUserTargetInput(value);
 }
@@ -75,12 +83,18 @@ export function collectRenderModifierSourceNames(activeName: string, aliases: re
 export function parseLeadingRenderModifier(
   text: string,
   sourceNames: readonly string[],
+  chainSourceNames: readonly string[] = sourceNames,
 ): LeadingRenderModifierMatch | null {
   if (!text.trim() || text.trimStart().startsWith("```")) return null;
 
-  for (const sourceName of collectRenderModifierSourceNames("", sourceNames)) {
+  const collectedSourceNames = collectRenderModifierSourceNames("", sourceNames);
+  const collectedChainSourceNames = collectRenderModifierSourceNames("", chainSourceNames);
+  const labelChainAlternation = buildSourceLabelAlternation(collectedChainSourceNames);
+  const labelChainPrefix = labelChainAlternation ? `(?:(?:${labelChainAlternation})\\s*[:：][ \\t]*)*` : "";
+
+  for (const sourceName of collectedSourceNames) {
     const pattern = new RegExp(
-      `^\\s*(${escapeRegExp(sourceName)})\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
+      `^\\s*${labelChainPrefix}(${escapeRegExp(sourceName)})\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
       "iu",
     );
     const match = pattern.exec(text);
@@ -99,6 +113,73 @@ export function parseLeadingRenderModifier(
   return null;
 }
 
+// Rejects label candidates that are really markdown structure: list items ("- Name", "1. Name"),
+// blockquotes ("> Name"), and headings ("# Name"). Mirrors parseLeadingRenderModifier, which never
+// matches these because its pattern is anchored directly after leading whitespace.
+const MARKDOWN_MARKER_NAME_RE = /^(?:[-*+>#]\s|\d{1,9}[.)]\s)/;
+
+/**
+ * Parses a leading speaker label of ANY name at the start of `text`, in either the decorated
+ * "Name (modifier): body" or plain "Name: body" shape. Unlike {@link parseLeadingRenderModifier},
+ * the name is not restricted to the active persona, so callers use this to detect *leaked* labels
+ * (e.g. "Chris (smug): ...") that the allowlisted parser intentionally refuses to match.
+ *
+ * Shapes that are really prose or markdown are rejected: code-fence openings, list items,
+ * blockquotes/headings, names without a word character, and names opening with "[" or "<"
+ * (links, mentions, timestamps: mirrors isGenericSpeakerStopLabel).
+ *
+ * @param text - Segment text to inspect (leading whitespace tolerated)
+ * @returns The parsed label and remaining body, or null when no label shape is present
+ */
+export function parseLeadingGenericSpeakerLabel(text: string): LeadingGenericSpeakerLabelMatch | null {
+  if (!text.trim() || text.trimStart().startsWith("```")) return null;
+
+  // Decorated shape first ("Name (modifier):"), since the plain pattern cannot cross a "(".
+  const decorated = new RegExp(
+    `^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`,
+    "u",
+  ).exec(text);
+  if (decorated) {
+    const sourceName = decorated[1]?.trim();
+    const modifier = decorated[2]?.trim();
+    if (sourceName && modifier && isPlausibleSpeakerLabelName(sourceName)) {
+      return { sourceName, modifier, body: text.slice(decorated[0].length), matchedPrefix: decorated[0] };
+    }
+    return null;
+  }
+
+  // Plain shape ("Name:").
+  const plain = new RegExp(`^\\s*([^\\n\\r():：]{1,${WEBHOOK_USERNAME_LIMIT}}?)\\s*[:：][ \\t]*`, "u").exec(text);
+  const plainName = plain?.[1]?.trim();
+  if (plain && plainName && isPlausibleSpeakerLabelName(plainName)) {
+    return { sourceName: plainName, body: text.slice(plain[0].length), matchedPrefix: plain[0] };
+  }
+
+  return null;
+}
+
+function isPlausibleSpeakerLabelName(name: string): boolean {
+  if (!/[\p{L}\p{N}_]/u.test(name)) return false;
+  if (name.startsWith("[") || name.startsWith("<")) return false;
+  return !MARKDOWN_MARKER_NAME_RE.test(name);
+}
+
+/**
+ * Returns true when `name` matches any of `names` after render-modifier normalization
+ * (the same comparison used by isAllowedRenderModifierSpeakerLabel).
+ * @param names - Names to compare against (not yet normalized)
+ */
+export function matchesRenderModifierName(name: string, names: readonly string[]): boolean {
+  const normalized = normalizeRenderModifierName(name);
+  if (!normalized) return false;
+  return names.some((candidate) => normalizeRenderModifierName(candidate) === normalized);
+}
+
+function buildSourceLabelAlternation(sourceNames: readonly string[]): string | null {
+  const escapedNames = sourceNames.map((sourceName) => escapeRegExp(sourceName.trim())).filter(Boolean);
+  return escapedNames.length > 0 ? `(?:${escapedNames.join("|")})` : null;
+}
+
 export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: readonly string[]): boolean {
   const parsed = parseRenderModifierWebhookName(label);
   if (!parsed) return false;
@@ -113,10 +194,10 @@ export function isAllowedRenderModifierSpeakerLabel(label: string, sourceNames: 
  * name orientations, and rebuilds the model-facing "SourcePersona (modifier)"
  * label:
  *
- * 1. Flipped copied-identity format (current): "impersonated (SourcePersona)" —
+ * - Flipped copied-identity format (current): "impersonated (SourcePersona)":
  *    Discord shows the impersonated name first so the disguise reads naturally,
  *    while the model-facing label keeps the source persona first.
- * 2. Legacy format: "SourcePersona (modifier)" — pre-flip copied identities and
+ * - Legacy format: "SourcePersona (modifier)": pre-flip copied identities and
  *    pre-clean-name sprite messages still in fetched history windows.
  *
  * When BOTH parts match personas (persona impersonating another persona) the

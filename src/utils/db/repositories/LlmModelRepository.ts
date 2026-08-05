@@ -27,14 +27,12 @@ function normalizeProviderName(providerName: string): string | null {
 }
 
 /**
- * LlmModelRepository — global model catalog for all LLM modalities.
+ * LlmModelRepository: global model catalog for all LLM modalities.
  *
  * Owns tables: llms, embedding_models, image_diffusion_models, video_generation_models.
  * Read-only; model catalog is global seed data, not exportable per-server state.
  */
-export class LlmModelRepository {
-  // ── llm catalog ────────────────────────────────────────────────────────────
-
+class LlmModelRepository {
   /**
    * Returns all non-deprecated LLMs, or all LLMs when includeDeprecated is true.
    *
@@ -73,7 +71,7 @@ export class LlmModelRepository {
     if (ids.length === 0) return [];
 
     try {
-      // Avoid ANY($1) array binding — Bun SQL can intermittently fail on
+      // Avoid ANY($1) array binding, because Bun SQL can intermittently fail on
       // integer-array parameters with protocol error 08P01.
       const distinctIds = Array.from(new Set(ids));
       const placeholders = distinctIds.map((_, i) => `$${i + 1}`).join(", ");
@@ -182,7 +180,6 @@ export class LlmModelRepository {
    * Returns available LLMs for a provider. For the openrouter provider with a scope,
    * delegates to LlmProviderRepository to filter by registration.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -240,7 +237,6 @@ export class LlmModelRepository {
   /**
    * Returns the default LLM for a provider (is_default=true, or first available as fallback).
    *
-   * @param providerName - Provider name
    */
   async loadDefaultModel(providerName: string): Promise<LlmRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -285,7 +281,6 @@ export class LlmModelRepository {
   /**
    * Returns the highest-capability (smartest) LLM for a provider.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    */
   async loadSmartestModel(providerName: string, includeDeprecated = false): Promise<LlmRow | null> {
@@ -330,7 +325,6 @@ export class LlmModelRepository {
   /**
    * Returns the default vision-capable LLM for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultVisionModel(providerName: string): Promise<LlmRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -419,13 +413,10 @@ export class LlmModelRepository {
     }
   }
 
-  // ── embedding model catalog ────────────────────────────────────────────────
-
   /**
    * Returns available embedding models for a provider. Delegates scoped OpenRouter
    * filtering to LlmProviderRepository.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -483,7 +474,6 @@ export class LlmModelRepository {
   /**
    * Returns the default embedding model for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultEmbeddingModel(providerName: string): Promise<EmbeddingModelRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -559,8 +549,6 @@ export class LlmModelRepository {
   /**
    * Returns an embedding model by provider + codename, or null if not found.
    *
-   * @param provider - Provider name
-   * @param codename - Model codename
    */
   async loadEmbeddingModelByProviderAndCodename(provider: string, codename: string): Promise<EmbeddingModelRow | null> {
     const normalizedProvider = provider.trim().toLowerCase();
@@ -592,13 +580,10 @@ export class LlmModelRepository {
     }
   }
 
-  // ── diffusion model catalog ────────────────────────────────────────────────
-
   /**
    * Returns available image diffusion models for a provider. Delegates scoped
    * OpenRouter filtering to LlmProviderRepository.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -656,7 +641,6 @@ export class LlmModelRepository {
   /**
    * Returns the default image diffusion model for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultDiffusionModel(providerName: string): Promise<DiffusionModelRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -695,8 +679,6 @@ export class LlmModelRepository {
   /**
    * Returns a diffusion model by provider + codename, or null if not found.
    *
-   * @param provider - Provider name
-   * @param codename - Model codename
    */
   async loadDiffusionModelByProviderAndCodename(provider: string, codename: string): Promise<DiffusionModelRow | null> {
     const normalizedProvider = provider.trim().toLowerCase();
@@ -728,13 +710,10 @@ export class LlmModelRepository {
     }
   }
 
-  // ── video generation model catalog ─────────────────────────────────────────
-
   /**
    * Returns available video generation models for a provider. Delegates scoped
    * OpenRouter filtering to LlmProviderRepository.
    *
-   * @param providerName      - Provider name
    * @param includeDeprecated - Include deprecated models
    * @param scope             - Optional OpenRouter scope filter
    */
@@ -792,7 +771,6 @@ export class LlmModelRepository {
   /**
    * Returns the default video generation model for a provider.
    *
-   * @param providerName - Provider name
    */
   async loadDefaultVideoGenerationModel(providerName: string): Promise<VideoGenerationModelRow | null> {
     const normalized = normalizeProviderName(providerName);
@@ -834,8 +812,6 @@ export class LlmModelRepository {
   /**
    * Returns a video generation model by provider + codename, or null if not found.
    *
-   * @param provider - Provider name
-   * @param codename - Model codename
    */
   async loadVideoGenerationModelByProviderAndCodename(
     provider: string,
@@ -933,8 +909,6 @@ export class LlmModelRepository {
     }
   }
 
-  // ── OpenRouter scoped model upserts ──────────────────────────────────────
-
   /**
    * Capability flags passed to upsertScopedLlm.
    * The caller (openrouterModelRegistry) resolves these from the OpenRouter
@@ -993,9 +967,6 @@ export class LlmModelRepository {
   }
 
   /**
-   * Upsert a scoped OpenRouter embedding model into the embedding_models catalog.
-   *
-   * @param modelCodename - OpenRouter model codename
    * @returns The upserted embedding_model_id, or null on failure
    */
   async upsertScopedEmbeddingModel(modelCodename: string): Promise<number | null> {
@@ -1140,62 +1111,14 @@ export class LlmModelRepository {
     }
   }
 
-  async upsertLegacyCustomLlm(params: {
-    codename: string;
-    hasTools: boolean;
-    seesImages: boolean;
-    seesVideos: boolean;
-    supportsStructOutput: boolean;
-  }): Promise<number | null> {
-    try {
-      const rows = await sql`
-        INSERT INTO llms (
-          llm_provider,
-          llm_codename,
-          has_tools,
-          sees_images,
-          sees_videos,
-          sees_youtube,
-          supports_structoutput,
-          is_smartest,
-          is_default,
-          is_reasoning,
-          is_deprecated,
-          is_free,
-          is_uncensored,
-          llm_description
-        ) VALUES (
-          'custom',
-          ${params.codename},
-          ${params.hasTools},
-          ${params.seesImages},
-          ${params.seesVideos},
-          false,
-          ${params.supportsStructOutput},
-          false,
-          false,
-          false,
-          false,
-          true,
-          true,
-          ${"Custom endpoint model configured by server admin"}
-        )
-        ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
-          has_tools = EXCLUDED.has_tools,
-          sees_images = EXCLUDED.sees_images,
-          sees_videos = EXCLUDED.sees_videos,
-          supports_structoutput = EXCLUDED.supports_structoutput,
-          updated_at = CURRENT_TIMESTAMP
-        RETURNING llm_id
-      `;
-      const id = Number(rows[0]?.llm_id);
-      return Number.isInteger(id) ? id : null;
-    } catch (error) {
-      log.error(`LlmModelRepository.upsertLegacyCustomLlm: failed for ${params.codename}`, error);
-      return null;
-    }
-  }
-
+  /**
+   * Removes a legacy `custom/{serverId}` llms row when a server switches away from the
+   * custom provider.
+   *
+   * Deliberately has no write-side counterpart: the inline custom-provider setup flow that
+   * created these rows was retired, so nothing can produce a new one. Existing rows still
+   * exist in older databases, which is why the cleanup path stays.
+   */
   async deleteLegacyCustomLlm(codename: string): Promise<boolean> {
     const result = await sql`
       DELETE FROM llms
@@ -1301,8 +1224,6 @@ export class LlmModelRepository {
       return null;
     }
   }
-
-  // ── OpenRouter reference checks ───────────────────────────────────────────
 
   /**
    * Returns true when any config row (server_model_configs, persona_configs,
@@ -1421,8 +1342,6 @@ export class LlmModelRepository {
     return Boolean(row?.in_use);
   }
 
-  // ── OpenRouter registration counts ────────────────────────────────────────
-
   /**
    * Count active scope registrations for a scoped LLM.
    * Zero means the catalog row can be deleted if also unreferenced.
@@ -1474,8 +1393,6 @@ export class LlmModelRepository {
     `;
     return Number(row?.count ?? 0);
   }
-
-  // ── OpenRouter orphan deletes ─────────────────────────────────────────────
 
   /**
    * Delete an orphaned scoped OpenRouter LLM catalog row.
@@ -1610,7 +1527,7 @@ export class LlmModelRepository {
    * Updates an existing synthetic custom model row in place by its primary key.
    *
    * Used on the edit path so a renamed model_name (which changes the derived codename) updates the
-   * same row rather than orphaning it — config rows reference the model by id, so the id is stable.
+   * same row rather than orphaning it, so config rows reference the model by id, so the id is stable.
    *
    * @param params - modelRefId + capability select the row/table; remaining fields are the new values
    */
@@ -1682,7 +1599,7 @@ export class LlmModelRepository {
   /**
    * Deletes every synthetic model row owned by a custom provider across all capability tables.
    *
-   * Used when tearing down a custom provider entirely — a label+capability may now own several
+   * Used when tearing down a custom provider entirely, so a label+capability may now own several
    * synthetic models, so codename-by-codename deletion is insufficient.
    *
    * @param provider - Internal custom provider name (e.g. "custom:s123:home")
@@ -1695,5 +1612,5 @@ export class LlmModelRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const llmModelRepo = new LlmModelRepository();

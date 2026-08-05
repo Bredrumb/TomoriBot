@@ -2,6 +2,7 @@ import type {
   CustomEndpointApiStyle,
   CustomEndpointCapability,
   CustomEndpointRow,
+  PersonalProviderCapability,
   SavedProviderConfigUpsert,
   SavedProviderConfigRow,
   ServerModelConfigRow,
@@ -10,9 +11,10 @@ import type {
   UserSavedProviderConfigUpsert,
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repositories";
 
-import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/discord/customProviderModal";
+import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,
   buildUserSavedProviderConfigFromExistingOrDefaults,
@@ -23,6 +25,9 @@ import {
   buildUserCustomProviderName,
   parseCustomProvider,
 } from "@/utils/provider/customProviderUtils";
+import { buildFallbackModelPersistence, prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
+import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
+import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
@@ -219,6 +224,164 @@ function getCapabilityModelId(
   }
 }
 
+function toPersonalModelCapability(capability: CustomEndpointCapability): PersonalProviderCapability | null {
+  switch (capability) {
+    case "text":
+    case "embedding":
+    case "image":
+    case "video":
+      return capability;
+    case "speech":
+    case "transcription":
+      return null;
+  }
+}
+
+async function activateServerCustomTextModel(params: {
+  scope: Extract<RegistrationScope, { kind: "server" }>;
+  endpoint: CustomEndpointRow;
+  savedConfig: SavedProviderConfigRow | SavedProviderConfigUpsert;
+  modelId: number;
+}): Promise<boolean> {
+  const selectedModel = await llmModelRepo.loadById(params.modelId);
+  if (!selectedModel?.llm_id) {
+    return false;
+  }
+
+  const promotedLlmId = selectedModel.llm_id;
+  // Registration activates the endpoint immediately, but it must not discard the server-wide
+  // cross-provider fallback chain that was active before registration.
+  const { fallbackModelRefs, fallbackLlmIds } = buildFallbackModelPersistence(
+    params.scope.baseConfig.fallback_model_refs ?? [],
+    promotedLlmId,
+    [params.endpoint],
+  );
+  const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
+    params.savedConfig.llm_logit_biases ?? params.scope.baseConfig.llm_logit_biases ?? [],
+    selectedModel,
+  );
+
+  const [updatedModel, updatedChat] = await Promise.all([
+    configRepository.updateModelConfig(params.scope.ownerId, {
+      llm_id: selectedModel.llm_id,
+      api_key: params.savedConfig.api_key,
+      key_version: params.savedConfig.key_version ?? 1,
+      thinking_level: params.savedConfig.thinking_level ?? "auto",
+      fallback_llm_ids: fallbackLlmIds,
+      llm_temperature: params.savedConfig.llm_temperature ?? params.scope.baseConfig.llm_temperature ?? 1.0,
+      llm_disabled_params: params.savedConfig.llm_disabled_params ?? [],
+      custom_model_name: null,
+      custom_endpoint_url: null,
+      custom_num_ctx: null,
+    }),
+    configRepository.updateChatConfig(params.scope.ownerId, {
+      llm_top_p: params.savedConfig.llm_top_p ?? params.scope.baseConfig.llm_top_p ?? 0.95,
+      llm_top_k: params.savedConfig.llm_top_k ?? params.scope.baseConfig.llm_top_k ?? 0,
+      llm_frequency_penalty:
+        params.savedConfig.llm_frequency_penalty ?? params.scope.baseConfig.llm_frequency_penalty ?? 0.0,
+      llm_presence_penalty:
+        params.savedConfig.llm_presence_penalty ?? params.scope.baseConfig.llm_presence_penalty ?? 0.0,
+      llm_min_p: params.savedConfig.llm_min_p ?? params.scope.baseConfig.llm_min_p ?? 0.05,
+      llm_logit_biases: resolvedLogitBiases.entries,
+      fallback_model_refs: fallbackModelRefs,
+    }),
+  ]);
+
+  if (updatedModel && updatedChat && params.scope.serverDiscId) {
+    invalidateTomoriStateCache(params.scope.serverDiscId);
+  }
+
+  return updatedModel && updatedChat;
+}
+
+async function activateServerCustomEndpointForCapability(params: {
+  scope: Extract<RegistrationScope, { kind: "server" }>;
+  endpoint: CustomEndpointRow;
+  capability: CustomEndpointCapability;
+  modelId: number | null;
+  savedConfig: SavedProviderConfigRow | SavedProviderConfigUpsert;
+}): Promise<boolean> {
+  if (params.capability === "speech" || params.capability === "transcription") {
+    return true;
+  }
+
+  if (!params.modelId) {
+    return false;
+  }
+
+  if (params.capability === "text") {
+    return await activateServerCustomTextModel({
+      scope: params.scope,
+      endpoint: params.endpoint,
+      savedConfig: params.savedConfig,
+      modelId: params.modelId,
+    });
+  }
+
+  const updated =
+    params.capability === "embedding"
+      ? await configRepository.updateModelConfig(params.scope.ownerId, { embedding_model_id: params.modelId })
+      : params.capability === "image"
+        ? await configRepository.updateModelConfig(params.scope.ownerId, { diffusion_model_id: params.modelId })
+        : await configRepository.updateModelConfig(params.scope.ownerId, { video_model_id: params.modelId });
+
+  if (updated && params.scope.serverDiscId) {
+    invalidateTomoriStateCache(params.scope.serverDiscId);
+  }
+
+  return updated;
+}
+
+async function activatePersonalCustomEndpointForCapability(params: {
+  userId: number;
+  provider: string;
+  endpoint: CustomEndpointRow;
+  capability: CustomEndpointCapability;
+  modelId: number | null;
+  seesImages: boolean;
+}): Promise<boolean> {
+  const capability = toPersonalModelCapability(params.capability);
+  if (!capability) {
+    return true;
+  }
+
+  if (!params.modelId) {
+    return false;
+  }
+
+  const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, capability, (row) => {
+    switch (params.capability) {
+      case "text":
+        return withPersonalTextPrimary(row, params.modelId, [params.endpoint]);
+      case "embedding":
+        return { ...row, embedding_model_id: params.modelId };
+      case "image":
+        return { ...row, diffusion_model_id: params.modelId };
+      case "video":
+        return { ...row, video_model_id: params.modelId };
+      case "speech":
+      case "transcription":
+        return row;
+    }
+  });
+
+  if (!updated) {
+    return false;
+  }
+
+  if (params.capability !== "text" || !params.seesImages) {
+    return true;
+  }
+
+  // Vision is a fallback slot for non-vision chat models, not the capability being registered.
+  // Only auto-fill it when empty so a deliberately configured vision model is never overwritten by
+  // registering an image-capable text model.
+  return await assignPersonalCapabilityToProvider(params.userId, params.provider, "vision", (row) => ({
+    ...row,
+    vision_llm_id: row.vision_llm_id ?? params.modelId,
+  }));
+}
+
 async function clearServerScopedLiveReferences(
   scope: Extract<RegistrationScope, { kind: "server" }>,
   capability: CustomEndpointCapability,
@@ -236,7 +399,6 @@ async function clearServerScopedLiveReferences(
   switch (capability) {
     case "text":
       if (scope.baseConfig.llm_id === modelId) {
-        // Promote to a sibling model when one exists; otherwise clear the slot.
         modelPatch.llm_id = siblingModelId;
         modelPatch.custom_endpoint_url = null;
         modelPatch.custom_model_name = null;
@@ -350,13 +512,12 @@ export async function registerCustomEndpoint(
   const existingConfig = await getExistingSavedConfig(input.scope, provider);
   const isEdit = input.editingEndpointId != null;
 
-  // 1. On the edit path, recover the row being edited (model link, prior auth/default flags).
   const editingRow = isEdit
     ? ((await llmProviderRepo.loadCustomEndpointsByIds([input.editingEndpointId as number]))[0] ?? null)
     : null;
 
-  // 2. Determine whether this is the first model of its capability under the label. The first model
-  //    auto-activates and becomes the default; later siblings are register-only (no active switch).
+  // Determine sibling metadata for inherited auth. Add registrations are activated immediately;
+  //    edit registrations preserve the row's existing default flag and active model selection.
   const allEndpoints =
     input.scope.kind === "server"
       ? await llmProviderRepo.loadCustomEndpointsForServer(input.scope.ownerId)
@@ -367,9 +528,9 @@ export async function registerCustomEndpoint(
       endpoint.capability === input.capability &&
       endpoint.custom_endpoint_id !== input.editingEndpointId,
   );
-  const shouldBeDefault = isEdit ? (editingRow?.is_default ?? false) : otherSiblings.length === 0;
+  const shouldActivateNewRegistration = !isEdit;
+  const shouldBeDefault = isEdit ? (editingRow?.is_default ?? false) : false;
 
-  // 3. Insert (add) or update-in-place (edit) the synthetic model row.
   const modelId = await writeSyntheticCapabilityModel(provider, input, editingRow?.model_ref_id ?? null);
 
   // Auth is shared per label (one stored key). A new sibling inherits requires_auth from an existing
@@ -409,57 +570,92 @@ export async function registerCustomEndpoint(
     return null;
   }
 
-  // 4. Register-only active selection: keep whatever model is already active for this capability;
-  //    only auto-activate when nothing is selected yet (the very first model under the label).
+  const activationEndpointId = customEndpoint.custom_endpoint_id;
+  if (shouldActivateNewRegistration && !activationEndpointId) {
+    return null;
+  }
+
+  // New registrations become active immediately. Edits preserve the existing
+  // active slot unless the provider did not have one yet.
   const currentActive = existingConfig ? getCapabilityModelId(existingConfig, input.capability) : null;
-  const activeId = currentActive ?? modelId;
+  const activeId = shouldActivateNewRegistration ? modelId : (currentActive ?? modelId);
   const currentVision = existingConfig?.vision_llm_id ?? null;
+  // Vision is a fallback slot for non-vision chat models, not the capability being registered. Unlike
+  // the active text slot (which always swaps to the new model on add), only auto-fill vision when it
+  // is currently empty so a deliberately configured vision model is never overwritten.
   const visionId = input.capability === "text" && input.seesImages ? (currentVision ?? modelId) : currentVision;
 
+  const savedConfig = await buildSavedConfigForCustomEndpoint(input.scope, provider, existingConfig, input, modelId);
+  const nextSavedConfig = {
+    ...savedConfig,
+    llm_id: input.capability === "text" ? activeId : savedConfig.llm_id,
+    vision_llm_id: input.capability === "text" && input.seesImages ? visionId : savedConfig.vision_llm_id,
+    embedding_model_id: input.capability === "embedding" ? activeId : savedConfig.embedding_model_id,
+    diffusion_model_id: input.capability === "image" ? activeId : savedConfig.diffusion_model_id,
+    video_model_id: input.capability === "video" ? activeId : savedConfig.video_model_id,
+    fallback_model_refs:
+      input.capability === "text"
+        ? prunePrimaryFallbackRefs(savedConfig.fallback_model_refs ?? [], activeId, [customEndpoint])
+        : savedConfig.fallback_model_refs,
+  };
+
   const writeOk = serverScope
-    ? await (async () => {
-        const savedConfig = (await buildSavedConfigForCustomEndpoint(
-          input.scope,
-          provider,
-          existingConfig,
-          input,
-          modelId,
-        )) as SavedProviderConfigUpsert;
-
-        return await llmProviderRepo.upsertSavedProviderConfig(
-          serverScope.ownerId,
-          {
-            ...savedConfig,
-            llm_id: input.capability === "text" ? activeId : savedConfig.llm_id,
-            vision_llm_id: input.capability === "text" && input.seesImages ? visionId : savedConfig.vision_llm_id,
-            embedding_model_id: input.capability === "embedding" ? activeId : savedConfig.embedding_model_id,
-            diffusion_model_id: input.capability === "image" ? activeId : savedConfig.diffusion_model_id,
-            video_model_id: input.capability === "video" ? activeId : savedConfig.video_model_id,
-          },
-          { serverDiscId: serverScope.serverDiscId },
-        );
-      })()
-    : await (async () => {
-        const savedConfig = (await buildSavedConfigForCustomEndpoint(
-          input.scope,
-          provider,
-          existingConfig,
-          input,
-          modelId,
-        )) as UserSavedProviderConfigUpsert;
-
-        return await llmProviderRepo.upsertUserSavedProviderConfig(input.scope.ownerId, {
-          ...savedConfig,
-          llm_id: input.capability === "text" ? activeId : savedConfig.llm_id,
-          vision_llm_id: input.capability === "text" && input.seesImages ? visionId : savedConfig.vision_llm_id,
-          embedding_model_id: input.capability === "embedding" ? activeId : savedConfig.embedding_model_id,
-          diffusion_model_id: input.capability === "image" ? activeId : savedConfig.diffusion_model_id,
-          video_model_id: input.capability === "video" ? activeId : savedConfig.video_model_id,
-        });
-      })();
+    ? await llmProviderRepo.upsertSavedProviderConfig(
+        serverScope.ownerId,
+        nextSavedConfig as SavedProviderConfigUpsert,
+        {
+          serverDiscId: serverScope.serverDiscId,
+        },
+      )
+    : await llmProviderRepo.upsertUserSavedProviderConfig(
+        input.scope.ownerId,
+        nextSavedConfig as UserSavedProviderConfigUpsert,
+      );
 
   if (!writeOk) {
     return null;
+  }
+
+  if (shouldActivateNewRegistration) {
+    if (!activationEndpointId) {
+      return null;
+    }
+
+    const activated = serverScope
+      ? await activateServerCustomEndpointForCapability({
+          scope: serverScope,
+          endpoint: customEndpoint,
+          capability: input.capability,
+          modelId,
+          savedConfig: nextSavedConfig as SavedProviderConfigUpsert,
+        })
+      : await activatePersonalCustomEndpointForCapability({
+          userId: input.scope.ownerId,
+          provider,
+          endpoint: customEndpoint,
+          capability: input.capability,
+          modelId,
+          seesImages: input.seesImages ?? false,
+        });
+
+    if (!activated) {
+      return null;
+    }
+
+    const defaulted = await llmProviderRepo.setDefaultCustomEndpoint(
+      {
+        serverId: input.scope.kind === "server" ? input.scope.ownerId : null,
+        userId: input.scope.kind === "personal" ? input.scope.ownerId : null,
+        capability: input.capability,
+        customEndpointId: activationEndpointId,
+        clearScope: input.capability === "speech" || input.capability === "transcription" ? "capability" : "label",
+      },
+      serverScope ? { serverDiscId: serverScope.serverDiscId } : {},
+    );
+
+    if (!defaulted) {
+      return null;
+    }
   }
 
   return {
@@ -481,13 +677,12 @@ export async function setActiveCustomEndpoint(params: {
  * Resolves the custom endpoint row backing a provider for a capability.
  *
  * When an active model id is supplied, the specific endpoint owning that synthetic model is
- * returned — this is how the runtime picks the right row when several models share a label+capability.
+ * returned: this is how the runtime picks the right row when several models share a label+capability.
  * When omitted (or no match, e.g. legacy rows whose model_ref_id was not backfilled), it falls back
  * to the most-recently-updated endpoint for the label+capability. Speech/transcription always use
  * the fallback since they have no synthetic model.
  *
  * @param provider      - Internal custom provider name
- * @param capability    - Endpoint capability
  * @param activeModelId - Optional id of the currently-active synthetic model for this capability
  */
 export async function resolveCustomEndpointForProvider(
@@ -534,7 +729,7 @@ export async function removeCustomEndpointRegistration(params: {
   const provider = getInternalProviderName(params.scope, params.label);
   const existingConfig = await getExistingSavedConfig(params.scope, provider);
 
-  // 1. Delete the specific endpoint row (one model among possibly several under this label+capability).
+  // Delete the specific endpoint row (one model among possibly several under this label+capability).
   const deleted =
     params.scope.kind === "server"
       ? await llmProviderRepo.deleteCustomEndpointById(params.customEndpointId, {
@@ -547,7 +742,7 @@ export async function removeCustomEndpointRegistration(params: {
     return false;
   }
 
-  // 2. Load remaining endpoints under the same label to find a sibling to auto-promote to when the
+  // Load remaining endpoints under the same label to find a sibling to auto-promote to when the
   //    removed model was the active one. Prefer the default-flagged sibling, then first available.
   const remaining =
     params.scope.kind === "server"
@@ -560,18 +755,17 @@ export async function removeCustomEndpointRegistration(params: {
   const siblingModelId =
     (sameLabelCapabilityRemaining.find((e) => e.is_default) ?? sameLabelCapabilityRemaining[0])?.model_ref_id ?? null;
 
-  // 3. Clear live server config + channel/persona overrides that pointed at this exact model,
+  // Clear live server config + channel/persona overrides that pointed at this exact model,
   //    auto-promoting to the sibling when one exists.
   if (params.scope.kind === "server") {
     await clearServerScopedLiveReferences(params.scope, params.capability, params.modelRefId, siblingModelId);
   }
 
-  // 4. Delete the synthetic model row this endpoint owned.
   if (params.modelRefId != null) {
     await llmModelRepo.deleteSyntheticCustomCapabilityModelById(params.modelRefId, params.capability);
   }
 
-  // 5. If no models remain for the whole label, drop the saved provider config entirely.
+  // If no models remain for the whole label, drop the saved provider config entirely.
   if (sameLabelRemaining.length === 0) {
     if (params.scope.kind === "server") {
       await llmProviderRepo.deleteSavedProviderConfig(params.scope.ownerId, provider, {
@@ -583,7 +777,7 @@ export async function removeCustomEndpointRegistration(params: {
     return true;
   }
 
-  // 6. Otherwise, update the saved config's active slot for this capability. If it pointed at the
+  // Otherwise, update the saved config's active slot for this capability. If it pointed at the
   //    removed model, promote to the sibling; null only when no sibling exists.
   if (!existingConfig || params.modelRefId == null) {
     return true;
@@ -630,7 +824,6 @@ export async function cleanupCustomProviderArtifacts(provider: string): Promise<
 
   const matchingEndpoints = registeredEndpoints.filter((endpoint) => endpoint.label === parsed.label);
 
-  // Delete each model row under the label (a label+capability may now own several).
   for (const endpoint of matchingEndpoints) {
     if (endpoint.custom_endpoint_id != null) {
       await llmProviderRepo.deleteCustomEndpointById(endpoint.custom_endpoint_id, {

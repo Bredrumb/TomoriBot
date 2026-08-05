@@ -18,6 +18,7 @@ import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "@/utils/quota/imageQuotaManager";
+import { statRepository } from "@/utils/db/repositories";
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { resolveNaiDiffusionModel } from "@/utils/image/naiDiffusionModels";
 import { normalizeNaiReferenceImage } from "@/utils/image/imageProcessor";
@@ -125,7 +126,9 @@ export async function execute(
 
     // Overlay the invoking user's personal (BYOK) provider selections so their
     // personal NovelAI model/key is used when configured, mirroring /generate image.
-    ({ tomoriState } = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null));
+    const overlay = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
+    tomoriState = overlay.tomoriState;
+    const { activeConfigs } = overlay;
 
     if (!tomoriState.config.imagegen_enabled) {
       await replyInfoEmbed(interaction, locale, {
@@ -161,42 +164,45 @@ export async function execute(
 
     const effectiveImageParams = resolveNaiImageParams(tomoriState.config);
 
-    const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
-    if (!quotaCheck.allowed) {
-      const errorTitleKey = "commands.generate.image.quota_exceeded_title";
-      let errorDescriptionKey = "commands.generate.image.quota_exceeded_description";
-      const descriptionVars: Record<string, string> = {};
+    // Personal-provider users (activeConfigs.image set) bypass quota enforcement
+    if (!activeConfigs.image) {
+      const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
+      if (!quotaCheck.allowed) {
+        const errorTitleKey = "commands.generate.image.quota_exceeded_title";
+        let errorDescriptionKey = "commands.generate.image.quota_exceeded_description";
+        const descriptionVars: Record<string, string> = {};
 
-      if (quotaCheck.resetTime) {
-        const now = new Date();
-        const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+        if (quotaCheck.resetTime) {
+          const now = new Date();
+          const hoursUntilReset = Math.ceil((quotaCheck.resetTime.getTime() - now.getTime()) / (1000 * 60 * 60));
 
-        if (hoursUntilReset < 24) {
-          descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_hours", {
-            hours: hoursUntilReset.toString(),
-          });
-        } else {
-          descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_days", {
-            days: Math.ceil(hoursUntilReset / 24).toString(),
-          });
+          if (hoursUntilReset < 24) {
+            descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_hours", {
+              hours: hoursUntilReset.toString(),
+            });
+          } else {
+            descriptionVars.reset_info = localizer(locale, "commands.generate.image.quota_resets_in_days", {
+              days: Math.ceil(hoursUntilReset / 24).toString(),
+            });
+          }
         }
-      }
 
-      if (quotaCheck.reason === "user_quota_exceeded") {
-        errorDescriptionKey = "commands.generate.image.user_quota_exceeded_description";
-      } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
-        errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
-      }
+        if (quotaCheck.reason === "user_quota_exceeded") {
+          errorDescriptionKey = "commands.generate.image.user_quota_exceeded_description";
+        } else if (quotaCheck.reason === "serverwide_quota_exceeded") {
+          errorDescriptionKey = "commands.generate.image.serverwide_quota_exceeded_description";
+        }
 
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: errorTitleKey,
-        descriptionKey: errorDescriptionKey,
-        descriptionVars,
-        footerKey: "commands.generate.image.quota_exceeded_footer",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: errorTitleKey,
+          descriptionKey: errorDescriptionKey,
+          descriptionVars,
+          footerKey: "commands.generate.image.quota_exceeded_footer",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
     }
 
     const modalResult = await promptWithRawModal(
@@ -327,7 +333,19 @@ export async function execute(
     });
 
     const generationTimeSeconds = ((performance.now() - startTime) / 1000).toFixed(1);
-    await incrementImageQuota(tomoriState.server_id, interaction.user.id);
+    if (!activeConfigs.image) {
+      await incrementImageQuota(tomoriState.server_id, interaction.user.id);
+    }
+    // Record canonical generation telemetry; quota tables enforce limits only.
+    if (userData.user_id) {
+      statRepository.recordStat({
+        serverId: tomoriState.server_id,
+        userId: userData.user_id,
+        lineageId: tomoriState.persona_lineage_id ?? 0,
+        metric: "image_generated",
+        metricKey: resolvedModel.codename,
+      });
+    }
 
     const filename = `nai_generated_${Date.now()}.png`;
     const attachment = new AttachmentBuilder(imageBuffer, {

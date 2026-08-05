@@ -15,7 +15,7 @@ export const EXPORT_VERSION = "1.0";
  * Explicit file type identifiers for /data export and /data import.
  * These map directly to user-facing export/delete choices.
  */
-export const DATA_EXPORT_TYPES = {
+const DATA_EXPORT_TYPES = {
   personal_memories: "personal_memories",
   server_memories: "server_memories",
   personal_settings: "personal_settings",
@@ -24,14 +24,11 @@ export const DATA_EXPORT_TYPES = {
   legacy_personal: "personal",
   legacy_server: "server",
 } as const;
-
-export type DataExportType = (typeof DATA_EXPORT_TYPES)[keyof typeof DATA_EXPORT_TYPES];
-
 /**
  * A single memory entry. Accepts plain strings (legacy exports) or tagged objects;
  * both forms normalise to { content, tags } on parse.
  */
-export const memoryItemSchema = z.union([
+const memoryItemSchema = z.union([
   z.string().transform((s) => ({ content: s, tags: [] as string[] })),
   z.object({
     content: z.string(),
@@ -49,7 +46,7 @@ export type MemoryItem = { content: string; tags: string[] };
  * Get personal data export schema with dynamic memory limits from environment
  * Validates the structure of exported personal user data
  */
-export function getPersonalExportDataSchema() {
+function getPersonalExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
     user_nickname: z.string().min(1).max(100),
@@ -71,11 +68,11 @@ export const personalSettingsExportDataSchema = z.object({
   impersonation_prompt: z.string().nullable().optional(),
   physical_appearance_tags: z.array(z.string()).default([]),
   nai_char_ref_url: z.string().nullable().optional(),
-  // Behavioral preferences (added since initial schema)
   privacy_level: z.nativeEnum(PrivacyLevel).optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).optional(),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
   shortterm_cache_crossserver_opt_in: z.boolean().optional(),
+  timezone_offset: z.number().int().min(-12).max(14).nullable().optional(),
 });
 
 export type PersonalSettingsExportData = z.infer<typeof personalSettingsExportDataSchema>;
@@ -83,7 +80,7 @@ export type PersonalSettingsExportData = z.infer<typeof personalSettingsExportDa
 /**
  * Persona-scoped personal memories-only export schema.
  */
-export function getPersonalMemoriesExportDataSchema() {
+function getPersonalMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
     personal_memories: z.array(memoryItemSchema).max(limits.maxPersonalMemories),
@@ -110,7 +107,7 @@ export type PersonalExport = z.infer<ReturnType<typeof getPersonalExportSchema>>
  * Portable server_model_configs export fields.
  * Excludes model-selection FKs and encrypted credential mirrors.
  */
-export const serverModelConfigExportSchema = z.object({
+const serverModelConfigExportSchema = z.object({
   llm_temperature: z.number().min(0.0).max(2.0),
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
   llm_disabled_params: z.array(z.enum(SUPPORTED_PARAM_VALUES)).default([]),
@@ -120,7 +117,7 @@ export const serverModelConfigExportSchema = z.object({
  * Portable server_chat_configs export fields.
  * Excludes provider/model fallback refs because they are server-specific model pointers.
  */
-export const serverChatConfigExportSchema = z.object({
+const serverChatConfigExportSchema = z.object({
   llm_top_p: z.number().min(0.0).max(1.0).default(0.95),
   llm_top_k: z.number().int().min(0).max(40).default(0),
   llm_frequency_penalty: z.number().min(-2.0).max(2.0).default(0.0),
@@ -147,7 +144,7 @@ export const serverChatConfigExportSchema = z.object({
 });
 
 /** Portable server_member_permissions_configs export fields. */
-export const serverMemberPermissionsConfigExportSchema = z.object({
+const serverMemberPermissionsConfigExportSchema = z.object({
   server_memteaching_enabled: z.boolean().default(true),
   attribute_memteaching_enabled: z.boolean().default(false),
   sampledialogue_memteaching_enabled: z.boolean().default(false),
@@ -157,7 +154,7 @@ export const serverMemberPermissionsConfigExportSchema = z.object({
 });
 
 /** Portable server_capabilities_configs export fields. */
-export const serverCapabilitiesConfigExportSchema = z.object({
+const serverCapabilitiesConfigExportSchema = z.object({
   web_search_enabled: z.boolean().default(true),
   emoji_usage_enabled: z.boolean().default(true),
   sticker_usage_enabled: z.boolean().default(true),
@@ -167,24 +164,26 @@ export const serverCapabilitiesConfigExportSchema = z.object({
   voice_message_enabled: z.boolean().optional(),
   thread_creation_enabled: z.boolean().optional(),
   user_blocking_enabled: z.boolean().optional(),
+  time_awareness_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
   short_term_memory_enabled: z.boolean().optional(),
+  verbatim_tool_calling_enabled: z.boolean().optional(),
 });
 
 /** Portable server_notice_embeds_configs export fields. */
-export const serverNoticeEmbedsConfigExportSchema = z.object({
+const serverNoticeEmbedsConfigExportSchema = z.object({
   tool_notice_hidden_keys: z.array(z.string()).default([]),
 });
 
 /** Portable server_nsfw_configs export fields. */
-export const serverNsfwConfigExportSchema = z.object({
+const serverNsfwConfigExportSchema = z.object({
   uncensor_injection_enabled: z.boolean().optional(),
   uncensor_unicode_space_enabled: z.boolean().optional(),
   uncensor_sanitize_enabled: z.boolean().optional(),
 });
 
 /** Portable server_speech_configs export fields. */
-export const serverSpeechConfigExportSchema = z.object({
+const serverSpeechConfigExportSchema = z.object({
   voice_transcript_chat_mode: z.boolean().optional(),
   chatterbox_turbo_enabled: z.boolean().optional(),
   chatterbox_cfg_weight: z.number().min(0.0).optional(),
@@ -195,7 +194,7 @@ export const serverSpeechConfigExportSchema = z.object({
  * Portable server_channel_scope_configs export fields.
  * Discord channel IDs remain excluded because they are not portable.
  */
-export const serverChannelScopeConfigExportSchema = z.object({
+const serverChannelScopeConfigExportSchema = z.object({
   stm_privacy_bypass: z.boolean().optional(),
 });
 
@@ -203,10 +202,10 @@ export const serverChannelScopeConfigExportSchema = z.object({
  * server_auto_trigger_configs currently has no portable export fields.
  * Channel IDs, persona overrides, and channel-coupled thresholds are server-specific.
  */
-export const serverAutoTriggerConfigExportSchema = z.object({});
+const serverAutoTriggerConfigExportSchema = z.object({});
 
 /** Portable server_trigger_behavior_configs export fields. */
-export const serverTriggerBehaviorConfigExportSchema = z.object({
+const serverTriggerBehaviorConfigExportSchema = z.object({
   always_reply_enabled: z.boolean().optional(),
   deliberate_trigger_mode: z.boolean().optional(),
   deliberate_tool_mode: z.boolean().optional(), // Added May 2026
@@ -220,7 +219,7 @@ export const serverTriggerBehaviorConfigExportSchema = z.object({
  * Portable server_novelai_imagegen_configs export fields.
  * Excludes model-selection FKs.
  */
-export const serverNovelaiImagegenConfigExportSchema = z.object({
+const serverNovelaiImagegenConfigExportSchema = z.object({
   image_default_positive_tags: z.array(z.string()).optional(),
   image_default_negative_tags: z.array(z.string()).optional(),
   nai_sampler: z.string().nullable().optional(),
@@ -232,12 +231,12 @@ export const serverNovelaiImagegenConfigExportSchema = z.object({
 });
 
 /** Portable server_byok_configs export fields. */
-export const serverByokConfigExportSchema = z.object({
+const serverByokConfigExportSchema = z.object({
   user_byok_mode: z.boolean().optional(),
 });
 
 /** Portable server_memory_configs export fields. */
-export const serverMemoryConfigExportSchema = z.object({
+const serverMemoryConfigExportSchema = z.object({
   memory_tagging_enabled: z.boolean().optional(),
   channel_memory_enabled: z.boolean().optional(),
 });
@@ -246,14 +245,14 @@ export const serverMemoryConfigExportSchema = z.object({
  * Portable server_welcome_configs export fields.
  * Discord channel/persona references remain excluded.
  */
-export const serverWelcomeConfigExportSchema = z.object({
+const serverWelcomeConfigExportSchema = z.object({
   welcome_prompt: z.string().nullable().optional(),
 });
 
 /**
  * Portable STM customization export fields (server_stm_configs + stm_categories).
  * Unlike the flat split-config tables, STM travels as a nested config object plus an
- * ordered categories array — these mirror ShortTermMemoryRepository's export shape.
+ * ordered categories array: these mirror ShortTermMemoryRepository's export shape.
  * Both keys are optional so exports predating STM customization still validate.
  * Per-channel durable STM *state* is intentionally NOT exported (design decision 8).
  */
@@ -286,7 +285,7 @@ export const serverStmConfigExportSchema = z.object({
  * Flat JSON shape is preserved for existing export/import file compatibility,
  * but the schema is now composed by split config-table ownership.
  */
-export const serverConfigExportSchema = serverModelConfigExportSchema
+const serverConfigExportSchema = serverModelConfigExportSchema
   .merge(serverChatConfigExportSchema)
   .merge(serverMemberPermissionsConfigExportSchema)
   .merge(serverCapabilitiesConfigExportSchema)
@@ -307,7 +306,7 @@ export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 /**
  * Persona-scoped server memories-only export schema.
  */
-export function getServerMemoriesExportDataSchema() {
+function getServerMemoriesExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
     server_memories: z.array(memoryItemSchema).max(limits.maxServerMemories),
@@ -319,7 +318,7 @@ export type ServerMemoriesExportData = z.infer<ReturnType<typeof getServerMemori
 /**
  * Server config-only export schema.
  */
-export const serverConfigOnlyExportDataSchema = z.object({
+const serverConfigOnlyExportDataSchema = z.object({
   config: serverConfigExportSchema,
 });
 
@@ -329,7 +328,7 @@ export type ServerConfigOnlyExportData = z.infer<typeof serverConfigOnlyExportDa
  * Get server data export schema with dynamic memory limits from environment
  * Includes configuration and server memories
  */
-export function getServerExportDataSchema() {
+function getServerExportDataSchema() {
   const limits = getMemoryLimits();
   return z.object({
     config: serverConfigExportSchema,
@@ -404,7 +403,7 @@ export type ServerConfigOnlyExport = z.infer<typeof serverConfigOnlyExportSchema
 /**
  * Union type for all export formats
  */
-export type DataExport =
+type DataExport =
   | PersonalMemoriesExport
   | ServerMemoriesExport
   | PersonalSettingsExport

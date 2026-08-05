@@ -1,28 +1,29 @@
-
-
-
+> [!NOTE]
+> このREADMEは簡単な概要です。完全で最新のドキュメント（セットアップガイド、機能の解説、プロバイダー情報など）については **[docs.tomoribot.app](https://docs.tomoribot.app/)** をご覧ください。
 
 <br />
 <div align="center">
 
   <a href="https://github.com/Bredrumb/TomoriBot">
-    <img src="img/tomoricon.png" alt="Logo" width="80" height="80">
+    <img src="assets/img/icons/tomoricon.svg" alt="Logo" width="80" height="80">
   </a>
 
 <h3 align="center">TomoriBot</h3>
 
-自ホスト可能で、カスタマイズ可能なDiscord向け個人AI アシスタント。堅牢なメモリー、複数ペルソナ、ツール呼び出し、マルチモーダルサポート、およびOpenAI互換/ローカルモデルサポートを備えています。
+Discord向けの自ホスト可能でカスタマイズ自在な個人AIアシスタント/ロールプレイシステム。メモリー、複数ペルソナ、ツール呼び出し、マルチモーダル、API/ローカルモデルサポートを備えています。
 
 <p align="center">
 
 [English](README.md) | 日本語
 <br />
       <br />
+      <strong><a href="https://docs.tomoribot.app/">公式ウェブサイト</a></strong>
+      &middot;
+      <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">TomoriBotを招待</a></strong>
+      &middot;
+      <strong><a href="https://discord.gg/bjCfHm9QsB">Discordサーバー</a></strong>
+      <br />
       <a href="https://github.com/Bredrumb/TomoriBot/releases">最新リリース</a>
-      &middot;
-      <a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">TomoriBotを招待</a>
-      &middot;
-      <a href="https://discord.gg/bjCfHm9QsB">Discordサーバー</a>
       &middot;
       <a href="https://github.com/Bredrumb/TomoriBot/issues/new?template=bug-report.md">バグ報告</a>
       &middot;
@@ -34,30 +35,31 @@
 [![GitHub Pull Requests](https://img.shields.io/github/issues-pr/Bredrumb/TomoriBot.svg)](https://github.com/Bredrumb/TomoriBot/pulls)
 [![License](https://img.shields.io/github/license/Bredrumb/TomoriBot.svg)](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE)
 
+
   </p>
 
 
 
 
 <!-- PROJECT LOGO -->
-![TomoriBot Banner](img/tomobanner.png)
+![TomoriBot Banner](assets/img/tomobanner.png)
 [![Bun][Bun.sh]][Bun-url][![Discord.js][Discord.js]][Discord-url][![TypeScript][TypeScript.js]][TypeScript-url][![PostgreSQL][PostgreSQL.org]][PostgreSQL-url]
 
-</div>
 
+</div>
 
 <!-- ABOUT THE PROJECT -->
 ## プロジェクトについて
 
-TomoriBotは、[SillyTavern](https://github.com/SillyTavern/SillyTavern)とDiscordの廃止されたClydeにインスパイアされた、無料でオープンソースの自ホスト型個人AI アシスタントです。実用的なAIアシスタントとカスタムAIコンパニオンの両方をDiscordにもたらし、設定可能なメモリー、ペルソナ、ツール使用、およびモデルルーティングで作成されました。
+TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイアされた、無料でオープンソースの自ホスト型個人AIアシスタント兼ロールプレイシステムです。DMでは自分専用の、Discordサーバーでは全員のための、実用的なアシスタント、カスタマイズ可能なコンパニオン、ロールプレイの相手として使えます。
 
-独自のインフラストラクチャ上で実行できるカスタマイズ可能なDiscord AI ボット、AIコンパニオン、またはエージェント型チャットボットを希望する人向けに設計されています。TomoriBotは長期メモリー、マルチペルソナ動作、WebおよびMCPツール、画像理解、ロールプレイ指向のワークフロー、およびGoogle Gemini、OpenRouter、NovelAI、ならびにOllama、KoboldCPP、vLLM、LocalAIおよびChatMockバックアップセットアップなどの自ホスト型OpenAI互換エンドポイントを含む複数のプロバイダーをサポートしています。
+TomoriBotは長期メモリー、マルチペルソナ動作、WebおよびMCPツール、チャット内でのメディア生成、100以上のDiscordスラッシュコマンド、そしてカスタムプロキシや自前モデルの自ホストを含む[複数のプロバイダー](#対応apiプロバイダー)をサポートし、テキスト生成から動画生成まで幅広く対応します。
 
-[公開TomoriBotを招待](https://discord.com/oauth2/authorize?client_id=841644102059556915)してDiscordサーバーに追加するか、プライバシーとAPIキーを完全にコントロールしたい場合は[自分でホスト](#セルフホスティング)することができます。TomoriBotは暗号化を使用してデータを安全に保ちますが、セルフホスティングにより、すべてのデータが完全にあなたのデバイス上に保持されます。
+[公開版TomoriBotを招待](https://discord.com/oauth2/authorize?client_id=841644102059556915)してDiscordサーバーに追加するか、プライバシーとAPIキーを完全にコントロールしたい場合は[自分でホスト](#セルフホスティング)することもできます。TomoriBotはデータを安全に保つためにセキュリティのベストプラクティスと暗号化を用いていますが、セルフホスティングならすべてのデータが完全にあなたのデバイス上にとどまります。
 
-どちらの方法でサーバーに追加した後、指示に従って`/config setup`コマンドを実行してください。その後、彼女の名前を呼ぶか@メンションするだけで応答を得ることができます。
+上記いずれかの方法でサーバーに追加した後、`/config setup`コマンドを実行して手順を確認してください。その後は、彼女の名前を呼ぶ（または@メンションする）だけで応答が得られます。
 
-TomoriBotをお気に入りになっていただけたら、GitHubでスターを付けるか、Ko-fiでの寄付でサポートをいただければ幸いです：
+TomoriBotを気に入っていただけたら、GitHubで⭐を付けるか、Ko-fiで開発をサポートしていただけると嬉しいです！
 
 <div align="center">
 
@@ -68,274 +70,102 @@ TomoriBotをお気に入りになっていただけたら、GitHubでスター�
 ## 機能紹介
 
 
-![Screenshots 1](img/scs/1.png)
-<h3 align="center">エージェント型AI駆動会話</h3>
-<p align="center">TomoriBotはチャット以上のことができる多数のツールを持っています。Web検索、繰り返しタスク/リマインダーの設定、サーバーの絵文字/スタンプの使用、RAGやSTMによるチャンネル・サーバーをまたいだコンテキスト記憶など。</p>
+![Screenshots 1](assets/img/scs/1.png)
+<h3 align="center">エージェント型AI駆動の会話</h3>
+<p align="center">TomoriBotはチャットするだけにとどまらない多彩なツールを備えています。Web検索、繰り返しタスク/リマインダーの設定、サーバーの絵文字/スタンプの活用、そしてチャンネルやサーバーをまたいでコンテキストを記憶できるRAGやSTMなどのメモリー機能が使えます。</p>
 
 <br />
 
 
-![Screenshots 2](img/scs/2.png)
+![Screenshots 2](assets/img/scs/2.png)
 <h3 align="center">完全なマルチモーダル入出力</h3>
-<p align="center">TomoriBotはDiscordで送信された画像、音声、動画を処理し、NovelAI、ElevenLabs、GoogleのNanoBanana/VeoなどのさまざまなAPIを使ってDiscord上で直接生成することができます。すべてのキーは暗号化され、永続的なデータベースに安全に保存されます。ローカル画像/音声モデルのサポートは現在開発中で、ローカルLLMはすでにサポートされています！</p>
+<p align="center">TomoriBotはDiscordで直接送信された画像・音声・動画を処理し、あなた自身のローカルモデルエンドポイントやAPIキーを使ってそれらを生成して返せます。これらはすべて暗号化され、永続的なデータベースに安全に保存されます。すぐに使えるComfyUIワークフローは<code>assets/comfyui-workflows/</code>に、ローカル音声推論サーバーは<code>servers/</code>にあります！</p>
 
 <br />
 
-![Screenshots 3](img/scs/3.png)
+![Screenshots 3](assets/img/scs/3.png)
 <h3 align="center">マルチペルソナサポート</h3>
-<p align="center">TomoriBotのサーバー内でのパーソナリティ、行動、アバターは簡単に変更・作成でき、ペルソナとして他のユーザーにエクスポートすることもできます（共有可能なAIキャラクターカードのようなもの）。`/persona generate`でお気に入りのSillyTavernカードをインポート・変換することもできます。1つのサーバーに無制限のペルソナを持つことができ、それぞれが独自のメモリーとアジェンダを持ちます。複数のペルソナを連携させてサーバー内の作業を協調して進めることもできます！</p>
+<p align="center">TomoriBotのサーバー内でのパーソナリティ、行動、アバターは簡単に変更・作成でき、ペルソナとして他のユーザーへエクスポートすることもできます（共有可能なAIキャラクターカードのようなもの）。<code>/persona generate</code>でお気に入りのSillyTavernカードをインポート・変換することも可能です。1つのサーバーに無制限のペルソナを持たせることができ、それぞれが独自のメモリーとアジェンダを持ちます。さらに、複数のペルソナを連携させてサーバー内で協働させる（あるいはただじゃれ合わせる）こともできます。</p>
 
 <br />
 
 
-![Screenshots 4](img/scs/4.png)
+![Screenshots 4](assets/img/scs/4.png)
 <h3 align="center">100以上のネイティブ設定コマンド</h3>
-<p align="center">すべてDiscordのネイティブスラッシュコマンドとインタラクティブUIで管理できます。ペルソナの完全な管理、モデルパラメータの調整、MCPツールサーバーの設定、権限の調整、メモリーの設定、サーバーメンバーのレート制限など、さらに多くのことが可能です。TomoriBotに彼女ができることとスラッシュコマンドは何かを直接尋ねることもできます。現在、Web ダッシュボードはさらに簡単な管理を行うために開発中です。</p>
+<p align="center">すべてDiscordのネイティブなスラッシュコマンドとインタラクティブUIで管理できます。ペルソナやプロンプトの完全な管理、モデルパラメータの調整、MCPツールサーバーの設定、権限の調整、メモリーの設定、サーバーメンバーのレート制限など、さらに多くのことが可能です。TomoriBotに、彼女ができることやスラッシュコマンドを直接尋ねることもできます。現在、さらに簡単な管理のためにWebダッシュボードを開発中です。</p>
 
 <br />
 
 
-![Screenshots 6](img/scs/6.png)
+![Screenshots 6](assets/img/scs/6.png)
 
 <h3 align="center">SillyTavern統合（ベータ）</h3>
-<p align="center">お気に入りのSillyTavernプリセットをDiscordで直接TomoriBotを通じて使用できます。Discordの新しいネイティブチェックボックスグループにより、SillyTavernのようにノードのオン/オフを簡単に切り替えられます。`/persona import`でSillyTavern V2キャラクターカードを直接インポートするか、`/persona generate`で先に変更を加えることもできます。</p>
+<p align="center">お気に入りのSillyTavernプリセットをTomoriBotを通じてDiscordで直接使用でき、彼女のプロンプトを丸ごと調整します。<code>st-preset</code>で.jsonをそのまま入れるだけです。Discordの新しいモーダル用ネイティブチェックボックスグループにより、SillyTavernのようにノードのオン/オフを簡単に切り替えられます。<code>/persona import</code>でSillyTavernキャラクターカードを直接インポートするか、<code>/persona generate</code>で先に手を加えることもできます。</p>
 
-![Screenshots 5](img/scs/5.png)
+![Screenshots 5](assets/img/scs/5.png)
 <h3 align="center">さらに多くの機能が続々追加中！</h3>
-<p align="center">新しいサーバーメンバーへの自動挨拶やチャンネル間の移動など実用的なものから、ユーザーのなりきりなどおもしろいものまで、様々な機能が揃っています。新機能は常に開発中です。バグはGitHub IssuesまたはDiscordで報告してください（楽しい提案もぜひ！）。</p>
+<p align="center">新しいサーバーメンバーへの自動挨拶やチャンネル間の移動など実用的なものから、ユーザーのなりきりでちょっとしたおふざけをするものまで、簡単に設定できる楽しい機能が揃っています。新機能は常に開発中ですので、バグ（や楽しい提案）はGitHub Issuesまたは公式Discordで報告してください。</p>
 
-## 対応プロバイダー
+## 対応APIプロバイダー
 
-TomoriBotは、幅広いLLMプロバイダー、画像生成API、音声サービス、検索ツールに対応しています。さらに多くのプロバイダーを追加し、それらを混合して使用できるようにする予定があります。
+TomoriBotは、幅広いLLMプロバイダー、画像生成API、音声サービス、検索ツールを標準でサポートしています。Google Gemini、OpenRouter、Anthropic、NovelAI、Nvidia、Deepseekなどの人気プロバイダーが含まれます。
 
-### LLMプロバイダー
+**[対応プロバイダーの完全なリストはこちら](https://docs.tomoribot.app/ja/features/setup-administration/providers-and-models/#サポートされているプロバイダー)**
 
-| プロバイダー | ストリーミング | ツール呼び出し | 画像入力 | エンベッディング | 備考 |
-|----------|-----------|--------------|-------------|-------|-------|
-| **Google Gemini** | ✅ | ✅ | ✅ | ✅ |無料モデル利用可 |
-| **OpenRouter** | ✅ | ✅ | ✅ | ✅ |無料モデル利用可 |
-| **Anthropic (API)** | ✅ | ✅ | ✅ |- | Claude Code非対応 |
-| **NovelAI** | ✅ | ✅ | - |- | ツールはGLM 4.6のみ |
-| **Nvidia** | ✅ | ✅ | ✅ | ✅ |無料モデル利用可 |
-| **Deepseek** | ✅ | ✅ | - | - |- |
-| **Z.ai** | ✅ | ✅ | ✅ | - |無料モデル利用可 |
-| **Z.ai Coding** | ✅ | ✅ | - | - |サブスクリプション計画 |
-| **Google Vertex AI** | ✅ | ✅ | ✅ |✅ | - |
-| **Codex CLI (via ChatMock)** | ✅ | ✅ | ✅ | - |ChatMock経由（README参照） |
-| **Custom (OpenAI互換)** | ✅ | ✅ | ✅ | - |KoboldCPPなど
+## ローカル・セルフホスト型エンドポイント
 
-### 画像生成
+APIに加えて、TomoriBotを自分でホストするモデルに接続することもできます。ローカルLLM（Ollama、KoboldCPP、LM Studio、vLLMなど）、ComfyUIによるローカル画像/動画生成、ローカルTTS・STTエンドポイント、さらにローカルのSearXNGやブラウザWeb取得用のDockerサイドカーに対応しています。
 
-| プロバイダー | テキスト生成 | 画像編集 | インペイント | 備考 |
-|----------|---------------|----------------|-----------|-------|
-| **Google** | ✅ | ✅ | - | - |
-| **OpenRouter** | ✅ | ✅ | - | - |
-| **NovelAI** | ✅ | ✅ | ✅ | 他のプロバイダーと組み合わせ可 |
-| **Nvidia** | ✅ | ✅ | - | - |
-| **Z.ai** | ✅ | - | - | - |
+**[ローカル・セルフホスト型エンドポイントのガイドはこちら](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/)**
 
-### 動画生成
+## セキュリティと脅威モデル
 
-| プロバイダー | テキスト生成 | 画像編集 | 備考 |
-|----------|---------------|----------------|-------|
-| **Google** | ✅ | ✅ | 非同期ポーリング方式 |
-| **OpenRouter** | ✅ | ✅ | 非同期ポーリング方式 |
-| **Z.ai** | ✅ | ✅ | 非同期ポーリング方式 |
+TomoriBotは暗号化とセキュリティのベストプラクティスを採用し、データとAPIキーを完全に安全に保ちます（設定可能なメンバー/サーバーごとのレート制限であなたの財布も守ります）。セルフホスティング時には完全なコントロールとプライバシーが得られます。
 
-### 音声・オーディオ
-
-| プロバイダー | テキスト読み上げ | 音声認識 |
-|----------|----------------|-----------------|
-| **ElevenLabs** | ✅ | ✅ |
-
-### 検索・Webツール
-
-| プロバイダー | 検索タイプ | MCP | 備考 |
-|----------|-------------|-----|-------|
-| **Brave Search** | Web検索、ニュース、ローカル | ✅ | REST API統合 |
-| **DuckDuckGo/Felo Search** | Web検索、即座検索 | ✅ | MCPサーバー統合 |
+**[セキュリティと脅威モデルの全文はこちら](https://docs.tomoribot.app/ja/wiki/threat-models/)**
 
 
-## プロンプトカスタマイズ用ビルトインツールリファレンス
+## プロンプトカスタマイズ用ツールマクロ
 
-TomoriBotのシステムプロンプト、ペルソナ設定、外部プロバイダーのプロンプトテンプレートをカスタマイズする際は、ツール名をハードコードする代わりに以下の安定したプロンプトマクロを使用することを推奨します。
+TomoriBotには多彩なビルトインツール（Web検索、メモリー管理、画像生成、クロスチャンネルメッセージングなど）が備わっており、プロンプト内でマクロとして直接参照できます。
 
-- `{memory_tool}`のようなプロンプトマクロは、コンテキスト構築時に展開されます。ツール名はバッククォートで囲まれて出力され、未解決の検索/取得系マクロは平易なテキストにフォールバックします。静的マクロは常に現在の正規ビルトインツール名に対応します。検索/取得系マクロは、アクティブなプロバイダー/設定に対応する最適なツール名に解決されます。
-- `ベースツール`とは、TomoriBotの通常のビルトインツールセットに含まれるツールです。ただし、現在のプロバイダー/モデルがツール呼び出しをサポートしている必要があります。
-- それ以外の要件は、サーバー機能フラグ、Discord権限、モデル機能、任意のAPIキーなど追加の条件です。
-- 旧マクロ（`{pin_tool}`、`{timestamp_refresh_tool}`など）は互換性エイリアスとして保持されていますが、新しいプロンプトテキストは`{manage_message_tool}`と`{message_metadata_tool}`の使用が推奨されます。
-- 管理者が追加したMCPツールは、各サーバーの設定によって名前が異なるため、ここには記載していません。
-
-### ビルトイン関数ツール
-
-| ツール名 | プロンプトマクロ | 要件 | 用途 |
-|---|---|---|---|
-| `review_capabilities` | `{capabilities_tool}` | ベースツール | 回答前に現在のチャット機能、スラッシュコマンド、またはランタイム設定を確認する。 |
-| `create_long_term_memory` | `{memory_tool}` | `self_teaching_enabled` | 安定したサーバーの事実やユーザー固有の設定を将来の会話のために保存する。 |
-| `update_long_term_memory` | `{memory_update_tool}` | `self_teaching_enabled` | 古くなった長期メモリーをIDで置き換える。 |
-| `update_short_term_memory` | `{short_term_memory_tool}` | ベースツール；NovelAI非対応 | 現在のチャンネル/ストーリーアークの一時的な作業メモリーを永続化せずに保存する。 |
-| `create_task` | `{task_tool}` | ベースツール | 一回限りまたは繰り返しのリマインダーやセルフタスクをスケジュールする。 |
-| `cross_channel_message` | `{cross_channel_tool}` | ベースツール；NovelAI非対応；対象チャンネルの権限とクロスチャンネルブロックリストが適用される | 別のチャンネルやスレッドで即座に行動し、オプションで報告を返す。 |
-| `select_sticker_for_response` | `{sticker_tool}` | `sticker_usage_enabled`；`USE_EXTERNAL_STICKERS` | 返答に合うサーバースタンプを選択する。 |
-| `manage_message` | `{manage_message_tool}` | `manage_message_enabled`；`pin`に`MANAGE_MESSAGES`が必要 | 最近のメッセージをピン留めするか、Tomoriやそのキャラクターが送信した最近のメッセージを編集/削除する。 |
-| `interact_with_recent_message` | `{message_interaction_tool}` | ベースツール；通常のDiscord送信/リアクション機能が実行時に適用される | 最近のメッセージにリアクションするか、短い返信を送信する。 |
-| `peek_profile_picture` | `{profile_picture_tool}` | ベースツール；ビジョン対応チャットモデルまたは設定済み`vision_llm`が必要 | ユーザーのアバターまたはアクティブなペルソナのアバターを確認する。 |
-| `read_document` | `{document_tool}` | ベースツール | 最近のメッセージのPDF、TXT、またはMD添付ファイルからテキストを抽出する。 |
-| `reveal_message_metadata` | `{message_metadata_tool}` | ベースツール | 最近の可視ターンに`ref_N`ハンドルと送信タイムスタンプを付与して、正確なメッセージターゲティングを可能にする。 |
-| `increase_media_context` | `{media_context_tool}` | ベースツール；ビジョン対応チャットモデルが必要 | 最適化のためにウィンドウアウトされた古い画像/動画をコンテキストに戻す。 |
-| `process_gif` | `{gif_tool}` | ベースツール；開発中のみ；ビジョン対応チャットモデルが必要 | 分析のためにGIFからキーフレームを抽出する。 |
-
-### デフォルト検索・Web拡張
-
-Webアクセスが有効な場合にTomoriが使用できる一般的なビルトインまたはバンドルされたWebツールです。実際の利用可否はプロバイダーサポート、サーバー設定、APIキー、アクティブなMCPサーバーによって異なります。
-
-以下のファミリーマクロは、管理者が独自の`web_search`や`url_fetcher`サーバーを登録している場合、バンドルされたツールまたは互換性のあるギルドMCPに解決されます。
-
-| ツール名 | プロンプトマクロ | 要件 | 用途 |
-|---|---|---|---|
-| `brave_web_search` | `{web_search_tool}` | `web_search_enabled`；Brave API利用可能 | 一般情報をWeb検索する。 |
-| `brave_image_search` | `{image_search_tool}` | `web_search_enabled`；Brave API利用可能 | Web上で関連画像を検索する。 |
-| `brave_video_search` | `{video_search_tool}` | `web_search_enabled`；Brave API利用可能 | Web上で関連動画を検索する。 |
-| `brave_news_search` | `{news_search_tool}` | `web_search_enabled`；Brave API利用可能 | 最新ニュースを専門的に検索する。 |
-| `fetch` | `{url_fetch_tool}` | アクティブなバンドルfetch MCPサーバー | 特定のWebページやURLをより詳細に読み込む。 |
-| `web-search` | `{web_search_tool}` | `web_search_enabled`；アクティブなDuckDuckGo/Felo MCPサーチサーバー | Braveが使用できない場合の無料Web検索フォールバック。 |
-| `url-metadata` | `{url_metadata_tool}` | `web_search_enabled`；アクティブなDuckDuckGo/Felo MCPサーチサーバー | メタデータ専用フェッチャーが利用可能な場合にURLのページメタデータを取得する。 |
+**[ビルトインツールリファレンスの全文はこちら](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/)**
 
 ### ツールを使ったサンプルプロンプト
 
-Discordコミュニティ内でTomoriBotのツールチェーンを活用したシステムプロンプトの短くてシリーな例です。もちろん、もっと工夫すれば実用的にもなります。
+以下は、Discordコミュニティ内でTomoriBotのツールチェーンを活用したシステムプロンプト指示の、短くておふざけな例です。もちろん、もっと工夫すれば実用的にもできます。
 
-#### 1. 週刊~~時事~~百合ニュースアンカー
+
+#### 1. 週刊 ~~時事~~ 百合ニュース
 ```text
-毎週金曜日、{web_search_tool}を使ってその週の注目百合漫画の章、アニメエピソード、コミュニティファンアートまとめを作成。
-{voice_message_tool}で大げさなニュースアンカー口調で発表する。
+毎週金曜日、{web_search_tool}を使ってその週の注目の百合漫画の章、アニメエピソード、コミュニティのファンアートをまとめる。
+まとめた内容を{voice_message_tool}で艶っぽいASMRボイスで発表する。
 ```
 
-#### 2. バイブチェッカー
+#### 2. ウェルネスチェッカー
 ```text
-数時間おきに最近のメッセージからサーバーの全体的な雰囲気を評価する。
-バイブが悪ければ{image_generation_tool}でランダムな褒め言葉や謎画像を投下する。
-バイブが完璧なら何もしない——良いバイブは自力で持続する。
-繰り返しバイブ破壊者を{memory_tool}に保存して誰にも報告しない。
+数時間おきに、@Bredrumbの様子を必ず確認する。
+今の気分はどうか、最近コーディングの休憩を取れているかを尋ねる。
+{memory_tool}や{memory_update_tool}で彼の感情の状態を時系列で記録し、後で本人に報告する。
 ```
 
-#### 3. 災難予報士
+#### 3. 睡眠ポリス
 ```text
-今日サーバーで起こる小さな不便を予測する。
-予報は具体的で、もっともらしく、まったく役に立たないものにすること。
-例：「正午前に誰かがガチャで爆死して離席する確率73%。」
-毎晩0時に{task_tool}で翌日の予報をスケジュールする。
+{message_metadata_tool}で誰かが午前2時を過ぎてもチャットしていることに気づいたら、{voice_message_tool}で不気味なほど穏やかなASMRの子守唄を送り、寝るように伝える。
+10分後もまだ話し続けていたら、{manage_message_tool}でその人のためを思ってメッセージを削除し、睡眠不足が彼らの問題の主な原因であることを念押しする。
 ```
 
 <!-- GETTING STARTED -->
-## セルフホスティング
+# セルフホスティング
 
-このガイドは、開発または個人使用のためにTomoriBotをローカルでセットアップするのに役立ちます。
+インストール方法を1つ選んでください：
 
-### 前提条件
+- **A. ローカルBunセットアップ（推奨）:** [Bun](https://bun.sh/)、MCPツール用のNode.js v20+、そしてデータベース用にPostgreSQLまたはDockerのいずれかが必要です。
+- **B. Docker Composeセットアップ:** ボット/データベースの実行にはDockerのみが必要ですが、ホスト側のメンテナンススクリプトには依然としてホストのツールが必要です。
 
-TomoriBotを実行する前に、以下がインストールされていることを確認してください：
+ほとんどのセルフホスターにおすすめなのは、ローカルBunのセットアップウィザードです。デフォルトの**フルインストール**では、`.env`の作成、安全な`CRYPTO_SECRET`の生成、Discordボットトークンの入力、PostgreSQLの設定、`bun install --frozen-lockfile`の実行を行い、続いて軽量なデータベースおよびAIヘルパーの追加機能のインストールを試みます。
 
-* **Node.js v20+** - MCPサーバーに必要（DuckDuckGo検索にはNode 20+のFile APIが必要）
-  ```sh
-  # 現在のバージョンを確認
-  node --version
-
-  # v20未満の場合、以下でアップグレード：
-  # Ubuntu/Debian
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-  sudo apt-get install -y nodejs
-
-  # macOS (Homebrewを使用)
-  brew install node@20
-
-  # Windows (Chocolateyを使用)
-  choco install nodejs-lts
-  ```
-
-* **Bun** - JavaScriptランタイムおよびパッケージマネージャー
-  ```sh
-  # Windows (PowerShell)
-  powershell -c "irm bun.sh/install.ps1 | iex"
-
-  # macOS/Linux
-  curl -fsSL https://bun.sh/install | bash
-  ```
-* **PostgreSQL** - データベースサーバー
-  ```sh
-  # Windows (Chocolateyを使用)
-  choco install postgresql
-
-  # macOS (Homebrewを使用)
-  brew install postgresql
-
-  # Linux (Ubuntu/Debian)
-  sudo apt-get install postgresql postgresql-contrib
-  ```
-  - PostgreSQLインストール後、ログイン：
-  ```sh
-  # Linux
-   sudo -u postgres psql
-
-   # macOS (Homebrew)
-   psql postgres
-
-   # Windows
-   # スタートメニューから「SQL Shell (psql)」を使用、または：
-   psql -U postgres
-  ```
-  - TomoriBotに必要なデータベースとユーザーを作成します。`your_`変数を自分のものに置き換えてメモしておいてください：
-  ```sql
-  CREATE USER your_username WITH PASSWORD 'your_password' SUPERUSER;
-  CREATE DATABASE your_dbname OWNER your_username;
-  \q
-  ```
-
-  **注意：** データベーススキーマ（`pgcrypto`などの必要な拡張機能を含む）は、TomoriBotを初めて実行すると自動的に初期化されます。
-
-  **pgvector（RAG/ドキュメントメモリのためにオプション）：**
-  - RAG機能をローカルで使用したい場合、[pgvector](https://github.com/pgvector/pgvector)をインストールしてから実行してください：
-  ```sql
-  CREATE EXTENSION vector;
-  ```
-  - TomoriBotは起動時にpgvectorを自動検出します — 追加の設定は不要です。
-
-
-* **トークナイザーアセット**（オプション、ロジットバイアス用） - モデル対応のロジットバイアス（絵文字・単語の繰り返しペナルティ）に必要
-  ```sh
-  bun run setup:tokenizers
-  ```
-  - 一部のモデル（例：Gemma）はゲート付きモデルのため、ライセンス同意と[HuggingFaceアクセストークン](https://huggingface.co/settings/tokens)が必要です。その場合は以下で再実行してください：
-  ```sh
-  # Windows (PowerShell)
-  $env:HF_TOKEN="hf_xxx"; bun run setup:tokenizers
-
-  # macOS/Linux
-  HF_TOKEN=hf_xxx bun run setup:tokenizers
-  ```
-  - このステップを省略した場合、ロジットバイアスは無効になりますが、他の機能はすべて正常に動作します。
-
-* **Python 3**（オプションですが推奨） - URL取得MCPサーバーツールに必要
-  ```sh
-  # Windows (Chocolateyを使用)
-  choco install python
-
-  # macOS (Homebrewを使用)
-  brew install python
-
-  # Linux (Ubuntu/Debian) - 通常はプリインストール済み
-  sudo apt-get install python3 python3-pip
-  ```
-  - MCPサーバーパッケージをインストール：
-  ```sh
-  # Webコンテンツ分析用URLフェッチャーをインストール
-  pip install mcp-server-fetch
-
-  # Linuxユーザー：「externally-managed-environment」エラーが出る場合は以下を使用：
-  pip install --break-system-packages mcp-server-fetch
-  # または仮想環境を作成
-  ```
-### インストール
+## A. ローカルBunセットアップ
 
 1. **リポジトリをクローン**
    ```sh
@@ -343,74 +173,118 @@ TomoriBotを実行する前に、以下がインストールされているこ�
    cd TomoriBot
    ```
 
-2. **依存関係をインストール**
+2. **セットアップウィザードを実行**（詳細は**[セットアップウィザードガイド](https://docs.tomoribot.app/ja/self-hosting/setup-wizard/)**を参照）
    ```sh
-   bun install
+   bun run setup
    ```
 
-### 設定
+3. **TomoriBotを起動**
+    ```sh
+    bun run dev
+    ```
 
-**環境ファイル** `.env`を作成し、必要な変数を入力します：
-   ```
-    # Discord Bot Configuration (必須)
-    DISCORD_TOKEN=your_discord_bot_token_here
-    # Discordボットに以下の特権ゲートウェイインテントが有効化されていることを確認してください:
-    # GuildMembers, MessageContent, GuildPresences
+`TomoriBot up and running!`と表示されたら、Discordで`/config setup`を実行してください。
 
-    # Security (必須)
-    CRYPTO_SECRET=your_32_character_crypto_secret_here
+## B. Docker Composeセットアップ
 
-    # Database Configuration (必須)
-    POSTGRES_HOST=localhost
-    POSTGRES_PORT=5432
-    POSTGRES_USER=your_username
-    POSTGRES_PASSWORD=your_password
-    POSTGRES_DB=your_dbname
+Docker ComposeはTomoriBotとPostgreSQLをビルドして実行します。セットアップウィザードは使用しません。
 
-    # Bot Configuration (オプション)
-    DEFAULT_BOTNAME=Tomori
-    DEFAULT_BOTNAME_JP=ともり
-    BASE_TRIGGER_WORDS=tomori,tomo,トモリ,ともり
+**Docker Composeに必要な`.env`変数：**
+- `DISCORD_TOKEN` - Discordボットトークン
+- `CRYPTO_SECRET` - 32文字の暗号化キー
+- `POSTGRES_PASSWORD` - データベースパスワード（他のDB設定は自動設定されます）
 
-   ```
-
-**必須変数：**
-- **DISCORD_TOKEN**: [Discord Developer Portal](https://discord.com/developers/applications)からのDiscordボット認証トークン
-- **CRYPTO_SECRET**: データベースに保存されるAPIキーを暗号化するための32文字の秘密鍵
-- **POSTGRES_HOST**: PostgreSQLサーバーのホスト名（デフォルト：`localhost`）
-- **POSTGRES_PORT**: PostgreSQLサーバーのポート（デフォルト：`5432`）
-- **POSTGRES_USER**: PostgreSQLデータベースのユーザー名
-- **POSTGRES_PASSWORD**: PostgreSQLデータベースのパスワード
-- **POSTGRES_DB**: PostgreSQLデータベース名
-
-調整可能な追加のオプション変数については、リポジトリの`.env.example`ファイルを確認してください。
-
-### TomoriBotの起動
-
-設定が完了したら、ボットを起動します：
+Docker Composeの場合は、`.env.example`をベースにして、まだ設定していなければ`POSTGRES_PASSWORD`を追加してください。任意のDockerやランタイム調整用の値は`.env.optional.example`からコピーできます。
 
 ```sh
-# ホットリロード付き開発モード
-bun run dev
+# TomoriBotとそのデータベースをビルドして起動
+docker compose up --build
 ```
 
-ボットは自動的に以下を実行します：
-- データベーススキーマと必要な拡張機能の初期化
-- ローカライゼーションファイルの読み込み
-- Discordへの接続
-- スラッシュコマンドの登録
+以降の起動では、コードや依存関係を変更していない限り`docker compose up`だけで十分です。
 
-ログにエラーがなく`TomoriBot up and running!`と表示されたら、ボットはオンラインで使用可能です。
+## C. オプションのサイドカー・サーバー
 
-#### 基本コマンド
+TomoriBotは、どちらのセットアップ方法でも併用できるオプトイン方式のサイドカー/サーバーサービスをサポートしており、ツールの強化やローカルモニタリングに利用できます。Web検索用のSearXNG、ブラウザレンダリングによるページ取得用のCrawl4AI、ローカルTTS/STT音声サーバー、Grafanaダッシュボードが含まれます。
+
+**ローカルBunセットアップ（A）の場合**は、`bun run dev`の代わりに`bun run launch`を使用します。実行例：
+
+```sh
+# SearXNGとCrawl4AIのDockerサイドカーを併用
+bun run launch --searxng --crawl4ai
+
+# 音声セットアップ手順に従った後、ローカルTTSサーバーを併用
+bun run launch --qwen3tts
+
+# 利用可能なフラグをすべて表示
+bun run launch --help
+```
+
+利用可能なフラグ： `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--whisperx`、`--help`
+
+**Ctrl+C**でボットとPython製サイドカープロセスが停止します。Dockerコンテナ（`--searxng`、`--crawl4ai`）は意図的に起動したまま残されます。終了時は`docker stop searxng` / `docker stop crawl4ai`で手動停止してください。
+
+**Docker Composeセットアップ（B）の場合**は、代わりにComposeプロファイルでサイドカーをオプトインします：
+
+```sh
+# + SearXNG Web検索（自ホスト型メタ検索）
+docker compose --profile searxng up
+
+# + Crawl4AI ブラウザレンダリングによるページ取得
+docker compose --profile fetch-crawl4ai up
+
+# + 両方同時に
+docker compose --profile searxng --profile fetch-crawl4ai up
+```
+
+詳細なセットアップ手順については、以下のガイドを参照してください：
+
+- **[SearXNG Web検索サイドカー](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-searxng/)** - `web_search`ツールで単一エンジンのAPI制限を回避するための自ホスト型メタ検索インスタンス。
+- **[Crawl4AIサイドカー](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-crawl4ai/)** - `fetch_url`ツールでJavaScriptの多いWebページを取得・処理するためのブラウザレンダリングサイドカー。
+- **[テキスト読み上げ（TTS）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/)** / **[音声認識（STT）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/speech-to-text/)** - TomoriBotのボイスメッセージ用のPython製音声サーバー。事前に一度venvのセットアップが必要です。
+- **[ローカルGrafanaモニタリング](https://docs.tomoribot.app/ja/self-hosting/local-monitoring/)** - TomoriBotのパフォーマンスとデータベースメトリクスを監視するためのローカルGrafanaダッシュボードの立ち上げ方法。
+
+# TomoriBotの更新
+
+セルフホストしているインスタンスを最新バージョンに更新するには、まずボットを停止し（バックアップとマイグレーションが静かなデータベースに対して実行されるように）、バックアップ優先の更新コマンドを実行します：
+
+```sh
+bun run update
+```
+
+このコマンドは以下の手順を順番に実行し、いずれかの手順が失敗した場合は即座に停止します：
+
+1. **`bun run backup`** - コードに触れる*前に*データベースの完全バックアップを取得します。バックアップに失敗した場合、デプロイに一切変更を加えずに更新を中断します。
+2. **`git pull --rebase --autostash`** - ローカルの変更を自動的にスタッシュ・再適用しながら最新のコードをプルします。ファイルが競合した場合は、競合解決の手順を段階的に表示して終了するため、中途半端に適用されることはありません。
+3. **`bun install --frozen-lockfile`** - 更新されたロックファイルに固定されたとおりに依存関係をインストールします。
+
+その後、`bun run dev`、`bun run launch`、またはプロセスマネージャーでTomoriBotを再起動してください。未適用のデータベースマイグレーションは起動時に自動的に適用されます。
+
+便利なフラグ：
+
+| フラグ | 効果 |
+|---|---|
+| `--build` | 依存関係のインストール後に`bun run build`も実行します |
+| `--docker` | Docker Compose用：手順3を`docker compose build` + `docker compose up -d`に置き換えます |
+| `--skip-backup` | 更新前のバックアップをスキップします（非推奨） |
+| `--yes` | 開始前の確認プロンプトをスキップします |
+
+その他のホスト側メンテナンススクリプト（`bun run backup`、`bun run restore-backup`、`bun run nuke-db`、`bun run rotate-keys`など）と、ローカル/Docker Compose両方のデプロイにおけるデータベースのバックアップ/復元はすべて[ドキュメント](https://docs.tomoribot.app/ja/self-hosting/maintenance/)にまとめられています。なお、TomoriBotは`/backups/`にデータを自動でローカルバックアップしています。
+
+<!-- AFTER SETUP -->
+## 招待・セットアップ後
+
+### 基本コマンド
 
 - `/config setup` - サーバーの初期ボットセットアップ
 - `/config` - TomoriBotを調整するための複数の方法
-- `/teach` - TomoriBotにメモリーを追加
-- `/forget` - TomoriBotからメモリーを削除
-- `/server` - TomoriBotの権限を追加/削除
+- `/memory personal add` / `/memory personal remove` - 個人メモリーの追加/削除
+- `/memory server add` / `/memory server remove` - サーバー全体のメモリーの追加/削除
+- `/server whitelist` / `/server user-blacklist` - TomoriBotの権限の追加/削除
 
-#### チャットインタラクション
+すべてのスラッシュコマンドについては、**[コマンドリファレンス](https://docs.tomoribot.app/ja/features/command-reference/)**の全文を参照してください。
+
+### チャットでのやり取り
 
 サーバーでボットをメンションするか、設定されたトリガーワードを使用して会話を開始します：
 ```
@@ -418,145 +292,6 @@ bun run dev
 ```
 
 または、TomoriBotのDMに入って挨拶してください！
-
-### Codex CLIをTomoriBotで使用する
-
-ChatGPTアカウントをローカルのOpenAI互換ブリッジを通じてTomoriBotで使用したい場合は、[ChatMock](https://github.com/RayBytes/ChatMock)を実行し、TomoriBotの`custom`プロバイダーを向けることができます。
-
-#### ChatMockとは
-
-- ChatMockはローカルのOpenAI互換APIサーバーを実行します
-- TomoriBotは`custom`プロバイダーを通じてそのローカルサーバーを使用できます
-
-#### 1. ChatMockを起動
-
-GitHubの手順に従ってChatMockをインストール・起動します：
-
-- [ChatMockリポジトリ](https://github.com/RayBytes/ChatMock)
-
-インストール後、実行します：
-```sh
-chatmock login
-chatmock serve
-```
-
-デフォルトでは、ChatMockは`http://127.0.0.1:8000/v1`でリッスンします
-
-#### 2. ChatMockを使用するようTomoriBotを設定
-
-Discordで、TomoriBotの`custom`プロバイダーを設定し、以下を使用します：
-
-- **エンドポイントURL**: `http://127.0.0.1:8000/v1`
-- **モデル名**: ChatMockが受け取るべき正確なモデル文字列（例：`gpt-5.4`や`gpt-5.3-codex`）
-
-TomoriBotは設定されたベースURLに`/chat/completions`を追加するため、`http://127.0.0.1:8000`のみは使用しないでください。
-
-ChatMock用の推奨機能フラグ：
-- **Function Calling / Tools**: はい
-- **Image Understanding**: はい
-- **Video Understanding**: いいえ
-- **Structured Output**: はい
-
-**注意**：Codex CLIは`system`プロンプトの変更を許可していないため、TomoriBotの`system`プロンプトは回避策としてコンテキスト内の`user`ターンに変換されます。この回避策が正しく機能するよう、実際のChatMockポートに合わせて`CHATMOCK_PORT` .env変数を設定してください（デフォルトは8000）。
-
-### メンテナンススクリプト
-
-| コマンド | 説明 |
-|---|---|
-| `bun run backup` | DBダンプと`.env`を含むバンドルを`backups/`に作成し、すべてのデータを含む |
-| `bun run restore-backup` | バンドルから`.env`とデータベースを復元。`--latest`または`--from backups/<bundle-dir>`フラグを使用 |
-| `bun run backup:personas` | サーバーメモリーを含むペルソナのみを`backups/`にエクスポート。**`restore-backup`で使用できず、`/persona import`で手動で再インポートが必要（主キー競合を回避）** |
-| `bun run backup:memories` | すべてのユーザーに対する個人メモリーのみを`backups/`にエクスポート。**手動で再インポートが必要で、`restore-backup`で使用できません（主キー競合を回避）** |
-| `bun run nuke-db` | 全テーブルを削除（その後ボットを起動して再初期化）。クリーンインストール時にバックアップと組み合わせて使用 |
-| `bun run purge-commands` | 登録済みのDiscordスラッシュコマンドをすべて削除 |
-| `bun run rotate-keys` | すべての暗号化フィールドを現在のキーバージョンに移行 |
-
-### TomoriBotの更新
-
-**新しいバージョンをプルする前に必ずバックアップを取ってください。**
-```sh
-bun run backup
-```
-バンドルは`backups/`に保存され、データベースダンプと`.env`の両方が含まれます。
-復元するには：`bun run restore-backup --latest`または`--from backups/<bundle-dir>`
-
-**注意：** `bun run backup`が"Script not found"エラーで失敗する場合は、最初に`git pull --rebase --autostash`を実行してください。これはコードファイルのみを更新し、データベースには触れないため、バックアップ前に実行しても安全です。
-
-**手動（Dockerなし）で更新する場合：**
-```sh
-# まず起動中のボットを停止します（Ctrl+C / service stop / pm2 stop など）
-git pull --rebase --autostash  # マージコミットを回避し、ダーティな作業ツリーを自動処理
-bun install
-
-# dist/ から起動している場合（bun run start）は再ビルド：
-bun run build
-```
-
-**Docker Composeで更新する場合：**
-```sh
-git pull --rebase --autostash  # マージコミットを回避し、ダーティな作業ツリーを自動処理
-docker compose build
-docker compose up -d
-```
-
-### 代替方法：Docker Compose
-
-コンテナ化されたデプロイを希望する場合、手動セットアップの代わりにDocker Composeを使用できます：
-
-**Docker Composeに必要な.env変数：**
-- `DISCORD_TOKEN` - Discordボットトークン
-- `CRYPTO_SECRET` - 32文字の暗号化キー
-- `POSTGRES_PASSWORD` - データベースパスワード（他のDB設定は自動設定されます）
-
-```sh
-# TomoriBotのコンテナをビルド（初回またはコード変更後）
-docker compose build
-
-# TomoriBotとデータベースを起動（docker-compose.yamlを使用）
-docker compose up
-```
-
-**注意：** Docker Composeはデータベース接続を自動的に設定します。PostgreSQLサービスは開発モード（SSLなし）で実行され、内部Dockerネットワークに接続します。
-
-#### セルフホスト型Web検索（SearXNGサイドカー）
-
-`web_search` ツールはエンジンチェーン **Brave → SearXNG → DuckDuckGo → Felo** で動作します。ローカルでのSearXNGセットアップ方法は3通り：
-
-1. **Docker Compose（推奨）。** `docker compose up` で `searxng` サービスが自動起動し、bot は `http://searxng:8080/` で接続します。本番では `.env` に32文字以上の `SEARXNG_SECRET` を設定してください（開発ではデフォルト値を使用）。
-2. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/searxng/README.md` の `docker run` スニペットを参照し、シェルで `SEARXNG_BASE_URL=http://localhost:8080/` を設定。
-3. **SearXNG なし。** `SEARXNG_BASE_URL` を未設定のままにすると、チェーンは `Brave → DDG → Felo` に縮退します。問題ありません。
-
-エンジンごとのタイムアウトとヘルスプローブのキャッシュ時間は `WEB_SEARCH_TIMEOUT_MS` と `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` で調整可能（`.env.optional.example` 参照）。
-
-#### セルフホスト型URL取得レンダリング（Crawl4AIサイドカー）
-
-`fetch_url` ツールは、任意でブラウザレンダリング用サイドカーを先に試し、その後に組み込みMCP fetchエンジンへフォールバックできます。JavaScriptが多いページのレンダリング済み内容を取得したい場合に使います。
-
-1. **Crawl4AI Docker Composeプロファイル。** `docker compose --profile fetch-crawl4ai up` で起動し、botコンテナ用に `.env` へ `CRAWL4AI_BASE_URL=http://crawl4ai:11235/` を設定します。
-2. **スタンドアロンDocker（`bun run dev` 利用時）。** `servers/crawl4ai/README.md` の `docker run` スニペットを参照し、`CRAWL4AI_BASE_URL=http://localhost:11235/` をシェルで設定します。
-3. **ブラウザサイドカーなし。** `CRAWL4AI_BASE_URL` を未設定のままにすると、`fetch_url` は組み込み `mcp_fetch` のみを使用します。
-
-デフォルトのエンジン順は `crawl4ai,mcp_fetch` です。任意設定: `FETCH_URL_ENGINE_ORDER`, `FETCH_URL_TIMEOUT_MS`, `FETCH_URL_HEALTHCHECK_CACHE_SEC`, `FETCH_URL_ALLOW_PRIVATE_NETWORK`, `CRAWL4AI_TOKEN`, `FETCH_URL_FILTER_MODE`。`FETCH_URL_ALLOW_PRIVATE_NETWORK=false` のままにしてください。このbotが信頼済みのセルフホスト環境で動作し、ユーザーに `fetch_url` からlocalhost/プライベート/内部ネットワークへ到達させてもよい場合だけ有効にします。
-
-#### Grafanaでのモニタリング（オプション）
-
-GrafanaダッシュボードでTomoriBotインスタンスをモニタリングするには：
-
-```sh
-# TomoriBotとGrafanaを一緒に起動
-docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up
-```
-
-これにより以下が実行されます：
-- TomoriBotとPostgreSQLを起動（DBはポート15432）
-- Grafanaをポート3000で起動し、PostgreSQLデータソースを自動設定
-- 両方のサービスを同じDockerネットワークで接続
-
-`http://localhost:3000`でGrafanaにアクセス：
-- **ユーザー名**: `admin`
-- **パスワード**: `.env`の`GRAFANA_PASSWORD`で設定（デフォルトは`admin`）
-
-PostgreSQLデータソースは自動的に設定され、ボットのメトリクス、データベースクエリ、パフォーマンスをモニタリングするためのダッシュボード作成の準備が整います。
 
 <!-- ROADMAP -->
 ## ロードマップ
@@ -569,33 +304,35 @@ PostgreSQLデータソースは自動的に設定され、ボットのメトリ�
 - [x] 画像生成機能
 - [x] 音声連携（ElevenLabs TTS/STT）
 - [x] SillyTavernカードインポートとプリセットシステム
+- [x] 動画生成機能
+- [x] TTS/STT機能
+- [x] 完全なローカルモデルサポート
 - [ ] ナレッジグラフメモリーシステム（Qdrant）
-- [ ] TomoriBot Wiki（ローカルセットアップとロケール貢献用）
+- [x] TomoriBot Wiki（ローカルセットアップとロケール貢献用）
 - [ ] AI生成プレースホルダーアセットの置き換え
-- [ ] 動画生成機能
 - [ ] 設定用Webダッシュボード
-- [ ] 技術的でないユーザーが独自のTomoriBotをホストできる「簡単インストール」ファイルの作成
+- [x] 独自のTomoriBotをホストしたい技術的でないユーザー向けの「簡単インストール」ファイルの作成
 
-提案された機能と既知の問題の完全なリストについては、[open issues](https://github.com/Bredrumb/TomoriBot/issues)を参照してください。
+提案された機能と既知の問題の完全なリストについては、[公式GitHubプロジェクト](https://github.com/users/Bredrumb/projects/1/views/1)を参照してください。
 
 <!-- CONTRIBUTING -->
 ## コントリビュート
 
-TomoriBotはまだベータ版のため、どんなコントリビュートでも**大歓迎**です。特に多言語対応のためのローカライゼーションは非常に助かります。
 
-新しい言語翻訳を追加するには：
+TomoriBotはまだベータ版のため、どんなコントリビュートでも**大歓迎**です。特にローカライゼーションは非常に助かります。
 
-1. **ロケールファイルを作成** `src/locales/`に[Discordロケールコード](https://discord.com/developers/docs/reference#locales)に従ってファイルを作成（例：`es-ES.ts`はスペイン語、`fr.ts`はフランス語、`ko.ts`は韓国語）
+### 新しい言語翻訳を追加するには：
 
-2. **構造をミラーリング** 基準ファイル[`src/locales/en-US.ts`](src/locales/en-US.ts)の構造に従う：
+1. **ロケールファイルを作成** `src/locales/`に[Discordロケールコード](https://discord.com/developers/docs/reference#locales)に従って名前を付けたファイルを作成します（例：スペイン語は`es-ES.ts`、フランス語は`fr.ts`、韓国語は`ko.ts`）
+
+2. **構造をミラーリング** 基準ファイル[`src/locales/en-US.ts`](src/locales/en-US.ts)の構造に従います：
    - すべてのキーとネストされたオブジェクトをコピー
    - `{variable}`のようなプレースホルダーを保持したまま、ユーザー向けテキストをすべて翻訳
 
-3. **プリセット翻訳を追加**（オプションですが推奨） `src/db/seed/02_personas.sql`に：
-   - 各プリセットの`persona_preset_desc`フィールドを翻訳
-   - `preset_attribute_list`、`preset_sample_dialogues_in`、`preset_sample_dialogues_out`配列を翻訳
-   - `src/db/seed/01_models.sql`で`llm_description`フィールドを翻訳してLLM説明を追加（`ja_description`の既存パターンに従う）
-   - `preset_language`をあなたのロケールコードに設定
+3. **プリセット翻訳を追加**（オプションですが推奨） `src/db/seed/catalog/personas/`に：
+   - 各ペルソナのフォルダ（`bratty/`、`default/`、`gloomy/`など）で、`en-US.ts`を`{あなたのロケール}.ts`にコピー
+   - `desc`、`attributes`、`sampleDialoguesIn`、`sampleDialoguesOut`フィールドを翻訳し、`language`をあなたのロケールコードに設定
+   - `src/db/seed/catalog/models.ts`の各行の`ja`フィールドを翻訳してLLMの説明を追加（英語の`desc`と並べて）。ペルソナとモデルはどちらも起動時にこれらのカタログから直接データベースにシードされます（再生成すべきSQLファイルはありません）
 
 4. **翻訳をテスト**：
    ```sh
@@ -603,13 +340,11 @@ TomoriBotはまだベータ版のため、どんなコントリビュートで�
    bun run check-locales
    ```
 
-5. **プルリクエストを送信** 新しいロケールファイルと`src/db/seed/*.sql`への追加内容を含めて
+5. **プルリクエストを送信** 新しいロケールファイルと`src/db/seed/catalog/`への追加内容を含めて送信します
 
-### 新機能にコントリビュートするには
+### 新機能をコントリビュートするには
 
-TomoriBot貢献者向けWikiはまだ開発中ですが、`/docs/`にはTomoriBotのアーキテクチャをより理解するのに役立つ包括的なドキュメントが既にあります。新機能のプルリクエストを送信する前に、`bun run vl`がエラーを返さないことを確認してください。また、リポジトリについてより詳しく学ぶには[DeepWiki](https://deepwiki.com/Bredrumb/TomoriBot)を活用することもできます。
-
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Bredrumb/TomoriBot)
+TomoriBot貢献者向けWikiはまだ開発中ですが、包括的なドキュメントが既に**[こちら](https://docs.tomoribot.app/contributing/)**にあります。プルリクエストを開く前に、[コントリビュートガイドライン](.github/CONTRIBUTING.md)（英語）に従ってください。ブランチ運用、品質ゲートのチェック、そして事前相談なしで歓迎されるコントリビュートの範囲がまとめられています。
 
 <!-- LEGAL -->
 ## 法的事項とライセンス
@@ -618,10 +353,12 @@ TomoriBot貢献者向けWikiはまだ開発中ですが、`/docs/`にはTomoriBo
 - **[利用規約](legal/en-US/terms-of-service.md)** - ボット使用のルールとガイドライン
 - **[プライバシーポリシー](legal/en-US/privacy-policy.md)** - データの取り扱いについて
 
-これらのドキュメントは、Discord内で`/legal terms`および`/legal privacy`コマンドを使用してもアクセスできます。TomoriBotをセルフホスティングしている場合、これらのドキュメントは参考テンプレートとして機能します。あなた自身のデータパイプラインを管理し、GNU Affero General Public License v3.0の下でのデプロイのコンプライアンスに責任を負います。
+これらのドキュメントは、Discord内で`/legal terms`および`/legal privacy`コマンドを使用してもアクセスできます。TomoriBotをセルフホスティングしている場合、これらのドキュメントは参考テンプレートとして機能します。あなたは自分自身のデータを管理し、[**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE)の下でのデプロイのコンプライアンスに責任を負います。
 
 <!-- CONTACT -->
-## 連絡先
+## 連絡先とリンク
+
+**公式ウェブサイト**: [https://docs.tomoribot.app](https://docs.tomoribot.app/ja/)
 
 **プロジェクトリンク**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

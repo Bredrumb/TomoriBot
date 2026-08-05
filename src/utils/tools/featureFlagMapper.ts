@@ -9,25 +9,20 @@ import { log } from "../misc/logger";
  * Feature flag requirements for built-in tools
  * Key: tool name, Value: required feature flag
  */
-export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
-  // Sticker tools
+const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
   select_sticker_for_response: "sticker_usage",
 
-  // Memory/learning tools
   create_long_term_memory: "self_teaching",
   remember_this_fact: "self_teaching",
   update_long_term_memory: "self_teaching",
 
-  // Discord interaction tools
   manage_message: "manage_message",
   create_thread: "thread_creation",
   block_user: "user_blocking",
   unblock_user: "user_blocking",
 
-  // Image generation tools
   generate_image: "image_gen",
 
-  // Video generation tools
   generate_video: "video_gen",
 
   // Unified web search tool (replaces the four LLM-visible Brave entries).
@@ -42,8 +37,7 @@ export const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
  * Feature flag requirements for MCP tools
  * Key: MCP function name, Value: required feature flag
  */
-export const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
-  // DuckDuckGo search functions
+const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
   "web-search": "web_search",
   "felo-search": "web_search",
   fetch: "web_search",
@@ -63,48 +57,20 @@ export const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
  * All feature flag mappings combined
  * Used for comprehensive tool filtering
  */
-export const ALL_TOOL_FEATURE_FLAGS = {
+const ALL_TOOL_FEATURE_FLAGS = {
   ...BUILTIN_TOOL_FEATURE_FLAGS,
   ...MCP_TOOL_FEATURE_FLAGS,
 };
 
-/**
- * Get the required feature flag for a tool
- * @param toolName - Name of the tool to check
- * @returns Required feature flag or undefined if no flag required
- */
-export function getRequiredFeatureFlag(toolName: string): string | undefined {
+function getRequiredFeatureFlag(toolName: string): string | undefined {
   return ALL_TOOL_FEATURE_FLAGS[toolName];
 }
 
 /**
- * Check if a tool requires a specific feature flag
- * @param toolName - Name of the tool to check
- * @param featureFlag - Feature flag to check against
- * @returns True if the tool requires this feature flag
- */
-export function toolRequiresFeatureFlag(toolName: string, featureFlag: string): boolean {
-  return ALL_TOOL_FEATURE_FLAGS[toolName] === featureFlag;
-}
-
-/**
- * Get all tools that require a specific feature flag
- * @param featureFlag - Feature flag to check
- * @returns Array of tool names that require this feature flag
- */
-export function getToolsRequiringFeatureFlag(featureFlag: string): string[] {
-  return Object.entries(ALL_TOOL_FEATURE_FLAGS)
-    .filter(([_, requiredFlag]) => requiredFlag === featureFlag)
-    .map(([toolName]) => toolName);
-}
-
-/**
  * Check if a tool should be filtered out based on feature flag state
- * @param toolName - Name of the tool to check
  * @param featureFlags - Object mapping feature flag names to their enabled state
- * @returns True if the tool should be filtered out (disabled)
  */
-export function shouldFilterTool(toolName: string, featureFlags: Record<string, boolean>): boolean {
+function shouldFilterTool(toolName: string, featureFlags: Record<string, boolean>): boolean {
   const requiredFlag = getRequiredFeatureFlag(toolName);
 
   // If no feature flag is required, don't filter
@@ -124,9 +90,7 @@ export function shouldFilterTool(toolName: string, featureFlags: Record<string, 
 
 /**
  * Filter an array of tool names based on feature flag state
- * @param toolNames - Array of tool names to filter
  * @param featureFlags - Object mapping feature flag names to their enabled state
- * @returns Array of tool names that should be available (not filtered)
  */
 export function filterToolsByFeatureFlags(toolNames: string[], featureFlags: Record<string, boolean>): string[] {
   return toolNames.filter((toolName) => !shouldFilterTool(toolName, featureFlags));
@@ -134,8 +98,6 @@ export function filterToolsByFeatureFlags(toolNames: string[], featureFlags: Rec
 
 /**
  * Convert Tomori config to feature flags object
- * @param config - Tomori configuration object
- * @returns Feature flags object with consistent naming
  */
 export function configToFeatureFlags(config: {
   sticker_usage_enabled: boolean;

@@ -1,0 +1,22 @@
+---
+title: "設定と管理"
+sidebar:
+  label: "概要"
+  groupLabel: "設定と管理"
+  order: 4
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBotの脳を接続し、サーバーで実行するための設定です。プロバイダー、管理者のコストと安全管理、成人向けコンテンツの年齢制限、利用状況の分析などが含まれます。
+
+<CardGrid>
+  <LinkCard title="プロバイダーとモデル" href="/ja/features/setup-administration/providers-and-models/"
+    description="プロバイダーごとのAPIキー、カスタムエンドポイント、およびサポート対象のプロバイダー一覧。" />
+  <LinkCard title="サーバーのモデレーション" href="/ja/features/setup-administration/server-moderation/"
+    description="思考ログ、クオータ、ホワイトリスト、BYOK必須モードなど、コストと安全の管理。" />
+  <LinkCard title="年齢制限のあるコマンド" href="/ja/features/setup-administration/age-restricted-commands/"
+    description="Discordの年齢制限付きチャンネルでの無修正の出力と成人向けメディアのオプトイン方法と動作。" />
+  <LinkCard title="統計とインサイト" href="/ja/features/setup-administration/stats-and-insights/"
+    description="利用状況のトラッキングと、共有可能なインフォグラフィックカード。" />
+</CardGrid>

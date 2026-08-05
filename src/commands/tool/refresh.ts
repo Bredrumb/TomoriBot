@@ -15,10 +15,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'refresh' command.
  * Sends an embed that acts as a visual separator and triggers conversation history reset.
- * @param client - The Discord client instance.
- * @param interaction - The chat input command interaction.
- * @param _userData - The user data (unused in this command).
- * @param locale - The user's preferred locale.
  */
 export async function execute(
   _client: Client,
@@ -26,13 +22,11 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Clear all short-term memories for this channel (for all users)
   if (interaction.channel) {
     clearShortTermMemoryForChannel(interaction.channel.id);
     log.info(`[refreshCommand] Cleared short-term memories for channel - channelId=${interaction.channel.id}`);
   }
 
-  // Send an embed that includes the keyword "refresh" in the description
   // This keyword is detected by the tomoriChat handler to reset context.
   // Let helper functions manage interaction state
   await replyInfoEmbed(

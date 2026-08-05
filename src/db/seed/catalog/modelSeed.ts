@@ -3,7 +3,7 @@
 // This is the single source of truth for seeded models: the catalog is rendered
 // into INSERT … ON CONFLICT statements and executed directly during database
 // initialization (see `seedModelsFromCatalog`). There is no generated .sql file
-// to keep in sync — editing `models.ts` is all that's needed.
+// to keep in sync, so editing `models.ts` is all that's needed.
 //
 // The same row tuples and ON CONFLICT upserts used by the old 01_models.sql are
 // reproduced here, so seeding behavior (idempotent upsert on every startup) is
@@ -32,14 +32,14 @@ interface TableSpec<T extends RowLike> {
   columns: string;
   /** Positional value tuple for one row, without the surrounding parentheses. */
   tuple: (m: T) => string;
-  /** `ON CONFLICT ...` block (no trailing semicolon — executed via client.unsafe). */
+  /** `ON CONFLICT ...` block (no trailing semicolon: executed via client.unsafe). */
   onConflict: string;
   /** Whether this table has an is_smartest column (only `llms`). */
   hasSmartest: boolean;
   sections: ModelSection<T>[];
 }
 
-// 2. Per-table specs (column order MUST match the column list)
+// Per-table specs (column order MUST match the column list)
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
@@ -66,6 +66,12 @@ const llmSpec: TableSpec<LlmInput> = {
       num(m.inputPricePerMillion),
       num(m.outputPricePerMillion),
     ].join(", "),
+  // The trailing WHERE guard is the key protection for scoped OpenRouter registrations:
+  // a row that a server/user has promoted to a scoped registration (is_scoped_registration = true)
+  // is user-owned, not a curated catalog entry, so the per-boot reseed must leave it untouched.
+  // Without this guard the reseed would reset is_scoped_registration = false and re-apply
+  // is_deprecated, silently reverting a user's deprecated-model registration on every restart.
+  // Curated (non-scoped, possibly NULL) rows still upsert normally and get normalized to false.
   onConflict: `ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
   ja_description = EXCLUDED.ja_description,
@@ -85,7 +91,8 @@ const llmSpec: TableSpec<LlmInput> = {
   supports_prefix_completion = EXCLUDED.supports_prefix_completion,
   input_price_per_million = EXCLUDED.input_price_per_million,
   output_price_per_million = EXCLUDED.output_price_per_million,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(llms.is_scoped_registration, false) = false`,
   hasSmartest: true,
   sections: llmSections,
 };
@@ -104,6 +111,8 @@ const imageSpec: TableSpec<ImageInput> = {
       desc(m.desc),
       desc(m.ja),
     ].join(", "),
+  // WHERE guard: preserve scoped OpenRouter image registrations across the per-boot reseed.
+  // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   ja_description = EXCLUDED.ja_description,
@@ -113,7 +122,8 @@ const imageSpec: TableSpec<ImageInput> = {
   is_uncensored = EXCLUDED.is_uncensored,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(image_diffusion_models.is_scoped_registration, false) = false`,
   hasSmartest: false,
   sections: imageSections,
 };
@@ -131,6 +141,8 @@ const videoSpec: TableSpec<VideoInput> = {
       desc(m.desc),
       desc(m.ja),
     ].join(", "),
+  // WHERE guard: preserve scoped OpenRouter video registrations across the per-boot reseed.
+  // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
   ja_description = EXCLUDED.ja_description,
@@ -139,7 +151,8 @@ const videoSpec: TableSpec<VideoInput> = {
   is_free = EXCLUDED.is_free,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(video_generation_models.is_scoped_registration, false) = false`,
   hasSmartest: false,
   sections: videoSections,
 };
@@ -157,6 +170,8 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
       desc(m.desc),
       desc(m.ja),
     ].join(", "),
+  // WHERE guard: preserve scoped OpenRouter embedding registrations across the per-boot reseed.
+  // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_family = EXCLUDED.model_family,
   model_description = EXCLUDED.model_description,
@@ -165,12 +180,12 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
   is_deprecated = EXCLUDED.is_deprecated,
   is_scoped_registration = false,
   provider = EXCLUDED.provider,
-  updated_at = CURRENT_TIMESTAMP`,
+  updated_at = CURRENT_TIMESTAMP
+  WHERE COALESCE(embedding_models.is_scoped_registration, false) = false`,
   hasSmartest: false,
   sections: embeddingSections,
 };
 
-// 3. Validation
 function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
   return spec.sections.flatMap((s) => s.rows);
 }
@@ -179,7 +194,6 @@ function rowsOf<T extends RowLike>(spec: TableSpec<T>): T[] {
 function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): void {
   const all = rowsOf(spec);
 
-  // 3a. Unique (provider, codename)
   const seen = new Set<string>();
   for (const r of all) {
     const key = `${r.provider}/${r.codename}`;
@@ -187,7 +201,6 @@ function validateSpec<T extends RowLike>(spec: TableSpec<T>, errors: string[]): 
     seen.add(key);
   }
 
-  // 3b. Per-provider default/smartest invariants
   const byProvider = new Map<string, T[]>();
   for (const r of all) {
     const list = byProvider.get(r.provider) ?? [];
@@ -227,7 +240,6 @@ const REQUIRED_PREFIX_PROVIDERS = new Set<string>(["deepseek", "zai", "zaicoding
  * (D4), a single un-flagged model would silently emit an invalid body for that backend.
  *
  * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @param rows - The llms catalog rows to validate.
  * @returns A list of violation messages (empty when valid).
  */
 export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
@@ -250,7 +262,7 @@ export function collectStrictChatFlagViolations(rows: LlmInput[]): string[] {
 // Providers billed per-token by the live `/tool estimate cost` path. Every active, billable row of these
 // providers must carry an explicit catalog price: the env-based price fallback has been removed, so an
 // unpriced row makes resolveModelPricing (src/commands/tool/estimate/cost.ts) return null and the command
-// reports "pricing unavailable". OpenRouter is intentionally absent — it is priced live from the OpenRouter
+// reports "pricing unavailable". OpenRouter is intentionally absent, because it is priced live from the OpenRouter
 // API cache, with any catalog price acting only as a cache-miss fallback.
 const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "google",
@@ -276,19 +288,15 @@ const PRICING_PENDING_CODENAMES = new Set<string>(["gemini-3.5-pro"]);
  * not published a rate yet).
  *
  * Pure and exported so the invariant can be unit-tested with crafted rows.
- * @param rows - The llms catalog rows to validate.
  * @returns A list of violation messages (empty when valid).
  */
-export function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
+function collectMeteredPriceViolations(rows: LlmInput[]): string[] {
   const errors: string[] = [];
   for (const row of rows) {
-    // 1. Only first-party metered providers are gated
     if (!METERED_FIRST_PARTY_PROVIDERS.has(row.provider)) continue;
-    // 2. Skip rows that are intentionally unpriced
     if (row.isDeprecated || row.isFree) continue;
     if (row.codename.includes("gemma")) continue;
     if (PRICING_PENDING_CODENAMES.has(row.codename)) continue;
-    // 3. The remaining active, billable rows MUST carry both prices
     const hasInput = typeof row.inputPricePerMillion === "number";
     const hasOutput = typeof row.outputPricePerMillion === "number";
     if (!hasInput || !hasOutput) {
@@ -315,9 +323,6 @@ export function validateModels(): string[] {
   return errors;
 }
 
-export const validateCatalog = validateModels;
-
-// 4. Rendering
 function renderStatement<T extends RowLike>(spec: TableSpec<T>): string {
   const values = rowsOf(spec)
     .map((m) => `  (${spec.tuple(m)})`)
@@ -338,12 +343,10 @@ export function buildModelSeedStatements(): string[] {
   ];
 }
 
-// 5. Runtime entry point
 /**
  * Seed all model tables from the typed catalog. Validates invariants first and
  * throws before touching the database if the catalog is malformed, then runs the
  * idempotent upsert for each table.
- * @param client The SQL client to execute against.
  */
 export async function seedModelsFromCatalog(client: SQL): Promise<void> {
   const violations = validateModels();

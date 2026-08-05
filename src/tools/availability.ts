@@ -1,5 +1,12 @@
-import { ChannelType } from "discord.js";
-import type { Tool, ToolAssemblyState, ToolAvailabilityLlmState, ToolContext } from "@/types/tool/interfaces";
+import { type BaseGuildTextChannel, ChannelType, type Client } from "discord.js";
+import type { TomoriState } from "@/types/db/schema";
+import type {
+  StreamingContext,
+  Tool,
+  ToolAssemblyState,
+  ToolAvailabilityLlmState,
+  ToolContext,
+} from "@/types/tool/interfaces";
 import { assembleToolsForContext } from "@/tools/assembly";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { getCachedEnabledGuildMcpConfigs } from "@/utils/cache/guildMcpConfigCache";
@@ -28,10 +35,9 @@ export function getAvailableToolsForProvider(tools: Iterable<Tool>, provider: st
 
   for (const tool of tools) {
     try {
-      const isToolAvailable =
-        "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-          ? tool.isAvailableForContext(provider, context)
-          : tool.isAvailableFor(provider);
+      const isToolAvailable = tool.isAvailableForContext
+        ? tool.isAvailableForContext(provider, context)
+        : tool.isAvailableFor(provider);
 
       if (!isToolAvailable) {
         continue;
@@ -60,6 +66,50 @@ export function getAvailableToolsForProvider(tools: Iterable<Tool>, provider: st
   );
 
   return availableTools;
+}
+
+/**
+ * Drops tools whose live-turn availability has lapsed (per-turn dedup flags,
+ * active model capabilities) from the set a provider is about to declare to the
+ * LLM, so a withdrawn tool is never advertised and then rejected at dispatch.
+ *
+ * Runs at declaration time, before any Discord interaction exists, so the
+ * synthesized context carries placeholder `channel`/`client` values: an
+ * `isAvailableForContext` implementation may read only `streamContext` and
+ * `tomoriState`.
+ */
+export function applyStreamContextAvailability(params: {
+  providerLabel: string;
+  provider: string;
+  builtInTools: Tool[];
+  streamContext?: StreamingContext | null;
+  tomoriState: TomoriState;
+}): Tool[] {
+  const { providerLabel, provider, builtInTools, streamContext, tomoriState } = params;
+  if (!streamContext) {
+    return builtInTools;
+  }
+
+  const declarationContext: ToolContext = {
+    streamContext,
+    provider,
+    channel: {} as BaseGuildTextChannel,
+    client: {} as Client,
+    tomoriState,
+    locale: "en-US",
+  };
+
+  const filteredTools = builtInTools.filter(
+    (tool) => tool.isAvailableForContext?.(provider, declarationContext) !== false,
+  );
+
+  if (filteredTools.length !== builtInTools.length) {
+    log.info(
+      `${providerLabel}: Applied streaming context filtering: ${builtInTools.length} -> ${filteredTools.length} built-in tools`,
+    );
+  }
+
+  return filteredTools;
 }
 
 export function getAvailableToolsForContext(
@@ -126,7 +176,7 @@ export async function getAvailableToolsWithMCP(
 
       let filteredByFeatureFlags = filterToolsByFeatureFlags(allMCPFunctionNames, featureFlags);
 
-      // 1. Unconditionally hide internal MCP function names from the LLM.
+      // Unconditionally hide internal MCP function names from the LLM.
       //    They are now consumed only via the unified `web_search` tool through
       //    `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`; bundled `fetch`
       //    is consumed only via `fetch_url` -> `McpFetchEngine`.
@@ -189,7 +239,7 @@ export async function getAvailableToolsWithMCP(
         const guildServerTypes = new Set(enabledConfigs.map((c) => c.server_type).filter(Boolean));
 
         if (guildServerTypes.has("web_search")) {
-          // 1. After the unified `web_search` tool migration the only LLM-visible
+          // After the unified `web_search` tool migration the only LLM-visible
           //    search name is `web_search` itself. The previous brave_*/DDG MCP
           //    names are no longer LLM-visible, so we just need to dedup against
           //    the unified tool name when a guild brings its own web_search MCP.
@@ -238,7 +288,7 @@ export async function getAvailableToolsWithMCP(
       const activeSpeechEndpoint = await resolveActiveSpeechEndpoint(serverIdNumber);
       const hasElevenLabsOptKey = await hasOptApiKey(serverIdNumber, ELEVENLABS_SERVICE_NAME);
       const hasSpeechProvider = Boolean(activeSpeechEndpoint) || hasElevenLabsOptKey;
-      // 1. Read split-table model slots: diffusion_model_id/video_model_id live in
+      // Read split-table model slots: diffusion_model_id/video_model_id live in
       //    server_model_configs; nai_diffusion_model_id lives in server_novelai_imagegen_configs.
       const [toolConfigRow] = await sql<
         [{ diffusion_model_id: number | null; nai_diffusion_model_id: number | null; video_model_id: number | null }]

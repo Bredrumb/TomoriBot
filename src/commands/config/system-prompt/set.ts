@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Command: /config system-prompt set
  * Allows users to set a custom system prompt up to 16000 characters
  * using a 4-part modal (4000 chars each, first part required)
@@ -13,6 +13,12 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
+import {
+  buildTextPreview,
+  CONFIRMATION_PREVIEW_BUDGET,
+  textPreviewFooterKey,
+  textPreviewFooterVars,
+} from "@/utils/text/textPreview";
 
 const MODAL_CUSTOM_ID = "config_prompt_change_modal";
 const PROMPT_PART_MAX_LENGTH = 4000;
@@ -20,23 +26,16 @@ const PROMPT_PART_COUNT = 4;
 
 /**
  * Configure the slash command subcommand metadata
- * @returns Configured SlashCommandSubcommandBuilder
  */
 export function configureSubcommand(): SlashCommandSubcommandBuilder {
   return new SlashCommandSubcommandBuilder()
     .setName("set")
     .setDescription("Set a custom system prompt to guide my behavior")
-    .setDescriptionLocalizations({
-      // Add localizations as needed
-    });
+    .setDescriptionLocalizations({});
 }
 
 /**
  * Execute the /config system-prompt set command
- * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
- * @param userData - User data from database
- * @param locale - User's locale for localization
  */
 export async function execute(
   _client: Client,
@@ -44,7 +43,7 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. ALL validation BEFORE try-catch block (CLAUDE.md pattern)
+  // ALL validation BEFORE try-catch block
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -55,7 +54,6 @@ export async function execute(
     return;
   }
 
-  // 2. Determine server context (guild or DM)
   const serverId = interaction.guildId ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
 
@@ -69,7 +67,7 @@ export async function execute(
     return;
   }
 
-  // 3. Declare modalSubmitInteraction outside try-catch for error handling
+  // Declare modalSubmitInteraction outside try-catch for error handling
   let modalSubmitInteraction: ModalSubmitInteraction | undefined;
 
   try {
@@ -79,7 +77,6 @@ export async function execute(
       PROMPT_PART_MAX_LENGTH,
     );
 
-    // 4. Show modal with 4 text fields (first required, others optional)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -134,16 +131,14 @@ export async function execute(
       return;
     }
 
-    // 5. ASSIGN (not declare) modalSubmitInteraction
+    // ASSIGN (not declare) modalSubmitInteraction
     modalSubmitInteraction = modalResult.interaction;
 
-    // 6. Safety check for modalSubmitInteraction
     if (!modalSubmitInteraction) {
       log.error("Modal submit interaction is undefined after successful submit");
       return;
     }
 
-    // 7. Extract and concatenate all parts
     const systemPrompt = combineModalPromptParts(
       [
         modalResult.values?.prompt_part1 || "",
@@ -154,7 +149,6 @@ export async function execute(
       PROMPT_PART_MAX_LENGTH,
     );
 
-    // 8. Validate non-empty
     if (!systemPrompt) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.prompt.change.empty_prompt_title",
@@ -165,18 +159,20 @@ export async function execute(
       return;
     }
 
-    // 9. Update database
     await configRepository.updateChatConfig(tomoriState.server_id, { system_prompt: systemPrompt });
 
-    // 10. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverId);
 
-    // 11. Success response with preview
-    const preview = systemPrompt.substring(0, 200);
+    // Success response with a fence-safe preview. The footer only appears
+    //     when the prompt actually exceeded the preview width.
+    const preview = buildTextPreview(systemPrompt, CONFIRMATION_PREVIEW_BUDGET);
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.config.prompt.change.success_title",
       descriptionKey: "commands.config.prompt.change.success_description",
-      descriptionVars: { preview },
+      descriptionVars: { preview: preview.text },
+      footerKey: textPreviewFooterKey(preview),
+      footerVars: textPreviewFooterVars(preview),
       color: ColorCode.SUCCESS,
       flags: MessageFlags.Ephemeral,
     });
@@ -185,7 +181,7 @@ export async function execute(
   } catch (error) {
     log.error("Failed to set custom system prompt:", error as Error);
 
-    // 11. Use correct interaction for error reply (fallback pattern)
+    // Use correct interaction for error reply (fallback pattern)
     const replyTarget = modalSubmitInteraction ?? interaction;
 
     await replyInfoEmbed(replyTarget, locale, {

@@ -72,7 +72,6 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
       presences += guild.presences.cache.size;
       voiceStates += guild.voiceStates.cache.size;
 
-      // Messages and threads live inside text-capable channels
       for (const channel of guild.channels.cache.values()) {
         if ("messages" in channel) {
           const mgr = (channel as unknown as { messages?: { cache?: { size?: number } } }).messages;
@@ -83,9 +82,7 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
           if (mgr?.cache?.size) threads += mgr.cache.size;
         }
       }
-    } catch {
-      // Ignore unavailable guilds (shard disconnect, partial data, etc.)
-    }
+    } catch {}
   }
 
   return {
@@ -139,7 +136,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     openrouterOnDemandCapability: getOpenRouterOnDemandCapabilityCacheSize(),
     novelaiSubscription: getNovelaiSubscriptionCacheSize(),
 
-    // Webhook manager (no TTL — watch for unbounded growth)
+    // Webhook manager (no TTL, watch for unbounded growth)
     webhookChannel: webhook.webhookChannel,
     webhookPersona: webhook.webhookPersona,
     webhookMutationLocks: webhook.webhookMutationLocks,
@@ -173,17 +170,15 @@ function emitSnapshot(client: Client): void {
 }
 
 /**
- * Start the cache metrics interval. Only runs in production — these logs are
+ * Start the cache metrics interval. Only runs in production, these logs are
  * intended for CloudWatch Logs Insights and are not useful in local dev.
- * Safe to call multiple times — a subsequent call is a no-op if already running.
+ * Safe to call multiple times, so a subsequent call is a no-op if already running.
  *
- * @param client - Discord client (needed for `.guilds.cache` iteration)
  * @param intervalMs - Optional override; defaults to CACHE_METRICS_INTERVAL_MS env or 5 min
  */
 export function initializeCacheMetricsLogger(client: Client, intervalMs?: number): void {
-  // Skip in non-production — these snapshots are for CloudWatch, not local dev
+  // Skip in non-production, so these snapshots are for CloudWatch, not local dev
   if (process.env.RUN_ENV !== "production") {
-    //log.info("Cache metrics logger skipped (non-production environment)");
     return;
   }
 
@@ -192,14 +187,13 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
     return;
   }
 
-  // 1. Resolve interval from explicit argument, env var, or fallback default
+  // Resolve interval from explicit argument, env var, or fallback default
   const resolved = intervalMs ?? Number.parseInt(process.env.CACHE_METRICS_INTERVAL_MS || "", 10);
   const finalInterval = Number.isFinite(resolved) && resolved > 0 ? resolved : DEFAULT_INTERVAL_MS;
 
-  // 2. Emit an immediate sample so CloudWatch has a baseline right after boot
+  // Emit an immediate sample so CloudWatch has a baseline right after boot
   emitSnapshot(client);
 
-  // 3. Schedule periodic samples
   intervalId = setInterval(() => emitSnapshot(client), finalInterval);
 
   log.success(`Cache metrics logger started (interval: ${finalInterval / 1000}s)`);

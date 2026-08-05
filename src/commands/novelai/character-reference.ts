@@ -8,7 +8,13 @@ import {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, userRepository } from "@/utils/db/repositories";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  PersonaWorkflowUpdateError,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
@@ -200,32 +206,38 @@ async function handleUserTarget(
 }
 
 async function handlePersonaTarget(
-  interaction: ChatInputCommandInteraction,
+  message: PersonaWorkflowMessageController,
   locale: string,
+  guildId: string,
   selectedPersona: TomoriState,
   imageAttachment: Attachment | null,
 ): Promise<void> {
-  if (!selectedPersona.persona_id || !interaction.guild) {
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: "general.errors.invalid_option_title",
-      descriptionKey: "general.errors.invalid_option_description",
-      color: ColorCode.ERROR,
-    });
+  const personaId = selectedPersona.persona_id;
+  if (!personaId) {
+    await message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.errors.invalid_option_title",
+        descriptionKey: "general.errors.invalid_option_description",
+        color: ColorCode.ERROR,
+      }),
+    );
     return;
   }
 
-  const personaId = selectedPersona.persona_id;
-  const guildId = interaction.guild.id;
   let pngBuffer: Buffer | null = null;
 
   if (imageAttachment) {
     const prepared = await prepareAttachmentForStorage(imageAttachment);
     if (!prepared.success) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: prepared.titleKey,
-        descriptionKey: prepared.descriptionKey,
-        color: ColorCode.ERROR,
-      });
+      await message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: prepared.titleKey,
+          descriptionKey: prepared.descriptionKey,
+          color: ColorCode.ERROR,
+        }),
+      );
       return;
     }
 
@@ -247,26 +259,32 @@ async function handlePersonaTarget(
   });
 
   if (!updated) {
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
+    await message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "general.errors.update_failed_title",
+        descriptionKey: "general.errors.update_failed_description",
+        color: ColorCode.ERROR,
+      }),
+    );
     return;
   }
 
-  await replyInfoEmbed(interaction, locale, {
-    titleKey: imageAttachment
-      ? "commands.novelai.character-reference.success_title"
-      : "commands.novelai.character-reference.cleared_title",
-    descriptionKey: imageAttachment
-      ? "commands.novelai.character-reference.success_persona_description"
-      : "commands.novelai.character-reference.cleared_persona_description",
-    descriptionVars: {
-      persona_name: selectedPersona.persona_nickname,
-    },
-    color: ColorCode.SUCCESS,
-  });
+  await message.replace(
+    buildPersonaWorkflowNotice({
+      locale,
+      titleKey: imageAttachment
+        ? "commands.novelai.character-reference.success_title"
+        : "commands.novelai.character-reference.cleared_title",
+      descriptionKey: imageAttachment
+        ? "commands.novelai.character-reference.success_persona_description"
+        : "commands.novelai.character-reference.cleared_persona_description",
+      descriptionVars: {
+        persona_name: selectedPersona.persona_nickname,
+      },
+      color: ColorCode.SUCCESS,
+    }),
+  );
 }
 
 export async function execute(
@@ -277,6 +295,7 @@ export async function execute(
 ): Promise<void> {
   const target = interaction.options.getString("target", true);
   const imageAttachment = interaction.options.getAttachment("image");
+  let personaWorkflowStarted = false;
 
   try {
     if (target === TARGET_ME) {
@@ -312,7 +331,10 @@ export async function execute(
       return;
     }
 
-    const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
+    const guildId = interaction.guild.id;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const allPersonas = await personaRepository.loadAllForServer(guildId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -322,27 +344,63 @@ export async function execute(
       return;
     }
 
-    const personaResult = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+    personaWorkflowStarted = true;
+    await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
       titleKey: "commands.novelai.character-reference.persona_select_title",
       color: ColorCode.INFO,
+      onSelected: async (selection) => {
+        const { message } = await selection.beginInPlaceWork();
+        const selectedPersona = selection.persona;
+
+        try {
+          if (!selectedPersona.persona_id) {
+            await message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          await message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.persona_workflow.loading_title",
+              descriptionKey: "general.persona_workflow.loading_description",
+              color: ColorCode.INFO,
+            }),
+          );
+          await handlePersonaTarget(message, locale, guildId, selectedPersona, imageAttachment);
+        } catch (error) {
+          if (error instanceof PersonaWorkflowUpdateError) throw error;
+          await log.error("Error in /novelai character-reference persona workflow", error, {
+            serverId: selectedPersona.server_id,
+            personaId: selectedPersona.persona_id,
+            errorType: "CommandExecutionError",
+            metadata: {
+              command: "novelai character-reference",
+              target,
+              guildId: interaction.guild?.id ?? null,
+              userDiscId: userData.user_disc_id,
+            },
+          });
+          await message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.unknown_error_title",
+              descriptionKey: "general.errors.unknown_error_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+        }
+
+        return completePersonaWorkflow();
+      },
     });
-
-    if (!personaResult.success || personaResult.selectedIndex === undefined) {
-      return;
-    }
-
-    const selectedPersona = allPersonas[personaResult.selectedIndex] ?? null;
-    if (!selectedPersona?.persona_id) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.invalid_option_title",
-        descriptionKey: "general.errors.invalid_option_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    await handlePersonaTarget(interaction, locale, selectedPersona, imageAttachment);
   } catch (error) {
     await log.error("Error in /novelai character-reference command", error, {
       errorType: "CommandExecutionError",
@@ -354,6 +412,7 @@ export async function execute(
       },
     });
 
+    if (personaWorkflowStarted) return;
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

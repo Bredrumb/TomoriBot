@@ -20,7 +20,7 @@ type VoiceSampleStoreOptions = {
 
 type VoiceSampleStorageConfig =
   | { backend: "gcs"; bucket: string; prefix: string; publicBaseUrl: string }
-  | { backend: "s3"; bucket: string; prefix: string; publicBaseUrl: string; region: string };
+  | { backend: "s3"; bucket: string; prefix: string; publicBaseUrl: string; region: string; endpoint?: string };
 
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
 const LOCAL_VOICE_SAMPLE_BASE_DIR = path.resolve(process.cwd(), "data", "voice-samples");
@@ -29,6 +29,7 @@ const SPEECH_SAMPLE_MAX_MB = Math.max(1, Number.parseInt(process.env.SPEECH_SAMP
 let cachedGcsStorage: Storage | null = null;
 let cachedS3Client: S3Client | null = null;
 let cachedS3Region: string | null = null;
+let cachedS3Endpoint: string | undefined;
 
 function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
   if (!IS_PRODUCTION) {
@@ -58,11 +59,12 @@ function getVoiceSampleStorageConfig(): VoiceSampleStorageConfig | null {
     process.env.AVATAR_S3_REGION?.trim() ||
     process.env.AWS_REGION?.trim() ||
     "us-east-1";
+  const endpoint = process.env.S3_ENDPOINT?.trim() || undefined;
   const prefix = (process.env.VOICE_SAMPLE_S3_PREFIX || "voice-samples").replace(/^\/+/, "").replace(/\/+$/, "");
   const publicBaseUrl =
     process.env.VOICE_SAMPLE_PUBLIC_BASE_URL?.trim() || `https://${s3Bucket}.s3.${region}.amazonaws.com`;
 
-  return { backend: "s3", bucket: s3Bucket, prefix, publicBaseUrl, region };
+  return { backend: "s3", bucket: s3Bucket, prefix, publicBaseUrl, region, endpoint };
 }
 
 function getGcsStorage(): Storage {
@@ -72,10 +74,14 @@ function getGcsStorage(): Storage {
   return cachedGcsStorage;
 }
 
-function getS3Client(region: string): S3Client {
-  if (!cachedS3Client || cachedS3Region !== region) {
+function getS3Client(region: string, endpoint?: string): S3Client {
+  if (!cachedS3Client || cachedS3Region !== region || cachedS3Endpoint !== endpoint) {
     cachedS3Region = region;
-    cachedS3Client = new S3Client({ region });
+    cachedS3Endpoint = endpoint;
+    cachedS3Client = new S3Client({
+      region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    });
   }
   return cachedS3Client;
 }
@@ -190,7 +196,7 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
 
       // S3 path
       try {
-        await getS3Client(config.region).send(
+        await getS3Client(config.region, config.endpoint).send(
           new PutObjectCommand({
             Bucket: config.bucket,
             Key: key,
@@ -278,7 +284,7 @@ export async function deleteStoredVoiceSample(reference: string): Promise<boolea
 
     // S3 path
     try {
-      await getS3Client(config.region).send(
+      await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({
           Bucket: config.bucket,
           Key: key,

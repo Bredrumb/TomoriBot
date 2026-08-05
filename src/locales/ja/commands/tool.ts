@@ -1,5 +1,3 @@
-// locales/ja/commands/tool.ts
-
 export default {
   tool: {
     ping: {
@@ -150,7 +148,7 @@ export default {
     refresh: {
       description: `最近の会話履歴をクリアします。`,
       title: `🧹 会話履歴がクリアされました`,
-      response: `コンテキストがリフレッシュされました。これより上のすべてのメッセージは無視されます。`,
+      response: `これより上のすべてのメッセージは無視されます。\n このチャンネルの[STM](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm)もクリアされました。`,
       footer: `この埋め込みを削除すると、以前のメッセージがもう一度含まれるようになります。`,
     },
     status: {
@@ -321,6 +319,7 @@ export default {
       field_user_byok_enabled: `有効。ユーザー発言に対する応答では各メンバーの個人プロバイダーが必要です。{toggle_command} で切り替えられます。`,
       field_user_byok_disabled: `無効。個人プロバイダーがない場合でもユーザー発言はサーバープロバイダーにフォールバックできます。{toggle_command} で切り替えられます。`,
       field_tool_use: `ツール使用`,
+      field_verbatim_tool_calling: `逐語ツール呼び出し`,
       field_prompt_snapshot: `プロンプトスナップショット`,
       field_short_term_memory: `短期記憶`,
       field_stm_privacy_bypass: `STMプライバシーバイパス`,

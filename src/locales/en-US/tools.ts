@@ -1,5 +1,3 @@
-// locales/en-US/tools.ts
-
 export default {
   tools: {
     generate_image: {
@@ -19,6 +17,8 @@ export default {
       quota_resets_in_days: `Quota resets in {days} day(s).`,
       quota_remaining: `You have {remaining} video(s) remaining for today.`,
       file_too_large: `The generated video ({size_mb} MB) exceeds Discord's 25 MB file size limit.`,
+      reference_unsupported: `The selected OpenRouter model \`{model}\` cannot use an image as the exact first frame. Remove the reference image or choose a compatible video model.`,
+      loop_unsupported: `The selected OpenRouter model \`{model}\` cannot use a last frame for looping video. Disable looping or choose a compatible video model.`,
     },
     generate_image_nai: {
       no_google_api_key: `Inpainting requires saved Google provider credentials for image segmentation. Add them with \`/provider add\`, or switch to the Google provider.`,
@@ -83,6 +83,7 @@ export default {
       notice_reference_line: `Reference: {message_url}`,
       notice_reference_count_line: `Using {count} reference image(s).`,
       generating_footer: `This may take 1-3 minutes.`,
+      generated_after_seconds_line: `Generated in {seconds} seconds`,
     },
     document: {
       reading_title: `📄 Reading File Contents...`,
@@ -115,7 +116,7 @@ export default {
     },
     vision: {
       analyzing_title: `🖼️  Analyzing Image...`,
-      analyzing_description: `Current model is non-vision; using configured vision model to analyze images.`,
+      analyzing_description: `Current model is non-vision; using configured \`/model vision\` ({model}) to analyze images.`,
       analyzing_footer: `This may take a moment depending on image count`,
     },
     gif: {
@@ -126,7 +127,7 @@ export default {
     fetch: {
       fetch_url_title: `🌐  Reading Webpage...`,
       fetch_failed_description: `I couldn't fetch that page: {error}`,
-      private_network_blocked_description: `I couldn't fetch that page because it points to a private or internal network address. TomoriBot blocks those by default with \`FETCH_URL_ALLOW_PRIVATE_NETWORK=false\`. {error}`,
+      private_network_blocked_description: `I couldn't fetch that page because it points to a private or internal network address. TomoriBot blocks those in production unless the host sets \`FETCH_URL_ALLOW_PRIVATE_NETWORK=true\`. {error}`,
       reading_title: `🌐  Reading Webpage...`,
       reading_title_page: `🌐  Reading Webpage (Page {page})...`,
       reading_description: `Fetching and reading: {url}`,

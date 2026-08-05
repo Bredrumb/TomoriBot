@@ -6,6 +6,7 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 
 /**
  * Configure the /help data subcommand
@@ -17,10 +18,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help data command
  * Displays data management and privacy information
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -29,7 +26,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Get command mentions for cross-references
     const memoryPersonalExportMention = commandRegistry.getCommandMention("memory", "personal", "export");
     const memoryServerExportMention = commandRegistry.getCommandMention("memory", "server", "export");
     const personalConfigExportMention = commandRegistry.getCommandMention("personal", "config", "export");
@@ -46,13 +42,13 @@ export async function execute(
     const personalPrivacyMention = commandRegistry.getCommandMention("personal", "privacy");
     const configPermissionsMention = commandRegistry.getCommandMention("config", "tools", "manage");
 
-    // Use replySummaryEmbed to show structured data management guide
     await replySummaryEmbed(
       interaction,
       locale,
       {
         titleKey: "commands.help.data.title",
         descriptionKey: "commands.help.data.embed_description",
+        docsPath: DOCS_PATHS.DATA_HANDLING,
         color: ColorCode.INFO,
         fields: [
           {
@@ -100,7 +96,6 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
   } catch (error) {
-    // Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",
@@ -111,7 +106,6 @@ export async function execute(
     };
     await log.error("Error executing /help data command", error as Error, context);
 
-    // Inform user of error (ephemeral)
     const errorMessage = localizer(locale, "general.errors.unknown_error_description");
     try {
       if (interaction.replied || interaction.deferred) {
@@ -126,7 +120,6 @@ export async function execute(
         });
       }
     } catch (replyError) {
-      // Log if even the error reply fails
       log.error("Failed to send error reply for /help data", replyError, context);
     }
   }

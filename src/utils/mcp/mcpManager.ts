@@ -36,9 +36,6 @@ export class MCPManager {
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
 
-  /**
-   * Get the singleton instance of MCPManager
-   */
   static getInstance(): MCPManager {
     if (!MCPManager.instance) {
       MCPManager.instance = new MCPManager();
@@ -78,17 +75,14 @@ export class MCPManager {
     log.info("Starting MCP server initialization...");
     const startTime = Date.now();
 
-    // Log initialization summary
     const configManager = getMCPConfigManager();
     const summary = configManager.getInitializationSummary();
     log.info(
       `MCP Configuration Summary: ${summary.readyToInitialize}/${summary.totalServers} servers ready to initialize${summary.missingApiKeys.length > 0 ? ` (missing API keys: ${summary.missingApiKeys.join(", ")})` : ""}${summary.disabledServers.length > 0 ? ` (disabled: ${summary.disabledServers.join(", ")})` : ""}`,
     );
 
-    // Define available MCP server configurations
     const serverConfigs = this.getServerConfigurations();
 
-    // Initialize each server concurrently with individual error handling
     const initPromises = serverConfigs.map((config) =>
       this.initializeServer(config).catch((error) => {
         log.error(`Failed to initialize MCP server '${config.displayName}':`, error as Error);
@@ -105,44 +99,34 @@ export class MCPManager {
     this.isInitialized = true;
     log.success(`MCP initialization completed in ${duration}ms: ${successCount}/${totalCount} servers connected`);
 
-    // Log available tools
     if (this.mcpTools.size > 0) {
       const toolNames = Array.from(this.mcpTools.keys());
       log.info(`Available MCP tools: ${toolNames.join(", ")}`);
     }
   }
 
-  /**
-   * Get MCP server configurations from the configuration manager
-   */
   private getServerConfigurations(): MCPServerConfig[] {
     const configManager = getMCPConfigManager();
     const enhancedConfigs = configManager.getConfigurationsByPriority(false); // Get all configs
 
-    // Filter configs that should be initialized
     const readyConfigs = enhancedConfigs.filter((config) => configManager.shouldInitializeServer(config));
 
-    // Convert enhanced configs to manager format
     return readyConfigs.map((config) => configManager.toManagerConfiguration(config));
   }
 
-  /**
-   * Initialize a single MCP server
-   */
   private async initializeServer(config: MCPServerConfig): Promise<void> {
     const { name, displayName, command, args, env, timeout = 30000 } = config;
 
     log.info(`Initializing ${displayName} MCP server...`);
 
     try {
-      // Create MCP client
       const client = new MCPClient({
         name: `tomoribot-${name}`,
         version: "1.0.0",
       });
 
-      // Create transport with environment variables
-      // Set NO_COLOR to suppress ANSI color codes which can interfere with filtering
+      // Banner filtering expects plain text, so suppress ANSI sequences at the
+      // child process instead of teaching the filter every terminal escape form.
       const transport = new BannerFilteringStdioClientTransport({
         command,
         args,
@@ -150,14 +134,13 @@ export class MCPManager {
           Object.entries({
             ...process.env,
             ...env,
-            NO_COLOR: "1", // Disable color output
-            FORCE_COLOR: "0", // Explicitly disable color
+            NO_COLOR: "1",
+            FORCE_COLOR: "0",
           }).filter(([, value]) => value !== undefined),
         ) as Record<string, string>,
         stderr: "ignore", // Ignore stderr to suppress advertisement output
       });
 
-      // Connect with timeout
       const connectPromise = client.connect(transport);
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(`${displayName} connection timed out (${timeout}ms)`)), timeout),
@@ -165,16 +148,13 @@ export class MCPManager {
 
       await Promise.race([connectPromise, timeoutPromise]);
 
-      // Convert to CallableTool using Google's mcpToTool()
       const callableTool = mcpToTool(client);
 
-      // Store both client and tool
       this.mcpClients.set(name, client);
       this.mcpTools.set(name, callableTool);
 
       log.success(`${displayName} MCP server connected successfully`);
 
-      // Log available functions for this server
       try {
         const tool = await callableTool.tool();
         if (tool.functionDeclarations) {
@@ -228,7 +208,6 @@ export class MCPManager {
         const tool = await callableTool.tool();
         const availableFunctions = tool.functionDeclarations?.map((f) => f.name) || [];
 
-        // Check if this tool provides any of the requested functions
         const hasMatchingFunction = functionNames.some((name) => availableFunctions.includes(name));
 
         if (hasMatchingFunction) {
@@ -256,9 +235,6 @@ export class MCPManager {
     return this.isInitialized;
   }
 
-  /**
-   * Get connection status for all MCP servers
-   */
   getConnectionStatus(): Record<string, boolean> {
     const status: Record<string, boolean> = {};
 
@@ -269,25 +245,15 @@ export class MCPManager {
     return status;
   }
 
-  /**
-   * Get count of connected MCP servers
-   */
   getConnectedServerCount(): number {
     return this.mcpClients.size;
   }
 
-  /**
-   * Get enhanced server configurations
-   * @returns Array of enhanced server configurations
-   */
   getEnhancedServerConfigurations(): EnhancedMCPServerConfig[] {
     const configManager = getMCPConfigManager();
     return configManager.getConfigurationsByPriority(true); // Get only enabled configs
   }
 
-  /**
-   * Get initialization summary for logging and monitoring
-   */
   getInitializationSummary() {
     const configManager = getMCPConfigManager();
     return configManager.getInitializationSummary();
@@ -318,7 +284,6 @@ export class MCPManager {
   }
 }
 
-// Export convenience function for getting the manager instance
 export function getMCPManager(): MCPManager {
   return MCPManager.getInstance();
 }

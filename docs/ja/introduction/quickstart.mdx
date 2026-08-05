@@ -1,0 +1,78 @@
+---
+title: "TomoriBotの使い方"
+# Keyword-rich <title> targeting "add AI bot to Discord server" queries;
+# replaces Starlight's default for this page only. H1 and sidebar keep the
+# plain title.
+head:
+  - tag: title
+    content: "TomoriBot | 数分でDiscordサーバーにAI Botを追加"
+# Hand-written search snippet; overrides the auto-derived description from
+# routeData.ts middleware.
+description: "数分でTomoriBotをセットアップできます。無料BotをDiscordサーバーに招待し、AI APIキーを接続してチャットを開始しましょう。セルフホストも可能です。"
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside } from "@astrojs/starlight/components";
+
+このガイドでは、TomoriBotでの最初のメッセージまでをゼロから案内します。最も簡単な方法は、準備済みの公開インスタンスを招待することです（[プライバシーポリシー](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md)をご覧ください）。もし独自のインスタンスを稼働させたい場合は、ページ下部の[セルフホスト](#セルフホスト)までジャンプしてください。
+
+## ホストされたBotを使用する
+
+### ステップ1：トモリを招待する
+
+以下のボタンを使用して公開インスタンスを招待し、トモリを参加させたいサーバーを選択します。Botを追加するには、**サーバー管理**権限が必要です。
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **TomoriBotを招待**
+  </LinkButton>
+</div>
+
+直接DMを送ることもできます。セットアップ手順は同じです。
+
+### ステップ2：APIキーを取得する
+
+TomoriBot自体にはAIの頭脳は組み込まれていません。**APIキー**を通じて**プロバイダー**から接続します。トモリは多くのプロバイダーをサポートしており、始めるために必要なのは1つだけです。現在サポートしているプロバイダーの一部を以下に示します。
+
+- **Google Gemini**：汎用性が高く、無料枠があり、すべての機能を実行できます。初めてのセットアップにおすすめです。
+- **OpenRouter**：1つのキーで、最新のテキスト、動画、画像、埋め込みモデルのすべてにアクセスできます。
+- **NovelAI**：サブスクリプションベースで、検閲のない画像、ロールプレイ、ストーリーテリングに適しています。
+- **DeepSeek**、**NVIDIA NIM**、**Anthropic**、**Vertex AI**、**Z.ai**、またはOpenAI互換の任意の**Custom**エンドポイント。
+
+Discord内で`/help api-key`を実行し、プロバイダーを選択してAPIキーの取得方法を確認するか、完全なリストについては[プロバイダーとモデル](/ja/features/setup-administration/providers-and-models/#api-keys)をご覧ください。
+
+<Aside type="caution">
+**APIキーは絶対に他の人と共有しないでください**。TomoriBotのスラッシュコマンドを通じてのみ提供してください。これにより安全に保存・暗号化されます。
+</Aside>
+
+### ステップ3：セットアップを実行する
+
+`/config setup`を実行し、APIキーを貼り付けます。これによりキーが暗号化され、サーバー用のトモリの設定が初期化され、話す準備が整います。各サーバーは独自の独立した設定を保持します。
+
+**推奨：** その後`/server expressions initialize`を実行して、トモリがサーバーのカスタム絵文字やステッカーを正確に使用できるようにしてください。
+
+### ステップ4：チャットを開始する
+
+トモリを**メンション**するか、トモリのメッセージに**返信**するだけです。
+
+```text
+@TomoriBotやっほ～
+```
+
+ここから、トモリがどのように反応し、どのように振る舞うかを形作ることができます。
+- `/persona`で個性を与える：[複数のペルソナ](/ja/features/chatting-personality/multiple-personas/)をご覧ください。
+- `/memory`でトモリに教える：[メモリー](/ja/features/knowledge/memory/)をご覧ください。
+- 他のカスタマイズオプションを探る：[コマンドリファレンス](/ja/features/command-reference/)または[機能](/ja/features/)をご覧ください。
+
+TomoriBotをセットアップすることは、あなたとサーバーのメンバーがトモリの`/legal terms`および`/legal privacy`の通知に同意することを意味します。
+
+## セルフホスト
+
+データ、モデル、APIキーを完全に制御したいですか？独自のTomoriBotインスタンスをご自身のハードウェアで稼働させることができます。推奨される方法は、ガイド付きセットアップウィザードです。
+
+<div class="button-row">
+  <LinkButton href="/ja/self-hosting/" variant="secondary">
+    **TomoriBotをセルフホスト**
+  </LinkButton>
+</div>

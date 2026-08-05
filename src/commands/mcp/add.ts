@@ -14,9 +14,7 @@ import type { UserRow, ErrorContext } from "@/types/db/schema";
 import type { RadioGroupOption } from "@/types/discord/modal";
 import { toolRepository } from "@/utils/db/repositories/ToolRepository";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
-import { type McpUrlValidationResult, validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
-
-// ─── Constants ───────────────────────────────────────────────────────
+import { type RemoteUrlValidationResult, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 
 const MODAL_CUSTOM_ID = "config_mcp_add_modal";
 const NAME_INPUT_ID = "mcp_server_name";
@@ -30,26 +28,17 @@ const MAX_SERVERS_PER_GUILD = Number(process.env.MAX_MCP_SERVERS_PER_GUILD) || 5
 /** Name format: alphanumeric + hyphens, 1-32 chars */
 const NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,31}$/;
 
-// ─── Subcommand Configuration ────────────────────────────────────────
-
 /**
  * Configure the /config mcp add subcommand.
  * Shows a modal for name, URL, optional auth token, and optional server type.
- * @param subcommand - The subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.mcp.add.description"));
-
-// ─── Execution ───────────────────────────────────────────────────────
 
 /**
  * Execute /config mcp add.
  * Opens a modal, validates inputs, tests the MCP connection, then persists.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -57,7 +46,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Validate context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -81,7 +69,6 @@ export async function execute(
   }
 
   try {
-    // 2. Build server type radio group options for tool deduplication
     const serverTypeOptions: RadioGroupOption[] = [
       {
         label: localizer(locale, "commands.mcp.add.none_option"),
@@ -100,7 +87,7 @@ export async function execute(
       },
     ];
 
-    // 3. Show modal (modal is the acknowledgment — no pre-defer)
+    // Show modal (modal is the acknowledgment; no pre-defer)
     const modalResult = await promptWithRawModal(
       interaction,
       locale,
@@ -154,7 +141,7 @@ export async function execute(
     const url = modalResult.values?.[URL_INPUT_ID]?.trim();
     const authToken = modalResult.values?.[AUTH_TOKEN_INPUT_ID]?.trim() || undefined;
     const serverTypeRaw = modalResult.values?.[SERVER_TYPE_SELECT_ID]?.trim();
-    // "none" or empty means no type — store as null
+    // "none" or empty means no type: store as null
     const serverType = serverTypeRaw && serverTypeRaw !== "none" ? serverTypeRaw : null;
 
     if (!modalResult.interaction) {
@@ -172,7 +159,6 @@ export async function execute(
       return;
     }
 
-    // 4. Validate name format
     if (!NAME_REGEX.test(name)) {
       await replyInfoEmbed(replyInteraction, locale, {
         titleKey: "commands.mcp.add.invalid_name_title",
@@ -182,8 +168,7 @@ export async function execute(
       return;
     }
 
-    // 5. Validate URL format + security
-    const urlValidation = await validateRemoteMcpUrl(url);
+    const urlValidation = await validateRemoteUrl(url);
     if (!urlValidation.valid) {
       const validationMessage = getUrlValidationMessage(locale, urlValidation);
       await replyInfoEmbed(replyInteraction, locale, {
@@ -195,7 +180,6 @@ export async function execute(
       return;
     }
 
-    // 6. Check server count limit
     const currentCount = await toolRepository.countMcpServers(tomoriState.server_id);
     if (currentCount >= MAX_SERVERS_PER_GUILD) {
       await replyInfoEmbed(replyInteraction, locale, {
@@ -207,7 +191,7 @@ export async function execute(
       return;
     }
 
-    // 7. Test connection before persisting
+    // Test connection before persisting
     const guildMcpManager = getGuildMcpManager();
     const testResult = await guildMcpManager.testConnection(url, authToken);
 
@@ -221,7 +205,7 @@ export async function execute(
       return;
     }
 
-    // 8. Persist to database (token is encrypted inline, server_type for tool deduplication)
+    // Persist to database (token is encrypted inline, server_type for tool deduplication)
     const insertedRow = await toolRepository.insertMcpServer(
       tomoriState.server_id,
       name,
@@ -241,7 +225,7 @@ export async function execute(
       return;
     }
 
-    // 10. Mask the URL for display (show domain only)
+    // Mask the URL for display (show domain only)
     let maskedUrl: string;
     try {
       const parsed = new URL(url);
@@ -250,7 +234,6 @@ export async function execute(
       maskedUrl = `${url.substring(0, 30)}...`;
     }
 
-    // 11. Success reply
     await replyInfoEmbed(replyInteraction, locale, {
       titleKey: "commands.mcp.add.success_title",
       descriptionKey: "commands.mcp.add.success_description",
@@ -293,7 +276,7 @@ export async function execute(
 
 function getUrlValidationMessage(
   _locale: string,
-  validation: McpUrlValidationResult,
+  validation: RemoteUrlValidationResult,
 ): {
   descriptionKey: string;
   descriptionVars?: Record<string, string>;

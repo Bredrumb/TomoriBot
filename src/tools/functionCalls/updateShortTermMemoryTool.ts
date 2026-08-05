@@ -36,7 +36,7 @@ import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemo
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 
-/** Single-summary fallback parameters — byte-identical to the pre-category schema. */
+/** Single-summary fallback parameters: byte-identical to the pre-category schema. */
 const SUMMARY_PARAMETERS: ToolParameterSchema = {
   type: "object",
   properties: {
@@ -62,10 +62,9 @@ export class UpdateShortTermMemoryTool extends BaseTool {
 
   /**
    * Check if this tool is available for a given provider.
-   * Disabled for NovelAI — GLM 4.6's limited token budget (~2800 tokens) makes
+   * Disabled for NovelAI, so GLM 4.6's limited token budget (~2800 tokens) makes
    * short-term memory updates impractical; the tool definition and STM prompts
    * consume tokens better spent on core conversation context.
-   * @param provider - LLM provider name
    * @returns True if provider supports short-term memory updates
    */
   isAvailableFor(provider: string): boolean {
@@ -77,15 +76,13 @@ export class UpdateShortTermMemoryTool extends BaseTool {
    * Enhanced availability check that also considers per-turn disable flags.
    * Once STM has been updated once in a turn, the flag is set to prevent
    * the LLM from calling this tool again in the same turn.
-   * @param provider - LLM provider name
-   * @param context - Tool context that may contain streaming flags
    * @returns True if tool should be offered to the LLM
    */
   isAvailableForContext(provider: string, context?: ToolContext): boolean {
     if (!this.isAvailableFor(provider)) return false;
 
-    // Per-server master switch (migration 038): when STM is disabled, do not offer the
-    // tool at all. Only `false` blocks — an undefined config (e.g. no context) is treated
+    // Per-server master switch (migration 054): when STM is disabled, do not offer the
+    // tool at all. Only `false` blocks: an undefined config (e.g. no context) is treated
     // as enabled so default/backward-compatible behavior is preserved.
     if (context?.tomoriState?.config?.short_term_memory_enabled === false) {
       log.info("UpdateShortTermMemoryTool: Disabled for this server — short_term_memory_enabled is off");
@@ -109,7 +106,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
    * Assembles a context-specific variant of this tool.
    *
    * When the server has multiple categories (or a single non-"summary" category),
-   * the tool's parameters schema is built dynamically — one optional `string` property
+   * the tool's parameters schema is built dynamically: one optional `string` property
    * per category (property name = slug derived from the label, description = category
    * description). The assembled variant's `execute` method writes the provided values
    * to the category map and resets the turn counter.
@@ -136,7 +133,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     // Build slug→label map (deterministic, collision-safe)
     const slugMap = buildSlugMap(categories);
 
-    // Initialize macro resolver for custom descriptions
     const macroResolver = createToolPromptMacroResolver({
       provider: context.provider,
       stateForContext: context.state,
@@ -181,14 +177,14 @@ export class UpdateShortTermMemoryTool extends BaseTool {
   /**
    * Execute the tool, routing to category mode if the server has custom categories.
    *
-   * The registry always executes the base tool by name — the assembled variant's
+   * The registry always executes the base tool by name: the assembled variant's
    * execute override is only used for schema building, never for dispatch. So we
    * detect category mode here at execution time and self-route to _executeCategoryMode
    * when the server is not in single-summary (fallback) mode.
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     // Defense-in-depth: the registry dispatches by name regardless of availability, so
-    // re-check the per-server master switch here (migration 038).
+    // re-check the per-server master switch here (migration 054).
     if (context.tomoriState?.config?.short_term_memory_enabled === false) {
       log.info("[updateShortTermMemoryTool] Execution blocked — short-term memory disabled for this server");
       return {
@@ -228,7 +224,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     log.info(`[updateShortTermMemoryTool] Tool called - userId=${context.userId}, channelId=${context.channel?.id}`);
 
     try {
-      // 1. Validate parameters
       const summary = args.summary;
 
       if (typeof summary !== "string") {
@@ -247,7 +242,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         };
       }
 
-      // 2. Extract userId and channelId from context
       const triggeringUserId = context.userId;
       const channelId = context.channel.id;
 
@@ -266,7 +260,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         };
       }
 
-      // 3. Validate summary length (use configured max from env)
+      // Validate summary length (use configured max from env)
       // Sanitize unknown {word} placeholders the LLM may have written (e.g. {bredrumb})
       const trimmedSummary = sanitizeUnknownTemplatePlaceholders(summary.trim());
 
@@ -277,7 +271,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         // Truncate will happen in the cache function
       }
 
-      // 4. Extract server and channel info for new entries
       const serverId = context.guildId || "DM";
       const serverName = "guild" in context.channel ? context.channel.guild?.name : undefined;
       const channelName = "name" in context.channel ? context.channel.name : undefined;
@@ -289,7 +282,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
           ? (context.channel.parentId ?? null)
           : null;
 
-      // 5. Update both the user-scoped STM and, in guilds, the shared server STM
       const personaId = context.tomoriState?.persona_id ?? null;
       const personaLineageId = context.tomoriState?.persona_lineage_id ?? null;
       const userCacheKey = personaId
@@ -316,8 +308,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         personaLineageId,
         parentChannelId,
       );
-
-      // 6. Reset cadence counter now that STM has been refreshed
       const liveServerId = serverId !== "DM" ? serverId : null;
       const liveDmUserId = serverId === "DM" ? triggeringUserId : null;
       void resetStmTurnCounter(channelId, liveServerId, liveDmUserId, personaId);
@@ -326,7 +316,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
         `[updateShortTermMemoryTool] [TOOL_EXECUTE] Updated short-term memory - userCacheKey=${userCacheKey}, serverCacheKey=${serverCacheKey}, summaryLength=${Math.min(trimmedSummary.length, MAX_SUMMARY_LENGTH)}`,
       );
 
-      // 7. Return success with no user-facing message (silent operation)
       return {
         success: true,
         message: "Short-term memory updated successfully (no user notification)",
@@ -357,7 +346,7 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     context: ToolContext,
     slugMap: Map<string, string>,
   ): Promise<ToolResult> {
-    // Defense-in-depth master-switch guard (migration 038), mirroring execute().
+    // Defense-in-depth master-switch guard (migration 054), mirroring execute().
     if (context.tomoriState?.config?.short_term_memory_enabled === false) {
       log.info("[updateShortTermMemoryTool] [category] Blocked — short-term memory disabled for this server");
       return { success: false, message: "Short-term memory is disabled for this server." };
@@ -391,7 +380,6 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     }
 
     try {
-      // Build the category map from the provided args — skip empty values
       const categories: Record<string, string> = {};
       for (const [slug] of slugMap) {
         const raw = args[slug];

@@ -1,7 +1,15 @@
-// locales/en-US/commands/server.ts
-
 export default {
   server: {
+    timezone: {
+      description: `Set your server's timezone offset from UTC (default: 0 / UTC).`,
+      value_description: `UTC offset hours (default: 0). Examples: 8, -5, 0, 9.`,
+      invalid_value_title: `Invalid Timezone Offset`,
+      invalid_value_description: `Timezone offset must be between {min} and {max} hours.`,
+      already_set_title: `Timezone Already Set`,
+      already_set_description: `The timezone is already set to \`{timezone}\`.`,
+      success_title: `Timezone Updated`,
+      success_description: `Server timezone changed from \`{previous_timezone}\` to \`{timezone}\`.`,
+    },
     "user-byok": {
       description: `Manage member-provided provider mode for this server.`,
       toggle: {

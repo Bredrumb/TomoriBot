@@ -118,6 +118,10 @@ services:
     volumes:
       - ./logs:/app/logs:rw
       - ./data:/app/data:rw
+      # Make Docker backup bundles durable and visible on the host.
+      - ./backups:/app/backups:rw
+      # Required by backup/restore scripts so Docker bundles include the active config.
+      - ./.env:/app/.env:rw
 
 # Named volumes for persistent data
 volumes:

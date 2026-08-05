@@ -1,0 +1,6 @@
+-- Rollback 045: no-op.
+--
+-- The forward migration is an idempotent, non-destructive backfill into the
+-- canonical split config tables. Reversing it would delete valid persona config
+-- data, so rollback is intentionally limited to schema compatibility handled by
+-- later migrations.

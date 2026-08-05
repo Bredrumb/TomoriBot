@@ -8,6 +8,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -23,10 +24,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help deliberate-trigger-mode command.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -42,6 +39,7 @@ export async function execute(
     const embedOptions: SummaryEmbedOptions = {
       titleKey: "commands.help.deliberate-trigger-mode.title",
       descriptionKey: "commands.help.deliberate-trigger-mode.embed_description",
+      docsPath: `${DOCS_PATHS.CHATTING_TRIGGERS}#deliberate-trigger-mode`,
       color: ColorCode.INFO,
       fields: [
         {

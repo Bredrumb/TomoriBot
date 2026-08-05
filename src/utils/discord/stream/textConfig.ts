@@ -2,9 +2,15 @@ import type { TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { getVisibleDeliveryMode, type TextProcessingConfig } from "@/types/stream/types";
+import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
+import {
+  buildPurposeCollisionIndex,
+  collectParticipantTargetIndex,
+  targetAliasesForPurpose,
+} from "@/utils/text/participants/targetIndex";
 
 export function createStreamTextProcessingConfig(config: StreamConfig, context: StreamContext): TextProcessingConfig {
-  const { mentionMap, mentionIdSet } = buildMentionLookup(context.contextItems);
+  const { mentionMap, mentionIdSet, personaMentionMap } = buildMentionLookup(context.contextItems);
   applyForcedMentions(mentionMap, mentionIdSet, context.forcedMentions);
   const botName = context.prefixStrippingName ?? context.personaUsername ?? context.tomoriState.persona_nickname;
 
@@ -15,6 +21,7 @@ export function createStreamTextProcessingConfig(config: StreamConfig, context: 
     emojiStrings: context.emojiStrings || [],
     mentionMap,
     mentionIdSet,
+    personaMentionMap,
     botName,
     botNameAliases: collectPersonaNameAliases(context.tomoriState, botName),
     registeredSpeakerNamesLower: collectRegisteredSpeakerNames(context.contextItems, botName),
@@ -33,10 +40,9 @@ export function createStreamTextProcessingConfig(config: StreamConfig, context: 
  * then prefixes its turn with *both* labels; only the active name ("Lilya") is otherwise stripped.
  *
  * Sources: the deployment default bot name plus the persona's own trigger words. The active display
- * name (`botName`) is excluded — it is handled directly by the cleaner — and matching is
+ * name (`botName`) is excluded, so it is handled directly by the cleaner, so and matching is
  * case-insensitive to avoid emitting a redundant alias.
  *
- * @param tomoriState - Active persona state for this turn
  * @param botName - The persona's current display name (already handled by the cleaner)
  * @returns De-duplicated alias names (excluding the active display name)
  */
@@ -105,7 +111,7 @@ function applyForcedMentions(
     if (!handle || !userId) continue;
 
     mentionIdSet.add(userId);
-    const normalizedHandle = handle.toLowerCase();
+    const normalizedHandle = normalizeParticipantAlias(handle);
     const existing = mentionMap.get(normalizedHandle) ?? [];
     if (!existing.includes(userId)) {
       existing.push(userId);
@@ -122,12 +128,42 @@ function applyForcedMentions(
 export function buildMentionLookup(contextItems: StructuredContextItem[]): {
   mentionMap: Map<string, string[]>;
   mentionIdSet: Set<string>;
+  personaMentionMap: Map<string, string>;
 } {
   const mentionMap = new Map<string, string[]>();
   const mentionIdSet = new Set<string>();
+  const personaMentionMap = new Map<string, string>();
+
+  const targetIndex = collectParticipantTargetIndex(contextItems);
+  const personaAliases = buildPurposeCollisionIndex(targetIndex, "output_mention", (key) => key.kind === "persona");
+  for (const [normalized, targets] of personaAliases) {
+    if (targets.length !== 1) continue;
+    const alias = targetAliasesForPurpose(targets[0], "output_mention").find(
+      (candidate) => candidate.normalized === normalized,
+    );
+    if (alias?.canonicalValue) personaMentionMap.set(normalized, alias.canonicalValue);
+  }
+
+  for (const target of targetIndex.targets) {
+    if (target.key.kind !== "discord_user" || !target.mentionable || !target.targetId) continue;
+    if (!/^\d{17,20}$/.test(target.targetId)) continue;
+    mentionIdSet.add(target.targetId);
+    for (const alias of targetAliasesForPurpose(target, "output_mention")) {
+      const existing = mentionMap.get(alias.normalized) ?? [];
+      if (!existing.includes(target.targetId)) existing.push(target.targetId);
+      mentionMap.set(alias.normalized, existing);
+    }
+  }
 
   for (const item of contextItems) {
+    if (item.personaMentionMap) {
+      for (const [alias, trigger] of item.personaMentionMap) {
+        personaMentionMap.set(alias, trigger);
+      }
+    }
+
     if (
+      item.participantTargetIndex ||
       item.metadataTag !== ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION ||
       !item.conversationUsers ||
       item.conversationUsers.length === 0
@@ -143,7 +179,7 @@ export function buildMentionLookup(contextItems: StructuredContextItem[]): {
       mentionIdSet.add(conversationUser.targetId);
 
       for (const alias of conversationUser.aliases) {
-        const normalizedHandle = alias.trim().toLowerCase();
+        const normalizedHandle = normalizeParticipantAlias(alias);
         if (!normalizedHandle) {
           continue;
         }
@@ -157,5 +193,5 @@ export function buildMentionLookup(contextItems: StructuredContextItem[]): {
     }
   }
 
-  return { mentionMap, mentionIdSet };
+  return { mentionMap, mentionIdSet, personaMentionMap };
 }

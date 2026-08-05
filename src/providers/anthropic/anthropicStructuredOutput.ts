@@ -32,14 +32,11 @@ function buildAnthropicMessages(
 ): { system: string; messages: Array<Record<string, unknown>> } {
   const messages: Array<Record<string, unknown>> = [];
 
-  // Build user message content
   if (images && images.length > 0) {
-    // Multi-part user message with text and images
     const contentBlocks: Array<Record<string, unknown>> = [{ type: "text", text: userPrompt }];
 
     for (const image of images) {
       if (image.url.startsWith("data:")) {
-        // Data URI: parse out mimeType and base64 data
         const dataUriMatch = image.url.match(/^data:([^;]+);base64,(.+)$/);
         if (dataUriMatch) {
           contentBlocks.push({
@@ -134,11 +131,7 @@ function extractToolUseFromResponse(
 /**
  * Call Anthropic with structured JSON output via forced tool use.
  *
- * @param request - The structured output request
- * @param responseSchema - JSON Schema describing the expected output
- * @param zodSchema - Zod schema for runtime validation
  * @param schemaName - Name for the forced tool (defaults to "structured_output")
- * @returns Structured output result with parsed and validated data
  */
 export async function callAnthropicStructuredJSON<T>(
   request: ProviderStructuredJsonRequest,
@@ -147,23 +140,20 @@ export async function callAnthropicStructuredJSON<T>(
   schemaName: string = "structured_output",
 ): Promise<StructuredOutputResult<T>> {
   try {
-    // 1. Build tool definition from schema
     const toolDefinition = {
       name: schemaName,
       description: `Generate structured output matching the ${schemaName} schema`,
       input_schema: responseSchema,
     };
 
-    // 2. Force the model to call this specific tool
+    // Force the model to call this specific tool
     const toolChoice = {
       type: "tool" as const,
       name: schemaName,
     };
 
-    // 3. Build messages
     const { system, messages } = buildAnthropicMessages(request.systemPrompt, request.userPrompt, request.images);
 
-    // 4. Make the API call
     const response = await callAnthropicApi(
       request.apiKey,
       request.model,
@@ -174,7 +164,6 @@ export async function callAnthropicStructuredJSON<T>(
       request.maxOutputTokens,
     );
 
-    // 5. Extract tool use content from response
     const toolInput = extractToolUseFromResponse(response, schemaName);
     if (!toolInput) {
       log.warn("Anthropic structured JSON: No tool_use block found in response", {
@@ -187,7 +176,6 @@ export async function callAnthropicStructuredJSON<T>(
       };
     }
 
-    // 6. Validate with Zod
     const validationResult = zodSchema.safeParse(toolInput);
     if (!validationResult.success) {
       log.error("Anthropic structured JSON validation failed", validationResult.error);
@@ -212,38 +200,4 @@ export async function callAnthropicStructuredJSON<T>(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-/**
- * Call Anthropic for expression initialization structured output.
- * Uses the same forced tool use pattern as callAnthropicStructuredJSON.
- *
- * For expression initialization, the schema is provided by the expression system
- * and passed through the request. Since ProviderStructuredJsonRequest doesn't carry
- * the response schema directly, callers should use callAnthropicStructuredJSON
- * with an explicit schema. This helper provides a generic passthrough for
- * expression initialization where the schema is defined by the caller.
- */
-export async function callAnthropicStructuredOutput(
-  request: ProviderStructuredJsonRequest,
-  responseSchema?: Record<string, unknown>,
-): Promise<StructuredOutputResult<unknown>> {
-  // Use provided schema or empty object as fallback
-  const schema = responseSchema ?? {
-    type: "object",
-    additionalProperties: true,
-  };
-
-  // Generic passthrough Zod schema
-  const passthroughSchema = {
-    parse: (data: unknown) => data,
-    safeParse: (data: unknown) => ({ success: true as const, data }),
-  } as unknown as z.ZodType<unknown>;
-
-  return await callAnthropicStructuredJSON(
-    request,
-    schema,
-    passthroughSchema,
-    request.schemaName ?? "expression_output",
-  );
 }

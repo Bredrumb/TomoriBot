@@ -7,21 +7,13 @@
 import { mergeStopStrings } from "@/providers/utils/stopStrings";
 import { log } from "@/utils/misc/logger";
 
-// =============================================
-// Constants
-// =============================================
-
 const NOVELAI_API_BASE_URL = "https://text.novelai.net";
 /** Default timeout for NovelAI API requests in milliseconds */
 const REQUEST_TIMEOUT = Number.parseInt(process.env.NOVELAI_REQUEST_TIMEOUT_MS || "60000", 10);
 
-/** Per-read inactivity timeout for streaming — if no data arrives within this window, abort.
+/** Per-read inactivity timeout for streaming: if no data arrives within this window, abort.
  *  Prevents indefinite hangs when NAI's server stops sending chunks mid-stream. */
 const STREAM_READ_TIMEOUT_MS = Number.parseInt(process.env.NOVELAI_STREAM_READ_TIMEOUT_MS || "30000", 10);
-
-// =============================================
-// Types
-// =============================================
 
 /**
  * NovelAI generation parameters
@@ -78,13 +70,6 @@ export interface NovelAIGenerationRequest {
 }
 
 /**
- * NovelAI generation response (non-streaming)
- */
-export interface NovelAIGenerationResponse {
-  output: string;
-}
-
-/**
  * NovelAI SSE stream chunk
  */
 export interface NovelAIStreamChunk {
@@ -98,7 +83,7 @@ export interface NovelAIStreamChunk {
 /**
  * OpenAI-compatible completion request (for glm-4-6 and other newer models)
  */
-export interface OpenAICompletionRequest {
+interface OpenAICompletionRequest {
   model: string;
   prompt: string | string[];
   max_tokens?: number;
@@ -117,7 +102,7 @@ export interface OpenAICompletionRequest {
 /**
  * OpenAI-compatible SSE chunk
  */
-export interface OpenAIStreamChunk {
+interface OpenAIStreamChunk {
   id: string;
   object: "text_completion";
   created: number;
@@ -139,25 +124,10 @@ export interface ApiRequestConfig {
 }
 
 /**
- * API result wrapper
- */
-export interface ApiResult<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  statusCode?: number;
-}
-
-// =============================================
-// Parameter Presets
-// =============================================
-
-/**
- * Get default parameters for kayra-v1 model
  * Based on reference implementation with sensible defaults for roleplay
  */
 // Use https://novelai.net/tokenizer to find stop sequences
-export function getKayraParameters(): NovelAIParameters {
+function getKayraParameters(): NovelAIParameters {
   return {
     max_length: 150, // Increased from reference for longer responses
     min_length: 10,
@@ -178,19 +148,17 @@ export function getKayraParameters(): NovelAIParameters {
     bracket_ban: true,
     order: [2, 3, 0, 4, 1],
     stop_sequences: [],
-    // stop_sequences: [[85], [85, 23]], // \n and \n***
   };
 }
 
 /**
- * Get default parameters for glm-4-6 model
  * Based on reference implementation optimized for latest model
  */
-export function getGlmParameters(): NovelAIParameters {
+function getGlmParameters(): NovelAIParameters {
   return {
-    max_length: 4096, // Request full token budget — API may cap lower but let's test the actual limit
+    max_length: 4096, // Request full token budget; API may cap lower but let's test the actual limit
     min_length: 1,
-    temperature: 1.0, // GLM 4.6 default — balanced between natural output and tool call precision
+    temperature: 1.0, // GLM 4.6 default: balanced between natural output and tool call precision
     top_k: 40,
     top_p: 0.95,
     top_a: 1,
@@ -210,13 +178,10 @@ export function getGlmParameters(): NovelAIParameters {
 
 /**
  * Previously converted temperature from a Gemini-centric scale to NovelAI model scale.
- * Now a direct passthrough — temperature is used as-is across all providers.
+ * Now a direct passthrough: temperature is used as-is across all providers.
  *
- * @param temperature - Temperature value from the database
- * @param _model - Target NovelAI model (unused, kept for call-site compatibility)
- * @returns The temperature unchanged
  */
-export function convertTemperatureToNovelAI(temperature: number, _model: string): number {
+function convertTemperatureToNovelAI(temperature: number, _model: string): number {
   return temperature;
 }
 
@@ -228,9 +193,8 @@ export function convertTemperatureToNovelAI(temperature: number, _model: string)
  * Merge priority (lowest → highest):
  * 1. Model hardcoded defaults (getKayraParameters / getGlmParameters)
  * 2. NAI-specific preset overrides (order, tail_free_sampling, phrase_rep_pen, etc.)
- * 3. DB schema values (temperature, topK, topP, minP) — always win if non-neutral
+ * 3. DB schema values (temperature, topK, topP, minP): always win if non-neutral
  *
- * @param model - Model name
  * @param temperature - Optional temperature in Gemini scale (will be converted to NovelAI scale)
  * @param topK - Optional top-K sampling override (0 = use model preset)
  * @param topP - Optional top-P sampling override (1.0 = use model preset)
@@ -245,30 +209,26 @@ export function getParametersForModel(
   minP?: number,
   presetOverrides?: Partial<NovelAIParameters>,
 ): NovelAIParameters {
-  // 1. Start from model hardcoded defaults
   const params = model === "kayra-v1" || model === "llama-3-erato-v1" ? getKayraParameters() : getGlmParameters();
 
-  // 2. Merge NAI-specific preset fields (order, TFS, phrase_rep_pen, mirostat, etc.)
+  // Merge NAI-specific preset fields (order, TFS, phrase_rep_pen, mirostat, etc.)
   //    These override the hardcoded defaults but are themselves overridden by DB schema values.
   if (presetOverrides && Object.keys(presetOverrides).length > 0) {
     Object.assign(params, presetOverrides);
   }
 
-  // 3. Apply DB schema overrides (highest priority — always win if non-neutral)
+  // Apply DB schema overrides (highest priority: always win if non-neutral)
   // Override temperature if provided (convert from Gemini scale to NovelAI scale)
   if (temperature !== undefined) {
     params.temperature = convertTemperatureToNovelAI(temperature, model);
   }
 
-  // Override topK from DB if non-neutral (0 = use model preset)
   if (topK !== undefined && topK > 0) {
     params.top_k = topK;
   }
-  // Override topP from DB if non-neutral (1.0 = use model preset)
   if (topP !== undefined && topP < 1.0) {
     params.top_p = topP;
   }
-  // Override minP from DB if non-neutral (0.0 = use model preset)
   if (minP !== undefined && minP > 0) {
     params.min_p = minP;
   }
@@ -278,7 +238,6 @@ export function getParametersForModel(
 
 /**
  * Check if a model requires the OpenAI-compatible API endpoint
- * @param model - Model name to check
  * @returns True if model uses OpenAI endpoint, false for native NovelAI endpoint
  */
 export function usesOpenAIEndpoint(model: string): boolean {
@@ -289,8 +248,6 @@ export function usesOpenAIEndpoint(model: string): boolean {
 
 /**
  * Convert NovelAI parameters to OpenAI-compatible format
- * @param naiParams - NovelAI parameters
- * @returns OpenAI-compatible parameters
  */
 function convertToOpenAIParams(
   naiParams: NovelAIParameters,
@@ -312,17 +269,8 @@ function convertToOpenAIParams(
   };
 }
 
-// =============================================
-// Core API Functions
-// =============================================
-
 /**
  * Start streaming generation using OpenAI-compatible API endpoint
- * @param prompt - Generation prompt
- * @param model - Model name
- * @param parameters - Generation parameters
- * @param config - Request configuration
- * @returns AsyncGenerator yielding stream chunks
  */
 async function* novelaiGenerateStreamOpenAI(
   prompt: string,
@@ -338,10 +286,8 @@ async function* novelaiGenerateStreamOpenAI(
 
     log.info("Starting NovelAI streaming generation (OpenAI-compatible API)");
 
-    // Convert NovelAI parameters to OpenAI format
     const openaiParams = convertToOpenAIParams(parameters, additionalStopStrings);
 
-    // Build OpenAI-compatible request
     const requestBody: OpenAICompletionRequest = {
       model,
       prompt,
@@ -349,7 +295,6 @@ async function* novelaiGenerateStreamOpenAI(
       ...openaiParams,
     };
 
-    // Create fetch request with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -414,10 +359,8 @@ async function* novelaiGenerateStreamOpenAI(
           break;
         }
 
-        // Decode chunk
         buffer += decoder.decode(value, { stream: true });
 
-        // Process SSE lines
         const lines = buffer.split("\n");
         buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
@@ -438,7 +381,6 @@ async function* novelaiGenerateStreamOpenAI(
               const chunk = JSON.parse(data) as OpenAIStreamChunk;
               const finishReason = chunk.choices?.[0]?.finish_reason ?? undefined;
 
-              // Extract text from choices
               if (chunk.choices?.[0]?.text) {
                 yield {
                   token: chunk.choices[0].text,
@@ -447,7 +389,6 @@ async function* novelaiGenerateStreamOpenAI(
                 };
               }
 
-              // Check if generation is complete
               if (finishReason) {
                 yield { final: true, finishReason };
                 return;
@@ -469,7 +410,7 @@ async function* novelaiGenerateStreamOpenAI(
           error: "Request timed out",
         };
       } else if (error.message.includes("stream read timed out")) {
-        // Per-read inactivity timeout — NAI stopped sending data mid-stream.
+        // Per-read inactivity timeout because NAI stopped sending data mid-stream.
         // Yield a final chunk so the stream adapter can flush any buffered text
         // (e.g., incomplete sentence trailing buffer) and terminate cleanly.
         log.warn(`NovelAI OpenAI: ${error.message} — yielding final chunk to flush buffers`);
@@ -490,9 +431,6 @@ async function* novelaiGenerateStreamOpenAI(
 
 /**
  * Start streaming generation from NovelAI using native SSE endpoint
- * @param request - Generation request
- * @param config - Request configuration
- * @returns AsyncGenerator yielding stream chunks
  */
 async function* novelaiGenerateStreamNative(
   request: NovelAIGenerationRequest,
@@ -505,7 +443,6 @@ async function* novelaiGenerateStreamNative(
 
     log.info("Starting NovelAI streaming generation");
 
-    // Create fetch request with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -540,7 +477,6 @@ async function* novelaiGenerateStreamNative(
       return;
     }
 
-    // Parse SSE stream with per-read inactivity timeout
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -567,20 +503,16 @@ async function* novelaiGenerateStreamNative(
           break;
         }
 
-        // Decode chunk and add to buffer
         buffer += decoder.decode(value, { stream: true });
 
-        // Process complete SSE messages (lines ending with \n\n)
         const lines = buffer.split("\n");
         buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
         for (const line of lines) {
-          // Skip empty lines and comments
           if (!line.trim() || line.startsWith(":")) {
             continue;
           }
 
-          // Parse SSE data lines
           if (line.startsWith("data: ")) {
             const data = line.slice(6); // Remove "data: " prefix
 
@@ -598,7 +530,6 @@ async function* novelaiGenerateStreamNative(
               }
             } catch (_parseError) {
               log.warn(`Failed to parse NovelAI SSE data: ${data}`);
-              // Yield raw data if JSON parsing fails
               yield { token: data };
             }
           }
@@ -613,7 +544,7 @@ async function* novelaiGenerateStreamNative(
         log.error("NovelAI streaming timed out");
         yield { error: "Request timed out" };
       } else if (error.message.includes("stream read timed out")) {
-        // Per-read inactivity timeout — NAI stopped sending data mid-stream
+        // Per-read inactivity timeout because NAI stopped sending data mid-stream
         log.warn(`NovelAI Native: ${error.message} — yielding final chunk to flush buffers`);
         yield { final: true };
       } else {
@@ -629,17 +560,12 @@ async function* novelaiGenerateStreamNative(
 /**
  * Start streaming generation from NovelAI
  * Routes to the appropriate endpoint based on the model
- * @param request - Generation request
- * @param config - Request configuration
- * @returns AsyncGenerator yielding stream chunks
  */
 export async function* novelaiGenerateStream(
   request: NovelAIGenerationRequest,
   config: ApiRequestConfig,
 ): AsyncGenerator<NovelAIStreamChunk, void, unknown> {
-  // Check if model requires OpenAI endpoint
   if (usesOpenAIEndpoint(request.model)) {
-    // Use OpenAI-compatible endpoint
     yield* novelaiGenerateStreamOpenAI(
       request.input,
       request.model,
@@ -648,7 +574,6 @@ export async function* novelaiGenerateStream(
       request.openAIStopStrings,
     );
   } else {
-    // Use native NovelAI endpoint
     yield* novelaiGenerateStreamNative(request, config);
   }
 }
@@ -657,7 +582,6 @@ export async function* novelaiGenerateStream(
  * Validate NovelAI API key by fetching user information
  * Uses GET /user/information which works for all account types
  * (subscribed, trial, Anlas-only) without triggering a generation.
- * @param apiKey - API key to validate
  * @returns True if valid, throws error with details if invalid
  * @throws Error with statusCode and message on validation failure
  */
@@ -683,9 +607,15 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
       return true;
     }
 
-    // Non-OK response — key is invalid or something else went wrong
+    // Non-OK response: key is invalid or something else went wrong.
+    // Carry the response body into the error message: NovelaiStreamAdapter
+    // classifies some failures by matching the body text (e.g. trial-account
+    // recaptcha 400s), and it is what makes host/endpoint migrations
+    // self-diagnosing rather than surfacing as a bare "Bad Request".
     const errorText = await response.text().catch(() => "Unknown error");
-    const error: Error & { statusCode?: number } = new Error(`API request failed: ${response.statusText}`);
+    const error: Error & { statusCode?: number } = new Error(
+      `API request failed: ${response.statusText}${errorText ? ` - ${errorText}` : ""}`,
+    );
     error.statusCode = response.status;
 
     log.warn(`NovelAI API key validation failed with status ${response.status}: ${errorText}`);
@@ -693,12 +623,10 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
   } catch (err) {
     clearTimeout(timeoutId);
 
-    // Re-throw our own errors (non-OK responses)
     if (err instanceof Error && "statusCode" in err) {
       throw err;
     }
 
-    // Network/timeout errors
     const error: Error & { statusCode?: number } = new Error(
       err instanceof Error ? err.message : "Validation request failed",
     );
@@ -706,10 +634,6 @@ export async function validateNovelAIApiKey(apiKey: string): Promise<boolean> {
     throw error;
   }
 }
-
-// =============================================
-// Error Checking Utilities
-// =============================================
 
 /**
  * Check if an error is related to API key issues
@@ -738,18 +662,23 @@ export function isNovelAIRateLimitError(error: string, statusCode?: number): boo
   return statusCode === 429 || rateLimitKeywords.some((keyword) => error.toLowerCase().includes(keyword));
 }
 
-// =============================================
-// Subscription API
-// =============================================
-
-/** Base URL for NovelAI account-management endpoints (distinct from the text generation URL) */
-const NOVELAI_ACCOUNT_API_BASE_URL = "https://api.novelai.net";
+/**
+ * Base URL for NovelAI account-management endpoints (/user/*).
+ *
+ * NovelAI retired third-party access to the legacy api.novelai.net host: every
+ * /user/* route there now answers a valid persistent token with
+ * HTTP 400 "Please refresh NovelAI.net. If using a third-party tool, update to
+ * the image URL." The route paths themselves are unchanged and are served by
+ * both text.novelai.net and image.novelai.net; the text host is used here so
+ * account calls share an origin with text generation.
+ */
+const NOVELAI_ACCOUNT_API_BASE_URL = "https://text.novelai.net";
 
 /**
  * Shape of the perks object returned by GET /user/subscription.
- * Only contextTokens is used here — other perks are preserved for completeness.
+ * Only contextTokens is used here; other perks are preserved for completeness.
  */
-export interface NovelAISubscriptionPerks {
+interface NovelAISubscriptionPerks {
   maxPriorityActions: number;
   startPriority: number;
   /** Maximum context size in tokens for this subscription tier */
@@ -772,10 +701,10 @@ export interface NovelAISubscription {
 /**
  * Fetches the current NovelAI subscription for a given API key.
  *
- * Uses the account management API (api.novelai.net), which is separate from
- * the text generation API (text.novelai.net).
+ * Uses the account management routes (/user/*), which are served by the same
+ * host as text generation. See NOVELAI_ACCOUNT_API_BASE_URL for why the legacy
+ * api.novelai.net host can no longer be used.
  *
- * @param apiKey - Plaintext NovelAI API key
  * @returns Subscription data including perks.contextTokens, or null on failure
  */
 export async function fetchNovelAISubscription(apiKey: string): Promise<NovelAISubscription | null> {

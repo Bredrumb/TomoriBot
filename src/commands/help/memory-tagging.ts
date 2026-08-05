@@ -8,6 +8,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { replySummaryEmbed } from "@/utils/discord/interactionHelper";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
+import { DOCS_PATHS } from "@/utils/discord/docsLinks";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -21,10 +22,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /help memory-tagging command.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -42,6 +39,7 @@ export async function execute(
       descriptionVars: {
         memoryTaggingSet: memoryTaggingSetMention,
       },
+      docsPath: DOCS_PATHS.MEMORY_TAGGING,
       color: ColorCode.INFO,
       fields: [
         {

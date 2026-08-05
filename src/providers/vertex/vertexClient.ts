@@ -34,7 +34,6 @@ const COMPOSITE_KEY_SEPARATOR = "::";
  * Expected format: `{project_id}::{location}`
  *
  * @param compositeKey - The raw composite key from the database
- * @returns Parsed project ID and location
  * @throws Error if the format is invalid
  */
 export function parseVertexCompositeKey(compositeKey: string): VertexConfig {
@@ -68,7 +67,6 @@ export function parseVertexCompositeKey(compositeKey: string): VertexConfig {
  *
  * Uses ADC (Application Default Credentials) rather than an API key.
  *
- * @param config - Parsed Vertex configuration with projectId and location
  * @returns GoogleGenAI client ready for Vertex AI calls
  */
 export function createVertexClient(config: VertexConfig): GoogleGenAI {

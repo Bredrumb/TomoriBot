@@ -1,4 +1,4 @@
-﻿import {
+import {
   MessageFlags,
   type ChatInputCommandInteraction,
   type Client,
@@ -11,7 +11,6 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import type { UserRow, ErrorContext } from "@/types/db/schema";
 
-// Constants for threshold limits (Rule #20)
 export const MIN_THRESHOLD = 0; // 0 means always-reply in configured auto-chat channels
 export const MIN_RANDOM_THRESHOLD = 1;
 export const MAX_THRESHOLD = 100; // The absolute maximum value allowed
@@ -50,7 +49,6 @@ export function rollAutochatTarget(minThreshold: number, maxThreshold: number): 
   return Math.floor(Math.random() * (maxThreshold - minThreshold + 1)) + minThreshold;
 }
 
-// Configure the subcommand (Rule #21)
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("threshold")
@@ -86,7 +84,6 @@ Positive values use a shared fixed or random range.
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -96,11 +93,10 @@ Positive values use a shared fixed or random range.
     return;
   }
 
-  // 1.5. Defer the interaction before async work to prevent timeout
+  // Defer the interaction before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // Get the threshold values from options
     const threshold = interaction.options.getInteger("threshold", true);
     const maxThreshold = interaction.options.getInteger("max") ?? threshold;
     const { isValid, isAlwaysReplyMode, isRangeMode } = validateThresholdInput(threshold, maxThreshold);
@@ -119,7 +115,6 @@ Positive values use a shared fixed or random range.
       return;
     }
 
-    // Load the Tomori state for this server - let helper functions manage interaction state
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -142,7 +137,8 @@ Positive values use a shared fixed or random range.
       return;
     }
 
-    // Update config and reset the shared cycle atomically via repository.
+    // Persist the range and its newly rolled target together so no reader can
+    // observe updated thresholds with a target from the previous cycle.
     const updatedRuntime = await configRepository.setAutoChatThreshold(
       tomoriState.server_id,
       tomoriState.persona_id,
@@ -182,7 +178,6 @@ Positive values use a shared fixed or random range.
     // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // Success message based on auto-chat mode
     await replyInfoEmbed(interaction, locale, {
       titleKey: isAlwaysReplyMode
         ? "commands.server.auto-trigger.threshold.success_always_title"

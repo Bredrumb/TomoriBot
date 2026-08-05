@@ -6,7 +6,7 @@ import { llmProviderRepo } from "@/utils/db/repositories";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import {
   buildCapabilityAddModalComponents,
   capabilityNeedsAddModal,
@@ -175,7 +175,7 @@ export async function execute(
 
   // Production always enforces the blocklist. Self-hosters can opt out via ALLOW_PERSONAL_LOCAL_ENDPOINTS=true.
   const strict = process.env.RUN_ENV === "production" || process.env.ALLOW_PERSONAL_LOCAL_ENDPOINTS !== "true";
-  const urlValidation = await validateRemoteMcpUrl(endpointUrl, { strict });
+  const urlValidation = await validateRemoteUrl(endpointUrl, { strict });
   if (!urlValidation.valid) {
     const isLocalBlock =
       urlValidation.failureCode === "PRODUCTION_LOCALHOST_FORBIDDEN" ||
@@ -195,7 +195,6 @@ export async function execute(
 
   const modalCustomId = `personal_endpoint_add_modal_${interaction.id}`;
 
-  // 1a. Capabilities with a detail modal: show it as the primary interaction response.
   if (capabilityNeedsAddModal(capability)) {
     const modalResult = await promptWithRawModal(interaction, locale, {
       modalCustomId,
@@ -294,7 +293,6 @@ export async function execute(
     return;
   }
 
-  // 1b. Image / video: show a raw modal with model_name, display_name, and workflow_json file upload.
   const imageVideoModalCustomId = `personal_endpoint_add_image_modal_${interaction.id}`;
   const modalResult = await promptWithRawModal(interaction, locale, {
     modalCustomId: imageVideoModalCustomId,

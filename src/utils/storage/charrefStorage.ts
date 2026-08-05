@@ -18,17 +18,23 @@ type CharRefStorageConfig = {
   region: string;
   prefix: string;
   publicBaseUrl: string;
+  endpoint?: string;
 };
 
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
 const LOCAL_CHARREF_BASE_DIR = path.resolve(process.cwd(), "data", "charreferences");
 let cachedClient: S3Client | null = null;
 let cachedRegion: string | null = null;
+let cachedEndpoint: string | undefined;
 
-function getS3Client(region: string): S3Client {
-  if (!cachedClient || cachedRegion !== region) {
+function getS3Client(region: string, endpoint?: string): S3Client {
+  if (!cachedClient || cachedRegion !== region || cachedEndpoint !== endpoint) {
     cachedRegion = region;
-    cachedClient = new S3Client({ region });
+    cachedEndpoint = endpoint;
+    cachedClient = new S3Client({
+      region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    });
   }
 
   return cachedClient;
@@ -52,6 +58,7 @@ function getCharRefStorageConfig(): CharRefStorageConfig | null {
     process.env.AVATAR_S3_REGION?.trim() ||
     process.env.AWS_REGION?.trim() ||
     "us-east-1";
+  const endpoint = process.env.S3_ENDPOINT?.trim() || undefined;
   const prefix = (process.env.CHARREF_S3_PREFIX || "charreferences").replace(/^\/+/, "").replace(/\/+$/, "");
   const publicBaseUrl = process.env.CHARREF_PUBLIC_BASE_URL?.trim() || `https://${bucket}.s3.${region}.amazonaws.com`;
 
@@ -60,6 +67,7 @@ function getCharRefStorageConfig(): CharRefStorageConfig | null {
     region,
     prefix,
     publicBaseUrl,
+    endpoint,
   };
 }
 
@@ -124,7 +132,7 @@ export async function uploadCharRef(options: CharRefUploadOptions): Promise<stri
     }
 
     const key = buildObjectKey(config, options);
-    const client = getS3Client(config.region);
+    const client = getS3Client(config.region, config.endpoint);
 
     try {
       await client.send(
@@ -181,7 +189,7 @@ export async function deleteCharRef(urlOrPath: string): Promise<boolean> {
     }
 
     try {
-      await getS3Client(config.region).send(
+      await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({
           Bucket: config.bucket,
           Key: key,

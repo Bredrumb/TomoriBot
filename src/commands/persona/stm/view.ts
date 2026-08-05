@@ -2,7 +2,7 @@
  * Command: /persona stm view
  * Read-only inspector for a persona's live short-term memory in the CURRENT channel.
  *
- * Unlike `/persona stm edit`, this subcommand is NOT gated behind Manage Server — any
+ * Unlike `/persona stm edit`, this subcommand is NOT gated behind Manage Server: any
  * member may inspect what the bot currently remembers for this channel. It opens the
  * shared persona picker and, on selection, renders the resolved STM as an ephemeral
  * status display instead of an editable modal (Discord modals have no read-only state).
@@ -17,16 +17,20 @@
  *   - Summary mode (only the default `summary` category) → the raw summary string.
  *   - Category mode (any custom config) → labeled sections in position order, empties skipped.
  */
-import type { ButtonInteraction, ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  runPersonaPickerWorkflow,
+} from "@/utils/discord/ui/personaWorkflow";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { personaRepository, shortTermMemoryRepository } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import {
   getShortTermMemoryForServerChannel,
   getShortTermMemoryForUserChannel,
@@ -48,7 +52,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /persona stm view command.
  * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
  * @param userData - Invoking user's row
  * @param locale - Resolved locale for the interaction
  */
@@ -58,8 +61,8 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Channel-only — STM is per-channel, so we need a concrete channel to scope to.
-  //    Note: intentionally NO permission gate — viewing is read-only and open to all members.
+  // STM is per-channel, requiring a concrete channel scope.
+  //    Note: intentionally NO permission gate: viewing is read-only and open to all members.
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -71,7 +74,10 @@ export async function execute(
   }
 
   let tomoriState: TomoriState | null = null;
-  let selectedPersona: TomoriState | null = null;
+  // Held on an object rather than a bare `let`: the picker assigns it inside a
+  // callback, which control-flow analysis cannot see, so a `let` would still read
+  // as `null` in the catch below.
+  const workflowState: { selectedPersona: TomoriState | null } = { selectedPersona: null };
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     tomoriState = await getCachedTomoriState(serverDiscId);
@@ -96,7 +102,7 @@ export async function execute(
       return;
     }
 
-    // 2. Load the server's ordered category definitions; getStmCategories always returns at
+    // getStmCategories always returns at
     //    least the default `summary` category. slugMap preserves position order (slug → label).
     const categoryRows = await shortTermMemoryRepository.getStmCategories(tomoriState.server_id);
     const isCategoryMode =
@@ -105,77 +111,71 @@ export async function execute(
 
     const channelId = interaction.channelId;
 
-    // 3. Persona picker (single pass) — read-only view, so no in-place edit loop.
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+    await runPersonaPickerWorkflow(interaction, locale, {
       personas: allPersonas,
-      avatarSessionCache,
       color: ColorCode.INFO,
-      preserveSelectedInteraction: true,
-      onSelect: async () => {},
+      async onSelected(selection) {
+        workflowState.selectedPersona = selection.persona;
+        const personaId = selection.persona.persona_id;
+        const work = await selection.beginInPlaceWork();
+
+        if (personaId == null) {
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
+
+        // The STM cache hydrates lazily (a cold miss returns undefined and only fills
+        // on the NEXT read), so without awaiting this one-shot hydration a fresh boot
+        // would show "no memory" until a message was sent in the channel.
+        if (interaction.guild) {
+          await preWarmStmEntry("server", interaction.guild.id, channelId, personaId);
+        } else {
+          await preWarmStmEntry("user", interaction.user.id, channelId, personaId);
+        }
+
+        // Resolve the row in the scope that actually gets injected: server-shared in a
+        // guild, user-scoped in a DM (the same resolution the prompt builder uses).
+        const liveEntry: ShortTermMemoryEntry | undefined = interaction.guild
+          ? getShortTermMemoryForServerChannel(interaction.guild.id, channelId, personaId)
+          : getShortTermMemoryForUserChannel(interaction.user.id, channelId, personaId);
+
+        const body = formatStmDisplay({
+          slugMap,
+          liveEntry,
+          isCategoryMode,
+          locale,
+          isGuild: interaction.guild != null,
+          personaName: selection.persona.persona_nickname,
+        });
+
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.persona.stm.view.title",
+            descriptionKey: "commands.persona.stm.view.display",
+            descriptionVars: { content: body },
+            color: ColorCode.INFO,
+          }),
+        );
+
+        log.info(
+          `Viewed STM for persona ${personaId} in channel ${channelId} (${isCategoryMode ? "category" : "summary"} mode) by ${userData.user_disc_id}`,
+        );
+        return completePersonaWorkflow();
+      },
     });
-
-    if (!personaSelection.success) return;
-    if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
-
-    const buttonInteraction: ButtonInteraction = personaSelection.interaction;
-    selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-    if (!selectedPersona?.persona_id) {
-      await updateButtonComponentsV2Status(
-        buttonInteraction,
-        locale,
-        "general.errors.invalid_option_title",
-        "general.errors.invalid_option_description",
-        ColorCode.ERROR,
-      );
-      return;
-    }
-
-    const personaId = selectedPersona.persona_id;
-
-    // 4. Pre-warm the cache from the durable DB before the synchronous read. The STM cache
-    //    hydrates lazily (a cold miss returns undefined and only fills on the NEXT read), so
-    //    without this a fresh boot would show "no memory" until a message was sent. Awaiting
-    //    the one-shot hydration makes the very first view reflect the persisted row.
-    if (interaction.guild) {
-      await preWarmStmEntry("server", interaction.guild.id, channelId, personaId);
-    } else {
-      await preWarmStmEntry("user", interaction.user.id, channelId, personaId);
-    }
-
-    // 5. Resolve the LIVE durable STM row for this channel + persona in the injected scope —
-    //    server-shared in a guild, user-scoped in a DM (same resolution the prompt builder uses).
-    const liveEntry: ShortTermMemoryEntry | undefined = interaction.guild
-      ? getShortTermMemoryForServerChannel(interaction.guild.id, channelId, personaId)
-      : getShortTermMemoryForUserChannel(interaction.user.id, channelId, personaId);
-
-    // 6. Format the STM into a read-only display body and render it in place over the picker.
-    const body = formatStmDisplay({
-      slugMap,
-      liveEntry,
-      isCategoryMode,
-      locale,
-      isGuild: interaction.guild != null,
-      personaName: selectedPersona.persona_nickname,
-    });
-
-    await updateButtonComponentsV2Status(
-      buttonInteraction,
-      locale,
-      "commands.persona.stm.view.title",
-      "commands.persona.stm.view.display",
-      ColorCode.INFO,
-      { content: body },
-    );
-
-    log.info(
-      `Viewed STM for persona ${personaId} in channel ${channelId} (${isCategoryMode ? "category" : "summary"} mode) by ${userData.user_disc_id}`,
-    );
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: workflowState.selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona stm view",
@@ -217,14 +217,14 @@ function formatStmDisplay(args: {
 }): string {
   const { slugMap, liveEntry, isCategoryMode, locale, isGuild, personaName } = args;
 
-  // 1. Header + scope line so the viewer knows exactly which row they are looking at.
+  // Header + scope line so the viewer knows exactly which row they are looking at.
   const lines: string[] = [
     `**${personaName}**`,
     localizer(locale, isGuild ? "commands.persona.stm.view.scope_guild" : "commands.persona.stm.view.scope_dm"),
     "",
   ];
 
-  // 2. Body — mirror the prompt render for the active storage mode.
+  // Body: mirror the prompt render for the active storage mode.
   if (isCategoryMode) {
     const categories = liveEntry?.categories ?? {};
     const sections: string[] = [];
@@ -240,7 +240,7 @@ function formatStmDisplay(args: {
     lines.push(summary || localizer(locale, "commands.persona.stm.view.empty_body"));
   }
 
-  // 3. Guard against overflowing the TextDisplay component limit.
+  // Guard against overflowing the TextDisplay component limit.
   const text = lines.join("\n");
   return text.length > MAX_DISPLAY_LENGTH
     ? `${text.slice(0, MAX_DISPLAY_LENGTH)}\n${localizer(locale, "commands.persona.stm.view.truncated")}`

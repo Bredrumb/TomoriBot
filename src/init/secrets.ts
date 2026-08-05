@@ -10,7 +10,6 @@ import type { AppEnvironment } from "@/types/config";
  *
  * Must be called before any module that reads credentials from process.env.
  *
- * @param environment - Resolved runtime environment
  */
 export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   log.section("Loading Application Secrets...");
@@ -25,17 +24,28 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
   process.env.POSTGRES_DB = secrets.POSTGRES_DB;
   process.env.CRYPTO_SECRET = secrets.CRYPTO_SECRET;
 
-  // Auto-detect and assign key versions (CRYPTO_SECRET_V1, V2, V3, etc.)
   if (secrets.CRYPTO_SECRET_V1) process.env.CRYPTO_SECRET_V1 = secrets.CRYPTO_SECRET_V1;
   if (secrets.CRYPTO_SECRET_V2) process.env.CRYPTO_SECRET_V2 = secrets.CRYPTO_SECRET_V2;
   if (secrets.CRYPTO_SECRET_V3) process.env.CRYPTO_SECRET_V3 = secrets.CRYPTO_SECRET_V3;
 
   if (secrets.DISCORD_WEBHOOK_URL) process.env.DISCORD_WEBHOOK_URL = secrets.DISCORD_WEBHOOK_URL;
 
+  if (secrets.AWS_ACCESS_KEY_ID) process.env.AWS_ACCESS_KEY_ID = secrets.AWS_ACCESS_KEY_ID;
+  if (secrets.AWS_SECRET_ACCESS_KEY) process.env.AWS_SECRET_ACCESS_KEY = secrets.AWS_SECRET_ACCESS_KEY;
+  if (secrets.S3_ENDPOINT) process.env.S3_ENDPOINT = secrets.S3_ENDPOINT;
+
   if (secrets.AVATAR_S3_BUCKET) process.env.AVATAR_S3_BUCKET = secrets.AVATAR_S3_BUCKET;
   if (secrets.AVATAR_S3_REGION) process.env.AVATAR_S3_REGION = secrets.AVATAR_S3_REGION;
   if (secrets.AVATAR_S3_PREFIX) process.env.AVATAR_S3_PREFIX = secrets.AVATAR_S3_PREFIX;
   if (secrets.AVATAR_PUBLIC_BASE_URL) process.env.AVATAR_PUBLIC_BASE_URL = secrets.AVATAR_PUBLIC_BASE_URL;
+
+  if (secrets.VOICE_SAMPLE_GCS_BUCKET) process.env.VOICE_SAMPLE_GCS_BUCKET = secrets.VOICE_SAMPLE_GCS_BUCKET;
+  if (secrets.VOICE_SAMPLE_GCS_PREFIX) process.env.VOICE_SAMPLE_GCS_PREFIX = secrets.VOICE_SAMPLE_GCS_PREFIX;
+  if (secrets.VOICE_SAMPLE_S3_BUCKET) process.env.VOICE_SAMPLE_S3_BUCKET = secrets.VOICE_SAMPLE_S3_BUCKET;
+  if (secrets.VOICE_SAMPLE_S3_REGION) process.env.VOICE_SAMPLE_S3_REGION = secrets.VOICE_SAMPLE_S3_REGION;
+  if (secrets.VOICE_SAMPLE_S3_PREFIX) process.env.VOICE_SAMPLE_S3_PREFIX = secrets.VOICE_SAMPLE_S3_PREFIX;
+  if (secrets.VOICE_SAMPLE_PUBLIC_BASE_URL)
+    process.env.VOICE_SAMPLE_PUBLIC_BASE_URL = secrets.VOICE_SAMPLE_PUBLIC_BASE_URL;
 
   if (secrets.CHARREF_S3_BUCKET) process.env.CHARREF_S3_BUCKET = secrets.CHARREF_S3_BUCKET;
   if (secrets.CHARREF_S3_REGION) process.env.CHARREF_S3_REGION = secrets.CHARREF_S3_REGION;
@@ -52,11 +62,19 @@ export async function loadSecrets(environment: AppEnvironment): Promise<void> {
 
   if (secrets.TOPGG_TOKEN) process.env.TOPGG_TOKEN = secrets.TOPGG_TOKEN;
 
-  // Must be set before any module reads MEMORY_PROTECTION()
-  if (secrets.CONTAINER_MEMORY_LIMIT_MB) process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
+  // Must be set before any module reads MEMORY_PROTECTION(). Deployment env wins: a stale bundle
+  // value could otherwise restore a limit above physical memory, leaving the guard unreachable.
+  if (secrets.CONTAINER_MEMORY_LIMIT_MB && !process.env.CONTAINER_MEMORY_LIMIT_MB)
+    process.env.CONTAINER_MEMORY_LIMIT_MB = secrets.CONTAINER_MEMORY_LIMIT_MB;
 
   const secretsSource =
-    environment === "production" && process.env.TEST_PRODUCTION !== "true" ? "AWS Secrets Manager" : ".env file";
+    environment !== "production" || process.env.TEST_PRODUCTION === "true"
+      ? ".env file"
+      : process.env.SECRET_FILE
+        ? "mounted JSON secret file"
+        : process.env.GCP_SECRET_FILE
+          ? "GCP Secret Manager file"
+          : "AWS Secrets Manager";
   log.success(`Secrets loaded successfully from ${secretsSource}`);
 
   // Initialize encryption key manager after process.env is fully populated

@@ -1,5 +1,5 @@
 /**
- * PresetRepository — manages SillyTavern preset data, persona preset import/export,
+ * PresetRepository: manages SillyTavern preset data, persona preset import/export,
  * and SillyTavern card conversion.
  *
  * Consolidates stPresetDb.ts, presetExport.ts, presetImport.ts, sillyTavernImport.ts.
@@ -33,8 +33,6 @@ import { dedupeTriggerWords, normalizeTriggerWord, stripSurroundingTriggerQuotes
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
 
-// ── SillyTavern conversion private types ──────────────────────────────────────
-
 type JsonObject = Record<string, unknown>;
 
 type DialoguePair = {
@@ -52,7 +50,7 @@ type ContentSection = {
   content: string;
 };
 
-export type SillyTavernConversionResult =
+type SillyTavernConversionResult =
   | {
       success: true;
       data: PresetExportData;
@@ -112,9 +110,7 @@ function normalizeNullableText(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export class PresetRepository {
-  // ── SillyTavern conversion private helpers (from sillyTavernImport.ts) ───────
-
+class PresetRepository {
   private asObject(value: unknown): JsonObject | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return null;
@@ -499,8 +495,6 @@ export class PresetRepository {
     return preset ?? null;
   }
 
-  // ── ST preset DB operations (from stPresetDb.ts) ──────────────────────────
-
   /**
    * Insert a new ST preset with its parsed nodes in a single transaction.
    * If a preset with the same name already exists for this server, the
@@ -519,23 +513,23 @@ export class PresetRepository {
     nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[],
   ): Promise<StPresetRow | null> {
     try {
-      // 1. Use a transaction to ensure atomicity (preset + all nodes or nothing)
+      // Use a transaction to ensure atomicity (preset + all nodes or nothing)
       const result = await sql.begin(async (tx) => {
-        // 2. Remove any existing preset with the same name for this server.
-        //    The FK cascade on st_preset_nodes deletes old nodes automatically.
+        // Deleting the old preset first is safe because its nodes are covered by
+        // the st_preset_nodes foreign-key cascade.
         await tx`
           DELETE FROM st_presets
           WHERE server_id = ${serverId} AND preset_name = ${presetName}
         `;
 
-        // 3. Insert the preset metadata + raw JSON
+        // Insert the preset metadata + raw JSON
         const [preset] = await tx`
           INSERT INTO st_presets (server_id, preset_name, raw_json)
           VALUES (${serverId}, ${presetName}, ${JSON.stringify(rawJson)})
           RETURNING *
         `;
 
-        // 4. Insert each node with a reference to the new preset_id
+        // Insert each node with a reference to the new preset_id
         for (const node of nodes) {
           await tx`
             INSERT INTO st_preset_nodes (
@@ -577,7 +571,6 @@ export class PresetRepository {
   /**
    * Load all ST presets for a server (metadata only, no nodes).
    *
-   * @param serverId - Internal server_id
    * @returns Array of preset rows ordered by creation date
    */
   async loadPresetsForServer(serverId: number): Promise<StPresetRow[]> {
@@ -614,9 +607,7 @@ export class PresetRepository {
   }
 
   /**
-   * Load the currently active preset for a server, if any.
    *
-   * @param serverId - Internal server_id
    * @returns The active preset row or null
    */
   async loadActivePreset(serverId: number): Promise<StPresetRow | null> {
@@ -738,19 +729,18 @@ export class PresetRepository {
    * Set a preset as active and deactivate all others for the same server.
    * Uses a transaction to ensure only one preset is active at a time.
    *
-   * @param serverId - Internal server_id
    * @param presetId - The preset_id to activate
    * @returns True if the activation succeeded
    */
   async setActivePreset(serverId: number, presetId: number): Promise<boolean> {
     try {
       await sql.begin(async (tx) => {
-        // 1. Deactivate all presets for this server
+        // Deactivate all presets for this server
         await tx`
           UPDATE st_presets SET is_active = false
           WHERE server_id = ${serverId}
         `;
-        // 2. Activate the target preset
+        // Activate the target preset
         await tx`
           UPDATE st_presets SET is_active = true
           WHERE preset_id = ${presetId} AND server_id = ${serverId}
@@ -766,8 +756,6 @@ export class PresetRepository {
     }
   }
 
-  // ── Preset export (from presetExport.ts) ──────────────────────────────────
-
   /**
    * Exports TomoriBot preset personality data for a given server.
    * Queries data from personas and persona_configs (tomori_configs was dropped in Task F2, migration 008).
@@ -778,7 +766,6 @@ export class PresetRepository {
    */
   async exportPresetData(serverDiscId: string, targetPersonaId?: number): Promise<ExportResult> {
     try {
-      // 1. Get internal server ID
       const serverRows = await sql`
         SELECT server_id
         FROM servers
@@ -792,32 +779,36 @@ export class PresetRepository {
 
       const serverId = serverRows[0].server_id;
 
-      // 2. Query target persona row (explicit selection) or default main persona
+      // Query target persona row (explicit selection) or default main persona
       const personaRows =
         typeof targetPersonaId === "number"
           ? await sql`
               SELECT
-                persona_id, persona_nickname, persona_lineage_id,
-                attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, is_pointer, preset_lineage_id, preset_language,
-                physical_appearance_tags, nai_char_ref_url,
-                nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM personas
-              WHERE server_id = ${serverId}
-                AND persona_id = ${targetPersonaId}
+                p.persona_id, p.persona_nickname, p.persona_lineage_id,
+                p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
+                p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language,
+                pic.physical_appearance_tags, pic.nai_char_ref_url,
+                ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
+              FROM personas p
+              LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
+              LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
+              WHERE p.server_id = ${serverId}
+                AND p.persona_id = ${targetPersonaId}
               LIMIT 1
             `
           : await sql`
               SELECT
-                persona_id, persona_nickname, persona_lineage_id,
-                attribute_list, sample_dialogues_in, sample_dialogues_out,
-                is_alter, is_pointer, preset_lineage_id, preset_language,
-                physical_appearance_tags, nai_char_ref_url,
-                nai_attg_author, nai_attg_title, nai_attg_tags, nai_attg_genre, nai_attg_stars
-              FROM personas
-              WHERE server_id = ${serverId}
-                AND is_alter = false
-              ORDER BY updated_at DESC NULLS LAST, persona_id DESC
+                p.persona_id, p.persona_nickname, p.persona_lineage_id,
+                p.attribute_list, p.sample_dialogues_in, p.sample_dialogues_out,
+                p.is_alter, p.is_pointer, p.preset_lineage_id, p.preset_language,
+                pic.physical_appearance_tags, pic.nai_char_ref_url,
+                ptc.nai_attg_author, ptc.nai_attg_title, ptc.nai_attg_tags, ptc.nai_attg_genre, ptc.nai_attg_stars
+              FROM personas p
+              LEFT JOIN persona_imagegen_configs pic ON pic.persona_id = p.persona_id
+              LEFT JOIN persona_textgen_configs ptc ON ptc.persona_id = p.persona_id
+              WHERE p.server_id = ${serverId}
+                AND p.is_alter = false
+              ORDER BY p.updated_at DESC NULLS LAST, p.persona_id DESC
               LIMIT 1
             `;
 
@@ -850,7 +841,6 @@ export class PresetRepository {
             ? Number(lineageIdRaw)
             : lineageIdRaw;
 
-      // 3. Load trigger words + persona prompt from persona-scoped config first
       let triggerWords: string[] | null = null;
       let personaPrompt: string | null = null;
       const personaConfigRows = await sql`
@@ -895,7 +885,7 @@ export class PresetRepository {
         ? normalizeLineageId(pointerPreset.preset_lineage_id)
         : normalizeLineageId(presetData.preset_lineage_id);
 
-      // 4. Build export object with metadata (includes NovelAI persona fields)
+      // Build export object with metadata (includes NovelAI persona fields)
       const exportData: PresetExport = {
         version: PRESET_EXPORT_VERSION,
         type: "preset",
@@ -920,7 +910,6 @@ export class PresetRepository {
         },
       };
 
-      // 5. Validate export data structure
       const validated = presetExportSchema.safeParse(exportData);
       if (!validated.success) {
         log.error(`Preset export validation failed for server ${serverDiscId}:`, validated.error);
@@ -938,13 +927,10 @@ export class PresetRepository {
     }
   }
 
-  // ── Preset import + validation (from presetImport.ts) ────────────────────
-
   /**
    * Imports TomoriBot preset personality data, replacing existing personality.
    *
    * @param serverDiscId - Discord server ID to import preset for
-   * @param importData - The validated preset export data to import
    * @param identityMode - preserve: keep/import lineage, fork: assign a fresh lineage
    * @returns ImportResult indicating success or failure with item counts
    */
@@ -964,7 +950,6 @@ export class PresetRepository {
       const validatedImportData = importValidation.data;
       const matchingOfficialPreset = await this.findMatchingOfficialPresetForImport(validatedImportData);
 
-      // 1. Validate persona-scoped config fields for SQL security.
       try {
         validatePersonaConfigFields(["trigger_words", "persona_prompt"]);
       } catch (error) {
@@ -972,7 +957,7 @@ export class PresetRepository {
         return { success: false, error: "commands.persona.import.error_invalid_config" };
       }
 
-      // 2. Get internal server ID and tomori ID (main persona only)
+      // Get internal server ID and tomori ID (main persona only)
       const serverRows = await sql`
         SELECT s.server_id, t.persona_id, t.persona_lineage_id
         FROM servers s
@@ -991,7 +976,7 @@ export class PresetRepository {
       const importedLineageId = validatedImportData.persona_lineage_id ?? null;
       const importedPresetLineageId = normalizeLineageId(validatedImportData.preset_lineage_id);
 
-      // 3. Enforce persona nickname uniqueness within this server (excluding current main persona)
+      // Enforce persona nickname uniqueness within this server (excluding current main persona)
       const conflictingNameRows = await sql<Array<{ persona_id: number }>>`
         SELECT persona_id
         FROM personas
@@ -1045,7 +1030,7 @@ export class PresetRepository {
         };
       }
 
-      // 4. Format arrays as PostgreSQL array literals for safe insertion
+      // Format arrays as PostgreSQL array literals for safe insertion
       const attributeArrayLiteral = `{${validatedImportData.attribute_list
         .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
         .join(",")}}`;
@@ -1063,12 +1048,6 @@ export class PresetRepository {
         .join(",")}}`;
       const shouldUseImportedLineage = identityMode === "preserve" && importedLineageId !== null;
 
-      // 5. Build physical appearance tags array literal for safe insertion
-      const physicalAppearanceTagsArrayLiteral = `{${(validatedImportData.physical_appearance_tags ?? [])
-        .map((item: string) => `"${item.replace(/(["\\])/g, "\\$1")}"`)
-        .join(",")}}`;
-
-      // 6. Update personas table with personality data, lineage behavior, and image-related fields
       try {
         await sql`
           UPDATE personas
@@ -1084,14 +1063,7 @@ export class PresetRepository {
             END,
             is_pointer = false,
             preset_lineage_id = ${importedPresetLineageId},
-            preset_language = NULL,
-            physical_appearance_tags = ${physicalAppearanceTagsArrayLiteral}::text[],
-            nai_char_ref_url = ${validatedImportData.nai_char_ref_url ?? null},
-            nai_attg_author = ${validatedImportData.nai_attg_author ?? null},
-            nai_attg_title = ${validatedImportData.nai_attg_title ?? null},
-            nai_attg_tags = ${validatedImportData.nai_attg_tags ?? null},
-            nai_attg_genre = ${validatedImportData.nai_attg_genre ?? null},
-            nai_attg_stars = ${validatedImportData.nai_attg_stars ?? null}
+            preset_language = NULL
           WHERE persona_id = ${mainTomoriId}
         `;
       } catch (error) {
@@ -1104,6 +1076,26 @@ export class PresetRepository {
         throw error;
       }
 
+      const imageTagsUpdated = await personaRepository.setPhysicalAppearanceTags(
+        mainTomoriId,
+        validatedImportData.physical_appearance_tags ?? [],
+      );
+      const charRefUpdated = await personaRepository.setNaiCharRef(
+        mainTomoriId,
+        validatedImportData.nai_char_ref_url ?? null,
+      );
+      const attgUpdated = await personaRepository.setNaiAttg(mainTomoriId, {
+        nai_attg_author: validatedImportData.nai_attg_author ?? null,
+        nai_attg_title: validatedImportData.nai_attg_title ?? null,
+        nai_attg_tags: validatedImportData.nai_attg_tags ?? null,
+        nai_attg_genre: validatedImportData.nai_attg_genre ?? null,
+        nai_attg_stars: validatedImportData.nai_attg_stars ?? null,
+      });
+
+      if (!imageTagsUpdated || !charRefUpdated || !attgUpdated) {
+        return { success: false, error: "commands.persona.import.error_import_failed" };
+      }
+
       const attributesUpdated = await personaRepository.replaceAttributes(
         mainTomoriId,
         validatedImportData.attribute_list,
@@ -1113,7 +1105,6 @@ export class PresetRepository {
         return { success: false, error: "commands.persona.import.error_import_failed" };
       }
 
-      // 7. Update persona-scoped trigger words + optional persona prompt
       const importedPersonaPrompt =
         typeof validatedImportData.persona_prompt === "string" ? validatedImportData.persona_prompt : null;
 
@@ -1185,12 +1176,11 @@ export class PresetRepository {
    * @returns Validation result with parsed data or error message
    */
   validatePresetFile(jsonData: unknown): ValidationResult {
-    // 1. Check if data is an object
     if (typeof jsonData !== "object" || jsonData === null) {
       return { valid: false, error: "commands.persona.import.error_not_json" };
     }
 
-    // 2. Check version compatibility
+    // Check version compatibility
     const version = (jsonData as { version?: string }).version;
     if (version !== PRESET_EXPORT_VERSION) {
       return {
@@ -1199,13 +1189,11 @@ export class PresetRepository {
       };
     }
 
-    // 3. Check type field
     const type = (jsonData as { type?: string }).type;
     if (type !== "preset") {
       return { valid: false, error: `commands.persona.import.error_invalid_type|${type}` };
     }
 
-    // 4. Validate with Zod schema
     const validated = presetExportSchema.safeParse(jsonData);
     if (!validated.success) {
       log.error("Preset import validation failed:", validated.error);
@@ -1214,8 +1202,6 @@ export class PresetRepository {
 
     return this.validatePresetData(validated.data.data);
   }
-
-  // ── SillyTavern conversion public API (from sillyTavernImport.ts) ─────────
 
   /**
    * Returns true if the given unknown value looks like a SillyTavern character card JSON.

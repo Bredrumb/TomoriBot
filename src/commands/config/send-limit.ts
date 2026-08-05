@@ -1,4 +1,4 @@
-﻿import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { configRepository } from "@/utils/db/repositories";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
@@ -11,7 +11,6 @@ const MIN_LIMIT = 0;
 const MAX_LIMIT = 40;
 const DEFAULT_LIMIT = 0;
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("send-limit")
@@ -29,10 +28,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Configures the maximum number of Discord messages sent per AI response.
  * 0 disables the limit (responses are only bounded by the safety MAX_FLUSH_COUNT).
  * 1-40 caps messages at the specified count, producing clean cutoffs at sentence boundaries.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -40,7 +35,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -50,14 +44,12 @@ export async function execute(
     return;
   }
 
-  // 2. Defer the interaction before async work to prevent timeout
+  // Defer the interaction before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 3. Get the limit value from options
     const limit = interaction.options.getInteger("limit", true);
 
-    // 4. Validate range (redundant but safe)
     if (limit < MIN_LIMIT || limit > MAX_LIMIT) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.config.sendlimit.invalid_range_title",
@@ -71,7 +63,6 @@ export async function execute(
       return;
     }
 
-    // 5. Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -82,7 +73,6 @@ export async function execute(
       return;
     }
 
-    // 6. Check if this is the same as the current limit
     const currentLimit = tomoriState.config.send_message_limit ?? DEFAULT_LIMIT;
     if (limit === currentLimit) {
       await replyInfoEmbed(interaction, locale, {
@@ -96,7 +86,6 @@ export async function execute(
       return;
     }
 
-    // 7. Update the limit in the database
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, { send_message_limit: limit });
 
     if (!updated) {
@@ -121,10 +110,9 @@ export async function execute(
       return;
     }
 
-    // 8. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild.id);
 
-    // 10. Success message - indicate disabled state if limit is 0
     const isEnabled = limit > 0;
     await replyInfoEmbed(interaction, locale, {
       titleKey: isEnabled

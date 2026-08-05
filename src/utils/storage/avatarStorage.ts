@@ -32,7 +32,7 @@ type AvatarUploadOptions = {
 
 type AvatarStorageConfig =
   | { backend: "gcs"; bucket: string; prefix: string; publicBaseUrl: string }
-  | { backend: "s3"; bucket: string; prefix: string; publicBaseUrl: string; region: string };
+  | { backend: "s3"; bucket: string; prefix: string; publicBaseUrl: string; region: string; endpoint?: string };
 
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
 const LOCAL_AVATAR_BASE_DIR = path.resolve(process.cwd(), "data", "avatars");
@@ -40,6 +40,7 @@ const LOCAL_AVATAR_ROOT_PREFIX = "data/avatars/";
 let cachedGcsStorage: Storage | null = null;
 let cachedS3Client: S3Client | null = null;
 let cachedS3Region: string | null = null;
+let cachedS3Endpoint: string | undefined;
 
 function getAvatarStorageConfig(): AvatarStorageConfig | null {
   if (!IS_PRODUCTION) {
@@ -66,9 +67,10 @@ function getAvatarStorageConfig(): AvatarStorageConfig | null {
   }
 
   const region = process.env.AVATAR_S3_REGION?.trim() || process.env.AWS_REGION?.trim() || "us-east-1";
+  const endpoint = process.env.S3_ENDPOINT?.trim() || undefined;
   const prefix = (process.env.AVATAR_S3_PREFIX || "avatars").replace(/^\/+/, "").replace(/\/+$/, "");
   const publicBaseUrl = process.env.AVATAR_PUBLIC_BASE_URL?.trim() || `https://${s3Bucket}.s3.${region}.amazonaws.com`;
-  return { backend: "s3", bucket: s3Bucket, prefix, publicBaseUrl, region };
+  return { backend: "s3", bucket: s3Bucket, prefix, publicBaseUrl, region, endpoint };
 }
 
 function getGcsStorage(): Storage {
@@ -78,10 +80,14 @@ function getGcsStorage(): Storage {
   return cachedGcsStorage;
 }
 
-function getS3Client(region: string): S3Client {
-  if (!cachedS3Client || cachedS3Region !== region) {
+function getS3Client(region: string, endpoint?: string): S3Client {
+  if (!cachedS3Client || cachedS3Region !== region || cachedS3Endpoint !== endpoint) {
     cachedS3Region = region;
-    cachedS3Client = new S3Client({ region });
+    cachedS3Endpoint = endpoint;
+    cachedS3Client = new S3Client({
+      region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    });
   }
   return cachedS3Client;
 }
@@ -290,7 +296,7 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
 
     // S3 path
     try {
-      await getS3Client(config.region).send(
+      await getS3Client(config.region, config.endpoint).send(
         new PutObjectCommand({
           Bucket: config.bucket,
           Key: key,
@@ -344,9 +350,7 @@ export async function uploadPersonaSpriteToStorage(
  * re-seed is a no-op) while changed art yields a new name (so the URL changes and
  * pointer personas pick it up live). The sprite key is sanitized for path safety.
  *
- * @param spriteKey - Normalized sprite lookup key
  * @param contentHash - Short hash of the PNG bytes
- * @returns A path-safe filename like `mad-ab12cd34ef56.png`
  */
 export function buildPresetSpriteFilename(spriteKey: string, contentHash: string): string {
   const safeKey = sanitizeAttachmentFilenamePart(spriteKey, { fallback: "sprite", maxLength: 40 });
@@ -372,7 +376,6 @@ function buildPresetSpriteRelativeKey(options: {
  * shared URL changes and pointer personas pick the new avatar up live).
  *
  * @param contentHash - Short hash of the PNG bytes
- * @returns A path-safe filename like `avatar-ab12cd34ef56.png`
  */
 export function buildPresetAvatarFilename(contentHash: string): string {
   return `avatar-${contentHash}.png`;
@@ -424,7 +427,7 @@ async function uploadSharedPresetObject(relativeKey: string, buffer: Buffer, log
     }
 
     try {
-      await getS3Client(config.region).send(
+      await getS3Client(config.region, config.endpoint).send(
         new PutObjectCommand({
           Bucket: config.bucket,
           Key: key,
@@ -517,7 +520,6 @@ export function isSharedPresetAssetReference(reference?: string | null): boolean
     return false;
   }
 
-  // Local form: data/avatars/presets/...
   const normalized = normalizeStoredPath(trimmed);
   if (normalized.startsWith(`${LOCAL_AVATAR_ROOT_PREFIX}${SHARED_PRESET_SEGMENT}/`)) {
     return true;
@@ -580,7 +582,7 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
 
     // S3 path
     try {
-      await getS3Client(config.region).send(
+      await getS3Client(config.region, config.endpoint).send(
         new DeleteObjectCommand({
           Bucket: config.bucket,
           Key: key,

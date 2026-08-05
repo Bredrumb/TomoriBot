@@ -44,7 +44,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Convert ColorCode hex string to Discord number format
  * @param hexColor - Hex color string (e.g., "#3498DB")
- * @returns Numeric color code for Discord embeds
  */
 function hexToNumber(hexColor: string): number {
   return Number.parseInt(hexColor.replace("#", ""), 16);
@@ -72,10 +71,6 @@ function buildStickerCDNUrl(stickerId: string): string {
   return `https://cdn.discordapp.com/stickers/${stickerId}.png`;
 }
 
-/**
- * Build system prompt for LLM
- * @returns System instruction text
- */
 function buildSystemPrompt(): string {
   return `You are an expert visual analyzer specializing in classifying emojis and stickers based on their emotional expression.
 
@@ -90,17 +85,9 @@ Guidelines:
 - Match emoji/sticker names case-insensitively`;
 }
 
-/**
- * Build user prompt for LLM
- *
- * @param items - Array of items to analyze (with name and type)
- * @returns User prompt text
- */
 function buildUserPrompt(items: Array<{ name: string; type: "emoji" | "sticker" }>): string {
-  // 1. Build numbered list of items
   const itemList = items.map((item, idx) => `${idx + 1}. ${item.name} (${item.type})`).join("\n");
 
-  // 2. Construct prompt
   return `Analyze the following ${items.length} Discord expressions and classify each one:
 
 ${itemList}
@@ -115,10 +102,6 @@ Return results in the specified JSON format.`;
 /**
  * Execute the /server expressions initialize command
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -126,7 +109,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild (not DM)
   if (!interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -137,7 +119,6 @@ export async function execute(
     return;
   }
 
-  // 2. Load Tomori state for this server
   const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -149,10 +130,10 @@ export async function execute(
     return;
   }
 
-  // 3. Defer reply early (this operation may take time)
+  // Defer reply early (this operation may take time)
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // 3a. Overlay the invoking user's personal (BYOK) provider so the expression
+  // Overlay the invoking user's personal (BYOK) provider so the expression
   //     generation runs on their personal model/key when configured. Done after
   //     deferReply since it performs DB reads (keeps the 3s ack window safe).
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
@@ -160,7 +141,7 @@ export async function execute(
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
 
   try {
-    // 4. Force sync emojis and stickers from Discord to ensure DB is populated
+    // Force sync emojis and stickers from Discord to ensure DB is populated
     // This handles scenarios where:
     // - Bot was just added to server (empty DB)
     // - Bot was kicked and re-added with new emojis/stickers
@@ -172,13 +153,12 @@ export async function execute(
 
     log.info(`[Initialize Expressions] Sync complete for guild ${interaction.guild.name}`);
 
-    // 5. Resolve effective LLM for expression initialization
+    // Resolve effective LLM for expression initialization
     // Primary model is preferred; vision model used as fallback when primary lacks vision
     const llm = tomoriState.llm;
     let effectiveLlm = llm;
 
     if (!llm.sees_images || !llm.supports_structoutput) {
-      // Primary model is missing a required capability — try vision model fallback
       const visionLlm = tomoriState.vision_llm;
 
       if (visionLlm?.sees_images && visionLlm.supports_structoutput) {
@@ -187,12 +167,9 @@ export async function execute(
         );
         effectiveLlm = visionLlm;
       } else {
-        // Neither model meets requirements
         const effectiveModelName = getEffectiveLlmModelName(llm, tomoriState.config.custom_model_name);
 
-        // Determine which error message to show
         if (!visionLlm) {
-          // No vision model configured — show original single-model error
           const missingCapability = !llm.sees_images ? "IMAGE VISION" : "STRUCTURED OUTPUT";
           await interaction.editReply({
             embeds: [
@@ -211,7 +188,6 @@ export async function execute(
             ],
           });
         } else {
-          // Vision model exists but also lacks capabilities
           await interaction.editReply({
             embeds: [
               {
@@ -253,13 +229,13 @@ export async function execute(
       ]);
     }
 
-    // 6. Resolve the provider and its per-batch image cap once. These are constant
+    // Resolve the provider and its per-batch image cap once. These are constant
     //    across every loop iteration, so there is no need to recompute them per batch.
     const provider = effectiveLlm.llm_provider.toLowerCase();
     const structuredOutputCapability = await resolveStructuredOutputCapability(provider);
     const expressionBatchSize = structuredOutputCapability?.getExpressionInitializationBatchSize?.() ?? null;
 
-    // 7. Verify an API key exists, then decrypt it once for reuse across all batches
+    // Verify an API key exists, then decrypt it once for reuse across all batches
     if (!tomoriState.config.api_key) {
       await interaction.editReply({
         embeds: [
@@ -276,14 +252,13 @@ export async function execute(
     const keyVersion = tomoriState.config.key_version || 1;
     const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
 
-    // 8. Snapshot the starting backlog so the final report can compare against it
+    // Snapshot the starting backlog so the final report can compare against it
     const [initialEmojis, initialStickers] = await Promise.all([
       serverRepository.loadUninitializedEmojis(tomoriState.server_id),
       serverRepository.loadUninitializedStickers(tomoriState.server_id),
     ]);
     const grandTotalUninitialized = initialEmojis.length + initialStickers.length;
 
-    // 8a. Nothing to do — every expression has already been classified
     if (grandTotalUninitialized === 0) {
       await interaction.editReply({
         embeds: [
@@ -297,7 +272,7 @@ export async function execute(
       return;
     }
 
-    // 9. Self-looping batch processor.
+    // Self-looping batch processor.
     //    Previously the command processed a single provider-sized batch and asked
     //    the user to re-run for the rest. It now drains the entire backlog on its
     //    own, one batch per iteration.
@@ -310,11 +285,9 @@ export async function execute(
     const maxChunkRetries = Number.parseInt(process.env.EXPRESSION_INIT_MAX_CHUNK_RETRIES || "3", 10);
     const batchDelayMs = Number.parseInt(process.env.EXPRESSION_INIT_BATCH_DELAY_MS || "1000", 10);
 
-    // 9a. Constants shared by every batch
     const systemPrompt = buildSystemPrompt();
     const temperature = 1.0;
 
-    // 9b. Mutable loop state
     let totalEmojiProcessed = 0;
     let totalStickerProcessed = 0;
     let batchNumber = 0;
@@ -322,19 +295,18 @@ export async function execute(
     let previousRemaining = -1; // backlog size observed at the start of the previous iteration
 
     while (true) {
-      // 9c. Re-query the backlog each iteration so prior batches' DB writes shrink it
+      // Re-query the backlog each iteration so prior batches' DB writes shrink it
       const [pendingEmojis, pendingStickers] = await Promise.all([
         serverRepository.loadUninitializedEmojis(tomoriState.server_id),
         serverRepository.loadUninitializedStickers(tomoriState.server_id),
       ]);
       const remaining = pendingEmojis.length + pendingStickers.length;
 
-      // 9d. Backlog fully drained — we are done
       if (remaining === 0) {
         break;
       }
 
-      // 9e. Loop-safety: detect a chunk that is not shrinking and cap its retries
+      // Loop-safety: detect a chunk that is not shrinking and cap its retries
       if (remaining === previousRemaining) {
         chunkRetries++;
         log.warn(
@@ -347,17 +319,14 @@ export async function execute(
           break;
         }
       } else {
-        // Backlog shrank since the last iteration → real progress, reset the guard
         chunkRetries = 0;
       }
       previousRemaining = remaining;
       batchNumber++;
 
-      // 9f. Build this iteration's image/item batch, capped at the provider batch size
       const images: Array<{ url: string; name: string }> = [];
       const items: Array<{ name: string; type: "emoji" | "sticker" }> = [];
 
-      // Add emojis
       for (const emoji of pendingEmojis) {
         images.push({
           url: buildEmojiCDNUrl(emoji.emoji_disc_id),
@@ -366,7 +335,6 @@ export async function execute(
         items.push({ name: emoji.emoji_name, type: "emoji" });
       }
 
-      // Add stickers
       for (const sticker of pendingStickers) {
         images.push({
           url: buildStickerCDNUrl(sticker.sticker_disc_id),
@@ -384,7 +352,6 @@ export async function execute(
         );
       }
 
-      // 9g. Progress update for this batch
       await interaction.editReply({
         embeds: [
           {
@@ -400,7 +367,6 @@ export async function execute(
         ],
       });
 
-      // 9h. Build the per-batch prompt and call the provider
       const userPrompt = buildUserPrompt(items);
 
       log.info(
@@ -430,7 +396,7 @@ export async function execute(
 
       log.info(`LLM structured output response (batch ${batchNumber}): ${JSON.stringify(result, null, 2)}`);
 
-      // 9i. On a provider error, log and let the loop retry this chunk (capped by maxChunkRetries)
+      // On a provider error, log and let the loop retry this chunk (capped by maxChunkRetries)
       if (!result.success) {
         log.error("LLM structured output failed", new Error(result.error), {
           errorType: "LLMStructuredOutputError",
@@ -443,7 +409,6 @@ export async function execute(
         continue;
       }
 
-      // 9j. Validate the response; an invalid shape is also a retryable no-progress batch
       const validationResult = ExpressionBatchResultSchema.safeParse(result.data);
 
       if (!validationResult.success) {
@@ -458,7 +423,6 @@ export async function execute(
         continue;
       }
 
-      // 9k. Persist this batch's classifications and accumulate running totals
       const { emojiCount, stickerCount } = await serverRepository.initializeExpressions(
         tomoriState.server_id,
         validationResult.data.expressions,
@@ -466,18 +430,16 @@ export async function execute(
       totalEmojiProcessed += emojiCount;
       totalStickerProcessed += stickerCount;
 
-      // 9l. Brief pause between batches to stay within provider rate limits, skipped
+      // Brief pause between batches to stay within provider rate limits, skipped
       //     when this batch drained the remaining backlog (no further iteration needed)
       if (batchDelayMs > 0 && remaining - (emojiCount + stickerCount) > 0) {
         await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
       }
     }
 
-    // 10. Final report based on the accumulated totals across every batch
     const totalProcessed = totalEmojiProcessed + totalStickerProcessed;
 
     if (totalProcessed === 0) {
-      // No expressions were updated at all (every batch failed to match)
       await interaction.editReply({
         embeds: [
           {
@@ -488,7 +450,6 @@ export async function execute(
         ],
       });
     } else if (totalProcessed < grandTotalUninitialized) {
-      // Partial success — the loop stopped (stuck chunk) with some expressions left over
       const failed = grandTotalUninitialized - totalProcessed;
       await interaction.editReply({
         embeds: [
@@ -504,7 +465,6 @@ export async function execute(
         ],
       });
     } else {
-      // Full success — entire backlog drained
       await interaction.editReply({
         embeds: [
           {
@@ -520,7 +480,6 @@ export async function execute(
       });
     }
   } catch (error) {
-    // 19. Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id ?? null,
@@ -534,7 +493,6 @@ export async function execute(
 
     await log.error("Error executing /server expressions initialize command", error as Error, context);
 
-    // 19. Show error message to user
     await interaction.editReply({
       embeds: [
         {

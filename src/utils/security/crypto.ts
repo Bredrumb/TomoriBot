@@ -6,7 +6,6 @@ import { keyManager } from "./keyManager";
  * Encrypts an API key before storing it in the database using pgcrypto's PGP symmetric encryption.
  *
  * @param apiKey - The raw API key to encrypt
- * @returns Promise<{encrypted: Buffer, version: number}> - The encrypted API key and the version used
  */
 export const encryptApiKey = async (apiKey: string): Promise<{ encrypted: Buffer; version: number }> => {
   if (!apiKey) {
@@ -37,7 +36,6 @@ export const encryptApiKey = async (apiKey: string): Promise<{ encrypted: Buffer
 
     log.success(`API key encrypted successfully with version ${currentVersion}`);
 
-    // PostgreSQL already returns bytea as Buffer - don't convert to string first
     return {
       encrypted: result.encrypted_key,
       version: currentVersion,
@@ -51,9 +49,7 @@ export const encryptApiKey = async (apiKey: string): Promise<{ encrypted: Buffer
 /**
  * Decrypts an API key retrieved from the database using pgcrypto's PGP symmetric decryption.
  *
- * @param encryptedKey - The encrypted API key Buffer from the database
  * @param keyVersion - The version of the key used to encrypt (defaults to 1 for backward compatibility)
- * @returns Promise<string> - The decrypted API key
  */
 export const decryptApiKey = async (encryptedKey: Buffer, keyVersion: number = 1): Promise<string> => {
   if (!encryptedKey || encryptedKey.length === 0) {
@@ -74,7 +70,6 @@ export const decryptApiKey = async (encryptedKey: Buffer, keyVersion: number = 1
       throw new Error("Decryption failed");
     }
 
-    // Convert the result to a string for use in the application
     return result.decrypted_key.toString();
   } catch (error) {
     log.error(
@@ -90,9 +85,6 @@ export const decryptApiKey = async (encryptedKey: Buffer, keyVersion: number = 1
 /**
  * Re-encrypts an API key from an old version to the current version
  *
- * @param encryptedKey - The encrypted API key Buffer
- * @param oldVersion - The version used to encrypt the key
- * @returns Promise<{encrypted: Buffer, version: number}> - The re-encrypted key with new version
  */
 export const reencryptApiKey = async (
   encryptedKey: Buffer,
@@ -110,10 +102,8 @@ export const reencryptApiKey = async (
 
 /**
  * Store an encrypted optional API key in the database
- * @param serverId - Server ID to associate the key with
  * @param serviceName - Name of the service (e.g., 'brave-search', 'duckduckgo-search')
  * @param apiKey - The raw API key to encrypt and store
- * @returns Promise<boolean> - True if stored successfully
  */
 export const storeOptApiKey = async (serverId: number, serviceName: string, apiKey: string): Promise<boolean> => {
   if (!apiKey || !serviceName || !serverId) {
@@ -127,7 +117,6 @@ export const storeOptApiKey = async (serverId: number, serviceName: string, apiK
     // Encrypt the API key using the current key version
     const { encrypted, version } = await encryptApiKey(apiKey);
 
-    // Store in database with ON CONFLICT update for idempotent operation
     await sql`
 			INSERT INTO opt_api_keys (server_id, service_name, api_key, key_version)
 			VALUES (${serverId}, ${serviceName}, ${encrypted}, ${version})
@@ -150,9 +139,6 @@ export const storeOptApiKey = async (serverId: number, serviceName: string, apiK
  * Retrieve and decrypt an optional API key from the database
  * Automatically performs lazy rotation if the key is encrypted with an old version
  *
- * @param serverId - Server ID to look up
- * @param serviceName - Name of the service
- * @returns Promise<string | null> - Decrypted API key or null if not found
  */
 export const getOptApiKey = async (serverId: number, serviceName: string): Promise<string | null> => {
   if (!serviceName || !serverId) {
@@ -209,8 +195,6 @@ export const getOptApiKey = async (serverId: number, serviceName: string): Promi
  * Get all optional API keys for a server (returns a map of serviceName -> decryptedKey)
  * Automatically performs lazy rotation for keys encrypted with old versions
  *
- * @param serverId - Server ID to look up
- * @returns Promise<Record<string, string>> - Map of service names to decrypted API keys
  */
 export const getAllOptApiKeysForServer = async (serverId: number): Promise<Record<string, string>> => {
   if (!serverId) {
@@ -269,9 +253,6 @@ export const getAllOptApiKeysForServer = async (serverId: number): Promise<Recor
 
 /**
  * Delete an optional API key from the database
- * @param serverId - Server ID
- * @param serviceName - Name of the service
- * @returns Promise<boolean> - True if deleted successfully
  */
 export const deleteOptApiKey = async (serverId: number, serviceName: string): Promise<boolean> => {
   if (!serviceName || !serverId) {
@@ -297,9 +278,6 @@ export const deleteOptApiKey = async (serverId: number, serviceName: string): Pr
 
 /**
  * Check if an optional API key exists for a server
- * @param serverId - Server ID
- * @param serviceName - Name of the service
- * @returns Promise<boolean> - True if key exists
  */
 export const hasOptApiKey = async (serverId: number, serviceName: string): Promise<boolean> => {
   if (!serviceName || !serverId) {

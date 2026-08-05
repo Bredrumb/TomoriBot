@@ -1,23 +1,45 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { Client, Message } from "discord.js";
-import type { LlmRow, TomoriState } from "@/types/db/schema";
+import type { CustomEndpointRow, LlmRow, TomoriState } from "@/types/db/schema";
 import type { ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 // Capture the REAL repository barrel before the mock below replaces it. Importing
 // it is side-effect-free (the DB client connects lazily, not at import), and
-// `mock.module` runs in source order — not hoisted — so this static import resolves
+// `mock.module` runs in source order (not hoisted), so this static import resolves
 // to the real module. Spreading it into the mock keeps every repository export
 // present, so command modules pulled into the SUT's dynamic-import graph can
 // satisfy their static `import { ... }` bindings. Without this, running this file
 // in its own process (per-file isolation in runTests.ts) fails to link exports
 // like `serverScheduleRepository` that the graph imports but the stub omitted.
 import * as realRepositories from "@/utils/db/repositories";
+// Same link-time capture for every other module mocked below, for the same
+// reason: a partial factory leaks for the rest of the run and breaks files
+// loaded later. Spreading the real namespace keeps each mock full-surface.
+import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
+import * as realGeminiCapabilityCache from "@/utils/cache/geminiCapabilityCache";
+import * as realNovelaiCapabilityCache from "@/utils/cache/novelaiCapabilityCache";
+import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
+import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabilityCache";
+import * as realToolLoop from "@/utils/chat/toolLoop";
+import * as realFallbackModelNotice from "@/utils/discord/fallbackModelNotice";
+import * as realStreamOrchestrator from "@/utils/discord/streamOrchestrator";
+import * as realLogger from "@/utils/misc/logger";
+import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
+import * as realProviderFactory from "@/utils/provider/providerFactory";
+import * as realCrypto from "@/utils/security/crypto";
+import * as realKeyRotation from "@/utils/security/keyRotation";
+import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
 const queuedResults: GenerationTurnResult[] = [];
+// Parallel to queuedResults: the delivered-message refs each runToolLoop call should push into the
+// shared sink before returning its queued result, simulating messages the stream committed to
+// Discord during that attempt. Undefined entries push nothing.
+const queuedDeliveries: Array<Array<{ messageId: string; channelId: string; isWebhook: boolean }> | undefined> = [];
 const toolLoopCalls: Array<{ model: string; suppressUserErrors: boolean | undefined }> = [];
 const fallbackNoticeCalls: Array<{ failures: FallbackNoticeAttempt[]; successModel: LlmRow }> = [];
+const personalSavedConfigLoads: Array<{ userId: number; provider: string }> = [];
 const testStopRequests = new Map<string, { type: "stop" | "follow_up"; stopContext?: TestStopContext }>();
 
 type TestStopContext = {
@@ -25,24 +47,30 @@ type TestStopContext = {
   client: Client;
 };
 
-mock.module("@/utils/misc/logger", () => ({
-  // ColorCode must be included so that command modules imported by other test
-  // files can satisfy their static `import { ColorCode }` bindings even when
-  // this file's mock is the one in effect (bun applies mocks globally).
-  // Values must stay hex STRINGS mirroring the real enum: modules evaluated
-  // under this mock call string methods on them at load time (e.g.
-  // contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
-  ColorCode: {
-    INFO: "#3498DB",
-    SUCCESS: "#2ECC71",
-    MEMORY_UPDATE: "#25d4da",
-    WARN: "#F1C40F",
-    ERROR: "#E74C3C",
-    SECTION: "#E066FF",
-    AFFECTION: "#ff10cb",
-    RATE_LIMIT: "#FFA500",
-  },
+// The real `ColorCode` enum passes through the spread, so its values stay the
+// hex STRINGS modules call string methods on at load time (e.g. contextEmbeds.ts
+// does ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
+const scopedMock = createScopedModuleMocker(mock, {
+  "@/utils/misc/logger": realLogger,
+  "@/utils/cache/channelLlmCache": realChannelLlmCache,
+  "@/utils/cache/geminiCapabilityCache": realGeminiCapabilityCache,
+  "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
+  "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
+  "@/utils/cache/openrouterCapabilityCache": realOpenrouterCapabilityCache,
+  "@/utils/db/repositories": realRepositories,
+  "@/utils/discord/fallbackModelNotice": realFallbackModelNotice,
+  "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
+  "@/utils/provider/personalProviderRuntime": realPersonalProviderRuntime,
+  "@/utils/provider/providerFactory": realProviderFactory,
+  "@/utils/security/crypto": realCrypto,
+  "@/utils/security/keyRotation": realKeyRotation,
+  "@/utils/chat/toolLoop": realToolLoop,
+});
+
+scopedMock.module("@/utils/misc/logger", () => ({
+  ...realLogger,
   log: {
+    ...realLogger.log,
     error: () => undefined,
     info: () => undefined,
     section: () => undefined,
@@ -51,24 +79,29 @@ mock.module("@/utils/misc/logger", () => ({
   },
 }));
 
-mock.module("@/utils/cache/channelLlmCache", () => ({
+scopedMock.module("@/utils/cache/channelLlmCache", () => ({
+  ...realChannelLlmCache,
   getCachedChannelLlm: async () => null,
 }));
 
-mock.module("@/utils/cache/geminiCapabilityCache", () => ({
+scopedMock.module("@/utils/cache/geminiCapabilityCache", () => ({
+  ...realGeminiCapabilityCache,
   getGeminiTokenLimits: () => undefined,
 }));
 
-mock.module("@/utils/cache/novelaiCapabilityCache", () => ({
+scopedMock.module("@/utils/cache/novelaiCapabilityCache", () => ({
+  ...realNovelaiCapabilityCache,
   getNovelAITokenLimits: () => undefined,
 }));
 
-mock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
+scopedMock.module("@/utils/cache/novelaiSubscriptionCache", () => ({
+  ...realNovelaiSubscriptionCache,
   getCachedContextTokens: () => undefined,
   refreshNovelAISubscription: async () => undefined,
 }));
 
-mock.module("@/utils/cache/openrouterCapabilityCache", () => ({
+scopedMock.module("@/utils/cache/openrouterCapabilityCache", () => ({
+  ...realOpenrouterCapabilityCache,
   clearOpenRouterOnDemandCapabilityCache: () => undefined,
   getOpenRouterCapabilities: () => undefined,
   getOpenRouterCapabilityCacheSize: () => 0,
@@ -83,36 +116,44 @@ mock.module("@/utils/cache/openrouterCapabilityCache", () => ({
   testAccountSettingModel: async () => ({ valid: false }),
 }));
 
-mock.module("@/utils/db/repositories", () => ({
+scopedMock.module("@/utils/db/repositories", () => ({
   // Spread the real barrel first so every export the SUT graph imports is present,
   // then override only the repository methods this test's code path actually drives.
   ...realRepositories,
-  llmProviderRepo: {
+  // Each repository is a class INSTANCE: its methods live on the prototype and
+  // a spread would drop them, so delegate and shadow only what this file drives.
+  llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     loadSavedProviderConfig: async () => null,
-  },
-  configRepository: {
+    loadUserSavedProviderConfig: async (userId: number, provider: string) => {
+      personalSavedConfigLoads.push({ userId, provider });
+      return { api_key: Buffer.from("encrypted-key"), key_version: 1 };
+    },
+  }),
+  configRepository: overrideMembers(realRepositories.configRepository, {
     updateNsfwConfig: async () => true,
-  },
-  personaRepository: {
+  }),
+  personaRepository: overrideMembers(realRepositories.personaRepository, {
     loadAllForServer: async () => [],
-  },
-  userRepository: {
+  }),
+  userRepository: overrideMembers(realRepositories.userRepository, {
     loadOrCreateUser: async () => null,
     updateLastSeen: async () => undefined,
-  },
-  serverRepository: {
+  }),
+  serverRepository: overrideMembers(realRepositories.serverRepository, {
     loadServerState: async () => null,
-  },
+  }),
 }));
 
-mock.module("@/utils/discord/fallbackModelNotice", () => ({
+scopedMock.module("@/utils/discord/fallbackModelNotice", () => ({
+  ...realFallbackModelNotice,
   sendFallbackModelUsageNotice: async (args: { failures: FallbackNoticeAttempt[]; successModel: LlmRow }) => {
     fallbackNoticeCalls.push({ failures: args.failures, successModel: args.successModel });
   },
 }));
 
-mock.module("@/utils/discord/streamOrchestrator", () => ({
-  StreamOrchestrator: {
+scopedMock.module("@/utils/discord/streamOrchestrator", () => ({
+  ...realStreamOrchestrator,
+  StreamOrchestrator: overrideMembers(realStreamOrchestrator.StreamOrchestrator, {
     requestStop(channelId: string, requesterId?: string, stopContext?: TestStopContext): boolean {
       void requesterId;
       testStopRequests.set(channelId, { type: "stop", stopContext });
@@ -144,31 +185,32 @@ mock.module("@/utils/discord/streamOrchestrator", () => ({
       testStopRequests.delete(channelId);
       return request.stopContext;
     },
-  },
+  }),
 }));
 
-mock.module("@/utils/provider/personalProviderRuntime", () => ({
+scopedMock.module("@/utils/provider/personalProviderRuntime", () => ({
+  ...realPersonalProviderRuntime,
   applyPersonalProviderSelectionsToTomoriState: async (tomoriState: TomoriState) => ({
     tomoriState,
     activeConfigs: {},
   }),
 }));
 
-mock.module("@/utils/provider/providerFactory", () => ({
+scopedMock.module("@/utils/provider/providerFactory", () => ({
+  ...realProviderFactory,
   getProviderForTomori: async () => fakeProvider,
-  ProviderFactory: {
+  ProviderFactory: overrideMembers(realProviderFactory.ProviderFactory, {
     getProviderByName: async () => fakeProvider,
-  },
+  }),
 }));
 
-// Stub the FULL export surface of crypto. `mock.module` is process-wide and is
-// never restored, so it replaces crypto.ts for every test file loaded after
-// this one. If any real export is omitted here, later files that import it fail
-// to link ("Export named X not found"), and which files become victims depends
-// on module load order — making the suite fragile to unrelated import changes.
-mock.module("@/utils/security/crypto", () => ({
-  encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
+// The spread keeps the full real export surface intact. `mock.module` is
+// process-wide and never restored, so a partial stub would leave later test
+// files unable to link against any omitted export.
+scopedMock.module("@/utils/security/crypto", () => ({
+  ...realCrypto,
   decryptApiKey: async () => "decrypted-key",
+  encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   reencryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   storeOptApiKey: async () => true,
   getOptApiKey: async () => null,
@@ -177,7 +219,8 @@ mock.module("@/utils/security/crypto", () => ({
   hasOptApiKey: async () => false,
 }));
 
-mock.module("@/utils/security/keyRotation", () => ({
+scopedMock.module("@/utils/security/keyRotation", () => ({
+  ...realKeyRotation,
   MAX_KEY_ATTEMPTS: 3,
   hasAvailableRotationKey: async () => false,
   recordKeyError: async () => undefined,
@@ -185,7 +228,8 @@ mock.module("@/utils/security/keyRotation", () => ({
   selectApiKey: async () => null,
 }));
 
-mock.module("@/utils/chat/toolLoop", () => ({
+scopedMock.module("@/utils/chat/toolLoop", () => ({
+  ...realToolLoop,
   providerIsApiFamily: (providerName: string, apiFamily: string) => {
     const families: Record<string, string> = {
       google: "google-genai",
@@ -225,6 +269,15 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
       model: params.tomoriState.llm.llm_codename,
       suppressUserErrors: params.context.streamingContext.suppressUserErrors,
     });
+    // Simulate this attempt committing messages to the channel before it resolves, so the
+    // supersede-cleanup path in runGenerationTurn has refs to act on.
+    const deliveries = queuedDeliveries.shift();
+    if (deliveries) {
+      if (!params.context.streamingContext.deliveredMessageRefs) {
+        params.context.streamingContext.deliveredMessageRefs = [];
+      }
+      params.context.streamingContext.deliveredMessageRefs.push(...deliveries);
+    }
     const next = queuedResults.shift();
     if (!next) {
       throw new Error("No queued generation result for test");
@@ -481,8 +534,10 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
 describe("runGenerationTurn fallback behavior", () => {
   beforeEach(async () => {
     queuedResults.length = 0;
+    queuedDeliveries.length = 0;
     toolLoopCalls.length = 0;
     fallbackNoticeCalls.length = 0;
+    personalSavedConfigLoads.length = 0;
 
     const { StreamOrchestrator } = await import("@/utils/discord/streamOrchestrator");
     StreamOrchestrator.clearStopRequest("channel_1");
@@ -539,10 +594,116 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(emittedErrors).toHaveLength(0);
     expect(finalizedResults).toEqual([fallbackSuccess]);
     expect(fallbackNoticeCalls).toHaveLength(1);
-    expect(fallbackNoticeCalls[0]?.failures).toEqual([{ modelCodename: "primary-model", errorCode: "429" }]);
+    expect(fallbackNoticeCalls[0]?.failures).toEqual([{ modelCodename: "primary-model", errorDetail: "rate limited" }]);
     expect(fallbackNoticeCalls[0]?.successModel.llm_codename).toBe("fallback-model");
     expect(context.streamingContext.suppressUserErrors).toBe(false);
     expect(context.streamingContext.forceModelFallback).toBe(false);
+  });
+
+  it("uses personal saved credentials for a user-scoped custom endpoint fallback", async () => {
+    const primaryModel = makeLlm(1, "primary-model");
+    const context = makeContext(primaryModel, makeLlm(2, "unused-fallback"));
+    const endpoint = {
+      custom_endpoint_id: 5,
+      server_id: null,
+      user_id: 4,
+      label: "local",
+      capability: "text",
+      endpoint_url: "https://example.invalid/v1",
+      model_name: "personal-fallback",
+      model_ref_id: 9,
+      has_tools: false,
+      sees_images: false,
+      sees_videos: false,
+      supports_structoutput: false,
+      strict_role_alternation: false,
+      supports_prefix_completion: false,
+    } as CustomEndpointRow;
+    context.currentPersona.fallback_chain = [{ kind: "custom_endpoint", endpoint }];
+    queuedResults.push(
+      {
+        status: "error",
+        streamResults: [{ status: "error", data: { type: "rate_limit", code: "429", message: "rate limited" } }],
+        personaResponses: [],
+      },
+      {
+        status: "completed",
+        streamResults: [{ status: "completed", accumulatedText: "ok" }],
+        personaResponses: [{ personaName: "Tomori", text: "ok", personaId: 10, personaLineageId: 100 }],
+      },
+    );
+    const sink: ChatResponseSink = {
+      emitStreamResult: async () => undefined,
+      emitError: async () => undefined,
+      finalize: async () => undefined,
+    };
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["primary-model", "personal-fallback"]);
+    expect(personalSavedConfigLoads).toEqual([{ userId: 4, provider: "custom:u4:local" }]);
+  });
+
+  it("deletes the timed-out primary's partial message when a fallback succeeds", async () => {
+    const primaryModel = makeLlm(1, "primary-model");
+    const fallbackModel = makeLlm(2, "fallback-model");
+    const context = makeContext(primaryModel, fallbackModel);
+
+    const deletedWebhookMessageIds: string[] = [];
+    (context as unknown as { responseTarget?: unknown }).responseTarget = {
+      webhook: {
+        deleteMessage: async (messageId: string) => {
+          deletedWebhookMessageIds.push(messageId);
+        },
+      },
+    };
+
+    const finalizedResults: GenerationTurnResult[] = [];
+    const sink: ChatResponseSink = {
+      emitStreamResult: async () => undefined,
+      emitError: async () => undefined,
+      finalize: async (result) => {
+        finalizedResults.push(result);
+      },
+    };
+
+    const fallbackSuccess: GenerationTurnResult = {
+      status: "completed",
+      streamResults: [{ status: "completed", accumulatedText: "ok" }],
+      personaResponses: [
+        {
+          personaName: "Tomori",
+          text: "ok",
+          personaId: 10,
+          personaLineageId: 100,
+        },
+      ],
+    };
+    // Primary times out after flushing one partial webhook message; the fallback completes with its
+    // own message. Only the fallback's message should remain in the channel (and the sink).
+    queuedResults.push(
+      {
+        status: "timeout",
+        streamResults: [
+          { status: "timeout", data: new Error("SDK_CALL_TIMEOUT: provider streamToDiscord call timed out.") },
+        ],
+        personaResponses: [],
+      },
+      fallbackSuccess,
+    );
+    queuedDeliveries.push(
+      [{ messageId: "partial_1", channelId: "channel_1", isWebhook: true }],
+      [{ messageId: "fallback_1", channelId: "channel_1", isWebhook: true }],
+    );
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(result).toBe(fallbackSuccess);
+    expect(finalizedResults).toEqual([fallbackSuccess]);
+    expect(deletedWebhookMessageIds).toEqual(["partial_1"]);
+    expect(context.streamingContext.deliveredMessageRefs?.map((ref) => ref.messageId)).toEqual(["fallback_1"]);
   });
 
   it("does not post fallback notice when fallback is interrupted by a follow-up", async () => {

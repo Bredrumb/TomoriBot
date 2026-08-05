@@ -1,5 +1,5 @@
 // locales/ja/commands.ts
-// Assembler — edit the individual files in commands/ instead.
+// Assembler: edit the individual files in commands/ instead.
 
 import speech from "./commands/speech";
 import choices from "./commands/choices";
@@ -33,6 +33,7 @@ import mcp from "./commands/mcp";
 import capabilities from "./commands/capabilities";
 import provider from "./commands/provider";
 import update from "./commands/update";
+import stats from "./commands/stats";
 
 export default {
   commands: {
@@ -68,5 +69,6 @@ export default {
     ...capabilities,
     ...provider,
     ...update,
+    ...stats,
   },
 };

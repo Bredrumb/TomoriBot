@@ -1,20 +1,22 @@
 import type {
   ProviderNativeVideoGenerationRequest,
   ProviderNativeVideoGenerationResult,
-  ProviderNativeVideoResolution,
 } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
 import { pollForCompletion } from "@/utils/async/pollForCompletion";
+import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openrouterVideoModelCache";
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
+import {
+  buildOpenRouterVideoRequestBody,
+  normalizeOpenRouterVideoOptions,
+  resolveOpenRouterPollingUrl,
+} from "@/providers/openrouter/openrouterVideoRequest";
 
-// ─── External HTTP helpers ──────────────────────────────────────────────────────
-//
 // Bun's BoringSSL stack produces a non-standard TLS/HTTP fingerprint that Cloudflare
 // identifies and serves cached HTML to, rather than routing to the API origin.
 // Both fetch() and Bun's node:https shim share this same fingerprint.
-//
 // We bypass this by spawning an external process for HTTP requests:
-//   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest — uses .NET's Schannel TLS
+//   - Windows: PowerShell 7 (pwsh) with Invoke-WebRequest: uses .NET's Schannel TLS
 //     and proper HTTP/2 negotiation, confirmed to bypass Cloudflare.
 //   - Linux/Docker: curl with HTTP/2 support (via nghttp2, standard on Alpine/Debian).
 //     Linux curl produces a different TLS fingerprint than Bun and negotiates HTTP/2
@@ -29,8 +31,6 @@ interface ExternalHttpResponse {
 
 /** Whether the current platform is Windows (determines which HTTP backend to use) */
 const IS_WINDOWS = process.platform === "win32";
-
-// ─── PowerShell 7 backend (Windows) ─────────────────────────────────────────────
 
 /**
  * Inline pwsh script that reads a JSON request envelope from stdin and performs
@@ -81,23 +81,20 @@ async function pwshHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // 1. Build the request envelope that pwsh reads from stdin
   const requestEnvelope = JSON.stringify({ url, method, headers, body });
 
-  // 2. Spawn pwsh with the inline HTTP script
+  // Spawn pwsh with the inline HTTP script
   //    -NoProfile: skip user profile loading for faster startup
-  //    -NonInteractive: no prompts — fail immediately on errors
+  //    -NonInteractive: no prompts: fail immediately on errors
   const proc = Bun.spawn(["pwsh", "-NoProfile", "-NonInteractive", "-Command", PWSH_HTTP_SCRIPT], {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
 
-  // 3. Write the request envelope to stdin and close it
   proc.stdin.write(requestEnvelope);
   proc.stdin.end();
 
-  // 4. Collect stdout and stderr in parallel
   const [rawOutput, rawStderr] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -109,7 +106,6 @@ async function pwshHttpRequest(
     throw new Error(`pwsh HTTP request failed (exit ${exitCode}): ${rawStderr.slice(0, 500)}`);
   }
 
-  // 5. Parse the JSON response envelope from pwsh
   let envelope: { status: number; bodyBase64: string };
   try {
     envelope = JSON.parse(rawOutput) as typeof envelope;
@@ -117,23 +113,19 @@ async function pwshHttpRequest(
     throw new Error(`pwsh HTTP response is not valid JSON: ${rawOutput.slice(0, 300)}`);
   }
 
-  // 6. Decode the base64 body back to a Buffer (handles both JSON and binary MP4 content)
   const bodyBuffer = Buffer.from(envelope.bodyBase64, "base64");
 
   return { status: envelope.status, headers: {}, bodyBuffer };
 }
 
-// ─── curl backend (Linux / Docker) ──────────────────────────────────────────────
-
 /**
- * HTTP request via curl subprocess.
  * Used on Linux where curl has HTTP/2 support (via nghttp2) and produces a standard
  * TLS fingerprint that Cloudflare allows through.
  *
  * Key curl flags for correctness and security:
- *   --proto =https — restricts to HTTPS only (blocks file://, ftp://, gopher://, etc.)
- *   --data-raw — prevents @filename expansion in the body
- *   -H "Expect:" — suppresses 100-Continue which breaks the -i header/body parser
+ *   --proto =https: restricts to HTTPS only (blocks file://, ftp://, gopher://, etc.)
+ *   --data-raw: prevents @filename expansion in the body
+ *   -H "Expect:"; suppresses 100-Continue which breaks the -i header/body parser
  */
 async function curlHttpRequest(
   url: string,
@@ -141,31 +133,26 @@ async function curlHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // 1. Build curl arguments
   const args: string[] = ["-s", "-S", "--max-time", "120", "--proto", "=https", "-X", method];
 
-  // 2. Suppress Expect: 100-continue — curl sends this for POST bodies over ~1KB,
+  // Suppress Expect: 100-continue because curl sends this for POST bodies over ~1KB,
   //    which inserts an intermediate "HTTP/1.1 100 Continue" block before the real response.
   //    Our -i parser splits on the first \r\n\r\n, so 100-Continue would break parsing.
   args.push("-H", "Expect:");
 
-  // 3. Add each header, stripping CRLF to prevent header injection
+  // Add each header, stripping CRLF to prevent header injection
   for (const [key, value] of Object.entries(headers)) {
     args.push("-H", `${key}: ${value}`);
   }
 
-  // 4. Add request body via --data-raw (no @filename expansion)
   if (body !== undefined) {
     args.push("--data-raw", body);
   }
 
-  // 5. Include response headers in output via -i
   args.push("-i");
 
-  // 6. Target URL last
   args.push(url);
 
-  // 7. Spawn curl
   const proc = Bun.spawn(["curl", ...args], {
     stdout: "pipe",
     stderr: "pipe",
@@ -182,7 +169,6 @@ async function curlHttpRequest(
     throw new Error(`curl exited with code ${exitCode}: ${rawStderr.slice(0, 500)}`);
   }
 
-  // 8. Parse the -i output: headers separated from body by \r\n\r\n
   const fullBuffer = Buffer.from(rawOutput);
   const headerEndIndex = fullBuffer.indexOf("\r\n\r\n");
 
@@ -193,12 +179,10 @@ async function curlHttpRequest(
   const headerSection = fullBuffer.subarray(0, headerEndIndex).toString("utf8");
   const bodyBuffer = fullBuffer.subarray(headerEndIndex + 4);
 
-  // 9. Parse status line (e.g. "HTTP/1.1 200 OK" or "HTTP/2 200")
   const headerLines = headerSection.split("\r\n");
   const statusMatch = headerLines[0]?.match(/HTTP\/[\d.]+ (\d+)/);
   const status = statusMatch ? Number.parseInt(statusMatch[1], 10) : 0;
 
-  // 10. Parse response headers into lowercase key-value map
   const responseHeaders: Record<string, string> = {};
   for (let i = 1; i < headerLines.length; i++) {
     const colonIdx = headerLines[i].indexOf(":");
@@ -212,8 +196,6 @@ async function curlHttpRequest(
   return { status, headers: responseHeaders, bodyBuffer };
 }
 
-// ─── Platform dispatcher ────────────────────────────────────────────────────────
-
 /**
  * Makes an HTTP request via an external process to bypass Bun's TLS fingerprint.
  * Dispatches to the appropriate backend based on the current platform:
@@ -222,7 +204,6 @@ async function curlHttpRequest(
  *
  * @param url - The full URL to request (must be HTTPS)
  * @param method - HTTP method (GET or POST)
- * @param headers - HTTP headers to include in the request
  * @param body - Optional JSON body string for POST requests
  * @returns Object with HTTP status code, response headers, and raw body as a Buffer
  */
@@ -232,75 +213,32 @@ async function externalHttpRequest(
   headers: Record<string, string>,
   body?: string,
 ): Promise<ExternalHttpResponse> {
-  // 1. Validate URL scheme — only HTTPS allowed to prevent protocol attacks
+  // Validate URL scheme: only HTTPS allowed to prevent protocol attacks
   if (!url.startsWith("https://")) {
     throw new Error(`externalHttpRequest: URL must use HTTPS, got: ${url.slice(0, 80)}`);
   }
 
-  // 2. Sanitize header values — strip CRLF to prevent header injection
+  // Sanitize header values: strip CRLF to prevent header injection
   const sanitizedHeaders: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     sanitizedHeaders[key] = value.replace(/[\r\n]/g, "");
   }
 
-  // 3. Dispatch to platform-appropriate backend
   return IS_WINDOWS
     ? pwshHttpRequest(url, method, sanitizedHeaders, body)
     : curlHttpRequest(url, method, sanitizedHeaders, body);
 }
 
-/** OpenRouter alpha video generation endpoint */
-const OPENROUTER_VIDEO_URL = "https://openrouter.ai/api/alpha/videos";
+const OPENROUTER_ORIGIN = "https://openrouter.ai";
+
+/** OpenRouter stable video generation endpoint */
+const OPENROUTER_VIDEO_URL = `${OPENROUTER_ORIGIN}/api/v1/videos`;
 
 /** Polling interval for OpenRouter video jobs (30 seconds, per OpenRouter docs) */
 const POLL_INTERVAL_MS = 30_000;
 
 /** Maximum poll attempts before timeout (~10 minutes at 30s intervals) */
 const MAX_POLL_ATTEMPTS = 20;
-
-function selectClosestSupportedDuration(
-  requestedDuration: number | undefined,
-  supportedDurations: readonly number[],
-): number {
-  const fallbackTarget = requestedDuration ?? supportedDurations[0];
-  return supportedDurations.reduce((best, current) =>
-    Math.abs(current - fallbackTarget) < Math.abs(best - fallbackTarget) ? current : best,
-  );
-}
-
-function normalizeOpenRouterOptions(
-  model: string,
-  requestedDuration: number | undefined,
-  requestedResolution: ProviderNativeVideoResolution | undefined,
-): { duration: number; resolution: ProviderNativeVideoResolution } {
-  const normalizedModel = model.toLowerCase();
-
-  if (normalizedModel.includes("google/veo")) {
-    const resolution = requestedResolution === "1080p" ? "1080p" : "720p";
-    // Veo requires exactly 8 seconds for 1080p output (provider constraint, not configurable)
-    const duration = resolution === "1080p" ? 8 : selectClosestSupportedDuration(requestedDuration, [4, 6, 8]);
-    return { duration, resolution };
-  }
-
-  if (normalizedModel.includes("openai/sora")) {
-    return {
-      duration: selectClosestSupportedDuration(requestedDuration, [4, 8, 12, 16, 20]),
-      resolution: requestedResolution === "1080p" ? "1080p" : "720p",
-    };
-  }
-
-  if (normalizedModel.includes("seedance")) {
-    return {
-      duration: Math.min(Math.max(requestedDuration ?? 5, 4), 12),
-      resolution: requestedResolution ?? "720p",
-    };
-  }
-
-  return {
-    duration: Math.min(Math.max(requestedDuration ?? 5, 1), 20),
-    resolution: requestedResolution ?? "720p",
-  };
-}
 
 /** Shape of the OpenRouter video job creation response */
 interface OpenRouterVideoSubmitResponse {
@@ -325,15 +263,15 @@ interface OpenRouterVideoPollResponse {
 }
 
 /**
- * Generate a video using OpenRouter's alpha video generation API.
+ * Generate a video using OpenRouter's stable video generation API.
  *
  * Flow:
- *   1. POST to /api/alpha/videos with model, prompt, and parameters
+ *   1. POST to /api/v1/videos with model, prompt, and parameters
  *   2. Receive a job ID with "pending" status
- *   3. Poll every 30s via GET /api/alpha/videos/:jobId until "completed" or "failed"
+ *   3. Poll every 30s via GET /api/v1/videos/:jobId until "completed" or "failed"
  *   4. Download the MP4 from the unsigned_urls or content endpoint
  *
- * Supported models: google/veo-3.1, bytedance/seedance-1-5-pro, alibaba/wan-2.6, openai/sora-2-pro
+ * Supported models are discovered from OpenRouter's dedicated video model catalog.
  *
  * @param request - Video generation request with apiKey, model, prompt, and optional parameters
  * @returns Raw MP4 video data as a Buffer, or null values on failure
@@ -341,41 +279,15 @@ interface OpenRouterVideoPollResponse {
 export async function generateOpenRouterNativeVideo(
   request: ProviderNativeVideoGenerationRequest,
 ): Promise<ProviderNativeVideoGenerationResult> {
-  const normalizedOptions = normalizeOpenRouterOptions(request.model, request.durationSeconds, request.resolution);
-
-  // 1. Build request body.
-  //    OpenRouter's alpha video endpoint accepts a unified format and maps params to each provider.
-  //    Most params (generate_audio, resolution, duration) are universal.
-  //    Exception: Seedance uses "ratio" internally (not "aspect_ratio"), but OpenRouter may not
-  //    translate this for us — so we omit aspect_ratio for Seedance to avoid strict-validation failures.
-  const body: Record<string, unknown> = {
-    model: request.model,
-    prompt: request.prompt,
-    generate_audio: request.generateAudio ?? false,
-    duration: normalizedOptions.duration,
-    resolution: normalizedOptions.resolution,
-  };
-
-  // aspect_ratio is supported by all OpenRouter video models — OpenRouter normalizes it to
-  // each provider's native field (e.g. "ratio" for Seedance) internally.
-  if (request.aspectRatio) {
-    body.aspect_ratio = request.aspectRatio;
-  }
-
-  // Add reference images for image-to-video.
-  // Prefer the source URL over base64 — embedding large base64 payloads in the JSON body
-  // can exceed OpenRouter's CDN body size limit and cause an HTML error page (200) to be returned.
-  if (request.referenceImages && request.referenceImages.length > 0) {
-    body.input_references = request.referenceImages.map((ref) => ({
-      type: "image_url",
-      image_url: {
-        url: ref.url ?? `data:${ref.mimeType};base64,${ref.data}`,
-      },
-    }));
-  }
+  const modelCapabilities = await getOrFetchOpenRouterVideoModelCapabilities(request.model);
+  const normalizedOptions = normalizeOpenRouterVideoOptions(request, modelCapabilities);
+  // `frame_images` preserves TomoriBot's image-to-video contract: the referenced image is
+  // the exact first frame. `input_references` is intentionally not used because the stable
+  // API defines it as loose subject/style guidance rather than frame control.
+  const body = buildOpenRouterVideoRequestBody(request, normalizedOptions, modelCapabilities);
 
   log.info(
-    `OpenRouter video generation: submitting request (model: ${request.model}, aspectRatio: ${request.aspectRatio ?? "default"}, durationSeconds: ${normalizedOptions.duration}, resolution: ${normalizedOptions.resolution}, hasReferenceImages: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
+    `OpenRouter video generation: submitting request (model: ${request.model}, aspectRatio: ${normalizedOptions.aspectRatio}, durationSeconds: ${normalizedOptions.duration}, resolution: ${normalizedOptions.resolution}, hasReferenceImages: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
   );
 
   const apiHeaders = {
@@ -386,7 +298,7 @@ export async function generateOpenRouterNativeVideo(
   };
   const submitBodyJson = JSON.stringify(body);
 
-  // 2. Submit the generation request via external HTTP helper (bypasses Bun's TLS fingerprint issue)
+  // Submit the generation request via external HTTP helper (bypasses Bun's TLS fingerprint issue)
   const submitRaw = await externalHttpRequest(OPENROUTER_VIDEO_URL, "POST", apiHeaders, submitBodyJson);
 
   const submitBodyText = submitRaw.bodyBuffer.toString("utf8");
@@ -411,9 +323,9 @@ export async function generateOpenRouterNativeVideo(
   }
 
   const jobId = submitResult.id;
-  const pollingUrl = submitResult.polling_url;
+  const rawPollingUrl = submitResult.polling_url;
 
-  if (!jobId || !pollingUrl) {
+  if (!jobId || !rawPollingUrl) {
     log.error(
       "OpenRouter video generation returned incomplete response",
       new Error(`Missing ${!jobId ? "job ID" : "polling_url"}: ${submitBodyText.slice(0, 300)}`),
@@ -421,11 +333,13 @@ export async function generateOpenRouterNativeVideo(
     throw new Error("OpenRouter video generation returned incomplete response (missing job ID or polling_url)");
   }
 
+  const pollingUrl = resolveOpenRouterPollingUrl(rawPollingUrl);
+
   log.info(
     `OpenRouter video generation: job submitted, polling for completion (jobId: ${jobId}, pollingUrl: ${pollingUrl})`,
   );
 
-  // 3. Poll for completion using the polling_url returned by the submit response.
+  // Poll for completion using the polling_url returned by the submit response.
   //    The URL format is determined by OpenRouter and may differ from a simple ID-based path.
   const pollHeaders = {
     Authorization: `Bearer ${request.apiKey}`,
@@ -439,9 +353,9 @@ export async function generateOpenRouterNativeVideo(
       const pollBodyText = pollRaw.bodyBuffer.toString("utf8");
 
       if (pollRaw.status < 200 || pollRaw.status >= 300) {
-        // Short-circuit on permanent auth errors — retrying won't help for 401/403
+        // Short-circuit on permanent auth errors, so retrying won't help for 401/403
         // Note: 404 is NOT terminal here. OpenRouter's async job system may return 404 briefly
-        // after submission due to eventual consistency — the job takes a few seconds to propagate.
+        // after submission due to eventual consistency because the job takes a few seconds to propagate.
         if (pollRaw.status === 401 || pollRaw.status === 403) {
           return {
             done: true,
@@ -477,7 +391,6 @@ export async function generateOpenRouterNativeVideo(
         case "expired":
           return { done: true, error: "OpenRouter video generation expired" };
         default:
-          // "pending" or "in_progress"
           return { done: false };
       }
     },
@@ -486,14 +399,15 @@ export async function generateOpenRouterNativeVideo(
     logLabel: "OpenRouterVideoGeneration",
   });
 
-  // 4. Download the video
+  // Download the video
   //    Use unsigned_urls if available, otherwise use the content endpoint.
   //    The video file may not be immediately available after the poll returns "completed"
-  //    due to eventual consistency in OpenRouter's storage — retry a few times on 404.
-  const videoUrl = completedJob.unsigned_urls?.[0] ?? `${OPENROUTER_VIDEO_URL}/${jobId}/content?index=0`;
+  //    due to eventual consistency in OpenRouter's storage, so retry a few times on 404.
+  const rawVideoUrl = completedJob.unsigned_urls?.[0] ?? `${OPENROUTER_VIDEO_URL}/${jobId}/content?index=0`;
+  const videoUrl = new URL(rawVideoUrl, OPENROUTER_ORIGIN).href;
 
   // Security: only send the Authorization header if the download URL is on OpenRouter's domain.
-  // unsigned_urls could theoretically point to a third-party CDN — avoid leaking the API key to it.
+  // unsigned_urls could theoretically point to a third-party CDN, so avoid leaking the API key to it.
   const downloadUrlOrigin = new URL(videoUrl).origin;
   const openRouterOrigin = new URL(OPENROUTER_VIDEO_URL).origin;
   const downloadHeaders: Record<string, string> =

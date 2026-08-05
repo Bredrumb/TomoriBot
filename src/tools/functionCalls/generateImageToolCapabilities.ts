@@ -1,6 +1,6 @@
 import type { CustomEndpointRow } from "@/types/db/schema";
 import type { ToolAssemblyState } from "@/types/tool/interfaces";
-import { sql } from "@/utils/db/client";
+import { configRepository } from "@/utils/db/repositories/ConfigRepository";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { log } from "@/utils/misc/logger";
 import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
@@ -129,14 +129,8 @@ async function resolveConfiguredDiffusionModelId(state: ToolAssemblyState): Prom
     return null;
   }
 
-  const [row] = await sql<[{ diffusion_model_id: number | null }]>`
-    SELECT diffusion_model_id
-    FROM server_model_configs
-    WHERE server_id = ${serverId}
-    LIMIT 1
-  `;
-
-  return row?.diffusion_model_id ?? null;
+  const modelConfig = await configRepository.getModelConfig(serverId);
+  return modelConfig?.diffusion_model_id ?? null;
 }
 
 export async function resolveImageToolCapabilities(state: ToolAssemblyState): Promise<ImageToolCapabilities | null> {

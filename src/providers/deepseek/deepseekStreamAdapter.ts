@@ -14,6 +14,8 @@ export class DeepseekStreamAdapter extends OpenAICompatibleStreamAdapter {
       localeNamespace: ["genai", "deepseek"].join("."),
       errorMessagePrefix: "DeepSeek API error",
       preserveReasoningContent: true,
+      requiresReasoningContentReplay: true,
+      mandatoryBodyKeys: ["thinking"],
       resolveApiUrl: (config) => {
         if (!config.endpointUrl) {
           throw new Error("DeepSeek endpoint URL is required");

@@ -21,8 +21,6 @@ import type { TomoriState } from "@/types/db/schema";
 
 /**
  * Configure the respond subcommand
- * @param subcommand - The slash command subcommand builder
- * @returns The configured subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -66,10 +64,6 @@ function getChannelAutoTriggerPersona(
 
 /**
  * Execute the respond command - manually trigger Tomori to respond to the latest message
- * @param client - Discord client instance
- * @param interaction - Command interaction
- * @param _userData - User data from database (not used)
- * @param locale - Locale of the interaction
  */
 export async function execute(
   client: Client,
@@ -77,7 +71,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild text channel - let helper functions manage interaction state
+  // Ensure command is run in a guild text channel - let helper functions manage interaction state
   if (!interaction.channel || !("messages" in interaction.channel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -87,7 +81,6 @@ export async function execute(
     return;
   }
 
-  // 2. Check if bot has required permissions to read message history
   const botMember = interaction.guild?.members.me;
   if (!botMember || !interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
@@ -99,10 +92,8 @@ export async function execute(
   }
 
   // Get the guild channel (we know it exists from check above, but need type narrowing)
-  // Check both regular channels and threads
   const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id) ?? interaction.channel;
 
-  // Verify it's a guild-based channel with permissions
   if (!("permissionsFor" in guildChannel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
@@ -123,7 +114,6 @@ export async function execute(
     return;
   }
 
-  // 3. Load tomori state for this server
   const tomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!tomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -137,7 +127,7 @@ export async function execute(
   const extraOptions = interaction.options.getBoolean("extra_options") ?? false;
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
-  // 3.5. Check cooldown (shares cooldown pool with message triggers)
+  // Check cooldown (shares cooldown pool with message triggers)
   const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
   const cooldownLength = tomoriState.config.cooldown_length ?? 5;
 
@@ -151,7 +141,6 @@ export async function execute(
   );
 
   if (cooldownResult.isOnCooldown) {
-    // If blocked by whitelist, show a specific "not whitelisted" message instead of cooldown
     if (cooldownResult.blockedByWhitelist) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.message_cooldown_title",
@@ -161,7 +150,6 @@ export async function execute(
       return;
     }
 
-    // Show cooldown warning via DM (with ephemeral fallback)
     const footerKey = cooldownRepository.getCooldownTypeFooterKey(cooldownResult.cooldownType);
     await sendCooldownDM(
       interaction.user,
@@ -179,7 +167,6 @@ export async function execute(
     return;
   }
 
-  // 4. Load all personas and check if alters exist
   const allPersonas = await personaRepository.loadAllForServer(interaction.guild.id);
   const isThread = "isThread" in guildChannel && typeof guildChannel.isThread === "function" && guildChannel.isThread();
   const parentChannelId = isThread && "parent" in guildChannel ? guildChannel.parent?.id : undefined;
@@ -265,10 +252,8 @@ export async function execute(
   let llmOverrideCodename: string | undefined;
 
   if (extraOptions) {
-    // Build modal components (persona select + reasoning + prompt + prefill)
     const modalComponents: ModalComponent[] = [];
 
-    // 1. Persona select dropdown — show when multiple personas are available
     if (availablePersonas.length > 1) {
       const personaOptions: SelectOption[] = availablePersonas.map((persona, index) => ({
         label: safeSelectOptionText(persona.persona_nickname),
@@ -290,7 +275,7 @@ export async function execute(
       });
     }
 
-    // 2. Reasoning checkbox — checked = "true", unchecked = "false"
+    // Reasoning checkbox: checked = "true", unchecked = "false"
     modalComponents.push({
       kind: "checkbox" as const,
       customId: "use_reasoning",
@@ -299,7 +284,6 @@ export async function execute(
       default: false,
     });
 
-    // 3. Optional system prompt input
     modalComponents.push({
       customId: "prompt",
       labelKey: "commands.bot.respond.prompt_label",
@@ -310,7 +294,6 @@ export async function execute(
       style: 2, // TextInputStyle.Paragraph
     });
 
-    // 4. Optional assistant prefill input
     modalComponents.push({
       customId: "prefill",
       labelKey: "commands.bot.respond.prefill_label",
@@ -321,7 +304,6 @@ export async function execute(
       style: 2, // TextInputStyle.Paragraph
     });
 
-    // 5. Show modal with extra options
     const modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: "respond_persona_select",
       modalTitleKey: "commands.bot.respond.extra_options_title",
@@ -337,10 +319,9 @@ export async function execute(
       replyInteraction = modalResult.interaction;
     }
 
-    // 6. Defer the modal submission — opens a new 3-second window
+    // Defer the modal submission: opens a new 3-second window
     await replyInteraction.deferReply({ flags: deferFlags });
 
-    // 7. Process persona selection
     const selectedIndex = Number.parseInt(modalResult.values?.persona_choice ?? "0", 10);
     if (availablePersonas.length > 1) {
       selectedPersona = availablePersonas[selectedIndex] ?? fallbackPersona;
@@ -361,13 +342,11 @@ export async function execute(
       return;
     }
 
-    // 8. Process prompt and prefill from modal
     const manualPromptRaw = modalResult.values?.prompt;
     manualPrompt = manualPromptRaw?.trim() || undefined;
     const manualPrefillRaw = modalResult.values?.prefill;
     manualPrefill = manualPrefillRaw?.trim() || undefined;
 
-    // 9. Determine if reasoning mode was requested
     const useReasoning = modalResult.values?.use_reasoning === "true";
     if (useReasoning) {
       const currentProvider = tomoriState.llm.llm_provider;
@@ -389,7 +368,6 @@ export async function execute(
       llmOverrideCodename = smartestModel.llm_codename;
     }
   } else {
-    // Direct response — skip modal, use default persona
     await interaction.deferReply({ flags: deferFlags });
 
     if (!isPersonaAllowedForTrigger(whitelistStatus, personalSpotlightStatus, selectedPersona?.persona_id)) {
@@ -406,32 +384,28 @@ export async function execute(
   }
 
   try {
-    // 6. Build success embed
     const successEmbed = new EmbedBuilder()
       .setTitle(localizer(locale, "commands.bot.respond.success_title"))
       .setDescription(localizer(locale, "commands.bot.respond.success_description"))
       .setColor(ColorCode.SUCCESS);
 
-    // Add footer notice if embed is visible
     if (!hideEmbed) {
       successEmbed.setFooter({
         text: localizer(locale, "commands.bot.respond.embed_hide_notice"),
       });
     }
 
-    // 7. Send success response (interaction already deferred above)
+    // Send success response (interaction already deferred above)
     await replyInteraction.editReply({
       embeds: [successEmbed],
     });
 
-    // 5. Create a "passport" message that will trigger tomoriChat
     // We need to ensure this message will pass the trigger checks
     // NOTE: tomoriChat has built-in logic (lines 2004-2040) that injects a
     // "[Continue your last message]" prompt when isManuallyTriggered=true
     // and the last message in history is from the bot
     const passportMessage = latestMessage;
 
-    // 6. Manually trigger tomoriChat with command flags
     log.info(
       `Manual respond command triggered by ${interaction.user.id} in channel ${interaction.channel.id} for message ${latestMessage.id}`,
     );
@@ -458,7 +432,7 @@ export async function execute(
       },
     });
 
-    // 7. Set cooldown after successful response (shares cooldown pool with message triggers)
+    // Set cooldown after successful response (shares cooldown pool with message triggers)
     // Uses whitelist-aware version to respect per-channel cooldown overrides
     await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
@@ -478,7 +452,6 @@ export async function execute(
       },
     });
 
-    // Try to send error feedback if possible
     try {
       await replyInteraction.followUp({
         content: localizer(locale, "general.errors.unknown_error_description"),

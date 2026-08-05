@@ -4,12 +4,11 @@ import {
   type Client,
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { sql } from "@/utils/db/client";
+import { userRepository } from "@/utils/db/repositories";
 import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
-import { type UserRow, type ErrorContext, userSchema } from "../../types/db/schema";
-import { invalidateUserCache } from "../../utils/cache/userCache";
+import type { UserRow, ErrorContext } from "../../types/db/schema";
 import type { PersonalDeliberateToolMode } from "@/utils/tools/deliberateToolMode";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -48,14 +47,17 @@ export async function execute(
   const selectedMode = interaction.options.getString("mode", true) as PersonalDeliberateToolMode;
 
   try {
-    const [updatedRow] = await sql`
-      UPDATE users
-      SET personal_deliberate_tool_mode = ${selectedMode}
-      WHERE user_disc_id = ${userData.user_disc_id}
-      RETURNING *
-    `;
+    // Persist through the repository layer, which validates the field,
+    //    writes the row, and invalidates the user cache on success. A loaded
+    //    user row always carries its PK; `?? -1` only narrows the optional type,
+    //    and a -1 id simply yields a null (no-row) update → the failure path below.
+    const updatedUser = await userRepository.update(userData.user_id ?? -1, {
+      personal_deliberate_tool_mode: selectedMode,
+    });
 
-    if (!updatedRow) {
+    // A null result means the write (or its validation) failed, so surface the
+    //    generic update-failed embed.
+    if (!updatedUser) {
       const context: ErrorContext = {
         userId: userData.user_id,
         errorType: "DatabaseUpdateError",
@@ -67,7 +69,7 @@ export async function execute(
       };
       await log.error(
         "Failed to update personal_deliberate_tool_mode for user",
-        new Error("Database update returned no rows"),
+        new Error("Repository update returned null"),
         context,
       );
 
@@ -78,32 +80,6 @@ export async function execute(
       });
       return;
     }
-
-    const validatedUser = userSchema.safeParse(updatedRow);
-    if (!validatedUser.success) {
-      const context: ErrorContext = {
-        userId: userData.user_id,
-        errorType: "SchemaValidationError",
-        metadata: {
-          command: "personal deliberatetoolmode",
-          validationErrors: validatedUser.error.flatten(),
-        },
-      };
-      await log.error(
-        "Failed to validate updated user after personal deliberate tool mode change",
-        validatedUser.error,
-        context,
-      );
-
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.update_failed_title",
-        descriptionKey: "general.errors.update_failed_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
-
-    invalidateUserCache(userData.user_disc_id);
 
     const colorByMode: Record<PersonalDeliberateToolMode, ColorCode> = {
       off: ColorCode.WARN,

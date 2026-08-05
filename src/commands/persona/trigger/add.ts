@@ -16,7 +16,6 @@ import type { SelectOption } from "@/types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
 import { normalizeTriggerWord, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 
-// Get memory limits from environment variables
 const memoryLimits = getMemoryLimits();
 
 const MODAL_CUSTOM_ID = "persona_triggeradd_modal";
@@ -31,16 +30,11 @@ const MAX_TEXT_INPUT_LENGTH = Math.min(
 const formatTriggerList = (triggers: string[]): string =>
   triggers.map((trigger) => `\`${normalizeTriggerWord(trigger, { lowercase: false })}\``).join(", ");
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.persona.trigger.add.description"));
 
 /**
  * Adds trigger words that will make a selected persona respond automatically when mentioned in chat
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -48,7 +42,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",

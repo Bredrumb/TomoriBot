@@ -15,7 +15,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import type { TomoriState } from "@/types/db/schema";
 import type { ToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
 import type { MentionConverter } from "./templates";
-import { sql } from "@/utils/db/client";
+import { serverMemoryRepository } from "@/utils/db/repositories";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
@@ -29,9 +29,30 @@ const DEFAULT_CRUDE_MESSAGE_COUNT = Number.parseInt(
 );
 const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3", 10);
 
-// ── Default seed strings ──────────────────────────────────────────────────────
-// The single unified nudge (migration 036) covers BOTH cases — "no STM yet, please
-// create one" and "STM exists, please refresh it" — with one cadence-gated prompt.
+// Position in context reads as recency to the model: a summary sitting at the tail
+// implies "this is happening now". While the conversation is still live that is
+// accurate and the block belongs next to the dialogue, but once the channel has gone
+// quiet the same placement would present stale content as current. `lastUpdated` is
+// refreshed by the per-turn crude write (not the cadence-gated summary write), so it
+// tracks the last turn Tomori took part in.
+const STM_FRESH_WINDOW_MS = Number.parseInt(process.env.STM_FRESH_WINDOW_MINUTES || "60", 10) * 60 * 1000;
+const STM_FRESH_INJECTION_DEPTH = Number.parseInt(process.env.STM_FRESH_INJECTION_DEPTH || "2", 10);
+
+/**
+ * Resolves the depth a fresh STM content block should use.
+ *
+ * The override may only pull the block closer to the dialogue, never push it away, so
+ * a server already placing STM below the fresh depth keeps its own placement. A
+ * negative configured value is the anchored-top sentinel rather than a real depth, so
+ * it is replaced outright instead of being treated as "closer".
+ */
+function resolveFreshInjectionDepth(configuredDepth: number): number {
+  if (configuredDepth < 0) return STM_FRESH_INJECTION_DEPTH;
+  return Math.min(STM_FRESH_INJECTION_DEPTH, configuredDepth);
+}
+
+// The single unified nudge (migration 052) covers BOTH cases: "no STM yet, please
+// create one" and "STM exists, please refresh it": with one cadence-gated prompt.
 // Category-mode seeds reference {category_labels}, substituted before sanitization.
 // `_FALLBACK` variants are byte-stable literals used when no macro resolver is wired.
 
@@ -47,7 +68,6 @@ export const SEED_CATEGORY_UPDATE_HINT =
 const SEED_CATEGORY_UPDATE_HINT_FALLBACK =
   "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
 
-// ─────────────────────────────────────────────────────────────────────────────
 
 function formatDiscordChannelReference(channelId: string | undefined, fallbackText: string): string {
   return channelId ? `<#${channelId}>` : fallbackText;
@@ -124,13 +144,15 @@ export async function buildServerMemoryContextItem(params: {
 
   let serverMemoryLines: string[] = [];
   try {
-    const serverMemoryRows = await sql<Array<{ server_memory_id: number; content: string; tags: string[] | null }>>`
-      SELECT server_memory_id, content, tags
-      FROM server_memories
-      WHERE server_id = ${params.tomoriState.server_id}
-        AND persona_lineage_id = ${params.tomoriState.persona_lineage_id}
-      ORDER BY created_at DESC
-    `;
+    // Without a resolved server id + persona lineage there is nothing to scope
+    // to treat it as "no memories" (the previous raw query interpolated NULL,
+    // matching none).
+    const serverId = params.tomoriState.server_id;
+    const personaLineageId = params.tomoriState.persona_lineage_id;
+    const serverMemoryRows =
+      serverId === undefined || personaLineageId === undefined
+        ? []
+        : await serverMemoryRepository.loadServerMemoriesScoped(serverId, personaLineageId);
 
     const filteredServerRows = serverMemoryRows.filter((row) => {
       const normalized = (row.tags ?? []).map((t) => t.replace(/^["']+|["']+$/g, ""));
@@ -138,16 +160,18 @@ export async function buildServerMemoryContextItem(params: {
       const contentTags = normalized.filter((t) => !t.startsWith("#"));
 
       // Channel tags gate: if present and channel_memory_enabled, channel must match.
-      // Channel and content filters are independent — channel match does not exempt a memory
+      // Channel and content filters are independent; channel match does not exempt a memory
       // from the content/corpus check below (per baetican's intended design).
       if (params.channelMemoryEnabled && channelTags.length > 0) {
         const channelAllowed = channelTags.some((t) => t.slice(1).toLowerCase() === params.channelName.toLowerCase());
         if (!channelAllowed) return false;
       }
 
-      // Content tags: if corpus filtering is active, memories must have a matching content tag
-      if (params.conversationCorpus) {
-        if (contentTags.length === 0) return false;
+      // Content tags: if corpus filtering is active and the memory has content tags,
+      // at least one must appear in the corpus. Memories with no content tags are
+      // unfiltered by keyword (per /help memory-tagging: "memories without keyword
+      // tags will always be active").
+      if (params.conversationCorpus != null && contentTags.length > 0) {
         return contentTags.some((tag) => params.conversationCorpus?.includes(tag.toLowerCase()));
       }
 
@@ -155,7 +179,8 @@ export async function buildServerMemoryContextItem(params: {
     });
 
     serverMemoryLines = filteredServerRows.map((row) =>
-      formatMemoryWithId(row.server_memory_id, row.content, row.tags ?? []),
+      // biome-ignore lint/style/noNonNullAssertion: a loaded server-memory row always carries its PK.
+      formatMemoryWithId(row.server_memory_id!, row.content, row.tags ?? []),
     );
   } catch (error) {
     log.warn("Failed to load server memories with IDs for context", error);
@@ -217,7 +242,6 @@ export async function buildShortTermMemoryContext(params: {
     params.toolPromptMacroResolver ? params.toolPromptMacroResolver.expand(macroText) : Promise.resolve(fallbackText);
 
   try {
-    // 1. Load STM config + category definitions for this server
     const numericServerId = params.tomoriState?.server_id ?? null;
     const [stmConfig, stmCategoryRows] = numericServerId
       ? await Promise.all([
@@ -228,25 +252,27 @@ export async function buildShortTermMemoryContext(params: {
 
     // Resolved config values (fall back to sensible defaults)
     const refreshCadence = stmConfig?.refresh_cadence ?? 5;
-    const renderMode = stmConfig?.render_mode ?? "supersede";
+    // Most servers have no server_stm_configs row at all (it is not seeded at setup),
+    // so this fallback, not the column default, decides the render mode for them.
+    const renderMode = stmConfig?.render_mode ?? "crude_summary";
     const crudeMessageCount = stmConfig?.crude_message_count ?? DEFAULT_CRUDE_MESSAGE_COUNT;
     const updateNudgeOverride = stmConfig?.update_nudge_override ?? null;
     // 0 = inject the nudge at the dialogue tail; N = before the Nth dialogue turn from the bottom.
     const nudgeInjectionDepth = stmConfig?.nudge_injection_depth ?? 2;
     // -1 = keep the STM content block anchored near the top (legacy default); >= 0 =
     // defer it to positional injection at this dialogue depth (same walk as the nudge).
-    const memoryInjectionDepth = stmConfig?.content_injection_depth ?? -1;
+    // The freshness override below can replace this for the current turn.
+    const configuredMemoryInjectionDepth = stmConfig?.content_injection_depth ?? -1;
+    let isStmFresh = false;
 
     // Category mode: any configuration other than the single default "summary" category.
-    // An empty list (no rows resolved, e.g. no server) is NOT category mode — it must
+    // An empty list (no rows resolved, e.g. no server) is NOT category mode: it must
     // collapse to the backward-compatible summary path, not render empty labeled sections.
     const isCategoryMode =
       stmCategoryRows.length > 0 &&
       !(stmCategoryRows.length === 1 && stmCategoryRows[0].label.toLowerCase() === "summary");
     const slugMap = isCategoryMode ? buildSlugMap(stmCategoryRows) : null;
     const categoryLabelList = isCategoryMode ? stmCategoryRows.map((r) => r.label).join(", ") : "";
-
-    // 2. Cross-channel / cross-server other-channel memories
     const userRow = await getCachedUserRow(params.triggeringUserId);
     const crossServerOptIn = userRow?.shortterm_cache_crossserver_opt_in ?? false;
 
@@ -326,7 +352,7 @@ export async function buildShortTermMemoryContext(params: {
             : `[System: ${params.botName} remembers a recent conversation with ${params.triggererName} in ${channelReference} (${relativeTime}):\n`;
 
         if (categoryContent) {
-          // Category content available — use it as the primary memory representation
+          // Category content available: use it as the primary memory representation
           otherChannelText += `${memoryPrefix}${categoryContent}]\n\n`;
 
           // Mode B (crude_summary): also show recent crude messages additively for other-channel
@@ -371,7 +397,7 @@ export async function buildShortTermMemoryContext(params: {
             otherChannelText += `${crudeText}]\n\n`;
           }
         } else {
-          // No summary or categories — fall back to crude turn listing (capped to depth).
+          // No summary or categories: fall back to crude turn listing (capped to depth).
           otherChannelText += memoryPrefix;
           for (const msg of memory.messages.slice(-crudeMessageCount)) {
             const speaker =
@@ -403,13 +429,11 @@ export async function buildShortTermMemoryContext(params: {
         });
       }
     }
-
-    // 3. Same-channel memory (live injected scope)
     if (params.tomoriState?.llm?.has_tools) {
       // The cadence nudge prompts the bot to CALL the STM write tool, so it must track
       // the same conditions that decide whether the tool is offered (see
       // updateShortTermMemoryTool.isAvailableForContext). When the per-server master
-      // switch (migration 038) is off, the tool is suppressed — so we suppress the nudge
+      // switch (migration 054) is off, the tool is suppressed: so we suppress the nudge
       // too. Crucially this only gates the nudge: the memory content blocks above and
       // below still render, so manually-curated STM (`/persona stm edit`) and crude
       // messages keep surfacing even with STM "off".
@@ -439,12 +463,19 @@ export async function buildShortTermMemoryContext(params: {
               params.tomoriState?.persona_id,
             );
 
-      // Unified cadence counter (migration 036). A channel with no prior STM starts
+      // Unified cadence counter (migration 052). A channel with no prior STM starts
       // at 0 and increments once per bot-participation turn, so the nudge first fires
-      // after exactly `refreshCadence` turns — for BOTH the create case (no STM yet)
+      // after exactly `refreshCadence` turns: for BOTH the create case (no STM yet)
       // and each subsequent update case (existing STM refresh).
       const turnsSinceRefresh = sameChannelMemory?.turnsSinceRefresh ?? 0;
       const isNudgeDue = turnsSinceRefresh >= refreshCadence;
+
+      // A channel with no STM yet has no age and is therefore never "fresh": there is
+      // nothing to keep adjacent to the dialogue, so the server's configured placement
+      // stands.
+      const stmAgeMs =
+        sameChannelMemory?.lastUpdated != null ? Date.now() - sameChannelMemory.lastUpdated : Number.POSITIVE_INFINITY;
+      isStmFresh = stmAgeMs <= STM_FRESH_WINDOW_MS;
 
       // Determine what content is in the same-channel memory
       const sameChannelCategories =
@@ -454,7 +485,6 @@ export async function buildShortTermMemoryContext(params: {
       const hasMemoryContent = sameChannelCategories !== null || Boolean(sameChannelMemory?.summary);
 
       if (hasMemoryContent) {
-        // 3a. Render the same-channel memory block
         let memoryBodyText: string;
         if (sameChannelCategories && slugMap) {
           // Category mode: render labeled sections using the server's ordered category rows
@@ -490,7 +520,7 @@ export async function buildShortTermMemoryContext(params: {
         });
       }
 
-      // 3b. Unified nudge (cadence-gated) — covers BOTH the create case (no STM yet)
+      // Unified nudge (cadence-gated): covers BOTH the create case (no STM yet)
       //     and the update case (refresh existing STM). It is NOT pushed into
       //     memoryItems; it is returned separately so the caller can inject it at the
       //     configured dialogue depth (highest-signal tail position by default).
@@ -533,6 +563,13 @@ export async function buildShortTermMemoryContext(params: {
         };
       }
     }
+
+    // While the conversation is still live the block is pulled down next to the dialogue,
+    // including from the anchored-top default. Once the channel goes quiet it snaps back
+    // so a stale summary never occupies a "current" slot.
+    const memoryInjectionDepth = isStmFresh
+      ? resolveFreshInjectionDepth(configuredMemoryInjectionDepth)
+      : configuredMemoryInjectionDepth;
 
     return { memoryItems, nudgeItem, nudgeInjectionDepth, memoryInjectionDepth };
   } catch (error) {

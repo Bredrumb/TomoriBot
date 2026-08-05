@@ -36,23 +36,21 @@ export interface MCPServerResponse {
  * MCP content item structure
  * Represents individual content items in MCP responses
  */
-export interface MCPContentItem {
+interface MCPContentItem {
   type: "text" | "image" | "audio" | "video";
   text?: string;
-  // Image-specific properties
   image_url?: string;
   url?: string;
   source_url?: string;
   original_url?: string;
   src?: string;
-  // Metadata
   metadata?: Record<string, unknown>;
 }
 
 /**
  * Brave Search specific result interfaces
  */
-export interface BraveSearchWebResult {
+interface BraveSearchWebResult {
   title: string;
   url: string;
   snippet: string;
@@ -61,7 +59,7 @@ export interface BraveSearchWebResult {
   language?: string;
 }
 
-export interface BraveSearchImageData {
+interface BraveSearchImageData {
   image_url: string;
   title?: string;
   source?: string;
@@ -70,30 +68,12 @@ export interface BraveSearchImageData {
   height?: number;
 }
 
-export interface BraveSearchVideoData {
+interface BraveSearchVideoData {
   video_url: string;
   title?: string;
   thumbnail_url?: string;
   duration?: string;
   source?: string;
-}
-
-export interface BraveSearchNewsData {
-  title: string;
-  url: string;
-  snippet: string;
-  published_date?: string;
-  source?: string;
-  thumbnail_url?: string;
-}
-
-export interface BraveSearchLocalData {
-  name: string;
-  address?: string;
-  phone?: string;
-  website?: string;
-  rating?: number;
-  reviews?: number;
 }
 
 /**
@@ -118,25 +98,6 @@ export interface BraveVideoSearchResponse extends MCPServerResponse {
   query?: string;
   safesearch?: string;
   count?: number;
-}
-
-export interface BraveNewsSearchResponse extends MCPServerResponse {
-  news_results?: BraveSearchNewsData[];
-  query?: string;
-  safesearch?: string;
-  count?: number;
-}
-
-export interface BraveLocalSearchResponse extends MCPServerResponse {
-  local_results?: BraveSearchLocalData[];
-  query?: string;
-  location?: string;
-}
-
-export interface BraveSummarizerResponse extends MCPServerResponse {
-  summary?: string;
-  source_url?: string;
-  title?: string;
 }
 
 /**
@@ -172,92 +133,15 @@ export interface DuckDuckGoWebSearchResponse extends MCPServerResponse {
 }
 
 /**
- * Felo AI Search response structure (felo-search tool)
- */
-export interface FeloAISearchResponse extends MCPServerResponse {
-  ai_response?: string;
-  query?: string;
-  stream?: boolean;
-  sources?: Array<{
-    title?: string;
-    url?: string;
-    snippet?: string;
-  }>;
-}
-
-/**
- * URL Content Fetch response structure (fetch-url tool)
- */
-export interface URLContentResponse extends MCPServerResponse {
-  url?: string;
-  page_content?: string;
-  title?: string;
-  extracted_text?: string;
-  main_content?: string;
-  links?: Array<{
-    text: string;
-    url: string;
-  }>;
-  images?: Array<{
-    alt: string;
-    src: string;
-  }>;
-  content_length?: number;
-  truncated?: boolean;
-  maxLength?: number;
-  extractMainContent?: boolean;
-  includeLinks?: boolean;
-  includeImages?: boolean;
-  excludeTags?: string[];
-}
-
-/**
- * URL Metadata response structure (url-metadata tool)
- */
-export interface URLMetadataResponse extends MCPServerResponse {
-  url?: string;
-  title?: string;
-  description?: string;
-  keywords?: string[];
-  author?: string;
-  published_date?: string;
-  og_title?: string;
-  og_description?: string;
-  og_image?: string;
-  og_url?: string;
-  twitter_title?: string;
-  twitter_description?: string;
-  twitter_image?: string;
-  canonical_url?: string;
-  favicon?: string;
-  images?: Array<{
-    url: string;
-    alt?: string;
-    width?: number;
-    height?: number;
-  }>;
-  language?: string;
-  charset?: string;
-}
-
-/**
- * Legacy DuckDuckGo Search response (for backward compatibility)
- * @deprecated Use DuckDuckGoWebSearchResponse instead
- */
-export interface DuckDuckGoSearchResponse extends DuckDuckGoWebSearchResponse {}
-
-/**
  * MCP function execution context
  * Extended context specifically for MCP function execution
  */
 export interface MCPExecutionContext extends ToolContext {
-  // MCP-specific properties
   serverName?: string;
   functionName: string;
   originalArgs: Record<string, unknown>;
   modifiedArgs: Record<string, unknown>;
 
-  // Execution metadata
   executionStartTime: number;
   overridesApplied?: string[];
 }
@@ -274,11 +158,8 @@ export interface MCPServerBehaviorHandler {
 
   /**
    * Process MCP function result before returning to LLM
-   * @param functionName - Name of the executed function
    * @param mcpResult - Raw result from MCP server
    * @param context - Execution context with Discord channel access
-   * @param args - Function arguments used
-   * @returns Processed tool result
    */
   processResult(
     functionName: string,
@@ -288,25 +169,10 @@ export interface MCPServerBehaviorHandler {
   ): Promise<ToolResult>;
 
   /**
-   * Check if this handler supports a specific function
    * @param functionName - Function name to check
    * @returns True if this handler supports the function
    */
   supportsFunction(functionName: string): boolean;
-}
-
-/**
- * MCP execution statistics for monitoring
- */
-export interface MCPExecutionStats {
-  functionName: string;
-  serverName: string;
-  executionTime: number;
-  success: boolean;
-  overridesApplied: number;
-  timestamp: Date;
-  userId?: string;
-  guildId?: string;
 }
 
 /**
@@ -328,10 +194,8 @@ export interface EnhancedMCPServerConfig {
   transport: "stdio" | "http" | "websocket";
   timeout?: number;
 
-  // Handler configuration
   behaviorHandler?: string; // Class name of the behavior handler
 
-  // Capabilities
   supportedFunctions?: string[];
   requiresAuth?: boolean;
   rateLimited?: boolean;
@@ -350,22 +214,18 @@ export interface TypedMCPToolResult extends ToolResult {
     executionTime: number;
     overridesApplied?: string[];
 
-    // Function-specific data
     imagesSent?: number;
     urlsFound?: number;
     fetchCapabilityReminder?: boolean;
     agentInstructions?: string;
 
-    // Status information
     status: "completed" | "completed_and_sent" | "failed" | "partial";
     completionMessage?: string;
 
-    // Handler-specific extensions
     error?: string; // For error scenarios
     searchProvider?: string; // For search-specific information
     contentLength?: number; // For fetch-specific information
 
-    // Allow additional properties for future extensibility
     [key: string]: unknown;
   };
 }
@@ -420,9 +280,7 @@ export const MCPTypeGuards = {
             if (imageData.image_url && typeof imageData.image_url === "string") {
               imageUrls.push(imageData.image_url);
             }
-          } catch {
-            // Skip malformed JSON
-          }
+          } catch {}
         } else if (item?.type === "image") {
           const possibleUrls = [item.image_url, item.url, item.source_url, item.original_url, item.src].filter(
             (url): url is string => typeof url === "string",
@@ -437,7 +295,7 @@ export const MCPTypeGuards = {
 };
 
 /**
- * Guild MCP connection state — represents an active remote MCP connection
+ * Guild MCP connection state : represents an active remote MCP connection
  * for a specific guild. Managed by GuildMcpManager's connection pool.
  *
  * @property guildMcpId - Database row PK (guild_mcp_servers.guild_mcp_id)
@@ -453,15 +311,15 @@ export interface GuildMCPConnection {
   guildMcpId: number;
   serverId: number;
   name: string;
-  client: unknown; // MCP Client — typed as unknown to avoid coupling mcpTypes to SDK imports
-  callableTool: unknown; // CallableTool from @google/genai — same reason
+  client: unknown; // MCP Client : typed as unknown to avoid coupling mcpTypes to SDK imports
+  callableTool: unknown; // CallableTool from @google/genai : same reason
   functionNames: string[];
   connectedAt: number;
   lastUsedAt: number;
 }
 
 /**
- * Result from GuildMcpManager.testConnection() — used by /config mcp add
+ * Result from GuildMcpManager.testConnection() : used by /config mcp add
  * to validate a remote MCP server before persisting the registration.
  */
 export interface GuildMCPTestResult {

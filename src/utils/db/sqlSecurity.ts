@@ -6,7 +6,7 @@
  *
  * Field whitelists are derived from Zod schema shapes at module load time.
  * Only primary keys, foreign keys used as table anchors, and auto-managed timestamps
- * are explicitly excluded — all other schema fields are allowed automatically.
+ * are explicitly excluded, so all other schema fields are allowed automatically.
  * When new columns are added to a schema, they become writable here without any manual update.
  */
 
@@ -53,7 +53,6 @@ const ALLOWED_PERSONA_CONFIG_FIELDS = schemaKeysExcluding<PersonaConfigRow>(pers
  * Validates that all provided field names are whitelisted for User table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validateUserFields(fields: string[]): void {
@@ -70,7 +69,6 @@ export function validateUserFields(fields: string[]): void {
  * Validates that all provided field names are whitelisted for Tomori table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validateTomoriFields(fields: string[]): void {
@@ -87,7 +85,6 @@ export function validateTomoriFields(fields: string[]): void {
  * Validates that all provided field names are whitelisted for TomoriConfig table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validateTomoriConfigFields(fields: string[]): void {
@@ -104,7 +101,6 @@ export function validateTomoriConfigFields(fields: string[]): void {
  * Validates that all provided field names are whitelisted for PersonaConfig table updates.
  * Throws an error if any field is not allowed to prevent SQL injection.
  *
- * @param fields - Array of field names to validate
  * @throws Error if any field name is not whitelisted
  */
 export function validatePersonaConfigFields(fields: string[]): void {
@@ -115,32 +111,4 @@ export function validatePersonaConfigFields(fields: string[]): void {
       throw new Error(error);
     }
   }
-}
-
-/**
- * Get all allowed field names for User table (for documentation/debugging purposes)
- */
-export function getAllowedUserFields(): readonly string[] {
-  return Array.from(ALLOWED_USER_FIELDS);
-}
-
-/**
- * Get all allowed field names for Tomori table (for documentation/debugging purposes)
- */
-export function getAllowedTomoriFields(): readonly string[] {
-  return Array.from(ALLOWED_TOMORI_FIELDS);
-}
-
-/**
- * Get all allowed field names for TomoriConfig table (for documentation/debugging purposes)
- */
-export function getAllowedTomoriConfigFields(): readonly string[] {
-  return Array.from(ALLOWED_TOMORI_CONFIG_FIELDS);
-}
-
-/**
- * Get all allowed field names for PersonaConfig table (for documentation/debugging purposes)
- */
-export function getAllowedPersonaConfigFields(): readonly string[] {
-  return Array.from(ALLOWED_PERSONA_CONFIG_FIELDS);
 }

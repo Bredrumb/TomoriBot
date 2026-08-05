@@ -1,0 +1,91 @@
+---
+title: "How do I use TomoriBot?"
+# Keyword-rich <title> targeting "add AI bot to Discord server" queries;
+# replaces Starlight's default for this page only. H1 and sidebar keep the
+# plain title.
+head:
+  - tag: title
+    content: "TomoriBot | Add an AI Bot to Your Discord Server in Minutes"
+# Hand-written search snippet; overrides the auto-derived description from
+# routeData.ts middleware.
+description: "Set up TomoriBot in minutes: invite the free bot to your Discord server, connect an AI API key, and start chatting. Or self-host your own instance."
+aiGenerated: false
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside } from "@astrojs/starlight/components";
+
+This guide takes you from scratch to your first message with TomoriBot. Easiest path is to invite the ready public instance (see the [Privacy Policy](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/privacy-policy.md)). If you'd rather run your own instance, jump to
+[Self-hosting](#self-hosting) at the bottom.
+
+## Use the Hosted Bot
+
+### Step 1: Invite her
+
+Invite the public instance with the button below, then pick the server you want her in.
+You need the **Manage Server** permission to add a bot.
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **Invite TomoriBot**
+  </LinkButton>
+</div>
+
+You can also DM her directly. The setup steps are the same.
+
+### Step 2: Get an API key
+
+TomoriBot doesn't ship with an AI brain of its own; you connect one from a **provider** through an **API key**. She supports many
+providers, and you only need one to get started. The following are some providers she currently supports:
+
+- **Google Gemini**: general-purpose, has a free tier, runs every feature. Recommended
+  for your first setup.
+- **OpenRouter**: one key, access to all of the latest text, video, image, embedding models.
+- **NovelAI**: subscription-based, uncensored images, roleplay, and storytelling.
+- **DeepSeek**, **NVIDIA NIM**, **Anthropic**, **Vertex AI**, **Z.ai**, or any
+  OpenAI-compatible **Custom** endpoint.
+
+Run `/help api-key` in Discord and pick your provider to see how to get their API key, or
+see [Providers & Models](/features/setup-administration/providers-and-models/#api-keys) for the full list.
+
+<Aside type="caution">
+**Never share your API key with anyone**. Only provide it through TomoriBot's slash commands which safely stores and encrypts it.
+</Aside>
+
+### Step 3: Run Setup
+
+Run `/config setup` and paste in your API key. This encrypts the key, initializes her
+configuration for the server, and gets her ready to talk. Each server keeps its own
+independent configuration.
+
+**Recommended:** run `/server expressions initialize` afterward so she can use your
+server's custom emojis and stickers accurately.
+
+### Step 4: Start chatting
+
+Just **mention** her or **reply** to one of her messages:
+
+```text
+@TomoriBot yo, what's up?
+```
+
+From here you can shape how she gets triggered and how she behaves:
+- Give her a personality with `/persona`: see [Multiple Personas](/features/chatting-personality/multiple-personas/).
+- Teach her with `/memory`: see [Memory](/features/knowledge/memory/).
+- Explore other customization options: see [Command Reference](/features/command-reference/) or [Features](/features/)
+
+Setting up TomoriBot means you and your server members agree to her `/legal terms` and
+`/legal privacy` notices.
+
+## Self-hosting
+
+Want full control over your data, models, and API keys? You can run your own TomoriBot
+instance on your own hardware. The recommended path is the guided setup wizard.
+
+<div class="button-row">
+  <LinkButton href="/self-hosting/" variant="secondary">
+    **Self-Host TomoriBot**
+  </LinkButton>
+</div>
+

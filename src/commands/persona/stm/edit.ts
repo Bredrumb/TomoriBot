@@ -4,7 +4,7 @@
  *
  * Flow (README decision 3): persona picker → ONE prefilled modal with one input per
  * configured STM category (≤5, fits Discord's 5-component modal limit). There is no
- * "select which field" step — the fixed category set is shown all at once.
+ * "select which field" step: the fixed category set is shown all at once.
  *   - input label       = the category label (e.g. "Goals")
  *   - input placeholder  = the category description
  *   - input value        = the persona's current stored value for that category in this scope
@@ -12,7 +12,7 @@
  *
  * Scope (README decision 6): in a guild the live injected row is the server-shared one;
  * in a DM it is the user-scoped row. The write fns dual-write both scopes in guilds, so
- * the editor's per-user recall mirrors the shared edit — consistent with the STM tool.
+ * the editor's per-user recall mirrors the shared edit: consistent with the STM tool.
  *
  * Storage mode mirrors the STM tool exactly:
  *   - Summary mode (only the default `summary` category) → edits the `summary` string field
@@ -21,24 +21,21 @@
  *     updateShortTermMemoryCategories.
  * Both write fns are write-through (cache + durable DB), so no extra invalidation is needed.
  */
-import type {
-  ButtonInteraction,
-  ChatInputCommandInteraction,
-  Client,
-  ModalSubmitInteraction,
-  SlashCommandSubcommandBuilder,
-} from "discord.js";
+import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags, TextInputStyle } from "discord.js";
 import type { ModalInputField } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { acknowledgeModalSubmitForRefresh, promptWithRawModal } from "@/utils/discord/ui/modals";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+} from "@/utils/discord/ui/personaWorkflow";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
-import { personaRepository, shortTermMemoryRepository } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import {
   clearShortTermMemorySummary,
   getShortTermMemoryForServerChannel,
@@ -69,7 +66,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Execute the /persona stm edit command.
  * @param _client - Discord client (unused)
- * @param interaction - Chat input command interaction
  * @param userData - Invoking user's row
  * @param locale - Resolved locale for the interaction
  */
@@ -79,7 +75,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Channel-only — STM is per-channel, so we need a concrete channel to scope to.
+  // STM is per-channel, requiring a concrete channel scope.
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -90,7 +86,7 @@ export async function execute(
     return;
   }
 
-  // 2. In guilds, editing a persona's working memory requires Manage Server.
+  // In guilds, editing a persona's working memory requires Manage Server.
   if (interaction.guild) {
     const hasPermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!hasPermission) {
@@ -105,9 +101,10 @@ export async function execute(
   }
 
   let tomoriState: TomoriState | null = null;
-  let selectedPersona: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
-  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
+  // Held on an object rather than a bare `let`: the picker assigns it inside a
+  // callback, which control-flow analysis cannot see, so a `let` would still read
+  // as `null` in the catch below.
+  const workflowState: { selectedPersona: TomoriState | null } = { selectedPersona: null };
   try {
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     tomoriState = await getCachedTomoriState(serverDiscId);
@@ -132,14 +129,14 @@ export async function execute(
       return;
     }
 
-    // 3. Load the server's ordered category definitions ONCE — shared by every picker pass.
+    // Load definitions once to share across all picker passes.
     //    getStmCategories always returns at least the default `summary` category.
     const categoryRows = await shortTermMemoryRepository.getStmCategories(tomoriState.server_id);
     const isCategoryMode =
       categoryRows.length > 0 && !(categoryRows.length === 1 && categoryRows[0].label.toLowerCase() === "summary");
     const slugMap = buildSlugMap(categoryRows);
 
-    // buildSlugMap iterates categoryRows in order, so the i-th slug pairs with the i-th row —
+    // buildSlugMap iterates categoryRows in order, so the i-th slug pairs with the i-th row:
     // zip them into a slug→description map for the modal input placeholders.
     const slugDescriptions = new Map<string, string>();
     const slugList = [...slugMap.keys()];
@@ -158,116 +155,100 @@ export async function execute(
         ? (interaction.channel.parentId ?? null)
         : null;
 
-    // 4. Persona picker loop (Pattern 4A) — refreshes in place after each edit.
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    while (true) {
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
-      });
+    // Every successful edit returns a retry directive, so the picker reopens in place
+    // and the admin can edit another persona without re-running the command.
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      async onSelected(selection) {
+        workflowState.selectedPersona = selection.persona;
+        const personaId = selection.persona.persona_id;
+        if (personaId == null) {
+          const invalidWork = await selection.beginInPlaceWork();
+          await invalidWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      if (!personaSelection.success) return;
-      if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
+        const personaLineageId = selection.persona.persona_lineage_id ?? null;
 
-      personaSelectionInteraction = personaSelection.interaction;
-      selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
+        // Captured from the modal-options thunk so the submit handler can map each
+        // returned value back to the category slug that produced its input.
+        let inputs: CategoryInput[] = [];
+
+        const modalResult = await selection.openModal(async () => {
+          // The STM cache hydrates lazily (a cold miss fills only on the NEXT read), so
+          // on a cold boot the modal would otherwise prefill EMPTY, and an empty submit
+          // would silently wipe the persisted row. Await the one-shot hydration first.
+          if (interaction.guild) {
+            await preWarmStmEntry("server", interaction.guild.id, channelId, personaId);
+          } else {
+            await preWarmStmEntry("user", interaction.user.id, channelId, personaId);
+          }
+
+          const liveEntry: ShortTermMemoryEntry | undefined = interaction.guild
+            ? getShortTermMemoryForServerChannel(interaction.guild.id, channelId, personaId)
+            : getShortTermMemoryForUserChannel(interaction.user.id, channelId, personaId);
+
+          inputs = buildCategoryInputs(slugMap, slugDescriptions, liveEntry, isCategoryMode);
+          return {
+            modalCustomId: MODAL_CUSTOM_ID,
+            modalTitleKey: "commands.persona.stm.edit.modal_title",
+            components: inputs.map((entry) => entry.field),
+          };
+        });
+
+        if (modalResult.outcome !== "submitted") {
+          log.info(`Persona STM edit modal ${modalResult.outcome} for user ${userData.user_id}`);
+          return retryPersonaWorkflow();
+        }
+
+        const work = await modalResult.phase.beginInPlaceWork();
+
+        // Persist through the same path the STM tool uses for this mode.
+        await persistStmEdit({
+          inputs,
+          values: modalResult.phase.values,
+          isCategoryMode,
+          guildId: interaction.guild?.id,
+          userId: interaction.user.id,
+          channelId,
+          channelName,
+          parentChannelId,
+          personaId,
+          personaLineageId,
+          serverName: interaction.guild?.name,
+        });
+
+        log.success(
+          `Edited STM for persona ${personaId} in channel ${channelId} (${isCategoryMode ? "category" : "summary"} mode) by ${userData.user_disc_id}`,
         );
-        continue;
-      }
 
-      const personaId = selectedPersona.persona_id;
-      const personaLineageId = selectedPersona.persona_lineage_id ?? null;
-
-      // 5. Pre-warm the cache from the durable DB before the synchronous read. The STM cache
-      //    hydrates lazily (a cold miss fills only on the NEXT read), so on a cold boot the
-      //    modal would otherwise prefill EMPTY — and an empty submit would silently wipe the
-      //    persisted row. Awaiting the one-shot hydration makes the prefill reflect the DB.
-      if (interaction.guild) {
-        await preWarmStmEntry("server", interaction.guild.id, channelId, personaId);
-      } else {
-        await preWarmStmEntry("user", interaction.user.id, channelId, personaId);
-      }
-
-      // 6. Resolve the LIVE durable STM row for this channel + persona in the injected scope.
-      const liveEntry: ShortTermMemoryEntry | undefined = interaction.guild
-        ? getShortTermMemoryForServerChannel(interaction.guild.id, channelId, personaId)
-        : getShortTermMemoryForUserChannel(interaction.user.id, channelId, personaId);
-
-      // 7. Build one prefilled input per category (or a single `summary` input in summary mode).
-      const inputs = buildCategoryInputs(slugMap, slugDescriptions, liveEntry, isCategoryMode);
-
-      const modalResult = await promptWithRawModal(personaSelectionInteraction, locale, {
-        modalCustomId: MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.persona.stm.edit.modal_title",
-        components: inputs.map((entry) => entry.field),
-      });
-
-      if (modalResult.outcome !== "submit") {
-        log.info(`Persona STM edit modal ${modalResult.outcome} for user ${userData.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.persona.stm.edit.success_title",
+            descriptionKey: "commands.persona.stm.edit.success_description",
+            descriptionVars: { persona_name: selection.persona.persona_nickname },
+            footerKey: "general.pagination.reloading_persona_picker",
+            color: ColorCode.SUCCESS,
+          }),
         );
-        continue;
-      }
-
-      modalSubmitInteraction = modalResult.interaction;
-      if (!modalSubmitInteraction) {
-        log.error("Persona STM edit modal unexpectedly missing interaction");
-        return;
-      }
-
-      // 8. Persist the edit through the same path the STM tool uses for this mode.
-      await persistStmEdit({
-        inputs,
-        values: modalResult.values,
-        isCategoryMode,
-        guildId: interaction.guild?.id,
-        userId: interaction.user.id,
-        channelId,
-        channelName,
-        parentChannelId,
-        personaId,
-        personaLineageId,
-        serverName: interaction.guild?.name,
-      });
-
-      log.success(
-        `Edited STM for persona ${personaId} in channel ${channelId} (${isCategoryMode ? "category" : "summary"} mode) by ${userData.user_disc_id}`,
-      );
-
-      // 9. Refresh the picker in place so the admin can edit another persona.
-      await acknowledgeModalSubmitForRefresh(modalSubmitInteraction);
-      await replyComponentsV2Status(
-        interaction,
-        locale,
-        "commands.persona.stm.edit.success_title",
-        "commands.persona.stm.edit.success_description",
-        ColorCode.SUCCESS,
-        { persona_name: selectedPersona.persona_nickname },
-        "general.pagination.reloading_persona_picker",
-      );
-    }
+        return retryPersonaWorkflow();
+      },
+    });
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: workflowState.selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona stm edit",
@@ -277,12 +258,9 @@ export async function execute(
     };
     await log.error(`Unexpected error in /persona stm edit for user ${userData.user_disc_id}`, error as Error, context);
 
-    const errorReplyTarget =
-      modalSubmitInteraction ??
-      (personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction);
-    await replyInfoEmbed(errorReplyTarget, locale, {
+    // The workflow owns every picker/modal interaction, so the root is the only
+    // handle still safe to reply on after an error unwinds out of the callback.
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,
@@ -292,7 +270,7 @@ export async function execute(
 }
 
 /**
- * Builds the modal inputs — one per category slug, prefilled from the live STM entry.
+ * Builds the modal inputs: one per category slug, prefilled from the live STM entry.
  * In summary mode the single input is prefilled from the `summary` string field; in
  * category mode each input is prefilled from the `categories` slug→value map.
  *
@@ -359,14 +337,14 @@ async function persistStmEdit(args: {
   const serverId = guildId ?? "DM";
 
   if (isCategoryMode) {
-    // 1. Build the slug→value map from non-empty fields; omitted slugs are cleared.
+    // Omitted slugs are cleared; build the map from non-empty fields.
     const categories: Record<string, string> = {};
     for (const { slug } of inputs) {
       const value = values?.[`${CATEGORY_INPUT_PREFIX}${slug}`]?.trim();
       if (value) categories[slug] = value.slice(0, VALUE_MAX_LENGTH);
     }
 
-    // 2. Write-through (cache + durable DB) for both scopes the way the STM tool does.
+    // Write-through (cache + durable DB) for both scopes the way the STM tool does.
     await updateShortTermMemoryCategories(
       userId,
       channelId,

@@ -35,7 +35,7 @@ import {
 } from "@/utils/misc/processMemory";
 import { clearMarkdownTableCache, getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 
-export interface EmergencyCacheClearStep {
+interface EmergencyCacheClearStep {
   name: string;
   before: number;
   after: number;

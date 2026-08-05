@@ -1,0 +1,63 @@
+# Cloudflare Pages/Workers redirect rules. These are evaluated BEFORE static
+# assets. Status 301 rules upgrade the Astro-generated meta-refresh pages
+# (which remain in the build as a fallback for non-Cloudflare hosting) to real
+# 301s that preserve search-engine link equity. Status 200 rules are rewrites:
+# Cloudflare serves the target page's HTML at the requested URL without
+# redirecting.
+#
+# Rules must match the request path exactly, so each old URL is listed both
+# with and without its trailing slash.
+
+# Site root: serve the introduction page's HTML in place (200 = rewrite, not a
+# redirect — the URL stays "/"). Temporary until a real landing page exists.
+# Search engines get a 200 here instead of a redirect, which clears the Google
+# Search Console "page with redirect" errors for sitemap-listed locale roots;
+# the served HTML's own canonical tag keeps /introduction/ as the indexed page.
+# The Astro-built root stub (src/pages/index.astro meta-refresh) remains in the
+# build as a fallback for non-Cloudflare hosting only.
+/ /introduction/ 200
+
+# Japanese locale root: same rewrite. The slashless /ja form first normalizes
+# to the canonical trailing-slash URL, then the rewrite serves the content.
+/ja /ja/ 301
+/ja/ /ja/introduction/ 200
+
+# /features/ restructure: flat pages moved into task-based sub-categories.
+/features/chatting-and-triggers /features/chatting-personality/chatting-and-triggers/ 301
+/features/chatting-and-triggers/ /features/chatting-personality/chatting-and-triggers/ 301
+/features/multiple-personas /features/chatting-personality/multiple-personas/ 301
+/features/multiple-personas/ /features/chatting-personality/multiple-personas/ 301
+/features/behavior-tweaking /features/chatting-personality/behavior-tweaking/ 301
+/features/behavior-tweaking/ /features/chatting-personality/behavior-tweaking/ 301
+/features/memory /features/knowledge/memory/ 301
+/features/memory/ /features/knowledge/memory/ 301
+/features/personalization /features/knowledge/personalization/ 301
+/features/personalization/ /features/knowledge/personalization/ 301
+/features/data-handling /features/knowledge/data-handling/ 301
+/features/data-handling/ /features/knowledge/data-handling/ 301
+/features/tools-and-extensions /features/capabilities/tools-and-extensions/ 301
+/features/tools-and-extensions/ /features/capabilities/tools-and-extensions/ 301
+/features/scheduled-tasks /features/capabilities/scheduled-tasks/ 301
+/features/scheduled-tasks/ /features/capabilities/scheduled-tasks/ 301
+/features/media-generation /features/capabilities/media-generation/ 301
+/features/media-generation/ /features/capabilities/media-generation/ 301
+/features/media-generation/image-generation /features/capabilities/media-generation/image-generation/ 301
+/features/media-generation/image-generation/ /features/capabilities/media-generation/image-generation/ 301
+/features/media-generation/video-generation /features/capabilities/media-generation/video-generation/ 301
+/features/media-generation/video-generation/ /features/capabilities/media-generation/video-generation/ 301
+/features/media-generation/tts-and-stt /features/capabilities/media-generation/tts-and-stt/ 301
+/features/media-generation/tts-and-stt/ /features/capabilities/media-generation/tts-and-stt/ 301
+/features/providers-and-models /features/setup-administration/providers-and-models/ 301
+/features/providers-and-models/ /features/setup-administration/providers-and-models/ 301
+/features/server-moderation /features/setup-administration/server-moderation/ 301
+/features/server-moderation/ /features/setup-administration/server-moderation/ 301
+/features/age-restricted-commands /features/setup-administration/age-restricted-commands/ 301
+/features/age-restricted-commands/ /features/setup-administration/age-restricted-commands/ 301
+/features/stats-and-insights /features/setup-administration/stats-and-insights/ 301
+/features/stats-and-insights/ /features/setup-administration/stats-and-insights/ 301
+/features/matrix-bridge /features/integrations/matrix-bridge/ 301
+/features/matrix-bridge/ /features/integrations/matrix-bridge/ 301
+/features/sillytavern-support /features/integrations/sillytavern-support/ 301
+/features/sillytavern-support/ /features/integrations/sillytavern-support/ 301
+/architecture/cloud/azure-terraform-state-recovery /wiki/azure-terraform-state-recovery/ 301
+/architecture/cloud/azure-terraform-state-recovery/ /wiki/azure-terraform-state-recovery/ 301

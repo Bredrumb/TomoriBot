@@ -21,7 +21,7 @@ import { FeloEngine } from "./feloEngine";
 import { getSearchCategoryLabel } from "./categoryMetadata";
 import type { SearchCategory, WebSearchEngine } from "./types";
 
-// 1. Singleton chain — engines are stateless so a single instance is reusable
+// Singleton chain : engines are stateless so a single instance is reusable
 //    across all tool invocations.
 const ENGINE_CHAIN: readonly WebSearchEngine[] = [
   new BraveEngine(),
@@ -29,24 +29,6 @@ const ENGINE_CHAIN: readonly WebSearchEngine[] = [
   new DuckDuckGoEngine(),
   new FeloEngine(),
 ];
-
-/**
- * Resolve the first engine in the chain that is currently available AND
- * supports the requested category. Returns null if none qualify.
- *
- * Exposed so other layers (debug, future provider-side hint extraction) can
- * peek at the active engine without actually executing a search.
- */
-export async function getActiveWebSearchEngine(
-  context: ToolContext,
-  category: SearchCategory = "text",
-): Promise<WebSearchEngine | null> {
-  for (const engine of ENGINE_CHAIN) {
-    if (!engine.supportsCategory(category)) continue;
-    if (await engine.available(context)) return engine;
-  }
-  return null;
-}
 
 /**
  * Execute a web search, walking the chain until one engine returns a
@@ -62,7 +44,7 @@ export async function executeWebSearchWithFallback(
   let lastError: string | undefined;
 
   for (const engine of ENGINE_CHAIN) {
-    // 2. Filter: must support the category and be available right now.
+    // Filter: must support the category and be available right now.
     if (!engine.supportsCategory(category)) continue;
     if (!(await engine.available(context))) continue;
 
@@ -82,7 +64,7 @@ export async function executeWebSearchWithFallback(
     }
   }
 
-  // 3. All engines exhausted — return a localized "category unavailable" message.
+  // All engines exhausted , so return a localized "category unavailable" message.
   //    For text, this means the entire chain is down; for image/video/news, this
   //    is the typical "no provider supports this category" path.
   const description = localizer(context.locale, "tools.search.category_unavailable_description", {

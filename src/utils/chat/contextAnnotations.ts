@@ -99,8 +99,12 @@ export function buildRevealedMessageMetadataTailDirective(): string {
   return (
     "Recent message metadata has been revealed in the visible conversation turns. " +
     "Each annotated message now includes a `ref_N` handle and sent timestamp. " +
+    // The system prompt still documents `reveal_message_metadata` (macros expand
+    // once at context-build time, before the reveal), so without this line the
+    // model re-requests a reveal it has already been given.
+    "That reveal is already complete, so do not call `reveal_message_metadata` again for the rest of this turn: use the `ref_N` handles shown above. " +
     "`manage_message` can pin any recent message if Discord permissions allow it, and can edit or delete recent messages you or another character owns. " +
-    "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it."
+    "`interact_with_recent_message` can react to a recent message with an emoji or send a short reply/backtrack comment about it; replies targeting a known persona message use that persona identity when possible."
   );
 }
 
@@ -201,7 +205,7 @@ export function insertBeforeLatestDialoguePair(
  * depth=0 → appended after all dialogue (tail, right before model generates).
  * depth=N → inserted before the Nth DIALOGUE_HISTORY item from the end.
  *
- * Only ContextItemTag.DIALOGUE_HISTORY items are counted — DIALOGUE_SAMPLE
+ * Only ContextItemTag.DIALOGUE_HISTORY items are counted: DIALOGUE_SAMPLE
  * (sample/example dialogues) are intentionally excluded from the depth walk
  * so they don't interfere with nudge positioning in real conversation history.
  *
@@ -230,12 +234,12 @@ export function insertAtDialogueDepth(
       }
     }
   }
-  // Fewer real dialogue turns than depth — clamp to the earliest found position.
+  // Fewer real dialogue turns than depth: clamp to the earliest found position.
   // This keeps the nudge inside the conversation area rather than jumping to tail.
   if (lastFoundIndex !== -1) {
     items.splice(lastFoundIndex, 0, nudge);
   } else {
-    // No dialogue history at all — tail is the only option
+    // No dialogue history at all: tail is the only option
     items.push(nudge);
   }
 }
@@ -319,7 +323,7 @@ export function annotateRecentMessageMetadataInContext(params: {
   // into that turn. Merged turns expand to all constituents; plain turns map to one.
   const constituentIdsByEntryId = new Map<string, string[]>();
   for (const message of params.simplifiedMessages) {
-    // 1. Resolve the original messages folded into this entry. Merged entries carry
+    // Resolve the original messages folded into this entry. Merged entries carry
     //    combinedMessageIds + combinedCreatedAts (parallel arrays); plain entries
     //    fall back to their own id + createdAt.
     const isMerged = !!message.combinedMessageIds && message.combinedMessageIds.length > 0;
@@ -365,7 +369,7 @@ export function annotateRecentMessageMetadataInContext(params: {
     if (textParts.some((part) => part.text.includes("[System: Message metadata: ref="))) {
       continue;
     }
-    // 2. Emit one metadata line per constituent message (in message order) so each
+    // Emit one metadata line per constituent message (in message order) so each
     //    original message in a merged turn still exposes its own ref_N handle and
     //    sent timestamp for manage_message / interact_with_recent_message.
     const annotationBlock = constituentIds
@@ -636,7 +640,7 @@ export function formatInlineSystemContent(content: string | null | undefined): s
 // fresh each turn (see buildReplyReferenceContextAnnotation / buildRecentMessageMetadataAnnotation
 // / buildReactionContextAnnotation and the provider media notices). Persisting them
 // verbatim into durable stores (e.g. short-term memory) leaves stale handles that a
-// later turn re-renders against a different messageIdMap — risking mis-targeted
+// later turn re-renders against a different messageIdMap: risking mis-targeted
 // manage_message / interact_with_recent_message actions. Strip them before storing.
 const INJECTED_CONTEXT_ANNOTATION_PATTERNS: RegExp[] = [
   // Reply-reference annotation AND media/GIF notices: "[System: This message (ID: …) …]"

@@ -31,6 +31,7 @@ import {
   type ImageToolCapabilities,
 } from "@/tools/functionCalls/generateImageToolCapabilities";
 import { checkImageQuota, incrementImageQuota, type QuotaCheckResult } from "../../utils/quota/imageQuotaManager";
+import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -107,19 +108,15 @@ function buildImageToolDescription(capabilities: ImageToolCapabilities): string 
 /**
  * Join mode labels into a human-readable list ("a", "a or b", "a, b, or c").
  * Keeps capability-specific parameter guidance limited to supported modes.
- * @param modes - Ordered list of supported mode labels
  * @returns Comma/"or"-joined list, or empty string when no modes are supported
  */
 function formatModeList(modes: string[]): string {
-  // 1. Zero or one item needs no conjunction
   if (modes.length <= 1) {
     return modes[0] ?? "";
   }
-  // 2. Two items join with a bare "or"
   if (modes.length === 2) {
     return `${modes[0]} or ${modes[1]}`;
   }
-  // 3. Three or more use an Oxford-comma list
   return `${modes.slice(0, -1).join(", ")}, or ${modes[modes.length - 1]}`;
 }
 
@@ -133,11 +130,11 @@ function formatModeList(modes: string[]): string {
 function buildImagePromptDescription(capabilities: ImageToolCapabilities): string {
   let description =
     "Describe the desired image. Include relevant Physical Appearance context for known users/personas.";
-  // 1. Only mention inpaint guidance when the backend can inpaint
+  // Only mention inpaint guidance when the backend can inpaint
   if (capabilities.inpaint) {
     description += " For inpaint, describe only the local replacement.";
   }
-  // 2. Only mention outpaint guidance when the backend can outpaint
+  // Only mention outpaint guidance when the backend can outpaint
   if (capabilities.outpaint) {
     description += " For outpaint, describe what should continue into the new canvas.";
   }
@@ -171,7 +168,6 @@ function buildImageDenoiseDescription(capabilities: ImageToolCapabilities): stri
   if (capabilities.imageToImage) strengthModes.push("img2img");
   if (capabilities.inpaint || capabilities.outpaint) strengthModes.push("inpaint");
   const label = strengthModes.join("/") || "img2img";
-  // Capitalize the leading mode label to match the rest of the schema's prose
   const capitalized = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
   return `${capitalized} strength from 0 to 1. Lower preserves more.`;
 }
@@ -415,8 +411,7 @@ export class GenerateImageTool extends BaseTool {
   /**
    * Standard image generation is available for any tool-capable chat model.
    * The actual execution provider is resolved from the configured image slot.
-   * @param _provider - LLM provider name
-   * @returns Always true — actual availability is gated by config + credential resolution
+   * @returns Always true, so actual availability is gated by config + credential resolution
    */
   isAvailableFor(_provider: string): boolean {
     return true;
@@ -436,7 +431,6 @@ export class GenerateImageTool extends BaseTool {
 
   /**
    * Check if image generation is enabled in Tomori config
-   * @param context - Tool execution context
    * @returns True if image generation is enabled
    */
   protected isEnabled(context: ToolContext): boolean {
@@ -629,7 +623,6 @@ export class GenerateImageTool extends BaseTool {
     const raw = args.target_identity ?? args.user_id;
     const collected: string[] = [];
 
-    // 1. Gather raw entries from either an array or a single string
     if (Array.isArray(raw)) {
       for (const entry of raw) {
         if (typeof entry === "string") {
@@ -640,7 +633,7 @@ export class GenerateImageTool extends BaseTool {
       collected.push(raw);
     }
 
-    // 2. Trim, drop empties, and de-duplicate while preserving first-seen order
+    // Trim, drop empties, and de-duplicate while preserving first-seen order
     const seen = new Set<string>();
     const identities: string[] = [];
     for (const candidate of collected) {
@@ -736,7 +729,6 @@ export class GenerateImageTool extends BaseTool {
 
   /**
    * Get the diffusion model codename from the database via repository
-   * @param diffusionModelId - Database ID of the diffusion model
    * @returns The model codename string (e.g., "gemini-2.5-flash-image")
    */
   private async getDiffusionModelCodename(diffusionModelId: number): Promise<string> {
@@ -817,9 +809,7 @@ export class GenerateImageTool extends BaseTool {
 
   /**
    * Generate image using OpenRouter API
-   * @param apiKey - Decrypted API key
    * @param modelCodename - Model codename (e.g., "google/gemini-2.5-flash-image")
-   * @param prompt - Text prompt for image generation
    * @param aspectRatio - Aspect ratio (e.g., "16:9")
    * @param referenceImages - Optional array of reference images for img2img
    * @returns Promise resolving to generated image data and mimeType
@@ -837,7 +827,6 @@ export class GenerateImageTool extends BaseTool {
       `[OpenRouter] Sending image request to model "${modelCodename}" (aspect ratio: ${aspectRatio}, refs: ${referenceImages?.length ?? 0})`,
     );
 
-    // Prepare messages array
     const messages: Array<{
       role: string;
       content: Array<{
@@ -854,7 +843,6 @@ export class GenerateImageTool extends BaseTool {
       image_url?: { url: string };
     }> = [{ type: "text", text: prompt }];
 
-    // Add reference images if provided (for img2img)
     if (referenceImages && referenceImages.length > 0) {
       for (const img of referenceImages) {
         contentParts.push({
@@ -874,7 +862,6 @@ export class GenerateImageTool extends BaseTool {
       content: contentParts,
     });
 
-    // Prepare request payload
     const requestPayload = {
       model: modelCodename,
       messages: messages,
@@ -896,7 +883,6 @@ export class GenerateImageTool extends BaseTool {
               type: part.type,
               hasImageUrl: part.type === "image_url",
               hasText: part.type === "text",
-              // Log first 100 chars of base64 to verify image data exists
               imageDataPreview: part.image_url?.url.substring(0, 100),
               textPreview: part.text?.substring(0, 50),
             })),
@@ -909,7 +895,6 @@ export class GenerateImageTool extends BaseTool {
       )}`,
     );
 
-    // Call OpenRouter API
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -922,13 +907,11 @@ export class GenerateImageTool extends BaseTool {
 
     if (!response.ok) {
       const errorText = await response.text();
-      // Log richer context without dumping the whole prompt
       const bodySnippet = errorText.slice(0, 500);
       log.warn(
         `[OpenRouter] Image request failed (${response.status} ${response.statusText}) for model "${modelCodename}". Body: ${bodySnippet}`,
       );
 
-      // Try to pull a human-readable message out of the body if possible
       let parsedMessage = "";
       try {
         const parsed = JSON.parse(errorText);
@@ -1001,13 +984,11 @@ export class GenerateImageTool extends BaseTool {
   /**
    * Execute image generation
    * @param args - Arguments containing prompt, optional media_id, and optional aspect_ratio
-   * @param context - Tool execution context
    * @returns Promise resolving to tool result with generated image
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const startedAtMs = Date.now();
 
-    // Validate parameters
     const validation = this.validateParameters(args);
     if (!validation.isValid) {
       return {
@@ -1016,7 +997,6 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
-    // Check if tool is enabled
     if (!this.isEnabled(context)) {
       return {
         success: false,
@@ -1033,7 +1013,6 @@ export class GenerateImageTool extends BaseTool {
       };
     }
 
-    // Extract arguments
     const prompt = args.prompt as string;
     const rawMediaId = args.media_id as string | undefined;
     const messageId = this.resolveMediaId(rawMediaId, context);
@@ -1119,13 +1098,12 @@ export class GenerateImageTool extends BaseTool {
         userId: context.internalUserId ?? null,
       });
 
-      // Personal BYOK users bring their own API quota — bypass server quota entirely
+      // Personal BYOK users bring their own API quota, so bypass server quota entirely
       if (creds.source === "server") {
         quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
       }
 
       if (!quotaCheck.allowed) {
-        // Build user-friendly error message based on quota type
         let errorMessage = "";
         let resetInfo = "";
 
@@ -1189,7 +1167,6 @@ export class GenerateImageTool extends BaseTool {
         ? effectiveNegativePrompt
         : undefined;
 
-      // Collect reference images from message attachments and/or profile pictures
       const referenceImages: ImageReference[] = [];
       // Resolved avatar metadata, in request order, for every identity that was
       // successfully fetched. Used to surface referenced users in the notice/embed.
@@ -1202,14 +1179,14 @@ export class GenerateImageTool extends BaseTool {
         log.info(`Using ${messageImages.length} reference image(s) from message ${messageId} for generation`);
       }
 
-      // Skip avatar references during inpaint when a message image is the edit source —
+      // Skip avatar references during inpaint when a message image is the edit source, so
       // the source image already defines the layout being edited.
       const allowAvatarReference = targetIdentities.length > 0 && !(inpaint && !!messageId);
 
       if (allowAvatarReference) {
         const failedIdentities: string[] = [];
 
-        // 1. Resolve each requested identity to an avatar, normalizing gif → png at
+        // Resolve each requested identity to an avatar, normalizing gif → png at
         //    the URL level via forceStatic (same behavior as peek_profile_picture).
         for (const identity of targetIdentities) {
           try {
@@ -1236,7 +1213,7 @@ export class GenerateImageTool extends BaseTool {
           }
         }
 
-        // 2. Only fail outright when every reference source came up empty; otherwise
+        // Only fail outright when every reference source came up empty; otherwise
         //    continue with whatever references (message images / other avatars) resolved.
         if (failedIdentities.length > 0) {
           if (referenceImages.length === 0) {
@@ -1358,7 +1335,6 @@ export class GenerateImageTool extends BaseTool {
 
       const providerReferenceImages = referenceImages.map(({ mimeType, data }) => ({ mimeType, data }));
 
-      // Call appropriate provider API
       log.info(
         `Generating image with ${executionProvider} via ${displayModelName}: "${effectivePrompt.substring(0, 100)}${effectivePrompt.length > 100 ? "..." : ""}" (aspect ratio: ${aspectRatio})`,
       );
@@ -1535,7 +1511,6 @@ export class GenerateImageTool extends BaseTool {
 
         const response = await chat.sendMessage(messagePayload);
 
-        // Extract generated image from response
         if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
           for (const part of response.candidates[0].content.parts) {
             if (part.inlineData) {
@@ -1593,14 +1568,12 @@ export class GenerateImageTool extends BaseTool {
         };
       }
 
-      // Convert base64 to buffer and send to Discord
       const imageBuffer = Buffer.from(generatedImageData, "base64");
       const attachmentFilename = `generated_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {
         name: attachmentFilename,
       });
 
-      // Send image to Discord channel and capture the sent message for metadata
       const sentMessage = await this.sendGeneratedImage(
         context,
         attachment,
@@ -1615,6 +1588,16 @@ export class GenerateImageTool extends BaseTool {
       if (creds.source === "server") {
         await incrementImageQuota(context.tomoriState.server_id, userDiscId);
       }
+      // Record canonical generation telemetry for all providers; quotas enforce limits only.
+      if (context.internalUserId) {
+        statRepository.recordStat({
+          serverId: context.tomoriState.server_id,
+          userId: context.internalUserId,
+          lineageId: context.tomoriState.persona_lineage_id ?? 0,
+          metric: "image_generated",
+          metricKey: modelCodename,
+        });
+      }
 
       // Note: We intentionally DO NOT include imageMetadata for generated images
       // because Discord CDN URLs are protected and cannot be fetched by external
@@ -1622,7 +1605,6 @@ export class GenerateImageTool extends BaseTool {
       // output - it just needs confirmation that the generation succeeded.
       // The text message includes the Discord message ID for reference.
 
-      // Build success message with remaining quota info (if quota is enabled)
       let successMessage = `Successfully generated and sent image to Discord (message ID: ${sentMessage.id}). The image has been created based on your prompt${
         referenceImagesUsed ? " and the reference image(s)" : ""
       }.`;
@@ -1645,7 +1627,6 @@ export class GenerateImageTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
-      // Handle specific Google API errors
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Localize errors, but fall back to readable defaults if the localizer
@@ -1657,7 +1638,6 @@ export class GenerateImageTool extends BaseTool {
 
       log.error("Image generation failed:", error as Error);
 
-      // Check for billing/payment errors
       if (
         errorMessage.includes("billing") ||
         errorMessage.includes("payment") ||
@@ -1670,7 +1650,6 @@ export class GenerateImageTool extends BaseTool {
         };
       }
 
-      // Check for content safety errors
       if (errorMessage.includes("safety") || errorMessage.includes("blocked") || errorMessage.includes("RECITATION")) {
         return {
           success: false,
@@ -1681,7 +1660,6 @@ export class GenerateImageTool extends BaseTool {
         };
       }
 
-      // Generic error fallback
       return {
         success: false,
         error: `Failed to generate image: ${errorMessage}`,

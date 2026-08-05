@@ -1,0 +1,28 @@
+import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
+
+export const VERBATIM_TOOL_CALLING_CONTEXT_DEPTH = 3;
+
+export const VERBATIM_TOOL_CALLING_NUDGE =
+  'If you need a tool and normal function calling is unavailable, write the tool call as exactly one Markdown inline code span or fenced code block, and make it the very last thing in your message. A short line of in-character narration before the call is fine, but write nothing after it. Use `tool_name({"arg":"value"})`. For complex tools, put every argument in one valid JSON object; do not use comma-separated positional arguments. JSON can include multiple named arguments, arrays, or nested objects when the exposed tool schema requires them. For tools with exactly one required string argument you may use `tool_name("value")`; for no-argument tools use `tool_name()`. Examples: `read_file("media_1")`, `select_sticker_for_response("gong")`, `web_search({"query":"latest current news","category":"news","count":5})`, `generate_image({"prompt":"blue raincoat","media_id":"media_1","inpaint":true,"clothing_segment_categories":["Upper-clothes"]})`. Nested-schema template, replacing tool_name with the exact exposed tool name: `tool_name({"query":"cats","filters":{"site":"example.com"},"tags":["cute","gif"]})`. End your message with the call, then wait for the tool result before continuing.';
+
+/**
+ * Whether the verbatim tool-calling nudge should be present for a given model
+ * attempt. The nudge is only useful when the response will actually be scanned
+ * by `VerbatimToolCallParser`, which lives exclusively in `CustomStreamAdapter`.
+ *
+ * Gating on the `custom` provider matters across the fallback chain: a fallback
+ * to a native tool-calling provider (Google, OpenRouter, etc.) has no verbatim
+ * parser, so the nudge there is useless noise that can even steer the model into
+ * emitting unparseable text-form calls. Evaluating this per attempt lets the
+ * nudge be stripped for those attempts while kept for custom ones.
+ */
+export function shouldInjectVerbatimToolCallingNudge(
+  tomoriConfig: AssembledServerConfig,
+  tomoriState: TomoriState | null | undefined,
+): boolean {
+  return Boolean(
+    tomoriConfig.verbatim_tool_calling_enabled &&
+      tomoriState?.llm?.has_tools &&
+      tomoriState?.llm?.llm_provider?.toLowerCase() === "custom",
+  );
+}

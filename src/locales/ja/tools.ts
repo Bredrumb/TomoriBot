@@ -1,5 +1,3 @@
-// locales/ja/tools.ts
-
 export default {
   tools: {
     generate_image: {
@@ -19,6 +17,8 @@ export default {
       quota_resets_in_days: `クォータは {days} 日後にリセットされます。`,
       quota_remaining: `本日はあと {remaining} 本の動画を生成できます。`,
       file_too_large: `生成された動画（{size_mb} MB）がDiscordの25 MBファイルサイズ制限を超えています。`,
+      reference_unsupported: `選択したOpenRouterモデル \`{model}\` は、画像を正確な最初のフレームとして使用できません。参照画像を外すか、対応する動画モデルを選択してください。`,
+      loop_unsupported: `選択したOpenRouterモデル \`{model}\` は、ループ動画の最後のフレーム指定に対応していません。ループを無効にするか、対応する動画モデルを選択してください。`,
     },
     generate_image_nai: {
       no_google_api_key: `インペインティングには画像セグメンテーション用のGoogleプロバイダー認証情報が必要です。\`/provider add\` で追加するか、Googleプロバイダーに切り替えてください。`,
@@ -83,6 +83,7 @@ export default {
       notice_reference_line: `参照元: {message_url}`,
       notice_reference_count_line: `参照画像を {count} 枚使用しています。`,
       generating_footer: `1〜3分ほどかかる場合があります。`,
+      generated_after_seconds_line: `{seconds}秒で生成しました。`,
     },
     document: {
       reading_title: `📄 ドキュメントを読み取り中...`,
@@ -115,7 +116,7 @@ export default {
     },
     vision: {
       analyzing_title: `🖼️ 画像を解析中...`,
-      analyzing_description: `現在のモデルはビジョン非対応です。設定されたビジョンモデルを使用して画像を解析しています`,
+      analyzing_description: `現在のモデルはビジョン非対応です。設定された \`/model vision\`（{model}）を使用して画像を解析しています。`,
       analyzing_footer: `画像の数によって少し時間がかかる場合があります`,
     },
     gif: {
@@ -126,7 +127,7 @@ export default {
     fetch: {
       fetch_url_title: `🌐 Webページを読み取り中...`,
       fetch_failed_description: `そのページを取得できませんでした: {error}`,
-      private_network_blocked_description: `そのページはプライベートまたは内部ネットワークのアドレスを指しているため取得できませんでした。TomoriBotは既定で \`FETCH_URL_ALLOW_PRIVATE_NETWORK=false\` により、そのようなURLの取得をブロックします。{error}`,
+      private_network_blocked_description: `そのページはプライベートまたは内部ネットワークのアドレスを指しているため取得できませんでした。TomoriBotは本番環境では、ホストが \`FETCH_URL_ALLOW_PRIVATE_NETWORK=true\` を設定しない限り、そのようなURLの取得をブロックします。{error}`,
       reading_title: `🌐 Webページを読み取り中...`,
       reading_title_page: `🌐 Webページを読み取り中（{page}ページ目）...`,
       reading_description: `{url} を取得して内容を読み取っています`,

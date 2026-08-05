@@ -2,7 +2,7 @@
  * Web Search engine-abstraction types.
  *
  * Defines the uniform interface implemented by each search engine
- * (Brave, DuckDuckGo, Felo — and SearXNG in Phase 2). The dispatcher
+ * (Brave, DuckDuckGo, Felo ; and SearXNG in Phase 2). The dispatcher
  * walks an ordered chain of engines per category, calling `search()`
  * on the first one whose `available()` returns true.
  */
@@ -20,7 +20,7 @@ export const BASE_SEARCH_CATEGORIES = ["text", "image", "video", "news"] as cons
  * don't support these and return the normal category-unavailable message when
  * no SearXNG sidecar is configured.
  */
-export const SEARXNG_ONLY_SEARCH_CATEGORIES = ["papers", "code", "files", "music"] as const;
+const SEARXNG_ONLY_SEARCH_CATEGORIES = ["papers", "code", "files", "music"] as const;
 
 export const SEARCH_CATEGORIES = [...BASE_SEARCH_CATEGORIES, ...SEARXNG_ONLY_SEARCH_CATEGORIES] as const;
 
@@ -43,7 +43,7 @@ export type WebSearchEngineName = "brave" | "searxng" | "duckduckgo" | "felo";
  * which engine handles them.
  */
 export interface WebSearchEngine {
-  /** Stable identifier — used for logs, telemetry, and embed provider labels. */
+  /** Stable identifier : used for logs, telemetry, and embed provider labels. */
   readonly name: WebSearchEngineName;
 
   /**
@@ -64,7 +64,7 @@ export interface WebSearchEngine {
 
   /**
    * Execute the search. Implementations are expected to return a fully
-   * formed ToolResult — including any Discord side-effects (embeds /
+   * formed ToolResult : including any Discord side-effects (embeds /
    * attachments) the engine wants to surface.
    *
    * @param count - Optional result count hint from the LLM. Engines that

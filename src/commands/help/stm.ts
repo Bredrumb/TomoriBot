@@ -31,7 +31,7 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // 1. Resolve command mentions for cross-references. Each renders as a clickable
+    // Resolve cross-references into clickable command mentions.
     //    slash-command chip, falling back to plain text if not yet registered.
     const stmParametersMention = commandRegistry.getCommandMention("server", "stm", "parameters");
     const stmPromptEditMention = commandRegistry.getCommandMention("server", "stm", "prompt-edit");
@@ -40,8 +40,6 @@ export async function execute(
     const stmPrivacyBypassMention = commandRegistry.getCommandMention("server", "stm", "privacy-bypass");
     const personaStmEditMention = commandRegistry.getCommandMention("persona", "stm", "edit");
     const helpMemoryMention = commandRegistry.getCommandMention("help", "memory");
-
-    // 2. Render the structured STM customization guide.
     await replySummaryEmbed(
       interaction,
       locale,
@@ -55,7 +53,7 @@ export async function execute(
         fields: [
           {
             // Command mentions live in the field TITLES, so they must be passed as
-            // nameVars — the field value carries no mention placeholders.
+            // nameVars: the field value carries no mention placeholders.
             nameKey: "commands.help.stm.parameters_title",
             nameVars: { stmParameters: stmParametersMention },
             value: localizer(locale, "commands.help.stm.parameters_description"),
@@ -93,7 +91,6 @@ export async function execute(
       MessageFlags.Ephemeral,
     );
   } catch (error) {
-    // 3. Log with context and surface a friendly ephemeral error.
     const context: ErrorContext = {
       userId: userData.user_id,
       errorType: "CommandExecutionError",

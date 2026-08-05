@@ -8,6 +8,7 @@ import type {
   Message,
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { buildStreamContext } from "@/utils/provider/streamContext";
 import { zaiProviderInfo } from "@/providers/zai/providerInfo";
 import { ZaiStreamAdapter, type ZaiStreamConfig } from "@/providers/zai/zaiStreamAdapter";
 import { getZaiToolAdapter } from "@/providers/zai/zaiToolAdapter";
@@ -55,6 +56,7 @@ import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
@@ -87,7 +89,6 @@ export class ZaiProvider
 
   /**
    * Validate a Z.ai API key by sending a minimal request.
-   * @param apiKey - The API key to validate
    * @returns Validation result indicating success or failure with error details
    */
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
@@ -134,11 +135,8 @@ export class ZaiProvider
   }
 
   /**
-   * Call Z.ai with structured JSON output.
-   * @param request - Structured JSON request parameters
    * @param responseSchema - JSON Schema for expected response
    * @param zodSchema - Zod schema for runtime validation
-   * @returns Parsed and validated structured output
    */
   async callStructuredJSON<T>(
     request: ProviderStructuredJsonRequest,
@@ -161,7 +159,6 @@ export class ZaiProvider
 
   /**
    * Get available tools formatted for Z.ai's OpenAI-compatible tool calling.
-   * @param tomoriState - Current server state
    * @param streamingContext - Optional streaming context for filtering
    * @returns Array of tool definitions in OpenAI format
    */
@@ -214,31 +211,14 @@ export class ZaiProvider
         totalCount,
       } = await getAvailableToolsWithMCP("zai", toolStateForContext);
 
-      let finalBuiltInTools = availableBuiltInTools;
+      let finalBuiltInTools = applyStreamContextAvailability({
+        providerLabel: "Z.ai provider",
+        provider: "zai",
+        builtInTools: availableBuiltInTools,
+        streamContext: streamingContext,
+        tomoriState,
+      });
       let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "zai" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState,
-          locale: "en-US",
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("zai", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied Z.ai streaming context filtering: ${availableBuiltInTools.length} -> ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
 
       ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
         providerLabel: "Z.ai provider",
@@ -270,9 +250,6 @@ export class ZaiProvider
   }
 
   /**
-   * Create a provider config from TomoriState.
-   * @param tomoriState - Current server state
-   * @param apiKey - Decrypted API key
    * @returns Provider config ready for streaming
    */
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<ZaiProviderConfig> {
@@ -289,7 +266,6 @@ export class ZaiProvider
       ...samplingParams,
     };
 
-    // Attach runtime logit_bias map if the server has any active entries for this model
     const runtimeLogitBias = buildRuntimeLogitBiasMapForLlm(tomoriState.config.llm_logit_biases ?? [], tomoriState.llm);
     if (Object.keys(runtimeLogitBias).length > 0) {
       config.logitBias = runtimeLogitBias;
@@ -304,12 +280,6 @@ export class ZaiProvider
 
   /**
    * Stream a Z.ai response to Discord using the OpenAI-compatible stream pipeline.
-   * @param channel - Discord channel to stream to
-   * @param client - Discord client instance
-   * @param tomoriState - Current server state
-   * @param config - Provider config from createConfig
-   * @param contextItems - Structured context items for the conversation
-   * @param currentTurnModelParts - Current turn model parts
    * @param emojiStrings - Optional emoji strings for the response
    * @param functionInteractionHistory - Optional function call history
    * @param initialInteraction - Optional initial command interaction
@@ -320,7 +290,6 @@ export class ZaiProvider
    * @param personaAvatarUrl - Optional persona avatar URL
    * @param personaUsername - Optional persona username
    * @param prefixStrippingName - Optional prefix stripping name
-   * @returns Stream result with status and data
    */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
@@ -365,13 +334,14 @@ export class ZaiProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Z.ai uses a single endpoint — no beta URL needed for prefill
+      // Z.ai uses a single endpoint, so no beta URL needed for prefill
       if (streamingContext && tomoriState.llm.has_tools) {
         log.info("ZaiProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
 
-      const streamContext: StreamContext = {
+      const streamContext: StreamContext = buildStreamContext({
+        provider: "zai",
         channel,
         client,
         initialInteraction,
@@ -381,25 +351,13 @@ export class ZaiProvider
         currentTurnModelParts,
         emojiStrings,
         functionInteractionHistory,
-        provider: "zai",
-        locale: userLocale ?? "en-US",
-        suppressUserErrors: streamingContext?.suppressUserErrors,
-        rotationKeyRetriesUsed: streamingContext?.rotationKeyRetriesUsed,
-        outputPrefill: streamingContext?.outputPrefill,
-        outputPrefillState: streamingContext?.outputPrefillState,
-        replyNoticeState: streamingContext?.replyNoticeState,
+        userLocale,
+        streamingContext,
         webhook,
         personaAvatarUrl,
         personaUsername,
         prefixStrippingName,
-        forcedMentions: streamingContext?.forcedMentions,
-
-        // External abort signal for SDK call timeout cancellation
-        abortSignal: streamingContext?.abortSignal,
-
-        // Opaque message ID map for snowflake ID abstraction in LLM-visible text
-        messageIdMap: streamingContext?.messageIdMap,
-      };
+      });
 
       const orchestrator = new StreamOrchestrator();
       const adapter = new ZaiStreamAdapter();

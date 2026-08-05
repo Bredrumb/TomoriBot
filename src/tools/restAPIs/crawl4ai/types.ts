@@ -24,14 +24,14 @@ export interface Crawl4aiCrawlRequest {
   crawler_config?: Record<string, unknown>;
 }
 
-export interface Crawl4aiCrawlMarkdown {
+interface Crawl4aiCrawlMarkdown {
   raw_markdown?: string;
   fit_markdown?: string;
   markdown_with_citations?: string;
   references_markdown?: string;
 }
 
-export interface Crawl4aiCrawlResult {
+interface Crawl4aiCrawlResult {
   url: string;
   success: boolean;
   status_code?: number;
@@ -63,13 +63,6 @@ export interface Crawl4aiMarkdownResponse {
   cache?: string | null;
   markdown: string;
   success: boolean;
-}
-
-export interface Crawl4aiHealthResponse {
-  status?: string;
-  timestamp?: number;
-  version?: string;
-  [extra: string]: unknown;
 }
 
 export interface Crawl4aiRequestConfig {

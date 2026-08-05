@@ -1,5 +1,5 @@
 /**
- * ServerRepository — manages server identity, emojis/stickers, managed webhooks,
+ * ServerRepository: manages server identity, emojis/stickers, managed webhooks,
  * and the personalization blacklist.
  *
  * Also owns the atomic setupServer transaction (creates server + tomori rows).
@@ -9,7 +9,7 @@
  * and consumed by the Phase 6 (#16.7) export pipeline composition.
  *
  * Size note: ~1,070 lines after Phase 5.5e Stage C SQL inline. setupServer is a
- * single unavoidably large transaction (~400 SQL lines) — splitting it would
+ * single unavoidably large transaction (~400 SQL lines); splitting it would
  * separate transactional setup context from its server repository owner.
  * See refactor-integrity-audit.md Intentional Large File table.
  */
@@ -31,12 +31,10 @@ import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
-// ── Managed webhook types ──────────────────────────────────────────────────────
-
 export const MANAGED_WEBHOOK_KIND_SHARED_CHANNEL = "shared_channel" as const;
-export type ManagedWebhookKind = typeof MANAGED_WEBHOOK_KIND_SHARED_CHANNEL;
+type ManagedWebhookKind = typeof MANAGED_WEBHOOK_KIND_SHARED_CHANNEL;
 
-export type ManagedDiscordWebhookRow = {
+type ManagedDiscordWebhookRow = {
   managed_webhook_id: number;
   guild_disc_id: string;
   kind: ManagedWebhookKind;
@@ -48,7 +46,13 @@ export type ManagedDiscordWebhookRow = {
   updated_at?: Date;
 };
 
-// ── Emoji/sticker sync private types ──────────────────────────────────────────
+/** Sync freshness for a server's emoji or sticker set (lazy-sync cache input). */
+interface ServerAssetSyncStatus {
+  /** Most recent `updated_at` across the rows, or null when none exist. */
+  lastUpdated: Date | null;
+  /** Number of synced rows for the server. */
+  count: number;
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: transaction type is complex and internal to Bun's SQL library
 type TransactionSql = any;
@@ -69,10 +73,8 @@ interface SyncItemConfig<TDiscord, TDatabase> {
   getDiscordId: (item: TDiscord) => string;
 }
 
-// ── server config table row shapes ─────────────────────────────────
-
 /** Row shape for server_chat_configs (Phase 6). */
-export type ServerChatConfigsRow = {
+type ServerChatConfigsRow = {
   humanizer_degree: number;
   message_fetch_limit: number;
   send_message_limit: number;
@@ -97,12 +99,12 @@ export type ServerChatConfigsRow = {
 };
 
 /** Row shape for server_notice_embeds_configs (Phase 6). */
-export type ServerNoticeEmbedsConfigsRow = {
+type ServerNoticeEmbedsConfigsRow = {
   tool_notice_hidden_keys: string[];
 };
 
 /** Row shape for server_member_permissions_configs (Phase 6). */
-export type ServerMemberPermissionsConfigsRow = {
+type ServerMemberPermissionsConfigsRow = {
   server_memteaching_enabled: boolean;
   attribute_memteaching_enabled: boolean;
   sampledialogue_memteaching_enabled: boolean;
@@ -113,7 +115,7 @@ export type ServerMemberPermissionsConfigsRow = {
 };
 
 /** Row shape for server_channel_scope_configs (Phase 6). */
-export type ServerChannelScopeConfigsRow = {
+type ServerChannelScopeConfigsRow = {
   rp_channel_ids: string[];
   private_channel_ids: string[];
   crosschannel_blocklist_ids: string[];
@@ -122,7 +124,7 @@ export type ServerChannelScopeConfigsRow = {
 };
 
 /** Row shape for server_welcome_configs (Phase 6). */
-export type ServerWelcomeConfigsRow = {
+type ServerWelcomeConfigsRow = {
   welcome_channel_disc_id: string | null;
   welcome_prompt: string | null;
   welcome_persona_id: number | null;
@@ -132,7 +134,7 @@ export type ServerWelcomeConfigsRow = {
  * Composite export shape for ServerRepository's Phase 6 config tables.
  * Replaces the old server_disc_id-only stub.
  */
-export type ServerExportShape = {
+type ServerExportShape = {
   server_disc_id: string;
   chat: ServerChatConfigsRow | null;
   notice_embeds: ServerNoticeEmbedsConfigsRow | null;
@@ -141,25 +143,19 @@ export type ServerExportShape = {
   welcome: ServerWelcomeConfigsRow | null;
 };
 
-export class ServerRepository implements IRepository<ServerExportShape> {
-  // ── server setup ───────────────────────────────────────────────────────────
-
+class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Atomically sets up a new server: creates server, tomori, config, and emoji rows.
    *
    * @param guild  - Discord Guild (null for DM contexts)
-   * @param config - Setup configuration
    */
   async setup(guild: Guild | null, config: SetupConfig): Promise<SetupResult> {
     return this.sqlSetupServer(guild, config);
   }
 
-  // ── server identity reads ──────────────────────────────────────────────────
-
   /**
    * Returns the internal server DB ID for a given Discord server snowflake.
    *
-   * @param serverDiscId - Discord server snowflake
    * @returns Internal server ID or null if not found
    */
   async loadServerIdByDiscId(serverDiscId: string): Promise<number | null> {
@@ -177,7 +173,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Returns the existing Matrix room ID for a Discord channel, if any.
    *
-   * @param channelDiscId - Discord channel snowflake
    * @returns Matrix room ID or null if not linked
    */
   async getExistingMatrixLink(channelDiscId: string): Promise<string | null> {
@@ -196,7 +191,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Returns the Discord channel ID linked to a Matrix room, if any.
    *
-   * @param matrixRoomId - Matrix room ID
    * @returns Discord channel snowflake or null if not linked
    */
   async getDiscordChannelForMatrixRoom(matrixRoomId: string): Promise<string | null> {
@@ -215,8 +209,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Returns true if a user is already blacklisted from personalization on the server.
    *
-   * @param serverId - Internal server DB ID
-   * @param userDiscId - Discord user snowflake
    */
   async isUserBlacklisted(serverId: number, userDiscId: string): Promise<boolean> {
     try {
@@ -231,12 +223,9 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── emoji / sticker reads ──────────────────────────────────────────────────
-
   /**
    * Loads all synced server emojis by internal server ID.
    *
-   * @param internalServerId - Internal server DB ID
    */
   async loadEmojis(internalServerId: number): Promise<ServerEmojiRow[] | null> {
     return this.sqlLoadServerEmojis(internalServerId);
@@ -245,17 +234,14 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Loads all synced server stickers by Discord server snowflake.
    *
-   * @param serverDiscId - Discord server snowflake
    */
   async loadStickers(serverDiscId: string): Promise<ServerStickerRow[] | null> {
     return this.sqlLoadServerStickers(serverDiscId);
   }
 
   /**
-   * Loads all synced server stickers by internal server DB ID.
    * Used by context builders that already hold the resolved server_id.
    *
-   * @param internalServerId - Internal server DB ID
    */
   async loadStickersByInternalId(internalServerId: number): Promise<ServerStickerRow[]> {
     try {
@@ -272,13 +258,47 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── blacklist ──────────────────────────────────────────────────────────────
+  /**
+   * Returns how many emojis are synced for a server and when they were last
+   * updated. Used by the lazy-sync cache to decide whether a Discord refetch is
+   * due. A server with no synced emojis yields `{ lastUpdated: null, count: 0 }`.
+   *
+   */
+  async getEmojiSyncStatus(serverId: number): Promise<ServerAssetSyncStatus> {
+    try {
+      const [row] = await sql<Array<{ last_updated: Date | null; asset_count: number | string }>>`
+        SELECT MAX(updated_at) AS last_updated, COUNT(*) AS asset_count
+        FROM server_emojis
+        WHERE server_id = ${serverId}
+      `;
+      return { lastUpdated: row?.last_updated ?? null, count: Number(row?.asset_count ?? 0) };
+    } catch (error) {
+      log.error(`Error loading emoji sync status for server ${serverId}:`, error);
+      return { lastUpdated: null, count: 0 };
+    }
+  }
+
+  /**
+   * Sticker counterpart of {@link getEmojiSyncStatus}.
+   *
+   */
+  async getStickerSyncStatus(serverId: number): Promise<ServerAssetSyncStatus> {
+    try {
+      const [row] = await sql<Array<{ last_updated: Date | null; asset_count: number | string }>>`
+        SELECT MAX(updated_at) AS last_updated, COUNT(*) AS asset_count
+        FROM server_stickers
+        WHERE server_id = ${serverId}
+      `;
+      return { lastUpdated: row?.last_updated ?? null, count: Number(row?.asset_count ?? 0) };
+    } catch (error) {
+      log.error(`Error loading sticker sync status for server ${serverId}:`, error);
+      return { lastUpdated: null, count: 0 };
+    }
+  }
 
   /**
    * Returns true if the user is blacklisted from the given server.
    *
-   * @param serverDiscId - Discord server snowflake
-   * @param userDiscId   - Discord user snowflake
    */
   async isBlacklisted(serverDiscId: string, userDiscId: string): Promise<boolean> {
     return userRepository.isBlacklisted(serverDiscId, userDiscId);
@@ -287,27 +307,20 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Returns all blacklisted user Discord IDs for a server.
    *
-   * @param serverId - Internal server DB ID
    */
   async getBlacklistedMemberIds(serverId: number): Promise<string[]> {
     return this.sqlGetBlacklistedMemberIds(serverId);
   }
 
-  // ── Brave API key ──────────────────────────────────────────────────────────
-
   /**
    * Returns true if a Brave Search API key is configured for the server.
    *
-   * @param serverId - Internal server DB ID
    */
   async getBraveApiKeyStatus(serverId: number): Promise<boolean> {
     return toolRepository.getBraveApiKeyStatus(serverId);
   }
 
-  // ── managed webhooks ──────────────────────────────────────────────────────────
-
   /**
-   * Upserts a managed Discord webhook for a channel.
    *
    * @param params - Webhook parameters (guildDiscId, kind, channelDiscId, webhookDiscId, rawToken)
    * @returns true on success, false on failure or missing params
@@ -325,7 +338,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Loads a managed Discord webhook row by channel and kind.
    *
-   * @param channelDiscId - Discord channel snowflake
    * @param kind - Webhook kind (defaults to shared_channel)
    */
   async loadManagedWebhookByChannel(
@@ -338,8 +350,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Loads a managed Discord webhook row by channel and webhook Discord ID.
    *
-   * @param channelDiscId - Discord channel snowflake
-   * @param webhookDiscId - Discord webhook snowflake
    * @param kind - Webhook kind (defaults to shared_channel)
    */
   async loadManagedWebhookByChannelAndWebhookId(
@@ -353,7 +363,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Deletes a managed Discord webhook by channel (and optionally webhook ID).
    *
-   * @param channelDiscId - Discord channel snowflake
    * @param webhookDiscId - Optional Discord webhook snowflake
    * @param kind - Webhook kind (defaults to shared_channel)
    */
@@ -375,15 +384,11 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     return this.sqlDecryptManagedWebhookToken(row);
   }
 
-  // ── emoji / sticker sync ───────────────────────────────────────────────────
-
   /**
    * Syncs emojis from Discord to the database within a transaction.
    * Preserves existing metadata (emoji_desc, emotion_key).
    *
    * @param tx - Active PostgreSQL transaction
-   * @param serverId - Internal server DB ID
-   * @param currentEmojis - Current emoji list from Discord API
    * @returns Number of emojis synced
    */
   async syncEmojis(tx: TransactionSql, serverId: number, currentEmojis: GuildEmoji[]): Promise<number> {
@@ -410,8 +415,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Preserves existing metadata (sticker_desc, emotion_key).
    *
    * @param tx - Active PostgreSQL transaction
-   * @param serverId - Internal server DB ID
-   * @param currentStickers - Current sticker list from Discord API
    * @returns Number of stickers synced
    */
   async syncStickers(tx: TransactionSql, serverId: number, currentStickers: Sticker[]): Promise<number> {
@@ -432,8 +435,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       getDiscordId: (sticker) => sticker.id,
     });
   }
-
-  // ── private SQL: server setup ──────────────────────────────────────────────
 
   private async sqlSetupServer(guild: Guild | null, config: SetupConfig): Promise<SetupResult> {
     const validConfig = setupConfigSchema.parse(config);
@@ -590,7 +591,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           dedupedPresetTriggers.length > 0 ? dedupedPresetTriggers : getBaseTriggerWords(validConfig.locale);
         const presetPersonaPrompt = presetRows[0]?.persona_preset_desc?.trim() || null;
 
-        // 1. Create or update server record with DM support
         const [server] = await tx`
           INSERT INTO servers (server_disc_id, is_dm_channel, registration_locale)
           VALUES (${validConfig.serverId}, ${isDMChannel}, ${validConfig.registrationLocale})
@@ -599,7 +599,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           RETURNING *
         `;
 
-        // 2. Create Tomori instance with the selected official preset.
         const [tomori] = await tx`
           INSERT INTO personas (
             server_id,
@@ -688,7 +687,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         await tx`INSERT INTO server_speech_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_memory_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
 
-        // Initialize persona-scoped config for the main persona.
         await tx`
           INSERT INTO persona_configs (persona_id, trigger_words, persona_prompt)
           VALUES (${tomori.persona_id}, ${triggerWordsArrayLiteral}::text[], ${presetPersonaPrompt})
@@ -721,7 +719,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           `;
         }
 
-        // 4. Register guild emojis in bulk insert (only for guild contexts)
+        // Register guild emojis in bulk insert (only for guild contexts)
         const emojis = [];
         if (!isDMChannel && guild) {
           const emojiValues = Array.from(guild.emojis.cache.values()).map((e) => ({
@@ -755,7 +753,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           log.info("Skipping emoji registration for DM context");
         }
 
-        // 5. Register guild stickers (only for guild contexts)
+        // Register guild stickers (only for guild contexts)
         const stickers = [];
         if (!isDMChannel && guild) {
           log.info(`Registering stickers for server ${server.server_id}`);
@@ -823,8 +821,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── private SQL: emoji / sticker reads ────────────────────────────────────
-
   private async sqlLoadServerEmojis(internalServerId: number): Promise<ServerEmojiRow[] | null> {
     try {
       const emojiRows = await sql`
@@ -853,7 +849,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
   private async sqlLoadServerStickers(serverDiscId: string): Promise<ServerStickerRow[] | null> {
     try {
-      // 1. Get the internal server_id from server_disc_id
       const [server] = await sql`
         SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
       `;
@@ -865,7 +860,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       // biome-ignore lint/style/noNonNullAssertion: server check guarantees server_id (Rule 8)
       const serverId = server.server_id!;
 
-      // 2. Fetch all stickers for that server_id
       const stickersData = await sql`
         SELECT sticker_id, server_id, sticker_disc_id, sticker_name, sticker_desc, emotion_key, format_type, is_global, created_at, updated_at
         FROM server_stickers
@@ -881,7 +875,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         return [];
       }
 
-      // 3. Validate each sticker row
       const validatedStickers: ServerStickerRow[] = [];
       for (const sticker of stickersData) {
         const parsed = serverStickerSchema.safeParse(sticker);
@@ -901,11 +894,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── private SQL: blacklist reads ───────────────────────────────────────────
-
   private async sqlGetBlacklistedMemberIds(serverId: number): Promise<string[]> {
     try {
-      // 1. Query personalization_blacklist table for blacklisted members
       const result = await sql`
         SELECT user_disc_id FROM personalization_blacklist
         WHERE server_id = ${serverId}
@@ -916,7 +906,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
         return [];
       }
 
-      // 2. Map to array of Discord IDs
+      // Map to array of Discord IDs
       const memberIds = result.map((row: unknown) => (row as { user_disc_id: string }).user_disc_id);
       log.info(`Found ${memberIds.length} blacklisted members for server ${serverId}`);
       return memberIds;
@@ -925,8 +915,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       return [];
     }
   }
-
-  // ── private SQL: managed webhooks ──────────────────────────────────────────
 
   private async sqlUpsertManagedWebhook(params: {
     guildDiscId: string;
@@ -1090,8 +1078,11 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── private SQL: emoji/sticker sync ───────────────────────────────────────
-
+  /**
+   * Must stay idempotent (upsert-only, no counters or append-style writes). Its callers wrap
+   * the enclosing transaction in `withTransientDbRetry`, which replays the whole reconcile
+   * when Bun's pool retires the connection mid-sync.
+   */
   private async syncItemsToDatabase<TDiscord, TDatabase extends Record<string, unknown>>(
     tx: TransactionSql,
     serverId: number,
@@ -1219,13 +1210,10 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     return currentItems.length;
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Reads chat, notice-embeds, member-permissions, channel-scope, and welcome
    * configs for the given server from their Phase 6 tables.
    *
-   * @param ownerId - Discord server snowflake
    */
   async toExportShape(ownerId: string | number): Promise<ServerExportShape | null> {
     const serverDiscId = String(ownerId);
@@ -1252,8 +1240,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
   /**
    * Restores ServerRepository-owned config table rows for a server.
-   * @param ownerId - Discord server snowflake
-   * @param data    - Previously exported ServerExportShape
    */
   async fromExportShape(ownerId: string | number, data: ServerExportShape): Promise<boolean> {
     const serverDiscId = String(ownerId);
@@ -1279,8 +1265,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       return false;
     }
   }
-
-  // ── server operations ──────────────────────────────────────────────────────
 
   async addUserBlacklist(serverId: number, userDiscId: string): Promise<boolean> {
     try {
@@ -1312,10 +1296,9 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
   /**
    * Batch-remove multiple users from the server's personalization blacklist.
-   * Single round trip via `user_disc_id = ANY(...)` — preferable to looping
+   * Single round trip via `user_disc_id = ANY(...)`: preferable to looping
    * `removeUserBlacklist` when removing several IDs at once.
    *
-   * @param serverId    - Internal server DB ID
    * @param userDiscIds - Discord IDs of users to remove from the blacklist
    * @returns Number of rows actually deleted
    */
@@ -1364,16 +1347,12 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     }
   }
 
-  // ── resolve internal server ID ──────────────────────────────────
-
   private async resolveServerInternalId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
       SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
     `;
     return (row?.server_id as number | undefined) ?? null;
   }
-
-  // ── config table reads ───────────────────────────────────────────
 
   private async sqlLoadChatConfigs(serverId: number): Promise<ServerChatConfigsRow | null> {
     try {
@@ -1451,8 +1430,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
       return null;
     }
   }
-
-  // ── config table upserts (new tables) ────────────────────────────
 
   private async sqlUpsertChatConfigs(serverId: number, row: ServerChatConfigsRow): Promise<void> {
     const logitBiasesJson = JSON.stringify(row.llm_logit_biases);
@@ -1560,8 +1537,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     `;
   }
 
-  // ── expression initialization ──────────────────────────────────────────────
-
   /**
    * Minimal classification shape used by initializeExpressions.
    * Mirrors ExpressionClassification from structuredOutput.ts without importing from providers.
@@ -1571,7 +1546,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Load all server emojis that have not yet been classified (emotion_key is null/unset
    * or description is empty).
    *
-   * @param serverId - Internal server DB ID
    */
   async loadUninitializedEmojis(
     serverId: number,
@@ -1592,7 +1566,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   /**
    * Load all server stickers that have not yet been classified.
    *
-   * @param serverId - Internal server DB ID
    */
   async loadUninitializedStickers(
     serverId: number,
@@ -1614,7 +1587,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Clear emotion_key and description from all server emojis.
    * Called before a full overwrite re-initialization.
    *
-   * @param serverId - Internal server DB ID
    */
   async clearEmojiExpressions(serverId: number): Promise<void> {
     await sql`UPDATE server_emojis SET emotion_key = NULL, emoji_desc = NULL WHERE server_id = ${serverId}`;
@@ -1624,7 +1596,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Clear emotion_key and description from all server stickers.
    * Called before a full overwrite re-initialization.
    *
-   * @param serverId - Internal server DB ID
    */
   async clearStickerExpressions(serverId: number): Promise<void> {
     await sql`UPDATE server_stickers SET emotion_key = NULL, sticker_desc = NULL WHERE server_id = ${serverId}`;
@@ -1636,8 +1607,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Each result is matched by name (case-insensitive) and only written when the row
    * is still uninitialized (guards against clobbering manual edits mid-batch).
    *
-   * @param serverId - Internal server DB ID
-   * @param results  - Classified expressions from the LLM structured output
    * @returns Object with counts of emojis and stickers that were updated
    */
   async initializeExpressions(
@@ -1649,7 +1618,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
 
     await sql.transaction(async (tx) => {
       for (const result of results) {
-        // 1. Try emoji first (only update if still uninitialized)
+        // Try emoji first (only update if still uninitialized)
         const emojiRows = await tx`
           UPDATE server_emojis
           SET
@@ -1672,7 +1641,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
           continue;
         }
 
-        // 2. Fall through to sticker if no emoji matched
+        // Fall through to sticker if no emoji matched
         const stickerRows = await tx`
           UPDATE server_stickers
           SET
@@ -1705,7 +1674,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * writes unconditionally (no "still uninitialized" guard) because the invoking user
    * is deliberately correcting an existing classification.
    *
-   * @param serverId - Internal server DB ID
    * @param emojiDiscId - Discord emoji snowflake identifying the row to update
    * @param emotionKey - New emotion key (must be one of the 28 valid EmotionKey values)
    * @param description - New usage/description text surfaced to the model
@@ -1733,7 +1701,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Manually overwrite a single sticker's emotion classification and usage description.
    * Sibling of {@link updateEmojiExpression} for the server_stickers table.
    *
-   * @param serverId - Internal server DB ID
    * @param stickerDiscId - Discord sticker snowflake identifying the row to update
    * @param emotionKey - New emotion key (must be one of the 28 valid EmotionKey values)
    * @param description - New usage/description text surfaced to the model
@@ -1757,8 +1724,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
     return rows.length > 0;
   }
 
-  // ── Nuke (full or persona-preserving wipe) ───────────────────────────────────
-
   /**
    * Server-scoped tables wiped in preserve-personas mode.
    *
@@ -1770,12 +1735,12 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * `column "server_id" does not exist` error and aborts the whole transaction.
    *
    * Excluded by design:
-   *  - `personas` and the persona subtree (`persona_*` tables) — preserved
-   *  - `server_memories` — preserved per product decision
-   *  - `error_logs` — uses ON DELETE SET NULL; nuke leaves history intact
-   *  - `discord_managed_webhooks` — keyed by `guild_disc_id` (handled separately)
-   *  - `documents` — has nullable `persona_id`; serverwide rows handled separately
-   *  - Global seed catalogs (`nai_presets`, `system_prompt_presets`) — shared
+   *  - `personas` and the persona subtree (`persona_*` tables): preserved
+   *  - `server_memories`: preserved per product decision
+   *  - `error_logs`; uses ON DELETE SET NULL; nuke leaves history intact
+   *  - `discord_managed_webhooks`: keyed by `guild_disc_id` (handled separately)
+   *  - `documents`: has nullable `persona_id`; serverwide rows handled separately
+   *  - Global seed catalogs (`nai_presets`, `system_prompt_presets`): shared
    *    across all servers, have NO `server_id` column; never wipe these.
    */
   private static readonly PRESERVE_MODE_WIPE_TABLES: readonly string[] = [
@@ -1839,7 +1804,6 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Lists every managed webhook for a guild with its decrypted token, so the
    * caller can delete the webhook on Discord's side before the DB row is wiped.
    *
-   * @param guildDiscId - Discord guild snowflake
    * @returns Array of `{ webhookDiscId, token }` pairs; failed decryptions are skipped (with a warn log)
    */
   async listManagedWebhooksDecrypted(guildDiscId: string): Promise<Array<{ webhookDiscId: string; token: string }>> {
@@ -1869,7 +1833,7 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    * Wipes a server's data. Two modes:
    *
    *  - **Full nuke** (`preservePersonas: false`): single
-   *    `DELETE FROM servers WHERE server_id = ?` — all `ON DELETE CASCADE`
+   *    `DELETE FROM servers WHERE server_id = ?`: all `ON DELETE CASCADE`
    *    children (personas, configs, memories, etc.) drop atomically.
    *
    *  - **Preserve personas** (`preservePersonas: true`): leaves the `servers`
@@ -1880,9 +1844,8 @@ export class ServerRepository implements IRepository<ServerExportShape> {
    *    (only serverwide rows, i.e. `persona_id IS NULL`).
    *
    * Discord-side webhook cleanup (calling `webhook.delete()` on Discord) is the
-   * caller's responsibility — use `listManagedWebhooksDecrypted` beforehand.
+   * caller's responsibility: use `listManagedWebhooksDecrypted` beforehand.
    *
-   * @param serverId - Internal server DB ID
    * @param serverDiscId - Discord guild snowflake (needed for webhook table)
    * @param options.preservePersonas - When true, keep personas + their subtree
    * @returns `true` if any rows were affected (false implies the server row was already missing)
@@ -1890,26 +1853,26 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   async nukeServer(serverId: number, serverDiscId: string, options: { preservePersonas: boolean }): Promise<boolean> {
     try {
       if (!options.preservePersonas) {
-        // 1. Full nuke — cascade-delete via the servers row
+        // Full nuke: cascade-delete via the servers row
         const result = await sql`DELETE FROM servers WHERE server_id = ${serverId}`;
         return result.count > 0;
       }
 
-      // 2. Preserve mode — atomic selective wipe inside a transaction
+      // Preserve mode: atomic selective wipe inside a transaction
       let totalDeleted = 0;
       await sql.transaction(async (tx) => {
-        // 2a. Wipe every server-scoped table in the maintained list
+        // Wipe every server-scoped table in the maintained list
         for (const table of ServerRepository.PRESERVE_MODE_WIPE_TABLES) {
-          // table name is a constant from a private allowlist, not user input — safe to interpolate
+          // table name is a constant from a private allowlist, not user input, so safe to interpolate
           const result = await tx.unsafe(`DELETE FROM ${table} WHERE server_id = $1`, [serverId]);
           totalDeleted += result.count ?? 0;
         }
-        // 2b. discord_managed_webhooks is keyed by guild_disc_id, not server_id
+        // discord_managed_webhooks is keyed by guild_disc_id, not server_id
         const whResult = await tx`
           DELETE FROM discord_managed_webhooks WHERE guild_disc_id = ${serverDiscId}
         `;
         totalDeleted += whResult.count ?? 0;
-        // 2c. Documents: only wipe serverwide rows; persona-scoped docs stay
+        // Documents: only wipe serverwide rows; persona-scoped docs stay
         const docResult = await tx`
           DELETE FROM documents WHERE server_id = ${serverId} AND persona_id IS NULL
         `;
@@ -1936,5 +1899,5 @@ export class ServerRepository implements IRepository<ServerExportShape> {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const serverRepository = new ServerRepository();

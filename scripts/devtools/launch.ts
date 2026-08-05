@@ -3,13 +3,13 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { config } from "dotenv";
 import pc from "picocolors";
+import { resolvePythonExe } from "../lib/pyenv";
 
 config();
 
-// ---------------------------------------------------------------------------
 // scripts/devtools/launch.ts
 //
-//   bun launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts]
+//   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts]
 //
 //   Starts requested sidecar services, waits for them to be ready, then
 //   launches the bot in watch mode (equivalent to `bun run dev`).
@@ -19,27 +19,19 @@ config();
 //   from their pre-built venv and given a configurable startup delay.
 //
 //   Press Ctrl+C to stop everything.
-// ---------------------------------------------------------------------------
 
 const ROOT = process.cwd();
-const IS_WINDOWS = process.platform === "win32";
-/** Python executable name inside a venv's Scripts/ (Windows) or bin/ (POSIX). */
-const VENV_BIN_DIR = IS_WINDOWS ? "Scripts" : "bin";
-const VENV_PYTHON = IS_WINDOWS ? "python.exe" : "python3";
 
-// ---------------------------------------------------------------------------
-// CLI argument parsing
-// ---------------------------------------------------------------------------
 
 const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith("--")).map((a) => a.slice(2)));
 
 if (flags.has("help") || flags.has("h")) {
   console.log(`
-${pc.bold("bun launch")} — start sidecars + TomoriBot in watch mode
+${pc.bold("bun run launch")} — start sidecars + TomoriBot in watch mode
 
 ${pc.bold("Usage:")}
-  bun launch [options]
+  bun run launch [options]
 
 ${pc.bold("Options:")}
   --searxng     Start the SearXNG metasearch Docker container (port 8080 by default)
@@ -51,16 +43,13 @@ ${pc.bold("Options:")}
   --help        Show this message
 
 ${pc.bold("Examples:")}
-  bun launch
-  bun launch --searxng --crawl4ai
-  bun launch --qwen3tts --searxng
+  bun run launch
+  bun run launch --searxng --crawl4ai
+  bun run launch --qwen3tts --searxng
 `);
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// Sidecar registry
-// ---------------------------------------------------------------------------
 
 interface DockerSidecar {
   kind: "docker";
@@ -172,9 +161,6 @@ const SIDECARS: Record<string, SidecarDef> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Docker helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Checks whether a named Docker container exists (regardless of state).
@@ -220,13 +206,12 @@ async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<vo
     if (health === "healthy") return;
     if (health === "unhealthy") throw new Error(`Container "${containerName}" reported unhealthy.`);
 
-    // No Docker healthcheck on this container — fall back to HTTP probe.
+    // No Docker healthcheck on this container, so fall back to HTTP probe.
     if (health === "" && httpHealthUrl) {
       try {
         const res = await fetch(httpHealthUrl, { signal: AbortSignal.timeout(3_000) });
         if (res.ok) return;
       } catch {
-        // Not ready yet — keep polling.
       }
     }
 
@@ -247,7 +232,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
   const state = await getContainerState(containerName);
 
   if (state === null) {
-    // 1. Container doesn't exist — create and start it.
     console.log(`${label} Container not found. Running docker run...`);
     const run = Bun.spawn(["docker", "run", ...def.runArgs], {
       stdout: "inherit",
@@ -256,7 +240,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
     const code = await run.exited;
     if (code !== 0) throw new Error(`docker run for "${containerName}" failed (exit ${code}).`);
   } else if (state !== "running") {
-    // 2. Container exists but is stopped — start it.
     console.log(`${label} Resuming existing container...`);
     const start = Bun.spawn(["docker", "start", containerName], {
       stdout: "inherit",
@@ -265,7 +248,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
     const code = await start.exited;
     if (code !== 0) throw new Error(`docker start for "${containerName}" failed (exit ${code}).`);
   } else {
-    // 3. Already running.
     console.log(`${label} Already running.`);
   }
 
@@ -274,16 +256,6 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
   console.log(`${label} ${pc.green("Healthy ✓")}`);
 }
 
-// ---------------------------------------------------------------------------
-// Python helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Resolves the absolute path to the Python interpreter inside a venv.
- */
-function resolvePythonExe(venvRelPath: string): string {
-  return join(ROOT, venvRelPath, VENV_BIN_DIR, VENV_PYTHON);
-}
 
 /**
  * Spawns a Python sidecar server from its pre-built venv and waits
@@ -319,9 +291,6 @@ async function startPythonSidecar(def: PythonSidecar): Promise<ReturnType<typeof
   return proc;
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const requested = [...flags].filter((f) => f in SIDECARS);
@@ -333,7 +302,6 @@ async function main(): Promise<void> {
 
   const childProcesses: ReturnType<typeof Bun.spawn>[] = [];
 
-  // 1. Start all requested sidecars.
   for (const flag of requested) {
     const def = SIDECARS[flag];
     try {
@@ -350,7 +318,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // 2. Launch the bot in watch mode.
   console.log(`\n${pc.bold(pc.blue("[TomoriBot]"))} Starting bot in watch mode...\n`);
   const bot = Bun.spawn(["bun", "--watch", "src/index.ts"], {
     stdout: "inherit",
@@ -360,7 +327,7 @@ async function main(): Promise<void> {
   });
   childProcesses.push(bot);
 
-  // 3. Graceful shutdown — kill all managed processes on Ctrl+C.
+  // Graceful shutdown because kill all managed processes on Ctrl+C.
   let isShuttingDown = false;
   const shutdown = () => {
     if (isShuttingDown) return;
@@ -373,7 +340,7 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  // 4. Wait for the bot to exit (its exit code becomes this process's exit code).
+  // Wait for the bot to exit (its exit code becomes this process's exit code).
   const exitCode = await bot.exited;
   for (const p of childProcesses) {
     if (p !== bot) {

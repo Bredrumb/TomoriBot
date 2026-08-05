@@ -1,5 +1,3 @@
-// locales/ja/general.ts
-
 export default {
   general: {
     yes: `はい`,
@@ -11,6 +9,9 @@ export default {
     openrouter_model_moved_description: `\`other-model\` の直接選択は OpenRouter モデル登録に移動しました。まず {add_command} で正確なモデルコードネームを登録し、不要な登録は {remove_command} で削除してください。その後、通常の OpenRouter モデル一覧から登録済みモデルを選択してください。`,
     defaults: {
       bot_name: `ともり`,
+    },
+    docs: {
+      open_button_label: `詳細ドキュメントを開く`,
     },
     api_styles: {
       openai_compatible: `OpenAI互換`,
@@ -39,6 +40,11 @@ export default {
       cancel_description: `コマンドはキャンセルされました。`,
       timeout_title: `⏰ コマンドがタイムアウトしました`,
       timeout_description: `時間内に応答しませんでした。もう一度お試しください。`,
+      selector_opened_title: `フォームを開きました`,
+      selector_opened_description: `入力フォームを開いています。送信すると続行し、閉じるとキャンセルされます。`,
+    },
+    text_preview: {
+      truncated_footer: `全 {total} 文字のうち、最初の {shown} 文字を表示しています。`,
     },
     pagination: {
       page_info: `ページ {current}/{total}`,
@@ -56,6 +62,28 @@ export default {
       persona_no_attributes: `属性はまだ設定されていません。`,
       persona_select_button: `選択`,
     },
+    persona_workflow: {
+      loading_title: `選択内容を準備しています`,
+      loading_description: `利用可能なオプションを読み込んでいます...`,
+      modal_ready_title: `続行できます`,
+      modal_ready_description: `フォームを開いて、選択内容の設定を続けてください。`,
+      open_modal_button: `フォームを開く`,
+      // 動詞に依存しない共通のフィルター通知文。下の名詞が差し込まれるため、
+      // 各機能の remove / edit では同じ文を再利用する。
+      filtered_notice: `{items}があるペルソナのみ表示しています。`,
+      items: {
+        attributes: `属性`,
+        sample_dialogues: `サンプル会話`,
+        trigger_words: `トリガーワード`,
+        persona_prompts: `ペルソナプロンプト`,
+        voice_designs: `ボイスデザイン`,
+        documents: `ドキュメント`,
+        chat_history: `チャット履歴`,
+        server_memories: `サーバーの記憶`,
+        personal_memories: `個人の記憶`,
+        sprites: `スプライト`,
+      },
+    },
     errors: {
       guild_only_title: `サーバー専用コマンド`,
       guild_only_description: `このコマンドはサーバー内でのみ使用できます。`,
@@ -64,12 +92,12 @@ export default {
       channel_not_supported_title: `サポートされていないチャンネルタイプ`,
       channel_not_supported_description: `申し訳ありませんが、サーバーのテキストチャンネルまたはダイレクトメッセージでのみ動作します。グループDMやその他のチャンネルタイプはサポートされていません。`,
       tomori_not_setup_title: `初期設定が必要です`,
-      tomori_not_setup_description: `このサーバーではまだ私の設定が行われていないようです。\`サーバー管理\`権限を持つメンバーが最初に\`/config setup\`を使用する必要があります。\`/help setup\`で案内を確認でき、\`/config language\`で希望の言語を設定できます。`,
+      tomori_not_setup_description: `このサーバーではまだ初期設定が必要です。**サーバー管理**権限を持つメンバーがまず \`/config setup\` を実行してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/introduction/quickstart/ で確認できます。`,
       tomori_updating_title: `現在アップデート中...`,
       tomori_updating_description: `現在アップデート中のため、まもなく復旧します。しばらくしてからもう一度お試しください！`,
-      tomori_not_setup_dm_footer: `DMは「ミニサーバー」として扱われ、私はあなたのメッセージに個人的に応答します。ほとんどのサーバー関連コマンドは意図通りに動作します。`,
+      tomori_not_setup_dm_footer: `DMでは個人用の設定として扱われ、ほとんどのサーバー形式の設定が利用できます。`,
       api_key_missing_title: `APIキーがありません`,
-      api_key_missing_description: `機能するには有効なプロバイダー設定が必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/setup\`（初回）または\`/provider add\`で設定できます。`,
+      api_key_missing_description: `応答するには有効なプロバイダー設定が必要です。**サーバー管理**権限を持つメンバーが、初回は \`/config setup\`、追加や更新は \`/provider add\` で設定できます。`,
       api_key_error_title: `APIキーエラー`,
       api_key_error_description: `設定されたプロバイダー認証情報へのアクセスまたは復号化で問題が発生しました。\`/provider add\`で再設定してください。`,
       personal_provider_required_title: `個人プロバイダーが必要です`,
@@ -109,7 +137,7 @@ export default {
       searxng_unreachable: {
         title: `SearXNGに接続できません`,
         description: `セルフホストのSearXNGメタ検索インスタンスが応答していません。一時的にDuckDuckGoへフォールバックします。サイドカーコンテナの起動状態と \`SEARXNG_BASE_URL\` の値を確認してください。`,
-        footer: `トラブルシュートは servers/searxng/README.md を参照`,
+        footer: `トラブルシュートは SearXNG 自己ホストガイドを参照`,
       },
       operation_failed_title: `操作に失敗しました`,
       operation_failed_description: `要求された操作を完了できませんでした。もう一度お試しください。`,
@@ -158,20 +186,17 @@ export default {
   events: {
     addBot: {
       rejoin_title: `TomoriBotが戻ってきました！`,
-      rejoin_description: `このサーバーに再追加されたようです。以前の設定と人格はそのままです！\`/config\`、\`/persona\`、\`/memory\`、\`/server\`コマンドで私を管理できます。\`/memory personal export\`、\`/memory server export\`、\`/personal config\`、\`/server config\`でいつでもデータのエクスポートやリセットができます。
+      rejoin_description: `このサーバーに再追加されたようです。既存の設定とペルソナはそのまま残っています。\`/config\`、\`/persona\`、\`/memory\`、\`/server\`、\`/provider add\` で確認や変更ができます。
 
-			プロバイダーを変更したい場合は、\`/provider add\`で新しいプロバイダーを登録し、\`/model text\`でアクティブにしてください。
-
-			**TomoriBotを使用することで、[利用規約](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/terms-of-service.md)と[プライバシーポリシー](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/privacy-policy.md)に同意したことになります。**\`/legal terms\`と\`/legal privacy\`でいつでも確認できます。`,
+現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms\` と \`/legal privacy\` で確認できます。`,
       setup_prompt_title: `TomoriBotの追加が完了しました`,
-      setup_prompt_description: `追加してくれてありがとうございます！始めるには、**サーバー管理**権限を持つ方が\`/config setup\`コマンドを実行して、私の初期の人格を選択し、AI機能を設定する必要があります。\`/memory personal export\`、\`/memory server export\`、\`/personal config\`、\`/server config\`でいつでもデータのエクスポートやリセットができます。
+      setup_prompt_description: `追加してくれてありがとうございます。始めるには、**サーバー管理**権限を持つメンバーが \`/config setup\` を実行して、初期ペルソナとプロバイダーを選択してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/introduction/quickstart/ で確認できます。
 
-			選択したAIプロバイダーのAPIキーの作成方法が不明な場合は、\`/help api-key\`コマンドを使用してください。APIキーは暗号化されて保存されますが、公開されているDiscordボットに提供することに不安がある場合（通常そうあるべきです）、[リポジトリのガイド](https://github.com/Bredrumb/TomoriBot)を使用してご自身でTomoriBotを実行することもできます。
-
-			**TomoriBotを使用することで、[利用規約](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/terms-of-service.md)と[プライバシーポリシー](https://github.com/Bredrumb/TomoriBot/blob/main/legal/ja/privacy-policy.md)に同意したことになります。**\`/legal terms\`と\`/legal privacy\`でいつでも確認できます。`,
+プロバイダーのAPIキーが必要な場合は \`/help api-key\` を使ってください。現在の利用規約とプライバシーポリシーは \`/legal terms\` と \`/legal privacy\` で確認できます。`,
     },
   },
   reminders: {
+    dual_time_display: `{server_time}（{server_offset} サーバー時間）／ {user_time}（{user_offset}、{user_nickname}さんの現地時間）`,
     reminder_set_title: `⏰ {persona_nickname}がリマインダーを設定しました`,
     reminder_set_description: `{user_nickname}さんに「**{reminder_purpose}**」について\`{reminder_time}\`にリマインドします`,
     reminder_set_footer: `{time_remaining}後にメンションを送信します。リマインダーは\`/scheduled-task remove\`で削除できます。`,
@@ -194,9 +219,11 @@ export default {
     task_update_repeat_hours: `{repetition_interval_hours}時間ごと`,
     expand_task_button: `全文を表示`,
     expand_task_title: `タスクの全文`,
-    reminder_triggered_title: `🔵 リマインダー通知`,
-    task_triggered_title: `🔵 タスク通知`,
-    triggered_description: `{reminder_purpose}`,
-    triggered_footer: `生成中にエラーが発生したため、代わりに生のリマインダーを送信しました`,
+    reminder_triggered_title: `🟡 リマインダー通知（配信失敗）`,
+    task_triggered_title: `🟡 タスク通知（配信失敗）`,
+    triggered_description: `**スケジュール項目ID：** \`{reminder_id}\`\n**元の内容：**`,
+    triggered_footer_one_time: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。この1回限りのスケジュールは完了済みとして削除されました。`,
+    triggered_footer_recurring_retained: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。次回は元の周期を維持して実行されます。管理するには \`/scheduled-task edit\` または \`/scheduled-task remove\` を使用してください。`,
+    triggered_footer_recurring_removed: `生成が繰り返し失敗し、次回の実行も維持できませんでした。この繰り返しスケジュールは削除されました。問題の解決後に作成し直してください。`,
   },
 };
