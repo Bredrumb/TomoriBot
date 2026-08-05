@@ -73,8 +73,8 @@ describe("buildLogStreams", () => {
     const [errorRecord, metricRecord] = stdoutSink.lines.map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(errorRecord?.level).toBe(50);
     expect(errorRecord?.msg).toBe("Chat turn failed");
-    expect((errorRecord?.err as Record<string, unknown>).message).toBe("boom");
-    expect((errorRecord?.context as Record<string, unknown>).commandName).toBe("chat");
+    expect((errorRecord?.err as Record<string, unknown> | undefined)?.message).toBe("boom");
+    expect((errorRecord?.context as Record<string, unknown> | undefined)?.commandName).toBe("chat");
     expect(metricRecord?.level).toBe(52);
     expect(metricRecord?.msg).toBe("metric:cache_sizes");
   });

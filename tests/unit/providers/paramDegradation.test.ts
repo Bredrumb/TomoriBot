@@ -225,7 +225,7 @@ describe("buildImageStripAttempt", () => {
 
     expect(attempt?.label).toBe("targeted_strip_images");
     expect(attempt?.body.temperature).toBe(0.8);
-    const content = (attempt?.body.messages as Array<Record<string, unknown>>)[0]?.content as Array<
+    const content = (attempt?.body.messages as Array<Record<string, unknown>> | undefined)?.[0]?.content as Array<
       Record<string, unknown>
     >;
     expect(content[0]?.type).toBe("text");
