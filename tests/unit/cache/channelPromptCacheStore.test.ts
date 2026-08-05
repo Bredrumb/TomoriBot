@@ -33,6 +33,7 @@ describe("channelPromptCacheStore", () => {
 
   test("entries expire after the TTL window", () => {
     const start = Date.now();
+    setSystemTime(new Date(start));
     setChannelPromptCache(1, "chan-a", { prompt: "hello", mode: "replace" });
 
     // Just inside the TTL, so still present.
