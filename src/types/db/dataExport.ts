@@ -166,6 +166,7 @@ const serverCapabilitiesConfigExportSchema = z.object({
   user_blocking_enabled: z.boolean().optional(),
   time_awareness_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
+  short_term_memory_enabled: z.boolean().optional(),
   verbatim_tool_calling_enabled: z.boolean().optional(),
 });
 
@@ -249,6 +250,37 @@ const serverWelcomeConfigExportSchema = z.object({
 });
 
 /**
+ * Portable STM customization export fields (server_stm_configs + stm_categories).
+ * Unlike the flat split-config tables, STM travels as a nested config object plus an
+ * ordered categories array: these mirror ShortTermMemoryRepository's export shape.
+ * Both keys are optional so exports predating STM customization still validate.
+ * Per-channel durable STM *state* is intentionally NOT exported (design decision 8).
+ */
+const serverStmConfigExportSchema = z.object({
+  stm_config: z
+    .object({
+      refresh_cadence: z.number().int(),
+      render_mode: z.enum(["supersede", "crude_summary"]),
+      crude_message_count: z.number().int(),
+      tool_description_override: z.string().nullable(),
+      update_nudge_override: z.string().nullable(),
+      nudge_injection_depth: z.number().int().optional(),
+      content_injection_depth: z.number().int().optional(),
+    })
+    .nullable()
+    .optional(),
+  stm_categories: z
+    .array(
+      z.object({
+        position: z.number().int().min(0).max(4),
+        label: z.string(),
+        description: z.string(),
+      }),
+    )
+    .optional(),
+});
+
+/**
  * Server configuration export schema.
  * Flat JSON shape is preserved for existing export/import file compatibility,
  * but the schema is now composed by split config-table ownership.
@@ -266,7 +298,8 @@ const serverConfigExportSchema = serverModelConfigExportSchema
   .merge(serverNovelaiImagegenConfigExportSchema)
   .merge(serverByokConfigExportSchema)
   .merge(serverMemoryConfigExportSchema)
-  .merge(serverWelcomeConfigExportSchema);
+  .merge(serverWelcomeConfigExportSchema)
+  .merge(serverStmConfigExportSchema);
 
 export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
 

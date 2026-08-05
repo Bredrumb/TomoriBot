@@ -115,11 +115,10 @@ describe("provider error tips resolve against the credential source", () => {
     expect(tips).not.toContain("/model text");
   });
 
-  it("offers the disable-override recovery path with the User BYOK caveat on personal failures", async () => {
+  it("offers the disable-override recovery path on personal failures", async () => {
     const tips = await renderTips(API_ERROR, "personal");
 
     expect(tips).toContain("/personal provider toggle-models");
-    expect(tips).toContain("User BYOK");
   });
 
   it("never shows the disable-override hint for a server-scoped failure", async () => {

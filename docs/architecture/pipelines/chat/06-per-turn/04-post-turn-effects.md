@@ -106,10 +106,18 @@ If the response was non-empty:
 If not a stop response, history is non-empty, user is not privacy-FULL, and
 the response was non-empty:
 
-- Builds the last 10 simplified messages + persona responses (one entry per
-  responding persona).
+- Builds the user/persona conversation entries plus persona responses (one
+  entry per responding persona); the STM cache applies its configured
+  per-channel storage cap.
 - Calls `storeShortTermMemory(...)` once per unique persona ID (or once with
   `null` if no persona IDs are known).
+- After storing the short-term memory entries, advances the STM cadence
+  counter via `incrementStmTurnCounter()`. The counter tracks
+  bot-participation cycles (not raw inbound messages) and is scoped to the
+  live STM row — server-shared in guilds, user-scoped in DMs. It increments
+  unconditionally (whether or not an STM was written this turn) and is reset
+  to `0` only when the bot calls `update_short_term_memory`. The counter
+  value gates the unified create/update nudge in the context-build STM stage.
 - Failures are logged but don't propagate.
 
 ### 6. `emitThoughtLog`
@@ -166,6 +174,8 @@ After this stage runs:
   this channel — used by the next turn's persona-rotation logic.
 - Short-term memory entries are scoped per-persona-ID (so each persona has
   its own conversational continuity in the cache).
+- The STM cadence counter (`turnsSinceRefresh`) advances once per
+  bot-participation cycle after each STM write.
 - A pending boomerang from this turn is consumed exactly once.
 - A selected sticker is delivered only for a completed result and always after
   the provider text stream has finalized.

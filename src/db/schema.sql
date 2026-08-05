@@ -2648,6 +2648,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
   time_awareness_enabled BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
+  short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
   verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -2904,6 +2905,71 @@ CREATE TRIGGER update_channel_prompt_overrides_timestamp
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================================
+-- STM CUSTOMIZATION (migration 051)
+-- Durable per-server STM config, ordered category definitions, and per-scope
+-- durable state rows. The in-process cache is write-through over short_term_memories.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS server_stm_configs (
+  server_id                 INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  refresh_cadence           INT         NOT NULL DEFAULT 5,
+  render_mode               TEXT        NOT NULL DEFAULT 'crude_summary'
+                                          CHECK (render_mode IN ('supersede', 'crude_summary')),
+  crude_message_count       INT         NOT NULL DEFAULT 6,
+  tool_description_override TEXT,
+  update_nudge_override     TEXT,
+  nudge_injection_depth     INT         NOT NULL DEFAULT 2,
+  content_injection_depth   INT         NOT NULL DEFAULT -1,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_stm_configs_timestamp ON server_stm_configs;
+CREATE TRIGGER update_server_stm_configs_timestamp
+  BEFORE UPDATE ON server_stm_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS stm_categories (
+  stm_category_id  SERIAL      PRIMARY KEY,
+  server_id        INT         NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  position         INT         NOT NULL CHECK (position BETWEEN 0 AND 4),
+  label            TEXT        NOT NULL,
+  description      TEXT        NOT NULL,
+  UNIQUE (server_id, position)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stm_categories_server ON stm_categories(server_id);
+
+CREATE TABLE IF NOT EXISTS short_term_memories (
+  stm_id               SERIAL      PRIMARY KEY,
+  server_disc_id       TEXT,
+  user_disc_id         TEXT,
+  channel_disc_id      TEXT        NOT NULL,
+  persona_id           INT,
+  persona_lineage_id   INT,
+  scope_kind           TEXT        NOT NULL CHECK (scope_kind IN ('server', 'user')),
+  categories           JSONB       NOT NULL DEFAULT '{}',
+  summary              TEXT,
+  turns_since_refresh  INT         NOT NULL DEFAULT 0,
+  last_refreshed_turn  INT         NOT NULL DEFAULT 0,
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stm_scope_unique
+  ON short_term_memories(
+    scope_kind,
+    COALESCE(server_disc_id, ''),
+    COALESCE(user_disc_id,   ''),
+    channel_disc_id,
+    COALESCE(persona_id, 0)
+  );
+
+CREATE INDEX IF NOT EXISTS idx_stm_updated_at ON short_term_memories(updated_at);
+
+DROP TRIGGER IF EXISTS update_short_term_memories_timestamp ON short_term_memories;
+CREATE TRIGGER update_short_term_memories_timestamp
+  BEFORE UPDATE ON short_term_memories
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 -- Per-channel context notes (migration 034)
 -- When a row exists for a channel, its note is injected into the dialogue
 -- history at the configured depth alongside any persona-scoped note (additive).

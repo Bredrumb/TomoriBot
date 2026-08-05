@@ -1,5 +1,5 @@
 import { PrivacyLevel } from "@/types/db/schema";
-import { storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
+import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
 import { resolveManagedChannelWebhook, sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
@@ -11,7 +11,11 @@ import { localizer } from "@/utils/text/localizer";
 import { normalizeCustomEmojisForLlm } from "@/utils/text/processors/mentionProcessor";
 import { MAX_EMPTY_RESPONSE_RETRIES } from "@/utils/discord/stream/constants";
 import { suppressNextSelfReply } from "@/utils/chat/channelQueue";
-import { buildSpeakerGuardRetryDirective, mergeInjectedContextItems } from "@/utils/chat/contextAnnotations";
+import {
+  buildSpeakerGuardRetryDirective,
+  mergeInjectedContextItems,
+  stripInjectedContextAnnotations,
+} from "@/utils/chat/contextAnnotations";
 import { getSelfReplyChainState, setLastRespondedPersona } from "@/utils/chat/selfReplyState";
 import { textQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { statRepository } from "@/utils/db/repositories";
@@ -480,19 +484,21 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
 
   try {
     const messagesToStore = context.simplifiedMessages
-      .slice(-10)
       .filter((message) => message.authorType === "user" || message.authorType === "persona")
       .map((message) => ({
         role: message.authorType === "user" ? ("user" as const) : ("model" as const),
-        content: normalizeCustomEmojisForLlm(message.content || ""),
+        // Strip turn-ephemeral [System: …] annotations (reply refs, metadata, reactions,
+        // media notices) so durable STM holds clean conversational text only.
+        content: stripInjectedContextAnnotations(normalizeCustomEmojisForLlm(message.content || "")),
         timestamp: Date.now(),
         speakerName: message.authorType === "persona" ? message.personaName || message.authorName : message.authorName,
-      }));
+      }))
+      .filter((message) => message.content.length > 0);
 
     for (const response of result.personaResponses) {
       messagesToStore.push({
         role: "model",
-        content: normalizeCustomEmojisForLlm(response.text),
+        content: stripInjectedContextAnnotations(normalizeCustomEmojisForLlm(response.text)),
         timestamp: Date.now(),
         speakerName: response.personaName,
       });
@@ -515,6 +521,14 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
         personaId,
         response?.personaLineageId ?? null,
         context.channel.isThread() ? context.channel.parentId : null,
+      );
+      // Advance the cadence counter on the live scope row (server-shared in guild, user in DM).
+      // This fires once per bot-participation cycle: not per raw inbound message.
+      void incrementStmTurnCounter(
+        context.channel.id,
+        context.isDMChannel ? null : context.serverDiscId,
+        context.isDMChannel ? context.userDiscId : null,
+        personaId,
       );
     }
   } catch (error) {

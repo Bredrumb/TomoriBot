@@ -213,6 +213,28 @@ Click **Confirm** to edit it.`,
         description: `Remove a persona prompt.`,
       },
     },
+    stm: {
+      description: `Manage a persona's short-term memory.`,
+      edit: {
+        description: `Hand-edit a persona's short-term memory for this channel.`,
+        no_permission_title: `Manage Server Required`,
+        no_permission_description: `You need the **Manage Server** permission to edit a persona's short-term memory.`,
+        modal_title: `Edit Short-Term Memory`,
+        success_title: `Short-Term Memory Updated`,
+        success_description: `Updated the short-term memory for **{persona_name}** in this channel.`,
+      },
+      view: {
+        description: `View a persona's short-term memory for this channel (read-only).`,
+        title: `Short-Term Memory`,
+        display: `{content}`,
+        scope_guild: `Showing the server-shared memory injected for this channel.`,
+        scope_dm: `Showing your personal memory injected for this conversation.`,
+        empty_body: `*No short-term memory is stored for this channel yet.*`,
+        truncated: `*…trimmed to fit Discord's display limit.*`,
+        none_title: `No Short-Term Memories`,
+        none_description: `No persona has any short-term memory stored for this channel yet.`,
+      },
+    },
     "sample-dialogue": {
       description: `Add a sample user/bot dialogue pair to as an example for how I should respond.`,
       add: {

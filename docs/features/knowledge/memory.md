@@ -38,7 +38,7 @@ memories activate and where. Turn it on with `/memory tagging set`.
 - Memories **without** keyword tags are always active (the default).
 - Memories **with** keyword tags only activate when the keyword appears in the visible
   context.
-- Use `/tool prompt-snapshot` to see which memories are currently activating.
+- Use `/tool prompt snapshot` to see which memories are currently activating.
 
 ### Channel Tags
 
@@ -103,15 +103,50 @@ usually resolves it. A batch that genuinely contained nothing worth keeping stil
 
 ## Short-Term Memory (STM)
 
-Beyond persistent memories, she keeps a short-term memory of recent conversations for
-channel and server awareness:
+TomoriBot can easily read messages from the current channel she's talking in, but STM allows her to do the following without saving an actual long-term memory:
+1. Temporarily reinforce the current scenario/situation of the channel in context
+2. Temporarily remember conversations from other channels/servers
 
-- Recent messages are cached per channel, and each persona carries the latest STM across
-  channels within the same server.
-- She can automatically summarize older conversation to keep context efficient.
-- **Cross-server sharing is opt-in**: use `/personal stm` with the `crossserver` option to
-  let her reference your own conversations from other servers.
-- Clear your user-specific STM with `/personal stm clear`. STM also expires over time.
+**She only remembers conversations she took part in.** She updates a channel's memory when
+she replies, and at no other time, so a busy channel where nobody talks to her leaves no
+trace. 
+
+STM of each channel expires after 24 hours by default and if you've opted out with `/personal privacy`, your messages never go into it at all as well.
+
+### What she can and can't see
+
+| Where | What that means |
+|---|---|
+| **In a server** | One shared memory per channel, not one per person. She isn't keeping notes on you individually. |
+| **In DMs** | Yours alone. |
+| **Other channels** | She can recall her recent conversations from a few other channels in the same server. |
+| **Private channels** | Anything set with `/server private-channels` stays there and won't surface elsewhere. |
+| **Other servers** | Never, unless you turn on `/personal stm` → `crossserver`. Even then only *your own* conversations follow you. |
+| **Each persona** | Keeps her own separate memory, so switching persona switches memory. |
+
+Each channel's memory holds the last few messages plus a short summary she writes herself
+and refreshes as the conversation moves along. It fades on its own after a few quiet hours.
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `/persona stm view` | See the summary she's keeping for this channel |
+| `/persona stm edit` | Correct it or write it yourself |
+| `/personal stm` | Opt into cross-server recall, or wipe your own |
+| `/tool refresh` | Make her forget this channel right now |
+| `/server stm parameters` | How often she updates it, and how much detail she keeps |
+| `/server stm categories-edit` | Swap the summary for up to 5 labeled fields (*Current scene*, *Mood*, …) |
+| `/server stm prompt-edit` | Reword how she's asked to keep it |
+| `/server stm manage` | Review or clear stored memories |
+| `/server stm privacy-bypass` | Let private-channel memories surface elsewhere |
+| `/capabilities manage` | Turn the feature on or off (stored memories are kept either way) |
+
+Anyone can run `/persona stm view` and `/personal stm`. The rest need Manage Server.
+
+:::tip
+These STM commands are for advanced users only, it is recommended to keep the default settings, unless you want to allow her to remember you across servers with `/personal stm`
+:::
 
 ## Conditioning
 

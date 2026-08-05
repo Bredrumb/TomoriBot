@@ -38,6 +38,7 @@ functions because callers use only their focused operations:
 | `ServerMemoryRepository` | Server-wide shared memories |
 | `ServerRepository` | Server identity: setup, emojis/stickers, webhooks, blacklist |
 | `ServerScheduleRepository` | Reminder + random-trigger scheduling |
+| `ShortTermMemoryRepository` | STM per-server config + categories (`server_stm_configs`, `stm_categories`), cache-delegating state access, retention purge |
 | `SpeechRepository` | Speech (TTS/STT) server configuration |
 | `StatRepository` | Buffered usage-stat counters + read/aggregation (`stat_counters`) |
 | `ToolRepository` | Tool configurations and API key status |
@@ -46,8 +47,10 @@ functions because callers use only their focused operations:
 
 Application code imports shared repository instances from `src/utils/db/repositories/index.ts`. Focused
 quota and speech callers import their operations directly from the owning module. Short-term conversation
-memory is owned directly by `src/utils/cache/shortTermMemoryCache.ts`; its unused repository wrapper was
-removed. The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have
+state is owned by `src/utils/cache/shortTermMemoryCache.ts` (write-through cache), while
+`ShortTermMemoryRepository` owns the per-server STM config tables and delegates state access to that cache;
+it is imported from its own module rather than the barrel, so the barrel keeps no edge into the cache layer.
+The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have
 also been removed.
 
 ### SQL convention
@@ -233,6 +236,7 @@ Also requires pgvector (`CREATE EXTENSION IF NOT EXISTS vector`).
 - `server_capabilities_configs.user_blocking_enabled` gates the `block_user` and `unblock_user` built-in tools. The DB default is `true`.
 - `server_capabilities_configs.time_awareness_enabled` gates reunion notes, their `presence_seen` writes, and server-calendar date spacers in dialogue context. The DB default is `true`; `/capabilities manage` exposes it as **Better Time Awareness**.
 - `server_capabilities_configs.verbatim_tool_calling_enabled` gates the Custom-provider-only text parser that converts strict code-span tool calls into normal tool-loop calls. The DB default is `false`.
+- `server_capabilities_configs.short_term_memory_enabled` (migration 054) is the master switch for the short-term memory subsystem, exposed in `/capabilities manage`. The DB default is `true`. When `false`, the `update_short_term_memory` tool is suppressed AND no STM is injected into context: the same-channel block, cadence nudge, and other-channel recall all go dark, gated at the `buildShortTermMemoryContext` caller in `nativeBuilder.ts`. Disabling does not delete stored `short_term_memories` rows; toggling back on restores prior behavior. The `/server stm …` and `/persona stm …` commands remain fully usable while disabled (configure-while-off).
 - `persona_user_blocks` stores active persona-scoped mutes/blocks keyed by `(server_id, persona_id, user_disc_id)`, with `block_type` (`mute` or `block`), `reason`, and `expires_at`. Expired rows are ignored by repository reads. The table is intentionally separate from `personalization_blacklist`.
 - `persona_context_note_configs.context_note` stores a per-persona author's note. Takes priority over `server_chat_configs.context_note` at inference when non-null.
 - `persona_context_note_configs.context_note_depth` stores the injection depth for the persona-specific note, using the same semantics as `server_chat_configs.context_note_depth`.

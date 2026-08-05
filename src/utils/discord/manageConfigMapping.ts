@@ -22,6 +22,7 @@ type CapabilitiesManageCapabilityColumn = Extract<
   | "videogen_enabled"
   | "voice_message_enabled"
   | "user_blocking_enabled"
+  | "short_term_memory_enabled"
   | "time_awareness_enabled"
 >;
 
@@ -174,6 +175,14 @@ const CAPABILITIES_MANAGE_PERMISSION_DEFINITIONS: readonly CapabilitiesManagePer
     labelKey: "commands.capabilities.manage.userblocking_option",
     descKey: "commands.capabilities.manage.userblocking_desc",
     getState: (c) => c.user_blocking_enabled ?? true,
+  },
+  {
+    value: "shorttermmemory",
+    table: "capabilities",
+    dbColumn: "short_term_memory_enabled",
+    labelKey: "commands.capabilities.manage.shorttermmemory_option",
+    descKey: "commands.capabilities.manage.shorttermmemory_desc",
+    getState: (c) => c.short_term_memory_enabled ?? true,
   },
   {
     value: "timeawareness",

@@ -20,6 +20,7 @@ import {
   type PersonalityExportResult,
   type MemoryItem,
 } from "@/types/db/dataExport";
+import { shortTermMemoryRepository } from "./ShortTermMemoryRepository";
 
 /**
  * ExportRepository: owns all data export operations.
@@ -225,6 +226,7 @@ class ExportRepository {
           COALESCE(snc.uncensor_unicode_space_enabled, false)       AS uncensor_unicode_space_enabled,
           COALESCE(snc.uncensor_sanitize_enabled, false)            AS uncensor_sanitize_enabled,
           COALESCE(scac.tool_use_enabled, true)                     AS tool_use_enabled,
+          COALESCE(scac.short_term_memory_enabled, true)            AS short_term_memory_enabled,
           COALESCE(scac.verbatim_tool_calling_enabled, false)       AS verbatim_tool_calling_enabled,
           COALESCE(smpc.prompt_snapshot_enabled, false)             AS prompt_snapshot_enabled,
           COALESCE(smemoc.memory_tagging_enabled, false)            AS memory_tagging_enabled,
@@ -327,6 +329,11 @@ class ExportRepository {
       // Sanitize memories for safe JSON export
       const sanitizedServerMemories = this.sanitizeMemoryItems(rawServerMemories, "server memories");
 
+      // Per-channel STM state is intentionally excluded from the export: only the
+      // reusable customization (cadence, render mode, prompt overrides, categories)
+      // is portable across servers.
+      const stmExport = await shortTermMemoryRepository.toExportShape(serverDiscId);
+
       const exportData: ServerExport = {
         version: EXPORT_VERSION,
         type: "server",
@@ -397,11 +404,15 @@ class ExportRepository {
             uncensor_unicode_space_enabled: configData.uncensor_unicode_space_enabled,
             uncensor_sanitize_enabled: configData.uncensor_sanitize_enabled,
             tool_use_enabled: configData.tool_use_enabled,
+            short_term_memory_enabled: configData.short_term_memory_enabled,
             verbatim_tool_calling_enabled: configData.verbatim_tool_calling_enabled,
             prompt_snapshot_enabled: configData.prompt_snapshot_enabled,
             memory_tagging_enabled: configData.memory_tagging_enabled,
             channel_memory_enabled: configData.channel_memory_enabled,
             welcome_prompt: configData.welcome_prompt ?? null,
+            // STM customization (nested config object + ordered categories array).
+            stm_config: stmExport?.stm_config ?? null,
+            stm_categories: stmExport?.stm_categories ?? [],
           },
           server_memories: sanitizedServerMemories,
         },

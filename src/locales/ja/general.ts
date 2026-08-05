@@ -81,6 +81,7 @@ export default {
         chat_history: `チャット履歴`,
         server_memories: `サーバーの記憶`,
         personal_memories: `個人の記憶`,
+        short_term_memories: `短期記憶`,
         sprites: `スプライト`,
       },
     },

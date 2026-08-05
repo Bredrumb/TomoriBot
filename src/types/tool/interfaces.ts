@@ -32,7 +32,7 @@ interface ToolParameterSchemaBase {
   enum?: string[];
 }
 
-interface ToolStringParameterSchema extends ToolParameterSchemaBase {
+export interface ToolStringParameterSchema extends ToolParameterSchemaBase {
   type: "string";
 }
 

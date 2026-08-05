@@ -2,8 +2,8 @@
 title: "STM 02: Summary Upgrade"
 ---
 
-LLM-initiated replacement of the crude conversation in the STM cache with a
-compact, LLM-authored summary.
+LLM-initiated replacement of the crude conversation at render time with a
+compact, durable LLM-authored summary.
 
 **Files:**
 - `UpdateShortTermMemoryTool` — `src/tools/functionCalls/updateShortTermMemoryTool.ts`
@@ -16,8 +16,8 @@ it provides a `summary` string that distills the current conversation into a
 compact, model-friendly representation. `UpdateShortTermMemoryTool.execute()`
 validates the input, extracts channel/server/persona metadata from the tool
 context, and calls `updateShortTermMemorySummary()`, which writes the summary
-string into both the user-scoped and server-scoped STM cache entries for this
-channel.
+string into both the user-scoped and server-scoped STM cache entries and their
+durable database rows for this channel.
 
 On the next turn, the context-build STM stage renders the `summary` field
 instead of the raw `messages` array, reducing token cost and giving the LLM
@@ -48,12 +48,14 @@ result on validation failure or blocked execution.
 - **STM cache `summary` field updated** — both user-scoped and server-scoped
   entries for this `(userId, channelId, personaId)` gain or replace their
   `summary` string.
+- **Durable summary rows updated** — both scopes are written through to
+  `short_term_memories`, allowing the summary to be hydrated after a restart.
 - **`lastUpdated` refreshed** — the TTL clock restarts on the updated entries.
 - **`streamingContext.disableShortTermMemoryUpdate = true`** — set by the
   tool-loop after successful execution (prevents re-calling this tool in the
   same turn).
-- **No cache invalidation** — STM is in-process only; no downstream DB or
-  TomoriState cache needs invalidating.
+- **No cache invalidation** — the live STM entry is updated directly before the
+  database write, so no downstream cache needs invalidating.
 
 ## Invariants
 

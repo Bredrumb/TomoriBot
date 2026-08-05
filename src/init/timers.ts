@@ -99,4 +99,18 @@ export function initTimers(client: Client): void {
   } catch (error) {
     log.error("Failed to initialize quota cleanup system", error as Error);
   }
+
+  log.section("Initializing STM Janitor...");
+  try {
+    import("@/timers/stmJanitor")
+      .then(({ initializeStmJanitor }) => {
+        initializeStmJanitor();
+        log.success("STM janitor initialized");
+      })
+      .catch((error: Error) => {
+        log.error("Failed to initialize STM janitor", error);
+      });
+  } catch (error) {
+    log.error("Failed to initialize STM janitor", error as Error);
+  }
 }

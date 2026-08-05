@@ -659,6 +659,9 @@ const serverCapabilitiesConfigSchema = z.object({
   user_blocking_enabled: z.boolean().default(true),
   time_awareness_enabled: z.boolean().default(true),
   tool_use_enabled: z.boolean().default(true),
+  // Master switch for the short-term memory subsystem (tool + context injection).
+  // Default true keeps existing servers unchanged; see migration 054.
+  short_term_memory_enabled: z.boolean().default(true),
   verbatim_tool_calling_enabled: z.boolean().default(false),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -772,6 +775,69 @@ const serverMemoryConfigSchema = z.object({
   updated_at: z.date().optional(),
 });
 export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
+
+export const serverStmConfigSchema = z.object({
+  server_id: z.number().int(),
+  refresh_cadence: z.number().int().default(5),
+  render_mode: z.enum(["supersede", "crude_summary"]).default("crude_summary"),
+  crude_message_count: z.number().int().default(6),
+  tool_description_override: z.string().nullable().optional(),
+  // Unified nudge override (merged create+update, migration 052). NULL → seed default.
+  update_nudge_override: z.string().nullable().optional(),
+  // Positional injection depth for the nudge, counted in dialogue TURNS from the
+  // bottom (not pairs): 0 = tail, 1 = before the final turn, 2 = before the latest
+  // pair, N = before the Nth turn (migration 052, default 2).
+  nudge_injection_depth: z.number().int().default(2),
+  // Positional injection depth for the STM content block (same/other-channel memory),
+  // counted in dialogue TURNS from the bottom like nudge_injection_depth, with an extra
+  // sentinel: -1 = default (keep the block anchored near the top as ambient knowledge,
+  // legacy behavior), 0 = tail (last dialogue item), N = before the Nth turn
+  // (migration 053, default -1). At equal depths the nudge lands just below the block.
+  content_injection_depth: z.number().int().default(-1),
+  created_at: z.date().optional(),
+  updated_at: z.date().optional(),
+});
+export type ServerStmConfigRow = z.infer<typeof serverStmConfigSchema>;
+
+export const stmCategorySchema = z.object({
+  stm_category_id: z.number().int().optional(),
+  server_id: z.number().int(),
+  position: z.number().int().min(0).max(4),
+  label: z.string(),
+  description: z.string(),
+});
+export type StmCategoryRow = z.infer<typeof stmCategorySchema>;
+
+export function normalizeStmCategories(value: unknown): Record<string, string> {
+  if (value === null || value === undefined) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
+        return parsed as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value === "object" && !Array.isArray(value)) return value as Record<string, string>;
+  return {};
+}
+
+const shortTermMemoryRowSchema = z.object({
+  stm_id: z.number().int().optional(),
+  server_disc_id: z.string().nullable().optional(),
+  user_disc_id: z.string().nullable().optional(),
+  channel_disc_id: z.string(),
+  persona_id: z.number().int().nullable().optional(),
+  persona_lineage_id: z.number().int().nullable().optional(),
+  scope_kind: z.enum(["server", "user"]),
+  categories: z.preprocess(normalizeStmCategories, z.record(z.string(), z.string()).default({})),
+  summary: z.string().nullable().optional(),
+  turns_since_refresh: z.number().int().default(0),
+  last_refreshed_turn: z.number().int().default(0),
+  updated_at: z.date().optional(),
+});
+export type ShortTermMemoryRow = z.infer<typeof shortTermMemoryRowSchema>;
 
 /**
  * Assembled view over the 13 split server config tables (Phase 6 / Stage B).

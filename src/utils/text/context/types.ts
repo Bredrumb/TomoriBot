@@ -117,6 +117,17 @@ export type BuildContextResult = {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
+  nudgeItem?: StructuredContextItem;
+  /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
+  nudgeInjectionDepth?: number;
+  /**
+   * STM content block deferred for positional injection (only when the server's
+   * content depth is >= 0; otherwise the block is already inline in `contextItems`).
+   */
+  memoryInjectionItems?: StructuredContextItem[];
+  /** Dialogue depth at which to inject `memoryInjectionItems` (0 = tail). */
+  memoryInjectionDepth?: number;
   /** Populated map of opaque keys -> real Discord message IDs. */
   messageIdMap: MessageIdMap;
 };

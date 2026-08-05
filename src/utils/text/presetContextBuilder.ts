@@ -302,6 +302,10 @@ export async function reassembleWithPreset(
     tailDirectives: string[];
     lowerPriorityTailDirectives: string[];
     uncensorDirective?: string;
+    nudgeItem?: StructuredContextItem;
+    nudgeInjectionDepth?: number;
+    memoryInjectionItems?: StructuredContextItem[];
+    memoryInjectionDepth?: number;
   },
   presetData: CachedPresetData,
   macroParams: PresetMacroParams,
@@ -311,6 +315,10 @@ export async function reassembleWithPreset(
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
 }> {
   const { nodes } = presetData;
 
@@ -515,10 +523,17 @@ export async function reassembleWithPreset(
       `(${systemNodes.length} system nodes, ${depthNodes.length} depth injections)`,
   );
 
+  // Tail directives, uncensor directive, and the out-of-band STM nudge + deferred STM
+  // content block pass through unchanged because they are injected positionally
+  // downstream of assembly, so preset reassembly must never re-anchor them.
   return {
     contextItems,
     tailDirectives: nativeOutput.tailDirectives,
     lowerPriorityTailDirectives: nativeOutput.lowerPriorityTailDirectives,
     uncensorDirective: nativeOutput.uncensorDirective,
+    nudgeItem: nativeOutput.nudgeItem,
+    nudgeInjectionDepth: nativeOutput.nudgeInjectionDepth,
+    memoryInjectionItems: nativeOutput.memoryInjectionItems,
+    memoryInjectionDepth: nativeOutput.memoryInjectionDepth,
   };
 }

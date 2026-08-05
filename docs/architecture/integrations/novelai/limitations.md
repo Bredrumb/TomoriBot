@@ -79,7 +79,7 @@ const isStmToolAvailable = tomoriState.llm.llm_provider !== "novelai";
 ```
 
 When `isStmToolAvailable` is `false`:
-- The hint message `"[System: HINT: Use the update_short_term_memory tool...]"` is never injected after short-term memory summaries.
+- The hint message `"[System: Use the update_short_term_memory tool...]"` is never injected after short-term memory summaries.
 - The nudge prompt that encourages the model to call the tool when a conversation goes stale is also suppressed.
 
 The short-term memory **data itself** (summaries and recent messages) is still included in context when available — only the tool-use instructions around it are removed.

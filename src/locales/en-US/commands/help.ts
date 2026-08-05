@@ -673,6 +673,35 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Clear your user-specific STM with {personalStmClear}
 - STM expires automatically over time`,
     },
+    stm: {
+      description: `Learn how to customize my short-term memory (server admins)`,
+      title: `Short-Term Memory Customization`,
+      embed_description: `Short-term memory (STM) is my working memory of the *current* conversation in each channel (separate from the persistent facts in {helpMemory}). Server admins can tune how it refreshes, how it renders, and what it tracks.`,
+      parameters_title: `Tuning Behavior ({stmParameters})`,
+      parameters_description: `Adjust the core knobs (*"crude"* means the original, unsummarized messages: the raw conversation before I condense it into a summary):
+- **Refresh cadence**: how many of my turns pass between refresh nudges (default **5**).
+- **Render mode**: how the summary and the raw messages combine. *Supersede* (the summary replaces the raw messages) or *Crude + summary* (show both).
+- **Crude messages**: how many recent raw (unsummarized) messages to keep in context (default **6**).
+- **Nudge depth**: where the refresh nudge sits in the conversation (0 = very bottom; 2 = just above the latest exchange, the default).
+- **Content depth**: where my memory block sits (-1 = up top as background knowledge, the default; 0 = very bottom; N = before the Nth turn from the bottom). At the same depth as the nudge, my memory block sits just above it.`,
+      nudge_title: `How the Refresh Nudge Works`,
+      nudge_description: `While a conversation is going I get a quiet system hint to create or update my STM, but only once every *cadence* turns, so I'm not nagged every message. The counter advances each time I respond (whether or not I saved anything) and resets only when I actually use my STM tool. If I keep ignoring it, the nudge stays due until I act.`,
+      categories_title: `Categories ({stmCategoriesEdit})`,
+      categories_description: `By default STM is one free-form summary. Define up to 5 labeled fields (e.g. \`Goals\`, \`Inventory\`) and I'll fill each one separately via tool calls and render them as labeled sections. Clear all fields to return to the single-summary default.`,
+      prompts_title: `Prompt Overrides ({stmPromptEdit})`,
+      prompts_description: `Customize two prompt strings:
+- **Tool description**: what my STM tool advertises to the model.
+- **Memory nudge**: the unified create/update hint text.
+Leave a box empty to reset it to the built-in default. Key \`{...}\` macros you can use:
+- \`{short_term_memory_tool}\` → the STM tool name
+- \`{memory_tool}\` / \`{memory_update_tool}\` → long-term memory tool names
+- \`{category_labels}\` → your configured category labels *(nudge only, category mode)*
+Unknown placeholders are stripped automatically.`,
+      manage_title: `Managing & Scoping`,
+      manage_description: `- {stmManage}: review and clear active server-shared STM entries.
+- {stmPrivacyBypass}: control whether private-channel STM can surface in other channels.
+- {personaStmEdit}: hand-edit a persona's live STM for the current channel.`,
+    },
     "memory-tagging": {
       description: `Learn how memory keyword and channel tagging works`,
       title: `Memory Tagging`,

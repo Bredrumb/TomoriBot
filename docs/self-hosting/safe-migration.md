@@ -190,6 +190,43 @@ For these operations, **the only recovery is your backup**. Always back up befor
 
 The migration runner's forward-only design is intentional: rollback files (`.down.sql`) exist for developer safety during testing, but production recovery relies on backups, not re-execution of undoable operations.
 
+## Trying out a feature branch, then returning to `main`
+
+A common case: someone asks you to test a branch on your existing install, and you want to know whether checking out the branch, booting it, then switching back to `main` will harm your database.
+
+**The key facts:**
+
+- Git and PostgreSQL are separate worlds. `git checkout` only swaps files on disk; it never connects to or modifies your database. Your applied-migration state lives in the `schema_migrations` table, not in git.
+- Migrations run **automatically on boot** (via `initializeDatabase.ts`), so the moment you start the branch, its new migrations are applied to whatever database you pointed at.
+- The forward runner **never auto-rolls-back**. When you return to `main`, it scans the files on disk, finds nothing pending, and does nothing. Migrations the branch applied stay applied.
+
+**So is it safe?** It depends entirely on what the branch's migrations did:
+
+- **Additive only** (new tables / new columns) → safe. The new objects simply sit unused; `main`'s code never references them, so they cannot cause wrong results or crashes. They are harmless dead weight.
+- **Destructive** (`DROP`/`RENAME`/`ALTER` on a table `main` still uses) → not safe. The branch's change strands `main`'s code against a column/table that is now gone or altered.
+
+**Safest approach:** point the branch at a throwaway database (a separate `POSTGRES_DB`), so your real data is never touched. You already build the connection from `POSTGRES_*` vars, and `bun run nuke-db` can reset a scratch database.
+
+### Manually rolling back a test migration
+
+If you tested a branch against your **real** database and want to undo its migrations afterward, use the rollback runner. Unlike the forward runner, it **never runs automatically** — rollback is always a deliberate manual act because `.down.sql` files are typically lossy.
+
+```bash
+# Preview only (dry run): show what would be rolled back
+bun run migrate:down 034          # this migration + every newer applied one
+bun run migrate:down --last       # only the most recently applied migration
+bun run migrate:down --last=2     # the two most recently applied migrations
+
+# Execute the rollback (runs the .down.sql files, removes schema_migrations rows)
+bun run migrate:down 034 --yes
+```
+
+The command runs the selected `.down.sql` files in **descending** version order (so a migration's dependents are undone before it), then deletes the matching `schema_migrations` rows. With those rows gone, the forward runner will re-apply the migrations the next time you boot a branch that still ships them.
+
+> **Run it while still on the branch.** The rollback reads `NNN_description.down.sql` from disk. Once you `git checkout main`, those files are gone and the rollback can no longer execute. Roll back first, then switch branches.
+
+> **It is still lossy.** Rolling back `034` here runs `DROP TABLE short_term_memories` — any data created while testing is gone. That is expected for a test cleanup, but never run `migrate:down` against data you want to keep without a backup.
+
 ## See also
 
 - [Database schema documentation](../systems/database-schema) — learn the current schema structure

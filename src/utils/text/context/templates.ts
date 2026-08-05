@@ -78,11 +78,19 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
 }): {
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
 } {
   return {
     contextItems: output.contextItems.map(resolveRandomChoiceMacrosInContextItem),
@@ -90,6 +98,12 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
     lowerPriorityTailDirectives: output.lowerPriorityTailDirectives.map(resolveRandomChoiceMacros),
     uncensorDirective:
       output.uncensorDirective !== undefined ? resolveRandomChoiceMacros(output.uncensorDirective) : undefined,
+    nudgeItem: output.nudgeItem ? resolveRandomChoiceMacrosInContextItem(output.nudgeItem) : undefined,
+    nudgeInjectionDepth: output.nudgeInjectionDepth,
+    // Deferred STM block items get the same random-choice macro resolution the inline
+    // path applies via `contextItems.map(...)`, so out-of-band placement is identical.
+    memoryInjectionItems: output.memoryInjectionItems?.map(resolveRandomChoiceMacrosInContextItem),
+    memoryInjectionDepth: output.memoryInjectionDepth,
   };
 }
 

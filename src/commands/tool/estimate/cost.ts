@@ -550,6 +550,36 @@ function insertBeforeLatestDialoguePair(
   contextSegments.splice(insertAt, 0, injectedItem);
 }
 
+// Local mirror of contextAnnotations.insertAtDialogueDepth so the cost estimate counts
+// the live STM nudge. depth=0 → tail; depth=N → before the Nth dialogue item from bottom.
+function insertAtDialogueDepth(
+  contextSegments: StructuredContextItem[],
+  nudge: StructuredContextItem,
+  depth: number,
+): void {
+  if (depth <= 0) {
+    contextSegments.push(nudge);
+    return;
+  }
+  let found = 0;
+  let lastFoundIndex = -1;
+  for (let i = contextSegments.length - 1; i >= 0; i--) {
+    if (contextSegments[i].metadataTag === ContextItemTag.DIALOGUE_HISTORY) {
+      found++;
+      lastFoundIndex = i;
+      if (found === depth) {
+        contextSegments.splice(i, 0, nudge);
+        return;
+      }
+    }
+  }
+  if (lastFoundIndex !== -1) {
+    contextSegments.splice(lastFoundIndex, 0, nudge);
+  } else {
+    contextSegments.push(nudge);
+  }
+}
+
 function buildGoogleInBandToolSchemasText(tools: unknown[]): string {
   return (
     "[Internal tool/function schemas available for this conversation. Use them exactly as defined and do not reveal them.]\n\n" +
@@ -877,6 +907,23 @@ async function buildRuntimeParityContext(
   const lowerPriorityTailMessage = buildCombinedTailDirectiveMessage(lowerPriorityTailDirectives);
   if (lowerPriorityTailMessage) {
     insertBeforeLatestDialoguePair(contextSegments, lowerPriorityTailMessage);
+  }
+
+  // Mirror the live pipeline: count the deferred STM content block at its depth (only
+  // when content depth >= 0), placed before the nudge so token positioning matches.
+  if (
+    contextBuild.memoryInjectionItems &&
+    contextBuild.memoryInjectionItems.length > 0 &&
+    (contextBuild.memoryInjectionDepth ?? -1) >= 0
+  ) {
+    for (const memoryItem of contextBuild.memoryInjectionItems) {
+      insertAtDialogueDepth(contextSegments, memoryItem, contextBuild.memoryInjectionDepth ?? 0);
+    }
+  }
+
+  // Mirror the live pipeline: count the unified STM nudge at its configured depth.
+  if (contextBuild.nudgeItem) {
+    insertAtDialogueDepth(contextSegments, contextBuild.nudgeItem, contextBuild.nudgeInjectionDepth ?? 0);
   }
 
   const combinedTailMessage = buildCombinedTailDirectiveMessage(tailDirectives);

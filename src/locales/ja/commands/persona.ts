@@ -213,6 +213,28 @@ export default {
         description: `ペルソナプロンプトを削除します。`,
       },
     },
+    stm: {
+      description: `ペルソナの短期記憶を管理します。`,
+      edit: {
+        description: `このチャンネルにおけるペルソナの短期記憶を手動で編集します。`,
+        no_permission_title: `サーバー管理権限が必要です`,
+        no_permission_description: `ペルソナの短期記憶を編集するには **サーバー管理** 権限が必要です。`,
+        modal_title: `短期記憶を編集`,
+        success_title: `短期記憶を更新しました`,
+        success_description: `このチャンネルの **{persona_name}** の短期記憶を更新しました。`,
+      },
+      view: {
+        description: `このチャンネルにおけるペルソナの短期記憶を閲覧します（読み取り専用）。`,
+        title: `短期記憶`,
+        display: `{content}`,
+        scope_guild: `このチャンネルに注入されるサーバー共有の記憶を表示しています。`,
+        scope_dm: `この会話に注入されるあなた個人の記憶を表示しています。`,
+        empty_body: `*このチャンネルにはまだ短期記憶が保存されていません。*`,
+        truncated: `*…Discordの表示上限に合わせて省略されました。*`,
+        none_title: `短期記憶がありません`,
+        none_description: `このチャンネルには短期記憶を保持しているペルソナがまだありません。`,
+      },
+    },
     "sample-dialogue": {
       description: `私がどのように応答すべきかの例として、ユーザー/ボットの対話ペアを追加します。`,
       add: {

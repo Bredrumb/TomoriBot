@@ -81,6 +81,7 @@ export default {
         chat_history: `chat history`,
         server_memories: `server memories`,
         personal_memories: `personal memories`,
+        short_term_memories: `short-term memories`,
         sprites: `sprites`,
       },
     },
