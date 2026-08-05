@@ -776,7 +776,6 @@ const serverMemoryConfigSchema = z.object({
 });
 export type ServerMemoryConfigRow = z.infer<typeof serverMemoryConfigSchema>;
 
-
 export const serverStmConfigSchema = z.object({
   server_id: z.number().int(),
   refresh_cadence: z.number().int().default(5),
@@ -824,7 +823,7 @@ export function normalizeStmCategories(value: unknown): Record<string, string> {
   return {};
 }
 
-export const shortTermMemoryRowSchema = z.object({
+const shortTermMemoryRowSchema = z.object({
   stm_id: z.number().int().optional(),
   server_disc_id: z.string().nullable().optional(),
   user_disc_id: z.string().nullable().optional(),

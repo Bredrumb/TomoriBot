@@ -19,6 +19,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import type { ErrorContext, ServerStmConfigRow, UserRow } from "@/types/db/schema";
+import { MAX_MESSAGES_PER_CHANNEL } from "@/utils/cache/shortTermMemoryCache";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -30,7 +31,7 @@ import { localizer } from "@/utils/text/localizer";
 const MIN_REFRESH_CADENCE = 1;
 const MAX_REFRESH_CADENCE = 100;
 const MIN_CRUDE_MESSAGES = 1;
-const MAX_CRUDE_MESSAGES = 50;
+const MAX_CRUDE_MESSAGES = MAX_MESSAGES_PER_CHANNEL;
 const MIN_NUDGE_DEPTH = 0;
 const MAX_NUDGE_DEPTH = 20;
 // Content-block depth allows -1 (sentinel: keep the block anchored near the top,

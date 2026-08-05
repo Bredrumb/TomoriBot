@@ -106,8 +106,9 @@ If the response was non-empty:
 If not a stop response, history is non-empty, user is not privacy-FULL, and
 the response was non-empty:
 
-- Builds the last 10 simplified messages + persona responses (one entry per
-  responding persona).
+- Builds the user/persona conversation entries plus persona responses (one
+  entry per responding persona); the STM cache applies its configured
+  per-channel storage cap.
 - Calls `storeShortTermMemory(...)` once per unique persona ID (or once with
   `null` if no persona IDs are known).
 - After storing the short-term memory entries, advances the STM cadence

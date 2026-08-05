@@ -484,7 +484,6 @@ async function writeShortTermMemory(context: ChatTurnContext, result: Generation
 
   try {
     const messagesToStore = context.simplifiedMessages
-      .slice(-10)
       .filter((message) => message.authorType === "user" || message.authorType === "persona")
       .map((message) => ({
         role: message.authorType === "user" ? ("user" as const) : ("model" as const),

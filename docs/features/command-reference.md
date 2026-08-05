@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **27**. Runnable slash commands: **233**.
+Top-level command groups: **27**. Runnable slash commands: **239**.
 
 ## `/bot`
 
@@ -125,6 +125,7 @@ Help commands.
 | `/help speech` | Learn how speech generation works. |
 | `/help spotlight` | Learn what personal spotlight does and how to use it |
 | `/help st-preset` | Learn how SillyTavern presets behave here |
+| `/help stm` | Learn how to customize my short-term memory (server admins) |
 | `/help transcription` | Learn how audio transcription works. |
 
 ## `/legal`
@@ -260,6 +261,8 @@ Manage personality presets
 | `/persona sprites export` | Export a persona's sprites as a shareable .zip file. |
 | `/persona sprites import` | Import a persona's sprites from a .zip file. |
 | `/persona sprites remove` | Remove persona sprite avatars. |
+| `/persona stm edit` | Hand-edit a persona's short-term memory for this channel. |
+| `/persona stm view` | View a persona's short-term memory for this channel (read-only). |
 | `/persona swap` | Swap the main persona with an alter persona |
 | `/persona trigger add` | Add trigger words for a persona. |
 | `/persona trigger remove` | Remove a word that makes me respond when mentioned. |
@@ -353,8 +356,11 @@ Server commands.
 | `/server quota text-generation` | Configure text generation trigger quotas for this server. |
 | `/server quota video-generation` | Configure video generation quotas for this server. |
 | `/server rp-channels` | Manage channels where emojis and stickers are always suppressed and `/delete turn` is available |
+| `/server stm categories-edit` | Define up to 5 labeled STM categories the bot fills via tool calls. |
 | `/server stm manage` | Review and clear active server-shared STMs across personas. |
+| `/server stm parameters` | Tune the STM refresh cadence, render mode, crude-message count, nudge depth, and content depth. |
 | `/server stm privacy-bypass` | Toggle whether private-channel STMs can leak into non-private channels. |
+| `/server stm prompt-edit` | Customize the STM tool description and the unified refresh nudge. |
 | `/server thought-logs-channel` | Set or clear the server's thought-log channel. |
 | `/server timezone` | Set your server's timezone offset from UTC (default: 0 / UTC). |
 | `/server user-blacklist add` | Add a member to the personalization blacklist. |

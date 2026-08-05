@@ -1,20 +1,20 @@
 /**
  * Short-Term Memory Cache
  *
- * Stores recent conversations (last 10 messages per channel) and tool-generated summaries
+ * Stores recent conversations (up to the configured messages per channel) and tool-generated summaries
  * for cross-channel and cross-server awareness.
  *
  * Features:
- * - Cache-only storage (no database persistence)
- * - TTL-based expiration (2 hours for conversations, 4 hours for summaries)
+ * - Cache-only crude conversations plus durable summaries, categories, and cadence state
+ * - Separately configurable TTLs for crude conversations and summaries
  * - Persona-shared guild STM plus privacy-respecting cross-server user STM
  * - Relative timestamp formatting (e.g., "2 hours ago")
  *
  * Design:
  * - User key pattern: `shortterm:user:${userId}:${channelId}` or `shortterm:user:${userId}:${channelId}:${personaId}`
  * - Server key pattern: `shortterm:server:${serverId}:${channelId}` or `shortterm:server:${serverId}:${channelId}:${personaId}`
- * - Conversations: Last 10 condensed turns (user + model messages)
- * - Summaries: Tool-generated summaries replace crude conversations
+ * - Conversations: Most recent condensed turns (user + model messages), up to the configured limit
+ * - Summaries: Tool-generated context that can augment or supersede crude conversations
  * - Cross-model compatible: Summaries created by any model work for all models
  */
 
@@ -37,10 +37,10 @@ interface ShortTermMessage {
  * A short-term memory entry for a specific channel
  */
 export interface ShortTermMemoryEntry {
-  /** Array of conversation messages (max 10 condensed turns) */
+  /** Array of conversation messages, capped by the configured per-channel limit */
   messages: ShortTermMessage[];
 
-  /** Optional tool-generated summary (replaces crude conversation when present) */
+  /** Optional tool-generated summary rendered according to the server STM mode */
   summary?: string;
 
   /** Structured memory categories for category-mode STM (slug → value map) */
@@ -92,7 +92,10 @@ const CRUDE_CONVERSATION_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMO
 export const STM_MAX_CATEGORIES = Number.parseInt(process.env.STM_MAX_CATEGORIES || "5", 10);
 const SUMMARY_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS || "24", 10);
 const MAX_SUMMARY_LENGTH = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH || "1500", 10);
-const MAX_MESSAGES_PER_CHANNEL = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL || "10", 10);
+export const MAX_MESSAGES_PER_CHANNEL = Math.max(
+  1,
+  Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL || "10", 10) || 10,
+);
 
 const CRUDE_CONVERSATION_TTL_MS = CRUDE_CONVERSATION_TTL_HOURS * 60 * 60 * 1000;
 const SUMMARY_TTL_MS = SUMMARY_TTL_HOURS * 60 * 60 * 1000;
@@ -690,7 +693,7 @@ function updateSummaryForKey(
  *
  * @param userId - Discord user ID
  * @param channelId - Discord channel ID
- * @param messages - Array of conversation messages (max 10 turns) with optional speaker names
+ * @param messages - Conversation messages with optional speaker names; the configured storage cap is applied
  * @param serverId - Discord server ID (or "DM" for direct messages)
  * @param serverName - Optional server name for same-server channel mentions
  * @param channelName - Optional channel name for same-server channel mentions

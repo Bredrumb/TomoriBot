@@ -39,7 +39,7 @@ import type { IRepository } from "./IRepository";
  * Exported shape for STM config (config only: per-channel state is excluded).
  * Consumed by the Phase 6 export pipeline and `/server config export`.
  */
-export type ShortTermMemoryExportShape = {
+type ShortTermMemoryExportShape = {
   stm_config: {
     refresh_cadence: number;
     render_mode: "supersede" | "crude_summary";
@@ -56,7 +56,7 @@ export type ShortTermMemoryExportShape = {
   }>;
 };
 
-export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShape> {
+class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShape> {
   // ── cache-delegating reads ─────────────────────────────────────────────────
 
   /**
@@ -180,7 +180,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     clearShortTermMemoryForUser(userId);
   }
 
-
   /**
    * Loads the STM config row for a server. Returns null when not yet set up.
    *
@@ -243,7 +242,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
       ];
     }
   }
-
 
   /**
    * Upserts the STM config row for a server (insert on first save, update thereafter).
@@ -317,7 +315,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     }
   }
 
-
   /**
    * Deletes durable `short_term_memories` rows untouched for longer than the
    * retention window, returning how many were removed. Cache entries are left
@@ -333,7 +330,6 @@ export class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExp
     `;
     return rows.length;
   }
-
 
   /**
    * Exports STM config (cadence, render mode, prompt overrides, category definitions)

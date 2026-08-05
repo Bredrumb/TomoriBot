@@ -16,9 +16,10 @@ After every successful generation turn, `runPostTurnEffects` calls
 and stores it so the context-build pipeline can surface it on the next turn
 as cross-channel or cross-persona awareness.
 
-The function takes the `simplifiedMessages` already built by the context
-pipeline (up to the last 10 user/persona entries), appends the new persona
-responses from this turn, and writes the combined slice into the STM cache.
+The function takes the user/persona entries from `simplifiedMessages`, appends
+the new persona responses from this turn, and writes the combined conversation
+into the STM cache. `storeShortTermMemory` retains the most recent entries up to
+`SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL`.
 A separate write is issued for each unique responding `personaId` so that
 personas with distinct IDs each maintain their own conversational continuity.
 
@@ -52,6 +53,9 @@ constructing the new entry.
 - **STM cache entries written** — two `Map` entries (user + server) per unique
   persona ID in `result.personaResponses`. In DM sessions, one entry only
   (user-scoped).
+- **Durable scope rows ensured** — user and server identity rows are created if
+  absent so later summary/category writes have durable targets. Crude messages
+  themselves remain cache-only.
 - **`stats.stores`** — incremented once per `storeMemoryEntry` call (internal
   to the cache module).
 
@@ -59,8 +63,8 @@ constructing the new entry.
 
 After this stage runs for a non-empty, non-stop generation result:
 
-- The STM cache contains an entry for `(userDiscId, channelId, personaId)` —
-  reflecting up to the last 10 messages from this turn.
+- The STM cache contains an entry for `(userDiscId, channelId, personaId)`,
+  capped by `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL`.
 - If a summary existed in a prior entry for this key, it is preserved in the
   new entry.
 - The `lastUpdated` timestamp on the entry is set to `Date.now()` at write
@@ -83,7 +87,7 @@ After this stage runs for a non-empty, non-stop generation result:
 |---|---|
 | `storeShortTermMemory()` | **A plugin extending channel-memory tagging or cross-server STM scoping would extend here.** The function signature accepts `personaId` and `personaLineageId` for scoping — new scope dimensions (e.g., thread lineage) would be added as additional parameters. → plugin plan candidate |
 | TTL constants (`SHORT_TERM_MEMORY_TTL_HOURS`, `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL`) | Env-var configurable. Not a plugin seam — operational tuning only. |
-| Message slice logic (`simplifiedMessages.slice(-10)`) | Internal — `MAX_MESSAGES_PER_CHANNEL` is the env-var control surface. |
+| Message storage cap (`messages.slice(-MAX_MESSAGES_PER_CHANNEL)`) | Internal; `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` is the env-var control surface. |
 
 ## Configuration
 

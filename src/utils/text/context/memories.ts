@@ -68,7 +68,6 @@ export const SEED_CATEGORY_UPDATE_HINT =
 const SEED_CATEGORY_UPDATE_HINT_FALLBACK =
   "[System: Use the update_short_term_memory tool AFTER you respond to create or update your short-term memory fields: {category_labels}. Do NOT use update_short_term_memory when a user explicitly asks you to remember/save/store something for future conversations; use create_long_term_memory or update_long_term_memory instead.]";
 
-
 function formatDiscordChannelReference(channelId: string | undefined, fallbackText: string): string {
   return channelId ? `<#${channelId}>` : fallbackText;
 }

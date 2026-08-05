@@ -129,8 +129,7 @@ export async function execute(
       return;
     }
 
-    // Load definitions once to share across all picker passes.
-    //    getStmCategories always returns at least the default `summary` category.
+    // getStmCategories always returns at least the default `summary` category.
     const categoryRows = await shortTermMemoryRepository.getStmCategories(tomoriState.server_id);
     const isCategoryMode =
       categoryRows.length > 0 && !(categoryRows.length === 1 && categoryRows[0].label.toLowerCase() === "summary");

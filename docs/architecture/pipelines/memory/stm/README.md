@@ -6,18 +6,21 @@ sidebar:
   order: 510
 ---
 
-Manages the short-term memory cache — an in-process `Map` that stores the
-last 10 conversation turns per channel/persona pair. Two write paths exist:
+Manages the short-term memory cache — an in-process `Map` that stores recent
+conversation turns per channel/persona pair up to the configured limit. Two
+write paths exist:
 
 | Stage | File | Trigger | What it writes |
 |---|---|---|---|
-| `01-passive-capture.md` | `storeShortTermMemory` | Post-turn, always | Crude conversation (last 10 messages + new persona response) |
-| `02-summary-upgrade.md` | `updateShortTermMemorySummary` | Mid-turn, LLM tool call | LLM-authored summary that replaces the crude conversation |
+| `01-passive-capture.md` | `storeShortTermMemory` | Post-turn, always | Crude conversation capped by `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` |
+| `02-summary-upgrade.md` | `updateShortTermMemorySummary` | Mid-turn, LLM tool call | LLM-authored summary written to the cache and database |
 
 ## Key design facts
 
-- **Cache-only** — STM is never written to the database. A process restart
-  clears all STM entries. Cross-restart persistence is not a design goal.
+- **Hybrid persistence** — crude messages exist only in the in-process cache,
+  while summaries, categories, and cadence state are stored in the database.
+  After a process restart, durable fields are hydrated with an empty crude
+  message list; crude history repopulates channel by channel as the bot replies.
 - **Dual-key scoping** — every write creates (or updates) two cache entries:
   one user-scoped (`shortterm:user:userId:channelId[:personaId]`) and one
   server-scoped (`shortterm:server:serverId:channelId[:personaId]`). DM

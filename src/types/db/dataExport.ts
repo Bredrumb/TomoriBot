@@ -256,7 +256,7 @@ const serverWelcomeConfigExportSchema = z.object({
  * Both keys are optional so exports predating STM customization still validate.
  * Per-channel durable STM *state* is intentionally NOT exported (design decision 8).
  */
-export const serverStmConfigExportSchema = z.object({
+const serverStmConfigExportSchema = z.object({
   stm_config: z
     .object({
       refresh_cadence: z.number().int(),
