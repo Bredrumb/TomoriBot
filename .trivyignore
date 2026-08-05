@@ -5,8 +5,9 @@
 # Risk is low as input comes from trusted AWS endpoints.
 CVE-2026-25128
 
-# Known issue: ip-address (no CVE assigned, GHSA only)
+# Known issue: ip-address (CVE-2026-69192 / GHSA-mwp4-54f8-5fhr)
 # Reached only via matrix-appservice-bridge > ip-cidr, and no ip-cidr release runs on a
 # patched ip-address: v10 removed bigInteger(), which ip-cidr needs at 20+ call sites.
 # Risk is low as the only consumer is ProvisioningApi, which TomoriBot never constructs.
 GHSA-mwp4-54f8-5fhr
+CVE-2026-69192
