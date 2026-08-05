@@ -226,6 +226,7 @@ export class StreamUiUpdater {
           ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
           ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
           allowedMentions: regularAllowedMentions,
+          failIfNotExists: false,
         });
         state.hasRepliedToOriginalMessage = true;
       } else {
@@ -483,6 +484,7 @@ export class StreamUiUpdater {
             ...(payload.files?.length ? { files: payload.files } : {}),
             ...(payload.components?.length ? { components: payload.components } : {}),
             allowedMentions: regularAllowedMentions,
+            failIfNotExists: false,
           })
         : await context.channel.send({
             ...(payload.content !== undefined ? { content: payload.content } : {}),
