@@ -104,7 +104,7 @@ export default {
       adjust_parameters_personal: `Use \`/personal parameters\` and adjust either **Temperature** or **Top P** to ensure only one is sent.`,
       switch_model_provider: `Switch to a different model or provider with \`/model text\` or \`/provider add\`.`,
       switch_model_provider_personal: `Switch with \`/personal provider model-text\`, or turn **Text** off in \`/personal provider toggle-models\` to use this server's model.`,
-      disable_personal_text_override: `Intended to use this server's configured model? Disable **Text** in \`/personal provider toggle-models\`. Servers using User BYOK mode may still require your personal provider.`,
+      disable_personal_text_override: `This request error was from your [personal provider](https://docs.tomoribot.app/features/knowledge/personalization/#your-own-providers). If you meant to use this server's configured model instead, disable **Text** in \`/personal provider toggle-models\`.`,
       // Auto-appended to every non-empty tip embed by createTipEmbed(); never list it in a caller's tipKeys.
       support_server: `Visit the [Official Support Server](https://discord.gg/bjCfHm9QsB) for assistance.`,
       shorten_message: `Try shortening your message, then send it again.`,

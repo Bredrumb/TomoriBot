@@ -239,7 +239,7 @@ Transcription supports ~100 languages (auto-detected).`,
       memory_title: `Memory & Personalization`,
       memory_description: `- I can remember personal facts about you and server-wide information, persisting across conversations
 - Personal memories persist across servers (try talking to me in another server!)
-- I also keep STM (short-term memory) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
+- I also keep [STM (short-term memory)](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
 - Change what I call you using \`/personal nickname\`
 - Use \`/memory\` and \`/persona\` commands to manually add or remove memories and persona data
 - I can use server emojis and stickers more accurately after registration with \`/server expressions initialize\`
@@ -666,7 +666,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Use \`/memory document remove\` or \`/memory history remove\` to remove stored documents
 - Requires an embedding model configured via \`/model embedding\``,
       shortterm_title: `Short-Term Memory`,
-      shortterm_description: `In addition to persistent memories, I keep STM (short-term memory) of recent conversations:
+      shortterm_description: `In addition to persistent memories, I keep [STM (short-term memory)](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm) of recent conversations:
 - Recent messages are cached per channel, and each persona carries the latest STM across channels within the same server
 - I can automatically summarize older conversations to keep context efficient
 - **Cross-server sharing** is opt-in: use {personalStm} with the \`crossserver\` option to let me reference your own conversations from other servers
@@ -689,7 +689,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
     spotlight: {
       description: `Learn what personal spotlight does and how to use it`,
       title: `Personal Spotlight Guide`,
-      embed_description: `Personal spotlight lets you narrow which personas *you* can trigger in one channel, and optionally assign one persona to auto-trigger for your own messages there.`,
+      embed_description: `[Personal spotlight](https://docs.tomoribot.app/features/knowledge/personalization/#personal-spotlight) lets you narrow which personas *you* can trigger in one channel, and optionally assign one persona to auto-trigger for your own messages there.`,
       what_title: `What It Does`,
       what_description: `- Spotlight is scoped to **you + one channel**
 - It does not affect other users
@@ -722,7 +722,7 @@ If you set **hours = 0**, the spotlight stays until you remove it manually.`,
     "deliberate-trigger-mode": {
       description: `Learn how deliberate trigger mode changes message triggering`,
       title: `Deliberate Trigger Mode Guide`,
-      embed_description: `Deliberate Trigger Mode (DTM) changes how explicit persona triggers are recognized, especially for plain trigger words.`,
+      embed_description: `[Deliberate Trigger Mode (DTM)](https://docs.tomoribot.app/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode) changes how explicit persona triggers are recognized, especially for plain trigger words.`,
       normal_title: `Normal Triggering`,
       normal_description: `When DTM is off, I can normally be triggered by:
 - Plain trigger words in a message
@@ -939,7 +939,7 @@ If a command is restricted and the channel isn't marked NSFW, you won't be able 
     "deliberate-tool-mode": {
       description: `Learn how deliberate tool mode changes tool availability`,
       title: `Deliberate Tool Mode Guide`,
-      embed_description: `Deliberate Tool Mode keeps tool declarations out of ordinary chat turns unless the message looks like it needs a tool.`,
+      embed_description: `[Deliberate Tool Mode](https://docs.tomoribot.app/features/capabilities/tools-and-extensions/#deliberate-tool-mode) keeps tool declarations out of ordinary chat turns unless the message looks like it needs a tool.`,
       what_title: `What It Does`,
       what_description: `When deliberate tool mode is active, I first check the message for explicit tool intent. If no intent is found, tool declarations are removed for that turn, which reduces prompt size and helps smaller/local models answer faster.`,
       intent_title: `What Counts As Tool Intent`,

@@ -239,7 +239,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       memory_title: `記憶＆パーソナライゼーション`,
       memory_description: `- ユーザーやサーバーに関する事実を記憶し、会話を跨いで保持します
 - 個人的な記憶は全サーバーで保持されます（他のサーバーでも私に話しかけてみて！）
-- 最近の会話はSTM（短期記憶）として保持し、チャンネルやサーバーをまたいで文脈を把握します（クロスサーバー共有は\`/personal stm\`でオプトインできます）
+- 最近の会話は[STM（短期記憶）](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm)として保持し、チャンネルやサーバーをまたいで文脈を把握します（クロスサーバー共有は\`/personal stm\`でオプトインできます）
 - \`/personal nickname\`であなたを呼ぶ名前を変更できます
 - \`/memory\` と \`/persona\` コマンドで手動で記憶やペルソナ情報を追加・削除できます
 - \`/server expressions initialize\`で絵文字やステッカーを登録すると、より適切な場面で使えるようになります
@@ -670,7 +670,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - \`/memory document remove\`または\`/memory history remove\`で保存済みドキュメントを削除
 - \`/model embedding\`で埋め込みモデルの設定が必要`,
       shortterm_title: `短期記憶`,
-      shortterm_description: `永続的な記憶に加え、最近の会話はSTM（短期記憶）として保持しています：
+      shortterm_description: `永続的な記憶に加え、最近の会話は[STM（短期記憶）](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm)として保持しています：
 - 最近のメッセージはチャンネルごとにキャッシュされ、各ペルソナは同じサーバー内の他チャンネルにも最新のSTMを持ち越します
 - 古い会話を自動的に要約し、文脈を効率的に保つことができます
 - **クロスサーバー共有**はオプトイン制です：{personalStm}の\`crossserver\`オプションを使うと、あなた自身の他サーバーでの会話も参照できるようになります
@@ -693,7 +693,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
     spotlight: {
       description: `パーソナルスポットライトの仕組みと使い方を学ぶ`,
       title: `パーソナルスポットライトガイド`,
-      embed_description: `パーソナルスポットライトを使うと、特定のチャンネルで**あなた自身**がトリガーできるペルソナを絞り込み、必要ならそのチャンネル専用の自動トリガーペルソナも設定できます。`,
+      embed_description: `[パーソナルスポットライト](https://docs.tomoribot.app/features/knowledge/personalization/#personal-spotlight)を使うと、特定のチャンネルで**あなた自身**がトリガーできるペルソナを絞り込み、必要ならそのチャンネル専用の自動トリガーペルソナも設定できます。`,
       what_title: `何をする機能か`,
       what_description: `- スポットライトは **あなた + 1チャンネル** 単位で適用されます
 - 他のユーザーには影響しません
@@ -726,7 +726,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
     "deliberate-trigger-mode": {
       description: `明示的トリガーモードで何が変わるかを学ぶ`,
       title: `明示的トリガーモードガイド`,
-      embed_description: `明示的トリガーモード（DTM）は、ペルソナの明示的トリガーとして何を認めるかを変える設定です。特に通常のトリガーワードの扱いが変わります。`,
+      embed_description: `[明示的トリガーモード（DTM）](https://docs.tomoribot.app/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)は、ペルソナの明示的トリガーとして何を認めるかを変える設定です。特に通常のトリガーワードの扱いが変わります。`,
       normal_title: `通常時のトリガー`,
       normal_description: `DTMがオフのとき、Tomoriは通常次の方法で反応できます：
 - メッセージ中の通常のトリガーワード
@@ -952,7 +952,7 @@ MCPサーバーはブラウザ拡張機能やサードパーティアプリと�
     "deliberate-tool-mode": {
       description: `明示的ツールモードでツール利用がどう変わるかを学ぶ`,
       title: `明示的ツールモードガイド`,
-      embed_description: `明示的ツールモードは、メッセージがツールを必要としているように見える場合だけ、通常会話ターンにツール宣言を含めます。`,
+      embed_description: `[明示的ツールモード](https://docs.tomoribot.app/features/capabilities/tools-and-extensions/#deliberate-tool-mode)は、メッセージがツールを必要としているように見える場合だけ、通常会話ターンにツール宣言を含めます。`,
       what_title: `何をするか`,
       what_description: `明示的ツールモードが有効な場合、まずメッセージに明示的なツール意図があるか確認します。意図が見つからない場合、そのターンではツール宣言を外します。これによりプロンプト量が減り、小型・ローカルモデルの応答が速くなります。`,
       intent_title: `ツール意図として扱われるもの`,

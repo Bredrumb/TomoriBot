@@ -142,11 +142,11 @@ export default {
       capability_video: `動画`,
       capability_vision: `ビジョン`,
       model_success_title: `個人モデルを更新しました`,
-      scope_notice: `この設定はあなた自身のリクエストにのみ影響しますが、TomoriBotを使うすべてのサーバーに引き継がれます。`,
+      scope_notice: `この設定はあなた自身のリクエストにのみ影響しますが、私を使うすべてのサーバーに引き継がれます。`,
       routing_personal: `個人 / {provider}`,
       routing_server_default: `サーバー既定`,
       activation_confirm_title: `個人上書きを有効にしますか？`,
-      activation_confirm_description: `TomoriBotを使うすべてのサーバーで、個人の **{capability}** プロバイダーが有効になります。あなたのリクエストは各サーバーの既定{capability}モデルではなく **{provider}** の \`{model}\` を使用します。
+      activation_confirm_description: `私を使うすべてのサーバーで、個人の **{capability}** プロバイダーが有効になります。**この設定はあなた自身のリクエストにのみ影響し、このサーバーの他のメンバーには影響しません。**あなたのリクエストは各サーバーの既定{capability}モデルではなく **{provider}** の \`{model}\` を使用します。
 
 続行しますか？`,
       activation_confirm_continue: `はい、有効にします`,
@@ -244,7 +244,7 @@ export default {
 
 {scope_notice}`,
         confirm_title: `個人上書きを有効にしますか？`,
-        confirm_description: `TomoriBotを使うすべてのサーバーで、次の機能がサーバー既定から個人プロバイダーへ切り替わります:
+        confirm_description: `私を使うすべてのサーバーで、次の機能がサーバー既定から個人プロバイダーへ切り替わります。**この設定はあなた自身のリクエストにのみ影響し、このサーバーの他のメンバーには影響しません:**
 
 {newly_enabled}
 

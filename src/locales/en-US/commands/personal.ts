@@ -142,11 +142,11 @@ export default {
       capability_video: `Video`,
       capability_vision: `Vision`,
       model_success_title: `Personal Model Updated`,
-      scope_notice: `This affects only your own requests, but follows you across every server where you use TomoriBot.`,
+      scope_notice: `This affects only your own requests, but follows you across every server where you use me.`,
       routing_personal: `Personal / {provider}`,
       routing_server_default: `Server default`,
       activation_confirm_title: `Enable Personal Override?`,
-      activation_confirm_description: `This enables your personal **{capability}** provider across every server where you use TomoriBot. Your requests will use **{provider}** / \`{model}\` instead of each server's default {capability} model.
+      activation_confirm_description: `This enables your personal **{capability}** provider across every server where you use me. **This will only affect your own requests, not anyone else in this server.** Your requests will use **{provider}** / \`{model}\` instead of each server's default {capability} model.
 
 Continue?`,
       activation_confirm_continue: `Yes, enable it`,
@@ -244,7 +244,7 @@ Choose which capabilities use a personal override with \`/personal provider togg
 
 {scope_notice}`,
         confirm_title: `Enable Personal Overrides?`,
-        confirm_description: `These capabilities will switch from the server default to your personal provider across every server where you use TomoriBot:
+        confirm_description: `These capabilities will switch from the server default to your personal provider across every server where you use me. **This will only affect your own requests, not anyone else in this server:**
 
 {newly_enabled}
 

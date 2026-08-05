@@ -407,8 +407,60 @@ class StatRepository implements IRepository<null> {
       });
       return true;
     } catch (error) {
-      // Re-merge drained deltas back into the live buffer for retry.
+      const pgError = error as Record<string, unknown>;
+      let badServerId: number | null = null;
+      let badUserId: number | null = null;
+      let badLineageId: number | null = null;
+
+      // A nuked server drops the servers row before this flush can execute.
+      // Dropping the resulting foreign key violation prevents the entire batch from retry-looping.
+      if (
+        pgError &&
+        typeof pgError === "object" &&
+        pgError.code === "ERR_POSTGRES_SERVER_ERROR" &&
+        String(pgError.errno) === "23503" &&
+        typeof pgError.detail === "string"
+      ) {
+        const match = pgError.detail.match(/Key \(([^)]+)\)=\(([^)]+)\) is not present/);
+        if (match) {
+          const col = match[1];
+          const val = Number(match[2]);
+          if (col === "server_id" && !Number.isNaN(val)) badServerId = val;
+          else if (col === "user_id" && !Number.isNaN(val)) badUserId = val;
+          else if (col === "persona_lineage_id" && !Number.isNaN(val)) badLineageId = val;
+        }
+      }
+
+      // Unparseable constraint violations require a full batch drop to break the retry loop.
+      const isUnparseableConstraint =
+        badServerId === null &&
+        badUserId === null &&
+        badLineageId === null &&
+        pgError &&
+        typeof pgError === "object" &&
+        pgError.code === "ERR_POSTGRES_SERVER_ERROR" &&
+        String(pgError.errno).startsWith("23");
+
+      if (isUnparseableConstraint) {
+        log.error(
+          `StatRepository.flush: dropping entire batch of ${entries.length} entries due to unparseable constraint violation`,
+          error,
+        );
+        return false;
+      }
+
+      let droppedCount = 0;
+      // Exclude permanently failed entries before returning the batch to the live buffer.
       for (const e of entries) {
+        if (
+          (badServerId !== null && e.serverId === badServerId) ||
+          (badUserId !== null && e.userId === badUserId) ||
+          (badLineageId !== null && e.lineageId === badLineageId)
+        ) {
+          droppedCount++;
+          continue;
+        }
+
         const key = this.bufferKey(e);
         const existing = this.buffer.get(key);
         if (existing) {
@@ -419,7 +471,15 @@ class StatRepository implements IRepository<null> {
           this.buffer.set(key, e);
         }
       }
-      log.error(`StatRepository.flush: failed to persist ${entries.length} buffered stat entries (will retry)`, error);
+
+      if (droppedCount > 0) {
+        log.warn(`StatRepository.flush: dropped ${droppedCount} invalid stat entries to resolve foreign key violation`);
+      } else {
+        log.error(
+          `StatRepository.flush: failed to persist ${entries.length} buffered stat entries (will retry)`,
+          error,
+        );
+      }
       return false;
     }
   }
