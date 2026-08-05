@@ -83,12 +83,7 @@ export class MCPManager {
 
     const serverConfigs = this.getServerConfigurations();
 
-    const initPromises = serverConfigs.map((config) =>
-      this.initializeServer(config).catch((error) => {
-        log.error(`Failed to initialize MCP server '${config.displayName}':`, error as Error);
-        return null; // Continue with other servers even if one fails
-      }),
-    );
+    const initPromises = serverConfigs.map((config) => this.initializeServer(config));
 
     await Promise.all(initPromises);
 
@@ -119,34 +114,58 @@ export class MCPManager {
 
     log.info(`Initializing ${displayName} MCP server...`);
 
+    const client = new MCPClient({
+      name: `tomoribot-${name}`,
+      version: "1.0.0",
+    });
+
+    // This server has historically emitted non-protocol output on stdout.
+    // Capturing stderr also preserves the actual child failure behind the
+    // SDK's generic "Connection closed" initialization error.
+    const transport = new BannerFilteringStdioClientTransport({
+      command,
+      args,
+      env: Object.fromEntries(
+        Object.entries({
+          ...process.env,
+          ...env,
+          NO_COLOR: "1",
+          FORCE_COLOR: "0",
+        }).filter(([, value]) => value !== undefined),
+      ) as Record<string, string>,
+      stderr: "pipe",
+    });
+
+    transport.onprocessclose = (exit) => {
+      if (exit.expected || this.mcpClients.get(name) !== client) return;
+
+      this.mcpClients.delete(name);
+      this.mcpTools.delete(name);
+      void log.error(`${displayName} MCP server exited after initialization`, undefined, {
+        errorType: "mcp_server_exit",
+        metadata: {
+          serverName: name,
+          command,
+          exitCode: exit.code,
+          signal: exit.signal,
+          diagnostics: transport.diagnostics,
+        },
+      });
+    };
+
     try {
-      const client = new MCPClient({
-        name: `tomoribot-${name}`,
-        version: "1.0.0",
-      });
-
-      // Banner filtering expects plain text, so suppress ANSI sequences at the
-      // child process instead of teaching the filter every terminal escape form.
-      const transport = new BannerFilteringStdioClientTransport({
-        command,
-        args,
-        env: Object.fromEntries(
-          Object.entries({
-            ...process.env,
-            ...env,
-            NO_COLOR: "1",
-            FORCE_COLOR: "0",
-          }).filter(([, value]) => value !== undefined),
-        ) as Record<string, string>,
-        stderr: "ignore", // Ignore stderr to suppress advertisement output
-      });
-
       const connectPromise = client.connect(transport);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`${displayName} connection timed out (${timeout}ms)`)), timeout),
-      );
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${displayName} connection timed out (${timeout}ms)`)), timeout);
+        timeoutId.unref();
+      });
 
-      await Promise.race([connectPromise, timeoutPromise]);
+      try {
+        await Promise.race([connectPromise, timeoutPromise]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
 
       const callableTool = mcpToTool(client);
 
@@ -167,6 +186,24 @@ export class MCPManager {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
+      try {
+        await transport.close();
+      } catch (cleanupError) {
+        log.warn(`Failed to clean up ${displayName} after its connection error`, cleanupError as Error);
+      }
+
+      const errorContext = {
+        errorType: "mcp_initialization_failed",
+        metadata: {
+          serverName: name,
+          command,
+          args,
+          exitCode: transport.lastExit?.code,
+          signal: transport.lastExit?.signal,
+          diagnostics: transport.diagnostics,
+        },
+      };
+
       if (errorMessage.includes("timed out")) {
         const usesPackageRunner = command === "npx" || command === "bunx";
 
@@ -174,19 +211,21 @@ export class MCPManager {
           log.warn(`${displayName} connection timed out - this can happen during first install or cache warm-up`);
           log.info("Try restarting TomoriBot after package installation/cache warm-up completes");
         } else {
-          log.error(`${displayName} connection timed out while starting '${command}' (${timeout}ms)`, error as Error);
+          await log.error(
+            `${displayName} connection timed out while starting '${command}' (${timeout}ms)`,
+            error as Error,
+            errorContext,
+          );
         }
       } else if (errorMessage.includes("not recognized") || errorMessage.includes("not found")) {
-        log.error(
+        await log.error(
           `${displayName} requires ${command} to be installed - functionality will not be available`,
           error as Error,
+          errorContext,
         );
       } else {
-        // Critical: Log MCP connection failures as errors for CloudWatch visibility
-        log.error(`${displayName} connection failed:`, error as Error);
+        await log.error(`${displayName} connection failed`, error as Error, errorContext);
       }
-
-      throw error; // Re-throw to be caught by caller
     }
   }
 

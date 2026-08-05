@@ -9,7 +9,7 @@ export interface WebSearchToolCapabilities {
   engineLabel: string;
 }
 
-async function hasMcpSearchFunction(functionName: "web-search" | "felo-search"): Promise<boolean> {
+async function hasMcpSearchFunction(functionName: "web-search" | "iask-search"): Promise<boolean> {
   const mcpManager = getMCPManager();
   if (!mcpManager.isReady()) {
     return false;
@@ -38,8 +38,8 @@ function describeEngine(engineName: WebSearchEngineName): string {
       return "SearXNG";
     case "duckduckgo":
       return "DuckDuckGo MCP";
-    case "felo":
-      return "Felo MCP";
+    case "iask":
+      return "IAsk MCP";
   }
 }
 
@@ -70,10 +70,10 @@ export async function resolveWebSearchToolCapabilities(serverId?: number): Promi
     };
   }
 
-  if (await hasMcpSearchFunction("felo-search")) {
+  if (await hasMcpSearchFunction("iask-search")) {
     return {
       categories: ["text"],
-      engineLabel: describeEngine("felo"),
+      engineLabel: describeEngine("iask"),
     };
   }
 

@@ -182,19 +182,11 @@ export class NovelaiToolAdapter implements MCPCapableToolAdapter {
       if (mcpManager.isReady() && allowedMCPFunctions) {
         let addedMCPToolsCount = 0;
 
-        // MCP functions disabled for NovelAI GLM because either redundant with
-        // other providers or too token-expensive for GLM's strict prompt budget.
-        // "fetch" is the dedicated fetch MCP server; "fetch-url" is DDG's variant.
+        // Raw AI-search modes are redundant with unified web_search and too
+        // token-expensive for GLM's strict prompt budget.
         // Note: brave_* names are no longer LLM-visible (replaced by unified
         // `web_search` tool) so they don't need to appear here.
-        const disabledMCPFunctions = [
-          "felo-search",
-          "iask-search",
-          "monica-search",
-          "fetch-url",
-          "url-metadata",
-          "fetch",
-        ];
+        const disabledMCPFunctions = ["iask-search", "monica-search"];
 
         const mcpTools = mcpManager.getMCPTools();
         const allowedFunctionSet = new Set(allowedMCPFunctions);

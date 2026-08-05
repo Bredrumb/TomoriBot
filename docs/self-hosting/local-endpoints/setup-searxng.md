@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → Felo**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage, and unlock SearXNG-only categories: `science`, `it`, `files`, and `music`.
+The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → IAsk**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage, and unlock SearXNG-only categories: `science`, `it`, `files`, and `music`.
 
 Choose one SearXNG setup path:
 
@@ -55,9 +55,9 @@ Then run `bun run dev` once the container is healthy (`docker ps` shows `(health
 ---
 
 ### C. No SearXNG
-Leave `SEARXNG_BASE_URL` unset — the chain falls back to `Brave → DDG → Felo` exactly as before. Nothing breaks.
+Leave `SEARXNG_BASE_URL` unset. The chain falls back to `Brave → DuckDuckGo → IAsk`.
 
-When no SearXNG sidecar is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only DDG/Felo MCP fallback is available.
+When no SearXNG sidecar is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only the DuckDuckGo/IAsk MCP fallback is available.
 
 ---
 

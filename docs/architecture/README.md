@@ -110,7 +110,7 @@ chat pipeline
 - Built-ins: `src/tools/functionCalls/*` (`BaseTool` classes)
 - MCP servers: `src/tools/mcpServers/*` via `mcpManager`
 - REST tools: `src/tools/restAPIs/brave/*` (engine-internal, consumed by `webSearch/braveEngine.ts`)
-- Web-search dispatcher: `src/tools/webSearch/*` — single LLM-visible `web_search(query, category)` tool routes through a Brave → DDG → Felo engine chain
+- Web-search dispatcher: `src/tools/webSearch/*` — single LLM-visible `web_search(query, category)` tool routes through a Brave → SearXNG → DuckDuckGo → IAsk engine chain
 - URL-fetch dispatcher: `src/tools/fetchUrl/*` — single LLM-visible `fetch_url(url, ...)` tool defaults to an in-process, per-redirect validated HTTP engine; Crawl4AI is an explicit trusted-development opt-in
 
 ### Data + Caching

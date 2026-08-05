@@ -26,7 +26,7 @@ const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
   generate_video: "video_gen",
 
   // Unified web search tool (replaces the four LLM-visible Brave entries).
-  // Engine routing (Brave → DDG → Felo) is handled inside the tool's dispatcher.
+  // Engine routing (Brave → DDG → IAsk) is handled inside the tool's dispatcher.
   web_search: "web_search",
 
   // Unified URL fetch tool. Phase 1 routes only through the internal MCP fetch engine.
@@ -39,7 +39,6 @@ const BUILTIN_TOOL_FEATURE_FLAGS: Record<string, string> = {
  */
 const MCP_TOOL_FEATURE_FLAGS: Record<string, string> = {
   "web-search": "web_search",
-  "felo-search": "web_search",
   fetch: "web_search",
   "fetch-url": "web_search", // Related to web search functionality
   "url-metadata": "web_search", // Related to web search functionality

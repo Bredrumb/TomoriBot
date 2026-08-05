@@ -135,7 +135,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
       // The unified `web_search` tool is gated centrally in `availability.ts`
       //    via its `requiresFeatureFlag = "web_search"`. No per-adapter Brave-key
       //    filtering needed here anymore, because the dispatcher inside the tool itself
-      //    decides which engine (Brave/DDG/Felo) serves the request at call time.
+      //    decides which engine (Brave/DDG/IAsk) serves the request at call time.
       if (builtInTools.length > 0) {
         allTools.push(...this.convertToolsArray(builtInTools));
         log.info(`Anthropic adapter: Converted ${builtInTools.length} built-in tools`);
@@ -144,7 +144,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
       const mcpManager = getMCPManager();
       if (mcpManager.isReady() && allowedMCPFunctions) {
         let addedMCPToolsCount = 0;
-        const disabledDDGFunctions = ["felo-search", "iask-search", "monica-search", "fetch-url", "url-metadata"];
+        const disabledDDGFunctions = ["iask-search", "monica-search"];
         const allowedFunctionSet = new Set(allowedMCPFunctions);
 
         for (const mcpTool of mcpManager.getMCPTools()) {

@@ -180,20 +180,8 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 
 Without this step logit bias is silently disabled and everything else works normally.
 
-### URL Fetch MCP : `fetch_url` fallback
-
-The bundled `fetch_url` tool falls back to the Python `mcp-server-fetch` package for
-browser-free page fetches. It needs Python 3:
-
-```sh
-pip install mcp-server-fetch
-
-# Linux, if you hit "externally-managed-environment":
-pip install --break-system-packages mcp-server-fetch
-# ...or install it inside a virtualenv.
-```
-
-DuckDuckGo/Felo `web_search` is separate and ships with `bun install --frozen-lockfile` so no extra step needed.
+The secure `fetch_url` fallback runs in process and needs no Python package. DuckDuckGo/IAsk
+`web_search` ships with `bun install --frozen-lockfile`, so it also needs no extra installation.
 
 ## Maintenance, updating & backups
 

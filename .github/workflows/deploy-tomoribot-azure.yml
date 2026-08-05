@@ -75,24 +75,6 @@ jobs:
           bun run setup:tokenizers
           du -sh tokenizers/*/
 
-      - name: Pre-download Python packages with platform-specific wheels
-        run: |
-          mkdir -p docker/pip-cache
-          pip3 download \
-            --dest docker/pip-cache \
-            --platform musllinux_1_2_x86_64 \
-            --platform musllinux_1_1_x86_64 \
-            --python-version 3.12 \
-            --implementation cp \
-            --abi cp312 \
-            --only-binary :all: \
-            mcp-server-fetch==2025.4.7
-
-      - name: Verify Python package checksums
-        run: |
-          cd docker/pip-cache
-          sha256sum -c ../pip-checksums.txt
-
       - name: Build Docker image
         run: |
           docker buildx build \

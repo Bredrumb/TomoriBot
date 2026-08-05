@@ -151,19 +151,7 @@ HF_TOKEN=hf_xxx bun run setup:tokenizers
 
 この手順を行わないとロジットバイアスは暗黙のうちに無効化されますが、その他のすべては正常に動作します。
 
-### URL Fetch MCP : `fetch_url` フォールバック
-
-バンドルされている `fetch_url` ツールは、ブラウザなしのページフェッチ用として、Pythonの `mcp-server-fetch` パッケージにフォールバックします。これにはPython 3が必要です。
-
-```sh
-pip install mcp-server-fetch
-
-# Linuxで "externally-managed-environment" エラーが発生した場合:
-pip install --break-system-packages mcp-server-fetch
-# ...または仮想環境（virtualenv）内にインストールしてください。
-```
-
-DuckDuckGo/Feloの `web_search` は別物であり、`bun install --frozen-lockfile` とともに同梱されているため、追加の手順は必要ありません。
+安全な `fetch_url` フォールバックはプロセス内で実行されるため、Pythonパッケージは不要です。DuckDuckGo/IAskの `web_search` も `bun install --frozen-lockfile` に含まれているため、追加のインストールは不要です。
 
 ## メンテナンス、更新とバックアップ
 

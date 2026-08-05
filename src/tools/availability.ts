@@ -178,9 +178,8 @@ export async function getAvailableToolsWithMCP(
 
       // Unconditionally hide internal MCP function names from the LLM.
       //    They are now consumed only via the unified `web_search` tool through
-      //    `webSearch/duckduckgoEngine.ts` / `feloEngine.ts`; bundled `fetch`
-      //    is consumed only via `fetch_url` -> `McpFetchEngine`.
-      const hiddenWebSearchMcpFunctions = ["web-search", "felo-search", "iask-search", "monica-search", "fetch"];
+      //    `webSearch/duckduckgoEngine.ts` / `iaskEngine.ts`.
+      const hiddenWebSearchMcpFunctions = ["web-search", "iask-search", "monica-search"];
       const originalCount = filteredByFeatureFlags.length;
       filteredByFeatureFlags = filteredByFeatureFlags.filter(
         (functionName) => !hiddenWebSearchMcpFunctions.includes(functionName),

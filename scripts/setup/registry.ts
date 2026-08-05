@@ -1,5 +1,4 @@
 import { askSecret, confirm } from "../lib/prompt";
-import { type PythonCommand } from "../lib/pyenv";
 import { readEnvValues } from "../lib/envFile";
 import { log } from "../lib/cliLogger";
 
@@ -9,7 +8,6 @@ export interface SetupContext {
   projectRoot: string;
   envPath: string;
   hasPsql: boolean;
-  python?: PythonCommand;
 }
 
 export interface SetupModule {
@@ -18,7 +16,7 @@ export interface SetupModule {
   run(ctx: SetupContext): Promise<SetupRunResult>;
 }
 
-const FULL_INSTALL_MODULE_IDS = ["pgvector", "pg-cron", "tokenizers", "mcp-fetch"];
+const FULL_INSTALL_MODULE_IDS = ["pgvector", "pg-cron", "tokenizers"];
 
 function buildDatabaseUrl(env: Record<string, string>): string | undefined {
   if (env.DATABASE_URL) return env.DATABASE_URL;
@@ -133,30 +131,6 @@ export const SETUP_MODULES: SetupModule[] = [
       }
       await runCommand("bun", ["run", "setup:tokenizers"], ctx.projectRoot, extraEnv);
       return "done";
-    },
-  },
-  {
-    id: "mcp-fetch",
-    label: "URL Fetch MCP package",
-    async run(ctx) {
-      log.section("URL Fetch MCP");
-      const python = ctx.python;
-      if (!python) {
-        log.warn("Python 3 was not detected.");
-        log.info("Install Python 3, then run:");
-        log.info("  python -m pip install mcp-server-fetch");
-        return "guided";
-      }
-
-      try {
-        await runCommand(python.command, [...python.args, "-m", "pip", "install", "mcp-server-fetch"], ctx.projectRoot);
-        return "done";
-      } catch (error) {
-        log.warn(`pip install failed: ${error instanceof Error ? error.message : String(error)}`);
-        log.info("If Linux reports an externally managed environment, try:");
-        log.info("  python -m pip install --break-system-packages mcp-server-fetch");
-        return "guided";
-      }
     },
   },
 ];

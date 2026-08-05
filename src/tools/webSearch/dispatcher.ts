@@ -5,10 +5,10 @@
  * For non-text categories, returns a friendly "category unavailable" message
  * when no engine in the chain supports/serves the request.
  *
- * Chain order: Brave → SearXNG → DuckDuckGo → Felo.
+ * Chain order: Brave → SearXNG → DuckDuckGo → IAsk.
  *   - Brave first (lowest latency, best quality when keyed).
  *   - SearXNG (Phase 2) plugs in for self-hosted operators without a Brave key.
- *   - DDG/Felo are the final text-only fallbacks.
+ *   - DuckDuckGo and IAsk are the final text-only fallbacks.
  */
 
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
@@ -17,7 +17,7 @@ import { localizer } from "@/utils/text/localizer";
 import { BraveEngine } from "./braveEngine";
 import { SearxngEngine } from "./searxngEngine";
 import { DuckDuckGoEngine } from "./duckduckgoEngine";
-import { FeloEngine } from "./feloEngine";
+import { IAskEngine } from "./iaskEngine";
 import { getSearchCategoryLabel } from "./categoryMetadata";
 import type { SearchCategory, WebSearchEngine } from "./types";
 
@@ -27,7 +27,7 @@ const ENGINE_CHAIN: readonly WebSearchEngine[] = [
   new BraveEngine(),
   new SearxngEngine(),
   new DuckDuckGoEngine(),
-  new FeloEngine(),
+  new IAskEngine(),
 ];
 
 /**

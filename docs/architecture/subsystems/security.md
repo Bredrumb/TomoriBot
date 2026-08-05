@@ -242,7 +242,7 @@ TomoriBot implements several controls to mitigate supply chain risks during deve
 - **Pinned Runtime Images and Actions:** Production Docker builds pin the Bun base image by digest, and deployment workflows pin third-party GitHub Actions by commit SHA.
 - **Bundled MCP Packages:** Built-in npm MCP servers are pinned in `package.json`/`bun.lock`; production uses installed binaries instead of runtime `bunx` package resolution.
 - **Dependency Auditing:** The CI/CD pipeline enforces `bun audit` (failing on high/critical) and container scanning (Trivy).
-- **Asset Checksums:** External dependencies downloaded outside the primary package manager (e.g., Python wheels for Alpine) must be verified against cryptographic hashes (`pip-checksums.txt`) before the Docker image is built.
+- **Asset Checksums:** External dependencies downloaded outside the primary package manager must be verified against cryptographic hashes before the Docker image is built.
 - **Dependency Patches:** Patches and overrides are tracked in `patches/README.md`. When updating dependencies, always refer to this document to check if a patch can be reverted.
 - **OIDC Deployments:** Production infrastructure uses short-lived OIDC tokens for AWS authentication rather than static IAM credentials.
 

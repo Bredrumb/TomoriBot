@@ -8,25 +8,46 @@ import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 
 type StdioProcess = ReturnType<typeof spawn>;
 
+export interface StdioProcessExit {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  expected: boolean;
+}
+
+const DEFAULT_DIAGNOSTIC_MAX_CHARS = 8192;
+
+function getDiagnosticMaxChars(): number {
+  const configured = Number.parseInt(process.env.MCP_STDIO_DIAGNOSTIC_MAX_CHARS ?? "", 10);
+  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_DIAGNOSTIC_MAX_CHARS;
+}
+
 /**
- * Stdio MCP transport that strips known startup banner lines from the child stdout
- * before JSON-RPC framing sees them. This keeps filtering scoped to each MCP child
- * instead of mutating the parent process stdout.
+ * Stdio MCP transport that accepts only JSON-RPC lines from child stdout.
+ * Some third-party servers write banners and request diagnostics to stdout,
+ * which would otherwise corrupt protocol framing.
  */
 export class BannerFilteringStdioClientTransport implements Transport {
   private process?: StdioProcess;
   private readonly readBuffer = new ReadBuffer();
   private readonly decoder = new StringDecoder("utf8");
   private readonly stderrStream: PassThrough | null = null;
+  private readonly diagnosticMaxChars = getDiagnosticMaxChars();
   private pendingLine = "";
+  private diagnosticTail = "";
+  private closeRequested = false;
+  private exitStatus?: StdioProcessExit;
 
   onclose?: () => void;
   onerror?: (error: Error) => void;
   onmessage?: (message: JSONRPCMessage) => void;
+  onprocessclose?: (exit: StdioProcessExit) => void;
 
   constructor(private readonly serverParams: StdioServerParameters) {
     if (serverParams.stderr === "pipe" || serverParams.stderr === "overlapped") {
       this.stderrStream = new PassThrough();
+      // Drain diagnostics even when callers do not subscribe to stderr. The
+      // bounded diagnostic tail remains available without an unbounded stream buffer.
+      this.stderrStream.resume();
     }
   }
 
@@ -34,6 +55,9 @@ export class BannerFilteringStdioClientTransport implements Transport {
     if (this.process) {
       throw new Error("BannerFilteringStdioClientTransport already started");
     }
+
+    this.closeRequested = false;
+    this.exitStatus = undefined;
 
     return new Promise((resolve, reject) => {
       this.process = spawn(this.serverParams.command, this.serverParams.args ?? [], {
@@ -54,9 +78,11 @@ export class BannerFilteringStdioClientTransport implements Transport {
       this.process.on("spawn", () => {
         resolve();
       });
-      this.process.on("close", () => {
+      this.process.on("close", (code, signal) => {
         this.flushPendingLine();
         this.process = undefined;
+        this.exitStatus = { code, signal, expected: this.closeRequested };
+        this.onprocessclose?.(this.exitStatus);
         this.onclose?.();
       });
       this.process.stdin?.on("error", (error) => {
@@ -69,6 +95,9 @@ export class BannerFilteringStdioClientTransport implements Transport {
         this.onerror?.(error);
       });
       if (this.stderrStream && this.process.stderr) {
+        this.process.stderr.on("data", (chunk: Buffer) => {
+          this.appendDiagnostic("stderr", chunk.toString("utf8"));
+        });
         this.process.stderr.pipe(this.stderrStream);
       }
     });
@@ -85,7 +114,17 @@ export class BannerFilteringStdioClientTransport implements Transport {
     return this.process?.pid ?? null;
   }
 
+  get diagnostics(): string | undefined {
+    return this.diagnosticTail.trim() || undefined;
+  }
+
+  get lastExit(): StdioProcessExit | undefined {
+    return this.exitStatus;
+  }
+
   async close(): Promise<void> {
+    this.closeRequested = true;
+
     if (this.process) {
       const processToClose = this.process;
       this.process = undefined;
@@ -138,7 +177,8 @@ export class BannerFilteringStdioClientTransport implements Transport {
     this.pendingLine = lines.pop() ?? "";
 
     for (const line of lines) {
-      if (isBannerLine(line)) {
+      if (!isProtocolLine(line)) {
+        this.appendDiagnostic("stdout", line);
         continue;
       }
 
@@ -151,7 +191,12 @@ export class BannerFilteringStdioClientTransport implements Transport {
     const remainder = this.pendingLine + this.decoder.end();
     this.pendingLine = "";
 
-    if (!remainder || isBannerLine(remainder)) {
+    if (!remainder) {
+      return;
+    }
+
+    if (!isProtocolLine(remainder)) {
+      this.appendDiagnostic("stdout", remainder);
       return;
     }
 
@@ -172,11 +217,20 @@ export class BannerFilteringStdioClientTransport implements Transport {
       }
     }
   }
+
+  private appendDiagnostic(source: "stdout" | "stderr", value: string): void {
+    if (!value.trim()) return;
+
+    this.diagnosticTail += `[${source}] ${value.trim()}\n`;
+    if (this.diagnosticTail.length > this.diagnosticMaxChars) {
+      this.diagnosticTail = this.diagnosticTail.slice(-this.diagnosticMaxChars);
+    }
+  }
 }
 
-function isBannerLine(line: string): boolean {
+function isProtocolLine(line: string): boolean {
   const trimmed = line.trimStart();
-  return !trimmed.startsWith("{") && !trimmed.startsWith("[") && /[╔╗╚╝║═]/.test(line);
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
 }
 
 export type { StdioServerParameters };

@@ -32,15 +32,11 @@ filter because NovelAI models have `sees_images = false`.
 Even when MCP servers are running, the following function names are stripped from the tool list before it is passed to GLM. Controlled in `src/providers/novelai/novelaiToolAdapter.ts:301`.
 
 ```
-felo-search
 iask-search
 monica-search
-fetch-url
-url-metadata
-fetch
 ```
 
-**Reason:** These are either redundant with the unified `web_search` tool (which routes search through the Brave → SearXNG → DuckDuckGo → Felo engine chain), internal to the unified `fetch_url` path, or too token-expensive in their argument schemas and response payloads for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
+**Reason:** These are redundant with the unified `web_search` tool (which routes search through the Brave → SearXNG → DuckDuckGo → IAsk engine chain) and too token-expensive in their raw form for GLM's strict prompt budget. The `brave_*` MCP function names are no longer LLM-visible at all post-unification, so they don't need to be in this disable list anymore.
 
 ---
 
@@ -126,7 +122,7 @@ Other providers do **not** get this fallback — they must explicitly set the fi
 | `peek_profile_picture` tool | ✅ Yes | Text-only model |
 | `process_gif` tool | ✅ Yes | Text-only model |
 | Unified `fetch_url` tool | ✅ Yes | Token budget |
-| MCP fetch functions (`fetch`, `fetch-url`, `url-metadata`) | ✅ Yes | Token budget / redundant |
+| Raw MCP AI-search functions (`iask-search`, `monica-search`) | ✅ Yes | Token budget / redundant |
 | MCP alternative search engines | ✅ Yes | Token budget / redundant |
 | Unified `web_search` tool | ❌ Enabled | Replaces the previous 4-tool Brave surface with one categorized tool |
 | `KNOWLEDGE_SERVER_EMOJIS` context block | ✅ Yes | Text-only + token budget |

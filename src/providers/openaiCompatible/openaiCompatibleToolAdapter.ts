@@ -113,7 +113,7 @@ export class OpenAICompatibleToolAdapter implements MCPCapableToolAdapter {
       const mcpManager = getMCPManager();
       if (mcpManager.isReady() && allowedMCPFunctions) {
         let addedMCPToolsCount = 0;
-        const disabledDDGFunctions = ["felo-search", "iask-search", "monica-search", "fetch-url", "url-metadata"];
+        const disabledDDGFunctions = ["iask-search", "monica-search"];
         const allowedFunctionSet = new Set(allowedMCPFunctions);
 
         for (const mcpTool of mcpManager.getMCPTools()) {

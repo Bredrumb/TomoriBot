@@ -191,12 +191,8 @@ export class OpenrouterToolAdapter implements MCPCapableToolAdapter {
       if (mcpManager.isReady()) {
         let addedMCPToolsCount = 0;
 
-        // Disabled DuckDuckGo functions (always filtered out)
-        // felo-search: Streaming not compatible with Discord
-        // iask-search / monica-search: unsupported or low-quality search modes
-        // fetch-url: Use dedicated Fetch MCP server instead
-        // url-metadata: Redundant with Fetch MCP server
-        const disabledDDGFunctions = ["felo-search", "iask-search", "monica-search", "fetch-url", "url-metadata"];
+        // Raw AI-search modes stay internal to the unified web_search dispatcher.
+        const disabledDDGFunctions = ["iask-search", "monica-search"];
         let disabledFunctionsCount = 0;
 
         if (allowedMCPFunctions) {

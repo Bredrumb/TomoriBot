@@ -176,7 +176,6 @@ async function loadToolPromptMacroAvailability(
     // Names that are filtered globally in `availability.ts` but might still
     // appear in MCP listings, so kept here as a defensive trim.
     const providerHiddenGlobalFunctions = new Set([
-      "felo-search",
       "iask-search",
       "monica-search",
       "fetch",

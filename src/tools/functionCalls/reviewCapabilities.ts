@@ -863,8 +863,7 @@ export class ReviewCapabilitiesTool extends BaseTool {
           // Group MCP tools by category
           const mcpFunctions = toolsResult.mcpFunctionNames;
           const mcpSearchTools = mcpFunctions.filter(
-            (name) =>
-              name.includes("search") || name.includes("brave") || name.includes("fetch") || name.includes("felo"),
+            (name) => name.includes("search") || name.includes("brave") || name.includes("fetch"),
           );
           const otherMcpTools = mcpFunctions.filter((name) => !mcpSearchTools.includes(name));
 

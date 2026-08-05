@@ -28,14 +28,13 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
   /**
    * Supported DuckDuckGo Search functions
-   * Note: felo-search remains hidden from providers and is only used as an
+   * Note: iask-search remains hidden from providers and is only used as an
    * internal fallback when DuckDuckGo web-search hits rate limits or returns
    * no usable results.
    */
   private readonly SUPPORTED_FUNCTIONS = [
     "web-search", // DuckDuckGo web search with HTML scraping
-    "felo-search", // Internal AI fallback for DuckDuckGo rate limits
-    "url-metadata", // URL metadata extraction (title, description, images)
+    "iask-search", // Internal AI fallback for DuckDuckGo rate limits
   ];
 
   /**
@@ -61,12 +60,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
         return await this.processWebSearch(mcpResult, args, context);
       }
 
-      if (functionName === "url-metadata") {
-        return await this.processUrlMetadata(mcpResult, args);
-      }
-
-      if (functionName === "felo-search") {
-        return this.processFeloSearch(mcpResult, args, context);
+      if (functionName === "iask-search") {
+        return this.processIAskSearch(mcpResult, args, context);
       }
 
       // Fallback for any unhandled functions
@@ -75,7 +70,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
       log.error(`Failed to process ${functionName} result:`, error as Error);
       return {
         success: false,
-        message: "Failed to process DuckDuckGo & Felo AI Search result",
+        message: "Failed to process DuckDuckGo & IAsk AI Search result",
         error: error instanceof Error ? error.message : String(error),
         data: {
           source: "mcp",
@@ -93,8 +88,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
    * Execute a DuckDuckGo web-search invocation directly (bypassing the LLM
    * MCP function-dispatch path). Consumed by `webSearch/duckduckgoEngine.ts`
    * so the unified `web_search` tool can route through DDG as an internal
-   * fallback. The built-in `tryFeloSearchFallback` inside `processWebSearch`
-   * still runs: meaning a single call here may transparently return Felo
+   * fallback. The built-in `tryIAskSearchFallback` inside `processWebSearch`
+   * still runs, so a single call here may transparently return IAsk
    * results when DDG itself is rate-limited.
    *
    * @param query - User search query.
@@ -106,11 +101,15 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
   }
 
   /**
-   * Execute a Felo-search invocation directly. Used by `webSearch/feloEngine.ts`
+   * Execute an IAsk invocation directly. Used by `webSearch/iaskEngine.ts`
    * as the final-resort engine in the chain (after DDG itself fails entirely).
    */
-  public async executeFeloSearchInternal(query: string, context: ToolContext): Promise<TypedMCPToolResult | null> {
-    return await this.invokeMcpFunctionInternal("felo-search", { query, stream: false }, context);
+  public async executeIAskSearchInternal(query: string, context: ToolContext): Promise<TypedMCPToolResult | null> {
+    return await this.invokeMcpFunctionInternal(
+      "iask-search",
+      { query, mode: "question", detailLevel: "concise" },
+      context,
+    );
   }
 
   /**
@@ -118,7 +117,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
    * invokes it, and routes the result through this handler's processResult.
    */
   private async invokeMcpFunctionInternal(
-    functionName: "web-search" | "felo-search",
+    functionName: "web-search" | "iask-search",
     args: Record<string, unknown>,
     context: ToolContext,
   ): Promise<TypedMCPToolResult | null> {
@@ -192,9 +191,9 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
         log.warn("Failed to send DuckDuckGo search status embed (non-fatal)", embedError as Error);
       }
 
-      const fallbackReason = this.getFeloFallbackReason(mcpResult);
+      const fallbackReason = this.getIAskFallbackReason(mcpResult);
       if (fallbackReason) {
-        const fallbackResult = await this.tryFeloSearchFallback(query, context, fallbackReason);
+        const fallbackResult = await this.tryIAskSearchFallback(query, context, fallbackReason);
         if (fallbackResult) {
           return fallbackResult;
         }
@@ -207,8 +206,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
           success: false,
           message:
             fallbackReason === "duckduckgo_rate_limit"
-              ? "DuckDuckGo search failed due to rate limiting, and Felo fallback was unavailable."
-              : "DuckDuckGo search returned no usable results, and Felo fallback was unavailable.",
+              ? "DuckDuckGo search failed due to rate limiting, and IAsk fallback was unavailable."
+              : "DuckDuckGo search returned no usable results, and IAsk fallback was unavailable.",
           error: this.extractResultText(mcpResult),
           data: {
             source: "mcp",
@@ -223,7 +222,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
       }
 
       // Surface non-rate-limit MCP errors without mislabeling them as throttling.
-      if (mcpResult.isError) {
+      if (this.isMcpError(mcpResult)) {
         const errorText = this.extractResultText(mcpResult);
         return {
           success: false,
@@ -285,65 +284,15 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
   }
 
   /**
-   * Provides structured metadata including title, description, and images
-   * @param mcpResult - The raw MCP result from URL metadata extraction
-   * @param args - The modified arguments used (contains url)
-   */
-  private async processUrlMetadata(
-    mcpResult: MCPServerResponse,
-    args: Record<string, unknown>,
-  ): Promise<TypedMCPToolResult> {
-    try {
-      const metadataContent = this.extractResultText(mcpResult);
-
-      const url = (args.url as string) || "unknown URL";
-
-      const prefixMessage = `[URL Metadata for: ${url}]\n\n${metadataContent}`;
-
-      log.info(`URL metadata for ${url}: ${metadataContent.substring(0, 150)}...`);
-
-      return {
-        success: true,
-        message: prefixMessage,
-        data: {
-          source: "mcp",
-          functionName: "url-metadata",
-          serverName: this.serverName,
-          rawResult: mcpResult,
-          executionTime: 0, // Will be set by caller
-          status: "completed",
-          url: url,
-          searchProvider: "DuckDuckGo MCP (URL Metadata Extraction)",
-        },
-      };
-    } catch (error) {
-      log.error("Error processing URL metadata result:", error as Error);
-      return {
-        success: true,
-        message: mcpResult.text || "URL metadata extraction completed successfully",
-        data: {
-          source: "mcp",
-          functionName: "url-metadata",
-          serverName: this.serverName,
-          rawResult: mcpResult,
-          executionTime: 0, // Will be set by caller
-          status: "completed",
-          searchProvider: "DuckDuckGo MCP (URL Metadata Extraction)",
-        },
-      };
-    }
-  }
-
-  /**
    * This remains available to the handler even when providers do not expose the
    * raw MCP function directly.
    */
-  private processFeloSearch(
+  private processIAskSearch(
     mcpResult: MCPServerResponse,
     args: Record<string, unknown>,
     context: MCPExecutionContext,
   ): TypedMCPToolResult {
-    const baseResult = this.processStandardDuckDuckGoResult("felo-search", mcpResult, context, args);
+    const baseResult = this.processStandardDuckDuckGoResult("iask-search", mcpResult, context, args);
     if (!baseResult.success) {
       return baseResult;
     }
@@ -358,22 +307,22 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
 
     return {
       ...baseResult,
-      message: `[Felo AI Search Fallback Results for: ${query}]\n\n${resultText}`,
+      message: `[IAsk AI Search Fallback Results for: ${query}]\n\n${resultText}`,
       data: {
         ...baseResult.data,
-        functionName: "felo-search",
+        functionName: "iask-search",
         rawResult: mcpResult,
         urlsFound,
-        searchProvider: "Felo AI Search (DuckDuckGo rate-limit fallback)",
+        searchProvider: "IAsk AI Search (DuckDuckGo rate-limit fallback)",
         fallbackFrom: "web-search",
       },
     };
   }
 
   /**
-   * Retry a rate-limited DuckDuckGo web search with Felo AI.
+   * Retry a rate-limited DuckDuckGo web search with IAsk AI.
    */
-  private async tryFeloSearchFallback(
+  private async tryIAskSearchFallback(
     query: string,
     context: MCPExecutionContext,
     reason: "duckduckgo_rate_limit" | "duckduckgo_empty_results",
@@ -393,26 +342,27 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
         const geminiTool = await mcpTool.tool();
         const functionNames = geminiTool.functionDeclarations?.map((declaration) => declaration.name) || [];
 
-        if (!functionNames.includes("felo-search")) {
+        if (!functionNames.includes("iask-search")) {
           continue;
         }
 
-        log.warn(`DuckDuckGo web-search fallback triggered (${reason}) for "${query}". Retrying with felo-search.`);
+        log.warn(`DuckDuckGo web-search fallback triggered (${reason}) for "${query}". Retrying with iask-search.`);
 
         const fallbackArgs = {
           query,
-          stream: false,
+          mode: "question",
+          detailLevel: "concise",
         };
-        const fallbackResult = await mcpTool.callTool([{ name: "felo-search", args: fallbackArgs }]);
+        const fallbackResult = await mcpTool.callTool([{ name: "iask-search", args: fallbackArgs }]);
         if (!fallbackResult || fallbackResult.length === 0) {
-          log.warn(`Felo fallback returned no results after DuckDuckGo web-search fallback (${reason}).`);
+          log.warn(`IAsk fallback returned no results after DuckDuckGo web-search fallback (${reason}).`);
           return null;
         }
 
-        const processedResult = this.processFeloSearch(fallbackResult[0], fallbackArgs, context);
+        const processedResult = this.processIAskSearch(fallbackResult[0], fallbackArgs, context);
         if (!processedResult.success) {
           log.warn(
-            `Felo fallback failed after DuckDuckGo fallback (${reason}): ${processedResult.error || processedResult.message || "unknown error"}`,
+            `IAsk fallback failed after DuckDuckGo fallback (${reason}): ${processedResult.error || processedResult.message || "unknown error"}`,
           );
           return null;
         }
@@ -421,11 +371,11 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
           processedResult.data.fallbackReason = reason;
         }
 
-        log.info(`Felo fallback succeeded for DuckDuckGo query "${query}" after ${reason}.`);
+        log.info(`IAsk fallback succeeded for DuckDuckGo query "${query}" after ${reason}.`);
         return processedResult;
       }
     } catch (error) {
-      log.warn(`Felo fallback execution failed after DuckDuckGo fallback (${reason}).`, {
+      log.warn(`IAsk fallback execution failed after DuckDuckGo fallback (${reason}).`, {
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -470,7 +420,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
     try {
       const resultText = this.extractResultText(mcpResult);
 
-      if (mcpResult.isError) {
+      if (this.isMcpError(mcpResult)) {
         return {
           success: false,
           message: resultText || `${functionName} execution failed`,
@@ -486,7 +436,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
         };
       }
 
-      const enhancedMessage = `[DuckDuckGo & Felo AI Search Results]\n\n${resultText}`;
+      const enhancedMessage = `[DuckDuckGo & IAsk AI Search Results]\n\n${resultText}`;
 
       return {
         success: true,
@@ -498,7 +448,7 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
           rawResult: mcpResult,
           executionTime: Date.now() - context.executionStartTime,
           status: "completed",
-          searchProvider: "DuckDuckGo & Felo AI Search MCP",
+          searchProvider: "DuckDuckGo & IAsk AI Search MCP",
         },
       };
     } catch (error) {
@@ -531,7 +481,30 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
       return mcpResult.functionResponse.response.text;
     }
 
+    const contentArrays = [
+      mcpResult.functionResponse?.response?.content,
+      mcpResult.functionResponse?.response?.error?.content,
+      mcpResult.response?.content,
+      mcpResult.content,
+      mcpResult.data,
+    ];
+
+    for (const content of contentArrays) {
+      if (!content) continue;
+
+      const text = content
+        .filter((item) => item.type === "text" && typeof item.text === "string")
+        .map((item) => item.text)
+        .join("\n")
+        .trim();
+      if (text) return text;
+    }
+
     return JSON.stringify(mcpResult, null, 2);
+  }
+
+  private isMcpError(mcpResult: MCPServerResponse): boolean {
+    return Boolean(mcpResult.isError || mcpResult.functionResponse?.response?.error?.isError);
   }
 
   /**
@@ -543,9 +516,9 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
   }
 
   /**
-   * Decide whether DuckDuckGo should fall back to Felo AI.
+   * Decide whether DuckDuckGo should fall back to IAsk AI.
    */
-  private getFeloFallbackReason(
+  private getIAskFallbackReason(
     mcpResult: MCPServerResponse,
   ): "duckduckgo_rate_limit" | "duckduckgo_empty_results" | null {
     if (this.isRateLimitError(mcpResult)) {
@@ -609,8 +582,8 @@ export class DuckDuckGoHandler implements MCPServerBehaviorHandler {
     const resultText = this.extractResultText(mcpResult).toLowerCase();
 
     // Treat any MCP-level error (isError: true) as a rate-limit-class failure
-    // so the felo fallback has a chance to recover the search.
-    if (mcpResult.isError) {
+    // so the IAsk fallback has a chance to recover the search.
+    if (this.isMcpError(mcpResult)) {
       return true;
     }
 

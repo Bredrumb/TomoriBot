@@ -12,7 +12,7 @@ export default {
       provider_label: `Target Provider`,
       provider_description: `Choose the provider to add or rotate credentials for on this server.`,
       provider_placeholder: `Select a provider...`,
-      free_suffix: `Free`,
+      free_suffix: `has free options`,
       already_existing_suffix: `Already Existing`,
       already_existing_description: `This provider is already configured. Submit again to update credentials.`,
       custom_deprecated_description: `Moved to /provider custom-endpoint add.`,

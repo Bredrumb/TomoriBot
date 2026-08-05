@@ -101,20 +101,8 @@ export interface BraveVideoSearchResponse extends MCPServerResponse {
 }
 
 /**
- * Fetch MCP server response structure
- */
-export interface FetchMCPResponse extends MCPServerResponse {
-  url?: string;
-  title?: string;
-  markdown?: string;
-  status_code?: number;
-  headers?: Record<string, string>;
-  error?: string;
-}
-
-/**
- * DuckDuckGo & Felo AI Search response structures
- * Comprehensive interfaces for all 4 tools in the @oevortex/ddg_search package
+ * DuckDuckGo & IAsk AI Search response structures
+ * Response structures for the bundled @oevortex/ddg_search package
  */
 
 /**
@@ -247,10 +235,6 @@ export const MCPTypeGuards = {
 
   isBraveVideoSearchResponse: (response: MCPServerResponse): response is BraveVideoSearchResponse => {
     return "video_results" in response || (response.text?.includes("video search") ?? false);
-  },
-
-  isFetchResponse: (response: MCPServerResponse): response is FetchMCPResponse => {
-    return "url" in response || "markdown" in response || "status_code" in response;
   },
 
   hasImageContent: (response: MCPServerResponse): boolean => {

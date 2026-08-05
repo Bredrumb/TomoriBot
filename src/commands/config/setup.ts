@@ -196,8 +196,10 @@ export async function execute(
       .filter((provider) => provider.toLowerCase() !== "custom" && !isCustomProvider(provider))
       .map((provider) => {
         const isFree = freeProviders.has(provider.toLowerCase());
+        let label = isFree ? `${getProviderDisplayName(provider)} (${freeSuffix})` : getProviderDisplayName(provider);
+        if (label.length > 100) label = label.substring(0, 100);
         return {
-          label: isFree ? `${getProviderDisplayName(provider)} (${freeSuffix})` : getProviderDisplayName(provider),
+          label,
           value: provider,
           description: undefined,
         };

@@ -147,7 +147,6 @@ export class MCPConfigManager {
   private determineBehaviorHandler(serverName: string): string | undefined {
     const handlerMap: Record<string, string> = {
       "brave-search": "BraveSearchHandler",
-      fetch: "FetchHandler",
       "duckduckgo-search": "DuckDuckGoHandler",
     };
 

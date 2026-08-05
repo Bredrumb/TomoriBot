@@ -266,7 +266,7 @@ Two related traps:
 
 `SEARXNG_MEMORY_LIMIT_MB` (default 256) is sized so the optional sidecar and the bot together stay
 inside physical RAM. Enable the sidecar only after confirming the host has real headroom; the
-`web_search` chain degrades to `Brave -> DDG -> Felo` without it.
+`web_search` chain degrades to `Brave -> DuckDuckGo -> IAsk` without it.
 
 ## Release proof and rollback
 

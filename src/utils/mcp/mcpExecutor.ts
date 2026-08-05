@@ -15,7 +15,6 @@ import type {
 import { MCPExecutionError, MCPFunctionNotFoundError, MCPServerNotFoundError } from "../../types/tool/mcpTypes";
 import type { ToolContext } from "../../types/tool/interfaces";
 import { getBraveSearchHandler } from "../../tools/mcpServers/brave-search/braveSearchHandler";
-import { getFetchHandler } from "../../tools/mcpServers/fetch/fetchHandler";
 import { getDuckDuckGoHandler } from "../../tools/mcpServers/duckduckgo-search/duckduckgoHandler";
 import { sendToolProgressNotice } from "../discord/toolProgressNotice";
 import { localizer } from "../text/localizer";
@@ -161,7 +160,6 @@ class MCPHandlerRegistry {
 
   private initializeDefaultHandlers(): void {
     this.registerHandler(getBraveSearchHandler());
-    this.registerHandler(getFetchHandler());
     this.registerHandler(getDuckDuckGoHandler());
 
     log.info(
@@ -265,10 +263,6 @@ export class MCPExecutor {
       case "web-search":
         modifiedArgs.numResults = Math.min(Number(modifiedArgs.numResults) || 12, 20); // Default 12, max 20
         modifiedArgs.page = 1; // Always start from first page
-        break;
-
-      case "felo-search":
-        modifiedArgs.stream = false; // Disable streaming for Discord compatibility
         break;
 
       case "fetch-url": {

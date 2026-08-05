@@ -85,9 +85,10 @@ export async function execute(
     const isExisting = savedProviderNames.has(provider.toLowerCase());
     const isFree = freeProviders.has(normalizedProvider);
     const baseName = getProviderDisplayName(provider);
-    const label = [baseName, isFree && `(${freeSuffix})`, isExisting && `(${alreadyExistingSuffix})`]
+    let label = [baseName, isFree && `(${freeSuffix})`, isExisting && `(${alreadyExistingSuffix})`]
       .filter(Boolean)
       .join(" ");
+    if (label.length > 100) label = label.substring(0, 100);
     const descriptionKey = getProviderAddChoiceDescriptionKey(normalizedProvider);
     return {
       label,

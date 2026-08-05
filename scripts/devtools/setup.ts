@@ -6,7 +6,6 @@ import pc from "picocolors";
 import { config } from "dotenv";
 import { isPlaceholder, readEnvValues, seedFromExample, upsertEnvKeys } from "../lib/envFile";
 import { ask, askSecret, confirm, isNonInteractiveMode, type MenuItem, selectMenu } from "../lib/prompt";
-import { detectPython, type PythonCommand } from "../lib/pyenv";
 import { type SetupContext, type SetupModule, getFullInstallModules } from "../setup/registry";
 import { log } from "../lib/cliLogger";
 
@@ -21,7 +20,6 @@ interface PrereqScan {
   hasPsql: boolean;
   hasPgDump: boolean;
   hasDocker: boolean;
-  python?: PythonCommand;
 }
 
 interface DatabaseConfigResult {
@@ -120,12 +118,11 @@ function parseNodeMajor(output: string | undefined): number | undefined {
 async function scanPrereqs(): Promise<PrereqScan> {
   log.section("Prerequisite scan");
 
-  const [nodeProbe, psqlProbe, pgDumpProbe, dockerProbe, python] = await Promise.all([
+  const [nodeProbe, psqlProbe, pgDumpProbe, dockerProbe] = await Promise.all([
     commandProbe("node", ["--version"]),
     commandProbe("psql", ["--version"]),
     commandProbe("pg_dump", ["--version"]),
     commandProbe("docker", ["--version"]),
-    detectPython(),
   ]);
 
   const nodeMajor = parseNodeMajor(nodeProbe.output);
@@ -155,17 +152,10 @@ async function scanPrereqs(): Promise<PrereqScan> {
     log.warn("Docker was not found. Docker database setup will be unavailable.");
   }
 
-  if (python) {
-    log.success(`Python detected: ${python.displayName}`);
-  } else {
-    log.warn("Python 3 was not found. URL Fetch MCP setup will be guided only.");
-  }
-
   return {
     hasPsql: psqlProbe.available,
     hasPgDump: pgDumpProbe.available,
     hasDocker: dockerProbe.available,
-    python,
   };
 }
 
@@ -174,7 +164,6 @@ function buildContext(scan: PrereqScan): SetupContext {
     projectRoot: ROOT,
     envPath: ENV_PATH,
     hasPsql: scan.hasPsql,
-    python: scan.python,
   };
 }
 
@@ -616,7 +605,7 @@ async function runInteractiveMenu(scan: PrereqScan): Promise<void> {
     {
       id: "full",
       label: "(Recommended) Full Install",
-      description: "Base Install plus pgvector, pg_cron, tokenizer assets, and URL Fetch MCP.",
+      description: "Base Install plus pgvector, pg_cron, and tokenizer assets.",
     },
     {
       id: "base",

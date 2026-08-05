@@ -8,7 +8,7 @@
  *
  * Sits between Brave and DuckDuckGo in the dispatcher chain: when a Brave key
  * isn't configured but a self-hosted SearXNG sidecar is, queries are routed
- * here instead of falling through to DDG/Felo.
+ * here instead of falling through to DuckDuckGo/IAsk.
  */
 
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";

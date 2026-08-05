@@ -196,7 +196,7 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
 
       // Brave-key dance removed: the unified `web_search` tool is gated centrally
       // in `availability.ts` via `requiresFeatureFlag = "web_search"`, and the
-      // engine chain inside the tool decides Brave-vs-DDG-vs-Felo at call time.
+      // engine chain inside the tool decides Brave-vs-DDG-vs-IAsk at call time.
       if (builtInTools.length > 0) {
         const builtInDeclarations = builtInTools.map((tool) => this.convertTool(tool));
         allFunctionDeclarations.push(...builtInDeclarations);
@@ -208,12 +208,8 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
         let addedMCPToolsCount = 0;
         let excludedDDGFunctionsCount = 0;
 
-        // Disabled DuckDuckGo functions (always filtered out)
-        // felo-search: Streaming not compatible with Discord
-        // iask-search / monica-search: unsupported or low-quality search modes
-        // fetch-url: Use dedicated Fetch MCP server instead
-        // url-metadata: Redundant with Fetch MCP server
-        const disabledDDGFunctions = ["felo-search", "iask-search", "monica-search", "fetch-url", "url-metadata"];
+        // Raw AI-search modes stay internal to the unified web_search dispatcher.
+        const disabledDDGFunctions = ["iask-search", "monica-search"];
         let disabledFunctionsCount = 0;
 
         if (allowedMCPFunctions) {
@@ -260,7 +256,7 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
           // Legacy path with Brave API key filtering (for backward compatibility)
           const mcpTools = mcpManager.getMCPTools();
 
-          const duckduckgoSearchFunctions = ["web-search", "iask-search", "monica-search", "url-metadata"];
+          const duckduckgoSearchFunctions = ["web-search", "iask-search", "monica-search"];
 
           for (const mcpTool of mcpTools) {
             try {
@@ -278,7 +274,7 @@ export class GoogleToolAdapter implements MCPCapableToolAdapter {
                     return false;
                   }
 
-                  // Post-refactor: DDG/Felo MCP function names are unconditionally
+                  // DuckDuckGo/IAsk MCP function names are unconditionally
                   // hidden in `availability.ts` and consumed only via the unified
                   // `web_search` tool. The legacy Brave-key gate here is a no-op now.
                   if (duckduckgoSearchFunctions.includes(functionName)) {

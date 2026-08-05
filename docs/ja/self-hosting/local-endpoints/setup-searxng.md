@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-`web_search`ツールは、**Brave → SearXNG → DuckDuckGo → Felo**のエンジンチェーンを通じてルーティングします。独自のSearXNGインスタンスを実行することで、単一エンジンのレート制限やスクレイピングの破損を回避し、`science`、`it`、`files`、`music`といったSearXNG専用のカテゴリーを利用できるようになります。
+`web_search`ツールは、**Brave → SearXNG → DuckDuckGo → IAsk**のエンジンチェーンを通じてルーティングします。独自のSearXNGインスタンスを実行することで、単一エンジンのレート制限やスクレイピングの破損を回避し、`science`、`it`、`files`、`music`といったSearXNG専用のカテゴリーを利用できるようになります。
 
 SearXNGのセットアップパスを1つ選択してください。
 
@@ -55,9 +55,9 @@ docker run -d --name searxng -p 8080:8080 \
 ---
 
 ### C. SearXNGなし
-`SEARXNG_BASE_URL`は設定しないでください：チェーンは以前とまったく同じように`Brave → DDG → Felo`にフォールバックします。何も壊れません。
+`SEARXNG_BASE_URL`を設定しない場合、チェーンは`Brave → DuckDuckGo → IAsk`にフォールバックします。
 
-SearXNGサイドカーが設定されていない場合、組み立てられた`web_search`スキーマはSearXNG専用カテゴリーをアドバタイズしなくなります。Braveが設定されている場合は一般的なカテゴリー（`text`、`image`、`video`、`news`）が引き続き表示され、DDG/FeloのMCPフォールバックのみが利用可能な場合はテキストのみの検索が表示されます。
+SearXNGサイドカーが設定されていない場合、組み立てられた`web_search`スキーマはSearXNG専用カテゴリーをアドバタイズしなくなります。Braveが設定されている場合は一般的なカテゴリー（`text`、`image`、`video`、`news`）が引き続き表示され、DuckDuckGo/IAskのMCPフォールバックのみが利用可能な場合はテキストのみの検索が表示されます。
 
 ---
 

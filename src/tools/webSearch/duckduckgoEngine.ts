@@ -2,8 +2,8 @@
  * DuckDuckGoEngine : wraps DuckDuckGoHandler.executeWebSearchInternal().
  *
  * Text-only engine. When DDG itself rate-limits, the underlying
- * processWebSearch() already cascades to Felo automatically , so that's why
- * this engine doesn't need to chain to FeloEngine itself. FeloEngine is
+ * processWebSearch() already cascades to IAsk automatically, so this engine
+ * doesn't need to chain to IAskEngine itself. IAskEngine is
  * a separate last-resort entry in the dispatcher chain for the case where
  * DDG can't even reach its MCP server.
  */
