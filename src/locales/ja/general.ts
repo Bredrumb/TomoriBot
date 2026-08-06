@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   general: {
     yes: `はい`,
     confirm: `確認`,
@@ -93,7 +93,7 @@ export default {
       channel_not_supported_title: `サポートされていないチャンネルタイプ`,
       channel_not_supported_description: `申し訳ありませんが、サーバーのテキストチャンネルまたはダイレクトメッセージでのみ動作します。グループDMやその他のチャンネルタイプはサポートされていません。`,
       tomori_not_setup_title: `初期設定が必要です`,
-      tomori_not_setup_description: `このサーバーではまだ初期設定が必要です。**サーバー管理**権限を持つメンバーがまず \`/config setup\` を実行してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/introduction/quickstart/ で確認できます。`,
+      tomori_not_setup_description: `このサーバーではまだ初期設定が必要です。**サーバー管理**権限を持つメンバーがまず \`/config setup\` を実行してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/ja/introduction/quickstart/ で確認できます。`,
       tomori_updating_title: `現在アップデート中...`,
       tomori_updating_description: `現在アップデート中のため、まもなく復旧します。しばらくしてからもう一度お試しください！`,
       tomori_not_setup_dm_footer: `DMでは個人用の設定として扱われ、ほとんどのサーバー形式の設定が利用できます。`,
@@ -191,7 +191,7 @@ export default {
 
 現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms\` と \`/legal privacy\` で確認できます。`,
       setup_prompt_title: `TomoriBotの追加が完了しました`,
-      setup_prompt_description: `追加してくれてありがとうございます。始めるには、**サーバー管理**権限を持つメンバーが \`/config setup\` を実行して、初期ペルソナとプロバイダーを選択してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/introduction/quickstart/ で確認できます。
+      setup_prompt_description: `追加してくれてありがとうございます。始めるには、**サーバー管理**権限を持つメンバーが \`/config setup\` を実行して、初期ペルソナとプロバイダーを選択してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/ja/introduction/quickstart/ で確認できます。
 
 プロバイダーのAPIキーが必要な場合は \`/help api-key\` を使ってください。現在の利用規約とプライバシーポリシーは \`/legal terms\` と \`/legal privacy\` で確認できます。`,
     },

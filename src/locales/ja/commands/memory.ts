@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   memory: {
     description: `保存された記憶とドキュメントを管理します。`,
     document: {
@@ -96,7 +96,7 @@ export default {
         in_character_scope_invalid_title: `インキャラクターモードはペルソナスコープが必要です`,
         in_character_scope_invalid_description: `インキャラクター抽出は単一のペルソナの視点で記憶を作成するため、\`scope: persona\` でのみ使用できます。\`scope: persona\` で再実行してください。`,
         rag_disabled_title: `ドキュメントRAGが無効です`,
-        rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[自己ホスト設定ガイド](https://docs.tomoribot.app/self-hosting/manual-setup/)を参照）。`,
+        rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[自己ホスト設定ガイド](https://docs.tomoribot.app/ja/self-hosting/manual-setup/)を参照）。`,
         no_permission_title: `権限がありません`,
         no_permission_description: `チャンネル履歴を抽出するには**サーバー管理**権限が必要です。`,
         model_incompatible_title: `モデルが非対応です`,
@@ -156,7 +156,7 @@ export default {
         select_description: `削除する履歴ドキュメントを選択してください`,
         select_placeholder: `ドキュメントを選択...`,
         rag_disabled_title: `ドキュメントRAGが無効です`,
-        rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[自己ホスト設定ガイド](https://docs.tomoribot.app/self-hosting/manual-setup/)を参照）。`,
+        rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[自己ホスト設定ガイド](https://docs.tomoribot.app/ja/self-hosting/manual-setup/)を参照）。`,
         none_title: `履歴ドキュメントがありません`,
         none_description: `このスコープには削除できる履歴ドキュメントがありません。\`/memory history import\`で抽出してください。`,
         success_title: `履歴ドキュメントが削除されました`,

@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   genai: {
     generic_error_title: `生成エラー`,
     generic_error_description: `申し訳ありません、応答を生成中にエラーが発生しました ({error_message})。`,
@@ -104,7 +104,7 @@ export default {
       adjust_parameters_personal: `\`/personal parameters\` を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
       switch_model_provider: `\`/model text\` または \`/provider add\` で別のモデルやプロバイダーに切り替えてください。`,
       switch_model_provider_personal: `\`/personal provider model-text\` で切り替えるか、\`/personal provider toggle-models\` で **テキスト** をオフにするとこのサーバーのモデルを使用します。`,
-      disable_personal_text_override: `このリクエストエラーはあなたの[個人プロバイダー](https://docs.tomoribot.app/features/knowledge/personalization/#your-own-providers)からのものです。代わりにこのサーバーの設定モデルを使いたい場合は、\`/personal provider toggle-models\` で **テキスト** を無効にしてください。`,
+      disable_personal_text_override: `このリクエストエラーはあなたの[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#your-own-providers)からのものです。代わりにこのサーバーの設定モデルを使いたい場合は、\`/personal provider toggle-models\` で **テキスト** を無効にしてください。`,
       support_server: `[公式サポートサーバー](https://discord.gg/bjCfHm9QsB)でサポートを受けられます。`,
       shorten_message: `メッセージを短くしてから、もう一度送信してください。`,
       refresh_context: `\`/tool refresh\` で会話コンテキストをクリアしてください。`,

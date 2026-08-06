@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   help: {
     "personal-provider": {
       description: `Learn how personal providers work.`,
@@ -72,7 +72,7 @@ export default {
       description: `Learn how speech generation works.`,
       engine_description: `Choose a speech engine guide.`,
       docs_title: `Full Docs`,
-      docs_description: `See the [TTS docs](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#text-to-speech) and [local TTS setup guides](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/) for setup commands and wrapper notes.`,
+      docs_description: `See the [TTS docs](https://docs.tomoribot.app/en/features/capabilities/media-generation/tts-and-stt/#text-to-speech) and [local TTS setup guides](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/) for setup commands and wrapper notes.`,
       summary_title: `Using Speech`,
       summary_description: `For local voice cloning, register a speech endpoint with {custom_endpoint_add}, pick it with {model_speech}, upload a sample with {voice_add}, then assign it with {voice_assign}. For ElevenLabs, run {elevenlabs}. VoiceDesign setups use {voice_design_set}.`,
       overview: {
@@ -95,7 +95,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
-1. Follow the [local TTS setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/chatterbox/) to prepare the server.
+1. Follow the [local TTS setup guide](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/chatterbox/) to prepare the server.
 2. Navigate to the downloaded \`chatterbox\` folder, then create and activate a Python \`.venv\`.
 3. Install numpy first (build dep): \`pip install numpy\`, then install \`requirements.txt\`.
 4. *(GPU only)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -112,7 +112,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
 • SoX installed system-wide (Windows: \`scoop install sox\`, macOS: \`brew install sox\`)
 • CUDA 12.x + drivers (optional, for GPU)
 
-1. Follow the [local TTS setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/qwen3tts/) to prepare the server.
+1. Follow the [local TTS setup guide](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/) to prepare the server.
 2. Navigate to the downloaded \`qwen3tts\` folder, create and activate a Python \`.venv\`.
 3. Install \`requirements.txt\`.
 4. *(GPU)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -127,7 +127,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
-1. Follow the [local TTS setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/irodoritts/) to prepare the server.
+1. Follow the [local TTS setup guide](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/irodoritts/) to prepare the server.
 2. Navigate to the downloaded \`irodoritts\` folder, then create and activate a Python \`.venv\`.
 3. Install \`requirements.txt\`.
 4. Install irodori-tts via the patch script (upstream packaging bugs require this):
@@ -149,7 +149,7 @@ Linux/macOS: \`bash install-irodori.sh\`
       description: `Learn how audio transcription works.`,
       engine_description: `Choose a transcription engine guide.`,
       docs_title: `Full Docs`,
-      docs_description: `See the [STT docs](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#speech-to-text) and [local STT setup guides](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/).`,
+      docs_description: `See the [STT docs](https://docs.tomoribot.app/en/features/capabilities/media-generation/tts-and-stt/#speech-to-text) and [local STT setup guides](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/).`,
       summary_title: `Using Transcription`,
       summary_description: `Register a transcription endpoint with {custom_endpoint_add}, choose it with {model_transcription}, and use {speech_transcripts} only if you want transcripts visibly posted. ElevenLabs users can run {elevenlabs}.`,
       overview: {
@@ -172,7 +172,7 @@ Linux/macOS: \`bash install-irodori.sh\`
 • FFmpeg installed system-wide (required for audio decoding)
 • CUDA 12.x + drivers (optional, for GPU acceleration)
 
-1. Follow the [local STT setup guide](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/whisperx/) to prepare the server.
+1. Follow the [local STT setup guide](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/whisperx/) to prepare the server.
 2. Navigate to the downloaded \`stt\` folder, then create and activate a Python \`.venv\`.
 3. Install \`requirements-whisperx.txt\`.
 4. *(GPU only)* Reinstall PyTorch with CUDA support:
@@ -239,7 +239,7 @@ Transcription supports ~100 languages (auto-detected).`,
       memory_title: `Memory & Personalization`,
       memory_description: `- I can remember personal facts about you and server-wide information, persisting across conversations
 - Personal memories persist across servers (try talking to me in another server!)
-- I also keep [STM (short-term memory)](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
+- I also keep [STM (short-term memory)](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
 - Change what I call you using \`/personal nickname\`
 - Use \`/memory\` and \`/persona\` commands to manually add or remove memories and persona data
 - I can use server emojis and stickers more accurately after registration with \`/server expressions initialize\`
@@ -666,7 +666,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Use \`/memory document remove\` or \`/memory history remove\` to remove stored documents
 - Requires an embedding model configured via \`/model embedding\``,
       shortterm_title: `Short-Term Memory`,
-      shortterm_description: `In addition to persistent memories, I keep [STM (short-term memory)](https://docs.tomoribot.app/features/knowledge/memory/#short-term-memory-stm) of recent conversations:
+      shortterm_description: `In addition to persistent memories, I keep [STM (short-term memory)](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm) of recent conversations:
 - Recent messages are cached per channel, and each persona carries the latest STM across channels within the same server
 - I can automatically summarize older conversations to keep context efficient
 - **Cross-server sharing** is opt-in: use {personalStm} with the \`crossserver\` option to let me reference your own conversations from other servers
@@ -718,7 +718,7 @@ Unknown placeholders are stripped automatically.`,
     spotlight: {
       description: `Learn what personal spotlight does and how to use it`,
       title: `Personal Spotlight Guide`,
-      embed_description: `[Personal spotlight](https://docs.tomoribot.app/features/knowledge/personalization/#personal-spotlight) lets you narrow which personas *you* can trigger in one channel, and optionally assign one persona to auto-trigger for your own messages there.`,
+      embed_description: `[Personal spotlight](https://docs.tomoribot.app/en/features/knowledge/personalization/#personal-spotlight) lets you narrow which personas *you* can trigger in one channel, and optionally assign one persona to auto-trigger for your own messages there.`,
       what_title: `What It Does`,
       what_description: `- Spotlight is scoped to **you + one channel**
 - It does not affect other users
@@ -751,7 +751,7 @@ If you set **hours = 0**, the spotlight stays until you remove it manually.`,
     "deliberate-trigger-mode": {
       description: `Learn how deliberate trigger mode changes message triggering`,
       title: `Deliberate Trigger Mode Guide`,
-      embed_description: `[Deliberate Trigger Mode (DTM)](https://docs.tomoribot.app/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode) changes how explicit persona triggers are recognized, especially for plain trigger words.`,
+      embed_description: `[Deliberate Trigger Mode (DTM)](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode) changes how explicit persona triggers are recognized, especially for plain trigger words.`,
       normal_title: `Normal Triggering`,
       normal_description: `When DTM is off, I can normally be triggered by:
 - Plain trigger words in a message
@@ -968,7 +968,7 @@ If a command is restricted and the channel isn't marked NSFW, you won't be able 
     "deliberate-tool-mode": {
       description: `Learn how deliberate tool mode changes tool availability`,
       title: `Deliberate Tool Mode Guide`,
-      embed_description: `[Deliberate Tool Mode](https://docs.tomoribot.app/features/capabilities/tools-and-extensions/#deliberate-tool-mode) keeps tool declarations out of ordinary chat turns unless the message looks like it needs a tool.`,
+      embed_description: `[Deliberate Tool Mode](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/#deliberate-tool-mode) keeps tool declarations out of ordinary chat turns unless the message looks like it needs a tool.`,
       what_title: `What It Does`,
       what_description: `When deliberate tool mode is active, I first check the message for explicit tool intent. If no intent is found, tool declarations are removed for that turn, which reduces prompt size and helps smaller/local models answer faster.`,
       intent_title: `What Counts As Tool Intent`,

@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   memory: {
     description: `Manage stored memories and documents.`,
     document: {
@@ -96,7 +96,7 @@ export default {
         in_character_scope_invalid_title: `In-character Mode Requires Persona Scope`,
         in_character_scope_invalid_description: `In-character extraction renders memories as a single persona would record them, so it only works with \`scope: persona\`. Re-run with \`scope: persona\` to use this prompt mode.`,
         rag_disabled_title: `Document RAG Disabled`,
-        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension in your database. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/self-hosting/manual-setup/)).`,
+        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension in your database. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/en/self-hosting/manual-setup/)).`,
         no_permission_title: `Permission Denied`,
         no_permission_description: `You need the **Manage Server** permission to extract channel history.`,
         model_incompatible_title: `Model Incompatible`,
@@ -156,7 +156,7 @@ export default {
         select_description: `Choose which history document to remove`,
         select_placeholder: `Select a document...`,
         rag_disabled_title: `Document RAG Disabled`,
-        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/self-hosting/manual-setup/)).`,
+        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/en/self-hosting/manual-setup/)).`,
         none_title: `No History Documents`,
         none_description: `There are no history-extracted documents to remove in this scope. Extract some with \`/memory history import\`.`,
         success_title: `History Document Removed`,

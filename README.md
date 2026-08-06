@@ -1,4 +1,4 @@
-## English | [日本語](.github/README_ja.md)
+﻿## English | [日本語](.github/README_ja.md)
 
 > [!NOTE]
 > This README is a quick overview. For the full, up-to-date documentation (setup guides, feature walkthroughs, provider info, and more) visit **[docs.tomoribot.app](https://docs.tomoribot.app/)**.
@@ -67,28 +67,28 @@ After adding her to your server through either method above, run the `/config se
 
 
 ![Screenshots 1](assets/img/scs/1.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/features/capabilities/tools-and-extensions/">Agentic AI-Powered Conversation</a></h3>
+<h3 align="center"><a href="https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/">Agentic AI-Powered Conversation</a></h3>
 <p align="center">TomoriBot has LOTS of tools that allows her to go beyond just chatting, such as searching the web, setting recurrent tasks/reminders, utilizing your server's emotes/stickers, and memory options such as RAG and STM that allow her to remember context across channels and servers. </p>
 
 <br />
 
 
 ![Screenshots 2](assets/img/scs/2.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/features/capabilities/media-generation/">Complete Multimodal Input/Output</a></h3>
+<h3 align="center"><a href="https://docs.tomoribot.app/en/features/capabilities/media-generation/">Complete Multimodal Input/Output</a></h3>
 <p align="center">TomoriBot can process images, audio, and video sent       
   directly in Discord and generate them in return using your own local model endpoints or through API keys, all of which are encrypted inside a persistent database. Ready-to-use ComfyUI workflows can be found in <code>assets/comfyui-workflows/</code> and local audio inference servers in <code>servers/</code>!</p>
 
 <br />
 
 ![Screenshots 3](assets/img/scs/3.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/features/chatting-personality/multiple-personas/">Multi-Persona Support</a></h3>
+<h3 align="center"><a href="https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/">Multi-Persona Support</a></h3>
 <p align="center">TomoriBot's in-server personality, behavior, and avatar can be easily changed, created, as well as exported for others as Personas (akin to shareable AI Character Cards). Import and even transform your favorite SillyTavern cards through <code>/persona generate</code>. You can have an unlimited amount of different personas in a single server, each having their own memories and agendas. You can also orchestrate them to work with each other to do work in your server (or just mess around with each other).</p>
 
 <br />
 
 
 ![Screenshots 4](assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/features/command-reference/">200+ Native Commands for Configuration</a></h3>
+<h3 align="center"><a href="https://docs.tomoribot.app/en/features/command-reference/">200+ Native Commands for Configuration</a></h3>
 <p align="center">Everything can be managed through Discord's native slash commands and interactive UI. Completely manage personas, prompts, tweak model parameters, set up MCP tool servers, adjust permissions, configure memory, set server member rate limits, and much more! You can also ask TomoriBot directly on what she can do and what her slash commands are. Currently, a Web Dashboard is in the works for even easier management.</p>
 
 <br />
@@ -96,27 +96,27 @@ After adding her to your server through either method above, run the `/config se
 
 ![Screenshots 6](assets/img/scs/6.png)
 
-<h3 align="center"><a href="https://docs.tomoribot.app/features/integrations/sillytavern-support/">SillyTavern Integration (Beta)</a></h3>
+<h3 align="center"><a href="https://docs.tomoribot.app/en/features/integrations/sillytavern-support/">SillyTavern Integration (Beta)</a></h3>
 <p align="center">Use your favorite SillyTavern presets directly in Discord through TomoriBot which adjusts her prompt completely, just plop the .json right in through <code>st-preset</code>. Discord's new native checkbox groups for modals makes it easy to toggle nodes on and off like in SillyTavern. You can also import SillyTavern character cards directly through <code>/persona import</code> or you can modify them first with <code>/persona generate</code>.</p>
 
 ![Screenshots 5](assets/img/scs/5.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/features/">Lots of More Features, and Counting!</a></h3>
+<h3 align="center"><a href="https://docs.tomoribot.app/en/features/">Lots of More Features, and Counting!</a></h3>
 <p align="center">A bunch of fun features that are easy to setup ranging from practical automatic greetings for new server members and cross-channel movement, to silly ones like user impersonations for some trolling. New ones are constantly in development, so please report through GitHub issues or the official Discord for any bugs (or to share any fun suggestions).</p>
 
 ## Useful Resources
 
-### [Full List of Supported Providers](https://docs.tomoribot.app/features/setup-administration/providers-and-models/#supported-providers)
+### [Full List of Supported Providers](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/#supported-providers)
 TomoriBot supports a wide range of LLM providers, image generation APIs, voice services, and search tools out of the box.
 
-### [How to run Local Models](https://docs.tomoribot.app/self-hosting/local-endpoints/)
+### [How to run Local Models](https://docs.tomoribot.app/en/self-hosting/local-endpoints/)
 
 TomoriBot supports local LLMs (via KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch Docker sidecars.
 
-### [Security & Threat Models](https://docs.tomoribot.app/wiki/threat-models/)
+### [Security & Threat Models](https://docs.tomoribot.app/en/wiki/threat-models/)
 
 TomoriBot employs encryption and security best practices to keep data and API keys completely safe, both for local setups as well as for those using the public deploy.
 
-### [Tool Macros for Prompt Customization](https://docs.tomoribot.app/features/capabilities/tools-and-extensions/)
+### [Tool Macros for Prompt Customization](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/)
 
 TomoriBot comes with a variety of built-in tools (such as web search, memory management, image generation, cross-channel messaging, and more), which you can directly refer to in your prompts with macros, here are some silly examples:
 
@@ -159,7 +159,7 @@ The recommended path for most self-hosters is the local Bun setup wizard. Its de
    cd TomoriBot
    ```
 
-2. **Run the setup wizard** (more info at **[Setup Wizard guide](https://docs.tomoribot.app/self-hosting/setup-wizard/)**)
+2. **Run the setup wizard** (more info at **[Setup Wizard guide](https://docs.tomoribot.app/en/self-hosting/setup-wizard/)**)
    ```sh
    bun run setup
    ```
@@ -225,9 +225,9 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 See the guides below for full setup details:
 
-- **[SearXNG Web Search Sidecar](https://docs.tomoribot.app/self-hosting/local-endpoints/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
-- **[Crawl4AI Sidecar](https://docs.tomoribot.app/self-hosting/local-endpoints/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
-- **[Text-to-Speech](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/)** / **[Speech-to-Text](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/)** - Python voice servers for TomoriBot's voice messages; their venv must be set up once beforehand.
+- **[SearXNG Web Search Sidecar](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
+- **[Crawl4AI Sidecar](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[Text-to-Speech](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/)** / **[Speech-to-Text](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/)** - Python voice servers for TomoriBot's voice messages; their venv must be set up once beforehand.
 
 ### Updating TomoriBot
 
@@ -254,7 +254,7 @@ Useful flags:
 | `--skip-backup` | Skips the pre-update backup (not recommended) |
 | `--yes` | Skips the confirmation prompt before starting |
 
-See the full **[Maintenance Documentation](https://docs.tomoribot.app/features/command-reference/)** for more details on all host-side scripts.
+See the full **[Maintenance Documentation](https://docs.tomoribot.app/en/features/command-reference/)** for more details on all host-side scripts.
 
 <!-- AFTER SETUP -->
 ### After Inviting / Setup
@@ -267,7 +267,7 @@ See the full **[Maintenance Documentation](https://docs.tomoribot.app/features/c
 - `/memory server add` / `/memory server remove` - Add / remove server-wide memories
 - `/server whitelist` / `/server user-blacklist` - Add / remove permissions from TomoriBot
 
-See the full **[Command Reference](https://docs.tomoribot.app/features/command-reference/)** for every slash command.
+See the full **[Command Reference](https://docs.tomoribot.app/en/features/command-reference/)** for every slash command.
 
 #### Chat Interaction
 
@@ -283,15 +283,15 @@ Or slide into TomoriBot's DMs and say hi!
 
 Contributions to TomoriBot are greatly appreciated! Please review the following resources before opening a pull request:
 
-- **[Contributing Documentation](https://docs.tomoribot.app/contributing/)**: Comprehensive step-by-step guides for adding slash commands, tools, event handlers, new AI providers, and locales.
+- **[Contributing Documentation](https://docs.tomoribot.app/en/contributing/)**: Comprehensive step-by-step guides for adding slash commands, tools, event handlers, new AI providers, and locales.
 - **[Contributing Guidelines](.github/CONTRIBUTING.md)**: Repository rules covering branching, quality gate checks, and the scope of contributions welcomed without prior discussion.
 
 <!-- LEGAL -->
 ## Legal & License
 
 ### For users of the official hosted TomoriBot instance
-- **[Terms of Service](https://docs.tomoribot.app/legal/terms-of-service/)** - Rules and guidelines for using the bot
-- **[Privacy Policy](https://docs.tomoribot.app/legal/privacy-policy/)** - How we handle your data
+- **[Terms of Service](https://docs.tomoribot.app/en/legal/terms-of-service/)** - Rules and guidelines for using the bot
+- **[Privacy Policy](https://docs.tomoribot.app/en/legal/privacy-policy/)** - How we handle your data
 
 These documents are also accessible within Discord using `/legal terms` and `/legal privacy` commands.
 

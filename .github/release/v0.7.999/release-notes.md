@@ -1,4 +1,4 @@
-# v0.7.999 | Pre-0.8 Update
+﻿# v0.7.999 | Pre-0.8 Update
   
 ![Release Picture](https://github.com/{REPO_OWNER}/{REPO_NAME}/raw/main/.github/release/v0.7.999/zaya-comic.webp)
 
@@ -37,7 +37,7 @@ Un-rewritten AI-generated pages will have a disclaimer at the top of the page, i
 - TomoriBot now automatically stores DB backups during bot startup before everything else (stored in `/backups/` with `_auto` suffix), checking if:
   - Last automatic backup is from an older version
   - Last automatic backup is atleast 24 hours old
-- Docker deploys of TomoriBot now support manual (and automatic) DB backups and restores (see the [Maintenance & Backups guide](https://docs.tomoribot.app/self-hosting/maintenance/))
+- Docker deploys of TomoriBot now support manual (and automatic) DB backups and restores (see the [Maintenance & Backups guide](https://docs.tomoribot.app/en/self-hosting/maintenance/))
 - New `bun run setup` and `bun run update` which makes it easier to first-time setup and update TomoriBot for local instances
 
 ## Persona Updates

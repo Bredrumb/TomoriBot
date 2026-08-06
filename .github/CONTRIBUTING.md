@@ -1,4 +1,4 @@
-# Contributing to TomoriBot
+﻿# Contributing to TomoriBot
 
 Thanks for your interest in contributing! This guide covers what you need to know before opening a PR.
 
@@ -12,7 +12,7 @@ Thanks for your interest in contributing! This guide covers what you need to kno
 
 ## Quality Gates
 
-The project has no strict coding standards other than what the automated tools enforce, but reading the official [Contributing](https://docs.tomoribot.app/contributing/) and [Architecture](https://docs.tomoribot.app/architecture/) docs can help you understand and follow established code conventions in the project.
+The project has no strict coding standards other than what the automated tools enforce, but reading the official [Contributing](https://docs.tomoribot.app/en/contributing/) and [Architecture](https://docs.tomoribot.app/en/architecture/) docs can help you understand and follow established code conventions in the project.
 
 Please refer to the [Pull Request Template](./pull_request_template.md) for the exact list of local checks you should run before submitting a PR. CI handles these automatically, but running them locally and fixing any problems saves time. If your PR is too big (around ~1000 lines of changes/additions), please split it up into multiple, smaller PRs instead if possible so it is easier to discuss and test.
 

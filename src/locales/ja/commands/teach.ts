@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   teach: {
     sampledialogue: {
       description: `私がどのように応答すべきかの例として、ユーザー/ボットの対話ペアを追加します。`,
@@ -95,7 +95,7 @@ export default {
       main_persona_description: `メインペルソナ`,
       alter_persona_description: `オルタペルソナ`,
       rag_disabled_title: `ドキュメントRAGが無効です`,
-      rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[自己ホスト設定ガイド](https://docs.tomoribot.app/self-hosting/manual-setup/)を参照）。`,
+      rag_disabled_description: `文書の参照にはデータベースに [pgvector](https://github.com/pgvector/pgvector) PostgreSQL拡張が必要です。pgvector をインストールして TomoriBot を再起動してください（[自己ホスト設定ガイド](https://docs.tomoribot.app/ja/self-hosting/manual-setup/)を参照）。`,
       teaching_disabled_title: `ドキュメントの教育が無効です`,
       teaching_disabled_description: `現在、このサーバーではメンバーが文書を教える・削除することは許可されていません。\`サーバー管理\`権限を持つメンバーが\`/server member-permissions\`で有効にできます。`,
       no_embedding_model_title: `埋め込みモデルが設定されていません`,

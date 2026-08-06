@@ -1,4 +1,4 @@
-export default {
+﻿export default {
   general: {
     yes: `Yes`,
     confirm: `Confirm`,
@@ -93,7 +93,7 @@ export default {
       channel_not_supported_title: `Unsupported Channel Type`,
       channel_not_supported_description: `Sorry, I can only work in server text channels or Direct Messages. Group DMs and other channel types are not supported.`,
       tomori_not_setup_title: `Initial Setup Required`,
-      tomori_not_setup_description: `This server still needs initial setup. A member with **Manage Server** permission should run \`/config setup\` first. Use \`/help setup\` or https://docs.tomoribot.app/introduction/quickstart/ for the short guide.`,
+      tomori_not_setup_description: `This server still needs initial setup. A member with **Manage Server** permission should run \`/config setup\` first. Use \`/help setup\` or https://docs.tomoribot.app/en/introduction/quickstart/ for the short guide.`,
       tomori_updating_title: `Currently Updating...`,
       tomori_updating_description: `I'm currently being updated and will be back shortly. Please try again in a few moments!`,
       tomori_not_setup_dm_footer: `DMs use a private setup, so most server-style settings still apply.`,
@@ -191,7 +191,7 @@ export default {
 
 View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
       setup_prompt_title: `Successfully Added`,
-      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or read the official [short guide](https://docs.tomoribot.app/introduction/quickstart/).
+      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or read the official [short guide](https://docs.tomoribot.app/en/introduction/quickstart/).
 
 Use \`/help api-key\` if you need provider key instructions. View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
     },
