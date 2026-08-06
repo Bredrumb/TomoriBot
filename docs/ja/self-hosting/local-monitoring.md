@@ -9,7 +9,7 @@ sidebar:
 お使いのマシンでTomoriBotとGrafanaを一緒に起動するには、以下のコマンドを実行します。
 
 ```sh
-docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up -d
+docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 ```
 
 これにより、以下の処理が行われます。

@@ -263,6 +263,29 @@ ingestion permissions belong to the DCR/agent path, never to Grafana. Current pa
   | where RawData has_any ("Memory warning", "CRITICAL MEMORY", "memory_emergency_entered")
   | order by TimeGenerated desc
   ```
+- **SearXNG sidecar availability** (`Logs`) — `TomoriBotLogs_CL` filtered to the availability
+  transitions emitted by `searxngService.ts`.
+
+  ```kusto
+  TomoriBotLogs_CL
+  | where TimeGenerated > ago(24h)
+  | where errorType in ("SearxngUnavailable", "SearxngRecovered")
+  | project TimeGenerated, errorType, message
+  | order by TimeGenerated desc
+  ```
+
+  These exist because a sidecar that is merely *gone* is otherwise invisible here. The health probe
+  logs at `warn`, which is below the level-50 threshold on the JSONL sink this table tails, and the
+  dispatcher skips an unavailable engine silently on its way down the `Brave → SearXNG → DDG → IAsk`
+  chain. Only the up-but-broken case (`searxng request failed with status …`) reaches the table on
+  its own. The records are emitted on transition rather than per probe, so a 60s health cache cannot
+  flood the table; the consequence is that a row means a *change*, and steady state produces nothing.
+
+  Container restarts are **not** in this table at all under any query: SearXNG writes to Docker's
+  `json-file` driver, while this table only tails the bot's own `TOMORI_LOG_FILE`. Read
+  `RestartCount` through Run Command instead, as in
+  [Azure Production Data Inspection](/wiki/azure-production-inspection/).
+
 - **Token consumption** (`Time series`, stacked bars) — Postgres `stat_counters`,
   `SUM(count)` of `tokens_in`+`tokens_out` grouped by `bucket` (day) and `metric_key` (model).
   Daily grain only; the table stores no finer bucket.

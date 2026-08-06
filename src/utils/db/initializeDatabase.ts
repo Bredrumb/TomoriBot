@@ -313,10 +313,13 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
     serverwideQuotaRenameMigrationPath,
     personaRenameMigrationPath,
   } = getSchemaPaths();
-  const ragAvailable = includeRag === "auto" ? await detectRagAvailability(client) : includeRag;
-
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      // Probed per attempt rather than once above the loop: a probe that could not reach
+      // the server reports `false`, and skipping the RAG schema on that basis would leave
+      // document features dead until the next restart.
+      const ragAvailable = includeRag === "auto" ? await detectRagAvailability(client) : includeRag;
+
       const freshDatabaseBeforeSchema = await isFreshDatabaseBeforeSchema(client);
 
       await runPreSchemaServerwideQuotaRenameBridge(client, serverwideQuotaRenameMigrationPath);

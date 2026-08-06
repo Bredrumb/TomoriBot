@@ -200,6 +200,16 @@ already discarded the dead socket and a reset would throw away the rest of a hea
 `POSTGRES_TRANSIENT_RETRY_ATTEMPTS` (default 2 total attempts) and
 `POSTGRES_TRANSIENT_RETRY_DELAY_MS` (default 100) tune it.
 
+One retirement reaches the application under several codes, so the classifier matches a set rather
+than a single value. Alongside `ERR_POSTGRES_LIFETIME_TIMEOUT`, `ERR_POSTGRES_IDLE_TIMEOUT`, and
+`ERR_POSTGRES_CONNECTION_CLOSED`, a connection that dies part-way through a wire message surfaces as
+`ERR_POSTGRES_INVALID_MESSAGE` or `ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE`: Bun rejects the pending
+queries from `#onClose` carrying whatever state its protocol reader stopped in, so the code describes
+where the byte stream was truncated rather than any fault in the data. Production logged 82 of these
+across unrelated servers in two bursts on 2026-08-06, every stack ending at `#onClose` and none
+retried, because the last two codes were missing from the set. When triaging a new Postgres code,
+read the stack before the code: a frame in `#onClose` means retirement regardless of the label.
+
 The helper replays `queryFn`, so only reads, idempotent writes, and transactions may use it. A
 transaction is safe because a socket that dies mid-transaction makes the server roll back; the
 emoji and sticker reconciles qualify additionally because they are upsert-only. A non-idempotent
@@ -223,6 +233,24 @@ The Compose service runs as `1001:1001` with a read-only root filesystem, all Li
 dropped, `no-new-privileges`, PID/memory limits, explicit writable bind mounts, and size-limited
 `tmpfs` mounts. The health port is bound only to `127.0.0.1`. Optional SearXNG is profile-gated,
 unpublished, and digest-pinned.
+
+### Enabling the SearXNG sidecar
+
+Setting the `SEARXNG_SECRET` repository secret is the entire switch. The deploy passes it to
+`run-command-deploy.sh`, which on a non-empty value adds `searxng` to the services named on
+`docker compose up` (naming a profile-gated service activates its profile) and sets
+`SEARXNG_BASE_URL=http://searxng:8080/` for the bot. Leaving the secret unset keeps the sidecar off
+and the bot on its `Brave → DDG → Felo` chain.
+
+One value drives both because the alternatives are failure modes: SearXNG will not start without a
+secret, so a profile enabled separately would crash-loop, and a secret set without the profile would
+do nothing. The deploy rejects a secret shorter than 32 characters. `SEARXNG_UWSGI_WORKERS` defaults
+to `1` rather than uWSGI's one-per-CPU, since this VM is memory-constrained rather than CPU-bound.
+
+The secret does **not** belong in `TOMORI_SECRETS_JSON`. That bundle is the application's runtime
+secrets, forwarded field by field to `process.env` by `src/init/secrets.ts`, which does not forward
+this key: the bot never reads it. It is a Compose-level value for a sidecar, so it is a separate
+secret, and keeping it separate also avoids a read-modify-write on a bundle GitHub cannot read back.
 
 This is a singleton: automatic platform patching or an operator reboot causes a short, expected bot
 outage while the VM and `restart: unless-stopped` container return. Schedule disruptive maintenance

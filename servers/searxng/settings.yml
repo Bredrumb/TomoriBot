@@ -1,9 +1,9 @@
 # SearXNG configuration for TomoriBot.
 #
-# This file is mounted read-only into the searxng container at /etc/searxng/.
-# The official searxng/searxng image expects `${SEARXNG_SECRET}` to be
-# substituted at container startup — that env var is provided by docker-compose,
-# the AWS task definition, or Cloud Run.
+# Baked into the custom image and restored into /etc/searxng by entrypoint.sh, which also
+# substitutes the `${SEARXNG_SECRET}` placeholder below. The stock searxng entrypoint does
+# not do that substitution: it only rewrites the literal `ultrasecretkey` in its own default
+# file, and with a random value rather than the env var.
 #
 # Reference: https://docs.searxng.org/admin/settings/index.html
 
@@ -18,8 +18,7 @@ general:
   enable_metrics: false
 
 server:
-  # Secret key — required by SearXNG to be non-default.
-  # Substituted from the SEARXNG_SECRET env var.
+  # Substituted from the SEARXNG_SECRET env var by entrypoint.sh.
   secret_key: "${SEARXNG_SECRET}"
   # No rate limiter: only TomoriBot on the private network talks to this sidecar.
   limiter: false

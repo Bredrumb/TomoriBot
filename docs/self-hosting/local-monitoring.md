@@ -9,7 +9,7 @@ You can monitor your local TomoriBot instance with Grafana dashboards using a pr
 To start both TomoriBot and Grafana together on your machine:
 
 ```sh
-docker compose -f docker-compose.yaml -f docker-compose.monitor.yaml up -d
+docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 ```
 
 This will:

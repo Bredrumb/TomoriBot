@@ -216,7 +216,7 @@ export function MEMORY_PROTECTION() {
  */
 export type MemoryStatus = "safe" | "warning" | "critical";
 
-interface MemoryCheckResult {
+export interface MemoryCheckResult {
   status: MemoryStatus;
   rssUsedMB: number;
   memoryLimitMB: number;
@@ -794,11 +794,22 @@ export function logGuardConfiguration(): void {
 }
 
 /**
+ * Renders an already-taken memory reading.
+ *
+ * Callers that branch on a reading must format that same reading rather than calling
+ * `getMemoryStatusSummary`, which samples afresh. Emergency clearing runs between the two
+ * samples, so prod logs carried lines whose label and body disagreed
+ * ("changed to CRITICAL: ... - Status: WARNING").
+ */
+export function formatMemoryStatus(check: MemoryCheckResult): string {
+  return `Memory (RSS): ${check.rssUsedMB.toFixed(2)} MB / ${check.memoryLimitMB} MB (${(check.percentUsed * 100).toFixed(1)}%) - Status: ${check.status.toUpperCase()}`;
+}
+
+/**
  * Gets a summary of current memory status (useful for monitoring/logging)
  */
 export function getMemoryStatusSummary(): string {
-  const check = memoryGuard.checkMemory();
-  return `Memory (RSS): ${check.rssUsedMB.toFixed(2)} MB / ${check.memoryLimitMB} MB (${(check.percentUsed * 100).toFixed(1)}%) - Status: ${check.status.toUpperCase()}`;
+  return formatMemoryStatus(memoryGuard.checkMemory());
 }
 
 /**

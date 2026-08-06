@@ -1,4 +1,9 @@
-# TomoriBot Terms of Service
+---
+title: Terms of Service
+description: The terms governing use of the official hosted TomoriBot instance.
+aiGenerated: false
+---
+
 Last updated: 2026-01-15
 
 By setting up or interacting with TomoriBot, you accept these Terms and Discord's Terms of Service and Community Guidelines. These Terms apply to the official hosted TomoriBot instance on Discord. If you run your own copy from TomoriBot's open-source repository, you are not bound by these Terms; your use is governed by the AGPLv3 license in `LICENSE` instead, and you alone control data handling in your self-hosted environment. 

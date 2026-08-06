@@ -30,7 +30,6 @@ an optional API key.
 | Peek profile picture | `{profile_picture_tool}` | vision model or `vision_llm` | Inspect a user's or the persona's avatar. |
 | Read document | `{document_tool}` | — | Extract text from a PDF or **any** UTF-8 text file — source code (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt`, and any non-binary attachment. |
 | Reveal message metadata | `{message_metadata_tool}` | — | Annotate recent turns with handles/timestamps for precise targeting. |
-| Increase media context | `{media_context_tool}` | vision model | Pull older windowed-out images/videos back into context. |
 | Process YouTube video | `{youtube_tool}` | model with video support | Analyze a specific YouTube link on demand. |
 | Analyze image | `{image_analysis_tool}` | configured `vision_llm` | Delegate image understanding to a separate vision model. |
 | Generate image / anime image | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + capable provider | Generate or edit images (see [Media Generation](/features/capabilities/media-generation/)). |

@@ -216,7 +216,7 @@ jobs:
           exit-code: 1
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          trivyignores: .trivyignore
+          trivyignores: .github/.trivyignore
         continue-on-error: true
         id: trivy
 
@@ -865,8 +865,15 @@ jobs:
           DOCKERHUB_TOKEN_B64: ${{ steps.payloads.outputs.docker_token_b64 }}
           TOMORIBOT_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot@${{ needs.push-to-docker-hub.outputs.image_digest }}
           SEARXNG_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tomoribot-searxng@${{ needs.push-to-docker-hub.outputs.searxng_image_digest }}
+          SEARXNG_SECRET: ${{ secrets.SEARXNG_SECRET }}
         run: |
           set -euo pipefail
+          # Empty until the secret is set, which is what keeps the sidecar off.
+          searxng_secret_b64=""
+          if [[ -n "$SEARXNG_SECRET" ]]; then
+            searxng_secret_b64=$(printf '%s' "$SEARXNG_SECRET" | base64 -w 0)
+            echo "::add-mask::$searxng_secret_b64"
+          fi
           # shellcheck disable=SC2016
           response_message=$(az vm run-command invoke \
             --resource-group "$RESOURCE_GROUP" \
@@ -888,6 +895,7 @@ jobs:
               "dockerHubTokenB64=$DOCKERHUB_TOKEN_B64" \
               "tomoribotImage=$TOMORIBOT_IMAGE" \
               "searxngImage=$SEARXNG_IMAGE" \
+              "searxngSecretB64=$searxng_secret_b64" \
             --query 'value[0].message' \
             --output tsv \
             --only-show-errors)

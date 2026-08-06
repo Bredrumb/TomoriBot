@@ -37,7 +37,7 @@ Please open an issue first to discuss:
 
 ## License
 
-TomoriBot is licensed under **AGPL-3.0**. By submitting a contribution, you agree it will be licensed under AGPL-3.0. AGPL requires source disclosure to users of network-deployed modified versions — please understand this before contributing or self-hosting a fork.
+TomoriBot is licensed under **AGPL-3.0**. By submitting a contribution, you agree it will be licensed under AGPL-3.0. AGPL requires source disclosure to users of network-deployed modified versions. Please understand this before contributing or self-hosting a fork.
 
 ## Security
 

@@ -8,7 +8,7 @@ import { clearEmergencyCaches } from "@/utils/cache/emergencyCacheClearer";
 import { log } from "@/utils/misc/logger";
 import {
   memoryGuard,
-  getMemoryStatusSummary,
+  formatMemoryStatus,
   type MemoryStatus,
   registerMemoryEmergencyHandler,
 } from "@/utils/security/rateLimiter";
@@ -100,7 +100,7 @@ export class MemoryMonitor {
 
       // Only log if status changed (avoid spam)
       if (currentStatus !== this.lastStatus) {
-        const summary = getMemoryStatusSummary();
+        const summary = formatMemoryStatus(memCheck);
 
         if (currentStatus === "critical") {
           log.error(`Memory status changed to CRITICAL: ${summary}`);

@@ -25,7 +25,6 @@ TomoriBotは自律エージェントです。単なるチャットを超えて�
 | Peek profile picture | `{profile_picture_tool}` | ビジョンモデルまたは`vision_llm` | ユーザーやペルソナのアバターを調べます。 |
 | Read document | `{document_tool}` | — | PDFや**任意の**UTF-8テキストファイルからテキストを抽出します。ソースコード（`.py`/`.ts`/`.rs`/…）、`.json`、`.yaml`、`.md`、`.txt`、およびバイナリ以外の添付ファイルに対応しています。 |
 | Reveal message metadata | `{message_metadata_tool}` | — | 正確なターゲティングのために、最近の会話にハンドルネームとタイムスタンプの注釈を付けます。 |
-| Increase media context | `{media_context_tool}` | ビジョンモデル | コンテキストから外れた古い画像や動画をコンテキスト内に引き戻します。 |
 | Process YouTube video | `{youtube_tool}` | 動画対応モデル | 要求に応じて、特定のYouTubeリンクを分析します。 |
 | Analyze image | `{image_analysis_tool}` | 設定済みの`vision_llm` | 画像の理解を専用のビジョンモデルに委任します。 |
 | Generate image / anime image | `{image_generation_tool}` / `{anime_image_generation_tool}` | `imagegen_enabled` + 対応プロバイダー | 画像を生成または編集します（[メディア生成](/ja/features/capabilities/media-generation/)を参照）。 |

@@ -2,6 +2,7 @@ import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder
 import { EmbedBuilder, MessageFlags } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode } from "@/utils/misc/logger";
+import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
 import type { UserRow } from "@/types/db/schema";
 
 /**
@@ -12,7 +13,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Executes the 'terms' command
- * Shows a link to the Terms of Service on GitHub with dynamic locale support
+ * Shows a link to the Terms of Service on the docs site with dynamic locale support
  */
 export async function execute(
   _client: Client,
@@ -20,16 +21,14 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Since language_pref only contains officially supported locales,
-  // we can directly use it without availability checks
-  const githubUrl = `https://github.com/Bredrumb/TomoriBot/blob/main/legal/${locale}/terms-of-service.md`;
+  const docsUrl = buildLegalDocUrl(locale, "terms-of-service");
 
   const embed = new EmbedBuilder()
     .setTitle(localizer(locale, "commands.legal.terms.title"))
     .setDescription(localizer(locale, "commands.legal.terms.description_text"))
     .addFields({
       name: localizer(locale, "commands.legal.terms.link_title"),
-      value: githubUrl,
+      value: docsUrl,
     })
     .setColor(ColorCode.INFO)
     .setTimestamp();

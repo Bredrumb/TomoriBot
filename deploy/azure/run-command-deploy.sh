@@ -8,6 +8,10 @@ set -euo pipefail
 : "${dockerHubTokenB64:?dockerHubTokenB64 is required}"
 : "${tomoribotImage:?tomoribotImage is required}"
 : "${searxngImage:?searxngImage is required}"
+# Optional, and doubles as the SearXNG on/off switch: the sidecar refuses to start without a
+# secret, so gating the profile on the same value makes "configured" and "running" one state
+# instead of two that can disagree. Absent means the bot keeps using Brave -> DDG -> Felo.
+searxngSecretB64="${searxngSecretB64:-}"
 
 require_digest() {
   local image_ref=$1
@@ -96,11 +100,32 @@ docker pull "$searxngImage" >/dev/null
 docker logout docker.io >/dev/null
 docker_authenticated=false
 
-TOMORIBOT_IMAGE="$tomoribotImage" SEARXNG_IMAGE="$searxngImage" \
-  docker compose -f /etc/tomoribot/docker-compose.yml up \
-    -d --pull never --remove-orphans tomoribot >/dev/null
+searxng_secret=""
+compose_services=(tomoribot)
+searxng_base_url=""
+if [ -n "$searxngSecretB64" ]; then
+  searxng_secret=$(printf '%s' "$searxngSecretB64" | base64 --decode)
+  if [ ${#searxng_secret} -lt 32 ]; then
+    echo "SEARXNG_SECRET must contain at least 32 characters." >&2
+    exit 1
+  fi
+  compose_services+=(searxng)
+  # Container-to-container over the compose network, so this never leaves the host.
+  searxng_base_url="http://searxng:8080/"
+fi
 
-container_id=$(TOMORIBOT_IMAGE="$tomoribotImage" SEARXNG_IMAGE="$searxngImage" \
+compose_env=(
+  "TOMORIBOT_IMAGE=$tomoribotImage"
+  "SEARXNG_IMAGE=$searxngImage"
+  "SEARXNG_SECRET=$searxng_secret"
+  "SEARXNG_BASE_URL=$searxng_base_url"
+)
+
+env "${compose_env[@]}" \
+  docker compose -f /etc/tomoribot/docker-compose.yml up \
+    -d --pull never --remove-orphans "${compose_services[@]}" >/dev/null
+
+container_id=$(env "${compose_env[@]}" \
   docker compose -f /etc/tomoribot/docker-compose.yml ps -q tomoribot)
 if [ -z "$container_id" ] || \
   [ "$(docker inspect --format '{{.Config.User}}' "$container_id")" != "1001:1001" ] || \

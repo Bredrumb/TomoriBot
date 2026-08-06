@@ -1,9 +1,14 @@
-# TomoriBot Privacy Policy
+---
+title: Privacy Policy
+description: How the official hosted TomoriBot instance collects, stores, and deletes your data.
+aiGenerated: false
+---
+
 Last updated: 2026-01-25
 
 This Privacy Policy explains how the official hosted TomoriBot instance handles data. If you self-host TomoriBot from this repository, you control your own data; this document is a reference template and does not govern your self-hosted deployment. 
 
-Terms like "Server," "Memories," "Persona/Preset," "Provider," "Trigger," and "API Key" are defined in our [Terms of Service](https://github.com/Bredrumb/TomoriBot/blob/main/legal/en-US/terms-of-service.md). Please refer to that document for definitions.
+Terms like "Server," "Memories," "Persona/Preset," "Provider," "Trigger," and "API Key" are defined in our [Terms of Service](/legal/terms-of-service/). Please refer to that document for definitions.
 
 ## 1) What We Collect and How Long We Keep It
 

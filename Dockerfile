@@ -71,9 +71,6 @@ COPY --chown=tomori:tomori assets/img/ ./assets/img/
 # depend on host fonts — Alpine installs none (see assets/fonts/README.md).
 COPY --chown=tomori:tomori assets/fonts/ ./assets/fonts/
 
-# Copy legal documents (Terms of Service, Privacy Policy)
-COPY --chown=tomori:tomori legal/ ./legal/
-
 # Copy local tokenizer assets used by model-aware logit-bias resolution
 COPY --chown=tomori:tomori tokenizers/ ./tokenizers/
 

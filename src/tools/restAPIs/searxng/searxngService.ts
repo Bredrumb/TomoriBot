@@ -42,6 +42,49 @@ interface HealthcheckCache {
 
 let healthcheckCache: HealthcheckCache | null = null;
 
+/** Last availability the transition logger reported; null until the first probe resolves. */
+let lastReportedAvailability: boolean | null = null;
+
+/**
+ * Emits an error-level record when availability flips, and only then.
+ *
+ * A sidecar that is merely unreachable is otherwise invisible in production: the probe
+ * failures below log at `warn`, which sits under the level-50 threshold on the JSONL sink
+ * that Azure Monitor tails, and `dispatcher.ts` skips an unavailable engine silently on its
+ * way down the chain. So the operator sees errors when SearXNG is up and broken, but nothing
+ * at all when it is simply gone, which is the louder failure. Error level is what reaches the
+ * table; transition-only is what keeps a 60s probe from flooding it.
+ */
+function reportAvailabilityTransition(available: boolean, reason?: string): void {
+  if (lastReportedAvailability === available) return;
+
+  const firstResolution = lastReportedAvailability === null;
+  lastReportedAvailability = available;
+
+  // log.error persists to the database, so it is awaited nowhere on this path: a health
+  // probe must not block a tool call on a write, and an unobserved rejection here would
+  // take down the process.
+  const emit = (message: string, errorType: string): void => {
+    void log.error(message, undefined, { errorType }).catch(() => undefined);
+  };
+
+  if (available) {
+    // Recovery is only newsworthy against a previously reported outage.
+    if (!firstResolution) {
+      emit(
+        `${SERVICE_NAME} sidecar is reachable again; web_search will prefer it over the fallback chain`,
+        "SearxngRecovered",
+      );
+    }
+    return;
+  }
+
+  emit(
+    `${SERVICE_NAME} sidecar is unreachable; web_search is falling back down the engine chain${reason ? `: ${reason}` : ""}`,
+    "SearxngUnavailable",
+  );
+}
+
 /**
  * Resolve the configured SearXNG base URL, trimming trailing slashes.
  * Returns null if the env var is not set.
@@ -82,10 +125,12 @@ export async function isSearxngAvailable(force = false): Promise<boolean> {
     if (!available) {
       log.warn(`${SERVICE_NAME} health check returned status ${response.status}`);
     }
+    reportAvailabilityTransition(available, available ? undefined : `health check returned ${response.status}`);
     return available;
   } catch (error) {
     healthcheckCache = { available: false, expiresAt: now + HEALTHCHECK_CACHE_MS };
     log.warn(`${SERVICE_NAME} health check failed:`, error as Error);
+    reportAvailabilityTransition(false, (error as Error).message);
     return false;
   } finally {
     clearTimeout(timeoutId);

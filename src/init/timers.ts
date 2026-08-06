@@ -100,6 +100,20 @@ export function initTimers(client: Client): void {
     log.error("Failed to initialize quota cleanup system", error as Error);
   }
 
+  log.section("Initializing RAG Availability Monitor...");
+  try {
+    import("@/timers/ragAvailabilityMonitor")
+      .then(({ initializeRagAvailabilityMonitor }) => {
+        initializeRagAvailabilityMonitor();
+        log.success("RAG availability monitor initialized");
+      })
+      .catch((error: Error) => {
+        log.error("Failed to initialize RAG availability monitor", error);
+      });
+  } catch (error) {
+    log.error("Failed to initialize RAG availability monitor", error as Error);
+  }
+
   log.section("Initializing STM Janitor...");
   try {
     import("@/timers/stmJanitor")

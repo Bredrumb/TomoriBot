@@ -245,6 +245,16 @@ const RETIRED_CONNECTION_ERROR_CODES = new Set([
   "ERR_POSTGRES_LIFETIME_TIMEOUT",
   "ERR_POSTGRES_IDLE_TIMEOUT",
   "ERR_POSTGRES_CONNECTION_CLOSED",
+  // The next two reach us from the wire-protocol reader rather than the socket: when a
+  // connection dies mid-message, Bun rejects the pending queries from `#onClose` carrying
+  // whatever state its parser stopped in, so the code marks where the byte stream was
+  // truncated. Prod logs on 2026-08-06 carried 82 of these across unrelated servers in two
+  // bursts, every stack ending at `#onClose`, none retried because of this gap.
+  // Neither code is exclusive to that path (Bun can also raise them from encoding faults),
+  // so read the stack before the code when triaging: a replay costs one query, but a real
+  // encoding bug retried here will look like ordinary connection churn in the logs.
+  "ERR_POSTGRES_INVALID_MESSAGE",
+  "ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE",
 ]);
 
 function isRetiredConnectionError(error: unknown): boolean {
