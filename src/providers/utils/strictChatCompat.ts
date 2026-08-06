@@ -209,6 +209,25 @@ export function assistantMediaRelocationNotice(imageCount: number, senderName?: 
 }
 
 /**
+ * Canonical system notice standing in for tool-returned images that an image-blind model cannot
+ * receive. The tool's own response text already reports that it delivered images, so the notice has
+ * to state both that delivery succeeded and that the contents are unseen, or the model narrates
+ * pictures it never got.
+ *
+ * @param imageCount - Number of withheld images (controls singular/plural).
+ */
+export function unseenToolImageNotice(imageCount: number): string {
+  const imagePhrase = imageCount === 1 ? "1 image" : `${imageCount} images`;
+  const pronoun = imageCount === 1 ? "it" : "them";
+
+  return (
+    `[System: The tool returned ${imagePhrase} and delivered ${pronoun} to the user in Discord, but ` +
+    "the current model cannot see images. Do not describe or claim to see the contents. If you need " +
+    "to see images, tell the user to set up `/model vision` or to use a model with the vision capability.]"
+  );
+}
+
+/**
  * Move neutral `image` parts off model turns into following synthetic user turns while sender
  * metadata is still attached to the originating context item. Provider serializers then see only
  * user-role media and one canonical attributed notice.

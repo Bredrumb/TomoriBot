@@ -6,6 +6,28 @@ export interface ProcessMemorySnapshot {
   arrayBuffersMb: number;
 }
 
+export type ForcedGcRuntime = "bun" | "node" | "unavailable";
+
+/**
+ * Runs a full, blocking garbage collection when the runtime exposes one.
+ *
+ * Throws whatever the underlying collector throws so callers can record the
+ * failure; a caller that only wants a best-effort pass must catch.
+ */
+export function runForcedGc(): ForcedGcRuntime {
+  if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
+    Bun.gc(true);
+    return "bun";
+  }
+
+  if (global.gc) {
+    global.gc();
+    return "node";
+  }
+
+  return "unavailable";
+}
+
 type MetricFields = Record<string, number | string>;
 
 const BYTES_PER_MB = 1024 * 1024;

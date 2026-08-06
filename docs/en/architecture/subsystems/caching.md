@@ -315,6 +315,14 @@ Default emergency behavior:
   `arrayBuffers`), and `log.metric("memory_emergency_entered", ...)` so
   CloudWatch/Grafana can correlate cache eviction with RSS pressure.
 
+`clearEmergencyCaches()` runs a forced collection between dropping the cache references
+and taking its post-clear snapshot. Without it the `*_delta_clear` fields are structurally
+always zero, because dropping a reference frees nothing measurable until the collector runs
+and the guard's own forced GC happens after the clear returns. Production samples taken
+before this was fixed show exactly that signature: `heap_used_mb_delta_clear` of `0` across
+every event despite 5,000-15,000 entries cleared. Pass `collectBeforeMeasuring: false` only
+in tests that assert on entry counts rather than on memory.
+
 Operational knobs:
 
 ```dotenv
@@ -326,6 +334,28 @@ EMERGENCY_COOLDOWN_MS=60000
 
 `EMERGENCY_CACHE_CLEAR_INCLUDE_STM=true` should be treated as a last-resort setting
 because STM is conversational state, not merely a database read-through cache.
+
+## Native Image Memory
+
+libvips (via `sharp`) allocates decoded bitmaps and its operation cache outside the JS heap,
+where they land in `process.memoryUsage().external` and `arrayBuffers`. No entry in any cache
+above accounts for that memory and no sweep or emergency clear can reclaim it, so a burst of
+image work can push a container toward its limit while every cache count looks healthy.
+
+`src/init/media.ts` applies process-global limits at startup, before any module performs image
+work, because `sharp.concurrency()` and `sharp.cache()` configure one shared libvips instance.
+Concurrency is the dominant term: each in-flight pipeline holds its own fully decoded bitmaps.
+
+```dotenv
+SHARP_CONCURRENCY=1
+SHARP_CACHE_MEMORY_MB=16
+SHARP_CACHE_ITEMS=50
+SHARP_CACHE_FILES=0
+```
+
+Defaults target a 512MB, 2-vCPU container. libvips on its own defaults would use a 50MB
+operation cache and one worker thread per CPU. Raise these only with headroom above
+`CONTAINER_MEMORY_LIMIT_MB`; `SHARP_CONCURRENCY` above 1 trades peak memory for image latency.
 
 ## Anti-Patterns to Avoid
 

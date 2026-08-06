@@ -35,7 +35,7 @@ import {
 } from "@/utils/discord/renderModifierParser";
 import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 import { safeDownload } from "@/utils/security/safeDownload";
-import { relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
+import { relocateAssistantMediaContextItems, unseenToolImageNotice } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
@@ -280,42 +280,63 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
           parts: modelParts,
         });
 
-        const responseParts: Part[] = [item.functionResponse as Part];
+        // Vertex classifies a turn carrying a functionResponse as a function-response turn and
+        // rejects it if it also carries inlineData or text. The turn then fails to count at all
+        // and the request reads as ending on the model's functionCall turn, surfacing as
+        // "Requests ending with a model turn are not supported". Tool media therefore rides in
+        // its own user turn, matching the OpenRouter adapter.
+        finalContents.push({
+          role: "user",
+          parts: [item.functionResponse as Part],
+        });
 
-        if (item.imageMetadata?.imageUrls) {
-          log.info(`Adding ${item.imageMetadata.imageUrls.length} image(s) to function response for LLM visibility`);
+        const toolMediaParts: Part[] = [];
 
-          for (const imageInfo of item.imageMetadata.imageUrls) {
-            try {
-              const optimized = await fetchAndOptimizeImage(imageInfo.url, imageInfo.mimeType || "image/jpeg");
+        if (item.imageMetadata?.imageUrls?.length) {
+          if (context.tomoriState.llm.sees_images) {
+            log.info(`Adding ${item.imageMetadata.imageUrls.length} image(s) to function response for LLM visibility`);
 
-              responseParts.push({
-                inlineData: {
-                  mimeType: optimized.mimeType,
-                  data: optimized.data,
-                },
-              });
+            for (const imageInfo of item.imageMetadata.imageUrls) {
+              try {
+                const optimized = await fetchAndOptimizeImage(imageInfo.url, imageInfo.mimeType || "image/jpeg");
 
-              log.success(`Successfully added image to function response: ${imageInfo.url}`);
-            } catch (imgErr) {
-              log.warn(`Error processing image for function response: ${imageInfo.url}`, {
-                error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-              });
+                toolMediaParts.push({
+                  inlineData: {
+                    mimeType: optimized.mimeType,
+                    data: optimized.data,
+                  },
+                });
+
+                log.success(`Successfully added image to function response: ${imageInfo.url}`);
+              } catch (imgErr) {
+                log.warn(`Error processing image for function response: ${imageInfo.url}`, {
+                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
+                });
+              }
             }
+          } else {
+            // The tool response already told the model it delivered images, so dropping them
+            // silently invites it to describe pictures it never received.
+            toolMediaParts.push({
+              text: unseenToolImageNotice(item.imageMetadata.imageUrls.length),
+            });
+            log.info("VertexStreamAdapter: Skipping tool images (model does not support images)");
           }
         }
 
         // Surface Discord message IDs for image references
         if (item.imageMetadata?.messageIds && item.imageMetadata.messageIds.length > 0) {
-          responseParts.push({
+          toolMediaParts.push({
             text: `[System: Images were sent to Discord in message ID(s): ${item.imageMetadata.messageIds.map((id) => context.messageIdMap?.register(id, "media") ?? id).join(", ")}]`,
           });
         }
 
-        finalContents.push({
-          role: "user",
-          parts: responseParts,
-        });
+        if (toolMediaParts.length > 0) {
+          finalContents.push({
+            role: "user",
+            parts: toolMediaParts,
+          });
+        }
       }
     }
 

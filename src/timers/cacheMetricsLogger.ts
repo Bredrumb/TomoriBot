@@ -34,6 +34,7 @@ import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
+import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 import { getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
@@ -114,6 +115,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
   const webhook = getWebhookCacheSizes();
   const personalSpotlight = getPersonalSpotlightCacheStats();
   const memCheck = memoryGuard.checkMemory();
+  const processMemory = collectProcessMemorySnapshot();
 
   return {
     // Tomori application-level caches
@@ -151,6 +153,14 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     rss_mb: Math.round(memCheck.rssUsedMB * 100) / 100,
     rss_pct: Math.round(memCheck.percentUsed * 10000) / 100,
     rss_limit_mb: memCheck.memoryLimitMB,
+
+    // Native allocations (decoded bitmaps, buffers) live in `external`/`arrayBuffers`, not in
+    // the JS heap and not in any cache counted above, so entry counts alone cannot explain a
+    // memory spike. RSS also understates the total once the kernel swaps part of the heap out.
+    heap_used_mb: processMemory.heapUsedMb,
+    heap_total_mb: processMemory.heapTotalMb,
+    external_mb: processMemory.externalMb,
+    array_buffers_mb: processMemory.arrayBuffersMb,
   };
 }
 

@@ -32,6 +32,7 @@ import {
   addProcessMemorySnapshotFields,
   collectProcessMemorySnapshot,
   type ProcessMemorySnapshot,
+  runForcedGc,
 } from "@/utils/misc/processMemory";
 import { clearMarkdownTableCache, getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 
@@ -59,6 +60,8 @@ export interface EmergencyCacheClearOptions {
   includeShortTermMemory?: boolean;
   clearDiscordVolatileCaches?: boolean;
   source?: string;
+  /** Collect before measuring the result. Disable only in tests that assert on entry counts. */
+  collectBeforeMeasuring?: boolean;
 }
 
 function parseBooleanEnv(name: string, defaultValue: boolean): boolean {
@@ -237,6 +240,18 @@ export function clearEmergencyCaches(options: EmergencyCacheClearOptions = {}): 
 
   if (options.client && shouldClearDiscordVolatileCaches) {
     steps.push(...clearDiscordVolatileCaches(options.client));
+  }
+
+  // Dropping a cache reference frees nothing observable until a collection runs, so without
+  // this pass every `*_delta_clear` field reads exactly 0 and the report cannot show whether
+  // clearing helped. The guard's own forced GC happens after this function returns, too late
+  // to be captured here.
+  if (options.collectBeforeMeasuring ?? true) {
+    try {
+      runForcedGc();
+    } catch (error) {
+      log.warn(`[Emergency Cache Clear] Forced collection failed before measurement: ${getStepErrorMessage(error)}`);
+    }
   }
 
   const memoryAfterClear = collectProcessMemorySnapshot();

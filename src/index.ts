@@ -8,6 +8,7 @@ import { initDatabase } from "@/init/database";
 import { initLoaders } from "@/init/loaders";
 import { initBridges } from "@/init/bridges";
 import { initTimers } from "@/init/timers";
+import { initMediaProcessing } from "@/init/media";
 import { log } from "@/utils/misc/logger";
 
 /**
@@ -41,6 +42,8 @@ if (environment === "production") {
 }
 
 await loadSecrets(environment);
+
+initMediaProcessing();
 
 // Probe Discord for Presence Intent approval (or honor an explicit override) before
 // building the client, so we request the privileged intent only when it is actually

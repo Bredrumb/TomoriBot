@@ -71,8 +71,13 @@ After context assembly completes (before the generator loop begins):
 - The provider SDK client has been initialised with the correct API key from `config.apiKey`.
 - The assembled native request payload includes all dialogue turns derived from `context.contextItems`,
   in the correct role ordering required by the provider.
-- Function interaction history (if present) has been replayed in alternating model/user turns with
-  image metadata attached to the corresponding user turn.
+- Function interaction history (if present) has been replayed in alternating model/user turns. The
+  user turn carries the `functionResponse` and nothing else; any image metadata rides in a separate
+  user turn appended straight after it. Vertex classifies a turn holding a `functionResponse` as a
+  function-response turn and rejects one that also carries `inlineData` or text, which surfaces as
+  the misleading `Requests ending with a model turn are not supported`. AI Studio accepts the mixed
+  shape, but both Gemini-schema adapters emit the stricter one so a payload that works on one works
+  on the other. OpenAI-compatible builders reach the same shape via a synthetic `user` message.
 - `config.tools` (if non-empty) has been attached to the request config after dynamic tool assembly
   and provider-specific serialization.
 

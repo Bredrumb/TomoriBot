@@ -4,6 +4,8 @@ import {
   addProcessMemoryDeltaFields,
   addProcessMemorySnapshotFields,
   collectProcessMemorySnapshot,
+  type ForcedGcRuntime,
+  runForcedGc,
 } from "@/utils/misc/processMemory";
 
 /**
@@ -258,20 +260,15 @@ function notifyMemoryEmergencyHandlers(event: MemoryEmergencyEvent): void {
 
 function forceGarbageCollection(): void {
   const beforeGc = collectProcessMemorySnapshot();
-  let gcRuntime = "unavailable";
+  let gcRuntime: ForcedGcRuntime = "unavailable";
   let failed = 0;
 
   try {
-    if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
-      gcRuntime = "bun";
-      log.info("Forcing Bun garbage collection...");
-      Bun.gc(true);
-    } else if (global.gc) {
-      gcRuntime = "node";
-      log.info("Forcing Node garbage collection...");
-      global.gc();
-    } else {
+    gcRuntime = runForcedGc();
+    if (gcRuntime === "unavailable") {
       log.warn("Garbage collection not available (Bun.gc or Node --expose-gc required for forced GC)");
+    } else {
+      log.info(`Forced ${gcRuntime} garbage collection`);
     }
   } catch (error) {
     failed = 1;
@@ -412,6 +409,8 @@ class MemoryGuard {
 
     notifyMemoryEmergencyHandlers(event);
 
+    // Kept even though the cache clearer collects before it measures: clearing can be turned
+    // off by env, and no handler is registered at all until the memory monitor starts.
     forceGarbageCollection();
   }
 

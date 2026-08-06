@@ -127,11 +127,16 @@ source
 | extend message = iff(isempty(tostring(p.message)), iff(isempty(tostring(p.err.message)), tostring(p.msg), tostring(p.err.message)), tostring(p.message))
 | extend commandName = iff(isempty(tostring(p.commandName)), tostring(p.context.commandName), tostring(p.commandName))
 | where level >= 50
-| where msg != "metric:cache_sizes"
+| where isempty(tostring(p.metric))
 | where RawData !contains "UNAVAILABLE"
 | where RawData !contains "RESOURCE_EXHAUSTED"
 | project TimeGenerated, Computer, FilePath, level, msg, code, errorType, message, commandName, RawData
 ```
+
+`isempty(tostring(p.metric))` excludes **every** `log.metric()` record, not just `cache_sizes`,
+which keeps error-rate panels counting only genuine errors. Every metric therefore needs a
+dataflow of its own or it is discarded at ingestion with no trace: Steps 5 and 6 below claim
+`cache_sizes` and the remainder respectively, so all three filters stay disjoint.
 
 DCR transformations compile against a restricted KQL subset, which shapes the query above:
 `coalesce()` and `unixtime_milliseconds_todatetime()` are not available (hence the nested
@@ -184,15 +189,21 @@ source
 | extend p = parse_json(RawData)
 | extend TimeGenerated = datetime(1970-01-01) + tolong(p["time"]) * 1ms
 | extend rss_mb = toreal(p.rss_mb), rss_pct = toreal(p.rss_pct)
+| extend heap_used_mb = toreal(p.heap_used_mb), external_mb = toreal(p.external_mb) // ...
 | extend shortTermMemory = toint(p.shortTermMemory), tomoriState = toint(p.tomoriState) // ...
 | extend discord_users = toint(p.discord_users), discord_members = toint(p.discord_members) // ...
-| project TimeGenerated, Computer, rss_mb, rss_pct, /* app caches */, /* discord.js caches */
+| project TimeGenerated, Computer, rss_mb, rss_pct, /* memory partition */, /* app caches */, /* discord.js caches */
 ```
 
 Cost note: this reverses the original "drop cache_sizes to save ingestion" decision, but the
-volume is tiny — ~288 samples/day at ~900 bytes (~260 KB/day), well within the free tier. The
-discord.js caches (`discord_users`, `discord_members`, `discord_channels`, `discord_presences`)
-are the real memory story; the app caches are usually small.
+volume is tiny (~288 samples/day at ~900 bytes, so ~260 KB/day), well within the free tier.
+
+`heap_used_mb`, `heap_total_mb`, `external_mb`, and `array_buffers_mb` partition the footprint
+that the cache counts cannot explain. Native allocations, chiefly decoded bitmaps held by
+libvips, live in `external`/`arrayBuffers` rather than in any counted cache, and `rss_mb`
+understates the total whenever the kernel has swapped part of the heap out (`heap_used_mb`
+exceeding `rss_mb` is the tell). Chart these before concluding that a cache is responsible for
+a memory trend.
 
 ### Emitted fields are not the same as table columns
 
@@ -212,6 +223,38 @@ az monitor log-analytics workspace table show -g <resource-group> --workspace-na
 change actually took effect. `rss_pct` works as a cross-check without any DCR change, since it is
 RSS divided by that limit: the same resident set reads about 16% against a 1536 limit and about 48%
 against 512.
+
+## Step 6: Every other metric (third dataflow)
+
+Dataflow 1 drops all `log.metric()` records and dataflow 2 keeps only `cache_sizes`, so any other
+metric matches neither filter and is discarded at ingestion without warning. `emergency_cache_clear`,
+`memory_forced_gc`, and `memory_emergency_entered` were lost this way: the memory guard was visibly
+firing in `TomoriBotLogs_CL` while the records describing what the response actually reclaimed never
+arrived.
+
+A third dataflow claims the remainder into `TomoriBotMetrics_CL` (`TimeGenerated`, `Computer`,
+`metric`, `RawData`). The filter is written against the `metric` field rather than a list of names,
+so a metric added later is captured without a pipeline change:
+
+```kusto
+source
+| extend p = parse_json(RawData)
+| extend metric = tostring(p.metric)
+| where isnotempty(metric) and metric != "cache_sizes"
+| extend TimeGenerated = datetime(1970-01-01) + tolong(p["time"]) * 1ms
+| project TimeGenerated, Computer, metric, RawData
+```
+
+Keeping `RawData` instead of typed columns is deliberate: these metrics carry different field sets
+(`emergency_cache_clear` alone emits one `cleared_*` field per cache), and a fixed projection would
+silently drop new ones exactly as before. Parse at query time with `parse_json(RawData)`.
+
+Records dropped by a transform leave no trace in the workspace, but the agent reads a host file that
+outlives the container, so history can still be recovered after fixing a filter:
+
+```bash
+grep -a "metric:emergency_cache_clear" /var/log/tomoribot/tomoribot.jsonl | tail -5
+```
 
 Ad-hoc queries can go through the REST API. The `log-analytics` az CLI extension currently has no
 installable stable version, so `az monitor log-analytics query` may be unavailable:
