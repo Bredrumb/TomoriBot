@@ -544,6 +544,10 @@ ON CONFLICT (persona_id) DO NOTHING;
 SELECT add_column_if_not_exists('persona_configs', 'reward_conditioning_enabled', 'BOOLEAN', 'true');
 SELECT add_column_if_not_exists('persona_configs', 'punish_conditioning_enabled', 'BOOLEAN', 'true');
 
+-- Add per-persona humanizer degree override (July 2026).
+-- NULL inherits the server-wide server_chat_configs.humanizer_degree.
+SELECT add_column_if_not_exists('persona_configs', 'humanizer_degree', 'INT', NULL, 'CHECK (humanizer_degree BETWEEN 0 AND 3)');
+
 -- Add server_id column for server-scoped configs (January 2026)
 
 -- Add hide_impersonation_embeds permission (February 2026)
@@ -843,7 +847,7 @@ SELECT add_column_if_not_exists('users', 'timezone_offset', 'SMALLINT');
 -- so a NULL value would fail parsing and break loading the user row entirely.
 SELECT add_column_if_not_exists('users', 'pluralkit_enabled', 'BOOLEAN', 'false', 'NOT NULL');
 -- Backstop for databases that added this column nullable (pre-review draft of
--- migration 047). Both statements are idempotent no-ops once converged.
+-- migration 056). Both statements are idempotent no-ops once converged.
 UPDATE users SET pluralkit_enabled = false WHERE pluralkit_enabled IS NULL;
 ALTER TABLE users ALTER COLUMN pluralkit_enabled SET NOT NULL;
 
@@ -1532,6 +1536,9 @@ SELECT add_column_if_not_exists('reminders', 'persona_id', 'INTEGER');
 SELECT add_column_if_not_exists('reminders', 'repetition_interval_hours', 'INTEGER');
 -- Self reminders (January 2026)
 SELECT add_column_if_not_exists('reminders', 'self_reminder', 'BOOLEAN', 'false');
+-- Delivery retries must not replace reminder_time because recurring schedules use it as their cadence anchor.
+SELECT add_column_if_not_exists('reminders', 'next_attempt_at', 'TIMESTAMP WITH TIME ZONE');
+SELECT add_column_if_not_exists('reminders', 'delivery_retry_count', 'INTEGER', '0', 'NOT NULL');
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1549,8 +1556,10 @@ END $$;
 -- Create index for efficient reminder queries
 CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_reminders_server_id ON reminders(server_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_effective_due_time
+  ON reminders((COALESCE(next_attempt_at, reminder_time)));
 
--- Removed updated_at trigger for reminders table (never updated after creation, only INSERT/DELETE)
+-- Reminder writes set updated_at explicitly, so this table does not need a general update trigger.
 DROP TRIGGER IF EXISTS update_reminders_timestamp ON reminders;
 
 -- Drop deprecated columns 
@@ -2646,7 +2655,9 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   videogen_enabled       BOOLEAN NOT NULL DEFAULT false,
   voice_message_enabled  BOOLEAN NOT NULL DEFAULT true,
   user_blocking_enabled  BOOLEAN NOT NULL DEFAULT true,
+  time_awareness_enabled BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
+  short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
   verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -2903,6 +2914,71 @@ CREATE TRIGGER update_channel_prompt_overrides_timestamp
     FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================================
+-- STM CUSTOMIZATION (migration 051)
+-- Durable per-server STM config, ordered category definitions, and per-scope
+-- durable state rows. The in-process cache is write-through over short_term_memories.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS server_stm_configs (
+  server_id                 INT         PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
+  refresh_cadence           INT         NOT NULL DEFAULT 5,
+  render_mode               TEXT        NOT NULL DEFAULT 'crude_summary'
+                                          CHECK (render_mode IN ('supersede', 'crude_summary')),
+  crude_message_count       INT         NOT NULL DEFAULT 6,
+  tool_description_override TEXT,
+  update_nudge_override     TEXT,
+  nudge_injection_depth     INT         NOT NULL DEFAULT 2,
+  content_injection_depth   INT         NOT NULL DEFAULT -1,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_server_stm_configs_timestamp ON server_stm_configs;
+CREATE TRIGGER update_server_stm_configs_timestamp
+  BEFORE UPDATE ON server_stm_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS stm_categories (
+  stm_category_id  SERIAL      PRIMARY KEY,
+  server_id        INT         NOT NULL REFERENCES servers(server_id) ON DELETE CASCADE,
+  position         INT         NOT NULL CHECK (position BETWEEN 0 AND 4),
+  label            TEXT        NOT NULL,
+  description      TEXT        NOT NULL,
+  UNIQUE (server_id, position)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stm_categories_server ON stm_categories(server_id);
+
+CREATE TABLE IF NOT EXISTS short_term_memories (
+  stm_id               SERIAL      PRIMARY KEY,
+  server_disc_id       TEXT,
+  user_disc_id         TEXT,
+  channel_disc_id      TEXT        NOT NULL,
+  persona_id           INT,
+  persona_lineage_id   INT,
+  scope_kind           TEXT        NOT NULL CHECK (scope_kind IN ('server', 'user')),
+  categories           JSONB       NOT NULL DEFAULT '{}',
+  summary              TEXT,
+  turns_since_refresh  INT         NOT NULL DEFAULT 0,
+  last_refreshed_turn  INT         NOT NULL DEFAULT 0,
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_stm_scope_unique
+  ON short_term_memories(
+    scope_kind,
+    COALESCE(server_disc_id, ''),
+    COALESCE(user_disc_id,   ''),
+    channel_disc_id,
+    COALESCE(persona_id, 0)
+  );
+
+CREATE INDEX IF NOT EXISTS idx_stm_updated_at ON short_term_memories(updated_at);
+
+DROP TRIGGER IF EXISTS update_short_term_memories_timestamp ON short_term_memories;
+CREATE TRIGGER update_short_term_memories_timestamp
+  BEFORE UPDATE ON short_term_memories
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 -- Per-channel context notes (migration 034)
 -- When a row exists for a channel, its note is injected into the dialogue
 -- history at the configured depth alongside any persona-scoped note (additive).
@@ -2961,7 +3037,7 @@ CREATE INDEX IF NOT EXISTS idx_stat_counters_user_lineage_metric
   ON stat_counters(user_id, persona_lineage_id, metric);
 
 -- ============================================================================
--- PluralKit integration (migration 047)
+-- PluralKit integration (migration 056)
 -- Canonical per-member identity for PluralKit system members, so a proxied
 -- member gets its own `users` row and therefore its own personal memories
 -- instead of degrading to server-wide (the fate this table family exists to
@@ -3043,3 +3119,19 @@ CREATE TABLE IF NOT EXISTS pluralkit_message_index (
 -- Retention pruning deletes by age (governed by PLURALKIT_MESSAGE_INDEX_RETENTION_DAYS).
 CREATE INDEX IF NOT EXISTS idx_pluralkit_message_index_created
   ON pluralkit_message_index(created_at);
+
+-- ============================================================================
+-- command_catalog — dimension table holding the full universe of registered
+-- commands (see migration 049). stat_counters only gains a command_used row once
+-- a command is invoked, so never-used commands are absent there; this table lets
+-- a LEFT JOIN report every command with COALESCE(count, 0). command_name is the
+-- same space-joined full path stat_counters.metric_key stores. The bot
+-- self-populates it on startup from loadCommandData() (04_syncCommandCatalog +
+-- StatRepository.syncCommandCatalog), so it never drifts from the code.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS command_catalog (
+  command_name   TEXT        PRIMARY KEY,          -- space-joined full path (= stat_counters.metric_key)
+  category       TEXT        NOT NULL,             -- top-level command/category name
+  first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_synced_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

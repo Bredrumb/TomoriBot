@@ -14,7 +14,6 @@ export interface SpeechEndpointResult {
  * Resolves the active speech or transcription endpoint for a server by querying
  * `custom_endpoints` directly (capability-first lookup, bypassing the LLM/model chain).
  *
- * @param serverId - Database server_id
  * @param capability - "speech" or "transcription"
  * @returns Endpoint row + decrypted API key, or null if none is registered
  */
@@ -23,19 +22,19 @@ async function resolveActiveEndpointByCapability(
   capability: "speech" | "transcription",
 ): Promise<SpeechEndpointResult | null> {
   try {
-    // 1. Find the active (is_default) custom endpoint for this capability on the server via repository
+    // Find the active (is_default) custom endpoint for this capability on the server via repository
     const endpoint = await loadActiveEndpoint(serverId, capability);
 
     if (!endpoint) {
       return null;
     }
 
-    // 2. Endpoints that don't require auth (local servers) need no key lookup.
+    // Endpoints that don't require auth (local servers) need no key lookup.
     if (!endpoint.requires_auth) {
       return { endpoint, apiKey: "" };
     }
 
-    // 3. Credentials are stored in saved_provider_configs keyed by the internal provider name via repository
+    // Credentials are stored in saved_provider_configs keyed by the internal provider name via repository
     const providerName = buildServerCustomProviderName(serverId, endpoint.label);
     const configRow = await loadEndpointCredentials(serverId, providerName);
 

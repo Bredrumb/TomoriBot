@@ -4,9 +4,7 @@ import {
   replaceMentionHandles,
   sanitizeUnknownTemplatePlaceholders,
 } from "@/utils/text/processors/mentionProcessor";
-import { buildPersonaMentionMap } from "@/utils/text/personaMentionHandles";
-
-// ─── sanitizeUnknownTemplatePlaceholders ────────────────────────────────────
+import { buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
 
 describe("sanitizeUnknownTemplatePlaceholders", () => {
   describe("single-brace allowed vars", () => {
@@ -76,8 +74,6 @@ describe("sanitizeUnknownTemplatePlaceholders", () => {
   });
 });
 
-// ─── normalizeCustomEmojisForLlm ────────────────────────────────────────────
-
 describe("normalizeCustomEmojisForLlm", () => {
   describe("emoji normalization", () => {
     it("converts static custom emoji to :name:", () => {
@@ -124,13 +120,11 @@ describe("normalizeCustomEmojisForLlm", () => {
   });
 });
 
-// ─── replaceMentionHandles ───────────────────────────────────────────────────
-
 describe("replaceMentionHandles", () => {
   const mentionMap = new Map([
     ["alice", ["111111111111111111"]],
     ["bob", ["222222222222222222"]],
-    ["ambiguous", ["333333333333333333", "444444444444444444"]], // two IDs — ambiguous
+    ["ambiguous", ["333333333333333333", "444444444444444444"]], // two IDs, so ambiguous
   ]);
   const mentionIdSet = new Set(["111111111111111111", "222222222222222222"]);
 
@@ -206,10 +200,10 @@ describe("replaceMentionHandles", () => {
   });
 
   describe("persona trigger preservation", () => {
-    const personaMentionMap = buildPersonaMentionMap([
+    const personaMentionMap = buildPersonaMentionCatalog([
       { persona_nickname: "Shy Tomori", trigger_words: ["lilya"] },
       { persona_nickname: "Ren", trigger_words: ["ren"] },
-    ]);
+    ]).mentionMap;
 
     it("canonicalizes braced persona nicknames to @trigger text", () => {
       expect(replaceMentionHandles("go ask @{Shy Tomori}", mentionMap, mentionIdSet, personaMentionMap)).toBe(
@@ -230,17 +224,19 @@ describe("replaceMentionHandles", () => {
     });
 
     it("keeps Discord user mentions ahead of persona trigger aliases", () => {
-      const overlappingPersonas = buildPersonaMentionMap([{ persona_nickname: "Alice", trigger_words: ["alice"] }]);
+      const overlappingPersonas = buildPersonaMentionCatalog([
+        { persona_nickname: "Alice", trigger_words: ["alice"] },
+      ]).mentionMap;
       expect(replaceMentionHandles("hey @alice", mentionMap, mentionIdSet, overlappingPersonas)).toBe(
         "hey <@111111111111111111>",
       );
     });
 
     it("does not preserve ambiguous persona aliases", () => {
-      const ambiguousPersonas = buildPersonaMentionMap([
+      const ambiguousPersonas = buildPersonaMentionCatalog([
         { persona_nickname: "Ren", trigger_words: ["ren"] },
         { persona_nickname: "Ren", trigger_words: ["renee"] },
-      ]);
+      ]).mentionMap;
       expect(replaceMentionHandles("hey @Ren", new Map(), new Set(), ambiguousPersonas)).toBe("hey Ren");
     });
   });

@@ -1,5 +1,5 @@
 /**
- * Regression harness — Cache invalidation assertions.
+ * Regression harness: Cache invalidation assertions.
  *
  * Each test follows the pattern: write → assert cache is cleared →
  * next read hits DB and returns fresh data.
@@ -32,8 +32,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     await cleanupFixtures(testSql);
   });
 
-  // ── user cache ────────────────────────────────────────────────────────────
-
   it("getCachedUserRow populates the cache on first access", async () => {
     clearUserCache();
     const user = await getCachedUserRow(FIXTURE_IDS.userDiscId);
@@ -42,11 +40,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
   });
 
   it("write → invalidate → re-read returns updated data (not stale cache)", async () => {
-    // Step 1: Warm the cache
     const original = await getCachedUserRow(FIXTURE_IDS.userDiscId);
     const originalPrivacy = original?.privacy_level ?? PrivacyLevel.MINIMAL;
 
-    // Step 2: Write a change (setPrivacyLevel also invalidates the cache internally)
     const newLevel = originalPrivacy === PrivacyLevel.MINIMAL ? PrivacyLevel.PARTIAL : PrivacyLevel.MINIMAL;
     await userRepository.setPrivacyLevel(FIXTURE_IDS.userDiscId, newLevel);
 
@@ -54,7 +50,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     // but the explicit invalidation here proves the harness can detect if it was NOT cleared)
     invalidateUserCache(FIXTURE_IDS.userDiscId);
 
-    // Step 4: Re-read — should go to DB and return updated value
     const fresh = await getCachedUserRow(FIXTURE_IDS.userDiscId);
     expect(fresh?.privacy_level).toBe(newLevel);
   });
@@ -74,11 +69,8 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     expect(fresh?.user_nickname).toBe("_rt_cache_test_name");
   });
 
-  // ── tomori state cache ────────────────────────────────────────────────────
-
   it("invalidateTomoriStateCache causes the next getCachedAllPersonas to hit the DB", async () => {
     const { getCachedAllPersonas } = await import("@/utils/cache/tomoriStateCache");
-    // Warm cache
     await getCachedAllPersonas(FIXTURE_IDS.serverDiscId);
 
     // Write a nickname change (which invalidates the cache in the real write path)
@@ -87,7 +79,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     // Invalidate (updateTomori should do this; we do it explicitly to prove the harness works)
     invalidateTomoriStateCache(FIXTURE_IDS.serverDiscId);
 
-    // Re-read — DB should reflect the new nickname
     const personas = await getCachedAllPersonas(FIXTURE_IDS.serverDiscId);
     const main = personas.find((p) => p.persona_id === refs.personaId);
     expect(main?.persona_nickname).toBe("_rt_cache_renamed");
@@ -99,20 +90,17 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Cache invalidation — regression", () => 
     // Warm the cache
     await getCachedMainPersona(FIXTURE_IDS.serverDiscId);
 
-    // Mutate config
     await configRepository.updateChatConfig(refs.serverId, { message_fetch_limit: 42 });
     // Config writes should invalidate the tomori state cache in command paths.
     invalidateTomoriStateCache(FIXTURE_IDS.serverDiscId);
 
-    // Verify fresh read
     const fresh = await getCachedMainPersona(FIXTURE_IDS.serverDiscId);
     expect(fresh?.config.message_fetch_limit).toBe(42);
   });
 
-  // ── regression probe — do not remove ─────────────────────────────────────
   // To verify the harness catches a cache invalidation regression:
-  // 1. Remove the `invalidateUserCache(userDiscId)` call from `UserRepository.register`
-  // 2. Run this test — it should fail because getCachedUserRow returns stale data
+  // Remove the `invalidateUserCache(userDiscId)` call from `UserRepository.register`
+  // Run this test: it should fail because getCachedUserRow returns stale data
   it.skip("[REGRESSION PROBE] harness detects missing cache invalidation", async () => {
     await userRepository.register("_rt_probe_user", "_rt_probe", "en");
     // If invalidation were missing, a cached null entry would persist and loadUserRow would still return null

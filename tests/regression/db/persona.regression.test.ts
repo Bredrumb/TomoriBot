@@ -1,5 +1,5 @@
 /**
- * Regression harness — PersonaRepository domain.
+ * Regression harness: PersonaRepository domain.
  *
  * Covers: loadTomoriState, loadAllPersonasForServer, loadPersonaConfigRow,
  * updateTomori.
@@ -34,8 +34,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     await cleanupFixtures(testSql);
   });
 
-  // ── loadTomoriState ───────────────────────────────────────────────────────
-
   it("loadTomoriState returns null for unknown server", async () => {
     const state = await personaRepository.loadState("_rt_unknown_server_9999");
     expect(state).toBeNull();
@@ -47,7 +45,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     expect(state?.persona_id).toBe(refs.personaId);
     // Config should load the server-scoped row
     expect(state?.config).not.toBeNull();
-    // LLM should be populated (unconfigured LLM is used when llm_id is NULL)
     expect(state?.llm).not.toBeNull();
   });
 
@@ -470,8 +467,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     }
   });
 
-  // ── loadAllPersonasForServer ─────────────────────────────────────────────
-
   it("loadAllPersonasForServer returns at least the main persona", async () => {
     const personas = await personaRepository.loadAllForServer(FIXTURE_IDS.serverDiscId);
     expect(personas.length).toBeGreaterThanOrEqual(1);
@@ -811,8 +806,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
     }
   });
 
-  // ── loadPersonaConfigRow ─────────────────────────────────────────────────
-
   it("loadPersonaConfigRow returns the fixture persona_config row", async () => {
     const config = await personaRepository.loadPersonaConfig(refs.personaId);
     expect(config).not.toBeNull();
@@ -846,8 +839,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Persona — regression", () => {
       await personaRepository.removeTrigger(refs.personaId, originalTriggers);
     }
   });
-
-  // ── updateTomori ─────────────────────────────────────────────────────────
 
   it("updateTomori mutates the nickname and returns the updated row", async () => {
     const updated = await personaRepository.update(refs.personaId, { persona_nickname: "_rt_persona_renamed" });

@@ -20,10 +20,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Execute the /help mcp command.
  * Displays a step-by-step guide for setting up MCP tool servers.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -32,7 +28,6 @@ export async function execute(
   locale: string,
 ): Promise<void> {
   try {
-    // Resolve command mentions for cross-references in the guide
     const configMcpAddMention = commandRegistry.getCommandMention("mcp", "add");
 
     const embedOptions: SummaryEmbedOptions = {

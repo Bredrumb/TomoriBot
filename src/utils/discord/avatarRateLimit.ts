@@ -2,7 +2,7 @@
  * Shared Discord avatar/nickname rate-limit detection.
  *
  * Discord throttles guild member avatar (and nickname) changes more aggressively
- * than its documented buckets — beyond a plain HTTP 429 it can return a 200-level
+ * than its documented buckets: beyond a plain HTTP 429 it can return a 200-level
  * error envelope whose `errors.avatar`/`errors.nick` carry an `AVATAR_RATE_LIMIT`
  * code, or a message mentioning a rate limit. Both `/persona import` (immediate,
  * best-effort apply) and the preset-avatar fan-out reconciler must treat any of
@@ -49,9 +49,7 @@ export function isAvatarUpdateRateLimited(status: number, errorText: string): bo
     if (parsed.message?.toLowerCase().includes("rate limit")) {
       return true;
     }
-  } catch {
-    // Fall through to text matching below
-  }
+  } catch {}
 
   return /AVATAR_RATE_LIMIT/i.test(errorText) || /RATE_LIMIT/i.test(errorText) || /too fast/i.test(errorText);
 }

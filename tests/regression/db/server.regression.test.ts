@@ -1,5 +1,5 @@
 /**
- * Regression harness — ServerRepository domain.
+ * Regression harness: ServerRepository domain.
  *
  * Covers: channel whitelist reads/writes, blacklist, server setup basics.
  * loadTomoriState implicitly tests server row loading; this file focuses on
@@ -23,8 +23,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Server — regression", () => {
   afterAll(async () => {
     await cleanupFixtures(testSql);
   });
-
-  // ── blacklist ─────────────────────────────────────────────────────────────
 
   it("isBlacklisted returns false for a user not in the blacklist", async () => {
     const result = await userRepository.isBlacklisted(FIXTURE_IDS.serverDiscId, FIXTURE_IDS.userDiscId);

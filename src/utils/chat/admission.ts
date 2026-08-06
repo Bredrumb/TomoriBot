@@ -76,6 +76,7 @@ export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
     injectedContextItems: input.injectedContextItems,
     forcedMentions: input.forcedMentions,
     manualTriggerInvoker: input.manualTriggerInvoker,
+    systemTriggerIdentity: input.systemTriggerIdentity,
     manualStreamingContextOverrides: input.manualStreamingContextOverrides,
     sceneTurn: input.sceneTurn,
     onGenerationResult: input.onGenerationResult,
@@ -208,11 +209,21 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
 
   const chainOriginUserDiscId =
     !incoming.isManuallyTriggered && isLikelySelfMessage ? getSelfReplyChainOriginUser(channel.id) : null;
+  // System-initiated turns (reminders, boomerangs) pass whatever message was last in the
+  // channel as their trigger, which in a DM is frequently one of Tomori's own. Falling back
+  // to the author there would resolve the DM owner (and thus the DM's server key) to the
+  // bot itself, so prefer the channel's recipient whenever the author is the client user.
+  const dmOwnerDiscId = channel instanceof DMChannel ? (channel.recipientId ?? null) : null;
+  const authorFallbackDiscId =
+    dmOwnerDiscId && message.author.id === client.user?.id ? dmOwnerDiscId : message.author.id;
+  // A system turn borrows an arbitrary channel message as its trigger, so its declared
+  // identity outranks a PluralKit sender that only happens to own that message.
   const userDiscId =
     incoming.manualTriggerInvoker?.userDiscId ??
+    incoming.systemTriggerIdentity?.userDiscId ??
     pluralKitProxyRecord?.senderDiscId ??
     chainOriginUserDiscId ??
-    message.author.id;
+    authorFallbackDiscId;
   const matrixRelayUserId = isMatrixRelay ? extractBridgeUserId(message.author.username) : undefined;
   const cooldownUserDiscId = matrixRelayUserId ?? userDiscId;
 
@@ -331,7 +342,7 @@ async function resolvePluralKitProxyRecord(
   // for the full retry cap, and extends live speedbump waits (in-flight
   // lookups pause the channel's wait timers). Tradeoff: a PK member whose
   // display name exactly matches a persona nickname is misclassified as self
-  // and falls back to plain-webhook behavior — same pre-existing hazard class
+  // and falls back to plain-webhook behavior: the same pre-existing hazard class
   // as Matrix users named after personas in shouldBotReply.
   if (getCachedImpersonatedUserIdForWebhook(message.webhookId)) {
     return null;
@@ -607,7 +618,7 @@ function createNaturalStopPatterns(): RegExp[] {
 
 const NATURAL_STOP_PATTERNS = createNaturalStopPatterns();
 
-async function resolveAdmissionChannelScope(
+export async function resolveAdmissionChannelScope(
   incoming: ChatIncoming,
   userDiscId: string,
 ): Promise<{
@@ -636,10 +647,15 @@ async function resolveAdmissionChannelScope(
   }
 
   if (channel instanceof DMChannel) {
+    // A DM's synthetic server key is its human recipient, which is a property of the
+    // channel and not of whoever authored the trigger message. Guilds get this for free
+    // via guild.id; DMs must not fall back to the author or a bot-authored trigger
+    // message would key the lookup to the bot and report the DM as unconfigured.
+    const serverDiscId = incoming.systemTriggerIdentity?.serverDiscId ?? channel.recipientId ?? userDiscId;
     log.info(`Processing DM from user ${userDiscId} in channel ${channel.id}`);
     return {
       guild: null,
-      serverDiscId: userDiscId,
+      serverDiscId,
       isDMChannel: true,
       isThreadChannel: false,
       isManuallyTriggered: true,
@@ -667,9 +683,7 @@ async function resolveAdmissionChannelScope(
       if (referenceMessage && referenceMessage.author.id === client.user?.id) {
         shouldShowError = true;
       }
-    } catch {
-      // Unsupported-channel admission should stay quiet if the reference cannot be fetched.
-    }
+    } catch {}
   }
 
   if (shouldShowError && "send" in channel && message.author.id !== client.user?.id) {
@@ -714,7 +728,8 @@ async function loadEarlyTomoriState(
   }
 }
 
-async function shouldBlockReplyToOtherBot(args: {
+/** @internal Exported for focused admission regression tests. */
+export async function shouldBlockReplyToOtherBot(args: {
   incoming: ChatIncoming;
   earlyAllPersonas: TomoriState[];
   isBotAuthor: boolean;
@@ -728,7 +743,9 @@ async function shouldBlockReplyToOtherBot(args: {
 
   let referencedMessage = message.channel.messages.cache.get(message.reference.messageId);
 
-  if (!referencedMessage && "messages" in message.channel) {
+  // Cached reply targets may be partial messages with a null author. Let
+  // MessageManager#fetch hydrate partials before making the bot-author check.
+  if ((!referencedMessage || referencedMessage.partial) && "messages" in message.channel) {
     try {
       referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
     } catch {
@@ -736,11 +753,8 @@ async function shouldBlockReplyToOtherBot(args: {
     }
   }
 
-  if (
-    !referencedMessage?.author.bot ||
-    referencedMessage.author.id === client.user?.id ||
-    referencedMessage.webhookId
-  ) {
+  const referencedAuthor = referencedMessage?.author;
+  if (!referencedAuthor?.bot || referencedAuthor.id === client.user?.id || referencedMessage?.webhookId) {
     return null;
   }
 

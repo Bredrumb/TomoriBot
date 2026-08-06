@@ -44,13 +44,10 @@ const SERVER_CONFIG_TABLES = [
 
 /**
  * Inserts the minimal fixture set needed across all regression test files.
- * Idempotent — uses ON CONFLICT DO NOTHING wherever possible.
+ * Idempotent: uses ON CONFLICT DO NOTHING wherever possible.
  *
- * @param db - The test SQL client from testDb.ts
- * @returns Internal DB IDs for test assertions that need them
  */
 export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
-  // 1. Server
   const [serverRow] = await db`
     INSERT INTO servers (server_disc_id)
     VALUES (${FIXTURE_IDS.serverDiscId})
@@ -59,7 +56,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   `;
   const serverId: number = serverRow.server_id;
 
-  // 2. Persona (llm_id left NULL → BYOK/unconfigured mode; avoids needing a real LLM row)
   const [personaRow] = await db`
     INSERT INTO personas (server_id, persona_nickname, is_alter)
     VALUES (${serverId}, '_rt_persona', false)
@@ -74,7 +70,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
     personaId = personaRow.persona_id;
     personaLineageId = Number(personaRow.persona_lineage_id);
   } else {
-    // Row already existed — re-query to get the IDs
     const [existing] = await db`
       SELECT persona_id, persona_lineage_id
       FROM personas
@@ -101,12 +96,12 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   `;
   await db`DELETE FROM persona_attributes WHERE persona_id = ${personaId}`;
 
-  // 3. Server-scoped split config rows.
+  // Server-scoped split config rows.
   for (const table of SERVER_CONFIG_TABLES) {
     await db.unsafe(`INSERT INTO ${table} (server_id) VALUES ($1) ON CONFLICT (server_id) DO NOTHING`, [serverId]);
   }
 
-  // 4. Persona-scoped config
+  // Persona-scoped config
   await db`
     INSERT INTO persona_configs (persona_id, trigger_words)
     VALUES (${personaId}, ARRAY['_rt_trigger']::TEXT[])
@@ -117,7 +112,6 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
   await db`DELETE FROM persona_imagegen_configs WHERE persona_id = ${personaId}`;
   await db`DELETE FROM persona_textgen_configs WHERE persona_id = ${personaId}`;
 
-  // 5. Test user
   const [userRow] = await db`
     INSERT INTO users (user_disc_id, user_nickname)
     VALUES (${FIXTURE_IDS.userDiscId}, '_rt_user')
@@ -163,12 +157,11 @@ export async function insertFixtures(db: SQL): Promise<FixtureRefs> {
  * Cascade deletes handle child rows (personas, split config tables, persona_configs,
  * server_memories) when the servers row is deleted.
  *
- * @param db - The test SQL client from testDb.ts
  */
 export async function cleanupFixtures(db: SQL): Promise<void> {
   // Cascade via FK: deletes personas, split config rows, persona_configs, server_memories
   await db`DELETE FROM servers WHERE server_disc_id = ${FIXTURE_IDS.serverDiscId}`;
 
-  // Users have no cascade from servers — clean up separately
+  // Users have no cascade from servers, so clean up separately
   await db`DELETE FROM users WHERE user_disc_id LIKE '_rt_%'`;
 }

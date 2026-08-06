@@ -9,14 +9,14 @@ import type { AppEnvironment } from "@/types/config";
  *
  * GuildPresences is a privileged intent: requesting it without Discord's
  * approval makes the gateway reject the entire connection (DisallowedIntents /
- * WS close 4014). To avoid that — and a failed-then-retried connection — we ask
+ * WS close 4014). To avoid that (and a failed-then-retried connection), we ask
  * Discord up front whether the intent is enabled for this application.
  *
  * Resolution order:
  *   1. Live probe of the application's gateway flags via REST `GET /applications/@me`.
  *      `GatewayPresence` (approved for 100+ guild bots) or `GatewayPresenceLimited`
  *      (enabled for <100 guild bots) means the intent is safe to request. The moment
- *      Discord grants approval, this flips on the next restart — no code change.
+ *      Discord grants approval, so this flips on the next restart, no code change.
  *   2. On probe failure (e.g. network/REST error), fall back to the legacy default:
  *      enabled outside production, disabled in production.
  *
@@ -33,7 +33,7 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
     return legacyDefault;
   }
 
-  // 1. Ask Discord which privileged gateway intents this application is approved for.
+  // Ask Discord which privileged gateway intents this application is approved for.
   try {
     const rest = new REST().setToken(token);
     const application = (await rest.get(Routes.currentApplication())) as { flags?: number };
@@ -46,7 +46,7 @@ export async function resolvePresenceIntentEnabled(environment: AppEnvironment):
     );
     return presenceApproved;
   } catch (error) {
-    // 2. Probe failed — degrade to the legacy default rather than risk a 4014.
+    // Probe failed, so degrade to the legacy default rather than risk a 4014.
     log.warn("Failed to probe Presence Intent approval; using default", error);
     return legacyDefault;
   }
@@ -77,7 +77,7 @@ export function createDiscordClient(includePresences: boolean): Client {
     GatewayIntentBits.GuildExpressions,
   ];
 
-  // GuildPresences is privileged — request it only when Discord has approved it
+  // GuildPresences is privileged, so request it only when Discord has approved it
   // (or it is force-enabled). See resolvePresenceIntentEnabled.
   if (includePresences) {
     intents.push(GatewayIntentBits.GuildPresences);
@@ -90,6 +90,12 @@ export function createDiscordClient(includePresences: boolean): Client {
       messages: {
         interval: 3600, // Run sweep every 1 hour (in seconds)
         lifetime: 1800, // Keep messages for 30 minutes (in seconds)
+      },
+      // Never sweep the client's own member: discord.js resolves permissions through it.
+      // Voice paths read members synchronously with no fetch fallback.
+      guildMembers: {
+        interval: 3600,
+        filter: () => (member) => member.id !== member.client.user.id && !member.voice.channelId,
       },
       users: {
         interval: 3600,
@@ -108,7 +114,7 @@ export function createDiscordClient(includePresences: boolean): Client {
 
   process.on("uncaughtException", (error) => {
     log.error("Uncaught exception occurred", error);
-    // Don't exit process for WebSocket errors — let Discord.js reconnect
+    // Don't exit process for WebSocket errors, so let Discord.js reconnect
     if (error.message?.includes("error is not an Object")) {
       log.warn("WebSocket error caught - Discord.js will attempt to reconnect");
       return;

@@ -51,7 +51,7 @@ temp/
 # weight (~9.5 MB) in the image and is never loaded (satori cannot parse its fvar).
 assets/fonts/*-VF.ttf
 
-# Phase 3 chunk-1 render-spike artifacts (throwaway dev tooling / outputs).
+# Throwaway dev tooling / outputs.
 .spike-output/
 .spike-output-docker/
 docker/Dockerfile.spike

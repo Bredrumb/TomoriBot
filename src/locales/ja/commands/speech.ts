@@ -1,5 +1,3 @@
-// locales/ja/commands/speech.ts
-
 export default {
   speech: {
     description: `音声出力の声とサンプルを管理します。`,
@@ -126,10 +124,17 @@ Exaggeration: **{exaggeration}**`,
       prompt_required_description: `VoiceDesign プロンプトを入力してください。`,
       success_title: `VoiceDesign プロンプトを設定しました`,
       success_description: `**{persona}** はローカルボイスメッセージで次の VoiceDesign プロンプトを使用します:
-
-> {preview}`,
+\`\`\`
+{preview}
+\`\`\``,
+      no_prompt_title: `VoiceDesign プロンプトがありません`,
+      no_prompt_description: `削除できる VoiceDesign プロンプトがありません。\`/speech voice-design set\` で設定できます。`,
       cleared_title: `VoiceDesign プロンプトを削除しました`,
       cleared_description: `**{persona}** から VoiceDesign プロンプトを削除しました。`,
+      cleared_description_with_prompt: `**{persona}** から VoiceDesign プロンプトを削除しました。控えが必要な場合は以下をコピーしてください：
+\`\`\`
+{removed_prompt}
+\`\`\``,
     },
     validation: {
       sample_not_found: `音声サンプルが見つかりません。`,

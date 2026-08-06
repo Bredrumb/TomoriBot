@@ -41,7 +41,7 @@ export const DB_TESTS_AVAILABLE = Boolean(effectivePassword) && process.env.TEST
 /**
  * A direct SQL client for the test database, used exclusively for fixture
  * insertion and cleanup. Test assertions call the real dbRead/dbWrite functions
- * which use the global sql singleton from client.ts — those must also be pointed
+ * which use the global sql singleton from client.ts, so those must also be pointed
  * at the test DB via POSTGRES_DB env var (set by the wrapper).
  */
 export const testSql = new SQL({
@@ -52,11 +52,21 @@ export const testSql = new SQL({
   database: effectiveDatabase,
 });
 
+/** Memoized bootstrap, shared by every `beforeAll` in the process. */
+let bootstrapPromise: Promise<void> | null = null;
+
 /**
  * Bootstraps the test database schema (idempotent).
  * Uses the same initializeDatabase() path as the bot, so schema drift
  * between tests and production is structurally impossible.
+ *
+ * initializeDatabase() is idempotent, but replaying the schema, migrations and
+ * seed catalogs costs roughly two seconds per call. The runner now covers every
+ * regression file with a single process, so the bootstrap is memoized for the
+ * lifetime of that process instead of repeating once per `beforeAll`. The call
+ * is argument-invariant, so no cache key is needed.
  */
 export async function setupTestDb(): Promise<void> {
-  await initializeDatabase({ client: testSql, includeRag: false });
+  bootstrapPromise ??= initializeDatabase({ client: testSql, includeRag: false });
+  await bootstrapPromise;
 }

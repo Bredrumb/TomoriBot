@@ -5,11 +5,9 @@ import { ColorCode } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
 
-// Define how the subcommand is configured
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("ping").setDescription(localizer("en-US", "commands.tool.ping.description"));
 
-// Command logic with the UserRow parameter
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -22,7 +20,6 @@ export async function execute(
   const reply = await interaction.fetchReply();
   const responseTime = reply.createdTimestamp - interaction.createdTimestamp;
 
-  // Determine if response is slow
   const isLaggy = responseTime > 250;
 
   const embed = new EmbedBuilder()

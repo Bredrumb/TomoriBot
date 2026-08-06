@@ -16,7 +16,6 @@ import type { ModalResult, SelectOption } from "../../types/discord/modal";
 import { personaRepository } from "@/utils/db/repositories";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
-// Constants for validation
 const NICKNAME_MIN_LENGTH = 2;
 const NICKNAME_MAX_LENGTH = 32;
 const MODAL_CUSTOM_ID = "config_rename_modal";
@@ -29,17 +28,12 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("rename").setDescription(localizer("en-US", "commands.persona.rename.description"));
 
 /**
  * Changes what Tomori refers to herself in context and in chat.
  * Also adds the new nickname to her trigger words if not already present.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -63,7 +57,6 @@ export async function execute(
   let selectedPersona: TomoriState | null = null;
   let attemptedNickname: string | null = null;
 
-  // 1. Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -75,7 +68,6 @@ export async function execute(
   }
 
   try {
-    // 2. Resolve all personas for selector
     const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -107,7 +99,6 @@ export async function execute(
       return;
     }
 
-    // 3. Show modal (persona select + new name)
     modalResult = await promptWithPaginatedModal(interaction, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.persona.rename.modal_title",
@@ -158,7 +149,6 @@ export async function execute(
       return;
     }
 
-    // 4. Validate nickname length
     if (newNickname.length < NICKNAME_MIN_LENGTH || newNickname.length > NICKNAME_MAX_LENGTH) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.persona.rename.invalid_length_title",
@@ -172,10 +162,8 @@ export async function execute(
       return;
     }
 
-    // 5. Store the old nickname for the success message
     const oldNickname = selectedPersona.persona_nickname;
 
-    // 6. Check if the nickname is actually changing
     if (newNickname === oldNickname) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.persona.rename.already_set_title",
@@ -203,11 +191,9 @@ export async function execute(
       return;
     }
 
-    // 7. Update the nickname in the `personas` table
     const renamed = await personaRepository.renamePersona(selectedPersona.persona_id, newNickname);
 
     if (!renamed) {
-      // Log error specific to personas update failure
       const context: ErrorContext = {
         personaId: selectedPersona.persona_id,
         serverId: selectedPersona.server_id,
@@ -234,7 +220,6 @@ export async function execute(
       return; // Stop if the primary update failed
     }
 
-    // 9. Add new nickname to trigger words if not already present
     const currentTriggers = selectedPersona.trigger_words ?? [];
     let triggerUpdateNeeded = false;
 
@@ -248,12 +233,10 @@ export async function execute(
       );
     }
 
-    // 10. Update trigger_words in `persona_configs` if needed
     if (triggerUpdateNeeded) {
       const triggerAdded = await personaRepository.addTrigger(selectedPersona.persona_id, [newNickname]);
 
       if (!triggerAdded) {
-        // Log error specific to persona_configs update failure
         const context: ErrorContext = {
           personaId: selectedPersona.persona_id,
           serverId: selectedPersona.server_id,
@@ -275,7 +258,6 @@ export async function execute(
           context,
         );
 
-        // Inform user about partial success
         await replyInfoEmbed(modalSubmitInteraction, locale, {
           titleKey: "commands.persona.rename.partial_success_title",
           descriptionKey: "commands.persona.rename.partial_success_description",
@@ -290,7 +272,7 @@ export async function execute(
       log.success(`Successfully updated trigger words for tomori ${selectedPersona.persona_id}`);
     }
 
-    // 12. Update bot's server nickname only when renaming the main persona
+    // Update bot's server nickname only when renaming the main persona
     let nicknameUpdateSuccess = false;
     const attemptedGuildNicknameSync = Boolean(interaction.guild) && selectedPersona.is_alter !== true;
     if (attemptedGuildNicknameSync && interaction.guild) {
@@ -302,17 +284,15 @@ export async function execute(
           log.success(`Successfully updated bot nickname to '${newNickname}' in guild ${interaction.guild.id}`);
         }
       } catch (nicknameError) {
-        // Log the error but don't fail the entire command
         await log.warn(
           `Failed to update bot's server nickname in guild ${interaction.guild.id} (permissions issue or API error): ${(nicknameError as Error).message}`,
         );
       }
     }
 
-    // 13. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(serverDiscId);
 
-    // 14. Success! Show the nickname change
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.persona.rename.success_title",
       descriptionKey: nicknameUpdateSuccess
@@ -347,7 +327,6 @@ export async function execute(
       return;
     }
 
-    // 15. Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: selectedPersona?.server_id ?? null,
@@ -363,7 +342,6 @@ export async function execute(
     };
     await log.error(`Error executing /config rename for user ${userData.user_disc_id}`, error as Error, context);
 
-    // 16. Inform user of unknown error
     await replyInfoEmbed(errorReplyInteraction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",

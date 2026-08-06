@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * checkPendingMigrations.ts — pre-deploy destructive-migration gate.
+ * checkPendingMigrations.ts: pre-deploy destructive-migration gate.
  *
  * Scans the migrations directory, queries the target database's
  * `schema_migrations` table to determine which migrations are pending,
@@ -9,9 +9,9 @@
  *  ALTER COLUMN ... TYPE).
  *
  * Exit codes:
- *   0  — no pending migrations, or all pending migrations are non-destructive
- *   1  — at least one pending migration contains a destructive pattern
- *   2  — script error (DB connection failed, migrations dir missing, etc.)
+ *   0: no pending migrations, or all pending migrations are non-destructive
+ *   1: at least one pending migration contains a destructive pattern
+ *   2: script error (DB connection failed, migrations dir missing, etc.)
  *
  * Usage:
  *   bun run scripts/checks/checkPendingMigrations.ts                       (DB-aware: pending only)
@@ -41,7 +41,7 @@ const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
  *   We approximate "same statement" as "before the next semicolon".
  * - `ALTER COLUMN ... TYPE` is flagged because changing a column type can
  *   silently truncate or fail to cast; routine ADD/RENAME is left alone.
- * - `DROP CONSTRAINT IF EXISTS` is flagged — even idempotent drops change
+ * - `DROP CONSTRAINT IF EXISTS` is flagged because even idempotent drops change
  *   schema shape and may invalidate dependent code.
  */
 const DESTRUCTIVE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
@@ -152,7 +152,7 @@ async function scanForDestructive(files: PendingFile[]): Promise<ScanResult[]> {
 
 /**
  * Uses `git diff --diff-filter=A` to list up-migration files added between
- * `ref` and HEAD. Files renamed or modified are intentionally excluded — only
+ * `ref` and HEAD. Files renamed or modified are intentionally excluded because only
  * newly-added migrations matter to a pre-deploy gate.
  */
 async function listMigrationsAddedSince(ref: string, allUp: PendingFile[]): Promise<PendingFile[]> {

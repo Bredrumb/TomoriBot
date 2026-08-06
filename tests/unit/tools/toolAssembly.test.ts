@@ -161,7 +161,7 @@ describe("tool schema assembly", () => {
     expect(getPropertyNames(tool as Tool)).toContain("target_identity");
     expect(getPropertyNames(tool as Tool)).not.toContain("mask_prompt");
     expect(getPropertyNames(tool as Tool)).not.toContain("outpaint");
-    // media_id/denoise/prompt guidance should mention img2img only — no inpaint/outpaint
+    // media_id/denoise/prompt guidance should mention img2img only; no inpaint/outpaint
     const properties = (tool as Tool).parameters.properties;
     expect(properties.media_id.description).toBe("Reference media ID such as media_1. Use for img2img.");
     expect(properties.denoise.description).toBe("Img2img strength from 0 to 1. Lower preserves more.");

@@ -59,7 +59,7 @@ export interface LlmInput extends CommonInput {
   supportsPrefixCompletion?: boolean;
   /**
    * Official uncached input price in USD per million tokens. Omit for OpenRouter (priced live from its
-   * API) and free/non-metered models — the column stays NULL and the cost command falls back.
+   * API) and free/non-metered models, so the column stays NULL and the cost command falls back.
    */
   inputPricePerMillion?: number;
   /** Official uncached output price in USD per million tokens. See {@link inputPricePerMillion}. */
@@ -113,7 +113,7 @@ export interface PersonaInput {
   /**
    * Optional official sprite set for this preset. Seeded into `preset_sprites`
    * and resolved live by pointer personas. Omit (or leave empty) and the persona
-   * simply has no default sprites — a graceful no-op.
+   * simply has no default sprites, so a graceful no-op.
    */
   sprites?: PresetSpriteInput[];
 }
@@ -128,10 +128,10 @@ export interface SystemPromptInput {
 
 export type NaiModelTarget = "kayra" | "erato";
 
-export type NaiPhraseRepPen = "off" | "light" | "medium" | "aggressive" | "very_aggressive";
+type NaiPhraseRepPen = "off" | "light" | "medium" | "aggressive" | "very_aggressive";
 
 /** NovelAI sampling parameter JSON stored in `nai_presets.parameters`. */
-export interface NaiSamplingParameters {
+interface NaiSamplingParameters {
   order?: number[];
   temperature?: number;
   max_length?: number;

@@ -28,7 +28,6 @@ export default async (client: Client): Promise<void> => {
       return;
     }
 
-    // Load command data using our new function
     const { registrationData } = await loadCommandData();
 
     if (registrationData.length === 0) {
@@ -38,7 +37,6 @@ export default async (client: Client): Promise<void> => {
 
     log.info(`Preparing to register ${registrationData.length} top-level commands`);
 
-    // Initialize REST API for command registration
     const rest = new REST().setToken(discordToken);
 
     // Register globally for both production and development

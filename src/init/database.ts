@@ -9,7 +9,6 @@ import type { AppEnvironment } from "@/types/config";
  *
  * Exits the process on critical DB initialization failure.
  *
- * @param environment - Resolved runtime environment
  */
 export async function initDatabase(environment: AppEnvironment): Promise<void> {
   log.section("Initializing Database...");
@@ -19,8 +18,15 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  const managesSchema = isDatabaseSchemaManagementEnabled();
+
   try {
-    await initializeDatabase();
+    if (managesSchema) {
+      await initializeDatabase();
+    } else {
+      await sql`SELECT 1`;
+      log.success("PostgreSQL runtime connection verified (schema management disabled)");
+    }
   } catch {
     process.exit(1);
   }
@@ -36,10 +42,13 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     }
   } catch (error) {
     log.warn("Error during startup cooldowns cleanup:", error);
-    // Non-critical — continue startup
+    // Non-critical, so continue startup
   }
 
-  // Attempt to set up pg_cron for recurring cooldown cleanup (non-critical)
+  if (!managesSchema) {
+    return;
+  }
+
   try {
     const host = process.env.POSTGRES_HOST || "localhost";
     const port = Number.parseInt(process.env.POSTGRES_PORT || "5432", 10);
@@ -49,7 +58,6 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // 1. Check if the pg_cron extension is available
     const [extensionCheck] = await sql`
       SELECT EXISTS (
         SELECT 1 FROM pg_available_extensions
@@ -62,16 +70,14 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
       return;
     }
 
-    // 2. Enable pg_cron extension
     await sql`CREATE EXTENSION IF NOT EXISTS pg_cron;`;
 
-    // 3. Delete any existing job with the same name (idempotent across pg_cron versions)
+    // Delete any existing job with the same name (idempotent across pg_cron versions)
     await sql`
       DELETE FROM cron.job
       WHERE jobname = 'tomoribot_cooldown_cleanup'
     `;
 
-    // 4. Insert the new/updated job
     await sql`
       INSERT INTO cron.job (jobname, schedule, command, nodename, nodeport, database, username)
       VALUES (
@@ -89,4 +95,9 @@ export async function initDatabase(environment: AppEnvironment): Promise<void> {
     log.info(`pg_cron setup failed (non-critical): ${err instanceof Error ? err.message : err}`);
     log.info("Cooldown cleanup will be handled by startup method instead");
   }
+}
+
+export function isDatabaseSchemaManagementEnabled(raw = process.env.DATABASE_SCHEMA_MANAGEMENT_ENABLED): boolean {
+  if (raw === undefined) return true;
+  return ["true", "1", "yes", "on"].includes(raw.trim().toLowerCase());
 }

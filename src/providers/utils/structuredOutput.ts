@@ -10,7 +10,7 @@ import { getAllEmotionKeys } from "@/types/misc/emotions";
 /**
  * Zod schema for a single expression (emoji or sticker) classification result
  */
-export const ExpressionClassificationSchema = z.object({
+const ExpressionClassificationSchema = z.object({
   name: z.string().describe("The emoji or sticker name (case-insensitive match)"),
   emotion_key: z
     .enum(getAllEmotionKeys() as [string, ...string[]])
@@ -28,12 +28,6 @@ export const ExpressionClassificationSchema = z.object({
 export const ExpressionBatchResultSchema = z.object({
   expressions: z.array(ExpressionClassificationSchema),
 });
-
-/**
- * Type for a single expression classification result
- */
-export type ExpressionClassification = z.infer<typeof ExpressionClassificationSchema>;
-
 /**
  * Type for the complete batch result
  */

@@ -331,6 +331,11 @@ export async function showServerConfigStatus(
         inline: true,
       },
       {
+        nameKey: "commands.tool.status.field_short_term_memory",
+        value: formatBooleanLocalized(config.short_term_memory_enabled ?? true, locale),
+        inline: true,
+      },
+      {
         nameKey: "commands.tool.status.field_stm_privacy_bypass",
         value: formatBooleanLocalized(config.stm_privacy_bypass ?? false, locale),
         inline: true,

@@ -5,7 +5,7 @@
  * layer and EXITS NON-ZERO when any genuine violation exists, so the
  * `bun run vl` "SQL Audit" gate enforces the standard (it previously only
  * printed and always passed). The actual scan lives in
- * `scripts/checks/lib/sqlAudit.ts` — shared with the unit test so the two can
+ * `scripts/checks/lib/sqlAudit.ts`: shared with the unit test so the two can
  * never disagree.
  *
  * Run via `bun run audit-sql`.
@@ -26,7 +26,6 @@ async function run() {
   console.log("\n=== EXEMPTIONS ===");
   exemptions.forEach((e) => console.log(`exempt: ${normalizePath(e.file)}:${e.line} (${e.kind}; ${e.reason})`));
 
-  // Genuine violations (raw SQL outside repositories/, not exempt) fail the gate.
   if (violations.length > 0) {
     console.error(
       `\n❌ Found ${violations.length} raw SQL ${violations.length === 1 ? "query" : "queries"} outside ` +

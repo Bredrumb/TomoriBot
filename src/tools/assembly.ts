@@ -26,7 +26,7 @@ export function createToolVariant<TTool extends Tool>(tool: TTool, overrides: To
   return Object.create(tool, propertyDescriptors) as TTool;
 }
 
-export async function assembleToolForContext(tool: Tool, context: ToolAssemblyContext): Promise<Tool | null> {
+async function assembleToolForContext(tool: Tool, context: ToolAssemblyContext): Promise<Tool | null> {
   if (!tool.assembleForContext) {
     return tool;
   }

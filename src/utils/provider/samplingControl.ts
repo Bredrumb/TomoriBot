@@ -26,26 +26,11 @@ export interface AnthropicSamplingSelection {
   logLevel?: "info" | "warn";
 }
 
-export const ANTHROPIC_TEMPERATURE_DEFAULT = 1.0;
-export const ANTHROPIC_TOP_P_DEFAULT = 0.95;
-
-// NVIDIA's current default NIM text model rejects min_p, so new saved provider snapshots omit it.
-const PROVIDER_DEFAULT_MIN_P_OVERRIDES: ReadonlyMap<string, number> = new Map([["nvidia", 0]]);
+const ANTHROPIC_TEMPERATURE_DEFAULT = 1.0;
+const ANTHROPIC_TOP_P_DEFAULT = 0.95;
 
 export function isParamDisabled(disabledParams: readonly string[] | null | undefined, param: SupportedParam): boolean {
   return disabledParams?.includes(param) ?? false;
-}
-
-export function resolveSavedProviderDefaultMinP(
-  provider: string,
-  baseMinP: number,
-  existingMinP?: number | null,
-): number {
-  if (existingMinP != null) {
-    return existingMinP;
-  }
-
-  return PROVIDER_DEFAULT_MIN_P_OVERRIDES.get(provider.toLowerCase()) ?? baseMinP;
 }
 
 export function getActiveTemperature(
@@ -54,7 +39,7 @@ export function getActiveTemperature(
   return isParamDisabled(config.llm_disabled_params, "temperature") ? undefined : config.llm_temperature;
 }
 
-export function isActiveSamplingParam(config: SamplingConfigSource, param: SupportedParam): boolean {
+function isActiveSamplingParam(config: SamplingConfigSource, param: SupportedParam): boolean {
   switch (param) {
     case "temperature":
       return getActiveTemperature(config) !== undefined;

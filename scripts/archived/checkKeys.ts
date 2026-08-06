@@ -1,11 +1,9 @@
-// src/test-secrets.ts
 import { getAppSecrets } from "@/utils/security/secretsManager";
 
 async function test() {
   console.log("🔒 Attempting to fetch secrets from AWS...");
 
   try {
-    // Force the function to use production mode (AWS Secrets Manager)
     process.env.RUN_ENV = "production";
 
     const secrets = await getAppSecrets();

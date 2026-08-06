@@ -1,6 +1,7 @@
 /**
  * Preset Export Command
- * Exports TomoriBot's personality as a PNG file with embedded metadata
+ * Exports TomoriBot's personality as a PNG file with embedded metadata,
+ * or as an importable JSON file (same payload, no avatar image)
  */
 
 import type {
@@ -38,10 +39,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Executes the 'export' command
  * Exports TomoriBot's personality to a PNG file and sends it to the channel
- * @param client - The Discord client instance
- * @param interaction - The chat input command interaction
- * @param userData - The user data for the invoking user
- * @param locale - The user's preferred locale
  */
 export async function execute(
   client: Client,
@@ -52,7 +49,6 @@ export async function execute(
   let responseInteraction: ChatInputCommandInteraction | ModalSubmitInteraction = interaction;
 
   try {
-    // 1. Resolve target persona via selector
     const serverDiscId = interaction.guild?.id ?? interaction.user.id;
     const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     const personaSelectOptions: SelectOption[] = allPersonas
@@ -123,10 +119,9 @@ export async function execute(
       return;
     }
 
-    // 2. Defer reply while we process (not ephemeral for transparency)
+    // Defer reply while we process (not ephemeral for transparency)
     await responseInteraction.deferReply();
 
-    // 3. Export selected persona data from database
     const exportResult = await presetRepository.exportPresetData(serverDiscId, selectedPersona.persona_id);
 
     if (!exportResult.success) {
@@ -141,7 +136,6 @@ export async function execute(
       return;
     }
 
-    // Type is now narrowed to success variant
     const presetData = exportResult.data;
     if (exportJson) {
       const nickname = presetData.data.tomori_nickname;
@@ -152,33 +146,25 @@ export async function execute(
       const timestamp = Date.now();
       const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.json`;
 
-      const readableJsonExport = {
-        export_type: "persona_readable",
-        import_compatible: false,
-        exported_at: new Date().toISOString(),
-        note: localizer(locale, "commands.persona.export.json_non_importable_note"),
-        persona: {
-          persona_id: selectedPersona.persona_id ?? null,
-          persona_nickname: nickname,
+      // Canonical PresetExport payload (identical to the PNG tEXt chunk) so the
+      // file round-trips through /persona import's validatePresetFile() path.
+      // The `note` and `readable` extras are for humans only: the import Zod
+      // schemas use non-strict z.object(), which strips unknown keys on parse.
+      const importableJsonExport = {
+        ...presetData,
+        note: localizer(locale, "commands.persona.export.json_importable_note"),
+        readable: {
           is_alter: selectedPersona.is_alter === true,
-          persona_lineage_id: presetData.data.persona_lineage_id,
-          preset_lineage_id: presetData.data.preset_lineage_id ?? null,
-          trigger_words: presetData.data.trigger_words,
-          persona_prompt: presetData.data.persona_prompt,
-          attribute_list: presetData.data.attribute_list,
-          sample_dialogues_in: presetData.data.sample_dialogues_in,
-          sample_dialogues_out: presetData.data.sample_dialogues_out,
+          webhook_avatar_url: selectedPersona.webhook_avatar_url ?? null,
           sample_dialogues: presetData.data.sample_dialogues_in.map((input, index) => ({
             user_input: input,
             persona_output: presetData.data.sample_dialogues_out[index] ?? "",
           })),
-          webhook_avatar_url: selectedPersona.webhook_avatar_url ?? null,
-          physical_appearance_tags: selectedPersona.physical_appearance_tags ?? [],
         },
       };
 
       const attachment = new AttachmentBuilder(
-        Buffer.from(`${JSON.stringify(readableJsonExport, null, 2)}\n`, "utf8"),
+        Buffer.from(`${JSON.stringify(importableJsonExport, null, 2)}\n`, "utf8"),
         {
           name: filename,
         },
@@ -199,12 +185,12 @@ export async function execute(
       });
 
       log.success(
-        `Successfully exported readable JSON preset for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}: ${nickname}`,
+        `Successfully exported importable JSON preset for ${interaction.guild ? "guild" : "DM"} ${serverDiscId}: ${nickname}`,
       );
       return;
     }
 
-    // 4. Resolve avatar image (alter persona avatar when available, otherwise server avatar)
+    // Resolve avatar image (alter persona avatar when available, otherwise server avatar)
     let avatarBuffer: Buffer;
     try {
       let selectedAvatarBuffer: Buffer | null = null;
@@ -243,7 +229,6 @@ export async function execute(
       return;
     }
 
-    // 5. Embed metadata into PNG
     let pngWithMetadata: Buffer;
     try {
       pngWithMetadata = embedMetadataInPNG(avatarBuffer, presetData);
@@ -263,7 +248,6 @@ export async function execute(
       return;
     }
 
-    // 6. Create filename with nickname and timestamp
     const nickname = presetData.data.tomori_nickname;
     const sanitizedNickname = sanitizeAttachmentFilenamePart(nickname, {
       fallback: "persona",
@@ -272,12 +256,11 @@ export async function execute(
     const timestamp = Date.now();
     const filename = `tomori-preset-${sanitizedNickname}-${timestamp}.png`;
 
-    // 7. Create attachment
     const attachment = new AttachmentBuilder(pngWithMetadata, {
       name: filename,
     });
 
-    // 8. Send to channel with embedded image (visible to everyone for transparency)
+    // Send to channel with embedded image (visible to everyone for transparency)
     await responseInteraction.editReply({
       embeds: [
         new EmbedBuilder()
@@ -300,7 +283,6 @@ export async function execute(
       metadata: { commandName: "preset export" },
     });
 
-    // If we haven't replied yet, reply with error
     if (!responseInteraction.replied && !responseInteraction.deferred) {
       await replyInfoEmbed(responseInteraction, locale, {
         titleKey: "general.errors.unknown_error_title",

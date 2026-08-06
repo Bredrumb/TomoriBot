@@ -1,5 +1,3 @@
-// locales/en-US/commands/mcp.ts
-
 export default {
   mcp: {
     description: `Manage remote MCP (Model Context Protocol) tool servers`,

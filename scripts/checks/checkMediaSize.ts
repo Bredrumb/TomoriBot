@@ -7,7 +7,7 @@
  * (these get uploaded to Discord on seed), plus bundled assets under assets/img.
  *
  * Historical marketing screenshots under .github/release/** are intentionally
- * NOT scanned — they are immutable release artifacts, not shipped or runtime art.
+ * NOT scanned because they are immutable release artifacts, not shipped or runtime art.
  *
  * The budget is configurable via MEDIA_SIZE_LIMIT_BYTES (see .env.optional.example).
  * Run `bun run compress-media` to losslessly shrink offenders in place.
@@ -26,10 +26,9 @@ config({ quiet: true });
 function main(): void {
   const limit = resolveLimitBytes();
 
-  // 1. Collect in-scope media that exceeds the budget.
   const offenders = listInScopeMedia().filter((file) => file.size > limit);
 
-  // 2. Report. Persona art is listed first and tagged, since it ships to Discord.
+  // Report. Persona art is listed first and tagged, since it ships to Discord.
   if (offenders.length > 0) {
     offenders.sort((a, b) => Number(b.isPersona) - Number(a.isPersona) || b.size - a.size);
     console.error(

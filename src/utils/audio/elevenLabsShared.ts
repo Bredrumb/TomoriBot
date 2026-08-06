@@ -12,7 +12,7 @@ const DEFAULT_TTS_OUTPUT_FORMAT = "mp3_44100_128";
 
 export const ELEVENLABS_SERVICE_NAME = "elevenlabs";
 export const ELEVENLABS_API_BASE_URL = "https://api.elevenlabs.io";
-export const DISCORD_MESSAGE_MAX_CHARS = 2_000;
+const DISCORD_MESSAGE_MAX_CHARS = 2_000;
 
 function parseNumberEnv(
   value: string | undefined,

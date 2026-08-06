@@ -6,10 +6,12 @@ import type {
 } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
-import { assignPersonalCapabilityToProvider } from "@/utils/provider/personalProviderHelpers";
+import { isCustomProvider } from "@/utils/provider/customProviderUtils";
+import { buildFallbackModelPersistence } from "@/utils/provider/fallbackModelIdentity";
+import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 
-export type ActivationStatus = "activated" | "missing_model" | "missing_provider" | "update_failed";
+type ActivationStatus = "activated" | "missing_model" | "missing_provider" | "update_failed";
 
 export interface ActivationResult {
   status: ActivationStatus;
@@ -19,10 +21,6 @@ export interface ActivationResult {
 export type OpenRouterActivationCapability = "text" | "embedding" | "image" | "video";
 
 type ServerSavedProviderConfig = SavedProviderConfigRow | SavedProviderConfigUpsert;
-
-function extractFallbackLlmIds(config: ServerSavedProviderConfig): number[] {
-  return (config.fallback_model_refs ?? []).filter((ref) => ref.type === "llm").map((ref) => ref.id);
-}
 
 export async function activateServerTextModelFromSavedConfig(params: {
   serverDiscId: string;
@@ -40,10 +38,18 @@ export async function activateServerTextModelFromSavedConfig(params: {
     return { status: "missing_model" };
   }
 
+  const promotedLlmId = selectedModel.llm_id;
   const normalizedProvider = params.savedConfig.provider.toLowerCase();
-  const clearFallbacks = params.tomoriState.llm?.llm_provider?.toLowerCase() !== normalizedProvider;
-  const fallbackModelRefs = clearFallbacks ? [] : (params.savedConfig.fallback_model_refs ?? []);
-  const fallbackLlmIds = clearFallbacks ? [] : extractFallbackLlmIds(params.savedConfig);
+  const customEndpoints = isCustomProvider(normalizedProvider)
+    ? await llmProviderRepo.loadCustomEndpointsForServer(params.tomoriState.server_id)
+    : [];
+  // The live chain is server-wide and may intentionally span providers. Switching the primary
+  // only removes entries that resolve to the promoted model.
+  const { fallbackModelRefs, fallbackLlmIds } = buildFallbackModelPersistence(
+    params.tomoriState.config.fallback_model_refs ?? [],
+    promotedLlmId,
+    customEndpoints,
+  );
   const resolvedLogitBiases = resolveLogitBiasEntriesForLlm(
     params.savedConfig.llm_logit_biases ?? params.tomoriState.config.llm_logit_biases ?? [],
     selectedModel,
@@ -134,10 +140,12 @@ export async function activatePersonalProviderTextModel(params: {
     return { status: "missing_model" };
   }
 
-  const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, "text", (row) => ({
-    ...row,
-    llm_id: selectedModel.llm_id ?? null,
-  }));
+  const customEndpoints = isCustomProvider(params.provider)
+    ? await llmProviderRepo.loadCustomEndpointsForUser(params.userId)
+    : [];
+  const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, "text", (row) =>
+    withPersonalTextPrimary(row, selectedModel.llm_id ?? null, customEndpoints),
+  );
 
   return updated ? { status: "activated", modelName: selectedModel.llm_codename } : { status: "update_failed" };
 }
@@ -157,7 +165,7 @@ export async function activatePersonalOpenRouterModelForCapability(params: {
   const updated = await assignPersonalCapabilityToProvider(params.userId, "openrouter", capability, (row) => {
     switch (params.capability) {
       case "text":
-        return { ...row, llm_id: params.modelId };
+        return withPersonalTextPrimary(row, params.modelId);
       case "embedding":
         return { ...row, embedding_model_id: params.modelId };
       case "image":

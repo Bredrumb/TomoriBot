@@ -1,5 +1,3 @@
-// locales/en-US/commands/stats.ts
-
 export default {
   stats: {
     description: `View usage statistics`,
@@ -23,7 +21,6 @@ export default {
       timeframe_description: `The time window to summarize.`,
     },
 
-    // Shared dashboard strings
     empty: `(None)`,
     footer: `Tokens reflect real provider usage where reported; cost is estimated from list prices.`,
     unknown_persona: `Unknown Persona #{id}`,
@@ -153,7 +150,6 @@ export default {
       server_leaderboard_footer: `SERVER LEADERBOARD ({timeframe})`,
     },
 
-    // /stats generate subcommand strings
     generate: {
       description: `Generate a shareable stats image card.`,
       type_description: `The type of card to generate.`,

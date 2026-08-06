@@ -45,6 +45,19 @@ async function discoverProviderInfos(): Promise<readonly ProviderInfo[]> {
 
 const providerInfos = await discoverProviderInfos();
 
+const providerAddChoiceDescriptionKeys: Readonly<Record<string, string>> = {
+  anthropic: "commands.provider.add.provider_choice_descriptions.anthropic",
+  deepseek: "commands.provider.add.provider_choice_descriptions.deepseek",
+  google: "commands.provider.add.provider_choice_descriptions.google",
+  novelai: "commands.provider.add.provider_choice_descriptions.novelai",
+  nvidia: "commands.provider.add.provider_choice_descriptions.nvidia",
+  openrouter: "commands.provider.add.provider_choice_descriptions.openrouter",
+  vertex: "commands.provider.add.provider_choice_descriptions.vertex",
+  vertexexpress: "commands.provider.add.provider_choice_descriptions.vertexexpress",
+  zai: "commands.provider.add.provider_choice_descriptions.zai",
+  zaicoding: "commands.provider.add.provider_choice_descriptions.zaicoding",
+};
+
 const providerInfoByCanonicalName = new Map<string, ProviderInfo>(
   providerInfos.map((info) => [info.name.toLowerCase(), info]),
 );
@@ -143,6 +156,13 @@ export function supportsVisionCapability(providerName: string): boolean {
  */
 export function getAllProviderChoices(): Array<{ name: string; value: string }> {
   return providerInfos.map((info) => ({ name: info.displayName, value: info.name.toLowerCase() }));
+}
+
+/**
+ * Returns the shared provider-picker description key, when one is available.
+ */
+export function getProviderAddChoiceDescriptionKey(providerName: string): string | undefined {
+  return providerAddChoiceDescriptionKeys[normalizeProviderName(providerName)];
 }
 
 /**

@@ -4,7 +4,7 @@ import {
   normalizeTranscriptText,
 } from "@/utils/audio/elevenLabsShared";
 
-export type ElevenLabsSttErrorKind = "missing_api_key" | "timeout" | "request_failed" | "invalid_response";
+type ElevenLabsSttErrorKind = "missing_api_key" | "timeout" | "request_failed" | "invalid_response";
 
 export interface ElevenLabsSttRequest {
   apiKey: string;

@@ -152,4 +152,72 @@ describe("buildOpenAICompatibleMessages — assistant media relocation (golden)"
       { role: "assistant", content: "Sure, " },
     ]);
   });
+
+  it("serializes a text-only tool result once without a duplicate user turn", async () => {
+    const functionResponse = {
+      functionResponse: {
+        name: "fetch_url",
+        response: { result: { summary: "Fetched page content" } },
+      },
+    };
+    const messages = await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "fetch_url", args: { url: "https://example.com" } },
+          functionResponse,
+        },
+      ],
+      seesImages: false,
+    });
+
+    expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
+    expect(messages[1]?.content).toBe(JSON.stringify(functionResponse));
+  });
+});
+
+describe("buildOpenAICompatibleMessages — reasoning_content replay", () => {
+  const functionResponse = { functionResponse: { name: "get_weather", response: { result: "ok" } } };
+
+  async function buildToolReplay(
+    deepseekReasoningContent: string | undefined,
+    requiresReasoningContentReplay: boolean,
+  ): Promise<Array<Record<string, unknown>>> {
+    return await buildOpenAICompatibleMessages({
+      adapterName: "TestAdapter",
+      contextItems: [],
+      currentTurnModelParts: [],
+      functionInteractionHistory: [
+        {
+          functionCall: { name: "get_weather", args: {}, deepseekReasoningContent },
+          functionResponse,
+        },
+      ],
+      seesImages: false,
+      requiresReasoningContentReplay,
+    });
+  }
+
+  it("emits an empty reasoning_content when replay is required but nothing was captured", async () => {
+    // DeepSeek 400s on an omitted key but accepts "", and a degraded retry that dropped
+    // `thinking` produces a tool call with no reasoning to capture.
+    const messages = await buildToolReplay(undefined, true);
+
+    expect(messages[0]).toHaveProperty("reasoning_content");
+    expect(messages[0]?.reasoning_content).toBe("");
+  });
+
+  it("replays captured reasoning verbatim when replay is required", async () => {
+    const messages = await buildToolReplay("thought about the weather", true);
+
+    expect(messages[0]?.reasoning_content).toBe("thought about the weather");
+  });
+
+  it("omits reasoning_content entirely for endpoints that do not require the replay", async () => {
+    const messages = await buildToolReplay(undefined, false);
+
+    expect(messages[0]).not.toHaveProperty("reasoning_content");
+  });
 });

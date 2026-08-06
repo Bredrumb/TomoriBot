@@ -1,4 +1,4 @@
----
+﻿---
 title: "ぶっ飛んでいるロック"
 sidebar:
   order: 6

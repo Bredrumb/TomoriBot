@@ -1,18 +1,36 @@
 import { isIP } from "node:net";
-import {
-  Agent,
-  fetch as undiciFetch,
-  interceptors,
-  type RequestInfo as UndiciRequestInfo,
-  type RequestInit as UndiciRequestInit,
-  type Response as UndiciResponse,
-} from "undici";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { type RemoteUrlValidationFailureCode, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 
-interface PinnedDnsRecord {
-  address: string;
-  family: 4 | 6;
-  ttl: number;
+export type RemoteUrlPolicyFailureCode =
+  | RemoteUrlValidationFailureCode
+  | "REDIRECT_FORBIDDEN"
+  | "REDIRECT_LIMIT_EXCEEDED"
+  | "REDIRECT_LOCATION_MISSING"
+  | "ADDRESS_NOT_PINNABLE";
+
+/**
+ * A user-supplied URL was refused by the SSRF gate, either before the first
+ * request or at a redirect hop.
+ *
+ * Thrown instead of a bare Error so callers can tell a deliberate refusal from a
+ * transport failure: no socket was opened, so these must not be reported as
+ * network errors, retried, or alerted on as connectivity problems.
+ */
+export class RemoteUrlPolicyError extends Error {
+  readonly failureCode: RemoteUrlPolicyFailureCode | undefined;
+  readonly hostname: string;
+
+  constructor(message: string, hostname: string, failureCode?: RemoteUrlPolicyFailureCode) {
+    super(message);
+    this.name = "RemoteUrlPolicyError";
+    this.hostname = hostname;
+    this.failureCode = failureCode;
+  }
+}
+
+export interface PinnedFetchRequest {
+  url: URL;
+  init: BunFetchRequestInit;
 }
 
 function readPositiveIntegerEnv(name: string, fallback: number): number {
@@ -77,40 +95,36 @@ async function normalizeRequestInput(
   };
 }
 
-function toPinnedDnsRecords(addresses: string[]): PinnedDnsRecord[] {
-  return addresses
-    .map((address) => {
-      const family = isIP(address);
-      if (family !== 4 && family !== 6) {
-        return null;
-      }
-
-      return {
-        address,
-        family,
-        ttl: 1,
-      } satisfies PinnedDnsRecord;
-    })
-    .filter((entry): entry is PinnedDnsRecord => entry !== null);
-}
-
-function createPinnedDispatcher(records: PinnedDnsRecord[]): Agent | null {
-  // interceptors.dns is absent in Bun's built-in undici shim; fall back to
-  // no pinning (validateRemoteMcpUrl already validated the resolved IPs).
-  if (typeof interceptors?.dns !== "function") {
-    return null;
+/**
+ * Build a Bun-native request pinned to an already validated IP address.
+ *
+ * The URL uses the literal IP so the transport performs no second DNS lookup,
+ * while Host and TLS SNI retain the validated origin hostname. Bun's native fetch
+ * is used because npm Undici response bodies can stall under Bun for lengthless or
+ * compressed streaming responses.
+ */
+export function createPinnedFetchRequest(url: URL, requestInit: RequestInit, address: string): PinnedFetchRequest {
+  const addressFamily = isIP(address);
+  if (addressFamily !== 4 && addressFamily !== 6) {
+    throw new Error(`Validated address '${address}' is not a valid IP address.`);
   }
 
-  return new Agent({
-    interceptors: {
-      Agent: [
-        interceptors.dns({
-          lookup: (_origin, _options, callback) => callback(null, records),
-        }),
-      ],
-      Client: [],
-    },
-  });
+  const pinnedUrl = new URL(url);
+  pinnedUrl.hostname = addressFamily === 6 ? `[${address}]` : address;
+
+  const headers = mergeHeaders(requestInit.headers);
+  headers.set("host", url.host);
+
+  const init: BunFetchRequestInit = {
+    ...requestInit,
+    headers,
+    redirect: "manual",
+  };
+  if (url.protocol === "https:") {
+    init.tls = { serverName: url.hostname };
+  }
+
+  return { url: pinnedUrl, init };
 }
 
 function isRedirectStatus(status: number): status is 301 | 302 | 303 | 307 | 308 {
@@ -140,71 +154,114 @@ function buildRedirectRequestInit(requestInit: RequestInit, status: number): Req
   };
 }
 
+export async function resolveValidatedUserRedirect(
+  currentUrl: URL,
+  location: string,
+  strict: boolean,
+  allowPrivateNetwork = false,
+): Promise<URL> {
+  const nextUrl = new URL(location, currentUrl);
+  const validation = await validateRemoteUrl(nextUrl.toString(), { strict, allowPrivateNetwork });
+  if (!validation.valid) {
+    throw new RemoteUrlPolicyError(
+      validation.details ?? `Remote redirect validation failed for '${nextUrl.hostname}'.`,
+      nextUrl.hostname,
+      validation.failureCode,
+    );
+  }
+  return nextUrl;
+}
+
 async function fetchUserRemoteUrlInternal(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
   redirectCount: number,
   strict: boolean,
+  allowPrivateNetwork: boolean,
 ): Promise<Response> {
   const { url, requestInit } = await normalizeRequestInput(input, init);
-  const validation = await validateRemoteMcpUrl(url.toString(), { strict });
+  const validation = await validateRemoteUrl(url.toString(), { strict, allowPrivateNetwork });
   if (!validation.valid) {
-    throw new Error(validation.details ?? `Remote URL validation failed for '${url.hostname}'.`);
+    throw new RemoteUrlPolicyError(
+      validation.details ?? `Remote URL validation failed for '${url.hostname}'.`,
+      url.hostname,
+      validation.failureCode,
+    );
   }
 
   const redirectPolicy = requestInit.redirect ?? "follow";
-  const pinnedRecords = toPinnedDnsRecords(validation.resolvedAddresses ?? []);
-  const dispatcher =
-    isIP(url.hostname) === 0 && pinnedRecords.length > 0 ? createPinnedDispatcher(pinnedRecords) : null;
+  let fetchUrl = url;
+  let fetchInit: BunFetchRequestInit = { ...requestInit, redirect: "manual" };
 
-  try {
-    const response = await undiciFetch(url as unknown as UndiciRequestInfo, {
-      ...(requestInit as unknown as UndiciRequestInit),
-      redirect: "manual",
-      dispatcher: dispatcher ?? undefined,
-    });
-
-    if (!isRedirectStatus(response.status)) {
-      return response as unknown as Response;
+  if (isIP(url.hostname) === 0) {
+    const pinnedAddress = validation.resolvedAddresses?.find((address) => isIP(address) !== 0);
+    if (!pinnedAddress) {
+      throw new RemoteUrlPolicyError(
+        `Remote URL validation did not return a pinnable address for '${url.hostname}'.`,
+        url.hostname,
+        "ADDRESS_NOT_PINNABLE",
+      );
     }
-
-    if (redirectPolicy === "manual") {
-      return response as unknown as Response;
-    }
-
-    await response.body?.cancel();
-
-    if (redirectPolicy === "error") {
-      throw new Error(`Redirects are not allowed for user-supplied URL '${url.toString()}'.`);
-    }
-
-    if (redirectCount >= USER_REMOTE_FETCH_MAX_REDIRECTS) {
-      throw new Error(`Too many redirects while fetching '${url.toString()}'.`);
-    }
-
-    const location = response.headers.get("location");
-    if (!location) {
-      throw new Error(`Redirect response from '${url.toString()}' did not include a Location header.`);
-    }
-
-    const nextUrl = new URL(location, url);
-    return await fetchUserRemoteUrlInternal(
-      nextUrl,
-      buildRedirectRequestInit(requestInit, response.status),
-      redirectCount + 1,
-      strict,
-    );
-  } finally {
-    if (dispatcher) {
-      void dispatcher.close().catch(() => undefined);
-    }
+    ({ url: fetchUrl, init: fetchInit } = createPinnedFetchRequest(url, requestInit, pinnedAddress));
   }
+
+  const response = await fetch(fetchUrl, fetchInit);
+  // Do not expose the transport-level pinned IP to callers or redirect logic.
+  Object.defineProperty(response, "url", { value: url.toString() });
+
+  if (!isRedirectStatus(response.status)) {
+    return response;
+  }
+
+  if (redirectPolicy === "manual") {
+    return response;
+  }
+
+  await response.body?.cancel();
+
+  if (redirectPolicy === "error") {
+    throw new RemoteUrlPolicyError(
+      `Redirects are not allowed for user-supplied URL '${url.toString()}'.`,
+      url.hostname,
+      "REDIRECT_FORBIDDEN",
+    );
+  }
+
+  if (redirectCount >= USER_REMOTE_FETCH_MAX_REDIRECTS) {
+    throw new RemoteUrlPolicyError(
+      `Too many redirects while fetching '${url.toString()}'.`,
+      url.hostname,
+      "REDIRECT_LIMIT_EXCEEDED",
+    );
+  }
+
+  const location = response.headers.get("location");
+  if (!location) {
+    throw new RemoteUrlPolicyError(
+      `Redirect response from '${url.toString()}' did not include a Location header.`,
+      url.hostname,
+      "REDIRECT_LOCATION_MISSING",
+    );
+  }
+
+  const nextUrl = await resolveValidatedUserRedirect(url, location, strict, allowPrivateNetwork);
+  return await fetchUserRemoteUrlInternal(
+    nextUrl,
+    buildRedirectRequestInit(requestInit, response.status),
+    redirectCount + 1,
+    strict,
+    allowPrivateNetwork,
+  );
 }
 
 export interface FetchUserRemoteUrlOptions {
   /** Enforce the private/link-local/loopback blocklist even outside production.
    *  Pass true for personal (user-scoped) endpoint calls. */
   strict?: boolean;
+  /** Permit private/internal targets even in production, aligning with the
+   *  `fetch_url` `FETCH_URL_ALLOW_PRIVATE_NETWORK` opt-in. The always-on
+   *  cloud-metadata denylist still applies. Ignored when `strict` is set. */
+  allowPrivateNetwork?: boolean;
 }
 
 export async function fetchUserRemoteUrl(
@@ -212,14 +269,11 @@ export async function fetchUserRemoteUrl(
   init?: RequestInit,
   options?: FetchUserRemoteUrlOptions,
 ): Promise<Response> {
-  return await fetchUserRemoteUrlInternal(input, init, 0, options?.strict === true);
+  return await fetchUserRemoteUrlInternal(
+    input,
+    init,
+    0,
+    options?.strict === true,
+    options?.allowPrivateNetwork === true,
+  );
 }
-
-export const fetchUserRemoteUrlUndici: typeof undiciFetch = async (
-  input: UndiciRequestInfo,
-  init?: UndiciRequestInit,
-): Promise<UndiciResponse> =>
-  (await fetchUserRemoteUrl(
-    input as unknown as RequestInfo | URL,
-    init as unknown as RequestInit,
-  )) as unknown as UndiciResponse;

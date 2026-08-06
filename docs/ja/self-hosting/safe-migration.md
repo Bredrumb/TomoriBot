@@ -131,7 +131,7 @@ Drops the deprecated tomori_configs table after Phase 6 backfill.
 Snapshot is required because the migration is destructive.
 ```
 
-`(Checkpoint)` トークンは、件名または本文の任意の場所に記載できます。これはヘッドコミットのメッセージに対して大文字と小文字を区別して照合されます。アドホックなケースでは、`create_db_snapshot: true` を指定した手動のワークフローディスパッチも同じ働きをします。
+`(Checkpoint)` トークンは、件名または本文の任意の場所に記載できます。これはヘッドコミットのメッセージに対して大文字と小文字を区別して照合されます。アドホックなケースでは、ワークフローのバックアップ入力を有効にした手動ディスパッチも同じ働きをします。
 
 ## 移行が途中で失敗した場合の対処法
 

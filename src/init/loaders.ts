@@ -9,9 +9,8 @@ import eventHandler from "@/handlers/eventHandler";
  * and the event handler (which registers all Discord event listeners).
  *
  * Exits the process on critical failures (tool registry). All other failures
- * are non-critical — the bot degrades gracefully without them.
+ * are non-critical, so the bot degrades gracefully without them.
  *
- * @param client - The Discord.js Client instance
  */
 export async function initLoaders(client: Client): Promise<void> {
   log.section("Initializing Tool Registry...");
@@ -46,6 +45,14 @@ export async function initLoaders(client: Client): Promise<void> {
       "Failed to initialize OpenRouter capability cache (non-critical) - will fall back to database flags",
       error,
     );
+  }
+
+  log.section("Initializing OpenRouter Video Model Cache...");
+  try {
+    const { initializeOpenRouterVideoModelCache } = await import("@/utils/cache/openrouterVideoModelCache");
+    await initializeOpenRouterVideoModelCache();
+  } catch (error) {
+    log.warn("Failed to initialize OpenRouter video model cache (non-critical)", error);
   }
 
   log.section("Initializing Preset Avatar Cache...");

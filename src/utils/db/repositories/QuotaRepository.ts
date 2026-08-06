@@ -1,5 +1,5 @@
 /**
- * QuotaRepository — manages all quota tables for text, image, and video generation.
+ * QuotaRepository: manages all quota tables for text, image, and video generation.
  *
  * Owns tables:
  *   text_quota_configs, text_quotas, text_serverwide_quotas
@@ -9,7 +9,7 @@
  * This repository is not exportable (quota counters are transient; configs are
  * server-specific operational settings, not portable persona state).
  *
- * Export contract: toExportShape returns null — IRepository is implemented as a
+ * Export contract: toExportShape returns null: IRepository is implemented as a
  * no-op stub to satisfy the interface and future pipeline composition.
  */
 import type { SQL } from "bun";
@@ -37,9 +37,7 @@ import {
 } from "@/types/db/schema";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
-import type { IRepository } from "./IRepository";
-
-// ── TEXT QUOTA ──────────────────────────────────────────────────────────────
+import type {} from "./IRepository";
 
 /**
  * Fetch or create the text quota config for a server.
@@ -175,22 +173,6 @@ export async function incrementTextQuota(serverId: number, userDiscId: string): 
 }
 
 /**
- * Delete text quota records older than 7 days via the DB cleanup function.
- * @returns Number of rows deleted
- */
-export async function cleanupOldTextQuotas(): Promise<number> {
-  try {
-    const [result] = await sql<{ cleanup_old_text_quotas: number }[]>`
-      SELECT cleanup_old_text_quotas() AS cleanup_old_text_quotas
-    `;
-    return result?.cleanup_old_text_quotas ?? 0;
-  } catch (error) {
-    log.error("QuotaRepository.cleanupOldTextQuotas: failed", error);
-    return 0;
-  }
-}
-
-/**
  * Update the daily-per-user text quota limit in text_quota_configs.
  * Callers must ensure the config row exists first (call getOrCreateTextConfig).
  *
@@ -295,8 +277,6 @@ export async function resetServerwideTextQuotaPool(serverId: number): Promise<vo
       quota_period_end   = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
   `;
 }
-
-// ── IMAGE QUOTA ─────────────────────────────────────────────────────────────
 
 /**
  * Fetch or create the image quota config for a server.
@@ -419,23 +399,6 @@ export async function incrementImageQuota(serverId: number, userDiscId: string):
 }
 
 /**
- * Delete image quota records older than 7 days via the DB cleanup function.
- * @returns Number of rows deleted
- */
-export async function cleanupOldImageQuotas(): Promise<number> {
-  try {
-    const [result] = await sql<{ cleanup_old_image_quotas: number }[]>`
-      SELECT cleanup_old_image_quotas() AS cleanup_old_image_quotas
-    `;
-    return result?.cleanup_old_image_quotas ?? 0;
-  } catch (error) {
-    log.error("QuotaRepository.cleanupOldImageQuotas: failed", error);
-    return 0;
-  }
-}
-
-/**
- * Update the daily-per-user image quota limit.
  *
  * @param serverId - Internal server DB ID
  * @param limit    - New limit (0 = unlimited)
@@ -536,8 +499,6 @@ export async function resetServerwideImageQuotaPool(serverId: number): Promise<v
       quota_period_end   = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
   `;
 }
-
-// ── VIDEO QUOTA ─────────────────────────────────────────────────────────────
 
 /**
  * Fetch or create the video quota config for a server.
@@ -662,7 +623,6 @@ export async function incrementVideoQuota(serverId: number, userDiscId: string):
 }
 
 /**
- * Update the daily-per-user video quota limit.
  *
  * @param serverId - Internal server DB ID
  * @param limit    - New limit (0 = unlimited)
@@ -763,22 +723,3 @@ export async function resetServerwideVideoQuotaPool(serverId: number): Promise<v
       quota_period_end   = CURRENT_TIMESTAMP + (${config.serverwide_quota_resets_in} || ' days')::interval
   `;
 }
-
-// ── IRepository stub ────────────────────────────────────────────────────────
-
-/**
- * QuotaRepository class — wraps the module-level functions and satisfies IRepository.
- * Quota state is transient and server-specific; toExportShape returns null.
- */
-export class QuotaRepository implements IRepository<null> {
-  async toExportShape(_ownerId: string | number): Promise<null> {
-    return null;
-  }
-
-  async fromExportShape(_ownerId: string | number, _data: null): Promise<boolean> {
-    return true;
-  }
-}
-
-/** Singleton instance — import this in callers. */
-export const quotaRepository = new QuotaRepository();

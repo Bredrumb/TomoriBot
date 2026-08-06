@@ -7,7 +7,7 @@ import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context
 import { appendDialogueHistoryContext } from "./dialogueHistory";
 import { convertMentions } from "./mentionNormalizer";
 import { buildServerMemoryContextItem, buildShortTermMemoryContext } from "./memories";
-import { buildUsersInConversationContextItem } from "./participants";
+import { buildParticipantContextItem } from "./participants";
 import { buildPersonaUserBlocksContextItem } from "./personaUserBlocks";
 import { buildPersonaSpriteContextItem } from "./personaSprites";
 import { buildServerDocumentContextItem } from "./rag";
@@ -16,12 +16,25 @@ import { buildServerInfoContextItem } from "./serverInfo";
 import { buildConditioningContextItem, buildPromptContextItems, buildSampleDialogueContextItems } from "./templates";
 import { buildVerbatimToolDefinitionsContextItem } from "./toolDefinitions";
 import type { BuildContextParams } from "./types";
+import { SPACER_TEMPLATE } from "./timeAwareness";
 
 export type NativeBuildContextResult = {
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  /** Unified STM nudge, injected positionally by the pipeline at `nudgeInjectionDepth`. */
+  nudgeItem?: StructuredContextItem;
+  /** Dialogue depth at which to inject `nudgeItem` (0 = tail). */
+  nudgeInjectionDepth?: number;
+  /**
+   * STM content block deferred for positional injection. Populated only when the
+   * server set a content depth >= 0; when -1 (default) the block is pushed inline
+   * into `contextItems` here and this stays undefined.
+   */
+  memoryInjectionItems?: StructuredContextItem[];
+  /** Dialogue depth at which to inject `memoryInjectionItems` (0 = tail). */
+  memoryInjectionDepth?: number;
 };
 
 /**
@@ -33,7 +46,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     serverName,
     serverDescription,
     simplifiedMessageHistory,
-    userList,
+    preparedParticipantContext,
     channelName,
     channelId,
     parentChannelId,
@@ -41,15 +54,14 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     triggererName,
     tomoriNickname,
     tomoriAttributes,
-    publicPersonaAttributes,
     tomoriConfig,
     channelPromptOverride,
     channelContextNote,
+    reunionNote,
     personaPrompt,
     personaLineageId,
     triggererUserId,
     isDMChannel = false,
-    mediaContextWindow,
     snapshot,
     preloadedEmojis,
     preloadedStickers,
@@ -57,9 +69,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     impersonatedUserId,
     impersonatedUserNickname,
     impersonatedUserPrompt,
-    matrixUsers,
-    syntheticUsers,
-    pluralKitUsers,
     personaUserBlocks,
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
@@ -70,7 +79,10 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   const contextItems: StructuredContextItem[] = [];
   const tailDirectives: string[] = [];
   const lowerPriorityTailDirectives: string[] = [];
-  let sameChannelMemoryDirective: string | undefined;
+  let nudgeItem: StructuredContextItem | undefined;
+  let nudgeInjectionDepth = 2;
+  let memoryInjectionItems: StructuredContextItem[] | undefined;
+  let memoryInjectionDepth = -1;
   let uncensorDirective: string | undefined;
   const botName = tomoriNickname;
   const impersonatedMember =
@@ -109,6 +121,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
           }
         : undefined,
   });
+  const dateSpacerTemplate =
+    tomoriConfig.time_awareness_enabled !== false ? await toolPromptMacroResolver.expand(SPACER_TEMPLATE) : null;
   const explicitLongTermMemoryIntent =
     explicitLongTermMemoryIntentOverride ??
     hasExplicitLongTermMemoryIntent(
@@ -121,7 +135,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       guildId,
       botName,
       tomoriAttributes,
-      publicPersonaAttributes,
       tomoriConfig,
       channelPromptOverride,
       personaPrompt,
@@ -226,12 +239,12 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   );
   await appendOptionalItem(
     contextItems,
-    buildUsersInConversationContextItem({
+    buildParticipantContextItem({
       client,
       guildId,
       channelName,
       channelId,
-      userList,
+      participantSeeds: preparedParticipantContext.discoveryPlan.seeds,
       triggererName,
       botName,
       personaLineageId,
@@ -241,10 +254,13 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       isUserImpersonation,
       impersonatedUserId,
       impersonatedIdentityName,
-      matrixUsers,
-      syntheticUsers,
-      pluralKitUsers,
-      publicPersonaAttributes,
+      matrixUsers: preparedParticipantContext.matrixUsers,
+      syntheticUsers: preparedParticipantContext.syntheticUsers,
+      pluralKitUsers: preparedParticipantContext.pluralKitUsers,
+      publicPersonaProfiles: preparedParticipantContext.publicPersonaProfiles,
+      preloadedReferencedUserRows: preparedParticipantContext.referencedUserRows,
+      referencedUserIds: preparedParticipantContext.referencedUserIds,
+      profileEnricherRegistry: preparedParticipantContext.profileEnricherRegistry,
       toolPromptMacroResolver,
       conversationCorpus,
       snapshot,
@@ -254,8 +270,14 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
 
   try {
     const actualTriggeringUserId = impersonatedUserId ?? snapshot?.triggererUserRow?.user_disc_id;
+    // Per-server master switch (migration 054): when STM is disabled we no longer skip the
+    // whole build. "Off" means the bot stops AUTO-managing STM (the write tool and the
+    // cadence nudge are suppressed): but existing STM content STILL surfaces so admins can
+    // curate it by hand via `/persona stm edit` and crude messages remain visible. The
+    // nudge suppression now lives inside buildShortTermMemoryContext (gated on the same
+    // switch), and the write tool gates itself in updateShortTermMemoryTool.
     if (actualTriggeringUserId) {
-      const { memoryItems, createPromptText } = await buildShortTermMemoryContext({
+      const stmResult = await buildShortTermMemoryContext({
         triggeringUserId: actualTriggeringUserId,
         currentChannelId: channelId,
         currentServerId: guildId,
@@ -270,8 +292,19 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
         currentParentChannelId: parentChannelId,
         convertMentions,
       });
-      contextItems.push(...memoryItems);
-      sameChannelMemoryDirective = createPromptText;
+      nudgeItem = stmResult.nudgeItem;
+      nudgeInjectionDepth = stmResult.nudgeInjectionDepth;
+      memoryInjectionDepth = stmResult.memoryInjectionDepth;
+      if (memoryInjectionDepth >= 0) {
+        // Depth >= 0: defer the block out-of-band so it can be spliced at a dialogue
+        // depth downstream (after history is assembled), the same way the nudge is.
+        // Keeping it OUT of contextItems also means preset reassembly won't anchor it
+        // at the chatHistory flush point: the positional injection owns placement.
+        memoryInjectionItems = stmResult.memoryItems;
+      } else {
+        // Default (-1): anchor the block near the top as ambient knowledge (legacy).
+        contextItems.push(...stmResult.memoryItems);
+      }
     }
   } catch (error) {
     log.warn("Failed to build short-term memory context", error);
@@ -318,7 +351,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     tomoriConfig,
     tomoriState,
     channelContextNote,
-    mediaContextWindow,
+    reunionNote,
+    dateSpacerTemplate,
     includeTimestamps,
     isUserImpersonation,
     impersonatedUserId,
@@ -332,10 +366,6 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
       `Imitate ${impersonatedIdentityName || "User"}, start your message with ${impersonatedIdentityName || "User"}:`,
     );
   }
-  if (sameChannelMemoryDirective) {
-    lowerPriorityTailDirectives.push(sameChannelMemoryDirective);
-  }
-
   const uncensorInjectionText = buildUncensorInjectionText({
     injectionEnabled: tomoriConfig.uncensor_injection_enabled,
     unicodeSpacesEnabled: tomoriConfig.uncensor_unicode_space_enabled,
@@ -349,7 +379,16 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   }
 
   log.info(`Built ${contextItems.length} structured context items for guild ${guildId}.`);
-  return { contextItems, tailDirectives, lowerPriorityTailDirectives, uncensorDirective };
+  return {
+    contextItems,
+    tailDirectives,
+    lowerPriorityTailDirectives,
+    uncensorDirective,
+    nudgeItem,
+    nudgeInjectionDepth,
+    memoryInjectionItems,
+    memoryInjectionDepth,
+  };
 }
 
 async function appendOptionalItem(

@@ -132,20 +132,19 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
     try {
       const allTools: Record<string, unknown>[] = [];
 
-      // 1. The unified `web_search` tool is gated centrally in `availability.ts`
+      // The unified `web_search` tool is gated centrally in `availability.ts`
       //    via its `requiresFeatureFlag = "web_search"`. No per-adapter Brave-key
-      //    filtering needed here anymore — the dispatcher inside the tool itself
-      //    decides which engine (Brave/DDG/Felo) serves the request at call time.
+      //    filtering needed here anymore, because the dispatcher inside the tool itself
+      //    decides which engine (Brave/DDG/IAsk) serves the request at call time.
       if (builtInTools.length > 0) {
         allTools.push(...this.convertToolsArray(builtInTools));
         log.info(`Anthropic adapter: Converted ${builtInTools.length} built-in tools`);
       }
 
-      // 4. Add global MCP tools
       const mcpManager = getMCPManager();
       if (mcpManager.isReady() && allowedMCPFunctions) {
         let addedMCPToolsCount = 0;
-        const disabledDDGFunctions = ["felo-search", "iask-search", "monica-search", "fetch-url", "url-metadata"];
+        const disabledDDGFunctions = ["iask-search", "monica-search"];
         const allowedFunctionSet = new Set(allowedMCPFunctions);
 
         for (const mcpTool of mcpManager.getMCPTools()) {
@@ -169,7 +168,6 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
               continue;
             }
 
-            // 5. Convert MCP declarations to Anthropic format
             for (const declaration of declarations) {
               const anthropicDeclaration: Record<string, unknown> = {
                 name: declaration.name,
@@ -177,7 +175,7 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
               };
 
               // MCP tools use `parametersJsonSchema`, rename to `input_schema`.
-              // Anthropic requires `input_schema` on every tool — fall back to an
+              // Anthropic requires `input_schema` on every tool, so fall back to an
               // empty object schema if the declaration provides no parameters.
               if ("parametersJsonSchema" in declaration) {
                 anthropicDeclaration.input_schema = declaration.parametersJsonSchema;
@@ -198,7 +196,6 @@ export class AnthropicToolAdapter implements MCPCapableToolAdapter {
         log.info(`Anthropic adapter: Added ${addedMCPToolsCount} MCP tools using centralized filtering`);
       }
 
-      // 6. Add guild MCP tools (per-guild remote servers)
       if (serverId && allowedMCPFunctions) {
         try {
           const guildMcpManager = getGuildMcpManager();

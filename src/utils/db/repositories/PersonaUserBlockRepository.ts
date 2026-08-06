@@ -25,7 +25,7 @@ function parsePersonaUserBlockRows(rows: unknown[]): PersonaUserBlockRow[] {
   return parsedRows;
 }
 
-export class PersonaUserBlockRepository {
+class PersonaUserBlockRepository {
   async loadActiveBlocksForPersona(serverId: number, personaId: number): Promise<PersonaUserBlockRow[]> {
     try {
       const rows = await sql`

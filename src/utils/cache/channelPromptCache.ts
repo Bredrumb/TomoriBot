@@ -10,24 +10,13 @@
 
 import {
   type ChannelPromptOverride,
-  clearChannelPromptCache,
   getChannelPromptCacheEntry,
-  getChannelPromptCacheSize,
-  invalidateAllChannelPromptCacheForServer,
-  invalidateChannelPromptCache,
   setChannelPromptCache,
 } from "@/utils/cache/channelPromptCacheStore";
 import { channelPromptRepo } from "@/utils/db/repositories/ChannelPromptRepository";
 import { log } from "@/utils/misc/logger";
 
 export type { ChannelPromptOverride };
-export {
-  clearChannelPromptCache,
-  getChannelPromptCacheSize,
-  invalidateAllChannelPromptCacheForServer,
-  invalidateChannelPromptCache,
-  setChannelPromptCache,
-};
 
 /**
  * Gets the channel-level system prompt override for a given server/channel pair.

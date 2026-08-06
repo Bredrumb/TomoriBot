@@ -15,8 +15,15 @@ import {
   safeSelectOptionText,
 } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible, refreshEligibilitySet } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
@@ -30,6 +37,7 @@ async function performDocumentRemoval(
   tomoriState: TomoriState,
   targetPersonaId: number | null,
   documentId: number,
+  serverDiscId: string,
   _userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
@@ -46,9 +54,7 @@ async function performDocumentRemoval(
     return false;
   }
 
-  if (replyInteraction.guildId) {
-    invalidateTomoriStateCache(replyInteraction.guildId);
-  }
+  invalidateTomoriStateCache(serverDiscId);
 
   if (!suppressSuccessReply) {
     await replyInfoEmbed(replyInteraction, locale, {
@@ -103,7 +109,10 @@ export async function execute(
 
   let tomoriState: TomoriState | null = null;
   let targetPersonaId: number | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
+  const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+  const scopeInput = interaction.options.getString("scope");
+  const scope: DocumentScope = scopeInput === "serverwide" ? "serverwide" : "persona";
 
   try {
     if (!isRagAvailable()) {
@@ -116,7 +125,11 @@ export async function execute(
       return;
     }
 
-    tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
+    if (scope === "persona") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
+    tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -126,6 +139,7 @@ export async function execute(
       });
       return;
     }
+    const activeTomoriState = tomoriState;
 
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
@@ -138,78 +152,190 @@ export async function execute(
       return;
     }
 
-    const scopeInput = interaction.options.getString("scope");
-    const scope: DocumentScope = scopeInput === "serverwide" ? "serverwide" : "persona";
-    const avatarSessionCache: AvatarSessionCache = new Map();
-
-    while (true) {
-      if (scope === "persona") {
-        const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
-        if (allPersonas.length === 0) {
-          await replyInfoEmbed(interaction, locale, {
-            titleKey: "general.errors.tomori_not_setup_title",
-            descriptionKey: "general.errors.tomori_not_setup_description",
-            color: ColorCode.ERROR,
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-          personas: allPersonas,
-          avatarSessionCache,
-          color: ColorCode.INFO,
-          preserveSelectedInteraction: true,
-          onSelect: async () => {},
+    if (scope === "persona") {
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
+      if (allPersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "general.errors.tomori_not_setup_title",
+          descriptionKey: "general.errors.tomori_not_setup_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
         });
-
-        if (!personaSelection.success) {
-          return;
-        }
-        if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-          return;
-        }
-
-        personaSelectionInteraction = personaSelection.interaction;
-        const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.persona_id) {
-          await updateButtonComponentsV2Status(
-            personaSelectionInteraction,
-            locale,
-            "general.errors.invalid_option_title",
-            "general.errors.invalid_option_description",
-            ColorCode.ERROR,
-            undefined,
-            "general.pagination.reloading_persona_picker",
-          );
-          continue;
-        }
-        targetPersonaId = selectedPersona.persona_id;
+        return;
       }
 
-      const selectionInteraction = personaSelectionInteraction ?? interaction;
+      // Class B eligibility: one batched query resolves every persona that owns
+      // at least one document. The predicate closes over this mutable set, which
+      // is refreshed in place after each removal so emptying the last document of
+      // the last eligible persona reaches the workflow's mid-loop empty state.
+      const eligibleDocumentPersonaIds = await serverMemoryRepository.personaIdsWithDocuments(
+        activeTomoriState.server_id,
+      );
+      const isEligible = personaIdIsEligible(eligibleDocumentPersonaIds);
+      const eligiblePersonas = allPersonas.filter(isEligible);
+      if (eligiblePersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.forget.document.none_title",
+          descriptionKey: "commands.forget.document.none_description",
+          color: ColorCode.WARN,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
+        personas: allPersonas,
+        color: ColorCode.INFO,
+        eligibility: {
+          isEligible,
+          emptyTitleKey: "commands.forget.document.none_title",
+          emptyDescriptionKey: "commands.forget.document.none_description",
+          itemsLabelKey: "general.persona_workflow.items.documents",
+        },
+        async onSelected(selection) {
+          workflowState.message = selection.message;
+          const selectedPersonaId = selection.persona.persona_id;
+          if (!selectedPersonaId) {
+            const work = await selection.beginInPlaceWork();
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+          targetPersonaId = selectedPersonaId;
+
+          let documents: Awaited<ReturnType<typeof serverMemoryRepository.loadDocuments>> = [];
+          let hasNoDocuments = false;
+          const modalResult = await selection.openModal(async () => {
+            documents = await serverMemoryRepository.loadDocuments(activeTomoriState.server_id, selectedPersonaId);
+            if (!documents || documents.length === 0) {
+              hasNoDocuments = true;
+              throw new Error("The selected persona has no documents.");
+            }
+            const documentOptions: SelectOption[] = documents.map((doc) => ({
+              label: safeSelectOptionText(doc.document_name),
+              value: doc.document_id.toString(),
+              description: doc.first_chunk ? safeSelectOptionText(doc.first_chunk) : undefined,
+            }));
+            return {
+              modalCustomId: MODAL_CUSTOM_ID,
+              modalTitleKey: "commands.forget.document.modal_title",
+              components: [
+                {
+                  customId: DOCUMENT_SELECT_ID,
+                  labelKey: "commands.forget.document.select_label",
+                  descriptionKey: "commands.forget.document.select_description",
+                  placeholder: "commands.forget.document.select_placeholder",
+                  required: true,
+                  options: documentOptions,
+                },
+              ],
+            };
+          });
+
+          if (hasNoDocuments) {
+            await selection.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.forget.document.none_title",
+                descriptionKey: "commands.forget.document.none_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.WARN,
+              }),
+            );
+            return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
+          }
+          if (modalResult.outcome !== "submitted") {
+            log.info(`Document removal modal ${modalResult.outcome} for user ${userData.user_id}`);
+            return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+          }
+
+          const work = await modalResult.phase.beginInPlaceWork();
+          const selectedIdStr = modalResult.phase.values[DOCUMENT_SELECT_ID];
+          const selectedId = Number.parseInt(selectedIdStr ?? "", 10);
+          const selectedDocument = documents.find((document) => document.document_id === selectedId);
+          if (!selectedIdStr || !selectedDocument) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+
+          const documentName = await serverMemoryRepository.removeDocument(
+            selectedId,
+            activeTomoriState.server_id,
+            selectedPersonaId,
+          );
+          if (!documentName) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.update_failed_title",
+                descriptionKey: "general.errors.update_failed_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+
+          invalidateTomoriStateCache(serverDiscId);
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.forget.document.success_title",
+              descriptionKey: "commands.forget.document.success_description",
+              descriptionVars: { name: documentName },
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.SUCCESS,
+            }),
+          );
+          // Refresh the eligible set in place (the predicate closes over it) so a
+          // persona whose last document was just removed drops out of the picker
+          // on retry, and the last such removal reaches the mid-loop empty state.
+          await refreshEligibilitySet(
+            eligibleDocumentPersonaIds,
+            serverMemoryRepository.personaIdsWithDocuments(activeTomoriState.server_id),
+          );
+          return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
+        },
+      });
+      if (workflowResult.outcome === "error" && workflowState.message) {
+        await workflowState.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+      }
+      return;
+    }
+
+    while (true) {
+      const selectionInteraction = interaction;
       const documents = await serverMemoryRepository.loadDocuments(tomoriState.server_id, targetPersonaId);
 
       if (!documents || documents.length === 0) {
-        if (personaSelectionInteraction) {
-          await updateButtonComponentsV2Status(
-            personaSelectionInteraction,
-            locale,
-            "commands.forget.document.none_title",
-            "commands.forget.document.none_description",
-            ColorCode.WARN,
-            undefined,
-            "general.pagination.reloading_persona_picker",
-          );
-        } else {
-          await replyInfoEmbed(selectionInteraction, locale, {
-            titleKey: "commands.forget.document.none_title",
-            descriptionKey: "commands.forget.document.none_description",
-            color: ColorCode.WARN,
-          });
-          return;
-        }
-        continue;
+        await replyInfoEmbed(selectionInteraction, locale, {
+          titleKey: "commands.forget.document.none_title",
+          descriptionKey: "commands.forget.document.none_description",
+          color: ColorCode.WARN,
+        });
+        return;
       }
 
       const documentOptions: SelectOption[] = documents.map((doc) => ({
@@ -236,17 +362,7 @@ export async function execute(
       // Handle modal outcome - keep the persona picker loop alive when the modal closes
       if (modalResult.outcome !== "submit") {
         log.info(`Document removal modal ${modalResult.outcome} for user ${userData.user_id}`);
-        if (scope === "serverwide") {
-          return;
-        }
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
+        return;
       }
 
       if (!modalResult.interaction || !modalResult.values) {
@@ -286,6 +402,7 @@ export async function execute(
         tomoriState,
         targetPersonaId,
         selectedId,
+        serverDiscId,
         userData,
         modalSubmitInteraction,
         locale,
@@ -301,14 +418,10 @@ export async function execute(
         "commands.forget.document.success_title",
         "commands.forget.document.success_description",
         ColorCode.SUCCESS,
-        {
-          name: selectedDocument.document_name,
-        },
+        { name: selectedDocument.document_name },
         "general.pagination.reloading_persona_picker",
       );
-      if (scope === "serverwide") {
-        return;
-      }
+      return;
     }
   } catch (error) {
     const context: ErrorContext = {
@@ -324,11 +437,18 @@ export async function execute(
     };
     await log.error(`Unexpected error in /forget document for user ${userData.user_disc_id}`, error as Error, context);
 
-    const errorReplyTarget =
-      personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction;
-    await replyInfoEmbed(errorReplyTarget, locale, {
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

@@ -4,6 +4,8 @@ import {
   addProcessMemoryDeltaFields,
   addProcessMemorySnapshotFields,
   collectProcessMemorySnapshot,
+  type ForcedGcRuntime,
+  runForcedGc,
 } from "@/utils/misc/processMemory";
 
 /**
@@ -13,13 +15,9 @@ import {
  * ============================================================================
  */
 
-// Environment check - disable guards in development
 const IS_PRODUCTION = process.env.RUN_ENV === "production";
 export const GUARDS_ENABLED = IS_PRODUCTION; // Automatically disabled in dev
 
-// -----------------------------------------------------------------------------
-// MESSAGE QUEUE RATE LIMITS
-// -----------------------------------------------------------------------------
 export const MESSAGE_RATE_LIMITS = {
   /**
    * Maximum concurrent messages a single user can have active (processing + queued)
@@ -40,9 +38,6 @@ export const MESSAGE_RATE_LIMITS = {
     : Number.POSITIVE_INFINITY,
 } as const;
 
-// -----------------------------------------------------------------------------
-// MEDIA PROCESSING LIMITS
-// -----------------------------------------------------------------------------
 export const MEDIA_LIMITS = {
   /**
    * Default total number of messages fetched for context building.
@@ -54,7 +49,6 @@ export const MEDIA_LIMITS = {
   /**
    * Number of most recent messages that can contain full media (images, videos, GIFs)
    * Messages beyond this window will have media replaced with text placeholders
-   * Maximum extend_by for increase_media_context = MESSAGE_FETCH_LIMIT - MEDIA_CONTEXT_WINDOW
    * @default 10 messages
    */
   MEDIA_CONTEXT_WINDOW: Number.parseInt(process.env.MEDIA_CONTEXT_WINDOW || "10", 10),
@@ -64,7 +58,7 @@ export const MEDIA_LIMITS = {
    * Larger files will be rejected or downscaled
    * @default 10 MB
    */
-  MAX_MEDIA_SIZE_MB: Number.parseInt(process.env.MAX_MEDIA_SIZE_MB || "8", 10),
+  MAX_MEDIA_SIZE_MB: Number.parseInt(process.env.MAX_MEDIA_SIZE_MB || "10", 10),
 
   /**
    * Maximum size per individual GIF file in MB (for process_gif tool in dev)
@@ -74,9 +68,6 @@ export const MEDIA_LIMITS = {
   MAX_GIF_SIZE_MB: Number.parseInt(process.env.MAX_GIF_SIZE_MB || "50", 10),
 } as const;
 
-// -----------------------------------------------------------------------------
-// PERSONA/AVATAR UPLOAD LIMITS
-// -----------------------------------------------------------------------------
 export const PERSONA_LIMITS = {
   /**
    * Maximum size for persona avatar attachments (create/generate commands)
@@ -86,9 +77,6 @@ export const PERSONA_LIMITS = {
   MAX_AVATAR_SIZE_MB: Number.parseInt(process.env.MAX_AVATAR_SIZE_MB || "10", 10),
 } as const;
 
-// -----------------------------------------------------------------------------
-// IMPORT FILE LIMITS
-// -----------------------------------------------------------------------------
 export const IMPORT_LIMITS = {
   /**
    * Maximum size for data export JSON files (personal/server memories)
@@ -103,9 +91,6 @@ export const IMPORT_LIMITS = {
   MAX_PERSONA_IMPORT_SIZE_MB: Number.parseInt(process.env.MAX_PERSONA_IMPORT_SIZE_MB || "10", 10),
 } as const;
 
-// -----------------------------------------------------------------------------
-// UPLOAD QUOTA LIMITS (Volume-Based DDoS Protection)
-// -----------------------------------------------------------------------------
 export const PERSONA_RATE_LIMITS = {
   /**
    * Maximum persona operations (create/generate) per user per 24 hours
@@ -151,9 +136,6 @@ export const AVATAR_RATE_LIMITS = {
     : Number.POSITIVE_INFINITY,
 } as const;
 
-// -----------------------------------------------------------------------------
-// FETCH TOOL LIMITS (MCP Fetch Server Protection)
-// -----------------------------------------------------------------------------
 export const FETCH_LIMITS = {
   /**
    * Maximum fetch response size in MB (byte size check via HEAD request)
@@ -181,9 +163,6 @@ export const FETCH_LIMITS = {
   MEMORY_REDUCTION_CRITICAL: 0.04, // 4% of base limit
 } as const;
 
-// -----------------------------------------------------------------------------
-// STREAMING LIMITS (Discord Message Flood Protection)
-// -----------------------------------------------------------------------------
 export const STREAMING_LIMITS = {
   /**
    * Maximum number of message flushes per stream session
@@ -194,13 +173,10 @@ export const STREAMING_LIMITS = {
   MAX_FLUSH_COUNT: GUARDS_ENABLED ? Number.parseInt(process.env.MAX_FLUSH_COUNT || "40", 10) : Number.POSITIVE_INFINITY,
 } as const;
 
-// -----------------------------------------------------------------------------
-// MEMORY PROTECTION (Global Process Memory)
-// -----------------------------------------------------------------------------
 /**
  * Returns memory protection configuration, read lazily from process.env.
  * Must be a function (not a const) so values are read after secrets are
- * loaded in index.ts — module-level consts evaluate before getAppSecrets() runs.
+ * loaded in index.ts, so module-level consts evaluate before getAppSecrets() runs.
  */
 export function MEMORY_PROTECTION() {
   return {
@@ -242,7 +218,7 @@ export function MEMORY_PROTECTION() {
  */
 export type MemoryStatus = "safe" | "warning" | "critical";
 
-interface MemoryCheckResult {
+export interface MemoryCheckResult {
   status: MemoryStatus;
   rssUsedMB: number;
   memoryLimitMB: number;
@@ -284,20 +260,15 @@ function notifyMemoryEmergencyHandlers(event: MemoryEmergencyEvent): void {
 
 function forceGarbageCollection(): void {
   const beforeGc = collectProcessMemorySnapshot();
-  let gcRuntime = "unavailable";
+  let gcRuntime: ForcedGcRuntime = "unavailable";
   let failed = 0;
 
   try {
-    if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
-      gcRuntime = "bun";
-      log.info("Forcing Bun garbage collection...");
-      Bun.gc(true);
-    } else if (global.gc) {
-      gcRuntime = "node";
-      log.info("Forcing Node garbage collection...");
-      global.gc();
-    } else {
+    gcRuntime = runForcedGc();
+    if (gcRuntime === "unavailable") {
       log.warn("Garbage collection not available (Bun.gc or Node --expose-gc required for forced GC)");
+    } else {
+      log.info(`Forced ${gcRuntime} garbage collection`);
     }
   } catch (error) {
     failed = 1;
@@ -326,7 +297,6 @@ class MemoryGuard {
   /**
    * Checks global process memory usage and returns status
    * This is called BEFORE processing any media to prevent OOM
-   * @returns Memory status and recommendations
    */
   checkMemory(): MemoryCheckResult {
     const protection = MEMORY_PROTECTION();
@@ -342,7 +312,7 @@ class MemoryGuard {
       };
     }
 
-    // Use RSS (Resident Set Size) — the total memory the OS has allocated to this
+    // Use RSS (Resident Set Size): the total memory the OS has allocated to this
     // process, including heap, native buffers, and shared libraries. This is what
     // the kernel's OOM killer tracks, so it's the correct metric for preventing crashes.
     const rssBytes = process.memoryUsage().rss;
@@ -351,7 +321,6 @@ class MemoryGuard {
     const rssUsedMB = rssBytes / (1024 * 1024);
     const percentUsed = rssBytes / limitBytes;
 
-    // Check if we're in emergency cooldown period
     if (this.isInEmergencyMode) {
       const timeSinceEmergency = Date.now() - this.emergencyModeEnteredAt;
 
@@ -368,14 +337,11 @@ class MemoryGuard {
         };
       }
 
-      // Cooldown expired, exit emergency mode
       log.info("Emergency cooldown expired. Resuming normal operation.");
       this.isInEmergencyMode = false;
     }
 
-    // Determine memory status
     if (percentUsed >= protection.MEMORY_CRITICAL_THRESHOLD) {
-      // CRITICAL: Emergency mode activated
       if (!this.isInEmergencyMode) {
         this.enterEmergencyMode(rssUsedMB, percentUsed);
       }
@@ -390,7 +356,6 @@ class MemoryGuard {
     }
 
     if (percentUsed >= protection.MEMORY_WARNING_THRESHOLD) {
-      // WARNING: Reduce media processing
       log.warn(
         `Memory warning: ${rssUsedMB.toFixed(2)} MB / ${protection.CONTAINER_MEMORY_LIMIT_MB} MB (${(percentUsed * 100).toFixed(1)}%)`,
       );
@@ -405,7 +370,6 @@ class MemoryGuard {
       };
     }
 
-    // SAFE: Normal operation
     return {
       status: "safe",
       rssUsedMB,
@@ -445,13 +409,14 @@ class MemoryGuard {
 
     notifyMemoryEmergencyHandlers(event);
 
+    // Kept even though the cache clearer collects before it measures: clearing can be turned
+    // off by env, and no handler is registered at all until the memory monitor starts.
     forceGarbageCollection();
   }
 
   /**
    * Gets the current media window based on memory status
    * Dynamically reduces window during high memory pressure
-   * @returns Number of messages that should contain media
    */
   getMediaWindow(): number {
     const memCheck = this.checkMemory();
@@ -488,7 +453,6 @@ class MemoryGuard {
 
   /**
    * Gets the current memory status without full check result
-   * @returns Current memory status (safe/warning/critical)
    */
   getStatus(): MemoryStatus {
     return this.checkMemory().status;
@@ -504,7 +468,6 @@ class MemoryGuard {
   }
 }
 
-// Singleton instance
 export const memoryGuard = new MemoryGuard();
 
 /**
@@ -554,7 +517,6 @@ interface QuotaCheckResult {
   max?: number;
 }
 
-// In-memory quota storage (resets on bot restart, which is acceptable)
 const personaQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
 const importQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
 const documentQuotaMap = new Map<string, QuotaEntry>(); // Key: userId
@@ -577,7 +539,6 @@ interface RateLimitResult {
 /**
  * Checks if a user has exceeded their message rate limit
  * @param userActiveCount - Current number of active messages for this user
- * @returns Rate limit check result
  */
 export function checkUserRateLimit(userActiveCount: number): RateLimitResult {
   if (!GUARDS_ENABLED) {
@@ -601,7 +562,6 @@ export function checkUserRateLimit(userActiveCount: number): RateLimitResult {
 /**
  * Checks if a server has exceeded their message rate limit
  * @param serverActiveCount - Current number of active messages for this server
- * @returns Rate limit check result
  */
 export function checkServerRateLimit(serverActiveCount: number): RateLimitResult {
   if (!GUARDS_ENABLED) {
@@ -632,7 +592,6 @@ export function checkServerRateLimit(serverActiveCount: number): RateLimitResult
 /**
  * Atomically checks and reserves a persona operation quota slot
  * Combines check and increment into a single operation to prevent race conditions
- * @param userId - Discord user ID
  * @returns Quota check result - if allowed, quota is already reserved
  */
 export function reservePersonaQuota(userId: string): QuotaCheckResult {
@@ -654,7 +613,6 @@ export function reservePersonaQuota(userId: string): QuotaCheckResult {
     return { allowed: true };
   }
 
-  // Check if quota would exceed limit BEFORE incrementing
   if (quota.count >= limit) {
     return {
       allowed: false,
@@ -672,7 +630,6 @@ export function reservePersonaQuota(userId: string): QuotaCheckResult {
 /**
  * Atomically checks and reserves an import operation quota slot
  * Combines check and increment into a single operation to prevent race conditions
- * @param userId - Discord user ID
  * @returns Quota check result - if allowed, quota is already reserved
  */
 export function reserveImportQuota(userId: string): QuotaCheckResult {
@@ -694,7 +651,6 @@ export function reserveImportQuota(userId: string): QuotaCheckResult {
     return { allowed: true };
   }
 
-  // Check if quota would exceed limit BEFORE incrementing
   if (quota.count >= limit) {
     return {
       allowed: false,
@@ -712,7 +668,6 @@ export function reserveImportQuota(userId: string): QuotaCheckResult {
 /**
  * Atomically checks and reserves a document upload quota slot
  * Combines check and increment into a single operation to prevent race conditions
- * @param userId - Discord user ID
  * @returns Quota check result - if allowed, quota is already reserved
  */
 export function reserveDocumentQuota(userId: string): QuotaCheckResult {
@@ -734,7 +689,6 @@ export function reserveDocumentQuota(userId: string): QuotaCheckResult {
     return { allowed: true };
   }
 
-  // Check if quota would exceed limit BEFORE incrementing
   if (quota.count >= limit) {
     return {
       allowed: false,
@@ -753,7 +707,6 @@ export function reserveDocumentQuota(userId: string): QuotaCheckResult {
  * Atomically checks and reserves an avatar change quota slot
  * Combines check and increment into a single operation to prevent race conditions
  * Note: This is a guild-level quota, not user-level
- * @param guildId - Discord guild ID
  * @returns Quota check result - if allowed, quota is already reserved
  */
 export function reserveAvatarQuota(guildId: string): QuotaCheckResult {
@@ -775,7 +728,6 @@ export function reserveAvatarQuota(guildId: string): QuotaCheckResult {
     return { allowed: true };
   }
 
-  // Check if quota would exceed limit BEFORE incrementing
   if (quota.count >= limit) {
     return {
       allowed: false,
@@ -841,11 +793,22 @@ export function logGuardConfiguration(): void {
 }
 
 /**
+ * Renders an already-taken memory reading.
+ *
+ * Callers that branch on a reading must format that same reading rather than calling
+ * `getMemoryStatusSummary`, which samples afresh. Emergency clearing runs between the two
+ * samples, so prod logs carried lines whose label and body disagreed
+ * ("changed to CRITICAL: ... - Status: WARNING").
+ */
+export function formatMemoryStatus(check: MemoryCheckResult): string {
+  return `Memory (RSS): ${check.rssUsedMB.toFixed(2)} MB / ${check.memoryLimitMB} MB (${(check.percentUsed * 100).toFixed(1)}%) - Status: ${check.status.toUpperCase()}`;
+}
+
+/**
  * Gets a summary of current memory status (useful for monitoring/logging)
  */
 export function getMemoryStatusSummary(): string {
-  const check = memoryGuard.checkMemory();
-  return `Memory (RSS): ${check.rssUsedMB.toFixed(2)} MB / ${check.memoryLimitMB} MB (${(check.percentUsed * 100).toFixed(1)}%) - Status: ${check.status.toUpperCase()}`;
+  return formatMemoryStatus(memoryGuard.checkMemory());
 }
 
 /**
@@ -854,14 +817,12 @@ export function getMemoryStatusSummary(): string {
  * Should be called once during application startup
  */
 export function initializeQuotaCleanup(): void {
-  // Run cleanup every hour
   const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
   setInterval(() => {
     const now = Date.now();
     let cleanedCount = 0;
 
-    // Clean persona quotas
     for (const [userId, quota] of personaQuotaMap.entries()) {
       if (now >= quota.resetAt) {
         personaQuotaMap.delete(userId);
@@ -869,7 +830,6 @@ export function initializeQuotaCleanup(): void {
       }
     }
 
-    // Clean import quotas
     for (const [userId, quota] of importQuotaMap.entries()) {
       if (now >= quota.resetAt) {
         importQuotaMap.delete(userId);
@@ -877,7 +837,6 @@ export function initializeQuotaCleanup(): void {
       }
     }
 
-    // Clean document quotas
     for (const [userId, quota] of documentQuotaMap.entries()) {
       if (now >= quota.resetAt) {
         documentQuotaMap.delete(userId);
@@ -885,7 +844,6 @@ export function initializeQuotaCleanup(): void {
       }
     }
 
-    // Clean avatar quotas
     for (const [guildId, quota] of avatarQuotaMap.entries()) {
       if (now >= quota.resetAt) {
         avatarQuotaMap.delete(guildId);

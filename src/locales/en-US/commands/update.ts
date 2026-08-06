@@ -1,5 +1,3 @@
-// locales/en-US/commands/update.ts
-
 export default {
   update: {
     description: `View the latest TomoriBot release notes`,

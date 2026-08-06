@@ -1,5 +1,3 @@
-// locales/ja/commands/nsfw.ts
-
 export default {
   nsfw: {
     description: `年齢制限付きのコマンドと設定です。`,

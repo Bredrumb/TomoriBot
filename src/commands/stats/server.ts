@@ -17,8 +17,6 @@ import {
 /**
  * Configures the /stats server subcommand: server-wide usage stats for the chosen
  * timeframe (leaderboard, models, tools, expression, generations).
- * @param subcommand - The subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
@@ -36,10 +34,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Renders the server-wide stats dashboard.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -47,7 +41,7 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Acknowledge publicly before DB reads (dashboard is a public message).
+  // Acknowledge publicly before DB reads (dashboard is a public message).
   await interaction.deferReply();
 
   const guild = interaction.guild;
@@ -61,7 +55,7 @@ export async function execute(
   }
 
   try {
-    // 2. Resolve the internal server id; stat reads key on it, not the snowflake.
+    // Resolve the internal server id; stat reads key on it, not the snowflake.
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     if (!serverId) {
@@ -73,7 +67,6 @@ export async function execute(
       return;
     }
 
-    // 3. Resolve timeframe → window floor and build the dashboard.
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);
     const subtitle = buildSubtitle(locale, timeframe);
@@ -88,7 +81,7 @@ export async function execute(
     });
 
     // Pin the server's icon to the dashboard's top-right corner (null when the guild
-    // has no custom icon — the card simply renders without one).
+    // has no custom icon, so the card simply renders without one).
     const iconUrl = guild.iconURL({ extension: "png", size: 256 }) ?? undefined;
     await renderStatsDashboard(interaction, interaction.user.id, locale, tabs, iconUrl);
   } catch (error) {

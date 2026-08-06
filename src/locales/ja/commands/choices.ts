@@ -1,5 +1,3 @@
-// locales/ja/commands/choices.ts
-
 export default {
   choices: {
     always: `常時`,

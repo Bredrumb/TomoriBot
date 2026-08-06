@@ -1,6 +1,4 @@
-// locales/en-US/commands/tool.ts
-
-export default {
+﻿export default {
   tool: {
     ping: {
       description: `Check the bot's latency.`,
@@ -148,9 +146,9 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       add_to_docs_error_description: `Could not save the summary to document memory.`,
     },
     refresh: {
-      description: `Clears the recent conversation history.`,
+      description: `Clear conversation history (this channel only).`,
       title: `🧹 Conversation History Cleared`,
-      response: `All messages above this one will now be ignored.\n This channel's STM has also been cleared.`,
+      response: `All messages above this one will now be ignored.\n This channel's [STM](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm) has also been cleared.`,
       footer: `Delete this embed to allow older messages above to be included again.`,
     },
     status: {
@@ -323,6 +321,7 @@ I have built-in features to help reduce costs from abusers or spammers in your s
       field_tool_use: `Tool Use`,
       field_verbatim_tool_calling: `Verbatim Tool-Calling`,
       field_prompt_snapshot: `Prompt Snapshot`,
+      field_short_term_memory: `Short-Term Memory`,
       field_stm_privacy_bypass: `STM Privacy Bypass`,
       field_voice_messages: `Voice Messages`,
       field_voice_transcript_mode: `Voice Transcript Chat Mode`,

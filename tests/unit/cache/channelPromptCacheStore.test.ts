@@ -12,7 +12,6 @@ import {
 const TTL_MS = Number.parseInt(process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10", 10) * 60 * 1000;
 
 afterEach(() => {
-  // Reset the simulated clock and wipe the store between tests.
   setSystemTime();
   clearChannelPromptCache();
 });
@@ -34,13 +33,14 @@ describe("channelPromptCacheStore", () => {
 
   test("entries expire after the TTL window", () => {
     const start = Date.now();
+    setSystemTime(new Date(start));
     setChannelPromptCache(1, "chan-a", { prompt: "hello", mode: "replace" });
 
-    // Just inside the TTL — still present.
+    // Just inside the TTL, so still present.
     setSystemTime(new Date(start + TTL_MS - 1));
     expect(getChannelPromptCacheEntry(1, "chan-a")).toEqual({ prompt: "hello", mode: "replace" });
 
-    // Past the TTL — expired (treated as a miss) and evicted.
+    // Past the TTL, so expired (treated as a miss) and evicted.
     setSystemTime(new Date(start + TTL_MS + 1));
     expect(getChannelPromptCacheEntry(1, "chan-a")).toBeUndefined();
     expect(getChannelPromptCacheSize()).toBe(0);

@@ -1,16 +1,16 @@
-// locales/en-US/commands/model.ts
-
 export default {
   model: {
+    description: `Manage this server's default AI models.`,
     providerPicker: {
       title: `Select Provider`,
       description: `Choose which saved provider to use for this model slot.`,
+      current_selection: `Currently using \`{model}\` in \`{provider}\`.`,
       placeholder: `Choose a saved provider...`,
       no_providers_title: `No Saved Providers`,
       no_providers_description: `No saved providers are available for this capability. Add one with \`/provider add\` first.`,
     },
     speech: {
-      description: `Choose the active speech endpoint.`,
+      description: `Choose this server's active speech endpoint.`,
       no_endpoints_title: `No Speech Endpoints`,
       no_endpoints_description: `Register a speech endpoint first with \`/provider custom-endpoint add\` or \`/speech elevenlabs\`.`,
       modal_title: `Select Speech Endpoint`,
@@ -26,7 +26,7 @@ export default {
       success_source_changed_description: `Speech voice messages will now use **{endpoint}**. Because the voice source type changed, run {voice_assign_command} if any persona needs a matching voice assignment.`,
     },
     transcription: {
-      description: `Choose the active transcription endpoint.`,
+      description: `Choose this server's active transcription endpoint.`,
       no_endpoints_title: `No Transcription Endpoints`,
       no_endpoints_description: `Register a transcription endpoint first with \`/provider custom-endpoint add\` or \`/speech elevenlabs\`.`,
       modal_title: `Select Transcription Endpoint`,
@@ -41,7 +41,7 @@ export default {
       success_description: `Audio attachments will now be transcribed with **{endpoint}**.`,
     },
     text: {
-      description: `Change the underlying AI model that I use.`,
+      description: `Change this server's default text model.`,
       modal_title: `Select AI Model`,
       select_label: `AI Model`,
       select_description: `Choose the AI model for me to use. Check your AI provider's website for pricing of non-free models.`,
@@ -81,7 +81,7 @@ Click the button below and enter your OpenRouter model codename (e.g., \`xai/gro
 **Detected Capabilities:** {capabilities}`,
     },
     embedding: {
-      description: `Change the embedding model used for document retrieval.`,
+      description: `Change this server's embedding model used for document retrieval.`,
       modal_title: `Select Embedding Model`,
       select_label: `Embedding Model`,
       select_description: `Choose the embedding model for document search.`,
@@ -101,7 +101,7 @@ Click the button below and enter your OpenRouter model codename (e.g., \`xai/gro
       current_none: `None`,
     },
     fallback: {
-      description: `Set backup models to use if the primary model fails, or clear slots with None.`,
+      description: `Set this server's backup text models, or clear slots with None.`,
       modal_title: `Set Fallback Models`,
       slot_1_label: `Fallback Model 1`,
       slot_2_label: `Fallback Model 2`,
@@ -129,7 +129,7 @@ Click the button below and enter your OpenRouter model codename (e.g., \`xai/gro
       cleared_description: `No fallback models are configured for this server.`,
     },
     image: {
-      description: `Change the image generation model for this server.`,
+      description: `Change this server's image generation model.`,
       modal_title: `Select Image Generation Model`,
       select_label: `Image Model`,
       select_description: `Choose the image generation model. Check your AI provider for pricing.`,
@@ -155,7 +155,7 @@ Click the button below and enter your OpenRouter model codename (e.g., \`xai/gro
       nai_picker_note: `Setting a NovelAI image model here stores it in the dedicated NovelAI slot used by \`generate_image_nai\`. If you only want one image generation tool available, use \`/model image clear\`.`,
     },
     video: {
-      description: `Change the video generation model for this server.`,
+      description: `Change this server's video generation model.`,
       modal_title: `Select Video Generation Model`,
       select_label: `Video Model`,
       select_description: `Choose the video generation model. Check your AI provider for pricing.`,
@@ -172,7 +172,7 @@ Click the button below and enter your OpenRouter model codename (e.g., \`xai/gro
       current_none: `None`,
     },
     vision: {
-      description: `Set a dedicated vision model for image analysis when your chat model can't see images.`,
+      description: `Set this server's vision model for when its chat model can't see images.`,
       modal_title: `Select Vision Model`,
       select_label: `Vision Model`,
       select_description: `Choose a vision-capable model to analyze images on behalf of your chat model.`,
@@ -302,16 +302,16 @@ Runtime-ready for the current model: **{runtime_ready_count}**`,
       description: `Manage channel and persona model overrides.`,
     },
     parameters: {
-      description: `Update saved sampler settings for a provider.`,
+      description: `Update this server's saved sampler settings for a provider.`,
       provider_description: `Optional provider to update. Defaults to the active text provider.`,
-      temperature_description: `Temperature override for this provider (0-2).`,
-      top_p_description: `Top-P override for this provider (0-1).`,
-      top_k_description: `Top-K override for this provider (0-256).`,
-      frequency_penalty_description: `Frequency penalty override for this provider (-2 to 2).`,
-      presence_penalty_description: `Presence penalty override for this provider (-2 to 2).`,
-      min_p_description: `Min-P override for this provider (0-1).`,
-      thinking_level_description: `Thinking level override for this provider.`,
-      max_output_tokens_description: `Max output tokens for this provider (1-131072). Leave unset to use the provider default.`,
+      temperature_description: `Temperature override for this provider (0-2, default: 1.0).`,
+      top_p_description: `Top-P override for this provider (0-1, default: 0.95).`,
+      top_k_description: `Top-K override for this provider (0-256, default: 0).`,
+      frequency_penalty_description: `Frequency penalty override for this provider (-2 to 2, default: 0.0).`,
+      presence_penalty_description: `Presence penalty override for this provider (-2 to 2, default: 0.0).`,
+      min_p_description: `Min-P override for this provider (0-1, default: 0.05).`,
+      thinking_level_description: `Thinking level override for this provider (default: Auto).`,
+      max_output_tokens_description: `Max output tokens for this provider (1-131072, default: provider default).`,
       sampler_temperature_label: `Temperature`,
       sampler_top_p_label: `Top-P`,
       sampler_top_k_label: `Top-K`,

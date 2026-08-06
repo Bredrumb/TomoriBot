@@ -26,10 +26,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * Default (false): private-channel STMs are isolated and cannot leak into non-private channels.
  * When enabled (true): the isolation guard is lifted and private-channel STMs flow freely.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -40,11 +36,10 @@ export async function execute(
   // Guild is guaranteed by command loader's server category gate
   const guildId = interaction.guild?.id ?? "";
 
-  // 1. Defer the reply before async work to prevent timeout
+  // Defer the reply before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 2. Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(guildId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -55,10 +50,9 @@ export async function execute(
       return;
     }
 
-    // 3. Toggle the current value (false = isolated, true = bypass)
+    // Toggle the current value (false = isolated, true = bypass)
     const newValue = !(tomoriState.config.stm_privacy_bypass ?? false);
 
-    // 4. Persist to the database
     const updated = await configRepository.updateChannelScopeConfig(tomoriState.server_id, {
       stm_privacy_bypass: newValue,
     });
@@ -88,10 +82,9 @@ export async function execute(
       return;
     }
 
-    // 5. Invalidate cache after successful write
+    // Invalidate cache after successful write
     invalidateTomoriStateCache(guildId);
 
-    // 6. Confirm the change to the user
     await replyInfoEmbed(interaction, locale, {
       titleKey: newValue
         ? "commands.server.stm.privacy-bypass.enabled_title"

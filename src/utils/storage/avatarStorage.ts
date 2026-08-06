@@ -350,9 +350,7 @@ export async function uploadPersonaSpriteToStorage(
  * re-seed is a no-op) while changed art yields a new name (so the URL changes and
  * pointer personas pick it up live). The sprite key is sanitized for path safety.
  *
- * @param spriteKey - Normalized sprite lookup key
  * @param contentHash - Short hash of the PNG bytes
- * @returns A path-safe filename like `mad-ab12cd34ef56.png`
  */
 export function buildPresetSpriteFilename(spriteKey: string, contentHash: string): string {
   const safeKey = sanitizeAttachmentFilenamePart(spriteKey, { fallback: "sprite", maxLength: 40 });
@@ -378,7 +376,6 @@ function buildPresetSpriteRelativeKey(options: {
  * shared URL changes and pointer personas pick the new avatar up live).
  *
  * @param contentHash - Short hash of the PNG bytes
- * @returns A path-safe filename like `avatar-ab12cd34ef56.png`
  */
 export function buildPresetAvatarFilename(contentHash: string): string {
   return `avatar-${contentHash}.png`;
@@ -523,7 +520,6 @@ export function isSharedPresetAssetReference(reference?: string | null): boolean
     return false;
   }
 
-  // Local form: data/avatars/presets/...
   const normalized = normalizeStoredPath(trimmed);
   if (normalized.startsWith(`${LOCAL_AVATAR_ROOT_PREFIX}${SHARED_PRESET_SEGMENT}/`)) {
     return true;

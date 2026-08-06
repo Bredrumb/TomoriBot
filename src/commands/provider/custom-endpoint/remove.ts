@@ -123,9 +123,8 @@ export async function execute(
       return;
     }
 
-    // Remove each selected model by its endpoint id. The service deletes the row + its synthetic
-    // model and precisely clears any live/saved active selection that pointed at that exact model,
-    // leaving sibling models under the same label untouched.
+    // The service deletes the synthetic model and clears only active selections
+    // that reference it, leaving sibling models under the same label untouched.
     const removedEndpoints: CustomEndpointRow[] = [];
     for (const endpoint of endpointsToRemove) {
       if (endpoint.custom_endpoint_id == null) {

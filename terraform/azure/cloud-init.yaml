@@ -1,6 +1,6 @@
 #cloud-config
 package_update: true
-package_upgrade: false
+package_upgrade: true
 
 write_files:
   - path: /usr/local/sbin/tomoribot-setup-swap.sh
@@ -23,11 +23,59 @@ write_files:
       if ! swapon --show=NAME --noheadings | grep -qx '/swapfile'; then
         swapon /swapfile
       fi
+  - path: /usr/local/sbin/tomoribot-setup-zram.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      # The Azure kernel ships a minimal module set; zram.ko lives in modules-extra.
+      apt-get install -y "linux-modules-extra-$(uname -r)" systemd-zram-generator
+
+      modprobe zram
+      echo zram > /etc/modules-load.d/zram.conf
+
+      systemctl daemon-reload
+      systemctl start "systemd-zram-setup@zram0.service"
+  - path: /etc/systemd/zram-generator.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      # Compressed swap in RAM. This VM is memory-starved and CPU-idle (2 vCPU at ~5%
+      # load), so trading a little CPU for capacity is the favourable direction. zstd
+      # measures ~4:1 on the bot's heap, so this device holds roughly its full size in
+      # pages for about a quarter of that in real RAM.
+      #
+      # Priority outranks /swapfile, which stays as the overflow tier beneath it: a
+      # disk-backed fallback must exist, because a full zram device has nowhere to spill.
+      [zram0]
+      zram-size = 1024
+      compression-algorithm = zstd
+      swap-priority = 100
   - path: /etc/sysctl.d/99-tomoribot-swap.conf
     owner: root:root
     permissions: "0644"
     content: |
-      vm.swappiness=20
+      # Tuned for zram, not for the disk swapfile. Swapping to compressed RAM costs
+      # microseconds, so the kernel should prefer it over reclaiming page cache; the
+      # previous value of 20 was avoiding disk seeks that no longer dominate. Readahead
+      # has no value without seeks, hence page-cluster 0.
+      vm.swappiness=180
+      vm.page-cluster=0
+  - path: /etc/docker/daemon.json
+    owner: root:root
+    permissions: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        },
+        "live-restore": true,
+        "no-new-privileges": true
+      }
 
 runcmd:
   - mkdir -p /etc/tomoribot
@@ -40,6 +88,8 @@ runcmd:
   - chmod a+r /etc/apt/keyrings/docker.gpg
   - bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list'
   - apt-get update
-  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq ufw
   - systemctl enable --now docker
-  - usermod -aG docker ${admin_username}
+  # After apt is primed, since this one needs packages unlike the swapfile script above.
+  - /usr/local/sbin/tomoribot-setup-zram.sh
+  - sysctl --system

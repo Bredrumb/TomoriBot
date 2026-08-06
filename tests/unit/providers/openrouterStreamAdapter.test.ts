@@ -1,6 +1,57 @@
-import { describe, expect, it } from "bun:test";
-import { OpenrouterStreamAdapter } from "@/providers/openrouter/openrouterStreamAdapter";
-import type { RawStreamChunk } from "@/types/stream/interfaces";
+import { afterEach, describe, expect, it } from "bun:test";
+import { OpenrouterStreamAdapter, type OpenrouterStreamConfig } from "@/providers/openrouter/openrouterStreamAdapter";
+import type { RawStreamChunk, StreamContext } from "@/types/stream/interfaces";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+function makeSseResponse(events: unknown[]): Response {
+  const body = events.map((event) => `data: ${typeof event === "string" ? event : JSON.stringify(event)}\n\n`).join("");
+  return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+}
+
+function makeStreamConfig(): OpenrouterStreamConfig {
+  return {
+    model: "example/model",
+    apiKey: "test-key",
+    temperature: 0.8,
+    topP: 0.9,
+    minP: 0.1,
+    logitBias: { "123": -100 },
+    inactivityTimeoutMs: 5_000,
+  } as OpenrouterStreamConfig;
+}
+
+function makeStreamContext(): StreamContext {
+  return {
+    channel: {},
+    client: {},
+    tomoriState: {
+      persona_nickname: "Tomori",
+      trigger_words: [],
+      config: {
+        llm_stop_speaker_pattern_enabled: false,
+        llm_stop_strings: null,
+        thinking_level: "none",
+      },
+    },
+    contextItems: [],
+    currentTurnModelParts: [],
+    provider: "openrouter",
+    locale: "en-US",
+  } as unknown as StreamContext;
+}
+
+async function collectRawChunks(adapter: OpenrouterStreamAdapter): Promise<RawStreamChunk[]> {
+  const chunks: RawStreamChunk[] = [];
+  for await (const chunk of adapter.startStream(makeStreamConfig(), makeStreamContext())) {
+    chunks.push(chunk);
+  }
+  return chunks;
+}
 
 /**
  * Builds a RawStreamChunk wrapping an OpenRouter-shaped data object.
@@ -128,10 +179,8 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
   });
 
   it("assembles a function_call with correct name and args on finishReason tool_calls", () => {
-    // Fresh adapter — accumulator starts empty
     const adapter = new OpenrouterStreamAdapter();
 
-    // Single-chunk tool call: both the delta and the finish reason arrive together
     const result = adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -156,14 +205,12 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
     expect(result.type).toBe("function_call");
     expect(result.functionCall?.name).toBe("search_web");
     expect(result.functionCall?.args).toEqual({ query: "TomoriBot changelog" });
-    // Visible content must not leak into a function_call chunk
     expect(result.content).toBeUndefined();
   });
 
   it("accumulates split tool-call chunks and resolves on the finish chunk", () => {
     const adapter = new OpenrouterStreamAdapter();
 
-    // 1. First chunk: name arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -179,7 +226,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 2. Second chunk: arguments fragment arrives
     adapter.processChunk(
       makeOpenrouterChunk({
         choices: [
@@ -191,7 +237,6 @@ describe("OpenrouterStreamAdapter.processChunk", () => {
       }),
     );
 
-    // 3. Terminal chunk: finishReason signals the call is complete
     const result = adapter.processChunk(
       makeOpenrouterChunk({
         choices: [{ index: 0, finishReason: "tool_calls", delta: {} }],
@@ -283,5 +328,112 @@ describe("OpenrouterStreamAdapter.handleProviderError", () => {
     expect(typeof result.message).toBe("string");
     expect(typeof result.retryable).toBe("boolean");
     expect(result.originalError).toBe(error);
+  });
+});
+
+describe("OpenrouterStreamAdapter tool history", () => {
+  it("does not duplicate a text-only tool response as a user message", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return makeSseResponse(["[DONE]"]);
+    }) as typeof fetch;
+
+    const context = makeStreamContext();
+    context.functionInteractionHistory = [
+      {
+        functionCall: { name: "fetch_url", args: { url: "https://example.com" } },
+        functionResponse: {
+          functionResponse: {
+            name: "fetch_url",
+            response: { result: { summary: "Fetched page content" } },
+          },
+        },
+      },
+    ];
+
+    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
+      // Drain the stream so the request body is fully assembled and processed.
+    }
+
+    const messages = requestBody?.messages as Array<Record<string, unknown>>;
+    expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
+    expect(String(messages[1]?.content)).toContain("Fetched page content");
+  });
+});
+
+describe("OpenrouterStreamAdapter parameter degradation", () => {
+  it("restarts an uncommitted SSE error with all named parameters removed", async () => {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_input, init) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      if (requestBodies.length === 1) {
+        return makeSseResponse([
+          {
+            error: {
+              code: 502,
+              message: "Provider returned error",
+              metadata: {
+                raw: "The min_p and logit_bias sampling parameters are not yet supported with speculative decoding.",
+              },
+            },
+          },
+        ]);
+      }
+      return makeSseResponse([{ choices: [{ index: 0, delta: { content: "Recovered" } }] }, "[DONE]"]);
+    }) as typeof fetch;
+
+    const chunks = await collectRawChunks(new OpenrouterStreamAdapter());
+
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[1]).not.toHaveProperty("min_p");
+    expect(requestBodies[1]).not.toHaveProperty("logit_bias");
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]?.data).toMatchObject({ choices: [{ delta: { content: "Recovered" } }] });
+  });
+
+  it("does not restart an SSE error after visible content commits the stream", async () => {
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      return makeSseResponse([
+        { choices: [{ index: 0, delta: { content: "Partial output" } }] },
+        { error: { code: 502, message: "Unsupported parameter: min_p" } },
+      ]);
+    }) as typeof fetch;
+
+    const chunks = await collectRawChunks(new OpenrouterStreamAdapter());
+
+    expect(fetchCalls).toBe(1);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[1]?.data).toMatchObject({ error: { code: 502, message: "Unsupported parameter: min_p" } });
+  });
+
+  it("caps message-targeted retries at three before returning to the static ladder", async () => {
+    const namedParams = ["min_p", "logit_bias", "temperature", "top_p"];
+    const requestBodies: Array<Record<string, unknown>> = [];
+    globalThis.fetch = (async (_input, init) => {
+      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      const namedParam = namedParams[requestBodies.length - 1];
+      return makeSseResponse([
+        {
+          error: {
+            code: 502,
+            message: namedParam ? `Unsupported parameter: ${namedParam}` : "Bad gateway",
+          },
+        },
+      ]);
+    }) as typeof fetch;
+
+    const chunks = await collectRawChunks(new OpenrouterStreamAdapter());
+
+    expect(requestBodies[1]).not.toHaveProperty("min_p");
+    expect(requestBodies[2]).not.toHaveProperty("min_p");
+    expect(requestBodies[2]).not.toHaveProperty("logit_bias");
+    expect(requestBodies[3]).not.toHaveProperty("temperature");
+    expect(requestBodies[3]).toHaveProperty("top_p");
+    expect(requestBodies[4]).toHaveProperty("min_p");
+    expect(requestBodies[4]).toHaveProperty("top_p");
+    expect(chunks.at(-1)?.data).toMatchObject({ error: { code: 502 } });
   });
 });

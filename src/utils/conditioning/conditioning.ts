@@ -1,17 +1,11 @@
 import type { ConditioningType } from "@/types/db/schema";
 
-export const REWARD_ACTION_KEYS = ["headpat", "hug", "kiss", "tickle", "feed"] as const;
-export const PUNISH_ACTION_KEYS = ["spank", "pinch", "bite", "squeeze", "bonk"] as const;
+const REWARD_ACTION_KEYS = ["headpat", "hug", "kiss", "tickle", "feed"] as const;
+const PUNISH_ACTION_KEYS = ["spank", "pinch", "bite", "squeeze", "bonk"] as const;
 
-export type RewardActionKey = (typeof REWARD_ACTION_KEYS)[number];
-export type PunishActionKey = (typeof PUNISH_ACTION_KEYS)[number];
+type RewardActionKey = (typeof REWARD_ACTION_KEYS)[number];
+type PunishActionKey = (typeof PUNISH_ACTION_KEYS)[number];
 export type ConditioningActionKey = RewardActionKey | PunishActionKey;
-
-export const CONDITIONING_ACTION_KEYS_BY_TYPE = {
-  reward: REWARD_ACTION_KEYS,
-  punish: PUNISH_ACTION_KEYS,
-} as const satisfies Record<ConditioningType, readonly ConditioningActionKey[]>;
-
 const CONTEXT_PAST_PARTICIPLES: Record<ConditioningType, Record<ConditioningActionKey, string>> = {
   reward: {
     headpat: "headpatted",
@@ -49,14 +43,6 @@ export const CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE = parsePositiveInt(
   process.env.CONDITIONING_CONTEXT_MAX_GROUPS_PER_TYPE,
   10,
 );
-
-export function getConditioningActionKeysForType(type: ConditioningType): readonly ConditioningActionKey[] {
-  return CONDITIONING_ACTION_KEYS_BY_TYPE[type];
-}
-
-export function isConditioningActionKey(type: ConditioningType, value: string): value is ConditioningActionKey {
-  return getConditioningActionKeysForType(type).includes(value as ConditioningActionKey);
-}
 
 export function normalizeConditioningReason(reason: string | null | undefined): string {
   return (reason ?? "").trim().replace(/\s+/g, " ");

@@ -17,7 +17,7 @@ import type { ErrorContext, UserRow } from "@/types/db/schema";
 import type { ModalComponent, SelectOption } from "@/types/discord/modal";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
-import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { getProviderAddChoiceDescriptionKey, getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { buildSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
 import { activateServerTextModelFromSavedConfig } from "@/utils/provider/providerActivation";
@@ -25,19 +25,6 @@ import { activateServerTextModelFromSavedConfig } from "@/utils/provider/provide
 const MODAL_CUSTOM_ID = "config_provider_add_modal";
 const PROVIDER_SELECT_ID = "provider_select";
 const API_KEY_INPUT_ID = "api_key_input";
-
-const PROVIDER_CHOICE_DESCRIPTION_KEYS: Record<string, string> = {
-  anthropic: "commands.provider.add.provider_choice_descriptions.anthropic",
-  deepseek: "commands.provider.add.provider_choice_descriptions.deepseek",
-  google: "commands.provider.add.provider_choice_descriptions.google",
-  novelai: "commands.provider.add.provider_choice_descriptions.novelai",
-  nvidia: "commands.provider.add.provider_choice_descriptions.nvidia",
-  openrouter: "commands.provider.add.provider_choice_descriptions.openrouter",
-  vertex: "commands.provider.add.provider_choice_descriptions.vertex",
-  vertexexpress: "commands.provider.add.provider_choice_descriptions.vertexexpress",
-  zai: "commands.provider.add.provider_choice_descriptions.zai",
-  zaicoding: "commands.provider.add.provider_choice_descriptions.zaicoding",
-};
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("add").setDescription(localizer("en-US", "commands.provider.add.description"));
@@ -87,7 +74,6 @@ export async function execute(
     return;
   }
 
-  // 1. Load already-saved providers for this server so we can mark them in the select menu
   const savedProviders = await llmProviderRepo.loadSavedProviderConfigs(tomoriState.server_id);
   const savedProviderNames = new Set(savedProviders.map((cfg) => cfg.provider.toLowerCase()));
 
@@ -99,10 +85,11 @@ export async function execute(
     const isExisting = savedProviderNames.has(provider.toLowerCase());
     const isFree = freeProviders.has(normalizedProvider);
     const baseName = getProviderDisplayName(provider);
-    const label = [baseName, isFree && `(${freeSuffix})`, isExisting && `(${alreadyExistingSuffix})`]
+    let label = [baseName, isFree && `(${freeSuffix})`, isExisting && `(${alreadyExistingSuffix})`]
       .filter(Boolean)
       .join(" ");
-    const descriptionKey = PROVIDER_CHOICE_DESCRIPTION_KEYS[normalizedProvider];
+    if (label.length > 100) label = label.substring(0, 100);
+    const descriptionKey = getProviderAddChoiceDescriptionKey(normalizedProvider);
     return {
       label,
       value: normalizedProvider,

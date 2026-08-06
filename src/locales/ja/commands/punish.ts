@@ -1,5 +1,3 @@
-// locales/ja/commands/punish.ts
-
 export default {
   punish: {
     description: `私をおしおきして応答をトリガーします。`,

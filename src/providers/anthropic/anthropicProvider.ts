@@ -64,6 +64,7 @@ import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
 import { log } from "@/utils/misc/logger";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
@@ -163,9 +164,6 @@ export class AnthropicProvider
     return await callAnthropicStructuredJSON(request, responseSchema, zodSchema);
   }
 
-  /**
-   * Get expression initialization batch size.
-   */
   getExpressionInitializationBatchSize(): number | null {
     return 50;
   }
@@ -222,31 +220,14 @@ export class AnthropicProvider
         totalCount,
       } = await getAvailableToolsWithMCP("anthropic", toolStateForContext);
 
-      let finalBuiltInTools = availableBuiltInTools;
+      let finalBuiltInTools = applyStreamContextAvailability({
+        providerLabel: "Anthropic provider",
+        provider: "anthropic",
+        builtInTools: availableBuiltInTools,
+        streamContext: streamingContext,
+        tomoriState,
+      });
       let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "anthropic" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState,
-          locale: "en-US",
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("anthropic", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied Anthropic streaming context filtering: ${availableBuiltInTools.length} -> ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
 
       ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
         providerLabel: "Anthropic provider",
@@ -273,9 +254,6 @@ export class AnthropicProvider
     }
   }
 
-  /**
-   * Get the default model codename for this provider.
-   */
   async getDefaultModel(): Promise<string> {
     return DEFAULT_ANTHROPIC_MODEL;
   }
@@ -302,9 +280,6 @@ export class AnthropicProvider
     return config;
   }
 
-  /**
-   * Stream a response from Anthropic to Discord.
-   */
   async streamToDiscord(
     channel: BaseGuildTextChannel | BaseGuildVoiceChannel | DMChannel | AnyThreadChannel,
     client: Client,
@@ -348,7 +323,6 @@ export class AnthropicProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      // Reload tools with streaming context for context-aware availability
       if (streamingContext && tomoriState.llm.has_tools) {
         log.info("AnthropicProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);

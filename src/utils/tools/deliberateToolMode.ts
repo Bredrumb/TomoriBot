@@ -151,7 +151,6 @@ const TOOL_FOLLOW_UP_PATTERNS: RegExp[] = [
 const WEB_TOOL_NAMES = [
   "web_search",
   "web-search",
-  "felo-search",
   "iask-search",
   "monica-search",
   "brave_web_search",
@@ -172,7 +171,6 @@ const VOICE_GENERATION_TOOL_NAMES = ["generate_voice_message"];
 const SHORT_TERM_MEMORY_TOOL_NAMES = ["update_short_term_memory"];
 const MEDIA_ANALYSIS_TOOL_NAMES = [
   "analyze_image",
-  "increase_media_context",
   "peek_profile_picture",
   "process_gif",
   "process_youtube_video",

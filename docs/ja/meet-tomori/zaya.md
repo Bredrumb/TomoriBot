@@ -1,4 +1,4 @@
----
+﻿---
 title: "プライドの高いザヤ"
 sidebar:
   order: 2

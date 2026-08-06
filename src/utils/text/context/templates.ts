@@ -27,13 +27,14 @@ export type MentionConverter = (
   tomoriNickname?: string,
   personalMemoriesEnabled?: boolean,
   snapshot?: import("@/types/misc/context").RequestSnapshot,
+  identityMacroMode?: import("./mentionNormalizer").IdentityMacroMode,
 ) => Promise<string>;
 
 /**
  * Resolves ST-style random choice macros that can appear in imported presets
  * or prompt fields. Each macro occurrence is rolled independently.
  */
-export function resolveRandomChoiceMacros(text: string): string {
+function resolveRandomChoiceMacros(text: string): string {
   return text.replace(
     RANDOM_CHOICE_MACRO_REGEX,
     (
@@ -78,11 +79,19 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
 }): {
   contextItems: StructuredContextItem[];
   tailDirectives: string[];
   lowerPriorityTailDirectives: string[];
   uncensorDirective?: string;
+  nudgeItem?: StructuredContextItem;
+  nudgeInjectionDepth?: number;
+  memoryInjectionItems?: StructuredContextItem[];
+  memoryInjectionDepth?: number;
 } {
   return {
     contextItems: output.contextItems.map(resolveRandomChoiceMacrosInContextItem),
@@ -90,6 +99,12 @@ export function resolveRandomChoiceMacrosInBuildOutput(output: {
     lowerPriorityTailDirectives: output.lowerPriorityTailDirectives.map(resolveRandomChoiceMacros),
     uncensorDirective:
       output.uncensorDirective !== undefined ? resolveRandomChoiceMacros(output.uncensorDirective) : undefined,
+    nudgeItem: output.nudgeItem ? resolveRandomChoiceMacrosInContextItem(output.nudgeItem) : undefined,
+    nudgeInjectionDepth: output.nudgeInjectionDepth,
+    // Deferred STM block items get the same random-choice macro resolution the inline
+    // path applies via `contextItems.map(...)`, so out-of-band placement is identical.
+    memoryInjectionItems: output.memoryInjectionItems?.map(resolveRandomChoiceMacrosInContextItem),
+    memoryInjectionDepth: output.memoryInjectionDepth,
   };
 }
 
@@ -98,11 +113,6 @@ export async function buildPromptContextItems(params: {
   guildId: string;
   botName: string;
   tomoriAttributes: string[];
-  publicPersonaAttributes?: Array<{
-    personaId: number;
-    personaName: string;
-    attributes: string[];
-  }>;
   tomoriConfig: AssembledServerConfig;
   channelPromptOverride?: { prompt: string; mode: import("@/types/db/schema").ChannelPromptMode } | null;
   personaPrompt?: string | null;
@@ -119,11 +129,11 @@ export async function buildPromptContextItems(params: {
   if (!params.isUserImpersonation) {
     const channelOverride = params.channelPromptOverride;
 
-    // 1. Resolve the server-level system prompt (or default fallback).
+    // Resolve the server-level system prompt (or default fallback).
     const baseSystemPrompt =
       params.tomoriConfig.system_prompt?.trim() || (params.suppressDefaultSystemPrompt ? null : DEFAULT_SYSTEM_PROMPT);
 
-    // 2. Replace mode: the channel prompt fully takes over the system-prompt slot's
+    // Replace mode: the channel prompt fully takes over the system-prompt slot's
     //    content (persona prompt + attributes below are untouched). Otherwise keep
     //    the server/default system prompt in that slot.
     const systemPrompt = channelOverride?.mode === "replace" ? channelOverride.prompt : baseSystemPrompt;
@@ -145,7 +155,7 @@ export async function buildPromptContextItems(params: {
       });
     }
 
-    // 3. Append mode: emit the channel prompt as its own distinct block placed
+    // Append mode: emit the channel prompt as its own distinct block placed
     //    immediately after the system prompt (and before the persona prompt).
     if (channelOverride?.mode === "append" && channelOverride.prompt.trim()) {
       const channelPromptText = await params.convertMentions(

@@ -1,5 +1,6 @@
 import { escapeRegExp } from "./regexUtils";
 import { resolvePersonaMentionHandle } from "@/utils/text/personaMentionHandles";
+import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 
 /**
  * Strips curly braces from unknown template placeholders in text, leaving only the inner word.
@@ -7,7 +8,6 @@ import { resolvePersonaMentionHandle } from "@/utils/text/personaMentionHandles"
  * This prevents LLM-generated `{username}` artifacts from appearing literally in stored
  * memories or Discord messages when the model incorrectly imitates the `{user}` convention.
  * @param text - Text that may contain erroneous `{word}` placeholders
- * @returns Text with unknown `{word}` braces stripped, valid template vars untouched
  */
 export function sanitizeUnknownTemplatePlaceholders(text: string): string {
   const result = text.replace(/\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/g, (_match, inner: string) =>
@@ -22,8 +22,6 @@ export function sanitizeUnknownTemplatePlaceholders(text: string): string {
  * Replaces template variables in a text string with their corresponding values.
  * Supports both `{name}` and `{{name}}` syntaxes, and normalises `char` as an alias for `bot`.
  * @param text - The template string containing placeholders to be replaced
- * @param variables - An object mapping variable names to their values
- * @returns The text with all placeholders replaced with their corresponding values
  */
 export function replaceTemplateVariables(text: string, variables: Record<string, string | undefined>): string {
   let result = text;
@@ -49,7 +47,6 @@ export function replaceTemplateVariables(text: string, variables: Record<string,
  * Normalizes custom Discord emoji tags into :name: for LLM context.
  * Skips code blocks and inline code to preserve literal examples.
  * @param text - Raw message content from Discord
- * @returns Content with custom emoji tags converted to :name:
  */
 export function normalizeCustomEmojisForLlm(text: string): string {
   if (!text) return text;
@@ -84,9 +81,7 @@ export function normalizeCustomEmojisForLlm(text: string): string {
  * Also handles the LLM hallucination variants @(name) and @[name].
  * Skips code blocks and inline code to preserve literal examples.
  * @param text - Raw text from LLM output
- * @param mentionMap - Map of normalized mention handles to user ID candidates
  * @param mentionIdSet - Set of known user IDs for disambiguation
- * @returns Text with mention handles replaced when resolvable
  */
 export function replaceMentionHandles(
   text: string,
@@ -125,13 +120,12 @@ export function replaceMentionHandles(
 
     if (/^\d{17,20}$/.test(handle) && mentionIdSet?.has(handle)) return `<@${handle}>`;
 
-    const normalizedHandle = handle.toLowerCase();
+    const normalizedHandle = normalizeParticipantAlias(handle);
     const ids = mentionMap?.get(normalizedHandle);
     if (!ids || ids.length !== 1) {
       const personaMention = resolvePersonaMentionHandle(handle, personaMentionMap);
       if (personaMention) return personaMention;
     }
-    // Fallback: show plain name — {handle} would look like a stray template var
     if (!ids || ids.length !== 1) return handle;
     return `<@${ids[0]}>`;
   }
@@ -140,12 +134,10 @@ export function replaceMentionHandles(
     resolveHandle((rawHandle as string).trim(), match),
   );
 
-  // @(name) and @(name|id) — LLM hallucination using parentheses
   processedText = processedText.replace(/@\(([^)]+)\)/g, (match, rawHandle) =>
     resolveHandle((rawHandle as string).trim(), match),
   );
 
-  // @[name] and @[name|id] — LLM hallucination using square brackets
   processedText = processedText.replace(/@\[([^\]]+)\]/g, (match, rawHandle) =>
     resolveHandle((rawHandle as string).trim(), match),
   );
@@ -166,7 +158,6 @@ export function replaceMentionHandles(
     }
   }
 
-  // @name|id format without braces (LLM sometimes omits braces)
   processedText = processedText.replace(
     /(^|[^\p{L}\p{N}_<])@([\p{L}\p{N}_][\p{L}\p{N}_ -]*)\|(\d{17,20})/giu,
     (_match, prefix, rawHandle, idPart) => {
@@ -182,7 +173,7 @@ export function replaceMentionHandles(
     (match, prefix, rawHandle) => {
       const handle = (rawHandle as string).trim();
       if (!handle) return match;
-      const normalizedHandle = handle.toLowerCase();
+      const normalizedHandle = normalizeParticipantAlias(handle);
       const ids = mentionMap?.get(normalizedHandle);
       if (!ids || ids.length !== 1) {
         const personaMention = resolvePersonaMentionHandle(handle, personaMentionMap);

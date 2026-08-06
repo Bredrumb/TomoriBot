@@ -65,6 +65,7 @@ import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
+import { applyStreamContextAvailability } from "@/tools/availability";
 import { getCachedDefaultLLM, isLLMCacheReady } from "@/utils/cache/llmCache";
 import { llmModelRepo } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
@@ -176,7 +177,7 @@ export class NvidiaProvider
 
   async validateApiKey(apiKey: string): Promise<ApiKeyValidationResult> {
     try {
-      // Use the models list endpoint — no model needed, no tokens consumed
+      // Use the models list endpoint: no model needed, no tokens consumed
       const response = await fetch(NVIDIA_MODELS_URL, {
         method: "GET",
         headers: {
@@ -297,31 +298,14 @@ export class NvidiaProvider
         totalCount,
       } = await getAvailableToolsWithMCP("nvidia", toolStateForContext);
 
-      let finalBuiltInTools = availableBuiltInTools;
+      let finalBuiltInTools = applyStreamContextAvailability({
+        providerLabel: "NVIDIA provider",
+        provider: "nvidia",
+        builtInTools: availableBuiltInTools,
+        streamContext: streamingContext,
+        tomoriState,
+      });
       let finalMcpFunctionNames = availableMcpFunctionNames;
-      if (streamingContext) {
-        const minimalContext = {
-          streamContext: streamingContext,
-          provider: "nvidia" as const,
-          channel: {} as BaseGuildTextChannel,
-          client: {} as Client,
-          tomoriState,
-          locale: "en-US",
-        };
-
-        finalBuiltInTools = availableBuiltInTools.filter((tool) => {
-          const isContextAvailable =
-            "isAvailableForContext" in tool && typeof tool.isAvailableForContext === "function"
-              ? tool.isAvailableForContext("nvidia", minimalContext)
-              : true;
-
-          return isContextAvailable;
-        });
-
-        log.info(
-          `Applied NVIDIA streaming context filtering: ${availableBuiltInTools.length} -> ${finalBuiltInTools.length} built-in tools`,
-        );
-      }
 
       ({ builtInTools: finalBuiltInTools, mcpFunctionNames: finalMcpFunctionNames } = applyDeliberateToolAllowlist({
         providerLabel: "NVIDIA provider",
@@ -370,7 +354,6 @@ export class NvidiaProvider
       ...samplingParams,
     };
 
-    // Attach runtime logit_bias map if the server has any active entries for this model
     const runtimeLogitBias = buildRuntimeLogitBiasMapForLlm(tomoriState.config.llm_logit_biases ?? [], tomoriState.llm);
     if (Object.keys(runtimeLogitBias).length > 0) {
       config.logitBias = runtimeLogitBias;

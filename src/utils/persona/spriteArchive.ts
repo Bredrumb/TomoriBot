@@ -19,32 +19,31 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { log } from "@/utils/misc/logger";
 
 /** Current archive format version. Bump when the manifest shape changes. */
-export const SPRITE_ARCHIVE_VERSION = 1;
+const SPRITE_ARCHIVE_VERSION = 1;
 /** Discriminator stored in the manifest so unrelated zips are rejected early. */
-export const SPRITE_ARCHIVE_EXPORT_TYPE = "persona_sprites";
+const SPRITE_ARCHIVE_EXPORT_TYPE = "persona_sprites";
 /** Canonical manifest filename inside the archive. */
-export const SPRITE_ARCHIVE_MANIFEST_NAME = "manifest.json";
+const SPRITE_ARCHIVE_MANIFEST_NAME = "manifest.json";
 /** Folder (inside the zip) that holds the sprite images. */
 const SPRITE_ARCHIVE_IMAGE_DIR = "sprites";
 
 /**
  * A single sprite entry as stored in `manifest.json`. Mirrors the importable
  * subset of `PersonaSpriteRow` (storage references and DB ids are intentionally
- * excluded — they are meaningless on another server).
+ * excluded because they are meaningless on another server).
  */
-export const spriteArchiveEntrySchema = z.object({
+const spriteArchiveEntrySchema = z.object({
   sprite_name: z.string().min(1).max(64),
   sprite_key: z.string().min(1).max(64),
   usage_instructions: z.string().max(1000).default(""),
   is_identity: z.boolean().default(false),
-  // Path (relative, inside the zip) to this sprite's PNG image.
   file: z.string().min(1).max(256),
 });
 
-export type SpriteArchiveEntry = z.infer<typeof spriteArchiveEntrySchema>;
+type SpriteArchiveEntry = z.infer<typeof spriteArchiveEntrySchema>;
 
 /** Full `manifest.json` schema. */
-export const spriteArchiveManifestSchema = z.object({
+const spriteArchiveManifestSchema = z.object({
   export_type: z.literal(SPRITE_ARCHIVE_EXPORT_TYPE),
   version: z.number().int().positive(),
   exported_at: z.string().optional(),
@@ -59,7 +58,7 @@ export const spriteArchiveManifestSchema = z.object({
   sprites: z.array(spriteArchiveEntrySchema),
 });
 
-export type SpriteArchiveManifest = z.infer<typeof spriteArchiveManifestSchema>;
+type SpriteArchiveManifest = z.infer<typeof spriteArchiveManifestSchema>;
 
 /** A built archive's bytes plus the metadata callers need for the reply. */
 export type BuiltSpriteArchive = {
@@ -84,7 +83,7 @@ export type SpriteArchiveReadLimits = {
 };
 
 /** A validated, parsed archive ready for import. */
-export type SpriteArchiveReadEntry = {
+type SpriteArchiveReadEntry = {
   meta: SpriteArchiveEntry;
   pngBuffer: Buffer;
 };
@@ -134,8 +133,6 @@ export async function buildSpriteArchive(options: {
     throw new Error("Failed to create sprite image folder in archive");
   }
 
-  // 1. Write each image under a zero-padded, key-derived filename and record
-  //    the manifest entry that points at it.
   const manifestEntries: SpriteArchiveEntry[] = [];
   const usedFilenames = new Set<string>();
   options.entries.forEach((entry, index) => {
@@ -150,7 +147,6 @@ export async function buildSpriteArchive(options: {
     });
   });
 
-  // 2. Write the manifest last so it sits alongside the images.
   const manifest: SpriteArchiveManifest = {
     export_type: SPRITE_ARCHIVE_EXPORT_TYPE,
     version: SPRITE_ARCHIVE_VERSION,
@@ -163,7 +159,7 @@ export async function buildSpriteArchive(options: {
   };
   zip.file(SPRITE_ARCHIVE_MANIFEST_NAME, `${JSON.stringify(manifest, null, 2)}\n`);
 
-  // 3. Generate the bytes. DEFLATE is cheap here (PNGs are already compressed,
+  // Generate the bytes. DEFLATE is cheap here (PNGs are already compressed,
   //    but the manifest and any incidental redundancy still benefit).
   const buffer = await zip.generateAsync({
     type: "nodebuffer",
@@ -186,14 +182,12 @@ export async function buildSpriteArchive(options: {
  * memory even within the (already capped) compressed download size.
  *
  * @param zipBuffer - Raw archive bytes (already size-capped by the downloader)
- * @param limits - ZIP-bomb guard thresholds
  * @returns A discriminated result: validated entries, or a typed failure reason
  */
 export async function readSpriteArchive(
   zipBuffer: Buffer,
   limits: SpriteArchiveReadLimits,
 ): Promise<SpriteArchiveReadResult> {
-  // 1. Load the container. Corrupt or non-zip input throws here.
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(zipBuffer);
@@ -202,7 +196,7 @@ export async function readSpriteArchive(
     return { ok: false, reason: "invalid_zip" };
   }
 
-  // 2. Locate the manifest (case-insensitive, ignoring any folder prefix some
+  // Locate the manifest (case-insensitive, ignoring any folder prefix some
   //    archivers add) and parse it as JSON.
   const manifestFile = findManifestFile(zip);
   if (!manifestFile) {
@@ -218,7 +212,6 @@ export async function readSpriteArchive(
     return { ok: false, reason: "invalid_manifest" };
   }
 
-  // 3. Validate the manifest shape.
   const parsedManifest = spriteArchiveManifestSchema.safeParse(manifestJson);
   if (!parsedManifest.success) {
     log.warn(`Invalid sprite archive manifest: ${parsedManifest.error.message}`);
@@ -226,12 +219,11 @@ export async function readSpriteArchive(
   }
   const manifest = parsedManifest.data;
 
-  // 4. Reject archives produced by a newer, incompatible format version.
+  // Reject archives produced by a newer, incompatible format version.
   if (manifest.version > SPRITE_ARCHIVE_VERSION) {
     return { ok: false, reason: "incompatible_version" };
   }
 
-  // 5. Entry-count guards.
   if (manifest.sprites.length === 0) {
     return { ok: false, reason: "empty" };
   }
@@ -239,7 +231,6 @@ export async function readSpriteArchive(
     return { ok: false, reason: "too_many_entries" };
   }
 
-  // 6. Resolve, guard, and read each referenced image.
   const entries: SpriteArchiveReadEntry[] = [];
   let totalBytes = 0;
   for (const meta of manifest.sprites) {
@@ -248,7 +239,7 @@ export async function readSpriteArchive(
       return { ok: false, reason: "missing_image" };
     }
 
-    // 6a. Best-effort pre-read size check using JSZip's declared uncompressed
+    // Best-effort pre-read size check using JSZip's declared uncompressed
     //     size, so an oversized entry is rejected before it is decompressed.
     const declaredSize = getDeclaredUncompressedSize(imageFile);
     if (declaredSize !== null && declaredSize > limits.maxFileBytes) {
@@ -257,7 +248,6 @@ export async function readSpriteArchive(
 
     const pngBuffer = (await imageFile.async("nodebuffer")) as Buffer;
 
-    // 6b. Post-read guards: per-file cap, then running total cap.
     if (pngBuffer.length > limits.maxFileBytes) {
       return { ok: false, reason: "file_too_large" };
     }
@@ -306,7 +296,6 @@ function findManifestFile(zip: JSZip): JSZip.JSZipObject | null {
     return direct;
   }
 
-  // Some archivers nest everything under a top-level folder; match on basename.
   const lowerTarget = SPRITE_ARCHIVE_MANIFEST_NAME.toLowerCase();
   for (const [name, file] of Object.entries(zip.files)) {
     if (file.dir) {
@@ -335,7 +324,6 @@ function resolveImageFile(zip: JSZip, declaredPath: string): JSZip.JSZipObject |
     return direct;
   }
 
-  // Fall back to matching on basename to tolerate a wrapping top-level folder.
   const lowerTarget = declaredPath.split("/").pop()?.toLowerCase();
   if (!lowerTarget) {
     return null;

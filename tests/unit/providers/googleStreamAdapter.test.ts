@@ -173,6 +173,58 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
     expect(result.retryable).toBe(true);
   });
 
+  it("maps HTTP 401 JSON error to api_error, not retryable", () => {
+    const adapter = new GoogleStreamAdapter();
+    // Google double-nests the real payload inside error.message, and its ErrorInfo metadata echoes
+    // the called method back. Both shapes matter here: the code must survive extraction, and the
+    // method name must not steer classification.
+    const nested = JSON.stringify({
+      error: {
+        code: 401,
+        message:
+          "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential.",
+        status: "UNAUTHENTICATED",
+        details: [
+          {
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            reason: "ACCESS_TOKEN_TYPE_UNSUPPORTED",
+            metadata: {
+              method: "google.ai.generativelanguage.v1beta.GenerativeService.StreamGenerateContent",
+              service: "generativelanguage.googleapis.com",
+            },
+          },
+        ],
+      },
+    });
+    const error = new Error(JSON.stringify({ error: { message: nested, code: 401, status: "Unauthorized" } }));
+    const result = adapter.handleProviderError(error);
+
+    expect(result.type).toBe("api_error");
+    expect(result.retryable).toBe(false);
+    expect(result.code).toBe("401");
+  });
+
+  it("does not treat the 'rate' inside GenerateContent method names as a rate limit", () => {
+    const adapter = new GoogleStreamAdapter();
+    // No parseable status code, so classification falls through to the message-content heuristics.
+    // "StreamGenerateContent" contains "rate", which used to match the rate-limit branch outright.
+    const error = new Error(
+      "Stream failed for google.ai.generativelanguage.v1beta.GenerativeService.StreamGenerateContent",
+    );
+    const result = adapter.handleProviderError(error);
+
+    expect(result.type).not.toBe("rate_limit");
+  });
+
+  it("classifies an explicit rate limit message as rate_limit", () => {
+    const adapter = new GoogleStreamAdapter();
+    const error = new Error("Rate limit exceeded for this project, please retry later");
+    const result = adapter.handleProviderError(error);
+
+    expect(result.type).toBe("rate_limit");
+    expect(result.retryable).toBe(true);
+  });
+
   it("maps HTTP 403 JSON error to api_error, not retryable", () => {
     const adapter = new GoogleStreamAdapter();
     const error = new Error('{"error":{"code":403,"message":"Permission denied","status":"PERMISSION_DENIED"}}');
@@ -193,7 +245,7 @@ describe("GoogleStreamAdapter.handleProviderError", () => {
 
   it("classifies RESOURCE_EXHAUSTED message as rate_limit when no JSON code present", () => {
     const adapter = new GoogleStreamAdapter();
-    // Plain error message without JSON structure — triggers fallback message-content classification.
+    // Plain error message without JSON structure, so triggers fallback message-content classification.
     // Must not include "API key" since that branch fires first in the default case.
     const error = new Error("RESOURCE_EXHAUSTED: quota exceeded for this project");
     const result = adapter.handleProviderError(error);

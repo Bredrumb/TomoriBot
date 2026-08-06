@@ -3,7 +3,6 @@ import { type ActivityOptions, ActivityType, type Client } from "discord.js";
 import _pkg from "../../../package.json";
 import { log } from "../../utils/misc/logger";
 import { getMCPManager } from "../../utils/mcp/mcpManager";
-// import { sql } from "@/utils/db/client";
 
 // Cycle delay in milliseconds (1 minute)
 const CYCLE_DELAY = 60000;
@@ -25,12 +24,10 @@ function isTomoriBirthday(): boolean {
  * Gets the server count from the database (including all servers and DM channels).
  * Falls back to Discord cache count on error.
  * @param client - The Discord client instance for fallback count.
- * @returns {Promise<number>} The number of servers.
  */
 /*
 async function getServerCount(client: Client): Promise<number> {
   try {
-    // Query database for total server count (includes DMs)
     const result = await sql<[{ count: string }]>`
 			SELECT COUNT(*) as count
 			FROM servers
@@ -52,24 +49,21 @@ async function getServerCount(client: Client): Promise<number> {
 /**
  * Posts the current Discord guild count to Top.gg once during startup.
  * Only runs in production and only when TOPGG_TOKEN is configured.
- * Non-critical — failures are logged as warnings and do not affect startup.
+ * Non-critical, so failures are logged as warnings and do not affect startup.
  *
  * @param client - The Discord client instance (must be ready, provides bot ID and guild cache).
- * @returns {Promise<void>}
  */
 async function postTopggStats(client: Client): Promise<void> {
-  // 1. Only run in production with a configured token
   const isProduction = process.env.NODE_ENV === "production";
   const topggToken = process.env.TOPGG_TOKEN;
 
   if (!isProduction || !topggToken || !client.user) return;
 
-  // 2. Use the actual Discord guild count (guilds the bot has joined)
+  // Use the actual Discord guild count (guilds the bot has joined)
   const serverCount = client.guilds.cache.size;
   const botId = client.user.id;
 
   try {
-    // 3. POST server count to Top.gg REST API
     const response = await fetch(`https://top.gg/api/bots/${botId}/stats`, {
       method: "POST",
       headers: {
@@ -98,16 +92,12 @@ async function postTopggStats(client: Client): Promise<void> {
 /**
  * Sets the bot's status and logs startup information.
  * Waits for MCP initialization to complete before finalizing startup.
- * @param client - The Discord client instance.
- * @returns Promise<void>
  */
 const handler = async (client: Client): Promise<void> => {
   log.section(`Launching ${client.user?.tag} on Discord...`);
 
-  // Wait for MCP initialization to complete before finalizing startup
   const mcpManager = getMCPManager();
 
-  // Wait for MCP manager to be ready (with a reasonable timeout)
   const mcpTimeout = 10000; // 10 seconds timeout
   const startTime = Date.now();
 
@@ -124,7 +114,6 @@ const handler = async (client: Client): Promise<void> => {
 
   log.success(`${client.user?.tag} up and running!`);
 
-  // Post server count to Top.gg once at startup (production only, non-critical)
   await postTopggStats(client);
 
   log.section("Listening for error and info logs...");
@@ -145,22 +134,16 @@ const handler = async (client: Client): Promise<void> => {
   async function updateStatus(): Promise<void> {
     if (!client.user) return;
 
-    // 1. Skip status updates in non-production environments
     const isProduction = process.env.NODE_ENV === "production";
     if (!isProduction) {
       return;
     }
 
-    // 2. Check if today is Tomori's birthday
     if (isTomoriBirthday()) {
-      // 3. Set birthday status
       client.user.setActivity(birthdayStatus);
     } else {
-      // 4. Use the same server count as Top.gg (actual Discord guild count)
       const serverCount = client.guilds.cache.size;
-      // const serverCount = await getServerCount(client);
 
-      // 5. Build normal status options with current server count
       const normalStatus: ActivityOptions[] = [
         {
           name: `Sprites Update! /update`,
@@ -172,7 +155,6 @@ const handler = async (client: Client): Promise<void> => {
         },
       ];
 
-      // 6. Normal status rotation
       if (normalStatus.length > 0) {
         const random = Math.floor(Math.random() * normalStatus.length);
         client.user.setActivity(normalStatus[random]);
@@ -180,10 +162,8 @@ const handler = async (client: Client): Promise<void> => {
     }
   }
 
-  // Set initial status on startup
   await updateStatus();
 
-  // Update status every cycle (5 minutes)
   setInterval(() => {
     void updateStatus(); // Use void to indicate intentional fire-and-forget
   }, CYCLE_DELAY);

@@ -1,7 +1,6 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import { loadUserNaiProfileByDiscordId } from "@/tools/functionCalls/generateImageNaiTool";
 import { PrivacyLevel, type UserRow } from "@/types/db/schema";
-import { userRepository } from "@/utils/db/repositories";
 
 const USER_DISC_ID = "12345678901234567";
 
@@ -26,26 +25,18 @@ function createUserRow(): UserRow {
 
 describe("NovelAI user profile loading", () => {
   it("uses the assembled UserRepository row", async () => {
-    const loadUser = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(createUserRow());
+    const loadUser = mock(async () => createUserRow());
 
-    try {
-      await expect(loadUserNaiProfileByDiscordId(USER_DISC_ID)).resolves.toEqual({
-        tags: ["silver hair", "green eyes"],
-        refUrl: "https://example.invalid/profile.png",
-      });
-      expect(loadUser).toHaveBeenCalledWith(USER_DISC_ID);
-    } finally {
-      loadUser.mockRestore();
-    }
+    await expect(loadUserNaiProfileByDiscordId(USER_DISC_ID, { loadByDiscordId: loadUser })).resolves.toEqual({
+      tags: ["silver hair", "green eyes"],
+      refUrl: "https://example.invalid/profile.png",
+    });
+    expect(loadUser).toHaveBeenCalledWith(USER_DISC_ID);
   });
 
   it("returns null when the user does not exist", async () => {
-    const loadUser = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(null);
+    const loadUser = mock(async () => null);
 
-    try {
-      await expect(loadUserNaiProfileByDiscordId(USER_DISC_ID)).resolves.toBeNull();
-    } finally {
-      loadUser.mockRestore();
-    }
+    await expect(loadUserNaiProfileByDiscordId(USER_DISC_ID, { loadByDiscordId: loadUser })).resolves.toBeNull();
   });
 });

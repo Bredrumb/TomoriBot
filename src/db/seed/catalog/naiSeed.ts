@@ -55,7 +55,7 @@ export function validateNaiPresets(): string[] {
   return errors;
 }
 
-export function buildNaiPresetSeedStatements(): string[] {
+function buildNaiPresetSeedStatements(): string[] {
   return rowsOf().map(
     (preset) => `INSERT INTO nai_presets (${NAI_COLUMNS})
 VALUES (${renderNaiPresetTuple(preset)})

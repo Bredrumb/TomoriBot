@@ -26,7 +26,6 @@ export default async (): Promise<void> => {
   try {
     log.section("Initializing MCP servers");
 
-    // Register MCP-capable tool adapters with the ToolRegistry
     const googleAdapter = getGoogleToolAdapter();
     registerMCPAdapter(googleAdapter);
     log.info("Registered Google tool adapter with MCP capabilities");
@@ -71,14 +70,10 @@ export default async (): Promise<void> => {
     registerMCPAdapter(anthropicAdapter);
     log.info("Registered Anthropic tool adapter with MCP capabilities");
 
-    // Get the MCP manager singleton instance
     const mcpManager = getMCPManager();
 
-    // Initialize all configured MCP servers
-    // This will attempt to connect to Brave Search (if API key available) and Fetch servers
     await mcpManager.initializeMCPServers();
 
-    // Log initialization results
     const connectedCount = mcpManager.getConnectedServerCount();
     const connectionStatus = mcpManager.getConnectionStatus();
 
@@ -86,7 +81,6 @@ export default async (): Promise<void> => {
       const connectedServers = Object.keys(connectionStatus).join(", ");
       log.success(`MCP initialization completed - ${connectedCount} server(s) connected: ${connectedServers}`);
 
-      // Log available tools for visibility
       const availableTools = mcpManager.getMCPTools();
       if (availableTools.length > 0) {
         log.info(`MCP tools are now available for function calling (${availableTools.length} tools loaded)`);
@@ -95,7 +89,6 @@ export default async (): Promise<void> => {
       log.info("No MCP servers connected - this is normal if API keys are not configured");
     }
 
-    // ─── Guild MCP setup ─────────────────────────────────────────────
     const guildMcpManager = getGuildMcpManager();
 
     // Register cleanup hook for graceful shutdown
@@ -105,21 +98,20 @@ export default async (): Promise<void> => {
       log.info("Shutting down guild MCP connections...");
       await guildMcpManager.cleanup();
       // Drain any buffered usage stats so a normal restart loses nothing
-      // (plan §4 — graceful shutdown covers the documented crash window).
+      // (plan §4: graceful shutdown covers the documented crash window).
       await statRepository.shutdown();
       process.kill(process.pid, signal);
     };
     process.once("SIGINT", () => cleanupHandler("SIGINT"));
     process.once("SIGTERM", () => cleanupHandler("SIGTERM"));
 
-    // Dev/local: eager-connect all enabled guild MCP servers
     const runEnv = process.env.RUN_ENV || "development";
     if (runEnv !== "production") {
       try {
         const allEnabled = await toolRepository.loadAllEnabledMcpServers();
         if (allEnabled.length > 0) {
           log.info(`[GuildMCP] Dev mode: eager-connecting ${allEnabled.length} enabled guild MCP server(s)...`);
-          // Non-blocking — failures are logged but don't prevent startup
+          // Non-blocking, so failures are logged but don't prevent startup
           guildMcpManager.eagerConnectAll(allEnabled).catch((err) => {
             log.warn("[GuildMCP] Eager connect encountered errors (non-fatal)", err);
           });
@@ -133,7 +125,6 @@ export default async (): Promise<void> => {
       log.info("[GuildMCP] Production mode: guild MCP connections will be established on-demand");
     }
   } catch (error) {
-    // Use structured error context for consistent error handling
     const context: ErrorContext = {
       errorType: "MCPInitializationError",
       metadata: { stage: "startup" },

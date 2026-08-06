@@ -25,7 +25,7 @@ const CONTENT_HASH_LENGTH = 12;
 
 /**
  * Seeds all catalog-authored preset sprites into `preset_sprites`, uploading
- * each image once and reconciling removed sprites. Never throws — a failed image
+ * each image once and reconciling removed sprites. Never throws, because a failed image
  * is logged and skipped so a single bad asset cannot abort startup.
  *
  * @param client - Active DB client/transaction
@@ -68,7 +68,6 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
   const usageInstructions = normalizePersonaSpriteInstructions(sprite.usageInstructions);
   const isIdentity = sprite.isIdentity === true;
 
-  // 1. Read + normalize the source image to PNG.
   const imagePath = path.join(process.cwd(), persona.avatarPath, sprite.file);
   let pngBuffer: Buffer;
   try {
@@ -79,7 +78,7 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
     return null;
   }
 
-  // 2. Content-address the image. If the existing row already references this
+  // Content-address the image. If the existing row already references this
   //    exact content, skip the (network) upload and only refresh metadata.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
   const expectedSuffix = buildPresetSpriteFilename(spriteKey, contentHash);
@@ -96,7 +95,7 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
   const existingUrl = existing?.avatar_url ?? null;
   let avatarUrl: string;
   if (existingUrl?.endsWith(expectedSuffix)) {
-    // Same content already uploaded — skip the (network) upload, refresh metadata only.
+    // Same content already uploaded, so skip the (network) upload, refresh metadata only.
     avatarUrl = existingUrl;
   } else {
     const uploadedUrl = await uploadPresetSpriteToStorage({
@@ -113,7 +112,6 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
     avatarUrl = uploadedUrl;
   }
 
-  // 3. Upsert the row (shared URL + metadata).
   await client`
     INSERT INTO preset_sprites (
       preset_lineage_id, preset_language, sprite_name, sprite_key, avatar_url, usage_instructions, is_identity
@@ -146,7 +144,6 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
  */
 async function reconcileRemovedSprites(client: SQL, persona: PersonaInput, seededKeys: string[]): Promise<void> {
   if (seededKeys.length === 0) {
-    // Empty/failed set: drop every sprite for this preset.
     await client`
       DELETE FROM preset_sprites
       WHERE preset_lineage_id = ${persona.lineageId}

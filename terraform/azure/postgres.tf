@@ -1,8 +1,10 @@
 /**
  * Azure Database for PostgreSQL Flexible Server.
  *
- * Public network access is deliberate for the low-cost VM architecture. Firewall
- * rules narrow access to the singleton VM public IP plus an optional admin IP.
+ * Public access is deny-by-default and restricted to the VM's static outbound
+ * address plus one Terraform-managed Grafana operator address. Both clients use
+ * TLS with certificate and hostname verification and separate least-privilege
+ * database roles.
  * pgvector still needs CREATE EXTENSION vector inside the database after the
  * Azure allowlist below is applied.
  */
@@ -22,6 +24,13 @@ resource "azurerm_postgresql_flexible_server" "main" {
   public_network_access_enabled = true
 
   tags = local.common_tags
+
+  # Azure selects an availability zone when none is configured. Preserve that
+  # provider-assigned zone on later applies; changing it requires a coordinated
+  # standby-zone exchange that this single-server deployment does not use.
+  lifecycle {
+    ignore_changes = [zone]
+  }
 }
 
 resource "azurerm_postgresql_flexible_server_database" "tomoribot" {
@@ -38,13 +47,11 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "vm" {
   end_ip_address   = azurerm_public_ip.vm.ip_address
 }
 
-resource "azurerm_postgresql_flexible_server_firewall_rule" "admin" {
-  for_each = var.admin_ip == null ? {} : { admin = var.admin_ip }
-
-  name             = "allow-admin-ip"
+resource "azurerm_postgresql_flexible_server_firewall_rule" "grafana" {
+  name             = "allow-grafana-operator"
   server_id        = azurerm_postgresql_flexible_server.main.id
-  start_ip_address = each.value
-  end_ip_address   = each.value
+  start_ip_address = var.grafana_egress_ip
+  end_ip_address   = var.grafana_egress_ip
 }
 
 # azure.extensions REPLACES the allowlist wholesale, so every extension the app

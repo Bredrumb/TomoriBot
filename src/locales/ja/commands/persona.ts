@@ -1,5 +1,3 @@
-// locales/ja/commands/persona.ts
-
 export default {
   persona: {
     description: `人格プリセットを管理する`,
@@ -76,6 +74,7 @@ export default {
         persona_select_title: `ペルソナを選択`,
         no_sprites_title: `🟡 スプライトがありません`,
         no_sprites_description: `**{persona_name}** には編集できるスプライトがありません。`,
+        no_eligible_sprites_description: `編集できるスプライトを持つペルソナがまだありません。\`/persona sprites add\` で追加できます。`,
         select_modal_title: `スプライトを選択`,
         select_label: `編集するスプライト`,
         select_description: `編集するスプライトを選択してください。`,
@@ -105,6 +104,7 @@ export default {
         persona_select_title: `ペルソナを選択`,
         no_sprites_title: `🟡 スプライトがありません`,
         no_sprites_description: `**{persona_name}** には削除できるスプライトがありません。`,
+        no_eligible_sprites_description: `削除できるスプライトを持つペルソナがまだありません。\`/persona sprites add\` で追加できます。`,
         modal_title: `ペルソナスプライトを削除`,
         checkbox_label: `残すスプライト`,
         checkbox_label_continued: `残すスプライト（続き）`,
@@ -213,6 +213,28 @@ export default {
         description: `ペルソナプロンプトを削除します。`,
       },
     },
+    stm: {
+      description: `ペルソナの短期記憶を管理します。`,
+      edit: {
+        description: `このチャンネルにおけるペルソナの短期記憶を手動で編集します。`,
+        no_permission_title: `サーバー管理権限が必要です`,
+        no_permission_description: `ペルソナの短期記憶を編集するには **サーバー管理** 権限が必要です。`,
+        modal_title: `短期記憶を編集`,
+        success_title: `短期記憶を更新しました`,
+        success_description: `このチャンネルの **{persona_name}** の短期記憶を更新しました。`,
+      },
+      view: {
+        description: `このチャンネルにおけるペルソナの短期記憶を閲覧します（読み取り専用）。`,
+        title: `短期記憶`,
+        display: `{content}`,
+        scope_guild: `このチャンネルに注入されるサーバー共有の記憶を表示しています。`,
+        scope_dm: `この会話に注入されるあなた個人の記憶を表示しています。`,
+        empty_body: `*このチャンネルにはまだ短期記憶が保存されていません。*`,
+        truncated: `*…Discordの表示上限に合わせて省略されました。*`,
+        none_title: `短期記憶がありません`,
+        none_description: `このチャンネルには短期記憶を保持しているペルソナがまだありません。`,
+      },
+    },
     "sample-dialogue": {
       description: `私がどのように応答すべきかの例として、ユーザー/ボットの対話ペアを追加します。`,
       add: {
@@ -257,7 +279,7 @@ export default {
     export: {
       description: `の人格を共有可能なPNGファイルとしてエクスポートする`,
       export_json_select_label: `JSONをエクスポート`,
-      export_json_select_description: `任意：読み取り用JSONファイルとしてエクスポート`,
+      export_json_select_description: `任意：インポート可能なJSONファイルとしてエクスポート（アバター画像なし）`,
       persona_modal_title: `ペルソナを選択`,
       persona_select_label: `ペルソナ`,
       persona_select_description: `エクスポートするペルソナを選択してください。`,
@@ -266,10 +288,10 @@ export default {
       alter_persona_description: `オルタペルソナ`,
       success_title: `🟢 ペルソナのエクスポートに成功しました`,
       success_description: `ペルソナ **{nickname}** がエクスポートされました！このPNGファイルを他の人と共有して、人格設定を広めましょう。`,
-      success_description_json: `ペルソナ **{nickname}** が読み取り用JSONファイルとしてエクスポートされました。
+      success_description_json: `ペルソナ **{nickname}** がJSONファイルとしてエクスポートされました。
 
-**注意:** このJSONエクスポートは参照用のみで、インポートはできません。`,
-      json_non_importable_note: `このJSONエクスポートは参照用のみで、インポートはできません。`,
+**注意:** このJSONは \`/persona import\` で再インポートできます。アバター画像は含まれないため、アバターも共有したい場合はPNGエクスポートをご利用ください。`,
+      json_importable_note: `このJSONエクスポートは /persona import でインポートできます。アバター画像は含まれないため、アバターも共有したい場合はPNGエクスポートをご利用ください。`,
       failed_title: `🔴 エクスポートに失敗しました`,
       avatar_failed_title: `🔴 アバターのダウンロードに失敗しました`,
       avatar_failed_description: `ペルソナアバターのダウンロードに失敗しました。後でもう一度お試しください。`,
@@ -471,7 +493,7 @@ export default {
       api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/provider add\`で再設定してください。`,
       invalid_image_title: `🔴 無効な画像`,
       invalid_image_description: `有効な画像ファイル(PNG、JPG、JPEGなど)をアップロードしてください。`,
-      error_file_too_large: `アバター画像は8MB以下である必要があります。`,
+      error_file_too_large: `アバター画像は{max_size}MB以下である必要があります。`,
       error_download_timeout: `アバターのダウンロードがタイムアウトしました。もう一度お試しください。`,
       error_download_failed: `アバター画像のダウンロードに失敗しました。`,
       processing_title: `人格を生成しています...`,
@@ -530,7 +552,7 @@ export default {
       field_example_bot: `ボット返信の例`,
       invalid_image_title: `🔴 無効な画像`,
       invalid_image_description: `有効な画像ファイル(PNG、JPG、JPEGなど)をアップロードしてください。`,
-      error_file_too_large: `アバター画像は8MB以下である必要があります。`,
+      error_file_too_large: `アバター画像は{max_size}MB以下である必要があります。`,
       error_download_timeout: `アバターのダウンロードがタイムアウトしました。もう一度お試しください。`,
       error_download_failed: `アバター画像のダウンロードに失敗しました。`,
       desc_too_long_title: `説明が長すぎます`,
@@ -605,7 +627,7 @@ export default {
       removed_alter_description: `ペルソナ「{persona_name}」のアバターをリセットしました。`,
       invalid_image_title: `無効な画像`,
       invalid_image_description: `有効な画像ファイルを提供してください。`,
-      file_too_large_description: `画像ファイルが大きすぎます。最大ファイルサイズは8MBです。`,
+      file_too_large_description: `画像ファイルが大きすぎます。最大ファイルサイズは{max_size}MBです。`,
       invalid_format_description: `PNG、JPG、JPEG、またはGIF画像ファイルを提供してください。`,
       conversion_error_title: `変換エラー`,
       conversion_error_description: `画像の処理に失敗しました。別の画像ファイルを試してください。`,

@@ -63,7 +63,7 @@ function readImageSupportRecord(extraConfig: Record<string, unknown>): Record<st
   return null;
 }
 
-export function getDefaultImageEndpointSupports(apiStyle: CustomEndpointApiStyle): ImageEndpointSupports {
+function getDefaultImageEndpointSupports(apiStyle: CustomEndpointApiStyle): ImageEndpointSupports {
   return { ...(apiStyle === "comfyui" ? COMFYUI_DEFAULT_IMAGE_SUPPORTS : GENERIC_DEFAULT_IMAGE_SUPPORTS) };
 }
 

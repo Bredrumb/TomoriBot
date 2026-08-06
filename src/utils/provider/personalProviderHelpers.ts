@@ -1,9 +1,16 @@
 import type {
+  CustomEndpointRow,
   PersonalProviderCapability,
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
+
+export interface ProviderModelSelection {
+  model: string;
+  provider: string;
+}
 
 function sortProviderRows(rows: UserSavedProviderConfigRow[]): UserSavedProviderConfigRow[] {
   return [...rows].sort((left, right) => left.provider.localeCompare(right.provider));
@@ -43,6 +50,98 @@ export function getStoredPersonalProviderForCapability(
   capability: PersonalProviderCapability,
 ): UserSavedProviderConfigRow | null {
   return sortProviderRows(rows).find((row) => hasConfiguredPersonalModel(row, capability)) ?? null;
+}
+
+/**
+ * Whether writing a model for `capability` would newly move it off the server default and onto a
+ * personal override.
+ *
+ * A personal override follows the user into every server, so that transition is the one operation
+ * worth confirming before the write. Switching models or providers inside an override that is
+ * already active changes nothing about scope and must not prompt again.
+ */
+export function activatesNewPersonalOverride(
+  rows: UserSavedProviderConfigRow[],
+  capability: PersonalProviderCapability,
+): boolean {
+  return getActivePersonalProviderForCapability(rows, capability) === null;
+}
+
+/**
+ * The capabilities a `toggle-models` submission moves from the server default onto a personal
+ * override. Capabilities being switched off are deliberately excluded: unchecking already
+ * expresses that intent through the submitted modal.
+ */
+export function findNewlyEnabledPersonalCapabilities(
+  rows: UserSavedProviderConfigRow[],
+  selected: ReadonlySet<PersonalProviderCapability>,
+  capabilities: readonly PersonalProviderCapability[],
+): PersonalProviderCapability[] {
+  return capabilities.filter(
+    (capability) => selected.has(capability) && activatesNewPersonalOverride(rows, capability),
+  );
+}
+
+/**
+ * Whether saving `provider` only rotates the credential behind the personal text route the user
+ * is already on. The routing is unchanged, so the activation confirmation would be noise.
+ */
+export function isPersonalTextCredentialRotation(rows: UserSavedProviderConfigRow[], provider: string): boolean {
+  return getActivePersonalProviderForCapability(rows, "text")?.provider.toLowerCase() === provider.toLowerCase();
+}
+
+/** Resolves the active personal model/provider pair(s) for a capability. */
+export async function resolveActivePersonalProviderModelSelections(
+  rows: UserSavedProviderConfigRow[],
+  capability: PersonalProviderCapability,
+): Promise<ProviderModelSelection[]> {
+  const row = getActivePersonalProviderForCapability(rows, capability);
+  if (!row) return [];
+
+  switch (capability) {
+    case "text": {
+      const model = row.llm_id ? await llmModelRepo.loadById(row.llm_id) : null;
+      return model ? [{ model: model.llm_codename, provider: row.provider }] : [];
+    }
+    case "embedding": {
+      const model = row.embedding_model_id ? await llmModelRepo.loadEmbeddingModelById(row.embedding_model_id) : null;
+      return model ? [{ model: model.codename, provider: row.provider }] : [];
+    }
+    case "image": {
+      const modelIds = [row.diffusion_model_id, row.nai_diffusion_model_id].filter(
+        (modelId): modelId is number => typeof modelId === "number",
+      );
+      const models = await Promise.all(modelIds.map((modelId) => llmModelRepo.loadDiffusionModelById(modelId)));
+      return models.flatMap((model) => (model ? [{ model: model.codename, provider: row.provider }] : []));
+    }
+    case "video": {
+      const model = row.video_model_id ? await llmModelRepo.loadVideoGenerationModelById(row.video_model_id) : null;
+      return model ? [{ model: model.codename, provider: row.provider }] : [];
+    }
+    case "vision": {
+      const model = row.vision_llm_id ? await llmModelRepo.loadById(row.vision_llm_id) : null;
+      return model ? [{ model: model.llm_codename, provider: row.provider }] : [];
+    }
+  }
+}
+
+/**
+ * Builds the upsert payload that promotes a text model to personal primary.
+ *
+ * The promoted model is pruned from the saved fallback chain: a fallback identical to the primary
+ * can never run, and leaving it there makes `/personal model fallback` reject every later edit,
+ * since untouched slots resubmit the stale ref.
+ */
+export function withPersonalTextPrimary(
+  row: UserSavedProviderConfigRow,
+  llmId: number | null,
+  endpoints: Iterable<Pick<CustomEndpointRow, "custom_endpoint_id" | "model_ref_id">> = [],
+): UserSavedProviderConfigUpsert {
+  return {
+    ...row,
+    llm_id: llmId,
+    fallback_model_refs: prunePrimaryFallbackRefs(row.fallback_model_refs, llmId, endpoints),
+  };
 }
 
 export function withCapabilityEnabled(

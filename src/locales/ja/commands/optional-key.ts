@@ -1,5 +1,3 @@
-// locales/ja/commands/optional-key.ts
-
 export default {
   "optional-key": {
     description: `オプションのサービスAPIキーを管理`,

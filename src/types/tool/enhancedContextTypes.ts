@@ -9,7 +9,7 @@
  * Base interface for enhanced context content objects.
  * Extends standard content with additional metadata for processing.
  */
-export interface BaseEnhancedContent {
+interface BaseEnhancedContent {
   /** Content type identifier */
   type: string;
   /** Special marker indicating enhanced context processing is required */
@@ -51,19 +51,4 @@ export interface EnhancedImageContent extends BaseEnhancedContent {
   isProfilePicture: boolean;
   /** Flag indicating this image is a profile banner */
   isProfileBanner?: boolean;
-}
-
-/**
- * Union type for all enhanced content types.
- * Used when a function can return various types of enhanced content.
- */
-export type EnhancedContent = EnhancedVideoContent | EnhancedImageContent;
-
-/**
- * Enhanced context message structure for AI tool responses.
- * Contains enhanced content objects for processing by AI providers.
- */
-export interface EnhancedContextMessage {
-  /** Array of enhanced content objects */
-  contents: EnhancedContent[];
 }

@@ -1,12 +1,14 @@
-import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type { ButtonInteraction, ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import { MessageFlags } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ErrorContext, PersonalProviderCapability, UserRow } from "@/types/db/schema";
 import { llmProviderRepo } from "@/utils/db/repositories";
 import {
+  findNewlyEnabledPersonalCapabilities,
   getActivePersonalProviderForCapability,
   getStoredPersonalProviderForCapability,
   setPersonalCapabilityEnabled,
@@ -18,6 +20,19 @@ const CAPABILITIES: PersonalProviderCapability[] = ["text", "embedding", "image"
 
 function getCapabilityLabel(locale: string, capability: PersonalProviderCapability): string {
   return localizer(locale, `commands.personal.provider.capability_${capability}`);
+}
+
+/**
+ * Renders one capability's routing as either the personal provider that answers it or the
+ * server default. "None" would be wrong here: an unrouted capability still resolves, just
+ * against whichever server the user is in.
+ */
+function describeRouting(provider: string | null, locale: string): string {
+  return provider
+    ? localizer(locale, "commands.personal.provider.routing_personal", {
+        provider: getProviderDisplayName(provider),
+      })
+    : localizer(locale, "commands.personal.provider.routing_server_default");
 }
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -115,24 +130,59 @@ export async function execute(
       }
     }
 
+    const newlyEnabled = findNewlyEnabledPersonalCapabilities(rows, selectedCapabilities, CAPABILITIES);
+
+    let responseInteraction: typeof modalResult.interaction | ButtonInteraction = modalResult.interaction;
+    if (newlyEnabled.length > 0) {
+      const confirmation = await promptWithUnacknowledgedConfirmation(modalResult.interaction, locale, {
+        embedTitleKey: "commands.personal.provider.toggle-models.confirm_title",
+        embedDescriptionKey: "commands.personal.provider.toggle-models.confirm_description",
+        embedDescriptionVars: {
+          // The stored provider, not the active one: these capabilities are inactive by
+          // definition here, so the active lookup would report every line as a server default.
+          newly_enabled: newlyEnabled
+            .map(
+              (capability) =>
+                `- **${getCapabilityLabel(locale, capability)}**: ${describeRouting(
+                  getStoredPersonalProviderForCapability(rows, capability)?.provider ?? null,
+                  locale,
+                )}`,
+            )
+            .join("\n"),
+        },
+        continueLabelKey: "commands.personal.provider.activation_confirm_continue",
+        cancelLabelKey: "commands.personal.provider.activation_confirm_cancel",
+        continueCustomId: "personal_provider_toggle_models_confirm",
+        cancelCustomId: "personal_provider_toggle_models_cancel",
+      });
+      if (confirmation.outcome !== "continue" || !confirmation.interaction) {
+        return;
+      }
+      // Acknowledge before the per-capability writes so the button never expires.
+      await confirmation.interaction.deferUpdate();
+      responseInteraction = confirmation.interaction;
+    }
+
     for (const capability of CAPABILITIES) {
       const enabled = selectedCapabilities.has(capability);
       await setPersonalCapabilityEnabled(userData.user_id, capability, enabled);
     }
 
     const refreshedRows = await llmProviderRepo.loadUserSavedProviderConfigs(userData.user_id);
-    const activeSummary = CAPABILITIES.map((capability) => {
-      const row = getActivePersonalProviderForCapability(refreshedRows, capability);
-      return row
-        ? `- ${getCapabilityLabel(locale, capability)}: ${getProviderDisplayName(row.provider)}`
-        : `- ${getCapabilityLabel(locale, capability)}: ${localizer(locale, "general.none")}`;
-    }).join("\n");
+    const activeSummary = CAPABILITIES.map(
+      (capability) =>
+        `- ${getCapabilityLabel(locale, capability)}: ${describeRouting(
+          getActivePersonalProviderForCapability(refreshedRows, capability)?.provider ?? null,
+          locale,
+        )}`,
+    ).join("\n");
 
-    await replyInfoEmbed(modalResult.interaction, locale, {
+    await replyInfoEmbed(responseInteraction, locale, {
       titleKey: "commands.personal.provider.toggle-models.success_title",
       descriptionKey: "commands.personal.provider.toggle-models.success_description",
       descriptionVars: {
         active_summary: activeSummary,
+        scope_notice: localizer(locale, "commands.personal.provider.scope_notice"),
       },
       color: ColorCode.SUCCESS,
     });

@@ -127,8 +127,8 @@ export async function execute(
       return;
     }
 
-    // Remove each selected model by its endpoint id; the service handles synthetic-model deletion
-    // and precise active-selection cleanup, leaving sibling models under the same label intact.
+    // The service owns synthetic-model deletion and exact active-selection cleanup,
+    // so removing one endpoint leaves sibling models under the same label intact.
     const removedEndpoints: CustomEndpointRow[] = [];
 
     for (const endpoint of endpointsToRemove) {

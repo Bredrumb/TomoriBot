@@ -1,11 +1,11 @@
 /**
- * Regression harness — LlmRepository domain.
+ * Regression harness: LlmRepository domain.
  *
  * Covers: loadAvailableLlms, loadLlmById, loadLlmByProviderAndCodename,
  * getLlmsByIds, loadSmartestModel, loadUniqueProviders.
  *
  * LLM rows come from the typed catalog (src/db/seed/catalog/models.ts), seeded by
- * initializeDatabase — no fixture insertion needed.
+ * initializeDatabase: no fixture insertion needed.
  *
  * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
  */
@@ -15,14 +15,13 @@ import { DB_TESTS_AVAILABLE, setupTestDb } from "./setup/testDb";
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
   beforeAll(async () => {
-    await setupTestDb(); // Seed data is applied here — LLMs are seeded from the catalog by initializeDatabase
+    await setupTestDb(); // Seed data is applied here: LLMs are seeded from the catalog by initializeDatabase
   });
 
   it("loadAvailableLlms returns at least one non-deprecated model", async () => {
     const llms = await llmModelRepo.loadAvailableLlms();
     if (!llms) throw new Error("loadAvailableLlms returned null");
     expect(llms.length).toBeGreaterThan(0);
-    // All returned rows should be non-deprecated (includeDeprecated defaults to false)
     expect(llms.every((l) => !l.is_deprecated)).toBe(true);
   });
 
@@ -76,7 +75,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
 
     const provider = providers[0];
     const smartest = await llmModelRepo.loadSmartestModel(provider);
-    // May be null if no is_smartest=true row exists for this provider — that is valid
+    // May be null if no is_smartest=true row exists for this provider. that is valid
     if (smartest !== null) {
       expect(smartest.llm_provider).toBe(provider);
     }

@@ -1,29 +1,37 @@
-import type {
-  ButtonInteraction,
-  ChatInputCommandInteraction,
-  Client,
-  ModalSubmitInteraction,
-  SlashCommandSubcommandBuilder,
-} from "discord.js";
-import { MessageFlags, TextInputStyle } from "discord.js";
-import { localizer } from "@/utils/text/localizer";
-import { log, ColorCode } from "@/utils/misc/logger";
 import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  safeSelectOptionText,
-} from "@/utils/discord/ui/modals";
-import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+  ButtonStyle,
+  ComponentType,
+  MessageFlags,
+  TextInputStyle,
+  type ActionRowData,
+  type ButtonComponentData,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type Client,
+  type ComponentInContainerData,
+  type ContainerComponentData,
+  type SlashCommandSubcommandBuilder,
+} from "discord.js";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
+import type { SelectOption } from "@/types/discord/modal";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, userRepository } from "@/utils/db/repositories";
+import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { hasAttributes } from "@/utils/discord/ui/personaEligibility";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS as WORKFLOW_COMPONENT_TIMEOUT_MS,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowComponentsV2Payload,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+import { ColorCode, log } from "@/utils/misc/logger";
 import { getMemoryLimits, validateAttribute } from "@/utils/misc/memoryLimits";
-import { splitPromptIntoModalParts, combineModalPromptParts } from "@/utils/text/modalPromptParts";
-import type { SelectOption } from "@/types/discord/modal";
-import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
+import { combineModalPromptParts, splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
+import { localizer } from "@/utils/text/localizer";
 
 const SELECT_MODAL_CUSTOM_ID = "persona_attribute_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "persona_attribute_edit_value_modal";
@@ -31,88 +39,55 @@ const ATTRIBUTE_SELECT_ID = "attribute_select";
 const ATTRIBUTE_PART1_ID = "attribute_part1";
 const ATTRIBUTE_PART2_ID = "attribute_part2";
 const ATTRIBUTE_PUBLIC_ID = "attribute_public";
-const ATTRIBUTE_PART_MAX_LENGTH = 4000; // Discord text input character limit
-
+const ATTRIBUTE_PART_MAX_LENGTH = 4000;
 const memoryLimits = getMemoryLimits();
 
 function formatAttributePreview(attribute: string, maxLength = 120): string {
   return attribute.length > maxLength ? `${attribute.slice(0, maxLength)}...` : attribute;
 }
 
-async function performAttributeEdit(
-  selectedPersona: TomoriState,
-  selectedIndex: number,
-  newAttribute: string,
-  isPublic: boolean,
-  userData: UserRow,
-  replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
+function buildConfirmationPayload(
   locale: string,
-  suppressSuccessReply = false,
-): Promise<boolean> {
-  if (selectedPersona.persona_id === undefined) {
-    await log.error("Cannot edit attribute for persona without persona_id");
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return false;
-  }
-
-  const pgIndex = selectedIndex + 1;
-  const updated = await personaRepository.editAttributeAt(selectedPersona.persona_id, pgIndex, newAttribute, isPublic);
-
-  if (!updated) {
-    const context: ErrorContext = {
-      userId: userData.user_id,
-      serverId: selectedPersona.server_id,
-      personaId: selectedPersona.persona_id,
-      errorType: "DatabaseUpdateError",
-      metadata: {
-        command: "persona attribute edit",
-        selectedIndex,
+  description: string,
+  continueCustomId: string,
+  cancelCustomId: string,
+): PersonaWorkflowComponentsV2Payload {
+  const actionRow: ActionRowData<ButtonComponentData> = {
+    type: ComponentType.ActionRow,
+    components: [
+      {
+        type: ComponentType.Button,
+        style: ButtonStyle.Success,
+        customId: continueCustomId,
+        label: localizer(locale, "general.confirm"),
       },
-    };
-
-    await log.error("Failed to update persona attribute list", new Error("Database update returned no rows"), context);
-
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "general.errors.update_failed_title",
-      descriptionKey: "general.errors.update_failed_description",
-      color: ColorCode.ERROR,
-    });
-    return false;
-  }
-
-  if (replyInteraction.guildId) {
-    invalidateTomoriStateCache(replyInteraction.guildId);
-  }
-
-  log.success(
-    `Updated attribute ${selectedIndex} for tomori ${selectedPersona.persona_id} by ${userData.user_disc_id}: "${formatAttributePreview(newAttribute, 60)}"`,
-  );
-
-  if (!suppressSuccessReply) {
-    await replyInfoEmbed(replyInteraction, locale, {
-      titleKey: "commands.persona.attribute.edit.success_title",
-      descriptionKey: "commands.persona.attribute.edit.success_description",
-      descriptionVars: {
-        attribute: formatAttributePreview(newAttribute, 96),
-        visibility: localizer(
-          locale,
-          isPublic ? "commands.teach.attribute.visibility_public" : "commands.teach.attribute.visibility_private",
-        ),
+      {
+        type: ComponentType.Button,
+        style: ButtonStyle.Danger,
+        customId: cancelCustomId,
+        label: localizer(locale, "general.pagination.cancel"),
       },
-      color: ColorCode.SUCCESS,
-    });
-  }
-
-  return true;
+    ],
+  };
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
+    components: [
+      {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.persona.attribute.edit.confirm_title")}`,
+      },
+      { type: ComponentType.TextDisplay, content: description },
+      actionRow,
+    ],
+  };
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("edit").setDescription(localizer("en-US", "commands.persona.attribute.edit.description"));
 
+/** Edits an existing attribute on a selected persona. */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -129,12 +104,16 @@ export async function execute(
     return;
   }
 
+  const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+  const workflowState: {
+    selectedPersona: TomoriState | null;
+    message: PersonaWorkflowMessageController | null;
+  } = { selectedPersona: null, message: null };
   let tomoriState: TomoriState | null = null;
-  let selectedPersona: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
 
   try {
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     if (interaction.guild) {
       const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
@@ -149,7 +128,7 @@ export async function execute(
       }
     }
 
-    tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
+    tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -160,7 +139,7 @@ export async function execute(
       return;
     }
 
-    let allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
+    const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
     if (allPersonas.length === 0) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -171,280 +150,323 @@ export async function execute(
       return;
     }
 
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    while (true) {
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
+    // Pre-picker eligibility guard shared with the workflow filter and the
+    // post-selection backstop below (all via `hasAttributes`).
+    const eligiblePersonas = allPersonas.filter(hasAttributes);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.attribute.no_attributes_title",
+        descriptionKey: "commands.forget.attribute.no_attributes",
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
       });
+      return;
+    }
 
-      if (!personaSelection.success) {
-        return;
-      }
-      if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-        return;
-      }
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      eligibility: {
+        isEligible: hasAttributes,
+        emptyTitleKey: "commands.forget.attribute.no_attributes_title",
+        emptyDescriptionKey: "commands.forget.attribute.no_attributes",
+        itemsLabelKey: "general.persona_workflow.items.attributes",
+      },
+      onSelected: async (selection) => {
+        workflowState.selectedPersona = selection.persona;
+        workflowState.message = selection.message;
+        const personaId = selection.persona.persona_id;
+        if (!personaId) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      personaSelectionInteraction = personaSelection.interaction;
-      selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
+        if (!tomoriState?.config.attribute_memteaching_enabled && !hasManagePermission) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.teach.attribute.teaching_disabled_title",
+              descriptionKey: "commands.teach.attribute.teaching_disabled_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
 
-      if (!tomoriState.config.attribute_memteaching_enabled && !hasManagePermission) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.teach.attribute.teaching_disabled_title",
-          descriptionKey: "commands.teach.attribute.teaching_disabled_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
+        // Concurrency backstop reusing the shared predicate (never diverges from
+        // the picker filter).
+        const currentAttributes = selection.persona.attribute_list ?? [];
+        if (!hasAttributes(selection.persona)) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.forget.attribute.no_attributes_title",
+              descriptionKey: "commands.forget.attribute.no_attributes",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        const selectOptions: SelectOption[] = currentAttributes.map((attribute, index) => ({
+          label: safeSelectOptionText(attribute),
+          value: index.toString(),
+        }));
+        const selectModalResult = await selection.openModal({
+          modalCustomId: SELECT_MODAL_CUSTOM_ID,
+          modalTitleKey: "commands.persona.attribute.edit.select_modal_title",
+          components: [
+            {
+              customId: ATTRIBUTE_SELECT_ID,
+              labelKey: "commands.persona.attribute.edit.select_label",
+              descriptionKey: "commands.persona.attribute.edit.select_description",
+              placeholder: "commands.persona.attribute.edit.select_placeholder",
+              required: true,
+              options: selectOptions,
+            },
+          ],
         });
-        return;
-      }
+        if (selectModalResult.outcome !== "submitted") {
+          log.info(`Attribute edit selection modal ${selectModalResult.outcome} for user ${userData.user_id}`);
+          return selectModalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+        }
 
-      const currentAttributes = selectedPersona.attribute_list ?? [];
-      if (currentAttributes.length === 0) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "commands.forget.attribute.no_attributes_title",
-          "commands.forget.attribute.no_attributes",
-          ColorCode.WARN,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
+        const selectWork = await selectModalResult.phase.beginInPlaceWork();
+        const selectedIndex = Number.parseInt(selectModalResult.phase.values[ATTRIBUTE_SELECT_ID] ?? "", 10);
+        const selectedAttribute = currentAttributes[selectedIndex];
+        if (!Number.isInteger(selectedIndex) || selectedAttribute === undefined) {
+          await selectWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.operation_failed_title",
+              descriptionKey: "general.errors.operation_failed_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+        const selectedAttributeIsPublic =
+          selection.persona.persona_attributes?.find((attribute) => attribute.attribute_order === selectedIndex + 1)
+            ?.is_public ?? false;
 
-      const attributeSelectOptions: SelectOption[] = currentAttributes.map((attribute, index) => ({
-        label: safeSelectOptionText(attribute),
-        value: index.toString(),
-      }));
-
-      const selectModalResult = await promptWithPaginatedModal(personaSelectionInteraction, locale, {
-        modalCustomId: SELECT_MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.persona.attribute.edit.select_modal_title",
-        components: [
-          {
-            customId: ATTRIBUTE_SELECT_ID,
-            labelKey: "commands.persona.attribute.edit.select_label",
-            descriptionKey: "commands.persona.attribute.edit.select_description",
-            placeholder: "commands.persona.attribute.edit.select_placeholder",
-            required: true,
-            options: attributeSelectOptions,
-          },
-        ],
-      });
-
-      if (selectModalResult.outcome !== "submit") {
-        log.info(`Attribute edit selection modal ${selectModalResult.outcome} for user ${userData.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      const selectModalInteraction = selectModalResult.interaction;
-      const selectedIndexRaw = selectModalResult.values?.[ATTRIBUTE_SELECT_ID];
-      if (!selectModalInteraction || !selectedIndexRaw) {
-        log.error("Attribute edit selection unexpectedly missing interaction or values");
-        return;
-      }
-
-      const selectedIndex = Number.parseInt(selectedIndexRaw, 10);
-      const selectedAttribute = currentAttributes[selectedIndex];
-      const selectedAttributeIsPublic =
-        selectedPersona.persona_attributes?.find((attribute) => attribute.attribute_order === selectedIndex + 1)
-          ?.is_public ?? false;
-      if (!selectedAttribute) {
-        await replyInfoEmbed(selectModalInteraction, locale, {
-          titleKey: "general.errors.operation_failed_title",
-          descriptionKey: "general.errors.operation_failed_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      await acknowledgeModalSubmitForRefresh(selectModalInteraction);
-
-      const confirmationResult = await promptWithUnacknowledgedConfirmation(interaction, locale, {
-        embedTitleKey: "commands.persona.attribute.edit.confirm_title",
-        embedDescriptionKey: "commands.persona.attribute.edit.confirm_description",
-        embedDescriptionVars: {
+        const continueCustomId = `persona_attribute_edit_confirm_${selection.phaseId}`;
+        const cancelCustomId = `persona_attribute_edit_cancel_${selection.phaseId}`;
+        const confirmationDescription = localizer(locale, "commands.persona.attribute.edit.confirm_description", {
           attribute: formatAttributePreview(selectedAttribute, 3000)
             .split("\n")
             .map((line) => `> ${line}`)
             .join("\n"),
-        },
-        embedColor: ColorCode.INFO,
-        useComponentsV2: true,
-        continueLabelKey: "general.confirm",
-        cancelLabelKey: "general.pagination.cancel",
-        continueCustomId: `persona_attribute_edit_confirm_${selectModalInteraction.id}`,
-        cancelCustomId: `persona_attribute_edit_cancel_${selectModalInteraction.id}`,
-      });
-
-      if (confirmationResult.outcome !== "continue" || !confirmationResult.interaction) {
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
+        });
+        await selectWork.message.replace(
+          buildConfirmationPayload(locale, confirmationDescription, continueCustomId, cancelCustomId),
         );
-        continue;
-      }
 
-      const attributeParts = splitPromptIntoModalParts(selectedAttribute, 2, ATTRIBUTE_PART_MAX_LENGTH);
+        let confirmationButton: ButtonInteraction;
+        try {
+          const message = await selectWork.message.fetchMessage();
+          confirmationButton = await message.awaitMessageComponent({
+            componentType: ComponentType.Button,
+            filter: (candidate) =>
+              candidate.user.id === interaction.user.id &&
+              (candidate.customId === continueCustomId || candidate.customId === cancelCustomId),
+            time: WORKFLOW_COMPONENT_TIMEOUT_MS,
+          });
+        } catch {
+          await selectWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.interaction.timeout_title",
+              descriptionKey: "general.pagination.timeout",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      const editModalResult = await promptWithRawModal(confirmationResult.interaction, locale, {
-        modalCustomId: EDIT_MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.persona.attribute.edit.modal_title",
-        components: [
-          {
-            customId: ATTRIBUTE_PART1_ID,
-            labelKey: "commands.persona.attribute.edit.attribute_input_label",
-            descriptionKey: "commands.persona.attribute.edit.attribute_input_description",
-            placeholder: "commands.persona.attribute.edit.attribute_input_placeholder",
-            style: TextInputStyle.Paragraph,
-            required: true,
-            maxLength: ATTRIBUTE_PART_MAX_LENGTH,
-            value: attributeParts[0] || undefined,
-          },
-          {
-            customId: ATTRIBUTE_PART2_ID,
-            labelKey: "commands.persona.attribute.edit.attribute_input_part2_label",
-            style: TextInputStyle.Paragraph,
-            required: false,
-            maxLength: ATTRIBUTE_PART_MAX_LENGTH,
-            value: attributeParts[1] || undefined,
-          },
-          {
-            kind: "checkbox",
-            customId: ATTRIBUTE_PUBLIC_ID,
-            labelKey: "commands.persona.attribute.edit.public_checkbox_label",
-            descriptionKey: "commands.persona.attribute.edit.public_checkbox_description",
-            default: selectedAttributeIsPublic,
-          },
-        ],
-      });
+        const confirmationPhase = selection.useButton(confirmationButton);
+        if (confirmationButton.customId === cancelCustomId) {
+          await confirmationPhase.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.interaction.cancel_title",
+              descriptionKey: "general.pagination.cancelled",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      if (editModalResult.outcome !== "submit") {
-        log.info(`Attribute edit modal ${editModalResult.outcome} for user ${userData.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
+        const attributeParts = splitPromptIntoModalParts(selectedAttribute, 2, ATTRIBUTE_PART_MAX_LENGTH);
+        const editModalResult = await confirmationPhase.openModal({
+          modalCustomId: EDIT_MODAL_CUSTOM_ID,
+          modalTitleKey: "commands.persona.attribute.edit.modal_title",
+          components: [
+            {
+              customId: ATTRIBUTE_PART1_ID,
+              labelKey: "commands.persona.attribute.edit.attribute_input_label",
+              descriptionKey: "commands.persona.attribute.edit.attribute_input_description",
+              placeholder: "commands.persona.attribute.edit.attribute_input_placeholder",
+              style: TextInputStyle.Paragraph,
+              required: true,
+              maxLength: ATTRIBUTE_PART_MAX_LENGTH,
+              value: attributeParts[0] || undefined,
+            },
+            {
+              customId: ATTRIBUTE_PART2_ID,
+              labelKey: "commands.persona.attribute.edit.attribute_input_part2_label",
+              style: TextInputStyle.Paragraph,
+              required: false,
+              maxLength: ATTRIBUTE_PART_MAX_LENGTH,
+              value: attributeParts[1] || undefined,
+            },
+            {
+              kind: "checkbox",
+              customId: ATTRIBUTE_PUBLIC_ID,
+              labelKey: "commands.persona.attribute.edit.public_checkbox_label",
+              descriptionKey: "commands.persona.attribute.edit.public_checkbox_description",
+              default: selectedAttributeIsPublic,
+            },
+          ],
+        });
+        if (editModalResult.outcome !== "submitted") {
+          log.info(`Attribute edit modal ${editModalResult.outcome} for user ${userData.user_id}`);
+          return editModalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+        }
+
+        const editWork = await editModalResult.phase.beginInPlaceWork();
+        const editedAttribute = combineModalPromptParts(
+          [
+            editModalResult.phase.values[ATTRIBUTE_PART1_ID]?.trim() ?? "",
+            editModalResult.phase.values[ATTRIBUTE_PART2_ID]?.trim() ?? "",
+          ],
+          ATTRIBUTE_PART_MAX_LENGTH,
         );
-        continue;
-      }
+        const editedIsPublic = editModalResult.phase.values[ATTRIBUTE_PUBLIC_ID] === "true";
+        const validation = validateAttribute(editedAttribute);
+        if (!validation.isValid) {
+          await editWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.teach.attribute.content_too_long_title",
+              descriptionKey: "commands.teach.attribute.content_too_long_description",
+              descriptionVars: {
+                current_length: editedAttribute.length.toString(),
+                max_allowed: (validation.maxAllowed || memoryLimits.maxAttributeLength).toString(),
+              },
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      const editModalInteraction = editModalResult.interaction;
-      const editedPart1 = editModalResult.values?.[ATTRIBUTE_PART1_ID]?.trim() ?? "";
-      const editedPart2 = editModalResult.values?.[ATTRIBUTE_PART2_ID]?.trim() ?? "";
-      const editedAttribute = combineModalPromptParts([editedPart1, editedPart2], ATTRIBUTE_PART_MAX_LENGTH);
-      const editedIsPublic = editModalResult.values?.[ATTRIBUTE_PUBLIC_ID] === "true";
-      if (!editModalInteraction) {
-        log.error("Attribute edit modal unexpectedly missing interaction");
-        return;
-      }
+        if (editedAttribute === selectedAttribute.trim() && editedIsPublic === selectedAttributeIsPublic) {
+          await editWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.persona.attribute.edit.no_changes_title",
+              descriptionKey: "commands.persona.attribute.edit.no_changes_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      const attributeValidation = validateAttribute(editedAttribute);
-      if (!attributeValidation.isValid) {
-        await replyInfoEmbed(editModalInteraction, locale, {
-          titleKey: "commands.teach.attribute.content_too_long_title",
-          descriptionKey: "commands.teach.attribute.content_too_long_description",
-          descriptionVars: {
-            current_length: editedAttribute.length.toString(),
-            max_allowed: (attributeValidation.maxAllowed || memoryLimits.maxAttributeLength).toString(),
-          },
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
+        const duplicateExists = currentAttributes.some(
+          (attribute, index) =>
+            index !== selectedIndex && attribute.trim().toLowerCase() === editedAttribute.toLowerCase(),
+        );
+        if (duplicateExists) {
+          await editWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.persona.attribute.edit.duplicate_title",
+              descriptionKey: "commands.persona.attribute.edit.duplicate_description",
+              descriptionVars: { attribute: formatAttributePreview(editedAttribute, 96) },
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      if (editedAttribute === selectedAttribute.trim() && editedIsPublic === selectedAttributeIsPublic) {
-        await replyInfoEmbed(editModalInteraction, locale, {
-          titleKey: "commands.persona.attribute.edit.no_changes_title",
-          descriptionKey: "commands.persona.attribute.edit.no_changes_description",
-          color: ColorCode.WARN,
-        });
-        continue;
-      }
+        const updated = await personaRepository.editAttributeAt(
+          personaId,
+          selectedIndex + 1,
+          editedAttribute,
+          editedIsPublic,
+        );
+        if (!updated) {
+          const context: ErrorContext = {
+            userId: userData.user_id,
+            serverId: selection.persona.server_id,
+            personaId,
+            errorType: "DatabaseUpdateError",
+            metadata: { command: "persona attribute edit", selectedIndex },
+          };
+          await log.error(
+            "Failed to update persona attribute list",
+            new Error("Database update returned no rows"),
+            context,
+          );
+          await editWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.update_failed_title",
+              descriptionKey: "general.errors.update_failed_description",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
 
-      const duplicateExists = currentAttributes.some(
-        (attribute, index) =>
-          index !== selectedIndex && attribute.trim().toLowerCase() === editedAttribute.toLowerCase(),
-      );
-      if (duplicateExists) {
-        await replyInfoEmbed(editModalInteraction, locale, {
-          titleKey: "commands.persona.attribute.edit.duplicate_title",
-          descriptionKey: "commands.persona.attribute.edit.duplicate_description",
-          descriptionVars: {
-            attribute: formatAttributePreview(editedAttribute, 96),
-          },
-          color: ColorCode.WARN,
-        });
-        continue;
-      }
-
-      const editSucceeded = await performAttributeEdit(
-        selectedPersona,
-        selectedIndex,
-        editedAttribute,
-        editedIsPublic,
-        userData,
-        editModalInteraction,
-        locale,
-        true,
-      );
-      if (!editSucceeded) {
-        return;
-      }
-
-      await acknowledgeModalSubmitForRefresh(editModalInteraction);
-      await replyComponentsV2Status(
-        interaction,
-        locale,
-        "commands.persona.attribute.edit.success_title",
-        "commands.persona.attribute.edit.success_description",
-        ColorCode.SUCCESS,
-        {
-          attribute: formatAttributePreview(editedAttribute, 96),
-          visibility: localizer(
+        invalidateTomoriStateCache(serverDiscId);
+        log.success(
+          `Updated attribute ${selectedIndex} for tomori ${personaId} by ${userData.user_disc_id}: "${formatAttributePreview(editedAttribute, 60)}"`,
+        );
+        await editWork.message.replace(
+          buildPersonaWorkflowNotice({
             locale,
-            editedIsPublic
-              ? "commands.teach.attribute.visibility_public"
-              : "commands.teach.attribute.visibility_private",
-          ),
-        },
-        "general.pagination.reloading_persona_picker",
-      );
-
-      allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
-    }
+            titleKey: "commands.persona.attribute.edit.success_title",
+            descriptionKey: "commands.persona.attribute.edit.success_description",
+            descriptionVars: {
+              attribute: formatAttributePreview(editedAttribute, 96),
+              visibility: localizer(
+                locale,
+                editedIsPublic
+                  ? "commands.teach.attribute.visibility_public"
+                  : "commands.teach.attribute.visibility_private",
+              ),
+            },
+            footerKey: "general.pagination.reloading_persona_picker",
+            color: ColorCode.SUCCESS,
+          }),
+        );
+        const refreshedPersonas = await personaRepository.loadAllForServer(serverDiscId);
+        return retryPersonaWorkflow(refreshedPersonas);
+      },
+    });
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: workflowState.selectedPersona?.persona_id ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "persona attribute edit",
@@ -457,12 +479,18 @@ export async function execute(
       error as Error,
       context,
     );
-
-    const errorReplyTarget =
-      personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction;
-    await replyInfoEmbed(errorReplyTarget, locale, {
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

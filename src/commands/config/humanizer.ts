@@ -1,33 +1,58 @@
-import {
-  MessageFlags,
-  type ChatInputCommandInteraction,
-  type Client,
-  type SlashCommandSubcommandBuilder,
-} from "discord.js";
-import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
-import { localizer } from "../../utils/text/localizer";
-import { log, ColorCode } from "../../utils/misc/logger";
-import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
-import type { UserRow, ErrorContext } from "../../types/db/schema";
-import type { RadioGroupOption } from "../../types/discord/modal";
-import { configRepository } from "@/utils/db/repositories";
+/**
+ * Command: /config humanizer
+ * Sets how 'human-like' Tomori's response delivery is (streaming, typing
+ * simulation, sentence chunking, casual text).
+ *
+ * Scopes:
+ * - global (default): server-wide value stored in server_chat_configs.humanizer_degree
+ * - persona: per-persona override stored in persona_configs.humanizer_degree
+ *   (persona picker shown first; the modal's "Inherit" choice clears the override)
+ *
+ * At runtime the persona override is overlaid onto config.humanizer_degree when
+ * the persona's TomoriState is assembled, so the answering persona always speaks
+ * at its own degree while everyone else inherits the global setting.
+ */
 
-// Define constants at the top (Rule #20)
+import type {
+  ChatInputCommandInteraction,
+  Client,
+  ModalSubmitInteraction,
+  SlashCommandSubcommandBuilder,
+} from "discord.js";
+import { MessageFlags } from "discord.js";
+import type { ErrorContext, UserRow } from "@/types/db/schema";
+import type { RadioGroupOption } from "@/types/discord/modal";
+import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { configRepository, personaRepository } from "@/utils/db/repositories";
+import { localizer } from "@/utils/text/localizer";
+import { log, ColorCode } from "@/utils/misc/logger";
+import { replyInfoEmbed, promptWithRawModal } from "@/utils/discord/interactionHelper";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+
 const HUMANIZER_MIN = 0;
 const HUMANIZER_MAX = 3;
 const HUMANIZER_DEFAULT = 1;
 
-// Modal configuration constants
 const MODAL_CUSTOM_ID = "config_humanizer_modal";
 const HUMANIZER_SELECT_ID = "humanizer_select";
 
+// Sentinel radio value for the persona-scope "Inherit global" choice (clears the override)
+const INHERIT_VALUE = "inherit";
+
 /**
- * Creates humanizer degree options with localized descriptions
- * @param locale - The locale to use for localization
- * @returns Array of SelectOption with localized descriptions
+ * Creates humanizer degree options with localized descriptions.
+ * The option matching `selectedValue` is pre-selected when the modal opens.
+ * @param selectedValue - Radio value to pre-select ("0"-"3" or "inherit")
+ * @param includeInherit - Whether to prepend the persona-scope "Inherit global" choice
+ * @returns Array of RadioGroupOption with localized descriptions
  */
-function createHumanizerOptions(locale: string): RadioGroupOption[] {
-  return [
+function createHumanizerOptions(locale: string, selectedValue: string, includeInherit: boolean): RadioGroupOption[] {
+  const options: RadioGroupOption[] = [
     {
       label: localizer(locale, "commands.config.humanizer.choice_none"),
       value: "0",
@@ -49,11 +74,38 @@ function createHumanizerOptions(locale: string): RadioGroupOption[] {
       description: localizer(locale, "commands.config.humanizer.desc_heavy"),
     },
   ];
+
+  if (includeInherit) {
+    options.unshift({
+      label: localizer(locale, "commands.config.humanizer.choice_inherit"),
+      value: INHERIT_VALUE,
+      description: localizer(locale, "commands.config.humanizer.desc_inherit"),
+    });
+  }
+
+  return options.map((option) => ({ ...option, default: option.value === selectedValue }));
 }
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("humanizer").setDescription(localizer("en-US", "commands.config.humanizer.description"));
+  subcommand
+    .setName("humanizer")
+    .setDescription(localizer("en-US", "commands.config.humanizer.description"))
+    .addStringOption((option) =>
+      option
+        .setName("scope")
+        .setDescription(localizer("en-US", "commands.config.humanizer.scope_description"))
+        .setRequired(false)
+        .addChoices(
+          {
+            name: localizer("en-US", "commands.config.humanizer.global_option"),
+            value: "global",
+          },
+          {
+            name: localizer("en-US", "commands.config.humanizer.persona_option"),
+            value: "persona",
+          },
+        ),
+    );
 
 /**
  * Configures the humanizer degree setting for Tomori.
@@ -62,10 +114,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  * 1 = Active system prompt + live discrete streaming
  * 2 = 1 + typing simulation and pauses between messages
  * 3 = 2 + sentence-level chunking and casual text humanization
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -73,7 +121,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a channel
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.channel_only_title",
@@ -83,9 +130,19 @@ export async function execute(
     return;
   }
 
+  // Declare interaction handles outside try-catch for fallback error replies
+  const modalHost = interaction;
+  let modalSubmitInteraction: ModalSubmitInteraction | undefined;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
+  const scope = (interaction.options.getString("scope") ?? "global") as "global" | "persona";
+
   try {
-    // 2. Load the Tomori state for this server (Rule #17)
-    const tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
+    if (scope === "persona") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
+    const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+    const tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -96,8 +153,171 @@ export async function execute(
       return;
     }
 
-    // 3. Show the modal with humanizer degree selection
-    const modalResult = await promptWithRawModal(interaction, locale, {
+    // Persona scope is fully owned by the anchor picker workflow.
+    if (scope === "persona") {
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
+
+      if (allPersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.config.humanizer.no_personas_title",
+          descriptionKey: "commands.config.humanizer.no_personas_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      await runPersonaPickerWorkflow(interaction, locale, {
+        personas: allPersonas,
+        color: ColorCode.INFO,
+        async onSelected(selection) {
+          workflowState.message = selection.message;
+          const selectedPersona = selection.persona;
+          const personaId = selectedPersona.persona_id;
+          if (personaId == null) {
+            const work = await selection.beginInPlaceWork();
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.unknown_error_title",
+                descriptionKey: "general.errors.unknown_error_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return completePersonaWorkflow();
+          }
+
+          try {
+            const currentOverride = selectedPersona.humanizer_degree_override ?? null;
+            const preselectedValue = currentOverride === null ? INHERIT_VALUE : String(currentOverride);
+            const modalResult = await selection.openModal({
+              modalCustomId: MODAL_CUSTOM_ID,
+              modalTitleKey: "commands.config.humanizer.modal_title",
+              components: [
+                {
+                  kind: "radioGroup" as const,
+                  customId: HUMANIZER_SELECT_ID,
+                  labelKey: "commands.config.humanizer.select_label",
+                  descriptionKey: "commands.config.humanizer.select_description",
+                  required: true,
+                  options: createHumanizerOptions(locale, preselectedValue, true),
+                },
+              ],
+            });
+            if (modalResult.outcome !== "submitted") {
+              log.info(`Humanizer degree selection modal ${modalResult.outcome} for user ${userData.user_id}`);
+              return completePersonaWorkflow();
+            }
+
+            const work = await modalResult.phase.beginInPlaceWork();
+            const selectedValue = modalResult.phase.values[HUMANIZER_SELECT_ID] ?? "";
+            const humanizerValue = selectedValue === INHERIT_VALUE ? null : Number.parseInt(selectedValue, 10);
+            if (
+              humanizerValue !== null &&
+              (Number.isNaN(humanizerValue) || humanizerValue < HUMANIZER_MIN || humanizerValue > HUMANIZER_MAX)
+            ) {
+              await work.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "general.errors.operation_failed_title",
+                  descriptionKey: "commands.config.humanizer.invalid_value_description",
+                  descriptionVars: { min: String(HUMANIZER_MIN), max: String(HUMANIZER_MAX) },
+                  color: ColorCode.ERROR,
+                }),
+              );
+              return completePersonaWorkflow();
+            }
+
+            if (humanizerValue === currentOverride) {
+              await work.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "commands.config.humanizer.already_set_title",
+                  descriptionKey: "commands.config.humanizer.persona_already_set_description",
+                  descriptionVars: {
+                    value: getHumanizerLabel(locale, humanizerValue),
+                    persona: selectedPersona.persona_nickname,
+                  },
+                  color: ColorCode.WARN,
+                }),
+              );
+              return completePersonaWorkflow();
+            }
+
+            const updated = await personaRepository.setHumanizerOverride(personaId, humanizerValue);
+            if (!updated) {
+              const context: ErrorContext = {
+                personaId,
+                serverId: selectedPersona.server_id,
+                userId: userData.user_id,
+                errorType: "DatabaseUpdateError",
+                metadata: {
+                  command: "config humanizer",
+                  guildId: serverDiscId,
+                  scope: "persona",
+                  humanizerValue,
+                },
+              };
+              await log.error(
+                "Failed to update humanizer_degree config",
+                new Error("Database update returned no rows"),
+                context,
+              );
+              await work.message.replace(
+                buildPersonaWorkflowNotice({
+                  locale,
+                  titleKey: "general.errors.update_failed_title",
+                  descriptionKey: "general.errors.update_failed_description",
+                  color: ColorCode.ERROR,
+                }),
+              );
+              return completePersonaWorkflow();
+            }
+
+            selectedPersona.humanizer_degree_override = humanizerValue;
+            invalidateTomoriStateCache(serverDiscId);
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.config.humanizer.persona_success_title",
+                descriptionKey: "commands.config.humanizer.persona_success_description",
+                descriptionVars: {
+                  persona: selectedPersona.persona_nickname,
+                  value: getHumanizerLabel(locale, humanizerValue),
+                  previous_value: getHumanizerLabel(locale, currentOverride),
+                },
+                color: ColorCode.SUCCESS,
+              }),
+            );
+            return completePersonaWorkflow();
+          } catch (error) {
+            await selection.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.unknown_error_title",
+                descriptionKey: "general.errors.unknown_error_description",
+                color: ColorCode.ERROR,
+              }),
+            );
+            throw error;
+          }
+        },
+      });
+      return;
+    }
+
+    // Resolve the current value for pre-selection and "already set" comparison.
+    // Global scope reads the raw server_chat_configs row instead of cached state:
+    // the cached main persona's config.humanizer_degree may already carry a persona
+    // overlay, which would mask the true server-wide value.
+    let currentGlobal = HUMANIZER_DEFAULT;
+    if (tomoriState.server_id) {
+      const chatConfig = await configRepository.getChatConfig(tomoriState.server_id);
+      currentGlobal = chatConfig?.humanizer_degree ?? tomoriState.config.humanizer_degree ?? HUMANIZER_DEFAULT;
+    }
+    const preselectedValue = String(currentGlobal);
+
+    const modalResult = await promptWithRawModal(modalHost, locale, {
       modalCustomId: MODAL_CUSTOM_ID,
       modalTitleKey: "commands.config.humanizer.modal_title",
       components: [
@@ -107,28 +327,28 @@ export async function execute(
           labelKey: "commands.config.humanizer.select_label",
           descriptionKey: "commands.config.humanizer.select_description",
           required: true,
-          options: createHumanizerOptions(locale),
+          options: createHumanizerOptions(locale, preselectedValue, false),
         },
       ],
     });
 
-    // 4. Handle modal outcome
     if (modalResult.outcome !== "submit") {
       log.info(`Humanizer degree selection modal ${modalResult.outcome} for user ${userData.user_id}`);
       return;
     }
 
-    // Extract values from the modal
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
-    const modalSubmitInteraction = modalResult.interaction!;
+    modalSubmitInteraction = modalResult.interaction!;
 
-    // 5a. Defer the modal submit interaction — DB write below exceeds the 3-second window
+    // Defer the modal submit interaction because DB write below exceeds the 3-second window
     await modalSubmitInteraction.deferReply({ flags: MessageFlags.Ephemeral });
     // biome-ignore lint/style/noNonNullAssertion: Modal submission outcome "submit" guarantees these values exist
     const selectedValue = modalResult.values![HUMANIZER_SELECT_ID];
+
+    // Global scope always submits a numeric degree.
     const humanizerValue = Number.parseInt(selectedValue, 10);
 
-    // 5b. Validate the parsed value (additional safety check)
+    // Validate the parsed value (additional safety check)
     if (Number.isNaN(humanizerValue) || humanizerValue < HUMANIZER_MIN || humanizerValue > HUMANIZER_MAX) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "general.errors.operation_failed_title",
@@ -142,9 +362,7 @@ export async function execute(
       return;
     }
 
-    // 6. Check if this is the same as the current humanizer value
-    const currentHumanizer = tomoriState.config.humanizer_degree ?? HUMANIZER_DEFAULT;
-    if (humanizerValue === currentHumanizer) {
+    if (humanizerValue === currentGlobal) {
       await replyInfoEmbed(modalSubmitInteraction, locale, {
         titleKey: "commands.config.humanizer.already_set_title",
         descriptionKey: "commands.config.humanizer.already_set_description",
@@ -156,12 +374,10 @@ export async function execute(
       return;
     }
 
-    // 7. Update the config in the database (Rule #4, #15)
     const updated = await configRepository.updateChatConfig(tomoriState.server_id, {
       humanizer_degree: humanizerValue,
     });
 
-    // 8. Check if update succeeded
     if (!updated) {
       const context: ErrorContext = {
         personaId: tomoriState.persona_id,
@@ -170,7 +386,8 @@ export async function execute(
         errorType: "DatabaseUpdateError",
         metadata: {
           command: "config humanizer",
-          guildId: interaction.guild?.id ?? interaction.user.id,
+          guildId: serverDiscId,
+          scope: "global",
           humanizerValue,
         },
       };
@@ -188,22 +405,19 @@ export async function execute(
       return;
     }
 
-    // 9. Invalidate cache so next message gets fresh config
-    invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
+    // Invalidate cache so next message gets fresh config
+    invalidateTomoriStateCache(serverDiscId);
 
-    // 10. Success message with explanation of the humanizer effect
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.config.humanizer.success_title",
       descriptionKey: "commands.config.humanizer.success_description",
       descriptionVars: {
         value: getHumanizerLabel(locale, humanizerValue),
-        previous_value: getHumanizerLabel(locale, currentHumanizer),
+        previous_value: getHumanizerLabel(locale, currentGlobal),
       },
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    // 11. Log error with context (Rule #22)
-    // Attempt to get server/tomori IDs only once if needed
     let serverIdForError: number | null = null;
     let personaIdForError: number | null = null;
     if (interaction.guild?.id) {
@@ -225,15 +439,27 @@ export async function execute(
     };
     await log.error(`Error executing /config humanizer for user ${userData.user_disc_id}`, error as Error, context);
 
-    // 11. Inform user of unknown error
-    // Check if the interaction has already been replied to or deferred
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+
+    // Inform user of unknown error on the most specific available interaction
+    const replyTarget = modalSubmitInteraction ?? modalHost;
+    if (!replyTarget.replied && !replyTarget.deferred) {
+      await replyTarget.reply({
         content: localizer(locale, "general.errors.unknown_error_description"),
         flags: MessageFlags.Ephemeral,
       });
     } else {
-      await interaction.followUp({
+      await replyTarget.followUp({
         content: localizer(locale, "general.errors.unknown_error_description"),
         flags: MessageFlags.Ephemeral,
       });
@@ -243,12 +469,12 @@ export async function execute(
 
 /**
  * Helper function to get a user-friendly label for humanizer values
- * @param locale - The user's locale
- * @param value - Humanizer degree value
- * @returns Localized humanizer label
+ * @param value - Humanizer degree value, or null for the persona-scope "Inherit" state
  */
-function getHumanizerLabel(locale: string, value: number): string {
+function getHumanizerLabel(locale: string, value: number | null): string {
   switch (value) {
+    case null:
+      return localizer(locale, "commands.config.humanizer.choice_inherit");
     case 0:
       return localizer(locale, "commands.config.humanizer.choice_none");
     case 1:

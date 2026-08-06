@@ -1,5 +1,3 @@
-// locales/ja/bridges.ts
-
 export default {
   matrix: {
     notices: {

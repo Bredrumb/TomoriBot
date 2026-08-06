@@ -7,16 +7,16 @@
  * execution time via {@link resolve}.
  *
  * Prefixes:
- * - `media_N` — message IDs referenced by media tools (analyze_image,
+ * - `media_N`: message IDs referenced by media tools (analyze_image,
  *   generate_image, read_file, process_gif, etc.)
- * - `ref_N`   — general recent-message references for replies, metadata reveals,
+ * - `ref_N`   : general recent-message references for replies, metadata reveals,
  *   and message-management targets
  *
  * The map is instantiated once per request cycle and garbage-collected when
  * the request ends.
  */
 
-/** Valid opaque key prefixes — each has its own independent counter. */
+/** Valid opaque key prefixes: each has its own independent counter. */
 type OpaquePrefix = "media" | "ref";
 
 /** Pattern that matches any opaque key produced by this class. */
@@ -34,7 +34,7 @@ export class MessageIdMap {
 
   /**
    * Register a real Discord message ID and return its opaque key.
-   * Idempotent within a prefix — the same (realId, prefix) pair always
+   * Idempotent within a prefix: the same (realId, prefix) pair always
    * returns the same opaque key.
    * @param realId - Discord snowflake message ID
    * @param prefix - Purpose-specific prefix ("media" or "ref")
@@ -77,7 +77,6 @@ export class MessageIdMap {
   /**
    * Check whether a string matches the opaque key pattern.
    * Useful for determining if a tool argument needs resolution.
-   * @param value - String to test
    * @returns True if value matches `media_N` or `ref_N` format
    */
   static isOpaqueKey(value: string): boolean {

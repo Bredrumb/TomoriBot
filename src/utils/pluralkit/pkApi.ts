@@ -13,12 +13,12 @@ const LOOKUP_TIMEOUT_MS = Number.parseInt(process.env.PLURALKIT_LOOKUP_TIMEOUT_M
 
 /**
  * Optional bot-owned PK token, sent as-is in the Authorization header (no "Bearer"
- * prefix — this is PluralKit's own convention, not OAuth). Raises the base rate
+ * prefix: this is PluralKit's own convention, not OAuth). Raises the base rate
  * limit for all lookups; grants no access to other users' private data.
  */
 const API_TOKEN = process.env.PLURALKIT_API_TOKEN || undefined;
 
-/** Backoff schedule between retries, in ms — PK's message index lags ~2s behind proxied sends */
+/** Backoff schedule between retries, in ms; PK's message index lags ~2s behind proxied sends */
 const RETRY_DELAYS_MS = [800, 1600, 3200];
 
 /** Cap on permanently-cached resolved identities (a message's identity never changes once known) */
@@ -26,9 +26,9 @@ const IDENTITY_CACHE_MAX_ENTRIES = 2000;
 
 /** PluralKit system fields we consume from the message-lookup payload */
 export interface PkSystemInfo {
-  /** Short-form system hid (5-7 chars, e.g. "abcdef") — stored alongside the UUID, never used as the key */
+  /** Short-form system hid (5-7 chars, e.g. "abcdef"), stored alongside the UUID but never used as the key */
   id: string;
-  /** Canonical system anchor — never key on name, it's volatile */
+  /** Canonical system anchor; never key on name, it's volatile */
   uuid: string;
   /** Cosmetic display name; may be null/absent when the system keeps it private */
   name?: string | null;
@@ -38,9 +38,9 @@ export interface PkSystemInfo {
 
 /** PluralKit member fields we consume from the message-lookup payload */
 export interface PkMemberInfo {
-  /** Short-form member hid (5-7 chars, e.g. "ghijkl") — stored alongside the UUID, never used as the key */
+  /** Short-form member hid (5-7 chars, e.g. "ghijkl"), stored alongside the UUID but never used as the key */
   id: string;
-  /** Canonical member anchor — never key on name, it's volatile */
+  /** Canonical member anchor; never key on name, it's volatile */
   uuid: string;
   name: string;
   /** Cosmetic display name; falls back to `name` when unset */
@@ -53,11 +53,11 @@ export interface PkMemberInfo {
 export interface PkMessageLookup {
   /** The original (pre-proxy, now-deleted) message's Discord snowflake ID */
   original: string;
-  /** The host Discord account snowflake that sent/proxied the message — authorization keys off this, never the member */
+  /** The host Discord account snowflake that sent/proxied the message; authorization keys off this, never the member */
   sender: string;
   /** The fronting member's system, or null if the member (and thus its system) was deleted */
   system: PkSystemInfo | null;
-  /** The fronting member, or null if deleted — treat as an unproxied webhook with no identity claims */
+  /** The fronting member, or null if deleted; treat as an unproxied webhook with no identity claims */
   member: PkMemberInfo | null;
 }
 
@@ -71,8 +71,8 @@ interface PkApiMessageResponse {
 
 // Single-flight + permanent cache: a message's PK identity is immutable once
 // resolved, so successful lookups never need to be refetched. Transient
-// failures (network errors, exhausted retries) are deliberately NOT cached —
-// caching them would permanently poison a message that PK could resolve fine
+// failures (network errors, exhausted retries) are deliberately NOT cached,
+// because caching them would permanently poison a message that PK could resolve fine
 // on a later attempt (e.g. after an outage clears).
 const identityCache = new Map<string, PkMessageLookup>();
 const inFlightLookups = new Map<string, Promise<PkMessageLookup | null>>();
@@ -98,7 +98,7 @@ function sleep(ms: number): Promise<void> {
  * Parses a `Retry-After` header (seconds) into milliseconds; null if missing
  * or insane. Zero counts as insane: PK's rate limiter is known to accidentally
  * send `Retry-After: 0` (per the domain expert), and honoring it would mean retrying a
- * rate-limited endpoint immediately — fall back to the backoff schedule instead.
+ * rate-limited endpoint immediately, so fall back to the backoff schedule instead.
  */
 function parseRetryAfterMs(header: string | null): number | null {
   if (!header) return null;
@@ -118,8 +118,8 @@ function toMessageLookup(raw: PkApiMessageResponse, messageId: string): PkMessag
 /**
  * Attempts the PK message lookup with retries, bounded by `deadline`.
  * Returns null once the budget is exhausted or PK returns a non-retryable
- * error — callers must fall through to today's plain-webhook behavior in
- * that case, never inventing an identity.
+ * error, because callers must fall through to today's plain-webhook behavior
+ * in that case, never inventing an identity.
  */
 async function fetchWithRetry(messageId: string, deadline: number): Promise<PkMessageLookup | null> {
   let attempt = 0;
@@ -147,7 +147,7 @@ async function fetchWithRetry(messageId: string, deadline: number): Promise<PkMe
         return toMessageLookup(raw, messageId);
       }
 
-      // 404: PK's message index lags ~2s behind proxied sends — retry within budget.
+      // 404: PK's message index lags ~2s behind proxied sends, so retry within budget.
       // 429: honor Retry-After when sane, otherwise fall back to the backoff schedule.
       if (response.status === 404 || response.status === 429) {
         const backoff = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
@@ -179,7 +179,7 @@ async function fetchWithRetry(messageId: string, deadline: number): Promise<PkMe
  * Retries 404s (PK indexing lag) and 429s (honoring `Retry-After`) on an
  * exponential backoff schedule, bounded by `PLURALKIT_LOOKUP_TIMEOUT_MS`
  * (default 5000ms). Returns null once that budget is exhausted or PK
- * returns a non-retryable error — callers must fall through to today's
+ * returns a non-retryable error, because callers must fall through to today's
  * plain-webhook behavior in that case.
  *
  * Successful lookups are cached permanently in-process (a message's

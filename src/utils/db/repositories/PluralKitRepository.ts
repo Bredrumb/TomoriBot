@@ -74,7 +74,7 @@ type PluralKitIndexedMessageIdentityRow = PluralKitContextRow & {
  * synthetic-user anchor (`external_identities`), host-account links, and the
  * durable message->identity index. See plans/pluralkit-integration.md §6.
  *
- * Never key on names (volatile) -- system_uuid/member_uuid are canonical;
+ * Never key on names (volatile); system_uuid/member_uuid are canonical, while
  * system_name/system_tag/display_name are cosmetic caches refreshed
  * opportunistically from PluralKit API lookups.
  */
@@ -138,7 +138,7 @@ export class PluralKitRepository {
         // fallback as registration). register() preserves nicknames on
         // conflict, so this explicit write is the only path that follows a
         // PluralKit member rename; conditional to avoid cache-invalidation
-        // churn on every sighting. Cosmetic only — identity keys on the UUID.
+        // churn on every sighting. Cosmetic only: identity keys on the UUID.
         const currentName = input.displayName ?? input.memberHid;
         if (userRow.user_id && userRow.user_nickname !== currentName) {
           const renamed = await userRepository.setNickname(userRow.user_id, currentName);

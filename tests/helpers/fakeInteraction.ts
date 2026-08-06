@@ -45,7 +45,6 @@ export type FakeInteraction = {
     getBoolean: (_name: string) => boolean | null;
   };
   webhook: { send: (..._args: unknown[]) => Promise<void> };
-  // Acknowledgement methods
   reply: (..._args: unknown[]) => Promise<void>;
   deferReply: (..._args: unknown[]) => Promise<void>;
   showModal: (..._args: unknown[]) => Promise<void>;
@@ -101,45 +100,43 @@ export function makeFakeInteraction(overrides: Partial<FakeInteraction> = {}): {
       },
     },
 
-    // 1. reply — sets replied=true so subsequent calls route to editReply
+    // reply: sets replied=true so subsequent calls route to editReply
     reply: async (...args: unknown[]) => {
       calls.push({ method: "reply", args });
       interaction.replied = true;
     },
 
-    // 2. deferReply — sets deferred=true; represents the initial deferred ack
+    // deferReply: sets deferred=true; represents the initial deferred ack
     deferReply: async (...args: unknown[]) => {
       calls.push({ method: "deferReply", args });
       interaction.deferred = true;
     },
 
-    // 3. showModal — the acknowledgement path for modal commands; does NOT set
+    // showModal: the acknowledgement path for modal commands; does NOT set
     //    replied=true in Discord.js, but the interaction IS consumed.
     showModal: async (...args: unknown[]) => {
       calls.push({ method: "showModal", args });
     },
 
-    // 4. editReply — only valid after deferReply() or reply()
+    // editReply: only valid after deferReply() or reply()
     editReply: async (...args: unknown[]) => {
       calls.push({ method: "editReply", args });
     },
 
-    // 5. followUp — only valid after any acknowledgement
+    // followUp: only valid after any acknowledgement
     followUp: async (...args: unknown[]) => {
       calls.push({ method: "followUp", args });
     },
 
-    // 6. deferUpdate — component interactions only; records for completeness
     deferUpdate: async (...args: unknown[]) => {
       calls.push({ method: "deferUpdate", args });
     },
 
-    // 7. update — component interactions only; records for completeness
     update: async (...args: unknown[]) => {
       calls.push({ method: "update", args });
     },
 
-    // fetchReply — not an acknowledgement; returns a fake message so ping-style
+    // fetchReply: not an acknowledgement; returns a fake message so ping-style
     // commands that measure latency don't throw.
     fetchReply: async () => ({
       id: "fake_reply_id",

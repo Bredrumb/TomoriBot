@@ -28,7 +28,7 @@ describe("preset sprite storage helpers", () => {
     });
 
     it("does NOT flag per-server (deletable) assets", () => {
-      // Server-owned sprite — must remain deletable.
+      // Server-owned sprite, so must remain deletable.
       expect(isSharedPresetAssetReference("data/avatars/servers/123/personas/5/sprites/1700000000000.png")).toBe(false);
       expect(
         isSharedPresetAssetReference("https://storage.googleapis.com/bucket/avatars/servers/123/personas/5/1.png"),

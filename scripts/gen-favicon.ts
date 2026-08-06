@@ -1,23 +1,24 @@
 /**
- * Generates a multi-size ICO file and an optimized 256x256 PNG from assets/img/original.png.
+ * Generates a multi-size ICO file and an optimized 256x256 PNG from assets/img/icons/tomoricon.png.
  *
- * ICO layout: 16x16, 32x32, 48x48, 256x256 — each stored as a compressed embedded PNG
+ * ICO layout: 16x16, 32x32, 48x48, 256x256 (each stored as a compressed embedded PNG
  * inside the ICO container (supported by all modern browsers and Google's faviconV2 service).
  *
  * Output:
- *   assets/img/tomoricon.ico        — replaces the bloated single-size ICO
- *   apps/docs/public/favicon.ico    — copy served by the docs site
- *   apps/docs/public/tomoricon.png  — optimized 256x256 PNG for docs
+ *   assets/img/icons/tomoricon.ico: replaces the bloated single-size ICO
+ *   apps/docs/public/favicon.ico: copy served by the docs site
+ *   apps/docs/public/tomoricon.png: optimized 256x256 PNG for docs
+ *   apps/docs/public/tomoricon.svg: copy of the vector mark for the SVG favicon/nav icon
  */
 
 import sharp from "sharp";
-import { writeFileSync } from "node:fs";
+import { copyFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const SOURCE = resolve(import.meta.dir, "../assets/img/tomoricon.png");
+const SOURCE = resolve(import.meta.dir, "../assets/img/icons/tomoricon.png");
+const SOURCE_SVG = resolve(import.meta.dir, "../assets/img/icons/tomoricon.svg");
 const SIZES = [16, 32, 48, 256];
 
-// 1. Resize source to each target size as a compressed PNG buffer.
 const layers: Buffer[] = await Promise.all(
   SIZES.map((size) =>
     sharp(SOURCE)
@@ -27,10 +28,8 @@ const layers: Buffer[] = await Promise.all(
   ),
 );
 
-// 2. Build the ICO container.
-//    ICO header  (6 bytes): reserved(2) + type=1(2) + count(2)
-//    Per-image directory entry (16 bytes each): w(1)+h(1)+colors(1)+reserved(1)+planes(2)+bitcount(2)+size(4)+offset(4)
-//    Image data: raw PNG bytes for each layer
+// ICO readers require a 6-byte header, one 16-byte directory entry per layer,
+// then the raw PNG layer data at the offsets recorded below.
 const count = SIZES.length;
 const headerSize = 6;
 const directorySize = 16 * count;
@@ -58,15 +57,13 @@ for (let i = 0; i < count; i++) {
 
 const ico = Buffer.concat([header, directory, ...layers]);
 
-// 3. Generate optimized 256x256 PNG.
 const png256 = await sharp(SOURCE)
   .resize(256, 256, { fit: "cover", kernel: "lanczos3" })
   .png({ compressionLevel: 9, effort: 10 })
   .toBuffer();
 
-// 4. Write outputs.
 const outputs: [string, Buffer][] = [
-  ["assets/img/tomoricon.ico", ico],
+  ["assets/img/icons/tomoricon.ico", ico],
   ["apps/docs/public/favicon.ico", ico],
   ["apps/docs/public/tomoricon.png", png256],
 ];
@@ -77,3 +74,7 @@ for (const [rel, buf] of outputs) {
   writeFileSync(dest, buf);
   console.log(`wrote ${rel} — ${(buf.length / 1024).toFixed(1)} KB`);
 }
+
+const svgDest = resolve(root, "apps/docs/public/tomoricon.svg");
+copyFileSync(SOURCE_SVG, svgDest);
+console.log("wrote apps/docs/public/tomoricon.svg");

@@ -195,7 +195,6 @@ describe("VerbatimToolCallParser", () => {
         args: { prompt: "a gray cat", mode: "txt2img" },
       },
     ]);
-    // Narration on both sides survives; only the call itself is consumed.
     expect(visible).toBe("She sighs.\n\nFine. But only because I am bored.\n\n\n\nThere. Now you owe me.");
   });
 

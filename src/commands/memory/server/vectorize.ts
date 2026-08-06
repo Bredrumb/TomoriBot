@@ -1,23 +1,28 @@
 import type {
+  ActionRowData,
+  ButtonComponentData,
   ButtonInteraction,
   ChatInputCommandInteraction,
   Client,
-  ModalSubmitInteraction,
+  ComponentInContainerData,
+  ContainerComponentData,
   SlashCommandSubcommandBuilder,
 } from "discord.js";
-import { EmbedBuilder, MessageFlags, TextInputStyle } from "discord.js";
+import { ButtonStyle, ComponentType, MessageFlags, TextInputStyle } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import {
-  acknowledgeModalSubmitForRefresh,
-  promptWithPaginatedModal,
-  promptWithRawModal,
-  safeSelectOptionText,
-} from "@/utils/discord/ui/modals";
-import { promptWithUnacknowledgedConfirmation } from "@/utils/discord/ui/confirmation";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS as WORKFLOW_COMPONENT_TIMEOUT_MS,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowComponentsV2Payload,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+import { lineageIdIsEligible } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import {
   llmModelRepo,
@@ -49,8 +54,46 @@ const CHANNEL_TAGS_INPUT_ID = "vectorize_channel_tags_input";
 
 const MAX_DOC_NAME_LENGTH = 64;
 const MAX_CHANNEL_TAGS_LENGTH = 200;
-
+const CONFIRMATION_DESCRIPTION_LIMIT = 3800;
 const memoryLimits = getMemoryLimits();
+
+function buildConfirmationPayload(locale: string, memory: string, phaseId: string): PersonaWorkflowComponentsV2Payload {
+  const description = localizer(locale, "commands.memory.server.vectorize.confirm_description", { memory }).slice(
+    0,
+    CONFIRMATION_DESCRIPTION_LIMIT,
+  );
+  const actionRow: ActionRowData<ButtonComponentData> = {
+    type: ComponentType.ActionRow,
+    components: [
+      {
+        type: ComponentType.Button,
+        style: ButtonStyle.Success,
+        customId: `memory_server_vectorize_confirm_${phaseId}`,
+        label: localizer(locale, "general.confirm"),
+      },
+      {
+        type: ComponentType.Button,
+        style: ButtonStyle.Danger,
+        customId: `memory_server_vectorize_cancel_${phaseId}`,
+        label: localizer(locale, "general.pagination.cancel"),
+      },
+    ],
+  };
+  const components: ComponentInContainerData[] = [
+    {
+      type: ComponentType.TextDisplay,
+      content: `### ${localizer(locale, "commands.memory.server.vectorize.confirm_title")}`,
+    },
+    { type: ComponentType.TextDisplay, content: description },
+    actionRow,
+  ];
+  const container: ContainerComponentData<ComponentInContainerData> = {
+    type: ComponentType.Container,
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
+    components,
+  };
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
+}
 
 function parseChannelTagsInput(input: string, client: Client): string[] {
   return input
@@ -89,11 +132,12 @@ export async function execute(
 
   let tomoriState: TomoriState | null = null;
   let selectedPersona: TomoriState | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
-  let deferredInteraction: ModalSubmitInteraction | null = null;
+  let selectedPersonaId: number | undefined;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     if (interaction.guild) {
       const blacklisted = (await userRepository.isBlacklisted(interaction.guild.id, interaction.user.id)) ?? false;
@@ -130,474 +174,502 @@ export async function execute(
       return;
     }
 
-    const avatarSessionCache: AvatarSessionCache = new Map();
-
-    while (true) {
-      // ── Step 1: Persona picker ──────────────────────────────────────────────
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
+    const baseTomoriState = tomoriState;
+    if (!baseTomoriState.config.server_memteaching_enabled && !hasManagePermission) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.teach.memory.server.teaching_disabled_title",
+        descriptionKey: "commands.teach.memory.server.teaching_disabled_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
       });
+      return;
+    }
 
-      if (!personaSelection.success) return;
-      if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) return;
-
-      personaSelectionInteraction = personaSelection.interaction;
-      selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
-
-      if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "commands.teach.memory.server.teaching_disabled_title",
-          descriptionKey: "commands.teach.memory.server.teaching_disabled_description",
-          color: ColorCode.ERROR,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      const targetPersonaLineageId = selectedPersona.persona_lineage_id ?? 0;
-      const memories = await serverMemoryRepository.loadServerMemoriesScoped(
-        tomoriState.server_id,
-        targetPersonaLineageId,
-        hasManagePermission ? undefined : userData.user_id,
-      );
-
-      if (memories.length === 0) {
-        const descriptionKey = hasManagePermission
-          ? "commands.forget.memory.server.no_memories"
-          : "commands.forget.memory.server.no_owned_memories";
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "commands.forget.memory.server.no_memories_title",
-          descriptionKey,
-          ColorCode.WARN,
-          undefined,
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
-
-      // ── Step 2: Memory selection modal ─────────────────────────────────────
-      const memorySelectOptions: SelectOption[] = memories.map((memory, index) => ({
-        label: safeSelectOptionText(memory.content, 20),
-        value: index.toString(),
-        description: safeSelectOptionText(memory.content),
-      }));
-
-      const selectModalResult = await promptWithPaginatedModal(personaSelectionInteraction, locale, {
-        modalCustomId: SELECT_MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.memory.server.vectorize.select_modal_title",
-        components: [
-          {
-            customId: MEMORY_SELECT_ID,
-            labelKey: "commands.memory.server.vectorize.select_label",
-            descriptionKey: "commands.memory.server.vectorize.select_description",
-            placeholder: "commands.memory.server.vectorize.select_placeholder",
-            required: true,
-            options: memorySelectOptions,
-          },
-        ],
+    // Class B, permission-dependent eligibility. A manager sees every lineage
+    // with server memories; a non-manager only lineages with memories they own.
+    // Vectorizing does not delete a memory, so the set stays static (no refresh).
+    const memoryUserScope = hasManagePermission ? undefined : userData.user_id;
+    const eligibleServerMemoryLineageIds = await serverMemoryRepository.lineageIdsWithServerMemories(
+      baseTomoriState.server_id,
+      memoryUserScope,
+    );
+    const isEligible = lineageIdIsEligible(eligibleServerMemoryLineageIds);
+    const emptyMemoriesDescriptionKey = hasManagePermission
+      ? "commands.forget.memory.server.no_memories"
+      : "commands.forget.memory.server.no_owned_memories";
+    const eligiblePersonas = allPersonas.filter(isEligible);
+    if (eligiblePersonas.length === 0) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.forget.memory.server.no_memories_title",
+        descriptionKey: emptyMemoriesDescriptionKey,
+        color: ColorCode.WARN,
+        flags: MessageFlags.Ephemeral,
       });
+      return;
+    }
 
-      if (selectModalResult.outcome !== "submit") {
-        log.info(`Server memory vectorize selection modal ${selectModalResult.outcome} for user ${userData.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      const selectModalInteraction = selectModalResult.interaction;
-      const selectedIndex = selectModalResult.values?.[MEMORY_SELECT_ID];
-      if (!selectModalInteraction || !selectedIndex) {
-        log.error("Server memory vectorize selection unexpectedly missing interaction or values");
-        return;
-      }
-
-      const selectedMemory = memories[Number.parseInt(selectedIndex, 10)];
-      if (!selectedMemory) {
-        await replyInfoEmbed(selectModalInteraction, locale, {
-          titleKey: "general.errors.operation_failed_title",
-          descriptionKey: "commands.forget.memory.server.memory_not_found",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      if (!hasManagePermission && selectedMemory.user_id !== userData.user_id) {
-        await replyInfoEmbed(selectModalInteraction, locale, {
-          titleKey: "general.errors.update_failed_title",
-          descriptionKey: "general.errors.update_failed_description",
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
-
-      await acknowledgeModalSubmitForRefresh(selectModalInteraction);
-
-      // ── Step 3: Confirmation embed ─────────────────────────────────────────
-      const confirmationResult = await promptWithUnacknowledgedConfirmation(interaction, locale, {
-        embedTitleKey: "commands.memory.server.vectorize.confirm_title",
-        embedDescriptionKey: "commands.memory.server.vectorize.confirm_description",
-        embedDescriptionVars: { memory: selectedMemory.content },
-        embedColor: ColorCode.INFO,
-        useComponentsV2: true,
-        continueLabelKey: "general.confirm",
-        cancelLabelKey: "general.pagination.cancel",
-        continueCustomId: `memory_server_vectorize_confirm_${selectModalInteraction.id}`,
-        cancelCustomId: `memory_server_vectorize_cancel_${selectModalInteraction.id}`,
-      });
-
-      if (confirmationResult.outcome !== "continue" || !confirmationResult.interaction) {
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      // Pre-fill channel tags from any #channel-format tags on the memory
-      const existingChannelTags = (selectedMemory.tags ?? [])
-        .map((t) => t.replace(/^["']+|["']+$/g, ""))
-        .filter((t) => t.startsWith("#"));
-      const channelTagsPrefill = existingChannelTags.join(", ");
-
-      // ── Step 4: Vectorize modal ────────────────────────────────────────────
-      const vectorizeModalResult = await promptWithRawModal(confirmationResult.interaction, locale, {
-        modalCustomId: VECTORIZE_MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.memory.server.vectorize.modal_title",
-        components: [
-          {
-            customId: CONTENT_INPUT_ID,
-            labelKey: "commands.memory.server.vectorize.content_label",
-            descriptionKey: "commands.memory.server.vectorize.content_description",
-            placeholder: "commands.memory.server.vectorize.content_placeholder",
-            style: TextInputStyle.Paragraph,
-            required: true,
-            maxLength: memoryLimits.maxMemoryLength,
-            value: selectedMemory.content,
-          },
-          {
-            customId: DOC_NAME_INPUT_ID,
-            labelKey: "commands.memory.server.vectorize.doc_name_label",
-            descriptionKey: "commands.memory.server.vectorize.doc_name_description",
-            placeholder: "commands.memory.server.vectorize.doc_name_placeholder",
-            style: TextInputStyle.Short,
-            required: true,
-            maxLength: MAX_DOC_NAME_LENGTH,
-          },
-          {
-            customId: CHANNEL_TAGS_INPUT_ID,
-            labelKey: "commands.memory.server.vectorize.channel_tags_label",
-            descriptionKey: "commands.memory.server.vectorize.channel_tags_description",
-            placeholder: "commands.memory.server.vectorize.channel_tags_placeholder",
-            style: TextInputStyle.Short,
-            required: false,
-            maxLength: MAX_CHANNEL_TAGS_LENGTH,
-            value: channelTagsPrefill,
-          },
-        ],
-      });
-
-      if (vectorizeModalResult.outcome !== "submit") {
-        log.info(`Server memory vectorize modal ${vectorizeModalResult.outcome} for user ${userData.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      const vectorizeInteraction = vectorizeModalResult.interaction;
-      if (!vectorizeInteraction) {
-        log.error("Server memory vectorize modal unexpectedly missing interaction");
-        return;
-      }
-
-      const editedContent = vectorizeModalResult.values?.[CONTENT_INPUT_ID]?.trim() ?? "";
-      const docName = vectorizeModalResult.values?.[DOC_NAME_INPUT_ID]?.trim() ?? "";
-      const rawTagsInput = vectorizeModalResult.values?.[CHANNEL_TAGS_INPUT_ID]?.trim() ?? "";
-      const channelTags = rawTagsInput ? parseChannelTagsInput(rawTagsInput, client) : [];
-
-      // ── Step 5: Sync validation (before deferReply) ────────────────────────
-      const contentValidation = validateMemoryContent(editedContent);
-      if (!contentValidation.isValid) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "commands.teach.memory.server.content_too_long_title",
-          descriptionKey: "commands.teach.memory.server.content_too_long_description",
-          descriptionVars: {
-            max_length: (contentValidation.maxAllowed || memoryLimits.maxMemoryLength).toString(),
-          },
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
-
-      if (!docName) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "commands.memory.server.vectorize.invalid_doc_name_title",
-          descriptionKey: "commands.memory.server.vectorize.invalid_doc_name_description",
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
-
-      if (!isRagAvailable()) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "commands.memory.server.vectorize.rag_disabled_title",
-          descriptionKey: "commands.memory.server.vectorize.rag_disabled_description",
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
-
-      if (memoryGuard.checkMemory().status === "critical") {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "rate_limit.error_memory_critical_title",
-          descriptionKey: "rate_limit.error_memory_critical_description",
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
-
-      // Resolve embedding credentials
-      const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
-      const stateWithOverlays = overlayResult.tomoriState;
-
-      let embeddingCreds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
-      try {
-        embeddingCreds = await resolveCapabilityCredentials(stateWithOverlays.server_id, "embedding", {
-          userId: userData.user_id ?? null,
-        });
-      } catch (credError) {
-        if (credError instanceof PersonalProviderRequiredError) {
-          await replyInfoEmbed(vectorizeInteraction, locale, {
-            titleKey: "general.errors.personal_provider_required_title",
-            descriptionKey: "general.errors.personal_provider_required_description",
-            color: ColorCode.ERROR,
-          });
-          continue;
+    const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      eligibility: {
+        isEligible,
+        emptyTitleKey: "commands.forget.memory.server.no_memories_title",
+        emptyDescriptionKey: emptyMemoriesDescriptionKey,
+        itemsLabelKey: "general.persona_workflow.items.server_memories",
+      },
+      async onSelected(selection) {
+        workflowState.message = selection.message;
+        selectedPersona = selection.persona;
+        const personaId = selectedPersona.persona_id;
+        selectedPersonaId = personaId;
+        if (!personaId) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
         }
-        if (credError instanceof CredentialUnavailableError) {
-          await replyInfoEmbed(vectorizeInteraction, locale, {
-            titleKey: "commands.memory.server.vectorize.embedding_creds_missing_title",
-            descriptionKey: "commands.memory.server.vectorize.embedding_creds_missing_description",
-            color: ColorCode.ERROR,
-          });
-          continue;
+
+        let memories: Awaited<ReturnType<typeof serverMemoryRepository.loadServerMemoriesScoped>> = [];
+        let memoriesLoaded = false;
+        const selectModalResult = await selection.openModal(async () => {
+          memories = await serverMemoryRepository.loadServerMemoriesScoped(
+            baseTomoriState.server_id,
+            selectedPersona?.persona_lineage_id ?? 0,
+            hasManagePermission ? undefined : userData.user_id,
+          );
+          memoriesLoaded = true;
+          if (memories.length === 0) throw new Error("No scoped server memories are available");
+
+          const memorySelectOptions: SelectOption[] = memories.map((memory, index) => ({
+            label: safeSelectOptionText(memory.content, 20),
+            value: index.toString(),
+            description: safeSelectOptionText(memory.content),
+          }));
+          return {
+            modalCustomId: SELECT_MODAL_CUSTOM_ID,
+            modalTitleKey: "commands.memory.server.vectorize.select_modal_title",
+            components: [
+              {
+                customId: MEMORY_SELECT_ID,
+                labelKey: "commands.memory.server.vectorize.select_label",
+                descriptionKey: "commands.memory.server.vectorize.select_description",
+                placeholder: "commands.memory.server.vectorize.select_placeholder",
+                required: true,
+                options: memorySelectOptions,
+              },
+            ],
+          };
+        });
+
+        if (selectModalResult.outcome !== "submitted") {
+          log.info(`Server memory vectorize selection modal ${selectModalResult.outcome} for user ${userData.user_id}`);
+          if (memoriesLoaded && memories.length === 0 && selectModalResult.outcome === "error") {
+            const descriptionKey = hasManagePermission
+              ? "commands.forget.memory.server.no_memories"
+              : "commands.forget.memory.server.no_owned_memories";
+            await selection.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.forget.memory.server.no_memories_title",
+                descriptionKey,
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.WARN,
+              }),
+            );
+          }
+          return selectModalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
         }
-        throw credError;
-      }
 
-      const embeddingModelId =
-        getResolvedCapabilityModelId(embeddingCreds, "embedding") ?? stateWithOverlays.config.embedding_model_id;
-      if (!embeddingModelId) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "commands.memory.server.vectorize.no_embedding_model_title",
-          descriptionKey: "commands.memory.server.vectorize.no_embedding_model_description",
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
+        const selectWork = await selectModalResult.phase.beginInPlaceWork();
+        const selectedIndex = Number.parseInt(selectModalResult.phase.values[MEMORY_SELECT_ID] ?? "", 10);
+        const selectedMemory = memories[selectedIndex];
+        if (!selectedMemory) {
+          await selectWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.operation_failed_title",
+              descriptionKey: "commands.forget.memory.server.memory_not_found",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+        if (!hasManagePermission && selectedMemory.user_id !== userData.user_id) {
+          await selectWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.update_failed_title",
+              descriptionKey: "general.errors.update_failed_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
-      if (!embeddingModel) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "commands.memory.server.vectorize.no_embedding_model_title",
-          descriptionKey: "commands.memory.server.vectorize.no_embedding_model_description",
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
+        const confirmId = `memory_server_vectorize_confirm_${selection.phaseId}`;
+        const cancelId = `memory_server_vectorize_cancel_${selection.phaseId}`;
+        await selectWork.message.replace(buildConfirmationPayload(locale, selectedMemory.content, selection.phaseId));
 
-      const duplicateExists = await serverMemoryRepository.documentExistsByName(
-        tomoriState.server_id,
-        selectedPersona.persona_id,
-        docName,
-      );
-      if (duplicateExists) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "commands.memory.server.vectorize.duplicate_title",
-          descriptionKey: "commands.memory.server.vectorize.duplicate_description",
-          descriptionVars: { name: docName, persona_name: selectedPersona.persona_nickname },
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
+        let confirmationButton: ButtonInteraction;
+        try {
+          const confirmationMessage = await selectWork.message.fetchMessage();
+          confirmationButton = await confirmationMessage.awaitMessageComponent({
+            componentType: ComponentType.Button,
+            filter: (candidate) =>
+              candidate.user.id === interaction.user.id &&
+              (candidate.customId === confirmId || candidate.customId === cancelId),
+            time: WORKFLOW_COMPONENT_TIMEOUT_MS,
+          });
+        } catch (error) {
+          log.info(
+            `Server memory vectorize confirmation timed out for user ${userData.user_id}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          await selectWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.interaction.timeout_title",
+              descriptionKey: "general.interaction.timeout_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      const docCount = await serverMemoryRepository.countDocumentsScoped(
-        tomoriState.server_id,
-        selectedPersona.persona_id,
-      );
-      if (docCount >= memoryLimits.maxDocumentsPerServer) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "commands.memory.server.vectorize.doc_limit_title",
-          descriptionKey: "commands.memory.server.vectorize.doc_limit_description",
-          descriptionVars: {
-            current_count: docCount.toString(),
-            max_allowed: memoryLimits.maxDocumentsPerServer.toString(),
-            persona_name: selectedPersona.persona_nickname,
-          },
-          color: ColorCode.ERROR,
-        });
-        continue;
-      }
+        const confirmationPhase = selection.useButton(confirmationButton);
+        if (confirmationButton.customId === cancelId) {
+          await confirmationPhase.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.interaction.cancel_title",
+              descriptionKey: "general.interaction.cancel_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      // ── Step 6: Async pipeline (defer first) ───────────────────────────────
-      await vectorizeInteraction.deferReply({ flags: MessageFlags.Ephemeral });
-      deferredInteraction = vectorizeInteraction;
-
-      const normalizedContent = ragRepository.normalizeText(editedContent);
-      const chunks = ragRepository.chunkText(
-        normalizedContent,
-        memoryLimits.documentChunkSize,
-        memoryLimits.documentChunkOverlap,
-      );
-
-      if (chunks.length === 0) {
-        await vectorizeInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.server.vectorize.empty_content_title"))
-              .setDescription(localizer(locale, "commands.memory.server.vectorize.empty_content_description"))
-              .setColor(ColorCode.ERROR),
+        const existingChannelTags = (selectedMemory.tags ?? [])
+          .map((tag) => tag.replace(/^["']+|["']+$/g, ""))
+          .filter((tag) => tag.startsWith("#"));
+        const vectorizeModalResult = await confirmationPhase.openModal({
+          modalCustomId: VECTORIZE_MODAL_CUSTOM_ID,
+          modalTitleKey: "commands.memory.server.vectorize.modal_title",
+          components: [
+            {
+              customId: CONTENT_INPUT_ID,
+              labelKey: "commands.memory.server.vectorize.content_label",
+              descriptionKey: "commands.memory.server.vectorize.content_description",
+              placeholder: "commands.memory.server.vectorize.content_placeholder",
+              style: TextInputStyle.Paragraph,
+              required: true,
+              maxLength: memoryLimits.maxMemoryLength,
+              value: selectedMemory.content,
+            },
+            {
+              customId: DOC_NAME_INPUT_ID,
+              labelKey: "commands.memory.server.vectorize.doc_name_label",
+              descriptionKey: "commands.memory.server.vectorize.doc_name_description",
+              placeholder: "commands.memory.server.vectorize.doc_name_placeholder",
+              style: TextInputStyle.Short,
+              required: true,
+              maxLength: MAX_DOC_NAME_LENGTH,
+            },
+            {
+              customId: CHANNEL_TAGS_INPUT_ID,
+              labelKey: "commands.memory.server.vectorize.channel_tags_label",
+              descriptionKey: "commands.memory.server.vectorize.channel_tags_description",
+              placeholder: "commands.memory.server.vectorize.channel_tags_placeholder",
+              style: TextInputStyle.Short,
+              required: false,
+              maxLength: MAX_CHANNEL_TAGS_LENGTH,
+              value: existingChannelTags.join(", "),
+            },
           ],
         });
-        continue;
-      }
 
-      const currentChunkCount = await serverMemoryRepository.countChunksScoped(
-        tomoriState.server_id,
-        selectedPersona.persona_id,
-      );
-      if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
-        await vectorizeInteraction.editReply({
-          embeds: [
-            new EmbedBuilder()
-              .setTitle(localizer(locale, "commands.memory.server.vectorize.chunk_limit_title"))
-              .setDescription(
-                localizer(locale, "commands.memory.server.vectorize.chunk_limit_description", {
-                  max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
-                  persona_name: selectedPersona.persona_nickname,
-                }),
-              )
-              .setColor(ColorCode.ERROR),
-          ],
-        });
-        continue;
-      }
+        if (vectorizeModalResult.outcome !== "submitted") {
+          log.info(`Server memory vectorize modal ${vectorizeModalResult.outcome} for user ${userData.user_id}`);
+          return vectorizeModalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+        }
 
-      // Reserve document quota now that all validation has passed — earlier placement
-      // would burn the user's daily slot on duplicate-name and credential errors that
-      // never write a document.
-      const quotaReserve = reserveDocumentQuota(interaction.user.id);
-      if (!quotaReserve.allowed) {
-        await replyInfoEmbed(vectorizeInteraction, locale, {
-          titleKey: "rate_limit.error_quota_exceeded_title",
-          descriptionKey: "rate_limit.error_quota_exceeded_description",
-          descriptionVars: {
+        const work = await vectorizeModalResult.phase.beginInPlaceWork();
+        const editedContent = vectorizeModalResult.phase.values[CONTENT_INPUT_ID]?.trim() ?? "";
+        const docName = vectorizeModalResult.phase.values[DOC_NAME_INPUT_ID]?.trim() ?? "";
+        const rawTagsInput = vectorizeModalResult.phase.values[CHANNEL_TAGS_INPUT_ID]?.trim() ?? "";
+        const channelTags = rawTagsInput ? parseChannelTagsInput(rawTagsInput, client) : [];
+
+        const replaceError = async (
+          titleKey: string,
+          descriptionKey: string,
+          descriptionVars?: Record<string, string>,
+        ) => {
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey,
+              descriptionKey,
+              descriptionVars,
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        };
+
+        const contentValidation = validateMemoryContent(editedContent);
+        if (!contentValidation.isValid) {
+          return replaceError(
+            "commands.teach.memory.server.content_too_long_title",
+            "commands.teach.memory.server.content_too_long_description",
+            { max_length: (contentValidation.maxAllowed || memoryLimits.maxMemoryLength).toString() },
+          );
+        }
+        if (!docName) {
+          return replaceError(
+            "commands.memory.server.vectorize.invalid_doc_name_title",
+            "commands.memory.server.vectorize.invalid_doc_name_description",
+          );
+        }
+        if (!isRagAvailable()) {
+          return replaceError(
+            "commands.memory.server.vectorize.rag_disabled_title",
+            "commands.memory.server.vectorize.rag_disabled_description",
+          );
+        }
+        if (memoryGuard.checkMemory().status === "critical") {
+          return replaceError("rate_limit.error_memory_critical_title", "rate_limit.error_memory_critical_description");
+        }
+
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.memory.server.vectorize.progress_title",
+            descriptionKey: "commands.memory.server.vectorize.progress_description",
+            color: ColorCode.INFO,
+          }),
+        );
+        const overlayResult = await applyPersonalProviderSelectionsToTomoriState(
+          baseTomoriState,
+          userData.user_id ?? null,
+        );
+        const stateWithOverlays = overlayResult.tomoriState;
+        let embeddingCreds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+        try {
+          embeddingCreds = await resolveCapabilityCredentials(stateWithOverlays.server_id, "embedding", {
+            userId: userData.user_id ?? null,
+          });
+        } catch (credError) {
+          if (credError instanceof PersonalProviderRequiredError) {
+            return replaceError(
+              "general.errors.personal_provider_required_title",
+              "general.errors.personal_provider_required_description",
+            );
+          }
+          if (credError instanceof CredentialUnavailableError) {
+            return replaceError(
+              "commands.memory.server.vectorize.embedding_creds_missing_title",
+              "commands.memory.server.vectorize.embedding_creds_missing_description",
+            );
+          }
+          throw credError;
+        }
+
+        const embeddingModelId =
+          getResolvedCapabilityModelId(embeddingCreds, "embedding") ?? stateWithOverlays.config.embedding_model_id;
+        if (!embeddingModelId) {
+          return replaceError(
+            "commands.memory.server.vectorize.no_embedding_model_title",
+            "commands.memory.server.vectorize.no_embedding_model_description",
+          );
+        }
+        const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
+        if (!embeddingModel) {
+          return replaceError(
+            "commands.memory.server.vectorize.no_embedding_model_title",
+            "commands.memory.server.vectorize.no_embedding_model_description",
+          );
+        }
+
+        if (await serverMemoryRepository.documentExistsByName(baseTomoriState.server_id, personaId, docName)) {
+          return replaceError(
+            "commands.memory.server.vectorize.duplicate_title",
+            "commands.memory.server.vectorize.duplicate_description",
+            { name: docName, persona_name: selectedPersona.persona_nickname },
+          );
+        }
+        const docCount = await serverMemoryRepository.countDocumentsScoped(baseTomoriState.server_id, personaId);
+        if (docCount >= memoryLimits.maxDocumentsPerServer) {
+          return replaceError(
+            "commands.memory.server.vectorize.doc_limit_title",
+            "commands.memory.server.vectorize.doc_limit_description",
+            {
+              current_count: docCount.toString(),
+              max_allowed: memoryLimits.maxDocumentsPerServer.toString(),
+              persona_name: selectedPersona.persona_nickname,
+            },
+          );
+        }
+
+        const normalizedContent = ragRepository.normalizeText(editedContent);
+        const chunks = ragRepository.chunkText(
+          normalizedContent,
+          memoryLimits.documentChunkSize,
+          memoryLimits.documentChunkOverlap,
+        );
+        if (chunks.length === 0) {
+          return replaceError(
+            "commands.memory.server.vectorize.empty_content_title",
+            "commands.memory.server.vectorize.empty_content_description",
+          );
+        }
+        const currentChunkCount = await serverMemoryRepository.countChunksScoped(baseTomoriState.server_id, personaId);
+        if (currentChunkCount + chunks.length > memoryLimits.maxDocumentChunksPerServer) {
+          return replaceError(
+            "commands.memory.server.vectorize.chunk_limit_title",
+            "commands.memory.server.vectorize.chunk_limit_description",
+            {
+              max_chunks: memoryLimits.maxDocumentChunksPerServer.toString(),
+              persona_name: selectedPersona.persona_nickname,
+            },
+          );
+        }
+
+        const quotaReserve = reserveDocumentQuota(interaction.user.id);
+        if (!quotaReserve.allowed) {
+          return replaceError("rate_limit.error_quota_exceeded_title", "rate_limit.error_quota_exceeded_description", {
             reset_time: quotaReserve.resetAt ? new Date(quotaReserve.resetAt).toLocaleString(locale) : "unknown",
-          },
-          color: ColorCode.ERROR,
+          });
+        }
+
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.memory.server.vectorize.progress_title",
+            descriptionKey: "commands.memory.server.vectorize.progress_description",
+            color: ColorCode.INFO,
+          }),
+        );
+        const embeddings = await generateEmbeddingsBatched({
+          provider: embeddingModel.provider,
+          apiKey: embeddingCreds.apiKey,
+          model: embeddingModel.codename,
+          modelId: embeddingModel.embedding_model_id,
+          inputs: chunks,
+          taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider))
+            ? "RETRIEVAL_DOCUMENT"
+            : undefined,
+          batchSize: 16,
         });
-        continue;
-      }
+        const documentId = await ragRepository.insertWithChunks({
+          serverId: baseTomoriState.server_id,
+          personaId,
+          uploaderUserId: userData.user_id ?? null,
+          documentName: docName,
+          fileName: null,
+          mimeType: null,
+          fileSizeBytes: null,
+          textContent: normalizedContent,
+          chunks,
+          embeddings,
+          embeddingModelId,
+          embeddingFamily: embeddingModel.model_family,
+          sourceType: "memory",
+          channelTags,
+        });
+        const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+        invalidateTomoriStateCache(serverDiscId);
 
-      const embeddings = await generateEmbeddingsBatched({
-        provider: embeddingModel.provider,
-        apiKey: embeddingCreds.apiKey,
-        model: embeddingModel.codename,
-        modelId: embeddingModel.embedding_model_id,
-        inputs: chunks,
-        taskType: (await providerSupportsEmbeddingTaskType(embeddingModel.provider)) ? "RETRIEVAL_DOCUMENT" : undefined,
-        batchSize: 16,
-      });
+        const originalMemoryId = selectedMemory.server_memory_id;
+        const originalMemoryRemoved =
+          typeof originalMemoryId === "number" && (await serverMemoryRepository.remove(originalMemoryId));
+        if (!originalMemoryRemoved) {
+          const context: ErrorContext = {
+            userId: userData.user_id,
+            serverId: baseTomoriState.server_id,
+            personaId,
+            errorType: "DatabaseUpdateError",
+            metadata: {
+              command: "memory server vectorize",
+              guildId: serverDiscId,
+              originalMemoryId: originalMemoryId ?? null,
+              newDocumentId: documentId,
+              documentName: docName,
+              chunkCount: chunks.length,
+            },
+          };
+          await log.error(
+            "Failed to remove the original server memory after vectorizing it",
+            new Error(
+              typeof originalMemoryId === "number"
+                ? "Server memory removal returned false"
+                : "Selected server memory has no database ID",
+            ),
+            context,
+          );
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.memory.server.vectorize.partial_failure_title",
+              descriptionKey: "commands.memory.server.vectorize.partial_failure_description",
+              descriptionVars: {
+                name: docName,
+                chunk_count: chunks.length.toString(),
+                persona_name: selectedPersona.persona_nickname,
+              },
+              color: ColorCode.WARN,
+            }),
+          );
+          return completePersonaWorkflow();
+        }
+        invalidateTomoriStateCache(serverDiscId);
 
-      await ragRepository.insertWithChunks({
-        serverId: tomoriState.server_id,
-        personaId: selectedPersona.persona_id,
-        uploaderUserId: userData.user_id ?? null,
-        documentName: docName,
-        fileName: null,
-        mimeType: null,
-        fileSizeBytes: null,
-        textContent: normalizedContent,
-        chunks,
-        embeddings,
-        embeddingModelId,
-        embeddingFamily: embeddingModel.model_family,
-        sourceType: "memory",
-        channelTags,
-      });
+        log.success(
+          `Vectorized server memory ${selectedMemory.server_memory_id} → "${docName}" (${chunks.length} chunks) for persona ${personaId} in server ${baseTomoriState.server_id}`,
+        );
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "commands.memory.server.vectorize.success_title",
+            descriptionKey: "commands.memory.server.vectorize.success_description",
+            descriptionVars: {
+              name: docName,
+              chunk_count: chunks.length.toString(),
+              persona_name: selectedPersona.persona_nickname,
+            },
+            footerKey: "general.pagination.reloading_persona_picker",
+            color: ColorCode.SUCCESS,
+          }),
+        );
+        return retryPersonaWorkflow();
+      },
+    });
 
-      if (selectedMemory.server_memory_id) {
-        await serverMemoryRepository.remove(selectedMemory.server_memory_id);
-      }
-
-      invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
-
-      log.success(
-        `Vectorized server memory ${selectedMemory.server_memory_id} → "${docName}" (${chunks.length} chunks) for persona ${selectedPersona.persona_id} in server ${tomoriState.server_id}`,
-      );
-
-      const successVars = {
-        name: docName,
-        chunk_count: chunks.length.toString(),
-        persona_name: selectedPersona.persona_nickname,
-      };
-
-      await vectorizeInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.memory.server.vectorize.success_title"))
-            .setDescription(localizer(locale, "commands.memory.server.vectorize.success_description", successVars))
-            .setColor(ColorCode.SUCCESS),
-        ],
-      });
-
-      deferredInteraction = null;
-
-      await replyComponentsV2Status(
-        interaction,
-        locale,
-        "commands.memory.server.vectorize.success_title",
-        "commands.memory.server.vectorize.success_description",
-        ColorCode.SUCCESS,
-        successVars,
-        "general.pagination.reloading_persona_picker",
+    if (workflowResult.outcome === "error" && workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
       );
     }
   } catch (error) {
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id,
-      personaId: selectedPersona?.persona_id ?? tomoriState?.persona_id,
+      personaId: selectedPersonaId ?? tomoriState?.persona_id,
       errorType: "CommandExecutionError",
       metadata: {
         command: "memory server vectorize",
@@ -611,27 +683,22 @@ export async function execute(
       context,
     );
 
-    if (deferredInteraction) {
-      await deferredInteraction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "general.errors.unknown_error_title"))
-            .setDescription(localizer(locale, "general.errors.unknown_error_description"))
-            .setColor(ColorCode.ERROR),
-        ],
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+    } else {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "general.errors.unknown_error_title",
+        descriptionKey: "general.errors.unknown_error_description",
+        color: ColorCode.ERROR,
+        flags: MessageFlags.Ephemeral,
       });
-      return;
     }
-
-    const errorReplyTarget =
-      personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction;
-    await replyInfoEmbed(errorReplyTarget, locale, {
-      titleKey: "general.errors.unknown_error_title",
-      descriptionKey: "general.errors.unknown_error_description",
-      color: ColorCode.ERROR,
-      flags: MessageFlags.Ephemeral,
-    });
   }
 }

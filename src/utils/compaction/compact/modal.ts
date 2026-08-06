@@ -31,8 +31,6 @@ const DEFAULT_ROLEPLAY_SYSTEM_PROMPT =
   "Your target audience is the AI player, not the human player - consider this when deciding what to summarize and how. " +
   "Your maximum budget is 3500 characters.";
 
-export { DEFAULT_CONVERSATION_SYSTEM_PROMPT, DEFAULT_ROLEPLAY_SYSTEM_PROMPT, DEFAULT_MANUAL_CONTENT };
-
 export type CompactModalSelection = {
   submitInteraction: ModalSubmitInteraction;
   summaryType: CompactSummaryMode;

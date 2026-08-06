@@ -18,8 +18,6 @@ import type { UserRow, ErrorContext, StPresetNodeRow, StPresetRow } from "@/type
 import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/discord/modal";
 import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 
-// ─── Constants ───────────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "stpreset_node_toggle_modal";
 
 /** Maximum checkbox options per group (Discord limit: 10) */
@@ -34,15 +32,13 @@ const NODES_PER_PAGE = MAX_OPTIONS_PER_GROUP * MAX_GROUPS_PER_MODAL;
 /** Timeout for page-selection button interaction (5 minutes) */
 const PAGE_SELECT_TIMEOUT_MS = 300_000;
 
-// ─── Helpers ─────────────────────────────────────────────────────────
-
 /** Maximum characters for a checkbox option description (Discord limit) */
 const DESCRIPTION_MAX_LENGTH = 100;
 
 /**
  * Strip SillyTavern macros from node content to produce a human-readable
  * description preview. Removes comment blocks, {{trim}}, {{setvar::...}},
- * {{addvar::...}}, and {{getvar::...}} wrappers — but for setvar/addvar nodes,
+ * {{addvar::...}}, and {{getvar::...}} wrappers; but for setvar/addvar nodes,
  * extracts the value portion (e.g., `{{setvar::tense::past tense}}` → `past tense`).
  *
  * @param content - Raw node content with ST macros
@@ -50,23 +46,17 @@ const DESCRIPTION_MAX_LENGTH = 100;
  */
 function buildNodeDescription(content: string): string | undefined {
   let cleaned = content
-    // 1. Strip comment blocks: {{// ... }}
     .replace(/\{\{\/\/[^}]*\}\}/g, "")
-    // 2. Strip {{trim}} macros
     .replace(/\{\{trim\}\}/g, "")
-    // 3. Extract value from setvar/addvar: {{setvar::key::value}} → value
     .replace(/\{\{(?:setvar|addvar)::[^:}]+::([^}]*)\}\}/g, "$1")
-    // 4. Resolve getvar to placeholder: {{getvar::key}} → [key]
     .replace(/\{\{getvar::([^}]*)\}\}/g, "[$1]")
-    // 5. Simplify remaining template vars: {{user}} → user, {{char}} → char
     .replace(/\{\{(\w+)\}\}/g, "$1")
-    // 6. Collapse whitespace
     .replace(/\s+/g, " ")
     .trim();
 
   if (cleaned.length === 0) return undefined;
 
-  // 7. Truncate to Discord's limit
+  // Truncate to Discord's limit
   if (cleaned.length > DESCRIPTION_MAX_LENGTH) {
     cleaned = `${cleaned.slice(0, DESCRIPTION_MAX_LENGTH - 3)}...`;
   }
@@ -85,7 +75,6 @@ function buildNodeDescription(content: string): string | undefined {
  * @returns Extracted comment text truncated to DESCRIPTION_MAX_LENGTH, or undefined if empty
  */
 function buildCommentNodeDescription(content: string): string | undefined {
-  // Extract inner text from all {{// ... }} blocks and join with spaces
   const commentText = [...content.matchAll(/\{\{\/\/([^}]*)\}\}/g)]
     .map((m) => m[1].trim())
     .filter((t) => t.length > 0)
@@ -101,18 +90,14 @@ function buildCommentNodeDescription(content: string): string | undefined {
 }
 
 /**
- * Build checkbox groups for a page of nodes.
  * Chunks the given nodes into groups of MAX_OPTIONS_PER_GROUP and
  * creates up to MAX_GROUPS_PER_MODAL checkbox group components.
  *
  * Comment-only nodes (`is_comment: true`) are shown with a localized
  * description indicating they are never injected into the prompt.
  *
- * @param pageNodes - The nodes for this page
- * @param pageOffset - The 0-based index of the first node on this page
  *                     (used to compute human-readable group labels)
  * @param locale - User's preferred locale for comment node descriptions
- * @returns Array of checkbox group modal components
  */
 function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): ModalCheckboxGroupField[] {
   const groups: ModalCheckboxGroupField[] = [];
@@ -123,21 +108,19 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
 
     const options: CheckboxGroupOption[] = chunk.map((node, chunkIdx) => {
       const rawName = node.name.trim();
-      // Discord requires 1–100 chars; fall back to positional label for blank names
+      // Discord requires 1-100 chars; fall back to positional label for blank names
       const nodeNumber = pageOffset + i + chunkIdx + 1;
       const label =
         rawName.length === 0 ? `Node ${nodeNumber}` : rawName.length > 100 ? `${rawName.slice(0, 97)}...` : rawName;
       return {
         label,
         value: node.identifier,
-        // Comment-only nodes show extracted comment text from inside {{// ... }} blocks
         description: node.is_comment ? buildCommentNodeDescription(node.content) : buildNodeDescription(node.content),
         default: node.is_enabled,
       };
     });
 
-    // Build a dynamic label like "Nodes 1–10" or "Nodes 51–60"
-    // (pageOffset converts page-relative indices to overall node numbers)
+    // Labels use document-wide positions rather than restarting numbering on each page.
     const rangeStart = pageOffset + i + 1;
     const rangeEnd = pageOffset + i + chunk.length;
     const dynamicLabel = `Nodes ${rangeStart}–${rangeEnd}`;
@@ -145,7 +128,7 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
     groups.push({
       kind: "checkboxGroup" as const,
       customId: `stpreset_nodes_${groupIndex}`,
-      // Pass raw label — localizer returns the key itself when no match is found
+      // Pass raw label: localizer returns the key itself when no match is found
       labelKey: dynamicLabel,
       descriptionKey: "commands.st-preset.node.toggle.group_description",
       minValues: 0,
@@ -161,8 +144,6 @@ function buildCheckboxGroups(pageNodes: StPresetNodeRow[], pageOffset: number): 
 /**
  * Collect selected node identifiers from modal submission checkbox groups.
  *
- * @param multiValues - The multiValues map from the modal result
- * @param groupCount - Number of checkbox groups in this modal
  * @returns Set of selected node identifiers
  */
 function collectSelectedIds(multiValues: Record<string, string[]> | undefined, groupCount: number): Set<string> {
@@ -176,17 +157,12 @@ function collectSelectedIds(multiValues: Record<string, string[]> | undefined, g
   return selectedIds;
 }
 
-// ─── Subcommand Configuration ────────────────────────────────────────
-
 /**
  * Configure the /st-preset node toggle subcommand.
- * No options — node selection happens via checkbox groups in a modal.
- * @param subcommand - The subcommand builder
+ * No options: node selection happens via checkbox groups in a modal.
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("toggle").setDescription(localizer("en-US", "commands.st-preset.node.toggle.description"));
-
-// ─── Execution ───────────────────────────────────────────────────────
 
 /**
  * Execute /st-preset node toggle.
@@ -201,10 +177,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  *
  * On submit, changed enabled states are persisted back to the database.
  *
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - User's preferred locale
  */
 export async function execute(
   _client: Client,
@@ -212,7 +184,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Verify server setup
   const serverId = interaction.guild?.id ?? interaction.user.id;
   const tomoriState = await getCachedTomoriState(serverId);
   if (!tomoriState) {
@@ -226,7 +197,6 @@ export async function execute(
   }
 
   try {
-    // 2. Find the active preset, or fall back to the first available preset
     let preset = await presetRepository.loadActivePreset(tomoriState.server_id);
     if (!preset) {
       const allPresets = await presetRepository.loadPresetsForServer(tomoriState.server_id);
@@ -243,7 +213,6 @@ export async function execute(
       return;
     }
 
-    // 3. Load toggleable nodes from DB (non-marker, ordered by node_order)
     const dbNodes = await presetRepository.loadToggleableNodes(preset.preset_id);
     if (dbNodes.length === 0) {
       await replyInfoEmbed(interaction, locale, {
@@ -255,18 +224,14 @@ export async function execute(
       return;
     }
 
-    // 4. Determine if pagination is needed
     const totalPages = Math.ceil(dbNodes.length / NODES_PER_PAGE);
 
     // preset_id is guaranteed non-null by the guard above
     const presetId = preset.preset_id as number;
 
     if (totalPages > 1) {
-      // 4a. Multi-page: page-selection loop
-      //     Users can pick pages, toggle nodes, and return to pick another page.
       await executeMultiPageToggle(interaction, locale, preset, presetId, dbNodes, totalPages);
     } else {
-      // 4b. Single page: show modal directly
       await executeSinglePageToggle(interaction, locale, preset, presetId, dbNodes);
     }
   } catch (error) {
@@ -286,17 +251,12 @@ export async function execute(
   }
 }
 
-// ─── Page Flow Helpers ──────────────────────────────────────────────
-
 /** Custom ID for the "Done" button in the page-selection loop */
 const DONE_BUTTON_ID = "stpreset_toggle_done";
 
 /**
  * Build the page-selection action rows (page buttons + "Done" button).
  *
- * @param totalPages - Total number of pages
- * @param totalNodes - Total number of toggleable nodes
- * @returns Array of action rows with page buttons and a trailing "Done" button
  */
 function buildPageActionRows(
   totalPages: number,
@@ -317,7 +277,6 @@ function buildPageActionRows(
     );
   }
 
-  // Add "Done" button at the end
   pageButtons.push(
     new ButtonBuilder()
       .setCustomId(DONE_BUTTON_ID)
@@ -337,11 +296,7 @@ function buildPageActionRows(
 /**
  * Handle the single-page flow: show modal directly, process results.
  *
- * @param interaction - The command interaction (used as modal source)
- * @param locale - User's preferred locale
- * @param preset - The active preset
  * @param presetId - The validated preset_id (guaranteed non-null by caller)
- * @param dbNodes - All toggleable nodes for this preset
  */
 async function executeSinglePageToggle(
   interaction: ChatInputCommandInteraction,
@@ -370,12 +325,10 @@ async function executeSinglePageToggle(
 
   const { summary, selectedCount, totalCount } = processToggleResults(modalResult, dbNodes, checkboxGroups.length);
 
-  // Persist changes
   if (summary.changes.length > 0) {
     await presetRepository.updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
   }
 
-  // Reply with summary
   const changesText =
     summary.changes.length > 0
       ? summary.changes.join("\n")
@@ -401,14 +354,10 @@ async function executeSinglePageToggle(
 /**
  * Handle the multi-page flow: page-selection loop with "Done" button.
  * Users can pick a page, toggle nodes in a modal, and return to pick
- * another page — no need to re-run the command.
+ * another page, so no need to re-run the command.
  *
- * @param interaction - The command interaction
- * @param locale - User's preferred locale
- * @param preset - The active preset
  * @param presetId - The validated preset_id (guaranteed non-null by caller)
  * @param dbNodes - All toggleable nodes (will be reloaded after each toggle)
- * @param totalPages - Total number of pages
  */
 async function executeMultiPageToggle(
   interaction: ChatInputCommandInteraction,
@@ -418,7 +367,6 @@ async function executeMultiPageToggle(
   dbNodes: StPresetNodeRow[],
   totalPages: number,
 ): Promise<void> {
-  // 1. Build and send the page-selection embed with buttons
   const pageSelectEmbed = createStandardEmbed(locale, {
     titleKey: "commands.st-preset.node.toggle.select_page_title",
     descriptionKey: "commands.st-preset.node.toggle.select_page_description",
@@ -438,11 +386,9 @@ async function executeMultiPageToggle(
     flags: MessageFlags.Ephemeral,
   });
 
-  // 2. Loop: await page button → show modal → process → repeat
   let currentNodes = dbNodes;
 
   while (true) {
-    // Wait for a button click (page or "Done")
     let buttonInteraction: ButtonInteraction;
     try {
       buttonInteraction = (await pageSelectMessage.awaitMessageComponent({
@@ -452,23 +398,19 @@ async function executeMultiPageToggle(
         time: PAGE_SELECT_TIMEOUT_MS,
       })) as ButtonInteraction;
     } catch {
-      // Timeout — silently end the loop
       log.info("[ST Preset Node Toggle] Page selection timed out");
       break;
     }
 
-    // "Done" button pressed — exit the loop
     if (buttonInteraction.customId === DONE_BUTTON_ID) {
       await buttonInteraction.deferUpdate();
       break;
     }
 
-    // Extract selected page and slice nodes
     const selectedPage = Number.parseInt(buttonInteraction.customId.replace("stpreset_page_", ""), 10);
     const startIndex = (selectedPage - 1) * NODES_PER_PAGE;
     const pageNodes = currentNodes.slice(startIndex, startIndex + NODES_PER_PAGE);
 
-    // Show modal for this page
     const checkboxGroups = buildCheckboxGroups(pageNodes, startIndex);
 
     const modalResult = await promptWithRawModal(
@@ -483,14 +425,12 @@ async function executeMultiPageToggle(
     );
 
     if (modalResult.outcome === "submit" && modalResult.interaction) {
-      // Process the toggle results
       const { summary, selectedCount, totalCount } = processToggleResults(
         modalResult,
         pageNodes,
         checkboxGroups.length,
       );
 
-      // Persist changes
       if (summary.changes.length > 0) {
         await presetRepository.updateNodeEnabledStates(presetId, summary.enabledMap, preset.server_id);
 
@@ -498,7 +438,6 @@ async function executeMultiPageToggle(
         currentNodes = await presetRepository.loadToggleableNodes(presetId);
       }
 
-      // Reply with summary on the modal interaction
       const changesText =
         summary.changes.length > 0
           ? summary.changes.join("\n")
@@ -538,24 +477,17 @@ async function executeMultiPageToggle(
     }
   }
 
-  // 3. Clean up — remove buttons from the page selection message
   try {
     await interaction.editReply({
       embeds: [pageSelectEmbed],
       components: [],
     });
-  } catch {
-    // Best-effort cleanup
-  }
+  } catch {}
 }
 
 /**
  * Process modal toggle results: build the enabled state map and detect changes.
  *
- * @param modalResult - The modal submission result
- * @param pageNodes - The nodes that were shown in this modal
- * @param groupCount - Number of checkbox groups in the modal
- * @returns Object with the summary, selected count, and total count
  */
 function processToggleResults(
   modalResult: { multiValues?: Record<string, string[]> },

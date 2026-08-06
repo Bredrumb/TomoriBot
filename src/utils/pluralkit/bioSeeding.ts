@@ -1,7 +1,7 @@
 /**
  * One-time PluralKit member bio seeding into personal memories.
  * See plans/pluralkit-integration.md §7.7 (v1: raw single-memory seed, no LLM
- * extraction — that's deferred to §11). Runs exactly once, at a member's
+ * extraction, which is deferred to §11). Runs exactly once, at a member's
  * first-ever registration; later bio edits on PluralKit never propagate.
  */
 import { invalidateUserCache } from "@/utils/cache/userCache";
@@ -27,8 +27,8 @@ function getBioSeedMaxChars(): number {
  * @returns The composed, flattened, truncated memory content
  */
 export function composePluralKitBioSeedContent(memberDisplayName: string, description: string): string {
-  // 1. Prefix with provenance so the memory reads clearly out of context.
-  // 2. Flatten newlines/repeated whitespace to single spaces — memories render semicolon-joined on one line.
+  // Provenance-prefixed and whitespace-flattened: memories render semicolon-joined
+  // on a single line, so an embedded newline would break the surrounding block.
   const flattened = `From ${memberDisplayName}'s PluralKit bio: ${description}`.replace(/\s+/g, " ").trim();
   const maxChars = getBioSeedMaxChars();
   return flattened.length > maxChars ? flattened.slice(0, maxChars) : flattened;
@@ -47,7 +47,7 @@ export type PluralKitBioSeedArgs = {
   serverDiscId: string | null | undefined;
 };
 
-/** Injectable seams for unit testing — production callers omit this and get the real implementations. */
+/** Injectable seams for unit testing; production callers omit this and get the real implementations. */
 export type PluralKitBioSeedDeps = {
   getHostProtection: typeof getPluralKitHostProtection;
   addPersonalMemory: (userId: number, personaLineageId: number, content: string) => Promise<unknown>;
@@ -66,8 +66,8 @@ const defaultDeps: PluralKitBioSeedDeps = {
  * memory (lineage 0), once ever. No-ops when `isNewMember` is false, the bio
  * is empty, the host is protected (FULL privacy / blacklisted), or the
  * personal-memory limit is exhausted. Callers must fire this without
- * awaiting — it must never delay admission, and failures must never surface
- * to the triggering reply.
+ * awaiting, because it must never delay admission and failures must never
+ * surface to the triggering reply.
  */
 export async function seedPluralKitMemberBio(
   args: PluralKitBioSeedArgs,

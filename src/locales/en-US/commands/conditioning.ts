@@ -1,5 +1,3 @@
-// locales/en-US/commands/conditioning.ts
-
 export default {
   conditioning: {
     description: `Manage persistent reward and punishment conditioning memories.`,

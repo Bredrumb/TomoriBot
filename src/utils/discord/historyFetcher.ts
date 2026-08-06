@@ -28,7 +28,6 @@ export interface FetchedHistoryAfterResult {
  * `createdTimestamp` ascending to guarantee chronological ordering regardless of
  * any quirks in the underlying collection iteration.
  *
- * @param channel - The Discord text channel to fetch from
  * @param startMessageId - Snowflake of the anchor message (NOT included in result)
  * @param limit - Maximum number of messages to fetch (1-100, capped by Discord)
  */

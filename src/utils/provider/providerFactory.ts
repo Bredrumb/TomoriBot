@@ -5,7 +5,7 @@
  */
 
 import { log } from "../misc/logger";
-import type { LLMProvider, ProviderInfo } from "../../types/provider/interfaces";
+import type { LLMProvider } from "../../types/provider/interfaces";
 import type { TomoriState } from "../../types/db/schema";
 import * as path from "node:path";
 import { Glob } from "bun";
@@ -21,11 +21,10 @@ export namespace ProviderFactory {
   // Map of provider names to their class constructors for lazy loading
   const providerRegistry = new Map<string, () => Promise<new () => LLMProvider>>();
 
-  // Flag to track if discovery has been run
   let discoveryComplete = false;
 
   /**
-   * Discover all available providers by scanning src/providers/* directories
+   * Discover all available providers by scanning provider entrypoint files
    * This function is called lazily on first access to any provider
    */
   async function discoverProviders(): Promise<void> {
@@ -33,46 +32,35 @@ export namespace ProviderFactory {
       return;
     }
 
-    log.info("Discovering providers from src/providers/*...");
+    log.info("Discovering providers from src/providers/*/*Provider.ts...");
 
     try {
-      // 1. Scan for provider directories using Bun.glob
-      const glob = new Glob("*/");
+      const glob = new Glob("*/*Provider.ts");
       const providersPath = path.join(import.meta.dir, "../../providers");
 
-      const providerDirs: string[] = [];
-      for await (const dir of glob.scan({
+      const providerEntries: Array<{ name: string; fileName: string }> = [];
+      for await (const providerPath of glob.scan({
         cwd: providersPath,
-        onlyFiles: false,
       })) {
-        providerDirs.push(dir);
+        const [providerName, fileName] = providerPath.replaceAll("\\", "/").split("/");
+        if (providerName && fileName === `${providerName}Provider.ts`) {
+          providerEntries.push({ name: providerName, fileName });
+        }
       }
 
-      if (providerDirs.length === 0) {
-        log.warn("No provider directories found in src/providers/");
+      if (providerEntries.length === 0) {
+        log.warn("No provider entrypoints found in src/providers/");
         discoveryComplete = true;
         return;
       }
 
-      log.info(`Found ${providerDirs.length} provider directories: ${providerDirs.join(", ")}`);
+      log.info(
+        `Found ${providerEntries.length} provider entrypoints: ${providerEntries.map(({ name }) => name).join(", ")}`,
+      );
 
-      // 2. For each directory, check if it has a provider implementation file
-      for (const dir of providerDirs) {
-        const providerName = dir.replace(/\/$/, ""); // Remove trailing slash
-        const providerFileName = `${providerName}Provider.ts`;
-        const providerPath = path.join(providersPath, dir, providerFileName);
-
+      for (const { name: providerName, fileName: providerFileName } of providerEntries) {
         try {
-          // 3. Check if the provider file exists
-          const file = Bun.file(providerPath);
-          const exists = await file.exists();
-
-          if (!exists) {
-            log.warn(`Skipping ${providerName}: No ${providerFileName} found`);
-            continue;
-          }
-
-          // 4. Register the provider with a lazy loader
+          // Register the provider with a lazy loader
           const importPath = `../../providers/${providerName}/${providerFileName.replace(".ts", "")}`;
           providerRegistry.set(providerName, async () => {
             const module = await import(importPath);
@@ -104,16 +92,14 @@ export namespace ProviderFactory {
    * Get a provider instance by name (canonical name or alias)
    * Uses singleton pattern to reuse provider instances
    * @param providerName - The name or alias of the provider (e.g., "google", "gemini")
-   * @returns The provider instance
    * @throws Error if provider is not supported
    */
   async function getProviderInstance(providerName: string): Promise<LLMProvider> {
-    // Ensure discovery has run
     await discoverProviders();
 
     const normalizedName = normalizeProviderName(providerName);
 
-    // 1. Check if we already have an instance (check cache first for canonical and alias)
+    // Check if we already have an instance (check cache first for canonical and alias)
     if (providerInstances.has(normalizedName)) {
       const instance = providerInstances.get(normalizedName);
       if (instance) {
@@ -121,7 +107,6 @@ export namespace ProviderFactory {
       }
     }
 
-    // 2. Check if this is a registered canonical provider name
     if (providerRegistry.has(normalizedName)) {
       const ProviderClassLoader = providerRegistry.get(normalizedName);
       if (!ProviderClassLoader) {
@@ -148,7 +133,6 @@ export namespace ProviderFactory {
       return provider;
     }
 
-    // 3. Check if this might be an alias - try loading all providers to check aliases
     // This is less efficient but handles the case where an alias is used before the provider is loaded
     for (const [registeredName, loader] of providerRegistry.entries()) {
       try {
@@ -156,7 +140,6 @@ export namespace ProviderFactory {
         const tempInstance = new ProviderClass();
         const info = tempInstance.getInfo();
 
-        // Check if the normalized name matches any alias
         if (info.aliases?.some((alias) => alias.toLowerCase().trim() === normalizedName)) {
           // Found a match! Cache it properly
           providerInstances.set(info.name.toLowerCase(), tempInstance);
@@ -179,7 +162,7 @@ export namespace ProviderFactory {
       }
     }
 
-    // 4. Provider not found
+    // Provider not found
     const availableProviders = Array.from(providerRegistry.keys());
     throw new Error(`Unsupported provider: ${providerName}. Available providers: ${availableProviders.join(", ")}`);
   }
@@ -187,7 +170,6 @@ export namespace ProviderFactory {
   /**
    * Get a provider based on the TomoriState configuration
    * @param tomoriState - The Tomori state containing LLM provider information
-   * @returns The appropriate provider instance
    * @throws Error if provider is not supported or not configured
    */
   export async function getProvider(tomoriState: TomoriState): Promise<LLMProvider> {
@@ -201,7 +183,6 @@ export namespace ProviderFactory {
     // Get the provider instance (handles aliases automatically)
     const provider = await getProviderInstance(providerName);
 
-    // Validate that the configured model is supported by the provider
     // Skip validation if supportedModels is empty (indicates provider accepts any model, e.g., OpenRouter)
     const providerInfo = provider.getInfo();
     if (
@@ -231,92 +212,14 @@ export namespace ProviderFactory {
    * Prefer this when the caller only needs provider behavior and does not have
    * a full TomoriState available.
    * @param providerName - Provider canonical name or alias
-   * @returns The provider instance
    */
   export async function getProviderByName(providerName: string): Promise<LLMProvider> {
     return getProviderInstance(providerName);
-  }
-
-  /**
-   * Get all available providers and their information
-   * @returns Array of provider information objects
-   */
-  export async function getAvailableProviders(): Promise<Array<{ name: string; info: ProviderInfo }>> {
-    // Ensure discovery has run
-    await discoverProviders();
-
-    const availableProviders: Array<{ name: string; info: ProviderInfo }> = [];
-
-    // Try to load each registered provider
-    for (const providerName of providerRegistry.keys()) {
-      try {
-        const provider = await getProviderInstance(providerName);
-        availableProviders.push({
-          name: providerName,
-          info: provider.getInfo(),
-        });
-      } catch (error) {
-        log.warn(`Provider ${providerName} not available: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    return availableProviders;
-  }
-
-  /**
-   * Check if a provider type is supported (including aliases)
-   * @param providerName - The provider name to check
-   * @returns True if the provider is supported
-   */
-  export async function isProviderSupported(providerName: string): Promise<boolean> {
-    // Ensure discovery has run
-    await discoverProviders();
-
-    const normalizedName = normalizeProviderName(providerName);
-
-    // Check if it's a canonical name
-    if (providerRegistry.has(normalizedName)) {
-      return true;
-    }
-
-    // Check if it's an alias by trying to load all providers
-    for (const [registeredName] of providerRegistry.entries()) {
-      try {
-        const provider = await getProviderInstance(registeredName);
-        const info = provider.getInfo();
-
-        if (info.aliases?.some((alias) => alias.toLowerCase().trim() === normalizedName)) {
-          return true;
-        }
-      } catch (_error) {}
-    }
-
-    return false;
-  }
-
-  /**
-   * Clear all cached provider instances (useful for testing or reloading)
-   */
-  export function clearCache(): void {
-    providerInstances.clear();
-    log.info("Cleared provider instance cache");
-  }
-
-  /**
-   * Reset discovery state (useful for testing)
-   */
-  export function resetDiscovery(): void {
-    providerRegistry.clear();
-    providerInstances.clear();
-    discoveryComplete = false;
-    log.info("Reset provider discovery state");
   }
 }
 
 /**
  * Convenience function to get a provider from TomoriState
- * @param tomoriState - The Tomori state
- * @returns The appropriate provider instance
  */
 export async function getProviderForTomori(tomoriState: TomoriState): Promise<LLMProvider> {
   return ProviderFactory.getProvider(tomoriState);

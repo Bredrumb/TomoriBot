@@ -1,5 +1,3 @@
-// locales/en-US/commands/choices.ts
-
 export default {
   choices: {
     always: `Always`,

@@ -24,8 +24,9 @@ resource "google_service_account" "grafana_monitor" {
   display_name = "Grafana Monitoring"
 
   lifecycle {
-    # SA is already in production — prevent accidental destruction via terraform destroy
-    prevent_destroy = true
+    # Phase 6 teardown: Azure is now authoritative, so this legacy GCP identity
+    # must be removable with the rest of the stack.
+    prevent_destroy = false
   }
 }
 

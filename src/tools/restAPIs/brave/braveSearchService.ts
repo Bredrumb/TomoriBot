@@ -4,7 +4,6 @@
  * Supports Web, Image, Video, and News search with server-specific API keys
  */
 
-import { AttachmentBuilder, type BaseGuildTextChannel } from "discord.js";
 import { log } from "../../../utils/misc/logger";
 import { getOptApiKey } from "../../../utils/security/crypto";
 import type {
@@ -23,10 +22,6 @@ import type {
   NewsResult,
 } from "../../../types/tool/braveTypes";
 
-// =============================================
-// Constants
-// =============================================
-
 const BRAVE_API_BASE_URL = "https://api.search.brave.com/res/v1";
 const SERVICE_NAME = "brave-search";
 const USER_AGENT =
@@ -39,25 +34,17 @@ const REQUEST_TIMEOUT = 15000; // 15 seconds
  */
 const BRAVE_LANGUAGE_CODE_MAP: Record<string, string> = {
   ja: "jp", // Japanese: ISO 639-1 "ja" → Brave "jp"
-  // Add more mappings here if Brave uses other non-standard codes
 };
 
 /**
  * Normalize language code to Brave API format
- * @param langCode - Standard ISO 639-1 language code or Brave-specific code
- * @returns Brave API-compatible language code
  */
 function normalizeBraveLangCode(langCode: string | undefined): string | undefined {
   if (!langCode) return undefined;
 
-  // Check if we have a mapping for this code
   const normalizedCode = BRAVE_LANGUAGE_CODE_MAP[langCode.toLowerCase()];
   return normalizedCode || langCode;
 }
-
-// =============================================
-// Types for Internal Use
-// =============================================
 
 interface ApiRequestConfig {
   serverId?: number;
@@ -73,15 +60,6 @@ interface ApiResult<T> {
   statusCode?: number;
 }
 
-// =============================================
-// Discord Integration Utilities
-// =============================================
-
-/**
- * Extract image URLs from Brave Image Search API response
- * @param response - Image search API response
- * @returns Array of image URLs
- */
 export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   const imageUrls: string[] = [];
 
@@ -90,7 +68,6 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
   }
 
   for (const result of response.results) {
-    // Try to get the actual image URL from properties first
     if (result.properties?.url) {
       imageUrls.push(result.properties.url);
     }
@@ -105,132 +82,8 @@ export function extractImageUrls(response: ImageSearchApiResponse): string[] {
 }
 
 /**
- * Send images as Discord attachments
- * @param imageUrls - Array of image URLs to send
- * @param channel - Discord channel to send images to
- * @param query - Search query for context
- * @returns Result of the Discord send operation
- */
-export async function sendImagesToDiscord(
-  imageUrls: string[],
-  channel: BaseGuildTextChannel,
-  query: string,
-): Promise<{
-  success: boolean;
-  sentCount: number;
-  failedUrls: string[];
-  error?: string;
-}> {
-  if (imageUrls.length === 0) {
-    return {
-      success: false,
-      sentCount: 0,
-      failedUrls: [],
-      error: "No image URLs provided",
-    };
-  }
-
-  try {
-    const attachments: AttachmentBuilder[] = [];
-    const failedUrls: string[] = [];
-
-    // Create Discord attachments from image URLs
-    for (let i = 0; i < imageUrls.length; i++) {
-      try {
-        const imageUrl = imageUrls[i];
-        const attachment = new AttachmentBuilder(imageUrl, {
-          name: `${query.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_image_${i + 1}.jpg`,
-        });
-        attachments.push(attachment);
-        log.info(`Prepared Discord attachment for image: ${imageUrl}`);
-      } catch (attachmentError) {
-        failedUrls.push(imageUrls[i]);
-        log.warn(`Failed to create attachment for URL: ${imageUrls[i]}`, attachmentError as Error);
-      }
-    }
-
-    // Send attachments to Discord channel
-    if (attachments.length > 0) {
-      await channel.send({
-        files: attachments,
-      });
-
-      log.success(`Sent ${attachments.length} image attachments to Discord`);
-      return {
-        success: true,
-        sentCount: attachments.length,
-        failedUrls,
-      };
-    } else {
-      return {
-        success: false,
-        sentCount: 0,
-        failedUrls,
-        error: "No valid attachments could be created",
-      };
-    }
-  } catch (error) {
-    log.error("Failed to send image attachments to Discord:", error as Error);
-    return {
-      success: false,
-      sentCount: 0,
-      failedUrls: imageUrls,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Clean image search result by removing image data to reduce token usage
- * @param response - Original image search response
- * @returns Cleaned response without image URLs
- */
-export function cleanImageSearchResult(response: ImageSearchApiResponse): Partial<ImageSearchApiResponse> {
-  try {
-    return {
-      type: response.type,
-      query: response.query,
-      results: response.results.map((result) => ({
-        ...result,
-        // Remove image URLs to prevent duplicate processing
-        properties: result.properties
-          ? {
-              ...result.properties,
-              url: undefined,
-              placeholder: undefined,
-            }
-          : undefined,
-        thumbnail: result.thumbnail
-          ? {
-              ...result.thumbnail,
-              src: "[Image sent to Discord]",
-              original: undefined,
-            }
-          : undefined,
-      })),
-      extra: {
-        ...response.extra,
-        summary: "Image search completed - images have been sent to Discord channel",
-      },
-    };
-  } catch (error) {
-    log.warn("Failed to clean image search result:", error as Error);
-    return {
-      type: "images",
-      query: response.query,
-      results: [],
-      extra: {
-        summary: "Image search completed - images have been sent to Discord channel",
-        imageDataRemoved: true,
-      },
-    };
-  }
-}
-
-/**
  * Add fetch capability reminder to web search results
  * @param originalResult - Original web search result text
- * @returns Enhanced result with fetch capability reminder
  */
 export function addFetchCapabilityReminder(originalResult: string): {
   enhancedMessage: string;
@@ -238,12 +91,10 @@ export function addFetchCapabilityReminder(originalResult: string): {
   fetchReminder: string;
 } {
   try {
-    // Extract URLs from the search results to count them
     const urlPattern = /https?:\/\/[^\s)]+/g;
     const foundUrls = originalResult.match(urlPattern) || [];
     const urlCount = foundUrls.length;
 
-    // Create an enhanced response that includes fetch capability reminder
     const fetchReminder =
       urlCount > 0
         ? `\n\n[AGENT REMINDER] You have access to the "fetch_url" function call to retrieve and analyze the full content of any of these ${urlCount} web URLs. If any given information snippet is not enough, use the function to retrieve more details about a specific webpage, use fetch_url(url="[URL]") to get the complete page content for deeper analysis.`
@@ -268,17 +119,12 @@ export function addFetchCapabilityReminder(originalResult: string): {
   }
 }
 
-// =============================================
-// Core API Functionality
-// =============================================
-
 /**
  * Get Brave API key for the given server, with fallback to environment variable
  * @param serverId - Discord server ID (optional)
  * @returns API key or null if not available
  */
 async function getBraveApiKey(serverId?: number): Promise<string | null> {
-  // Try to get server-specific API key first
   if (serverId) {
     try {
       const serverApiKey = await getOptApiKey(serverId, SERVICE_NAME);
@@ -303,11 +149,8 @@ async function getBraveApiKey(serverId?: number): Promise<string | null> {
 }
 
 /**
- * Make a request to the Brave Search API
- * @param endpoint - API endpoint path
  * @param params - Query parameters
  * @param config - Request configuration
- * @returns API response
  */
 async function makeBraveApiRequest<T>(
   endpoint: string,
@@ -317,7 +160,6 @@ async function makeBraveApiRequest<T>(
   const { serverId, timeout = REQUEST_TIMEOUT, signal: externalSignal } = config;
 
   try {
-    // Get API key
     const apiKey = config.apiKey || (await getBraveApiKey(serverId));
     if (!apiKey) {
       return {
@@ -327,7 +169,6 @@ async function makeBraveApiRequest<T>(
       };
     }
 
-    // Build URL with query parameters
     const url = new URL(`${BRAVE_API_BASE_URL}${endpoint}`);
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== null) {
@@ -337,7 +178,6 @@ async function makeBraveApiRequest<T>(
 
     log.info(`Making Brave API request to: ${endpoint} with ${Object.keys(params).length} parameters`);
 
-    // Create fetch request with timeout; chain optional external signal
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     if (externalSignal) {
@@ -361,7 +201,6 @@ async function makeBraveApiRequest<T>(
 
     clearTimeout(timeoutId);
 
-    // Check if request was successful
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
       log.error(`Brave API request failed with status ${response.status}: ${errorText}`);
@@ -373,7 +212,6 @@ async function makeBraveApiRequest<T>(
       };
     }
 
-    // Parse JSON response
     const data = (await response.json()) as T;
     log.success(`Brave API request to ${endpoint} completed successfully`);
 
@@ -407,21 +245,15 @@ async function makeBraveApiRequest<T>(
   }
 }
 
-// =============================================
-// Public API Functions
-// =============================================
-
 /**
  * Perform a web search using Brave Search API
  * @param params - Web search parameters
  * @param config - Request configuration
- * @returns Web search results
  */
 export async function braveWebSearch(
   params: WebSearchParams,
   config: ApiRequestConfig = {},
 ): Promise<ApiResult<WebSearchApiResponse>> {
-  // Direct parameter assignment with business rules
   const searchParams = {
     q: params.q,
     country: params.country || "US",
@@ -433,7 +265,6 @@ export async function braveWebSearch(
     spellcheck: params.spellcheck !== false,
     text_decorations: params.text_decorations !== false,
     summary: true, // Always enabled for better results
-    // Only include optional parameters if specified
     ...(params.freshness ? { freshness: params.freshness } : {}),
     ...(params.result_filter ? { result_filter: params.result_filter } : {}),
     ...(params.units ? { units: params.units } : {}),
@@ -446,13 +277,11 @@ export async function braveWebSearch(
  * Perform an image search using Brave Search API
  * @param params - Image search parameters
  * @param config - Request configuration
- * @returns Image search results
  */
 export async function braveImageSearch(
   params: ImageSearchParams,
   config: ApiRequestConfig = {},
 ): Promise<ApiResult<ImageSearchApiResponse>> {
-  // Direct parameter assignment with business rules
   const searchParams = {
     q: params.q,
     country: params.country || "US",
@@ -468,13 +297,11 @@ export async function braveImageSearch(
  * Perform a video search using Brave Search API
  * @param params - Video search parameters
  * @param config - Request configuration
- * @returns Video search results
  */
 export async function braveVideoSearch(
   params: VideoSearchParams,
   config: ApiRequestConfig = {},
 ): Promise<ApiResult<VideoSearchApiResponse>> {
-  // Direct parameter assignment with business rules
   const searchParams = {
     q: params.q,
     country: params.country || "US",
@@ -495,13 +322,11 @@ export async function braveVideoSearch(
  * Perform a news search using Brave Search API
  * @param params - News search parameters
  * @param config - Request configuration
- * @returns News search results
  */
 export async function braveNewsSearch(
   params: NewsSearchParams,
   config: ApiRequestConfig = {},
 ): Promise<ApiResult<NewsSearchApiResponse>> {
-  // Direct parameter assignment with business rules
   const searchParams = {
     q: params.q,
     country: params.country || "US",
@@ -518,12 +343,7 @@ export async function braveNewsSearch(
   return makeBraveApiRequest<NewsSearchApiResponse>("/news/search", searchParams, config);
 }
 
-// =============================================
-// Utility Functions
-// =============================================
-
 /**
- * Check if Brave Search is available for a given server
  * @param serverId - Discord server ID (optional)
  * @returns True if API key is available
  */
@@ -533,32 +353,8 @@ export async function isBraveSearchAvailable(serverId?: number): Promise<boolean
 }
 
 /**
- * Test Brave API connectivity
- * @param serverId - Discord server ID (optional)
- * @returns Test result
- */
-export async function testBraveApiConnection(serverId?: number): Promise<{ success: boolean; error?: string }> {
-  try {
-    const result = await braveWebSearch({ q: "test" }, { serverId, timeout: 5000 });
-
-    if (result.success) {
-      return { success: true };
-    } else {
-      return { success: false, error: result.error };
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-}
-
-/**
  * Format search results for consistent output with current MCP implementation
- * @param response - Brave API response
  * @param searchType - Type of search performed
- * @returns Formatted result string
  */
 export function formatBraveSearchResults(
   response: BraveSearchResponse,
@@ -568,7 +364,6 @@ export function formatBraveSearchResults(
     let results: unknown[] = [];
     let queryOriginal = "your search";
 
-    // Extract results based on search type and response structure
     if (searchType === "web" && "web" in response && response.web) {
       results = response.web.results || [];
       queryOriginal = response.query?.original || "your search";
@@ -589,7 +384,6 @@ export function formatBraveSearchResults(
 
     let formatted = `**${searchType.charAt(0).toUpperCase() + searchType.slice(1)} Search Results for "${queryOriginal}"**\n\n`;
 
-    // Handle different result types
     for (let i = 0; i < Math.min(results.length, 10); i++) {
       const result = results[i];
 
@@ -648,7 +442,6 @@ export function formatBraveSearchResults(
       }
     }
 
-    // Add query alteration info if available
     if (response.query?.altered && response.query.altered !== response.query.original) {
       formatted += `\n*Search query was corrected to: "${response.query.altered}"*`;
     }
@@ -659,10 +452,6 @@ export function formatBraveSearchResults(
     return `Error formatting ${searchType} search results`;
   }
 }
-
-// =============================================
-// Error Handling Utilities
-// =============================================
 
 /**
  * Check if an error is related to API key issues

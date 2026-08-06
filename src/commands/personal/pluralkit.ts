@@ -50,7 +50,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Defer ephemerally before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const userId = userData.user_id;
@@ -64,11 +63,9 @@ export async function execute(
   }
 
   try {
-    // 2. Read the requested value and compare against the current setting
     const requestedEnabled = interaction.options.getBoolean("enabled", true);
     const currentEnabled = userData.pluralkit_enabled ?? false;
 
-    // 3. No-op check: already set to the requested value
     if (requestedEnabled === currentEnabled) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: currentEnabled
@@ -82,7 +79,8 @@ export async function execute(
       return;
     }
 
-    // 4. Write to database (UserRepository.update invalidates cache internally)
+    // setPluralKitEnabled routes through UserRepository.update, which invalidates
+    // the user cache on success; no separate invalidation belongs here.
     const updated = await userRepository.setPluralKitEnabled(userId, requestedEnabled);
     if (!updated) {
       await replyInfoEmbed(interaction, locale, {
@@ -93,7 +91,6 @@ export async function execute(
       return;
     }
 
-    // 5. Success — the "enabled" reply spells out the delay + consent tradeoffs
     if (requestedEnabled) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.personal.pluralkit.enabled_success_title",

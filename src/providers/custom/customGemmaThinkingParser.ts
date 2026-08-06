@@ -13,7 +13,7 @@
  *
  * Two variants exist across Gemma 4 model sizes:
  *   - Thinking ON:  <|channel>thought\n[reasoning]\n<channel|>[answer]
- *   - Thinking OFF: <|channel>thought\n<channel|>[answer]  (empty suppressor — 26B/31B only)
+ *   - Thinking OFF: <|channel>thought\n<channel|>[answer]  (empty suppressor: 26B/31B only)
  *
  * Empty suppressor blocks are dropped silently (no thought log entry created).
  *
@@ -26,8 +26,8 @@ import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 
 /**
  * KoboldCPP renders the <|channel> special token differently depending on context:
- *   - "<|channel>thought" — canonical form (shown in KoboldCPP's own UI / terminal log)
- *   - "</s><thought"      — API stream form (the token decoded to "</s>" + plain text "<thought")
+ *   - "<|channel>thought": canonical form (shown in KoboldCPP's own UI / terminal log)
+ *   - "</s><thought": API stream form (the token decoded to "</s>" + plain text "<thought")
  * Both share the same END_TOKEN, so we scan for whichever start variant arrives first.
  */
 const START_TOKENS = ["</s><thought", "<|channel>thought"] as const;
@@ -76,7 +76,7 @@ export class GemmaThinkingParser {
       return { visibleText, thoughts: [] };
     }
 
-    // Stream ended mid-accumulation — treat buffered content as a partial thought.
+    // Stream ended mid-accumulation, so treat buffered content as a partial thought.
     log.info("CustomGemmaThinkingParser: Stream ended during thinking accumulation — recovering partial thought");
     const content = this.thinkBuffer.replace(/^\n/, "").trim();
     this.reset();
@@ -85,12 +85,9 @@ export class GemmaThinkingParser {
     return { visibleText: "", thoughts };
   }
 
-  // ─── Private helpers ────────────────────────────────────────────────────────
-
   private scanForStart(text: string): GemmaThinkingResult {
     const combined = this.scanHoldback + text;
 
-    // Find whichever start token variant appears earliest in the chunk.
     let earliest = -1;
     let matchedLen = 0;
     for (const token of START_TOKENS) {
@@ -102,7 +99,6 @@ export class GemmaThinkingParser {
     }
 
     if (earliest !== -1) {
-      // Found a start token: visible text before it passes through, remainder begins accumulation.
       const visibleBefore = combined.slice(0, earliest);
       this.scanHoldback = "";
       this.thinkBuffer = combined.slice(earliest + matchedLen);
@@ -128,20 +124,19 @@ export class GemmaThinkingParser {
       return { visibleText: prependVisible, thoughts: [] };
     }
 
-    // 1. Extract and normalise the thinking content.
     let content = this.thinkBuffer.slice(0, endIdx);
     const remaining = this.thinkBuffer.slice(endIdx + END_TOKEN.length);
     this.reset();
 
-    // Gemma always emits a newline immediately after "thought" — trim it.
+    // Gemma always emits a newline immediately after "thought", so trim it.
     if (content.startsWith("\n")) {
       content = content.slice(1);
     }
 
-    // 2. Build thought entry; drop empty suppressors (26B/31B thinking OFF).
+    // Build thought entry; drop empty suppressors (26B/31B thinking OFF).
     const thoughts: ThoughtLogEntry[] = content.trim().length > 0 ? [{ kind: "raw", content }] : [];
 
-    // 3. Scan remaining text for any subsequent thinking blocks (e.g. multi-turn).
+    // Scan remaining text for any subsequent thinking blocks (e.g. multi-turn).
     const rest = this.scanForStart(remaining);
 
     return {

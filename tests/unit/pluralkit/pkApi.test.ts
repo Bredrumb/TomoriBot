@@ -1,11 +1,18 @@
-import { afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
 
 // pkApi.ts reads PLURALKIT_LOOKUP_TIMEOUT_MS at module-load time, so this must
 // be set before the module is first evaluated. The dynamic import in
 // beforeAll (rather than a static top-level import) guarantees that ordering.
 // 2000ms leaves enough room for the real ~800ms first-retry backoff to play
 // out at least once without the remaining-budget cap swallowing the retry.
+const originalLookupTimeoutMs = process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
 process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = "2000";
+
+// Set at module scope, so it can only be undone once every test here has run.
+afterAll(() => {
+  if (originalLookupTimeoutMs === undefined) delete process.env.PLURALKIT_LOOKUP_TIMEOUT_MS;
+  else process.env.PLURALKIT_LOOKUP_TIMEOUT_MS = originalLookupTimeoutMs;
+});
 
 let fetchMessage: typeof import("@/utils/pluralkit/pkApi").fetchMessage;
 
@@ -105,7 +112,7 @@ describe("pkApi.fetchMessage", () => {
     expect(calls).toBe(2);
     expect(result?.sender).toBe("888");
     // A zero header must NOT mean an instant retry against a rate-limited
-    // endpoint — the ~800ms first backoff step applies instead (per the domain expert:
+    // endpoint; the ~800ms first backoff step applies instead (per the domain expert:
     // PK's rate limiter accidentally sends 0).
     expect(Date.now() - start).toBeGreaterThanOrEqual(750);
   });

@@ -22,7 +22,6 @@ import { buildRoleplaySchema, CompactRoleplaySummarySchema } from "@/providers/u
 /**
  * Generate a plain-text conversation summary using the Z.ai API.
  *
- * @param request - Compact summary request with model, prompts, and auth
  * @param endpointUrl - Override endpoint URL (defaults to ZAI_GENERAL_CHAT_COMPLETIONS_URL)
  * @returns Plain-text summary or an error object
  */
@@ -35,17 +34,14 @@ export async function generateConversationSummaryZai(
       return { error: "Invalid Z.ai API key" };
     }
 
-    // Strip the zai/ prefix so the API receives the raw model name
     const apiModel = toZaiApiModelName(request.model);
 
-    // 1. Build the message array
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemPrompt) {
       messages.push({ role: "system", content: request.systemPrompt });
     }
     messages.push({ role: "user", content: request.userPrompt });
 
-    // 2. Build the request body
     const body: Record<string, unknown> = {
       model: apiModel,
       messages,
@@ -53,12 +49,11 @@ export async function generateConversationSummaryZai(
       stream: false,
     };
 
-    // 3. Skip temperature for reasoning models (they don't support it)
+    // Skip temperature for reasoning models (they don't support it)
     if (!ZAI_REASONING_MODELS.includes(apiModel)) {
       body.temperature = request.temperature ?? 0.7;
     }
 
-    // 4. Send the request
     const response = await fetch(endpointUrl ?? ZAI_GENERAL_CHAT_COMPLETIONS_URL, {
       method: "POST",
       headers: {
@@ -83,7 +78,6 @@ export async function generateConversationSummaryZai(
       };
     }
 
-    // 5. Extract the response text
     const result = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };
@@ -109,7 +103,6 @@ export async function generateConversationSummaryZai(
  * Delegates to callZaiStructuredJSON, which uses json_object mode with
  * schema/example injected into the system prompt and Zod validation.
  *
- * @param request - Compact summary request with model, prompts, and auth
  * @param endpointUrl - Override endpoint URL (defaults to ZAI_GENERAL_CHAT_COMPLETIONS_URL)
  * @returns Structured roleplay summary or an error object
  */

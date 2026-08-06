@@ -2,7 +2,7 @@ import type { ChannelPromptMode } from "@/types/db/schema";
 
 /**
  * Resolved per-channel system prompt override.
- * `null` (cached) means the channel has no override — a negative-cache hit.
+ * `null` (cached) means the channel has no override : a negative-cache hit.
  */
 export type ChannelPromptOverride = {
   prompt: string;

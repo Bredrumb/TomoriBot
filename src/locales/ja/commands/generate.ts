@@ -1,5 +1,3 @@
-// locales/ja/commands/generate.ts
-
 export default {
   generate: {
     image: {
@@ -93,6 +91,8 @@ export default {
       file_too_large_description: `生成された動画（{size_mb} MB）がDiscordの25 MBファイルサイズ制限を超えています。短いプロンプトや異なるアスペクト比をお試しください。`,
       invalid_image_title: `🔴 無効な画像`,
       invalid_image_description: `アップロードされた参照画像を処理できませんでした。別の画像をお試しください。`,
+      reference_unsupported_description: `選択したOpenRouterモデル \`{model}\` は、最初のフレームを指定する画像から動画への生成に対応していません。参照画像を外すか、対応する動画モデルを選択してください。`,
+      loop_unsupported_description: `選択したOpenRouterモデル \`{model}\` は、ループ動画に必要な最後のフレーム指定に対応していません。ループを無効にするか、対応する動画モデルを選択してください。`,
       timeout_description: `動画生成がタイムアウトしました。プロバイダーに負荷がかかっている可能性があります。後でもう一度お試しください。`,
       blocked_description: `プロバイダーのコンテンツ安全フィルターにより動画生成がブロックされました。別のプロンプトをお試しください。`,
       generic_error_description: `動画生成中に予期しないエラーが発生しました。後でもう一度お試しください。`,

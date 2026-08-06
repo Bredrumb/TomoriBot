@@ -34,6 +34,7 @@ import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
+import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import { memoryGuard } from "@/utils/security/rateLimiter";
 import { getMarkdownTableCacheSize } from "@/utils/text/markdownTableCache";
 import { getPersonaSpriteCacheSize } from "@/utils/cache/personaSpriteCacheStore";
@@ -72,7 +73,6 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
       presences += guild.presences.cache.size;
       voiceStates += guild.voiceStates.cache.size;
 
-      // Messages and threads live inside text-capable channels
       for (const channel of guild.channels.cache.values()) {
         if ("messages" in channel) {
           const mgr = (channel as unknown as { messages?: { cache?: { size?: number } } }).messages;
@@ -83,9 +83,7 @@ function collectDiscordCacheSizes(client: Client): Record<string, number> {
           if (mgr?.cache?.size) threads += mgr.cache.size;
         }
       }
-    } catch {
-      // Ignore unavailable guilds (shard disconnect, partial data, etc.)
-    }
+    } catch {}
   }
 
   return {
@@ -117,6 +115,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
   const webhook = getWebhookCacheSizes();
   const personalSpotlight = getPersonalSpotlightCacheStats();
   const memCheck = memoryGuard.checkMemory();
+  const processMemory = collectProcessMemorySnapshot();
 
   return {
     // Tomori application-level caches
@@ -139,7 +138,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     openrouterOnDemandCapability: getOpenRouterOnDemandCapabilityCacheSize(),
     novelaiSubscription: getNovelaiSubscriptionCacheSize(),
 
-    // Webhook manager (no TTL — watch for unbounded growth)
+    // Webhook manager (no TTL, watch for unbounded growth)
     webhookChannel: webhook.webhookChannel,
     webhookPersona: webhook.webhookPersona,
     webhookMutationLocks: webhook.webhookMutationLocks,
@@ -154,6 +153,14 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     rss_mb: Math.round(memCheck.rssUsedMB * 100) / 100,
     rss_pct: Math.round(memCheck.percentUsed * 10000) / 100,
     rss_limit_mb: memCheck.memoryLimitMB,
+
+    // Native allocations (decoded bitmaps, buffers) live in `external`/`arrayBuffers`, not in
+    // the JS heap and not in any cache counted above, so entry counts alone cannot explain a
+    // memory spike. RSS also understates the total once the kernel swaps part of the heap out.
+    heap_used_mb: processMemory.heapUsedMb,
+    heap_total_mb: processMemory.heapTotalMb,
+    external_mb: processMemory.externalMb,
+    array_buffers_mb: processMemory.arrayBuffersMb,
   };
 }
 
@@ -173,17 +180,15 @@ function emitSnapshot(client: Client): void {
 }
 
 /**
- * Start the cache metrics interval. Only runs in production — these logs are
+ * Start the cache metrics interval. Only runs in production, these logs are
  * intended for CloudWatch Logs Insights and are not useful in local dev.
- * Safe to call multiple times — a subsequent call is a no-op if already running.
+ * Safe to call multiple times, so a subsequent call is a no-op if already running.
  *
- * @param client - Discord client (needed for `.guilds.cache` iteration)
  * @param intervalMs - Optional override; defaults to CACHE_METRICS_INTERVAL_MS env or 5 min
  */
 export function initializeCacheMetricsLogger(client: Client, intervalMs?: number): void {
-  // Skip in non-production — these snapshots are for CloudWatch, not local dev
+  // Skip in non-production, so these snapshots are for CloudWatch, not local dev
   if (process.env.RUN_ENV !== "production") {
-    //log.info("Cache metrics logger skipped (non-production environment)");
     return;
   }
 
@@ -192,14 +197,13 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
     return;
   }
 
-  // 1. Resolve interval from explicit argument, env var, or fallback default
+  // Resolve interval from explicit argument, env var, or fallback default
   const resolved = intervalMs ?? Number.parseInt(process.env.CACHE_METRICS_INTERVAL_MS || "", 10);
   const finalInterval = Number.isFinite(resolved) && resolved > 0 ? resolved : DEFAULT_INTERVAL_MS;
 
-  // 2. Emit an immediate sample so CloudWatch has a baseline right after boot
+  // Emit an immediate sample so CloudWatch has a baseline right after boot
   emitSnapshot(client);
 
-  // 3. Schedule periodic samples
   intervalId = setInterval(() => emitSnapshot(client), finalInterval);
 
   log.success(`Cache metrics logger started (interval: ${finalInterval / 1000}s)`);

@@ -1,16 +1,16 @@
-// locales/ja/commands/model.ts
-
 export default {
   model: {
+    description: `このサーバーの既定AIモデルを管理します。`,
     providerPicker: {
       title: `プロバイダーを選択`,
       description: `このモデルスロットで使う保存済みプロバイダーを選択してください。`,
+      current_selection: `現在は \`{provider}\` の \`{model}\` を使用しています。`,
       placeholder: `保存済みプロバイダーを選択...`,
       no_providers_title: `保存済みプロバイダーがありません`,
       no_providers_description: `この機能で使える保存済みプロバイダーがありません。先に \`/provider add\` で追加してください。`,
     },
     speech: {
-      description: `有効な音声生成エンドポイントを選択します。`,
+      description: `このサーバーの音声生成エンドポイントを選択します。`,
       no_endpoints_title: `音声エンドポイントがありません`,
       no_endpoints_description: `まず \`/provider custom-endpoint add\` または \`/speech elevenlabs\` で音声エンドポイントを登録してください。`,
       modal_title: `音声エンドポイントを選択`,
@@ -26,7 +26,7 @@ export default {
       success_source_changed_description: `ボイスメッセージは今後 **{endpoint}** を使用します。音声ソース種別が変わったため、必要なペルソナには {voice_assign_command} で対応する音声を割り当ててください。`,
     },
     transcription: {
-      description: `有効な文字起こしエンドポイントを選択します。`,
+      description: `このサーバーの文字起こしエンドポイントを選択します。`,
       no_endpoints_title: `文字起こしエンドポイントがありません`,
       no_endpoints_description: `まず \`/provider custom-endpoint add\` または \`/speech elevenlabs\` で文字起こしエンドポイントを登録してください。`,
       modal_title: `文字起こしエンドポイントを選択`,
@@ -41,7 +41,7 @@ export default {
       success_description: `音声添付は今後 **{endpoint}** で文字起こしされます。`,
     },
     text: {
-      description: `私が使用する基盤となるAIモデルを変更します。`,
+      description: `このサーバーの既定テキストモデルを変更します。`,
       modal_title: `AIモデルの選択`,
       select_label: `AIモデル`,
       select_description: `私が使用するAIモデルを選択してください。無料でないモデルの価格については、各AIプロバイダーの公式サイトをご確認ください。`,
@@ -81,7 +81,7 @@ export default {
 **検出された機能:** {capabilities}`,
     },
     embedding: {
-      description: `文書検索に使用する埋め込みモデルを変更します。`,
+      description: `このサーバーで文書検索に使う埋め込みモデルを変更します。`,
       modal_title: `埋め込みモデルを選択`,
       select_label: `埋め込みモデル`,
       select_description: `文書検索に使用する埋め込みモデルを選択してください。`,
@@ -101,7 +101,7 @@ export default {
       current_none: `なし`,
     },
     fallback: {
-      description: `プライマリモデルが失敗した場合に使うバックアップモデルを設定し、なしで各スロットをクリアできます。`,
+      description: `このサーバーのバックアップテキストモデルを設定し、なしで各スロットをクリアできます。`,
       modal_title: `フォールバックモデルの設定`,
       slot_1_label: `フォールバックモデル1`,
       slot_2_label: `フォールバックモデル2`,
@@ -172,7 +172,7 @@ export default {
       current_none: `なし`,
     },
     vision: {
-      description: `チャットモデルが画像を見られない場合に画像分析用のビジョンモデルを設定します。`,
+      description: `チャットモデルが画像を見られない場合に使うこのサーバーのビジョンモデルを設定します。`,
       modal_title: `ビジョンモデルの選択`,
       select_label: `ビジョンモデル`,
       select_description: `チャットモデルの代わりに画像を分析するビジョン対応モデルを選択してください。`,
@@ -302,16 +302,16 @@ export default {
       description: `チャンネルとペルソナのモデル上書きを管理します。`,
     },
     parameters: {
-      description: `プロバイダーごとの保存済みサンプラー設定を更新します。`,
+      description: `このサーバーのプロバイダーごとの保存済みサンプラー設定を更新します。`,
       provider_description: `更新するプロバイダーを指定します。未指定なら現在のテキストプロバイダーです。`,
-      temperature_description: `このプロバイダーの Temperature 上書き値（0〜2）。`,
-      top_p_description: `このプロバイダーの Top-P 上書き値（0〜1）。`,
-      top_k_description: `このプロバイダーの Top-K 上書き値（0〜256）。`,
-      frequency_penalty_description: `このプロバイダーの頻度ペナルティ上書き値（-2〜2）。`,
-      presence_penalty_description: `このプロバイダーの出現ペナルティ上書き値（-2〜2）。`,
-      min_p_description: `このプロバイダーの Min-P 上書き値（0〜1）。`,
-      thinking_level_description: `このプロバイダーの思考レベル上書き値。`,
-      max_output_tokens_description: `このプロバイダーの最大出力トークン数（1〜131072）。未設定の場合はプロバイダーのデフォルト値を使用します。`,
+      temperature_description: `このプロバイダーの Temperature 上書き値（0〜2、デフォルト: 1.0）。`,
+      top_p_description: `このプロバイダーの Top-P 上書き値（0〜1、デフォルト: 0.95）。`,
+      top_k_description: `このプロバイダーの Top-K 上書き値（0〜256、デフォルト: 0）。`,
+      frequency_penalty_description: `このプロバイダーの頻度ペナルティ上書き値（-2〜2、デフォルト: 0.0）。`,
+      presence_penalty_description: `このプロバイダーの出現ペナルティ上書き値（-2〜2、デフォルト: 0.0）。`,
+      min_p_description: `このプロバイダーの Min-P 上書き値（0〜1、デフォルト: 0.05）。`,
+      thinking_level_description: `このプロバイダーの思考レベル上書き値（デフォルト: 自動）。`,
+      max_output_tokens_description: `このプロバイダーの最大出力トークン数（1〜131072、デフォルト: プロバイダー既定値）。`,
       sampler_temperature_label: `温度`,
       sampler_top_p_label: `Top-P`,
       sampler_top_k_label: `Top-K`,

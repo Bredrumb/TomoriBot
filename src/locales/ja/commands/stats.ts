@@ -1,5 +1,3 @@
-// locales/ja/commands/stats.ts
-
 export default {
   stats: {
     description: `使用統計を表示します`,
@@ -23,7 +21,6 @@ export default {
       timeframe_description: `集計する期間。`,
     },
 
-    // 共通ダッシュボード文字列
     empty: `（なし）`,
     footer: `トークン数はプロバイダーの実使用量（報告時）、コストは定価ベースの概算です。生成数とごほうび／おしおきは累計です。`,
     unknown_persona: `ペルソナ #{id}`,
@@ -153,7 +150,6 @@ export default {
       server_leaderboard_footer: `サーバーランキング（{timeframe}）`,
     },
 
-    // /stats generate サブコマンド文字列
     generate: {
       description: `シェアできる統計画像カードを生成します。`,
       type_description: `生成するカードの種類。`,

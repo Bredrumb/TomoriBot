@@ -9,13 +9,13 @@ import {
   type Client,
   type ComponentInContainerData,
   type ContainerComponentData,
-  type ModalSubmitInteraction,
   type SlashCommandSubcommandBuilder,
   type TopLevelComponentData,
 } from "discord.js";
+import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { ModalCheckboxGroupField } from "@/types/discord/modal";
-import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { invalidateWhitelistCache } from "@/utils/cache/channelWhitelistCache";
+import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { whitelistRepository } from "@/utils/db/repositories/WhitelistRepository";
 import {
   CHECKLIST_CHANNELS_PER_PAGE,
@@ -27,13 +27,16 @@ import {
   loadGuildTextChecklistChannels,
   type ChecklistChannelTarget,
 } from "@/utils/discord/channelChecklistManager";
-import { acknowledgeModalSubmitForRefresh, promptWithRawModal } from "@/utils/discord/ui/modals";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
-import { log, ColorCode } from "@/utils/misc/logger";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 
 const MODAL_CUSTOM_ID = "server_whitelist_persona_modal";
 const CHECKBOX_ID_PREFIX = "server_whitelist_persona_checkbox_group";
@@ -41,20 +44,11 @@ const PAGE_BUTTON_PREFIX = "server_whitelist_persona_page_";
 const DONE_BUTTON_ID = "server_whitelist_persona_done";
 
 type PersonaWithId = TomoriState & { persona_id: number };
-type ResponseInteraction = ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction;
-type PageSelectionResult =
-  | {
-      outcome: "selected";
-      interaction: ButtonInteraction;
-      pageChannels: ChecklistChannelTarget[];
-    }
-  | {
-      outcome: "done" | "timeout";
-    };
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("persona").setDescription(localizer("en-US", "commands.server.whitelist.persona.description"));
 
+/** Configures per-persona channel whitelist entries. */
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
@@ -66,7 +60,7 @@ export async function execute(
     serverId: null,
     personaId: null,
   };
-  let responseInteraction: ResponseInteraction = interaction;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
 
   try {
     if (!interaction.guild || !interaction.guildId) {
@@ -78,9 +72,12 @@ export async function execute(
       return;
     }
 
+    const guildId = interaction.guildId;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
     const [tomoriState, allPersonasRaw, availableChannels] = await Promise.all([
-      getCachedTomoriState(interaction.guildId),
-      getCachedAllPersonas(interaction.guildId),
+      getCachedTomoriState(guildId),
+      getCachedAllPersonas(guildId),
       loadGuildTextChecklistChannels(interaction.guild),
     ]);
     if (!tomoriState) {
@@ -94,7 +91,6 @@ export async function execute(
 
     errorContext.serverId = tomoriState.server_id;
     errorContext.personaId = tomoriState.persona_id;
-
     const allPersonas = allPersonasRaw.filter(
       (persona): persona is PersonaWithId => typeof persona.persona_id === "number",
     );
@@ -107,187 +103,221 @@ export async function execute(
       return;
     }
 
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    while (true) {
-      const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-        personas: allPersonas,
-        avatarSessionCache,
-        color: ColorCode.INFO,
-        preserveSelectedInteraction: true,
-        onSelect: async () => {},
-      });
+    await runPersonaPickerWorkflow(interaction, locale, {
+      personas: allPersonas,
+      color: ColorCode.INFO,
+      onSelected: async (selection) => {
+        workflowState.message = selection.message;
+        const selectedPersona = selection.persona;
+        errorContext.personaId = selectedPersona.persona_id;
 
-      if (!personaSelection.success) {
-        return;
-      }
-      if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-        return;
-      }
+        if (availableChannels.length === 0) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.server.whitelist.persona.no_channels_title",
+              descriptionKey: "commands.server.whitelist.persona.no_channels_description",
+              descriptionVars: { persona_name: selectedPersona.persona_nickname },
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      responseInteraction = personaSelection.interaction;
-      const personaSelectionInteraction = personaSelection.interaction;
-      const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-      if (!selectedPersona?.persona_id) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "general.errors.invalid_option_title",
-          "general.errors.invalid_option_description",
-          ColorCode.ERROR,
-          undefined,
-          "general.pagination.reloading_persona_picker",
+        if (availableChannels.length > CHECKLIST_MAX_PAGE_BUTTONS * CHECKLIST_CHANNELS_PER_PAGE) {
+          const work = await selection.beginInPlaceWork();
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.server.whitelist.persona.too_many_pages_title",
+              descriptionKey: "commands.server.whitelist.persona.too_many_pages_description",
+              descriptionVars: {
+                persona_name: selectedPersona.persona_nickname,
+                channel_count: availableChannels.length.toString(),
+                max_pages: CHECKLIST_MAX_PAGE_BUTTONS.toString(),
+              },
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        if (availableChannels.length <= CHECKLIST_CHANNELS_PER_PAGE) {
+          let currentSelectedIds = new Set<string>();
+          let checkboxGroups: ModalCheckboxGroupField[] = [];
+          const modalResult = await selection.openModal(async () => {
+            const currentEntries = await whitelistRepository.getPersonaWhitelistChannels(
+              tomoriState.server_id,
+              selectedPersona.persona_id,
+            );
+            currentSelectedIds = new Set(currentEntries.map((entry) => entry.channel_disc_id));
+            checkboxGroups = buildCheckboxGroups(availableChannels, currentSelectedIds, locale);
+            return {
+              modalCustomId: MODAL_CUSTOM_ID,
+              modalTitleKey: "commands.server.whitelist.persona.modal_title",
+              components: checkboxGroups,
+            };
+          });
+          if (modalResult.outcome !== "submitted") {
+            log.info(`Persona whitelist modal ${modalResult.outcome} for user ${user.user_id}`);
+            return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+          }
+
+          const work = await modalResult.phase.beginInPlaceWork();
+          const nextSelectedIds = collectCheckedIds(
+            modalResult.phase.multiValues,
+            CHECKBOX_ID_PREFIX,
+            checkboxGroups.length,
+          );
+          await persistUpdate(
+            work.message,
+            locale,
+            tomoriState.server_id,
+            guildId,
+            selectedPersona,
+            currentSelectedIds,
+            nextSelectedIds,
+            availableChannels,
+          );
+          return retryPersonaWorkflow();
+        }
+
+        const work = await selection.beginInPlaceWork();
+        await work.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.persona_workflow.loading_title",
+            descriptionKey: "general.persona_workflow.loading_description",
+            color: ColorCode.INFO,
+          }),
         );
-        continue;
-      }
-
-      errorContext.personaId = selectedPersona.persona_id;
-
-      if (availableChannels.length === 0) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "commands.server.whitelist.persona.no_channels_title",
-          "commands.server.whitelist.persona.no_channels_description",
-          ColorCode.WARN,
-          {
-            persona_name: selectedPersona.persona_nickname,
-          },
-          "general.pagination.reloading_persona_picker",
+        const currentEntries = await whitelistRepository.getPersonaWhitelistChannels(
+          tomoriState.server_id,
+          selectedPersona.persona_id,
         );
-        continue;
-      }
+        const currentSelectedIds = new Set(currentEntries.map((entry) => entry.channel_disc_id));
+        const totalPages = Math.ceil(availableChannels.length / CHECKLIST_CHANNELS_PER_PAGE);
+        const visibleSelectedCount = availableChannels.filter((channel) => currentSelectedIds.has(channel.id)).length;
+        await work.message.replace({
+          components: buildPageSelectComponents(
+            locale,
+            selectedPersona,
+            availableChannels.length,
+            totalPages,
+            visibleSelectedCount,
+          ),
+          flags: MessageFlags.IsComponentsV2,
+        });
 
-      if (availableChannels.length > CHECKLIST_MAX_PAGE_BUTTONS * CHECKLIST_CHANNELS_PER_PAGE) {
-        await updateButtonComponentsV2Status(
-          personaSelectionInteraction,
-          locale,
-          "commands.server.whitelist.persona.too_many_pages_title",
-          "commands.server.whitelist.persona.too_many_pages_description",
-          ColorCode.WARN,
-          {
-            persona_name: selectedPersona.persona_nickname,
-            channel_count: availableChannels.length.toString(),
-            max_pages: CHECKLIST_MAX_PAGE_BUTTONS.toString(),
-          },
-          "general.pagination.reloading_persona_picker",
-        );
-        continue;
-      }
+        let pageButton: ButtonInteraction;
+        try {
+          const message = await work.message.fetchMessage();
+          pageButton = await message.awaitMessageComponent({
+            componentType: ComponentType.Button,
+            filter: (candidate) =>
+              candidate.user.id === interaction.user.id &&
+              (candidate.customId.startsWith(PAGE_BUTTON_PREFIX) || candidate.customId === DONE_BUTTON_ID),
+            time: CHECKLIST_PAGE_SELECT_TIMEOUT_MS,
+          });
+        } catch {
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.interaction.timeout_title",
+              descriptionKey: "general.pagination.timeout",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.WARN,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      const currentEntries = await whitelistRepository.getPersonaWhitelistChannels(
-        tomoriState.server_id,
-        selectedPersona.persona_id,
-      );
-      const currentSelectedIds = new Set(currentEntries.map((entry) => entry.channel_disc_id));
+        const pagePhase = selection.useButton(pageButton);
+        if (pageButton.customId === DONE_BUTTON_ID) {
+          const doneWork = await pagePhase.beginInPlaceWork();
+          await doneWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.pagination.select_persona_title",
+              descriptionKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.INFO,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
 
-      if (availableChannels.length <= CHECKLIST_CHANNELS_PER_PAGE) {
-        const checkboxGroups = buildCheckboxGroups(availableChannels, currentSelectedIds, locale);
-        const modalResult = await promptWithRawModal(personaSelectionInteraction, locale, {
+        const selectedPage = Number.parseInt(pageButton.customId.replace(PAGE_BUTTON_PREFIX, ""), 10);
+        if (!Number.isInteger(selectedPage) || selectedPage < 1 || selectedPage > totalPages) {
+          const invalidWork = await pagePhase.beginInPlaceWork();
+          await invalidWork.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "general.errors.invalid_option_title",
+              descriptionKey: "general.errors.invalid_option_description",
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.ERROR,
+            }),
+          );
+          return retryPersonaWorkflow();
+        }
+
+        const startIndex = (selectedPage - 1) * CHECKLIST_CHANNELS_PER_PAGE;
+        const pageChannels = availableChannels.slice(startIndex, startIndex + CHECKLIST_CHANNELS_PER_PAGE);
+        const checkboxGroups = buildCheckboxGroups(pageChannels, currentSelectedIds, locale);
+        const modalResult = await pagePhase.openModal({
           modalCustomId: MODAL_CUSTOM_ID,
           modalTitleKey: "commands.server.whitelist.persona.modal_title",
           components: checkboxGroups,
         });
-
-        if (modalResult.outcome !== "submit" || !modalResult.interaction) {
-          log.info(`Persona whitelist modal ${modalResult.outcome} for user ${user.user_id}`);
-          await replyComponentsV2Status(
-            interaction,
-            locale,
-            "general.pagination.select_persona_title",
-            "general.pagination.reloading_persona_picker",
-            ColorCode.INFO,
-          );
-          continue;
+        if (modalResult.outcome !== "submitted") {
+          log.info(`Persona whitelist page modal ${modalResult.outcome} for user ${user.user_id}`);
+          return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
         }
 
-        responseInteraction = modalResult.interaction;
-        await acknowledgeModalSubmitForRefresh(modalResult.interaction);
-        const nextSelectedIds = collectCheckedIds(modalResult.multiValues, CHECKBOX_ID_PREFIX, checkboxGroups.length);
-        await persistUpdateAndRefreshPicker(
-          interaction,
+        const modalWork = await modalResult.phase.beginInPlaceWork();
+        const pageSelectedIds = collectCheckedIds(
+          modalResult.phase.multiValues,
+          CHECKBOX_ID_PREFIX,
+          checkboxGroups.length,
+        );
+        const nextSelectedIds = new Set(currentSelectedIds);
+        for (const channel of pageChannels) nextSelectedIds.delete(channel.id);
+        for (const channelId of pageSelectedIds) nextSelectedIds.add(channelId);
+        await persistUpdate(
+          modalWork.message,
           locale,
           tomoriState.server_id,
-          interaction.guildId,
+          guildId,
           selectedPersona,
           currentSelectedIds,
           nextSelectedIds,
           availableChannels,
         );
-        continue;
-      }
-
-      const pageSelection = await promptForPageSelection(
-        personaSelectionInteraction,
-        locale,
-        selectedPersona,
-        availableChannels,
-        currentSelectedIds,
-      );
-
-      if (pageSelection.outcome !== "selected") {
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      responseInteraction = pageSelection.interaction;
-      const checkboxGroups = buildCheckboxGroups(pageSelection.pageChannels, currentSelectedIds, locale);
-      const modalResult = await promptWithRawModal(pageSelection.interaction, locale, {
-        modalCustomId: MODAL_CUSTOM_ID,
-        modalTitleKey: "commands.server.whitelist.persona.modal_title",
-        components: checkboxGroups,
-      });
-
-      if (modalResult.outcome !== "submit" || !modalResult.interaction) {
-        log.info(`Persona whitelist page modal ${modalResult.outcome} for user ${user.user_id}`);
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
-      }
-
-      responseInteraction = modalResult.interaction;
-      await acknowledgeModalSubmitForRefresh(modalResult.interaction);
-      const pageSelectedIds = collectCheckedIds(modalResult.multiValues, CHECKBOX_ID_PREFIX, checkboxGroups.length);
-      const nextSelectedIds = new Set(currentSelectedIds);
-
-      for (const channel of pageSelection.pageChannels) {
-        nextSelectedIds.delete(channel.id);
-      }
-      for (const channelId of pageSelectedIds) {
-        nextSelectedIds.add(channelId);
-      }
-
-      await persistUpdateAndRefreshPicker(
-        interaction,
-        locale,
-        tomoriState.server_id,
-        interaction.guildId,
-        selectedPersona,
-        currentSelectedIds,
-        nextSelectedIds,
-        availableChannels,
-      );
-    }
+        return retryPersonaWorkflow();
+      },
+    });
   } catch (error) {
     log.error("Error executing /server whitelist persona command", error, errorContext);
-
-    await replyComponentsV2Status(
-      responseInteraction,
-      locale,
-      "general.errors.unknown_error_title",
-      "general.errors.unknown_error_description",
-      ColorCode.ERROR,
-    );
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.unknown_error_title",
+      descriptionKey: "general.errors.unknown_error_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
   }
 }
 
@@ -307,54 +337,8 @@ function buildCheckboxGroups(
   });
 }
 
-async function promptForPageSelection(
-  interaction: ButtonInteraction,
-  locale: string,
-  persona: PersonaWithId,
-  availableChannels: ChecklistChannelTarget[],
-  selectedIds: Set<string>,
-): Promise<PageSelectionResult> {
-  const totalPages = Math.ceil(availableChannels.length / CHECKLIST_CHANNELS_PER_PAGE);
-  const visibleSelectedCount = availableChannels.filter((channel) => selectedIds.has(channel.id)).length;
-
-  await interaction.update({
-    components: buildPageSelectComponents(locale, persona, availableChannels.length, totalPages, visibleSelectedCount),
-    flags: MessageFlags.IsComponentsV2,
-  });
-
-  try {
-    const pageButtonInteraction = (await interaction.message.awaitMessageComponent({
-      filter: (i) =>
-        i.user.id === interaction.user.id &&
-        (i.customId.startsWith(PAGE_BUTTON_PREFIX) || i.customId === DONE_BUTTON_ID),
-      time: CHECKLIST_PAGE_SELECT_TIMEOUT_MS,
-    })) as ButtonInteraction;
-
-    if (pageButtonInteraction.customId === DONE_BUTTON_ID) {
-      await pageButtonInteraction.deferUpdate();
-      return { outcome: "done" };
-    }
-
-    const selectedPage = Number.parseInt(pageButtonInteraction.customId.replace(PAGE_BUTTON_PREFIX, ""), 10);
-    if (!Number.isInteger(selectedPage) || selectedPage < 1 || selectedPage > totalPages) {
-      await pageButtonInteraction.deferUpdate();
-      return { outcome: "done" };
-    }
-
-    const startIndex = (selectedPage - 1) * CHECKLIST_CHANNELS_PER_PAGE;
-    return {
-      outcome: "selected",
-      interaction: pageButtonInteraction,
-      pageChannels: availableChannels.slice(startIndex, startIndex + CHECKLIST_CHANNELS_PER_PAGE),
-    };
-  } catch {
-    log.info("[WhitelistPersona] Page selection timed out");
-    return { outcome: "timeout" };
-  }
-}
-
-async function persistUpdateAndRefreshPicker(
-  interaction: ChatInputCommandInteraction,
+async function persistUpdate(
+  message: PersonaWorkflowMessageController,
   locale: string,
   serverId: number,
   guildId: string,
@@ -370,54 +354,50 @@ async function persistUpdateAndRefreshPicker(
   const disabledIds = [...previousSelectedIds].filter((channelId) => !nextSelectedIds.has(channelId));
 
   if (enabledIds.length === 0 && disabledIds.length === 0) {
-    await replyComponentsV2Status(
-      interaction,
-      locale,
-      "commands.server.whitelist.persona.no_changes_title",
-      "commands.server.whitelist.persona.no_changes_description",
-      ColorCode.INFO,
-      {
-        persona_name: persona.persona_nickname,
-      },
-      "general.pagination.reloading_persona_picker",
+    await message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.server.whitelist.persona.no_changes_title",
+        descriptionKey: "commands.server.whitelist.persona.no_changes_description",
+        descriptionVars: { persona_name: persona.persona_nickname },
+        footerKey: "general.pagination.reloading_persona_picker",
+        color: ColorCode.INFO,
+      }),
     );
     return;
   }
 
   await whitelistRepository.replacePersonaWhitelistChannels(serverId, persona.persona_id, normalizedSelectedIds);
   invalidateWhitelistCache(guildId);
-
   if (normalizedSelectedIds.length === 0) {
-    await replyComponentsV2Status(
-      interaction,
-      locale,
-      "commands.server.whitelist.persona.success_clear_title",
-      "commands.server.whitelist.persona.success_clear_description",
-      ColorCode.SUCCESS,
-      {
-        persona_name: persona.persona_nickname,
-      },
-      "general.pagination.reloading_persona_picker",
+    await message.replace(
+      buildPersonaWorkflowNotice({
+        locale,
+        titleKey: "commands.server.whitelist.persona.success_clear_title",
+        descriptionKey: "commands.server.whitelist.persona.success_clear_description",
+        descriptionVars: { persona_name: persona.persona_nickname },
+        footerKey: "general.pagination.reloading_persona_picker",
+        color: ColorCode.SUCCESS,
+      }),
     );
-
     log.info(`Cleared channel whitelist restriction for persona ${persona.persona_id} in server ${guildId}`);
     return;
   }
 
-  await replyComponentsV2Status(
-    interaction,
-    locale,
-    "commands.server.whitelist.persona.success_title",
-    "commands.server.whitelist.persona.success_description",
-    ColorCode.SUCCESS,
-    {
-      persona_name: persona.persona_nickname,
-      selected_count: normalizedSelectedIds.length.toString(),
-      selected_channels: formatChecklistChannelMentions(normalizedSelectedIds, availableChannels, locale),
-    },
-    "general.pagination.reloading_persona_picker",
+  await message.replace(
+    buildPersonaWorkflowNotice({
+      locale,
+      titleKey: "commands.server.whitelist.persona.success_title",
+      descriptionKey: "commands.server.whitelist.persona.success_description",
+      descriptionVars: {
+        persona_name: persona.persona_nickname,
+        selected_count: normalizedSelectedIds.length.toString(),
+        selected_channels: formatChecklistChannelMentions(normalizedSelectedIds, availableChannels, locale),
+      },
+      footerKey: "general.pagination.reloading_persona_picker",
+      color: ColorCode.SUCCESS,
+    }),
   );
-
   log.info(
     `Updated channel whitelist restriction for persona ${persona.persona_id} in server ${guildId}: [${normalizedSelectedIds.join(", ")}]`,
   );
@@ -431,7 +411,6 @@ function buildPageSelectComponents(
   selectedCount: number,
 ): TopLevelComponentData[] {
   const pageButtons: ButtonComponentData[] = [];
-
   for (let page = 1; page <= totalPages; page++) {
     const start = (page - 1) * CHECKLIST_CHANNELS_PER_PAGE + 1;
     const end = Math.min(page * CHECKLIST_CHANNELS_PER_PAGE, channelCount);
@@ -442,7 +421,6 @@ function buildPageSelectComponents(
       label: `${start}-${end}`,
     });
   }
-
   pageButtons.push({
     type: ComponentType.Button,
     style: ButtonStyle.Secondary,
@@ -452,15 +430,11 @@ function buildPageSelectComponents(
 
   const actionRows: ActionRowData<ButtonComponentData>[] = [];
   for (let index = 0; index < pageButtons.length; index += 5) {
-    actionRows.push({
-      type: ComponentType.ActionRow,
-      components: pageButtons.slice(index, index + 5),
-    });
+    actionRows.push({ type: ComponentType.ActionRow, components: pageButtons.slice(index, index + 5) });
   }
-
   const container: ContainerComponentData<ComponentInContainerData> = {
     type: ComponentType.Container,
-    accentColor: resolveAccentColor(ColorCode.INFO),
+    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
     components: [
       {
         type: ComponentType.TextDisplay,
@@ -478,18 +452,5 @@ function buildPageSelectComponents(
       ...actionRows,
     ],
   };
-
   return [container];
-}
-
-function resolveAccentColor(color: string | number): number {
-  if (typeof color === "number") {
-    return color;
-  }
-
-  if (typeof color === "string" && color.startsWith("#")) {
-    return Number.parseInt(color.replace("#", ""), 16);
-  }
-
-  return Number.parseInt(ColorCode.INFO.replace("#", ""), 16);
 }

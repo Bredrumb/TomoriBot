@@ -1,0 +1,59 @@
+{
+  "_notes": "Intentional comment-policy exceptions. Keep this list small; each entry must document literal syntax or a live named rule.",
+  "exceptions": [
+    {
+      "file": "src/providers/novelai/novelaiStreamAdapter.ts",
+      "reason": "Documents the literal em-dash character recognized as a sentence boundary.",
+      "rule": "prose-dash",
+      "text": "* formatting (* ~), em dash (—), and newlines."
+    },
+    {
+      "file": "src/providers/novelai/novelaiStreamAdapter.ts",
+      "reason": "Labels the literal Unicode character checked by the adjacent condition.",
+      "rule": "prose-dash",
+      "text": "// —"
+    },
+    {
+      "file": "src/utils/db/sqlSplitter.ts",
+      "reason": "Documents SQL line-comment syntax rather than using a prose separator.",
+      "rule": "prose-dash",
+      "text": "*   - Line comments:         -- ..."
+    },
+    {
+      "file": "scripts/checks/lib/textPreviewAudit.ts",
+      "reason": "Names the live baked-ellipsis audit rule.",
+      "rule": "rule-scaffolding",
+      "text": "* Rule 1: `baked-ellipsis`"
+    },
+    {
+      "file": "scripts/checks/lib/textPreviewAudit.ts",
+      "reason": "Names the live fenced-placeholder audit rule.",
+      "rule": "rule-scaffolding",
+      "text": "* Rule 2: `unguarded-fenced-placeholder`"
+    },
+    {
+      "file": "scripts/checks/lib/textPreviewAudit.ts",
+      "reason": "Explains the execution scope of live audit rule 1.",
+      "rule": "rule-scaffolding",
+      "text": "* Rule 1: scans a single locale string for an unconditional ellipsis."
+    },
+    {
+      "file": "scripts/checks/lib/textPreviewAudit.ts",
+      "reason": "Explains the execution scope of live audit rule 2.",
+      "rule": "rule-scaffolding",
+      "text": "* Rule 2: checks that every consumer of a fenced-placeholder key guards it."
+    },
+    {
+      "file": "scripts/checks/lib/textPreviewAudit.ts",
+      "reason": "Documents why live audit rule 1 runs for each locale.",
+      "rule": "rule-scaffolding",
+      "text": "// Rule 1 runs per locale, so a translation must not reintroduce it alone."
+    },
+    {
+      "file": "scripts/checks/lib/textPreviewAudit.ts",
+      "reason": "Documents why live audit rule 2 uses only the reference locale.",
+      "rule": "rule-scaffolding",
+      "text": "// Rule 2 is structural, so the reference locale alone drives it."
+    }
+  ]
+}

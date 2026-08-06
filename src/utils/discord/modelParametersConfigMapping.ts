@@ -47,7 +47,7 @@ export type ModelParameterSavedConfigSnapshot = Pick<
  * Each field takes the user-provided value when non-null, otherwise falls back to the
  * saved config value. max_output_tokens falls to null (not undefined) when both are
  * absent. Non-sampler provider fields (api_key, llm_id, server_id, etc.) are not
- * included in the returned patch — the caller merges it into the full config with spread.
+ * included in the returned patch, so the caller merges it into the full config with spread.
  */
 export function buildModelParametersSamplerPatch(
   options: ModelParameterOptions,

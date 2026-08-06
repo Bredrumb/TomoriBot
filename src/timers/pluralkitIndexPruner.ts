@@ -57,10 +57,9 @@ export function initializePluralKitIndexPruner(): void {
     DEFAULT_PRUNE_INTERVAL_HOURS,
   );
 
-  // 1. Startup sweep — never awaited, so a slow DB cannot delay readiness.
+  // Never awaited: a slow DB must not delay startup readiness.
   void runPrunePass(retentionDays);
 
-  // 2. Recurring sweep on the configured cadence.
   pruneInterval = setInterval(() => {
     void runPrunePass(retentionDays);
   }, intervalHours * MS_PER_HOUR);

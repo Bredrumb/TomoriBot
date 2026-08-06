@@ -1,5 +1,3 @@
-// locales/ja/commands/st-preset.ts
-
 export default {
   "st-preset": {
     description: `SillyTavernプリセットを管理。詳しくは /help st-preset`,

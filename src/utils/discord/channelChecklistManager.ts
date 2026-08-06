@@ -3,8 +3,8 @@ import type { CheckboxGroupOption, ModalCheckboxGroupField } from "@/types/disco
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { localizer } from "@/utils/text/localizer";
 
-export const CHECKLIST_MAX_OPTIONS_PER_GROUP = 10;
-export const CHECKLIST_MAX_GROUPS_PER_MODAL = 5;
+const CHECKLIST_MAX_OPTIONS_PER_GROUP = 10;
+const CHECKLIST_MAX_GROUPS_PER_MODAL = 5;
 export const CHECKLIST_CHANNELS_PER_PAGE = CHECKLIST_MAX_OPTIONS_PER_GROUP * CHECKLIST_MAX_GROUPS_PER_MODAL;
 export const CHECKLIST_PAGE_SELECT_TIMEOUT_MS = 300_000;
 export const CHECKLIST_MAX_PAGE_BUTTONS = 24;

@@ -1,12 +1,15 @@
 import { AttachmentBuilder, MessageFlags } from "discord.js";
-import type { ButtonInteraction, ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
+import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
 import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { buildNoticeContainer } from "@/utils/discord/ui/interactionCore";
-import { replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  runPersonaPickerWorkflow,
+} from "@/utils/discord/ui/personaWorkflow";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { DEFAULT_TIMEFRAME, type StatsScope, type Timeframe, TIMEFRAME_VALUES } from "@/utils/stats/statsDashboard";
@@ -30,14 +33,11 @@ type CardType = "personal" | "persona" | "server";
 /**
  * Configures the /stats generate subcommand: generates a shareable PNG image
  * card summarising personal, persona, or server stats for the chosen timeframe.
- * @param subcommand - The subcommand builder
- * @returns Configured subcommand builder
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("generate")
     .setDescription(localizer("en-US", "commands.stats.generate.description"))
-    // 1. type (required) — determines which card is rendered.
     .addStringOption((option) =>
       option
         .setName("type")
@@ -49,7 +49,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           { name: localizer("en-US", "commands.stats.generate.server_option"), value: "server" },
         ),
     )
-    // 2. timeframe (optional) — defaults to all_time.
     .addStringOption((option) =>
       option
         .setName("timeframe")
@@ -59,7 +58,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           ...TIMEFRAME_VALUES.map((value) => ({ name: localizer("en-US", `commands.choices.${value}`), value })),
         ),
     )
-    // 3. scope (optional) — only meaningful for personal cards.
     .addStringOption((option) =>
       option
         .setName("scope")
@@ -76,13 +74,10 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
  *
  * Flow by card type:
  * - personal: privacy gate → deferReply → gather → render → editReply with PNG.
- * - persona:  show picker → consume it with a selection notice → button.deferReply() → gather → render → PNG.
+ * - persona:  show private picker → compact it → create exactly one public PNG response.
  * - server:   deferReply → gather → render → editReply with PNG.
  *
- * @param _client     - Discord client instance (unused; required by the command interface)
- * @param interaction - The slash command interaction
  * @param userData    - Caller's user row from the DB
- * @param locale      - BCP-47 locale string for the interaction
  */
 export async function execute(
   _client: Client,
@@ -101,7 +96,16 @@ export async function execute(
   }
 
   try {
-    // 1. Resolve the internal server id from cache.
+    const cardType = interaction.options.getString("type", true) as CardType;
+    const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
+    const scope = (interaction.options.getString("scope") ?? "this_server") as StatsScope;
+
+    // Persona cards start with a private picker even though the final card is
+    // public. Protect the state/persona reads before handing off to the picker.
+    if (cardType === "persona") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
     const tomoriState = await getCachedTomoriState(guild.id);
     const serverId = tomoriState?.server_id;
     if (!serverId) {
@@ -112,10 +116,6 @@ export async function execute(
       });
       return;
     }
-
-    const cardType = interaction.options.getString("type", true) as CardType;
-    const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
-    const scope = (interaction.options.getString("scope") ?? "this_server") as StatsScope;
 
     if (cardType === "personal") {
       await executePersonalCard(interaction, userData, locale, serverId, timeframe, scope);
@@ -133,15 +133,11 @@ export async function execute(
   }
 }
 
-// ── Personal card ─────────────────────────────────────────────────────────────
-
 /**
  * Generates and sends the Personal "Wrapped" infographic card.
  * Fully-private users are refused immediately with an ephemeral error embed.
  *
- * @param interaction - The slash command interaction
  * @param userData    - Caller's user row
- * @param locale      - BCP-47 locale string
  * @param serverId    - Internal servers FK for "this server" scope queries
  * @param timeframe   - Selected time window
  * @param scope       - "this_server" or "global" scope for the personal card
@@ -164,10 +160,10 @@ async function executePersonalCard(
     return;
   }
 
-  // 1. Privacy gate: fully-private users cannot generate personal cards.
+  // Privacy gate: fully-private users cannot generate personal cards.
   const privacyLevel = await getCachedPrivacyLevel(interaction.user.id);
   if (privacyLevel === PrivacyLevel.FULL) {
-    // replyInfoEmbed defaults to ephemeral — no extra flag needed.
+    // replyInfoEmbed defaults to ephemeral, so no extra flag needed.
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.stats.generate.privacy_title",
       descriptionKey: "commands.stats.generate.privacy_description",
@@ -176,10 +172,9 @@ async function executePersonalCard(
     return;
   }
 
-  // 2. Acknowledge the interaction before the DB reads start.
+  // Acknowledge the interaction before the DB reads start.
   await interaction.deferReply();
 
-  // 3. Gather data. Omit serverId for global scope.
   const scopedServerId = scope === "this_server" ? serverId : undefined;
   const data = await gatherPersonalCardData({
     userId,
@@ -191,7 +186,6 @@ async function executePersonalCard(
     timeframe,
   });
 
-  // 4. Render the VNode to a PNG buffer and send as an attachment.
   const node = renderPersonalCard(data);
   const png = await renderCardToPng(node, CARD_W, getPersonalCardHeight(data));
   const attachment = new AttachmentBuilder(png, { name: `stats_personal_${Date.now()}.png` });
@@ -199,17 +193,11 @@ async function executePersonalCard(
   await interaction.editReply({ files: [attachment] });
 }
 
-// ── Persona card ──────────────────────────────────────────────────────────────
-
 /**
  * Opens the persona picker then generates the invoking user's Persona Affinity
- * card for the selected persona. The card reply is sent from the button
- * interaction to avoid double-acknowledging the original command interaction.
+ * card for the selected persona through the workflow's explicit public-result phase.
  *
  * @param interaction - The original slash command interaction (used for the picker)
- * @param locale      - BCP-47 locale string
- * @param serverId    - Internal servers FK
- * @param guild       - Discord.js Guild for member name resolution
  * @param timeframe   - Selected time window
  */
 async function executePersonaCard(
@@ -230,7 +218,6 @@ async function executePersonaCard(
     return;
   }
 
-  // 1. Guard: this server must have at least one persona to pick.
   const personas = await getCachedAllPersonas(guild.id);
   if (personas.length === 0) {
     await replyInfoEmbed(interaction, locale, {
@@ -241,69 +228,57 @@ async function executePersonaCard(
     return;
   }
 
-  // 2. Show the ephemeral persona picker; preserve the button interaction so we
-  //    can deferReply from it (avoids the "already-acknowledged" Discord error).
-  const result = await replyPaginatedPersonaChoicesV2(interaction, locale, {
+  await runPersonaPickerWorkflow(interaction, locale, {
     personas,
     titleKey: "commands.stats.generate.picker_title",
     descriptionKey: "commands.stats.generate.picker_description",
     color: ColorCode.INFO,
-    preserveSelectedInteraction: true,
+    async onSelected(selection) {
+      const selected = selection.persona;
+      const publicReply = await selection.beginSeparatePublicReply(
+        buildPersonaWorkflowNotice({
+          locale,
+          color: ColorCode.SUCCESS,
+          titleKey: "commands.stats.persona.chosen_title",
+          titleVars: { name: selected.persona_nickname },
+        }),
+      );
+
+      try {
+        const data = await gatherPersonaCardData({
+          serverId,
+          guildDiscId: guild.id,
+          lineageId: selected.persona_lineage_id ?? 0,
+          userId,
+          username: interaction.user.displayName,
+          userAvatarUrl: interaction.user.displayAvatarURL({ extension: "png", forceStatic: true, size: 128 }),
+          locale,
+          timeframe,
+          guild,
+        });
+        const node = renderPersonaCard(data);
+        const png = await renderCardToPng(node, CARD_W, getPersonaCardHeight(data));
+        const attachment = new AttachmentBuilder(png, { name: `stats_persona_${Date.now()}.png` });
+        await publicReply.reply({ files: [attachment] });
+      } catch (error) {
+        await selection.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            color: ColorCode.ERROR,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+          }),
+        );
+        throw error;
+      }
+      return completePersonaWorkflow();
+    },
   });
-
-  // 3. Picker timed out or was dismissed — nothing to do.
-  if (!result.success || result.selectedIndex === undefined || !result.interaction) return;
-
-  const selected = personas[result.selectedIndex];
-  if (!selected) return;
-
-  const lineageId = selected.persona_lineage_id ?? 0;
-  const button = result.interaction as ButtonInteraction;
-
-  // 4. Consume the ephemeral picker before the card is generated. This mirrors
-  //    /stats persona and keeps the original picker from remaining interactive.
-  await interaction.editReply({
-    components: buildNoticeContainer({
-      locale,
-      color: ColorCode.SUCCESS,
-      titleKey: "commands.stats.persona.chosen_title",
-      titleVars: { name: selected.persona_nickname },
-    }),
-    flags: MessageFlags.IsComponentsV2,
-  });
-
-  // 5. Acknowledge from the button interaction. The original slash command
-  //    interaction was already consumed by the ephemeral picker notice.
-  await button.deferReply();
-
-  // 6. Gather + render + send.
-  const data = await gatherPersonaCardData({
-    serverId,
-    guildDiscId: guild.id,
-    lineageId,
-    userId,
-    username: interaction.user.displayName,
-    userAvatarUrl: interaction.user.displayAvatarURL({ extension: "png", forceStatic: true, size: 128 }),
-    locale,
-    timeframe,
-    guild,
-  });
-
-  const node = renderPersonaCard(data);
-  const png = await renderCardToPng(node, CARD_W, getPersonaCardHeight(data));
-  const attachment = new AttachmentBuilder(png, { name: `stats_persona_${Date.now()}.png` });
-
-  await button.editReply({ files: [attachment] });
 }
-
-// ── Server card ───────────────────────────────────────────────────────────────
 
 /**
  * Generates and sends the Server Leaderboard infographic card.
  *
- * @param interaction  - The slash command interaction
- * @param locale       - BCP-47 locale string
- * @param serverId     - Internal servers FK
  * @param guildDiscId  - Discord guild snowflake (for persona cache)
  * @param serverName   - Guild display name shown on the card header
  * @param timeframe    - Selected time window
@@ -316,10 +291,9 @@ async function executeServerCard(
   serverName: string,
   timeframe: Timeframe,
 ): Promise<void> {
-  // 1. Acknowledge immediately — DB reads can take a moment.
+  // Acknowledge immediately, because DB reads can take a moment.
   await interaction.deferReply();
 
-  // 2. Gather + render + send.
   const guild = interaction.guild;
   if (!guild) return;
 

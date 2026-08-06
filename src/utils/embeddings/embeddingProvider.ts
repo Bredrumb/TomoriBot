@@ -26,13 +26,74 @@ async function generateEmbeddingsOnce(request: EmbeddingRequest): Promise<number
   return await capability.generateEmbeddings(request);
 }
 
-export async function generateEmbeddings(request: EmbeddingRequest): Promise<number[][]> {
-  try {
-    const embeddings = await generateEmbeddingsOnce(request);
-    if (embeddings.length !== request.inputs.length) {
-      throw new Error(`Embedding count mismatch: expected ${request.inputs.length}, got ${embeddings.length}`);
+/**
+ * Models observed to return a single embedding regardless of how many inputs were sent.
+ *
+ * Some embedding models (notably the newer Gemini embedding family) accept only one content
+ * per request and silently embed just the first, rather than erroring. Once a model is seen
+ * behaving this way, later batches for that model go straight to per-input requests instead
+ * of paying for a doomed batch call first. Keyed `provider:model`; process-lifetime only.
+ */
+const singleInputEmbeddingModels = new Set<string>();
+
+/**
+ * Runs `embed` for the whole batch, falling back to one call per input when the model
+ * returns fewer embeddings than it was given.
+ *
+ * Kept free of provider resolution so the retry policy is testable on its own; callers
+ * supply whatever performs the actual request.
+ *
+ * @param modelKey - `provider:model`, used to remember non-batching models for the process.
+ * @throws When a single-input request returns anything other than one embedding.
+ */
+export async function embedWithBatchFallback(
+  inputs: string[],
+  modelKey: string,
+  embed: (batch: string[]) => Promise<number[][]>,
+): Promise<number[][]> {
+  const runSequentially = async (): Promise<number[][]> => {
+    const embeddings: number[][] = [];
+    for (const input of inputs) {
+      const single = await embed([input]);
+      if (single.length !== 1) {
+        throw new Error(`Embedding count mismatch: expected 1, got ${single.length}`);
+      }
+      embeddings.push(single[0]);
     }
     return embeddings;
+  };
+
+  if (inputs.length > 1 && singleInputEmbeddingModels.has(modelKey)) {
+    return await runSequentially();
+  }
+
+  const embeddings = await embed(inputs);
+  if (embeddings.length === inputs.length) {
+    return embeddings;
+  }
+
+  // A short count on a multi-input request means the model ignored the batch rather than
+  //    failing, so retry one input at a time instead of surfacing a mismatch the caller
+  //    cannot act on. Remember the model so later batches skip straight to step 1.
+  if (inputs.length > 1) {
+    log.warn(
+      `Embedding model ${modelKey} returned ${embeddings.length} embeddings for ${inputs.length} inputs; ` +
+        `retrying one input at a time.`,
+    );
+    singleInputEmbeddingModels.add(modelKey);
+    return await runSequentially();
+  }
+
+  throw new Error(`Embedding count mismatch: expected ${inputs.length}, got ${embeddings.length}`);
+}
+
+export async function generateEmbeddings(request: EmbeddingRequest): Promise<number[][]> {
+  try {
+    return await embedWithBatchFallback(
+      request.inputs,
+      `${request.provider}:${request.model}`,
+      async (batch) => await generateEmbeddingsOnce({ ...request, inputs: batch }),
+    );
   } catch (error) {
     log.error(`Failed to generate embeddings for provider ${request.provider} model ${request.model}`, error);
     throw error;

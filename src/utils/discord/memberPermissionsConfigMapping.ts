@@ -6,7 +6,7 @@ type BooleanColumn<T> = {
 
 type ServerMemberPermissionsBooleanColumn = BooleanColumn<ServerMemberPermissionsConfigRow>;
 
-export type ServerMemberPermissionsCommandColumn = Extract<
+type ServerMemberPermissionsCommandColumn = Extract<
   ServerMemberPermissionsBooleanColumn,
   | "server_memteaching_enabled"
   | "attribute_memteaching_enabled"
@@ -27,7 +27,7 @@ export interface ServerMemberPermissionDefinition {
   getState: (config: ServerMemberPermissionsCommandConfigState) => boolean;
 }
 
-export interface ServerMemberPermissionsConfigChange {
+interface ServerMemberPermissionsConfigChange {
   value: string;
   dbColumn: ServerMemberPermissionsCommandColumn;
   isEnabled: boolean;

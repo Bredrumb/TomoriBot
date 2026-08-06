@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import type { ToolContext } from "@/types/tool/interfaces";
+import { createParticipantAlias } from "@/utils/text/participants/aliases";
+import { createDiscordUserKey, serializeParticipantKey } from "@/utils/text/participants/identity";
 
 /**
  * Builds a minimal ToolContext carrying only the conversation-user metadata that
@@ -16,6 +18,43 @@ function buildContext(conversationUsers: ConversationUserReference[]): ToolConte
     conversationUsers,
   };
   return { contextItems: [contextItem] } as unknown as ToolContext;
+}
+
+function buildIndexedContext(conversationUsers: ConversationUserReference[]): ToolContext {
+  const targets = conversationUsers.map((reference) => {
+    const key = createDiscordUserKey(reference.targetId);
+    return {
+      key,
+      serializedKey: serializeParticipantKey(key),
+      displayLabel: reference.displayLabel,
+      primaryAlias: reference.displayLabel,
+      targetId: reference.targetId,
+      mentionable: reference.mentionable,
+      inParticipantContext: true,
+      aliases: reference.aliases.flatMap((value, index) => {
+        const alias = createParticipantAlias({
+          owner: key,
+          value,
+          source: index === 0 ? "saved_nickname" : "guild_nickname",
+          purposes: ["tool_target"],
+          exposure: "visible",
+          priority: index,
+        });
+        return alias ? [alias] : [];
+      }),
+    };
+  });
+  return {
+    contextItems: [
+      {
+        role: "user",
+        parts: [{ type: "text", text: "" }],
+        metadataTag: ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION,
+        conversationUsers: [],
+        participantTargetIndex: { targets },
+      },
+    ],
+  } as unknown as ToolContext;
 }
 
 describe("resolveUserTarget — conversation stage primary-name precedence", () => {
@@ -36,7 +75,7 @@ describe("resolveUserTarget — conversation stage primary-name precedence", () 
   };
 
   it("prefers the primary-name match over a colliding secondary alias", async () => {
-    const result = await resolveUserTarget("Bredrumb", buildContext([misuzu, bredrumb]));
+    const result = await resolveUserTarget("Bredrumb", buildIndexedContext([misuzu, bredrumb]));
 
     expect(result.status).toBe("resolved");
     if (result.status === "resolved") {

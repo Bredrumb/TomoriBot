@@ -48,7 +48,7 @@ function parseIntegerEnv(value: string | undefined, defaultValue: number, minimu
 }
 
 // Timing envs are read lazily (per use, not at module load) so import order
-// never bakes stale values in — chat modules pull this file in transitively,
+// never bakes stale values in: chat modules pull this file in transitively,
 // which would otherwise freeze defaults before test files can set overrides.
 export function getPluralKitProxyWaitMs(): number {
   return parseIntegerEnv(process.env.PLURALKIT_PROXY_WAIT_MS, 2000, 0);

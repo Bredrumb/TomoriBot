@@ -24,8 +24,15 @@ import {
   safeSelectOptionText,
 } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { replyComponentsV2Status, updateButtonComponentsV2Status } from "@/utils/discord/ui/statusComponents";
-import { type AvatarSessionCache, replyPaginatedPersonaChoicesV2 } from "@/utils/discord/ui/personaPagination";
+import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
+import {
+  buildPersonaWorkflowNotice,
+  completePersonaWorkflow,
+  retryPersonaWorkflow,
+  runPersonaPickerWorkflow,
+  type PersonaWorkflowMessageController,
+} from "@/utils/discord/ui/personaWorkflow";
+import { personaIdIsEligible, refreshEligibilitySet } from "@/utils/discord/ui/personaEligibility";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { personaRepository, serverMemoryRepository } from "@/utils/db/repositories";
 import type { SelectOption } from "@/types/discord/modal";
@@ -38,10 +45,8 @@ type HistoryScope = "persona" | "serverwide";
 /**
  * Performs the actual document deletion and replies with success/failure.
  *
- * @param tomoriState - The server's Tomori state
  * @param targetPersonaId - Persona ID (null for serverwide)
- * @param documentId - The document to delete
- * @param userData - The executing user's data
+ * @param serverDiscId - The Discord server or DM owner ID used as the Tomori-state cache key
  * @param replyInteraction - The interaction to reply on
  * @param locale - The user's locale
  */
@@ -49,6 +54,7 @@ async function performHistoryDocumentRemoval(
   tomoriState: TomoriState,
   targetPersonaId: number | null,
   documentId: number,
+  serverDiscId: string,
   _userData: UserRow,
   replyInteraction: ChatInputCommandInteraction | ButtonInteraction | ModalSubmitInteraction,
   locale: string,
@@ -70,9 +76,7 @@ async function performHistoryDocumentRemoval(
     return false;
   }
 
-  if (replyInteraction.guildId) {
-    invalidateTomoriStateCache(replyInteraction.guildId);
-  }
+  invalidateTomoriStateCache(serverDiscId);
 
   if (!suppressSuccessReply) {
     await replyInfoEmbed(replyInteraction, locale, {
@@ -132,10 +136,12 @@ export async function execute(
 
   let tomoriState: TomoriState | null = null;
   let targetPersonaId: number | null = null;
-  let personaSelectionInteraction: ButtonInteraction | null = null;
+  const workflowState: { message: PersonaWorkflowMessageController | null } = { message: null };
+  const serverDiscId = interaction.guild?.id ?? interaction.user.id;
+  const scopeInput = interaction.options.getString("scope");
+  const scope: HistoryScope = scopeInput === "serverwide" ? "serverwide" : "persona";
 
   try {
-    // 1. Check RAG is enabled
     if (!isRagAvailable()) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.memory.history.remove.rag_disabled_title",
@@ -146,8 +152,11 @@ export async function execute(
       return;
     }
 
-    // 2. Load Tomori state
-    tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
+    if (scope === "persona") {
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    }
+
+    tomoriState = await getCachedTomoriState(serverDiscId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
@@ -157,8 +166,8 @@ export async function execute(
       });
       return;
     }
+    const activeTomoriState = tomoriState;
 
-    // 3. Check teaching permission
     const hasManagePermission = interaction.memberPermissions?.has("ManageGuild") ?? false;
     if (!tomoriState.config.server_memteaching_enabled && !hasManagePermission) {
       await replyInfoEmbed(interaction, locale, {
@@ -170,84 +179,192 @@ export async function execute(
       return;
     }
 
-    // 4. Resolve scope
-    const scopeInput = interaction.options.getString("scope");
-    const scope: HistoryScope = scopeInput === "serverwide" ? "serverwide" : "persona";
-
-    // 5. Handle persona scope: show persona selector
-    const avatarSessionCache: AvatarSessionCache = new Map();
-    while (true) {
-      if (scope === "persona") {
-        const allPersonas = await personaRepository.loadAllForServer(interaction.guild?.id ?? interaction.user.id);
-        if (allPersonas.length === 0) {
-          await replyInfoEmbed(interaction, locale, {
-            titleKey: "general.errors.tomori_not_setup_title",
-            descriptionKey: "general.errors.tomori_not_setup_description",
-            color: ColorCode.ERROR,
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const personaSelection = await replyPaginatedPersonaChoicesV2(interaction, locale, {
-          personas: allPersonas,
-          avatarSessionCache,
-          color: ColorCode.INFO,
-          preserveSelectedInteraction: true,
-          onSelect: async () => {},
+    if (scope === "persona") {
+      const allPersonas = await personaRepository.loadAllForServer(serverDiscId);
+      if (allPersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "general.errors.tomori_not_setup_title",
+          descriptionKey: "general.errors.tomori_not_setup_description",
+          color: ColorCode.ERROR,
+          flags: MessageFlags.Ephemeral,
         });
-
-        if (!personaSelection.success) {
-          return;
-        }
-        if (personaSelection.selectedIndex === undefined || !personaSelection.interaction) {
-          return;
-        }
-
-        personaSelectionInteraction = personaSelection.interaction;
-        const selectedPersona = allPersonas[personaSelection.selectedIndex] ?? null;
-        if (!selectedPersona?.persona_id) {
-          await updateButtonComponentsV2Status(
-            personaSelectionInteraction,
-            locale,
-            "general.errors.invalid_option_title",
-            "general.errors.invalid_option_description",
-            ColorCode.ERROR,
-            undefined,
-            "general.pagination.reloading_persona_picker",
-          );
-          continue;
-        }
-        targetPersonaId = selectedPersona.persona_id;
+        return;
       }
 
-      // 6. Query history-extracted documents for the selected scope
-      const selectionInteraction = personaSelectionInteraction ?? interaction;
+      // Class B eligibility keyed on personas owning history-sourced documents.
+      // The mutable set is refreshed after each removal so the mid-loop empty
+      // state is reachable; the `loadHistoryDocuments` reload stays the backstop.
+      const eligibleHistoryPersonaIds = await serverMemoryRepository.personaIdsWithHistoryDocuments(
+        activeTomoriState.server_id,
+      );
+      const isEligible = personaIdIsEligible(eligibleHistoryPersonaIds);
+      const eligiblePersonas = allPersonas.filter(isEligible);
+      if (eligiblePersonas.length === 0) {
+        await replyInfoEmbed(interaction, locale, {
+          titleKey: "commands.memory.history.remove.none_title",
+          descriptionKey: "commands.memory.history.remove.none_description",
+          color: ColorCode.WARN,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const workflowResult = await runPersonaPickerWorkflow(interaction, locale, {
+        personas: allPersonas,
+        color: ColorCode.INFO,
+        eligibility: {
+          isEligible,
+          emptyTitleKey: "commands.memory.history.remove.none_title",
+          emptyDescriptionKey: "commands.memory.history.remove.none_description",
+          itemsLabelKey: "general.persona_workflow.items.chat_history",
+        },
+        async onSelected(selection) {
+          workflowState.message = selection.message;
+          const selectedPersonaId = selection.persona.persona_id;
+          if (!selectedPersonaId) {
+            const work = await selection.beginInPlaceWork();
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+          targetPersonaId = selectedPersonaId;
+
+          let documents: Awaited<ReturnType<typeof serverMemoryRepository.loadHistoryDocuments>> = [];
+          let hasNoDocuments = false;
+          const modalResult = await selection.openModal(async () => {
+            documents = await serverMemoryRepository.loadHistoryDocuments(
+              activeTomoriState.server_id,
+              selectedPersonaId,
+            );
+            if (!documents || documents.length === 0) {
+              hasNoDocuments = true;
+              throw new Error("The selected persona has no history documents.");
+            }
+            const documentOptions: SelectOption[] = documents.map((doc) => ({
+              label: safeSelectOptionText(doc.document_name),
+              value: doc.document_id.toString(),
+            }));
+            return {
+              modalCustomId: MODAL_CUSTOM_ID,
+              modalTitleKey: "commands.memory.history.remove.modal_title",
+              components: [
+                {
+                  customId: DOCUMENT_SELECT_ID,
+                  labelKey: "commands.memory.history.remove.select_label",
+                  descriptionKey: "commands.memory.history.remove.select_description",
+                  placeholder: "commands.memory.history.remove.select_placeholder",
+                  required: true,
+                  options: documentOptions,
+                },
+              ],
+            };
+          });
+
+          if (hasNoDocuments) {
+            await selection.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "commands.memory.history.remove.none_title",
+                descriptionKey: "commands.memory.history.remove.none_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.WARN,
+              }),
+            );
+            return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
+          }
+          if (modalResult.outcome !== "submitted") {
+            log.info(`History document removal modal ${modalResult.outcome} for user ${userData.user_id}`);
+            return modalResult.outcome === "fatal" ? completePersonaWorkflow() : retryPersonaWorkflow();
+          }
+
+          const work = await modalResult.phase.beginInPlaceWork();
+          const selectedIdStr = modalResult.phase.values[DOCUMENT_SELECT_ID];
+          const selectedId = Number.parseInt(selectedIdStr ?? "", 10);
+          const selectedDocument = documents.find((document) => document.document_id === selectedId);
+          if (!selectedIdStr || !selectedDocument) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.invalid_option_title",
+                descriptionKey: "general.errors.invalid_option_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+
+          const documentName = await serverMemoryRepository.removeHistoryDocument(
+            selectedId,
+            activeTomoriState.server_id,
+            selectedPersonaId,
+          );
+          if (!documentName) {
+            await work.message.replace(
+              buildPersonaWorkflowNotice({
+                locale,
+                titleKey: "general.errors.update_failed_title",
+                descriptionKey: "general.errors.update_failed_description",
+                footerKey: "general.pagination.reloading_persona_picker",
+                color: ColorCode.ERROR,
+              }),
+            );
+            return retryPersonaWorkflow();
+          }
+
+          invalidateTomoriStateCache(serverDiscId);
+          await work.message.replace(
+            buildPersonaWorkflowNotice({
+              locale,
+              titleKey: "commands.memory.history.remove.success_title",
+              descriptionKey: "commands.memory.history.remove.success_description",
+              descriptionVars: { name: documentName },
+              footerKey: "general.pagination.reloading_persona_picker",
+              color: ColorCode.SUCCESS,
+            }),
+          );
+          // Refresh eligibility in place so a persona whose last history document
+          // was removed drops from the picker on retry (reaching mid-loop empty).
+          await refreshEligibilitySet(
+            eligibleHistoryPersonaIds,
+            serverMemoryRepository.personaIdsWithHistoryDocuments(activeTomoriState.server_id),
+          );
+          return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
+        },
+      });
+      if (workflowResult.outcome === "error" && workflowState.message) {
+        await workflowState.message.replace(
+          buildPersonaWorkflowNotice({
+            locale,
+            titleKey: "general.errors.unknown_error_title",
+            descriptionKey: "general.errors.unknown_error_description",
+            color: ColorCode.ERROR,
+          }),
+        );
+      }
+      return;
+    }
+
+    while (true) {
+      const selectionInteraction = interaction;
       const documents = await serverMemoryRepository.loadHistoryDocuments(tomoriState.server_id, targetPersonaId);
 
       if (!documents || documents.length === 0) {
-        if (personaSelectionInteraction) {
-          await updateButtonComponentsV2Status(
-            personaSelectionInteraction,
-            locale,
-            "commands.memory.history.remove.none_title",
-            "commands.memory.history.remove.none_description",
-            ColorCode.WARN,
-            undefined,
-            "general.pagination.reloading_persona_picker",
-          );
-        } else {
-          await replyInfoEmbed(selectionInteraction, locale, {
-            titleKey: "commands.memory.history.remove.none_title",
-            descriptionKey: "commands.memory.history.remove.none_description",
-            color: ColorCode.WARN,
-          });
-          return;
-        }
-        continue;
+        await replyInfoEmbed(selectionInteraction, locale, {
+          titleKey: "commands.memory.history.remove.none_title",
+          descriptionKey: "commands.memory.history.remove.none_description",
+          color: ColorCode.WARN,
+        });
+        return;
       }
 
-      // 7. Show paginated document selection modal
       const documentOptions: SelectOption[] = documents.map((doc) => ({
         label: safeSelectOptionText(doc.document_name),
         value: doc.document_id.toString(),
@@ -271,17 +388,7 @@ export async function execute(
       // Handle modal outcome - keep the persona picker loop alive when the modal closes
       if (modalResult.outcome !== "submit") {
         log.info(`History document removal modal ${modalResult.outcome} for user ${userData.user_id}`);
-        if (scope === "serverwide") {
-          return;
-        }
-        await replyComponentsV2Status(
-          interaction,
-          locale,
-          "general.pagination.select_persona_title",
-          "general.pagination.reloading_persona_picker",
-          ColorCode.INFO,
-        );
-        continue;
+        return;
       }
 
       if (!modalResult.interaction || !modalResult.values) {
@@ -316,11 +423,11 @@ export async function execute(
         return;
       }
 
-      // 8. Perform deletion
       const removalSucceeded = await performHistoryDocumentRemoval(
         tomoriState,
         targetPersonaId,
         selectedId,
+        serverDiscId,
         userData,
         modalResult.interaction,
         locale,
@@ -339,9 +446,7 @@ export async function execute(
         { name: selectedDocument.document_name },
         "general.pagination.reloading_persona_picker",
       );
-      if (scope === "serverwide") {
-        return;
-      }
+      return;
     }
   } catch (error) {
     const context: ErrorContext = {
@@ -361,11 +466,18 @@ export async function execute(
       context,
     );
 
-    const errorReplyTarget =
-      personaSelectionInteraction && !personaSelectionInteraction.deferred && !personaSelectionInteraction.replied
-        ? personaSelectionInteraction
-        : interaction;
-    await replyInfoEmbed(errorReplyTarget, locale, {
+    if (workflowState.message) {
+      await workflowState.message.replace(
+        buildPersonaWorkflowNotice({
+          locale,
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        }),
+      );
+      return;
+    }
+    await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

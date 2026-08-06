@@ -7,12 +7,10 @@ import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 
-// Cooldown length limits (seconds)
 const MIN_LENGTH = 1;
 const MAX_LENGTH = 86400;
 const DEFAULT_LENGTH = 5;
 
-// Cooldown type limits
 const COOLDOWN_TYPE_MIN = 0;
 const COOLDOWN_TYPE_MAX = 3; // Disabled type 4 (STRICT_SERVER_WIDE) - users found it redundant
 const COOLDOWN_TYPE_DEFAULT = CooldownType.OFF;
@@ -48,16 +46,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
           },
           // Disabled: Users found STRICT_SERVER_WIDE redundant (no manager exemption)
           // Servers already using type 4 will continue to work - just can't be newly selected
-          // {
-          // 	name: localizer(
-          // 		"en-US",
-          // 		"commands.server.cooldown.triggers.type.choice_strict_server_wide",
-          // 	),
-          // 	value: CooldownType.STRICT_SERVER_WIDE,
-          // 	name_localizations: {
-          // 		ja: localizer("ja", "commands.server.cooldown.triggers.type.choice_strict_server_wide"),
-          // 	},
-          // },
         ),
     )
     .addIntegerOption((option) =>
@@ -71,10 +59,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Configure cooldown type and length for message triggers and /bot commands.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -82,7 +66,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Ensure command is run in a guild
   if (!interaction.guild || !interaction.channel) {
     await replyInfoEmbed(interaction, userData.language_pref, {
       titleKey: "general.errors.guild_only_title",
@@ -92,15 +75,13 @@ export async function execute(
     return;
   }
 
-  // 1.5. Defer the interaction before async work to prevent timeout
+  // Defer the interaction before async work to prevent timeout
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    // 2. Get values from options
     const cooldownTypeValue = interaction.options.getInteger("cooldown_type", true);
     const cooldownLength = interaction.options.getInteger("cooldown_length", true);
 
-    // 3. Validate cooldown type
     if (cooldownTypeValue < COOLDOWN_TYPE_MIN || cooldownTypeValue > COOLDOWN_TYPE_MAX) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.cooldown.triggers.invalid_type_title",
@@ -110,7 +91,6 @@ export async function execute(
       return;
     }
 
-    // 4. Validate cooldown length
     if (cooldownLength < MIN_LENGTH || cooldownLength > MAX_LENGTH) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.server.cooldown.triggers.invalid_length_title",
@@ -124,7 +104,6 @@ export async function execute(
       return;
     }
 
-    // 5. Load the Tomori state for this server
     const tomoriState = await getCachedTomoriState(interaction.guild.id);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -135,7 +114,6 @@ export async function execute(
       return;
     }
 
-    // 6. Check if values are unchanged
     const currentCooldownType = tomoriState.config.cooldown_type ?? COOLDOWN_TYPE_DEFAULT;
     const currentCooldownLength = tomoriState.config.cooldown_length ?? DEFAULT_LENGTH;
     if (cooldownTypeValue === currentCooldownType && cooldownLength === currentCooldownLength) {
@@ -151,7 +129,6 @@ export async function execute(
       return;
     }
 
-    // 7. Update both cooldown values in the database
     const updated = await configRepository.updateTriggerBehaviorConfig(tomoriState.server_id, {
       cooldown_type: cooldownTypeValue,
       cooldown_length: cooldownLength,
@@ -180,10 +157,9 @@ export async function execute(
       return;
     }
 
-    // 9. Invalidate cache so next message gets fresh config
+    // Invalidate cache so next message gets fresh config
     invalidateTomoriStateCache(interaction.guild?.id ?? interaction.user.id);
 
-    // 10. Success message
     const isEnabled = cooldownTypeValue !== CooldownType.OFF;
     await replyInfoEmbed(interaction, locale, {
       titleKey: isEnabled
@@ -222,9 +198,6 @@ export async function execute(
 
 /**
  * Helper function to get a user-friendly label for cooldown type values.
- * @param locale - The user's locale
- * @param value - Cooldown type value
- * @returns Localized cooldown type label
  */
 function getCooldownTypeLabel(locale: string, value: number): string {
   switch (value) {

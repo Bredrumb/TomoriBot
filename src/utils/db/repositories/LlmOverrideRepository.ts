@@ -1,10 +1,10 @@
 /**
- * LlmOverrideRepository — manages channel/persona LLM override assignments and fallback refs.
+ * LlmOverrideRepository: manages channel/persona LLM override assignments and fallback refs.
  *
  * Covered tables: channel_llm_overrides, persona_configs (llm_id column),
  * server_model_configs (fallback_llm_ids), server_chat_configs (fallback_model_refs).
  *
- * No IRepository implementation — override state is transient and not exported per-server.
+ * No IRepository implementation, so override state is transient and not exported per-server.
  */
 import type { FallbackModelRef, LlmRow } from "@/types/db/schema";
 import { invalidateAllChannelLlmCacheForServer, invalidateChannelLlmCache } from "@/utils/cache/channelLlmCacheStore";
@@ -19,18 +19,11 @@ const FALLBACK_DEBUG_ENABLED = new Set(["1", "true", "yes", "on"]).has(
 );
 
 /** Cache invalidation options for override writes. */
-export type LlmOverrideCacheOptions = {
+type LlmOverrideCacheOptions = {
   serverDiscId?: string;
 };
 
-/** Extends LlmOverrideCacheOptions with optional per-channel invalidation. */
-export type ChannelLlmOverrideCacheOptions = LlmOverrideCacheOptions & {
-  channelDiscId?: string;
-};
-
-export class LlmOverrideRepository {
-  // ── channel override reads ──────────────────────────────────────────────────
-
+class LlmOverrideRepository {
   /**
    * Returns the LLM assigned as a channel-level override, or null if none is set.
    * Resolves the llm_id via the LLM cache before falling back to a direct DB query.
@@ -125,8 +118,6 @@ export class LlmOverrideRepository {
     }
   }
 
-  // ── channel override writes ─────────────────────────────────────────────────
-
   /**
    * Upserts a channel-level LLM override and invalidates the channel LLM cache.
    *
@@ -193,7 +184,6 @@ export class LlmOverrideRepository {
    * Used when removing custom/scoped model registrations so unrelated overrides survive.
    *
    * @param serverId - Internal server DB ID
-   * @param llmId    - LLM ID being removed
    * @param options  - Optional cache invalidation scope
    */
   async deleteChannelLlmOverridesForModel(
@@ -208,8 +198,6 @@ export class LlmOverrideRepository {
     }
     return ok;
   }
-
-  // ── persona override writes ─────────────────────────────────────────────────
 
   /**
    * Upserts a persona-level LLM override in persona_configs.
@@ -250,7 +238,6 @@ export class LlmOverrideRepository {
    * Used when removing custom/scoped model registrations so unrelated overrides survive.
    *
    * @param serverId - Internal server DB ID
-   * @param llmId    - LLM ID being removed
    * @param options  - Optional cache invalidation scope
    */
   async clearPersonaLlmOverridesForModel(
@@ -262,8 +249,6 @@ export class LlmOverrideRepository {
     if (ok && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
     return ok;
   }
-
-  // ── fallback config writes ──────────────────────────────────────────────────
 
   /**
    * Sets the ordered fallback LLM model chain for a server.
@@ -331,8 +316,6 @@ export class LlmOverrideRepository {
       return false;
     }
   }
-
-  // ── snapshot restore & cleanup ──────────────────────────────────────────────
 
   /**
    * Restores channel and persona LLM overrides from a saved provider config snapshot.
@@ -449,7 +432,7 @@ export class LlmOverrideRepository {
 
       if (deadChannelIds.length === 0) return 0;
 
-      // Avoid ANY($1) array binding — Bun SQL intermittently fails with 08P01 on array parameters.
+      // Avoid ANY($1) array binding, because Bun SQL intermittently fails with 08P01 on array parameters.
       const placeholders = deadChannelIds.map((_: string, i: number) => `$${i + 2}`).join(", ");
       await sql.unsafe(
         `DELETE FROM channel_llm_overrides WHERE server_id = $1 AND channel_disc_id IN (${placeholders})`,
@@ -463,8 +446,6 @@ export class LlmOverrideRepository {
       return 0;
     }
   }
-
-  // ── private SQL helpers (no cache side-effects) ─────────────────────────────
 
   /**
    * Raw SQL upsert for a channel LLM override row. No cache invalidation.

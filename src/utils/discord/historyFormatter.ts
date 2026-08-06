@@ -8,7 +8,7 @@ import type { Message } from "discord.js";
 import { MessageType } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { isRefreshMarkerEmbed } from "@/utils/discord/embedDetection";
-import { stripBridgePrefix } from "@/utils/bridges";
+import { isMatrixBridgeWebhookUsername, stripBridgePrefix } from "@/utils/bridges";
 import { isAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { getCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { getCachedRenderedMarkdownTable } from "@/utils/text/markdownTableCache";
@@ -19,7 +19,10 @@ export interface FormattedHistoryResult {
   /** Formatted dialogue text for the extraction prompt */
   text: string;
 
-  /** Unique tomori IDs detected from webhook-authored messages (for automatic scope) */
+  /**
+   * Unique persona IDs detected in the batch (for automatic scope): from webhook-authored
+   * messages, plus the main persona when the bot posted under its own account.
+   */
   detectedPersonaTomoriIds: number[];
 
   /** Number of messages that made it into the formatted text */
@@ -55,7 +58,7 @@ const SKIPPED_MESSAGE_TYPES = new Set([
 function resolveMentions(content: string, msg: Message): string {
   let resolved = content;
 
-  // 1. Resolve user mentions: <@123456> or <@!123456> → @Username
+  // Resolve user mentions: <@123456> or <@!123456> → @Username
   resolved = resolved.replace(/<@!?(\d+)>/g, (_match, userId: string) => {
     const member = msg.guild?.members.cache.get(userId);
     if (member) return `@${member.displayName}`;
@@ -64,14 +67,14 @@ function resolveMentions(content: string, msg: Message): string {
     return `@UnknownUser`;
   });
 
-  // 2. Resolve channel mentions: <#123456> → #channel-name
+  // Resolve channel mentions: <#123456> → #channel-name
   resolved = resolved.replace(/<#(\d+)>/g, (_match, channelId: string) => {
     const channel = msg.guild?.channels.cache.get(channelId);
     if (channel) return `#${channel.name}`;
     return `#unknown-channel`;
   });
 
-  // 3. Resolve role mentions: <@&123456> → @RoleName
+  // Resolve role mentions: <@&123456> → @RoleName
   resolved = resolved.replace(/<@&(\d+)>/g, (_match, roleId: string) => {
     const role = msg.guild?.roles.cache.get(roleId);
     if (role) return `@${role.name}`;
@@ -100,16 +103,18 @@ function resolveMentions(content: string, msg: Message): string {
  *
  * @param messages - Array of Discord messages in chronological order
  * @param serverPersonas - All personas for the server (for webhook author matching)
+ * @param clientUserId - The bot's own user id, so replies it sent directly (rather than
+ *        through a persona webhook) can still be attributed to the main persona
  * @returns Formatted text, detected persona IDs, and message count
  */
 export function formatMessagesForExtraction(
   messages: Message[],
   serverPersonas: TomoriState[],
+  clientUserId?: string,
 ): FormattedHistoryResult {
   const lines: string[] = [];
   const detectedTomoriIds = new Set<number>();
 
-  // Build a lowercase nickname → personaId map for persona detection
   const nicknameToTomoriId = new Map<string, number>();
   for (const persona of serverPersonas) {
     if (persona.persona_id !== undefined) {
@@ -117,24 +122,28 @@ export function formatMessagesForExtraction(
     }
   }
 
+  // The main (non-alter) persona owns any message the bot account posted itself. Webhook
+  // delivery is not guaranteed it is skipped when webhooks are unavailable for the
+  // channel so keying detection purely off `webhookId` misses those turns entirely.
+  const mainPersonaId = serverPersonas.find((persona) => !persona.is_alter)?.persona_id;
+
   for (const msg of messages) {
-    // 1. Skip system messages
+    // Skip system messages
     if (SKIPPED_MESSAGE_TYPES.has(msg.type)) continue;
 
-    // 2. Build message content
     let content = msg.content ? resolveMentions(msg.content, msg) : "";
     const cachedRenderedTable = getCachedRenderedMarkdownTable(msg.id);
     if (cachedRenderedTable) {
       content += ` [Rendered markdown table]\n${cachedRenderedTable}`;
     }
 
-    // 3. Append attachment indicators (or cached voice transcript for audio)
+    // Append attachment indicators (or cached voice transcript for audio)
     let audioTranscriptAppended = false;
     for (const attachment of msg.attachments.values()) {
       if (cachedRenderedTable) continue;
 
       if (isAudioAttachment(attachment)) {
-        // Check the in-memory cache first — avoids re-running STT on history audio.
+        // Check the in-memory cache first, so avoids re-running STT on history audio.
         // "tts" source = Tomori's own voice message; caption text is already
         // included in msg.content (sent alongside the attachment), so we just
         // skip the [Attachment] tag to avoid duplication.
@@ -153,7 +162,7 @@ export function formatMessagesForExtraction(
       content += ` [Attachment: ${attachment.name ?? "file"}]`;
     }
 
-    // 4. Append non-system embed indicators
+    // Append non-system embed indicators
     for (const embed of msg.embeds) {
       // Skip refresh/system embeds
       if (isRefreshMarkerEmbed(embed)) continue;
@@ -162,27 +171,30 @@ export function formatMessagesForExtraction(
       }
     }
 
-    // 5. Skip empty messages (no content, no attachments, no meaningful embeds)
+    // Skip empty messages (no content, no attachments, no meaningful embeds)
     content = content.trim();
     if (!content) continue;
 
-    // 6. Format timestamp
+    // Format timestamp
     const timestamp = msg.createdAt.toISOString();
 
-    // 7. Determine author name
+    // Determine author name
     //    Strip "[Matrix|@user:host] " prefix from Matrix bridge webhook messages
     //    so TomoriBot sees just the display name (e.g., "Neko Neechan") in context
     const rawAuthorName = msg.member?.displayName ?? msg.author?.username ?? "Unknown";
     const authorName = stripBridgePrefix(rawAuthorName);
 
-    // 8. Build formatted line
     lines.push(`[${timestamp}] ${authorName}: ${content}`);
 
-    // 9. Persona detection: match webhook-authored messages by name.
+    // Persona detection: match webhook-authored messages by name.
     //    Decorated names carry the persona in either part: flipped copied
     //    identities ("impersonated (SourcePersona)") put it inside the parens,
     //    legacy decorations ("SourcePersona (modifier)") put it first.
     if (msg.webhookId && msg.author) {
+      // Matrix bridge messages also arrive as webhooks; a bridged user whose display name
+      // happens to match a persona nickname must not register as that persona.
+      if (isMatrixBridgeWebhookUsername(msg.author.username)) continue;
+
       const renderModifierName = parseRenderModifierWebhookName(msg.author.username);
       const authorKeys = renderModifierName
         ? [renderModifierName.modifier, renderModifierName.sourceName]
@@ -194,6 +206,12 @@ export function formatMessagesForExtraction(
           break;
         }
       }
+      continue;
+    }
+
+    // Non-webhook turns the bot posted under its own account belong to the main persona.
+    if (mainPersonaId !== undefined && clientUserId && msg.author?.id === clientUserId) {
+      detectedTomoriIds.add(mainPersonaId);
     }
   }
 

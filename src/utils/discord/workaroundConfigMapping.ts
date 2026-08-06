@@ -1,6 +1,6 @@
 import type { AssembledServerConfig, ServerCapabilitiesConfigRow } from "@/types/db/schema";
 
-export type WorkaroundConfigColumn = Extract<keyof ServerCapabilitiesConfigRow, "verbatim_tool_calling_enabled">;
+type WorkaroundConfigColumn = Extract<keyof ServerCapabilitiesConfigRow, "verbatim_tool_calling_enabled">;
 
 export type WorkaroundConfigState = Pick<AssembledServerConfig, WorkaroundConfigColumn>;
 
@@ -12,7 +12,7 @@ export interface WorkaroundDefinition {
   getState: (config: WorkaroundConfigState) => boolean;
 }
 
-export interface WorkaroundConfigChange {
+interface WorkaroundConfigChange {
   value: string;
   dbColumn: WorkaroundConfigColumn;
   isEnabled: boolean;

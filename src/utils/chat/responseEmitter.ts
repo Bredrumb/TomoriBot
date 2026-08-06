@@ -31,7 +31,7 @@ function shouldSendWebhookError(channelId: string): boolean {
   return true;
 }
 
-export async function sendWebhookErrorEmbed(
+async function sendWebhookErrorEmbed(
   channel: BaseGuildTextChannel | AnyThreadChannel,
   locale: string,
   reason: WebhookCreateErrorReason,
@@ -62,6 +62,17 @@ export async function sendWebhookErrorEmbed(
 
 export function createChatResponseSink(context: ChatTurnContext): ChatResponseSink {
   let target: ChatResponseTarget | undefined;
+  let temporaryWebhookReleased = false;
+
+  // Guarded so the guaranteed cleanup path and a normal finalize cannot both issue the delete
+  // and log a spurious 404 warning for the second one.
+  const releaseTemporaryWebhook = async (): Promise<void> => {
+    if (!target?.temporaryWebhook || temporaryWebhookReleased) return;
+    temporaryWebhookReleased = true;
+    await target.temporaryWebhook.delete("User impersonation complete").catch((error: unknown) => {
+      log.warn("Failed to delete temporary user impersonation webhook", error);
+    });
+  };
 
   return {
     async prepare() {
@@ -92,14 +103,13 @@ export function createChatResponseSink(context: ChatTurnContext): ChatResponseSi
       await emitGenerationError(context, error);
     },
     async finalize(result: GenerationTurnResult) {
-      if (target?.temporaryWebhook) {
-        await target.temporaryWebhook.delete("User impersonation complete").catch((error: unknown) => {
-          log.warn("Failed to delete temporary user impersonation webhook", error);
-        });
-      }
+      await releaseTemporaryWebhook();
       log.info(
         `Chat response finalized for message ${context.message.id} with status ${result.status} and ${result.personaResponses.length} captured response(s).`,
       );
+    },
+    async cleanup() {
+      await releaseTemporaryWebhook();
     },
   };
 }
@@ -212,7 +222,7 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
       descriptionVars: {
         error_message: error instanceof Error ? error.message : "Unknown Error",
       },
-      footerKey: "genai.generic_error_footer",
+      tipKeys: ["genai.tips.refresh_context"],
     },
     {
       webhook: context.responseTarget?.webhook,

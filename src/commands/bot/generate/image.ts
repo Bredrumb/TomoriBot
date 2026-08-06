@@ -26,15 +26,11 @@ import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 
-// ─── Modal field identifiers ──────────────────────────────────────────────────
-
 const MODAL_CUSTOM_ID = "bot_generate_image_modal";
 const PROMPT_INPUT_ID = "bot_generate_image_prompt";
 const SETTING_INPUT_ID = "bot_generate_image_setting";
 const BACKEND_INPUT_ID = "bot_generate_image_backend";
 const PERSONA_INPUT_ID = "bot_generate_image_persona";
-
-// ─── Preset / backend types ───────────────────────────────────────────────────
 
 type SceneSettingId = "storybeat" | "character" | "snapshot" | "vertical";
 type SceneImageBackend = "current_provider" | "novelai";
@@ -95,7 +91,7 @@ interface PersonaSummary {
   persona_nickname: string;
   webhook_avatar_url: string | null;
   is_alter: boolean;
-  /** From persona_configs — null when no persona-specific prompt is set. */
+  /** From persona_configs: null when no persona-specific prompt is set. */
   persona_prompt: string | null;
   /** Appearance/personality attribute list used by buildContext(). */
   attribute_list: string[];
@@ -105,12 +101,8 @@ interface PersonaSummary {
 
 type ImageQuotaCheckResult = Awaited<ReturnType<typeof checkImageQuota>>;
 
-// ─── Subcommand registration ──────────────────────────────────────────────────
-
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("image").setDescription(localizer("en-US", "commands.bot.generate.image.description"));
-
-// ─── Locale helpers ───────────────────────────────────────────────────────────
 
 function getSettingOptions(locale: string) {
   return [
@@ -154,8 +146,6 @@ function getBackendOptions(locale: string, providerName: string) {
   ];
 }
 
-// ─── Persona helpers ──────────────────────────────────────────────────────────
-
 /**
  * Fetches persona summaries for the modal selector and context overrides.
  * Includes the fields needed to override buildContext() persona identity
@@ -170,7 +160,6 @@ async function loadServerPersonaSummaries(serverId: number): Promise<PersonaSumm
 /**
  * Builds string-select options from persona summaries for the modal.
  * The active persona (matching activeTomoriId) is marked as default.
- * @param personas - List of persona summaries from loadServerPersonaSummaries
  * @param activeTomoriId - The currently active persona's persona_id
  */
 function getPersonaSelectOptions(personas: PersonaSummary[], activeTomoriId: number) {
@@ -180,8 +169,6 @@ function getPersonaSelectOptions(personas: PersonaSummary[], activeTomoriId: num
     default: p.persona_id === activeTomoriId,
   }));
 }
-
-// ─── Backend availability ─────────────────────────────────────────────────────
 
 async function resolveSceneImageBackendAvailability(params: {
   provider: string;
@@ -205,8 +192,6 @@ async function resolveSceneImageBackendAvailability(params: {
     defaultBackend,
   };
 }
-
-// ─── Quota error reply ────────────────────────────────────────────────────────
 
 async function replyQuotaExceeded(
   replyTarget: ChatInputCommandInteraction | import("discord.js").ModalSubmitInteraction,
@@ -248,15 +233,12 @@ async function replyQuotaExceeded(
   });
 }
 
-// ─── Command entry point ──────────────────────────────────────────────────────
-
 export async function execute(
   client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // 1. Guild-only guard — the command targets a specific channel.
   if (!interaction.guild || !interaction.channel || !("messages" in interaction.channel)) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.guild_only_title",
@@ -267,7 +249,6 @@ export async function execute(
     return;
   }
 
-  // 2. Resolve bot guild member (required for permission checks).
   const botMember = interaction.guild.members.me;
   if (!botMember) {
     await replyInfoEmbed(interaction, locale, {
@@ -279,7 +260,6 @@ export async function execute(
     return;
   }
 
-  // 3. Validate bot channel permissions.
   const guildChannel = interaction.guild.channels.cache.get(interaction.channel.id) ?? interaction.channel;
   if (!("permissionsFor" in guildChannel)) {
     await replyInfoEmbed(interaction, locale, {
@@ -313,7 +293,6 @@ export async function execute(
     return;
   }
 
-  // 4. Load server state.
   const baseTomoriState = await personaRepository.loadState(interaction.guild.id);
   if (!baseTomoriState) {
     await replyInfoEmbed(interaction, locale, {
@@ -326,11 +305,9 @@ export async function execute(
   }
   const { tomoriState } = await applyPersonalProviderSelectionsToTomoriState(baseTomoriState, userData.user_id ?? null);
 
-  // 4a. Load all persona summaries for the sender selector.
   const personaSummaries = await loadServerPersonaSummaries(tomoriState.server_id);
   const invokingMember = interaction.member as import("discord.js").GuildMember | null;
 
-  // 5. Cooldown check.
   const cooldownType = tomoriState.config.cooldown_type ?? CooldownType.OFF;
   const cooldownLength = tomoriState.config.cooldown_length ?? 5;
   const cooldownResult = await cooldownRepository.checkMessageTriggerCooldownWithWhitelist(
@@ -403,7 +380,6 @@ export async function execute(
   }
   const fallbackPersonaSummary = availablePersonaSummaries[0];
 
-  // 6. Image generation feature flag.
   if (!tomoriState.config.imagegen_enabled) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.image.disabled_title",
@@ -414,7 +390,7 @@ export async function execute(
     return;
   }
 
-  // 7. The hidden image agent requires function-calling support on the active model.
+  // The hidden image agent requires function-calling support on the active model.
   //    Without tool support the model cannot call generate_image / generate_image_nai.
   if (!tomoriState.llm.has_tools) {
     await replyInfoEmbed(interaction, locale, {
@@ -426,7 +402,6 @@ export async function execute(
     return;
   }
 
-  // 8. API key presence check.
   if (!tomoriState.config.api_key) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.image.no_api_key_title",
@@ -437,7 +412,6 @@ export async function execute(
     return;
   }
 
-  // 9. Determine which backends are available.
   const provider = tomoriState.llm.llm_provider.toLowerCase();
   const backendAvailability = await resolveSceneImageBackendAvailability({
     provider,
@@ -457,14 +431,14 @@ export async function execute(
     return;
   }
 
-  // 10. Quota check before showing the modal (avoids wasting user interaction).
+  // Quota check before showing the modal (avoids wasting user interaction).
   const quotaCheck = await checkImageQuota(tomoriState.server_id, interaction.user.id);
   if (!quotaCheck.allowed) {
     await replyQuotaExceeded(interaction, locale, quotaCheck);
     return;
   }
 
-  // 11. Show the modal (fire-and-forget UX — no public bot response until image posts).
+  // Show the modal (fire-and-forget UX; no public bot response until image posts).
   const defaultPersonaId = availablePersonaSummaries.some((persona) => persona.persona_id === tomoriState.persona_id)
     ? (tomoriState.persona_id ?? fallbackPersonaSummary?.persona_id ?? -1)
     : (fallbackPersonaSummary?.persona_id ?? -1);
@@ -523,7 +497,6 @@ export async function execute(
   const modalSubmitInteraction = modalResult.interaction;
 
   try {
-    // 12. Read modal values.
     const selectedSetting = (modalResult.values?.[SETTING_INPUT_ID] as SceneSettingId | undefined) ?? "storybeat";
     const settingPreset = SCENE_SETTING_PRESETS[selectedSetting] ?? SCENE_SETTING_PRESETS.storybeat;
 
@@ -550,7 +523,6 @@ export async function execute(
 
     const extraDirection = modalResult.values?.[PROMPT_INPUT_ID]?.trim();
 
-    // 13. Resolve the selected sender persona and its webhook identity.
     const selectedPersonaIdStr = modalResult.values?.[PERSONA_INPUT_ID];
     const selectedPersonaId = selectedPersonaIdStr ? Number.parseInt(selectedPersonaIdStr, 10) : tomoriState.persona_id;
     const selectedPersona =
@@ -584,7 +556,6 @@ export async function execute(
           const webhookResult = await getOrCreateWebhook(webhookChannel as TextChannel | BaseGuildTextChannel);
           if (webhookResult.webhook) {
             senderWebhook = webhookResult.webhook;
-            // Resolve avatar URL using the same identity path as normal persona messages.
             const identity = await resolvePersonaWebhookIdentity(
               selectedPersona as unknown as TomoriState,
               interaction.guild,
@@ -604,7 +575,7 @@ export async function execute(
       `[/bot generate image] Starting hidden image agent for channel ${interaction.channel.id} — backend=${selectedBackend}, preset=${settingPreset.plannerLabel}, sender=${selectedPersona?.persona_nickname ?? "active"}`,
     );
 
-    // 14. Invoke the hidden image agent turn.
+    // Invoke the hidden image agent turn.
     //     This replaces the old structured-output planner: the model now sees the
     //     full conversation context (persona prompt, users, memories, RAG docs, etc.)
     //     and is directed via a tail directive to call the appropriate image tool.
@@ -656,14 +627,14 @@ export async function execute(
       `[/bot generate image] Hidden image agent completed for channel ${interaction.channel.id} — backend=${selectedBackend}`,
     );
 
-    // 14. Acknowledge the modal submit interaction with an ephemeral success notice.
+    // Acknowledge the modal submit interaction with an ephemeral success notice.
     await replyInfoEmbed(modalSubmitInteraction, locale, {
       titleKey: "commands.bot.generate.image.success_title",
       descriptionKey: "commands.bot.generate.image.success_description",
       color: ColorCode.SUCCESS,
     });
 
-    // 15. Record the cooldown entry after confirmed success.
+    // Record the cooldown entry after confirmed success.
     await cooldownRepository.setMessageTriggerCooldownWithWhitelist(
       interaction.guild.id,
       interaction.user.id,

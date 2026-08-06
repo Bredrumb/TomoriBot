@@ -246,9 +246,7 @@ async function executeMultiPage(
       embeds: [buildPageSelectEmbed(locale, entries.length, totalPages)],
       components: [],
     });
-  } catch {
-    // Best effort cleanup.
-  }
+  } catch {}
 }
 
 function buildCheckboxGroups(entries: ConditioningManageEntry[], locale: string): ModalCheckboxGroupField[] {

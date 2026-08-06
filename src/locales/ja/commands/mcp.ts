@@ -1,5 +1,3 @@
-// locales/ja/commands/mcp.ts
-
 export default {
   mcp: {
     description: `リモートMCP（Model Context Protocol）ツールサーバーを管理`,

@@ -36,9 +36,6 @@ export class MCPManager {
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
 
-  /**
-   * Get the singleton instance of MCPManager
-   */
   static getInstance(): MCPManager {
     if (!MCPManager.instance) {
       MCPManager.instance = new MCPManager();
@@ -78,23 +75,15 @@ export class MCPManager {
     log.info("Starting MCP server initialization...");
     const startTime = Date.now();
 
-    // Log initialization summary
     const configManager = getMCPConfigManager();
     const summary = configManager.getInitializationSummary();
     log.info(
       `MCP Configuration Summary: ${summary.readyToInitialize}/${summary.totalServers} servers ready to initialize${summary.missingApiKeys.length > 0 ? ` (missing API keys: ${summary.missingApiKeys.join(", ")})` : ""}${summary.disabledServers.length > 0 ? ` (disabled: ${summary.disabledServers.join(", ")})` : ""}`,
     );
 
-    // Define available MCP server configurations
     const serverConfigs = this.getServerConfigurations();
 
-    // Initialize each server concurrently with individual error handling
-    const initPromises = serverConfigs.map((config) =>
-      this.initializeServer(config).catch((error) => {
-        log.error(`Failed to initialize MCP server '${config.displayName}':`, error as Error);
-        return null; // Continue with other servers even if one fails
-      }),
-    );
+    const initPromises = serverConfigs.map((config) => this.initializeServer(config));
 
     await Promise.all(initPromises);
 
@@ -105,76 +94,86 @@ export class MCPManager {
     this.isInitialized = true;
     log.success(`MCP initialization completed in ${duration}ms: ${successCount}/${totalCount} servers connected`);
 
-    // Log available tools
     if (this.mcpTools.size > 0) {
       const toolNames = Array.from(this.mcpTools.keys());
       log.info(`Available MCP tools: ${toolNames.join(", ")}`);
     }
   }
 
-  /**
-   * Get MCP server configurations from the configuration manager
-   */
   private getServerConfigurations(): MCPServerConfig[] {
     const configManager = getMCPConfigManager();
     const enhancedConfigs = configManager.getConfigurationsByPriority(false); // Get all configs
 
-    // Filter configs that should be initialized
     const readyConfigs = enhancedConfigs.filter((config) => configManager.shouldInitializeServer(config));
 
-    // Convert enhanced configs to manager format
     return readyConfigs.map((config) => configManager.toManagerConfiguration(config));
   }
 
-  /**
-   * Initialize a single MCP server
-   */
   private async initializeServer(config: MCPServerConfig): Promise<void> {
     const { name, displayName, command, args, env, timeout = 30000 } = config;
 
     log.info(`Initializing ${displayName} MCP server...`);
 
+    const client = new MCPClient({
+      name: `tomoribot-${name}`,
+      version: "1.0.0",
+    });
+
+    // This server has historically emitted non-protocol output on stdout.
+    // Capturing stderr also preserves the actual child failure behind the
+    // SDK's generic "Connection closed" initialization error.
+    const transport = new BannerFilteringStdioClientTransport({
+      command,
+      args,
+      env: Object.fromEntries(
+        Object.entries({
+          ...process.env,
+          ...env,
+          NO_COLOR: "1",
+          FORCE_COLOR: "0",
+        }).filter(([, value]) => value !== undefined),
+      ) as Record<string, string>,
+      stderr: "pipe",
+    });
+
+    transport.onprocessclose = (exit) => {
+      if (exit.expected || this.mcpClients.get(name) !== client) return;
+
+      this.mcpClients.delete(name);
+      this.mcpTools.delete(name);
+      void log.error(`${displayName} MCP server exited after initialization`, undefined, {
+        errorType: "mcp_server_exit",
+        metadata: {
+          serverName: name,
+          command,
+          exitCode: exit.code,
+          signal: exit.signal,
+          diagnostics: transport.diagnostics,
+        },
+      });
+    };
+
     try {
-      // Create MCP client
-      const client = new MCPClient({
-        name: `tomoribot-${name}`,
-        version: "1.0.0",
-      });
-
-      // Create transport with environment variables
-      // Set NO_COLOR to suppress ANSI color codes which can interfere with filtering
-      const transport = new BannerFilteringStdioClientTransport({
-        command,
-        args,
-        env: Object.fromEntries(
-          Object.entries({
-            ...process.env,
-            ...env,
-            NO_COLOR: "1", // Disable color output
-            FORCE_COLOR: "0", // Explicitly disable color
-          }).filter(([, value]) => value !== undefined),
-        ) as Record<string, string>,
-        stderr: "ignore", // Ignore stderr to suppress advertisement output
-      });
-
-      // Connect with timeout
       const connectPromise = client.connect(transport);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`${displayName} connection timed out (${timeout}ms)`)), timeout),
-      );
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(`${displayName} connection timed out (${timeout}ms)`)), timeout);
+        timeoutId.unref();
+      });
 
-      await Promise.race([connectPromise, timeoutPromise]);
+      try {
+        await Promise.race([connectPromise, timeoutPromise]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
 
-      // Convert to CallableTool using Google's mcpToTool()
       const callableTool = mcpToTool(client);
 
-      // Store both client and tool
       this.mcpClients.set(name, client);
       this.mcpTools.set(name, callableTool);
 
       log.success(`${displayName} MCP server connected successfully`);
 
-      // Log available functions for this server
       try {
         const tool = await callableTool.tool();
         if (tool.functionDeclarations) {
@@ -187,6 +186,24 @@ export class MCPManager {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
+      try {
+        await transport.close();
+      } catch (cleanupError) {
+        log.warn(`Failed to clean up ${displayName} after its connection error`, cleanupError as Error);
+      }
+
+      const errorContext = {
+        errorType: "mcp_initialization_failed",
+        metadata: {
+          serverName: name,
+          command,
+          args,
+          exitCode: transport.lastExit?.code,
+          signal: transport.lastExit?.signal,
+          diagnostics: transport.diagnostics,
+        },
+      };
+
       if (errorMessage.includes("timed out")) {
         const usesPackageRunner = command === "npx" || command === "bunx";
 
@@ -194,19 +211,21 @@ export class MCPManager {
           log.warn(`${displayName} connection timed out - this can happen during first install or cache warm-up`);
           log.info("Try restarting TomoriBot after package installation/cache warm-up completes");
         } else {
-          log.error(`${displayName} connection timed out while starting '${command}' (${timeout}ms)`, error as Error);
+          await log.error(
+            `${displayName} connection timed out while starting '${command}' (${timeout}ms)`,
+            error as Error,
+            errorContext,
+          );
         }
       } else if (errorMessage.includes("not recognized") || errorMessage.includes("not found")) {
-        log.error(
+        await log.error(
           `${displayName} requires ${command} to be installed - functionality will not be available`,
           error as Error,
+          errorContext,
         );
       } else {
-        // Critical: Log MCP connection failures as errors for CloudWatch visibility
-        log.error(`${displayName} connection failed:`, error as Error);
+        await log.error(`${displayName} connection failed`, error as Error, errorContext);
       }
-
-      throw error; // Re-throw to be caught by caller
     }
   }
 
@@ -228,7 +247,6 @@ export class MCPManager {
         const tool = await callableTool.tool();
         const availableFunctions = tool.functionDeclarations?.map((f) => f.name) || [];
 
-        // Check if this tool provides any of the requested functions
         const hasMatchingFunction = functionNames.some((name) => availableFunctions.includes(name));
 
         if (hasMatchingFunction) {
@@ -256,9 +274,6 @@ export class MCPManager {
     return this.isInitialized;
   }
 
-  /**
-   * Get connection status for all MCP servers
-   */
   getConnectionStatus(): Record<string, boolean> {
     const status: Record<string, boolean> = {};
 
@@ -269,25 +284,15 @@ export class MCPManager {
     return status;
   }
 
-  /**
-   * Get count of connected MCP servers
-   */
   getConnectedServerCount(): number {
     return this.mcpClients.size;
   }
 
-  /**
-   * Get enhanced server configurations
-   * @returns Array of enhanced server configurations
-   */
   getEnhancedServerConfigurations(): EnhancedMCPServerConfig[] {
     const configManager = getMCPConfigManager();
     return configManager.getConfigurationsByPriority(true); // Get only enabled configs
   }
 
-  /**
-   * Get initialization summary for logging and monitoring
-   */
   getInitializationSummary() {
     const configManager = getMCPConfigManager();
     return configManager.getInitializationSummary();
@@ -318,7 +323,6 @@ export class MCPManager {
   }
 }
 
-// Export convenience function for getting the manager instance
 export function getMCPManager(): MCPManager {
   return MCPManager.getInstance();
 }

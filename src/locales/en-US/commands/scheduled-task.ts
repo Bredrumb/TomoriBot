@@ -1,5 +1,3 @@
-// locales/en-US/commands/scheduled-task.ts
-
 export default {
   "scheduled-task": {
     description: `Manage scheduled tasks and reminders.`,

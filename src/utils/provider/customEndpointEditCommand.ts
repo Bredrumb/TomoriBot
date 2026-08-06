@@ -3,7 +3,7 @@
  *
  * Discord's interaction rules:
  *   - Slash command    → showModal (endpoint select) ✓
- *   - ModalSubmit      → reply/defer (NOT showModal) ✓ — so we reply with a button
+ *   - ModalSubmit      → reply/defer (NOT showModal) ✓ so we reply with a button
  *   - ButtonInteraction → showModal (capability fields, pre-filled) ✓
  *   - ModalSubmit      → deferUpdate → register → editReply ✓
  */
@@ -16,7 +16,7 @@ import type { SelectOption } from "@/types/discord/modal";
 import { promptWithPaginatedModal, promptWithRawModal, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { validateRemoteMcpUrl } from "@/utils/mcp/mcpUrlSecurity";
+import { validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 import {
   buildCapabilityEditModalComponents,
   parseCapabilityModalFields,
@@ -97,9 +97,9 @@ function buildEndpointSelectOptions(
   locale: string,
   keys: ExecuteCustomEndpointEditOptions["keys"],
 ): SelectOption[] {
-  // 1. First pass: count how many times each base label appears.
+  // First pass: count how many times each base label appears.
   //    Two workflows under the same label with identical names would otherwise
-  //    produce duplicate option labels — Discord silently drops the second one.
+  //    produce duplicate option labels, so Discord silently drops the second one.
   const labelCounts = new Map<string, number>();
   for (const endpoint of endpoints) {
     const primaryName = endpoint.model_name?.trim() || endpoint.display_name;
@@ -107,7 +107,6 @@ function buildEndpointSelectOptions(
     labelCounts.set(base, (labelCounts.get(base) ?? 0) + 1);
   }
 
-  // 2. Second pass: build options, appending a counter to colliding base labels.
   const labelIndex = new Map<string, number>();
   return endpoints.map((endpoint) => {
     const primaryName = endpoint.model_name?.trim() || endpoint.display_name;
@@ -329,7 +328,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       time: 300_000,
     });
   } catch {
-    // Timed out or user ignored.
     await selectInteraction.editReply({ components: [] });
     return;
   }
@@ -373,6 +371,25 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
     );
   }
 
+  // Collapse-at-open: replace the summary's now-dead controls before the modal goes up.
+  // Discord emits no modal-dismiss event, so without this the Edit Fields/Cancel buttons stay
+  // clickable (and fail) for the modal's full 10-minute lifetime, because the single-shot
+  // collector above has already resolved. The summary message belongs to `selectInteraction`
+  // while the modal opens from `buttonInteraction`, so editing here does not acknowledge the
+  // button and the modal still opens normally. Doing it *before* the modal leaves no window
+  // in which the stale buttons are clickable.
+  await selectInteraction
+    .editReply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(localizer(locale, "general.interaction.selector_opened_title"))
+          .setDescription(localizer(locale, "general.interaction.selector_opened_description"))
+          .setColor(ColorCode.INFO),
+      ],
+      components: [],
+    })
+    .catch(() => undefined);
+
   const editModalResult = await promptWithRawModal(buttonInteraction, locale, {
     modalCustomId: editModalCustomId,
     modalTitleKey: `commands.config.custom_models.capability_modal.${existingEndpoint.capability}_edit_title`,
@@ -395,7 +412,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       existingEndpoint.capability,
     );
 
-    // Merge parsed values with existing, treating blank text inputs as "keep existing".
     const endpointUrl = parsed.endpointUrl || existingEndpoint.endpoint_url;
     const displayName = parsed.displayName || existingEndpoint.display_name;
     const modelName =
@@ -412,7 +428,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
     const authTokenProvided = Boolean(parsed.authToken);
     const authToken = authTokenProvided ? parsed.authToken : undefined;
 
-    // Build extra_config (merge with existing).
     let extraConfig = { ...(existingEndpoint.extra_config as Record<string, unknown>) };
     if (existingEndpoint.capability === "speech") {
       extraConfig = {
@@ -437,11 +452,10 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       };
     }
 
-    // Validate the new endpoint URL if it changed.
     if (endpointUrl !== existingEndpoint.endpoint_url) {
       const urlValidation = strictRemoteValidation
-        ? await validateRemoteMcpUrl(endpointUrl, { strict: true })
-        : await validateRemoteMcpUrl(endpointUrl);
+        ? await validateRemoteUrl(endpointUrl, { strict: true })
+        : await validateRemoteUrl(endpointUrl);
       if (!urlValidation.valid) {
         await selectInteraction.editReply({
           embeds: [],
@@ -486,7 +500,6 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
         });
         return;
       }
-      // No attachment + existing workflow → keep existing workflow as-is.
     }
 
     const registered = await registerCustomEndpoint({
@@ -507,7 +520,7 @@ export async function executeCustomEndpointEditCommand(options: ExecuteCustomEnd
       supportsPrefixCompletion,
       extraConfig,
       // Edit the exact selected row in place (update its model + row by id) so a renamed model_name
-      // does not collide with — or orphan — sibling models under the same label+capability.
+      // does not collide with (or orphan) sibling models under the same label+capability.
       editingEndpointId: existingEndpoint.custom_endpoint_id,
     });
 

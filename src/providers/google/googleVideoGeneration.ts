@@ -20,7 +20,7 @@ const PROVIDER_VIDEO_DOWNLOAD_MAX_MB = Math.max(
   Number.parseInt(process.env.PROVIDER_VIDEO_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
 );
 
-/** Aspect ratios supported by Google Veo — "1:1" and others are rejected by the API */
+/** Aspect ratios supported by Google Veo: "1:1" and others are rejected by the API */
 const GOOGLE_SUPPORTED_ASPECT_RATIOS = new Set(["16:9", "9:16"]);
 
 function selectClosestSupportedDuration(
@@ -46,14 +46,14 @@ function normalizeGoogleResolution(requestedResolution: ProviderNativeVideoResol
  * Generate a video using Google's Veo API via the @google/genai SDK.
  *
  * Flow:
- *   1. Call ai.models.generateVideos() — returns a long-running operation
+ *   1. Call ai.models.generateVideos(): returns a long-running operation
  *   2. Poll every 10s via ai.operations.getVideosOperation() until done
  *   3. Download the video from the operation response
  *
  * Supports:
  *   - Text-to-video: prompt only
  *   - Image-to-video: prompt + single reference image as starting frame
- *   - Aspect ratio: "16:9" (default) or "9:16" — unsupported values (e.g. "1:1") are silently ignored and Veo defaults to "16:9"
+ *   - Aspect ratio: "16:9" (default) or "9:16". unsupported values (e.g. "1:1") are silently ignored and Veo defaults to "16:9"
  *
  * @param request - Video generation request with apiKey, model, prompt, and optional parameters
  * @returns Raw MP4 video data as a Buffer, or null values on failure
@@ -70,13 +70,12 @@ export async function generateGoogleNativeVideo(
     requiresEightSecondOutput ? 8 : undefined,
   );
 
-  // 1. Build generation parameters
   const generateParams: GenerateVideosParameters = {
     model: request.model,
     prompt: request.prompt,
   };
 
-  // 2. Add config (aspect ratio — only pass values Veo supports; unsupported values like "1:1" cause a 400)
+  // Add config (aspect ratio: only pass values Veo supports; unsupported values like "1:1" cause a 400)
   const config: NonNullable<GenerateVideosParameters["config"]> = {};
   if (request.aspectRatio && GOOGLE_SUPPORTED_ASPECT_RATIOS.has(request.aspectRatio)) {
     config.aspectRatio = request.aspectRatio;
@@ -87,7 +86,7 @@ export async function generateGoogleNativeVideo(
     generateParams.config = config;
   }
 
-  // 3. Add reference image for image-to-video (first image becomes starting frame)
+  // Add reference image for image-to-video (first image becomes starting frame)
   if (request.referenceImages && request.referenceImages.length > 0) {
     const ref = request.referenceImages[0];
     generateParams.image = {
@@ -100,16 +99,13 @@ export async function generateGoogleNativeVideo(
     `Google video generation: submitting request (model: ${request.model}, aspectRatio: ${request.aspectRatio ?? "16:9"}, durationSeconds: ${normalizedDurationSeconds}, resolution: ${normalizedResolution}, hasReferenceImage: ${!!(request.referenceImages && request.referenceImages.length > 0)})`,
   );
 
-  // 4. Submit the generation request
   let operation: GenerateVideosOperation = await ai.models.generateVideos(generateParams);
 
-  // 5. Poll for completion
   const completedOp = await pollForCompletion<typeof operation>({
     pollFn: async () => {
       if (operation.done) {
         return { done: true, result: operation };
       }
-      // Poll for updated status
       operation = await ai.operations.getVideosOperation({ operation });
       if (operation.done) {
         return { done: true, result: operation };
@@ -121,7 +117,6 @@ export async function generateGoogleNativeVideo(
     logLabel: "GoogleVideoGeneration",
   });
 
-  // 6. Extract video from the completed operation
   const generatedVideos = completedOp?.response?.generatedVideos;
   if (!generatedVideos || generatedVideos.length === 0) {
     log.warn(`Google video generation completed but returned no videos (model: ${request.model})`);
@@ -130,10 +125,9 @@ export async function generateGoogleNativeVideo(
 
   const video = generatedVideos[0].video;
 
-  // 7. Download the video file
+  // Download the video file
   //    The SDK provides video.uri for download, or video bytes may be inline
   if (video?.videoBytes) {
-    // Video bytes available directly
     const videoData = Buffer.from(video.videoBytes);
     log.info(
       `Google video generation: got inline video bytes (model: ${request.model}, sizeBytes: ${videoData.length})`,

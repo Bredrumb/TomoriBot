@@ -1,5 +1,5 @@
 /**
- * Regression harness — user_personalization_configs cutover.
+ * Regression harness: user_personalization_configs cutover.
  *
  * Covers the Phase 6 follow-up that moved five user-scoped personalization
  * fields from users into user_personalization_configs.

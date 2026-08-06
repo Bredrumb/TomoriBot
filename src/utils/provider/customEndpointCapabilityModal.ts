@@ -70,9 +70,6 @@ export interface ParsedCapabilityModalFields {
 
 /**
  * Parse modal submission values into typed fields.
- * @param values - Scalar values from text inputs, radio groups, and single checkboxes.
- * @param multiValues - Array values from checkbox groups, keyed by customId.
- * @param capability - Which capability's fields to parse.
  */
 export function parseCapabilityModalFields(
   values: Record<string, string>,
@@ -669,7 +666,7 @@ export function buildCapabilityEditModalComponents(
       ];
 
       if (isComfyUi) {
-        // Slot 4: workflow upload (replaces auth_token for ComfyUI — token changes are rare,
+        // Slot 4: workflow upload (replaces auth_token for ComfyUI: token changes are rare,
         // workflow iteration is the common edit operation for self-hosted ComfyUI instances).
         baseComponents.push({
           customId: WORKFLOW_UPLOAD_ID,

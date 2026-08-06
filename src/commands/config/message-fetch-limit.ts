@@ -12,7 +12,6 @@ import {
   MIN_MESSAGE_FETCH_LIMIT,
 } from "@/utils/discord/messageFetchLimit";
 
-// Configure the subcommand
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("message-fetch-limit")
@@ -29,10 +28,6 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 /**
  * Configures how many recent messages are fetched for context building.
  * Applies per server (or DM pseudo-server) and affects chat context windows.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,

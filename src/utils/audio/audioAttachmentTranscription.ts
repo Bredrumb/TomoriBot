@@ -7,7 +7,7 @@ import { resolveActiveTranscriptionEndpoint } from "@/utils/provider/speechEndpo
 
 const AUDIO_EXTENSION_REGEX = /\.(aac|flac|m4a|mp3|mp4|mpeg|mpga|oga|ogg|opus|wav|webm)$/i;
 
-export type AudioAttachmentFailureReason =
+type AudioAttachmentFailureReason =
   | "no_endpoint"
   | "missing_api_key"
   | "download_failed"
@@ -58,8 +58,8 @@ export async function transcribeMessageAudioAttachment(
   }
 
   // Resolution order:
-  // 1. Active transcription endpoint via custom_endpoints.
-  // 2. Skip transcription silently if none is configured.
+  // Active transcription endpoint via custom_endpoints.
+  // Skip transcription silently if none is configured.
   const transcriptionEndpoint = await resolveActiveTranscriptionEndpoint(serverId);
   if (!transcriptionEndpoint) {
     return {

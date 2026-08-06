@@ -15,6 +15,7 @@ import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { cleanupCustomProviderArtifacts } from "@/utils/provider/customEndpointService";
 import { promptForSavedProvider } from "@/utils/discord/providerPicker";
 import { hasRegisteredCustomProvider } from "@/utils/provider/savedProviderConfig";
+import { resolveActivePersonalProviderModelSelections } from "@/utils/provider/personalProviderHelpers";
 
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("remove").setDescription(localizer("en-US", "commands.personal.provider.remove.description"));
@@ -68,6 +69,14 @@ export async function execute(
       return;
     }
 
+    const currentSelections = (
+      await Promise.all(
+        (["text", "embedding", "image", "video", "vision"] as const).map((capability) =>
+          resolveActivePersonalProviderModelSelections(savedProviders, capability),
+        ),
+      )
+    ).flat();
+
     const selection = await promptForSavedProvider(
       interaction,
       locale,
@@ -76,6 +85,7 @@ export async function execute(
         alwaysShowPicker: true,
         titleKey: "commands.personal.provider.remove.picker_title",
         descriptionKey: "commands.personal.provider.remove.picker_description",
+        currentSelections,
       },
     );
     if (!selection) {

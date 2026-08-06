@@ -13,25 +13,24 @@ import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
  * rationale and the resolution order.
  */
 export function getReplyContextAuthorName(message: Message, botUserId?: string, botName?: string): string {
-  // 1. Webhook-delivered messages: the per-message `username` override captures the
+  // Webhook-delivered messages: the per-message `username` override captures the
   //    persona identity at send time.
   if (message.webhookId) {
     return stripBridgePrefix(message.author.username);
   }
-  // 2. Non-webhook bot-authored messages (direct reply fallback). Discord snapshots the
+  // Non-webhook bot-authored messages (direct reply fallback). Discord snapshots the
   //    author's guild member on each message, so `message.member.displayName` reflects
-  //    the bot's nickname *at send time* — which, for persona-aware bots that rename
+  //    the bot's nickname *at send time* which, for persona-aware bots that rename
   //    themselves per persona, is the persona that actually sent that message. Prefer it
   //    over `botName` (the *currently* active persona), which is stale whenever an alter
   //    switch happened between send and now.
   if (botUserId && message.author.id === botUserId) {
     return message.member?.displayName ?? botName ?? stripBridgePrefix(message.author.username);
   }
-  // 3. Normal user messages.
   return message.member?.displayName ?? message.author.globalName ?? stripBridgePrefix(message.author.username);
 }
 
-export function buildReplyContextEmbed(
+function buildReplyContextEmbed(
   targetMessage: Message,
   locale: string,
   botUserId?: string,

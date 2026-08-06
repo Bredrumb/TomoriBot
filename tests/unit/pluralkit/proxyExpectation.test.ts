@@ -1,9 +1,19 @@
-import { afterEach, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import type { Message } from "discord.js";
 import type { PkMessageLookup } from "@/utils/pluralkit/pkApi";
 
+const originalProxyWaitMs = process.env.PLURALKIT_PROXY_WAIT_MS;
+const originalExpectationTtlMs = process.env.PLURALKIT_EXPECTATION_TTL_MS;
 process.env.PLURALKIT_PROXY_WAIT_MS = "15";
 process.env.PLURALKIT_EXPECTATION_TTL_MS = "45";
+
+// Set at module scope, so it can only be undone once every test here has run.
+afterAll(() => {
+  if (originalProxyWaitMs === undefined) delete process.env.PLURALKIT_PROXY_WAIT_MS;
+  else process.env.PLURALKIT_PROXY_WAIT_MS = originalProxyWaitMs;
+  if (originalExpectationTtlMs === undefined) delete process.env.PLURALKIT_EXPECTATION_TTL_MS;
+  else process.env.PLURALKIT_EXPECTATION_TTL_MS = originalExpectationTtlMs;
+});
 
 let proxyExpectation: typeof import("@/utils/chat/pluralkit/proxyExpectation");
 

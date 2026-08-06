@@ -8,11 +8,9 @@ import { getCachedTomoriState } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories";
 
-// Rule 20: Constants for static values at the top
 const NICKNAME_MIN_LENGTH = 2;
 const NICKNAME_MAX_LENGTH = 32;
 
-// Rule 21: Configure the subcommand (Using updated localization keys)
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand
     .setName("nickname") // Keep name simple as per refactor
@@ -27,12 +25,8 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
     );
 
 /**
- * Rule 1: JSDoc comment for exported function
+ * JSDoc comment for exported function
  * Updates how Tomori refers to the user.
- * @param _client - Discord client instance
- * @param interaction - Command interaction
- * @param userData - User data from database
- * @param locale - Locale of the interaction
  */
 export async function execute(
   _client: Client,
@@ -40,7 +34,6 @@ export async function execute(
   userData: UserRow,
   locale: string,
 ): Promise<void> {
-  // Ensure command is run in a valid channel context
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -54,10 +47,9 @@ export async function execute(
   let tomoriState: TomoriState | null = null; // Define outside for catch block
 
   try {
-    // 1. Get the new nickname from the command options
     const newNickname = interaction.options.getString("name", true);
 
-    // 2. Validate nickname length (redundant check, Discord handles this, but good for safety)
+    // Validate nickname length (redundant check, Discord handles this, but good for safety)
     // Let helper functions manage interaction state
     if (newNickname.length < NICKNAME_MIN_LENGTH || newNickname.length > NICKNAME_MAX_LENGTH) {
       await replyInfoEmbed(interaction, locale, {
@@ -73,24 +65,19 @@ export async function execute(
       return;
     }
 
-    // 4. Load server's Tomori state to check personalization setting
     tomoriState = await getCachedTomoriState(interaction.guild?.id ?? interaction.user.id);
 
-    // 5. Check if Tomori is set up (needed for config check)
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
         descriptionKey: "general.errors.tomori_not_setup_description",
         color: ColorCode.ERROR,
-        // No flags needed
       });
       return;
     }
 
-    // 6. Store the old nickname for the success message
     const oldNickname = userData.user_nickname;
 
-    // 7. Update the user's nickname in the database
     // biome-ignore lint/style/noNonNullAssertion: userData.user_id is always provided by command framework
     const ok = await userRepository.setNickname(userData.user_id!, newNickname);
 
@@ -103,10 +90,9 @@ export async function execute(
       return;
     }
 
-    // 8. Invalidate user cache so next message gets fresh data
+    // Invalidate user cache so next message gets fresh data
     invalidateUserCache(interaction.user.id);
 
-    // 9. Check if personalization is disabled on this server and prepare message
     let descriptionKey = "commands.personal.nickname.success_description";
     let embedColor = ColorCode.SUCCESS;
 
@@ -117,7 +103,6 @@ export async function execute(
       embedColor = ColorCode.WARN; // Use warning color
     }
 
-    // 10. Success! Show the nickname change (with potential warning if personalization disabled)
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.personal.nickname.success_title",
       descriptionKey: descriptionKey, // Use the determined description key
@@ -126,10 +111,8 @@ export async function execute(
         new_nickname: newNickname,
       },
       color: embedColor, // Use the determined color
-      // No flags needed
     });
   } catch (error) {
-    // Rule 22: Log error with context
     const context: ErrorContext = {
       userId: userData.user_id,
       serverId: tomoriState?.server_id, // Use optional chaining
@@ -143,12 +126,11 @@ export async function execute(
     };
     await log.error("Error in /teach nickname command", error, context);
 
-    // Rule 12 & 19: Use helper for unknown error embed
+    // Use helper for unknown error embed
     // Use followUp since we deferred initially
     if (interaction.deferred || interaction.replied) {
       try {
         await interaction.followUp({
-          // Use followUp
           content: localizer(locale, "general.errors.unknown_error_description"),
           flags: MessageFlags.Ephemeral,
         });

@@ -1,6 +1,4 @@
-// locales/ja/general.ts
-
-export default {
+﻿export default {
   general: {
     yes: `はい`,
     confirm: `確認`,
@@ -42,6 +40,11 @@ export default {
       cancel_description: `コマンドはキャンセルされました。`,
       timeout_title: `⏰ コマンドがタイムアウトしました`,
       timeout_description: `時間内に応答しませんでした。もう一度お試しください。`,
+      selector_opened_title: `フォームを開きました`,
+      selector_opened_description: `入力フォームを開いています。送信すると続行し、閉じるとキャンセルされます。`,
+    },
+    text_preview: {
+      truncated_footer: `全 {total} 文字のうち、最初の {shown} 文字を表示しています。`,
     },
     pagination: {
       page_info: `ページ {current}/{total}`,
@@ -59,6 +62,29 @@ export default {
       persona_no_attributes: `属性はまだ設定されていません。`,
       persona_select_button: `選択`,
     },
+    persona_workflow: {
+      loading_title: `選択内容を準備しています`,
+      loading_description: `利用可能なオプションを読み込んでいます...`,
+      modal_ready_title: `続行できます`,
+      modal_ready_description: `フォームを開いて、選択内容の設定を続けてください。`,
+      open_modal_button: `フォームを開く`,
+      // 動詞に依存しない共通のフィルター通知文。下の名詞が差し込まれるため、
+      // 各機能の remove / edit では同じ文を再利用する。
+      filtered_notice: `{items}があるペルソナのみ表示しています。`,
+      items: {
+        attributes: `属性`,
+        sample_dialogues: `サンプル会話`,
+        trigger_words: `トリガーワード`,
+        persona_prompts: `ペルソナプロンプト`,
+        voice_designs: `ボイスデザイン`,
+        documents: `ドキュメント`,
+        chat_history: `チャット履歴`,
+        server_memories: `サーバーの記憶`,
+        personal_memories: `個人の記憶`,
+        short_term_memories: `短期記憶`,
+        sprites: `スプライト`,
+      },
+    },
     errors: {
       guild_only_title: `サーバー専用コマンド`,
       guild_only_description: `このコマンドはサーバー内でのみ使用できます。`,
@@ -67,7 +93,7 @@ export default {
       channel_not_supported_title: `サポートされていないチャンネルタイプ`,
       channel_not_supported_description: `申し訳ありませんが、サーバーのテキストチャンネルまたはダイレクトメッセージでのみ動作します。グループDMやその他のチャンネルタイプはサポートされていません。`,
       tomori_not_setup_title: `初期設定が必要です`,
-      tomori_not_setup_description: `このサーバーではまだ初期設定が必要です。**サーバー管理**権限を持つメンバーがまず \`/config setup\` を実行してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/introduction/quickstart/ で確認できます。`,
+      tomori_not_setup_description: `このサーバーではまだ初期設定が必要です。**サーバー管理**権限を持つメンバーがまず \`/config setup\` を実行してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/ja/introduction/quickstart/ で確認できます。`,
       tomori_updating_title: `現在アップデート中...`,
       tomori_updating_description: `現在アップデート中のため、まもなく復旧します。しばらくしてからもう一度お試しください！`,
       tomori_not_setup_dm_footer: `DMでは個人用の設定として扱われ、ほとんどのサーバー形式の設定が利用できます。`,
@@ -163,11 +189,11 @@ export default {
       rejoin_title: `TomoriBotが戻ってきました！`,
       rejoin_description: `このサーバーに再追加されたようです。既存の設定とペルソナはそのまま残っています。\`/config\`、\`/persona\`、\`/memory\`、\`/server\`、\`/provider add\` で確認や変更ができます。
 
-			現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms\` と \`/legal privacy\` で確認できます。`,
+現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms\` と \`/legal privacy\` で確認できます。`,
       setup_prompt_title: `TomoriBotの追加が完了しました`,
-      setup_prompt_description: `追加してくれてありがとうございます。始めるには、**サーバー管理**権限を持つメンバーが \`/config setup\` を実行して、初期ペルソナとプロバイダーを選択してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/introduction/quickstart/ で確認できます。
+      setup_prompt_description: `追加してくれてありがとうございます。始めるには、**サーバー管理**権限を持つメンバーが \`/config setup\` を実行して、初期ペルソナとプロバイダーを選択してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/ja/introduction/quickstart/ で確認できます。
 
-			プロバイダーのAPIキーが必要な場合は \`/help api-key\` を使ってください。現在の利用規約とプライバシーポリシーは \`/legal terms\` と \`/legal privacy\` で確認できます。`,
+プロバイダーのAPIキーが必要な場合は \`/help api-key\` を使ってください。現在の利用規約とプライバシーポリシーは \`/legal terms\` と \`/legal privacy\` で確認できます。`,
     },
   },
   reminders: {
@@ -194,9 +220,11 @@ export default {
     task_update_repeat_hours: `{repetition_interval_hours}時間ごと`,
     expand_task_button: `全文を表示`,
     expand_task_title: `タスクの全文`,
-    reminder_triggered_title: `🔵 リマインダー通知`,
-    task_triggered_title: `🔵 タスク通知`,
-    triggered_description: `{reminder_purpose}`,
-    triggered_footer: `生成中にエラーが発生したため、代わりに生のリマインダーを送信しました`,
+    reminder_triggered_title: `🟡 リマインダー通知（配信失敗）`,
+    task_triggered_title: `🟡 タスク通知（配信失敗）`,
+    triggered_description: `**スケジュール項目ID：** \`{reminder_id}\`\n**元の内容：**`,
+    triggered_footer_one_time: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。この1回限りのスケジュールは完了済みとして削除されました。`,
+    triggered_footer_recurring_retained: `生成が繰り返し失敗したため、スケジュールされた内容をそのまま表示しています。次回は元の周期を維持して実行されます。管理するには \`/scheduled-task edit\` または \`/scheduled-task remove\` を使用してください。`,
+    triggered_footer_recurring_removed: `生成が繰り返し失敗し、次回の実行も維持できませんでした。この繰り返しスケジュールは削除されました。問題の解決後に作成し直してください。`,
   },
 };

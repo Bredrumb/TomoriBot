@@ -65,7 +65,7 @@ const capabilityGuards = {
   [K in ProviderCapabilityName]: (provider: LLMProvider) => provider is LLMProvider & ProviderCapabilityMap[K];
 };
 
-export async function resolveProviderCapability<TCapabilityName extends ProviderCapabilityName>(
+async function resolveProviderCapability<TCapabilityName extends ProviderCapabilityName>(
   providerName: string,
   capabilityName: TCapabilityName,
 ): Promise<(LLMProvider & ProviderCapabilityMap[TCapabilityName]) | null> {
@@ -91,10 +91,6 @@ export async function resolvePresetGenerationCapability(providerName: string) {
 
 export async function resolveConversationCompactionCapability(providerName: string) {
   return resolveProviderCapability(providerName, "conversationCompaction");
-}
-
-export async function resolveLiveTokenCountingCapability(providerName: string) {
-  return resolveProviderCapability(providerName, "liveTokenCounting");
 }
 
 export async function resolveNativeImageGenerationCapability(providerName: string) {

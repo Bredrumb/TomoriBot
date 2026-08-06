@@ -1,5 +1,5 @@
 /**
- * ServerMemoryRepository — manages the `server_memories` table.
+ * ServerMemoryRepository: manages the `server_memories` table.
  *
  * Server memories are long-term facts Tomori learns about a Discord server,
  * scoped to a persona lineage. They are read back as part of TomoriState
@@ -17,7 +17,7 @@ import { log } from "@/utils/misc/logger";
 import type { IRepository } from "./IRepository";
 
 /** Row shape for server_memory_configs (Phase 6). */
-export type ServerMemoryConfigsRow = {
+type ServerMemoryConfigsRow = {
   memory_tagging_enabled: boolean;
 };
 
@@ -26,19 +26,16 @@ export type ServerMemoryConfigsRow = {
  * Includes the Phase 6 server_memory_configs table in addition to
  * the existing memories array (expanded in Phase 6 #16.7).
  */
-export type ServerMemoryExportShape = {
+type ServerMemoryExportShape = {
   server_disc_id: string;
   memory_configs: ServerMemoryConfigsRow | null;
   memories: Array<{ content: string; tags: string[] }>;
 };
 
-export class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
-  // ── reads ──────────────────────────────────────────────────────────────────
-
+class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   /**
    * Returns the count of documents in the documents table for a server.
    *
-   * @param serverId - Internal server DB ID
    */
   async countDocuments(serverId: number): Promise<number> {
     try {
@@ -56,8 +53,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Loads server memories scoped to a persona lineage, with optional user filter.
    * Used by /memory server edit and /memory server remove to populate the selection list.
    *
-   * @param serverId         - Internal server DB ID
-   * @param personaLineageId - Persona lineage scope
    * @param userId           - If provided, only returns memories owned by this user
    * @returns Ordered array of ServerMemoryRow (newest first)
    */
@@ -91,12 +86,43 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
+   * Returns the set of persona lineage ids that have at least one server memory
+   * in the given server. Batched eligibility source for `/memory server` picker
+   * filters: it reproduces exactly the filters `loadServerMemoriesScoped` applies
+   * (server scope, plus the optional owner filter) so the filtered picker and the
+   * loader always agree.
+   *
+   * @param userId   - If provided, restricts to memories owned by this user, so a
+   *                   manager and a non-manager can receive different eligible sets
+   *                   for the same command in the same guild.
+   * @returns Set of eligible `persona_lineage_id` values.
+   */
+  async lineageIdsWithServerMemories(serverId: number, userId?: number): Promise<Set<number>> {
+    try {
+      const rows =
+        userId !== undefined
+          ? await sql<Array<{ persona_lineage_id: number | string }>>`
+              SELECT DISTINCT persona_lineage_id
+              FROM server_memories
+              WHERE server_id = ${serverId}
+                AND user_id = ${userId}
+            `
+          : await sql<Array<{ persona_lineage_id: number | string }>>`
+              SELECT DISTINCT persona_lineage_id
+              FROM server_memories
+              WHERE server_id = ${serverId}
+            `;
+      return new Set(rows.map((row) => Number(row.persona_lineage_id)));
+    } catch (error) {
+      log.error(`Error loading lineage ids with server memories for server ${serverId}:`, error);
+      return new Set();
+    }
+  }
+
+  /**
    * Returns all memory content strings for a server + persona lineage.
    * Used for case-insensitive duplicate detection before insert.
    *
-   * @param serverId         - Internal server DB ID
-   * @param personaLineageId - Persona lineage scope
-   * @returns Array of raw content strings
    */
   async loadServerMemoryContents(serverId: number, personaLineageId: number): Promise<string[]> {
     try {
@@ -117,8 +143,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Returns memory content and tags for in-character history extraction context.
    * The caller owns any channel-tag filtering because it has the import channel set.
    *
-   * @param serverId         - Internal server DB ID
-   * @param personaLineageId - Persona lineage scope
    * @returns Newest-first rows containing content and optional tags
    */
   async loadServerMemoryContentTags(
@@ -143,9 +167,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Returns true if a document with the given name already exists in the scope.
    * Used for duplicate-name checking before insert.
    *
-   * @param serverId     - Internal server DB ID
    * @param personaId     - null = serverwide scope; non-null = per-persona scope
-   * @param documentName - Document name to check
    */
   async documentExistsByName(serverId: number, personaId: number | null, documentName: string): Promise<boolean> {
     try {
@@ -175,7 +197,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   /**
    * Returns the count of documents in the given server + scope.
    *
-   * @param serverId - Internal server DB ID
    * @param personaId - null = serverwide scope; non-null = per-persona scope
    */
   async countDocumentsScoped(serverId: number, personaId: number | null): Promise<number> {
@@ -204,7 +225,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   /**
    * Returns the count of document chunks across all documents in the given server + scope.
    *
-   * @param serverId - Internal server DB ID
    * @param personaId - null = serverwide scope; non-null = per-persona scope
    */
   async countChunksScoped(serverId: number, personaId: number | null): Promise<number> {
@@ -237,7 +257,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * For persona scope, also checks serverwide documents (persona_id IS NULL)
    * since RAG retrieval includes shared docs.
    *
-   * @param serverId - Internal server DB ID
    * @param personaId - null = serverwide only; non-null = persona OR serverwide
    */
   async hasDocumentInScope(serverId: number, personaId: number | null): Promise<boolean> {
@@ -262,8 +281,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
       return false;
     }
   }
-
-  // ── writes ─────────────────────────────────────────────────────────────────
 
   async edit(serverMemoryId: number, content: string, tags: string[] = []): Promise<boolean> {
     try {
@@ -300,11 +317,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Rolls back all inserts if any row fails (atomicity guarantee).
    * Cache invalidation is the caller's responsibility after a successful return.
    *
-   * @param serverId         - Internal server DB ID
-   * @param personaId         - Internal tomori DB ID
    * @param personaLineageId - Persona lineage scope for all memories
-   * @param taughtByUserId   - Internal DB ID of the teaching user
-   * @param memories         - Array of content strings to insert
    * @param tags             - Optional classification tags applied to all memories
    * @returns true on full success, false if the transaction was rolled back
    */
@@ -353,12 +366,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Inserts a new server memory taught by Tomori.
    * Invalidates the tomori state cache so the next context build reads the new memory.
    *
-   * @param serverId        - Internal server DB ID
-   * @param personaId        - Internal tomori DB ID
-   * @param personaLineageId - Persona lineage the memory belongs to
-   * @param taughtByUserId  - Internal DB ID of the user who triggered the memory
-   * @param content         - Memory content string
-   * @param tags            - Optional classification tags
    * @param serverDiscId    - Discord server snowflake (required for cache invalidation)
    * @returns Inserted ServerMemoryRow or null on failure
    */
@@ -394,12 +401,8 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     return row;
   }
 
-  // ── limit checks ───────────────────────────────────────────────────────────
-
   /**
-   * Check if a server has reached its memory limit.
    *
-   * @param serverId         - Internal server DB ID
    * @param personaLineageId - Optional persona lineage scope
    * @returns MemoryValidationResult indicating whether the limit is exceeded
    */
@@ -439,13 +442,10 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     }
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Reads server_memory_configs for the given server.
    * Memory rows are exported by ExportRepository; this method covers the config table.
    *
-   * @param ownerId - Discord server snowflake
    */
   async toExportShape(ownerId: string | number): Promise<ServerMemoryExportShape | null> {
     const serverDiscId = String(ownerId);
@@ -458,8 +458,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
 
   /**
    * Restores server_memory_configs for a server.
-   * @param ownerId - Discord server snowflake
-   * @param data    - Previously exported ServerMemoryExportShape
    */
   async fromExportShape(ownerId: string | number, data: ServerMemoryExportShape): Promise<boolean> {
     const serverDiscId = String(ownerId);
@@ -481,16 +479,12 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     }
   }
 
-  // ── resolve internal server ID ──────────────────────────────────
-
   private async resolveServerId(serverDiscId: string): Promise<number | null> {
     const [row] = await sql`
       SELECT server_id FROM servers WHERE server_disc_id = ${serverDiscId} LIMIT 1
     `;
     return (row?.server_id as number | undefined) ?? null;
   }
-
-  // ── config table read ────────────────────────────────────────────
 
   private async sqlLoadMemoryConfigs(serverId: number): Promise<ServerMemoryConfigsRow | null> {
     try {
@@ -504,8 +498,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     }
   }
 
-  // ── config table upsert ─────────────────────────────────────────
-
   private async sqlUpsertMemoryConfigs(serverId: number, row: ServerMemoryConfigsRow): Promise<void> {
     await sql`
       INSERT INTO server_memory_configs (server_id, memory_tagging_enabled)
@@ -516,14 +508,10 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     `;
   }
 
-  // ── document CRUD ──────────────────────────────────────────────────────────
-
   /**
    * Load non-history documents for a server/tomori scope.
    *
-   * @param serverId - Internal server DB ID
    * @param personaId - Null = server-wide (shared) scope; non-null = per-persona scope
-   * @returns Array of document id/name rows
    */
   async loadDocuments(
     serverId: number,
@@ -554,9 +542,33 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
+   * Returns the set of persona ids that own at least one document in the given
+   * server. Batched eligibility source for the persona-scoped `/memory document`
+   * picker filters. Mirrors `loadDocuments` for persona scope, which deliberately
+   * applies **no** `source_type` filter: history-sourced documents count here
+   * exactly as they do in that loader. Serverwide documents (`persona_id IS NULL`)
+   * are excluded because the persona picker only concerns persona-owned rows.
+   *
+   * @returns Set of eligible `persona_id` values.
+   */
+  async personaIdsWithDocuments(serverId: number): Promise<Set<number>> {
+    try {
+      const rows = await sql<Array<{ persona_id: number | string }>>`
+        SELECT DISTINCT persona_id
+        FROM documents
+        WHERE server_id = ${serverId}
+          AND persona_id IS NOT NULL
+      `;
+      return new Set(rows.map((row) => Number(row.persona_id)));
+    } catch (error) {
+      log.error(`Error loading persona ids with documents for server ${serverId}:`, error);
+      return new Set();
+    }
+  }
+
+  /**
    * Delete a document (chunks cascade-delete via FK).
    *
-   * @param documentId - Primary key of the document
    * @param serverId   - Internal server DB ID (ownership guard)
    * @param personaId   - Null = server-wide scope; non-null = per-persona scope
    * @returns Deleted document_name or null when not found
@@ -760,9 +772,7 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   /**
    * Load history-sourced documents for a server/tomori scope.
    *
-   * @param serverId - Internal server DB ID
    * @param personaId - Null = server-wide scope; non-null = per-persona scope
-   * @returns Array of document id/name rows
    */
   async loadHistoryDocuments(
     serverId: number,
@@ -789,9 +799,34 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 
   /**
+   * Returns the set of persona ids that own at least one history-sourced document
+   * in the given server. Batched eligibility source for the persona-scoped
+   * `/memory history` picker filter. Reproduces the `source_type = 'history'`
+   * filter `loadHistoryDocuments` applies, so a persona that has upload documents
+   * but no history documents is correctly excluded here even though it appears in
+   * {@link personaIdsWithDocuments}.
+   *
+   * @returns Set of eligible `persona_id` values.
+   */
+  async personaIdsWithHistoryDocuments(serverId: number): Promise<Set<number>> {
+    try {
+      const rows = await sql<Array<{ persona_id: number | string }>>`
+        SELECT DISTINCT persona_id
+        FROM documents
+        WHERE server_id = ${serverId}
+          AND persona_id IS NOT NULL
+          AND source_type = 'history'
+      `;
+      return new Set(rows.map((row) => Number(row.persona_id)));
+    } catch (error) {
+      log.error(`Error loading persona ids with history documents for server ${serverId}:`, error);
+      return new Set();
+    }
+  }
+
+  /**
    * Delete a history-sourced document (chunks cascade-delete via FK).
    *
-   * @param documentId - Primary key of the document
    * @param serverId   - Internal server DB ID (ownership guard)
    * @param personaId   - Null = server-wide scope; non-null = per-persona scope
    * @returns Deleted document_name or null when not found
@@ -818,13 +853,10 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
     return (rows[0]?.document_name as string | undefined) ?? null;
   }
 
-  // ── server_memories tool-call operations ───────────────────────────────────
-
   /**
    * Delete a server memory scoped to server + persona lineage.
    * Used by the updateLongTermMemoryTool function call handler.
    *
-   * @param memoryId         - Primary key of the server memory
    * @param serverId         - Internal server DB ID (ownership guard)
    * @param personaLineageId - Persona lineage scope guard
    * @returns Row with server_memory_id, content, user_id or null when not found
@@ -854,9 +886,6 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
    * Update a server memory's content, scoped to server + persona lineage.
    * Used by the updateLongTermMemoryTool function call handler.
    *
-   * @param memoryId         - Primary key of the server memory
-   * @param content          - New memory content
-   * @param serverId         - Internal server DB ID (ownership guard)
    * @param personaLineageId - Persona lineage scope guard
    * @returns Row with server_memory_id, content, user_id or null when not found
    */
@@ -940,5 +969,5 @@ export class ServerMemoryRepository implements IRepository<ServerMemoryExportSha
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const serverMemoryRepository = new ServerMemoryRepository();

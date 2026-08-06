@@ -4,7 +4,7 @@ import { BytePairEncodingCore, type RawBytePairRanks } from "gpt-tokenizer/ByteP
 import { log } from "@/utils/misc/logger";
 import { getTokenizerAssetDir } from "@/utils/provider/tokenizerAssetDir";
 
-export const LOCAL_LOGIT_BIAS_TOKENIZER_FAMILY_VALUES = [
+const LOCAL_LOGIT_BIAS_TOKENIZER_FAMILY_VALUES = [
   "deepseek_v3_r1",
   "qwen3_5",
   "mistral_small3",

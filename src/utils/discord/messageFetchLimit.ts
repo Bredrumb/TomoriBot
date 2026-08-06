@@ -10,7 +10,6 @@ export const DEFAULT_MESSAGE_FETCH_LIMIT = 80;
 /**
  * Normalize a configured fetch limit to a safe integer within allowed bounds.
  *
- * @param value - Candidate configured value
  * @returns Clamped integer fetch limit
  */
 export function normalizeMessageFetchLimit(value: number | null | undefined): number {

@@ -1,5 +1,3 @@
-// locales/en-US/commands/punish.ts
-
 export default {
   punish: {
     description: `Punish me with playful interactions.`,

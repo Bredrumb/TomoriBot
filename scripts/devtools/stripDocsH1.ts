@@ -22,7 +22,6 @@ for await (const rel of glob.scan(docsDir)) {
     continue;
   }
 
-  // Find the end of the frontmatter block
   const closingDash = content.indexOf("---", 3);
   if (closingDash === -1) {
     skipped++;
@@ -31,7 +30,6 @@ for await (const rel of glob.scan(docsDir)) {
 
   const afterFrontmatter = content.slice(closingDash + 3);
 
-  // Remove the first # heading (and any blank lines immediately before it)
   const stripped_body = afterFrontmatter.replace(/^\s*\n#[^\n]*\n/, "\n");
 
   if (stripped_body === afterFrontmatter) {

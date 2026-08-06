@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import {
   composePluralKitBioSeedContent,
   seedPluralKitMemberBio,
@@ -28,6 +28,13 @@ function makeDeps(overrides: Partial<PluralKitBioSeedDeps> = {}): {
   return { deps, addCalls, invalidateCalls };
 }
 
+const originalBioSeedMaxChars = process.env.PLURALKIT_BIO_SEED_MAX_CHARS;
+
+afterEach(() => {
+  if (originalBioSeedMaxChars === undefined) delete process.env.PLURALKIT_BIO_SEED_MAX_CHARS;
+  else process.env.PLURALKIT_BIO_SEED_MAX_CHARS = originalBioSeedMaxChars;
+});
+
 describe("composePluralKitBioSeedContent", () => {
   it("flattens newlines and repeated whitespace to single spaces", () => {
     const content = composePluralKitBioSeedContent("TestA", "line one\n\nline   two\tline three");
@@ -35,19 +42,10 @@ describe("composePluralKitBioSeedContent", () => {
   });
 
   it("truncates to PLURALKIT_BIO_SEED_MAX_CHARS", () => {
-    const original = process.env.PLURALKIT_BIO_SEED_MAX_CHARS;
     process.env.PLURALKIT_BIO_SEED_MAX_CHARS = "20";
-    try {
-      const content = composePluralKitBioSeedContent("TestA", "a very long bio that exceeds the cap");
-      expect(content).toHaveLength(20);
-      expect(content).toBe("From TestA's PluralK");
-    } finally {
-      if (original === undefined) {
-        delete process.env.PLURALKIT_BIO_SEED_MAX_CHARS;
-      } else {
-        process.env.PLURALKIT_BIO_SEED_MAX_CHARS = original;
-      }
-    }
+    const content = composePluralKitBioSeedContent("TestA", "a very long bio that exceeds the cap");
+    expect(content).toHaveLength(20);
+    expect(content).toBe("From TestA's PluralK");
   });
 });
 

@@ -1,20 +1,18 @@
-// locales/ja/commands/help.ts
-
-export default {
+﻿export default {
   help: {
     "personal-provider": {
       description: `個人プロバイダーの仕組みを確認します。`,
       title: `個人プロバイダー`,
-      description_body: `個人プロバイダーを使うと、サーバー既定の設定ではなく、あなた自身のAPIキーとモデルでメッセージを処理できます。`,
+      description_body: `個人プロバイダーを使うと、サーバー共通の既定ではなく、あなた自身のAPIキーとモデルであなた自身のリクエストを処理できます。`,
       setup_field: `設定手順`,
-      setup_value: `1. {add_command} でプロバイダーを保存します。
-2. {model_command} でモデルを選びます。
-3. {toggle_command} でその機能を有効にします。`,
+      setup_value: `1. {add_command} でプロバイダーを保存すると、個人の **テキスト** モデルが同時に有効になります。
+2. {model_command} は任意です。手順1の既定モデル以外を使いたい場合にのみ使用します。
+3. {toggle_command} で機能ごとに個人上書きを有効化・無効化します。`,
       behavior_field: `動作`,
-      behavior_value: `有効にすると、その機能ではサーバー設定より個人プロバイダーが優先されます。思考ログにはその旨が記録され、{samplers_command} と {fallback_command} で調整できます。`,
+      behavior_value: `有効な機能は、TomoriBotを使うすべてのサーバーであなた自身のリクエストにのみサーバー既定を上書きします。モデルを選んだ時点でその機能は有効になるため、手順3は主に機能をオフに戻すためのものです。思考ログにはその旨が記録され、{samplers_command} と {fallback_command} で調整できます。`,
       byok_field: `BYOKサーバー`,
       byok_value: `{byok_command} により、メンバー自身のプロバイダーが必須になるサーバーがあります。このモードでは、ユーザー発言に対する応答に個人プロバイダーが必要です。`,
-      footer: `個人プロバイダー設定は、TomoriBot を使うすべてのサーバーで共通です。`,
+      footer: `サーバー既定は /provider と /model で管理します。個人上書きは、TomoriBotを使うすべてのサーバーであなたのリクエストにのみ影響します。`,
     },
     custom_models: {
       description: `カスタムエンドポイントの使い方を確認します。`,
@@ -74,7 +72,7 @@ export default {
       description: `音声生成の設定方法を確認します。`,
       engine_description: `音声エンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
-      docs_description: `設定手順とラッパーの注意点は、[TTSドキュメント](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#text-to-speech) と [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/) を確認してください。`,
+      docs_description: `設定手順とラッパーの注意点は、[TTSドキュメント](https://docs.tomoribot.app/ja/features/capabilities/media-generation/tts-and-stt/#text-to-speech) と [ローカルTTS設定ガイド](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/) を確認してください。`,
       summary_title: `音声生成の使い方`,
       summary_description: `ローカル音声クローンでは、{custom_endpoint_add} で音声エンドポイントを登録し、{model_speech} で選択、{voice_add} でサンプル追加、{voice_assign} で割り当てます。ElevenLabs は {elevenlabs} を実行します。VoiceDesign 設定は {voice_design_set} を使います。`,
       overview: {
@@ -97,7 +95,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/chatterbox/) に従ってサーバーを準備します。
+1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/) に従ってサーバーを準備します。
 2. ダウンロードした \`chatterbox\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. numpy を先にインストールします: \`pip install numpy\`、その後 \`requirements.txt\` をインストールします。
 4. *(GPU のみ)* PyTorch を再インストールします: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -114,7 +112,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
 • SoX をシステムにインストール（Windows: \`scoop install sox\`、macOS: \`brew install sox\`）
 • CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/qwen3tts/) に従ってサーバーを準備します。
+1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/) に従ってサーバーを準備します。
 2. ダウンロードした \`qwen3tts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements.txt\` をインストールします。
 4. *(GPU)* PyTorch を再インストール: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
@@ -129,7 +127,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 
-1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/text-to-speech/irodoritts/) に従ってサーバーを準備します。
+1. [ローカルTTS設定ガイド](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/) に従ってサーバーを準備します。
 2. ダウンロードした \`irodoritts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements.txt\` をインストールします。
 4. パッチスクリプトで irodori-tts をインストール（上流のバグ対処）:
@@ -151,7 +149,7 @@ Linux/macOS: \`bash install-irodori.sh\`
       description: `音声文字起こしの設定方法を確認します。`,
       engine_description: `文字起こしエンジンのガイドを選択します。`,
       docs_title: `詳細ドキュメント`,
-      docs_description: `文字起こしについては [STTドキュメント](https://docs.tomoribot.app/features/capabilities/media-generation/tts-and-stt/#speech-to-text) と [ローカルSTT設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/) を確認してください。`,
+      docs_description: `文字起こしについては [STTドキュメント](https://docs.tomoribot.app/ja/features/capabilities/media-generation/tts-and-stt/#speech-to-text) と [ローカルSTT設定ガイド](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/speech-to-text/) を確認してください。`,
       summary_title: `文字起こしの使い方`,
       summary_description: `{custom_endpoint_add} で文字起こしエンドポイントを登録し、{model_transcription} で選択します。字幕をチャットに表示したい場合だけ {speech_transcripts} を使います。ElevenLabs ユーザーは {elevenlabs} を実行できます。`,
       overview: {
@@ -174,7 +172,7 @@ Linux/macOS: \`bash install-irodori.sh\`
 • FFmpeg をシステムにインストール（必須）
 • CUDA 12.x + ドライバー（任意、GPU 高速化用）
 
-1. [ローカルSTT設定ガイド](https://docs.tomoribot.app/self-hosting/local-endpoints/speech-to-text/whisperx/) に従ってサーバーを準備します。
+1. [ローカルSTT設定ガイド](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/speech-to-text/whisperx/) に従ってサーバーを準備します。
 2. ダウンロードした \`stt\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements-whisperx.txt\` をインストールします。
 4. *(GPU)* CUDA 対応 PyTorch を再インストール:
@@ -241,7 +239,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       memory_title: `記憶＆パーソナライゼーション`,
       memory_description: `- ユーザーやサーバーに関する事実を記憶し、会話を跨いで保持します
 - 個人的な記憶は全サーバーで保持されます（他のサーバーでも私に話しかけてみて！）
-- 最近の会話はSTM（短期記憶）として保持し、チャンネルやサーバーをまたいで文脈を把握します（クロスサーバー共有は\`/personal stm\`でオプトインできます）
+- 最近の会話は[STM（短期記憶）](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)として保持し、チャンネルやサーバーをまたいで文脈を把握します（クロスサーバー共有は\`/personal stm\`でオプトインできます）
 - \`/personal nickname\`であなたを呼ぶ名前を変更できます
 - \`/memory\` と \`/persona\` コマンドで手動で記憶やペルソナ情報を追加・削除できます
 - \`/server expressions initialize\`で絵文字やステッカーを登録すると、より適切な場面で使えるようになります
@@ -296,16 +294,10 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       step1_title: `ステップ1：APIキーを取得`,
       step1_description: `TomoriBotは複数のAIプロバイダーに対応しています。いずれかのAPIキーが必要です。
 - {helpApikey}で取得方法を確認
-  - **Google Gemini** — 汎用、無料枠あり、すべての機能を実行可能
-  - **OpenRouter** — 多数のAIモデルに一箇所でアクセス
-  - **NovelAI** — 無検閲なロールプレイとストーリーテリング特化
-  - **DeepSeek** — コスト効率の高い推論モデル
-  - **NVIDIA NIM** — NVIDIAホスト型モデル
-  - **Anthropic** — Claudeモデル
-  - **Vertex AI** — ADC経由のGoogle Cloudモデル
-  - **Vertex AI Express** — Express Mode経由のGoogle Cloud APIキーBYOK（Preview、Gemini限定）
-  - **Z.ai (Zhipu)** — 中国のAIモデル、コーディングプランあり ⚠️ *利用規約でコーディング/エージェントのシナリオのみに制限*
-  - **Custom**: OpenAI互換エンドポイント（Ollama、vLLM、LiteLLMなど）
+  - **Google Gemini**（*推奨*）— 汎用、無料で利用可能、すべての機能を実行可能
+  - **DeepSeek**（*推奨*）— 非常に安価で無検閲な代替手段
+  - **OpenRouter** — 有料で信頼性の高い、多数のAIモデルへの一箇所からのアクセス
+  - **NovelAI** — 無検閲なロールプレイ、ストーリーテリング、画像生成
 - このAPIキーを**他人と共有しないでください**
 - Customエンドポイントはセットアップ後に{configApiKeySet}でBearer認証トークンを追加可能`,
       step2_title: `ステップ2：セットアップコマンドを実行`,
@@ -520,7 +512,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 4. このAPIキーを{configSetup}または{configApikeySet}にコピー`,
       nvidia_important_title: `重要な注意事項：`,
       nvidia_important_description: `- テキストと埋め込みはNVIDIAのホスト型 \`integrate.api.nvidia.com\` を使用します
-- ネイティブ画像生成はNVIDIAホストの \`ai.api.nvidia.com\` Stabilityエンドポイントを使用します`,
+- ネイティブ画像生成はNVIDIAホストの \`ai.api.nvidia.com\` FLUXエンドポイントを使用します`,
       nvidia_footer: `このプロバイダーを設定したら、{configModel}、{configModelEmbedding}、{configModelImage}でテキスト・埋め込み・画像モデルを変更できます`,
       provider_choice_zai: `Z.ai`,
       provider_choice_vertex: `Google Vertex AI`,
@@ -571,7 +563,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       vertex_title: `Google Vertex AIの設定`,
       vertex_description: `Google Vertex AIは、Google Cloudを通じてGeminiモデルへのエンタープライズグレードのアクセスを提供します。
 - 認証にApplication Default Credentials（ADC）を使用、APIキーの管理が不要
-- TomoriBotをローカル（PC）で実行している開発者やユーザーに最適
+- ローカルのgcloud ADC、またはホスト環境のワークロードID・サービスアカウントを使用
 - [Vertex AIドキュメント](https://cloud.google.com/vertex-ai/docs)`,
       vertex_getting_key_title: `設定手順：`,
       vertex_getting_key_description: `**手順1: [Google Cloud CLI](https://cloud.google.com/cli)をインストール**
@@ -599,8 +591,8 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - 例：\`my-vertex-project-12345::global\``,
       vertex_important_title: `重要な注意事項：`,
       vertex_important_description: `- 保存される値は**設定情報**（プロジェクト＋ロケーション）であり、認証情報ではありません
-- すべてのVertexリクエストはPCのGoogle Cloud CLI IDを使用します
-- ⚠️ \`gen-lang-client-\` で始まるプロジェクトはGoogle AI Studioが自動生成したもので、Vertex AIでは**使用できません**。上記の手順でプロジェクトを作成してください。
+- すべてのVertexリクエストはホストのApplication Default Credentials IDを使用します
+- AI StudioのAPIキーだけではこのプロバイダーを認証できません。プロジェクトで請求とVertex AI APIを有効にし、ホストIDにVertexアクセス権を付与してください。
 - チャット、ツール呼び出し、ストリーミング、構造化出力、圧縮、埋め込み、プリセット生成に対応`,
       vertex_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
       vertexexpress_title: `Google Vertex AI Expressの設定`,
@@ -678,12 +670,41 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - \`/memory document remove\`または\`/memory history remove\`で保存済みドキュメントを削除
 - \`/model embedding\`で埋め込みモデルの設定が必要`,
       shortterm_title: `短期記憶`,
-      shortterm_description: `永続的な記憶に加え、最近の会話はSTM（短期記憶）として保持しています：
+      shortterm_description: `永続的な記憶に加え、最近の会話は[STM（短期記憶）](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)として保持しています：
 - 最近のメッセージはチャンネルごとにキャッシュされ、各ペルソナは同じサーバー内の他チャンネルにも最新のSTMを持ち越します
 - 古い会話を自動的に要約し、文脈を効率的に保つことができます
 - **クロスサーバー共有**はオプトイン制です：{personalStm}の\`crossserver\`オプションを使うと、あなた自身の他サーバーでの会話も参照できるようになります
 - {personalStmClear}でユーザー固有のSTMをすべて削除できます
 - STMは時間とともに自動的に期限切れになります`,
+    },
+    stm: {
+      description: `短期記憶のカスタマイズ方法を学びます（サーバー管理者向け）`,
+      title: `短期記憶のカスタマイズ`,
+      embed_description: `短期記憶（STM）は、各チャンネルでの*現在の*会話に関する作業記憶です。{helpMemory}にある永続的な事実とは別物です。サーバー管理者は、更新の頻度・表示方法・記録する内容を調整できます。`,
+      parameters_title: `動作の調整（{stmParameters}）`,
+      parameters_description: `主なつまみを調整します（*「生（crude）」*とは、要約する前の元のメッセージ、つまり生の会話のことです）：
+- **更新頻度**：更新を促すまでに私が応答するターン数（デフォルト**5**）。
+- **表示モード**：要約と生メッセージの組み合わせ方。*置き換え*（要約が生メッセージを置換）または*生＋要約*（両方を表示）。
+- **生メッセージ数**：コンテキストに残す直近の生（要約前の）メッセージ数（デフォルト**6**）。
+- **促しの挿入位置**：更新の促しを会話のどこに置くか（0＝最下部、2＝直近のやり取りの直前でデフォルト）。
+- **記憶ブロックの挿入位置**：私の記憶ブロックをどこに置くか（-1＝上部に背景知識として置く、デフォルト；0＝最下部；N＝下からN番目の発言の前）。促しと同じ位置のとき、記憶ブロックはその直前に置かれます。`,
+      nudge_title: `更新の促しの仕組み`,
+      nudge_description: `会話が続いている間、STMを作成・更新するための控えめなシステムヒントが出ます。ただし*更新頻度*ごとに一度だけなので、毎メッセージ催促されることはありません。カウンターは私が応答するたびに（保存したかどうかに関わらず）進み、実際にSTMツールを使った時のみリセットされます。無視し続けると、行動するまで促しは出続けます。`,
+      categories_title: `カテゴリ（{stmCategoriesEdit}）`,
+      categories_description: `デフォルトのSTMは1つの自由記述の要約です。最大5つのラベル付きフィールド（例：\`Goals\`、\`Inventory\`）を定義すると、私がツール呼び出しで個別に埋め、ラベル付きセクションとして表示します。すべてのフィールドを空にすると単一要約のデフォルトに戻ります。`,
+      prompts_title: `プロンプトの上書き（{stmPromptEdit}）`,
+      prompts_description: `2つのプロンプト文字列をカスタマイズできます：
+- **ツール説明**：私のSTMツールがモデルに提示する説明文。
+- **メモリの促し**：統合された作成・更新のヒント文。
+空欄にすると組み込みのデフォルトに戻ります。使用できる主な\`{...}\`マクロ：
+- \`{short_term_memory_tool}\` → STMツール名
+- \`{memory_tool}\` / \`{memory_update_tool}\` → 長期記憶ツール名
+- \`{category_labels}\` → 設定済みカテゴリラベル一覧 *（促しのみ・カテゴリモード）*
+未知のプレースホルダーは自動的に除去されます。`,
+      manage_title: `管理とスコープ`,
+      manage_description: `- {stmManage}：有効なサーバー共有STMエントリを確認・削除します。
+- {stmPrivacyBypass}：プライベートチャンネルのSTMを他チャンネルに表示するか制御します。
+- {personaStmEdit}：現在のチャンネルでペルソナのライブSTMを手動編集します。`,
     },
     "memory-tagging": {
       description: `記憶のキーワードタグとチャンネルタグの仕組みを学ぶ`,
@@ -701,7 +722,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
     spotlight: {
       description: `パーソナルスポットライトの仕組みと使い方を学ぶ`,
       title: `パーソナルスポットライトガイド`,
-      embed_description: `パーソナルスポットライトを使うと、特定のチャンネルで**あなた自身**がトリガーできるペルソナを絞り込み、必要ならそのチャンネル専用の自動トリガーペルソナも設定できます。`,
+      embed_description: `[パーソナルスポットライト](https://docs.tomoribot.app/ja/features/knowledge/personalization/#personal-spotlight)を使うと、特定のチャンネルで**あなた自身**がトリガーできるペルソナを絞り込み、必要ならそのチャンネル専用の自動トリガーペルソナも設定できます。`,
       what_title: `何をする機能か`,
       what_description: `- スポットライトは **あなた + 1チャンネル** 単位で適用されます
 - 他のユーザーには影響しません
@@ -734,7 +755,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
     "deliberate-trigger-mode": {
       description: `明示的トリガーモードで何が変わるかを学ぶ`,
       title: `明示的トリガーモードガイド`,
-      embed_description: `明示的トリガーモード（DTM）は、ペルソナの明示的トリガーとして何を認めるかを変える設定です。特に通常のトリガーワードの扱いが変わります。`,
+      embed_description: `[明示的トリガーモード（DTM）](https://docs.tomoribot.app/ja/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)は、ペルソナの明示的トリガーとして何を認めるかを変える設定です。特に通常のトリガーワードの扱いが変わります。`,
       normal_title: `通常時のトリガー`,
       normal_description: `DTMがオフのとき、Tomoriは通常次の方法で反応できます：
 - メッセージ中の通常のトリガーワード
@@ -960,7 +981,7 @@ MCPサーバーはブラウザ拡張機能やサードパーティアプリと�
     "deliberate-tool-mode": {
       description: `明示的ツールモードでツール利用がどう変わるかを学ぶ`,
       title: `明示的ツールモードガイド`,
-      embed_description: `明示的ツールモードは、メッセージがツールを必要としているように見える場合だけ、通常会話ターンにツール宣言を含めます。`,
+      embed_description: `[明示的ツールモード](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/#deliberate-tool-mode)は、メッセージがツールを必要としているように見える場合だけ、通常会話ターンにツール宣言を含めます。`,
       what_title: `何をするか`,
       what_description: `明示的ツールモードが有効な場合、まずメッセージに明示的なツール意図があるか確認します。意図が見つからない場合、そのターンではツール宣言を外します。これによりプロンプト量が減り、小型・ローカルモデルの応答が速くなります。`,
       intent_title: `ツール意図として扱われるもの`,

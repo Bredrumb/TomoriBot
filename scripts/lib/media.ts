@@ -54,7 +54,7 @@ export const PERSONA_PREFIX = "src/db/seed/catalog/personas/";
 
 /**
  * Prefix for historical release cards. These are NOT in the gate scope (excluded
- * on purpose), but `compress-media` still normalizes them to WebP — they are
+ * on purpose), but `compress-media` still normalizes them to WebP, so they are
  * web-viewed showcase art where WebP wins hugely over PNG.
  */
 export const RELEASE_PREFIX = ".github/release/";
@@ -100,7 +100,7 @@ export function listTrackedFiles(): string[] {
 /**
  * List untracked, non-gitignored file paths within the given scope prefixes
  * (forward-slash, repo-relative). These are files present on disk but not yet
- * staged or committed — `git ls-files` alone misses them entirely.
+ * staged or committed because `git ls-files` alone misses them entirely.
  */
 export function listUntrackedInScopePaths(prefixes: string[]): string[] {
   // --others = untracked files; --exclude-standard = respect .gitignore.
@@ -158,7 +158,7 @@ export function listCompressTargets(): CompressTarget[] {
     SCOPE_PREFIXES.some((prefix) => path.startsWith(prefix)) || path.startsWith(RELEASE_PREFIX);
 
   const tracked = listTrackedFiles().filter((path) => MEDIA_EXTENSIONS.has(extensionOf(path)) && isInScope(path));
-  // Untracked release cards are transient scratch — only scope prefixes matter here.
+  // Untracked release cards are transient scratch, so only scope prefixes matter here.
   const untracked = listUntrackedInScopePaths(SCOPE_PREFIXES).filter((path) => MEDIA_EXTENSIONS.has(extensionOf(path)));
 
   const seen = new Set<string>();

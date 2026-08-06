@@ -10,7 +10,6 @@ import { healthTracker } from "@/utils/misc/healthTracker";
  * Non-critical: failures here degrade diagnostics/reminders but do not
  * affect core chat functionality.
  *
- * @param client - The Discord.js Client instance
  */
 export function initTimers(client: Client): void {
   client.once("clientReady", () => {
@@ -20,7 +19,7 @@ export function initTimers(client: Client): void {
 
   log.section("Initializing Scheduled Work Coordinator...");
   try {
-    // Dynamic import deferred — module references timers that require the client to be ready
+    // Dynamic import deferred, because module references timers that require the client to be ready
     import("@/timers/scheduledWorkCoordinator")
       .then(({ initializeScheduledWorkCoordinator }) => {
         client.once("clientReady", () => {
@@ -116,5 +115,33 @@ export function initTimers(client: Client): void {
       });
   } catch (error) {
     log.error("Failed to initialize quota cleanup system", error as Error);
+  }
+
+  log.section("Initializing RAG Availability Monitor...");
+  try {
+    import("@/timers/ragAvailabilityMonitor")
+      .then(({ initializeRagAvailabilityMonitor }) => {
+        initializeRagAvailabilityMonitor();
+        log.success("RAG availability monitor initialized");
+      })
+      .catch((error: Error) => {
+        log.error("Failed to initialize RAG availability monitor", error);
+      });
+  } catch (error) {
+    log.error("Failed to initialize RAG availability monitor", error as Error);
+  }
+
+  log.section("Initializing STM Janitor...");
+  try {
+    import("@/timers/stmJanitor")
+      .then(({ initializeStmJanitor }) => {
+        initializeStmJanitor();
+        log.success("STM janitor initialized");
+      })
+      .catch((error: Error) => {
+        log.error("Failed to initialize STM janitor", error);
+      });
+  } catch (error) {
+    log.error("Failed to initialize STM janitor", error as Error);
   }
 }

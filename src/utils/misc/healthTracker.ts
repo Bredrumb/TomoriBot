@@ -31,7 +31,6 @@ class HealthTracker {
 
   /**
    * Initialize the health tracker with a Discord client
-   * @param client - Discord.js client instance
    */
   initialize(client: Client): void {
     this.client = client;
@@ -47,15 +46,10 @@ class HealthTracker {
     this.lastActivityTimestamp = Date.now();
   }
 
-  /**
-   * Get comprehensive health status of the bot
-   * @returns Health check result with detailed status
-   */
   getHealthStatus(): HealthStatus {
     const now = Date.now();
     const timeSinceLastActivity = now - this.lastActivityTimestamp;
 
-    // 1. Check if client is initialized
     if (!this.client) {
       return {
         healthy: false,
@@ -68,7 +62,6 @@ class HealthTracker {
       };
     }
 
-    // 2. Check if Discord client is ready
     const isClientReady = this.client.isReady();
     if (!isClientReady) {
       return {
@@ -82,7 +75,7 @@ class HealthTracker {
       };
     }
 
-    // 3. Check WebSocket ping (measures roundtrip latency to Discord)
+    // Check WebSocket ping (measures roundtrip latency to Discord)
     const websocketPing = this.client.ws.ping;
     if (websocketPing < 0 || websocketPing > this.maxPingLatency) {
       return {
@@ -96,7 +89,7 @@ class HealthTracker {
       };
     }
 
-    // 4. Activity timeout check (DISABLED)
+    // Activity timeout check (DISABLED)
     // This check is intentionally commented out to prevent false positives during quiet hours.
     // The "Lonely Bot" problem: During periods of low activity (e.g., 3 AM), no Discord events
     // are received, causing the bot to report "unhealthy" despite being perfectly functional.
@@ -121,7 +114,6 @@ class HealthTracker {
 		}
 		*/
 
-    // All checks passed - bot is healthy
     return {
       healthy: true,
       reason: "All systems operational",
@@ -133,9 +125,6 @@ class HealthTracker {
     };
   }
 
-  /**
-   * Get time since last Discord activity in milliseconds
-   */
   getTimeSinceLastActivity(): number {
     return Date.now() - this.lastActivityTimestamp;
   }
@@ -151,7 +140,7 @@ class HealthTracker {
 /**
  * Health status result structure
  */
-export interface HealthStatus {
+interface HealthStatus {
   /**
    * Whether the bot is considered healthy
    */

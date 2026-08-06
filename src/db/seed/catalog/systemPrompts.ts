@@ -1,5 +1,3 @@
-// Typed system prompt preset catalog — split out from the former 02_personas.sql seed.
-
 import type { CatalogSection, SystemPromptInput } from "./types";
 
 export const systemPromptSections: CatalogSection<SystemPromptInput>[] = [

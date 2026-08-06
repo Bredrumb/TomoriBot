@@ -24,9 +24,10 @@ import { validateTomoriConfigFields } from "@/utils/db/sqlSecurity";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { invalidateUserCache } from "@/utils/cache/userCache";
 import { configRepository } from "@/utils/db/repositories/ConfigRepository";
+import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import type { ServerChatConfigRow, ServerNoticeEmbedsConfigRow } from "@/types/db/schema";
 
-export type ImportFileType =
+type ImportFileType =
   | "personal_memories"
   | "server_memories"
   | "personal_settings"
@@ -35,7 +36,7 @@ export type ImportFileType =
   | "personal"
   | "server";
 
-export interface ImportValidationResult {
+interface ImportValidationResult {
   valid: boolean;
   type?: ImportFileType;
   data?:
@@ -49,7 +50,7 @@ export interface ImportValidationResult {
 }
 
 /**
- * ImportRepository — owns all data import operations.
+ * ImportRepository: owns all data import operations.
  *
  * Handles personal and server data import, per-domain slice imports
  * (memories, settings, config), import file validation, and cache
@@ -58,9 +59,7 @@ export interface ImportValidationResult {
  * Composite methods (importPersonalData, importServerData) call private
  * SQL sub-methods directly to avoid double cache invalidation.
  */
-export class ImportRepository {
-  // ── private SQL helpers ────────────────────────────────────────────────────
-
+class ImportRepository {
   /** Upserts a user row by Discord ID and returns the internal user_id. */
   private async ensureUserId(userDiscId: string): Promise<number | null> {
     const upserted = await sql.begin(async (tx) => {
@@ -135,8 +134,6 @@ export class ImportRepository {
     return { personaId: mainTomori.persona_id, personaLineageId };
   }
 
-  // ── private SQL operations (no cache) ─────────────────────────────────────
-
   private async sqlImportPersonalMemories(
     userDiscId: string,
     memories: MemoryItem[],
@@ -180,12 +177,10 @@ export class ImportRepository {
     importData: PersonalSettingsExportData,
   ): Promise<ImportResult> {
     try {
-      // 1. Normalize split-table personalization values.
       const physicalAppearanceTags = importData.physical_appearance_tags ?? [];
       const naiCharRefUrl = importData.nai_char_ref_url ?? null;
       const impersonationPrompt = importData.impersonation_prompt ?? null;
 
-      // 2. Upsert identity fields to users, then the 5 personalization fields to the split table.
       const updateResult = await sql.begin(async (tx) => {
         const userRows = await tx<Array<{ user_id: number }>>`
           INSERT INTO users (
@@ -253,7 +248,7 @@ export class ImportRepository {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
 
-      // 3. Count imported fields (base 2 + optional impersonation/image/behavioral fields)
+      // Count imported fields (base 2 + optional impersonation/image/behavioral fields)
       let fieldsCount = 2;
       if (impersonationPrompt) fieldsCount++;
       if (physicalAppearanceTags.length > 0) fieldsCount++;
@@ -279,7 +274,10 @@ export class ImportRepository {
         return { success: false, error: "commands.data.import.error_no_server_data" };
       }
 
-      const configFields = Object.keys(config);
+      // STM customization travels as nested keys (stm_config / stm_categories) that are
+      // restored via shortTermMemoryRepository.fromExportShape, NOT the dynamic flat-config
+      // SQL writer: so exclude them from the column-name allowlist validation below.
+      const configFields = Object.keys(config).filter((f) => f !== "stm_config" && f !== "stm_categories");
       try {
         validateTomoriConfigFields(configFields);
       } catch (error) {
@@ -287,19 +285,14 @@ export class ImportRepository {
         return { success: false, error: "commands.data.import.error_invalid_config" };
       }
 
-      // llm_max_output_tokens uses conditional inclusion: only overwrite when explicitly present in the export.
       const hasMaxOutputTokens = Object.hasOwn(config, "llm_max_output_tokens");
 
-      // 1. Partition imported fields into typed patch objects by split-table ownership.
-
-      // server_model_configs: temperature, thinking level, disabled params
       const modelPatch = {
         llm_temperature: config.llm_temperature,
         thinking_level: config.thinking_level,
         llm_disabled_params: config.llm_disabled_params,
       };
 
-      // server_chat_configs: LLM sampling params, humanizer, prompt, context, limits
       const chatPatch: Partial<ServerChatConfigRow> = {
         llm_top_p: config.llm_top_p,
         llm_top_k: config.llm_top_k,
@@ -309,7 +302,6 @@ export class ImportRepository {
         llm_logit_biases: config.llm_logit_biases,
         llm_stop_strings: config.llm_stop_strings,
         llm_stop_speaker_pattern_enabled: config.llm_stop_speaker_pattern_enabled ?? false,
-        // HumanizerDegree is a numeric enum; number is safe at runtime
         humanizer_degree: config.humanizer_degree as ServerChatConfigRow["humanizer_degree"],
         timezone_offset: config.timezone_offset,
         message_fetch_limit: config.message_fetch_limit,
@@ -324,7 +316,6 @@ export class ImportRepository {
         ...(config.send_message_limit !== undefined && { send_message_limit: config.send_message_limit }),
       };
 
-      // server_member_permissions_configs: teaching toggles, personal memories, snapshot
       const memberPermPatch = {
         server_memteaching_enabled: config.server_memteaching_enabled,
         attribute_memteaching_enabled: config.attribute_memteaching_enabled,
@@ -336,7 +327,6 @@ export class ImportRepository {
         }),
       };
 
-      // server_capabilities_configs: feature toggles
       const capsPatch = {
         emoji_usage_enabled: config.emoji_usage_enabled,
         sticker_usage_enabled: config.sticker_usage_enabled,
@@ -351,7 +341,13 @@ export class ImportRepository {
         ...(config.user_blocking_enabled !== undefined && {
           user_blocking_enabled: config.user_blocking_enabled,
         }),
+        ...(config.time_awareness_enabled !== undefined && {
+          time_awareness_enabled: config.time_awareness_enabled,
+        }),
         ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
+        ...(config.short_term_memory_enabled !== undefined && {
+          short_term_memory_enabled: config.short_term_memory_enabled,
+        }),
         ...(config.verbatim_tool_calling_enabled !== undefined && {
           verbatim_tool_calling_enabled: config.verbatim_tool_calling_enabled,
         }),
@@ -364,7 +360,6 @@ export class ImportRepository {
           config.tool_notice_hidden_keys as ServerNoticeEmbedsConfigRow["tool_notice_hidden_keys"],
       };
 
-      // 2. Dispatch the five always-present table writes in parallel.
       const requiredWriteResults = await Promise.all([
         configRepository.updateModelConfig(serverId, modelPatch),
         configRepository.updateChatConfig(serverId, chatPatch),
@@ -373,12 +368,10 @@ export class ImportRepository {
         configRepository.updateNoticeEmbedsConfig(serverId, noticeEmbedsPatch),
       ]);
 
-      // 3. Failure on any required config write means at least one split-table row failed to restore.
       if (requiredWriteResults.some((ok) => !ok)) {
         return { success: false, error: "commands.data.import.error_update_failed" };
       }
 
-      // 4. Dispatch optional-field table writes in parallel; these are absent in older exports.
       const optionalWriteResults = await Promise.all([
         config.uncensor_injection_enabled !== undefined ||
         config.uncensor_unicode_space_enabled !== undefined ||
@@ -488,6 +481,15 @@ export class ImportRepository {
         config.welcome_prompt !== undefined
           ? configRepository.updateWelcomeConfig(serverId, { welcome_prompt: config.welcome_prompt })
           : Promise.resolve(true),
+
+        // STM customization (config + categories) restores via the repository's export
+        // shape, which upserts server_stm_configs and replace-alls stm_categories.
+        config.stm_config !== undefined || config.stm_categories !== undefined
+          ? shortTermMemoryRepository.fromExportShape(serverDiscId, {
+              stm_config: config.stm_config ?? null,
+              stm_categories: config.stm_categories ?? [],
+            })
+          : Promise.resolve(true),
       ]);
 
       if (optionalWriteResults.some((ok) => !ok)) {
@@ -594,7 +596,7 @@ export class ImportRepository {
   }
 
   /**
-   * Raw composite personal import — no cache invalidation.
+   * Raw composite personal import; no cache invalidation.
    * Used internally by importPersonalData (which adds cache) and
    * fromExportShape (which intentionally skips cache for pipeline use).
    */
@@ -629,7 +631,7 @@ export class ImportRepository {
   }
 
   /**
-   * Raw composite server import — no cache invalidation.
+   * Raw composite server import; no cache invalidation.
    * Used internally by importServerData (which adds cache).
    */
   private async sqlImportServerData(
@@ -654,8 +656,6 @@ export class ImportRepository {
       },
     };
   }
-
-  // ── public import operations ───────────────────────────────────────────────
 
   /**
    * Imports personal memories for a user from an export payload.
@@ -696,7 +696,6 @@ export class ImportRepository {
   }
 
   /**
-   * Imports server memories from an export payload.
    * @param serverDiscId - Discord server snowflake
    * @param memories - Array of memory items to import
    * @param target - Target scope: persona (with optional personaId) or global
@@ -828,11 +827,9 @@ export class ImportRepository {
     return { valid: false, error: `commands.data.import.error_unknown_type|${type}` };
   }
 
-  // ── IRepository contract ───────────────────────────────────────────────────
-
   /**
    * Imports a previously exported personal data bundle (IRepository contract).
-   * Intentionally bypasses cache invalidation — this is a pipeline/batch entry
+   * Intentionally bypasses cache invalidation: this is a pipeline/batch entry
    * point where the caller controls cache lifecycle.
    *
    * @param ownerId - Discord user snowflake
@@ -847,5 +844,5 @@ export class ImportRepository {
   }
 }
 
-/** Singleton instance — import this in callers. */
+/** Singleton instance: import this in callers. */
 export const importRepository = new ImportRepository();

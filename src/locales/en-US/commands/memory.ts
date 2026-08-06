@@ -1,6 +1,4 @@
-// locales/en-US/commands/memory.ts
-
-export default {
+﻿export default {
   memory: {
     description: `Manage stored memories and documents.`,
     document: {
@@ -98,7 +96,7 @@ export default {
         in_character_scope_invalid_title: `In-character Mode Requires Persona Scope`,
         in_character_scope_invalid_description: `In-character extraction renders memories as a single persona would record them, so it only works with \`scope: persona\`. Re-run with \`scope: persona\` to use this prompt mode.`,
         rag_disabled_title: `Document RAG Disabled`,
-        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension in your database. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/self-hosting/manual-setup/)).`,
+        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension in your database. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/en/self-hosting/manual-setup/)).`,
         no_permission_title: `Permission Denied`,
         no_permission_description: `You need the **Manage Server** permission to extract channel history.`,
         model_incompatible_title: `Model Incompatible`,
@@ -121,6 +119,8 @@ export default {
         no_extractable_content_description: `This batch of messages contained only system messages or empty content. Continue from the message ID below to process more.`,
         no_facts_extracted_title: `No Facts Extracted`,
         no_facts_extracted_description: `The AI could not extract any meaningful facts from this batch. The conversation may be too short or consist only of trivial messages.`,
+        extraction_failed_title: `Fact Extraction Failed`,
+        extraction_failed_description: `The model could not produce structured output, so no facts could be extracted ({failed_windows} of {total_windows} batches failed). This usually means the selected model does not support JSON schema output, try a different model. The provider reported:`,
         duplicate_title: `Document Name Already Exists`,
         duplicate_description: `A document named \`{name}\` already exists in this scope. Please choose a different name.`,
         limit_exceeded_title: `Document Limit Reached`,
@@ -156,7 +156,7 @@ export default {
         select_description: `Choose which history document to remove`,
         select_placeholder: `Select a document...`,
         rag_disabled_title: `Document RAG Disabled`,
-        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/self-hosting/manual-setup/)).`,
+        rag_disabled_description: `Document retrieval requires the [pgvector](https://github.com/pgvector/pgvector) PostgreSQL extension. Install pgvector and restart me to enable it (see the [self-hosting setup guide](https://docs.tomoribot.app/en/self-hosting/manual-setup/)).`,
         none_title: `No History Documents`,
         none_description: `There are no history-extracted documents to remove in this scope. Extract some with \`/memory history import\`.`,
         success_title: `History Document Removed`,
@@ -296,6 +296,10 @@ Click **Confirm** to proceed. You can review and edit the content before it is s
         chunk_limit_description: `Adding this memory would exceed the chunk limit for **{persona_name}** (max {max_chunks}). Remove some documents first.`,
         empty_content_title: `Memory Content Is Empty`,
         empty_content_description: `The memory content produced no text chunks after normalization. Please ensure it contains meaningful text.`,
+        progress_title: `Vectorization in Progress`,
+        progress_description: `Embedding and storing the memory as a document. This may take a moment...`,
+        partial_failure_title: `Memory Vectorized — Cleanup Required`,
+        partial_failure_description: `Created document **{name}** ({chunk_count} chunks) for **{persona_name}**, but I couldn't remove the original server memory. Both now exist. Remove the original with \`/memory server remove\`; do not vectorize it again unless you first delete the new document.`,
         success_title: `Memory Vectorized`,
         success_description: `Converted memory into document **{name}** ({chunk_count} chunks) for **{persona_name}**. The original memory has been removed.`,
       },

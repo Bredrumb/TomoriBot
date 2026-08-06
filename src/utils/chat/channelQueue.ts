@@ -16,6 +16,7 @@ import type {
   QueuedMessageDiscardReason,
   RunnableChatAdmission,
   SceneTurnMetadata,
+  SystemTriggerIdentity,
   TextQuotaSource,
 } from "@/utils/chat/types";
 
@@ -57,6 +58,7 @@ export type QueuedMessage = {
   injectedContextItems?: StructuredContextItem[];
   forcedMentions?: ForcedMention[];
   manualTriggerInvoker?: ManualTriggerInvoker;
+  systemTriggerIdentity?: SystemTriggerIdentity;
   manualStreamingContextOverrides?: Pick<
     StreamingContext,
     "disableCrossChannelMessage" | "disableRecentMessageReplyTool" | "disableReminderTool"
@@ -105,7 +107,7 @@ export async function runWithChannelLock<T>(
   const channelId = admission.message.channel.id;
   const skipLock = admission.incoming.skipLock;
 
-  // Retry/internal re-entries (skipLock) reuse the outer turn's lock and typing keepalive — no new typing start
+  // Retry/internal re-entries (skipLock) reuse the outer turn's lock and typing keepalive : no new typing start
   if (skipLock) {
     const lockEntry = channelLocks.get(channelId);
     return await callback(

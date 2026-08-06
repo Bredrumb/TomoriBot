@@ -1,5 +1,3 @@
-// locales/ja/commands/capabilities.ts
-
 export default {
   capabilities: {
     description: `ツール使用と特定の機能を管理します。`,
@@ -19,11 +17,13 @@ export default {
       managemessage_option: `メッセージ管理`,
       threadcreation_option: `スレッド作成`,
       userblocking_option: `ペルソナ別ユーザーブロック`,
+      timeawareness_option: `時間認識の強化`,
       imagegen_option: `画像生成`,
       videogen_option: `動画生成`,
       hiderespondembed_option: `応答埋め込みを非表示`,
       hideimpersonationembeds_option: `なりすまし埋め込みを非表示`,
       voicemessage_option: `ボイスメッセージ（ElevenLabs）`,
+      shorttermmemory_option: `STMの自動要約`,
       selfteaching_desc: `サーバーの会話から学習する`,
       personalization_desc: `個人記憶とニックネーム`,
       emojiusage_desc: `返答に絵文字を使用する`,
@@ -32,11 +32,13 @@ export default {
       managemessage_desc: `最近のメッセージの固定と、ボットやキャラクター名義の最近のメッセージ編集・削除を許可する`,
       threadcreation_desc: `公開スレッドを作成し、最初のメッセージを送信する`,
       userblocking_desc: `ペルソナがユーザーをミュート/ブロックできるようにする`,
+      timeawareness_desc: `再会や最近のメッセージの日付の区切りを認識する`,
       imagegen_desc: `リクエストに応じて画像生成`,
       videogen_desc: `リクエストに応じて短い動画を生成`,
       hiderespondembed_desc: `/bot respond の成功埋め込みを非表示`,
       hideimpersonationembeds_desc: `なりすまし通知を非表示`,
       voicemessage_desc: `ElevenLabs TTSボイスメッセージを送信`,
+      shorttermmemory_desc: `ボットの自動記憶＆促し。オフでも手動編集(/persona stm edit)と生メッセージは表示`,
       select_placeholder: `有効にする機能を選択...`,
       checkbox_label_continued: `機能（続き）`,
       select_embed_title: `機能の設定`,

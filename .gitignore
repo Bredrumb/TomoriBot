@@ -39,8 +39,8 @@ docker-pip-cache/
 docker-npm-cache/
 
 # Other folders
-.plans/*
-plans/
+/.plans/
+/plans/
 .deprecated/
 .vscode/
 .temp/
@@ -220,5 +220,6 @@ Thumbs.db
 terraform.tfvars
 .terraform/
 .terraform.lock.hcl
+!terraform/azure/.terraform.lock.hcl
 *.tfplan
 *.tfplan.*
