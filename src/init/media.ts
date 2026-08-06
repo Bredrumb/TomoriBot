@@ -48,6 +48,16 @@ export function initMediaProcessing(): void {
     log.success(
       `Media processing configured (sharp concurrency: ${concurrency}, cache: ${cacheMemoryMb}MB / ${cacheItems} items / ${cacheFiles} files)`,
     );
+
+    // Production pins pino to `level: "error"`, so the line above is never emitted there and the
+    // applied limits would be unverifiable from outside the process. `log.metric` is level 52,
+    // which clears that floor and routes to TomoriBotMetrics_CL.
+    log.metric("media_config", {
+      sharp_concurrency: concurrency,
+      sharp_cache_memory_mb: cacheMemoryMb,
+      sharp_cache_items: cacheItems,
+      sharp_cache_files: cacheFiles,
+    });
   } catch (error) {
     // Image features degrade rather than fail: leaving libvips on its defaults is worse for
     // memory but still functional, so this must not abort startup.
