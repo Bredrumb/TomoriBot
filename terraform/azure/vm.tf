@@ -51,4 +51,14 @@ resource "azurerm_linux_virtual_machine" "tomoribot" {
   }
 
   tags = local.common_tags
+
+  # cloud-init is consumed once at provision time, so the provider can satisfy a
+  # custom_data diff only by rebuilding the host. Editing this file to record a
+  # host change already applied out of band would otherwise plan a destructive
+  # replacement that reconstructs state the running VM already has. The file
+  # stays authoritative for the next deliberate rebuild; reaching that rebuild
+  # means removing this VM from state, not pushing a YAML edit.
+  lifecycle {
+    ignore_changes = [custom_data]
+  }
 }

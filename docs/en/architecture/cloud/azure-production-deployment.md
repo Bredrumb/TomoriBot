@@ -62,8 +62,19 @@ The workflow deliberately separates recurring releases from one-time lifecycle o
 
 Terraform plans that delete or replace the production VM stop before apply. After reviewing the
 saved plan, an operator may approve the replacement only through a manual dispatch with
-`allow_vm_replacement=true`; release-branch pushes cannot bypass this guard. This matters because
-changes to VM `custom_data` are replacement operations, not in-place updates.
+`allow_vm_replacement=true`; release-branch pushes cannot bypass this guard.
+
+The VM carries `lifecycle { ignore_changes = [custom_data] }` so that editing `cloud-init.yaml` is
+not one of the ways a plan reaches that guard. Azure hands cloud-init to the guest agent once, at
+provision time, which is why the provider treats `custom_data` as replace-only: rebuilding is the
+sole way it can honour the diff. A host setting is therefore routinely applied to the running VM
+first and backported to `cloud-init.yaml` afterwards, and without the exemption that backport would
+plan a destructive replacement whose only effect is to reconstruct state the host already has.
+
+The YAML stays authoritative for the next provision, so keep it accurate. Reaching that provision is
+a deliberate act, though: removing the VM from state or destroying it, never a pushed YAML edit.
+Verify a backport against the live host rather than trusting a clean plan, because Terraform no
+longer reports drift on this field.
 
 The Azure Monitor Linux Agent and both DCR associations are Terraform-managed children of the VM.
 The DCR definitions, DCE, Log Analytics workspace, and custom tables remain externally managed and
