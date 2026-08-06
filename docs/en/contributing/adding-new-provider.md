@@ -1,10 +1,10 @@
----
+﻿---
 title: "Add a New AI Provider"
 ---
 
 This is the current implementation guide for adding a provider to TomoriBot.
 
-Read [`docs/architecture/pipelines/provider/`](../pipelines/provider/) first if you need the architecture overview.
+Read [`docs/en/architecture/pipelines/provider/`](../pipelines/provider/) first if you need the architecture overview.
 Use this guide when you are actually wiring a new provider into the codebase.
 
 ## Mental Model
@@ -411,7 +411,7 @@ Use this as the last pass before you call a provider integration "done".
 
 - if the vendor has a verified request-side reasoning control, map the `thinking_level` option from `/model parameters` in the provider layer
 - if the vendor only supports startup flags, GUI toggles, or backend-template-specific reasoning controls, do not invent a generic request field
-- document the result in `docs/architecture/subsystems/thinking-level.md` and the provider notes
+- document the result in `docs/en/architecture/subsystems/thinking-level.md` and the provider notes
 - if the provider only guarantees JSON objects, inject the required prompt guidance and validate locally with Zod
 - seed `llms.supports_structoutput` only for models validated end-to-end in TomoriBot
 - if history extraction depends on structured output, do not enable `featureSupport.historyExtraction` until that path works
@@ -513,7 +513,7 @@ Run `bun run check-locales` only if you changed locale files or command metadata
 
 ## Related Files
 
-- `docs/architecture/pipelines/provider/` (provider pipeline architecture reference)
+- `docs/en/architecture/pipelines/provider/` (provider pipeline architecture reference)
 - `src/types/provider/interfaces.ts`
 - `src/types/provider/featureInterfaces.ts`
 - `src/utils/provider/providerFactory.ts`
@@ -751,7 +751,7 @@ If you want another agent to implement this in one pass, give it this bounded sc
 Recommended handoff prompt:
 
 ```text
-Implement Phase 1 and Phase 2 from the OpenAI-Compatible Providers section in docs/contributing/adding-new-provider.md, then implement only the bounded DeepSeek MVP from the same guide.
+Implement Phase 1 and Phase 2 from the OpenAI-Compatible Providers section in docs/en/contributing/adding-new-provider.md, then implement only the bounded DeepSeek MVP from the same guide.
 
 Constraints:
 - preserve current custom-provider behavior

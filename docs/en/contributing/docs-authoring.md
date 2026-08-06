@@ -1,4 +1,4 @@
----
+﻿---
 title: "Docs Authoring Conventions"
 sidebar:
   order: 3
@@ -33,12 +33,12 @@ its normal section. **Use placeholders** for anything tied to one account: `<gcp
 `<resource-group>`, `<workspace-name>`. A reader who copies a literal value from a guide gets a
 failure, so a real project ID in a guide is a bug, not just an oversight.
 
-**A runbook** performs a procedure against the project's own production. It belongs in `docs/wiki/`
+**A runbook** performs a procedure against the project's own production. It belongs in `docs/en/wiki/`
 and **keeps real resource names**, because substituting placeholders into a runbook makes it wrong.
 Link it from the related architecture page rather than the sidebar.
 
 "Specific to a cloud provider" and "specific to our account" are different axes.
-`docs/architecture/cloud/` covers the first; only `docs/wiki/` covers the second.
+`docs/en/architecture/cloud/` covers the first; only `docs/en/wiki/` covers the second.
 
 Regardless of type, never write credentials, API keys, tokens, private keys, connection strings,
 tenant IDs, or the production VM's public IP into any page. GitHub push protection blocks true
@@ -124,7 +124,7 @@ The docs site handles most SEO automatically:
 - **First paragraphs matter**: because they become search snippets, open each page with one
   or two plain sentences that describe the page, before any heading, list, aside, or
   component.
-- **Internal pages**: everything under `docs/wiki/` is marked `noindex` and stays out of
+- **Internal pages**: everything under `docs/en/wiki/` is marked `noindex` and stays out of
   search engines. Put maintainer-only records there.
 - **robots.txt / sitemap**: `apps/docs/public/robots.txt` advertises the auto-generated
   `sitemap-index.xml`. No per-page action needed.

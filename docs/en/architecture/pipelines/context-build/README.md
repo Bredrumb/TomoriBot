@@ -1,4 +1,4 @@
----
+﻿---
 title: "Context-Build Pipeline"
 sidebar:
   label: "Overview"
@@ -72,7 +72,7 @@ buildContextNative(BuildContextParams)        ← fixed-order assembly
   before passing to the provider.
 - **SillyTavern presets:** preset reassembly lives in
   `src/utils/text/presetContextBuilder.ts` (called from the routing wrapper).
-  See also [`docs/architecture/integrations/sillytavern/preset-system.md`](../../integrations/sillytavern/preset-system) for the user-facing system.
+  See also [`docs/en/architecture/integrations/sillytavern/preset-system.md`](../../integrations/sillytavern/preset-system) for the user-facing system.
 - **Tool prompt macros:** `{short_term_memory_tool}`, `{sticker_tool}`,
   `{memory_tool}`, etc. are expanded by `toolPromptMacroResolver` from
   `src/utils/tools/toolPromptMacros.ts`. Used across contributors.

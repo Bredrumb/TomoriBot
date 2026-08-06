@@ -1,4 +1,4 @@
----
+﻿---
 title: "05: Turn Planning"
 ---
 
@@ -129,5 +129,5 @@ gating completes, not a wholesale override.
 
 - Credential resolution: → [provider pipeline](../provider/).
 - Autochat / DTM / always-reply mode semantics: → folded into `triggerProcessor.ts`; no dedicated doc yet.
-- Cooldown types and behavior: → [`docs/architecture/subsystems/cooldowns.md`](../../subsystems/cooldowns).
+- Cooldown types and behavior: → [`docs/en/architecture/subsystems/cooldowns.md`](../../subsystems/cooldowns).
 - Text quota: → no dedicated doc yet; quota-manager helper only.

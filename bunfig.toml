@@ -1,9 +1,9 @@
-[test]
+﻿[test]
 # Scopes bare `bun test` to the same tree `bun run test` scans. Without this, Bun
 # walks the whole repo and picks up two files that must not run by default: the
 # archived comment-sweep test under gitignored `plans/`, whose subject script was
 # removed from the tracked surface (it can only ever fail), and
-# scripts/checks/commentPolicy.test.ts, which docs/contributing/comment-policy.md
+# scripts/checks/commentPolicy.test.ts, which docs/en/contributing/comment-policy.md
 # documents as a manual self-test. A path outside this root must be prefixed with
 # `./` or Bun reads it as a name filter and matches nothing.
 root = "tests"

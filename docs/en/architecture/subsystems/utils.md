@@ -1,4 +1,4 @@
----
+﻿---
 title: "Utils and Helpers"
 ---
 
@@ -42,7 +42,7 @@ This is a current map of shared utility modules under `src/utils/`.
 - `sqlSecurity.ts`: query parameterisation helpers
 - `sqlSplitter.ts`: SQL file parsing utilities
 - `ragAvailability.ts`: pgvector / RAG feature detection
-- `repositories/`: 28 domain-owned repository modules + `index.ts` (shared instance + type re-exports only). SQL remains in its owning module; no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. `ErrorLogRepository` is a thin shim used by `logger.ts` to insert into `error_logs` without creating a circular import. See `docs/architecture/subsystems/database-schema.md` for the full repository table and SQL convention.
+- `repositories/`: 28 domain-owned repository modules + `index.ts` (shared instance + type re-exports only). SQL remains in its owning module; no `*ReadSql.ts` / `*WriteSql.ts` sibling files exist. `ErrorLogRepository` is a thin shim used by `logger.ts` to insert into `error_logs` without creating a circular import. See `docs/en/architecture/subsystems/database-schema.md` for the full repository table and SQL convention.
 
 ### `utils/discord`
 

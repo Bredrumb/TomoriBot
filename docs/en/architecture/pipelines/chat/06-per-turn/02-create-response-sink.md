@@ -1,4 +1,4 @@
----
+﻿---
 title: "06.2: Response Sink"
 ---
 
@@ -140,4 +140,4 @@ both the stream orchestrator (writes chunks) and the generation stage (calls
 - Stream consumption: → [provider pipeline](../../provider/)
 - Webhook lifecycle and fallback: → webhook subsystem (currently in webhook helper files; no dedicated
   doc yet)
-- Multi-persona delivery identity: → `docs/architecture/subsystems/multi-persona.md` (webhook-persona pipeline TBD)
+- Multi-persona delivery identity: → `docs/en/architecture/subsystems/multi-persona.md` (webhook-persona pipeline TBD)

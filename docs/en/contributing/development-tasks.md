@@ -1,4 +1,4 @@
----
+﻿---
 title: "Development Tasks"
 ---
 
@@ -80,7 +80,7 @@ const VALUE = Number.parseInt(process.env.CONFIG_VAR || "10", 10);
 
 - Use Bun SQL template literals for queries.
 - Keep schema migrations idempotent (`IF NOT EXISTS`, helper functions, guarded blocks).
-- For DB model details, see [`docs/architecture/subsystems/database-schema.md`](../subsystems/database-schema).
+- For DB model details, see [`docs/en/architecture/subsystems/database-schema.md`](../subsystems/database-schema).
 
 ### Cache-Safe Write Pattern
 
@@ -90,7 +90,7 @@ When a write affects cached reads:
 2. Then invalidate affected cache key(s).
 
 Do not invalidate before failed writes, and do not manually mutate cached objects.
-See [`docs/architecture/subsystems/caching.md`](../subsystems/caching) for the cache map and invalidation APIs.
+See [`docs/en/architecture/subsystems/caching.md`](../subsystems/caching) for the cache map and invalidation APIs.
 
 ### Logging and Error Handling
 
@@ -102,4 +102,4 @@ See [`docs/architecture/subsystems/caching.md`](../subsystems/caching) for the c
 
 - Slash commands only (no legacy prefix command surface).
 - All user-facing text must be localized via `localizer()`.
-- Follow interaction timing patterns in [`docs/architecture/subsystems/command-system.md`](../subsystems/command-system).
+- Follow interaction timing patterns in [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system).

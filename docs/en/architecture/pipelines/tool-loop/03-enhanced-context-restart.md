@@ -1,4 +1,4 @@
----
+﻿---
 title: "03: Enhanced Context Restart"
 ---
 
@@ -120,6 +120,6 @@ After this stage runs (when it returns `true`):
 ## Related docs
 
 - Context items and tags: →
-  [`docs/architecture/pipelines/context-build/`](../context-build/)
+  [`docs/en/architecture/pipelines/context-build/`](../context-build/)
 - Stage 02 (caller): → [`02-execute-tool-call.md`](02-execute-tool-call.md)
 - Tool-loop coordinator: → [`README.md`](README.md)

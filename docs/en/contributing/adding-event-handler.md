@@ -1,4 +1,4 @@
----
+﻿---
 title: "Adding an Event Handler"
 ---
 
@@ -25,4 +25,4 @@ Then trigger the event in Discord (join a server, send a message, etc.) and conf
 
 ## Related Docs
 
-- [`docs/architecture/subsystems/event-system.md`](../subsystems/event-system) — event registration pattern, handler conventions
+- [`docs/en/architecture/subsystems/event-system.md`](../subsystems/event-system) — event registration pattern, handler conventions

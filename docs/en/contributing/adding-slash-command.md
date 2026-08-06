@@ -1,4 +1,4 @@
----
+﻿---
 title: "Adding a Slash Command"
 ---
 
@@ -26,7 +26,7 @@ This guide walks through the full process of creating a new slash command in Tom
    - Fast commands can call `reply()` immediately.
    - Async/heavy commands must call `deferReply()` before any await.
    - Modal and pagination helpers must NOT be pre-deferred — they handle acknowledgement internally.
-   - For full timing patterns and representative command groups, see [`docs/architecture/subsystems/command-system.md`](../subsystems/command-system).
+   - For full timing patterns and representative command groups, see [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system).
 
 6. The command auto-registers on next startup unless it exports
    `isCommandEnabled()` and that gate returns `false`. `commandLoader.ts`
@@ -99,5 +99,5 @@ Current commands that define or inspire the v2 design direction:
 
 ## Related Docs
 
-- [`docs/architecture/subsystems/command-system.md`](../subsystems/command-system) — interaction timing rules, pagination helpers, modal patterns
-- [`docs/architecture/subsystems/localization.md`](../subsystems/localization) — key naming conventions, `localizer()` API
+- [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system) — interaction timing rules, pagination helpers, modal patterns
+- [`docs/en/architecture/subsystems/localization.md`](../subsystems/localization) — key naming conventions, `localizer()` API

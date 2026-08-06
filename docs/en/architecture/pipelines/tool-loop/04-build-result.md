@@ -1,4 +1,4 @@
----
+﻿---
 title: "04: Build Result"
 ---
 
@@ -126,7 +126,7 @@ After this stage runs:
 ## Related docs
 
 - Result consumer: → `responseSink.finalize` in
-  [`docs/architecture/pipelines/chat/06-per-turn/02-create-response-sink.md`](../chat/06-per-turn/02-create-response-sink)
+  [`docs/en/architecture/pipelines/chat/06-per-turn/02-create-response-sink.md`](../chat/06-per-turn/02-create-response-sink)
 - Post-turn effects (reads `personaResponses`): →
-  [`docs/architecture/pipelines/chat/06-per-turn/04-post-turn-effects.md`](../chat/06-per-turn/04-post-turn-effects)
+  [`docs/en/architecture/pipelines/chat/06-per-turn/04-post-turn-effects.md`](../chat/06-per-turn/04-post-turn-effects)
 - Tool-loop coordinator: → [`README.md`](README.md)

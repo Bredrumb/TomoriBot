@@ -1,4 +1,4 @@
----
+﻿---
 title: "Tool-Loop Pipeline"
 sidebar:
   label: "Overview"
@@ -81,10 +81,10 @@ runToolLoop(ToolLoopParams)
 - **Caller:** chat per-turn stage 03 — `runGenerationTurn` in
   `src/utils/chat/generationTurn.ts` calls `runToolLoop` per model-fallback
   attempt. See
-  [`docs/architecture/pipelines/chat/06-per-turn/03-run-generation-turn.md`](../chat/06-per-turn/03-run-generation-turn).
+  [`docs/en/architecture/pipelines/chat/06-per-turn/03-run-generation-turn.md`](../chat/06-per-turn/03-run-generation-turn).
 - **Provider streaming:** each iteration delegates actual LLM I/O to the
   provider pipeline. See
-  [`docs/architecture/pipelines/provider/`](../provider/).
+  [`docs/en/architecture/pipelines/provider/`](../provider/).
 - **Tool registry:** `ToolRegistry.executeTool` is the dispatch surface in
   `src/tools/toolRegistry.ts`.
 

@@ -1,6 +1,6 @@
-# Security Policy
+﻿# Security Policy
 
-TomoriBot is an AI Discord bot that handles API keys, user prompts, persisted memory, and tool-calling integrations. For a detailed breakdown of its known threat model and residual risks, please see [`docs/wiki/threat-models.md`](../docs/wiki/threat-models.md).
+TomoriBot is an AI Discord bot that handles API keys, user prompts, persisted memory, and tool-calling integrations. For a detailed breakdown of its known threat model and residual risks, please see [`docs/en/wiki/threat-models.md`](../docs/en/wiki/threat-models.md).
 
 ## Reporting a Vulnerability
 

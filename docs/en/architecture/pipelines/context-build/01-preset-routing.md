@@ -1,4 +1,4 @@
----
+﻿---
 title: "01: Preset Routing"
 ---
 
@@ -76,6 +76,6 @@ plugin work goes there, not here.
 
 - Native assembly: [`02-native-assembly/`](/architecture/pipelines/context-build/02-native-assembly/)
 - SillyTavern preset system:
-  [`docs/architecture/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system)
+  [`docs/en/architecture/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system)
 - Random-choice macros: → folded into this doc; no dedicated page (small
   feature)

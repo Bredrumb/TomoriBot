@@ -1,4 +1,4 @@
----
+﻿---
 title: "07: Discord Delivery"
 ---
 
@@ -271,4 +271,4 @@ After this stage (per successful send):
 - Rendered table button: `src/utils/discord/markdownTableButton.ts`
 - `HumanizerDegree` enum: `src/types/db/schema.ts`
 - `DISCORD_STREAMING_CONSTANTS`: `src/types/stream/types.ts:15`
-- Multi-persona webhook behavior: `docs/architecture/subsystems/multi-persona.md` (webhook-persona pipeline TBD)
+- Multi-persona webhook behavior: `docs/en/architecture/subsystems/multi-persona.md` (webhook-persona pipeline TBD)

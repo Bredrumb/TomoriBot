@@ -1,4 +1,4 @@
----
+﻿---
 title: "02.10: Sample Dialogues"
 ---
 
@@ -89,4 +89,4 @@ ST card conversion).
 - Uncensor system: → no dedicated doc;
   `src/utils/text/uncensor.ts` helper only
 - ST preset sample-dialogue handling:
-  [`docs/architecture/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system)
+  [`docs/en/architecture/integrations/sillytavern/preset-system.md`](../../../integrations/sillytavern/preset-system)

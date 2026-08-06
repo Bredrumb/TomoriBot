@@ -1,4 +1,4 @@
----
+﻿---
 title: "Adding a DB Column"
 ---
 
@@ -51,5 +51,5 @@ bun run db:lifecycle  # full schema lifecycle test (requires local PostgreSQL)
 
 ## Related Docs
 
-- [`docs/architecture/subsystems/database-schema.md`](../subsystems/database-schema) — full schema reference and column index
-- [`docs/architecture/subsystems/caching.md`](../subsystems/caching) — cache map and invalidation APIs
+- [`docs/en/architecture/subsystems/database-schema.md`](../subsystems/database-schema) — full schema reference and column index
+- [`docs/en/architecture/subsystems/caching.md`](../subsystems/caching) — cache map and invalidation APIs

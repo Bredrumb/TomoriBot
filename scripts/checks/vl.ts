@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+﻿import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "bun";
@@ -595,7 +595,7 @@ async function main() {
       "Run `bun install --frozen-lockfile`, then `bun run check-runtime-imports`. Confirm bun.lock resolves gaxios to uuid@9.",
     Knip: "Run `bun run knip` and remove unused files, dependencies, or exports, or update scripts/knip.json for intentional entry points.",
     "Comment Audit":
-      "Run `bun run audit-comments` and review each finding against docs/contributing/comment-policy.md before editing.",
+      "Run `bun run audit-comments` and review each finding against docs/en/contributing/comment-policy.md before editing.",
     "Dependency Audit":
       "Update the parent dependency or run `bun update <package-name>` specifically. Only use a global override when the replacement stays within every dependent package's declared version range.",
     "SQL Audit":
@@ -613,7 +613,7 @@ async function main() {
     "Localization Discord Limits":
       "Discord truncates modal placeholders/descriptions and select-option labels/descriptions (>100 chars), modal titles/labels (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
     "Command Reference":
-      "Run `bun run generate-command-reference` and commit the regenerated docs/features/command-reference.md.",
+      "Run `bun run generate-command-reference` and commit the regenerated docs/en/features/command-reference.md.",
   };
 
   const getHint = (name: string) => {

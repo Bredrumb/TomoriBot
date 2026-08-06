@@ -1,4 +1,4 @@
----
+﻿---
 title: "06.3: Generation Turn"
 ---
 
@@ -213,5 +213,5 @@ Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 - Tool execution loop: → [tool-loop pipeline](../../tool-loop/)
 - Provider streaming + adapter pattern: → [provider pipeline](../../provider/)
 - Key rotation: → no dedicated doc yet; `keyRotation.ts` helper only
-- Fallback chain schema: → [`docs/architecture/subsystems/database-schema.md`](../../../subsystems/database-schema) (`fallback_chain` column)
+- Fallback chain schema: → [`docs/en/architecture/subsystems/database-schema.md`](../../../subsystems/database-schema) (`fallback_chain` column)
 - Personal-provider runtime substitution: → [provider pipeline](../../provider/)

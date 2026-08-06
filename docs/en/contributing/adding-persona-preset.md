@@ -1,4 +1,4 @@
----
+﻿---
 title: "Adding a Persona Preset"
 ---
 
@@ -88,5 +88,5 @@ Then run a local seed against a dev database and verify the preset appears corre
 
 ## Related Docs
 
-- [`docs/architecture/subsystems/persona-presets.md`](../subsystems/persona-presets) — preset identity and pointer behavior
-- [`docs/architecture/pipelines/memory/`](../pipelines/memory/) — how persona conditioning flows into context
+- [`docs/en/architecture/subsystems/persona-presets.md`](../subsystems/persona-presets) — preset identity and pointer behavior
+- [`docs/en/architecture/pipelines/memory/`](../pipelines/memory/) — how persona conditioning flows into context

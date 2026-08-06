@@ -1,4 +1,4 @@
----
+﻿---
 title: "Locke, the Unhinged"
 aiGenerated: false
 sidebar:

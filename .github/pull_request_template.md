@@ -1,4 +1,4 @@
-## Summary
+﻿## Summary
 _What does this change and why? Link to issues/discussions for deeper context if possible._
 
 Closes # <!-- Replace # with issue number, or remove this line if not applicable -->
@@ -19,7 +19,7 @@ a single-select classification, not a to-do. -->
 ### Only when relevant
 No need to mark if irrelevant
 - ( ) No hardcoded operational limits/timeouts (use env vars, document in `.env.optional.example`)
-- ( ) Followed command patterns and conventions in [`docs/architecture/subsystems/command-system.md`](../docs/architecture/subsystems/command-system.md) (If adding or modifying a Discord Command) 
+- ( ) Followed command patterns and conventions in [`docs/en/architecture/subsystems/command-system.md`](../docs/en/architecture/subsystems/command-system.md) (If adding or modifying a Discord Command) 
 - ( ) Updated the matching [`docs/`](../docs/) page(s) (If behavior/flow/schema/config changed) 
 - ( ) Used `localizer()` with an en-US key, not a hardcoded string (If adding or changing user-facing text) 
 

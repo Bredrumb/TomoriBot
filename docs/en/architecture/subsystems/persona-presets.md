@@ -1,4 +1,4 @@
----
+﻿---
 title: "Persona Presets"
 ---
 
@@ -42,7 +42,7 @@ When `is_pointer = true`, runtime reads resolve the persona's preset-backed cont
 
 The persona row and normalized child rows still carry copied values for compatibility with older surfaces, but live preset data is authoritative while the persona is a pointer.
 
-Trigger words are the one preset-resolved field that is further post-processed: because every preset bundles the shared base word (`tomori`), `loadAllForServer` collapses contested words to a single owner after resolving them (main persona wins base words; alters keep only what no higher-priority persona already claimed). See `docs/architecture/subsystems/multi-persona.md` → *Single-owner trigger resolution*. The de-duped result, not the raw preset list, is what routes messages.
+Trigger words are the one preset-resolved field that is further post-processed: because every preset bundles the shared base word (`tomori`), `loadAllForServer` collapses contested words to a single owner after resolving them (main persona wins base words; alters keep only what no higher-priority persona already claimed). See `docs/en/architecture/subsystems/multi-persona.md` → *Single-owner trigger resolution*. The de-duped result, not the raw preset list, is what routes messages.
 
 Avatars sync too, but the mechanism depends on the **delivery channel**, not on "avatar vs sprite":
 

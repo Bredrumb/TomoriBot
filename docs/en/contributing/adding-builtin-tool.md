@@ -1,4 +1,4 @@
----
+﻿---
 title: "Adding a Built-In Tool"
 ---
 
@@ -47,5 +47,5 @@ Then test the tool by prompting the bot in a way that triggers it and checking t
 
 ## Related Docs
 
-- [`docs/architecture/pipelines/tool-loop/`](../pipelines/tool-loop/) — how tools are dispatched and results assembled
+- [`docs/en/architecture/pipelines/tool-loop/`](../pipelines/tool-loop/) — how tools are dispatched and results assembled
 - [`docs/guides/adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) — gating a tool behind a feature flag

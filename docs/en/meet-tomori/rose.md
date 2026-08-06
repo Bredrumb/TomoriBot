@@ -1,4 +1,4 @@
----
+﻿---
 title: "Rose, the Boyish"
 aiGenerated: false
 sidebar:

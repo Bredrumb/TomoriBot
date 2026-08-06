@@ -1,4 +1,4 @@
----
+﻿---
 title: "02.8: RAG Documents"
 ---
 
@@ -93,6 +93,6 @@ After this stage runs:
   `ragAvailability.ts` and `ragRepository.ts` helpers only
 - Capability credentials (server vs personal): → folded into stage 05 of
   the chat pipeline ([`05-plan-turns.md`](../../chat/05-plan-turns))
-- Embedding models: → [`docs/architecture/subsystems/database-schema.md`](../../../subsystems/database-schema) (embedding_models table)
+- Embedding models: → [`docs/en/architecture/subsystems/database-schema.md`](../../../subsystems/database-schema) (embedding_models table)
 - Document upload + chunking: → no dedicated doc;
   `insertDocumentWithChunks` in `serverMemoryRepository` only

@@ -1,10 +1,10 @@
-import { readFile, stat } from "node:fs/promises";
+﻿import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
 
 const DEFAULT_PATHS = ["src", "scripts", "tests", "apps"];
 const DEFAULT_EXCEPTIONS_PATH = "scripts/checks/comment-policy-exceptions.json";
-const POLICY_DOC_PATH = "docs/contributing/comment-policy.md";
+const POLICY_DOC_PATH = "docs/en/contributing/comment-policy.md";
 const DASH_PATTERN = /—|–| -- /;
 const NUMBERED_PREFIX_PATTERNS = [
   String.raw`\d+[a-z]?(?:\.\d+[a-z]?)*(?:-\d+[a-z]?)*\.`,

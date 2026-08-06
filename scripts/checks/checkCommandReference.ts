@@ -11,7 +11,7 @@ async function main(): Promise<void> {
   }
 
   console.error(
-    "Command reference is stale. Run `bun run generate-command-reference` and commit docs/features/command-reference.md.",
+    "Command reference is stale. Run `bun run generate-command-reference` and commit docs/en/features/command-reference.md.",
   );
   process.exit(1);
 }

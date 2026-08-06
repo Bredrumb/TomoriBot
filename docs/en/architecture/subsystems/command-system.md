@@ -1,4 +1,4 @@
----
+﻿---
 title: "Command System"
 ---
 
@@ -986,7 +986,7 @@ Any command that performs AI work the invoking user triggers must overlay that u
 
 The one deliberate exception is `/model embedding`, which re-embeds **server-wide** documents under server credentials (`resolveCapabilityCredentials(serverId, "embedding")` with no `userId`). This is bulk maintenance of a pre-existing server resource rather than a fresh user action, so it intentionally stays on server credentials.
 
-Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/contributing/adding-slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
+Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/en/contributing/adding-slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
 
 ## Adding a New Command
 

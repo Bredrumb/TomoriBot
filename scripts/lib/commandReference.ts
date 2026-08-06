@@ -3,7 +3,7 @@ import { ApplicationCommandOptionType, type ApplicationCommandData } from "disco
 import { loadCommandData } from "../../src/utils/discord/commandLoader";
 import { initializeLocalizer } from "../../src/utils/text/localizer";
 
-export const COMMAND_REFERENCE_PATH = join(process.cwd(), "docs", "features", "command-reference.md");
+export const COMMAND_REFERENCE_PATH = join(process.cwd(), "docs", "en", "features", "command-reference.md");
 
 type CommandOption = {
   name?: string;

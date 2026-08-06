@@ -1,4 +1,4 @@
----
+﻿---
 title: "Adding a Setup Module"
 sidebar:
   label: "Adding a Setup Module"
@@ -45,7 +45,7 @@ Add an entry to `SETUP_MODULES`, then add its id to `FULL_INSTALL_MODULE_IDS`:
 - Spawn existing scripts when they are CLI-shaped; do not import scripts that call `process.exit()`.
 - Print guided fallback commands when automation depends on missing local tools.
 - Do not persist temporary access tokens unless the runtime needs them.
-- Update `docs/self-hosting/setup-wizard.md` when changing Full Install behavior.
+- Update `docs/en/self-hosting/setup-wizard.md` when changing Full Install behavior.
 
 Run the relevant validation after changes:
 
