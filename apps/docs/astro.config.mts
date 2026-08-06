@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const junctionPath = resolve(__dirname, "src/content/docs");
 const docsTarget = resolve(__dirname, "../../docs");
+const enDocsTarget = resolve(docsTarget, "en");
 
 if (!existsSync(junctionPath)) {
   mkdirSync(resolve(__dirname, "src/content"), { recursive: true });
@@ -50,7 +51,7 @@ const segmentLabelOverrides = {
 };
 
 function buildSidebarSection(directory) {
-  const dirPath = resolve(docsTarget, directory);
+  const dirPath = resolve(enDocsTarget, directory);
   const readmePath = getReadmePath(dirPath);
   const readmeData = readmePath ? readFrontmatter(readmePath) : {};
   const jaLabel = getJaGroupLabel(dirPath, directory);
@@ -68,7 +69,7 @@ function buildSidebarSection(directory) {
 // labels while browsing /ja/ pages. Pages without a translation keep the
 // English label (and Starlight's locale fallback serves the English content).
 function readJaCounterpartData(filePath) {
-  const jaPath = join(docsTarget, "ja", relative(docsTarget, filePath));
+  const jaPath = join(docsTarget, "ja", relative(enDocsTarget, filePath));
   return existsSync(jaPath) ? readFrontmatter(jaPath) : undefined;
 }
 
@@ -82,7 +83,7 @@ const jaGroupLabelFallbacks = {
 };
 
 function getJaGroupLabel(dirPath, dirName) {
-  const jaReadmePath = getReadmePath(join(docsTarget, "ja", relative(docsTarget, dirPath)));
+  const jaReadmePath = getReadmePath(join(docsTarget, "ja", relative(enDocsTarget, dirPath)));
   if (!jaReadmePath) return dirName ? jaGroupLabelFallbacks[dirName.toLowerCase()] : undefined;
   const jaData = readFrontmatter(jaReadmePath);
   return jaData.sidebar?.groupLabel ?? jaData.groupLabel ?? jaData.title;
@@ -237,10 +238,10 @@ function stripMarkdownExtension(fileName) {
 }
 
 function buildTopLevelSidebar() {
-  return readdirSync(docsTarget, { withFileTypes: true })
+  return readdirSync(enDocsTarget, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => {
-      const dirPath = resolve(docsTarget, entry.name);
+      const dirPath = resolve(enDocsTarget, entry.name);
       const readmePath = getReadmePath(dirPath);
       if (!readmePath) return [];
 
@@ -264,7 +265,7 @@ const sidebar = buildTopLevelSidebar();
 // Shared with the sitemap integration below. Registering our own sitemap makes Starlight skip its
 // own, so the hreflang i18n block must be derived here from this same object or the two drift.
 const docsLocales = {
-  root: { label: "English", lang: "en" },
+  en: { label: "English", lang: "en" },
   ja: { label: "日本語", lang: "ja" },
 } as const;
 
@@ -275,28 +276,165 @@ export default defineConfig({
   // (shared links, search-engine index) working by forwarding to the new paths.
   // Astro emits a static meta-refresh page for each key at build time.
   redirects: {
-    "/features/chatting-and-triggers": "/features/chatting-personality/chatting-and-triggers/",
-    "/features/multiple-personas": "/features/chatting-personality/multiple-personas/",
-    "/features/behavior-tweaking": "/features/chatting-personality/behavior-tweaking/",
-    "/features/memory": "/features/knowledge/memory/",
-    "/features/personalization": "/features/knowledge/personalization/",
-    "/features/data-handling": "/features/knowledge/data-handling/",
-    "/features/tools-and-extensions": "/features/capabilities/tools-and-extensions/",
-    "/features/scheduled-tasks": "/features/capabilities/scheduled-tasks/",
-    "/features/media-generation": "/features/capabilities/media-generation/",
-    "/features/media-generation/image-generation": "/features/capabilities/media-generation/image-generation/",
-    "/features/media-generation/video-generation": "/features/capabilities/media-generation/video-generation/",
-    "/features/media-generation/tts-and-stt": "/features/capabilities/media-generation/tts-and-stt/",
-    "/features/providers-and-models": "/features/setup-administration/providers-and-models/",
-    "/features/server-moderation": "/features/setup-administration/server-moderation/",
-    "/features/age-restricted-commands": "/features/setup-administration/age-restricted-commands/",
-    "/features/stats-and-insights": "/features/setup-administration/stats-and-insights/",
-    "/features/matrix-bridge": "/features/integrations/matrix-bridge/",
-    "/features/sillytavern-support": "/features/integrations/sillytavern-support/",
-    // Destination is `noindex`, so the redirect is what drops the old URL from the index rather
-    // than leaving it to age out through 404s.
-    "/architecture/cloud/azure-terraform-state-recovery": "/wiki/azure-terraform-state-recovery/",
+    "/": "/en/introduction/",
+    "/en/": "/en/introduction/",
+    "/ja/": "/ja/introduction/",
+    "/architecture/entry-point/": "/en/architecture/entry-point/",
+    "/architecture/cloud/azure-application-logs/": "/en/architecture/cloud/azure-application-logs/",
+    "/architecture/cloud/azure-production-deployment/": "/en/architecture/cloud/azure-production-deployment/",
+    "/architecture/cloud/azure-vertex-auth/": "/en/architecture/cloud/azure-vertex-auth/",
+    "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
+    "/architecture/integrations/discord/modal-input-components/": "/en/architecture/integrations/discord/modal-input-components/",
+    "/architecture/integrations/matrix/bridge/": "/en/architecture/integrations/matrix/bridge/",
+    "/architecture/integrations/novelai/inpainting/": "/en/architecture/integrations/novelai/inpainting/",
+    "/architecture/integrations/novelai/limitations/": "/en/architecture/integrations/novelai/limitations/",
+    "/architecture/integrations/novelai/tool-calling/": "/en/architecture/integrations/novelai/tool-calling/",
+    "/architecture/integrations/sillytavern/card-support/": "/en/architecture/integrations/sillytavern/card-support/",
+    "/architecture/integrations/sillytavern/preset-system/": "/en/architecture/integrations/sillytavern/preset-system/",
+    "/architecture/pipelines/chat/01-normalize-invocation/": "/en/architecture/pipelines/chat/01-normalize-invocation/",
+    "/architecture/pipelines/chat/02-evaluate-admission/": "/en/architecture/pipelines/chat/02-evaluate-admission/",
+    "/architecture/pipelines/chat/03-handle-disposition/": "/en/architecture/pipelines/chat/03-handle-disposition/",
+    "/architecture/pipelines/chat/04-channel-lock/": "/en/architecture/pipelines/chat/04-channel-lock/",
+    "/architecture/pipelines/chat/05-plan-turns/": "/en/architecture/pipelines/chat/05-plan-turns/",
+    "/architecture/pipelines/chat/06-per-turn/01-build-context/": "/en/architecture/pipelines/chat/06-per-turn/01-build-context/",
+    "/architecture/pipelines/chat/06-per-turn/02-create-response-sink/": "/en/architecture/pipelines/chat/06-per-turn/02-create-response-sink/",
+    "/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/": "/en/architecture/pipelines/chat/06-per-turn/03-run-generation-turn/",
+    "/architecture/pipelines/chat/06-per-turn/04-post-turn-effects/": "/en/architecture/pipelines/chat/06-per-turn/04-post-turn-effects/",
+    "/architecture/pipelines/context-build/01-preset-routing/": "/en/architecture/pipelines/context-build/01-preset-routing/",
+    "/architecture/pipelines/context-build/02-native-assembly/01-prompt-items/": "/en/architecture/pipelines/context-build/02-native-assembly/01-prompt-items/",
+    "/architecture/pipelines/context-build/02-native-assembly/02-server-info/": "/en/architecture/pipelines/context-build/02-native-assembly/02-server-info/",
+    "/architecture/pipelines/context-build/02-native-assembly/03-server-memories/": "/en/architecture/pipelines/context-build/02-native-assembly/03-server-memories/",
+    "/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/": "/en/architecture/pipelines/context-build/02-native-assembly/04-server-emojis/",
+    "/architecture/pipelines/context-build/02-native-assembly/05-server-stickers/": "/en/architecture/pipelines/context-build/02-native-assembly/05-server-stickers/",
+    "/architecture/pipelines/context-build/02-native-assembly/06-participants/": "/en/architecture/pipelines/context-build/02-native-assembly/06-participants/",
+    "/architecture/pipelines/context-build/02-native-assembly/07-short-term-memory/": "/en/architecture/pipelines/context-build/02-native-assembly/07-short-term-memory/",
+    "/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/": "/en/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/",
+    "/architecture/pipelines/context-build/02-native-assembly/08-rag-documents/": "/en/architecture/pipelines/context-build/02-native-assembly/08-rag-documents/",
+    "/architecture/pipelines/context-build/02-native-assembly/09-conditioning/": "/en/architecture/pipelines/context-build/02-native-assembly/09-conditioning/",
+    "/architecture/pipelines/context-build/02-native-assembly/10-sample-dialogues/": "/en/architecture/pipelines/context-build/02-native-assembly/10-sample-dialogues/",
+    "/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/": "/en/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/",
+    "/architecture/pipelines/memory/ltm/01-ltm-create/": "/en/architecture/pipelines/memory/ltm/01-ltm-create/",
+    "/architecture/pipelines/memory/ltm/02-ltm-update-delete/": "/en/architecture/pipelines/memory/ltm/02-ltm-update-delete/",
+    "/architecture/pipelines/memory/stm/01-passive-capture/": "/en/architecture/pipelines/memory/stm/01-passive-capture/",
+    "/architecture/pipelines/memory/stm/02-summary-upgrade/": "/en/architecture/pipelines/memory/stm/02-summary-upgrade/",
+    "/architecture/pipelines/provider/01-context-assembly/": "/en/architecture/pipelines/provider/01-context-assembly/",
+    "/architecture/pipelines/provider/02-raw-chunk-generation/": "/en/architecture/pipelines/provider/02-raw-chunk-generation/",
+    "/architecture/pipelines/provider/03-chunk-normalization/": "/en/architecture/pipelines/provider/03-chunk-normalization/",
+    "/architecture/pipelines/provider/04-orchestrator-state-machine/": "/en/architecture/pipelines/provider/04-orchestrator-state-machine/",
+    "/architecture/pipelines/provider/05-buffer-management/": "/en/architecture/pipelines/provider/05-buffer-management/",
+    "/architecture/pipelines/provider/06-segment-normalization/": "/en/architecture/pipelines/provider/06-segment-normalization/",
+    "/architecture/pipelines/provider/07-discord-delivery/": "/en/architecture/pipelines/provider/07-discord-delivery/",
+    "/architecture/pipelines/tool-loop/01-stream-once/": "/en/architecture/pipelines/tool-loop/01-stream-once/",
+    "/architecture/pipelines/tool-loop/02-execute-tool-call/": "/en/architecture/pipelines/tool-loop/02-execute-tool-call/",
+    "/architecture/pipelines/tool-loop/03-enhanced-context-restart/": "/en/architecture/pipelines/tool-loop/03-enhanced-context-restart/",
+    "/architecture/pipelines/tool-loop/04-build-result/": "/en/architecture/pipelines/tool-loop/04-build-result/",
+    "/architecture/subsystems/caching/": "/en/architecture/subsystems/caching/",
+    "/architecture/subsystems/command-system/": "/en/architecture/subsystems/command-system/",
+    "/architecture/subsystems/cooldowns/": "/en/architecture/subsystems/cooldowns/",
+    "/architecture/subsystems/database-schema/": "/en/architecture/subsystems/database-schema/",
+    "/architecture/subsystems/event-system/": "/en/architecture/subsystems/event-system/",
+    "/architecture/subsystems/localization/": "/en/architecture/subsystems/localization/",
+    "/architecture/subsystems/logit-bias/": "/en/architecture/subsystems/logit-bias/",
+    "/architecture/subsystems/multi-persona/": "/en/architecture/subsystems/multi-persona/",
+    "/architecture/subsystems/persona-presets/": "/en/architecture/subsystems/persona-presets/",
+    "/architecture/subsystems/prompt-snapshot/": "/en/architecture/subsystems/prompt-snapshot/",
+    "/architecture/subsystems/security/": "/en/architecture/subsystems/security/",
+    "/architecture/subsystems/stats-infographic/": "/en/architecture/subsystems/stats-infographic/",
+    "/architecture/subsystems/status-command/": "/en/architecture/subsystems/status-command/",
+    "/architecture/subsystems/strict-chat-completion/": "/en/architecture/subsystems/strict-chat-completion/",
+    "/architecture/subsystems/thinking-level/": "/en/architecture/subsystems/thinking-level/",
+    "/architecture/subsystems/tool-system/": "/en/architecture/subsystems/tool-system/",
+    "/architecture/subsystems/utils/": "/en/architecture/subsystems/utils/",
+    "/architecture/subsystems/video-generation/": "/en/architecture/subsystems/video-generation/",
+    "/contributing/adding-builtin-tool/": "/en/contributing/adding-builtin-tool/",
+    "/contributing/adding-db-column/": "/en/contributing/adding-db-column/",
+    "/contributing/adding-event-handler/": "/en/contributing/adding-event-handler/",
+    "/contributing/adding-feature-flag-tool/": "/en/contributing/adding-feature-flag-tool/",
+    "/contributing/adding-locale/": "/en/contributing/adding-locale/",
+    "/contributing/adding-new-provider/": "/en/contributing/adding-new-provider/",
+    "/contributing/adding-participant-extension/": "/en/contributing/adding-participant-extension/",
+    "/contributing/adding-persona-preset/": "/en/contributing/adding-persona-preset/",
+    "/contributing/adding-setup-module/": "/en/contributing/adding-setup-module/",
+    "/contributing/adding-slash-command/": "/en/contributing/adding-slash-command/",
+    "/contributing/comment-policy/": "/en/contributing/comment-policy/",
+    "/contributing/dependency-security-policy/": "/en/contributing/dependency-security-policy/",
+    "/contributing/development-tasks/": "/en/contributing/development-tasks/",
+    "/contributing/docs-authoring/": "/en/contributing/docs-authoring/",
+    "/contributing/getting-started/": "/en/contributing/getting-started/",
+    "/contributing/raw-sql-boundary/": "/en/contributing/raw-sql-boundary/",
+    "/contributing/testing-chat-changes/": "/en/contributing/testing-chat-changes/",
+    "/contributing/testing-db-changes/": "/en/contributing/testing-db-changes/",
+    "/contributing/testing-module-mocks/": "/en/contributing/testing-module-mocks/",
+    "/features/command-reference/": "/en/features/command-reference/",
+    "/features/capabilities/scheduled-tasks/": "/en/features/capabilities/scheduled-tasks/",
+    "/features/capabilities/tools-and-extensions/": "/en/features/capabilities/tools-and-extensions/",
+    "/features/capabilities/media-generation/image-generation/": "/en/features/capabilities/media-generation/image-generation/",
+    "/features/capabilities/media-generation/tts-and-stt/": "/en/features/capabilities/media-generation/tts-and-stt/",
+    "/features/capabilities/media-generation/video-generation/": "/en/features/capabilities/media-generation/video-generation/",
+    "/features/chatting-personality/behavior-tweaking/": "/en/features/chatting-personality/behavior-tweaking/",
+    "/features/chatting-personality/chatting-and-triggers/": "/en/features/chatting-personality/chatting-and-triggers/",
+    "/features/chatting-personality/multiple-personas/": "/en/features/chatting-personality/multiple-personas/",
+    "/features/integrations/matrix-bridge/": "/en/features/integrations/matrix-bridge/",
+    "/features/integrations/sillytavern-support/": "/en/features/integrations/sillytavern-support/",
+    "/features/knowledge/data-handling/": "/en/features/knowledge/data-handling/",
+    "/features/knowledge/memory/": "/en/features/knowledge/memory/",
+    "/features/knowledge/personalization/": "/en/features/knowledge/personalization/",
+    "/features/setup-administration/age-restricted-commands/": "/en/features/setup-administration/age-restricted-commands/",
+    "/features/setup-administration/providers-and-models/": "/en/features/setup-administration/providers-and-models/",
+    "/features/setup-administration/server-moderation/": "/en/features/setup-administration/server-moderation/",
+    "/features/setup-administration/stats-and-insights/": "/en/features/setup-administration/stats-and-insights/",
+    "/legal/privacy-policy/": "/en/legal/privacy-policy/",
+    "/legal/terms-of-service/": "/en/legal/terms-of-service/",
+    "/meet-tomori/aphel/": "/en/meet-tomori/aphel/",
+    "/meet-tomori/lilya/": "/en/meet-tomori/lilya/",
+    "/meet-tomori/locke/": "/en/meet-tomori/locke/",
+    "/meet-tomori/nerine/": "/en/meet-tomori/nerine/",
+    "/meet-tomori/rose/": "/en/meet-tomori/rose/",
+    "/meet-tomori/zaya/": "/en/meet-tomori/zaya/",
+    "/self-hosting/docker-compose/": "/en/self-hosting/docker-compose/",
+    "/self-hosting/local-monitoring/": "/en/self-hosting/local-monitoring/",
+    "/self-hosting/maintenance/": "/en/self-hosting/maintenance/",
+    "/self-hosting/manual-setup/": "/en/self-hosting/manual-setup/",
+    "/self-hosting/safe-migration/": "/en/self-hosting/safe-migration/",
+    "/self-hosting/setup-wizard/": "/en/self-hosting/setup-wizard/",
+    "/self-hosting/local-endpoints/setup-chatmock/": "/en/self-hosting/local-endpoints/setup-chatmock/",
+    "/self-hosting/local-endpoints/setup-comfyui/": "/en/self-hosting/local-endpoints/setup-comfyui/",
+    "/self-hosting/local-endpoints/setup-crawl4ai/": "/en/self-hosting/local-endpoints/setup-crawl4ai/",
+    "/self-hosting/local-endpoints/setup-local-llm/": "/en/self-hosting/local-endpoints/setup-local-llm/",
+    "/self-hosting/local-endpoints/setup-local-mcp/": "/en/self-hosting/local-endpoints/setup-local-mcp/",
+    "/self-hosting/local-endpoints/setup-searxng/": "/en/self-hosting/local-endpoints/setup-searxng/",
+    "/self-hosting/local-endpoints/speech-to-text/koboldcpp/": "/en/self-hosting/local-endpoints/speech-to-text/koboldcpp/",
+    "/self-hosting/local-endpoints/speech-to-text/whispercpp/": "/en/self-hosting/local-endpoints/speech-to-text/whispercpp/",
+    "/self-hosting/local-endpoints/speech-to-text/whisperx/": "/en/self-hosting/local-endpoints/speech-to-text/whisperx/",
+    "/self-hosting/local-endpoints/text-to-speech/chatterbox/": "/en/self-hosting/local-endpoints/text-to-speech/chatterbox/",
+    "/self-hosting/local-endpoints/text-to-speech/irodoritts/": "/en/self-hosting/local-endpoints/text-to-speech/irodoritts/",
+    "/self-hosting/local-endpoints/text-to-speech/qwen3tts/": "/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/",
+    "/wiki/azure-production-inspection/": "/en/wiki/azure-production-inspection/",
+    "/wiki/azure-terraform-state-recovery/": "/en/wiki/azure-terraform-state-recovery/",
+    "/wiki/refactor-record/": "/en/wiki/refactor-record/",
+    "/wiki/threat-models/": "/en/wiki/threat-models/",
+    "/introduction/quickstart/": "/en/introduction/quickstart/",
+    "/features/chatting-and-triggers": "/en/features/chatting-personality/chatting-and-triggers/",
+    "/features/multiple-personas": "/en/features/chatting-personality/multiple-personas/",
+    "/features/behavior-tweaking": "/en/features/chatting-personality/behavior-tweaking/",
+    "/features/memory": "/en/features/knowledge/memory/",
+    "/features/personalization": "/en/features/knowledge/personalization/",
+    "/features/data-handling": "/en/features/knowledge/data-handling/",
+    "/features/tools-and-extensions": "/en/features/capabilities/tools-and-extensions/",
+    "/features/scheduled-tasks": "/en/features/capabilities/scheduled-tasks/",
+    "/features/media-generation": "/en/features/capabilities/media-generation/",
+    "/features/media-generation/image-generation": "/en/features/capabilities/media-generation/image-generation/",
+    "/features/media-generation/video-generation": "/en/features/capabilities/media-generation/video-generation/",
+    "/features/media-generation/tts-and-stt": "/en/features/capabilities/media-generation/tts-and-stt/",
+    "/features/providers-and-models": "/en/features/setup-administration/providers-and-models/",
+    "/features/server-moderation": "/en/features/setup-administration/server-moderation/",
+    "/features/age-restricted-commands": "/en/features/setup-administration/age-restricted-commands/",
+    "/features/stats-and-insights": "/en/features/setup-administration/stats-and-insights/",
+    "/features/matrix-bridge": "/en/features/integrations/matrix-bridge/",
+    "/features/sillytavern-support": "/en/features/integrations/sillytavern-support/",
+    "/architecture/cloud/azure-terraform-state-recovery": "/en/wiki/azure-terraform-state-recovery/"
   },
+
   // Docs content lives at repo-root `docs/`, surfaced via a junction at `src/content/docs`
   // (see above). Vite resolves each content file to its real path under `../../docs/...`,
   // which sits outside this app, so a bare `@astrojs/starlight/components` import in an MDX
@@ -322,18 +460,17 @@ export default defineConfig({
     // sitemap makes Search Console report "Submitted URL marked 'noindex'", hence the wiki filter.
     sitemap({
       i18n: {
-        defaultLocale: "root",
+        defaultLocale: "en",
         locales: Object.fromEntries(Object.entries(docsLocales).map(([locale, { lang }]) => [locale, lang])),
       },
       filter: (page) => !/\/wiki(\/|$)/.test(new URL(page).pathname),
     }),
     starlight({
       title: "TomoriBot",
-      // i18n: `root` keeps every existing English URL unchanged (no /en/ prefix,
-      // no index reset for search engines). Japanese pages live under docs/ja/
-      // mirroring the English tree; untranslated pages fall back to English
+      // i18n: `en` handles /en/ pages, and Starlight handles root redirection automatically.
+      // Japanese pages live under docs/ja/ mirroring the English tree; untranslated pages fall back to English
       // content served at the /ja/ URL with a translation notice.
-      defaultLocale: "root",
+      defaultLocale: "en",
       locales: docsLocales,
       // Fallback meta description for pages without one (see routeMiddleware
       // below, which auto-derives per-page descriptions from page content).
@@ -436,3 +573,6 @@ export default defineConfig({
     }),
   ],
 });
+
+
+
