@@ -144,6 +144,28 @@ history fetch inside that window still returns the original from Discord. Withou
 the filter the same message renders twice, once under the host account's display
 name and once under the member's.
 
+### Reply embeds
+
+A webhook message cannot carry a native reply reference, so PluralKit states the
+reply as an embed on the proxy: `author.name` is the replied-to member's name
+followed by U+21A9, and the description holds a jump link to the quoted message.
+That is the same fact `applyPluralKitProxyReference` recovers by copying the
+pre-proxy original's `reference` onto the proxy, so an unfiltered embed reaches
+the model as a second reply notice next to the pipeline's own
+`[System: ... is referring to a previous message ...]` line.
+
+`src/utils/pluralkit/proxyReplyEmbed.ts` recognizes the shape (author suffix plus
+a jump link, both required so an ordinary link preview cannot trip it) and feeds
+two call sites:
+
+- `processLinkEmbed` (`src/utils/discord/embedClassifier.ts`) drops the embed
+  instead of rendering it as link-preview content.
+- `extractReplyContextTargetFromEmbed` (`src/utils/chat/contextAnnotations.ts`)
+  accepts it as a reply target. The copied `reference` lives on one in-memory
+  `Message` instance, so a proxy refetched after eviction or a restart arrives
+  with the embed as its only reply evidence: without this lane, dropping the
+  embed would lose the reply relationship entirely on older history.
+
 ### Naming an absent member
 
 A member that has not spoken inside the history window can still be pulled into context by
