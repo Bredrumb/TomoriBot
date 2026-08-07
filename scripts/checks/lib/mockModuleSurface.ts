@@ -19,15 +19,26 @@ export const HIGH_RISK_MOCK_MODULES = new Set([
   "@/utils/discord/ui/embeds",
   "@/utils/discord/ui/modals",
   "@/utils/discord/ui/personaWorkflow",
-  "@/utils/misc/logger",
   "@/utils/provider/providerInfoRegistry",
   "@/utils/security/crypto",
   "@/utils/text/localizer",
 ]);
 
+/**
+ * Modules that must never be mocked at module level, not even full-surface and leak-scoped.
+ *
+ * Scoping fixes leaked *behavior*, but the module record stays replaced for the rest of the
+ * process, and that alone is enough to break a later file: `spyOn` on an export of a replaced
+ * module installs nothing, silently, so the spy records zero calls while the real implementation
+ * runs. `log` is a singleton whose members production resolves at call time, so `stubLogMembers()`
+ * in `tests/helpers/mockSurface.ts` covers every case a module mock was serving here.
+ */
+export const FORBIDDEN_MOCK_MODULES = new Set(["@/utils/misc/logger"]);
+
 export const MOCK_MODULE_SURFACE_REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
 export type MockModuleSurfaceViolationKind =
+  | "forbidden-module"
   | "missing-hoisted-real-import"
   | "missing-real-spread"
   | "unscoped-behavior";
@@ -163,7 +174,16 @@ export function scanMockModuleSurfaceSource(
       const specifierExpression = node.arguments[0] ? unwrapExpression(node.arguments[0]) : null;
       if (receiver && specifierExpression && ts.isStringLiteralLike(specifierExpression)) {
         const moduleSpecifier = specifierExpression.text;
-        if (HIGH_RISK_MOCK_MODULES.has(moduleSpecifier)) {
+        if (FORBIDDEN_MOCK_MODULES.has(moduleSpecifier)) {
+          addViolation(
+            node,
+            moduleSpecifier,
+            "forbidden-module",
+            `Do not module-mock "${moduleSpecifier}". Use \`stubLogMembers()\` from ` +
+              "tests/helpers/mockSurface instead: a replaced module record makes a later file's " +
+              "`spyOn` silently install nothing.",
+          );
+        } else if (HIGH_RISK_MOCK_MODULES.has(moduleSpecifier)) {
           const realAliases = namespaceImports.get(moduleSpecifier) ?? new Set<string>();
           const object = factoryObjectLiteral(node.arguments[1]);
           const matchingSpreads =

@@ -12,12 +12,11 @@ import * as realProviderPicker from "@/utils/discord/providerPicker";
 import * as realEmbeds from "@/utils/discord/ui/embeds";
 import * as realModals from "@/utils/discord/ui/modals";
 import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
-import * as realLogger from "@/utils/misc/logger";
 import * as realLogitBiasResolver from "@/utils/provider/logitBiasResolver";
 import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
 import * as realSavedProviderConfig from "@/utils/provider/savedProviderConfig";
 import * as realLocalizer from "@/utils/text/localizer";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 
 interface Scenario {
   branch: "custom" | "regular";
@@ -124,7 +123,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/discord/ui/embeds": realEmbeds,
   "@/utils/discord/providerPicker": realProviderPicker,
   "@/utils/provider/logitBiasResolver": realLogitBiasResolver,
-  "@/utils/misc/logger": realLogger,
   "@/utils/text/localizer": realLocalizer,
   "@/utils/discord/openrouterModelMigrationNotice": realOpenrouterModelMigrationNotice,
   "@/utils/provider/providerInfoRegistry": realProviderInfoRegistry,
@@ -228,18 +226,14 @@ scopedMock.module("@/utils/provider/logitBiasResolver", () => ({
   resolveLogitBiasEntriesForLlm: () => ({ entries: [] }),
 }));
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: async (message: string, error: Error, context: ErrorContext) => {
-      chronology.push("log.error");
-      errorLogs.push({ message, error, context });
-    },
-    info: () => undefined,
-    warn: () => undefined,
+stubLogMembers({
+  error: async (message: string, error: Error, context: ErrorContext) => {
+    chronology.push("log.error");
+    errorLogs.push({ message, error, context });
   },
-}));
+  info: () => undefined,
+  warn: () => undefined,
+});
 
 scopedMock.module("@/utils/text/localizer", () => ({
   ...realLocalizer,

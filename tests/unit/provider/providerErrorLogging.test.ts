@@ -1,25 +1,17 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
-import * as realLogger from "@/utils/misc/logger";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { beforeEach, describe, expect, it } from "bun:test";
+import { stubLogMembers } from "../../helpers/mockSurface";
 
 const errorCalls: string[] = [];
 const warnCalls: string[] = [];
 
-const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/misc/logger": realLogger,
+stubLogMembers({
+  error: async (msg: string) => {
+    errorCalls.push(msg);
+  },
+  warn: (msg: string) => {
+    warnCalls.push(msg);
+  },
 });
-
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: overrideMembers(realLogger.log, {
-    error: async (msg: string) => {
-      errorCalls.push(msg);
-    },
-    warn: (msg: string) => {
-      warnCalls.push(msg);
-    },
-  }),
-}));
 
 const { logRawProviderError } = await import("@/utils/provider/providerErrorLogging");
 

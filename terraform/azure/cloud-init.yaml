@@ -61,8 +61,18 @@ write_files:
       # microseconds, so the kernel should prefer it over reclaiming page cache; the
       # previous value of 20 was avoiding disk seeks that no longer dominate. Readahead
       # has no value without seeks, hence page-cluster 0.
+      #
+      # Do not lower swappiness to "preserve swap headroom". zram measures 3.87:1
+      # effective here, holding 688 MiB of anonymous pages in 178 MiB of RAM, against a
+      # 908 MiB anonymous working set on an 843 MiB host. Pages migrated back out of
+      # zram expand at that ratio, so a lower value costs more RAM than it frees.
       vm.swappiness=180
       vm.page-cluster=0
+      # The default 10 leaves kswapd under 1 MiB of runway at this memory size, so
+      # allocations enter synchronous direct reclaim almost immediately: 9,911
+      # allocstalls in 7.7 h of uptime. A wider gap lets kswapd reclaim ahead of demand
+      # instead, at the cost of holding roughly 8 MiB further from allocation.
+      vm.watermark_scale_factor=100
   - path: /etc/docker/daemon.json
     owner: root:root
     permissions: "0644"

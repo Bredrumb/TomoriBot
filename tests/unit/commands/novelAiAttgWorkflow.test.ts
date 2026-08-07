@@ -9,8 +9,7 @@ import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as realRepositories from "@/utils/db/repositories";
 import * as realInteractionHelper from "@/utils/discord/interactionHelper";
 import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
-import * as realLogger from "@/utils/misc/logger";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -49,7 +48,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/tomoriStateCache": realTomoriStateCache,
   "@/utils/db/repositories": realRepositories,
   "@/utils/discord/interactionHelper": realInteractionHelper,
-  "@/utils/misc/logger": realLogger,
   "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
 });
 
@@ -78,17 +76,13 @@ scopedMock.module("@/utils/discord/interactionHelper", () => ({
   replyInfoEmbed: async () => undefined,
 }));
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    info: () => undefined,
-    error: async (message: string, error: unknown, context?: Payload) => {
-      chronology.push("log.error");
-      logCalls.push({ message, error, context });
-    },
+stubLogMembers({
+  info: () => undefined,
+  error: async (message: string, error: unknown, context?: Payload) => {
+    chronology.push("log.error");
+    logCalls.push({ message, error, context });
   },
-}));
+});
 
 scopedMock.module("@/utils/discord/ui/personaWorkflow", () => ({
   ...realPersonaWorkflow,

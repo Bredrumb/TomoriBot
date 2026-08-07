@@ -19,9 +19,8 @@ import type {
 // hoisted). Spreading them keeps each factory full-surface so a later test file
 // in the monolithic `bun test` never links against a missing export.
 import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
-import * as realLogger from "@/utils/misc/logger";
 import * as realLocalizer from "@/utils/text/localizer";
-import { createScopedModuleMocker } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
 
 interface RecordedCall {
   method: string;
@@ -83,20 +82,15 @@ let collapseGate: Promise<void> | null = null;
 let rejectCollapse = false;
 
 const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/misc/logger": realLogger,
   "@/utils/text/localizer": realLocalizer,
   "@/utils/discord/ui/interactionCore": realInteractionCore,
 });
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: () => undefined,
-    info: () => undefined,
-    warn: (message: string, context?: unknown) => warnings.push({ message, context }),
-  },
-}));
+stubLogMembers({
+  error: () => undefined,
+  info: () => undefined,
+  warn: (message: string, context?: unknown) => warnings.push({ message, context }),
+});
 
 scopedMock.module("@/utils/text/localizer", () => ({
   ...realLocalizer,
