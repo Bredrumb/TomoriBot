@@ -138,6 +138,18 @@ name/group/type triple instead. Interpretation:
 | Burst IO credits at 0% | Rules out disk throttling as the cause. |
 
 A flat memory plateau with a storage stall and no kill is the zram livelock described in
-[Azure Production Deployment](/architecture/cloud/azure-production-deployment/). `earlyoom` exists to
-convert it into a restart; if one recurs, check that the daemon is running and that its SIGTERM
-threshold sits above the plateau.
+[Azure Production Deployment](/architecture/cloud/azure-production-deployment/). **There is currently
+no automatic recovery from it**, so clearing one means restarting the container or the VM by hand.
+
+Before concluding a freeze is that livelock, rule out the opposite failure. A restart *loop* also
+presents as an unresponsive bot, and the two need opposite responses:
+
+```sh
+docker inspect tomoribot-azure-tomoribot-1 --format 'restarts={{.RestartCount}} health={{.State.Health.Status}}'
+systemctl is-active earlyoom systemd-oomd
+```
+
+A climbing `RestartCount` means something is killing the process, not that it is hung. An OOM daemon
+configured against instantaneous `MemAvailable` will do exactly this on a host this small, because a
+warming cache dips into the same range a livelock sits in; see the deployment page for why that
+approach was reverted.

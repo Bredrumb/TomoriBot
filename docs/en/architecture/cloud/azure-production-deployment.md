@@ -323,34 +323,48 @@ kernel is evicting clean file-backed pages (the Bun binary's own text, which nee
 discard) and faulting them straight back in. Anonymous pages would appear as swap writes instead, so
 falling writes are what separate this from ordinary swapping.
 
-`earlyoom` restores the fast, self-healing kill. `terraform/azure/cloud-init.yaml` installs it with a
-drop-in that pins absolute thresholds and a victim policy:
+### A free-memory threshold is the wrong trigger for it
 
-- Absolute (`-M`) rather than percentage thresholds, so they read in the same units as an "Available
-  Memory Bytes" alert. Size the SIGTERM threshold between the observed healthy floor and the plateau
-  memory settles at during a stall, which means measuring both before choosing a number.
-- `-s 100,100` is load-bearing. earlyoom fires only when the memory **and** swap conditions both
-  hold, and a disk-backed overflow swapfile sitting at 0 used still counts toward `SwapTotal`,
-  pinning swap-free percentage high permanently. At any lower value the daemon prints healthy-looking
-  thresholds at startup and then never fires.
-- `--avoid` must cover the container runtime and the cloud agent. On a locked-down host the agent is
-  the only remaining access path, so killing it to reclaim memory is unrecoverable.
+The obvious remedy is a userspace OOM daemon such as `earlyoom`, which kills the largest consumer
+when available memory crosses a threshold. **This was tried on this deployment and had to be
+reverted.** It is recorded here because the failure is instructive and easy to repeat.
 
-Verify victim selection without killing anything by running a second instance in dry run, with a
-threshold above current availability so it triggers immediately:
+`earlyoom` polls `MemAvailable` and acts on the instantaneous reading. Configured to fire at 120 MiB
+on an 843 MiB host, sized to sit between the measured healthy floor (~148 MiB) and the measured
+thrash plateau (~95 MiB), it killed the bot **21 times in 19 minutes**:
 
-```bash
-timeout 6 earlyoom -M <above-current-avail-KiB> -s 100,100 --dryrun -r 0 \
-  --prefer '^bun$' --avoid '^(systemd|dockerd|containerd|python3|node|sshd)$'
+```
+mem avail: 119 of 842 MiB (14.19%)
+low memory! at or below SIGTERM limits
+sending SIGTERM to process 56123 uid 1001 "bun": badness 1034, VmRSS 321 MiB
 ```
 
-It names the process it would signal, then exits without acting.
+A cold-starting bot warming its caches crosses that threshold *transiently and harmlessly*, so each
+kill produced a restart that produced the next kill. The bot was less available than it had been with
+no protection at all. Two details make this trap easy to walk into:
 
-Two kernel knobs pair with this. `vm.watermark_scale_factor` at its default of 10 leaves kswapd well
-under 1 MiB of runway on a host this size, so allocations enter synchronous direct reclaim instead of
-letting kswapd work ahead; `allocstall_*` in `/proc/vmstat` counts how often that happens. And
-`vm.swappiness` must stay high: with zram measuring near 4:1, pages migrated back out of compressed
-swap expand at that ratio, so lowering it to "preserve swap headroom" costs more RAM than it frees.
+- `MemAvailable` counts reclaimable page cache, so it drops sharply during ordinary allocation bursts
+  and recovers on its own seconds later. The same 119 MiB reading means "warming up" and "livelocked"
+  at different moments.
+- The healthy floor and the failure plateau are only ~50 MiB apart on a host this small, so no
+  instantaneous threshold cleanly separates them.
+
+What actually distinguishes the two states is **duration, not depth**: a startup burst shows memory
+pressure for seconds, while the livelock held it for 80 minutes. The trigger therefore has to be a
+sustained-pressure signal (`/proc/pressure/memory`, as `systemd-oomd` uses, with a dwell window)
+rather than a single free-memory sample. An in-process event-loop lag watchdog that exits when its
+own timers are starved is a reasonable complement, since it measures the symptom users actually see.
+
+Whatever the mechanism, **run it in observe-only mode first** and log what it would have killed for
+at least a full day across a restart and a traffic peak. A kill loop is a worse outage than the hang
+it was meant to prevent, and only a dry period of real traffic distinguishes the two.
+
+Two kernel knobs pair with any such daemon. `vm.watermark_scale_factor` at its default of 10 leaves
+kswapd well under 1 MiB of runway on a host this size, so allocations enter synchronous direct
+reclaim instead of letting kswapd work ahead; `allocstall_*` in `/proc/vmstat` counts how often that
+happens. And `vm.swappiness` must stay high: with zram measuring near 4:1, pages migrated back out of
+compressed swap expand at that ratio, so lowering it to "preserve swap headroom" costs more RAM than
+it frees.
 
 ## Release proof and rollback
 
