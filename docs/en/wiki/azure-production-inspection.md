@@ -83,9 +83,39 @@ and never needed again, which is harmless. Sustained nonzero `si` means the work
 oversubscribed. `/proc/pressure/memory` confirms it independently by measuring stall time, where
 `full` is the share of wall time every task was blocked.
 
-## Triaging a frozen bot ("Online but ignoring everything")
+## Triaging a frozen bot (unresponsive, or fully offline)
+
+The same livelock has presented two ways, so do not let the symptom narrow the diagnosis:
+
+| Presentation | Meaning |
+|---|---|
+| Online in Discord, ignoring every command | Starved but still servicing the gateway heartbeat |
+| **Completely offline in Discord** | Starved deeper and longer, so the heartbeat missed and Discord dropped the connection |
+
+Offline therefore does **not** imply the process died. Confirm with step 1 rather than assuming.
 
 Run these in order. Each one invalidates the next if it fails, and the first two are cheap.
+
+**0. Can you still reach the guest at all?** Deep enough starvation takes out the Azure guest agent,
+which is the only in-guest access path. If `az vm run-command invoke` hangs past a couple of minutes:
+
+```bash
+az vm get-instance-view -g tomoribot-rg -n tomoribot-vm \
+  --query "{power:instanceView.statuses[?starts_with(code,'PowerState')].displayStatus|[0], \
+            agent:instanceView.vmAgent.statuses[0].displayStatus}" -o json
+```
+
+`agent: "Not Ready"` with `power: "VM running"` means Run Command cannot be delivered, so
+`docker restart` is unavailable and the only lever left is a control-plane reboot, which does not
+need the guest agent:
+
+```bash
+az vm restart -g tomoribot-rg -n tomoribot-vm
+```
+
+This loses no forensics: the observer log, `tomoribot.jsonl`, and journald are all on persistent disk.
+Prefer `docker restart tomoribot-azure-tomoribot-1` whenever the guest still answers, since it is far
+faster and avoids the `swapoff` OOM that zram teardown causes on shutdown.
 
 **1. Was anything actually killed?** A restarted process and a hung process need opposite fixes.
 
@@ -136,6 +166,13 @@ name/group/type triple instead. Interpretation:
 | Reads climb while writes fall | Clean file-backed reclaim thrash, so the binary's own text is being evicted and re-faulted. |
 | Available memory pinned flat for the whole window | Reclaim equilibrium. The OOM killer will not fire, because reclaim keeps succeeding. |
 | Burst IO credits at 0% | Rules out disk throttling as the cause. |
+| The series simply **ends** mid-incident | The guest agent starved too. Read it as evidence of severity, not as an absence of events. |
+
+Use `PT1M` rather than `PT15M` once the window is known. A transient dip that recovers unaided can
+precede the real decline by only a few minutes, and a 15-minute average blurs the two into a single
+slope, erasing exactly the distinction a dwell-based trigger depends on. Note also that a 5-minute
+series can lag its final buckets by longer than a 1-minute series, so an apparent cutoff at `PT5M`
+may just be an unclosed bucket rather than a stalled agent.
 
 A flat memory plateau with a storage stall and no kill is the zram livelock described in
 [Azure Production Deployment](/architecture/cloud/azure-production-deployment/). **There is currently

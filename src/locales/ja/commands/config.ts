@@ -190,7 +190,7 @@ export default {
         image_workflow_edit_title: `画像ワークフローを編集`,
         video_workflow_edit_title: `動画ワークフローを編集`,
         model_name_label: `モデル名（正確なAPI ID）`,
-        model_name_placeholder: `APIリクエストで使われる正確なID。例: deepseek-chat, gemma3:latest`,
+        model_name_placeholder: `APIリクエストで使われる正確なID。例: deepseek-v4-flash, gemma3:latest`,
         display_name_label: `表示名`,
         display_name_placeholder: `省略するとモデル名が使われます`,
         num_ctx_label: `コンテキストウィンドウ上書き`,

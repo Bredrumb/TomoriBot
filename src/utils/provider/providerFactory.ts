@@ -192,6 +192,7 @@ export namespace ProviderFactory {
     ) {
       log.warn(
         `Model ${modelCodename} is not officially supported by provider ${providerName}. This may cause issues.`,
+        undefined,
         {
           serverId: tomoriState.server_id,
           metadata: {

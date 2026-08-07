@@ -148,16 +148,20 @@ Tomori does not currently send numeric reasoning budgets through OpenRouter.
 
 ### DeepSeek
 
-Tomori treats the two DeepSeek chat model modes differently:
+Tomori treats DeepSeek chat model modes differently:
 
-- `deepseek-chat`: optional request-side thinking enable
-- `deepseek-reasoner`: reasoning model by identity
+- `deepseek-v4-flash` (default) and `deepseek-chat` (deprecated codename, same behavior): optional
+  request-side thinking enable
+- `deepseek-reasoner` (deprecated): reasoning model by identity
+
+`deepseek-v4-pro` is DeepSeek's higher tier general model; it is not part of the thinking-toggle
+special case and receives no extra toggle handling.
 
 Tomori behavior:
 
 | Model | `auto` / `none` | `low` / `medium` / `high` |
 | --- | --- | --- |
-| `deepseek-chat` | omit thinking flag | `thinking: { type: "enabled" }` |
+| `deepseek-v4-flash` / `deepseek-chat` | omit thinking flag | `thinking: { type: "enabled" }` |
 | `deepseek-reasoner` | no extra toggle; model stays reasoning-oriented | no extra toggle; model stays reasoning-oriented |
 
 Additional behavior:
@@ -167,8 +171,8 @@ Additional behavior:
 
 #### reasoning_content round-trip (thinking mode)
 
-With `thinking: { type: "enabled" }` on `deepseek-chat`, DeepSeek rejects any replayed assistant
-tool-call turn that omits `reasoning_content`:
+With `thinking: { type: "enabled" }` on `deepseek-v4-flash` (or the deprecated `deepseek-chat`
+codename), DeepSeek rejects any replayed assistant tool-call turn that omits `reasoning_content`:
 
 ```
 HTTP 400: The `reasoning_content` in the thinking mode must be passed back to the API.
@@ -183,8 +187,8 @@ Verified endpoint behavior:
 | tool-call turn with the key omitted | 400 |
 | plain history assistant turns without the key | accepted |
 
-The validator checks presence, not content. `deepseek-reasoner` and non-thinking `deepseek-chat`
-do not enforce it.
+The validator checks presence, not content. `deepseek-reasoner` and non-thinking `deepseek-v4-flash`
+(or `deepseek-chat`) do not enforce it.
 
 Tomori therefore always emits the key on tool-call turns for DeepSeek
 (`requiresReasoningContentReplay`), falling back to an empty string when the reply carried no

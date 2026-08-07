@@ -217,7 +217,7 @@ than a single value. Alongside `ERR_POSTGRES_LIFETIME_TIMEOUT`, `ERR_POSTGRES_ID
 `ERR_POSTGRES_INVALID_MESSAGE` or `ERR_POSTGRES_UNSUPPORTED_INTEGER_SIZE`: Bun rejects the pending
 queries from `#onClose` carrying whatever state its protocol reader stopped in, so the code describes
 where the byte stream was truncated rather than any fault in the data. Production logged 82 of these
-across unrelated servers in two bursts on 2026-08-06, every stack ending at `#onClose` and none
+across unrelated servers in two bursts, every stack ending at `#onClose` and none
 retried, because the last two codes were missing from the set. When triaging a new Postgres code,
 read the stack before the code: a frame in `#onClose` means retirement regardless of the label.
 
@@ -291,6 +291,13 @@ The value is sized against the `Standard_B2ats_v2`'s roughly 842 MB of usable RA
 a convenient number. A limit above physical memory is unreachable: RSS cannot climb to it, the guard
 never fires, and the kernel silently swaps the heap instead.
 
+`TOMORIBOT_MEMORY_SWAP_LIMIT_MB` (default 2048) sets Compose's `memswap_limit`, which is **total**
+memory plus swap, so the swap allowance is that figure minus `mem_limit`. It is declared explicitly
+rather than left to Docker's implicit 2x default for the reason given under
+[The container's swap ceiling](#the-containers-swap-ceiling-decides-whether-the-host-has-an-escape-route):
+the derived 512 MB ceiling saturated within minutes of boot and cut the container off from the host's
+disk swapfile entirely. Raise both values together, since either one alone moves the other's meaning.
+
 Two related traps:
 
 - `src/init/secrets.ts` also reads `CONTAINER_MEMORY_LIMIT_MB` from the mounted secret bundle, but
@@ -315,13 +322,45 @@ cgroup and Docker's `unless-stopped` policy restarts it inside a minute. With zr
 has somewhere to put another page, so reclaim keeps succeeding and the OOM killer never fires. The
 host settles into a thrashing equilibrium instead: available memory flat, CPU near idle, disk queue
 depth an order of magnitude above baseline, and every process blocked on major faults. A bot in this
-state stays Online, because the gateway socket survives at the OS level while nothing in the runtime
-advances.
+state usually stays Online, because the gateway socket survives at the OS level while nothing in the
+runtime advances. It is not guaranteed to: a long or deep enough episode starves the heartbeat too,
+and the bot then disappears from Discord entirely without any process having died. Treat "offline"
+and "online but inert" as the same diagnosis until the evidence says otherwise.
 
 The distinguishing signature is a read-only disk storm. Reads climb while writes *fall*, because the
 kernel is evicting clean file-backed pages (the Bun binary's own text, which needs no write to
 discard) and faulting them straight back in. Anonymous pages would appear as swap writes instead, so
 falling writes are what separate this from ordinary swapping.
+
+#### The container's swap ceiling decides whether the host has an escape route
+
+Compose's `mem_limit` implies a swap ceiling even when none is written down. Docker sets
+memory-swap to **twice** memory whenever `memswap_limit` is unset, so a 512 MB limit silently yields
+`memory.max=512Mi` **plus** `memory.swap.max=512Mi`. Nothing in the repository states this, so it
+survives code review unnoticed.
+
+That derived ceiling matters more than it looks, because **a cgroup that reaches
+`memory.swap.max` cannot swap anywhere at all**, no matter which swap device still has room. Where a
+host pairs a small high-priority zram device with a large low-priority disk swapfile, the container
+exhausts its budget inside zram and is then cut off from the overflow tier entirely. The disk
+swapfile reads `0B` used while the container suffocates beside it. From that point the kernel's only
+remaining reclaim target is global file-backed memory, which is precisely the read-storm livelock
+above.
+
+Check for this directly rather than inferring it from free memory:
+
+```sh
+swapon --show   # a large low-priority tier stuck at 0B used is the tell
+C=$(docker inspect -f "{{.Id}}" <container-name>)
+cat /sys/fs/cgroup/system.slice/docker-$C.scope/memory.swap.current
+cat /sys/fs/cgroup/system.slice/docker-$C.scope/memory.swap.max
+```
+
+`memory.swap.peak` equal to `memory.swap.max` within minutes of a clean boot means the deployment
+does not drift into the dangerous state, it **starts** there. Declaring `memswap_limit` explicitly,
+above the size of the compressed tier, restores access to the disk swapfile and converts an
+unrecoverable hang into merely slow operation. Set it alongside `mem_limit`: changing either one
+moves the other's derived value.
 
 ### A free-memory threshold is the wrong trigger for it
 
@@ -354,6 +393,36 @@ pressure for seconds, while the livelock held it for 80 minutes. The trigger the
 sustained-pressure signal (`/proc/pressure/memory`, as `systemd-oomd` uses, with a dwell window)
 rather than a single free-memory sample. An in-process event-loop lag watchdog that exits when its
 own timers are starved is a reasonable complement, since it measures the symptom users actually see.
+
+A later recurrence measured this directly rather than inferring it. Available memory touched the same
+120 MiB threshold and **recovered unaided within four minutes**, fourteen minutes before the genuine
+event began; the real livelock then held below that level continuously for the better part of an
+hour. Sustained memory pressure separated them by two orders of magnitude (`full` avg60 of 0.27 while
+healthy against 27.96 during the event) where free memory did not separate them at all.
+
+#### A detector that has to be scheduled cannot act while nothing is being scheduled
+
+This is the constraint that eliminates most homegrown answers, and it was learned the expensive way.
+A collector was deployed to gather exactly the data above, deliberately deprioritised with `Nice=10`
+and `IOSchedulingClass=idle` so it could never add to the load it was measuring. During the next
+livelock it recorded **nothing for 54 minutes**. The process was never killed: the service manager
+later stopped it cleanly and reported over a minute of consumed CPU. It simply never got scheduled.
+
+`IOSchedulingClass=idle` means "receive IO only when nothing else wants it", which during a
+disk-thrash livelock means never, so its own major page faults went unserviced. Deprioritising a
+watchdog guarantees it is silent exactly when it is needed.
+
+Two rules follow:
+
+- **The daemon must be memory-resident and IO-prioritised.** `earlyoom` and `systemd-oomd` both call
+  `mlockall`, which is why `earlyoom` remained able to act even while misjudging *when* to. A shell
+  script or a sidecar that pages in on demand does not have this property. Give any such unit a
+  negative `Nice`, a real-time IO class, and `OOMScoreAdjust=-1000`, and do not cap its memory so
+  tightly that it reclaims against its own ceiling while sampling.
+- **Compute dwell from timestamps, never from a count of samples.** A collector's cadence stretches
+  during the very event it is measuring, so "twelve consecutive samples" stops meaning "three
+  minutes". Analysis that assumes a fixed interval will conclude a rule never fired when in truth it
+  had no data. A gap in a collector's own output is itself a measurement of severity.
 
 Whatever the mechanism, **run it in observe-only mode first** and log what it would have killed for
 at least a full day across a restart and a traffic peak. A kill loop is a worse outage than the hang

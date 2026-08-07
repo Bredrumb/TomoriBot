@@ -102,8 +102,11 @@ function isDeepSeekReasonerModel(model: string): boolean {
   return normalizeModel(model) === "deepseek-reasoner";
 }
 
+// deepseek-v4-flash absorbed deepseek-chat's opt-in thinking toggle; deepseek-chat stays
+// listed so servers still configured with the deprecated codename keep working unchanged.
 function isDeepSeekChatModel(model: string): boolean {
-  return normalizeModel(model) === "deepseek-chat";
+  const normalized = normalizeModel(model);
+  return normalized === "deepseek-chat" || normalized === "deepseek-v4-flash";
 }
 
 function looksLikeOllamaEndpoint(endpointUrl: string): boolean {

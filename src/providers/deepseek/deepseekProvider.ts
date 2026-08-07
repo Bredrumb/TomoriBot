@@ -59,7 +59,7 @@ import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 
-const DEFAULT_DEEPSEEK_MODEL = "deepseek-chat";
+const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_BETA_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/beta/chat/completions";
 
