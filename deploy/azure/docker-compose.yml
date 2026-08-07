@@ -10,6 +10,13 @@ services:
     # Must stay at or below the VM's usable RAM (~842 MB): an unreachable limit means the app's
     # RSS guard never trips and the kernel swaps the heap instead.
     mem_limit: "${TOMORIBOT_MEMORY_LIMIT_MB:-512}m"
+    # Total memory+swap, so swap.max is this minus mem_limit. Must be set explicitly: Docker
+    # otherwise derives it as 2x mem_limit, which capped swap at 512 MB and saturated it within
+    # 8 minutes of every boot. A cgroup at memory.swap.max cannot swap to ANY tier, so the host's
+    # 3 GB disk swapfile sat at 0B used while the container suffocated beside it, leaving the
+    # kernel nothing to reclaim but program text, which is the read-storm livelock this host hit.
+    # Keep above the zram device's 1 GB so the overflow actually reaches disk.
+    memswap_limit: "${TOMORIBOT_MEMORY_SWAP_LIMIT_MB:-2048}m"
     pids_limit: ${TOMORIBOT_PIDS_LIMIT:-256}
     security_opt:
       - no-new-privileges:true

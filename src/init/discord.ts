@@ -101,6 +101,15 @@ export function createDiscordClient(includePresences: boolean): Client {
         interval: 3600,
         filter: () => (user) => user.bot,
       },
+      // Presence data is gateway-only with no REST fetch, so a swept entry stays missing until
+      // that user's next presence change. Offline-with-no-activity is the only safe set to drop:
+      // getUserPresenceDetails renders a cached offline presence as "Offline" and a missing one as
+      // "Offline or status unknown", so the information lost is nil. Widening this filter to
+      // idle/dnd or to entries carrying activities would silently degrade what Tomori can see.
+      presences: {
+        interval: 3600,
+        filter: () => (presence) => presence.status === "offline" && presence.activities.length === 0,
+      },
     },
   });
 

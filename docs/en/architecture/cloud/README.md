@@ -9,7 +9,7 @@ sidebar:
 Cloud docs describe how TomoriBot's production infrastructure runs on Azure: deployment
 targets, log/metric ingestion, and the operational rules around them. The AWS and GCP
 deployment code is retained as legacy rollback and self-hosting reference; TomoriBot's
-managed GCP project was retired after the Azure cutover on 2026-07-20. Provider-agnostic
+managed GCP project was retired after the Azure cutover. Provider-agnostic
 hosting on your own machines lives under [Self-Hosting](/self-hosting/) instead.
 
 A small dedicated GCP project is retained only as an outbound AI provider. It
