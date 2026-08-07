@@ -13,9 +13,8 @@ import * as realContextAnnotations from "@/utils/chat/contextAnnotations";
 import * as realEmbedHelper from "@/utils/discord/embedHelper";
 import * as realStreamOrchestrator from "@/utils/discord/streamOrchestrator";
 import * as realToolProgressNotice from "@/utils/discord/toolProgressNotice";
-import * as realLogger from "@/utils/misc/logger";
 import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ChatTurnContext } from "@/utils/chat/types";
 import type { TomoriState } from "@/types/db/schema";
@@ -42,7 +41,6 @@ let standardEmbedCalls: Array<{ titleKey?: string; descriptionKey?: string }> = 
 // STRINGS other modules rely on at load time (e.g. contextEmbeds.ts calls
 // ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
 const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/misc/logger": realLogger,
   "@/utils/discord/embedHelper": realEmbedHelper,
   "@/utils/discord/toolProgressNotice": realToolProgressNotice,
   "@/utils/discord/streamOrchestrator": realStreamOrchestrator,
@@ -53,17 +51,13 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/tools/toolRegistry": realToolRegistry,
 });
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    success: () => undefined,
-    section: () => undefined,
-  },
-}));
+stubLogMembers({
+  error: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  success: () => undefined,
+  section: () => undefined,
+});
 
 scopedMock.module("@/utils/discord/embedHelper", () => ({
   ...realEmbedHelper,

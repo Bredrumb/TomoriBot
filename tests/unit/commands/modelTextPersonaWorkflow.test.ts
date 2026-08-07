@@ -13,12 +13,11 @@ import * as realProviderPicker from "@/utils/discord/providerPicker";
 import * as realEmbeds from "@/utils/discord/ui/embeds";
 import * as realModals from "@/utils/discord/ui/modals";
 import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
-import * as realLogger from "@/utils/misc/logger";
 import * as realLogitBiasResolver from "@/utils/provider/logitBiasResolver";
 import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
 import * as realSavedProviderConfig from "@/utils/provider/savedProviderConfig";
 import * as realLocalizer from "@/utils/text/localizer";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -233,7 +232,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/discord/ui/modals": realModals,
   "@/utils/discord/ui/embeds": realEmbeds,
   "@/utils/text/localizer": realLocalizer,
-  "@/utils/misc/logger": realLogger,
   "@/utils/cache/tomoriStateCache": realTomoriStateCache,
   "@/utils/provider/savedProviderConfig": realSavedProviderConfig,
   "@/utils/db/repositories": realRepositories,
@@ -325,15 +323,11 @@ scopedMock.module("@/utils/text/localizer", () => ({
     variables ? `${key}:${JSON.stringify(variables)}` : key,
 }));
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: async () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-  },
-}));
+stubLogMembers({
+  error: async () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+});
 
 scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
   ...realTomoriStateCache,

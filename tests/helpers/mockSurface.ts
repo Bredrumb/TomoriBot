@@ -1,4 +1,5 @@
-import { afterAll } from "bun:test";
+import { afterAll, spyOn } from "bun:test";
+import { log } from "@/utils/misc/logger";
 
 /**
  * Helper for writing leak-safe `mock.module` factories.
@@ -17,6 +18,35 @@ import { afterAll } from "bun:test";
  * spread would silently reproduce the same partial-mock bug one level down.
  * {@link overrideMembers} covers those cases.
  */
+
+type LogSurface = typeof log;
+
+/**
+ * Member names are checked against the real surface, but signatures are not: existing stubs narrow
+ * parameters the real members declare as optional or `unknown`, which strict contravariance would
+ * reject for no safety gain in a test double.
+ */
+type LogMemberStubs = { [K in keyof LogSurface]?: (...args: never[]) => unknown };
+
+/**
+ * Replaces members of the live `log` singleton for the calling file, restoring them in `afterAll`.
+ *
+ * Use this instead of a module mock over `@/utils/misc/logger`, which
+ * `scripts/checks/checkMockModuleSurface.ts` rejects. `log` is a process-wide singleton whose
+ * members production resolves at call time, so a module mock leaves the module record replaced for
+ * the rest of the run. A LATER file's `spyOn(log, ...)` then installs nothing at all: no throw, no
+ * missing export, the spy records zero calls, and the assertions quietly observe the real
+ * implementation instead. Mutating the singleton avoids that entirely and is order-independent.
+ */
+export function stubLogMembers(overrides: LogMemberStubs): void {
+  const spies = Object.entries(overrides).map(([member, implementation]) =>
+    spyOn(log, member as keyof LogSurface).mockImplementation(implementation as never),
+  );
+
+  afterAll(() => {
+    for (const spy of spies) spy.mockRestore();
+  });
+}
 
 interface ModuleMockRegistrar {
   module(specifier: string, factory: () => object): void;

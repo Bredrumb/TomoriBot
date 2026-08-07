@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 
 // Static imports are hoisted and evaluated before any `mock.module` runs, so
 // these namespaces hold the genuine exports. Spreading them keeps every mock
@@ -40,7 +40,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/tomoriStateCache": realTomoriStateCache,
   "@/utils/discord/webhookManager": realWebhookManager,
   "@/utils/bridges/matrix": realMatrix,
-  "@/utils/misc/logger": realLogger,
 });
 
 scopedMock.module("@/utils/db/repositories", () => ({
@@ -83,21 +82,30 @@ scopedMock.module("@/utils/bridges/matrix", () => ({
   sendMatrixReminderMention: mock(async () => {}),
 }));
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: mock(() => {}),
-    info: mock(() => {}),
-    success: mock(() => {}),
-    warn: mock(() => {}),
-  },
-}));
-
 let ReminderProcessor: typeof import("@/timers/reminderProcessor").ReminderProcessor;
 
+/**
+ * Silencing goes through `spyOn` on the live `log` singleton rather than a module mock. Nothing
+ * here asserts on the logger, so the mock only ever suppressed noise, but registering it left the
+ * module record replaced for the rest of the process: a later file's `spyOn(log, ...)` then
+ * installs nothing at all, silently, and its assertions see the real implementation's output.
+ * That cost `tests/unit/tools/searxngAvailabilityTransition.test.ts` a false failure. `spyOn`
+ * mutates the singleton production already resolves at call time and is undone below.
+ */
+const silencedLogMethods = ["error", "info", "success", "warn"] as const;
+const logSpies = silencedLogMethods.map((method) => spyOn(realLogger.log, method));
+
 beforeAll(async () => {
+  // `error` is the only async member, so its replacement has to stay thenable for callers that
+  // chain `.catch()` on the returned promise.
+  for (const spy of logSpies) spy.mockImplementation((() => undefined) as never);
+  logSpies[0].mockImplementation((async () => undefined) as never);
+
   ({ ReminderProcessor } = await import("@/timers/reminderProcessor"));
+});
+
+afterAll(() => {
+  for (const spy of logSpies) spy.mockRestore();
 });
 
 function makeReminder(overrides: Record<string, unknown> = {}) {

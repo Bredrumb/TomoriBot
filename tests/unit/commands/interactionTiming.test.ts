@@ -17,14 +17,13 @@ import { describe, expect, it, mock } from "bun:test";
 import type { Client } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
 import { makeFakeInteraction, callMethods } from "../../helpers/fakeInteraction";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 // Real namespaces captured at link time, before any `mock.module` below runs.
 // Spreading them keeps each factory full-surface: `mock.module` is process-global
 // and never restored, so an omitted export breaks files loaded later.
 import * as realTomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as realRepositories from "@/utils/db/repositories";
 import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
-import * as realLogger from "@/utils/misc/logger";
 import * as realLocalizer from "@/utils/text/localizer";
 
 // All mock.module() calls are hoisted by bun before static imports are resolved.
@@ -41,24 +40,19 @@ import * as realLocalizer from "@/utils/text/localizer";
 // values for modules that call string methods on them at load time (e.g.
 // contextEmbeds.ts does ColorCode.ERROR.replace("#", "")).
 const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/misc/logger": realLogger,
   "@/utils/text/localizer": realLocalizer,
   "@/utils/discord/ui/interactionCore": realInteractionCore,
   "@/utils/cache/tomoriStateCache": realTomoriStateCache,
   "@/utils/db/repositories": realRepositories,
 });
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-    success: () => undefined,
-    section: () => undefined,
-  },
-}));
+stubLogMembers({
+  error: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  success: () => undefined,
+  section: () => undefined,
+});
 
 scopedMock.module("@/utils/text/localizer", () => ({
   ...realLocalizer,

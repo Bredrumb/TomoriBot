@@ -11,12 +11,11 @@ import * as realCommandRegistry from "@/utils/discord/commandRegistry";
 import * as realEmbeds from "@/utils/discord/ui/embeds";
 import * as realModals from "@/utils/discord/ui/modals";
 import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
-import * as realLogger from "@/utils/misc/logger";
 import * as realCustomProviderUtils from "@/utils/provider/customProviderUtils";
 import * as realProviderInfoRegistry from "@/utils/provider/providerInfoRegistry";
 import * as realSavedProviderConfig from "@/utils/provider/savedProviderConfig";
 import * as realLocalizer from "@/utils/text/localizer";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 
 /**
  * Anchor-migration tests for `/model fallback`.
@@ -139,7 +138,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/provider/providerInfoRegistry": realProviderInfoRegistry,
   "@/utils/provider/customProviderUtils": realCustomProviderUtils,
   "@/utils/discord/commandRegistry": realCommandRegistry,
-  "@/utils/misc/logger": realLogger,
   "@/utils/text/localizer": realLocalizer,
   "@/utils/discord/ui/personaWorkflow": realPersonaWorkflow,
 });
@@ -217,17 +215,13 @@ scopedMock.module("@/utils/discord/commandRegistry", () => ({
   }),
 }));
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: async (_message: string, _error: Error, _context: ErrorContext) => {
-      chronology.push("log.error");
-    },
-    info: () => undefined,
-    warn: () => undefined,
+stubLogMembers({
+  error: async (_message: string, _error: Error, _context: ErrorContext) => {
+    chronology.push("log.error");
   },
-}));
+  info: () => undefined,
+  warn: () => undefined,
+});
 
 scopedMock.module("@/utils/text/localizer", () => ({
   ...realLocalizer,

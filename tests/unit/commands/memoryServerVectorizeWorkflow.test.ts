@@ -12,13 +12,12 @@ import * as realEmbeds from "@/utils/discord/ui/embeds";
 import * as realModals from "@/utils/discord/ui/modals";
 import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
 import * as realEmbeddingProvider from "@/utils/embeddings/embeddingProvider";
-import * as realLogger from "@/utils/misc/logger";
 import * as realMemoryLimits from "@/utils/misc/memoryLimits";
 import * as realCredentialResolver from "@/utils/provider/credentialResolver";
 import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
 import * as realRateLimiter from "@/utils/security/rateLimiter";
 import * as realLocalizer from "@/utils/text/localizer";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -102,7 +101,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/discord/ui/modals": realModals,
   "@/utils/discord/ui/embeds": realEmbeds,
   "@/utils/text/localizer": realLocalizer,
-  "@/utils/misc/logger": realLogger,
   "@/utils/cache/tomoriStateCache": realTomoriStateCache,
   "@/utils/db/repositories": realRepositories,
   "@/utils/db/ragAvailability": realRagAvailability,
@@ -172,21 +170,17 @@ scopedMock.module("@/utils/text/localizer", () => ({
   localizer: (_locale: string, key: string) => key,
 }));
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    info: () => undefined,
-    success: (message: string) => {
-      chronology.push("log.success");
-      successLogs.push(message);
-    },
-    error: async (message: string, error: unknown, context?: Payload) => {
-      chronology.push("log.error");
-      errorLogs.push({ message, error, context });
-    },
+stubLogMembers({
+  info: () => undefined,
+  success: (message: string) => {
+    chronology.push("log.success");
+    successLogs.push(message);
   },
-}));
+  error: async (message: string, error: unknown, context?: Payload) => {
+    chronology.push("log.error");
+    errorLogs.push({ message, error, context });
+  },
+});
 
 scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
   ...realTomoriStateCache,

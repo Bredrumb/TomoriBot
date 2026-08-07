@@ -13,11 +13,10 @@ import * as realModals from "@/utils/discord/ui/modals";
 import * as realPersonaWorkflow from "@/utils/discord/ui/personaWorkflow";
 import * as realDocumentService from "@/utils/documents/documentService";
 import * as realEmbeddingProvider from "@/utils/embeddings/embeddingProvider";
-import * as realLogger from "@/utils/misc/logger";
 import * as realCredentialResolver from "@/utils/provider/credentialResolver";
 import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
 import * as realLocalizer from "@/utils/text/localizer";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 
 type Payload = Record<string, unknown>;
 
@@ -206,7 +205,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/discord/ui/modals": realModals,
   "@/utils/discord/ui/embeds": realEmbeds,
   "@/utils/text/localizer": realLocalizer,
-  "@/utils/misc/logger": realLogger,
   "@/utils/db/ragAvailability": realRagAvailability,
   "@/utils/cache/tomoriStateCache": realTomoriStateCache,
   "@/utils/db/repositories": realRepositories,
@@ -308,15 +306,11 @@ scopedMock.module("@/utils/text/localizer", () => ({
     variables ? `${key}:${JSON.stringify(variables)}` : key,
 }));
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: async () => undefined,
-    info: () => undefined,
-    warn: () => undefined,
-  },
-}));
+stubLogMembers({
+  error: async () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+});
 
 scopedMock.module("@/utils/db/ragAvailability", () => ({
   ...realRagAvailability,

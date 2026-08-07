@@ -25,12 +25,11 @@ import * as realOpenrouterCapabilityCache from "@/utils/cache/openrouterCapabili
 import * as realToolLoop from "@/utils/chat/toolLoop";
 import * as realFallbackModelNotice from "@/utils/discord/fallbackModelNotice";
 import * as realStreamOrchestrator from "@/utils/discord/streamOrchestrator";
-import * as realLogger from "@/utils/misc/logger";
 import * as realPersonalProviderRuntime from "@/utils/provider/personalProviderRuntime";
 import * as realProviderFactory from "@/utils/provider/providerFactory";
 import * as realCrypto from "@/utils/security/crypto";
 import * as realKeyRotation from "@/utils/security/keyRotation";
-import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 
 const queuedResults: GenerationTurnResult[] = [];
 // Parallel to queuedResults: the delivered-message refs each runToolLoop call should push into the
@@ -51,7 +50,6 @@ type TestStopContext = {
 // hex STRINGS modules call string methods on at load time (e.g. contextEmbeds.ts
 // does ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
 const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/misc/logger": realLogger,
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
   "@/utils/cache/geminiCapabilityCache": realGeminiCapabilityCache,
   "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
@@ -67,17 +65,13 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/chat/toolLoop": realToolLoop,
 });
 
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: {
-    ...realLogger.log,
-    error: () => undefined,
-    info: () => undefined,
-    section: () => undefined,
-    success: () => undefined,
-    warn: () => undefined,
-  },
-}));
+stubLogMembers({
+  error: () => undefined,
+  info: () => undefined,
+  section: () => undefined,
+  success: () => undefined,
+  warn: () => undefined,
+});
 
 scopedMock.module("@/utils/cache/channelLlmCache", () => ({
   ...realChannelLlmCache,
