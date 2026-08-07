@@ -61,8 +61,46 @@ write_files:
       # microseconds, so the kernel should prefer it over reclaiming page cache; the
       # previous value of 20 was avoiding disk seeks that no longer dominate. Readahead
       # has no value without seeks, hence page-cluster 0.
+      #
+      # Do not lower swappiness to "preserve swap headroom". zram measures 3.87:1
+      # effective here, holding 688 MiB of anonymous pages in 178 MiB of RAM, against a
+      # 908 MiB anonymous working set on an 843 MiB host. Pages migrated back out of
+      # zram expand at that ratio, so a lower value costs more RAM than it frees.
       vm.swappiness=180
       vm.page-cluster=0
+      # The default 10 leaves kswapd under 1 MiB of runway at this memory size, so
+      # allocations enter synchronous direct reclaim almost immediately: 9,911
+      # allocstalls in 7.7 h of uptime. A wider gap lets kswapd reclaim ahead of demand
+      # instead, at the cost of holding roughly 8 MiB further from allocation.
+      vm.watermark_scale_factor=100
+  - path: /etc/systemd/system/earlyoom.service.d/override.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      # zram hands the kernel enough rope that the global OOM killer never fires under
+      # sustained pressure: reclaim keeps succeeding one page at a time while every
+      # process blocks on major faults. A past incident stalled the host for 82
+      # minutes with no process killed and no container restarted, which is strictly
+      # worse than the fast kill the same overcommit produced before zram existed.
+      #
+      # Thresholds are absolute rather than percentages so they read in the same units
+      # as the "Available Memory Bytes" alert. 120 MiB sits between the observed
+      # healthy floor (~148 MiB) and the thrash plateau (~95 MiB); raise it if a freeze
+      # recurs below the trigger, lower it if healthy operation starts tripping it.
+      #
+      # Killing bun costs about a minute, since Docker's restart policy brings it back.
+      # Killing waagent is unrecoverable: VM Run Command is the only access path to
+      # this host, so the agent and the container runtime are exempt.
+      #
+      # The swap thresholds must stay at 100. earlyoom fires only when the memory AND
+      # swap conditions both hold, and SwapTotal counts the 3 GiB /swapfile overflow
+      # tier that sits at 0 used, pinning swap-free above 80% permanently. At any lower
+      # value the memory threshold can never be reached and the daemon silently never
+      # fires. Ignoring swap is also correct on its own terms here: the only free swap
+      # is the disk-backed tier, and paging into it is the stall being prevented.
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/earlyoom -M 122880,81920 -s 100,100 -r 3600 --avoid '^(systemd|dockerd|containerd|python3|node|sshd|multipathd|snapd)$' --prefer '^(bun|searxng)$'
   - path: /etc/docker/daemon.json
     owner: root:root
     permissions: "0644"
@@ -92,4 +130,7 @@ runcmd:
   - systemctl enable --now docker
   # After apt is primed, since this one needs packages unlike the swapfile script above.
   - /usr/local/sbin/tomoribot-setup-zram.sh
+  - apt-get install -y earlyoom
+  - systemctl daemon-reload
+  - systemctl enable --now earlyoom
   - sysctl --system

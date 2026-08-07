@@ -82,3 +82,62 @@ Read `si`/`so` rather than swap *used*: a large `swpd` with zero `si`/`so` is co
 and never needed again, which is harmless. Sustained nonzero `si` means the working set is genuinely
 oversubscribed. `/proc/pressure/memory` confirms it independently by measuring stall time, where
 `full` is the share of wall time every task was blocked.
+
+## Triaging a frozen bot ("Online but ignoring everything")
+
+Run these in order. Each one invalidates the next if it fails, and the first two are cheap.
+
+**1. Was anything actually killed?** A restarted process and a hung process need opposite fixes.
+
+```sh
+docker inspect $(docker ps -q) --format '{{.Name}} restarts={{.RestartCount}} oom={{.State.OOMKilled}}'
+journalctl -b -1 -k --no-pager | grep -iE "out of memory|killed process|oom-kill"
+```
+
+`restarts=0` with `oom=false` and no kernel OOM line means the process never died. Note that a
+`swapoff` victim dated to the moment of a reboot is an artifact of that reboot tearing down zram, not
+evidence about the incident. If the host was rebooted, `-b -1` is the boot that matters.
+
+**2. Find the gap in a heartbeat metric.** `cache_sizes` emits every 5 minutes at level 52, so a
+missing run of samples bounds the freeze far more precisely than any error log. The host file
+outlives containers, and `hostname` is the container ID, which separates process generations across a
+restart:
+
+```sh
+awk '/metric:cache_sizes/{
+  if (match($0, /"time":[0-9]+/)) { t=int(substr($0, RSTART+7, RLENGTH-7)/1000) } else next;
+  sod = t % 86400;
+  m="?"; if (match($0, /"hostname":"[a-z0-9]+"/)) m=substr($0,RSTART+12,RLENGTH-13);
+  printf "%02d:%02d ctr=%s\n", int(sod/3600), int((sod%3600)/60), m;
+}' /var/log/tomoribot/tomoribot.jsonl | tail -40
+```
+
+Same container ID on both sides of a gap means one process stopped running its timers rather than
+dying. `mawk` has no `strftime`, hence the manual UTC arithmetic.
+
+**3. Ask the platform what stalled.** Guest metrics are gone once the VM reboots, but Azure keeps
+these. Query the freeze window at `PT15M`:
+
+```bash
+for M in "Percentage CPU" "CPU Credits Remaining" "OS Disk Queue Depth" "OS Disk Latency" \
+         "OS Disk Read Operations/Sec" "OS Disk Write Operations/Sec" "Available Memory Bytes"; do
+  az monitor metrics list --resource tomoribot-vm --resource-group tomoribot-rg \
+    --resource-type Microsoft.Compute/virtualMachines --metrics "$M" \
+    --start-time <start>Z --end-time <end>Z --interval PT15M --aggregation Average -o table
+done
+```
+
+`az monitor metrics list` rejects a full resource ID in the installed extension; pass the
+name/group/type triple instead. Interpretation:
+
+| Pattern | Meaning |
+|---|---|
+| Queue depth and latency spike, CPU flat, credits untouched | Storage stall, not compute. Not a burstable throttle. |
+| Reads climb while writes fall | Clean file-backed reclaim thrash, so the binary's own text is being evicted and re-faulted. |
+| Available memory pinned flat for the whole window | Reclaim equilibrium. The OOM killer will not fire, because reclaim keeps succeeding. |
+| Burst IO credits at 0% | Rules out disk throttling as the cause. |
+
+A flat memory plateau with a storage stall and no kill is the zram livelock described in
+[Azure Production Deployment](/architecture/cloud/azure-production-deployment/). `earlyoom` exists to
+convert it into a restart; if one recurs, check that the daemon is running and that its SIGTERM
+threshold sits above the plateau.

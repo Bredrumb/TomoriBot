@@ -307,6 +307,51 @@ Two related traps:
 inside physical RAM. Enable the sidecar only after confirming the host has real headroom; the
 `web_search` chain degrades to `Brave -> DuckDuckGo -> IAsk` without it.
 
+### Compressed swap needs an OOM safety net
+
+zram makes an oversubscribed host survivable, but it changes the failure mode in a way that needs a
+deliberate counterweight. Without swap, a container that outgrows `mem_limit` is OOM-killed by its
+cgroup and Docker's `unless-stopped` policy restarts it inside a minute. With zram the kernel always
+has somewhere to put another page, so reclaim keeps succeeding and the OOM killer never fires. The
+host settles into a thrashing equilibrium instead: available memory flat, CPU near idle, disk queue
+depth an order of magnitude above baseline, and every process blocked on major faults. A bot in this
+state stays Online, because the gateway socket survives at the OS level while nothing in the runtime
+advances.
+
+The distinguishing signature is a read-only disk storm. Reads climb while writes *fall*, because the
+kernel is evicting clean file-backed pages (the Bun binary's own text, which needs no write to
+discard) and faulting them straight back in. Anonymous pages would appear as swap writes instead, so
+falling writes are what separate this from ordinary swapping.
+
+`earlyoom` restores the fast, self-healing kill. `terraform/azure/cloud-init.yaml` installs it with a
+drop-in that pins absolute thresholds and a victim policy:
+
+- Absolute (`-M`) rather than percentage thresholds, so they read in the same units as an "Available
+  Memory Bytes" alert. Size the SIGTERM threshold between the observed healthy floor and the plateau
+  memory settles at during a stall, which means measuring both before choosing a number.
+- `-s 100,100` is load-bearing. earlyoom fires only when the memory **and** swap conditions both
+  hold, and a disk-backed overflow swapfile sitting at 0 used still counts toward `SwapTotal`,
+  pinning swap-free percentage high permanently. At any lower value the daemon prints healthy-looking
+  thresholds at startup and then never fires.
+- `--avoid` must cover the container runtime and the cloud agent. On a locked-down host the agent is
+  the only remaining access path, so killing it to reclaim memory is unrecoverable.
+
+Verify victim selection without killing anything by running a second instance in dry run, with a
+threshold above current availability so it triggers immediately:
+
+```bash
+timeout 6 earlyoom -M <above-current-avail-KiB> -s 100,100 --dryrun -r 0 \
+  --prefer '^bun$' --avoid '^(systemd|dockerd|containerd|python3|node|sshd)$'
+```
+
+It names the process it would signal, then exits without acting.
+
+Two kernel knobs pair with this. `vm.watermark_scale_factor` at its default of 10 leaves kswapd well
+under 1 MiB of runway on a host this size, so allocations enter synchronous direct reclaim instead of
+letting kswapd work ahead; `allocstall_*` in `/proc/vmstat` counts how often that happens. And
+`vm.swappiness` must stay high: with zram measuring near 4:1, pages migrated back out of compressed
+swap expand at that ratio, so lowering it to "preserve swap headroom" costs more RAM than it frees.
+
 ## Release proof and rollback
 
 A production hardening rollout is proven only after the protected `validate` check passes, the PR
