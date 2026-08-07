@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
-import type { CustomEndpointRow, LlmRow, TomoriState, UserSavedProviderConfigRow } from "@/types/db/schema";
+import type {
+  CustomEndpointRow,
+  FallbackModelRef,
+  LlmRow,
+  TomoriState,
+  UserSavedProviderConfigRow,
+} from "@/types/db/schema";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers } from "../../helpers/mockSurface";
 
@@ -16,6 +22,7 @@ const endpoint = {
 } as CustomEndpointRow;
 
 let rows: UserSavedProviderConfigRow[] = [];
+let userChain: FallbackModelRef[] = [];
 
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/repositories": realRepositories,
@@ -29,6 +36,7 @@ scopedMock.module("@/utils/db/repositories", () => ({
   }),
   llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     loadUserSavedProviderConfigs: async () => rows,
+    loadUserFallbackChain: async () => userChain,
     loadCustomEndpointsByIds: async (ids: number[]) =>
       ids.includes(endpoint.custom_endpoint_id as number) ? [endpoint] : [],
   }),
@@ -45,22 +53,23 @@ function makeState(): TomoriState {
 
 function makePersonalRow(
   enabledCapabilities: UserSavedProviderConfigRow["enabled_capabilities"],
+  provider = "custom:u4:local",
 ): UserSavedProviderConfigRow {
   return {
     user_id: 4,
-    provider: "custom:u4:local",
+    provider,
     enabled_capabilities: enabledCapabilities,
     llm_id: 11,
-    fallback_model_refs: [
-      { type: "custom_endpoint", id: 5 },
-      { type: "llm", id: 12 },
-    ],
   } as UserSavedProviderConfigRow;
 }
 
 describe("personal provider fallback overlay", () => {
   beforeEach(() => {
     rows = [];
+    userChain = [
+      { type: "custom_endpoint", id: 5 },
+      { type: "llm", id: 12 },
+    ];
   });
 
   it("materializes user custom endpoints and preserves the configured fallback order", async () => {
@@ -86,5 +95,33 @@ describe("personal provider fallback overlay", () => {
 
     expect(result.tomoriState.fallback_chain).toBe(state.fallback_chain);
     expect(result.tomoriState.fallback_llms).toBe(state.fallback_llms);
+  });
+
+  // The chain is stored per user, so switching which provider answers must not
+  // change which chain is read. Storing it per provider row is what previously
+  // stranded a configured chain on an inactive provider.
+  it("applies the same chain whichever personal text provider is active", async () => {
+    rows = [makePersonalRow(["text"], "deepseek")];
+
+    const { applyPersonalProviderSelectionsToTomoriState } = await import("@/utils/provider/personalProviderRuntime");
+    const result = await applyPersonalProviderSelectionsToTomoriState(makeState(), 4);
+
+    expect(result.tomoriState.fallback_chain).toEqual([
+      { kind: "custom_endpoint", endpoint },
+      { kind: "llm", model: fallback },
+    ]);
+    expect(result.tomoriState.config.fallback_llm_ids).toEqual([12]);
+  });
+
+  it("drops the personal chain to undefined when the user has none", async () => {
+    rows = [makePersonalRow(["text"])];
+    userChain = [];
+
+    const { applyPersonalProviderSelectionsToTomoriState } = await import("@/utils/provider/personalProviderRuntime");
+    const result = await applyPersonalProviderSelectionsToTomoriState(makeState(), 4);
+
+    expect(result.tomoriState.fallback_chain).toBeUndefined();
+    expect(result.tomoriState.fallback_llms).toBeUndefined();
+    expect(result.tomoriState.config.fallback_llm_ids).toEqual([]);
   });
 });

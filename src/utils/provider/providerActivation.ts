@@ -8,7 +8,7 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { buildFallbackModelPersistence } from "@/utils/provider/fallbackModelIdentity";
-import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
+import { assignPersonalCapabilityToProvider } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 
 type ActivationStatus = "activated" | "missing_model" | "missing_provider" | "update_failed";
@@ -140,12 +140,10 @@ export async function activatePersonalProviderTextModel(params: {
     return { status: "missing_model" };
   }
 
-  const customEndpoints = isCustomProvider(params.provider)
-    ? await llmProviderRepo.loadCustomEndpointsForUser(params.userId)
-    : [];
-  const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, "text", (row) =>
-    withPersonalTextPrimary(row, selectedModel.llm_id ?? null, customEndpoints),
-  );
+  const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, "text", (row) => ({
+    ...row,
+    llm_id: selectedModel.llm_id ?? null,
+  }));
 
   return updated ? { status: "activated", modelName: selectedModel.llm_codename } : { status: "update_failed" };
 }
@@ -165,7 +163,7 @@ export async function activatePersonalOpenRouterModelForCapability(params: {
   const updated = await assignPersonalCapabilityToProvider(params.userId, "openrouter", capability, (row) => {
     switch (params.capability) {
       case "text":
-        return withPersonalTextPrimary(row, params.modelId);
+        return { ...row, llm_id: params.modelId };
       case "embedding":
         return { ...row, embedding_model_id: params.modelId };
       case "image":

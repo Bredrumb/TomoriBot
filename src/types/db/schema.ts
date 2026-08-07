@@ -492,6 +492,21 @@ function normalizeFallbackModelRefs(value: unknown): FallbackModelRef[] {
   return parsed.success ? parsed.data : [];
 }
 
+/**
+ * A user's model fallback chain, held once per user rather than per saved
+ * provider row so it survives a provider switch and can span providers.
+ */
+export const userFallbackChainSchema = z.object({
+  user_id: z.number().int(),
+  fallback_model_refs: z.preprocess(
+    (value) => normalizeFallbackModelRefs(value),
+    fallbackModelRefSchema.array().default([]),
+  ),
+  created_at: z.coerce.date().optional(),
+  updated_at: z.coerce.date().optional(),
+});
+export type UserFallbackChainRow = z.infer<typeof userFallbackChainSchema>;
+
 function normalizeEnabledCapabilities(value: unknown): string[] {
   let source: unknown = value;
   if (typeof source === "string") {

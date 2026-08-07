@@ -1,11 +1,31 @@
 import type {
-  CustomEndpointRow,
+  LlmRow,
   PersonalProviderCapability,
+  TomoriState,
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
+import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
+
+/**
+ * The smartest model available on the provider that will actually answer a turn.
+ *
+ * A turn routes on the invoking user's personal credentials whenever they have
+ * an active personal text provider, and a model override travels as a bare
+ * codename that inherits the answering row's provider. Resolving against the
+ * server's provider would therefore pair a personal endpoint with a codename it
+ * does not serve. Null means the routed provider publishes no smartest model,
+ * which callers surface rather than substituting another provider's.
+ */
+export async function loadSmartestModelForRoutedProvider(
+  tomoriState: TomoriState,
+  userId: number | null | undefined,
+): Promise<LlmRow | null> {
+  const { tomoriState: routedState } = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userId);
+  return await llmModelRepo.loadSmartestModel(routedState.llm.llm_provider);
+}
 
 export interface ProviderModelSelection {
   model: string;
@@ -126,22 +146,24 @@ export async function resolveActivePersonalProviderModelSelections(
 }
 
 /**
- * Builds the upsert payload that promotes a text model to personal primary.
+ * Drops a newly promoted primary from the user's fallback chain.
  *
- * The promoted model is pruned from the saved fallback chain: a fallback identical to the primary
- * can never run, and leaving it there makes `/personal model fallback` reject every later edit,
- * since untouched slots resubmit the stale ref.
+ * A fallback identical to the primary can never run: the runtime pool would attempt the same model
+ * twice, and `/personal model fallback` would reject every later edit because untouched slots
+ * resubmit the stale ref. A custom-endpoint ref is matched through its `model_ref_id`, so both
+ * representations of one model are pruned rather than only the numerically equal one.
  */
-export function withPersonalTextPrimary(
-  row: UserSavedProviderConfigRow,
-  llmId: number | null,
-  endpoints: Iterable<Pick<CustomEndpointRow, "custom_endpoint_id" | "model_ref_id">> = [],
-): UserSavedProviderConfigUpsert {
-  return {
-    ...row,
-    llm_id: llmId,
-    fallback_model_refs: prunePrimaryFallbackRefs(row.fallback_model_refs, llmId, endpoints),
-  };
+export async function pruneUserFallbackChainForPrimary(userId: number, primaryLlmId: number | null): Promise<void> {
+  const chain = await llmProviderRepo.loadUserFallbackChain(userId);
+  if (chain.length === 0) {
+    return;
+  }
+
+  const endpoints = await llmProviderRepo.loadCustomEndpointsForUser(userId);
+  const pruned = prunePrimaryFallbackRefs(chain, primaryLlmId, endpoints);
+  if (pruned.length !== chain.length) {
+    await llmProviderRepo.setUserFallbackChain(userId, pruned);
+  }
 }
 
 export function withCapabilityEnabled(
@@ -179,6 +201,11 @@ export async function assignPersonalCapabilityToProvider(
         ...nextRow,
         enabled_capabilities: nextEnabled,
       });
+      // The chain lives on the user, not this row, so promoting a text primary has
+      // to prune it separately to keep the primary out of its own fallback chain.
+      if (capability === "text") {
+        await pruneUserFallbackChainForPrimary(userId, nextRow.llm_id ?? null);
+      }
       updated = true;
       continue;
     }

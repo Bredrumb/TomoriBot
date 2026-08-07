@@ -546,44 +546,10 @@ describe("personal provider model-* anchor workflow", () => {
     });
   });
 
-  it("model-text drops the promoted model from the saved fallback chain", async () => {
-    scenario.submittedValue = "text-model";
-    scenario.fallbackModelRefs = [
-      { type: "llm", id: 11 },
-      { type: "llm", id: 12 },
-      { type: "custom_endpoint", id: 11 },
-    ];
-
-    await runSubcommand("@/commands/personal/provider/model-text");
-
-    // Leaving the promoted model in the chain would make /personal model fallback reject
-    // every later edit, since untouched slots resubmit the stale ref. The same numeric id
-    // under a different ref type is a different model and must survive.
-    expect(assignCalls[0]?.result).toMatchObject({
-      llm_id: 11,
-      fallback_model_refs: [
-        { type: "llm", id: 12 },
-        { type: "custom_endpoint", id: 11 },
-      ],
-    });
-  });
-
-  it("model-text also drops the custom endpoint backing the promoted synthetic model", async () => {
-    scenario.providers = ["custom:u4:local"];
-    scenario.customPrimaryEndpointMode = true;
-    scenario.submittedValue = "text-model";
-    scenario.fallbackModelRefs = [
-      { type: "custom_endpoint", id: 5 },
-      { type: "llm", id: 12 },
-    ];
-
-    await runSubcommand("@/commands/personal/provider/model-text");
-
-    expect(assignCalls[0]?.result).toMatchObject({
-      llm_id: 11,
-      fallback_model_refs: [{ type: "llm", id: 12 }],
-    });
-  });
+  // Pruning the promoted primary out of the fallback chain is asserted in
+  // tests/unit/provider/personalFallbackChainWiring.test.ts: the chain moved to
+  // user_fallback_chains, so it is no longer part of this command's upsert payload
+  // and is not observable at the assignPersonalCapabilityToProvider seam mocked here.
 
   it("renders the moved-model notice in place for the legacy OpenRouter sentinel", async () => {
     scenario.submittedValue = "other-model";

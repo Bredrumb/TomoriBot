@@ -30,6 +30,10 @@ function jsonResponse(status: number, body: unknown, headers?: Record<string, st
   return new Response(JSON.stringify(body), { status, headers });
 }
 
+// Two cases below exhaust the real retry budget rather than faking timers, so they need
+// headroom over the 5s per-test default.
+const RETRY_EXHAUSTION_TIMEOUT_MS = 20_000;
+
 describe("pkApi.fetchMessage", () => {
   it("resolves a successful lookup and normalizes fields", async () => {
     const fetchMock = mock(async () =>
@@ -117,32 +121,42 @@ describe("pkApi.fetchMessage", () => {
     expect(Date.now() - start).toBeGreaterThanOrEqual(750);
   });
 
-  it("gives up once the retry budget is exhausted and returns null", async () => {
-    const fetchMock = mock(async () => jsonResponse(404, {}));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  it(
+    "gives up once the retry budget is exhausted and returns null",
+    async () => {
+      const fetchMock = mock(async () => jsonResponse(404, {}));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const result = await fetchMessage("msg-exhausted");
+      const result = await fetchMessage("msg-exhausted");
 
-    expect(result).toBeNull();
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
-  });
+      expect(result).toBeNull();
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
+      // Real backoff sleeps dominate this test, putting it near the 5s default and
+      // flaking whenever the shared lane runs under load.
+    },
+    RETRY_EXHAUSTION_TIMEOUT_MS,
+  );
 
-  it("does not permanently cache a failed lookup — a later call can still succeed", async () => {
-    const failingFetch = mock(async () => jsonResponse(404, {}));
-    globalThis.fetch = failingFetch as unknown as typeof fetch;
+  it(
+    "does not permanently cache a failed lookup — a later call can still succeed",
+    async () => {
+      const failingFetch = mock(async () => jsonResponse(404, {}));
+      globalThis.fetch = failingFetch as unknown as typeof fetch;
 
-    const firstResult = await fetchMessage("msg-recovers");
-    expect(firstResult).toBeNull();
+      const firstResult = await fetchMessage("msg-recovers");
+      expect(firstResult).toBeNull();
 
-    const succeedingFetch = mock(async () =>
-      jsonResponse(200, { original: "999", sender: "aaa", system: null, member: null }),
-    );
-    globalThis.fetch = succeedingFetch as unknown as typeof fetch;
+      const succeedingFetch = mock(async () =>
+        jsonResponse(200, { original: "999", sender: "aaa", system: null, member: null }),
+      );
+      globalThis.fetch = succeedingFetch as unknown as typeof fetch;
 
-    const secondResult = await fetchMessage("msg-recovers");
-    expect(secondResult?.sender).toBe("aaa");
-    expect(succeedingFetch).toHaveBeenCalledTimes(1);
-  });
+      const secondResult = await fetchMessage("msg-recovers");
+      expect(secondResult?.sender).toBe("aaa");
+      expect(succeedingFetch).toHaveBeenCalledTimes(1);
+    },
+    RETRY_EXHAUSTION_TIMEOUT_MS,
+  );
 
   it("caches a successful lookup permanently — a later call never refetches", async () => {
     const fetchMock = mock(async () =>

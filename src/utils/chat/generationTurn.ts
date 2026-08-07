@@ -1,4 +1,4 @@
-import type { FallbackEntry, LlmRow, TomoriState } from "@/types/db/schema";
+import type { FallbackEntry, LlmRow, SavedProviderConfigRow, TomoriState } from "@/types/db/schema";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import type { LLMProvider, ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { ProviderError } from "@/types/stream/interfaces";
@@ -238,6 +238,9 @@ async function purgeSupersededDeliveries(
 async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
   const primaryState = await resolvePrimaryTomoriState(context);
+  // Non-null only while the turn routes on personal credentials, which is what
+  // confines cross-provider fallbacks to the user's own keys.
+  const personalUserId = context.textCredentialSource === "personal" ? (context.personalRoutingUserId ?? null) : null;
   const fallbackEntries =
     primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
 
@@ -258,10 +261,13 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   const attempts: GenerationAttempt[] = [];
   for (const [index, entry] of pool.entries()) {
     try {
-      const attempt = await createFallbackAttempt(primaryState, entry, index, disableAllTools);
+      const attempt = await createFallbackAttempt(primaryState, entry, index, disableAllTools, personalUserId);
       if (!attempt) {
-        // Only an unusable custom-endpoint lead resolves to null; the primary llm entry never does,
-        // so at least one valid attempt always remains in the chain.
+        // An unusable custom endpoint, or an llm whose provider has no key in the
+        // applicable scope, resolves to null. The primary's own llm entry shares
+        // the primary's provider and so never re-credentials, which is what
+        // guarantees at least one valid attempt survives however the pool is
+        // ordered.
         continue;
       }
       // Keep logs readable: the lead is always labelled "primary" regardless of the random draw.
@@ -377,6 +383,7 @@ async function createFallbackAttempt(
   entry: FallbackEntry,
   fallbackIndex: number,
   disableAllTools: boolean,
+  personalUserId: number | null,
 ): Promise<GenerationAttempt | null> {
   if (entry.kind === "custom_endpoint") {
     const endpointUserId = entry.endpoint.user_id ?? null;
@@ -426,7 +433,14 @@ async function createFallbackAttempt(
 
   let state: TomoriState = { ...primaryState, llm: entry.model };
   if (entry.model.llm_provider.toLowerCase() !== primaryState.llm.llm_provider.toLowerCase()) {
-    state = await applySavedProviderConfig(state, entry.model.llm_provider);
+    const recredentialed = await applyCrossProviderConfig(state, entry.model.llm_provider, personalUserId);
+    if (!recredentialed) {
+      log.warn(
+        `Skipping fallback ${entry.model.llm_codename}: no ${personalUserId ? "personal" : "server"} key saved for provider ${entry.model.llm_provider}.`,
+      );
+      return null;
+    }
+    state = recredentialed;
   }
   return await createAttempt(
     `fallback ${fallbackIndex}: ${entry.model.llm_codename}`,
@@ -473,12 +487,27 @@ async function resolveApiKey(tomoriState: TomoriState): Promise<string> {
   return await decryptApiKey(encryptedKey, tomoriState.config.key_version || 1);
 }
 
-async function applySavedProviderConfig(tomoriState: TomoriState, providerName: string): Promise<TomoriState> {
-  const savedConfig = await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, providerName.toLowerCase());
-  if (!savedConfig?.api_key) {
-    throw new Error(`No saved credentials found for provider ${providerName}.`);
-  }
+// The saved-config fields a cross-provider switch carries onto the attempt.
+// Optional beyond api_key so the server-scoped and user-scoped row types, which
+// differ in which sampler fields they mark optional, both satisfy it.
+type CrossProviderConfig = Pick<SavedProviderConfigRow, "api_key"> &
+  Partial<
+    Pick<
+      SavedProviderConfigRow,
+      | "key_version"
+      | "llm_temperature"
+      | "llm_top_p"
+      | "llm_top_k"
+      | "llm_frequency_penalty"
+      | "llm_presence_penalty"
+      | "llm_min_p"
+      | "thinking_level"
+      | "llm_disabled_params"
+      | "llm_logit_biases"
+    >
+  >;
 
+function withSavedProviderConfig(tomoriState: TomoriState, savedConfig: CrossProviderConfig): TomoriState {
   return {
     ...tomoriState,
     config: {
@@ -496,6 +525,41 @@ async function applySavedProviderConfig(tomoriState: TomoriState, providerName: 
       llm_logit_biases: savedConfig.llm_logit_biases ?? tomoriState.config.llm_logit_biases,
     },
   };
+}
+
+/**
+ * Re-credentials a fallback attempt whose model belongs to a different provider
+ * than the primary's.
+ *
+ * A personal-routed turn resolves against the user's own saved providers and
+ * never falls through to the server's, so a chain the user configured cannot
+ * silently spend the server owner's key. Returns null when no key exists in the
+ * applicable scope, which drops the entry from the pool.
+ */
+async function applyCrossProviderConfig(
+  tomoriState: TomoriState,
+  providerName: string,
+  personalUserId: number | null,
+): Promise<TomoriState | null> {
+  const provider = providerName.toLowerCase();
+  const savedConfig = personalUserId
+    ? await llmProviderRepo.loadUserSavedProviderConfig(personalUserId, provider)
+    : await llmProviderRepo.loadSavedProviderConfig(tomoriState.server_id, provider);
+
+  return savedConfig?.api_key ? withSavedProviderConfig(tomoriState, savedConfig) : null;
+}
+
+/**
+ * Server-scoped variant for the primary attempt, which cannot be skipped the way a
+ * fallback entry can and so raises instead of returning null.
+ */
+async function applySavedProviderConfig(tomoriState: TomoriState, providerName: string): Promise<TomoriState> {
+  const state = await applyCrossProviderConfig(tomoriState, providerName, null);
+  if (!state) {
+    throw new Error(`No saved credentials found for provider ${providerName}.`);
+  }
+
+  return state;
 }
 
 function extractErrorCode(streamResult: StreamResult | undefined): string {

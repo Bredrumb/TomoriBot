@@ -97,10 +97,6 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     nextConfig.llm_disabled_params = activeConfigs.text.llm_disabled_params ?? nextConfig.llm_disabled_params;
     nextConfig.llm_logit_biases = activeConfigs.text.llm_logit_biases ?? nextConfig.llm_logit_biases;
     nextConfig.thinking_level = activeConfigs.text.thinking_level ?? nextConfig.thinking_level;
-    const personalFallbackIds = (activeConfigs.text.fallback_model_refs ?? [])
-      .filter((r) => r.type === "llm")
-      .map((r) => r.id);
-    nextConfig.fallback_llm_ids = personalFallbackIds;
     // custom_endpoint_url/name/ctx are no longer on user saved configs; resolved from custom_endpoints at runtime
   }
 
@@ -136,8 +132,11 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     }
   }
 
+  // The chain is per user, not per saved provider row, so it survives a provider
+  // switch and can span providers. It still only applies while personal text
+  // routing is active: the server chain stays isolated from personal routing.
   const personalFallbackChain = activeConfigs.text
-    ? await resolvePersonalFallbackChain(activeConfigs.text.fallback_model_refs ?? [], userId)
+    ? await resolvePersonalFallbackChain(await llmProviderRepo.loadUserFallbackChain(userId), userId)
     : null;
   const nextFallbackChain = activeConfigs.text
     ? personalFallbackChain && personalFallbackChain.length > 0
@@ -147,6 +146,12 @@ export async function applyPersonalProviderSelectionsToTomoriState(
   const nextFallbackLlms = activeConfigs.text
     ? personalFallbackChain?.flatMap((entry) => (entry.kind === "llm" ? [entry.model] : []))
     : tomoriState.fallback_llms;
+
+  if (activeConfigs.text) {
+    nextConfig.fallback_llm_ids = (nextFallbackLlms ?? []).flatMap((model) =>
+      model.llm_id !== undefined ? [model.llm_id] : [],
+    );
+  }
 
   return {
     tomoriState: {

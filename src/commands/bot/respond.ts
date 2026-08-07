@@ -8,7 +8,7 @@ import { localizer } from "../../utils/text/localizer";
 import type { UserRow } from "../../types/db/schema";
 import type { ModalComponent, SelectOption } from "../../types/discord/modal";
 import { tomoriChat } from "../../events/messageCreate/tomoriChat";
-import { llmModelRepo, personaRepository } from "@/utils/db/repositories";
+import { personaRepository } from "@/utils/db/repositories";
 import { getCachedWhitelistStatus } from "../../utils/cache/channelWhitelistCache";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -17,6 +17,7 @@ import { filterPersonasForTrigger, isPersonaAllowedForTrigger } from "@/utils/pe
 import { CooldownType } from "../../types/db/schema";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isNoticeEmbedVisible } from "@/utils/discord/toolProgressNotice";
+import { loadSmartestModelForRoutedProvider } from "@/utils/provider/personalProviderHelpers";
 import type { TomoriState } from "@/types/db/schema";
 
 /**
@@ -349,8 +350,7 @@ export async function execute(
 
     const useReasoning = modalResult.values?.use_reasoning === "true";
     if (useReasoning) {
-      const currentProvider = tomoriState.llm.llm_provider;
-      const smartestModel = await llmModelRepo.loadSmartestModel(currentProvider);
+      const smartestModel = await loadSmartestModelForRoutedProvider(tomoriState, userData.user_id);
 
       if (!smartestModel) {
         await replyInteraction.editReply({

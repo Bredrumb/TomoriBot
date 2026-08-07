@@ -258,13 +258,15 @@ export default {
         no_provider_title: `有効な個人テキストプロバイダーがありません`,
         no_provider_description: `先に \`/personal provider add\` または \`/personal provider model-text\` で個人テキスト上書きを有効化してください。`,
         primary_conflict_title: `選択が無効です`,
-        primary_conflict_description: `選択したフォールバックモデルの一つ以上が、このプロバイダーの個人プライマリモデル \`{model}\` と一致しています。別のモデルを選択してください。`,
+        primary_conflict_description: `選択したフォールバックモデルの一つ以上が、個人プライマリモデル \`{model}\` と一致しています。別のモデルを選択してください。`,
         success_title: `個人フォールバックを更新しました`,
-        success_description: `個人 {provider} テキストプロバイダーのフォールバックモデルを更新しました。
+        success_description: `個人フォールバックモデルを更新しました。
 
-{model_list}`,
+{model_list}
+
+別のプロバイダーのモデルを同じチェーンに追加するには、このコマンドをもう一度実行してそのプロバイダーを選んでください。`,
         cleared_title: `個人フォールバックをクリアしました`,
-        cleared_description: `個人 {provider} テキストプロバイダーのフォールバックモデルをクリアしました。`,
+        cleared_description: `個人フォールバックモデルをクリアしました。`,
       },
     },
     parameters: {

@@ -26,7 +26,10 @@ import {
   parseCustomProvider,
 } from "@/utils/provider/customProviderUtils";
 import { buildFallbackModelPersistence, prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
-import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
+import {
+  assignPersonalCapabilityToProvider,
+  pruneUserFallbackChainForPrimary,
+} from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
@@ -352,7 +355,7 @@ async function activatePersonalCustomEndpointForCapability(params: {
   const updated = await assignPersonalCapabilityToProvider(params.userId, params.provider, capability, (row) => {
     switch (params.capability) {
       case "text":
-        return withPersonalTextPrimary(row, params.modelId, [params.endpoint]);
+        return { ...row, llm_id: params.modelId };
       case "embedding":
         return { ...row, embedding_model_id: params.modelId };
       case "image":
@@ -806,6 +809,12 @@ export async function removeCustomEndpointRegistration(params: {
     });
   } else {
     await llmProviderRepo.upsertUserSavedProviderConfig(params.scope.ownerId, nextConfig as UserSavedProviderConfigRow);
+    // This path promotes a sibling without going through assignPersonalCapabilityToProvider,
+    // so the chain has to be pruned here or a sibling already listed as a fallback would
+    // end up as both the primary and its own fallback entry.
+    if (params.capability === "text" && clearActive) {
+      await pruneUserFallbackChainForPrimary(params.scope.ownerId, siblingModelId ?? null);
+    }
   }
 
   return true;

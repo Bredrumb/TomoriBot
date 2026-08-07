@@ -19,7 +19,10 @@ import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getFallbackModelRefKey, getPrimaryFallbackRefKeys } from "@/utils/provider/fallbackModelIdentity";
-import { resolveActivePersonalProviderModelSelections } from "@/utils/provider/personalProviderHelpers";
+import {
+  getActivePersonalProviderForCapability,
+  resolveActivePersonalProviderModelSelections,
+} from "@/utils/provider/personalProviderHelpers";
 import {
   beginAnchorPrivateWorkflow,
   buildPersonaWorkflowNotice,
@@ -185,8 +188,13 @@ export async function execute(
     // one and hands back the range button in its place.
     let modalButton: ButtonInteraction = opener.button;
 
-    const selectedConfig = savedProviders.find((p) => p.provider.toLowerCase() === selectedProvider) ?? null;
-    const existingRefs = selectedConfig?.fallback_model_refs ?? [];
+    // One chain per user, so the provider picked above selects only which model
+    // catalogue the slots offer. Re-running with a different provider therefore
+    // adds to the same chain instead of editing a separate per-provider list.
+    const existingRefs = await llmProviderRepo.loadUserFallbackChain(userData.user_id);
+    // "Primary" is whichever provider actually answers at inference, which is not
+    // necessarily the catalogue being browsed right now.
+    const activeTextConfig = getActivePersonalProviderForCapability(savedProviders, "text");
 
     const llmRefIds = existingRefs.filter((r) => r.type === "llm").map((r) => r.id);
     const epRefIds = existingRefs.filter((r) => r.type === "custom_endpoint").map((r) => r.id);
@@ -374,7 +382,7 @@ export async function execute(
     // pick made in this submission is worth an error; an inherited duplicate (the primary was
     // promoted after this chain was saved) is dropped silently, since erroring on it would
     // reject every submission until the user found and cleared that untouched slot.
-    const primaryLlmId = selectedConfig?.llm_id ?? null;
+    const primaryLlmId = activeTextConfig?.llm_id ?? null;
     const primaryKeys = getPrimaryFallbackRefKeys(primaryLlmId, resolvedEndpointMap.values());
     if ([...submittedKeys].some((key) => primaryKeys.has(key))) {
       const primaryModel = primaryLlmId ? resolvedModelMap.get(primaryLlmId) : undefined;
@@ -391,22 +399,7 @@ export async function execute(
     }
     const finalRefs = dedupedRefs.filter((ref) => !primaryKeys.has(getFallbackModelRefKey(ref)));
 
-    if (!selectedConfig) {
-      await work.message.replace(
-        buildPersonaWorkflowNotice({
-          locale,
-          titleKey: "general.errors.unknown_error_title",
-          descriptionKey: "general.errors.unknown_error_description",
-          color: ColorCode.ERROR,
-        }),
-      );
-      return;
-    }
-
-    const writeOk = await llmProviderRepo.upsertUserSavedProviderConfig(userData.user_id, {
-      ...selectedConfig,
-      fallback_model_refs: finalRefs,
-    });
+    const writeOk = await llmProviderRepo.setUserFallbackChain(userData.user_id, finalRefs);
     if (!writeOk) {
       await work.message.replace(
         buildPersonaWorkflowNotice({
@@ -425,7 +418,6 @@ export async function execute(
           locale,
           titleKey: "commands.personal.model.fallback.cleared_title",
           descriptionKey: "commands.personal.model.fallback.cleared_description",
-          descriptionVars: { provider: getProviderDisplayName(selectedProvider) },
           color: ColorCode.SUCCESS,
         }),
       );
@@ -453,7 +445,6 @@ export async function execute(
         descriptionKey: "commands.personal.model.fallback.success_description",
         descriptionVars: {
           model_list: modelList,
-          provider: getProviderDisplayName(selectedProvider),
         },
         color: ColorCode.SUCCESS,
       }),

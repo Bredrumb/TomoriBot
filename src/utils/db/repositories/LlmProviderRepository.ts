@@ -8,6 +8,7 @@ import {
   openRouterModelRegistrationSchema,
   openRouterVideoModelRegistrationSchema,
   savedProviderConfigSchema,
+  userFallbackChainSchema,
   userSavedProviderConfigSchema,
   videoGenerationModelSchema,
   type CustomEndpointApiStyle,
@@ -15,6 +16,7 @@ import {
   type CustomEndpointRow,
   type DiffusionModelRow,
   type EmbeddingModelRow,
+  type FallbackModelRef,
   type LlmRow,
   type OpenRouterEmbeddingModelRegistrationRow,
   type OpenRouterImageModelRegistrationRow,
@@ -1100,17 +1102,19 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     try {
       const provider = config.provider.toLowerCase();
       const enabledCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.enabled_capabilities);
-      const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
       const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
       const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
 
+      // fallback_model_refs is deliberately absent: the chain moved to
+      // user_fallback_chains in migration 058 and the column is awaiting a drop.
+      // Writing it here would let the dead copy drift back out of agreement.
       const rows = await sql`
         INSERT INTO user_saved_provider_configs (
           user_id, provider, api_key, key_version,
           llm_id, diffusion_model_id, embedding_model_id,
           video_model_id,
           nai_diffusion_model_id, vision_llm_id, nai_preset_name,
-          thinking_level, enabled_capabilities, fallback_model_refs,
+          thinking_level, enabled_capabilities,
           llm_temperature, llm_top_p, llm_top_k,
           llm_frequency_penalty, llm_presence_penalty, llm_min_p,
           llm_max_output_tokens,
@@ -1120,7 +1124,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
           ${config.video_model_id ?? null},
           ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
-          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${fallbackModelRefsJson}::jsonb,
+          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[],
           ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
           ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
           ${config.llm_max_output_tokens ?? null},
@@ -1138,7 +1142,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           nai_preset_name = EXCLUDED.nai_preset_name,
           thinking_level = EXCLUDED.thinking_level,
           enabled_capabilities = EXCLUDED.enabled_capabilities,
-          fallback_model_refs = EXCLUDED.fallback_model_refs,
           llm_temperature = EXCLUDED.llm_temperature,
           llm_top_p = EXCLUDED.llm_top_p,
           llm_top_k = EXCLUDED.llm_top_k,
@@ -1165,6 +1168,66 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       return true;
     } catch (error) {
       log.error(`Error upserting user saved provider config for user ${userId}, provider ${config.provider}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Returns a user's model fallback chain, or an empty chain when unset.
+   *
+   * @param userId - Internal user DB ID
+   */
+  async loadUserFallbackChain(userId: number): Promise<FallbackModelRef[]> {
+    try {
+      const rows = await sql`
+        SELECT user_id, fallback_model_refs
+        FROM user_fallback_chains
+        WHERE user_id = ${userId}
+        LIMIT 1
+      `;
+      if (!rows || rows.length === 0) return [];
+
+      const parsed = userFallbackChainSchema.safeParse(rows[0]);
+      if (!parsed.success) {
+        log.warn(`Invalid user fallback chain row for user ${userId}: ${parsed.error.message}`);
+        return [];
+      }
+      return parsed.data.fallback_model_refs;
+    } catch (error) {
+      log.error(`Error loading user fallback chain for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Replaces a user's model fallback chain wholesale.
+   *
+   * @param userId - Internal user DB ID
+   * @param refs   - Ordered chain; an empty array clears it
+   */
+  async setUserFallbackChain(userId: number, refs: FallbackModelRef[]): Promise<boolean> {
+    try {
+      // Bind the array itself, never JSON.stringify output: Bun's driver already
+      // encodes a bound JS string as a JSON string, so `${JSON.stringify(x)}::jsonb`
+      // stores "[...]" (jsonb_typeof 'string') and the trailing cast is a no-op
+      // with nothing left to parse. That is how the superseded per-provider
+      // column ended up double-encoded on almost every row.
+      const rows = await sql`
+        INSERT INTO user_fallback_chains (user_id, fallback_model_refs)
+        VALUES (${userId}, ${refs})
+        ON CONFLICT (user_id) DO UPDATE SET
+          fallback_model_refs = EXCLUDED.fallback_model_refs
+        RETURNING user_id
+      `;
+      if (rows.length === 0) {
+        log.warn(`Fallback chain write for user ${userId} affected no rows.`);
+        return false;
+      }
+
+      log.info(`Updated fallback chain for user ${userId} (${refs.length} entr${refs.length === 1 ? "y" : "ies"})`);
+      return true;
+    } catch (error) {
+      log.error(`Error setting user fallback chain for user ${userId}:`, error);
       return false;
     }
   }

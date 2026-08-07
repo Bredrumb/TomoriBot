@@ -2457,6 +2457,26 @@ CREATE TRIGGER update_user_saved_provider_configs_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================
+-- Personal Model Fallback Chain (migration 058)
+-- One chain per user, deliberately not per provider row: only the
+-- text-enabled provider row is read at inference, so a per-provider chain
+-- became unreachable on provider switch and could never span two providers.
+-- Mirrors the server-side single list in server_chat_configs.
+-- user_saved_provider_configs.fallback_model_refs is the superseded location.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_fallback_chains (
+  user_id             INT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+  fallback_model_refs JSONB NOT NULL DEFAULT '[]'::JSONB,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_user_fallback_chains_timestamp ON user_fallback_chains;
+CREATE TRIGGER update_user_fallback_chains_timestamp
+  BEFORE UPDATE ON user_fallback_chains
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================
 -- Context Note / Author's Note (April 2026)
 -- Short reminder string injected into conversation history at a
 -- user-specified depth from the bottom to reduce context drift.

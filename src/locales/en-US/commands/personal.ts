@@ -258,13 +258,15 @@ Continue?`,
         no_provider_title: `No Active Personal Text Provider`,
         no_provider_description: `Enable a personal text override first with \`/personal provider add\` or \`/personal provider model-text\`.`,
         primary_conflict_title: `Invalid Selection`,
-        primary_conflict_description: `One or more selected fallback models matches your personal primary model \`{model}\` for this provider. Please choose different models.`,
+        primary_conflict_description: `One or more selected fallback models matches your personal primary model \`{model}\`. Please choose different models.`,
         success_title: `Personal Fallback Updated`,
-        success_description: `Updated fallback models for your personal {provider} text provider.
+        success_description: `Updated your personal fallback models.
 
-{model_list}`,
+{model_list}
+
+Run this command again and pick a different provider to add its models to the same chain.`,
         cleared_title: `Personal Fallback Cleared`,
-        cleared_description: `Cleared fallback models for your personal {provider} text provider.`,
+        cleared_description: `Cleared your personal fallback models.`,
       },
     },
     parameters: {
