@@ -9,8 +9,10 @@ import type {
 import { resolveContextReferences, type ResolvedContextReferences } from "@/utils/text/contextReferences";
 import {
   createDiscordParticipantMemberDirectory,
+  repositoryPluralKitMemberReferenceSource,
   repositoryUserReferenceCandidateSource,
   type ParticipantMemberDirectory,
+  type PluralKitMemberReferenceSource,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
 import {
@@ -30,6 +32,7 @@ interface ParticipantPreparationExternalCalls {
   candidateSourceReads: number;
   memberCacheHits: number;
   memberFetches: number;
+  pluralKitMemberReads: number;
 }
 
 interface ParticipantPreparationDiagnostics {
@@ -67,6 +70,7 @@ export interface ParticipantPreparationInput {
   responderPersonaIds?: ReadonlySet<number>;
   requestScope?: ParticipantRequestScope;
   candidateSource?: UserReferenceCandidateSource;
+  pluralKitMemberSource?: PluralKitMemberReferenceSource;
   memberDirectory?: ParticipantMemberDirectory | null;
   sourceRegistry?: ParticipantSourceRegistry;
   profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
@@ -100,7 +104,8 @@ export async function prepareParticipantContext(
   const requestScope = input.requestScope ?? createParticipantRequestScope();
   const cached = requestScope.discoveries.get(cacheKey);
   const discoveryCacheHit = Boolean(cached);
-  const discoveryPromise = cached ?? discoverParticipants(frozen, input.candidateSource, input.memberDirectory);
+  const discoveryPromise =
+    cached ?? discoverParticipants(frozen, input.candidateSource, input.memberDirectory, input.pluralKitMemberSource);
   if (!cached) requestScope.discoveries.set(cacheKey, discoveryPromise);
   const discoveryStartedAt = performance.now();
   let discovery: CachedParticipantDiscovery;
@@ -154,7 +159,7 @@ export async function prepareParticipantContext(
       includedCount: discoveryPlan.seeds.length,
       rejectionCounts,
       externalCalls: discoveryCacheHit
-        ? { candidateSourceReads: 0, memberCacheHits: 0, memberFetches: 0 }
+        ? { candidateSourceReads: 0, memberCacheHits: 0, memberFetches: 0, pluralKitMemberReads: 0 }
         : discovery.externalCalls,
       sourceContributions: composition.diagnostics,
     },
@@ -230,18 +235,27 @@ async function discoverParticipants(
   input: ReturnType<typeof freezeParticipantInput>,
   candidateSourceOverride?: UserReferenceCandidateSource,
   memberDirectoryOverride?: ParticipantMemberDirectory | null,
+  pluralKitMemberSourceOverride?: PluralKitMemberReferenceSource,
 ): Promise<CachedParticipantDiscovery> {
   const startedAt = performance.now();
   const externalCalls: ParticipantPreparationExternalCalls = {
     candidateSourceReads: 0,
     memberCacheHits: 0,
     memberFetches: 0,
+    pluralKitMemberReads: 0,
   };
   const candidateSource = candidateSourceOverride ?? repositoryUserReferenceCandidateSource;
   const countedCandidateSource: UserReferenceCandidateSource = {
     loadCandidates: async (query) => {
       externalCalls.candidateSourceReads += 1;
       return candidateSource.loadCandidates(query);
+    },
+  };
+  const pluralKitMemberSource = pluralKitMemberSourceOverride ?? repositoryPluralKitMemberReferenceSource;
+  const countedPluralKitMemberSource: PluralKitMemberReferenceSource = {
+    loadMembers: async (query) => {
+      externalCalls.pluralKitMemberReads += 1;
+      return pluralKitMemberSource.loadMembers(query);
     },
   };
   const memberDirectory =
@@ -275,6 +289,7 @@ async function discoverParticipants(
     existingPersonaIds,
     responderPersonaIds: input.responderPersonaIds,
     candidateSource: countedCandidateSource,
+    pluralKitMemberSource: countedPluralKitMemberSource,
     memberDirectory: countedMemberDirectory,
   });
   return { references, durationMs: performance.now() - startedAt, externalCalls };

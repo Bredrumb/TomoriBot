@@ -38,7 +38,10 @@ import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audi
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
-import { getPluralKitProxyMessageRecord } from "@/utils/chat/pluralkit/proxyExpectation";
+import {
+  getPluralKitProxyMessageRecord,
+  getSupersededPluralKitOriginalMessageIds,
+} from "@/utils/chat/pluralkit/proxyExpectation";
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
@@ -474,6 +477,15 @@ async function buildSimplifiedHistory(
     !messages.some((message) => message.id === turn.lockedTurn.admission.message.id)
   ) {
     messages.push(turn.lockedTurn.admission.message);
+  }
+
+  // A confirmed PluralKit proxy can resolve before PluralKit's delete of the
+  // original lands, so the fetch above may still return both. Drop the original:
+  // the proxy carries the member identity, and keeping both renders one message
+  // twice under two names (host account, then member).
+  const supersededOriginalIds = getSupersededPluralKitOriginalMessageIds(channel.id);
+  if (supersededOriginalIds.size > 0) {
+    messages = messages.filter((message) => !supersededOriginalIds.has(message.id));
   }
 
   // Find the most recent reset or compact_refresh embed and slice history at that point.

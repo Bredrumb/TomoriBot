@@ -229,6 +229,30 @@ export function isKnownPluralKitProxyMessage(message: Pick<Message, "id" | "webh
   return Boolean(message.webhookId && getPluralKitProxyMessageRecord(message.id));
 }
 
+/**
+ * IDs of originals that a confirmed proxy in this channel has superseded.
+ *
+ * PluralKit posts the webhook and deletes the original as two separate REST
+ * calls, and it indexes the proxy at step one, so a lookup can resolve while the
+ * delete is still in flight. A history fetch in that window still returns the
+ * original from Discord, which would render the same message twice under two
+ * different identities. Callers building dialogue context must drop these.
+ *
+ * Scanned rather than kept as a reverse index because PluralKit splits messages
+ * over 2000 chars into several proxies sharing one original, so an
+ * original-to-proxy map would drop live entries as siblings expired.
+ */
+export function getSupersededPluralKitOriginalMessageIds(channelId: string): Set<string> {
+  sweepExpiredPluralKitProxyState();
+  const originalMessageIds = new Set<string>();
+  for (const record of proxyMessagesById.values()) {
+    if (record.channelId === channelId) {
+      originalMessageIds.add(record.originalMessageId);
+    }
+  }
+  return originalMessageIds;
+}
+
 export function applyPluralKitProxyReference(message: Message): boolean {
   const record = getPluralKitProxyMessageRecord(message.id);
   if (!record?.originalReference || message.reference?.messageId) {

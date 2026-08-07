@@ -10,6 +10,7 @@ import type {
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
+import { pluralKitRepository } from "@/utils/db/repositories/PluralKitRepository";
 import { buildParticipantContextItem } from "@/utils/text/context/participants";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
@@ -290,7 +291,12 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     getPrivacyLevel: userRepository.getPrivacyLevel,
     loadForUserLineage: personalMemoryRepository.loadForUserLineage,
     getPendingRemindersForUser: serverScheduleRepository.getPendingRemindersForUser,
+    loadContextReferenceMembers: pluralKitRepository.loadContextReferenceMembers,
   };
+
+  // Stubbed even though this fixture has no PluralKit members: reference resolution
+  // calls it unconditionally, and the live method would open a database connection.
+  pluralKitRepository.loadContextReferenceMembers = async () => [];
 
   userRepository.loadByDiscordId = async (discordId) => {
     counters.userRowLoads += 1;
@@ -388,6 +394,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
       userRepository.getPrivacyLevel = originals.getPrivacyLevel;
       personalMemoryRepository.loadForUserLineage = originals.loadForUserLineage;
       serverScheduleRepository.getPendingRemindersForUser = originals.getPendingRemindersForUser;
+      pluralKitRepository.loadContextReferenceMembers = originals.loadContextReferenceMembers;
     },
   };
 }

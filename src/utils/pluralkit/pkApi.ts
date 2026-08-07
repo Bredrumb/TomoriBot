@@ -97,7 +97,7 @@ function sleep(ms: number): Promise<void> {
 /**
  * Parses a `Retry-After` header (seconds) into milliseconds; null if missing
  * or insane. Zero counts as insane: PK's rate limiter is known to accidentally
- * send `Retry-After: 0` (per the domain expert), and honoring it would mean retrying a
+ * send `Retry-After: 0`, and honoring it would mean retrying a
  * rate-limited endpoint immediately, so fall back to the backoff schedule instead.
  */
 function parseRetryAfterMs(header: string | null): number | null {

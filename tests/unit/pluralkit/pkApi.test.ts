@@ -112,8 +112,8 @@ describe("pkApi.fetchMessage", () => {
     expect(calls).toBe(2);
     expect(result?.sender).toBe("888");
     // A zero header must NOT mean an instant retry against a rate-limited
-    // endpoint; the ~800ms first backoff step applies instead (per the domain expert:
-    // PK's rate limiter accidentally sends 0).
+    // endpoint; the ~800ms first backoff step applies instead. PluralKit's
+    // rate limiter is known to send 0 accidentally.
     expect(Date.now() - start).toBeGreaterThanOrEqual(750);
   });
 

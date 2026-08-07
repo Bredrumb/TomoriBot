@@ -156,4 +156,42 @@ describe("PluralKit proxy expectations", () => {
     expect(proxyExpectation.applyPluralKitProxyReference(proxyMessage)).toBe(true);
     expect(proxyMessage.reference).toBe(reference);
   });
+
+  it("reports superseded originals per channel so a racing history fetch can drop them", () => {
+    for (const [channelId, originalMessageId, messageDiscId] of [
+      ["channel_1", "original_1", "proxy_1"],
+      ["channel_1", "original_2", "proxy_2"],
+      ["other_channel", "original_3", "proxy_3"],
+    ] as const) {
+      proxyExpectation.rememberPluralKitProxyMessage({
+        messageDiscId,
+        channelId,
+        expectation: proxyExpectation.createPluralKitProxyExpectation({
+          channelId,
+          originalMessageId,
+          senderDiscId: "sender_1",
+          originalReference: null,
+        }),
+      });
+    }
+
+    // A split proxy: PluralKit chunks messages over 2000 chars, so several
+    // proxies can share one original without duplicating or dropping it.
+    proxyExpectation.rememberPluralKitProxyMessage({
+      messageDiscId: "proxy_1b",
+      channelId: "channel_1",
+      expectation: proxyExpectation.createPluralKitProxyExpectation({
+        channelId: "channel_1",
+        originalMessageId: "original_1",
+        senderDiscId: "sender_1",
+        originalReference: null,
+      }),
+    });
+
+    expect(proxyExpectation.getSupersededPluralKitOriginalMessageIds("channel_1")).toEqual(
+      new Set(["original_1", "original_2"]),
+    );
+    expect(proxyExpectation.getSupersededPluralKitOriginalMessageIds("other_channel")).toEqual(new Set(["original_3"]));
+    expect(proxyExpectation.getSupersededPluralKitOriginalMessageIds("empty_channel").size).toBe(0);
+  });
 });

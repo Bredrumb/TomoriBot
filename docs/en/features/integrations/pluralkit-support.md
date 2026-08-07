@@ -60,7 +60,16 @@ for no benefit (see below).
   person, and picks up the new name cosmetically.
 - Identity comes from the message itself, not from who is "currently fronting" — Tomori
   never polls your fronters. A member becomes part of the conversation the moment they send
-  a proxied message.
+  a proxied message, and Tomori has no way to know a member exists until it has proxied at
+  least once while you were opted in.
+- **Naming a member brings them into context**, exactly as naming a human participant does:
+  if someone asks "what did Sparrow think?", Tomori loads Sparrow's memories even though
+  Sparrow hasn't spoken recently. This is scoped to members of systems whose host account is
+  in the server, and an ambiguous name (two people or members answering to it) is ignored
+  rather than guessed at.
+- Naming the **system** does not pool its members' memories. Only members actually present
+  or named are loaded, so a fronting member's conversation never exposes facts about
+  members who aren't part of it.
 - Private system data stays private. Tomori only ever sees what PluralKit exposes publicly
   about a message's member and system; she has no access to member ACL-protected fields. If
   your system name is hidden, she falls back to your system tag, or just "a plural system".

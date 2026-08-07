@@ -2,11 +2,13 @@ import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { isEligibleContextReferenceUserV1 } from "@/utils/db/repositories/UserRepository";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
-import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
+import { buildDiscordUserAliases, buildPluralKitMemberAliases } from "@/utils/text/participants/aliases";
 import {
   createDiscordParticipantMemberDirectory,
+  repositoryPluralKitMemberReferenceSource,
   repositoryUserReferenceCandidateSource,
   type ParticipantMemberDirectory,
+  type PluralKitMemberReferenceSource,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
 import {
@@ -16,6 +18,7 @@ import {
   type ParticipantDiscoveryPlan,
   type ParticipantDiscoveryRejection,
 } from "@/utils/text/participants/discoveryPlan";
+import { isPluralKitUserId } from "@/utils/bridges";
 import {
   discoverReferencedPersonaIds,
   extractRealDiscordMentionIds,
@@ -92,6 +95,7 @@ export async function resolveContextReferences(params: {
   existingPersonaIds?: ReadonlySet<number>;
   responderPersonaIds?: ReadonlySet<number>;
   candidateSource?: UserReferenceCandidateSource;
+  pluralKitMemberSource?: PluralKitMemberReferenceSource;
   memberDirectory?: ParticipantMemberDirectory | null;
 }): Promise<ResolvedContextReferences> {
   const historyText = params.simplifiedMessageHistory
@@ -157,7 +161,13 @@ export async function resolveContextReferences(params: {
       return eligible;
     })
     .map((candidate) => candidate.userRow);
-  const uniqueEligibleRows = [...new Map(eligibleRows.map((row) => [row.user_disc_id, row])).values()];
+  // PluralKit members have real user rows, so the human candidate query can match
+  // them on nickname or server activity. Excluding them here keeps their only route
+  // the PluralKit lane below: sending a "pk:{uuid}" to guild.members.fetch() would
+  // spend a REST call to earn an Unknown Member error and a bogus non_member rejection.
+  const uniqueEligibleRows = [...new Map(eligibleRows.map((row) => [row.user_disc_id, row])).values()].filter(
+    (row) => !isPluralKitUserId(row.user_disc_id),
+  );
 
   const eligibleMembers = (
     await Promise.all(
@@ -176,19 +186,39 @@ export async function resolveContextReferences(params: {
     )
   ).filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
 
-  const participantAliases = eligibleMembers.flatMap(({ member, userRow }) =>
-    buildDiscordUserAliases({
-      owner: createDiscordUserKey(userRow.user_disc_id),
-      userRow,
-      identity: {
-        displayName: member.displayName,
-        nickname: member.nickname,
-        globalName: member.globalName,
-        username: member.username,
-      },
-      exposeSavedNickname: false,
-    }),
-  );
+  // A PluralKit member is a real user row behind a "pk:{uuid}" identity, so it can
+  // never resolve through the member directory above. It gets its own lookup, but
+  // shares the alias resolver below: a member and a human answering to the same
+  // name must collide with each other, not each win inside their own lane.
+  const pluralKitReferences = await (
+    params.pluralKitMemberSource ?? repositoryPluralKitMemberReferenceSource
+  ).loadMembers({
+    hostUserDiscIds: [...candidateDiscordIds],
+    normalizedHistoryText: historyText,
+  });
+
+  const participantAliases = [
+    ...eligibleMembers.flatMap(({ member, userRow }) =>
+      buildDiscordUserAliases({
+        owner: createDiscordUserKey(userRow.user_disc_id),
+        userRow,
+        identity: {
+          displayName: member.displayName,
+          nickname: member.nickname,
+          globalName: member.globalName,
+          username: member.username,
+        },
+        exposeSavedNickname: false,
+      }),
+    ),
+    ...pluralKitReferences.flatMap((reference) =>
+      buildPluralKitMemberAliases({
+        owner: createDiscordUserKey(reference.userDiscId),
+        displayName: reference.displayName,
+        savedNickname: reference.savedNickname,
+      }),
+    ),
+  ];
   const aliasResolution = resolveUniqueParticipantAliasReferences(historyText, participantAliases);
   if (aliasResolution.diagnostics.ambiguousAliasCount > 0) {
     addRejection(rejections, "ambiguous_alias", aliasResolution.diagnostics.ambiguousAliasCount);
@@ -236,14 +266,32 @@ export async function resolveContextReferences(params: {
       },
     ];
   });
+  const pluralKitCandidates: DiscoveredParticipantCandidate[] = pluralKitReferences.flatMap((reference) => {
+    const reasons = referencedUserReasons.get(reference.userDiscId);
+    if (!reasons) return [];
+    const displayName = reference.displayName ?? reference.savedNickname;
+    return [
+      {
+        key: createDiscordUserKey(reference.userDiscId),
+        reasons,
+        aliases: participantAliases.filter(
+          (alias) => alias.owner.kind === "discord_user" && alias.owner.discordId === reference.userDiscId,
+        ),
+        // No "mentionable": a member has no account to ping, only a host that does.
+        capabilities: new Set(),
+        ...(displayName && { sourceDisplayName: displayName }),
+        evidenceSources: [...reasons],
+      },
+    ];
+  });
   const discoveryPlan = buildParticipantDiscoveryPlan({
-    candidates: [...userCandidates, ...personaCandidates],
+    candidates: [...userCandidates, ...pluralKitCandidates, ...personaCandidates],
     rejections,
     aliasReferenceDiagnostics: aliasResolution.diagnostics,
   });
 
   return {
-    candidateCount: personaCandidates.length + loadedCandidates.length,
+    candidateCount: personaCandidates.length + loadedCandidates.length + pluralKitReferences.length,
     referencedUserIds,
     referencedUserRows,
     referencedUserReasons,

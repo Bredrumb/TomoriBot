@@ -100,7 +100,7 @@ Opted-in user sends a proxied message
 
 Canonical anchors are the PluralKit **member UUID** and **system UUID** —
 never names, which are volatile and user-editable at any time. Short-form
-hids (5-7 chars, e.g. `ghijkl`) are cached "just in case" but never used as a
+hids (5-7 chars, e.g. `abcdef`) are cached "just in case" but never used as a
 key.
 
 ```
@@ -136,12 +136,43 @@ then a single batched `WHERE message_disc_id = ANY(...)` query per history
 rebuild, so a 50-message rebuild cannot burst PK's rate limit. Misses fall
 back to the webhook's own display name.
 
+The same rebuild also drops any original that a confirmed proxy has superseded
+(`getSupersededPluralKitOriginalMessageIds`). PluralKit posts the webhook and
+deletes the original as two separate REST calls, and it indexes the proxy at the
+first one, so a lookup can resolve while the delete is still in flight — a
+history fetch inside that window still returns the original from Discord. Without
+the filter the same message renders twice, once under the host account's display
+name and once under the member's.
+
+### Naming an absent member
+
+A member that has not spoken inside the history window can still be pulled into context by
+name, matching how a named human participant is hydrated. `resolveContextReferences`
+(`src/utils/text/contextReferences.ts`) runs a third candidate lane alongside the existing
+persona and Discord-user lanes:
+
+- `pluralKitRepository.loadContextReferenceMembers` matches `pluralkit_members.display_name`
+  and `users.user_nickname` against the history text, scoped to systems whose
+  `pluralkit_system_accounts` link a host account in the guild. Without that scope, a common
+  first name would offer every member the bot has ever indexed.
+- Member rows are excluded from the Discord-user lane, because their `users` rows can satisfy
+  that lane's nickname and server-activity filters and a `pk:{uuid}` sent to
+  `guild.members.fetch()` earns only an Unknown Member error and a bogus `non_member` rejection.
+- Both lanes feed one `resolveUniqueParticipantAliasReferences` call, so a member and a human
+  answering to the same name collide with each other and neither is hydrated. Collisions are
+  per alias string, not per person: an owner's other distinct names still resolve, and anyone
+  already visible in the window is unaffected.
+- Members are seeded without the `mentionable` capability: there is no account to ping.
+
+Naming a *system* is deliberately not a hydration trigger. Loading every member's memories
+would expose absent members' facts to whoever the fronting member is talking to, and systems
+run 24-40 members, so it would also churn the prompt cache for the rest of the conversation.
+
 The users-in-conversation block is assembled by
 `src/utils/text/context/participants.ts`, which delegates every per-participant
-fact to `src/utils/text/participants/hydration.ts`. Per the domain expert's guidance it
-renders PK members with three separate facts: member name, system name, and
-host account as independent entities (no possessive framing like "the host's
-system"):
+fact to `src/utils/text/participants/hydration.ts`. It renders PK members with
+three separate facts: member name, system name, and host account as independent
+entities (no possessive framing like "the host's system"):
 
 ```
 Sparrow:
@@ -167,7 +198,7 @@ Matrix bridge ID helpers.
 
 ## Authorization vs. Identity Split
 
-Per the domain expert's domain constraint: **settings, keys, permissions, quotas,
+**Settings, keys, permissions, quotas,
 cooldowns, privacy, and blacklists key on the host Discord account**;
 **conversational identity and memories key on the member**.
 

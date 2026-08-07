@@ -333,6 +333,7 @@ describe("context reference discovery", () => {
         simplifiedMessageHistory: [message("<@100>, ask Guild Alias. Bot Alias and User 400 are also named.")],
         personas: [],
         existingParticipantIds: new Set(),
+        pluralKitMemberSource: { loadMembers: async () => [] },
       });
 
       expect(resolved.referencedUserIds).toEqual(new Set(["200", "100"]));
@@ -346,6 +347,131 @@ describe("context reference discovery", () => {
     } finally {
       userRepository.loadContextReferenceCandidates = originalLoadCandidates;
     }
+  });
+});
+
+describe("PluralKit member reference discovery", () => {
+  const HOST_ID = "700";
+  const MEMBER_ID = "pk:11111111-1111-4111-8111-111111111111";
+
+  function guildClient(cachedMemberIds: readonly string[] = [HOST_ID]): Client {
+    const makeMember = (id: string) =>
+      ({
+        id,
+        displayName: `Display ${id}`,
+        nickname: null,
+        user: { id, bot: false, globalName: `Global ${id}`, username: `username_${id}` },
+      }) as never;
+    const cache = new Map(cachedMemberIds.map((id) => [id, makeMember(id)]));
+    return {
+      guilds: {
+        cache: new Map([["guild", { members: { cache, fetch: async () => null } }]]),
+      },
+    } as unknown as Client;
+  }
+
+  async function resolveWithMembers(params: {
+    content: string;
+    members: readonly { userDiscId: string; displayName: string | null; savedNickname: string | null }[];
+    humanCandidates?: readonly UserRow[];
+    existingParticipantIds?: ReadonlySet<string>;
+    onQuery?: (query: { hostUserDiscIds: readonly string[]; normalizedHistoryText: string }) => void;
+  }) {
+    const originalLoadCandidates = userRepository.loadContextReferenceCandidates;
+    userRepository.loadContextReferenceCandidates = async () =>
+      (params.humanCandidates ?? []).map((userRow) => ({
+        userRow,
+        evidence: { hasServerActivity: true, hasPersonalMemories: false, hasPendingTasks: false },
+      }));
+
+    try {
+      return await resolveContextReferences({
+        client: guildClient(),
+        guildId: "guild",
+        simplifiedMessageHistory: [message(params.content)],
+        personas: [],
+        existingParticipantIds: params.existingParticipantIds ?? new Set(),
+        pluralKitMemberSource: {
+          loadMembers: async (query) => {
+            params.onQuery?.(query);
+            return params.members;
+          },
+        },
+      });
+    } finally {
+      userRepository.loadContextReferenceCandidates = originalLoadCandidates;
+    }
+  }
+
+  it("discovers a member named in conversation that never spoke in the window", async () => {
+    let observedQuery: { hostUserDiscIds: readonly string[]; normalizedHistoryText: string } | null = null;
+    const resolved = await resolveWithMembers({
+      content: "What did Sparrow say about that?",
+      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      onQuery: (query) => {
+        observedQuery = query;
+      },
+    });
+
+    expect(resolved.referencedUserIds).toEqual(new Set([MEMBER_ID]));
+    expect(resolved.referencedUserReasons).toEqual(new Map([[MEMBER_ID, new Set(["unique_text_alias"])]]));
+    // Host scoping is what keeps member names from colliding across every system
+    // the bot has ever seen; the pool is the guild's cached members.
+    expect(observedQuery?.hostUserDiscIds).toContain(HOST_ID);
+
+    const seed = resolved.discoveryPlan.seeds.find(
+      (candidate) => candidate.key.kind === "discord_user" && candidate.key.discordId === MEMBER_ID,
+    );
+    expect(seed?.sourceDisplayName).toBe("Sparrow");
+    expect(seed?.capabilities.has("mentionable")).toBe(false);
+  });
+
+  it("resolves a member by its saved nickname as well as its PluralKit display name", async () => {
+    const resolved = await resolveWithMembers({
+      content: "Ask Spar about it.",
+      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: "Spar" }],
+    });
+
+    expect(resolved.referencedUserIds).toEqual(new Set([MEMBER_ID]));
+  });
+
+  it("drops a name shared by a member and a human instead of guessing between them", async () => {
+    const human: UserRow = { ...defaultUser(), user_disc_id: HOST_ID, user_nickname: "Sparrow" };
+    const resolved = await resolveWithMembers({
+      content: "Sparrow said so.",
+      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      humanCandidates: [human],
+    });
+
+    expect(resolved.referencedUserIds).toEqual(new Set());
+    expect(resolved.discoveryPlan.aliasReferenceDiagnostics.ambiguousAliasCount).toBe(1);
+    expect(resolved.discoveryPlan.rejections).toContainEqual({ reason: "ambiguous_alias", count: 1 });
+  });
+
+  it("does not re-add a member that is already a visible participant", async () => {
+    const resolved = await resolveWithMembers({
+      content: "Sparrow said so.",
+      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      existingParticipantIds: new Set([MEMBER_ID]),
+    });
+
+    expect(resolved.referencedUserIds).toEqual(new Set());
+    expect(resolved.discoveryPlan.rejections).toContainEqual({ reason: "existing_participant", count: 1 });
+  });
+
+  it("keeps a member row out of the guild-member lane so no pk: ID reaches Discord", async () => {
+    // The human candidate query selects by nickname and server activity, which a
+    // member's real users row can satisfy. Reaching resolveMember would spend a
+    // fetch on a non-snowflake and log an Unknown Member error.
+    const memberRow: UserRow = { ...defaultUser(), user_disc_id: MEMBER_ID, user_nickname: "Sparrow" };
+    const resolved = await resolveWithMembers({
+      content: "Sparrow said so.",
+      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      humanCandidates: [memberRow],
+    });
+
+    expect(resolved.referencedUserIds).toEqual(new Set([MEMBER_ID]));
+    expect(resolved.discoveryPlan.rejections).not.toContainEqual({ reason: "non_member", count: 1 });
   });
 });
 

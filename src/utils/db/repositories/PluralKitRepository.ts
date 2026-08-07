@@ -50,6 +50,19 @@ export type PluralKitIndexedMessageIdentity = PluralKitMemberContext & {
   senderDiscId: string;
 };
 
+/** A member that conversation text can name, without it having spoken in the window */
+export type PluralKitMemberReference = {
+  userDiscId: string;
+  displayName: string | null;
+  savedNickname: string | null;
+};
+
+type PluralKitMemberReferenceRow = {
+  user_disc_id: string;
+  display_name: string | null;
+  user_nickname: string | null;
+};
+
 type PluralKitContextRow = {
   user_disc_id: string;
   external_identity_id: number | string;
@@ -421,6 +434,78 @@ export class PluralKitRepository {
     } catch (error) {
       log.error(`Error loading PluralKit member context for ${userDiscId}:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Members nameable in this conversation: those whose system links one of
+   * `hostUserDiscIds`, whose name occurs in `normalizedHistoryText`.
+   *
+   * The host scope is what keeps the name pool sane. Member names are chosen
+   * freely and collide across systems, so an unscoped lookup would offer every
+   * member the bot has ever seen as a candidate for a common first name.
+   * Matching runs in SQL for the same reason the human lane does it there: the
+   * candidate set is the whole table otherwise.
+   *
+   * @param params.normalizedHistoryText - lowercased, whitespace-collapsed history
+   * @returns identity handles only; full user rows load during hydration
+   */
+  async loadContextReferenceMembers(params: {
+    hostUserDiscIds: readonly string[];
+    normalizedHistoryText: string;
+  }): Promise<PluralKitMemberReference[]> {
+    const hostUserDiscIds = [...new Set(params.hostUserDiscIds)];
+    const normalizedHistoryText = params.normalizedHistoryText.trim().toLowerCase().replace(/\s+/g, " ");
+    if (hostUserDiscIds.length === 0 || normalizedHistoryText === "") {
+      return [];
+    }
+
+    try {
+      const rows = await sql<PluralKitMemberReferenceRow[]>`
+        SELECT DISTINCT
+          u.user_disc_id,
+          pm.display_name,
+          u.user_nickname
+        FROM pluralkit_members pm
+        JOIN external_identities ei ON ei.external_identity_id = pm.external_identity_id
+        JOIN users u ON u.user_id = ei.user_id
+        JOIN pluralkit_system_accounts psa ON psa.pk_system_id = pm.pk_system_id
+        WHERE ei.kind = 'pluralkit_member'
+          AND psa.host_user_disc_id = ANY(${sql.array(hostUserDiscIds, "TEXT")})
+          AND (
+            (
+              -- position('' IN text) returns 1, so a blank name would match every
+              -- message and drag the system's whole roster into context.
+              btrim(pm.display_name) <> ''
+              AND position(
+                regexp_replace(lower(trim(pm.display_name)), '[[:space:]]+', ' ', 'g')
+                IN ${normalizedHistoryText}
+              ) > 0
+            )
+            OR (
+              btrim(u.user_nickname) <> ''
+              AND position(
+                regexp_replace(lower(trim(u.user_nickname)), '[[:space:]]+', ' ', 'g')
+                IN ${normalizedHistoryText}
+              ) > 0
+            )
+          )
+      `;
+
+      return rows.flatMap((row) => {
+        const userDiscId = String(row.user_disc_id);
+        if (!isPluralKitUserId(userDiscId)) return [];
+        return [
+          {
+            userDiscId,
+            displayName: row.display_name,
+            savedNickname: row.user_nickname,
+          },
+        ];
+      });
+    } catch (error) {
+      log.error("Error loading PluralKit context reference members:", error);
+      return [];
     }
   }
 

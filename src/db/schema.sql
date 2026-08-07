@@ -3106,6 +3106,11 @@ CREATE TABLE IF NOT EXISTS pluralkit_system_accounts (
   PRIMARY KEY (pk_system_id, host_user_disc_id)
 );
 
+-- By-name member references filter on the host account alone, which the primary
+-- key cannot serve (its leading column is the system).
+CREATE INDEX IF NOT EXISTS idx_pluralkit_system_accounts_host
+  ON pluralkit_system_accounts(host_user_disc_id);
+
 -- Durable message -> identity index so context rebuilds survive restarts
 -- without re-querying the PluralKit API. Rows are immutable (a message's
 -- identity never changes), so there is no updated_at/trigger.
