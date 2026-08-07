@@ -4,9 +4,6 @@ name: Validate
 
 on:
   pull_request:
-  push:
-    branches:
-      - release
   workflow_dispatch:
   workflow_call:
 
