@@ -199,6 +199,7 @@ export const pluralKitSystemSchema = z.object({
   system_hid: z.string().min(1),
   system_name: z.string().nullable().optional(),
   system_tag: z.string().nullable().optional(),
+  system_description: z.string().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

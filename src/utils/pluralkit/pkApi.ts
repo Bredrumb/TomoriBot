@@ -34,6 +34,8 @@ export interface PkSystemInfo {
   name?: string | null;
   /** Cosmetic system tag; may be null/absent when the system keeps it private */
   tag?: string | null;
+  /** System bio; null/absent when private. Rendered live in context, so a withdrawn description propagates */
+  description?: string | null;
 }
 
 /** PluralKit member fields we consume from the message-lookup payload */

@@ -486,7 +486,7 @@ export default {
       enabled_success_title: `PluralKit連携を有効にしました`,
       enabled_success_description: `あなたのアカウントのPluralKit連携が**有効**になりました。
 
-あなたからのメッセージを検出すると、PluralKitがそれを削除してプロキシのWebhook経由で再投稿する可能性があるため、約{delay_seconds}秒待ってから返信します。あなたのシステムのメンバーを初めて見かけたとき、PluralKit上で設定された公開プロフィール文があれば、そのメンバーの初期記憶として保存されることがあります。`,
+あなたからのメッセージを検出すると、PluralKitがそれを削除してプロキシのWebhook経由で再投稿する可能性があるため、約{delay_seconds}秒待ってから返信します。あなたのシステムのメンバーを初めて見かけたとき、PluralKit上で設定された公開プロフィール文があれば、そのメンバーの初期記憶として保存されることがあります。システムの公開説明文が設定されている場合は、メンバーとの会話中に参照できるよう、そちらも保存します。`,
       disabled_success_title: `PluralKit連携を無効にしました`,
       disabled_success_description: `あなたのアカウントのPluralKit連携が**無効**になりました。PluralKitのプロキシ再投稿を待つことなく、あなたのメッセージは通常どおり処理されます。`,
     },

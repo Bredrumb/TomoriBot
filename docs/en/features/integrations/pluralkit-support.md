@@ -52,6 +52,13 @@ for no benefit (see below).
   respect pronouns, boundaries, and preferences from the first conversation. This is a
   **snapshot, not a sync** — editing the bio on PluralKit later never updates it. To change
   what she remembers, just tell her in chat ("forget that", "actually, ...").
+- **Your system's description, read while your members talk.** If your system has a public
+  description, Tomori keeps it and reads it whenever any of your members are in the
+  conversation, so system-wide boundaries apply to all of you without repeating them per
+  member. This one *does* follow edits: change or clear it on PluralKit and she picks that
+  up the next time one of your members speaks. It's shown once for the whole system, not
+  attached to any individual member, and a private or empty description shows nothing at
+  all.
 
 ## Identity Details Worth Knowing
 

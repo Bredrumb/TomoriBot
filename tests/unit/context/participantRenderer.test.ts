@@ -1,13 +1,18 @@
 import { describe, expect, it } from "bun:test";
 import { createParticipantAlias } from "@/utils/text/participants/aliases";
-import type { HydratedParticipantProfile, ParticipantProfileField } from "@/utils/text/participants/hydration";
+import type {
+  HydratedParticipantProfile,
+  ParticipantProfileField,
+  PluralKitSystemNote,
+} from "@/utils/text/participants/hydration";
 import { createBotKey, createDiscordUserKey, type ParticipantKey } from "@/utils/text/participants/identity";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 
-function render(profiles: readonly HydratedParticipantProfile[]) {
+function render(profiles: readonly HydratedParticipantProfile[], pluralKitSystems: PluralKitSystemNote[] = []) {
   return renderParticipantPrompt({
     profiles,
     personaTaskLines: [],
+    pluralKitSystems,
     isUserImpersonation: false,
     botName: "Tomori",
     isDMChannel: false,
@@ -132,5 +137,33 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
       "400000000000000001",
       "400000000000000002",
     ]);
+  });
+
+  it("renders system notes as their own section, after the participant entries", () => {
+    const member = humanProfile("400000000000000001", "Sparrow", "sparrow", [
+      '- Member of the "Lighthouse" plural system; its members share one presence here (Jordan, @jordan_h)',
+    ]);
+    const rendered = render(
+      [member],
+      [
+        {
+          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+          label: 'the "Lighthouse" plural system',
+          description: "We are five. Ask before DMing.",
+        },
+      ],
+    );
+
+    expect(rendered.text).toContain(
+      "Some of the people above are members of plural systems:\n" +
+        '- The "Lighthouse" plural system: We are five. Ask before DMing.',
+    );
+    expect(rendered.text.indexOf("Sparrow")).toBeLessThan(rendered.text.indexOf("Some of the people above"));
+  });
+
+  it("renders no system section at all when no present system has a description", () => {
+    const rendered = render([humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])]);
+
+    expect(rendered.text).not.toContain("plural system");
   });
 });

@@ -29,6 +29,7 @@ export function toPluralKitMemberIdentityInput(lookup: PkMessageLookup): PluralK
       systemHid: lookup.system.id,
       systemName: normalizeOptionalText(lookup.system.name),
       systemTag: normalizeOptionalText(lookup.system.tag),
+      systemDescription: normalizeOptionalText(lookup.system.description),
     },
     memberUuid: lookup.member.uuid,
     memberHid: lookup.member.id,

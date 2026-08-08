@@ -100,9 +100,17 @@ export interface ParticipantExposurePolicy {
   exposePersonalMemories: boolean;
 }
 
+/** A present system's self-description, rendered once for the whole system rather than per member. */
+export interface PluralKitSystemNote {
+  systemUuid: string;
+  label: string;
+  description: string;
+}
+
 export interface ParticipantHydrationResult {
   profiles: readonly HydratedParticipantProfile[];
   personaTaskLines: readonly string[];
+  pluralKitSystems: readonly PluralKitSystemNote[];
   diagnostics: ParticipantHydrationDiagnostics;
 }
 
@@ -654,11 +662,18 @@ async function enrichPluralKitIdentityField(
   ]);
 }
 
+function pluralKitSystemNote(base: HydratedDiscordUserBase): PluralKitSystemNote | null {
+  const context = base.pluralKit?.context;
+  const description = context?.systemDescription?.replace(/\s+/gu, " ").trim();
+  if (!context || !description) return null;
+  return { systemUuid: context.systemUuid, label: formatPluralKitSystemLabel(context), description };
+}
+
 async function hydrateDiscordUser(
   seed: ParticipantSeed,
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
-): Promise<HydratedParticipantProfile | null> {
+): Promise<{ profile: HydratedParticipantProfile; systemNote: PluralKitSystemNote | null } | null> {
   const base = await hydrateDiscordUserBase(seed, params, dependencies);
   if (!base) return null;
   const fields: ParticipantProfileField[] = [
@@ -670,7 +685,7 @@ async function hydrateDiscordUser(
     await enrichPersonalMemoriesField(base, params, dependencies),
     await enrichHumanRemindersField(base, params, dependencies),
   ];
-  return { ...base.profile, fields };
+  return { profile: { ...base.profile, fields }, systemNote: pluralKitSystemNote(base) };
 }
 
 function buildRoleLines(member: GuildMember, guild: Guild | undefined): string[] {
@@ -939,6 +954,7 @@ export async function hydrateParticipantProfiles(
     },
   };
   const profiles: HydratedParticipantProfile[] = [];
+  const pluralKitSystems = new Map<string, PluralKitSystemNote>();
   let botAdded = false;
   for (const seed of params.participantSeeds) {
     if (seed.key.kind === "bot" || (seed.key.kind === "persona" && seed.reasons.has("active_identity"))) {
@@ -949,8 +965,15 @@ export async function hydrateParticipantProfiles(
       continue;
     }
     if (seed.key.kind === "discord_user") {
-      const profile = await hydrateDiscordUser(seed, params, dependencies);
-      if (profile) profiles.push(profile);
+      const hydrated = await hydrateDiscordUser(seed, params, dependencies);
+      if (hydrated) {
+        profiles.push(hydrated.profile);
+        // Keyed by system, not member: system-mates share one note, and the
+        // first speaker's position fixes where it renders.
+        if (hydrated.systemNote && !pluralKitSystems.has(hydrated.systemNote.systemUuid)) {
+          pluralKitSystems.set(hydrated.systemNote.systemUuid, hydrated.systemNote);
+        }
+      }
       continue;
     }
     const syntheticProfile = hydrateSyntheticBase(seed, params);
@@ -965,6 +988,7 @@ export async function hydrateParticipantProfiles(
   return {
     profiles: enriched.profiles,
     personaTaskLines: await hydratePersonaTaskLines(params, dependencies),
+    pluralKitSystems: [...pluralKitSystems.values()],
     diagnostics: {
       durationMs: performance.now() - startedAt,
       profileCount: enriched.profiles.length,

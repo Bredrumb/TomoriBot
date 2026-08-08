@@ -86,6 +86,7 @@ export async function buildParticipantContextItem(params: {
   const rendered = renderParticipantPrompt({
     profiles: hydrated.profiles,
     personaTaskLines: hydrated.personaTaskLines,
+    pluralKitSystems: hydrated.pluralKitSystems,
     isUserImpersonation: params.isUserImpersonation,
     botName: params.botName,
     isDMChannel: params.isDMChannel,

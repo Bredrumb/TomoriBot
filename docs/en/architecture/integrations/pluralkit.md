@@ -107,7 +107,8 @@ key.
 users (synthetic row, user_disc_id = 'pk:{member_uuid}')
   └─ external_identities (kind='pluralkit_member', external_key=member_uuid)
        └─ pluralkit_members (member_uuid, member_hid, display_name)
-            └─ pluralkit_systems (system_uuid, system_hid, system_name, system_tag)
+            └─ pluralkit_systems (system_uuid, system_hid, system_name, system_tag,
+                                  system_description)
                  └─ pluralkit_system_accounts (pk_system_id ↔ host_user_disc_id, 1..n)
 
 pluralkit_message_index (message_disc_id → external_identity_id, sender_disc_id)
@@ -209,6 +210,39 @@ Members get no presence line. A member has no presence of its own, it is in the
 block because it just spoke, and it is never mentionable, so the proxying
 account's status governs no decision. The host's own presence renders normally
 whenever the host is a participant in its own right.
+
+### System descriptions
+
+A system's own description (migration 059, `pluralkit_systems.system_description`)
+renders once per present system, in its own section below the participant
+entries:
+
+```
+Some of the people above are members of plural systems:
+- The "Lighthouse" plural system: We're a system of five. Ask before DMing.
+```
+
+Systems are **not** rendered as headings with their members nested underneath.
+Nesting would make the system the entity and its members its parts, and grouping
+by system would reorder speakers away from the first-seen order the block relies
+on. A flat participant list keeps members peers of the humans in the room; the
+system note is collected during hydration
+(`PluralKitSystemNote`, keyed by `system_uuid` so system-mates share one entry)
+and rendered where the first member of that system appears.
+
+A system with no description, or one keeping it private, contributes nothing —
+and if no present system has a description, the section and its header are
+omitted entirely. There is no placeholder, so an absent description never
+advertises itself.
+
+Unlike the member bio seed, the description is **refreshed, not snapshotted**:
+`upsertSystem` writes it from the message-lookup payload already fetched, so an
+edited or withdrawn description propagates on that member's next proxied
+message. This does not reintroduce the prompt-cache churn that ruled out live
+bio injection, because it changes only when the system edits its description,
+not on every front switch. System-mates hold their own cached
+`PluralKitMemberContext` entries, so each picks up the new text on its own next
+message.
 
 Memory rendering is **per-present-member, never per-system** — only members
 who actually appear in the loaded dialogue history get their memories

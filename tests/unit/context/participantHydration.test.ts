@@ -525,6 +525,7 @@ function createPluralKitContext(overrides: Partial<PluralKitMemberContext> = {})
     systemHid: "abcdef",
     systemName: "Lighthouse",
     systemTag: "[LH]",
+    systemDescription: null,
     hostUserDiscIds: [PK_HOST_ID],
     ...overrides,
   };
@@ -589,6 +590,36 @@ describe("pluralkit member hydration", () => {
     // fixes which account the identity line names first.
     expect(fixture.memberLoads.indexOf(proxyingHost)).toBeLessThan(fixture.memberLoads.indexOf(PK_HOST_ID));
     expect(fixture.privacyReads).toContain(proxyingHost);
+  });
+
+  it("collects one system note per system, not per member", async () => {
+    const siblingUserId = "pk:3a2b1c0d-9e8f-4a7b-8c6d-5e4f3a2b1c0d";
+    const fixture = createPluralKitFixture({
+      participantSeeds: [
+        createPluralKitSeed(),
+        { ...createPluralKitSeed(), key: createDiscordUserKey(siblingUserId), firstSeenOrder: 1 },
+      ],
+      pluralKitContext: createPluralKitContext({ systemDescription: "We are five.\n\nAsk before  DMing." }),
+    });
+
+    const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
+
+    expect(result.profiles).toHaveLength(2);
+    expect(result.pluralKitSystems).toEqual([
+      {
+        systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+        label: 'the "Lighthouse" plural system',
+        description: "We are five. Ask before DMing.",
+      },
+    ]);
+  });
+
+  it("collects no system note when the system has no description", async () => {
+    const blank = createPluralKitFixture({ pluralKitContext: createPluralKitContext({ systemDescription: "   " }) });
+    const absent = createPluralKitFixture();
+
+    expect((await hydrateParticipantProfiles(blank.params, blank.dependencies)).pluralKitSystems).toEqual([]);
+    expect((await hydrateParticipantProfiles(absent.params, absent.dependencies)).pluralKitSystems).toEqual([]);
   });
 
   it("renders no presence line, since a member has none of its own", async () => {

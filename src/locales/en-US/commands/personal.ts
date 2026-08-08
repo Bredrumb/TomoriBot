@@ -486,7 +486,7 @@ You can change this anytime using \`/personal privacy\`.`,
       enabled_success_title: `PluralKit Integration Enabled`,
       enabled_success_description: `PluralKit integration is now **enabled** for your account.
 
-When I see a message from you, I'll wait about {delay_seconds}s before responding, in case PluralKit deletes and reposts it through a proxy webhook. The first time I see one of your system's members, any public bio text they've set on PluralKit may be saved as a starting memory for them.`,
+When I see a message from you, I'll wait about {delay_seconds}s before responding, in case PluralKit deletes and reposts it through a proxy webhook. The first time I see one of your system's members, any public bio text they've set on PluralKit may be saved as a starting memory for them. If your system has a public description, I'll also keep it so I can read it while your members are talking with me.`,
       disabled_success_title: `PluralKit Integration Disabled`,
       disabled_success_description: `PluralKit integration is now **disabled** for your account. Your messages will be handled normally, without waiting for a possible PluralKit proxy repost.`,
     },

@@ -5,13 +5,14 @@ import {
   targetAliasesForPurpose,
   type ParticipantTargetIndex,
 } from "@/utils/text/participants/targetIndex";
-import type { HydratedParticipantProfile } from "@/utils/text/participants/hydration";
+import type { HydratedParticipantProfile, PluralKitSystemNote } from "@/utils/text/participants/hydration";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 import { serializeParticipantKey } from "@/utils/text/participants/identity";
 
 export interface ParticipantPromptRenderParams {
   profiles: readonly HydratedParticipantProfile[];
   personaTaskLines: readonly string[];
+  pluralKitSystems?: readonly PluralKitSystemNote[];
   isUserImpersonation: boolean;
   botName: string;
   isDMChannel: boolean;
@@ -35,6 +36,7 @@ export function renderParticipantPrompt(params: ParticipantPromptRenderParams): 
     ? 'To ping users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n'
     : `If ${params.botName} wants to ping any of these users, prepend an "@" symbol to a unique mention handle shown below (case-insensitive). If there is ambiguity with names, ask for clarification instead of guessing. Use mentions only when the notification matters.\n\n`;
   text += renderProfileEntries(params.profiles, targetIndex, params.isUserImpersonation);
+  text += renderPluralKitSystemNotes(params.pluralKitSystems ?? []);
   if (params.personaTaskLines.length > 0) text += `${params.personaTaskLines.join("\n")}\n\n`;
   text += renderChannelTimeFooter(params);
   return {
@@ -42,6 +44,20 @@ export function renderParticipantPrompt(params: ParticipantPromptRenderParams): 
     targetIndex,
     conversationUsers: projectConversationUserReferences(targetIndex),
   };
+}
+
+/**
+ * Systems render as their own section rather than as a heading their members sit
+ * under: nesting members below a system makes the system the entity and its
+ * members its parts, and grouping would reorder speakers away from first-seen
+ * order.
+ */
+function renderPluralKitSystemNotes(systems: readonly PluralKitSystemNote[]): string {
+  if (systems.length === 0) return "";
+  const entries = systems
+    .map((system) => `- ${system.label.charAt(0).toUpperCase()}${system.label.slice(1)}: ${system.description}`)
+    .join("\n");
+  return `Some of the people above are members of plural systems:\n${entries}\n\n`;
 }
 
 function renderProfileEntries(

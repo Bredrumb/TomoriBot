@@ -3091,6 +3091,9 @@ CREATE TABLE IF NOT EXISTS pluralkit_systems (
   system_hid   TEXT NOT NULL,
   system_name  TEXT, -- cosmetic cache only; refreshed opportunistically from lookups
   system_tag   TEXT, -- cosmetic cache only
+  -- Rendered live in context, unlike member bios (snapshotted once into memories),
+  -- so an edited or withdrawn description propagates on the next lookup
+  system_description TEXT,
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

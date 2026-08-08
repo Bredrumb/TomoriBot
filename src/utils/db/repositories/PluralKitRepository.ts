@@ -15,6 +15,7 @@ export type PluralKitSystemUpsertInput = {
   systemHid: string;
   systemName: string | null;
   systemTag: string | null;
+  systemDescription: string | null;
 };
 
 export type PluralKitMemberIdentityInput = {
@@ -42,6 +43,7 @@ export type PluralKitMemberContext = {
   systemHid: string;
   systemName: string | null;
   systemTag: string | null;
+  systemDescription: string | null;
   hostUserDiscIds: string[];
 };
 
@@ -74,6 +76,7 @@ type PluralKitContextRow = {
   system_hid: string;
   system_name: string | null;
   system_tag: string | null;
+  system_description: string | null;
   host_user_disc_ids?: string[] | string | null;
 };
 
@@ -104,15 +107,16 @@ export class PluralKitRepository {
   async upsertSystem(input: PluralKitSystemUpsertInput): Promise<PluralKitSystemRow | null> {
     try {
       const [row] = await sql`
-        INSERT INTO pluralkit_systems (system_uuid, system_hid, system_name, system_tag)
-        VALUES (${input.systemUuid}, ${input.systemHid}, ${input.systemName}, ${input.systemTag})
+        INSERT INTO pluralkit_systems (system_uuid, system_hid, system_name, system_tag, system_description)
+        VALUES (${input.systemUuid}, ${input.systemHid}, ${input.systemName}, ${input.systemTag}, ${input.systemDescription})
         ON CONFLICT (system_uuid) DO UPDATE
         SET
           system_hid = EXCLUDED.system_hid,
           system_name = EXCLUDED.system_name,
           system_tag = EXCLUDED.system_tag,
+          system_description = EXCLUDED.system_description,
           updated_at = NOW()
-        RETURNING pk_system_id, system_uuid, system_hid, system_name, system_tag, created_at, updated_at
+        RETURNING pk_system_id, system_uuid, system_hid, system_name, system_tag, system_description, created_at, updated_at
       `;
       return row ? this.parseSystemRow(row, `system ${input.systemUuid}`) : null;
     } catch (error) {
@@ -328,6 +332,7 @@ export class PluralKitRepository {
           ps.system_hid,
           ps.system_name,
           ps.system_tag,
+          ps.system_description,
           COALESCE(
             array_agg(DISTINCT psa.host_user_disc_id) FILTER (WHERE psa.host_user_disc_id IS NOT NULL),
             ARRAY[]::TEXT[]
@@ -352,7 +357,8 @@ export class PluralKitRepository {
           ps.system_uuid,
           ps.system_hid,
           ps.system_name,
-          ps.system_tag
+          ps.system_tag,
+          ps.system_description
       `;
 
       for (const row of rows) {
@@ -403,6 +409,7 @@ export class PluralKitRepository {
           ps.system_hid,
           ps.system_name,
           ps.system_tag,
+          ps.system_description,
           COALESCE(
             array_agg(DISTINCT psa.host_user_disc_id) FILTER (WHERE psa.host_user_disc_id IS NOT NULL),
             ARRAY[]::TEXT[]
@@ -424,7 +431,8 @@ export class PluralKitRepository {
           ps.system_uuid,
           ps.system_hid,
           ps.system_name,
-          ps.system_tag
+          ps.system_tag,
+          ps.system_description
         LIMIT 1
       `;
 
@@ -572,6 +580,7 @@ export class PluralKitRepository {
       systemHid: String(row.system_hid),
       systemName: row.system_name ?? null,
       systemTag: row.system_tag ?? null,
+      systemDescription: row.system_description ?? null,
       hostUserDiscIds: this.parseTextArray(row.host_user_disc_ids),
     };
   }
