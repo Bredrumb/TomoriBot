@@ -193,16 +193,22 @@ run 24-40 members, so it would also churn the prompt cache for the rest of the c
 The users-in-conversation block is assembled by
 `src/utils/text/context/participants.ts`, which delegates every per-participant
 fact to `src/utils/text/participants/hydration.ts`. It renders PK members with
-three separate facts: member name, system name, and host account as independent
-entities (no possessive framing like "the host's system"):
+member name, system name, and host account as independent entities, named
+appositively so no relational verb is implied. Possessive or authority framing
+("the host's system", "owned by", "run by") is excluded by design: the host
+label is usually a member's or the system's own name, so a relational verb
+would invent a hierarchy among system-mates:
 
 ```
 Sparrow:
-- Member of the "Lighthouse" plural system; messages from this system's
-  members arrive through the same Discord account
-- Host account: Jordan (@jordan_h)
+- Member of the "Lighthouse" plural system; its members share one presence here (Jordan, @jordan_h)
 - Sparrow's memories: ...
 ```
+
+Members get no presence line. A member has no presence of its own, it is in the
+block because it just spoke, and it is never mentionable, so the proxying
+account's status governs no decision. The host's own presence renders normally
+whenever the host is a participant in its own right.
 
 Memory rendering is **per-present-member, never per-system** — only members
 who actually appear in the loaded dialogue history get their memories
@@ -307,7 +313,7 @@ an opted-in user's own message. Enabling it means:
 ### One-time bio seeding
 
 On a member's first-ever registration, `src/utils/pluralkit/bioSeeding.ts`
-seeds their PluralKit member description as a single personal memory
+seeds their PluralKit member description verbatim as a single personal memory
 (`persona_lineage_id = 0`, the global personal namespace), truncated to
 `PLURALKIT_BIO_SEED_MAX_CHARS` (default 1000, matching PK's own description
 cap). This is a **snapshot, not a sync** — later bio edits on PluralKit never

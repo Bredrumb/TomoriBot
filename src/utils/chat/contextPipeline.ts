@@ -900,7 +900,10 @@ async function simplifyMessage(
       if (pluralKitIdentity) {
         authorId = pluralKitIdentity.userDiscId;
         authorName = pluralKitIdentity.displayName;
-        syntheticUsers.set(authorId, { displayName: authorName, type: "webhook" });
+        // Deliberately not registered in syntheticUsers: a member owns a real
+        // "pk:{uuid}" users row, and participant discovery keys any synthetic
+        // entry as a webhook, which would strip its memories, aliases, and
+        // system/host identity lines.
         pluralKitUsers.set(authorId, {
           displayName: authorName,
           senderDiscId: pluralKitIdentity.senderDiscId,

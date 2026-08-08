@@ -483,18 +483,12 @@ async function enrichPresenceField(
   let lines: string[] = [];
   let failed = false;
   const hasPresenceIntent = params.client.options.intents?.has(GatewayIntentBits.GuildPresences);
-  if (base.policy.exposePresence) {
-    if (base.pluralKit) {
-      // A member has no presence of its own; the account proxying it does.
-      const hostDiscId = base.pluralKit.hostDiscIds[0];
-      if (hasPresenceIntent && hostDiscId) {
-        try {
-          lines = [`- Host Status: ${await dependencies.loadPresence(params.client, hostDiscId, params.guildId)}`];
-        } catch {
-          failed = true;
-        }
-      }
-    } else if (params.isDMChannel) {
+  // Members carry no presence of their own, and the proxying account's presence
+  // drove no decision: a member is in this block because it just spoke, and it is
+  // never mentionable, so idle/DND etiquette has nothing to govern. The host's own
+  // presence still renders whenever the host is a participant in its own right.
+  if (base.policy.exposePresence && !base.pluralKit) {
+    if (params.isDMChannel) {
       lines = ["- Status: Online (Direct Message)"];
     } else if (hasPresenceIntent) {
       try {
@@ -635,7 +629,7 @@ async function resolveHostAccountLabel(
     `<@${hostDiscId}>`;
   const username = member?.user.username?.trim() ?? fallbackUser?.username?.trim() ?? null;
   return username && displayName.toLowerCase() !== username.toLowerCase()
-    ? `${displayName} (@${username})`
+    ? `${displayName}, @${username}`
     : displayName;
 }
 
@@ -647,16 +641,17 @@ async function enrichPluralKitIdentityField(
   const context = base.pluralKit?.context;
   if (!base.pluralKit || !context) return field(base.profile.key, "pluralkit_identity", 5, []);
 
-  const lines = [
-    `- Member of ${formatPluralKitSystemLabel(context)}; messages from this system's members arrive through the same Discord account`,
-  ];
-  if (base.pluralKit.hostDiscIds.length > 0) {
-    const hostLabels = await Promise.all(
-      base.pluralKit.hostDiscIds.map((hostDiscId) => resolveHostAccountLabel(hostDiscId, params, dependencies)),
-    );
-    lines.push(`- Host account: ${hostLabels.join(", ")}`);
-  }
-  return field(base.profile.key, "pluralkit_identity", 5, lines);
+  // One line, and the host named appositively: any relational verb ("owned by",
+  // "run by") reads as authority over the system, and the host label is usually a
+  // member's or the system's own name, so it would invent a hierarchy among
+  // system-mates that a model then routes around the speaking member.
+  const hostLabels = await Promise.all(
+    base.pluralKit.hostDiscIds.map((hostDiscId) => resolveHostAccountLabel(hostDiscId, params, dependencies)),
+  );
+  const sharedPresence = hostLabels.length > 0 ? ` (${hostLabels.join("; ")})` : "";
+  return field(base.profile.key, "pluralkit_identity", 5, [
+    `- Member of ${formatPluralKitSystemLabel(context)}; its members share one presence here${sharedPresence}`,
+  ]);
 }
 
 async function hydrateDiscordUser(

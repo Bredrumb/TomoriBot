@@ -561,7 +561,7 @@ describe("pluralkit member hydration", () => {
     expect(fixture.presenceLoads).not.toContain(PK_USER_ID);
   });
 
-  it("renders the system and host account as independent facts", async () => {
+  it("names the shared presence without asserting authority over the system", async () => {
     const fixture = createPluralKitFixture();
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
@@ -570,7 +570,8 @@ describe("pluralkit member hydration", () => {
       ?.lines.join("\n");
 
     expect(identityLines).toContain('Member of the "Lighthouse" plural system');
-    expect(identityLines).toContain("Host account:");
+    expect(identityLines).toContain("its members share one presence here (");
+    expect(identityLines).not.toMatch(/owned by|run by|belongs to/iu);
   });
 
   it("prefers the proxying host over the system's other linked accounts", async () => {
@@ -584,20 +585,20 @@ describe("pluralkit member hydration", () => {
 
     await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
 
-    expect(fixture.presenceLoads[0]).toBe(proxyingHost);
+    // Host labels are resolved in host order, so the member-load order is what
+    // fixes which account the identity line names first.
+    expect(fixture.memberLoads.indexOf(proxyingHost)).toBeLessThan(fixture.memberLoads.indexOf(PK_HOST_ID));
     expect(fixture.privacyReads).toContain(proxyingHost);
   });
 
-  it("labels presence as the host's, since a member has none of its own", async () => {
+  it("renders no presence line, since a member has none of its own", async () => {
     const fixture = createPluralKitFixture();
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
-    const presenceLines = result.profiles[0]?.fields
-      .find((candidate) => candidate.kind === "presence")
-      ?.lines.join("\n");
+    const presenceLines = result.profiles[0]?.fields.find((candidate) => candidate.kind === "presence")?.lines;
 
-    expect(presenceLines).toBe("- Host Status: Online");
-    expect(fixture.presenceLoads).toContain(PK_HOST_ID);
+    expect(presenceLines).toEqual([]);
+    expect(fixture.presenceLoads).toHaveLength(0);
   });
 
   it("attributes memories to the member, not the shared account", async () => {

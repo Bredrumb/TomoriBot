@@ -37,15 +37,19 @@ afterEach(() => {
 
 describe("composePluralKitBioSeedContent", () => {
   it("flattens newlines and repeated whitespace to single spaces", () => {
-    const content = composePluralKitBioSeedContent("TestA", "line one\n\nline   two\tline three");
-    expect(content).toBe("From TestA's PluralKit bio: line one line two line three");
+    const content = composePluralKitBioSeedContent("line one\n\nline   two\tline three");
+    expect(content).toBe("line one line two line three");
+  });
+
+  it("stores the bio verbatim, with no provenance prefix", () => {
+    expect(composePluralKitBioSeedContent("pronouns: she/her")).toBe("pronouns: she/her");
   });
 
   it("truncates to PLURALKIT_BIO_SEED_MAX_CHARS", () => {
     process.env.PLURALKIT_BIO_SEED_MAX_CHARS = "20";
-    const content = composePluralKitBioSeedContent("TestA", "a very long bio that exceeds the cap");
+    const content = composePluralKitBioSeedContent("a very long bio that exceeds the cap");
     expect(content).toHaveLength(20);
-    expect(content).toBe("From TestA's PluralK");
+    expect(content).toBe("a very long bio that");
   });
 });
 
@@ -58,7 +62,6 @@ describe("seedPluralKitMemberBio", () => {
         isNewMember: true,
         memberUserDiscId: "pk:mem-uuid",
         memberUserId: 42,
-        memberDisplayName: "TestA",
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },
@@ -68,7 +71,7 @@ describe("seedPluralKitMemberBio", () => {
     expect(addCalls).toHaveLength(1);
     expect(addCalls[0]?.userId).toBe(42);
     expect(addCalls[0]?.personaLineageId).toBe(0);
-    expect(addCalls[0]?.content).toBe("From TestA's PluralKit bio: pronouns: she/her");
+    expect(addCalls[0]?.content).toBe("pronouns: she/her");
     expect(invalidateCalls).toEqual(["pk:mem-uuid"]);
   });
 
@@ -80,7 +83,6 @@ describe("seedPluralKitMemberBio", () => {
         isNewMember: true,
         memberUserDiscId: "pk:mem-uuid",
         memberUserId: 42,
-        memberDisplayName: "TestB",
         description: "   ",
         serverDiscId: "server_1",
       },
@@ -91,7 +93,6 @@ describe("seedPluralKitMemberBio", () => {
         isNewMember: true,
         memberUserDiscId: "pk:mem-uuid",
         memberUserId: 42,
-        memberDisplayName: "TestB",
         description: undefined,
         serverDiscId: "server_1",
       },
@@ -110,7 +111,6 @@ describe("seedPluralKitMemberBio", () => {
         isNewMember: false,
         memberUserDiscId: "pk:mem-uuid",
         memberUserId: 42,
-        memberDisplayName: "TestA",
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },
@@ -135,7 +135,6 @@ describe("seedPluralKitMemberBio", () => {
         isNewMember: true,
         memberUserDiscId: "pk:mem-uuid",
         memberUserId: 42,
-        memberDisplayName: "TestA",
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },
@@ -155,7 +154,6 @@ describe("seedPluralKitMemberBio", () => {
         isNewMember: true,
         memberUserDiscId: "pk:mem-uuid",
         memberUserId: 42,
-        memberDisplayName: "TestA",
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },

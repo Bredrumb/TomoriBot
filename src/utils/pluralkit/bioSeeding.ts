@@ -18,18 +18,13 @@ function getBioSeedMaxChars(): number {
 }
 
 /**
- * Composes the one-time bio-seed memory string: a provenance-prefixed,
- * single-line snapshot of a PluralKit member's bio, truncated to
- * `PLURALKIT_BIO_SEED_MAX_CHARS`.
- *
- * @param memberDisplayName - Cosmetic member name for the provenance prefix
- * @param description       - Raw PluralKit member bio text
- * @returns The composed, flattened, truncated memory content
+ * Composes the one-time bio-seed memory string: a single-line snapshot of a
+ * PluralKit member's bio, truncated to `PLURALKIT_BIO_SEED_MAX_CHARS`.
  */
-export function composePluralKitBioSeedContent(memberDisplayName: string, description: string): string {
-  // Provenance-prefixed and whitespace-flattened: memories render semicolon-joined
-  // on a single line, so an embedded newline would break the surrounding block.
-  const flattened = `From ${memberDisplayName}'s PluralKit bio: ${description}`.replace(/\s+/g, " ").trim();
+export function composePluralKitBioSeedContent(description: string): string {
+  // Whitespace-flattened: memories render semicolon-joined on a single line, so
+  // an embedded newline would break the surrounding block.
+  const flattened = description.replace(/\s+/g, " ").trim();
   const maxChars = getBioSeedMaxChars();
   return flattened.length > maxChars ? flattened.slice(0, maxChars) : flattened;
 }
@@ -41,7 +36,6 @@ export type PluralKitBioSeedArgs = {
   memberUserDiscId: string;
   /** Internal `users.user_id` for the member's synthetic row */
   memberUserId: number;
-  memberDisplayName: string;
   /** Raw PluralKit member bio; empty/nullish means nothing to seed */
   description: string | null | undefined;
   serverDiscId: string | null | undefined;
@@ -87,7 +81,7 @@ export async function seedPluralKitMemberBio(
     return;
   }
 
-  const content = composePluralKitBioSeedContent(args.memberDisplayName, description);
+  const content = composePluralKitBioSeedContent(description);
   const inserted = await deps.addPersonalMemory(args.memberUserId, 0, content);
   if (!inserted) {
     log.info(

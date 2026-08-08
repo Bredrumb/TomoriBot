@@ -407,7 +407,6 @@ async function persistPluralKitLookupIdentity(
       isNewMember: identity.isNewMember,
       memberUserDiscId: identity.userRow.user_disc_id,
       memberUserId: identity.userRow.user_id,
-      memberDisplayName: identityInput.displayName ?? identityInput.memberHid,
       description: lookup.member?.description,
       serverDiscId,
     }).catch((error) => log.warn(`PluralKit bio seed failed for ${identity.userRow.user_disc_id}`, error));

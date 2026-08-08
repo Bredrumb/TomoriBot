@@ -9,6 +9,7 @@ import {
 import { createDiscordParticipantMemberDirectory } from "@/utils/text/participants/candidateSources";
 import {
   buildParticipantDiscoveryPlan,
+  discoverHistoricalSyntheticCandidates,
   discoverPersonaReferenceCandidates,
   discoverVisibleAuthorCandidates,
   parsePersonaId,
@@ -121,6 +122,17 @@ describe("participant discovery plan", () => {
         referencePlan,
       }),
     ).rejects.toThrow("cannot be both a synthetic webhook and a Matrix user");
+  });
+
+  it("keys a PluralKit member as a discord user even when a webhook entry exists for it", () => {
+    const pluralKitUserId = "pk:11111111-2222-3333-4444-555555555555";
+    const syntheticUsers = new Map([[pluralKitUserId, { displayName: "Hiro", type: "webhook" as const }]]);
+
+    const visible = discoverVisibleAuthorCandidates({ participantIds: [pluralKitUserId], syntheticUsers });
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.key).toEqual(createDiscordUserKey(pluralKitUserId));
+
+    expect(discoverHistoricalSyntheticCandidates(syntheticUsers)).toHaveLength(0);
   });
 
   it("is pure, merges multiple reasons, and retains active-turn-independent aliases and evidence", async () => {
