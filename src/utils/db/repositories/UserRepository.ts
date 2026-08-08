@@ -54,6 +54,12 @@ export interface PersonalSpotlightStatus {
   updatedAt: Date | null;
 }
 
+/**
+ * Every flag is scoped to the server being built for. An unscoped flag would admit
+ * a silent lurker who personalized the bot elsewhere, and each extra owner of a
+ * common name makes that name permanently unresolvable: the alias resolver drops
+ * a name outright once two participants answer to it.
+ */
 export type ContextReferenceEligibilityEvidence = {
   hasServerActivity: boolean;
   hasPersonalMemories: boolean;
@@ -223,16 +229,35 @@ class UserRepository implements IRepository<UserExportShape> {
                     AND sc.metric IN ('message_sent', 'command_used')
                     AND sc.count > 0
                 ) AS has_server_activity,
+                -- Reached through persona_lineage_id rather than a server column because
+                -- personal_memories has none: the lineage is the cross-server pooling
+                -- namespace, so joining it back to the personas of this server keeps a
+                -- re-imported persona's memories counting while excluding a user whose
+                -- memories all belong to lineages this server never ran. Lineage 0 is the
+                -- global branch that loadForUserLineage ORs into every persona's read, so
+                -- it renders here regardless of which lineages this server owns.
                 EXISTS (
                   SELECT 1
                   FROM personal_memories pm
                   WHERE pm.user_id = u.user_id
+                    AND (
+                      pm.persona_lineage_id = 0
+                      OR EXISTS (
+                        SELECT 1
+                        FROM personas p
+                        JOIN servers s ON s.server_id = p.server_id
+                        WHERE p.persona_lineage_id = pm.persona_lineage_id
+                          AND s.server_disc_id = ${params.serverDiscId}
+                      )
+                    )
                 ) AS has_personal_memories,
                 EXISTS (
                   SELECT 1
                   FROM reminders r
+                  JOIN servers s ON s.server_id = r.server_id
                   WHERE (r.user_discord_id = u.user_disc_id OR r.created_by_user_id = u.user_id)
                     AND r.reminder_time > CURRENT_TIMESTAMP
+                    AND s.server_disc_id = ${params.serverDiscId}
                 ) AS has_pending_tasks
               FROM users u
               LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
