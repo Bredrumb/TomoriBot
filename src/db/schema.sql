@@ -2410,7 +2410,8 @@ CREATE TABLE IF NOT EXISTS user_saved_provider_configs (
   -- custom_endpoint_url, custom_model_name, custom_num_ctx dropped by migration 011 (Phase 3)
   -- fallback_llm_ids dropped by migration 011 (Phase 3)
   thinking_level TEXT DEFAULT 'auto',
-  enabled_capabilities TEXT[] DEFAULT '{}', -- Intentionally user-only: which capabilities this user-provider is active for
+  enabled_capabilities TEXT[] DEFAULT '{}', -- Intentionally user-only: which of the assigned capabilities are switched on
+  assigned_capabilities TEXT[] DEFAULT '{}', -- Which capabilities this user-provider owns; survives being switched off (migration 060)
   saved_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, provider),
@@ -2440,6 +2441,7 @@ SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_disabled_par
 -- fallback_llm_ids: dropped by migration 011
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'thinking_level', 'TEXT', '''auto''');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'enabled_capabilities', 'TEXT[]', 'ARRAY[]::TEXT[]');
+SELECT add_column_if_not_exists('user_saved_provider_configs', 'assigned_capabilities', 'TEXT[]', 'ARRAY[]::TEXT[]');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'fallback_model_refs', 'JSONB', '''[]''::JSONB');
 
 DROP TRIGGER IF EXISTS update_user_saved_provider_configs_timestamp ON user_saved_provider_configs;

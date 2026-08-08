@@ -490,19 +490,32 @@ async function buildSavedConfigForCustomEndpoint(
         existingConfig: existingConfig as UserSavedProviderConfigRow | null,
         llmId: textModelId,
         enabledCapabilities: (existingConfig as UserSavedProviderConfigRow | null)?.enabled_capabilities ?? [],
-      }).then((config) => ({
-        ...config,
-        enabled_capabilities:
-          endpoint.capability === "text"
-            ? Array.from(
-                new Set([...config.enabled_capabilities, "text", ...(endpoint.seesImages ? ["vision" as const] : [])]),
-              )
-            : endpoint.capability === "embedding"
-              ? Array.from(new Set([...config.enabled_capabilities, "embedding"]))
-              : endpoint.capability === "image"
-                ? Array.from(new Set([...config.enabled_capabilities, "image"]))
-                : Array.from(new Set([...config.enabled_capabilities, "video"])),
-      }));
+      }).then((config) => {
+        // Registering an endpoint both switches its capabilities on and claims them
+        // for this provider, so the two arrays take the same additions.
+        const claimed = capabilitiesClaimedByEndpoint(endpoint);
+        return {
+          ...config,
+          enabled_capabilities: Array.from(new Set([...config.enabled_capabilities, ...claimed])),
+          assigned_capabilities: Array.from(new Set([...config.assigned_capabilities, ...claimed])),
+        };
+      });
+}
+
+function capabilitiesClaimedByEndpoint(endpoint: {
+  capability: CustomEndpointCapability;
+  seesImages?: boolean;
+}): PersonalProviderCapability[] {
+  switch (endpoint.capability) {
+    case "text":
+      return endpoint.seesImages ? ["text", "vision"] : ["text"];
+    case "embedding":
+      return ["embedding"];
+    case "image":
+      return ["image"];
+    default:
+      return ["video"];
+  }
 }
 
 export async function registerCustomEndpoint(

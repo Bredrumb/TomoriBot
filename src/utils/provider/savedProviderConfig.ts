@@ -235,6 +235,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     !existingConfig || refreshTextModel || refreshDiffusionModel || refreshNaiDiffusionModel
       ? await loadProviderDefaultSelectionIds(normalizedProvider)
       : null;
+  const enabledCapabilities = params.enabledCapabilities ?? existingConfig?.enabled_capabilities ?? [];
 
   return {
     user_id: params.userId,
@@ -261,7 +262,12 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
-    enabled_capabilities: params.enabledCapabilities ?? existingConfig?.enabled_capabilities ?? [],
+    enabled_capabilities: enabledCapabilities,
+    // Anything switched on here is owned here. Previously assigned capabilities are
+    // kept even when currently off, so a re-enable still resolves to this provider.
+    assigned_capabilities: Array.from(
+      new Set([...(existingConfig?.assigned_capabilities ?? []), ...enabledCapabilities]),
+    ),
     fallback_model_refs: existingConfig?.fallback_model_refs ?? [],
   };
 }

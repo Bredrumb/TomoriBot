@@ -1571,7 +1571,15 @@ export const userSavedProviderConfigSchema = z.object({
     z.array(logitBiasEntrySchema).default([]),
   ),
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
+  // Which of this row's assigned capabilities are currently switched on.
+  // Always a subset of assigned_capabilities; see migration 060 for why the two are separate.
   enabled_capabilities: z.preprocess(
+    (value) => normalizeEnabledCapabilities(value),
+    z.array(personalProviderCapabilitySchema).default([]),
+  ),
+  // Which capabilities this row owns. Survives being switched off, so re-enabling
+  // returns to the provider the user actually chose.
+  assigned_capabilities: z.preprocess(
     (value) => normalizeEnabledCapabilities(value),
     z.array(personalProviderCapabilitySchema).default([]),
   ),

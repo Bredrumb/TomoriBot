@@ -39,6 +39,9 @@ Step 3 is not required after every model selection. Selecting a model with any
 `/personal provider model-*` command already activates that capability; the toggle command is
 how you turn one back **off** and hand the capability back to each server's default.
 
+Turning a capability off remembers which provider was serving it, so switching it back on
+returns to that same provider rather than to whichever one you happen to have saved first.
+
 Because steps 1 and 2 switch you onto a cross-server override, TomoriBot asks you to confirm
 before saving whenever a capability moves from the server default to a personal one. Rotating
 the key on a provider that already answers your requests skips that confirmation, since the
