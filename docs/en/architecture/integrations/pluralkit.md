@@ -198,11 +198,13 @@ member name, system name, and host account as independent entities, named
 appositively so no relational verb is implied. Possessive or authority framing
 ("the host's system", "owned by", "run by") is excluded by design: the host
 label is usually a member's or the system's own name, so a relational verb
-would invent a hierarchy among system-mates:
+would invent a hierarchy among system-mates.
+
+A member's own entry states membership and nothing about the account:
 
 ```
 Sparrow:
-- Member of the "Lighthouse" plural system; its members share one presence here (Jordan, @jordan_h)
+- Member of the "Lighthouse" plural system; its members share one presence here
 - Sparrow's memories: ...
 ```
 
@@ -211,16 +213,27 @@ block because it just spoke, and it is never mentionable, so the proxying
 account's status governs no decision. The host's own presence renders normally
 whenever the host is a participant in its own right.
 
-### System descriptions
+### System notes
 
-A system's own description (migration 059, `pluralkit_systems.system_description`)
-renders once per present system, in its own section below the participant
-entries:
+Each present system gets one note in its own section below the participant
+entries, carrying the shared account and the system's own description
+(migration 059, `pluralkit_systems.system_description`):
 
 ```
 Some of the people above are members of plural systems:
-- The "Lighthouse" plural system: We're a system of five. Ask before DMing.
+- The "Lighthouse" plural system (shared account: Jordan, @jordan_h): We're a system of five. Ask before DMing.
 ```
+
+The account is named here rather than on each member's line because it is a
+property of the system, not of whichever member happens to be speaking.
+Repeating it per member also cost a line and a host lookup pass for every
+present member of the same system.
+
+Both halves are optional and degrade independently. A system with no
+description, or one keeping it private, still renders its name and account; a
+system whose host accounts do not resolve drops the parenthetical. Only an
+absent system omits the entry, and only an empty section omits the header.
+There is no placeholder, so an absent description never advertises itself.
 
 Systems are **not** rendered as headings with their members nested underneath.
 Nesting would make the system the entity and its members its parts, and grouping
@@ -228,12 +241,9 @@ by system would reorder speakers away from the first-seen order the block relies
 on. A flat participant list keeps members peers of the humans in the room; the
 system note is collected during hydration
 (`PluralKitSystemNote`, keyed by `system_uuid` so system-mates share one entry)
-and rendered where the first member of that system appears.
-
-A system with no description, or one keeping it private, contributes nothing —
-and if no present system has a description, the section and its header are
-omitted entirely. There is no placeholder, so an absent description never
-advertises itself.
+and rendered where the first member of that system appears. Host labels resolve
+only when a system first enters that map, so the first-seen member's proxying
+account is still the one hoisted to the front of the list.
 
 Unlike the member bio seed, the description is **refreshed, not snapshotted**:
 `upsertSystem` writes it from the message-lookup payload already fetched, so an

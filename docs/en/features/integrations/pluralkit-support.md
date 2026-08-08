@@ -57,8 +57,8 @@ for no benefit (see below).
   conversation, so system-wide boundaries apply to all of you without repeating them per
   member. This one *does* follow edits: change or clear it on PluralKit and she picks that
   up the next time one of your members speaks. It's shown once for the whole system, not
-  attached to any individual member, and a private or empty description shows nothing at
-  all.
+  attached to any individual member, and a private or empty description is simply left out
+  rather than replaced with a placeholder.
 
 ## Identity Details Worth Knowing
 

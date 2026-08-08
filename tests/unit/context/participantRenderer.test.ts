@@ -141,7 +141,7 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
 
   it("renders system notes as their own section, after the participant entries", () => {
     const member = humanProfile("400000000000000001", "Sparrow", "sparrow", [
-      '- Member of the "Lighthouse" plural system; its members share one presence here (Jordan, @jordan_h)',
+      '- Member of the "Lighthouse" plural system; its members share one presence here',
     ]);
     const rendered = render(
       [member],
@@ -150,18 +150,53 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
           systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
           label: 'the "Lighthouse" plural system',
           description: "We are five. Ask before DMing.",
+          hostLabels: ["Jordan, @jordan_h"],
         },
       ],
     );
 
     expect(rendered.text).toContain(
       "Some of the people above are members of plural systems:\n" +
-        '- The "Lighthouse" plural system: We are five. Ask before DMing.',
+        '- The "Lighthouse" plural system (shared account: Jordan, @jordan_h): We are five. Ask before DMing.',
     );
     expect(rendered.text.indexOf("Sparrow")).toBeLessThan(rendered.text.indexOf("Some of the people above"));
   });
 
-  it("renders no system section at all when no present system has a description", () => {
+  it("names the shared account even when the system has no description", () => {
+    const rendered = render(
+      [humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])],
+      [
+        {
+          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+          label: 'the "Lighthouse" plural system',
+          description: null,
+          hostLabels: ["Jordan, @jordan_h"],
+        },
+      ],
+    );
+
+    expect(rendered.text).toContain('- The "Lighthouse" plural system (shared account: Jordan, @jordan_h)\n');
+    expect(rendered.text).not.toContain("plural system (shared account: Jordan, @jordan_h):");
+  });
+
+  it("omits the account parenthetical when no host resolved", () => {
+    const rendered = render(
+      [humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])],
+      [
+        {
+          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+          label: 'the "Lighthouse" plural system',
+          description: "We are five.",
+          hostLabels: [],
+        },
+      ],
+    );
+
+    expect(rendered.text).toContain('- The "Lighthouse" plural system: We are five.');
+    expect(rendered.text).not.toContain("shared account");
+  });
+
+  it("renders no system section at all when no system is present", () => {
     const rendered = render([humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])]);
 
     expect(rendered.text).not.toContain("plural system");

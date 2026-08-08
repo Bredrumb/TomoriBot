@@ -100,11 +100,12 @@ export interface ParticipantExposurePolicy {
   exposePersonalMemories: boolean;
 }
 
-/** A present system's self-description, rendered once for the whole system rather than per member. */
+/** A present system's own identity, rendered once for the whole system rather than per member. */
 export interface PluralKitSystemNote {
   systemUuid: string;
   label: string;
-  description: string;
+  description: string | null;
+  hostLabels: readonly string[];
 }
 
 export interface ParticipantHydrationResult {
@@ -641,43 +642,46 @@ async function resolveHostAccountLabel(
     : displayName;
 }
 
-async function enrichPluralKitIdentityField(
-  base: HydratedDiscordUserBase,
-  params: ParticipantHydrationParams,
-  dependencies: ParticipantHydrationDependencies,
-): Promise<ParticipantProfileField> {
+function enrichPluralKitIdentityField(base: HydratedDiscordUserBase): ParticipantProfileField {
   const context = base.pluralKit?.context;
-  if (!base.pluralKit || !context) return field(base.profile.key, "pluralkit_identity", 5, []);
+  if (!context) return field(base.profile.key, "pluralkit_identity", 5, []);
 
-  // One line, and the host named appositively: any relational verb ("owned by",
-  // "run by") reads as authority over the system, and the host label is usually a
-  // member's or the system's own name, so it would invent a hierarchy among
-  // system-mates that a model then routes around the speaking member.
-  const hostLabels = await Promise.all(
-    base.pluralKit.hostDiscIds.map((hostDiscId) => resolveHostAccountLabel(hostDiscId, params, dependencies)),
-  );
-  const sharedPresence = hostLabels.length > 0 ? ` (${hostLabels.join("; ")})` : "";
+  // Membership only. The host account belongs to the system, not to whichever
+  // member happens to be speaking, so it renders once in the system note.
   return field(base.profile.key, "pluralkit_identity", 5, [
-    `- Member of ${formatPluralKitSystemLabel(context)}; its members share one presence here${sharedPresence}`,
+    `- Member of ${formatPluralKitSystemLabel(context)}; its members share one presence here`,
   ]);
 }
 
-function pluralKitSystemNote(base: HydratedDiscordUserBase): PluralKitSystemNote | null {
-  const context = base.pluralKit?.context;
-  const description = context?.systemDescription?.replace(/\s+/gu, " ").trim();
-  if (!context || !description) return null;
-  return { systemUuid: context.systemUuid, label: formatPluralKitSystemLabel(context), description };
+/** Host ids stay unresolved until dedup, so only a system's first-seen member pays to label them. */
+interface PluralKitSystemNoteSeed {
+  systemUuid: string;
+  label: string;
+  description: string | null;
+  hostDiscIds: readonly string[];
+}
+
+function pluralKitSystemNoteSeed(base: HydratedDiscordUserBase): PluralKitSystemNoteSeed | null {
+  const pluralKit = base.pluralKit;
+  const context = pluralKit?.context;
+  if (!pluralKit || !context) return null;
+  return {
+    systemUuid: context.systemUuid,
+    label: formatPluralKitSystemLabel(context),
+    description: context.systemDescription?.replace(/\s+/gu, " ").trim() || null,
+    hostDiscIds: pluralKit.hostDiscIds,
+  };
 }
 
 async function hydrateDiscordUser(
   seed: ParticipantSeed,
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
-): Promise<{ profile: HydratedParticipantProfile; systemNote: PluralKitSystemNote | null } | null> {
+): Promise<{ profile: HydratedParticipantProfile; systemNoteSeed: PluralKitSystemNoteSeed | null } | null> {
   const base = await hydrateDiscordUserBase(seed, params, dependencies);
   if (!base) return null;
   const fields: ParticipantProfileField[] = [
-    ...(base.pluralKit ? [await enrichPluralKitIdentityField(base, params, dependencies)] : []),
+    ...(base.pluralKit ? [enrichPluralKitIdentityField(base)] : []),
     enrichPhysicalAppearanceField(base, params),
     enrichTimezoneField(base, params),
     await enrichPresenceField(base, params, dependencies),
@@ -685,7 +689,7 @@ async function hydrateDiscordUser(
     await enrichPersonalMemoriesField(base, params, dependencies),
     await enrichHumanRemindersField(base, params, dependencies),
   ];
-  return { profile: { ...base.profile, fields }, systemNote: pluralKitSystemNote(base) };
+  return { profile: { ...base.profile, fields }, systemNoteSeed: pluralKitSystemNoteSeed(base) };
 }
 
 function buildRoleLines(member: GuildMember, guild: Guild | undefined): string[] {
@@ -969,9 +973,19 @@ export async function hydrateParticipantProfiles(
       if (hydrated) {
         profiles.push(hydrated.profile);
         // Keyed by system, not member: system-mates share one note, and the
-        // first speaker's position fixes where it renders.
-        if (hydrated.systemNote && !pluralKitSystems.has(hydrated.systemNote.systemUuid)) {
-          pluralKitSystems.set(hydrated.systemNote.systemUuid, hydrated.systemNote);
+        // first speaker's position fixes where it renders. Host labels resolve
+        // inside the guard so a system with N present members costs one host
+        // lookup pass rather than N identical ones.
+        const noteSeed = hydrated.systemNoteSeed;
+        if (noteSeed && !pluralKitSystems.has(noteSeed.systemUuid)) {
+          pluralKitSystems.set(noteSeed.systemUuid, {
+            systemUuid: noteSeed.systemUuid,
+            label: noteSeed.label,
+            description: noteSeed.description,
+            hostLabels: await Promise.all(
+              noteSeed.hostDiscIds.map((hostDiscId) => resolveHostAccountLabel(hostDiscId, params, dependencies)),
+            ),
+          });
         }
       }
       continue;

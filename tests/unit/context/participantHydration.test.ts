@@ -562,7 +562,7 @@ describe("pluralkit member hydration", () => {
     expect(fixture.presenceLoads).not.toContain(PK_USER_ID);
   });
 
-  it("names the shared presence without asserting authority over the system", async () => {
+  it("states membership only, leaving the shared account to the system note", async () => {
     const fixture = createPluralKitFixture();
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
@@ -570,8 +570,7 @@ describe("pluralkit member hydration", () => {
       .find((candidate) => candidate.kind === "pluralkit_identity")
       ?.lines.join("\n");
 
-    expect(identityLines).toContain('Member of the "Lighthouse" plural system');
-    expect(identityLines).toContain("its members share one presence here (");
+    expect(identityLines).toBe('- Member of the "Lighthouse" plural system; its members share one presence here');
     expect(identityLines).not.toMatch(/owned by|run by|belongs to/iu);
   });
 
@@ -587,7 +586,7 @@ describe("pluralkit member hydration", () => {
     await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
 
     // Host labels are resolved in host order, so the member-load order is what
-    // fixes which account the identity line names first.
+    // fixes which account the system note names first.
     expect(fixture.memberLoads.indexOf(proxyingHost)).toBeLessThan(fixture.memberLoads.indexOf(PK_HOST_ID));
     expect(fixture.privacyReads).toContain(proxyingHost);
   });
@@ -610,16 +609,26 @@ describe("pluralkit member hydration", () => {
         systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
         label: 'the "Lighthouse" plural system',
         description: "We are five. Ask before DMing.",
+        hostLabels: ["Alice Guild, @alice_username"],
       },
     ]);
+    expect(fixture.memberLoads.filter((discordId) => discordId === PK_HOST_ID)).toHaveLength(1);
   });
 
-  it("collects no system note when the system has no description", async () => {
+  it("collects a system note without a description, so the shared account still renders", async () => {
     const blank = createPluralKitFixture({ pluralKitContext: createPluralKitContext({ systemDescription: "   " }) });
     const absent = createPluralKitFixture();
 
-    expect((await hydrateParticipantProfiles(blank.params, blank.dependencies)).pluralKitSystems).toEqual([]);
-    expect((await hydrateParticipantProfiles(absent.params, absent.dependencies)).pluralKitSystems).toEqual([]);
+    for (const fixture of [blank, absent]) {
+      expect((await hydrateParticipantProfiles(fixture.params, fixture.dependencies)).pluralKitSystems).toEqual([
+        {
+          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+          label: 'the "Lighthouse" plural system',
+          description: null,
+          hostLabels: ["Alice Guild, @alice_username"],
+        },
+      ]);
+    }
   });
 
   it("renders no presence line, since a member has none of its own", async () => {

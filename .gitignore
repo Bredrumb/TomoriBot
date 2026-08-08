@@ -1,5 +1,7 @@
 nul
 temp_*
+scratch*.diff
+scratch*.patch
 .venv*
 # Throwaway output from the /stats infographic render harnesses (scripts/devtools/)
 .spike-output/

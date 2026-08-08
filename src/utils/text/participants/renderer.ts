@@ -51,11 +51,22 @@ export function renderParticipantPrompt(params: ParticipantPromptRenderParams): 
  * under: nesting members below a system makes the system the entity and its
  * members its parts, and grouping would reorder speakers away from first-seen
  * order.
+ *
+ * The host account is named here rather than on each member's identity line
+ * because it is a property of the system. It stays appositive: any relational
+ * verb ("owned by", "run by") reads as authority over the system, and the host
+ * label is usually a member's or the system's own name, so it would invent a
+ * hierarchy among system-mates that a model then routes around the speaker.
+ * A system therefore renders whenever it is present, description or not.
  */
 function renderPluralKitSystemNotes(systems: readonly PluralKitSystemNote[]): string {
   if (systems.length === 0) return "";
   const entries = systems
-    .map((system) => `- ${system.label.charAt(0).toUpperCase()}${system.label.slice(1)}: ${system.description}`)
+    .map((system) => {
+      const label = `${system.label.charAt(0).toUpperCase()}${system.label.slice(1)}`;
+      const hosts = system.hostLabels.length > 0 ? ` (shared account: ${system.hostLabels.join("; ")})` : "";
+      return `- ${label}${hosts}${system.description ? `: ${system.description}` : ""}`;
+    })
     .join("\n");
   return `Some of the people above are members of plural systems:\n${entries}\n\n`;
 }
