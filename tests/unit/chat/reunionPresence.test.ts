@@ -148,4 +148,35 @@ describe("ReunionClaimRegistry", () => {
     expect(retry.presence?.mode).toBe("claimed");
     await recordReunionPresence(retry.presence, emptyResult, presenceStore);
   });
+
+  it("names the fronting member while keeping the clock on the shared account", async () => {
+    const read = mock(async () => ({
+      lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"),
+      seenToday: false,
+    }));
+    const presenceStore = makePresenceStore({ getUserPersonaReunionInfo: read });
+
+    const resolved = await resolveReunionNote({ ...makeResolveArgs(33), frontingMemberName: "Locke" }, presenceStore);
+
+    expect(resolved.note).toContain("Locke is talking to you again");
+    expect(resolved.note).toContain("the account they share has not been around since");
+    // The host account, not the member, is what the absence and the one-shot are keyed to.
+    expect(read).toHaveBeenCalledWith(33, 10);
+    expect(resolved.presence?.userId).toBe(33);
+    await recordReunionPresence(resolved.presence, emptyResult, presenceStore);
+  });
+
+  it("ignores a blank fronting member name rather than emitting an empty speaker", async () => {
+    const read = mock(async () => ({
+      lastPreviousDayAt: new Date("2026-07-01T00:00:00Z"),
+      seenToday: false,
+    }));
+    const presenceStore = makePresenceStore({ getUserPersonaReunionInfo: read });
+
+    const resolved = await resolveReunionNote({ ...makeResolveArgs(34), frontingMemberName: "  " }, presenceStore);
+
+    expect(resolved.note).toContain("Alice is talking to you again for the first time since");
+    expect(resolved.note).not.toContain("the account they share");
+    await recordReunionPresence(resolved.presence, emptyResult, presenceStore);
+  });
 });

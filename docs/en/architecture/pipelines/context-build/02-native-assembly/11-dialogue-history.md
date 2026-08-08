@@ -257,6 +257,9 @@ After this stage runs:
   the pre-feature dialogue context for both injections. It also records no
   `presence_seen` ticks, so a disabled server writes nothing.
 - At most one reunion note is injected, and it can describe only the direct triggerer.
+- On a PluralKit-proxied turn the clock stays on the host account while the note
+  names the fronting member, so the wording attributes the absence to the shared
+  account. See [PluralKit Integration](/architecture/integrations/pluralkit/).
 - `messageIdMap.register(...)` is called for every media reference the
   LLM might ask about after resolution (so `image_analysis_tool` and
   media-reference tools have stable IDs).

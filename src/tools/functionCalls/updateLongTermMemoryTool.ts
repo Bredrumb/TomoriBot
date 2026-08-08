@@ -15,7 +15,7 @@ import { sendMemoryEmbedWithExpand } from "../../utils/discord/expandableEmbedNo
 import { convertMentions } from "../../utils/text/contextBuilder";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
-import { resolveUserTarget } from "@/utils/discord/targetResolver";
+import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
 import { isPluralKitUserId } from "@/utils/bridges";
 import { getPluralKitHostProtection } from "@/utils/pluralkit/hostProtection";
 
@@ -207,7 +207,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
     try {
       if (!isPersonalUpdate) {
         if (isDeleteRequested) {
-          const resolvedTriggererUserId = context.message?.author?.id || context.userId;
+          const resolvedTriggererUserId = resolveTriggererDiscordId(context);
           const triggererRow = resolvedTriggererUserId
             ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
             : null;
@@ -286,7 +286,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         );
 
         if (updatedServerMemory) {
-          const resolvedTriggererUserId = context.message?.author?.id || context.userId;
+          const resolvedTriggererUserId = resolveTriggererDiscordId(context);
           const triggererRow = resolvedTriggererUserId
             ? await userRepository.loadByDiscordId(resolvedTriggererUserId)
             : null;
@@ -391,7 +391,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           };
         }
       } else if (!guild) {
-        const triggererDiscId = context.message?.author?.id || context.userId;
+        const triggererDiscId = resolveTriggererDiscordId(context);
         if (!triggererDiscId || triggererDiscId !== resolvedTargetUserId) {
           return {
             success: false,

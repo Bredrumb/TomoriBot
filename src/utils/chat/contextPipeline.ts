@@ -95,6 +95,18 @@ type PluralKitHistoryIdentity = {
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
  */
+/**
+ * The plural-system member speaking this turn, or null for an ordinary message.
+ * Admission resolves a proxied turn's identity to the host account so settings
+ * and quotas gate correctly, which leaves the fronting member's name to be
+ * recovered separately by anything that addresses the speaker.
+ */
+function resolveFrontingMemberName(message: Message): string | null {
+  if (!message.webhookId || !getPluralKitProxyMessageRecord(message.id)) return null;
+  const lookup = getCachedMessageLookup(message.id);
+  return lookup ? getPluralKitMemberDisplayName(lookup) : null;
+}
+
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
   const incoming = turn.lockedTurn.admission.incoming;
   const { client, message } = incoming;
@@ -306,6 +318,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     turn,
     effectivePersona,
     isUserImpersonation: incoming.isUserImpersonation,
+    frontingMemberName: resolveFrontingMemberName(message),
   });
 
   const contextBuild = await buildContext({

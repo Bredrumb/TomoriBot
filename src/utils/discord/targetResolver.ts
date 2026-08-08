@@ -396,6 +396,21 @@ function resolveGuildMemberStage(
   };
 }
 
+/**
+ * The Discord id of whoever caused this turn, for tools keying a write or a
+ * permission check on the triggerer rather than on a named target.
+ *
+ * `context.userId` is the identity admission already resolved through the
+ * PluralKit proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
+ * it outranks the message author. The author is a fallback for tool contexts
+ * built outside a chat turn, and never used for a webhook message: a proxied
+ * turn authors as the webhook, whose snowflake matches no user row.
+ */
+export function resolveTriggererDiscordId(context: ToolContext): string | undefined {
+  if (context.userId) return context.userId;
+  return context.message?.webhookId ? undefined : context.message?.author?.id;
+}
+
 export async function resolveUserTarget(input: string, context: ToolContext): Promise<UserTargetResolution> {
   const rawInput = input.trim();
   const normalizedInput = normalizeUserTargetInput(input);

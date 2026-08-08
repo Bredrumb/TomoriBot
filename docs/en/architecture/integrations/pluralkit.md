@@ -282,10 +282,44 @@ cooldowns, privacy, and blacklists key on the host Discord account**;
 | Conversational identity (who Tomori is talking to) | Member (`pk:{uuid}`) | Context pipeline / participants block, resolved independently of admission's host-keyed `userDiscId` |
 | Personal memories | Member (`pk:{uuid}`) | `memoryTool.ts` — `loadByDiscordId('pk:{uuid}')` returns a real `users` row, so personal memory creation needs **no fallback**, unlike the Matrix bridge's server-wide degrade |
 | One-time bio seed | Member (`pk:{uuid}`), lineage 0 | `src/utils/pluralkit/bioSeeding.ts` |
+| Tool triggerer (who invoked a write) | Host (`sender`) | `resolveTriggererDiscordId()` (`src/utils/discord/targetResolver.ts`) |
+| Reunion clock (has this person been away?) | Host (`sender`) | `reunionPresence.ts` via `turn.userRow.user_id`; only the name in the note follows the member |
 
 `getPluralKitHostProtection()` shields **all** of a host's members if the host
 sets `PrivacyLevel.FULL` or gets blacklisted on a server — a host-level
 shield, not a per-member one.
+
+### Never read the message author on a proxied turn
+
+A proxied message is authored by the **webhook**, so `message.author.id` equals
+`message.webhookId` and matches no `users` row. Any tool keying a write or a
+permission check on the triggerer must call `resolveTriggererDiscordId(context)`,
+which prefers `context.userId` (the identity admission already resolved through
+the proxy, bridge, manual-trigger, and self-reply-chain paths) and refuses a
+webhook author outright rather than returning a snowflake that cannot resolve.
+
+Reading the raw author first is a silent trap: it looks correct on every
+unproxied message and fails only behind a proxy, where the affected tools report
+missing internal state rather than an identity problem.
+
+### Reunion notes name the member, not the account
+
+Absence is a property of the human, so the reunion clock stays keyed on the host
+account: a per-member clock would fire a reunion, or a "very first time"
+greeting, on nearly every front switch in a system running dozens of members.
+
+The **name** in the note is the fronting member, resolved from the trigger
+message's cached PK lookup. Without that split the note addresses whoever the
+host account is named after, which is usually not the member in the
+conversation, and the model then spends its reasoning reconciling two different
+names for one speaker.
+
+Because the clock and the name describe different subjects, the reunion wording
+changes on a proxied turn: the absence is attributed to the shared account
+(`isSharedAccount` in `buildReunionNote`) rather than asserting the member was
+personally away. It stays appositive, for the reason the participant block does:
+no member is framed as owning the system. The first-ever branch keeps its plain
+wording, since an account that has never spoken means no member has either.
 
 ## API Etiquette
 

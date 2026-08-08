@@ -7,7 +7,7 @@ import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
-import { resolveUserTarget } from "@/utils/discord/targetResolver";
+import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
 import { getPluralKitHostProtection } from "@/utils/pluralkit/hostProtection";
 
 /**
@@ -106,7 +106,7 @@ export class MemoryTool extends BaseTool {
     );
 
     const tomoriState = context.tomoriState;
-    const resolvedUserId = context.message?.author?.id || context.userId;
+    const resolvedUserId = resolveTriggererDiscordId(context);
     const userRow = resolvedUserId ? await userRepository.loadByDiscordId(resolvedUserId) : null;
 
     if (!tomoriState || !userRow?.user_id || !tomoriState.server_id || !tomoriState.persona_id || !resolvedUserId) {

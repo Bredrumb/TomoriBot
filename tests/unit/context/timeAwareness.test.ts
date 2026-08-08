@@ -102,6 +102,36 @@ describe("buildReunionNote", () => {
     ).toBeNull();
   });
 
+  it("attributes a shared-account absence to the account, never to the fronting member", () => {
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: new Date("2026-07-12T12:00:00Z"),
+        seenToday: false,
+        displayName: "Locke",
+        nowMs: NOW,
+        reunionDays: 3,
+        isSharedAccount: true,
+      }),
+    ).toBe(
+      "Locke is talking to you again, and the account they share has not been around since July 12, 2026. It's been 3 days! Acknowledge their return naturally and ask what they've been up to.",
+    );
+  });
+
+  it("keeps the plain first-timer wording for a member, since no one has spoken from that account yet", () => {
+    expect(
+      buildReunionNote({
+        lastPreviousDayAt: null,
+        seenToday: false,
+        displayName: "Locke",
+        nowMs: NOW,
+        reunionDays: 3,
+        isSharedAccount: true,
+      }),
+    ).toBe(
+      "Locke is talking to you for the very first time! Welcome them naturally and ask something friendly to get to know them.",
+    );
+  });
+
   it("uses personal, then server, then UTC timezone fallback", () => {
     const args = {
       lastPreviousDayAt: new Date("2026-07-12T23:30:00Z"),

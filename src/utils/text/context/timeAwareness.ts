@@ -28,6 +28,13 @@ export interface BuildReunionNoteArgs {
   displayName: string;
   nowMs?: number;
   reunionDays?: number;
+  /**
+   * Set when `displayName` is a plural-system member: the absence being reported
+   * belongs to the account they share, not to that member, and the wording must
+   * not claim otherwise. Stays appositive for the same reason the participant
+   * block does, so no member is framed as owning the system.
+   */
+  isSharedAccount?: boolean;
 }
 
 /**
@@ -53,6 +60,9 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
   if (dayGap < reunionDays) return null;
 
   const lastDate = formatDateWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
+  if (args.isSharedAccount) {
+    return `${args.displayName} is talking to you again, and the account they share has not been around since ${lastDate}. It's been ${dayGap} days! Acknowledge their return naturally and ask what they've been up to.`;
+  }
   return `${args.displayName} is talking to you again for the first time since ${lastDate}. It's been ${dayGap} days! Acknowledge their return naturally and ask what they've been up to.`;
 }
 
