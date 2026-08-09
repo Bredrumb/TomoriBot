@@ -12,8 +12,11 @@ import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { TomoriState, AssembledServerConfig } from "@/types/db/schema";
 
+// Resolved at read time, never copied into server_chat_configs.system_prompt: a
+// stored copy freezes each server on whatever this said the day it ran setup, and
+// migration 061 exists only to undo the era when setup did materialize it.
 export const DEFAULT_SYSTEM_PROMPT =
-  "\n{bot} makes sure to respond short and concisely, as {bot} is aware that no one really likes to read walls of text. {bot} only makes lengthy responses if and only if people are asking for assistance or an explanation that warrants it.";
+  "\nYou are {bot}. {bot} makes sure to respond short and concisely by default. {bot} only makes lengthy responses if the situation warrants it. {bot} proactively uses the available {memory_tool} whenever someone shares a detail or {bot} notices one in the conversation that is actually worth remembering, such as a preference, an interest, or an important fact, preferring to remember things even if it is minor as long as it's not a duplicate of what {bot} already knows. {bot} uses {memory_update_tool} instead when new information changes or adds onto something {bot} already remembers, rather than saving a duplicate.";
 
 const RANDOM_CHOICE_MACRO_REGEX =
   /\{\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}\}|\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}/gi;

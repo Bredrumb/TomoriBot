@@ -16,11 +16,12 @@
  * Invoke via `bun run test` (package.json): not `bun test tests/` directly.
  */
 
-import { SQL } from "bun";
+import type { SQL } from "bun";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { config } from "dotenv";
+import { createScriptSqlClient } from "./lib/scriptSqlClient";
 import { usesModuleMocks } from "./lib/testIsolation";
 
 config({ quiet: true });
@@ -100,10 +101,6 @@ function isLocalHost(params: ConnectionParams): boolean {
   if (process.env.TOMORI_TESTS_ALLOW_NONLOCAL_DB === "true") return true;
   const allowed = new Set(["localhost", "127.0.0.1", "::1", "postgres", "tomoribot-db", "host.docker.internal"]);
   return allowed.has(params.host.toLowerCase());
-}
-
-function createSqlClient(url: string): SQL {
-  return new SQL(url, { max: 1, idleTimeout: 1, connectionTimeout: 5 });
 }
 
 async function discoverTestFiles(): Promise<string[]> {
@@ -355,7 +352,7 @@ async function main(): Promise<void> {
   });
 
   try {
-    adminSql = createSqlClient(adminUrl);
+    adminSql = createScriptSqlClient(adminUrl);
     await adminSql`SELECT 1`;
   } catch {
     console.log("[test-runner] Could not reach Postgres. DB regression tests will be skipped.");

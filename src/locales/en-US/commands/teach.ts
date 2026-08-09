@@ -178,9 +178,9 @@
         content_too_long_title: `Memory Content Too Long`,
         content_too_long_description: `The memory content is too long. Maximum allowed length is {max_length} characters.`,
         success_title: `Personal Memory Added`,
-        success_description: `Successfully added '{memory}' to your personal memories.`,
+        success_description: `Successfully added '{memory}' to your [personal memories](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory).`,
         batch_success_title: `Personal Memories Added`,
-        batch_success_description: `Successfully added {added_count} memories to your personal memories.`,
+        batch_success_description: `Successfully added {added_count} memories to your [personal memories](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory).`,
         success_but_disabled_description: `Successfully added '{memory}' to your personal memories.
 
 **Warning:** Personalization is currently disabled on this server, so this memory won't be used here. It will still be available on other servers where personalization is enabled.`,
@@ -226,9 +226,9 @@
         content_too_long_title: `Memory Content Too Long`,
         content_too_long_description: `The memory content is too long. Maximum allowed length is {max_length} characters.`,
         success_title: `Server Memory Added`,
-        success_description: `Successfully added '{memory}' to my server memories.`,
+        success_description: `Successfully added '{memory}' to my [server memories](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory).`,
         batch_success_title: `Server Memories Added`,
-        batch_success_description: `Added {added_count} memories to server memory.`,
+        batch_success_description: `Added {added_count} memories to [server memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory).`,
       },
     },
   },

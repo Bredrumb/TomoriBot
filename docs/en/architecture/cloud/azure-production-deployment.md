@@ -188,13 +188,20 @@ Because the application now reaches PostgreSQL over the public Azure gateway rat
 endpoint, the runtime client sets pool-recycling options (`src/utils/db/client.ts`). Azure's public
 gateway silently reaps idle TCP connections after roughly four minutes without sending a RST; a
 pooled connection reaped this way becomes a black hole, so the next query hangs until an application
-timeout fires (~3 minutes). Chat turns exhibited this — but lightweight slash commands, which touch
+timeout fires (~3 minutes). Chat turns exhibited this, but lightweight slash commands, which touch
 the pool more opportunistically, largely did not. `POSTGRES_IDLE_TIMEOUT_SECONDS` (default 30)
 recycles idle connections before the gateway can reap them, `POSTGRES_MAX_LIFETIME_SECONDS`
 (default 600) caps total connection age, and `POSTGRES_CONNECTION_TIMEOUT_SECONDS` (default 10)
 turns a dead-path hang into a fast, retryable failure. Defaults are production-safe; tune only during
 an incident. This was fixed at the client layer deliberately, so the private endpoint stays removed
 and the free-tier cost target holds.
+
+When tuning, keep `POSTGRES_IDLE_TIMEOUT_SECONDS` comfortably above the slowest single statement the
+bot issues. Bun measures that timer as wall-clock silence on the socket, and a statement the server
+is still executing sends no bytes, so the pool counts the connection as idle and closes it under the
+in-flight query. The timer resets on every completed query, which makes the setting a cap on one
+statement's duration rather than a limit on how long a connection may live. Lowering it therefore
+starts killing healthy long queries well before it buys any extra reaping headroom.
 
 #### Retrying queries killed by pool recycling
 

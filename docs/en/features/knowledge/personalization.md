@@ -1,7 +1,7 @@
 ---
 title: "Personalization"
 sidebar:
-  order: 2
+  order: 3
 ---
 
 TomoriBot can be configured for **you specifically** with the `/personal` commands — settings
