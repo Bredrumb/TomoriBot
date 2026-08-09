@@ -54,4 +54,21 @@ describe("deliberate tool mode", () => {
       "generate_image",
     );
   });
+
+  it("exposes capability review and docs access for self-diagnostic questions", () => {
+    const prompts = [
+      "What model are you currently using?",
+      "Is web search enabled for you?",
+      "Why can't you generate images?",
+      "Why do you forget conversations?",
+      "How does TomoriBot memory work?",
+    ];
+
+    for (const prompt of prompts) {
+      const allowedNames = getDeliberateToolAllowedNames(prompt);
+      expect(allowedNames).toContain("review_capabilities");
+      expect(allowedNames).toContain("fetch_url");
+      expect(allowedNames).not.toContain("web_search");
+    }
+  });
 });

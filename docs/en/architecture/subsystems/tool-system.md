@@ -49,6 +49,28 @@ Successful `safe_http` results place the formatted URL and Markdown in `ToolResu
 
 Guild MCP tools are appended after built-in and global MCP filtering, then collision-checked. If a guild enables a `url_fetcher` MCP server with at least one function, TomoriBot hides bundled `fetch_url` for that guild so the LLM receives one URL-fetch surface. Prompt macro resolution follows the same rule: `{url_fetch_tool}` prefers guild `url_fetcher` functions, then falls back to `fetch_url`.
 
+The `tool_family:url_fetch` prompt predicate follows the same family resolution. Under
+Deliberate Tool Mode, a URL-reading intent admits the guild replacement function names as
+well as the bundled aliases, so replacing `fetch_url` does not make documentation guidance
+disappear from the prompt.
+
+## Capability Self-Diagnosis
+
+`review_capabilities` builds its chat and settings inventories from `ToolRegistry` runtime
+availability instead of maintaining a second hardcoded tool list. Its command report formats
+the cached `loadCommandData()` registration payload, which is the same payload registered
+with Discord and includes root, flat, and grouped commands.
+
+Chat and command reports are safe for normal members. The settings report exposes feature
+states and disabled reasons to everyone, but credential state, rotation-pool counts, internal
+identifiers, and system-prompt metadata require the requesting Discord member to hold
+`ManageGuild`. A missing member context fails closed and receives the redacted report.
+
+Self-diagnostic intent includes questions about the active model, tools, settings, supported
+features, and why TomoriBot did not or cannot perform an action. These turns admit both
+`review_capabilities` and URL-reading tools: runtime state is checked first, then the model may
+consult the curated official docs when the runtime report is insufficient.
+
 ### Connection resilience
 
 Guild MCP servers are connected lazily and pooled (`guildMcpManager`), on the critical path of tool-gathering before each generation. Each connect attempt tries transports in order — Smithery Connect (for `*.run.tools`), then StreamableHTTP, then SSE — using a **fresh MCP client per attempt** (reusing one client across attempts triggers the SDK's "Already connected to a transport" error and breaks the fallback). Every attempt is bounded by `GUILD_MCP_CONNECT_TIMEOUT_MS`.

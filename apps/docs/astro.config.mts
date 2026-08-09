@@ -478,17 +478,27 @@ export default defineConfig({
         "Documentation for TomoriBot, a self-hostable AI Discord bot with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
       plugins: [
         starlightLlmsTxt({
-          exclude: ["wiki", "wiki/**"],
+          details:
+            "AI agents should begin with the [Introduction](https://docs.tomoribot.app/en/introduction/) and [Features](https://docs.tomoribot.app/en/features/) indexes. For a specific question, fetch the smallest relevant page instead of a combined documentation set; common starting points are [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/), [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/), [Inside the Prompt](https://docs.tomoribot.app/en/features/knowledge/inside-the-prompt/), and [Providers & Models](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/). Current runtime capability reports and assembled context override general documentation. Contributor, architecture, self-hosting, and other public pages remain available for deeper investigation. Internal wiki pages are intentionally omitted from every machine-readable documentation set.",
+          exclude: ["ja/**", "en/wiki", "en/wiki/**", "en/architecture/**", "en/contributing/**", "en/self-hosting/**", "en/meet-tomori/**", "en/legal/**"],
+          excludeFull: ["en/wiki", "en/wiki/**", "ja/wiki", "ja/wiki/**"],
+          promote: ["en/introduction/**", "en/features/**"],
+          demote: ["en/architecture/**", "en/contributing/**"],
           customSets: [
             {
-              label: "User and self-hosting documentation",
-              description: "public user, feature, persona, and self-hosting docs for TomoriBot",
-              paths: ["introduction/**", "features/**", "self-hosting/**", "meet-tomori/**"],
+              label: "TomoriBot introduction and features",
+              description: "the emphasized, user-facing self-knowledge source for TomoriBot",
+              paths: ["en/introduction/**", "en/features/**"],
+            },
+            {
+              label: "Self-hosting and public reference",
+              description: "secondary deployment, project, and legal documentation",
+              paths: ["en/self-hosting/**", "en/meet-tomori/**", "en/legal/**"],
             },
             {
               label: "Contributor and architecture documentation",
               description: "developer implementation guides and code-level architecture references for TomoriBot",
-              paths: ["contributing/**", "architecture/**"],
+              paths: ["en/contributing/**", "en/architecture/**"],
             },
           ],
         }),
@@ -573,6 +583,5 @@ export default defineConfig({
     }),
   ],
 });
-
 
 

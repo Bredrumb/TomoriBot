@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AssembledServerConfig } from "@/types/db/schema";
 import type { ToolStateForContext } from "@/tools/toolRegistry";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
@@ -53,7 +55,7 @@ const TOOL_STATE = {
 
 async function render(
   text: string,
-  values: Partial<Record<`${"capability" | "tool"}:${string}`, boolean>>,
+  values: Partial<Record<`${"capability" | "tool" | "tool_family"}:${string}`, boolean>>,
 ): Promise<{ text: string; warnings: string[] }> {
   const warnings: string[] = [];
   const rendered = await renderPromptConditionals(text, {
@@ -65,12 +67,16 @@ async function render(
 
 describe("prompt conditionals", () => {
   it("selects capability and tool branches", async () => {
-    const result = await render("A{{if capability:self_teaching}}B{{else}}C{{/if}}{{if tool:web_search}}D{{/if}}E", {
-      "capability:self_teaching": true,
-      "tool:web_search": false,
-    });
+    const result = await render(
+      "A{{if capability:self_teaching}}B{{else}}C{{/if}}{{if tool:web_search}}D{{/if}}{{if tool_family:url_fetch}}F{{/if}}E",
+      {
+        "capability:self_teaching": true,
+        "tool:web_search": false,
+        "tool_family:url_fetch": true,
+      },
+    );
 
-    expect(result.text).toBe("ABE");
+    expect(result.text).toBe("ABFE");
     expect(result.warnings).toEqual([]);
   });
 
@@ -124,6 +130,17 @@ describe("prompt conditionals", () => {
 });
 
 describe("prompt macro resolver condition integration", () => {
+  it("keeps the migration rollback fallback synchronized", () => {
+    const migration = readFileSync(
+      join(process.cwd(), "src/db/migrations/061_default_system_prompt_read_time.down.sql"),
+      "utf8",
+    );
+    const literal = migration.match(/SET system_prompt = E'((?:''|[^'])*)'\s+WHERE/s)?.[1];
+
+    expect(literal).toBeDefined();
+    expect(literal?.replaceAll("''", "'").replaceAll("\\n", "\n")).toBe(DEFAULT_SYSTEM_PROMPT);
+  });
+
   it("evaluates capability blocks before expanding surviving tool macros", async () => {
     const resolver = createToolPromptMacroResolver({ capabilities: ENABLED_CAPABILITIES });
 
@@ -141,6 +158,8 @@ describe("prompt macro resolver condition integration", () => {
 
     expect(expanded).toContain("respond short and concisely");
     expect(expanded).not.toContain("memory");
+    expect(expanded).not.toContain("docs.tomoribot.app");
+    expect(expanded).not.toContain("review_capabilities");
     expect(expanded).not.toContain("{{if");
   });
 
@@ -184,6 +203,51 @@ describe("prompt macro resolver condition integration", () => {
     expect(expanded).toContain("`create_long_term_memory`");
     expect(expanded).toContain("`update_long_term_memory`");
     expect(expanded).not.toContain("{{if");
+  });
+
+  it("renders self-diagnostic guidance for bundled and guild URL fetch tools", async () => {
+    const bundledResolver = createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: TOOL_STATE,
+      capabilities: ENABLED_CAPABILITIES,
+      availableToolNames: new Set([
+        "create_long_term_memory",
+        "update_long_term_memory",
+        "review_capabilities",
+        "fetch_url",
+      ]),
+    });
+    const guildResolver = createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: TOOL_STATE,
+      capabilities: ENABLED_CAPABILITIES,
+      availableToolNames: new Set(["review_capabilities", "read_webpage"]),
+    });
+
+    const bundled = await bundledResolver.expand(DEFAULT_SYSTEM_PROMPT);
+    const guild = await guildResolver.expand(DEFAULT_SYSTEM_PROMPT);
+
+    expect(bundled).toContain("`review_capabilities`");
+    expect(bundled).toContain("`fetch_url`");
+    expect(bundled).toContain("https://docs.tomoribot.app/llms.txt");
+    expect(bundled.indexOf("`create_long_term_memory`")).toBeLessThan(bundled.indexOf("`review_capabilities`"));
+    expect(bundled).toContain("warrants it.\n\n");
+    expect(guild).toContain("`read_webpage`");
+    expect(guild).not.toContain("currently available URL fetch tool");
+  });
+
+  it("does not infer URL-fetch availability from unrelated read tools", async () => {
+    const resolver = createToolPromptMacroResolver({
+      provider: "google",
+      stateForContext: TOOL_STATE,
+      capabilities: ENABLED_CAPABILITIES,
+      availableToolNames: new Set(["review_capabilities", "read_file"]),
+    });
+
+    const expanded = await resolver.expand(DEFAULT_SYSTEM_PROMPT);
+
+    expect(expanded).toContain("`review_capabilities`");
+    expect(expanded).not.toContain("docs.tomoribot.app");
   });
 
   it("maps public capability names independently from database column names", () => {

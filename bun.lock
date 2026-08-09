@@ -56,8 +56,9 @@
     },
   },
   "patchedDependencies": {
-    "@sapphire/shapeshift@4.0.0": "patches/@sapphire%2Fshapeshift@4.0.0.patch",
     "@matrix-org/matrix-sdk-crypto-nodejs@0.4.0": "patches/@matrix-org%2Fmatrix-sdk-crypto-nodejs@0.4.0.patch",
+    "starlight-llms-txt@0.11.0": "patches/starlight-llms-txt@0.11.0.patch",
+    "@sapphire/shapeshift@4.0.0": "patches/@sapphire%2Fshapeshift@4.0.0.patch",
   },
   "overrides": {
     "@aws-sdk/xml-builder>fast-xml-parser": "5.7.0",

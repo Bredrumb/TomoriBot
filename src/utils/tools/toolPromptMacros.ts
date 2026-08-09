@@ -108,12 +108,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
   "{url_fetch_tool}": {
     currentTarget: "best available URL fetch tool",
     fallbackText: "the currently available URL fetch tool",
-    resolve: (availability: ToolPromptMacroAvailability) =>
-      resolveGuildFamilyToolName(
-        availability.guildUrlFetcherToolNames,
-        [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
-        [/metadata/, /meta/, /head/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"]),
+    resolve: (availability: ToolPromptMacroAvailability) => resolveUrlFetchToolName(availability),
   },
   "{url_metadata_tool}": {
     currentTarget: "best available URL metadata tool",
@@ -189,7 +184,16 @@ export function createToolPromptMacroResolver(context?: ToolPromptMacroContext |
     }
 
     availabilityPromise ??= loadToolPromptMacroAvailability(context);
-    return (await availabilityPromise).availableToolNames.has(predicate.name);
+    const availability = await availabilityPromise;
+    if (predicate.namespace === "tool") {
+      return availability.availableToolNames.has(predicate.name);
+    }
+
+    if (predicate.name === "url_fetch") {
+      return resolveUrlFetchToolName(availability) !== null;
+    }
+
+    return undefined;
   };
 
   return {
@@ -307,8 +311,8 @@ async function loadToolPromptMacroAvailability(
 
     return {
       availableToolNames: filteredAvailableToolNames,
-      guildWebSearchToolNames: guildToolNames.webSearch,
-      guildUrlFetcherToolNames: guildToolNames.urlFetcher,
+      guildWebSearchToolNames: guildToolNames.webSearch.filter((name) => filteredAvailableToolNames.has(name)),
+      guildUrlFetcherToolNames: guildToolNames.urlFetcher.filter((name) => filteredAvailableToolNames.has(name)),
     };
   } catch (error) {
     log.warn("[ToolPromptMacros] Failed to load tool availability for prompt macro expansion", error);
@@ -377,6 +381,19 @@ function resolveGuildFamilyToolName(
   }
 
   return bestScore > 0 ? bestName : (uniqueFunctionNames[0] ?? null);
+}
+
+function resolveUrlFetchToolName(availability: ToolPromptMacroAvailability): string | null {
+  const inferredUrlFetcherNames = [...availability.availableToolNames].filter(
+    (name) => name === "fetch" || /(?:url|web|http|fetch|crawl|page|visit)/i.test(name),
+  );
+  return (
+    resolveGuildFamilyToolName(
+      [...availability.guildUrlFetcherToolNames, ...inferredUrlFetcherNames],
+      [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
+      [/metadata/, /meta/, /head/],
+    ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"])
+  );
 }
 
 function pickFirstAvailable(availableToolNames: Set<string>, preferredToolNames: string[]): string | null {

@@ -12,6 +12,7 @@ import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomori
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { buildContext } from "@/utils/text/contextBuilder";
+import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
@@ -75,7 +76,7 @@ const AVG_SPEAKER_PREFIX_CHARS = 12;
  * Approximate fixed-length instruction blocks included in contextBuilder.ts.
  * These are intentionally rounded; exact lengths vary with server/bot/user names.
  */
-const DEFAULT_SYSTEM_PROMPT_CHARS_EST = 640;
+const DEFAULT_SYSTEM_PROMPT_CHARS_EST = DEFAULT_SYSTEM_PROMPT.length;
 const MENTION_PING_RULE_CHARS_EST = 300;
 const EMOJI_USAGE_RULES_CHARS_EST = 340;
 const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines

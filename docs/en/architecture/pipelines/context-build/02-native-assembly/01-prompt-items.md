@@ -101,6 +101,7 @@ After this stage runs:
 | `tomoriConfig` | `personal_memories_enabled` | Passed to `convertMentions` for blacklist/privacy behavior |
 | `tomoriConfig` capability flags | `*_enabled` fields exposed through stable prompt names | Resolve `capability:` predicates without exposing database column names |
 | `BuildContextParams` | `deliberateToolAllowedNames` | Narrows `tool:` predicates to the current Deliberate Tool Mode scope |
+| Tool-family availability | Bundled and guild MCP function names | Resolves `tool_family:url_fetch` without coupling prompt text to one URL-fetch implementation |
 | `tomoriState` | `persona_prompt` | The persona's distinctive prompt |
 | `tomoriState` | `attribute_list` | Personality bullets (joined with `\n`) |
 

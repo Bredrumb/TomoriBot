@@ -129,6 +129,24 @@ The docs site handles most SEO automatically:
 - **robots.txt / sitemap**: `apps/docs/public/robots.txt` advertises the auto-generated
   `sitemap-index.xml`. No per-page action needed.
 
+### Machine-readable documentation
+
+The docs build also generates `llms.txt` entrypoints for AI agents:
+
+- `llms.txt` emphasizes the English `introduction/` and `features/` indexes and links to
+  small, commonly useful pages. Agents should fetch the smallest relevant page.
+- `llms-small.txt` and the “TomoriBot introduction and features” set contain the curated
+  English user-facing surface.
+- Self-hosting/public reference and contributor/architecture sets remain available for
+  deeper investigation, while the complete set contains all public locales.
+- `wiki/` is excluded from every generated text set, including `llms-full.txt`. The docs
+  package build runs `scripts/checkLlmsOutput.ts` to fail if a wiki page leaks or a curated
+  set becomes empty.
+
+Keep page IDs in `apps/docs/astro.config.mts` synchronized when moving a page between these
+audiences. The local `starlight-llms-txt` dependency patch adds full-output exclusions because
+the upstream `exclude` option only applies to the abridged output.
+
 ## Internal Links
 
 Always link between docs pages with **root-absolute** URLs (leading `/`, trailing slash),

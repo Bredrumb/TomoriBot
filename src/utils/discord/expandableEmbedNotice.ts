@@ -36,6 +36,7 @@ import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/e
 import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { buildTextPreview } from "@/utils/text/textPreview";
 
 type SupportedChannel =
   | TextChannel
@@ -68,7 +69,7 @@ const TASK_EXPAND_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
  * the button still has a purpose, and far below Discord's 4000-char text
  * display cap so the title, footer, and framing sentence always fit.
  */
-const MEMORY_NOTICE_PREVIEW_LIMIT = parsePositiveIntegerEnv(
+export const MEMORY_NOTICE_PREVIEW_LIMIT = parsePositiveIntegerEnv(
   process.env.MEMORY_NOTICE_PREVIEW_LIMIT,
   DEFAULT_MEMORY_NOTICE_PREVIEW_LIMIT,
 );
@@ -77,31 +78,6 @@ function parsePositiveIntegerEnv(value: string | undefined, fallback: number): n
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-const ZERO_WIDTH_SPACE = String.fromCharCode(0x200b);
-
-/**
- * Neutralizes fence sequences inside content that will be rendered inside a
- * fenced code block. Discord offers no escape within a fence, so a literal
- * triple backtick would close it early and render the remainder as markdown;
- * a zero-width space keeps the sequence readable but inert.
- */
-function neutralizeCodeFences(content: string): string {
-  return content.replaceAll("```", `\`${ZERO_WIDTH_SPACE}\`\``);
-}
-
-/**
- * Prepares memory content for the inline notice body, which renders it inside a
- * fenced code block. Shares {@link MEMORY_NOTICE_PREVIEW_LIMIT} with
- * {@link sendMemoryEmbedWithExpand} so a truncated preview always ships an
- * expand button and an untruncated one never does.
- */
-export function truncateMemoryNoticePreview(content: string): string {
-  const fenceSafe = neutralizeCodeFences(content);
-  return fenceSafe.length > MEMORY_NOTICE_PREVIEW_LIMIT
-    ? `${fenceSafe.slice(0, MEMORY_NOTICE_PREVIEW_LIMIT - 3)}...`
-    : fenceSafe;
 }
 
 /**
@@ -196,10 +172,9 @@ async function sendEmbedWithExpand(
   webhookContext?: WebhookEmbedContext,
 ): Promise<void> {
   const truncationThreshold = config.truncationThreshold ?? DEFAULT_TRUNCATION_THRESHOLD;
-  // Measure the fence-safe form so this decision matches the caller's preview
-  // truncation, which neutralizes fences before comparing against the same limit.
-  const fenceSafeContent = neutralizeCodeFences(fullContent);
-  const shouldAttachExpandButton = fenceSafeContent.length > truncationThreshold;
+  const thresholdPreview = buildTextPreview(fullContent, truncationThreshold);
+  const fenceSafeContent = buildTextPreview(fullContent, Number.MAX_SAFE_INTEGER).text;
+  const shouldAttachExpandButton = thresholdPreview.truncated;
 
   // Teardown reuses the complete Components V2 tree with only the button
   // disabled, keeping the message in one rendering mode.

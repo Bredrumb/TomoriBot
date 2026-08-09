@@ -10,6 +10,7 @@ import { loadEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { buildForcedMentionsForUser } from "@/utils/discord/mentionHelper";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
 import { log } from "@/utils/misc/logger";
+import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import {
   type DeliberateToolIntentMatch,
@@ -155,6 +156,23 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   );
   const deliberateToolAllowedNames = [...deliberateToolIntentResult.allowedToolNames];
   const deliberateToolTriggerMatches: DeliberateToolIntentMatch[] = [...deliberateToolIntentResult.matches];
+  if (deliberateToolAllowedNames.includes("fetch_url")) {
+    const serverId = Number(turn.persona.server_id);
+    if (Number.isFinite(serverId)) {
+      const guildUrlFetcherNames = await getGuildMcpManager().getGuildMCPFunctionNamesByServerType(
+        serverId,
+        "url_fetcher",
+      );
+      for (const toolName of guildUrlFetcherNames) {
+        deliberateToolAllowedNames.push(toolName);
+        deliberateToolTriggerMatches.push({
+          toolName,
+          trigger: "URL fetch request",
+          source: "built-in",
+        });
+      }
+    }
+  }
   const deliberateToolContextTurns = resolveDeliberateToolContextTurns(
     turn.persona.config.deliberate_tool_context_turns,
   );

@@ -11,8 +11,9 @@ import { PrivacyLevel } from "../../types/db/schema";
 import { validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
-import { sendMemoryEmbedWithExpand, truncateMemoryNoticePreview } from "../../utils/discord/expandableEmbedNotice";
+import { MEMORY_NOTICE_PREVIEW_LIMIT, sendMemoryEmbedWithExpand } from "../../utils/discord/expandableEmbedNotice";
 import { convertMentions } from "../../utils/text/contextBuilder";
+import { buildTextPreview } from "@/utils/text/textPreview";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { resolveUserTarget } from "@/utils/discord/targetResolver";
@@ -224,6 +225,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               tomoriState.persona_nickname,
               tomoriState?.config.personal_memories_enabled,
             );
+            const memoryPreview = buildTextPreview(processedMemoryContent, MEMORY_NOTICE_PREVIEW_LIMIT);
 
             await sendMemoryEmbedWithExpand(
               context.channel,
@@ -237,7 +239,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
                 descriptionKey: "genai.self_teach.server_memory_deleted_description",
                 descriptionVars: {
                   memory_id: memoryId.toString(),
-                  memory_content: truncateMemoryNoticePreview(processedMemoryContent),
+                  memory_content: memoryPreview.text,
                 },
                 footerKey: "genai.self_teach.server_memory_footer",
               },
@@ -293,6 +295,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             tomoriState.persona_nickname,
             tomoriState?.config.personal_memories_enabled,
           );
+          const memoryPreview = buildTextPreview(processedMemoryContent, MEMORY_NOTICE_PREVIEW_LIMIT);
 
           await sendMemoryEmbedWithExpand(
             context.channel,
@@ -306,7 +309,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               descriptionKey: "genai.self_teach.server_memory_updated_description",
               descriptionVars: {
                 memory_id: memoryId.toString(),
-                memory_content: truncateMemoryNoticePreview(processedMemoryContent),
+                memory_content: memoryPreview.text,
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
@@ -471,6 +474,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           tomoriState.persona_nickname,
           tomoriState?.config.personal_memories_enabled,
         );
+        const memoryPreview = buildTextPreview(processedMemoryContent, MEMORY_NOTICE_PREVIEW_LIMIT);
 
         await sendMemoryEmbedWithExpand(
           context.channel,
@@ -486,7 +490,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             descriptionVars: {
               user_nickname: userDisplayName,
               memory_id: memoryId.toString(),
-              memory_content: truncateMemoryNoticePreview(processedMemoryContent),
+              memory_content: memoryPreview.text,
             },
             footerKey,
           },
@@ -540,6 +544,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
         tomoriState.persona_nickname,
         tomoriState?.config.personal_memories_enabled,
       );
+      const memoryPreview = buildTextPreview(processedMemoryContent, MEMORY_NOTICE_PREVIEW_LIMIT);
 
       await sendMemoryEmbedWithExpand(
         context.channel,
@@ -555,7 +560,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           descriptionVars: {
             user_nickname: userDisplayName,
             memory_id: memoryId.toString(),
-            memory_content: truncateMemoryNoticePreview(processedMemoryContent),
+            memory_content: memoryPreview.text,
           },
           footerKey,
         },

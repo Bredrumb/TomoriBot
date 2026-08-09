@@ -1,4 +1,4 @@
-type PromptConditionNamespace = "capability" | "tool";
+type PromptConditionNamespace = "capability" | "tool" | "tool_family";
 
 export interface PromptConditionPredicate {
   namespace: PromptConditionNamespace;
@@ -31,7 +31,7 @@ export interface PromptConditionalRenderOptions {
 }
 
 const CONDITIONAL_DIRECTIVE_REGEX = /\{\{\s*(\/?if\b[^{}]*|else\b[^{}]*)\s*\}\}/gi;
-const CONDITION_REGEX = /^(!)?(capability|tool):([a-z0-9][a-z0-9_.-]*)$/i;
+const CONDITION_REGEX = /^(!)?(capability|tool|tool_family):([a-z0-9][a-z0-9_.-]*)$/i;
 
 function parsePredicate(rawCondition: string): PromptConditionPredicate | null {
   const match = rawCondition.trim().match(CONDITION_REGEX);
