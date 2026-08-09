@@ -11,7 +11,7 @@ import { PrivacyLevel } from "../../types/db/schema";
 import { validateMemoryContent } from "@/utils/misc/memoryLimits";
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
-import { sendMemoryEmbedWithExpand } from "../../utils/discord/expandableEmbedNotice";
+import { sendMemoryEmbedWithExpand, truncateMemoryNoticePreview } from "../../utils/discord/expandableEmbedNotice";
 import { convertMentions } from "../../utils/text/contextBuilder";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
@@ -237,10 +237,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
                 descriptionKey: "genai.self_teach.server_memory_deleted_description",
                 descriptionVars: {
                   memory_id: memoryId.toString(),
-                  memory_content:
-                    processedMemoryContent.length > 200
-                      ? `${processedMemoryContent.substring(0, 197)}...`
-                      : processedMemoryContent,
+                  memory_content: truncateMemoryNoticePreview(processedMemoryContent),
                 },
                 footerKey: "genai.self_teach.server_memory_footer",
               },
@@ -309,10 +306,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
               descriptionKey: "genai.self_teach.server_memory_updated_description",
               descriptionVars: {
                 memory_id: memoryId.toString(),
-                memory_content:
-                  processedMemoryContent.length > 200
-                    ? `${processedMemoryContent.substring(0, 197)}...`
-                    : processedMemoryContent,
+                memory_content: truncateMemoryNoticePreview(processedMemoryContent),
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
@@ -492,10 +486,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
             descriptionVars: {
               user_nickname: userDisplayName,
               memory_id: memoryId.toString(),
-              memory_content:
-                processedMemoryContent.length > 200
-                  ? `${processedMemoryContent.substring(0, 197)}...`
-                  : processedMemoryContent,
+              memory_content: truncateMemoryNoticePreview(processedMemoryContent),
             },
             footerKey,
           },
@@ -564,10 +555,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           descriptionVars: {
             user_nickname: userDisplayName,
             memory_id: memoryId.toString(),
-            memory_content:
-              processedMemoryContent.length > 200
-                ? `${processedMemoryContent.substring(0, 197)}...`
-                : processedMemoryContent,
+            memory_content: truncateMemoryNoticePreview(processedMemoryContent),
           },
           footerKey,
         },

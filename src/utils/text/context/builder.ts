@@ -2,7 +2,7 @@ import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { personaRepository } from "@/utils/db/repositories";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { reassembleWithPreset } from "@/utils/text/presetContextBuilder";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { buildContextNative } from "./nativeBuilder";
 import { resolveRandomChoiceMacrosInBuildOutput } from "./templates";
 import type { BuildContextParams, BuildContextResult } from "./types";
@@ -29,6 +29,8 @@ export async function buildContext(params: BuildContextParams): Promise<BuildCon
           params.simplifiedMessageHistory.filter((message) => message.authorType === "user").at(-1)?.content ?? "";
         const presetToolPromptMacroResolver = createToolPromptMacroResolver({
           provider: tomoriStateForPreset?.llm?.llm_provider,
+          capabilities: resolvePromptCapabilityValues(params.tomoriConfig),
+          deliberateToolAllowedNames: params.deliberateToolAllowedNames,
           stateForContext:
             tomoriStateForPreset?.server_id && tomoriStateForPreset.llm
               ? {

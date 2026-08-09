@@ -188,23 +188,35 @@ export default {
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname}が新しいことを学びました！`,
-      server_memory_learned_description: `[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)を保存しました:
-\`{memory_content}\``,
+      server_memory_learned_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を保存しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_updated_title: `📝 {persona_nickname}が記憶を更新しました！`,
-      server_memory_updated_description: `[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)を更新しました:
-\`{memory_content}\``,
+      server_memory_updated_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を更新しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname}が記憶を削除しました！`,
-      server_memory_deleted_description: `[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)を削除しました:
-\`{memory_content}\``,
+      server_memory_deleted_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を削除しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname}が{user_nickname}さんについて新しいことを学びました！`,
-      personal_memory_learned_description: `{user_nickname}さんに関する[個人的な記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)を保存しました:
-\`{memory_content}\``,
+      personal_memory_learned_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を保存しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname}が{user_nickname}さんについての記憶を更新しました！`,
-      personal_memory_updated_description: `{user_nickname}さんに関する[個人的な記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)を更新しました:
-\`{memory_content}\``,
+      personal_memory_updated_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を更新しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname}が{user_nickname}さんについての記憶を削除しました！`,
-      personal_memory_deleted_description: `{user_nickname}さんに関する[個人的な記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)を削除しました:
-\`{memory_content}\``,
+      personal_memory_deleted_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を削除しました:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_footer: `サーバー管理者は\`/memory server\`でこの記憶を管理できます。`,
       personal_memory_footer_manage: `個人記憶は\`/memory personal\`で管理できます。`,
       personal_memory_footer_personalization_disabled: `この記憶は保存されましたが、現在このサーバーではパーソナライズ機能が無効になっているため、すぐには効果がありません。全文は\`/memory personal export\`で確認できます。\`/personal privacy\`でオプトアウトできます。`,

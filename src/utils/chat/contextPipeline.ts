@@ -319,6 +319,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname,
     impersonatedUserPrompt,
     explicitLongTermMemoryIntent: streamingContext.explicitLongTermMemoryIntent,
+    deliberateToolAllowedNames: streamingContext.deliberateToolAllowedNames,
     messageIdMap,
   });
 

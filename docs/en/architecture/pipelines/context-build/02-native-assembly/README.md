@@ -98,12 +98,13 @@ Runs in the routing wrapper after all contributors complete (see stage 01).
 
 ### `toolPromptMacroResolver` (`src/utils/tools/toolPromptMacros.ts`)
 
-Expands tool-name macros (`{short_term_memory_tool}`, `{sticker_tool}`,
-`{memory_tool}`, etc.) into the actual function-call tool names for the
-active provider. Each provider may name tools differently (provider name
-prefix, suffix conventions); the resolver hides this from prompt text.
-Built once at the top of the native builder via `createToolPromptMacroResolver`
-and passed to contributors that emit tool-reference text.
+Evaluates scoped `{{if capability:...}}` and `{{if tool:...}}` blocks, then
+expands tool-name macros (`{short_term_memory_tool}`, `{sticker_tool}`,
+`{memory_tool}`, etc.) into the actual function-call tool names for the active
+provider. Tool predicates share the resolver's lazy availability lookup and
+respect the per-turn Deliberate Tool Mode allowlist. The resolver is built once
+at the top of the native builder and passed to contributors that emit
+tool-reference text.
 
 ### `history.ts` utilities
 

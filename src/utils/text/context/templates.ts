@@ -16,7 +16,7 @@ import type { TomoriState, AssembledServerConfig } from "@/types/db/schema";
 // stored copy freezes each server on whatever this said the day it ran setup, and
 // migration 061 exists only to undo the era when setup did materialize it.
 export const DEFAULT_SYSTEM_PROMPT =
-  "\nYou are {bot}. {bot} makes sure to respond short and concisely by default. {bot} only makes lengthy responses if the situation warrants it. {bot} proactively uses the available {memory_tool} whenever someone shares a detail or {bot} notices one in the conversation that is actually worth remembering, such as a preference, an interest, or an important fact, preferring to remember things even if it is minor as long as it's not a duplicate of what {bot} already knows. {bot} uses {memory_update_tool} instead when new information changes or adds onto something {bot} already remembers, rather than saving a duplicate.";
+  "\nYou are {bot}. {bot} makes sure to respond short and concisely by default. {bot} only makes lengthy responses if the situation warrants it. {{if tool:create_long_term_memory}}{bot} proactively uses the available {memory_tool} whenever someone shares a detail or {bot} notices one in the conversation that is actually worth remembering, such as a preference, an interest, or an important fact, preferring to remember things even if it is minor as long as it's not a duplicate of what {bot} already knows. {{/if}}{{if tool:update_long_term_memory}}{bot} uses {memory_update_tool} instead when new information changes or adds onto something {bot} already remembers, rather than saving a duplicate.{{/if}}";
 
 const RANDOM_CHOICE_MACRO_REGEX =
   /\{\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}\}|\{\s*random(?:::\s*([^{}]+)|:\s*([^{}]+))\s*\}/gi;
@@ -141,103 +141,120 @@ export async function buildPromptContextItems(params: {
     const systemPrompt = channelOverride?.mode === "replace" ? channelOverride.prompt : baseSystemPrompt;
 
     if (systemPrompt) {
-      const humanizerText = await params.convertMentions(
-        await params.toolPromptMacroResolver.expand(systemPrompt),
-        params.client,
-        params.guildId,
-        "User",
-        params.botName,
-        params.tomoriConfig.personal_memories_enabled,
-        params.snapshot,
-      );
-      contextItems.push({
-        role: "system",
-        parts: [{ type: "text", text: humanizerText }],
-        metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
-      });
+      const expandedSystemPrompt = await params.toolPromptMacroResolver.expand(systemPrompt);
+      if (expandedSystemPrompt.trim()) {
+        const humanizerText = await params.convertMentions(
+          expandedSystemPrompt,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.tomoriConfig.personal_memories_enabled,
+          params.snapshot,
+        );
+        contextItems.push({
+          role: "system",
+          parts: [{ type: "text", text: humanizerText }],
+          metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+        });
+      }
     }
 
     // Append mode: emit the channel prompt as its own distinct block placed
     //    immediately after the system prompt (and before the persona prompt).
     if (channelOverride?.mode === "append" && channelOverride.prompt.trim()) {
-      const channelPromptText = await params.convertMentions(
-        await params.toolPromptMacroResolver.expand(channelOverride.prompt),
-        params.client,
-        params.guildId,
-        "User",
-        params.botName,
-        params.tomoriConfig.personal_memories_enabled,
-        params.snapshot,
-      );
-      contextItems.push({
-        role: "system",
-        parts: [{ type: "text", text: channelPromptText }],
-        metadataTag: ContextItemTag.SYSTEM_CHANNEL_PROMPT,
-      });
+      const expandedChannelPrompt = await params.toolPromptMacroResolver.expand(channelOverride.prompt);
+      if (expandedChannelPrompt.trim()) {
+        const channelPromptText = await params.convertMentions(
+          expandedChannelPrompt,
+          params.client,
+          params.guildId,
+          "User",
+          params.botName,
+          params.tomoriConfig.personal_memories_enabled,
+          params.snapshot,
+        );
+        contextItems.push({
+          role: "system",
+          parts: [{ type: "text", text: channelPromptText }],
+          metadataTag: ContextItemTag.SYSTEM_CHANNEL_PROMPT,
+        });
+      }
     }
   }
 
   if (!params.isUserImpersonation && params.personaPrompt?.trim()) {
-    contextItems.push({
-      role: "system",
-      parts: [
-        {
-          type: "text",
-          text: await params.convertMentions(
-            await params.toolPromptMacroResolver.expand(params.personaPrompt.trim()),
-            params.client,
-            params.guildId,
-            "User",
-            params.botName,
-            params.tomoriConfig.personal_memories_enabled,
-            params.snapshot,
-          ),
-        },
-      ],
-      metadataTag: ContextItemTag.SYSTEM_PERSONA_PROMPT,
-    });
+    const expandedPersonaPrompt = await params.toolPromptMacroResolver.expand(params.personaPrompt.trim());
+    if (expandedPersonaPrompt.trim()) {
+      contextItems.push({
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: await params.convertMentions(
+              expandedPersonaPrompt,
+              params.client,
+              params.guildId,
+              "User",
+              params.botName,
+              params.tomoriConfig.personal_memories_enabled,
+              params.snapshot,
+            ),
+          },
+        ],
+        metadataTag: ContextItemTag.SYSTEM_PERSONA_PROMPT,
+      });
+    }
   }
 
   if (params.isUserImpersonation && params.impersonatedUserPrompt?.trim()) {
-    contextItems.push({
-      role: "system",
-      parts: [
-        {
-          type: "text",
-          text: await params.convertMentions(
-            await params.toolPromptMacroResolver.expand(params.impersonatedUserPrompt.trim()),
-            params.client,
-            params.guildId,
-            params.impersonatedIdentityName || "User",
-            params.botName,
-            params.tomoriConfig.personal_memories_enabled,
-            params.snapshot,
-          ),
-        },
-      ],
-      metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
-    });
+    const expandedImpersonatedPrompt = await params.toolPromptMacroResolver.expand(
+      params.impersonatedUserPrompt.trim(),
+    );
+    if (expandedImpersonatedPrompt.trim()) {
+      contextItems.push({
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: await params.convertMentions(
+              expandedImpersonatedPrompt,
+              params.client,
+              params.guildId,
+              params.impersonatedIdentityName || "User",
+              params.botName,
+              params.tomoriConfig.personal_memories_enabled,
+              params.snapshot,
+            ),
+          },
+        ],
+        metadataTag: ContextItemTag.SYSTEM_HUMANIZER_RULES,
+      });
+    }
   }
 
   if (!params.isUserImpersonation) {
-    contextItems.push({
-      role: "system",
-      parts: [
-        {
-          type: "text",
-          text: await params.convertMentions(
-            await params.toolPromptMacroResolver.expand(params.tomoriAttributes.join("\n")),
-            params.client,
-            params.guildId,
-            "User",
-            params.botName,
-            params.tomoriConfig.personal_memories_enabled,
-            params.snapshot,
-          ),
-        },
-      ],
-      metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
-    });
+    const expandedAttributes = await params.toolPromptMacroResolver.expand(params.tomoriAttributes.join("\n"));
+    if (expandedAttributes.trim()) {
+      contextItems.push({
+        role: "system",
+        parts: [
+          {
+            type: "text",
+            text: await params.convertMentions(
+              expandedAttributes,
+              params.client,
+              params.guildId,
+              "User",
+              params.botName,
+              params.tomoriConfig.personal_memories_enabled,
+              params.snapshot,
+            ),
+          },
+        ],
+        metadataTag: ContextItemTag.SYSTEM_PERSONALITY,
+      });
+    }
   }
 
   return contextItems;

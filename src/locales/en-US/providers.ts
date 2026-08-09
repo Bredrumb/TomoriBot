@@ -189,23 +189,35 @@ The selected model requires allowing data for paid model training, but your Open
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname} Learned Something New!`,
-      server_memory_learned_description: `A [server memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory) has been saved:
-\`{memory_content}\``,
+      server_memory_learned_description: `A **[Server Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory)** has been saved:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_updated_title: `📝 {persona_nickname} Updated a Memory!`,
-      server_memory_updated_description: `A [server memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory) has been updated:
-\`{memory_content}\``,
+      server_memory_updated_description: `A **[Server Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory)** has been updated:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname} Deleted a Memory!`,
-      server_memory_deleted_description: `A [server memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory) has been deleted:
-\`{memory_content}\``,
+      server_memory_deleted_description: `A **[Server Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory)** has been deleted:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname} Learned Something New about {user_nickname}!`,
-      personal_memory_learned_description: `A [personal memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory) about {user_nickname} has been saved:
-\`{memory_content}\``,
+      personal_memory_learned_description: `A **[Personal Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory)** about {user_nickname} has been saved:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname} Updated a Memory about {user_nickname}!`,
-      personal_memory_updated_description: `A [personal memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory) about {user_nickname} has been updated:
-\`{memory_content}\``,
+      personal_memory_updated_description: `A **[Personal Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory)** about {user_nickname} has been updated:
+\`\`\`
+{memory_content}
+\`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname} Deleted a Memory about {user_nickname}!`,
-      personal_memory_deleted_description: `A [personal memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory) about {user_nickname} has been deleted:
-\`{memory_content}\``,
+      personal_memory_deleted_description: `A **[Personal Memory](https://docs.tomoribot.app/en/features/knowledge/memory/#long-term-memory)** about {user_nickname} has been deleted:
+\`\`\`
+{memory_content}
+\`\`\``,
       server_memory_footer: `Server managers can manage this memory using \`/memory server\`.`,
       personal_memory_footer_manage: `You can manage your personal memories using \`/memory personal\`.`,
       personal_memory_footer_personalization_disabled: `This memory was saved, but personalization features are currently disabled on this server, so it will not have an immediate effect here. Use \`/memory personal export\` to view it. You can opt out with \`/personal privacy\`.`,

@@ -94,7 +94,9 @@ export class MemoryTool extends BaseTool {
     const requestedTargetUser =
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
-    const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
+    const { sendMemoryEmbedWithExpand, truncateMemoryNoticePreview } = await import(
+      "../../utils/discord/expandableEmbedNotice"
+    );
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
     const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
@@ -309,9 +311,9 @@ export class MemoryTool extends BaseTool {
             tomoriState?.config.personal_memories_enabled,
           );
 
-          // The expand helper attaches a "Show Full Memory" button when the
-          // processed content exceeds 200 chars (the embed truncation threshold),
-          // letting users read the full memory ephemerally without channel clutter.
+          // The expand helper attaches a "Show Full Memory" button using the same
+          // limit `truncateMemoryNoticePreview` applies, letting users read the
+          // full memory ephemerally without channel clutter.
           await sendMemoryEmbedWithExpand(
             context.channel,
             context.locale,
@@ -323,10 +325,7 @@ export class MemoryTool extends BaseTool {
               },
               descriptionKey: "genai.self_teach.server_memory_learned_description",
               descriptionVars: {
-                memory_content:
-                  processedMemoryContent.length > 200
-                    ? `${processedMemoryContent.substring(0, 197)}...`
-                    : processedMemoryContent,
+                memory_content: truncateMemoryNoticePreview(processedMemoryContent),
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
@@ -485,8 +484,6 @@ export class MemoryTool extends BaseTool {
           invalidateUserCache(resolvedTargetUserId as string);
 
           // Send notification notice (non-fatal: missing permissions won't block the memory save).
-          // The expand helper attaches a "Show Full Memory" button when the
-          // processed content exceeds 200 chars (the embed truncation threshold).
           try {
             await sendMemoryEmbedWithExpand(
               context.channel,
@@ -501,10 +498,7 @@ export class MemoryTool extends BaseTool {
                 descriptionKey: "genai.self_teach.personal_memory_learned_description",
                 descriptionVars: {
                   user_nickname: targetUserDisplayName,
-                  memory_content:
-                    processedMemoryContent.length > 200
-                      ? `${processedMemoryContent.substring(0, 197)}...`
-                      : processedMemoryContent,
+                  memory_content: truncateMemoryNoticePreview(processedMemoryContent),
                 },
                 footerKey: personalMemoryFooterKey,
               },

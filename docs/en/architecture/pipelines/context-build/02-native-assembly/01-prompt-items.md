@@ -62,9 +62,10 @@ All emitted items are `role: "system"`.
 
 ## Side effects
 
-- **Tool-prompt macro expansion** — every emitted text passes through
-  `toolPromptMacroResolver.expand(...)` so `{short_term_memory_tool}` etc.
-  become provider-correct tool names.
+- **Conditional and tool-macro expansion** — every emitted text passes through
+  `toolPromptMacroResolver.expand(...)`. It first removes inactive
+  `{{if capability:...}}` / `{{if tool:...}}` branches, then resolves
+  `{short_term_memory_tool}` and related names. Text that becomes blank emits no item.
 - **Mention conversion** — every emitted text passes through
   `convertMentions(...)` for `<@id>` / `<#id>` / `{bot}` / `{user}`
   resolution. The `triggererName` argument is hardcoded to `"User"` here
@@ -98,6 +99,8 @@ After this stage runs:
 | `tomoriConfig` | `system_prompt` | Overrides `DEFAULT_SYSTEM_PROMPT` when present |
 | `channelPromptOverride` | `{ prompt, mode }` | `append` adds a `SYSTEM_CHANNEL_PROMPT` block after the system prompt; `replace` substitutes the system-prompt slot content. Set per channel via `/server channel-prompt`. |
 | `tomoriConfig` | `personal_memories_enabled` | Passed to `convertMentions` for blacklist/privacy behavior |
+| `tomoriConfig` capability flags | `*_enabled` fields exposed through stable prompt names | Resolve `capability:` predicates without exposing database column names |
+| `BuildContextParams` | `deliberateToolAllowedNames` | Narrows `tool:` predicates to the current Deliberate Tool Mode scope |
 | `tomoriState` | `persona_prompt` | The persona's distinctive prompt |
 | `tomoriState` | `attribute_list` | Personality bullets (joined with `\n`) |
 

@@ -34,6 +34,33 @@ TomoriBotは自律エージェントです。単なるチャットを超えて�
 システムプロンプトやペルソナの指示をカスタマイズする際は、ツールの名前をハードコーディングするのではなく、上記の表にある**プロンプトマクロ**で参照してください。これらのマクロは、コンテキスト構築時に正しい名前に展開され、ツールが使用できない場合でも適切にフォールバックされます。`{pin_tool}`と`{timestamp_refresh_tool}`は、それぞれ`{manage_message_tool}`と`{message_metadata_tool}`の互換エイリアスとして引き続き使用できます。以下のウェブ検索およびURL関連ツールにもマクロがあります：`{web_search_tool}`、`{image_search_tool}`、`{video_search_tool}`、`{news_search_tool}`、`{url_fetch_tool}`、`{url_metadata_tool}`。これらは、ギルドMCPによる置き換えを含め、利用可能な最適なエンジンに動的に解決されます。
 :::
 
+### 条件付きプロンプトブロック
+
+上記のツールマクロを利用できるプロンプト文では、スコープ付き条件分岐も利用できます：
+
+```text
+{{if capability:self_teaching}}
+覚えておく価値のある情報には {memory_tool} を使用すること。
+{{else}}
+長期記憶への保存を約束しないこと。
+{{/if}}
+```
+
+TomoriBotの設定が有効な場合に表示するには `capability:<name>` を、アクティブなプロバイダーと
+モデルで特定のツールが実際に利用できる場合にのみ表示するには `tool:<function_name>` を使います。
+条件の先頭に `!` を付けると反転できます。ブロックはネストでき、`{{else}}` を1つ含められます。
+一般的な `and` / `or` 式には対応していません。
+
+対応する機能名は `tool_use`、`self_teaching`、`personal_memories`、`emoji_usage`、
+`sticker_usage`、`web_search`、`manage_message`、`thread_creation`、`image_generation`、
+`video_generation`、`voice_message`、`user_blocking`、`short_term_memory`、`time_awareness` です。
+
+ツール条件には、プロバイダーやモデルの対応状況、サーバー設定、設定済みバックエンド、MCPによる
+置き換え、現在の意図的ツールモードの許可リストが反映されます。ツール実行時のDiscord権限チェックを
+回避したり予測したりするものではありません。不明な機能名はfalseとして評価されログに記録され、
+不正なブロックは省略されます。生のチャットメッセージ、モデル出力、ツール結果は条件テンプレートとして
+処理されません。
+
 ## ウェブ検索とURLの読み込み
 
 モデルは単一の統合された`web_search(query, category)`ツールを認識します。この背後で、ディスパッチャーが各呼び出しをエンジンのチェーンを通してルーティングし、最初に成功したものを返します：
