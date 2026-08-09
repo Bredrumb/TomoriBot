@@ -362,6 +362,46 @@ above the size of the compressed tier, restores access to the disk swapfile and 
 unrecoverable hang into merely slow operation. Set it alongside `mem_limit`: changing either one
 moves the other's derived value.
 
+#### zram disappears on a kernel upgrade unless the meta-package is installed
+
+Cloud kernels ship a minimal module set and `zram.ko` lives in `linux-modules-extra`. That package
+comes in two forms, and the difference decides whether compressed swap survives the host's next
+reboot. `linux-modules-extra-<version>-<flavour>` is pinned to one kernel build, while the flavour
+meta-package (`linux-modules-extra-azure` and its equivalents) tracks the kernel meta-package. Install
+only the pinned name at provisioning time and unattended upgrades will eventually pull a newer kernel
+whose modules-extra was never fetched. The host then boots with no zram device, and because a disk
+swapfile is still mounted as the overflow tier, swap keeps working and nothing reports an error.
+
+The failure is silent from every angle that usually gets checked: memory limits are unchanged,
+containers are healthy, and free memory typically looks *better*, because the compressed pool is no
+longer holding RAM. The tells are specific:
+
+```sh
+swapon --show                                      # the zram device is simply absent
+ls /sys/block | grep zram                          # no output
+systemctl status systemd-zram-setup@zram0.service  # "Dependency failed", retried on a timer
+uname -r                                           # compare against:
+dpkg -l | grep linux-modules-extra                 # a version mismatch here is the root cause
+```
+
+Install both names, and mind which one is allowed to fail. The **versioned** install is the
+load-bearing one at provisioning time, because a `modprobe` immediately afterwards can only load a
+module built for the kernel currently booted. Cloud-init applies its package upgrade *before* running
+user scripts, so the archive frequently already offers a newer kernel by then, and the meta-package
+would resolve modules-extra against that newer kernel rather than the running one. The
+**meta-package** is the future-proofing, and belongs on a best-effort install: it is what carries
+`zram.ko` across the next unattended kernel upgrade.
+
+Recovery on a live host needs no reboot once the module matches the running kernel:
+
+```sh
+apt-get install -y linux-modules-extra-azure || apt-get install -y "linux-modules-extra-$(uname -r)"
+modprobe zram && systemctl start systemd-zram-setup@zram0.service
+```
+
+Reach for the versioned fallback when the meta-package resolves ahead of the running kernel, which
+happens whenever a newer kernel has landed in the archive but the host has not rebooted into it.
+
 ### A free-memory threshold is the wrong trigger for it
 
 The obvious remedy is a userspace OOM daemon such as `earlyoom`, which kills the largest consumer
