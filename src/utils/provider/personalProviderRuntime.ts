@@ -6,6 +6,7 @@ import type {
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { hasConfiguredPersonalModel } from "@/utils/provider/personalProviderHelpers";
 import { log } from "@/utils/misc/logger";
 
 export interface PersonalProviderOverlayResult {
@@ -19,7 +20,12 @@ function collectActiveConfigs(
   const active: Partial<Record<PersonalProviderCapability, UserSavedProviderConfigRow>> = {};
 
   for (const capability of ["text", "embedding", "image", "video", "vision"] as const) {
-    const matches = rows.filter((row) => row.enabled_capabilities.includes(capability));
+    // The model check keeps this in step with what the commands call active. Without
+    // it an enabled row whose model pointer went NULL would swap its credential in
+    // under the server's model, while the UI still reported the server default.
+    const matches = rows.filter(
+      (row) => row.enabled_capabilities.includes(capability) && hasConfiguredPersonalModel(row, capability),
+    );
     if (matches.length === 0) {
       continue;
     }

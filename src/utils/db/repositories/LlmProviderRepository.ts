@@ -1100,6 +1100,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     try {
       const provider = config.provider.toLowerCase();
       const enabledCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.enabled_capabilities);
+      const assignedCapabilitiesLiteral = this.toPostgresTextArrayLiteral(config.assigned_capabilities);
       const fallbackModelRefsJson = JSON.stringify(config.fallback_model_refs ?? []);
       const logitBiasesJson = JSON.stringify(config.llm_logit_biases ?? []);
       const disabledParamsLiteral = this.toPostgresTextArrayLiteral(config.llm_disabled_params);
@@ -1110,7 +1111,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           llm_id, diffusion_model_id, embedding_model_id,
           video_model_id,
           nai_diffusion_model_id, vision_llm_id, nai_preset_name,
-          thinking_level, enabled_capabilities, fallback_model_refs,
+          thinking_level, enabled_capabilities, assigned_capabilities, fallback_model_refs,
           llm_temperature, llm_top_p, llm_top_k,
           llm_frequency_penalty, llm_presence_penalty, llm_min_p,
           llm_max_output_tokens,
@@ -1120,7 +1121,8 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
           ${config.video_model_id ?? null},
           ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
-          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${fallbackModelRefsJson}::jsonb,
+          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${assignedCapabilitiesLiteral}::text[],
+          ${fallbackModelRefsJson}::jsonb,
           ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
           ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
           ${config.llm_max_output_tokens ?? null},
@@ -1138,6 +1140,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           nai_preset_name = EXCLUDED.nai_preset_name,
           thinking_level = EXCLUDED.thinking_level,
           enabled_capabilities = EXCLUDED.enabled_capabilities,
+          assigned_capabilities = EXCLUDED.assigned_capabilities,
           fallback_model_refs = EXCLUDED.fallback_model_refs,
           llm_temperature = EXCLUDED.llm_temperature,
           llm_top_p = EXCLUDED.llm_top_p,

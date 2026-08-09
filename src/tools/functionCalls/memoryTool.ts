@@ -94,9 +94,12 @@ export class MemoryTool extends BaseTool {
     const requestedTargetUser =
       targetUserArg?.trim() || legacyTargetUserNicknameArg?.trim() || legacyTargetUserDiscordIdArg?.trim();
 
-    const { sendMemoryEmbedWithExpand } = await import("../../utils/discord/expandableEmbedNotice");
+    const { MEMORY_NOTICE_PREVIEW_LIMIT, sendMemoryEmbedWithExpand } = await import(
+      "../../utils/discord/expandableEmbedNotice"
+    );
     const { ColorCode } = await import("../../utils/misc/logger");
     const { convertMentions } = await import("../../utils/text/contextBuilder");
+    const { buildTextPreview } = await import("@/utils/text/textPreview");
     const { sanitizeUnknownTemplatePlaceholders } = await import("@/utils/text/processors/mentionProcessor");
 
     const { validateMemoryContent } = await import("@/utils/misc/memoryLimits");
@@ -308,10 +311,10 @@ export class MemoryTool extends BaseTool {
             tomoriState.persona_nickname, // Use bot's current nickname for {bot} replacement
             tomoriState?.config.personal_memories_enabled,
           );
+          const memoryPreview = buildTextPreview(processedMemoryContent, MEMORY_NOTICE_PREVIEW_LIMIT);
 
-          // The expand helper attaches a "Show Full Memory" button when the
-          // processed content exceeds 200 chars (the embed truncation threshold),
-          // letting users read the full memory ephemerally without channel clutter.
+          // The expand helper uses the same preview limit, letting users read
+          // the full memory ephemerally without channel clutter.
           await sendMemoryEmbedWithExpand(
             context.channel,
             context.locale,
@@ -323,10 +326,7 @@ export class MemoryTool extends BaseTool {
               },
               descriptionKey: "genai.self_teach.server_memory_learned_description",
               descriptionVars: {
-                memory_content:
-                  processedMemoryContent.length > 200
-                    ? `${processedMemoryContent.substring(0, 197)}...`
-                    : processedMemoryContent,
+                memory_content: memoryPreview.text,
               },
               footerKey: "genai.self_teach.server_memory_footer",
             },
@@ -460,6 +460,7 @@ export class MemoryTool extends BaseTool {
             tomoriState.persona_nickname, // Use bot's current nickname for {bot} replacement
             tomoriState?.config.personal_memories_enabled,
           );
+          const memoryPreview = buildTextPreview(processedMemoryContent, MEMORY_NOTICE_PREVIEW_LIMIT);
 
           // Determine footer key based on personalization settings
           const personalizationEnabled = tomoriState?.config.personal_memories_enabled ?? true;
@@ -485,8 +486,6 @@ export class MemoryTool extends BaseTool {
           invalidateUserCache(resolvedTargetUserId as string);
 
           // Send notification notice (non-fatal: missing permissions won't block the memory save).
-          // The expand helper attaches a "Show Full Memory" button when the
-          // processed content exceeds 200 chars (the embed truncation threshold).
           try {
             await sendMemoryEmbedWithExpand(
               context.channel,
@@ -501,10 +500,7 @@ export class MemoryTool extends BaseTool {
                 descriptionKey: "genai.self_teach.personal_memory_learned_description",
                 descriptionVars: {
                   user_nickname: targetUserDisplayName,
-                  memory_content:
-                    processedMemoryContent.length > 200
-                      ? `${processedMemoryContent.substring(0, 197)}...`
-                      : processedMemoryContent,
+                  memory_content: memoryPreview.text,
                 },
                 footerKey: personalMemoryFooterKey,
               },

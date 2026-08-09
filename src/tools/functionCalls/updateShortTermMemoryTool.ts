@@ -34,7 +34,10 @@ import { log } from "../../utils/misc/logger";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import {
+  createToolPromptMacroResolver,
+  resolvePromptCapabilityValuesFromToolState,
+} from "@/utils/tools/toolPromptMacros";
 
 /** Single-summary fallback parameters: byte-identical to the pre-category schema. */
 const SUMMARY_PARAMETERS: ToolParameterSchema = {
@@ -136,6 +139,8 @@ export class UpdateShortTermMemoryTool extends BaseTool {
     const macroResolver = createToolPromptMacroResolver({
       provider: context.provider,
       stateForContext: context.state,
+      capabilities: resolvePromptCapabilityValuesFromToolState(context.state),
+      availableToolNames: context.availableToolNames,
     });
 
     // One optional string property per category

@@ -12,6 +12,7 @@ import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomori
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { buildContext } from "@/utils/text/contextBuilder";
+import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
@@ -75,7 +76,7 @@ const AVG_SPEAKER_PREFIX_CHARS = 12;
  * Approximate fixed-length instruction blocks included in contextBuilder.ts.
  * These are intentionally rounded; exact lengths vary with server/bot/user names.
  */
-const DEFAULT_SYSTEM_PROMPT_CHARS_EST = 360;
+const DEFAULT_SYSTEM_PROMPT_CHARS_EST = DEFAULT_SYSTEM_PROMPT.length;
 const MENTION_PING_RULE_CHARS_EST = 300;
 const EMOJI_USAGE_RULES_CHARS_EST = 340;
 const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines
@@ -346,7 +347,7 @@ function buildScenarioEstimates(): {
 } {
   const limits = getMemoryLimits();
   const baseToolSchemaTokens = estimateToolSchemaTokens();
-  const avgMemoryChars = Math.round(limits.maxMemoryLength * 0.5); // e.g., 128 when max is 256
+  const avgMemoryChars = Math.round(limits.maxMemoryLength * 0.5);
 
   // Minimum Scenario (Light usage)
   // - 1 user with 0 memories
@@ -399,8 +400,8 @@ function buildScenarioEstimates(): {
   };
 
   // Maximum Scenario (Heavy usage)
-  // - 5 users with 25 memories each (256 chars max per memory)
-  // - 25 server memories (256 chars max each)
+  // - 5 users, each holding a full personal memory allowance at max memory length
+  // - A full server memory allowance at max memory length
   // - Maxed persona + maxed sample dialogues
   // - 80 messages in history (multi-paragraph messages)
   // - 10 emojis (constant)

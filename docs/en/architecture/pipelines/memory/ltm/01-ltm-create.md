@@ -111,10 +111,15 @@ After a successful write:
 
 | Source | Key / Env var | Default | Purpose |
 |---|---|---|---|
-| `TomoriState.config` | `self_teaching_enabled` | `false` | Master feature flag for all LTM tools |
+| `TomoriState.config` | `self_teaching_enabled` | `true` | Master feature flag for all LTM tools |
 | `TomoriState.config` | `personal_memories_enabled` | `true` | Controls embed footer wording for personal memory notifications |
-| DB column | `server_memory_limit` | (schema default) | Max server memories per `(server_id, persona_lineage_id)` |
-| DB column | `personal_memory_limit` | (schema default) | Max personal memories per `(user_id, persona_lineage_id)` |
+| Env var | `MAX_SERVER_MEMORIES` | `100` | Max server memories per `(server_id, persona_lineage_id)` |
+| Env var | `MAX_PERSONAL_MEMORIES` | `100` | Max personal memories per `(user_id, persona_lineage_id)`, counting lineage `0` globals |
+| Env var | `MAX_MEMORY_LENGTH` | `1000` | Max characters per memory, enforced by `validateMemoryContent()` |
+
+Limits live only in `src/utils/misc/memoryLimits.ts`; there are no per-server limit columns.
+Counting is scoped to a persona lineage, so a multi-persona server holds `MAX_SERVER_MEMORIES`
+per persona rather than in total.
 
 ## Related docs
 

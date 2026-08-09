@@ -101,6 +101,8 @@ export interface BuildContextParams {
   personaUserBlocks?: PersonaUserBlockRow[];
   includeTimestamps?: boolean;
   explicitLongTermMemoryIntent?: boolean;
+  /** Per-turn tool names retained by Deliberate Tool Mode; undefined means no scoped filtering. */
+  deliberateToolAllowedNames?: readonly string[] | null;
   /**
    * When `true`, skips the `DEFAULT_SYSTEM_PROMPT` fallback in the humanizer block.
    * Set by the routing wrapper when a SillyTavern preset is active and no custom

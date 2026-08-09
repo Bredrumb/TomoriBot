@@ -106,6 +106,20 @@ const URL_TOOL_INTENT_PATTERNS: RegExp[] = [
   /\b(what(?:'s| is)\s+(?:this|on|in)|tell\s+me\s+about\s+this)\b/i,
 ];
 
+const SELF_DIAGNOSTIC_INTENT_PATTERNS: RegExp[] = [
+  /\b(?:capabilities|what\s+can\s+you\s+do|available\s+(?:tools|commands|settings)|review\s+(?:your\s+)?(?:capabilities|settings))\b/i,
+  /\b(?:what|which)\b.{0,50}\b(?:model|provider|tools?|commands?|settings?|configuration|config)\b.{0,80}\b(?:you|your|tomoribot)\b/i,
+  /\b(?:you|your|tomoribot)\b.{0,80}\b(?:model|provider|tools?|commands?|settings?|configuration|config)\b/i,
+  /\b(?:is|are)\b.{0,80}\b(?:web\s+search|memory|image\s+generation|video\s+generation|voice|tools?|feature)\b.{0,80}\b(?:enabled|available|configured|supported|working)\b/i,
+  /\bwhy\b.{0,100}\b(?:can(?:not|'t)|could(?:\s+not|n't)|did(?:\s+not|n't)|won't|failed\s+to)\b.{0,80}\b(?:you|tomoribot)\b/i,
+  /\bwhy\b.{0,40}\b(?:do|does)\b.{0,40}\b(?:you|tomoribot)\b.{0,80}\b(?:forget|remember|search|generate|respond|behave)\b/i,
+  /\bhow\s+(?:does|do)\s+(?:your|tomoribot(?:'s)?)\b.{0,100}\b(?:work|behave|remember|forget|search|generate|respond)\b/i,
+];
+
+function hasSelfDiagnosticIntent(text: string): boolean {
+  return SELF_DIAGNOSTIC_INTENT_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 const CROSS_CHANNEL_INTENT_PATTERNS: RegExp[] = [
   /\bcross[-_\s]?channel\b.{0,80}\b(?:message|send|post|peek|check|boomerang|tool|function)\b/i,
   /\b(?:send|post|say|tell|ask|message|write)\b.{0,120}\b(?:in|to|into|over\s+in)\s+(?:<#\d+>|#[^\s]+|`[^`]+`)/iu,
@@ -163,6 +177,7 @@ const WEB_TOOL_NAMES = [
   "fetch",
   "url-metadata",
 ];
+const URL_READING_TOOL_NAMES = ["fetch_url", "fetch", "fetch-url", "url-metadata"];
 const REMINDER_TOOL_NAMES = ["create_task", "update_task"];
 const MEMORY_TOOL_NAMES = ["create_long_term_memory", "update_long_term_memory"];
 const IMAGE_GENERATION_TOOL_NAMES = ["generate_image", "generate_image_nai"];
@@ -349,6 +364,10 @@ export function hasDeliberateToolIntent(
     return true;
   }
 
+  if (hasSelfDiagnosticIntent(text)) {
+    return true;
+  }
+
   if (
     USER_BLOCK_INTENT_PATTERNS.some((pattern) => pattern.test(text)) ||
     USER_UNBLOCK_INTENT_PATTERNS.some((pattern) => pattern.test(text))
@@ -424,9 +443,10 @@ export function getDeliberateToolIntentResult(
   }
 
   if (
-    /\b(search|web\s*search|look\s+up|browse|google|fetch|latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i.test(
-      text,
-    ) ||
+    (!hasSelfDiagnosticIntent(text) &&
+      /\b(search|web\s*search|look\s+up|browse|google|fetch|latest|today|current|currently|up[- ]?to[- ]?date|news|recent)\b/i.test(
+        text,
+      )) ||
     (URL_PATTERN.test(text) && URL_TOOL_INTENT_PATTERNS.some((pattern) => pattern.test(text)))
   ) {
     addToolMatches(
@@ -537,12 +557,14 @@ export function getDeliberateToolIntentResult(
     addToolMatches(allowedToolNames, matches, ["create_thread"], "thread request", "built-in");
   }
 
-  if (
-    /\b(capabilities|what\s+can\s+you\s+do|available\s+(?:tools|commands|settings)|review\s+(?:your\s+)?(?:capabilities|settings))\b/i.test(
-      text,
-    )
-  ) {
-    addToolMatches(allowedToolNames, matches, CAPABILITY_TOOL_NAMES, "capability review request", "built-in");
+  if (hasSelfDiagnosticIntent(text)) {
+    addToolMatches(
+      allowedToolNames,
+      matches,
+      [...CAPABILITY_TOOL_NAMES, ...URL_READING_TOOL_NAMES],
+      "self-diagnostic request",
+      "built-in",
+    );
   }
 
   return {

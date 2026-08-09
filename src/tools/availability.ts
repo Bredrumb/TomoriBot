@@ -355,6 +355,7 @@ export async function getAvailableToolsWithMCP(
     builtInTools = await assembleToolsForContext(builtInTools, {
       provider,
       state: stateForContext,
+      availableToolNames: new Set([...builtInTools.map((tool) => tool.name), ...mcpFunctionNames]),
     });
 
     const totalCount = builtInTools.length + mcpFunctionNames.length;

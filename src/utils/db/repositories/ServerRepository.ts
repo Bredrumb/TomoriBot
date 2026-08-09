@@ -21,12 +21,6 @@ import { userRepository } from "@/utils/db/repositories/UserRepository";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { keyManager } from "@/utils/security/keyManager";
-// Import the constant directly from its leaf module rather than the
-// `contextBuilder` barrel: the barrel also re-exports `buildContext`, whose
-// transitive graph (tools, webhooks, providers, tomoriStateCache) would
-// otherwise be pulled into the repositories barrel and create deep import
-// cycles. See docs/subsystems/command-system.md (single-flight loading).
-import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/context/templates";
 import { getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
@@ -657,11 +651,14 @@ class ServerRepository implements IRepository<ServerExportShape> {
             ${server.server_id}, ${selectedLlmId}, ${selectedEmbeddingModelId}, ${selectedDiffusionModelId}, ${validConfig.encryptedApiKey}, ${validConfig.keyVersion}
           ) ON CONFLICT (server_id) DO NOTHING
         `;
+        // system_prompt stays NULL so DEFAULT_SYSTEM_PROMPT resolves at read time.
+        // Seeding it here froze every server on the constant's value at setup, which
+        // is why tuning the default needed a migration to reach anyone.
         await tx`
           INSERT INTO server_chat_configs (
-            server_id, humanizer_degree, timezone_offset, system_prompt
+            server_id, humanizer_degree, timezone_offset
           ) VALUES (
-            ${server.server_id}, ${validConfig.humanizer}, ${validConfig.timezoneOffset}, ${DEFAULT_SYSTEM_PROMPT}
+            ${server.server_id}, ${validConfig.humanizer}, ${validConfig.timezoneOffset}
           ) ON CONFLICT (server_id) DO NOTHING
         `;
         await tx`

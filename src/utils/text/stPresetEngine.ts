@@ -83,6 +83,9 @@ const SIMPLE_SUPPORTED_MACRO_REGEX =
 /** Matches any remaining {{...}} macro for compatibility warnings */
 const GENERIC_MACRO_REGEX = /\{\{([^{}]+)\}\}/g;
 
+const TOMORI_CONDITIONAL_DIRECTIVE_REGEX =
+  /\{\{\s*(?:if\s+!?(?:capability|tool):[a-z0-9][a-z0-9_.-]*|else|\/if)\s*\}\}/gi;
+
 /** Detects HTML tags that Discord cannot render */
 const HTML_TAG_REGEX =
   /<(?:div|span|style|br|p|h[1-6]|table|tr|td|th|ul|ol|li|details|summary|img|a|strong|em|b|i|u|s|pre|code)\b[^>]*>/i;
@@ -180,6 +183,7 @@ export function findUnsupportedPresetMacros(text: string): string[] {
     .replace(RANDOM_DOUBLE_COLON_REGEX, "")
     .replace(ROLL_REGEX, "")
     .replace(TRIM_REGEX, "")
+    .replace(TOMORI_CONDITIONAL_DIRECTIVE_REGEX, "")
     .replace(SIMPLE_SUPPORTED_MACRO_REGEX, "");
 
   GENERIC_MACRO_REGEX.lastIndex = 0;
