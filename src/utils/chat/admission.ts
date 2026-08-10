@@ -22,28 +22,25 @@ import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
 import {
-  applyPluralKitProxyReference,
-  beginPluralKitProxyLookup,
-  createPluralKitProxyExpectation,
-  findMatchingPluralKitProxyExpectation,
-  getPluralKitProxyMessageRecord,
-  hasLivePluralKitProxyExpectations,
-  markPluralKitProxyExpectationProxied,
-  rememberPluralKitProxyMessage,
-  waitForPluralKitProxyExpectation,
-  type PluralKitProxyMessageRecord,
-} from "@/utils/chat/pluralkit/proxyExpectation";
+  applyChatProxyReference,
+  createChatProxyExpectation,
+  getChatProxyMessageRecord,
+  getLiveChatProxyExpectationServiceIds,
+  hasLiveChatProxyExpectations,
+  markChatProxyExpectationProxied,
+  rememberChatProxyMessage,
+  waitForChatProxyExpectation,
+  type ChatProxyMessageRecord,
+} from "@/utils/chatProxy/proxyExpectation";
 import {
   getSelfReplyChainOriginUser,
   setSelfReplyChainOriginUser,
   updateSelfReplyChainState,
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
-import { fetchMessage } from "@/utils/pluralkit/pkApi";
-import type { PkMessageLookup } from "@/utils/pluralkit/pkApi";
-import { toPluralKitMemberIdentityInput } from "@/utils/pluralkit/pkIdentity";
-import { seedPluralKitMemberBio } from "@/utils/pluralkit/bioSeeding";
-import { pluralKitRepository } from "@/utils/db/repositories/PluralKitRepository";
+import { resolveConfiguredProxyService } from "@/utils/chatProxy/registry";
+import { routeChatProxyMessage } from "@/utils/chatProxy/router";
+import { persistChatProxyAttestationIdentity } from "@/utils/chatProxy/persistence";
 import type { Message } from "discord.js";
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
@@ -102,9 +99,9 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   const isInteractionResponse = Boolean(message.interaction);
   const isFromClientUser = Boolean(client.user && message.author.id === client.user.id);
   const isMatrixRelay = isMatrixRelayMessage(message);
-  const pluralKitProxyRecord = await resolvePluralKitProxyRecord(message, isWebhookMessage, isMatrixRelay);
-  const isPluralKitProxy = Boolean(pluralKitProxyRecord);
-  const isLikelySelfMessage = !isMatrixRelay && !isPluralKitProxy && (isFromClientUser || isWebhookMessage);
+  const chatProxyRecord = await resolveChatProxyRecord(message, isWebhookMessage, isMatrixRelay);
+  const isChatProxy = Boolean(chatProxyRecord);
+  const isLikelySelfMessage = !isMatrixRelay && !isChatProxy && (isFromClientUser || isWebhookMessage);
   const isRealUserMessage = isRealUserLikeMessage(message);
   const isActiveNaturalStopMessage =
     !incoming.isStopResponse &&
@@ -217,11 +214,11 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   const authorFallbackDiscId =
     dmOwnerDiscId && message.author.id === client.user?.id ? dmOwnerDiscId : message.author.id;
   // A system turn borrows an arbitrary channel message as its trigger, so its declared
-  // identity outranks a PluralKit sender that only happens to own that message.
+  // identity outranks a proxy sender that only happens to own that message.
   const userDiscId =
     incoming.manualTriggerInvoker?.userDiscId ??
     incoming.systemTriggerIdentity?.userDiscId ??
-    pluralKitProxyRecord?.senderDiscId ??
+    chatProxyRecord?.senderDiscId ??
     chainOriginUserDiscId ??
     authorFallbackDiscId;
   const matrixRelayUserId = isMatrixRelay ? extractBridgeUserId(message.author.username) : undefined;
@@ -258,14 +255,14 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     }
   }
 
-  const pluralKitOriginalDisposition = await evaluatePluralKitOriginalSpeedbump({
+  const chatProxyOriginalDisposition = await evaluateChatProxyOriginalSpeedbump({
     incoming,
     userDiscId,
     isRealUserMessage,
     ignored,
   });
-  if (pluralKitOriginalDisposition) {
-    return pluralKitOriginalDisposition;
+  if (chatProxyOriginalDisposition) {
+    return chatProxyOriginalDisposition;
   }
 
   const { earlyTomoriState, earlyAllPersonas } = await loadEarlyTomoriState(channelScope.serverDiscId, channel.id);
@@ -299,6 +296,7 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     cooldownUserDiscId,
     isActiveNaturalStopMessage,
     isNaturalStopMessage: isNaturalStopMessage(message.content),
+    triggerMessage: chatProxyRecord?.originalMessage,
   });
   if (queueDisposition) {
     return queueDisposition;
@@ -321,27 +319,26 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   };
 }
 
-async function resolvePluralKitProxyRecord(
+async function resolveChatProxyRecord(
   message: Message,
   isWebhookMessage: boolean,
   isMatrixRelay: boolean,
-): Promise<PluralKitProxyMessageRecord | null> {
-  const knownRecord = getPluralKitProxyMessageRecord(message.id);
+): Promise<ChatProxyMessageRecord | null> {
+  const knownRecord = getChatProxyMessageRecord(message.id);
   if (knownRecord) {
-    applyPluralKitProxyReference(message);
+    applyChatProxyReference(message);
     return knownRecord;
   }
 
-  if (!isWebhookMessage || isMatrixRelay || !hasLivePluralKitProxyExpectations(message.channelId)) {
+  if (!isWebhookMessage || isMatrixRelay || !hasLiveChatProxyExpectations(message.channelId)) {
     return null;
   }
 
   // Client-owned webhooks (persona replies, user impersonation) can never be
-  // PluralKit reposts. Skipping them matters: the lookup below burns PK's
-  // shared 5 rps budget on guaranteed 404s, stalls this message's admission
-  // for the full retry cap, and extends live speedbump waits (in-flight
-  // lookups pause the channel's wait timers). Tradeoff: a PK member whose
-  // display name exactly matches a persona nickname is misclassified as self
+  // chat-proxy reposts. Skipping them avoids guaranteed transport misses and
+  // stalls in this message's admission for the full retry cap, and extends live
+  // speedbump waits. A proxied identity whose display name exactly matches a
+  // persona nickname is misclassified as self
   // and falls back to plain-webhook behavior: the same pre-existing hazard class
   // as Matrix users named after personas in shouldBotReply.
   if (getCachedImpersonatedUserIdForWebhook(message.webhookId)) {
@@ -354,66 +351,35 @@ async function resolvePluralKitProxyRecord(
     }
   }
 
-  const endLookup = beginPluralKitProxyLookup(message.channelId);
-  const lookup = await fetchMessage(message.id).finally(endLookup);
-  if (!lookup?.member || !lookup.system) {
+  const route = await routeChatProxyMessage({
+    message,
+    candidateServiceIds: getLiveChatProxyExpectationServiceIds(message.channelId),
+  });
+  if (route.status !== "matched_trigger_only" && route.status !== "matched_stable_identity") {
     return null;
   }
 
-  const expectation = findMatchingPluralKitProxyExpectation(message.channelId, lookup);
-  if (!expectation) {
-    return null;
-  }
+  await persistChatProxyAttestationIdentity({
+    messageDiscId: message.id,
+    attestation: route.attestation,
+    serverDiscId: message.guildId ?? null,
+  });
 
-  await persistPluralKitLookupIdentity(message.id, lookup, message.guildId ?? null);
-
-  markPluralKitProxyExpectationProxied(expectation);
-  const record = rememberPluralKitProxyMessage({
+  markChatProxyExpectationProxied(route.expectation);
+  const record = rememberChatProxyMessage({
     messageDiscId: message.id,
     channelId: message.channelId,
-    expectation,
+    expectation: route.expectation,
   });
-  applyPluralKitProxyReference(message);
+  applyChatProxyReference(message);
 
   log.info(
-    `Confirmed PluralKit proxy message ${message.id} for original ${expectation.originalMessageId} in channel ${message.channelId}`,
+    `Confirmed ${route.attestation.serviceId} chat-proxy message ${message.id} for original ${route.expectation.originalMessageId} in channel ${message.channelId}`,
   );
   return record;
 }
 
-async function persistPluralKitLookupIdentity(
-  messageDiscId: string,
-  lookup: PkMessageLookup,
-  serverDiscId: string | null,
-): Promise<void> {
-  const identityInput = toPluralKitMemberIdentityInput(lookup);
-  if (!identityInput) {
-    return;
-  }
-
-  const identity = await pluralKitRepository.upsertMemberIdentity(identityInput);
-  if (!identity?.member.external_identity_id || !identity.system.pk_system_id) {
-    log.warn(`PluralKit identity upsert failed for proxy message ${messageDiscId}; continuing without DB identity`);
-    return;
-  }
-
-  await pluralKitRepository.linkHostAccount(identity.system.pk_system_id, lookup.sender);
-  await pluralKitRepository.recordMessageIndex(messageDiscId, identity.member.external_identity_id, lookup.sender);
-
-  // Fire-and-forget: the one-time bio seed (§7.7) must never delay this reply's
-  // admission, and a seeding failure must never surface to the conversation.
-  if (identity.userRow.user_id) {
-    void seedPluralKitMemberBio({
-      isNewMember: identity.isNewMember,
-      memberUserDiscId: identity.userRow.user_disc_id,
-      memberUserId: identity.userRow.user_id,
-      description: lookup.member?.description,
-      serverDiscId,
-    }).catch((error) => log.warn(`PluralKit bio seed failed for ${identity.userRow.user_disc_id}`, error));
-  }
-}
-
-async function evaluatePluralKitOriginalSpeedbump(args: {
+async function evaluateChatProxyOriginalSpeedbump(args: {
   incoming: ChatIncoming;
   userDiscId: string;
   isRealUserMessage: boolean;
@@ -437,19 +403,22 @@ async function evaluatePluralKitOriginalSpeedbump(args: {
   }
 
   const userRow = await getCachedUserRow(userDiscId);
-  if (!userRow?.pluralkit_enabled) {
+  const serviceId = resolveConfiguredProxyService(userRow?.chat_proxy_service);
+  if (!serviceId) {
     return null;
   }
 
-  const expectation = createPluralKitProxyExpectation({
+  const expectation = createChatProxyExpectation({
+    serviceId,
     channelId: message.channelId,
     originalMessageId: message.id,
     senderDiscId: userDiscId,
+    originalMessage: message,
     originalReference: message.reference,
   });
-  const waitResult = await waitForPluralKitProxyExpectation(expectation);
+  const waitResult = await waitForChatProxyExpectation(expectation);
   if (waitResult === "proxied") {
-    return ignored("pluralkit_proxied");
+    return ignored("chat_proxy_proxied");
   }
 
   return null;

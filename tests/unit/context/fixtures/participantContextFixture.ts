@@ -10,7 +10,7 @@ import type {
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
-import { pluralKitRepository } from "@/utils/db/repositories/PluralKitRepository";
+import { chatProxyRepository } from "@/utils/db/repositories/ChatProxyRepository";
 import { buildParticipantContextItem } from "@/utils/text/context/participants";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { attachPersonaMentionMapToContextItems, buildPersonaMentionCatalog } from "@/utils/text/personaMentionHandles";
@@ -291,12 +291,12 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
     getPrivacyLevel: userRepository.getPrivacyLevel,
     loadForUserLineage: personalMemoryRepository.loadForUserLineage,
     getPendingRemindersForUser: serverScheduleRepository.getPendingRemindersForUser,
-    loadContextReferenceMembers: pluralKitRepository.loadContextReferenceMembers,
+    loadContextReferenceIdentities: chatProxyRepository.loadContextReferenceIdentities,
   };
 
-  // Stubbed even though this fixture has no PluralKit members: reference resolution
-  // calls it unconditionally, and the live method would open a database connection.
-  pluralKitRepository.loadContextReferenceMembers = async () => [];
+  // Reference resolution always checks stable proxy identities, so the fixture
+  // isolates that read from the live database even when it returns no rows.
+  chatProxyRepository.loadContextReferenceIdentities = async () => [];
 
   userRepository.loadByDiscordId = async (discordId) => {
     counters.userRowLoads += 1;
@@ -394,7 +394,7 @@ export function createParticipantContextFixture(): ParticipantContextFixture {
       userRepository.getPrivacyLevel = originals.getPrivacyLevel;
       personalMemoryRepository.loadForUserLineage = originals.loadForUserLineage;
       serverScheduleRepository.getPendingRemindersForUser = originals.getPendingRemindersForUser;
-      pluralKitRepository.loadContextReferenceMembers = originals.loadContextReferenceMembers;
+      chatProxyRepository.loadContextReferenceIdentities = originals.loadContextReferenceIdentities;
     },
   };
 }

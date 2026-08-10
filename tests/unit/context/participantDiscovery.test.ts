@@ -124,13 +124,13 @@ describe("participant discovery plan", () => {
     ).rejects.toThrow("cannot be both a synthetic webhook and a Matrix user");
   });
 
-  it("keys a PluralKit member as a discord user even when a webhook entry exists for it", () => {
-    const pluralKitUserId = "pk:11111111-2222-3333-4444-555555555555";
-    const syntheticUsers = new Map([[pluralKitUserId, { displayName: "Hiro", type: "webhook" as const }]]);
+  it("keys a stable proxy identity as a Discord-shaped user even when a webhook entry exists", () => {
+    const chatProxyUserId = "pk:11111111-2222-4333-8444-555555555555";
+    const syntheticUsers = new Map([[chatProxyUserId, { displayName: "Hiro", type: "webhook" as const }]]);
 
-    const visible = discoverVisibleAuthorCandidates({ participantIds: [pluralKitUserId], syntheticUsers });
+    const visible = discoverVisibleAuthorCandidates({ participantIds: [chatProxyUserId], syntheticUsers });
     expect(visible).toHaveLength(1);
-    expect(visible[0]?.key).toEqual(createDiscordUserKey(pluralKitUserId));
+    expect(visible[0]?.key).toEqual(createDiscordUserKey(chatProxyUserId));
 
     expect(discoverHistoricalSyntheticCandidates(syntheticUsers)).toHaveLength(0);
   });

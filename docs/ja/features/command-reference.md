@@ -268,6 +268,7 @@ OpenRouter固有のモデルと設定を管理します。
 
 | コマンド | 概要 |
 |---|---|
+| `/personal chat-proxy` | アカウントで使用する対応チャットプロキシサービスを選択します。 |
 | `/personal config export` | サーバー設定、ペルソナ、メモリーを除外して、個人設定をエクスポートします。 |
 | `/personal config import` | 個人設定のみをインポートします。サーバー設定やメモリーはインポートしません。 |
 | `/personal config remove` | 個人設定をリセットします。 |

@@ -13,7 +13,7 @@
 import type { Embed } from "discord.js";
 import { localizer, getSupportedLocales, getLocaleSubKeys } from "@/utils/text/localizer";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-import { isPluralKitReplyEmbed } from "@/utils/pluralkit/proxyReplyEmbed";
+import { isChatProxyReplyEmbed } from "@/utils/chatProxy/registry";
 
 /** Target embed classifications recognized by the chat pipeline. */
 type TargetEmbedType =
@@ -174,9 +174,9 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 
-  // A PluralKit reply embed restates a reference the pipeline already annotates
+  // A chat-proxy reply embed restates a reference the pipeline already annotates
   // from the pre-proxy original, so rendering it would duplicate the notice.
-  if (isPluralKitReplyEmbed(embed)) {
+  if (isChatProxyReplyEmbed(embed)) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }
 

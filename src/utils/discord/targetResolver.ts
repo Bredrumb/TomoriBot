@@ -2,7 +2,9 @@ import { ChannelType, type Guild, type GuildMember, type GuildTextBasedChannel }
 import { ContextItemTag, type ConversationUserReference, type StructuredContextItem } from "@/types/misc/context";
 import type { ToolContext } from "@/types/tool/interfaces";
 import { userRepository } from "@/utils/db/repositories";
-import { isBridgeUserId, isExternalUserId, isPluralKitUserId } from "@/utils/bridges";
+import { isBridgeUserId } from "@/utils/bridges";
+import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import { normalizeParticipantAlias } from "@/utils/text/participants/aliases";
 import {
   collectParticipantTargetIndex,
@@ -401,7 +403,7 @@ function resolveGuildMemberStage(
  * permission check on the triggerer rather than on a named target.
  *
  * `context.userId` is the identity admission already resolved through the
- * PluralKit proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
+ * Chat-proxy, Matrix relay, manual-trigger, and self-reply-chain paths, so
  * it outranks the message author. The author is a fallback for tool contexts
  * built outside a chat turn, and never used for a webhook message: a proxied
  * turn authors as the webhook, whose snowflake matches no user row.
@@ -436,13 +438,13 @@ export async function resolveUserTarget(input: string, context: ToolContext): Pr
     }
   }
 
-  if (isPluralKitUserId(rawInput)) {
-    const pluralKitReference = conversationReferences.find((reference) => reference.targetId === rawInput);
-    if (pluralKitReference) {
+  if (isChatProxyIdentityUserId(rawInput)) {
+    const chatProxyReference = conversationReferences.find((reference) => reference.targetId === rawInput);
+    if (chatProxyReference) {
       return {
         status: "resolved",
-        targetId: pluralKitReference.targetId,
-        displayLabel: pluralKitReference.displayLabel,
+        targetId: chatProxyReference.targetId,
+        displayLabel: chatProxyReference.displayLabel,
         isBridgeUser: false,
         source: "legacy_id",
       };

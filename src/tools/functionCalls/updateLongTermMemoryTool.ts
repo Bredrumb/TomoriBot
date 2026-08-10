@@ -17,8 +17,8 @@ import { buildTextPreview } from "@/utils/text/textPreview";
 import { sanitizeUnknownTemplatePlaceholders } from "@/utils/text/processors/mentionProcessor";
 import { personalMemoryRepository, serverMemoryRepository, userRepository } from "@/utils/db/repositories";
 import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
-import { isPluralKitUserId } from "@/utils/bridges";
-import { getPluralKitHostProtection } from "@/utils/pluralkit/hostProtection";
+import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
+import { getChatProxyHostProtection } from "@/utils/chatProxy/hostProtection";
 
 export class UpdateLongTermMemoryTool extends BaseTool {
   name = "update_long_term_memory";
@@ -372,8 +372,8 @@ export class UpdateLongTermMemoryTool extends BaseTool {
 
       const guild = "guild" in context.channel ? context.channel.guild : undefined;
       let guildMember = null;
-      const isPluralKitTarget = isPluralKitUserId(resolvedTargetUserId as string);
-      if (guild && !isPluralKitTarget) {
+      const isChatProxyTarget = isChatProxyIdentityUserId(resolvedTargetUserId as string);
+      if (guild && !isChatProxyTarget) {
         guildMember =
           guild.members.cache.get(resolvedTargetUserId as string) ||
           (await guild.members.fetch(resolvedTargetUserId as string).catch(() => null));
@@ -420,17 +420,17 @@ export class UpdateLongTermMemoryTool extends BaseTool {
           };
         }
 
-        const pluralKitHostProtection = await getPluralKitHostProtection(resolvedTargetUserId as string, serverDiscId);
-        if (pluralKitHostProtection.protected) {
+        const chatProxyHostProtection = await getChatProxyHostProtection(resolvedTargetUserId as string, serverDiscId);
+        if (chatProxyHostProtection.protected) {
           return {
             success: false,
             error: `Cannot update personal memory: ${resolvedTargetUserLabel} has privacy restrictions.`,
             data: {
               status: "memory_update_failed_privacy_restricted",
               reason:
-                pluralKitHostProtection.reason === "host_blacklisted"
-                  ? `The host account for ${resolvedTargetUserLabel} is blacklisted in this server. I cannot update personal memories for their PluralKit members.`
-                  : `The host account for ${resolvedTargetUserLabel} has full privacy enabled. I cannot update personal memories for their PluralKit members.`,
+                chatProxyHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${resolvedTargetUserLabel} is blacklisted in this server. I cannot update personal memories for its chat-proxy identities.`
+                  : `The host account for ${resolvedTargetUserLabel} has full privacy enabled. I cannot update personal memories for its chat-proxy identities.`,
             },
           };
         }
@@ -456,7 +456,7 @@ export class UpdateLongTermMemoryTool extends BaseTool {
 
       const isUserBlacklisted = guild
         ? (await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ||
-          (await getPluralKitHostProtection(resolvedTargetUserId as string, serverDiscId)).protected
+          (await getChatProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected
         : false;
       const footerKey = !tomoriState.config.personal_memories_enabled
         ? "genai.self_teach.personal_memory_footer_personalization_disabled"

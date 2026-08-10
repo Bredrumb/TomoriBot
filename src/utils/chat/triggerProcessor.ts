@@ -2,7 +2,7 @@ import type { Client, Message } from "discord.js";
 import { DMChannel } from "discord.js";
 import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
 import { isMatrixBridgeWebhookUsername } from "@/utils/bridges";
-import { isKnownPluralKitProxyMessage } from "@/utils/chat/pluralkit/proxyExpectation";
+import { isKnownChatProxyMessage } from "@/utils/chatProxy/proxyExpectation";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
@@ -139,14 +139,12 @@ export function isMatrixRelayMessage(message: Pick<Message, "webhookId" | "autho
   return Boolean(message.webhookId) && isMatrixBridgeWebhookUsername(message.author.username);
 }
 
-export function isPluralKitProxyMessage(message: Pick<Message, "id" | "webhookId">): boolean {
-  return isKnownPluralKitProxyMessage(message);
+export function isChatProxyMessage(message: Pick<Message, "id" | "webhookId">): boolean {
+  return isKnownChatProxyMessage(message);
 }
 
 export function isRealUserLikeMessage(message: Message): boolean {
-  return (
-    (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isPluralKitProxyMessage(message)
-  );
+  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isChatProxyMessage(message);
 }
 
 export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[]): boolean {
@@ -160,7 +158,7 @@ export function isSelfTriggerMessage(message: Message, allPersonas: TomoriState[
   if (!message.webhookId) {
     return false;
   }
-  if (isPluralKitProxyMessage(message)) {
+  if (isChatProxyMessage(message)) {
     return false;
   }
 
@@ -352,7 +350,7 @@ export function determineMatchingPersonas(
     if (!nicknameKey || personaByNickname.has(nicknameKey)) continue;
     personaByNickname.set(nicknameKey, persona);
   }
-  if (message.webhookId && !isPluralKitProxyMessage(message)) {
+  if (message.webhookId && !isChatProxyMessage(message)) {
     const webhookName = message.author.username;
     senderPersona =
       resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??
@@ -367,7 +365,7 @@ export function determineMatchingPersonas(
     if (referenceMessage) {
       if (referenceMessage.author.id === client.user?.id) {
         repliedToPersona = allPersonas.find((persona) => !persona.is_alter);
-      } else if (referenceMessage.webhookId && !isPluralKitProxyMessage(referenceMessage)) {
+      } else if (referenceMessage.webhookId && !isChatProxyMessage(referenceMessage)) {
         const webhookName = referenceMessage.author.username;
         repliedToPersona =
           resolveRenderModifierSourcePersona(webhookName, personaByNickname)?.persona ??

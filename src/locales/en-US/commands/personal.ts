@@ -476,19 +476,19 @@ You can change this anytime using \`/personal privacy\`.`,
     "deliberate-tool-mode": {
       description: `Set your personal deliberate tool mode preference.`,
     },
-    pluralkit: {
-      description: `Enable or disable PluralKit-aware message handling for your account.`,
-      enabled_description: `Turn PluralKit integration on (true) or off (false) for your account.`,
-      already_enabled_title: `No Changes Made`,
-      already_enabled_description: `PluralKit integration is already enabled for your account.`,
-      already_disabled_title: `No Changes Made`,
-      already_disabled_description: `PluralKit integration is already disabled for your account.`,
-      enabled_success_title: `PluralKit Integration Enabled`,
-      enabled_success_description: `PluralKit integration is now **enabled** for your account.
+    "chat-proxy": {
+      description: `Choose a supported chat proxy service for your account.`,
+      service_description: `The chat proxy service to use, or None to disable chat proxy handling.`,
+      none_option: `None`,
+      pluralkit_option: `PluralKit`,
+      already_selected_title: `No Changes Made`,
+      already_selected_description: `Your chat proxy service is already set to **{service}**.`,
+      enabled_success_title: `Chat Proxy Service Enabled`,
+      pluralkit_enabled_success_description: `**{service}** is now your selected chat proxy service.
 
 When I see a message from you, I'll wait about {delay_seconds}s before responding, in case PluralKit deletes and reposts it through a proxy webhook. The first time I see one of your system's members, any public bio text they've set on PluralKit may be saved as a starting memory for them. If your system has a public description, I'll also keep it so I can read it while your members are talking with me.`,
-      disabled_success_title: `PluralKit Integration Disabled`,
-      disabled_success_description: `PluralKit integration is now **disabled** for your account. Your messages will be handled normally, without waiting for a possible PluralKit proxy repost.`,
+      disabled_success_title: `Chat Proxy Service Disabled`,
+      disabled_success_description: `Chat proxy handling is now **disabled** for your account. Your messages will be handled normally, without waiting for a possible proxy repost.`,
     },
   },
 };

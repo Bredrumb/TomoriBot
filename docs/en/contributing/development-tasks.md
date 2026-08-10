@@ -35,7 +35,7 @@ bun run db:lifecycle    # schema lifecycle test (when schema.sql changed; needs 
 
 `bun run db:lifecycle` requires a local disposable PostgreSQL target with CREATE/DROP database
 permission. It creates and drops its own temporary database, then tests fresh initialization plus
-backup/restore and DB maintenance scripts.
+the current migration down/re-up path, backup/restore, and DB maintenance scripts.
 
 ---
 

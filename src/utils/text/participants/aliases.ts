@@ -189,11 +189,11 @@ export function buildBridgeUserAliases(params: {
 }
 
 /**
- * Aliases for a PluralKit member identity. Exposure stays `lookup_only` because a
- * `pk:{uuid}` is not a mentionable Discord account: the handles exist so tools can
- * target the member, not so the model can ping it.
+ * Aliases for a stable chat-proxy identity. Exposure stays `lookup_only` because
+ * it is not a mentionable Discord account: the handles exist for tool targeting,
+ * not notifications.
  */
-export function buildPluralKitMemberAliases(params: {
+export function buildChatProxyIdentityAliases(params: {
   owner: Extract<ParticipantKey, { kind: "discord_user" }>;
   displayName?: string | null;
   savedNickname?: string | null;
@@ -206,7 +206,7 @@ export function buildPluralKitMemberAliases(params: {
     appendAlias(aliases, {
       owner: params.owner,
       value,
-      source: "pluralkit_display_name",
+      source: "chat_proxy_display_name",
       purposes: ["input_reference", "output_mention", "tool_target"],
       exposure: "lookup_only",
       priority,

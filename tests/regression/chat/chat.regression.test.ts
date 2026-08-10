@@ -716,6 +716,148 @@ describe("chat regression harness", () => {
     expect(channelLocks.get(channelId)?.isLocked).not.toBe(true);
   });
 
+  it("uses the attested original for a proxy repost trigger decision", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const stateFixture = {
+      ...fixture,
+      state: {
+        ...fixture.state,
+        alwaysReplyEnabled: false,
+        autochDiscIds: [],
+        autochCounter: 0,
+        autochNextTarget: 10,
+      },
+    };
+    const original = makeMessage(
+      {
+        ...stateFixture,
+        id: "proxy_original_mention",
+        message: {
+          ...stateFixture.message,
+          content: "hello",
+          mentionedUserIds: [botUserId],
+          webhookId: null,
+        },
+      },
+      client,
+    );
+    const repost = makeMessage(
+      {
+        ...stateFixture,
+        id: "proxy_repost_without_mention",
+        message: {
+          ...stateFixture.message,
+          content: "hello",
+          mentionedUserIds: [],
+          webhookId: "proxy-webhook",
+        },
+      },
+      client,
+    );
+    const earlyTomoriState = makeTomoriState(stateFixture, {
+      id: 1001,
+      nickname: "Tomori",
+      isAlter: false,
+      triggers: ["tomori"],
+    });
+    earlyTomoriState.config.thought_log_channel_disc_id = null;
+
+    const disposition = await evaluateAdmissionQueueAndTriggerGate({
+      incoming: {
+        client,
+        message: repost,
+        isFromQueue: false,
+        retryCount: 0,
+        skipLock: false,
+        isPersonaJob: false,
+        isUserImpersonation: false,
+        textQuotaSource: "user",
+      },
+      channelScope: { guild: null, serverDiscId: guildId, isDMChannel: false },
+      earlyTomoriState,
+      earlyAllPersonas: [earlyTomoriState],
+      userDiscId: original.author.id,
+      cooldownUserDiscId: original.author.id,
+      isActiveNaturalStopMessage: false,
+      isNaturalStopMessage: false,
+      triggerMessage: original,
+    });
+
+    expect(disposition).toBeNull();
+  });
+
+  it("does not let repost-only trigger text replace the original verdict", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const stateFixture = {
+      ...fixture,
+      state: {
+        ...fixture.state,
+        alwaysReplyEnabled: false,
+        autochDiscIds: [],
+        autochCounter: 0,
+        autochNextTarget: 10,
+      },
+    };
+    const original = makeMessage(
+      {
+        ...stateFixture,
+        id: "proxy_original_without_trigger",
+        message: {
+          ...stateFixture.message,
+          content: "hello",
+          mentionedUserIds: [],
+          webhookId: null,
+        },
+      },
+      client,
+    );
+    const repost = makeMessage(
+      {
+        ...stateFixture,
+        id: "proxy_repost_with_trigger",
+        message: {
+          ...stateFixture.message,
+          content: "tomori",
+          mentionedUserIds: [botUserId],
+          webhookId: "proxy-webhook",
+        },
+      },
+      client,
+    );
+    const earlyTomoriState = makeTomoriState(stateFixture, {
+      id: 1001,
+      nickname: "Tomori",
+      isAlter: false,
+      triggers: ["tomori"],
+    });
+    earlyTomoriState.config.thought_log_channel_disc_id = null;
+
+    const disposition = await evaluateAdmissionQueueAndTriggerGate({
+      incoming: {
+        client,
+        message: repost,
+        isFromQueue: false,
+        retryCount: 0,
+        skipLock: false,
+        isPersonaJob: false,
+        isUserImpersonation: false,
+        textQuotaSource: "user",
+      },
+      channelScope: { guild: null, serverDiscId: guildId, isDMChannel: false },
+      earlyTomoriState,
+      earlyAllPersonas: [earlyTomoriState],
+      userDiscId: original.author.id,
+      cooldownUserDiscId: original.author.id,
+      isActiveNaturalStopMessage: false,
+      isNaturalStopMessage: false,
+      triggerMessage: original,
+    });
+
+    expect(disposition?.reason).toBe("non_trigger_pre_lock");
+  });
+
   it.skip("[REGRESSION PROBE] fails when a fixture expectation is deliberately inverted", () => {
     const googleFixture = conversations.find((fixture) => fixture.id === "google-direct-mention-main");
     if (!googleFixture) {

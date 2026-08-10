@@ -82,7 +82,7 @@ describe("participant context preparation", () => {
         candidateSourceReads: 0,
         memberCacheHits: 0,
         memberFetches: 0,
-        pluralKitMemberReads: 0,
+        chatProxyIdentityReads: 0,
       });
       expect(alter.diagnostics.discoveryCacheHit).toBe(true);
       expect(retry.discoveryPlan).toEqual(main.discoveryPlan);

@@ -85,18 +85,15 @@ export interface ReunionPresenceStore {
  * Resolves a one-shot reunion for the direct triggerer and reserves it before
  * another channel can build an equivalent context.
  *
- * The clock stays keyed on the account, never on a plural-system member: absence
- * is a property of the human behind it, and a per-member clock would fire a
- * reunion on nearly every front switch in a system running dozens of members.
- * Only the name in the note follows the fronting member, so the note never
- * addresses someone who is not in the conversation.
+ * The clock stays keyed on the host account because absence belongs to the
+ * account's activity. Only the note's name follows the proxied identity.
  */
 export async function resolveReunionNote(
   args: {
     turn: ChatTurn;
     effectivePersona: TomoriState;
     isUserImpersonation: boolean;
-    frontingMemberName?: string | null;
+    proxiedIdentityName?: string | null;
   },
   presenceStore: ReunionPresenceStore = statRepository,
 ): Promise<{
@@ -137,13 +134,13 @@ export async function resolveReunionNote(
     return { note: null, presence: null };
   }
 
-  const frontingMemberName = args.frontingMemberName?.trim() || null;
+  const proxiedIdentityName = args.proxiedIdentityName?.trim() || null;
   const note = buildReunionNote({
     ...reunionInfo,
     personalOffset: turn.userRow.timezone_offset ?? null,
     serverOffset: effectivePersona.config.timezone_offset,
-    displayName: frontingMemberName ?? turn.triggererName,
-    isSharedAccount: frontingMemberName !== null,
+    displayName: proxiedIdentityName ?? turn.triggererName,
+    isSharedAccount: proxiedIdentityName !== null,
   });
   if (!note) {
     reunionClaims.release(claim);

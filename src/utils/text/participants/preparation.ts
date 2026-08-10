@@ -2,17 +2,17 @@ import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import type { ContributionExecutionDiagnostic } from "@/utils/contributions/registry";
 import type {
-  PluralKitConversationUser,
+  ChatProxyConversationUser,
   PublicPersonaProfile,
   SimplifiedMessageForContext,
 } from "@/utils/text/context/types";
 import { resolveContextReferences, type ResolvedContextReferences } from "@/utils/text/contextReferences";
 import {
   createDiscordParticipantMemberDirectory,
-  repositoryPluralKitMemberReferenceSource,
+  repositoryChatProxyIdentityReferenceSource,
   repositoryUserReferenceCandidateSource,
   type ParticipantMemberDirectory,
-  type PluralKitMemberReferenceSource,
+  type ChatProxyIdentityReferenceSource,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
 import {
@@ -32,7 +32,7 @@ interface ParticipantPreparationExternalCalls {
   candidateSourceReads: number;
   memberCacheHits: number;
   memberFetches: number;
-  pluralKitMemberReads: number;
+  chatProxyIdentityReads: number;
 }
 
 interface ParticipantPreparationDiagnostics {
@@ -49,7 +49,7 @@ export interface PreparedParticipantContext {
   discoveryPlan: ParticipantDiscoveryPlan;
   matrixUsers: ReadonlyMap<string, string>;
   syntheticUsers: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
-  pluralKitUsers: ReadonlyMap<string, PluralKitConversationUser>;
+  chatProxyUsers: ReadonlyMap<string, ChatProxyConversationUser>;
   publicPersonaProfiles: readonly PublicPersonaProfile[];
   referencedUserRows: ReadonlyMap<string, UserRow>;
   referencedUserIds: ReadonlySet<string>;
@@ -66,11 +66,11 @@ export interface ParticipantPreparationInput {
   visibleUserIds: readonly string[];
   syntheticUsers?: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
   matrixUsers?: ReadonlyMap<string, string>;
-  pluralKitUsers?: ReadonlyMap<string, PluralKitConversationUser>;
+  chatProxyUsers?: ReadonlyMap<string, ChatProxyConversationUser>;
   responderPersonaIds?: ReadonlySet<number>;
   requestScope?: ParticipantRequestScope;
   candidateSource?: UserReferenceCandidateSource;
-  pluralKitMemberSource?: PluralKitMemberReferenceSource;
+  chatProxyIdentitySource?: ChatProxyIdentityReferenceSource;
   memberDirectory?: ParticipantMemberDirectory | null;
   sourceRegistry?: ParticipantSourceRegistry;
   profileEnricherRegistry?: ParticipantProfileEnricherRegistry;
@@ -105,7 +105,7 @@ export async function prepareParticipantContext(
   const cached = requestScope.discoveries.get(cacheKey);
   const discoveryCacheHit = Boolean(cached);
   const discoveryPromise =
-    cached ?? discoverParticipants(frozen, input.candidateSource, input.memberDirectory, input.pluralKitMemberSource);
+    cached ?? discoverParticipants(frozen, input.candidateSource, input.memberDirectory, input.chatProxyIdentitySource);
   if (!cached) requestScope.discoveries.set(cacheKey, discoveryPromise);
   const discoveryStartedAt = performance.now();
   let discovery: CachedParticipantDiscovery;
@@ -148,7 +148,7 @@ export async function prepareParticipantContext(
     discoveryPlan,
     matrixUsers: frozen.matrixUsers,
     syntheticUsers: frozen.syntheticUsers,
-    pluralKitUsers: frozen.pluralKitUsers,
+    chatProxyUsers: frozen.chatProxyUsers,
     publicPersonaProfiles,
     referencedUserRows: discovery.references.referencedUserRows,
     referencedUserIds: discovery.references.referencedUserIds,
@@ -159,7 +159,7 @@ export async function prepareParticipantContext(
       includedCount: discoveryPlan.seeds.length,
       rejectionCounts,
       externalCalls: discoveryCacheHit
-        ? { candidateSourceReads: 0, memberCacheHits: 0, memberFetches: 0, pluralKitMemberReads: 0 }
+        ? { candidateSourceReads: 0, memberCacheHits: 0, memberFetches: 0, chatProxyIdentityReads: 0 }
         : discovery.externalCalls,
       sourceContributions: composition.diagnostics,
     },
@@ -208,7 +208,7 @@ function freezeParticipantInput(input: ParticipantPreparationInput): Participant
   visibleUserIds: readonly string[];
   syntheticUsers: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
   matrixUsers: ReadonlyMap<string, string>;
-  pluralKitUsers: ReadonlyMap<string, PluralKitConversationUser>;
+  chatProxyUsers: ReadonlyMap<string, ChatProxyConversationUser>;
 } {
   return {
     ...input,
@@ -226,7 +226,7 @@ function freezeParticipantInput(input: ParticipantPreparationInput): Participant
     visibleUserIds: [...input.visibleUserIds],
     syntheticUsers: new Map([...(input.syntheticUsers ?? [])].map(([id, user]) => [id, { ...user }])),
     matrixUsers: new Map(input.matrixUsers ?? []),
-    pluralKitUsers: new Map([...(input.pluralKitUsers ?? [])].map(([id, user]) => [id, { ...user }])),
+    chatProxyUsers: new Map([...(input.chatProxyUsers ?? [])].map(([id, user]) => [id, { ...user }])),
     responderPersonaIds: new Set(input.responderPersonaIds ?? []),
   };
 }
@@ -235,14 +235,14 @@ async function discoverParticipants(
   input: ReturnType<typeof freezeParticipantInput>,
   candidateSourceOverride?: UserReferenceCandidateSource,
   memberDirectoryOverride?: ParticipantMemberDirectory | null,
-  pluralKitMemberSourceOverride?: PluralKitMemberReferenceSource,
+  chatProxyIdentitySourceOverride?: ChatProxyIdentityReferenceSource,
 ): Promise<CachedParticipantDiscovery> {
   const startedAt = performance.now();
   const externalCalls: ParticipantPreparationExternalCalls = {
     candidateSourceReads: 0,
     memberCacheHits: 0,
     memberFetches: 0,
-    pluralKitMemberReads: 0,
+    chatProxyIdentityReads: 0,
   };
   const candidateSource = candidateSourceOverride ?? repositoryUserReferenceCandidateSource;
   const countedCandidateSource: UserReferenceCandidateSource = {
@@ -251,11 +251,11 @@ async function discoverParticipants(
       return candidateSource.loadCandidates(query);
     },
   };
-  const pluralKitMemberSource = pluralKitMemberSourceOverride ?? repositoryPluralKitMemberReferenceSource;
-  const countedPluralKitMemberSource: PluralKitMemberReferenceSource = {
-    loadMembers: async (query) => {
-      externalCalls.pluralKitMemberReads += 1;
-      return pluralKitMemberSource.loadMembers(query);
+  const chatProxyIdentitySource = chatProxyIdentitySourceOverride ?? repositoryChatProxyIdentityReferenceSource;
+  const countedChatProxyIdentitySource: ChatProxyIdentityReferenceSource = {
+    loadIdentities: async (query) => {
+      externalCalls.chatProxyIdentityReads += 1;
+      return chatProxyIdentitySource.loadIdentities(query);
     },
   };
   const memberDirectory =
@@ -289,7 +289,7 @@ async function discoverParticipants(
     existingPersonaIds,
     responderPersonaIds: input.responderPersonaIds,
     candidateSource: countedCandidateSource,
-    pluralKitMemberSource: countedPluralKitMemberSource,
+    chatProxyIdentitySource: countedChatProxyIdentitySource,
     memberDirectory: countedMemberDirectory,
   });
   return { references, durationMs: performance.now() - startedAt, externalCalls };

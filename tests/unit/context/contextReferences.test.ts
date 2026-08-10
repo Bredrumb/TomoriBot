@@ -333,7 +333,7 @@ describe("context reference discovery", () => {
         simplifiedMessageHistory: [message("<@100>, ask Guild Alias. Bot Alias and User 400 are also named.")],
         personas: [],
         existingParticipantIds: new Set(),
-        pluralKitMemberSource: { loadMembers: async () => [] },
+        chatProxyIdentitySource: { loadIdentities: async () => [] },
       });
 
       expect(resolved.referencedUserIds).toEqual(new Set(["200", "100"]));
@@ -350,7 +350,7 @@ describe("context reference discovery", () => {
   });
 });
 
-describe("PluralKit member reference discovery", () => {
+describe("chat-proxy identity reference discovery", () => {
   const HOST_ID = "700";
   const MEMBER_ID = "pk:11111111-1111-4111-8111-111111111111";
 
@@ -372,7 +372,12 @@ describe("PluralKit member reference discovery", () => {
 
   async function resolveWithMembers(params: {
     content: string;
-    members: readonly { userDiscId: string; displayName: string | null; savedNickname: string | null }[];
+    identities: readonly {
+      serviceId: string;
+      userDiscId: string;
+      displayName: string | null;
+      savedNickname: string | null;
+    }[];
     humanCandidates?: readonly UserRow[];
     existingParticipantIds?: ReadonlySet<string>;
     onQuery?: (query: { hostUserDiscIds: readonly string[]; normalizedHistoryText: string }) => void;
@@ -391,10 +396,10 @@ describe("PluralKit member reference discovery", () => {
         simplifiedMessageHistory: [message(params.content)],
         personas: [],
         existingParticipantIds: params.existingParticipantIds ?? new Set(),
-        pluralKitMemberSource: {
-          loadMembers: async (query) => {
+        chatProxyIdentitySource: {
+          loadIdentities: async (query) => {
             params.onQuery?.(query);
-            return params.members;
+            return params.identities;
           },
         },
       });
@@ -407,7 +412,7 @@ describe("PluralKit member reference discovery", () => {
     let observedQuery: { hostUserDiscIds: readonly string[]; normalizedHistoryText: string } | null = null;
     const resolved = await resolveWithMembers({
       content: "What did Sparrow say about that?",
-      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
       onQuery: (query) => {
         observedQuery = query;
       },
@@ -429,7 +434,7 @@ describe("PluralKit member reference discovery", () => {
   it("resolves a member by its saved nickname as well as its PluralKit display name", async () => {
     const resolved = await resolveWithMembers({
       content: "Ask Spar about it.",
-      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: "Spar" }],
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: "Spar" }],
     });
 
     expect(resolved.referencedUserIds).toEqual(new Set([MEMBER_ID]));
@@ -439,7 +444,7 @@ describe("PluralKit member reference discovery", () => {
     const human: UserRow = { ...defaultUser(), user_disc_id: HOST_ID, user_nickname: "Sparrow" };
     const resolved = await resolveWithMembers({
       content: "Sparrow said so.",
-      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
       humanCandidates: [human],
     });
 
@@ -451,7 +456,7 @@ describe("PluralKit member reference discovery", () => {
   it("does not re-add a member that is already a visible participant", async () => {
     const resolved = await resolveWithMembers({
       content: "Sparrow said so.",
-      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
       existingParticipantIds: new Set([MEMBER_ID]),
     });
 
@@ -459,14 +464,14 @@ describe("PluralKit member reference discovery", () => {
     expect(resolved.discoveryPlan.rejections).toContainEqual({ reason: "existing_participant", count: 1 });
   });
 
-  it("keeps a member row out of the guild-member lane so no pk: ID reaches Discord", async () => {
+  it("keeps a proxy identity row out of the guild-member lane", async () => {
     // The human candidate query selects by nickname and server activity, which a
     // member's real users row can satisfy. Reaching resolveMember would spend a
     // fetch on a non-snowflake and log an Unknown Member error.
     const memberRow: UserRow = { ...defaultUser(), user_disc_id: MEMBER_ID, user_nickname: "Sparrow" };
     const resolved = await resolveWithMembers({
       content: "Sparrow said so.",
-      members: [{ userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
+      identities: [{ serviceId: "pluralkit", userDiscId: MEMBER_ID, displayName: "Sparrow", savedNickname: null }],
       humanCandidates: [memberRow],
     });
 

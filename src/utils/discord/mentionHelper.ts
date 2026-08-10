@@ -1,7 +1,7 @@
 import type { Client, Guild, TextBasedChannel } from "discord.js";
 import type { ForcedMention } from "@/types/discord/mentions";
 import { getCachedUserRow } from "@/utils/cache/userCache";
-import { isExternalUserId } from "@/utils/bridges";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import { log } from "@/utils/misc/logger";
 
 type SendableChannel = TextBasedChannel & {

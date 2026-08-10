@@ -1,55 +1,49 @@
 /**
  * PluralKit v2 API client.
  * Resolves the identity behind a proxied webhook message (member/system/host)
- * via `GET /v2/messages/{messageId}`. See plans/pluralkit-integration.md §5.
+ * via `GET /v2/messages/{messageId}`.
  */
 
+import { z } from "zod";
 import { log } from "@/utils/misc/logger";
 
 const PK_API_BASE_URL = "https://api.pluralkit.me/v2";
 
-/** Overall retry budget for a single message lookup, in milliseconds (default: 5000) */
-const LOOKUP_TIMEOUT_MS = Number.parseInt(process.env.PLURALKIT_LOOKUP_TIMEOUT_MS || "5000", 10);
+/** Overall retry budget for a single message lookup, in milliseconds. */
+function getLookupTimeoutMs(): number {
+  const parsed = Number.parseInt(process.env.PLURALKIT_LOOKUP_TIMEOUT_MS || "5000", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5000;
+}
 
 /**
  * Optional bot-owned PK token, sent as-is in the Authorization header (no "Bearer"
  * prefix: this is PluralKit's own convention, not OAuth). Raises the base rate
  * limit for all lookups; grants no access to other users' private data.
  */
-const API_TOKEN = process.env.PLURALKIT_API_TOKEN || undefined;
-
 /** Backoff schedule between retries, in ms; PK's message index lags ~2s behind proxied sends */
 const RETRY_DELAYS_MS = [800, 1600, 3200];
 
 /** Cap on permanently-cached resolved identities (a message's identity never changes once known) */
 const IDENTITY_CACHE_MAX_ENTRIES = 2000;
 
-/** PluralKit system fields we consume from the message-lookup payload */
-export interface PkSystemInfo {
-  /** Short-form system hid (5-7 chars, e.g. "abcdef"), stored alongside the UUID but never used as the key */
-  id: string;
-  /** Canonical system anchor; never key on name, it's volatile */
-  uuid: string;
-  /** Cosmetic display name; may be null/absent when the system keeps it private */
-  name?: string | null;
-  /** Cosmetic system tag; may be null/absent when the system keeps it private */
-  tag?: string | null;
-  /** System bio; null/absent when private. Rendered live in context, so a withdrawn description propagates */
-  description?: string | null;
-}
+const pkSystemInfoSchema = z.object({
+  id: z.string().min(1),
+  uuid: z.string().uuid(),
+  name: z.string().nullable().optional(),
+  tag: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
 
-/** PluralKit member fields we consume from the message-lookup payload */
-export interface PkMemberInfo {
-  /** Short-form member hid (5-7 chars, e.g. "ghijkl"), stored alongside the UUID but never used as the key */
-  id: string;
-  /** Canonical member anchor; never key on name, it's volatile */
-  uuid: string;
-  name: string;
-  /** Cosmetic display name; falls back to `name` when unset */
-  display_name?: string | null;
-  /** Member bio text; used only for one-time seeding (§7.7), never live-injected */
-  description?: string | null;
-}
+const pkMemberInfoSchema = z.object({
+  id: z.string().min(1),
+  uuid: z.string().uuid(),
+  name: z.string().min(1),
+  display_name: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+
+export type PkSystemInfo = z.infer<typeof pkSystemInfoSchema>;
+export type PkMemberInfo = z.infer<typeof pkMemberInfoSchema>;
 
 /** Resolved PluralKit identity behind a proxied webhook message */
 export interface PkMessageLookup {
@@ -64,12 +58,14 @@ export interface PkMessageLookup {
 }
 
 /** Raw PK API response shape for `GET /messages/{id}` (subset of fields we use) */
-interface PkApiMessageResponse {
-  original?: string;
-  sender: string;
-  system?: PkSystemInfo | null;
-  member?: PkMemberInfo | null;
-}
+const pkApiMessageResponseSchema = z.object({
+  original: z.string().min(1).optional(),
+  sender: z.string().min(1),
+  system: pkSystemInfoSchema.nullable().optional(),
+  member: pkMemberInfoSchema.nullable().optional(),
+});
+
+type PkApiMessageResponse = z.infer<typeof pkApiMessageResponseSchema>;
 
 // Single-flight + permanent cache: a message's PK identity is immutable once
 // resolved, so successful lookups never need to be refetched. Transient
@@ -123,21 +119,26 @@ function toMessageLookup(raw: PkApiMessageResponse, messageId: string): PkMessag
  * error, because callers must fall through to today's plain-webhook behavior
  * in that case, never inventing an identity.
  */
-async function fetchWithRetry(messageId: string, deadline: number): Promise<PkMessageLookup | null> {
+async function fetchWithRetry(
+  messageId: string,
+  deadline: number,
+  lookupTimeoutMs: number,
+): Promise<PkMessageLookup | null> {
   let attempt = 0;
 
   while (true) {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) {
       log.warn(
-        `PluralKit lookup for message ${messageId} exceeded the ${LOOKUP_TIMEOUT_MS}ms budget; treating as unproxied`,
+        `PluralKit lookup for message ${messageId} exceeded the ${lookupTimeoutMs}ms budget; treating as unproxied`,
       );
       return null;
     }
 
     try {
       const headers: Record<string, string> = {};
-      if (API_TOKEN) headers.Authorization = API_TOKEN;
+      const apiToken = process.env.PLURALKIT_API_TOKEN?.trim();
+      if (apiToken) headers.Authorization = apiToken;
 
       const response = await fetch(`${PK_API_BASE_URL}/messages/${messageId}`, {
         headers,
@@ -145,8 +146,19 @@ async function fetchWithRetry(messageId: string, deadline: number): Promise<PkMe
       });
 
       if (response.ok) {
-        const raw = (await response.json()) as PkApiMessageResponse;
-        return toMessageLookup(raw, messageId);
+        let raw: unknown;
+        try {
+          raw = await response.json();
+        } catch (error) {
+          log.warn(`PluralKit lookup for message ${messageId} returned malformed JSON`, error);
+          return null;
+        }
+        const parsed = pkApiMessageResponseSchema.safeParse(raw);
+        if (!parsed.success) {
+          log.warn(`PluralKit lookup for message ${messageId} returned an invalid payload`);
+          return null;
+        }
+        return toMessageLookup(parsed.data, messageId);
       }
 
       // 404: PK's message index lags ~2s behind proxied sends, so retry within budget.
@@ -187,9 +199,6 @@ async function fetchWithRetry(messageId: string, deadline: number): Promise<PkMe
  * Successful lookups are cached permanently in-process (a message's
  * identity never changes) under an LRU-style eviction cap; concurrent
  * calls for the same message share one in-flight request.
- *
- * @param messageId - The webhook (proxy repost) message's Discord snowflake ID
- * @returns The resolved identity, or null if PK has no data / is unreachable
  */
 export async function fetchMessage(messageId: string): Promise<PkMessageLookup | null> {
   const cached = identityCache.get(messageId);
@@ -198,8 +207,9 @@ export async function fetchMessage(messageId: string): Promise<PkMessageLookup |
   const existing = inFlightLookups.get(messageId);
   if (existing) return existing;
 
-  const deadline = Date.now() + LOOKUP_TIMEOUT_MS;
-  const lookupPromise = fetchWithRetry(messageId, deadline)
+  const lookupTimeoutMs = getLookupTimeoutMs();
+  const deadline = Date.now() + lookupTimeoutMs;
+  const lookupPromise = fetchWithRetry(messageId, deadline, lookupTimeoutMs)
     .then((lookup) => {
       if (lookup) rememberIdentity(messageId, lookup);
       return lookup;
@@ -216,10 +226,13 @@ export async function fetchMessage(messageId: string): Promise<PkMessageLookup |
  * Returns a successful in-process PluralKit message lookup without making any
  * network request. Context rebuilding uses this before falling back to the
  * durable DB index; it must never call the PluralKit API.
- *
- * @param messageId - Discord webhook/proxy message ID
- * @returns Cached lookup, or null when this process has not resolved it
  */
 export function getCachedMessageLookup(messageId: string): PkMessageLookup | null {
   return identityCache.get(messageId) ?? null;
+}
+
+/** Clears process-local transport state between isolated contract tests. */
+export function clearPluralKitApiStateForTests(): void {
+  identityCache.clear();
+  inFlightLookups.clear();
 }

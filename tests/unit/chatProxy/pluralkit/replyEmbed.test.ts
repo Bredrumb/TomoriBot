@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { Embed } from "discord.js";
-import { extractPluralKitReplyTarget, isPluralKitReplyEmbed } from "@/utils/pluralkit/proxyReplyEmbed";
+import { extractPluralKitReplyTarget, isPluralKitReplyEmbed } from "@/utils/chatProxy/services/pluralkit/replyEmbed";
 import { processLinkEmbed } from "@/utils/discord/embedClassifier";
 import { findReplyContextTargetInMessage } from "@/utils/chat/contextAnnotations";
 

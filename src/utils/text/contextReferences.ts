@@ -2,13 +2,13 @@ import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
 import { isEligibleContextReferenceUserV1 } from "@/utils/db/repositories/UserRepository";
 import type { PublicPersonaProfile, SimplifiedMessageForContext } from "@/utils/text/context/types";
-import { buildDiscordUserAliases, buildPluralKitMemberAliases } from "@/utils/text/participants/aliases";
+import { buildDiscordUserAliases, buildChatProxyIdentityAliases } from "@/utils/text/participants/aliases";
 import {
   createDiscordParticipantMemberDirectory,
-  repositoryPluralKitMemberReferenceSource,
+  repositoryChatProxyIdentityReferenceSource,
   repositoryUserReferenceCandidateSource,
   type ParticipantMemberDirectory,
-  type PluralKitMemberReferenceSource,
+  type ChatProxyIdentityReferenceSource,
   type UserReferenceCandidateSource,
 } from "@/utils/text/participants/candidateSources";
 import {
@@ -18,7 +18,7 @@ import {
   type ParticipantDiscoveryPlan,
   type ParticipantDiscoveryRejection,
 } from "@/utils/text/participants/discoveryPlan";
-import { isPluralKitUserId } from "@/utils/bridges";
+import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
 import {
   discoverReferencedPersonaIds,
   extractRealDiscordMentionIds,
@@ -95,7 +95,7 @@ export async function resolveContextReferences(params: {
   existingPersonaIds?: ReadonlySet<number>;
   responderPersonaIds?: ReadonlySet<number>;
   candidateSource?: UserReferenceCandidateSource;
-  pluralKitMemberSource?: PluralKitMemberReferenceSource;
+  chatProxyIdentitySource?: ChatProxyIdentityReferenceSource;
   memberDirectory?: ParticipantMemberDirectory | null;
 }): Promise<ResolvedContextReferences> {
   const historyText = params.simplifiedMessageHistory
@@ -161,12 +161,12 @@ export async function resolveContextReferences(params: {
       return eligible;
     })
     .map((candidate) => candidate.userRow);
-  // PluralKit members have real user rows, so the human candidate query can match
-  // them on nickname or server activity. Excluding them here keeps their only route
-  // the PluralKit lane below: sending a "pk:{uuid}" to guild.members.fetch() would
+  // Stable proxy identities have real user rows, so the human candidate query can
+  // match them on nickname or server activity. Their separate lane prevents a
+  // synthetic identifier from reaching guild.members.fetch(), which would
   // spend a REST call to earn an Unknown Member error and a bogus non_member rejection.
   const uniqueEligibleRows = [...new Map(eligibleRows.map((row) => [row.user_disc_id, row])).values()].filter(
-    (row) => !isPluralKitUserId(row.user_disc_id),
+    (row) => !isChatProxyIdentityUserId(row.user_disc_id),
   );
 
   const eligibleMembers = (
@@ -186,13 +186,13 @@ export async function resolveContextReferences(params: {
     )
   ).filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
 
-  // A PluralKit member is a real user row behind a "pk:{uuid}" identity, so it can
-  // never resolve through the member directory above. It gets its own lookup, but
-  // shares the alias resolver below: a member and a human answering to the same
+  // A stable proxy identity can never resolve through the Discord member directory.
+  // It gets its own lookup but shares the alias resolver below, so identities
+  // and humans answering to the same
   // name must collide with each other, not each win inside their own lane.
-  const pluralKitReferences = await (
-    params.pluralKitMemberSource ?? repositoryPluralKitMemberReferenceSource
-  ).loadMembers({
+  const chatProxyReferences = await (
+    params.chatProxyIdentitySource ?? repositoryChatProxyIdentityReferenceSource
+  ).loadIdentities({
     hostUserDiscIds: [...candidateDiscordIds],
     normalizedHistoryText: historyText,
   });
@@ -211,8 +211,8 @@ export async function resolveContextReferences(params: {
         exposeSavedNickname: false,
       }),
     ),
-    ...pluralKitReferences.flatMap((reference) =>
-      buildPluralKitMemberAliases({
+    ...chatProxyReferences.flatMap((reference) =>
+      buildChatProxyIdentityAliases({
         owner: createDiscordUserKey(reference.userDiscId),
         displayName: reference.displayName,
         savedNickname: reference.savedNickname,
@@ -266,7 +266,7 @@ export async function resolveContextReferences(params: {
       },
     ];
   });
-  const pluralKitCandidates: DiscoveredParticipantCandidate[] = pluralKitReferences.flatMap((reference) => {
+  const chatProxyCandidates: DiscoveredParticipantCandidate[] = chatProxyReferences.flatMap((reference) => {
     const reasons = referencedUserReasons.get(reference.userDiscId);
     if (!reasons) return [];
     const displayName = reference.displayName ?? reference.savedNickname;
@@ -285,13 +285,13 @@ export async function resolveContextReferences(params: {
     ];
   });
   const discoveryPlan = buildParticipantDiscoveryPlan({
-    candidates: [...userCandidates, ...pluralKitCandidates, ...personaCandidates],
+    candidates: [...userCandidates, ...chatProxyCandidates, ...personaCandidates],
     rejections,
     aliasReferenceDiagnostics: aliasResolution.diagnostics,
   });
 
   return {
-    candidateCount: personaCandidates.length + loadedCandidates.length + pluralKitReferences.length,
+    candidateCount: personaCandidates.length + loadedCandidates.length + chatProxyReferences.length,
     referencedUserIds,
     referencedUserRows,
     referencedUserReasons,

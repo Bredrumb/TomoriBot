@@ -156,7 +156,7 @@ describe("ReunionClaimRegistry", () => {
     }));
     const presenceStore = makePresenceStore({ getUserPersonaReunionInfo: read });
 
-    const resolved = await resolveReunionNote({ ...makeResolveArgs(33), frontingMemberName: "Locke" }, presenceStore);
+    const resolved = await resolveReunionNote({ ...makeResolveArgs(33), proxiedIdentityName: "Locke" }, presenceStore);
 
     expect(resolved.note).toContain("Locke is talking to you again");
     expect(resolved.note).toContain("the account they share has not been around since");
@@ -173,7 +173,7 @@ describe("ReunionClaimRegistry", () => {
     }));
     const presenceStore = makePresenceStore({ getUserPersonaReunionInfo: read });
 
-    const resolved = await resolveReunionNote({ ...makeResolveArgs(34), frontingMemberName: "  " }, presenceStore);
+    const resolved = await resolveReunionNote({ ...makeResolveArgs(34), proxiedIdentityName: "  " }, presenceStore);
 
     expect(resolved.note).toContain("Alice is talking to you again for the first time since");
     expect(resolved.note).not.toContain("the account they share");

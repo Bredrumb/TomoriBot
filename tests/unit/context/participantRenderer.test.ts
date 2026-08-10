@@ -3,16 +3,16 @@ import { createParticipantAlias } from "@/utils/text/participants/aliases";
 import type {
   HydratedParticipantProfile,
   ParticipantProfileField,
-  PluralKitSystemNote,
+  ChatProxyNamespaceNote,
 } from "@/utils/text/participants/hydration";
 import { createBotKey, createDiscordUserKey, type ParticipantKey } from "@/utils/text/participants/identity";
 import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 
-function render(profiles: readonly HydratedParticipantProfile[], pluralKitSystems: PluralKitSystemNote[] = []) {
+function render(profiles: readonly HydratedParticipantProfile[], chatProxyNamespaces: ChatProxyNamespaceNote[] = []) {
   return renderParticipantPrompt({
     profiles,
     personaTaskLines: [],
-    pluralKitSystems,
+    chatProxyNamespaces,
     isUserImpersonation: false,
     botName: "Tomori",
     isDMChannel: false,
@@ -139,66 +139,47 @@ Current time: Aug 2, 2026, 02:00 PM (UTC+8), afternoon.
     ]);
   });
 
-  it("renders system notes as their own section, after the participant entries", () => {
-    const member = humanProfile("400000000000000001", "Sparrow", "sparrow", [
-      '- Member of the "Lighthouse" plural system; its members share one presence here',
-    ]);
+  it("renders a neutral service-owned namespace entry after participant entries", () => {
+    const profile = humanProfile("400000000000000001", "Sparrow", "sparrow", ["- Verified relay identity"]);
     const rendered = render(
-      [member],
+      [profile],
       [
         {
-          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
-          label: 'the "Lighthouse" plural system',
-          description: "We are five. Ask before DMing.",
-          hostLabels: ["Jordan, @jordan_h"],
+          serviceId: "fixture_service",
+          namespaceKey: "namespace_1",
+          sectionHeading: "Verified relay profiles:",
+          entry: "- Lighthouse profile (relay source: Jordan, @jordan_h): Public relay notes.",
         },
       ],
     );
 
     expect(rendered.text).toContain(
-      "Some of the people above are members of plural systems:\n" +
-        '- The "Lighthouse" plural system (shared account: Jordan, @jordan_h): We are five. Ask before DMing.',
+      "Verified relay profiles:\n- Lighthouse profile (relay source: Jordan, @jordan_h): Public relay notes.",
     );
-    expect(rendered.text.indexOf("Sparrow")).toBeLessThan(rendered.text.indexOf("Some of the people above"));
+    expect(rendered.text.indexOf("Sparrow")).toBeLessThan(rendered.text.indexOf("Verified relay profiles"));
+    expect(rendered.text).not.toMatch(/shared account|\bmember\b|plural system/iu);
   });
 
-  it("names the shared account even when the system has no description", () => {
+  it("preserves a service entry that has no account relationship or description", () => {
     const rendered = render(
       [humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])],
       [
         {
-          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
-          label: 'the "Lighthouse" plural system',
-          description: null,
-          hostLabels: ["Jordan, @jordan_h"],
+          serviceId: "fixture_service",
+          namespaceKey: "namespace_1",
+          sectionHeading: "Verified relay profiles:",
+          entry: "- Lighthouse profile",
         },
       ],
     );
 
-    expect(rendered.text).toContain('- The "Lighthouse" plural system (shared account: Jordan, @jordan_h)\n');
-    expect(rendered.text).not.toContain("plural system (shared account: Jordan, @jordan_h):");
-  });
-
-  it("omits the account parenthetical when no host resolved", () => {
-    const rendered = render(
-      [humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])],
-      [
-        {
-          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
-          label: 'the "Lighthouse" plural system',
-          description: "We are five.",
-          hostLabels: [],
-        },
-      ],
-    );
-
-    expect(rendered.text).toContain('- The "Lighthouse" plural system: We are five.');
+    expect(rendered.text).toContain("Verified relay profiles:\n- Lighthouse profile\n");
     expect(rendered.text).not.toContain("shared account");
   });
 
-  it("renders no system section at all when no system is present", () => {
+  it("renders no namespace section when no service provides one", () => {
     const rendered = render([humanProfile("400000000000000001", "Sparrow", "sparrow", ["- A fact"])]);
 
-    expect(rendered.text).not.toContain("plural system");
+    expect(rendered.text).not.toContain("Verified relay profiles:");
   });
 });

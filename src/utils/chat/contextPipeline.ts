@@ -23,26 +23,24 @@ import {
 } from "@/utils/tools/deliberateToolMode";
 import { getEmojiPenaltyDirective } from "@/utils/text/emojiPenalty";
 import { buildContext, type SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
-import type { PluralKitConversationUser } from "@/utils/text/context/types";
+import type { ChatProxyConversationUser } from "@/utils/text/context/types";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import {
-  stripBridgePrefix,
-  extractBridgeUserId,
-  isMatrixBridgeWebhookUsername,
-  isBridgeUserId,
-  toPluralKitUserId,
-} from "@/utils/bridges";
+import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
 import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import {
-  getPluralKitProxyMessageRecord,
-  getSupersededPluralKitOriginalMessageIds,
-} from "@/utils/chat/pluralkit/proxyExpectation";
+  getChatProxyMessageRecord,
+  getSupersededChatProxyOriginalMessageIds,
+} from "@/utils/chatProxy/proxyExpectation";
+import {
+  resolveChatProxyMessageIdentitiesForHistory,
+  type ChatProxyHistoryIdentity,
+} from "@/utils/chatProxy/historyAttribution";
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
@@ -67,9 +65,7 @@ import {
 } from "@/utils/chat/contextMedia";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
 import { getCachedImpersonatedUserIdForWebhook } from "@/utils/chat/webhookIdentity";
-import { getCachedMessageLookup } from "@/utils/pluralkit/pkApi";
-import { getPluralKitMemberDisplayName } from "@/utils/pluralkit/pkIdentity";
-import { pluralKitRepository } from "@/utils/db/repositories/PluralKitRepository";
+import { getProxyServiceDescriptor } from "@/utils/chatProxy/registry";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { primePersonaSpriteMessageRecords } from "@/utils/cache/personaSpriteMessageCache";
 import { getCachedPersonaSprites } from "@/utils/cache/personaSpriteCache";
@@ -87,25 +83,20 @@ import {
 
 const participantRequestScopes = new WeakMap<LockedChatTurn, ParticipantRequestScope>();
 
-type PluralKitHistoryIdentity = {
-  userDiscId: string;
-  displayName: string;
-  senderDiscId: string;
-};
-
 /**
  * Builds the LLM-visible context and per-turn streaming metadata for one persona turn.
  */
 /**
- * The plural-system member speaking this turn, or null for an ordinary message.
- * Admission resolves a proxied turn's identity to the host account so settings
- * and quotas gate correctly, which leaves the fronting member's name to be
- * recovered separately by anything that addresses the speaker.
+ * The stable proxied identity speaking this turn, or null for an ordinary message.
+ * Admission resolves a proxied turn to its host account for settings and
+ * quotas, while speaker-facing context recovers the service identity name.
  */
-function resolveFrontingMemberName(message: Message): string | null {
-  if (!message.webhookId || !getPluralKitProxyMessageRecord(message.id)) return null;
-  const lookup = getCachedMessageLookup(message.id);
-  return lookup ? getPluralKitMemberDisplayName(lookup) : null;
+function resolveProxiedIdentityName(message: Message): string | null {
+  if (!message.webhookId) return null;
+  const record = getChatProxyMessageRecord(message.id);
+  if (!record) return null;
+  const identity = getProxyServiceDescriptor(record.serviceId)?.getCachedAttestation?.(message.id)?.identity;
+  return identity?.displayName ?? null;
 }
 
 export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnContext> {
@@ -312,7 +303,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     visibleUserIds: [...history.userIds],
     syntheticUsers: history.syntheticUsers,
     matrixUsers: history.matrixUsers,
-    pluralKitUsers: history.pluralKitUsers,
+    chatProxyUsers: history.chatProxyUsers,
     responderPersonaIds: new Set(turn.triggeredPersonaIds),
     requestScope: participantRequestScope,
   });
@@ -336,7 +327,7 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     turn,
     effectivePersona,
     isUserImpersonation: incoming.isUserImpersonation,
-    frontingMemberName: resolveFrontingMemberName(message),
+    proxiedIdentityName: resolveProxiedIdentityName(message),
   });
 
   const contextBuild = await buildContext({
@@ -494,7 +485,7 @@ async function buildSimplifiedHistory(
   userIds: Set<string>;
   matrixUsers: Map<string, string>;
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>;
-  pluralKitUsers: Map<string, PluralKitConversationUser>;
+  chatProxyUsers: Map<string, ChatProxyConversationUser>;
   rawMessages: Message[];
   activeUserBlocks: PersonaUserBlockRow[];
 }> {
@@ -511,11 +502,9 @@ async function buildSimplifiedHistory(
     messages.push(turn.lockedTurn.admission.message);
   }
 
-  // A confirmed PluralKit proxy can resolve before PluralKit's delete of the
-  // original lands, so the fetch above may still return both. Drop the original:
-  // the proxy carries the member identity, and keeping both renders one message
-  // twice under two names (host account, then member).
-  const supersededOriginalIds = getSupersededPluralKitOriginalMessageIds(channel.id);
+  // A proxy may be confirmed before the original deletion lands, so a history
+  // fetch can contain both. Keeping both would duplicate one authored message.
+  const supersededOriginalIds = getSupersededChatProxyOriginalMessageIds(channel.id);
   if (supersededOriginalIds.size > 0) {
     messages = messages.filter((message) => !supersededOriginalIds.has(message.id));
   }
@@ -541,7 +530,7 @@ async function buildSimplifiedHistory(
     messages = messages.slice(startIndex);
   }
 
-  const pluralKitIdentitiesByMessageId = await resolvePluralKitMessageIdentitiesForHistory(messages);
+  const chatProxyIdentitiesByMessageId = await resolveChatProxyMessageIdentitiesForHistory(messages);
   const activeUserBlocks = await loadActivePersonaUserBlocks(turn);
   // Map each 'block'-type target to its row so the simplify loop can render a
   // notice that includes the remaining block duration (from expires_at). 'mute'
@@ -560,7 +549,7 @@ async function buildSimplifiedHistory(
   const visibleRawMessages =
     blockedContextUserIds.size > 0
       ? messages.filter(
-          (msg) => !blockedContextUserIds.has(getBlockComparableAuthorId(msg, pluralKitIdentitiesByMessageId)),
+          (msg) => !blockedContextUserIds.has(getBlockComparableAuthorId(msg, chatProxyIdentitiesByMessageId)),
         )
       : messages;
 
@@ -589,7 +578,7 @@ async function buildSimplifiedHistory(
   const userIds = new Set<string>();
   const matrixUsers = new Map<string, string>();
   const syntheticUsers = new Map<string, { displayName: string; type: "persona" | "webhook" }>();
-  const pluralKitUsers = new Map<string, PluralKitConversationUser>();
+  const chatProxyUsers = new Map<string, ChatProxyConversationUser>();
   const personaByName = new Map(
     turn.allPersonas.map((persona) => [normalizeRenderModifierName(persona.persona_nickname), persona]),
   );
@@ -607,14 +596,14 @@ async function buildSimplifiedHistory(
   // Iterate the full message list (not visibleRawMessages): blocked authors are
   // rendered as notices here rather than dropped.
   for (const msg of messages) {
-    const pluralKitIdentity = pluralKitIdentitiesByMessageId.get(msg.id);
-    if ((await getCachedPrivacyLevel(pluralKitIdentity?.senderDiscId ?? msg.author.id)) === PrivacyLevel.FULL) {
+    const chatProxyIdentity = chatProxyIdentitiesByMessageId.get(msg.id);
+    if ((await getCachedPrivacyLevel(chatProxyIdentity?.senderDiscId ?? msg.author.id)) === PrivacyLevel.FULL) {
       continue;
     }
 
     // Blocked-author short-circuit: replace this user's live message with a
     //    single system notice instead of running the full simplify pipeline.
-    const blockComparableId = getBlockComparableAuthorId(msg, pluralKitIdentitiesByMessageId);
+    const blockComparableId = getBlockComparableAuthorId(msg, chatProxyIdentitiesByMessageId);
     const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
     if (activeContextBlock) {
       if (previousBlockNoticeAuthorId === blockComparableId) {
@@ -644,8 +633,8 @@ async function buildSimplifiedHistory(
       messageIdMap,
       syntheticUsers,
       matrixUsers,
-      pluralKitIdentitiesByMessageId,
-      pluralKitUsers,
+      chatProxyIdentitiesByMessageId,
+      chatProxyUsers,
       reactionBudgetState,
       blockedContextUserIds,
     );
@@ -764,86 +753,10 @@ async function buildSimplifiedHistory(
     userIds,
     matrixUsers,
     syntheticUsers,
-    pluralKitUsers,
+    chatProxyUsers,
     rawMessages: visibleRawMessages,
     activeUserBlocks,
   };
-}
-
-// Negative cache for webhook message IDs the DB confirmed have no PluralKit
-// identity (e.g. Tomori's own alter-persona webhooks, other bots' webhooks).
-// message->identity is immutable once resolved, so a miss stays a miss, and
-// caching it stops every subsequent history rebuild from re-querying the same
-// non-PK webhook message IDs. Capped and FIFO-evicted (Set preserves
-// insertion order) rather than left unbounded.
-const NO_PLURALKIT_IDENTITY_CACHE_MAX_ENTRIES = 2000;
-const messageIdsWithNoPluralKitIdentity = new Set<string>();
-
-function rememberNoPluralKitIdentity(messageDiscId: string): void {
-  if (messageIdsWithNoPluralKitIdentity.has(messageDiscId)) return;
-  if (messageIdsWithNoPluralKitIdentity.size >= NO_PLURALKIT_IDENTITY_CACHE_MAX_ENTRIES) {
-    const oldest = messageIdsWithNoPluralKitIdentity.values().next().value;
-    if (oldest !== undefined) messageIdsWithNoPluralKitIdentity.delete(oldest);
-  }
-  messageIdsWithNoPluralKitIdentity.add(messageDiscId);
-}
-
-async function resolvePluralKitMessageIdentitiesForHistory(
-  messages: Message[],
-): Promise<Map<string, PluralKitHistoryIdentity>> {
-  const identities = new Map<string, PluralKitHistoryIdentity>();
-  const messageById = new Map(messages.map((message) => [message.id, message]));
-  const dbLookupIds: string[] = [];
-  const seenDbLookupIds = new Set<string>();
-
-  for (const message of messages) {
-    if (!message.webhookId) continue;
-    if (messageIdsWithNoPluralKitIdentity.has(message.id)) continue;
-
-    const cachedLookup = getCachedMessageLookup(message.id);
-    if (cachedLookup?.member && cachedLookup.system && getPluralKitProxyMessageRecord(message.id)) {
-      identities.set(message.id, {
-        userDiscId: toPluralKitUserId(cachedLookup.member.uuid),
-        displayName:
-          getPluralKitMemberDisplayName(cachedLookup) ?? getWebhookDisplayName(message, cachedLookup.member.id),
-        senderDiscId: cachedLookup.sender,
-      });
-      continue;
-    }
-
-    if (!seenDbLookupIds.has(message.id)) {
-      seenDbLookupIds.add(message.id);
-      dbLookupIds.push(message.id);
-    }
-  }
-
-  const dbIdentities = await pluralKitRepository.getMessageIdentitiesByMessageIds(dbLookupIds);
-  if (!dbIdentities) {
-    // null means query failure, not "confirmed no identity", so never negative-cache this.
-    return identities;
-  }
-
-  for (const messageDiscId of dbLookupIds) {
-    if (!dbIdentities.has(messageDiscId)) {
-      rememberNoPluralKitIdentity(messageDiscId);
-    }
-  }
-
-  for (const [messageDiscId, identity] of dbIdentities.entries()) {
-    const message = messageById.get(messageDiscId);
-    identities.set(messageDiscId, {
-      userDiscId: identity.userDiscId,
-      displayName: identity.displayName ?? getWebhookDisplayName(message, identity.memberHid),
-      senderDiscId: identity.senderDiscId,
-    });
-  }
-
-  return identities;
-}
-
-function getWebhookDisplayName(message: Message | undefined, fallback: string): string {
-  const username = message?.author.username ?? "";
-  return stripBridgePrefix(username).trim() || username.trim() || fallback;
 }
 
 async function simplifyMessage(
@@ -853,8 +766,8 @@ async function simplifyMessage(
   messageIdMap: MessageIdMap,
   syntheticUsers: Map<string, { displayName: string; type: "persona" | "webhook" }>,
   matrixUsers: Map<string, string>,
-  pluralKitIdentitiesByMessageId: Map<string, PluralKitHistoryIdentity>,
-  pluralKitUsers: Map<string, PluralKitConversationUser>,
+  chatProxyIdentitiesByMessageId: Map<string, ChatProxyHistoryIdentity>,
+  chatProxyUsers: Map<string, ChatProxyConversationUser>,
   reactionBudgetState: ReactionContextBudgetState,
   blockedContextUserIds: Set<string>,
 ): Promise<{ message: SimplifiedMessageForContext; isDebug: boolean } | null> {
@@ -873,7 +786,7 @@ async function simplifyMessage(
     messageIdMap,
     personaByName,
     blockedContextUserIds,
-    pluralKitIdentitiesByMessageId,
+    chatProxyIdentitiesByMessageId,
   );
   content = replyContext.content;
   content = await withReactionContext(turn, msg, content, reactionBudgetState);
@@ -928,17 +841,18 @@ async function simplifyMessage(
       personaName = matchedPersona.persona_nickname;
       syntheticUsers.set(authorId, { displayName: authorName, type: "persona" });
     } else {
-      const pluralKitIdentity = pluralKitIdentitiesByMessageId.get(msg.id);
-      if (pluralKitIdentity) {
-        authorId = pluralKitIdentity.userDiscId;
-        authorName = pluralKitIdentity.displayName;
-        // Deliberately not registered in syntheticUsers: a member owns a real
-        // "pk:{uuid}" users row, and participant discovery keys any synthetic
+      const chatProxyIdentity = chatProxyIdentitiesByMessageId.get(msg.id);
+      if (chatProxyIdentity) {
+        authorId = chatProxyIdentity.userDiscId;
+        authorName = chatProxyIdentity.displayName;
+        // Deliberately not registered in syntheticUsers: a stable proxy identity
+        // owns a real users row, and participant discovery keys any synthetic
         // entry as a webhook, which would strip its memories, aliases, and
         // system/host identity lines.
-        pluralKitUsers.set(authorId, {
+        chatProxyUsers.set(authorId, {
+          serviceId: chatProxyIdentity.serviceId,
           displayName: authorName,
-          senderDiscId: pluralKitIdentity.senderDiscId,
+          senderDiscId: chatProxyIdentity.senderDiscId,
         });
       } else {
         authorId = msg.webhookId ?? msg.author.id;
@@ -1085,7 +999,7 @@ async function withReplyContext(
   messageIdMap: MessageIdMap,
   personaByNickname: Map<string, ChatTurn["persona"]>,
   blockedContextUserIds: Set<string>,
-  pluralKitIdentitiesByMessageId: Map<string, PluralKitHistoryIdentity>,
+  chatProxyIdentitiesByMessageId: Map<string, ChatProxyHistoryIdentity>,
 ): Promise<{ content: string; referencedMessage?: Message }> {
   if (msg.reference?.type === MessageReferenceType.Forward || !("messages" in msg.channel)) {
     return { content };
@@ -1101,7 +1015,7 @@ async function withReplyContext(
     }
     const referenced =
       msg.channel.messages.cache.get(referenceMessageId) ?? (await msg.channel.messages.fetch(referenceMessageId));
-    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, pluralKitIdentitiesByMessageId))) {
+    if (blockedContextUserIds.has(getBlockComparableAuthorId(referenced, chatProxyIdentitiesByMessageId))) {
       return { content };
     }
     const annotation = await buildReplyReferenceContextAnnotation({
@@ -1131,11 +1045,11 @@ async function loadActivePersonaUserBlocks(turn: ChatTurn): Promise<PersonaUserB
 
 function getBlockComparableAuthorId(
   msg: Message,
-  pluralKitIdentitiesByMessageId?: Map<string, PluralKitHistoryIdentity>,
+  chatProxyIdentitiesByMessageId?: Map<string, ChatProxyHistoryIdentity>,
 ): string {
-  const pluralKitIdentity = pluralKitIdentitiesByMessageId?.get(msg.id);
-  if (pluralKitIdentity) {
-    return pluralKitIdentity.senderDiscId;
+  const chatProxyIdentity = chatProxyIdentitiesByMessageId?.get(msg.id);
+  if (chatProxyIdentity) {
+    return chatProxyIdentity.senderDiscId;
   }
   if (msg.webhookId) {
     return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? msg.author.id;

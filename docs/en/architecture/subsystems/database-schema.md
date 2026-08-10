@@ -71,6 +71,28 @@ than externalising SQL. Size is the signal; the split must follow a coherent dom
 - `persona_configs`
 - `users`
 
+### Chat-proxy identity and attribution
+
+`users.chat_proxy_service` is nullable and intentionally has no service-enumerating check constraint:
+`NULL` means never configured, `none` is an explicit opt-out, and a registry service ID enables that
+adapter. Unknown stored IDs remain portable but fail closed at runtime.
+
+Migration 056 adds the service-neutral identity graph:
+
+- `external_identities` maps a canonical `(kind, external_key)` to one synthetic `users` row.
+- `chat_proxy_namespaces` is unique on `(service_id, namespace_key)` and stores optional cosmetic
+  short ID, display name, tag, and public description.
+- `chat_proxy_identities` links one external identity to one namespace. Its external-identity link is
+  unique and both foreign keys cascade on deletion.
+- `chat_proxy_namespace_accounts` links one namespace to multiple Discord host accounts and indexes
+  `host_user_disc_id` for scoped absent-identity discovery.
+- `chat_proxy_message_index` immutably maps a Discord message to its stable external identity and
+  attested sender. Its creation-time index supports retention pruning.
+
+All canonical identity, namespace, host, and message-index writes occur in one transaction through
+`ChatProxyRepository.persistAttestedIdentity()`. Identity-free attestations never touch this graph.
+See [Chat-Proxy Integration](/architecture/integrations/chat-proxy/) for the routing contract.
+
 ### Server config normalization (Phase 6 Step #14 — complete)
 
 `tomori_configs` was split across 14 command-aligned tables and dropped (migration `008_drop_tomori_configs.sql`):
@@ -570,4 +592,4 @@ ST preset schema, typed catalog seeds, and migration marker behavior as runtime 
 - `cleanup_expired_cooldowns()` is defined in schema and used by startup cleanup + optional pg_cron.
 - Quota cleanup helpers exist for old image/text/video quota rows (`cleanup_old_image_quotas()`, `cleanup_old_text_quotas()`, `cleanup_old_video_quotas()`).
 - RAG tables are intentionally separate so local development can run without pgvector unless enabled.
-- `bun run db:lifecycle` creates a disposable database on the configured local PostgreSQL server, validates fresh schema/seed initialization twice, smoke-tests backup/restore and DB maintenance scripts, runs `nuke-db` against only that disposable DB, and verifies re-initialization afterward.
+- `bun run db:lifecycle` creates a disposable database on the configured local PostgreSQL server, validates fresh schema/seed initialization twice, rolls the chat-proxy migration down and back up, smoke-tests backup/restore and DB maintenance scripts, runs `nuke-db` against only that disposable DB, and verifies re-initialization afterward.

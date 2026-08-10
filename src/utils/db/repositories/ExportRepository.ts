@@ -502,7 +502,7 @@ class ExportRepository {
           u.personal_deliberate_tool_mode,
           COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
           u.timezone_offset,
-          u.pluralkit_enabled
+          u.chat_proxy_service
         FROM users u
         LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
         WHERE u.user_disc_id = ${userDiscId}
@@ -530,7 +530,7 @@ class ExportRepository {
           personal_deliberate_tool_mode: userData.personal_deliberate_tool_mode ?? undefined,
           shortterm_cache_crossserver_opt_in: userData.shortterm_cache_crossserver_opt_in ?? undefined,
           timezone_offset: userData.timezone_offset ?? undefined,
-          pluralkit_enabled: userData.pluralkit_enabled ?? undefined,
+          chat_proxy_service: userData.chat_proxy_service,
         },
       };
 

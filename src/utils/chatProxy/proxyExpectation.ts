@@ -1,42 +1,46 @@
 import type { Message } from "discord.js";
-import type { PkMessageLookup } from "@/utils/pluralkit/pkApi";
+import type { ProxyMessageAttestation } from "@/utils/chatProxy/types";
 import { log } from "@/utils/misc/logger";
 
-export type PluralKitProxyExpectationState = "pending" | "proxied";
-export type PluralKitProxyWaitResult = "timeout" | "proxied";
+export type ChatProxyExpectationState = "pending" | "proxied";
+export type ChatProxyWaitResult = "timeout" | "proxied";
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 
-export interface PluralKitProxyExpectation {
+export interface ChatProxyExpectation {
+  serviceId: string;
   channelId: string;
   originalMessageId: string;
   senderDiscId: string;
-  state: PluralKitProxyExpectationState;
+  state: ChatProxyExpectationState;
   createdAt: number;
   expiresAt: number;
+  originalMessage: Message;
   originalReference: Message["reference"];
 }
 
-interface InternalPluralKitProxyExpectation extends PluralKitProxyExpectation {
-  waitPromise: Promise<PluralKitProxyWaitResult>;
+interface InternalChatProxyExpectation extends ChatProxyExpectation {
+  waitPromise: Promise<ChatProxyWaitResult>;
   waitResolved: boolean;
   waitDeadline: number;
   waitTimer: TimerHandle | null;
   ttlTimer: TimerHandle | null;
-  resolveWait: (result: PluralKitProxyWaitResult) => void;
+  resolveWait: (result: ChatProxyWaitResult) => void;
 }
 
-export interface PluralKitProxyMessageRecord {
+export interface ChatProxyMessageRecord {
+  serviceId: string;
   messageDiscId: string;
   channelId: string;
   originalMessageId: string;
   senderDiscId: string;
   createdAt: number;
   expiresAt: number;
+  originalMessage: Message;
   originalReference: Message["reference"];
 }
 
-interface InternalPluralKitProxyMessageRecord extends PluralKitProxyMessageRecord {
+interface InternalChatProxyMessageRecord extends ChatProxyMessageRecord {
   ttlTimer: TimerHandle | null;
 }
 
@@ -50,46 +54,50 @@ function parseIntegerEnv(value: string | undefined, defaultValue: number, minimu
 // Timing envs are read lazily (per use, not at module load) so import order
 // never bakes stale values in: chat modules pull this file in transitively,
 // which would otherwise freeze defaults before test files can set overrides.
-export function getPluralKitProxyWaitMs(): number {
-  return parseIntegerEnv(process.env.PLURALKIT_PROXY_WAIT_MS, 2000, 0);
+export function getChatProxyWaitMs(): number {
+  return parseIntegerEnv(process.env.CHAT_PROXY_WAIT_MS, 2000, 0);
 }
 
-export function getPluralKitExpectationTtlMs(): number {
-  return parseIntegerEnv(process.env.PLURALKIT_EXPECTATION_TTL_MS, 10000, Math.max(getPluralKitProxyWaitMs(), 1));
+export function getChatProxyExpectationTtlMs(): number {
+  return parseIntegerEnv(process.env.CHAT_PROXY_EXPECTATION_TTL_MS, 10000, Math.max(getChatProxyWaitMs(), 1));
 }
 
 function getConfirmedProxyMessageTtlMs(): number {
-  return Math.max(getPluralKitExpectationTtlMs(), parseIntegerEnv(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000));
+  return Math.max(getChatProxyExpectationTtlMs(), parseIntegerEnv(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000));
 }
 
-const expectationsByChannel = new Map<string, Map<string, InternalPluralKitProxyExpectation>>();
-const proxyMessagesById = new Map<string, InternalPluralKitProxyMessageRecord>();
+const expectationsByChannel = new Map<string, Map<string, InternalChatProxyExpectation>>();
+const proxyMessagesById = new Map<string, InternalChatProxyMessageRecord>();
 const activeLookupCountsByChannel = new Map<string, number>();
 
-export function createPluralKitProxyExpectation(args: {
+export function createChatProxyExpectation(args: {
+  serviceId: string;
   channelId: string;
   originalMessageId: string;
   senderDiscId: string;
+  originalMessage: Message;
   originalReference: Message["reference"];
-}): PluralKitProxyExpectation {
-  sweepExpiredPluralKitProxyState();
-  deletePluralKitProxyExpectation(args.channelId, args.originalMessageId);
+}): ChatProxyExpectation {
+  sweepExpiredChatProxyState();
+  deleteChatProxyExpectation(args.channelId, args.originalMessageId);
 
   const createdAt = Date.now();
-  const proxyWaitMs = getPluralKitProxyWaitMs();
-  const expectationTtlMs = getPluralKitExpectationTtlMs();
-  let resolveWaitPromise: (result: PluralKitProxyWaitResult) => void = () => {};
-  const waitPromise = new Promise<PluralKitProxyWaitResult>((resolve) => {
+  const proxyWaitMs = getChatProxyWaitMs();
+  const expectationTtlMs = getChatProxyExpectationTtlMs();
+  let resolveWaitPromise: (result: ChatProxyWaitResult) => void = () => {};
+  const waitPromise = new Promise<ChatProxyWaitResult>((resolve) => {
     resolveWaitPromise = resolve;
   });
 
-  const expectation: InternalPluralKitProxyExpectation = {
+  const expectation: InternalChatProxyExpectation = {
+    serviceId: args.serviceId,
     channelId: args.channelId,
     originalMessageId: args.originalMessageId,
     senderDiscId: args.senderDiscId,
     state: "pending",
     createdAt,
     expiresAt: createdAt + expectationTtlMs,
+    originalMessage: args.originalMessage,
     originalReference: args.originalReference,
     waitPromise,
     waitResolved: false,
@@ -107,9 +115,9 @@ export function createPluralKitProxyExpectation(args: {
     },
   };
 
-  schedulePluralKitProxyWaitTimer(expectation);
+  scheduleChatProxyWaitTimer(expectation);
   expectation.ttlTimer = setTimeout(() => {
-    deletePluralKitProxyExpectation(expectation.channelId, expectation.originalMessageId);
+    deleteChatProxyExpectation(expectation.channelId, expectation.originalMessageId);
   }, expectationTtlMs);
 
   let channelExpectations = expectationsByChannel.get(args.channelId);
@@ -122,18 +130,16 @@ export function createPluralKitProxyExpectation(args: {
   return expectation;
 }
 
-export async function waitForPluralKitProxyExpectation(
-  expectation: PluralKitProxyExpectation,
-): Promise<PluralKitProxyWaitResult> {
-  const internal = getInternalPluralKitProxyExpectation(expectation.channelId, expectation.originalMessageId);
+export async function waitForChatProxyExpectation(expectation: ChatProxyExpectation): Promise<ChatProxyWaitResult> {
+  const internal = getInternalChatProxyExpectation(expectation.channelId, expectation.originalMessageId);
   if (!internal) {
     return "timeout";
   }
   return await internal.waitPromise;
 }
 
-export function markPluralKitProxyOriginalDeleted(channelId: string, originalMessageId: string): boolean {
-  const expectation = getInternalPluralKitProxyExpectation(channelId, originalMessageId);
+export function markChatProxyOriginalDeleted(channelId: string, originalMessageId: string): boolean {
+  const expectation = getInternalChatProxyExpectation(channelId, originalMessageId);
   if (!expectation) {
     return false;
   }
@@ -143,26 +149,39 @@ export function markPluralKitProxyOriginalDeleted(channelId: string, originalMes
   return true;
 }
 
-export function hasLivePluralKitProxyExpectations(channelId: string): boolean {
-  sweepExpiredPluralKitProxyState();
+export function hasLiveChatProxyExpectations(channelId: string): boolean {
+  sweepExpiredChatProxyState();
   const channelExpectations = expectationsByChannel.get(channelId);
   return Boolean(channelExpectations && channelExpectations.size > 0);
 }
 
-export function findMatchingPluralKitProxyExpectation(
+export function getLiveChatProxyExpectationServiceIds(channelId: string): string[] {
+  sweepExpiredChatProxyState();
+  const serviceIds = new Set<string>();
+  for (const expectation of expectationsByChannel.get(channelId)?.values() ?? []) {
+    serviceIds.add(expectation.serviceId);
+  }
+  return [...serviceIds];
+}
+
+export function findMatchingChatProxyExpectation(
   channelId: string,
-  lookup: PkMessageLookup,
-): PluralKitProxyExpectation | null {
-  sweepExpiredPluralKitProxyState();
-  const expectation = getInternalPluralKitProxyExpectation(channelId, lookup.original);
-  if (!expectation || expectation.senderDiscId !== lookup.sender) {
+  attestation: ProxyMessageAttestation,
+): ChatProxyExpectation | null {
+  sweepExpiredChatProxyState();
+  const expectation = getInternalChatProxyExpectation(channelId, attestation.originalMessageId);
+  if (
+    !expectation ||
+    expectation.serviceId !== attestation.serviceId ||
+    expectation.senderDiscId !== attestation.senderDiscordId
+  ) {
     return null;
   }
   return expectation;
 }
 
-export function markPluralKitProxyExpectationProxied(expectation: PluralKitProxyExpectation): void {
-  const internal = getInternalPluralKitProxyExpectation(expectation.channelId, expectation.originalMessageId);
+export function markChatProxyExpectationProxied(expectation: ChatProxyExpectation): void {
+  const internal = getInternalChatProxyExpectation(expectation.channelId, expectation.originalMessageId);
   if (!internal) {
     return;
   }
@@ -171,10 +190,10 @@ export function markPluralKitProxyExpectationProxied(expectation: PluralKitProxy
   internal.resolveWait("proxied");
 }
 
-export function beginPluralKitProxyLookup(channelId: string): () => void {
+export function beginChatProxyLookup(channelId: string): () => void {
   const currentCount = activeLookupCountsByChannel.get(channelId) ?? 0;
   activeLookupCountsByChannel.set(channelId, currentCount + 1);
-  pausePluralKitProxyWaitTimers(channelId);
+  pauseChatProxyWaitTimers(channelId);
 
   let ended = false;
   return () => {
@@ -188,62 +207,64 @@ export function beginPluralKitProxyLookup(channelId: string): () => void {
     }
 
     activeLookupCountsByChannel.delete(channelId);
-    resumePluralKitProxyWaitTimers(channelId);
+    resumeChatProxyWaitTimers(channelId);
   };
 }
 
-export function rememberPluralKitProxyMessage(args: {
+export function rememberChatProxyMessage(args: {
   messageDiscId: string;
   channelId: string;
-  expectation: PluralKitProxyExpectation;
-}): PluralKitProxyMessageRecord {
-  sweepExpiredPluralKitProxyState();
-  deletePluralKitProxyMessageRecord(args.messageDiscId);
+  expectation: ChatProxyExpectation;
+}): ChatProxyMessageRecord {
+  sweepExpiredChatProxyState();
+  deleteChatProxyMessageRecord(args.messageDiscId);
 
   const createdAt = Date.now();
   const confirmedProxyMessageTtlMs = getConfirmedProxyMessageTtlMs();
-  const record: InternalPluralKitProxyMessageRecord = {
+  const record: InternalChatProxyMessageRecord = {
+    serviceId: args.expectation.serviceId,
     messageDiscId: args.messageDiscId,
     channelId: args.channelId,
     originalMessageId: args.expectation.originalMessageId,
     senderDiscId: args.expectation.senderDiscId,
     createdAt,
     expiresAt: createdAt + confirmedProxyMessageTtlMs,
+    originalMessage: args.expectation.originalMessage,
     originalReference: args.expectation.originalReference,
     ttlTimer: null,
   };
 
   record.ttlTimer = setTimeout(() => {
-    deletePluralKitProxyMessageRecord(record.messageDiscId);
+    deleteChatProxyMessageRecord(record.messageDiscId);
   }, confirmedProxyMessageTtlMs);
   proxyMessagesById.set(args.messageDiscId, record);
   return record;
 }
 
-export function getPluralKitProxyMessageRecord(messageDiscId: string): PluralKitProxyMessageRecord | null {
-  sweepExpiredPluralKitProxyState();
+export function getChatProxyMessageRecord(messageDiscId: string): ChatProxyMessageRecord | null {
+  sweepExpiredChatProxyState();
   return proxyMessagesById.get(messageDiscId) ?? null;
 }
 
-export function isKnownPluralKitProxyMessage(message: Pick<Message, "id" | "webhookId">): boolean {
-  return Boolean(message.webhookId && getPluralKitProxyMessageRecord(message.id));
+export function isKnownChatProxyMessage(message: Pick<Message, "id" | "webhookId">): boolean {
+  return Boolean(message.webhookId && getChatProxyMessageRecord(message.id));
 }
 
 /**
  * IDs of originals that a confirmed proxy in this channel has superseded.
  *
- * PluralKit posts the webhook and deletes the original as two separate REST
- * calls, and it indexes the proxy at step one, so a lookup can resolve while the
+ * A service may post the webhook and delete the original as separate operations,
+ * so an attestation can resolve while the
  * delete is still in flight. A history fetch in that window still returns the
  * original from Discord, which would render the same message twice under two
  * different identities. Callers building dialogue context must drop these.
  *
- * Scanned rather than kept as a reverse index because PluralKit splits messages
- * over 2000 chars into several proxies sharing one original, so an
+ * Scanned rather than kept as a reverse index because a service may split long
+ * messages into several proxies sharing one original, so an
  * original-to-proxy map would drop live entries as siblings expired.
  */
-export function getSupersededPluralKitOriginalMessageIds(channelId: string): Set<string> {
-  sweepExpiredPluralKitProxyState();
+export function getSupersededChatProxyOriginalMessageIds(channelId: string): Set<string> {
+  sweepExpiredChatProxyState();
   const originalMessageIds = new Set<string>();
   for (const record of proxyMessagesById.values()) {
     if (record.channelId === channelId) {
@@ -253,8 +274,8 @@ export function getSupersededPluralKitOriginalMessageIds(channelId: string): Set
   return originalMessageIds;
 }
 
-export function applyPluralKitProxyReference(message: Message): boolean {
-  const record = getPluralKitProxyMessageRecord(message.id);
+export function applyChatProxyReference(message: Message): boolean {
+  const record = getChatProxyMessageRecord(message.id);
   if (!record?.originalReference || message.reference?.messageId) {
     return false;
   }
@@ -267,15 +288,15 @@ export function applyPluralKitProxyReference(message: Message): boolean {
     });
     return true;
   } catch (error) {
-    log.warn(`Failed to apply PluralKit original reference to proxy message ${message.id}`, error);
+    log.warn(`Failed to apply chat-proxy original reference to proxy message ${message.id}`, error);
     return false;
   }
 }
 
-export function clearPluralKitProxyExpectationStateForTests(): void {
+export function clearChatProxyExpectationStateForTests(): void {
   for (const channelExpectations of expectationsByChannel.values()) {
     for (const expectation of channelExpectations.values()) {
-      clearPluralKitProxyExpectationTimers(expectation);
+      clearChatProxyExpectationTimers(expectation);
     }
   }
   expectationsByChannel.clear();
@@ -287,10 +308,10 @@ export function clearPluralKitProxyExpectationStateForTests(): void {
   activeLookupCountsByChannel.clear();
 }
 
-function getInternalPluralKitProxyExpectation(
+function getInternalChatProxyExpectation(
   channelId: string,
   originalMessageId: string,
-): InternalPluralKitProxyExpectation | null {
+): InternalChatProxyExpectation | null {
   const channelExpectations = expectationsByChannel.get(channelId);
   const expectation = channelExpectations?.get(originalMessageId) ?? null;
   if (!expectation) {
@@ -298,21 +319,21 @@ function getInternalPluralKitProxyExpectation(
   }
 
   if (Date.now() > expectation.expiresAt) {
-    deletePluralKitProxyExpectation(channelId, originalMessageId);
+    deleteChatProxyExpectation(channelId, originalMessageId);
     return null;
   }
 
   return expectation;
 }
 
-function deletePluralKitProxyExpectation(channelId: string, originalMessageId: string): void {
+function deleteChatProxyExpectation(channelId: string, originalMessageId: string): void {
   const channelExpectations = expectationsByChannel.get(channelId);
   const existing = channelExpectations?.get(originalMessageId);
   if (!existing || !channelExpectations) {
     return;
   }
 
-  clearPluralKitProxyExpectationTimers(existing);
+  clearChatProxyExpectationTimers(existing);
   existing.resolveWait("timeout");
   channelExpectations.delete(originalMessageId);
   if (channelExpectations.size === 0) {
@@ -320,7 +341,7 @@ function deletePluralKitProxyExpectation(channelId: string, originalMessageId: s
   }
 }
 
-function deletePluralKitProxyMessageRecord(messageDiscId: string): void {
+function deleteChatProxyMessageRecord(messageDiscId: string): void {
   const existing = proxyMessagesById.get(messageDiscId);
   if (!existing) {
     return;
@@ -333,7 +354,7 @@ function deletePluralKitProxyMessageRecord(messageDiscId: string): void {
   proxyMessagesById.delete(messageDiscId);
 }
 
-function clearPluralKitProxyExpectationTimers(expectation: InternalPluralKitProxyExpectation): void {
+function clearChatProxyExpectationTimers(expectation: InternalChatProxyExpectation): void {
   if (expectation.waitTimer) {
     clearTimeout(expectation.waitTimer);
     expectation.waitTimer = null;
@@ -344,7 +365,7 @@ function clearPluralKitProxyExpectationTimers(expectation: InternalPluralKitProx
   }
 }
 
-function schedulePluralKitProxyWaitTimer(expectation: InternalPluralKitProxyExpectation): void {
+function scheduleChatProxyWaitTimer(expectation: InternalChatProxyExpectation): void {
   if (expectation.waitResolved || activeLookupCountsByChannel.has(expectation.channelId)) {
     return;
   }
@@ -355,13 +376,15 @@ function schedulePluralKitProxyWaitTimer(expectation: InternalPluralKitProxyExpe
 
   expectation.waitTimer = setTimeout(
     () => {
-      expectation.resolveWait("timeout");
+      // Once the original is allowed to proceed, a later webhook must not
+      // inherit its trigger decision and create a second response.
+      deleteChatProxyExpectation(expectation.channelId, expectation.originalMessageId);
     },
     Math.max(expectation.waitDeadline - Date.now(), 0),
   );
 }
 
-function pausePluralKitProxyWaitTimers(channelId: string): void {
+function pauseChatProxyWaitTimers(channelId: string): void {
   const channelExpectations = expectationsByChannel.get(channelId);
   if (!channelExpectations) {
     return;
@@ -375,24 +398,24 @@ function pausePluralKitProxyWaitTimers(channelId: string): void {
   }
 }
 
-function resumePluralKitProxyWaitTimers(channelId: string): void {
+function resumeChatProxyWaitTimers(channelId: string): void {
   const channelExpectations = expectationsByChannel.get(channelId);
   if (!channelExpectations) {
     return;
   }
 
   for (const expectation of channelExpectations.values()) {
-    schedulePluralKitProxyWaitTimer(expectation);
+    scheduleChatProxyWaitTimer(expectation);
   }
 }
 
-function sweepExpiredPluralKitProxyState(): void {
+function sweepExpiredChatProxyState(): void {
   const now = Date.now();
 
   for (const [channelId, channelExpectations] of expectationsByChannel.entries()) {
     for (const [originalMessageId, expectation] of channelExpectations.entries()) {
       if (now > expectation.expiresAt) {
-        clearPluralKitProxyExpectationTimers(expectation);
+        clearChatProxyExpectationTimers(expectation);
         expectation.resolveWait("timeout");
         channelExpectations.delete(originalMessageId);
       }

@@ -9,8 +9,9 @@ import {
   type UserRow,
 } from "@/types/db/schema";
 import type { RequestSnapshot } from "@/types/misc/context";
-import type { PluralKitMemberContext } from "@/utils/db/repositories/PluralKitRepository";
-import type { PluralKitConversationUser } from "@/utils/text/context/types";
+import type { ChatProxyIdentityContext } from "@/utils/chatProxy/types";
+import { getProxyServicePresentation } from "@/utils/chatProxy/registry";
+import type { ChatProxyConversationUser } from "@/utils/text/context/types";
 import {
   createParticipantExposurePolicy,
   hydrateParticipantProfiles,
@@ -19,6 +20,7 @@ import {
   type ParticipantHydrationParams,
 } from "@/utils/text/participants/hydration";
 import { createBotKey, createDiscordUserKey, type ParticipantSeed } from "@/utils/text/participants/identity";
+import { renderParticipantPrompt } from "@/utils/text/participants/renderer";
 
 const GUILD_ID = "100000000000000001";
 const CHANNEL_ID = "200000000000000001";
@@ -130,8 +132,8 @@ function createFixture(
     fallbackUser?: User | null;
     participantSeeds?: ParticipantSeed[];
     snapshot?: RequestSnapshot;
-    pluralKitContext?: PluralKitMemberContext | null;
-    pluralKitUsers?: ReadonlyMap<string, PluralKitConversationUser>;
+    chatProxyContext?: ChatProxyIdentityContext | null;
+    chatProxyUsers?: ReadonlyMap<string, ChatProxyConversationUser>;
     privacyByDiscordId?: Record<string, PrivacyLevel>;
     blacklistedDiscordIds?: readonly string[];
   } = {},
@@ -189,9 +191,11 @@ function createFixture(
     conversationCorpus: "maps",
     snapshot: options.snapshot,
     convertMentions: async (text) => text,
-    ...(options.pluralKitUsers && { pluralKitUsers: options.pluralKitUsers }),
+    ...(options.chatProxyUsers && { chatProxyUsers: options.chatProxyUsers }),
   };
   const dependencies: ParticipantHydrationDependencies = {
+    isChatProxyIdentity: (discordId) => discordId.startsWith("pk:"),
+    getChatProxyPresentation: getProxyServicePresentation,
     loadUserRow: async () => userRow,
     registerUser: async () => null,
     isBlacklisted: async (_guildId, discordId) => {
@@ -231,7 +235,7 @@ function createFixture(
       presenceMembers.push(preloadedMember);
       return "Online";
     },
-    loadPluralKitMemberContext: async () => options.pluralKitContext ?? null,
+    loadChatProxyIdentityContext: async () => options.chatProxyContext ?? null,
   };
   return {
     params,
@@ -513,19 +517,20 @@ describe("participant hydration", () => {
 const PK_USER_ID = "pk:2f1c9d4e-6b7a-4c31-8d02-5e9f7a1b3c4d";
 const PK_HOST_ID = "500000000000000001";
 
-function createPluralKitContext(overrides: Partial<PluralKitMemberContext> = {}): PluralKitMemberContext {
+function createPluralKitContext(overrides: Partial<ChatProxyIdentityContext> = {}): ChatProxyIdentityContext {
   return {
+    serviceId: "pluralkit",
     userDiscId: PK_USER_ID,
     externalIdentityId: 12,
-    memberUuid: "2f1c9d4e-6b7a-4c31-8d02-5e9f7a1b3c4d",
-    memberHid: "ghijkl",
+    externalKey: "2f1c9d4e-6b7a-4c31-8d02-5e9f7a1b3c4d",
+    identityShortId: "ghijkl",
     displayName: "Sparrow",
-    pkSystemId: 3,
-    systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
-    systemHid: "abcdef",
-    systemName: "Lighthouse",
-    systemTag: "[LH]",
-    systemDescription: null,
+    namespaceId: 3,
+    namespaceKey: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+    namespaceShortId: "abcdef",
+    namespaceDisplayName: "Lighthouse",
+    namespaceTag: "[LH]",
+    namespaceDescription: null,
     hostUserDiscIds: [PK_HOST_ID],
     ...overrides,
   };
@@ -545,7 +550,7 @@ function createPluralKitFixture(options: Parameters<typeof createFixture>[0] = {
   return createFixture({
     participantSeeds: [createPluralKitSeed()],
     userRow: createUserRow({ user_id: 88, user_disc_id: PK_USER_ID, user_nickname: "Saved Sparrow" }),
-    pluralKitContext: createPluralKitContext(),
+    chatProxyContext: createPluralKitContext(),
     ...options,
   });
 }
@@ -567,7 +572,7 @@ describe("pluralkit member hydration", () => {
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
     const identityLines = result.profiles[0]?.fields
-      .find((candidate) => candidate.kind === "pluralkit_identity")
+      .find((candidate) => candidate.kind === "chat_proxy_identity")
       ?.lines.join("\n");
 
     expect(identityLines).toBe('- Member of the "Lighthouse" plural system; its members share one presence here');
@@ -577,9 +582,9 @@ describe("pluralkit member hydration", () => {
   it("prefers the proxying host over the system's other linked accounts", async () => {
     const proxyingHost = "500000000000000009";
     const fixture = createPluralKitFixture({
-      pluralKitContext: createPluralKitContext({ hostUserDiscIds: [PK_HOST_ID] }),
-      pluralKitUsers: new Map<string, PluralKitConversationUser>([
-        [PK_USER_ID, { displayName: "Sparrow", senderDiscId: proxyingHost }],
+      chatProxyContext: createPluralKitContext({ hostUserDiscIds: [PK_HOST_ID] }),
+      chatProxyUsers: new Map<string, ChatProxyConversationUser>([
+        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: proxyingHost }],
       ]),
     });
 
@@ -598,34 +603,37 @@ describe("pluralkit member hydration", () => {
         createPluralKitSeed(),
         { ...createPluralKitSeed(), key: createDiscordUserKey(siblingUserId), firstSeenOrder: 1 },
       ],
-      pluralKitContext: createPluralKitContext({ systemDescription: "We are five.\n\nAsk before  DMing." }),
+      chatProxyContext: createPluralKitContext({ namespaceDescription: "We are five.\n\nAsk before  DMing." }),
     });
 
     const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
 
     expect(result.profiles).toHaveLength(2);
-    expect(result.pluralKitSystems).toEqual([
+    expect(result.chatProxyNamespaces).toEqual([
       {
-        systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
-        label: 'the "Lighthouse" plural system',
-        description: "We are five. Ask before DMing.",
-        hostLabels: ["Alice Guild, @alice_username"],
+        serviceId: "pluralkit",
+        namespaceKey: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+        sectionHeading: "Some of the people above are members of plural systems:",
+        entry:
+          '- The "Lighthouse" plural system (shared account: Alice Guild, @alice_username): We are five. Ask before DMing.',
       },
     ]);
     expect(fixture.memberLoads.filter((discordId) => discordId === PK_HOST_ID)).toHaveLength(1);
   });
 
   it("collects a system note without a description, so the shared account still renders", async () => {
-    const blank = createPluralKitFixture({ pluralKitContext: createPluralKitContext({ systemDescription: "   " }) });
+    const blank = createPluralKitFixture({
+      chatProxyContext: createPluralKitContext({ namespaceDescription: "   " }),
+    });
     const absent = createPluralKitFixture();
 
     for (const fixture of [blank, absent]) {
-      expect((await hydrateParticipantProfiles(fixture.params, fixture.dependencies)).pluralKitSystems).toEqual([
+      expect((await hydrateParticipantProfiles(fixture.params, fixture.dependencies)).chatProxyNamespaces).toEqual([
         {
-          systemUuid: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
-          label: 'the "Lighthouse" plural system',
-          description: null,
-          hostLabels: ["Alice Guild, @alice_username"],
+          serviceId: "pluralkit",
+          namespaceKey: "8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+          sectionHeading: "Some of the people above are members of plural systems:",
+          entry: '- The "Lighthouse" plural system (shared account: Alice Guild, @alice_username)',
         },
       ]);
     }
@@ -643,8 +651,8 @@ describe("pluralkit member hydration", () => {
 
   it("attributes memories to the member, not the shared account", async () => {
     const fixture = createPluralKitFixture({
-      pluralKitUsers: new Map<string, PluralKitConversationUser>([
-        [PK_USER_ID, { displayName: "Sparrow", senderDiscId: PK_HOST_ID }],
+      chatProxyUsers: new Map<string, ChatProxyConversationUser>([
+        [PK_USER_ID, { serviceId: "pluralkit", displayName: "Sparrow", senderDiscId: PK_HOST_ID }],
       ]),
     });
 
@@ -685,5 +693,73 @@ describe("pluralkit member hydration", () => {
 
     expect(memories?.visibility.visible).toBe(false);
     expect(memories?.visibility.reason).toBe("blacklist");
+  });
+});
+
+describe("service-owned chat-proxy presentation", () => {
+  it("renders a non-PluralKit identity without service vocabulary in shared consumers", async () => {
+    const identityUserId = "fx:profile-one";
+    const fixture = createFixture({
+      participantSeeds: [
+        {
+          key: createDiscordUserKey(identityUserId),
+          reasons: new Set(["visible_author"]),
+          aliases: [],
+          capabilities: new Set(["mentionable"]),
+          firstSeenOrder: 0,
+        },
+      ],
+      userRow: createUserRow({ user_id: 99, user_disc_id: identityUserId, user_nickname: "Saved Profile" }),
+      chatProxyContext: {
+        serviceId: "fixture_service",
+        userDiscId: identityUserId,
+        externalIdentityId: 21,
+        externalKey: "profile-one",
+        identityShortId: "one",
+        displayName: "Sparrow",
+        namespaceId: 22,
+        namespaceKey: "account-one",
+        namespaceShortId: "acct",
+        namespaceDisplayName: "Lighthouse Account",
+        namespaceTag: null,
+        namespaceDescription: "Shared public notes.",
+        hostUserDiscIds: [],
+      },
+      chatProxyUsers: new Map([
+        [identityUserId, { serviceId: "fixture_service", displayName: "Sparrow", senderDiscId: USER_ID }],
+      ]),
+    });
+    fixture.dependencies.isChatProxyIdentity = (discordId) => discordId.startsWith("fx:");
+    fixture.dependencies.getChatProxyPresentation = () => ({
+      identityMemoryLabel: (displayName) => `${displayName}'s profile notes`,
+      identityMembershipLine: (context) => `- Profile on ${context.namespaceDisplayName ?? "an account"}`,
+      namespacePresentation: (context, accountLabels) => ({
+        sectionHeading: "Verified relay profiles:",
+        entry: `- ${context.namespaceDisplayName ?? "Unnamed profile"}${
+          accountLabels.length > 0 ? ` (relay source: ${accountLabels.join("; ")})` : ""
+        }${context.namespaceDescription ? `: ${context.namespaceDescription}` : ""}`,
+      }),
+    });
+
+    const result = await hydrateParticipantProfiles(fixture.params, fixture.dependencies);
+    const rendered = renderParticipantPrompt({
+      profiles: result.profiles,
+      personaTaskLines: result.personaTaskLines,
+      chatProxyNamespaces: result.chatProxyNamespaces,
+      isUserImpersonation: false,
+      botName: "Tomori",
+      isDMChannel: false,
+      channelName: "general",
+      channelId: CHANNEL_ID,
+      currentTime: "Aug 2, 2026, 02:00 PM",
+      timezoneLabel: "UTC+8",
+      timeOfDayPhrase: "afternoon",
+    }).text;
+
+    expect(rendered).toContain("Profile on Lighthouse Account");
+    expect(rendered).toContain("Verified relay profiles:");
+    expect(rendered).toContain("relay source:");
+    expect(rendered).not.toMatch(/shared account|\bmember\b|plural system/iu);
+    expect(fixture.memberLoads).not.toContain(identityUserId);
   });
 });

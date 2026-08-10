@@ -10,7 +10,7 @@ import { UNPAIRED_SAMPLE_DIALOGUE_SENTINEL } from "@/types/preset/presetExport";
 import { humanizeString } from "@/utils/text/processors/formatters";
 import { applyUncensorInputTransforms } from "@/utils/text/uncensor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-import { isExternalUserId } from "@/utils/bridges";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import type { TomoriState, AssembledServerConfig } from "@/types/db/schema";
 
 // Resolved at read time, never copied into server_chat_configs.system_prompt: a

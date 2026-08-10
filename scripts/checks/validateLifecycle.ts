@@ -63,6 +63,25 @@ const requiredTables = [
   "nai_presets",
   "st_presets",
   "st_preset_nodes",
+  "external_identities",
+  "chat_proxy_namespaces",
+  "chat_proxy_identities",
+  "chat_proxy_namespace_accounts",
+  "chat_proxy_message_index",
+] as const;
+
+const chatProxyTables = [
+  "external_identities",
+  "chat_proxy_namespaces",
+  "chat_proxy_identities",
+  "chat_proxy_namespace_accounts",
+  "chat_proxy_message_index",
+] as const;
+
+const chatProxyIndexes = [
+  "idx_chat_proxy_identities_namespace",
+  "idx_chat_proxy_namespace_accounts_host",
+  "idx_chat_proxy_message_index_created",
 ] as const;
 
 const seedChecks: SeedCheck[] = [
@@ -181,6 +200,102 @@ async function assertStartupFunctionsExist(client: SQL): Promise<void> {
   }
 }
 
+async function assertChatProxyMigrationPresent(client: SQL): Promise<void> {
+  for (const table of chatProxyTables) {
+    const [row] = await client<ExistsRow[]>`
+      SELECT to_regclass(${`public.${table}`}) IS NOT NULL AS exists
+    `;
+    if (!row?.exists) {
+      throw new Error(`Chat-proxy migration is missing table ${table}.`);
+    }
+  }
+
+  for (const index of chatProxyIndexes) {
+    const [row] = await client<ExistsRow[]>`
+      SELECT to_regclass(${`public.${index}`}) IS NOT NULL AS exists
+    `;
+    if (!row?.exists) {
+      throw new Error(`Chat-proxy migration is missing index ${index}.`);
+    }
+  }
+
+  const [serviceColumn] = await client<{ data_type: string; is_nullable: string }[]>`
+    SELECT data_type, is_nullable
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'users'
+      AND column_name = 'chat_proxy_service'
+  `;
+  if (serviceColumn?.data_type !== "text" || serviceColumn.is_nullable !== "YES") {
+    throw new Error("users.chat_proxy_service must be nullable TEXT.");
+  }
+
+  const [constraintCount] = await client<CountRow[]>`
+    SELECT COUNT(*) AS count
+    FROM pg_constraint
+    WHERE conname IN (
+      'external_identities_user_id_key',
+      'external_identities_kind_external_key_key',
+      'external_identities_user_id_fkey',
+      'chat_proxy_namespaces_service_id_namespace_key_key',
+      'chat_proxy_identities_external_identity_id_key',
+      'chat_proxy_identities_chat_proxy_namespace_id_fkey',
+      'chat_proxy_identities_external_identity_id_fkey',
+      'chat_proxy_namespace_accounts_pkey',
+      'chat_proxy_namespace_accounts_chat_proxy_namespace_id_fkey',
+      'chat_proxy_message_index_pkey',
+      'chat_proxy_message_index_external_identity_id_fkey'
+    )
+  `;
+  if (Number(constraintCount?.count ?? 0) !== 11) {
+    throw new Error("Chat-proxy migration is missing required unique, primary-key, or foreign-key constraints.");
+  }
+
+  const migrationRows = await client<{ name: string }[]>`
+    SELECT name
+    FROM schema_migrations
+    WHERE name LIKE '056\_%' ESCAPE '\\'
+       OR name LIKE '057\_%' ESCAPE '\\'
+       OR name LIKE '058\_%' ESCAPE '\\'
+       OR name LIKE '059\_%' ESCAPE '\\'
+       OR name LIKE '060\_%' ESCAPE '\\'
+  `;
+  const names = new Set(migrationRows.map(({ name }) => name));
+  if (!names.has("056_chat_proxy_identity") || !names.has("058_personal_fallback_chain")) {
+    throw new Error("Expected migrations 056 and 058 were not applied.");
+  }
+  if (!names.has("060_personal_capability_assignment")) {
+    throw new Error("Expected migration 060 was not applied.");
+  }
+  if ([...names].some((name) => name.startsWith("057_") || name.startsWith("059_"))) {
+    throw new Error("Retired migrations 057 or 059 were unexpectedly applied.");
+  }
+}
+
+async function assertChatProxyMigrationAbsent(client: SQL): Promise<void> {
+  for (const table of chatProxyTables) {
+    const [row] = await client<ExistsRow[]>`
+      SELECT to_regclass(${`public.${table}`}) IS NOT NULL AS exists
+    `;
+    if (row?.exists) {
+      throw new Error(`Chat-proxy rollback left table ${table} behind.`);
+    }
+  }
+
+  const [serviceColumn] = await client<ExistsRow[]>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'users'
+        AND column_name = 'chat_proxy_service'
+    ) AS exists
+  `;
+  if (serviceColumn?.exists) {
+    throw new Error("Chat-proxy rollback left users.chat_proxy_service behind.");
+  }
+}
+
 async function assertNoPublicTablesRemain(client: SQL): Promise<void> {
   const tables = await client<TableNameRow[]>`
     SELECT tablename
@@ -293,6 +408,7 @@ async function validateFreshInitialization(client: SQL): Promise<void> {
   await assertRequiredTablesExist(client);
   await assertSeedDataExists(client);
   await assertStartupFunctionsExist(client);
+  await assertChatProxyMigrationPresent(client);
 }
 
 async function main(): Promise<void> {
@@ -318,6 +434,18 @@ async function main(): Promise<void> {
     await validateFreshInitialization(appSql);
 
     const commandEnv = buildCommandEnv(validationUrl, baseUrl);
+
+    section("Validating Chat-Proxy Migration Down And Re-Up");
+    await appSql.close({ timeout: 1 });
+    appSql = null;
+    await runCommand("bun run migrate:down 056 --yes", ["bun", "run", "migrate:down", "056", "--yes"], commandEnv);
+    appSql = createScriptSqlClient(validationUrl);
+    await assertChatProxyMigrationAbsent(appSql);
+    await appSql.close({ timeout: 1 });
+    appSql = null;
+    await runCommand("bun run migrate", ["bun", "run", "migrate"], commandEnv);
+    appSql = createScriptSqlClient(validationUrl);
+    await assertChatProxyMigrationPresent(appSql);
 
     section("Validating Maintenance Scripts");
     await runCommand("bun run backup", ["bun", "run", "backup"], commandEnv);

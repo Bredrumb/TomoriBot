@@ -111,7 +111,7 @@ class UserRepository implements IRepository<UserExportShape> {
             u.privacy_level,
             u.personal_deliberate_tool_mode,
             u.timezone_offset,
-            u.pluralkit_enabled,
+            u.chat_proxy_service,
             u.created_at,
             u.updated_at,
             COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
@@ -161,7 +161,7 @@ class UserRepository implements IRepository<UserExportShape> {
               u.privacy_level,
               u.personal_deliberate_tool_mode,
               u.timezone_offset,
-              u.pluralkit_enabled,
+              u.chat_proxy_service,
               u.created_at,
               u.updated_at,
               COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
@@ -535,8 +535,8 @@ class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
-  async setPluralKitEnabled(userId: number, enabled: boolean): Promise<boolean> {
-    const updated = await this.update(userId, { pluralkit_enabled: enabled });
+  async setChatProxyService(userId: number, serviceId: string | null): Promise<boolean> {
+    const updated = await this.update(userId, { chat_proxy_service: serviceId });
     return updated !== null;
   }
 

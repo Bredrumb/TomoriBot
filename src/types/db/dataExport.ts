@@ -73,7 +73,7 @@ export const personalSettingsExportDataSchema = z.object({
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
   shortterm_cache_crossserver_opt_in: z.boolean().optional(),
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(),
-  pluralkit_enabled: z.boolean().optional(),
+  chat_proxy_service: z.string().nullable().optional(),
 });
 
 export type PersonalSettingsExportData = z.infer<typeof personalSettingsExportDataSchema>;

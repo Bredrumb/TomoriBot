@@ -29,10 +29,8 @@ export interface BuildReunionNoteArgs {
   nowMs?: number;
   reunionDays?: number;
   /**
-   * Set when `displayName` is a plural-system member: the absence being reported
-   * belongs to the account they share, not to that member, and the wording must
-   * not claim otherwise. Stays appositive for the same reason the participant
-   * block does, so no member is framed as owning the system.
+   * Set when `displayName` is a proxied identity. The absence belongs to the
+   * shared host account, so the wording must not assign it to that identity.
    */
   isSharedAccount?: boolean;
 }

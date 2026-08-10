@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
-  composePluralKitBioSeedContent,
-  seedPluralKitMemberBio,
-  type PluralKitBioSeedDeps,
-} from "@/utils/pluralkit/bioSeeding";
+  composeChatProxyBioSeedContent,
+  seedChatProxyIdentityBio,
+  type ChatProxyBioSeedDeps,
+} from "@/utils/chatProxy/bioSeeding";
 
-function makeDeps(overrides: Partial<PluralKitBioSeedDeps> = {}): {
-  deps: PluralKitBioSeedDeps;
+function makeDeps(overrides: Partial<ChatProxyBioSeedDeps> = {}): {
+  deps: ChatProxyBioSeedDeps;
   addCalls: Array<{ userId: number; personaLineageId: number; content: string }>;
   invalidateCalls: string[];
 } {
   const addCalls: Array<{ userId: number; personaLineageId: number; content: string }> = [];
   const invalidateCalls: string[] = [];
 
-  const deps: PluralKitBioSeedDeps = {
-    getHostProtection: async () => ({ protected: false, isPluralKitUser: true }),
+  const deps: ChatProxyBioSeedDeps = {
+    getHostProtection: async () => ({ protected: false, isChatProxyIdentity: true }),
     addPersonalMemory: async (userId, personaLineageId, content) => {
       addCalls.push({ userId, personaLineageId, content });
       return { personal_memory_id: 1 };
@@ -28,40 +28,40 @@ function makeDeps(overrides: Partial<PluralKitBioSeedDeps> = {}): {
   return { deps, addCalls, invalidateCalls };
 }
 
-const originalBioSeedMaxChars = process.env.PLURALKIT_BIO_SEED_MAX_CHARS;
+const originalBioSeedMaxChars = process.env.CHAT_PROXY_BIO_SEED_MAX_CHARS;
 
 afterEach(() => {
-  if (originalBioSeedMaxChars === undefined) delete process.env.PLURALKIT_BIO_SEED_MAX_CHARS;
-  else process.env.PLURALKIT_BIO_SEED_MAX_CHARS = originalBioSeedMaxChars;
+  if (originalBioSeedMaxChars === undefined) delete process.env.CHAT_PROXY_BIO_SEED_MAX_CHARS;
+  else process.env.CHAT_PROXY_BIO_SEED_MAX_CHARS = originalBioSeedMaxChars;
 });
 
-describe("composePluralKitBioSeedContent", () => {
+describe("composeChatProxyBioSeedContent", () => {
   it("flattens newlines and repeated whitespace to single spaces", () => {
-    const content = composePluralKitBioSeedContent("line one\n\nline   two\tline three");
+    const content = composeChatProxyBioSeedContent("line one\n\nline   two\tline three");
     expect(content).toBe("line one line two line three");
   });
 
   it("stores the bio verbatim, with no provenance prefix", () => {
-    expect(composePluralKitBioSeedContent("pronouns: she/her")).toBe("pronouns: she/her");
+    expect(composeChatProxyBioSeedContent("pronouns: she/her")).toBe("pronouns: she/her");
   });
 
-  it("truncates to PLURALKIT_BIO_SEED_MAX_CHARS", () => {
-    process.env.PLURALKIT_BIO_SEED_MAX_CHARS = "20";
-    const content = composePluralKitBioSeedContent("a very long bio that exceeds the cap");
+  it("truncates to CHAT_PROXY_BIO_SEED_MAX_CHARS", () => {
+    process.env.CHAT_PROXY_BIO_SEED_MAX_CHARS = "20";
+    const content = composeChatProxyBioSeedContent("a very long bio that exceeds the cap");
     expect(content).toHaveLength(20);
     expect(content).toBe("a very long bio that");
   });
 });
 
-describe("seedPluralKitMemberBio", () => {
+describe("seedChatProxyIdentityBio", () => {
   it("inserts a memory and invalidates the cache on a new member with a bio", async () => {
     const { deps, addCalls, invalidateCalls } = makeDeps();
 
-    await seedPluralKitMemberBio(
+    await seedChatProxyIdentityBio(
       {
-        isNewMember: true,
-        memberUserDiscId: "pk:mem-uuid",
-        memberUserId: 42,
+        isNewIdentity: true,
+        identityUserDiscId: "fixture:identity-1",
+        identityUserId: 42,
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },
@@ -72,27 +72,27 @@ describe("seedPluralKitMemberBio", () => {
     expect(addCalls[0]?.userId).toBe(42);
     expect(addCalls[0]?.personaLineageId).toBe(0);
     expect(addCalls[0]?.content).toBe("pronouns: she/her");
-    expect(invalidateCalls).toEqual(["pk:mem-uuid"]);
+    expect(invalidateCalls).toEqual(["fixture:identity-1"]);
   });
 
   it("does not insert when the description is empty or absent", async () => {
     const { deps, addCalls, invalidateCalls } = makeDeps();
 
-    await seedPluralKitMemberBio(
+    await seedChatProxyIdentityBio(
       {
-        isNewMember: true,
-        memberUserDiscId: "pk:mem-uuid",
-        memberUserId: 42,
+        isNewIdentity: true,
+        identityUserDiscId: "fixture:identity-1",
+        identityUserId: 42,
         description: "   ",
         serverDiscId: "server_1",
       },
       deps,
     );
-    await seedPluralKitMemberBio(
+    await seedChatProxyIdentityBio(
       {
-        isNewMember: true,
-        memberUserDiscId: "pk:mem-uuid",
-        memberUserId: 42,
+        isNewIdentity: true,
+        identityUserDiscId: "fixture:identity-1",
+        identityUserId: 42,
         description: undefined,
         serverDiscId: "server_1",
       },
@@ -103,14 +103,14 @@ describe("seedPluralKitMemberBio", () => {
     expect(invalidateCalls).toHaveLength(0);
   });
 
-  it("does not insert when isNewMember is false", async () => {
+  it("does not insert when isNewIdentity is false", async () => {
     const { deps, addCalls } = makeDeps();
 
-    await seedPluralKitMemberBio(
+    await seedChatProxyIdentityBio(
       {
-        isNewMember: false,
-        memberUserDiscId: "pk:mem-uuid",
-        memberUserId: 42,
+        isNewIdentity: false,
+        identityUserDiscId: "fixture:identity-1",
+        identityUserId: 42,
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },
@@ -124,17 +124,17 @@ describe("seedPluralKitMemberBio", () => {
     const { deps, addCalls } = makeDeps({
       getHostProtection: async () => ({
         protected: true,
-        isPluralKitUser: true,
+        isChatProxyIdentity: true,
         reason: "host_full_privacy",
         hostUserDiscId: "host_1",
       }),
     });
 
-    await seedPluralKitMemberBio(
+    await seedChatProxyIdentityBio(
       {
-        isNewMember: true,
-        memberUserDiscId: "pk:mem-uuid",
-        memberUserId: 42,
+        isNewIdentity: true,
+        identityUserDiscId: "fixture:identity-1",
+        identityUserId: 42,
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },
@@ -149,11 +149,11 @@ describe("seedPluralKitMemberBio", () => {
       addPersonalMemory: async () => null,
     });
 
-    await seedPluralKitMemberBio(
+    await seedChatProxyIdentityBio(
       {
-        isNewMember: true,
-        memberUserDiscId: "pk:mem-uuid",
-        memberUserId: 42,
+        isNewIdentity: true,
+        identityUserDiscId: "fixture:identity-1",
+        identityUserId: 42,
         description: "pronouns: she/her",
         serverDiscId: "server_1",
       },

@@ -5,7 +5,8 @@ import type { AssembledServerConfig, PersonaUserBlockRow, ServerEmojiRow, Server
 import type { StructuredContextItem } from "@/types/misc/context";
 import type { PreparedParticipantContext } from "@/utils/text/participants/preparation";
 
-export type PluralKitConversationUser = {
+export type ChatProxyConversationUser = {
+  serviceId: string;
   displayName: string;
   senderDiscId: string;
 };

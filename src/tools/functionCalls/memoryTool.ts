@@ -8,7 +8,7 @@ import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema }
 import { invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { invalidateUserCache } from "../../utils/cache/userCache";
 import { resolveTriggererDiscordId, resolveUserTarget } from "@/utils/discord/targetResolver";
-import { getPluralKitHostProtection } from "@/utils/pluralkit/hostProtection";
+import { getChatProxyHostProtection } from "@/utils/chatProxy/hostProtection";
 
 /**
  * Tool for remembering and learning new information during conversations
@@ -394,13 +394,13 @@ export class MemoryTool extends BaseTool {
         }
         const targetUserDisplayName = resolvedTargetUserLabel || targetUserRow.user_nickname;
         const contextServerDiscId = "guild" in context.channel ? context.channel.guild.id : context.userId;
-        const pluralKitHostProtection = await getPluralKitHostProtection(
+        const chatProxyHostProtection = await getChatProxyHostProtection(
           resolvedTargetUserId as string,
           contextServerDiscId,
         );
-        if (pluralKitHostProtection.protected) {
+        if (chatProxyHostProtection.protected) {
           log.info(
-            `Self-teach blocked: PluralKit member ${resolvedTargetUserId} is shielded by host ${pluralKitHostProtection.hostUserDiscId} (${pluralKitHostProtection.reason})`,
+            `Self-teach blocked: chat-proxy identity ${resolvedTargetUserId} is shielded by host ${chatProxyHostProtection.hostUserDiscId} (${chatProxyHostProtection.reason})`,
           );
           return {
             success: false,
@@ -409,9 +409,9 @@ export class MemoryTool extends BaseTool {
               status: "memory_save_failed_privacy_restricted",
               scope: "target_user",
               reason:
-                pluralKitHostProtection.reason === "host_blacklisted"
-                  ? `The host account for ${targetUserDisplayName} is blacklisted in this server. I cannot save personal memories for their PluralKit members.`
-                  : `The host account for ${targetUserDisplayName} has full privacy enabled. I cannot save personal memories for their PluralKit members.`,
+                chatProxyHostProtection.reason === "host_blacklisted"
+                  ? `The host account for ${targetUserDisplayName} is blacklisted in this server. I cannot save personal memories for its chat-proxy identities.`
+                  : `The host account for ${targetUserDisplayName} has full privacy enabled. I cannot save personal memories for its chat-proxy identities.`,
             },
           };
         }
@@ -494,7 +494,7 @@ export class MemoryTool extends BaseTool {
           }
           const targetUserIsBlacklisted =
             ((await userRepository.isBlacklisted(serverDiscId, resolvedTargetUserId as string)) ?? false) ||
-            (await getPluralKitHostProtection(resolvedTargetUserId as string, serverDiscId)).protected;
+            (await getChatProxyHostProtection(resolvedTargetUserId as string, serverDiscId)).protected;
 
           let personalMemoryFooterKey: string;
           if (!personalizationEnabled) {

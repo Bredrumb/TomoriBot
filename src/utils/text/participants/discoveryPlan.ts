@@ -1,5 +1,5 @@
 import type { TomoriState } from "@/types/db/schema";
-import { isPluralKitUserId } from "@/utils/bridges";
+import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
 import { buildBridgeUserAliases, buildPersonaAliases, buildWebhookAliases } from "@/utils/text/participants/aliases";
 import {
   createBotKey,
@@ -122,10 +122,10 @@ function visibleParticipantIdentity(
     }
     return { key: createPersonaKey(personaId), sourceDisplayName: syntheticUser.displayName };
   }
-  // A PluralKit member arrives through a webhook but is a real user identity with
-  // its own "pk:{uuid}" row, so its kind comes from the ID, never from a webhook
+  // A stable proxy identity arrives through a webhook but owns a real user row,
+  // so its kind comes from the ID, never from a webhook
   // entry a caller happened to record for it.
-  if (syntheticUser?.type === "webhook" && !isPluralKitUserId(normalizedId)) {
+  if (syntheticUser?.type === "webhook" && !isChatProxyIdentityUserId(normalizedId)) {
     return { key: createWebhookKey(normalizedId), sourceDisplayName: syntheticUser.displayName };
   }
 
@@ -161,7 +161,7 @@ export function discoverHistoricalSyntheticCandidates(
   syntheticUsers: ParticipantVisibleInput["syntheticUsers"],
 ): DiscoveredParticipantCandidate[] {
   return [...(syntheticUsers ?? [])].flatMap(([participantId, syntheticUser]) => {
-    if (isPluralKitUserId(participantId)) return [];
+    if (isChatProxyIdentityUserId(participantId)) return [];
     const personaId = syntheticUser.type === "persona" ? parsePersonaId(participantId) : null;
     if (syntheticUser.type === "persona" && personaId === null) {
       throw new Error(`Synthetic persona key ${participantId} does not contain a valid persona ID`);

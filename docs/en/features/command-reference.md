@@ -273,6 +273,7 @@ Manage your personal settings
 
 | Command | Summary |
 |---|---|
+| `/personal chat-proxy` | Choose a supported chat proxy service for your account. |
 | `/personal config export` | Export your personal settings, excluding server settings, personas, and memories. |
 | `/personal config import` | Import your personal settings only. Does not import server settings or memories. |
 | `/personal config remove` | Reset your personal configuration. |
@@ -289,7 +290,6 @@ Manage your personal settings
 | `/personal openrouter-model add` | Register an OpenRouter model codename for your personal provider list. |
 | `/personal openrouter-model remove` | Remove registered OpenRouter models from your personal provider list. |
 | `/personal parameters` | Adjust sampler settings for your personal providers, not this server's. |
-| `/personal pluralkit` | Enable or disable PluralKit-aware message handling for your account. |
 | `/personal privacy` | Control personal memory storage and privacy settings |
 | `/personal provider add` | Save your API key and enable its default personal text model everywhere. |
 | `/personal provider model-embedding` | Select and enable your personal embedding model, used in every server. |

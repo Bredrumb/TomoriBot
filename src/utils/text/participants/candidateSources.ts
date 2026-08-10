@@ -1,7 +1,8 @@
 import type { Client } from "discord.js";
 import type { ContextReferenceCandidate } from "@/utils/db/repositories/UserRepository";
 import { userRepository } from "@/utils/db/repositories";
-import { pluralKitRepository, type PluralKitMemberReference } from "@/utils/db/repositories/PluralKitRepository";
+import type { ChatProxyIdentityReference } from "@/utils/chatProxy/types";
+import { chatProxyRepository } from "@/utils/db/repositories/ChatProxyRepository";
 
 interface UserReferenceCandidateQuery {
   serverDiscId: string;
@@ -13,13 +14,13 @@ export interface UserReferenceCandidateSource {
   loadCandidates(query: UserReferenceCandidateQuery): Promise<readonly ContextReferenceCandidate[]>;
 }
 
-interface PluralKitMemberReferenceQuery {
+interface ChatProxyIdentityReferenceQuery {
   hostUserDiscIds: readonly string[];
   normalizedHistoryText: string;
 }
 
-export interface PluralKitMemberReferenceSource {
-  loadMembers(query: PluralKitMemberReferenceQuery): Promise<readonly PluralKitMemberReference[]>;
+export interface ChatProxyIdentityReferenceSource {
+  loadIdentities(query: ChatProxyIdentityReferenceQuery): Promise<readonly ChatProxyIdentityReference[]>;
 }
 
 interface ReferenceMemberIdentity {
@@ -45,9 +46,9 @@ export const repositoryUserReferenceCandidateSource: UserReferenceCandidateSourc
     }),
 };
 
-export const repositoryPluralKitMemberReferenceSource: PluralKitMemberReferenceSource = {
-  loadMembers: (query) =>
-    pluralKitRepository.loadContextReferenceMembers({
+export const repositoryChatProxyIdentityReferenceSource: ChatProxyIdentityReferenceSource = {
+  loadIdentities: (query) =>
+    chatProxyRepository.loadContextReferenceIdentities({
       hostUserDiscIds: [...query.hostUserDiscIds],
       normalizedHistoryText: query.normalizedHistoryText,
     }),

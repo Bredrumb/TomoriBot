@@ -3,7 +3,7 @@ import type { TomoriState, UserRow } from "@/types/db/schema";
 import { CooldownType, PrivacyLevel } from "@/types/db/schema";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { isExternalUserId } from "@/utils/bridges";
+import { isExternalUserId } from "@/utils/externalIdentityUserId";
 import { configRepository, userRepository, whitelistRepository } from "@/utils/db/repositories";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
@@ -38,7 +38,7 @@ import {
   isAutochatOverrideChannel,
   isAutochatQualifyingMessage,
   isMatrixRelayMessage,
-  isPluralKitProxyMessage,
+  isChatProxyMessage,
   isSelfTriggerMessage,
 } from "@/utils/chat/triggerProcessor";
 import { getLastRespondedPersonaId, getSelfReplyChainState } from "@/utils/chat/selfReplyState";
@@ -99,13 +99,13 @@ export async function planChatTurns(lockedTurn: LockedChatTurn): Promise<ChatTur
   admission.allPersonas = allPersonas;
 
   const isSelfMessage = isSelfTriggerMessage(message, allPersonas);
-  const isPluralKitProxy = isPluralKitProxyMessage(message);
+  const isChatProxy = isChatProxyMessage(message);
   if (
     (message.author.bot || message.webhookId) &&
     !isSelfMessage &&
     !incoming.isManuallyTriggered &&
     !isMatrixRelayMessage(message) &&
-    !isPluralKitProxy
+    !isChatProxy
   ) {
     return { lockedTurn, turns: [] };
   }
@@ -463,9 +463,7 @@ async function updateAutochatCounter(message: Message, tomoriState: TomoriState,
 }
 
 function isRealUserMessage(message: Message): boolean {
-  return (
-    (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isPluralKitProxyMessage(message)
-  );
+  return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message) || isChatProxyMessage(message);
 }
 
 function resolveChannelScope(message: Message): { effectiveChannelId: string; parentChannelId?: string } {
@@ -704,9 +702,8 @@ async function enforceTurnGuards(
 
   if (!incoming.isStopResponse && !incoming.isPersonaJob && !isSelfMessage && textCredentialSource !== "personal") {
     const cooldownUserDiscId = admission.cooldownUserDiscId ?? userDiscId;
-    // External IDs (Matrix "@user:server", "pk:{uuid}") are never Discord
-    // snowflakes, so fetching them is a guaranteed API error; reuse the
-    // message's own member/author fallbacks instead of burning two REST calls.
+    // External identities are not Discord snowflakes. Reuse the message's own
+    // member and author fallbacks instead of spending guaranteed-failing calls.
     const shouldFetchCooldownUser = cooldownUserDiscId !== message.author.id && !isExternalUserId(cooldownUserDiscId);
     const cooldownMember = shouldFetchCooldownUser
       ? ((await admission.guild?.members.fetch(cooldownUserDiscId).catch(() => null)) ?? null)

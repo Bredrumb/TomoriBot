@@ -53,6 +53,17 @@ within the same server.
 Remove them with `/memory personal remove` and `/memory server remove`. Memories persist
 until you remove them.
 
+### Chat-Proxy Identities
+
+When you enable a supported chat-proxy service, TomoriBot can keep personal memories for each
+verified proxied identity separately from the Discord account that sent the message. The host
+account still controls privacy, blocking, cooldowns, and authorization. TomoriBot never guesses an
+identity from a webhook name or avatar, and an unverified webhook does not receive a separate
+memory profile.
+
+PluralKit is currently the only selectable service. See
+[Chat-Proxy Support](/features/integrations/chat-proxy-support/) for setup and limitations.
+
 
 ### How Memories Get Saved
 

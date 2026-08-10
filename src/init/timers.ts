@@ -86,21 +86,21 @@ export function initTimers(client: Client): void {
     log.error("Failed to schedule preset avatar fan-out", error as Error);
   }
 
-  log.section("Initializing PluralKit Index Pruner...");
+  log.section("Initializing Chat-Proxy Index Pruner...");
   try {
-    // Age-based retention sweep over pluralkit_message_index (startup + daily).
-    import("@/timers/pluralkitIndexPruner")
-      .then(({ initializePluralKitIndexPruner }) => {
+    // Age-based retention keeps the durable proxy-message index bounded.
+    import("@/timers/chatProxyIndexPruner")
+      .then(({ initializeChatProxyIndexPruner }) => {
         client.once("clientReady", () => {
-          initializePluralKitIndexPruner();
-          log.success("PluralKit index pruner initialized");
+          initializeChatProxyIndexPruner();
+          log.success("Chat-proxy index pruner initialized");
         });
       })
       .catch((error: Error) => {
-        log.error("Failed to initialize PluralKit index pruner", error);
+        log.error("Failed to initialize chat-proxy index pruner", error);
       });
   } catch (error) {
-    log.error("Failed to initialize PluralKit index pruner", error as Error);
+    log.error("Failed to initialize chat-proxy index pruner", error as Error);
   }
 
   log.section("Initializing Upload Quota System...");

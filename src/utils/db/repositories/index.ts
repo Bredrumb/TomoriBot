@@ -12,7 +12,7 @@ import { personalMemoryRepository } from "./PersonalMemoryRepository";
 import { personaUserBlockRepository } from "./PersonaUserBlockRepository";
 import { personaSpriteRepository } from "./PersonaSpriteRepository";
 import { personaRepository } from "./PersonaRepository";
-import { pluralKitRepository } from "./PluralKitRepository";
+import { chatProxyRepository } from "./ChatProxyRepository";
 import { presetRepository } from "./PresetRepository";
 import { ragRepository } from "./RagRepository";
 import { serverMemoryRepository } from "./ServerMemoryRepository";
@@ -38,7 +38,7 @@ export {
   personaUserBlockRepository,
   personaSpriteRepository,
   personaRepository,
-  pluralKitRepository,
+  chatProxyRepository,
   presetRepository,
   ragRepository,
   serverMemoryRepository,

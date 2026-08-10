@@ -46,7 +46,7 @@ export const userSchema = z.object({
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"), // Added May 2026 - User-scoped deliberate tool mode tri-state
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(), // Added June 2026 - Personal UTC offset; NULL = not set / opt-out
-  pluralkit_enabled: z.boolean().default(false), // Added July 2026 - opt-in for PluralKit proxy-aware triggers + per-member identity
+  chat_proxy_service: z.string().nullable().default(null),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -175,8 +175,8 @@ export const personaAutochRuntimeStateSchema = z.object({
 export type PersonaAutochRuntimeStateRow = z.infer<typeof personaAutochRuntimeStateSchema>;
 /**
  * Generic (kind, external_key) -> users-row anchor (migration 056). Only
- * kind = 'pluralkit_member' ships today; the shape is ready for future
- * external identity kinds without a redesign. See plans/pluralkit-integration.md.
+ * Service-owned identity kinds share this shape so new adapters do not require
+ * another user-identity schema.
  */
 export const externalIdentitySchema = z.object({
   external_identity_id: z.number().int().optional(),
@@ -188,63 +188,44 @@ export const externalIdentitySchema = z.object({
 });
 export type ExternalIdentityRow = z.infer<typeof externalIdentitySchema>;
 
-/**
- * A PluralKit system (migration 056). system_uuid is the canonical anchor
- * (never the name/tag, which are volatile); system_name/system_tag are
- * cosmetic caches refreshed opportunistically from message lookups.
- */
-export const pluralKitSystemSchema = z.object({
-  pk_system_id: z.number().int().optional(),
-  system_uuid: z.string().uuid(),
-  system_hid: z.string().min(1),
-  system_name: z.string().nullable().optional(),
-  system_tag: z.string().nullable().optional(),
-  system_description: z.string().nullable().optional(),
+export const chatProxyNamespaceSchema = z.object({
+  chat_proxy_namespace_id: z.number().int().optional(),
+  service_id: z.string().min(1),
+  namespace_key: z.string().min(1),
+  short_id: z.string().nullable().optional(),
+  display_name: z.string().nullable().optional(),
+  tag: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
-export type PluralKitSystemRow = z.infer<typeof pluralKitSystemSchema>;
+export type ChatProxyNamespaceRow = z.infer<typeof chatProxyNamespaceSchema>;
 
-/**
- * A PluralKit member (migration 056). member_uuid is the canonical anchor;
- * external_identity_id links to the synthetic `users` row that carries this
- * member's personal memories. display_name is a cosmetic cache.
- */
-export const pluralKitMemberSchema = z.object({
-  pk_member_id: z.number().int().optional(),
-  pk_system_id: z.number().int(),
+export const chatProxyIdentitySchema = z.object({
+  chat_proxy_identity_id: z.number().int().optional(),
+  chat_proxy_namespace_id: z.number().int(),
   external_identity_id: z.number().int(),
-  member_uuid: z.string().uuid(),
-  member_hid: z.string().min(1),
+  short_id: z.string().nullable().optional(),
   display_name: z.string().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
-export type PluralKitMemberRow = z.infer<typeof pluralKitMemberSchema>;
+export type ChatProxyIdentityRow = z.infer<typeof chatProxyIdentitySchema>;
 
-/**
- * Links a PluralKit system to a Discord host account that proxies for it
- * (migration 056). Authorization (privacy, blacklist, cooldowns, quotas)
- * keys on host_user_disc_id; conversational identity keys on the member.
- */
-export const pluralKitSystemAccountSchema = z.object({
-  pk_system_id: z.number().int(),
+export const chatProxyNamespaceAccountSchema = z.object({
+  chat_proxy_namespace_id: z.number().int(),
   host_user_disc_id: z.string().min(1),
   created_at: z.date().optional(),
 });
-export type PluralKitSystemAccountRow = z.infer<typeof pluralKitSystemAccountSchema>;
+export type ChatProxyNamespaceAccountRow = z.infer<typeof chatProxyNamespaceAccountSchema>;
 
-/**
- * Durable message -> identity index (migration 056) so context rebuilds
- * survive restarts without re-querying the PluralKit API. Rows are immutable.
- */
-export const pluralKitMessageIndexSchema = z.object({
+export const chatProxyMessageIndexSchema = z.object({
   message_disc_id: z.string().min(1),
   external_identity_id: z.number().int(),
   sender_disc_id: z.string().min(1),
   created_at: z.date().optional(),
 });
-export type PluralKitMessageIndexRow = z.infer<typeof pluralKitMessageIndexSchema>;
+export type ChatProxyMessageIndexRow = z.infer<typeof chatProxyMessageIndexSchema>;
 
 /**
  * Schema for voice_samples table : reference audio clips for local TTS voice cloning.

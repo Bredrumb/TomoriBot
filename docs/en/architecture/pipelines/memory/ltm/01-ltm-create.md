@@ -96,24 +96,20 @@ After a successful write:
 |---|---|---|
 | `target_user` resolves to the bot itself | `server_wide` | Bot can't have personal memories about itself |
 | `target_user` is a Matrix bridge user | `server_wide` | Bridge users are not stored in `users` table with full identity |
-| `target_user` is a PluralKit member (`pk:{uuid}`) | `target_user` (**no fallback**) | Unlike Matrix bridge users, a PK member has a real synthetic `users` row (see [`integrations/pluralkit.md`](../../../integrations/pluralkit)), so `resolveUserTarget()` and this tool's happy path need zero PK-specific changes |
+| `target_user` is a stable chat-proxy identity | `target_user` (**no fallback**) | Stable identities have synthetic `users` rows, so `resolveUserTarget()` and the memory path remain service-neutral. |
 | `target_user` has `PrivacyLevel.PARTIAL/FULL` | Error (no fallback) | Privacy restriction; user must change setting |
 
-Authorization still checks the PK member's **host** Discord account for
-`PrivacyLevel.FULL`/blacklist shielding (`getPluralKitHostProtection()`) in
-addition to the member's own row — see the integration doc's
-[authorization/identity split table](../../../integrations/pluralkit#authorization-vs-identity-split).
+Authorization also checks a proxy identity's **host** Discord account for `PrivacyLevel.FULL` and
+blacklist shielding through `getChatProxyHostProtection()`. See
+[Chat-Proxy Integration](../../../integrations/chat-proxy#persistence).
 
-### One-time PluralKit bio seed (a separate write path)
+### One-time proxy identity bio seed
 
-`src/utils/pluralkit/bioSeeding.ts` writes a personal memory directly via
-`personalMemoryRepository.add()` — it does **not** go through
-`create_long_term_memory` or this tool. It fires once, fire-and-forget, right
-after a PluralKit member's first-ever identity registration, using
-`persona_lineage_id = 0` (the global personal namespace) rather than a normal
-lineage ID, since the fact describes the person, not one persona. See the
-integration doc's [bio seeding section](../../../integrations/pluralkit#one-time-bio-seeding)
-for the truncation/consent/snapshot-not-sync rules.
+`src/utils/chatProxy/bioSeeding.ts` writes through `personalMemoryRepository.add()` rather than the
+tool. A stable adapter may supply a public bio when an identity is first registered. The write uses
+`persona_lineage_id = 0`, runs without delaying admission, invalidates cache only after success, and
+is blocked by host privacy or blacklist state. PluralKit's member bio is a one-time snapshot; see the
+[adapter documentation](../../../integrations/pluralkit#prompt-presentation).
 
 ## Extension points
 

@@ -9,19 +9,21 @@ import {
 } from "@/types/db/schema";
 import type { RequestSnapshot } from "@/types/misc/context";
 import { personalMemoryRepository, serverScheduleRepository, userRepository } from "@/utils/db/repositories";
-import { pluralKitRepository, type PluralKitMemberContext } from "@/utils/db/repositories/PluralKitRepository";
-import { isPluralKitUserId } from "@/utils/bridges";
+import type { ChatProxyIdentityContext, ProxyServicePresentation } from "@/utils/chatProxy/types";
+import { isChatProxyIdentityUserId } from "@/utils/chatProxy/identityUserId";
+import { getProxyServicePresentation } from "@/utils/chatProxy/registry";
+import { chatProxyRepository } from "@/utils/db/repositories/ChatProxyRepository";
 import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName";
 import { log } from "@/utils/misc/logger";
 import { formatMemoryWithId } from "@/utils/memory/memoryId";
 import { getUserPresenceDetails } from "@/utils/text/context/history";
 import type { MentionConverter } from "@/utils/text/context/templates";
-import type { PluralKitConversationUser, PublicPersonaProfile } from "@/utils/text/context/types";
+import type { ChatProxyConversationUser, PublicPersonaProfile } from "@/utils/text/context/types";
 import {
   buildBridgeUserAliases,
   buildDiscordUserAliases,
   buildPersonaAliases,
-  buildPluralKitMemberAliases,
+  buildChatProxyIdentityAliases,
   type DiscordAliasIdentity,
 } from "@/utils/text/participants/aliases";
 import {
@@ -55,7 +57,7 @@ export type ParticipantProfileFieldKind =
   | "personal_memories"
   | "human_reminders"
   | "persona_public_attributes"
-  | "pluralkit_identity"
+  | "chat_proxy_identity"
   | `extension:${string}`;
 
 export type ParticipantFieldVisibilityReason =
@@ -100,18 +102,18 @@ export interface ParticipantExposurePolicy {
   exposePersonalMemories: boolean;
 }
 
-/** A present system's own identity, rendered once for the whole system rather than per member. */
-export interface PluralKitSystemNote {
-  systemUuid: string;
-  label: string;
-  description: string | null;
-  hostLabels: readonly string[];
+/** A present namespace, rendered once rather than repeated for every identity. */
+export interface ChatProxyNamespaceNote {
+  serviceId: string;
+  namespaceKey: string;
+  sectionHeading: string;
+  entry: string;
 }
 
 export interface ParticipantHydrationResult {
   profiles: readonly HydratedParticipantProfile[];
   personaTaskLines: readonly string[];
-  pluralKitSystems: readonly PluralKitSystemNote[];
+  chatProxyNamespaces: readonly ChatProxyNamespaceNote[];
   diagnostics: ParticipantHydrationDiagnostics;
 }
 
@@ -128,12 +130,14 @@ interface ParticipantHydrationDiagnostics {
     memberReads: number;
     fallbackUserReads: number;
     presenceReads: number;
-    pluralKitContextReads: number;
+    chatProxyContextReads: number;
   };
   enricherContributions: readonly ContributionExecutionDiagnostic[];
 }
 
 export interface ParticipantHydrationDependencies {
+  isChatProxyIdentity(discordId: string): boolean;
+  getChatProxyPresentation(serviceId: string): ProxyServicePresentation | null;
   loadUserRow(discordId: string): Promise<UserRow | null>;
   registerUser(discordId: string, displayName: string, language: "en-US" | "ja"): Promise<UserRow | null>;
   isBlacklisted(guildId: string, discordId: string): Promise<boolean>;
@@ -148,7 +152,7 @@ export interface ParticipantHydrationDependencies {
   loadMember(client: Client, guildId: string, discordId: string): Promise<GuildMember | null>;
   loadFallbackUser(client: Client, discordId: string): Promise<User | null>;
   loadPresence(client: Client, discordId: string, guildId: string, preloadedMember?: GuildMember): Promise<string>;
-  loadPluralKitMemberContext(userDiscId: string): Promise<PluralKitMemberContext | null>;
+  loadChatProxyIdentityContext(userDiscId: string): Promise<ChatProxyIdentityContext | null>;
 }
 
 export interface ParticipantHydrationParams {
@@ -164,7 +168,7 @@ export interface ParticipantHydrationParams {
   impersonatedIdentityName: string | null;
   matrixUsers?: ReadonlyMap<string, string>;
   syntheticUsers?: ReadonlyMap<string, { displayName: string; type: "persona" | "webhook" }>;
-  pluralKitUsers?: ReadonlyMap<string, PluralKitConversationUser>;
+  chatProxyUsers?: ReadonlyMap<string, ChatProxyConversationUser>;
   publicPersonaProfiles?: readonly PublicPersonaProfile[];
   preloadedReferencedUserRows?: ReadonlyMap<string, UserRow>;
   referencedUserIds?: ReadonlySet<string>;
@@ -176,6 +180,8 @@ export interface ParticipantHydrationParams {
 }
 
 const DEFAULT_HYDRATION_DEPENDENCIES: ParticipantHydrationDependencies = {
+  isChatProxyIdentity: isChatProxyIdentityUserId,
+  getChatProxyPresentation: getProxyServicePresentation,
   loadUserRow: (discordId) => userRepository.loadByDiscordId(discordId),
   registerUser: (discordId, displayName, language) => userRepository.register(discordId, displayName, language),
   isBlacklisted: (guildId, discordId) => userRepository.isBlacklisted(guildId, discordId),
@@ -195,7 +201,7 @@ const DEFAULT_HYDRATION_DEPENDENCIES: ParticipantHydrationDependencies = {
   loadFallbackUser: (client, discordId) => client.users.fetch(discordId).catch(() => null),
   loadPresence: (client, discordId, guildId, preloadedMember) =>
     getUserPresenceDetails(client, discordId, guildId, preloadedMember),
-  loadPluralKitMemberContext: (userDiscId) => pluralKitRepository.getMemberContextByUserDiscId(userDiscId),
+  loadChatProxyIdentityContext: (userDiscId) => chatProxyRepository.getIdentityContextByUserDiscId(userDiscId),
 };
 
 export function createParticipantExposurePolicy(params: {
@@ -312,19 +318,20 @@ interface HydratedDiscordUserBase {
   blacklisted: boolean;
   personalizationEnabled: boolean;
   isTriggerer: boolean;
-  pluralKit: PluralKitParticipant | null;
+  chatProxy: ChatProxyParticipant | null;
 }
 
-interface PluralKitParticipant {
-  context: PluralKitMemberContext | null;
+interface ChatProxyParticipant {
+  context: ChatProxyIdentityContext | null;
   hostDiscIds: readonly string[];
+  presentation: ProxyServicePresentation | null;
 }
 
 /**
- * Host accounts that may speak for this member, preferring the account that actually
- * proxied it in this history window over the system's other linked accounts.
+ * Host accounts that may speak for this identity, preferring the account that
+ * actually proxied it in this history window over other linked accounts.
  */
-function pluralKitHostDiscIds(context: PluralKitMemberContext | null, proxyingHostDiscId?: string | null): string[] {
+function chatProxyHostDiscIds(context: ChatProxyIdentityContext | null, proxyingHostDiscId?: string | null): string[] {
   const ordered = new Set<string>();
   if (proxyingHostDiscId?.trim()) ordered.add(proxyingHostDiscId.trim());
   for (const hostDiscId of context?.hostUserDiscIds ?? []) {
@@ -335,11 +342,10 @@ function pluralKitHostDiscIds(context: PluralKitMemberContext | null, proxyingHo
 }
 
 /**
- * A member identity is not an independent Discord account, so the host account's
- * opt-out and blacklist state governs it: without this a plural system could not
- * opt out of personalization without unlinking every member.
+ * A proxy identity is not an independent Discord account, so host privacy and
+ * blacklist state must govern it as well as its synthetic row.
  */
-async function applyPluralKitHostAuthorization(
+async function applyChatProxyHostAuthorization(
   hostDiscIds: readonly string[],
   current: { blacklisted: boolean; privacyLevel: PrivacyLevel },
   guildId: string,
@@ -362,13 +368,12 @@ async function hydrateDiscordUserBase(
 ): Promise<HydratedDiscordUserBase | null> {
   if (seed.key.kind !== "discord_user") return null;
   const discordId = seed.key.discordId;
-  // A "pk:{uuid}" identity is not a Discord snowflake, so every member/user/presence
-  // fetch for one is a guaranteed API error: the PluralKit repository and the proxy
-  // window map are its only identity sources.
-  const isPluralKitMember = isPluralKitUserId(discordId);
+  // A synthetic proxy identity is not a Discord snowflake, so member, user, and
+  // presence fetches would be guaranteed API errors.
+  const isChatProxyIdentity = dependencies.isChatProxyIdentity(discordId);
   let userRow =
     params.preloadedReferencedUserRows?.get(discordId) ?? (await dependencies.loadUserRow(discordId).catch(() => null));
-  const member = isPluralKitMember
+  const member = isChatProxyIdentity
     ? null
     : await dependencies.loadMember(params.client, params.guildId, discordId).catch(() => null);
   if (!userRow && !params.referencedUserIds?.has(discordId) && member) {
@@ -386,7 +391,7 @@ async function hydrateDiscordUserBase(
   }
 
   const fallbackUser =
-    member || isPluralKitMember
+    member || isChatProxyIdentity
       ? null
       : await dependencies.loadFallbackUser(params.client, discordId).catch(() => null);
   const personalizationEnabled = params.tomoriConfig.personal_memories_enabled ?? true;
@@ -399,17 +404,18 @@ async function hydrateDiscordUserBase(
       ? (params.snapshot?.triggererPrivacyLevel ?? PrivacyLevel.MINIMAL)
       : await dependencies.getPrivacyLevel(discordId),
   };
-  const pluralKitContext = isPluralKitMember
-    ? await dependencies.loadPluralKitMemberContext(discordId).catch(() => null)
+  const chatProxyContext = isChatProxyIdentity
+    ? await dependencies.loadChatProxyIdentityContext(discordId).catch(() => null)
     : null;
-  const pluralKit: PluralKitParticipant | null = isPluralKitMember
+  const chatProxy: ChatProxyParticipant | null = isChatProxyIdentity
     ? {
-        context: pluralKitContext,
-        hostDiscIds: pluralKitHostDiscIds(pluralKitContext, params.pluralKitUsers?.get(discordId)?.senderDiscId),
+        context: chatProxyContext,
+        hostDiscIds: chatProxyHostDiscIds(chatProxyContext, params.chatProxyUsers?.get(discordId)?.senderDiscId),
+        presentation: chatProxyContext ? dependencies.getChatProxyPresentation(chatProxyContext.serviceId) : null,
       }
     : null;
-  const { blacklisted, privacyLevel } = pluralKit
-    ? await applyPluralKitHostAuthorization(pluralKit.hostDiscIds, ownAuthorization, params.guildId, dependencies)
+  const { blacklisted, privacyLevel } = chatProxy
+    ? await applyChatProxyHostAuthorization(chatProxy.hostDiscIds, ownAuthorization, params.guildId, dependencies)
     : ownAuthorization;
   const serverNickname = member?.nickname ?? null;
   const globalName = member?.user.globalName ?? fallbackUser?.globalName ?? null;
@@ -425,14 +431,14 @@ async function hydrateDiscordUserBase(
     isImpersonatedUser,
   });
   const customNickname = userRow.user_nickname;
-  const pluralKitDisplayName = pluralKit
-    ? (params.pluralKitUsers?.get(discordId)?.displayName ??
-      pluralKit.context?.displayName ??
+  const chatProxyDisplayName = chatProxy
+    ? (params.chatProxyUsers?.get(discordId)?.displayName ??
+      chatProxy.context?.displayName ??
       customNickname ??
       discordId)
     : null;
   let displayName =
-    pluralKitDisplayName ??
+    chatProxyDisplayName ??
     (policy.canUseSavedNickname ? customNickname : serverNickname ? serverNickname : `<@${discordId}>`);
   if (isImpersonatedUser && params.impersonatedIdentityName) displayName = params.impersonatedIdentityName;
 
@@ -444,10 +450,10 @@ async function hydrateDiscordUserBase(
   };
   const aliases = [
     ...seed.aliases,
-    ...(pluralKit
-      ? buildPluralKitMemberAliases({
+    ...(chatProxy
+      ? buildChatProxyIdentityAliases({
           owner: seed.key,
-          displayName: pluralKitDisplayName,
+          displayName: chatProxyDisplayName,
           savedNickname: policy.exposeSavedNicknameAlias ? customNickname : null,
         })
       : buildDiscordUserAliases({
@@ -461,7 +467,7 @@ async function hydrateDiscordUserBase(
   const primaryAlias =
     isImpersonatedUser && params.impersonatedIdentityName
       ? params.impersonatedIdentityName
-      : (pluralKitDisplayName ??
+      : (chatProxyDisplayName ??
         (policy.canUseSavedNickname ? customNickname : (serverNickname ?? globalName ?? username ?? discordId)));
   return {
     profile: {
@@ -470,7 +476,7 @@ async function hydrateDiscordUserBase(
       displayName,
       aliases,
       primaryAlias,
-      mentionable: canMentionParticipant(seed) && !pluralKit,
+      mentionable: canMentionParticipant(seed) && !chatProxy,
       isBot: false,
       resolvableTargetId: discordId,
     },
@@ -480,7 +486,7 @@ async function hydrateDiscordUserBase(
     blacklisted,
     personalizationEnabled,
     isTriggerer,
-    pluralKit,
+    chatProxy,
   };
 }
 
@@ -492,11 +498,11 @@ async function enrichPresenceField(
   let lines: string[] = [];
   let failed = false;
   const hasPresenceIntent = params.client.options.intents?.has(GatewayIntentBits.GuildPresences);
-  // Members carry no presence of their own, and the proxying account's presence
-  // drove no decision: a member is in this block because it just spoke, and it is
-  // never mentionable, so idle/DND etiquette has nothing to govern. The host's own
+  // Proxy identities carry no presence of their own. They are in this block because
+  // they spoke and are never mentionable, so idle/DND etiquette has no action to
+  // govern. The host's own
   // presence still renders whenever the host is a participant in its own right.
-  if (base.policy.exposePresence && !base.pluralKit) {
+  if (base.policy.exposePresence && !base.chatProxy) {
     if (params.isDMChannel) {
       lines = ["- Status: Online (Direct Message)"];
     } else if (hasPresenceIntent) {
@@ -574,9 +580,9 @@ async function enrichPersonalMemoriesField(
 ): Promise<ParticipantProfileField> {
   const lines = base.policy.exposePersonalMemories
     ? await hydratePersonalMemoryLines(base.userRow, base.profile.displayName, params, dependencies, {
-        // Several members share one Discord account, so an unqualified "Memories:"
-        // would read as the whole system's rather than this member's.
-        label: base.pluralKit ? `${base.profile.displayName}'s memories` : "Memories",
+        label: base.chatProxy?.context
+          ? (base.chatProxy.presentation?.identityMemoryLabel(base.profile.displayName) ?? "Memories")
+          : "Memories",
       })
     : [];
   return field(
@@ -615,61 +621,57 @@ async function enrichHumanRemindersField(
   return field(base.profile.key, "human_reminders", 60, lines);
 }
 
-function formatPluralKitSystemLabel(context: PluralKitMemberContext): string {
-  const systemName = context.systemName?.trim();
-  if (systemName) return `the "${systemName}" plural system`;
-  const systemTag = context.systemTag?.trim();
-  return systemTag ? `${systemTag} plural system` : "a plural system";
-}
-
-async function resolveHostAccountLabel(
-  hostDiscId: string,
+async function resolveDiscordAccountLabel(
+  accountDiscId: string,
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
 ): Promise<string> {
-  const member = await dependencies.loadMember(params.client, params.guildId, hostDiscId).catch(() => null);
-  const fallbackUser = member ? null : await dependencies.loadFallbackUser(params.client, hostDiscId).catch(() => null);
-  const userRow = await dependencies.loadUserRow(hostDiscId).catch(() => null);
+  const member = await dependencies.loadMember(params.client, params.guildId, accountDiscId).catch(() => null);
+  const fallbackUser = member
+    ? null
+    : await dependencies.loadFallbackUser(params.client, accountDiscId).catch(() => null);
+  const userRow = await dependencies.loadUserRow(accountDiscId).catch(() => null);
   const displayName =
     member?.displayName?.trim() ||
     userRow?.user_nickname?.trim() ||
     fallbackUser?.globalName?.trim() ||
     fallbackUser?.username?.trim() ||
-    `<@${hostDiscId}>`;
+    `<@${accountDiscId}>`;
   const username = member?.user.username?.trim() ?? fallbackUser?.username?.trim() ?? null;
   return username && displayName.toLowerCase() !== username.toLowerCase()
     ? `${displayName}, @${username}`
     : displayName;
 }
 
-function enrichPluralKitIdentityField(base: HydratedDiscordUserBase): ParticipantProfileField {
-  const context = base.pluralKit?.context;
-  if (!context) return field(base.profile.key, "pluralkit_identity", 5, []);
-
-  // Membership only. The host account belongs to the system, not to whichever
-  // member happens to be speaking, so it renders once in the system note.
-  return field(base.profile.key, "pluralkit_identity", 5, [
-    `- Member of ${formatPluralKitSystemLabel(context)}; its members share one presence here`,
-  ]);
+function enrichChatProxyIdentityField(base: HydratedDiscordUserBase): ParticipantProfileField {
+  const context = base.chatProxy?.context;
+  if (!context) return field(base.profile.key, "chat_proxy_identity", 5, []);
+  const presentation = base.chatProxy?.presentation ?? null;
+  return field(
+    base.profile.key,
+    "chat_proxy_identity",
+    5,
+    presentation ? [presentation.identityMembershipLine(context)] : [],
+  );
 }
 
-/** Host ids stay unresolved until dedup, so only a system's first-seen member pays to label them. */
-interface PluralKitSystemNoteSeed {
-  systemUuid: string;
-  label: string;
-  description: string | null;
-  hostDiscIds: readonly string[];
+/** Host IDs stay unresolved until namespace dedup, so they are labeled once. */
+interface ChatProxyNamespaceNoteSeed {
+  context: ChatProxyIdentityContext;
+  presentation: ProxyServicePresentation;
+  accountDiscIds: readonly string[];
 }
 
-function pluralKitSystemNoteSeed(base: HydratedDiscordUserBase): PluralKitSystemNoteSeed | null {
-  const pluralKit = base.pluralKit;
-  const context = pluralKit?.context;
-  if (!pluralKit || !context) return null;
+function chatProxyNamespaceNoteSeed(base: HydratedDiscordUserBase): ChatProxyNamespaceNoteSeed | null {
+  const chatProxy = base.chatProxy;
+  const context = chatProxy?.context;
+  if (!chatProxy || !context) return null;
+  const presentation = chatProxy.presentation;
+  if (!presentation) return null;
   return {
-    systemUuid: context.systemUuid,
-    label: formatPluralKitSystemLabel(context),
-    description: context.systemDescription?.replace(/\s+/gu, " ").trim() || null,
-    hostDiscIds: pluralKit.hostDiscIds,
+    context,
+    presentation,
+    accountDiscIds: chatProxy.hostDiscIds,
   };
 }
 
@@ -677,11 +679,11 @@ async function hydrateDiscordUser(
   seed: ParticipantSeed,
   params: ParticipantHydrationParams,
   dependencies: ParticipantHydrationDependencies,
-): Promise<{ profile: HydratedParticipantProfile; systemNoteSeed: PluralKitSystemNoteSeed | null } | null> {
+): Promise<{ profile: HydratedParticipantProfile; namespaceNoteSeed: ChatProxyNamespaceNoteSeed | null } | null> {
   const base = await hydrateDiscordUserBase(seed, params, dependencies);
   if (!base) return null;
   const fields: ParticipantProfileField[] = [
-    ...(base.pluralKit ? [enrichPluralKitIdentityField(base)] : []),
+    ...(base.chatProxy ? [enrichChatProxyIdentityField(base)] : []),
     enrichPhysicalAppearanceField(base, params),
     enrichTimezoneField(base, params),
     await enrichPresenceField(base, params, dependencies),
@@ -689,7 +691,7 @@ async function hydrateDiscordUser(
     await enrichPersonalMemoriesField(base, params, dependencies),
     await enrichHumanRemindersField(base, params, dependencies),
   ];
-  return { profile: { ...base.profile, fields }, systemNoteSeed: pluralKitSystemNoteSeed(base) };
+  return { profile: { ...base.profile, fields }, namespaceNoteSeed: chatProxyNamespaceNoteSeed(base) };
 }
 
 function buildRoleLines(member: GuildMember, guild: Guild | undefined): string[] {
@@ -913,9 +915,11 @@ export async function hydrateParticipantProfiles(
     memberReads: 0,
     fallbackUserReads: 0,
     presenceReads: 0,
-    pluralKitContextReads: 0,
+    chatProxyContextReads: 0,
   };
   const dependencies: ParticipantHydrationDependencies = {
+    isChatProxyIdentity: baseDependencies.isChatProxyIdentity,
+    getChatProxyPresentation: baseDependencies.getChatProxyPresentation,
     loadUserRow: async (discordId) => {
       externalCalls.userRowLoads += 1;
       return baseDependencies.loadUserRow(discordId);
@@ -952,13 +956,13 @@ export async function hydrateParticipantProfiles(
       externalCalls.presenceReads += 1;
       return baseDependencies.loadPresence(client, discordId, guildId, preloadedMember);
     },
-    loadPluralKitMemberContext: async (userDiscId) => {
-      externalCalls.pluralKitContextReads += 1;
-      return baseDependencies.loadPluralKitMemberContext(userDiscId);
+    loadChatProxyIdentityContext: async (userDiscId) => {
+      externalCalls.chatProxyContextReads += 1;
+      return baseDependencies.loadChatProxyIdentityContext(userDiscId);
     },
   };
   const profiles: HydratedParticipantProfile[] = [];
-  const pluralKitSystems = new Map<string, PluralKitSystemNote>();
+  const chatProxyNamespaces = new Map<string, ChatProxyNamespaceNote>();
   let botAdded = false;
   for (const seed of params.participantSeeds) {
     if (seed.key.kind === "bot" || (seed.key.kind === "persona" && seed.reasons.has("active_identity"))) {
@@ -972,19 +976,20 @@ export async function hydrateParticipantProfiles(
       const hydrated = await hydrateDiscordUser(seed, params, dependencies);
       if (hydrated) {
         profiles.push(hydrated.profile);
-        // Keyed by system, not member: system-mates share one note, and the
-        // first speaker's position fixes where it renders. Host labels resolve
-        // inside the guard so a system with N present members costs one host
-        // lookup pass rather than N identical ones.
-        const noteSeed = hydrated.systemNoteSeed;
-        if (noteSeed && !pluralKitSystems.has(noteSeed.systemUuid)) {
-          pluralKitSystems.set(noteSeed.systemUuid, {
-            systemUuid: noteSeed.systemUuid,
-            label: noteSeed.label,
-            description: noteSeed.description,
-            hostLabels: await Promise.all(
-              noteSeed.hostDiscIds.map((hostDiscId) => resolveHostAccountLabel(hostDiscId, params, dependencies)),
+        const noteSeed = hydrated.namespaceNoteSeed;
+        const namespaceMapKey = noteSeed ? `${noteSeed.context.serviceId}\u0000${noteSeed.context.namespaceKey}` : null;
+        if (noteSeed && namespaceMapKey && !chatProxyNamespaces.has(namespaceMapKey)) {
+          const accountLabels = await Promise.all(
+            noteSeed.accountDiscIds.map((accountDiscId) =>
+              resolveDiscordAccountLabel(accountDiscId, params, dependencies),
             ),
+          );
+          const namespace = noteSeed.presentation.namespacePresentation(noteSeed.context, accountLabels);
+          chatProxyNamespaces.set(namespaceMapKey, {
+            serviceId: noteSeed.context.serviceId,
+            namespaceKey: noteSeed.context.namespaceKey,
+            sectionHeading: namespace.sectionHeading,
+            entry: namespace.entry,
           });
         }
       }
@@ -1002,7 +1007,7 @@ export async function hydrateParticipantProfiles(
   return {
     profiles: enriched.profiles,
     personaTaskLines: await hydratePersonaTaskLines(params, dependencies),
-    pluralKitSystems: [...pluralKitSystems.values()],
+    chatProxyNamespaces: [...chatProxyNamespaces.values()],
     diagnostics: {
       durationMs: performance.now() - startedAt,
       profileCount: enriched.profiles.length,
