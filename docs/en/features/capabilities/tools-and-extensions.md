@@ -46,6 +46,35 @@ have macros too: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool
 dynamically to the best available engine, including guild MCP replacements.
 :::
 
+### Conditional Prompt Blocks
+
+Prompt text that supports the tool macros above also supports scoped conditionals:
+
+```text
+{{if capability:self_teaching}}
+Use {memory_tool} when a detail is worth remembering.
+{{else}}
+Do not promise to save long-term memories.
+{{/if}}
+```
+
+Use `capability:<name>` for an enabled TomoriBot setting, or `tool:<function_name>` when
+the text should appear only if that exact tool is available to the active provider and
+model. Use `tool_family:url_fetch` when either the bundled URL reader or a guild MCP
+replacement is available. Prefix a condition with `!` to invert it. Blocks can be nested
+and may contain one `{{else}}`; general `and`/`or` expressions are not supported.
+
+The supported capability names are `tool_use`, `self_teaching`, `personal_memories`,
+`emoji_usage`, `sticker_usage`, `web_search`, `manage_message`, `thread_creation`,
+`image_generation`, `video_generation`, `voice_message`, `user_blocking`,
+`short_term_memory`, and `time_awareness`.
+
+Tool conditions reflect provider/model support, server configuration, configured backends,
+MCP replacements, and the current Deliberate Tool Mode allowlist. They do not bypass or
+predict Discord permission checks performed when a tool executes. Unknown capability names
+evaluate as false and are logged; malformed blocks are omitted. Raw chat messages, model
+output, and tool results are never treated as conditional templates.
+
 ## Web Search & URL Reading
 
 The model sees a single unified `web_search(query, category)` tool. Behind it, a dispatcher
@@ -102,8 +131,10 @@ prompt size and helps smaller/local models answer faster.
 
 - She first checks the message for **tool intent**. Built-in triggers cover common requests
   (reminders, web search, memory updates, cross-channel messages, image/video/voice
-  generation, media analysis, thread creation, message actions). Follow-up wording works too,
-  like "do that again but angrier" after a voice-message request.
+  generation, media analysis, thread creation, message actions). Questions about her current
+  model, tools, settings, or why a capability is unavailable expose capability review and
+  official documentation access together. Follow-up wording works too, like "do that again
+  but angrier" after a voice-message request.
 - Server managers can add literal **custom trigger phrases** with `/server trigger add` — for
   example mapping `pic`, `img`, or `pfp` to image generation.
 

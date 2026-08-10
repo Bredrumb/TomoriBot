@@ -453,6 +453,7 @@ export async function reassembleWithPreset(
     } else if (node.content.length > 0) {
       const toolMacroExpandedContent = await (mentionParams.toolPromptMacroResolver?.expand(node.content) ??
         Promise.resolve(node.content));
+      if (!toolMacroExpandedContent.trim()) continue;
       const resolvedContent = await convertMentions(
         toolMacroExpandedContent,
         mentionParams.client,
@@ -496,6 +497,7 @@ export async function reassembleWithPreset(
 
     const toolMacroExpandedContent = await (mentionParams.toolPromptMacroResolver?.expand(depthNode.content) ??
       Promise.resolve(depthNode.content));
+    if (!toolMacroExpandedContent.trim()) continue;
     const resolvedContent = await convertMentions(
       toolMacroExpandedContent,
       mentionParams.client,

@@ -30,6 +30,7 @@ Pages are bucketed into task-based sub-categories, each with a landing card-grid
   - [`behavior-tweaking.md`](./features/chatting-personality/behavior-tweaking/)
 - **Knowledge** — [`knowledge/`](./features/knowledge/)
   - [`memory.md`](./features/knowledge/memory/)
+  - [`inside-the-prompt.md`](./features/knowledge/inside-the-prompt/)
   - [`personalization.md`](./features/knowledge/personalization/)
   - [`data-handling.md`](./features/knowledge/data-handling/)
 - **Capabilities** — [`capabilities/`](./features/capabilities/)

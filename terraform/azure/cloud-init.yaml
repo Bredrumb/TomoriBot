@@ -31,7 +31,16 @@ write_files:
       set -euo pipefail
 
       # The Azure kernel ships a minimal module set; zram.ko lives in modules-extra.
+      # Two packages, deliberately, and the order carries the risk. The versioned name
+      # must match the running kernel or the modprobe below fails: package_upgrade runs
+      # before this script, so the archive often already offers a kernel newer than the
+      # booted one, and the meta-package would resolve modules-extra against that newer
+      # kernel instead. The meta-package tracks linux-image-azure and is the only thing
+      # that carries zram.ko across a later unattended kernel upgrade, so it is installed
+      # best-effort: a versioned name alone leaves the host with no zram device after the
+      # next kernel reboot, and swap then falls back to disk silently.
       apt-get install -y "linux-modules-extra-$(uname -r)" systemd-zram-generator
+      apt-get install -y linux-modules-extra-azure || true
 
       modprobe zram
       echo zram > /etc/modules-load.d/zram.conf

@@ -83,6 +83,40 @@ and never needed again, which is harmless. Sustained nonzero `si` means the work
 oversubscribed. `/proc/pressure/memory` confirms it independently by measuring stall time, where
 `full` is the share of wall time every task was blocked.
 
+### Confirm zram survived, after every reboot
+
+An unattended kernel upgrade takes zram with it whenever the running kernel has no matching
+`linux-modules-extra`. Nothing reports this: swap still works because `/swapfile` is mounted as the
+overflow tier, containers stay healthy, and free memory looks *better* than usual because the
+compressed pool is no longer holding RAM. Check it explicitly rather than waiting for it to surface:
+
+```sh
+swapon --show                             # /dev/zram0 missing is the finding
+uname -r; dpkg -l | grep linux-modules-extra
+systemctl status systemd-zram-setup@zram0.service --no-pager | head -6
+```
+
+A version mismatch between `uname -r` and the installed `linux-modules-extra-<version>-azure`, plus
+`Dependency failed` retrying on a timer, is the confirmed signature.
+
+**The repair below is a write, not triage.** It installs a package and loads a kernel module on the
+production host, so it is an explicitly confirmed one-off under the read-only rule above: get
+agreement first, then run it through `az vm run-command` like everything else, since no SSH exists.
+No reboot is required once the module matches the running kernel.
+
+```sh
+apt-get install -y linux-modules-extra-azure || apt-get install -y "linux-modules-extra-$(uname -r)"
+modprobe zram && systemctl start systemd-zram-setup@zram0.service
+swapon --show   # expect /dev/zram0 back at priority 100, above /swapfile
+```
+
+The versioned fallback matters when a newer kernel has reached the archive but the host has not
+rebooted into it: the meta-package then resolves modules-extra ahead of the running kernel and
+`modprobe` still fails.
+
+`terraform/azure/cloud-init.yaml` installs the meta-package so a rebuilt VM does not regress, but a
+host provisioned before that change stays broken until repaired by hand.
+
 ## Triaging a frozen bot (unresponsive, or fully offline)
 
 The same livelock has presented two ways, so do not let the symptom narrow the diagnosis:

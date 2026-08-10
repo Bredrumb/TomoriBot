@@ -11,6 +11,7 @@ import {
   findNewlyEnabledPersonalCapabilities,
   getActivePersonalProviderForCapability,
   getStoredPersonalProviderForCapability,
+  hasConfiguredPersonalModel,
   setPersonalCapabilityEnabled,
 } from "@/utils/provider/personalProviderHelpers";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -117,7 +118,10 @@ export async function execute(
     );
 
     for (const capability of selectedCapabilities) {
-      if (!getStoredPersonalProviderForCapability(rows, capability)) {
+      // The assigned owner is honoured even when its model pointer is gone, so the
+      // model has to be checked separately or switching on would silently no-op.
+      const target = getStoredPersonalProviderForCapability(rows, capability);
+      if (!target || !hasConfiguredPersonalModel(target, capability)) {
         await replyInfoEmbed(modalResult.interaction, locale, {
           titleKey: "commands.personal.provider.toggle-models.missing_model_title",
           descriptionKey: "commands.personal.provider.toggle-models.missing_model_description",

@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && bun run scripts/checkLlmsOutput.ts",
     "preview": "astro preview"
   },
   "devDependencies": {

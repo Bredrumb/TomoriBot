@@ -42,7 +42,13 @@ let chainWrites: FallbackModelRef[][] = [];
 let savedConfig: UserSavedProviderConfigRow | null = null;
 
 function makeRow(provider: string, llmId: number | null): UserSavedProviderConfigRow {
-  return { user_id: 49, provider, enabled_capabilities: ["text"], llm_id: llmId } as UserSavedProviderConfigRow;
+  return {
+    user_id: 49,
+    provider,
+    enabled_capabilities: ["text"],
+    assigned_capabilities: ["text"],
+    llm_id: llmId,
+  } as UserSavedProviderConfigRow;
 }
 
 beforeEach(() => {

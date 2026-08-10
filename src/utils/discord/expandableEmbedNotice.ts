@@ -3,9 +3,9 @@
  *
  * Renders a standard notification as a Components V2 container with an optional
  * in-card "Expand" button. The button is attached only when the underlying
- * content exceeds the truncation threshold (default 200 chars). Clicking it
- * replies ephemerally with the full, un-truncated content so users can read
- * everything without cluttering the channel.
+ * content exceeds the notice type's truncation threshold. Clicking it replies
+ * ephemerally with the full, un-truncated content so users can read everything
+ * without cluttering the channel.
  *
  * The generic `sendEmbedWithExpand` is reused by both memory-learning notices
  * (`sendMemoryEmbedWithExpand`) and scheduled-task notices
@@ -36,6 +36,7 @@ import { createStandardEmbed, type WebhookEmbedContext } from "@/utils/discord/e
 import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/webhookCore";
 import { ColorCode, log } from "@/utils/misc/logger";
+import { buildTextPreview } from "@/utils/text/textPreview";
 
 type SupportedChannel =
   | TextChannel
@@ -46,10 +47,11 @@ type SupportedChannel =
   | BaseGuildVoiceChannel;
 
 // Default character count above which the "Expand" button is attached. Matches
-// the 200-char truncation applied by the memory and task embed callers.
+// the truncation applied by the task embed callers.
 const DEFAULT_TRUNCATION_THRESHOLD = 200;
 // Shared 24h fallback used when a caller does not provide its own timeout.
 const DEFAULT_EXPAND_BUTTON_TIMEOUT_MS = 86_400_000;
+const DEFAULT_MEMORY_NOTICE_PREVIEW_LIMIT = 600;
 
 // Per-notice-type collector timeouts, each independently configurable via env.
 const MEMORY_EXPAND_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
@@ -59,6 +61,17 @@ const MEMORY_EXPAND_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
 const TASK_EXPAND_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
   process.env.TASK_EXPAND_BUTTON_TIMEOUT_MS,
   DEFAULT_EXPAND_BUTTON_TIMEOUT_MS,
+);
+
+/**
+ * Characters of memory content shown inline before the notice truncates and
+ * offers the expand button. Deliberately below `MAX_MEMORY_LENGTH` (1000) so
+ * the button still has a purpose, and far below Discord's 4000-char text
+ * display cap so the title, footer, and framing sentence always fit.
+ */
+export const MEMORY_NOTICE_PREVIEW_LIMIT = parsePositiveIntegerEnv(
+  process.env.MEMORY_NOTICE_PREVIEW_LIMIT,
+  DEFAULT_MEMORY_NOTICE_PREVIEW_LIMIT,
 );
 
 function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
@@ -159,7 +172,9 @@ async function sendEmbedWithExpand(
   webhookContext?: WebhookEmbedContext,
 ): Promise<void> {
   const truncationThreshold = config.truncationThreshold ?? DEFAULT_TRUNCATION_THRESHOLD;
-  const shouldAttachExpandButton = fullContent.length > truncationThreshold;
+  const thresholdPreview = buildTextPreview(fullContent, truncationThreshold);
+  const fenceSafeContent = buildTextPreview(fullContent, Number.MAX_SAFE_INTEGER).text;
+  const shouldAttachExpandButton = thresholdPreview.truncated;
 
   // Teardown reuses the complete Components V2 tree with only the button
   // disabled, keeping the message in one rendering mode.
@@ -228,7 +243,7 @@ async function sendEmbedWithExpand(
   const fullEmbed = createStandardEmbed(locale, {
     color: embedOptions.color ?? ColorCode.INFO,
     titleKey: config.expandTitleKey,
-    description: `\`\`\`\n${fullContent}\n\`\`\``,
+    description: `\`\`\`\n${fenceSafeContent}\n\`\`\``,
   });
 
   // Wire the button collector. Any non-bot user may click, so the full content
@@ -301,6 +316,7 @@ export async function sendMemoryEmbedWithExpand(
       customId: "memory_notice_expand",
       buttonLabelKey: "genai.self_teach.expand_memory_button",
       expandTitleKey: "genai.self_teach.expand_memory_title",
+      truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
       timeoutMs: MEMORY_EXPAND_BUTTON_TIMEOUT_MS,
     },
     webhookContext,

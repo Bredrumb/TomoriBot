@@ -59,6 +59,7 @@ function makePersonalRow(
     user_id: 4,
     provider,
     enabled_capabilities: enabledCapabilities,
+    assigned_capabilities: enabledCapabilities,
     llm_id: 11,
   } as UserSavedProviderConfigRow;
 }

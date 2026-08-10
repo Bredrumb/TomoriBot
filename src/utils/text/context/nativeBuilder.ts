@@ -2,7 +2,7 @@ import { personaRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTermMemoryIntent";
 import { buildUncensorInjectionText } from "@/utils/text/uncensor";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
 import { appendDialogueHistoryContext } from "./dialogueHistory";
 import { convertMentions } from "./mentionNormalizer";
@@ -72,6 +72,7 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     personaUserBlocks,
     includeTimestamps = false,
     explicitLongTermMemoryIntent: explicitLongTermMemoryIntentOverride,
+    deliberateToolAllowedNames,
     suppressDefaultSystemPrompt = false,
     messageIdMap,
   } = params;
@@ -98,6 +99,8 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
   const tomoriState = snapshot?.tomoriState ?? (await personaRepository.loadState(guildId));
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState?.llm?.llm_provider,
+    capabilities: resolvePromptCapabilityValues(tomoriConfig),
+    deliberateToolAllowedNames,
     stateForContext:
       tomoriState?.server_id && tomoriState.llm
         ? {

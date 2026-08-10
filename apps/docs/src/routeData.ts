@@ -25,11 +25,10 @@ const docsRoot = join(dirname(fileURLToPath(import.meta.url)), "content/docs");
  * Mirrors the id scheme from content.config.ts: `index` ids come from README
  * files (or literal index files), other ids map to `<id>.md`/`<id>.mdx`.
  *
- * @param baseId - Entry id without the "ja/" locale prefix.
- * @param locale - "" for the root (English) locale, or "ja".
+ * @param baseId - Entry id without an "en/" or "ja/" locale prefix.
  * @returns True when a source file exists for that id in that locale.
  */
-function entryExists(baseId: string, locale: "" | "ja"): boolean {
+function entryExists(baseId: string, locale: "en" | "ja"): boolean {
   const base = join(docsRoot, locale, baseId);
   const candidates =
     baseId === "index" || baseId.endsWith("/index")
@@ -135,7 +134,9 @@ export const onRequest = defineRouteMiddleware((context) => {
   // them would create duplicate-content competition with the English pages.
   // A fallback page becomes indexable automatically once its translation
   // lands (the route stops being a fallback).
-  const isWiki = entry.id === "wiki" || entry.id.startsWith("wiki/");
+  const isJa = entry.id === "ja" || entry.id.startsWith("ja/");
+  const baseId = entry.id.replace(/^(?:en|ja)\/?/, "");
+  const isWiki = baseId === "wiki" || baseId.startsWith("wiki/");
   if (isWiki || starlightRoute.isFallback) {
     head.push({ tag: "meta", attrs: { name: "robots", content: "noindex" } });
   }
@@ -143,12 +144,10 @@ export const onRequest = defineRouteMiddleware((context) => {
   // hreflang pairs. Fallback pages (ja URL serving English content) are NOT
   // pairs only emit when a real translated source file exists, otherwise
   // Google would be told duplicate English content is "the Japanese version".
-  const isJa = entry.id === "ja" || entry.id.startsWith("ja/");
-  const baseId = isJa ? entry.id.replace(/^ja\/?/, "") : entry.id;
-  if (baseId && entryExists(baseId, "ja") && entryExists(baseId, "")) {
+  if (baseId && entryExists(baseId, "ja") && entryExists(baseId, "en")) {
     const site = context.site ?? new URL("https://docs.tomoribot.app");
     const slug = baseId.replace(/(^|\/)index$/, "").replace(/\/$/, "");
-    const enUrl = new URL(slug ? `/${slug}/` : "/", site).href;
+    const enUrl = new URL(slug ? `/en/${slug}/` : "/en/", site).href;
     const jaUrl = new URL(slug ? `/ja/${slug}/` : "/ja/", site).href;
     head.push({ tag: "link", attrs: { rel: "alternate", hreflang: "en", href: enUrl } });
     head.push({ tag: "link", attrs: { rel: "alternate", hreflang: "ja", href: jaUrl } });

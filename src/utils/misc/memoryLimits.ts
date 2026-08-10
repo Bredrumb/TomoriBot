@@ -49,8 +49,10 @@ export type MemoryValidationError =
  * Load memory limits from environment variables with sensible defaults
  */
 export function getMemoryLimits(): MemoryLimits {
-  const maxPersonalMemories = parsePositiveIntegerEnv("MAX_PERSONAL_MEMORIES", 25);
-  const maxServerMemories = parsePositiveIntegerEnv("MAX_SERVER_MEMORIES", 25);
+  // Counted per (owner, persona_lineage_id), so a multi-persona server holds this
+  // many times the persona count. Memory length, not count, is the context tax.
+  const maxPersonalMemories = parsePositiveIntegerEnv("MAX_PERSONAL_MEMORIES", 100);
+  const maxServerMemories = parsePositiveIntegerEnv("MAX_SERVER_MEMORIES", 100);
   const maxMemoryLength = parsePositiveIntegerEnv("MAX_MEMORY_LENGTH", 1000);
   const maxSampleDialogueLength = parsePositiveIntegerEnv("MAX_SAMPLE_DIALOGUE_LENGTH", 2000);
   const maxAttributeLength = parsePositiveIntegerEnv("MAX_ATTRIBUTE_LENGTH", 2000);

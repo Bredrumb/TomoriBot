@@ -124,4 +124,17 @@ describe("buildPromptContextItems — per-channel prompt override", () => {
       expect(textForTag(items, ContextItemTag.SYSTEM_PERSONALITY)).toBe("bullet one\nbullet two");
     }
   });
+
+  test("omits prompt items that become empty after macro expansion", async () => {
+    const params = makeParams({
+      systemPrompt: "{{if capability:self_teaching}}memory instructions{{/if}}",
+      personaPrompt: "{{if capability:self_teaching}}persona instructions{{/if}}",
+    });
+    params.tomoriAttributes = ["{{if capability:self_teaching}}attribute{{/if}}"];
+    params.toolPromptMacroResolver = { expand: async () => "" };
+
+    const items = await buildPromptContextItems(params);
+
+    expect(items).toEqual([]);
+  });
 });

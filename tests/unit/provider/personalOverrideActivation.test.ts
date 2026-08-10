@@ -13,6 +13,7 @@ function makeRow(overrides: Partial<UserSavedProviderConfigRow> & { provider: st
     user_id: 1,
     provider: overrides.provider,
     enabled_capabilities: [],
+    assigned_capabilities: [],
     llm_id: null,
     embedding_model_id: null,
     diffusion_model_id: null,

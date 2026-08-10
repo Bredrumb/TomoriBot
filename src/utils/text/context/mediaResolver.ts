@@ -2,7 +2,7 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ContextPart, MediaDescriptor, StructuredContextItem } from "@/types/misc/context";
 import { getOpenRouterCapabilities, isOpenRouterCapabilityCacheReady } from "@/utils/cache/openrouterCapabilityCache";
 import { log } from "@/utils/misc/logger";
-import { createToolPromptMacroResolver } from "@/utils/tools/toolPromptMacros";
+import { createToolPromptMacroResolver, resolvePromptCapabilityValues } from "@/utils/tools/toolPromptMacros";
 
 interface MediaCapabilities {
   seesImages: boolean;
@@ -15,6 +15,7 @@ export async function resolveMediaForModel(
 ): Promise<StructuredContextItem[]> {
   const toolPromptMacroResolver = createToolPromptMacroResolver({
     provider: tomoriState.llm.llm_provider,
+    capabilities: resolvePromptCapabilityValues(tomoriState.config),
     stateForContext:
       tomoriState.server_id && tomoriState.llm
         ? {

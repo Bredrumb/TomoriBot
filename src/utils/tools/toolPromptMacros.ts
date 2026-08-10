@@ -1,10 +1,35 @@
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { getGuildMcpManager } from "@/utils/mcp/guildMcpManager";
 import { log } from "@/utils/misc/logger";
+import type { AssembledServerConfig } from "@/types/db/schema";
+import { renderPromptConditionals, type PromptConditionPredicate } from "./promptConditionals";
+
+const PROMPT_CAPABILITY_NAMES = [
+  "tool_use",
+  "self_teaching",
+  "personal_memories",
+  "emoji_usage",
+  "sticker_usage",
+  "web_search",
+  "manage_message",
+  "thread_creation",
+  "image_generation",
+  "video_generation",
+  "voice_message",
+  "user_blocking",
+  "short_term_memory",
+  "time_awareness",
+] as const;
+
+type PromptCapabilityName = (typeof PROMPT_CAPABILITY_NAMES)[number];
+export type PromptCapabilityValues = Partial<Record<PromptCapabilityName, boolean>>;
 
 export interface ToolPromptMacroContext {
   provider?: string | null;
   stateForContext?: ToolStateForContext | null;
+  capabilities?: PromptCapabilityValues | null;
+  deliberateToolAllowedNames?: readonly string[] | null;
+  availableToolNames?: ReadonlySet<string> | null;
 }
 
 export interface ToolPromptMacroResolver {
@@ -83,12 +108,7 @@ const DYNAMIC_TOOL_PROMPT_MACROS = {
   "{url_fetch_tool}": {
     currentTarget: "best available URL fetch tool",
     fallbackText: "the currently available URL fetch tool",
-    resolve: (availability: ToolPromptMacroAvailability) =>
-      resolveGuildFamilyToolName(
-        availability.guildUrlFetcherToolNames,
-        [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
-        [/metadata/, /meta/, /head/],
-      ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"]),
+    resolve: (availability: ToolPromptMacroAvailability) => resolveUrlFetchToolName(availability),
   },
   "{url_metadata_tool}": {
     currentTarget: "best available URL metadata tool",
@@ -110,16 +130,86 @@ function hasToolPromptMacros(text: string): boolean {
   return ALL_TOOL_PROMPT_MACRO_KEYS.some((macro) => text.includes(macro));
 }
 
+export function resolvePromptCapabilityValues(config: AssembledServerConfig): PromptCapabilityValues {
+  return {
+    tool_use: config.tool_use_enabled ?? true,
+    self_teaching: config.self_teaching_enabled,
+    personal_memories: config.personal_memories_enabled,
+    emoji_usage: config.emoji_usage_enabled,
+    sticker_usage: config.sticker_usage_enabled,
+    web_search: config.web_search_enabled,
+    manage_message: config.manage_message_enabled,
+    thread_creation: config.thread_creation_enabled,
+    image_generation: config.imagegen_enabled,
+    video_generation: config.videogen_enabled,
+    voice_message: config.voice_message_enabled,
+    user_blocking: config.user_blocking_enabled,
+    short_term_memory: config.short_term_memory_enabled,
+    time_awareness: config.time_awareness_enabled,
+  };
+}
+
+export function resolvePromptCapabilityValuesFromToolState(state: ToolStateForContext): PromptCapabilityValues {
+  return {
+    tool_use: state.llm.has_tools,
+    self_teaching: state.config.self_teaching_enabled,
+    sticker_usage: state.config.sticker_usage_enabled,
+    web_search: state.config.web_search_enabled,
+    manage_message: state.config.manage_message_enabled,
+    thread_creation: state.config.thread_creation_enabled,
+    image_generation: state.config.imagegen_enabled,
+    video_generation: state.config.videogen_enabled,
+    voice_message: state.config.voice_message_enabled,
+    user_blocking: state.config.user_blocking_enabled,
+    short_term_memory: true,
+  };
+}
+
 export function createToolPromptMacroResolver(context?: ToolPromptMacroContext | null): ToolPromptMacroResolver {
   let availabilityPromise: Promise<ToolPromptMacroAvailability> | null = null;
+  const warnedConditions = new Set<string>();
+
+  const warnOnce = (message: string): void => {
+    if (warnedConditions.has(message)) return;
+    warnedConditions.add(message);
+    log.warn(`[PromptConditionals] ${message}`);
+  };
+
+  const evaluateCondition = async (predicate: PromptConditionPredicate): Promise<boolean | undefined> => {
+    if (predicate.namespace === "capability") {
+      if (!PROMPT_CAPABILITY_NAMES.includes(predicate.name as PromptCapabilityName)) {
+        return undefined;
+      }
+      return context?.capabilities?.[predicate.name as PromptCapabilityName];
+    }
+
+    availabilityPromise ??= loadToolPromptMacroAvailability(context);
+    const availability = await availabilityPromise;
+    if (predicate.namespace === "tool") {
+      return availability.availableToolNames.has(predicate.name);
+    }
+
+    if (predicate.name === "url_fetch") {
+      return resolveUrlFetchToolName(availability) !== null;
+    }
+
+    return undefined;
+  };
 
   return {
     async expand(text: string): Promise<string> {
-      if (!text || !hasToolPromptMacros(text)) {
+      if (!text) {
         return text;
       }
 
-      let expanded = text;
+      let expanded = await renderPromptConditionals(text, {
+        evaluate: evaluateCondition,
+        warn: warnOnce,
+      });
+
+      if (!hasToolPromptMacros(expanded)) {
+        return expanded;
+      }
 
       for (const [macro, toolName] of Object.entries(STATIC_TOOL_PROMPT_MACROS)) {
         if (expanded.includes(macro)) {
@@ -164,8 +254,27 @@ async function loadToolPromptMacroAvailability(
 
   const provider = context?.provider?.trim().toLowerCase();
   const stateForContext = context?.stateForContext;
-  if (!provider || !stateForContext?.server_id || !stateForContext.llm) {
+  if (
+    context?.capabilities?.tool_use === false ||
+    !provider ||
+    !stateForContext?.server_id ||
+    !stateForContext.llm ||
+    !stateForContext.llm.has_tools
+  ) {
     return fallbackAvailability;
+  }
+
+  const preloadedToolNames = context?.availableToolNames;
+  if (preloadedToolNames) {
+    const deliberateToolAllowedNames = context?.deliberateToolAllowedNames;
+    const availableToolNames = deliberateToolAllowedNames
+      ? new Set([...preloadedToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
+      : new Set(preloadedToolNames);
+    return {
+      availableToolNames,
+      guildWebSearchToolNames: [],
+      guildUrlFetcherToolNames: [],
+    };
   }
 
   try {
@@ -195,10 +304,15 @@ async function loadToolPromptMacroAvailability(
       availableToolNames.add(functionName);
     }
 
+    const deliberateToolAllowedNames = context?.deliberateToolAllowedNames;
+    const filteredAvailableToolNames = deliberateToolAllowedNames
+      ? new Set([...availableToolNames].filter((name) => deliberateToolAllowedNames.includes(name)))
+      : availableToolNames;
+
     return {
-      availableToolNames,
-      guildWebSearchToolNames: guildToolNames.webSearch,
-      guildUrlFetcherToolNames: guildToolNames.urlFetcher,
+      availableToolNames: filteredAvailableToolNames,
+      guildWebSearchToolNames: guildToolNames.webSearch.filter((name) => filteredAvailableToolNames.has(name)),
+      guildUrlFetcherToolNames: guildToolNames.urlFetcher.filter((name) => filteredAvailableToolNames.has(name)),
     };
   } catch (error) {
     log.warn("[ToolPromptMacros] Failed to load tool availability for prompt macro expansion", error);
@@ -267,6 +381,19 @@ function resolveGuildFamilyToolName(
   }
 
   return bestScore > 0 ? bestName : (uniqueFunctionNames[0] ?? null);
+}
+
+function resolveUrlFetchToolName(availability: ToolPromptMacroAvailability): string | null {
+  const inferredUrlFetcherNames = [...availability.availableToolNames].filter(
+    (name) => name === "fetch" || /(?:url|web|http|fetch|crawl|page|visit)/i.test(name),
+  );
+  return (
+    resolveGuildFamilyToolName(
+      [...availability.guildUrlFetcherToolNames, ...inferredUrlFetcherNames],
+      [/fetch/, /read/, /crawl/, /page/, /open/, /visit/, /url/],
+      [/metadata/, /meta/, /head/],
+    ) || pickFirstAvailable(availability.availableToolNames, ["fetch_url", "fetch"])
+  );
 }
 
 function pickFirstAvailable(availableToolNames: Set<string>, preferredToolNames: string[]): string | null {

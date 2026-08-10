@@ -429,6 +429,9 @@ This section documents what our implementation supports versus what native Silly
 | `{{roll: XdY}}` | Supported | Capped at 100 dice, 1000 sides |
 | `{{trim}}` | Supported | Node disabled if result is empty |
 | `{{// comment}}` | Supported | Stripped from output |
+| `{{if capability:name}}...{{else}}...{{/if}}` | Supported | Tests an effective TomoriBot capability setting; `{{else}}` is optional |
+| `{{if tool:function_name}}...{{/if}}` | Supported | Tests runtime tool availability, including Deliberate Tool Mode filtering |
+| `{{if !capability:name}}...{{/if}}` | Supported | `!` inverts either supported predicate namespace; blocks may be nested |
 
 ### Unsupported Macros
 

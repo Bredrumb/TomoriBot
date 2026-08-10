@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.7.9.9995",
+  "version": "0.7.9.9996",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",
@@ -112,6 +112,7 @@
     "brace-expansion": ">=5.0.9",
     "fast-xml-parser": ">=5.7.0",
     "postcss": ">=8.5.18",
+    "nanoid": ">=3.3.17 <4",
     "svgo": "^4.0.2",
     "sharp": "$sharp",
     "ajv": "^8.18.0",
@@ -131,6 +132,7 @@
   "patchedDependencies": {
     "@aws-sdk/xml-builder@3.972.11": "patches/@aws-sdk%2Fxml-builder@3.972.11.patch",
     "@matrix-org/matrix-sdk-crypto-nodejs@0.4.0": "patches/@matrix-org%2Fmatrix-sdk-crypto-nodejs@0.4.0.patch",
-    "@sapphire/shapeshift@4.0.0": "patches/@sapphire%2Fshapeshift@4.0.0.patch"
+    "@sapphire/shapeshift@4.0.0": "patches/@sapphire%2Fshapeshift@4.0.0.patch",
+    "starlight-llms-txt@0.11.0": "patches/starlight-llms-txt@0.11.0.patch"
   }
 }

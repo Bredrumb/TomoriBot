@@ -246,6 +246,8 @@ export interface ToolAssemblyState {
 export interface ToolAssemblyContext {
   provider: string;
   state: ToolAssemblyState;
+  /** Names admitted before context-specific schema variants are assembled. */
+  availableToolNames?: ReadonlySet<string>;
 }
 
 /**

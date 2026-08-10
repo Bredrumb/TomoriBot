@@ -1,7 +1,7 @@
 ---
 title: "Data Handling"
 sidebar:
-  order: 3
+  order: 4
 ---
 
 TomoriBot is built to be transparent about your data. You can export, import, or delete
