@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot doesn't have a built-in AI brain — you connect one. A **provider** is an AI
+TomoriBot doesn't have a built-in AI model, you connect one from a provider. A **provider** is an AI
 service (Google Gemini, OpenRouter, NovelAI, a local endpoint, …), and a **model** is a
 specific model on that provider. You need at least one provider to use her at all.
 

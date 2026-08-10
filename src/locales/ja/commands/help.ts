@@ -319,9 +319,7 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       need_help_description: `- {helpFeatures} - 私ができることを見る
 - {helpMemory} - 記憶システムについて学ぶ
 - {helpCustomization} - パーソナリティのカスタマイズについて学ぶ
-- {supportServer} - 公式TomoriBotサポートサーバーに参加
-
-TomoriBotをセットアップすることで、あなたとサーバーメンバーは\`/legal terms\`と\`/legal privacy\`の通知に同意したことになります`,
+- {supportServer} - 公式TomoriBotサポートサーバーに参加{legalNotice}`,
     },
     matrix: {
       description: `Matrixブリッジの設定方法と使い方を学ぶ`,
@@ -394,7 +392,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 トリガーされるたびに、AIモデルが返信を形成するためのコンテキストとして、テキストチャンネルの**最新メッセージ**と**関連する記憶**を取得します。これらのトリガー以外でメッセージを積極的に監視したり閲覧したりすることはありません。
 
 {personalPrivacy}コマンドで記憶機能をオプトアウトし、{configPermissions}コマンドで自己学習を無効化できます。`,
-      footer: `選択したAIプロバイダー（Google、NovelAI、OpenRouter）は独自のプライバシーポリシーに従ってメッセージを処理します。プライバシーのため、個人情報を共有しないでください。詳細は\`/legal privacy\`と\`/legal terms\`をご覧ください`,
+      footer: `選択したAIプロバイダー（Google、NovelAI、OpenRouter）は独自のプライバシーポリシーに従ってメッセージを処理します。プライバシーのため、個人情報を共有しないでください。{legalNotice}`,
     },
     "st-preset": {
       description: `この環境でのSillyTavernプリセットの挙動を学ぶ`,
@@ -658,9 +656,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       tips_description: `- 好み、ニックネーム、重要な事実を教えてください
 - サーバーの記憶には共有情報、内輪ネタ、サーバー文化を使用
 - {memoryPersonalExport}、{memoryServerExport}、または{status}で定期的に記憶を確認
-- 最良の結果を得るために記憶を簡潔明瞭に保つ
-
-**プライバシー:** データ処理の詳細は\`/legal privacy\`をご覧ください`,
+- 最良の結果を得るために記憶を簡潔明瞭に保つ{legalNotice}`,
       documents_title: `ドキュメント知識庫`,
       documents_description: `サーバー管理者は参照用のドキュメントをアップロードできます：
 - \`/memory document add\`でテキスト、PDF、Markdownファイルをアップロード
