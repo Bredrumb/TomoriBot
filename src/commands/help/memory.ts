@@ -7,6 +7,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { DOCS_PATHS } from "@/utils/discord/docsLinks";
+import { legalNoticeSuffix } from "@/utils/misc/legalNotice";
 
 /**
  * Configure the /help memory subcommand
@@ -75,6 +76,7 @@ export async function execute(
               memoryPersonalExport: memoryPersonalExportMention,
               memoryServerExport: memoryServerExportMention,
               status: statusMention,
+              legalNotice: legalNoticeSuffix(locale, "general.legal.data_handling_reference"),
             }),
             inline: false,
           },

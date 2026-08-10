@@ -319,9 +319,7 @@ Transcription supports ~100 languages (auto-detected).`,
       need_help_description: `- {helpFeatures} - See what I can do
 - {helpMemory} - Learn about my memory system
 - {helpCustomization} - Learn about personality customization
-- {supportServer} - Join the official TomoriBot support server
-
-Setting up TomoriBot means that you and your server members agree to its \`/legal terms\` and \`/legal privacy\` notices`,
+- {supportServer} - Join the official TomoriBot support server{legalNotice}`,
     },
     matrix: {
       description: `Learn how to set up and use the Matrix bridge`,
@@ -394,7 +392,7 @@ After the bot accepts an invite, it now posts a short reminder in the Matrix roo
 Whenever I'm triggered, I fetch the **latest messages** in the text channel as well as any **relevant memories** as context for the AI model to form my reply. I do NOT actively monitor and look at messages outside of these triggers.
 
 You may opt out of my Memory features by using the {personalPrivacy} command, as well as turn off my self-learning using the {configPermissions} command.`,
-      footer: `Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me for privacy. For full details, see \`/legal privacy\` and \`/legal terms\``,
+      footer: `Your chosen AI provider (Google, NovelAI, OpenRouter) processes your messages according to their own privacy policies. Never share personal information with me for privacy.{legalNotice}`,
     },
     "st-preset": {
       description: `Learn how SillyTavern presets behave here`,
@@ -654,9 +652,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       tips_description: `- Teach me your preferences, nicknames, and important facts
 - Use server memories for shared information, inside jokes, or server rules
 - Review your memories periodically with {memoryPersonalExport}, {memoryServerExport}, or {status}
-- Keep memories concise and clear for best results
-
-**Privacy:** See \`/legal privacy\` for full data handling details`,
+- Keep memories concise and clear for best results{legalNotice}`,
       documents_title: `Document Knowledge Base`,
       documents_description: `Server administrators can upload documents for me to reference:
 - Use \`/memory document add\` to upload text, PDF, or Markdown files

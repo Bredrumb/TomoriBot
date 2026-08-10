@@ -4,6 +4,7 @@ import type { Client, Guild } from "discord.js";
 import { findBestChannel } from "@/utils/discord/eventHelper";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { personaRepository } from "@/utils/db/repositories/PersonaRepository";
+import { legalNoticeSuffix } from "@/utils/misc/legalNotice";
 
 /**
  * Sends welcome message when bot joins a new guild.
@@ -23,16 +24,20 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
     }
 
     const serverLocale = guild.preferredLocale;
+    const welcomeEmbedOptions = {
+      titleKey: tomoriExists ? "events.addBot.rejoin_title" : "events.addBot.setup_prompt_title",
+      descriptionKey: tomoriExists ? "events.addBot.rejoin_description" : "events.addBot.setup_prompt_description",
+      descriptionVars: {
+        legalNotice: legalNoticeSuffix(serverLocale, "general.legal.policy_reference"),
+      },
+      color: tomoriExists ? ColorCode.INFO : ColorCode.WARN,
+    };
     let channel = guild.systemChannel;
     let sentSuccessfully = false;
 
     if (channel) {
       try {
-        await sendStandardEmbed(channel, serverLocale, {
-          titleKey: tomoriExists ? "events.addBot.rejoin_title" : "events.addBot.setup_prompt_title",
-          descriptionKey: tomoriExists ? "events.addBot.rejoin_description" : "events.addBot.setup_prompt_description",
-          color: tomoriExists ? ColorCode.INFO : ColorCode.WARN,
-        });
+        await sendStandardEmbed(channel, serverLocale, welcomeEmbedOptions);
         sentSuccessfully = true;
         log.success(`Sent welcome message to system channel ${channel.name} in ${guild.name}`);
       } catch (_error) {
@@ -47,11 +52,7 @@ const handler = async (client: Client, guild: Guild): Promise<void> => {
         return;
       }
 
-      await sendStandardEmbed(channel, serverLocale, {
-        titleKey: tomoriExists ? "events.addBot.rejoin_title" : "events.addBot.setup_prompt_title",
-        descriptionKey: tomoriExists ? "events.addBot.rejoin_description" : "events.addBot.setup_prompt_description",
-        color: tomoriExists ? ColorCode.INFO : ColorCode.WARN,
-      });
+      await sendStandardEmbed(channel, serverLocale, welcomeEmbedOptions);
 
       log.success(`Sent welcome message to fallback channel ${channel.name} in ${guild.name}`);
     }

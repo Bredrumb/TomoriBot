@@ -7,6 +7,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { DOCS_PATHS } from "@/utils/discord/docsLinks";
+import { legalNoticeSuffix } from "@/utils/misc/legalNotice";
 
 /**
  * Configure the /help setup subcommand
@@ -95,6 +96,7 @@ export async function execute(
               helpMemory: helpMemoryMention,
               helpCustomization: helpCustomizationMention,
               supportServer: supportServerMention,
+              legalNotice: legalNoticeSuffix(locale, "general.legal.setup_agreement"),
             }),
             inline: false,
           },

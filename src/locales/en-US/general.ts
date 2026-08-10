@@ -11,7 +11,13 @@
       bot_name: `Tomori`,
     },
     docs: {
-      open_button_label: `Open Full Docs`,
+      open_button_label: `Learn More`,
+    },
+    legal: {
+      policy_reference: `View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
+      setup_agreement: `Setting up TomoriBot means that you and your server members agree to its \`/legal terms\` and \`/legal privacy\` notices`,
+      provider_policy_reference: `For full details, see \`/legal privacy\` and \`/legal terms\``,
+      data_handling_reference: `**Privacy:** See \`/legal privacy\` for full data handling details`,
     },
     api_styles: {
       openai_compatible: `OpenAI-Compatible`,
@@ -187,13 +193,11 @@
   events: {
     addBot: {
       rejoin_title: `I'm Back!`,
-      rejoin_description: `Looks like I was re-added to this server. Existing settings and personas are still intact. Use \`/config\`, \`/persona\`, \`/memory\`, \`/server\`, and \`/provider add\` to review or change them.
-
-View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
+      rejoin_description: `Looks like I was re-added to this server. Existing settings and personas are still intact. Use \`/config\`, \`/persona\`, \`/memory\`, \`/server\`, and \`/provider add\` to review or change them.{legalNotice}`,
       setup_prompt_title: `Successfully Added`,
       setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or read the official [short guide](https://docs.tomoribot.app/en/introduction/quickstart/).
 
-Use \`/help api-key\` if you need provider key instructions. View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
+Use \`/help api-key\` if you need provider key instructions.{legalNotice}`,
     },
   },
   reminders: {
