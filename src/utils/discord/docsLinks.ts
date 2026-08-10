@@ -57,8 +57,10 @@ export function buildDocsLinkRow(
   path: DocsPath,
   labelKey = "general.docs.open_button_label",
 ): ActionRowBuilder<MessageActionRowComponentBuilder> {
+  // Link buttons render grey by API contract, so an emoji is the only way to add visual weight.
   const button = new ButtonBuilder()
     .setStyle(ButtonStyle.Link)
+    .setEmoji("✨")
     .setLabel(localizer(locale, labelKey))
     .setURL(buildDocsUrl(path));
 

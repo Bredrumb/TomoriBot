@@ -7,6 +7,7 @@ import { log, ColorCode } from "@/utils/misc/logger";
 import { replySummaryEmbed } from "@/utils/discord/ui/embeds";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { DOCS_PATHS } from "@/utils/discord/docsLinks";
+import { legalNoticeSuffix } from "@/utils/misc/legalNotice";
 
 /**
  * Configure the /help data subcommand
@@ -92,6 +93,9 @@ export async function execute(
           },
         ],
         footerKey: "commands.help.data.footer",
+        footerVars: {
+          legalNotice: legalNoticeSuffix(locale, "general.legal.provider_policy_reference", " "),
+        },
       },
       MessageFlags.Ephemeral,
     );
