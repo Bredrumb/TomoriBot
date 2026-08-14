@@ -1,4 +1,12 @@
 #cloud-config
+# Rendered through Terraform's templatefile() (see vm.tf), which consumes dollar-brace as
+# interpolation and percent-brace as a directive before cloud-init ever sees them. This
+# comment therefore spells both out rather than quoting them, since quoting them here
+# would fail the same way. Shell written in this file must avoid both: prefer a bare
+# "$VAR" to a braced one, and a command's exit status to a printf-style percent-brace
+# format. Percent-brace fails at parse time and names itself in the error, while
+# dollar-brace fails later as an unknown variable, so the two are never reported together
+# and fixing one can surface the other.
 package_update: true
 package_upgrade: true
 
@@ -129,19 +137,21 @@ write_files:
       STARTED="$(docker inspect -f '{{.State.StartedAt}}' "$CID")"
       AGE=$(( $(date +%s) - $(date -d "$STARTED" +%s) ))
       if [ "$AGE" -lt 21600 ]; then
-        echo "container is ${AGE}s old (under 6h); skipping"
+        echo "container is $AGE seconds old (under 6h); skipping"
         exit 0
       fi
 
       T0=$(date +%s)
-      echo "restarting: age=${AGE}s cg_swap=$(swap_mb "$CID")MB"
+      echo "restarting: age=$AGE seconds cg_swap=$(swap_mb "$CID")MB"
 
       # Docker's 10s default stop grace is short enough to SIGKILL the bot partway through
       # its own shutdown.
       docker restart -t 30 "$CID"
 
       for _ in $(seq 1 30); do
-        if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8081/healthz || true)" = "200" ]; then
+        # Exit status rather than a written-out status code: curl's --write-out uses a
+        # percent-brace syntax that Terraform's templatefile() parses as a directive.
+        if curl -sf -o /dev/null --max-time 5 http://127.0.0.1:8081/healthz; then
           echo "healthy after $(( $(date +%s) - T0 ))s, cg_swap=$(swap_mb "$CID")MB"
           exit 0
         fi
