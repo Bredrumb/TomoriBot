@@ -456,7 +456,14 @@ jobs:
       TF_VAR_azure_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_postgres_admin_password: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
       TF_VAR_vm_admin_ssh_public_key: ${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}
-      TF_VAR_grafana_egress_ip: ${{ vars.GRAFANA_EGRESS_IP }}
+      # A secret rather than a variable: this is an operator's ISP egress address, and
+      # repository variables are not masked, so a job-level env block publishes it in the
+      # logs of a public repository. Masking it after the fact is not possible here, since
+      # registering the mask requires the value to appear first. Nothing is lost by making
+      # it write-only: the authoritative pair to compare when the ISP rotates is the
+      # operator's current address against the live allow-grafana-operator firewall rule,
+      # and both are readable without this value.
+      TF_VAR_grafana_egress_ip: ${{ secrets.GRAFANA_EGRESS_IP }}
       TF_IN_AUTOMATION: "1"
       TF_INPUT: "0"
     steps:
