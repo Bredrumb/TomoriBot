@@ -117,13 +117,62 @@ write_files:
       # failing together. The gateway heartbeat is independent of handlers, so the bot goes
       # on reporting healthy while this happens and nothing restarts it. Recycling on a
       # timer bounds the swap depth. This treats the symptom, not the accumulation.
+      #
+      # The bot is not the only tenant that grows, and it is the only one anything restarts.
+      # searxng and the Azure Monitor agent ride the host's whole uptime, and both climb the
+      # same way: measured on this host, searxng went 22MB to 95MB and the agent stack 148MB
+      # to 200MB between a fresh boot and 13 hours. Together they are comparable to the gap
+      # between the compressed swap device's capacity and total demand, and once that device
+      # saturates every further page falls through to disk at roughly a hundred times the
+      # fault cost. Recycling them here is what keeps zram below its ceiling.
+      #
+      # searxng cannot bound itself: its Granian worker respawns on an RSS ceiling, but RSS
+      # reads near zero once the worker is swapped out, so the guard is anti-correlated with
+      # the pressure it exists to catch.
+
+      # Co-tenant failures must not block the bot's own restart, which is the one that
+      # matters, but they must not pass silently either: a monitoring agent that quietly
+      # stopped shipping is a failure mode this deployment has already hit once.
+      DEGRADED=0
+
+      host_swap_mb() { free -m | awk '/^Swap:/ { print $3 }'; }
+
+      echo "host_swap_before=$(host_swap_mb)MB"
+
+      # Recycled before the bot so its cold start, which is the most allocation-heavy moment
+      # in the cycle, runs with the reclaimed headroom already available.
+      SEARX_CID="$(docker ps -q --filter 'label=com.docker.compose.service=searxng' | head -1)"
+      if [ -n "$SEARX_CID" ]; then
+        if docker restart -t 15 "$SEARX_CID" > /dev/null; then
+          echo "recycled searxng"
+        else
+          echo "WARNING: failed to recycle searxng"
+          DEGRADED=1
+        fi
+      else
+        echo "searxng not running; skipping"
+      fi
+
+      # The host JSONL is the source of truth and the agent is only the shipping layer, so a
+      # brief gap here costs nothing that cannot be read back off the host.
+      if systemctl is-active --quiet azuremonitoragent; then
+        if systemctl restart azuremonitoragent; then
+          echo "recycled azuremonitoragent"
+        else
+          echo "WARNING: failed to recycle azuremonitoragent"
+          DEGRADED=1
+        fi
+      else
+        echo "azuremonitoragent not active; skipping"
+      fi
 
       # Resolve through the compose label instead of the generated container name, which
       # would silently stop matching if the compose project were ever renamed.
       CID="$(docker ps -q --filter 'label=com.docker.compose.service=tomoribot' | head -1)"
       if [ -z "$CID" ]; then
-        echo "no running tomoribot container; nothing to do"
-        exit 0
+        echo "no running tomoribot container; co-tenants recycled, nothing else to do"
+        echo "host_swap_after=$(host_swap_mb)MB"
+        exit "$DEGRADED"
       fi
       CID="$(docker inspect -f '{{.Id}}' "$CID")"
 
@@ -133,12 +182,15 @@ write_files:
       }
 
       # A deploy recreates the container, which already resets the swap depth this exists to
-      # bound. Restarting a young container spends an outage and buys nothing.
+      # bound. Restarting a young container spends an outage and buys nothing. The co-tenants
+      # above are recycled regardless, since their growth tracks host uptime rather than this
+      # container's age.
       STARTED="$(docker inspect -f '{{.State.StartedAt}}' "$CID")"
       AGE=$(( $(date +%s) - $(date -d "$STARTED" +%s) ))
       if [ "$AGE" -lt 21600 ]; then
-        echo "container is $AGE seconds old (under 6h); skipping"
-        exit 0
+        echo "container is $AGE seconds old (under 6h); skipping bot restart"
+        echo "host_swap_after=$(host_swap_mb)MB"
+        exit "$DEGRADED"
       fi
 
       T0=$(date +%s)
@@ -153,7 +205,8 @@ write_files:
         # percent-brace syntax that Terraform's templatefile() parses as a directive.
         if curl -sf -o /dev/null --max-time 5 http://127.0.0.1:8081/healthz; then
           echo "healthy after $(( $(date +%s) - T0 ))s, cg_swap=$(swap_mb "$CID")MB"
-          exit 0
+          echo "host_swap_after=$(host_swap_mb)MB"
+          exit "$DEGRADED"
         fi
         sleep 3
       done
@@ -161,20 +214,21 @@ write_files:
       # Exiting non-zero leaves the unit visibly failed, since an unattended restart that
       # never came back must not look identical to a successful one.
       echo "ERROR: not healthy within 90s of restart"
+      echo "host_swap_after=$(host_swap_mb)MB"
       exit 1
   - path: /etc/systemd/system/tomoribot-restart.service
     owner: root:root
     permissions: "0644"
     content: |
       [Unit]
-      Description=TomoriBot scheduled container restart
+      Description=TomoriBot scheduled recycle of the container and its co-tenants
       Requires=docker.service
       After=docker.service
 
       [Service]
       Type=oneshot
       ExecStart=/usr/local/sbin/tomoribot-scheduled-restart.sh
-      # Must exceed the 30s stop grace plus the 90s health wait.
+      # Must exceed the co-tenant recycles plus the bot's 30s stop grace and 90s health wait.
       TimeoutStartSec=300
   - path: /etc/systemd/system/tomoribot-restart.timer
     owner: root:root

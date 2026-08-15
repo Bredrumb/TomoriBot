@@ -25,7 +25,7 @@ stdin instead. Write the query as a local file, base64 it to survive Run Command
 decode it into the host's `/tmp`:
 
 ```bash
-# probe.js — uses Bun.SQL directly; the app's own client.ts is not importable via `bun -e`
+# probe.js uses Bun.SQL directly: the app's own client.ts is not importable via `bun -e`
 cat > probe.js <<'EOF'
 const s = await Bun.file(process.env.SECRET_FILE).json();
 const sql = new Bun.SQL({
@@ -119,6 +119,35 @@ host provisioned before that change stays broken until repaired by hand.
 
 ## Triaging a frozen bot (unresponsive, or fully offline)
 
+### Slow, not frozen? Ask which path is slow
+
+**If messages answer slowly but slash commands stay snappy, stop and read this before the freeze
+triage below.** That asymmetry is diagnostic and it rules out most of what follows.
+
+Both paths share the database, so a database or pool fault degrades them *together*. What they do
+not share is size: a slash command runs a few reads and replies, while a chat turn walks context
+build, history, the provider call and streaming, touching a far larger working set. When every touch
+risks a major fault, the heavy path stretches to tens of seconds while the light one hides its extra
+few hundred milliseconds inside Discord's "thinking" indicator.
+
+So message-only slowness points at **per-fault cost**, not at the database. The usual cause is zram
+saturation:
+
+```sh
+swapon --show   # /dev/zram0 USED at or near SIZE means every further page goes to disk
+```
+
+Once the compressed device is full, overflow lands on `/swapfile` and each fault costs milliseconds
+instead of microseconds. The fault *rate* need not have changed at all, which is why counters like
+`majflt/s` can look unremarkable while latency triples. Confirm with `/healthz` latency over time
+rather than a single probe, and check that the database is genuinely idle before suspecting it:
+
+```sh
+grep -c "Idle timeout reached" /var/log/tomoribot/tomoribot.jsonl
+```
+
+Few or no recent entries alongside slow messages means this class, not the swap-depth freeze.
+
 ### Separate the two causes first
 
 **Two unrelated failures both present as "green in Discord, ignoring everything", and they need
@@ -173,9 +202,32 @@ bytes it holds, and it does not decompose `external`/`array_buffers` at all. A h
 only way to attribute those. `HEAP_SNAPSHOT_DIR` is set in the Azure compose file, so the handler is
 already armed; nothing is written until you signal it.
 
-**Taking one is not free.** The snapshot serializes to roughly a fifth to a half of the live heap as
-a single string, which on this host is a real allocation spike. Take one at moderate uptime rather
-than at maximum depth, prefer the quiet hour, and restart the container afterwards.
+> **This has taken production down. Read the whole section before signalling.**
+>
+> One attempt at ~13 h uptime, with zram already 99.2% full, **never completed and wrote no file**.
+> It allocated roughly 500 MB against a heap reporting 300-577 MB, drove available memory to 38 MB
+> and page cache from 270 MB down to 81 MB, starved the guest agent to `Not Ready` so Run Command
+> stopped responding, and needed `az vm restart` to clear. Cost: about 35 minutes of
+> degraded-to-unresponsive service and no data.
+
+**Taking one is not free**, and on an 842 MB host it is closer to unusable than to expensive. The
+snapshot serializes a large fraction of the live heap as a single string, so peak allocation roughly
+doubles at the worst possible moment. Preconditions, all of them, before you signal:
+
+- **Low uptime.** Within a few minutes of a restart, while the container is near its floor. At depth
+  it will not finish.
+- **The quiet hour** (00:00 UTC is the measured traffic minimum), and not while zram is near full;
+  check `swapon --show` first, since a saturated device means every spilled page goes to disk.
+- **An abort trigger agreed in advance.** Available memory below ~50 MB *with* page cache collapsing
+  is the incident-1 clean-file eviction signature: stop waiting and restart the container.
+- **A recovery path that does not need the guest agent.** If `instanceView.vmAgent.statuses[0]`
+  reads `Not Ready`, Run Command is gone and `az vm restart` is the only lever left. Note the
+  `instanceView.` prefix: querying `vmAgent` at the object root silently returns `null`, which looks
+  identical to a dead agent.
+
+Prefer any cheaper attribution first. Cache entry counts, the `TomoriBotCacheMetrics_CL` series, and
+the observer's `cg_swap` curve across a restart together answer most questions a snapshot would,
+without the allocation spike.
 
 Signal the bot process directly from the host. The container's PID 1 is `docker-init`, so signalling
 the container would rely on forwarding; the host sees the real process:
@@ -208,6 +260,20 @@ a single snapshot shows what is large, which is not the same question as what is
 uptime resets on a daily boundary is the timer working, not an incident**. Check what it did with
 `journalctl -u tomoribot-restart.service`; it logs swap depth before and after each run, and it skips
 containers younger than six hours.
+
+**It also recycles searxng and the Azure Monitor agent, and those are not subject to the six-hour
+gate.** They grow with host uptime rather than container age, so a run that logs
+`skipping bot restart` has still done useful work. Expect `recycled searxng` and
+`recycled azuremonitoragent` on every firing, with `host_swap_before` / `host_swap_after` bracketing
+the whole unit.
+
+The bot is deliberately restarted last, so its cold start (the most allocation-heavy moment in the
+cycle) runs with the co-tenants' memory already reclaimed.
+
+**A co-tenant failure fails the unit but does not skip the bot.** `WARNING: failed to recycle ...` in
+the journal with a non-zero unit result means the bot was still recycled and something else needs
+attention. That distinction matters because a monitoring agent that silently stopped shipping has
+happened here before, and an unattended job must not hide it.
 
 This does **not** blunt the kill-loop discriminator in step 1: `docker restart` does not increment
 `RestartCount`, since only restart-*policy* restarts do. `RestartCount` climbing therefore still

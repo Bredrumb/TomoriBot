@@ -516,6 +516,31 @@ Pick the hour from your own traffic histogram rather than copying one. Note also
 restart` does not increment `RestartCount`, so adopting a restart schedule does not blunt the
 "something is killing it" signal that a rising `RestartCount` gives during triage.
 
+### Recycle the co-tenants, not just the application
+
+**The application is rarely the only thing on the host that grows, and it is easily the only thing
+anything restarts.** On this deployment the search backend and the monitoring agent each roughly
+quadrupled between a fresh boot and thirteen hours of uptime, and together they were comparable in
+size to the headroom that separated a healthy host from a saturated one.
+
+Two properties make co-tenants worth recycling on the same timer:
+
+- **They are not subject to the application's age gate.** Their growth tracks host uptime, not
+  container age, so a run that skips a freshly deployed container should still recycle them.
+- **A runtime that returns freed memory to its own arenas rather than to the OS sets a permanent
+  floor.** Peak concurrency, not steady-state load, decides that floor, so bounding concurrency is
+  the durable fix and recycling is what reclaims what has already been committed.
+
+Beware of self-limiting guards that key on RSS. A worker configured to respawn above an RSS ceiling
+cannot fire once it has been swapped out, because its RSS then reads near zero exactly when its
+true footprint is largest. **On a swap-backed host, any RSS-triggered guard is anti-correlated with
+the pressure it exists to catch.**
+
+Order the recycles so the heaviest cold start runs last, with the reclaimed memory already
+available. Let a co-tenant failure fail the unit for visibility, but never let it skip the
+application's own restart: a monitoring agent that quietly stops shipping is a failure mode worth
+surfacing loudly, and an unattended job is exactly where it would otherwise hide.
+
 **This is symptom management.** It bounds the depth without addressing the accumulation, and it is
 worth adopting only alongside the hunt for what is growing. Its one genuine diagnostic benefit is
 that a sawtooth measures a growth rate that a permanently saturated flat line hides.
