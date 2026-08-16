@@ -25,6 +25,13 @@ function positiveIntFromEnv(name: string, fallback: number): number {
 export class MetricSampleRepository {
   private lastPruneAt = 0;
 
+  /**
+   * The executor is injected rather than module-mocked in tests. `mock.module` is registered
+   * process-wide for the whole run and is not undone by `mock.restore()`, so a mocked `sql`
+   * leaks into every later test file and quietly answers its queries too.
+   */
+  constructor(private readonly db: typeof sql = sql) {}
+
   /** Suppresses repeat warnings so a pool-wide failure logs once, not once per sample. */
   private hasWarnedSinceSuccess = false;
 
@@ -38,8 +45,10 @@ export class MetricSampleRepository {
    * outcome, and `log.metric()` still writes the durable copy to the host JSONL regardless.
    */
   async recordSample(metricName: string, fields: MetricFields): Promise<void> {
+    // Called through a local so `this` stays undefined at the call site, matching a bare `sql`.
+    const run = this.db;
     try {
-      await sql`
+      await run`
         INSERT INTO metric_samples (metric_name, fields)
         VALUES (${metricName}, ${JSON.stringify(fields)}::jsonb)
       `;
@@ -70,8 +79,9 @@ export class MetricSampleRepository {
     this.lastPruneAt = now;
 
     const retentionDays = positiveIntFromEnv("METRIC_SAMPLE_RETENTION_DAYS", DEFAULT_RETENTION_DAYS);
+    const run = this.db;
     try {
-      await sql`
+      await run`
         DELETE FROM metric_samples
         WHERE created_at < CURRENT_TIMESTAMP - MAKE_INTERVAL(days => ${retentionDays})
       `;

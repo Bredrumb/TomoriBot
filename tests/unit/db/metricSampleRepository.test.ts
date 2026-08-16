@@ -1,15 +1,15 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
-// Hoisted real namespace so the mock below stays full-surface; `mock.module` is
-// process-global for the whole run and a partial factory breaks later files.
-import * as realDbClient from "@/utils/db/client";
-import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import type { sql } from "@/utils/db/client";
+import { stubLogMembers } from "../../helpers/mockSurface";
 
 const queries: string[] = [];
 let insertRejection: Error | null = null;
 
 /**
- * Stands in for the Bun SQL tagged template, recording the normalized statement text so a test
- * can assert which statements ran rather than what the repository intended to run.
+ * Injected in place of the real `sql`, recording the normalized statement text so a test can
+ * assert which statements ran. Injection rather than `mock.module`: Bun registers module mocks
+ * process-wide for the whole run and never undoes them, so a mocked `sql` would answer queries
+ * in every later test file too.
  */
 function fakeSql(strings: TemplateStringsArray, ..._values: unknown[]): Promise<unknown[]> {
   const text = strings.join(" ? ").replace(/\s+/g, " ").trim();
@@ -20,14 +20,7 @@ function fakeSql(strings: TemplateStringsArray, ..._values: unknown[]): Promise<
   return Promise.resolve([]);
 }
 
-const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/db/client": realDbClient,
-});
-
-scopedMock.module("@/utils/db/client", () => ({
-  ...realDbClient,
-  sql: fakeSql,
-}));
+const injectedSql = fakeSql as unknown as typeof sql;
 
 stubLogMembers({ warn: () => {} });
 
@@ -54,7 +47,7 @@ const deletes = () => queries.filter((q) => q.startsWith("DELETE"));
 
 describe("MetricSampleRepository", () => {
   it("records a sample and prunes on the first write", async () => {
-    const repository = new MetricSampleRepository();
+    const repository = new MetricSampleRepository(injectedSql);
     await repository.recordSample("cache_sizes", { heap_used_mb: 312 });
 
     expect(inserts()).toHaveLength(1);
@@ -67,7 +60,7 @@ describe("MetricSampleRepository", () => {
   // table grows unbounded with nothing to report it, which is the failure this test exists for.
   it("prunes again once the interval has elapsed", async () => {
     process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = "1";
-    const repository = new MetricSampleRepository();
+    const repository = new MetricSampleRepository(injectedSql);
 
     await repository.recordSample("cache_sizes", { heap_used_mb: 1 });
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -78,7 +71,7 @@ describe("MetricSampleRepository", () => {
 
   it("does not prune twice inside the interval", async () => {
     process.env.METRIC_SAMPLE_PRUNE_INTERVAL_MS = String(60 * 60 * 1000);
-    const repository = new MetricSampleRepository();
+    const repository = new MetricSampleRepository(injectedSql);
 
     await repository.recordSample("cache_sizes", { heap_used_mb: 1 });
     await repository.recordSample("cache_sizes", { heap_used_mb: 2 });
@@ -90,7 +83,7 @@ describe("MetricSampleRepository", () => {
 
   it("falls back to the default retention when the env value is not a positive integer", async () => {
     process.env.METRIC_SAMPLE_RETENTION_DAYS = "not-a-number";
-    const repository = new MetricSampleRepository();
+    const repository = new MetricSampleRepository(injectedSql);
 
     await expect(repository.recordSample("cache_sizes", { heap_used_mb: 1 })).resolves.toBeUndefined();
     expect(deletes()).toHaveLength(1);
@@ -100,7 +93,7 @@ describe("MetricSampleRepository", () => {
   // into a pool that is already retiring queries.
   it("swallows an insert failure without rejecting or pruning", async () => {
     insertRejection = new Error("Idle timeout reached after 30s");
-    const repository = new MetricSampleRepository();
+    const repository = new MetricSampleRepository(injectedSql);
 
     await expect(repository.recordSample("cache_sizes", { heap_used_mb: 1 })).resolves.toBeUndefined();
     expect(inserts()).toHaveLength(1);
