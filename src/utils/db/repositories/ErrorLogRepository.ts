@@ -12,8 +12,13 @@ export interface ErrorLogPayload {
   error_type: string;
   error_message: string;
   stack_trace: string | null;
-  /** JSON-serialized metadata string, or null. */
-  error_metadata: string | null;
+  /**
+   * Bound to JSONB as an object, never as a `JSON.stringify` result. Under Bun's driver a
+   * stringified value binds as text and `::jsonb` then parses it into a JSONB *scalar string*
+   * whose content is the JSON source, so `->`, `->>` and containment all stop working.
+   * Migration 064 exists to repair columns written that way.
+   */
+  error_metadata: Record<string, unknown> | null;
 }
 
 /**
@@ -35,7 +40,7 @@ export function buildErrorLogPayload(msg: string, err: unknown, context?: ErrorC
     error_type: context?.errorType ?? "GenericError",
     error_message: `${msg} - ${errorMessage}`,
     stack_trace: stackTrace,
-    error_metadata: context?.metadata ? JSON.stringify(context.metadata) : null,
+    error_metadata: context?.metadata ?? null,
   };
 }
 
@@ -88,8 +93,18 @@ export class ErrorLogRepository {
    * The executor is injected rather than module-mocked in tests. `mock.module` is registered
    * process-wide for the whole run and is not undone by `mock.restore()`, so a mocked `sql`
    * leaks into every later test file and quietly answers its queries too.
+   *
+   * It must stay optional and resolve in {@link executor}, never as a `= sql` default. This
+   * module sits on a cycle (`client` imports `logger`, which imports this file, which imports
+   * `client`), and the singleton below is constructed during module evaluation, so a default
+   * parameter reads `sql` while it is still in its temporal dead zone and throws at startup.
    */
-  constructor(private readonly db: typeof sql = sql) {}
+  constructor(private readonly db?: typeof sql) {}
+
+  /** Resolved per call so the cycle above is closed by the time anything queries. */
+  private get executor(): typeof sql {
+    return this.db ?? sql;
+  }
 
   /**
    * Inserts a structured error record into the `error_logs` table. Never throws.
@@ -108,7 +123,7 @@ export class ErrorLogRepository {
     }
 
     // Called through a local so `this` stays undefined at the call site, matching a bare `sql`.
-    const run = this.db;
+    const run = this.executor;
     try {
       await run`
         INSERT INTO error_logs (
@@ -117,7 +132,7 @@ export class ErrorLogRepository {
         ) VALUES (
           ${payload.persona_id}, ${payload.user_id}, ${payload.server_id},
           ${payload.error_type}, ${payload.error_message}, ${payload.stack_trace},
-          ${payload.error_metadata}::jsonb
+          ${payload.error_metadata}
         )
       `;
       this.consecutiveFailures = 0;
@@ -154,7 +169,7 @@ export class ErrorLogRepository {
     this.lastPruneAt = now;
 
     const retentionDays = positiveIntFromEnv("ERROR_LOG_RETENTION_DAYS", DEFAULT_RETENTION_DAYS);
-    const run = this.db;
+    const run = this.executor;
     try {
       await run`
         DELETE FROM error_logs

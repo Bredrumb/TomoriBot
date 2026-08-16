@@ -237,9 +237,7 @@
       },
       "options": {
         "legend": {
-          "calcs": [
-            "sum"
-          ],
+          "calcs": ["sum"],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true,
@@ -537,9 +535,7 @@
         "orientation": "horizontal",
         "percentChangeColorMode": "standard",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": false
         },
@@ -691,9 +687,7 @@
         },
         "pieType": "pie",
         "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "fields": "",
           "values": true
         },
@@ -763,15 +757,9 @@
           "deterministic": true,
           "enableTooltip": true,
           "fontFamily": "arial",
-          "fontSizes": [
-            15,
-            80
-          ],
+          "fontSizes": [15, 80],
           "padding": 1,
-          "rotationAngles": [
-            0,
-            0
-          ],
+          "rotationAngles": [0, 0],
           "rotations": 2,
           "scale": "sqrt",
           "spiral": "archimedean",
@@ -921,9 +909,7 @@
               "id": "byNames",
               "options": {
                 "mode": "exclude",
-                "names": [
-                  "value"
-                ],
+                "names": ["value"],
                 "prefix": "All except:",
                 "readOnly": true
               }
@@ -1147,9 +1133,7 @@
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": [
-    "tomoribot"
-  ],
+  "tags": ["tomoribot"],
   "templating": {
     "list": []
   },

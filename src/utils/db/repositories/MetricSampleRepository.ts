@@ -29,8 +29,17 @@ export class MetricSampleRepository {
    * The executor is injected rather than module-mocked in tests. `mock.module` is registered
    * process-wide for the whole run and is not undone by `mock.restore()`, so a mocked `sql`
    * leaks into every later test file and quietly answers its queries too.
+   *
+   * It stays optional and resolves in {@link executor} rather than as a `= sql` default, for the
+   * same reason as ErrorLogRepository: a default parameter is evaluated while constructing the
+   * singleton below, which can read `sql` before its module has finished initializing.
    */
-  constructor(private readonly db: typeof sql = sql) {}
+  constructor(private readonly db?: typeof sql) {}
+
+  /** Resolved per call so module initialization order cannot matter. */
+  private get executor(): typeof sql {
+    return this.db ?? sql;
+  }
 
   /** Suppresses repeat warnings so a pool-wide failure logs once, not once per sample. */
   private hasWarnedSinceSuccess = false;
@@ -45,12 +54,15 @@ export class MetricSampleRepository {
    * outcome, and `log.metric()` still writes the durable copy to the host JSONL regardless.
    */
   async recordSample(metricName: string, fields: MetricFields): Promise<void> {
+    // `fields` is bound as an object, not a `JSON.stringify` result: under Bun's driver a
+    // stringified value binds as text and `::jsonb` parses it into a JSONB scalar string, which
+    // makes every `fields->>'...'` read in the Grafana panels return null. See migration 064.
     // Called through a local so `this` stays undefined at the call site, matching a bare `sql`.
-    const run = this.db;
+    const run = this.executor;
     try {
       await run`
         INSERT INTO metric_samples (metric_name, fields)
-        VALUES (${metricName}, ${JSON.stringify(fields)}::jsonb)
+        VALUES (${metricName}, ${fields})
       `;
       this.hasWarnedSinceSuccess = false;
       await this.pruneIfDue();
@@ -79,7 +91,7 @@ export class MetricSampleRepository {
     this.lastPruneAt = now;
 
     const retentionDays = positiveIntFromEnv("METRIC_SAMPLE_RETENTION_DAYS", DEFAULT_RETENTION_DAYS);
-    const run = this.db;
+    const run = this.executor;
     try {
       await run`
         DELETE FROM metric_samples
