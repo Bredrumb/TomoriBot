@@ -1,14 +1,16 @@
 /**
  * Cache Metrics Logger
  *
- * Periodically emits a structured `log.metric()` line containing the size of every
- * in-memory cache plus process RSS. Designed for AWS CloudWatch Logs Insights:
- * all fields land at the top level of a single log record so they can be graphed
- * together with queries like:
+ * Periodically records the size of every in-memory cache plus process memory, to two sinks:
+ * a structured `log.metric()` line and a row in `metric_samples`.
  *
- *   fields @timestamp, shortTermMemory, webhookChannel, rss_mb, rss_pct
- *   | filter metric = "cache_sizes"
- *   | stats max(shortTermMemory), max(webhookChannel), max(rss_mb) by bin(5m)
+ * All fields land at the top level of a single flat record, so a log query can graph them
+ * together and Grafana can read them as `(fields->>'heap_used_mb')::float`.
+ *
+ * Both sinks are kept because they fail at different times. The log line reaches the host
+ * JSONL, which survives container recreate, VM reboot, and the bot stalling deep in swap, and
+ * is what incident triage greps. The database row is the one Grafana can graph, and it stops
+ * exactly when the bot cannot reach Postgres.
  *
  * This is diagnostic-only. It does not mutate caches or trigger cleanup.
  */
@@ -31,6 +33,7 @@ import { getStPresetCacheStats } from "@/utils/cache/stPresetCache";
 import { getTomoriStateCacheStats } from "@/utils/cache/tomoriStateCache";
 import { getUserCacheStats } from "@/utils/cache/userCache";
 import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
+import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
@@ -165,13 +168,19 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
 }
 
 /**
- * Emit one cache metrics snapshot to the logger.
+ * Emit one cache metrics snapshot to the logger and to the Postgres sink.
  * Errors are caught and logged so a failed snapshot never kills the interval.
+ *
+ * Both sinks are kept rather than one: the host JSONL survives container recreate, VM reboot,
+ * and the bot stalling deep in swap, and it is what the runbook greps during an incident. The
+ * Postgres row is what Grafana can graph. The insert is fire-and-forget because a sample is
+ * worth less than the interval that produces it.
  */
 function emitSnapshot(client: Client): void {
   try {
     const snapshot = collectCacheMetricsSnapshot(client);
     log.metric("cache_sizes", snapshot);
+    void metricSampleRepository.recordSample("cache_sizes", snapshot);
   } catch (error) {
     log.error("Failed to emit cache metrics snapshot", error, {
       errorType: "CacheMetricsLoggerError",
