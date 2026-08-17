@@ -335,6 +335,7 @@ async function* novelaiGenerateStreamOpenAI(
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let completed = false;
 
     try {
       while (true) {
@@ -356,6 +357,7 @@ async function* novelaiGenerateStreamOpenAI(
 
         if (done) {
           log.info("NovelAI OpenAI stream complete");
+          completed = true;
           break;
         }
 
@@ -400,7 +402,11 @@ async function* novelaiGenerateStreamOpenAI(
         }
       }
     } finally {
-      reader.releaseLock();
+      // `releaseLock` only detaches the reader: the body stays open and keeps its buffers and
+      // connection. The inactivity timeout above exits without `done`, which is exactly that case.
+      if (!completed) {
+        await reader.cancel().catch(() => undefined);
+      }
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -480,6 +486,7 @@ async function* novelaiGenerateStreamNative(
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let completed = false;
 
     try {
       while (true) {
@@ -499,6 +506,7 @@ async function* novelaiGenerateStreamNative(
 
         if (done) {
           log.info("NovelAI stream completed");
+          completed = true;
           yield { final: true };
           break;
         }
@@ -536,7 +544,11 @@ async function* novelaiGenerateStreamNative(
         }
       }
     } finally {
-      reader.releaseLock();
+      // `releaseLock` only detaches the reader: the body stays open and keeps its buffers and
+      // connection. The inactivity timeout above exits without `done`, which is exactly that case.
+      if (!completed) {
+        await reader.cancel().catch(() => undefined);
+      }
     }
   } catch (error) {
     if (error instanceof Error) {

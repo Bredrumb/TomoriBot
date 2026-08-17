@@ -493,7 +493,10 @@ export async function testAccountSettingModel(apiKey: string): Promise<
         }
       }
     } finally {
-      reader.cancel();
+      // This probe reads one chunk and abandons the rest, so the body always needs cancelling.
+      // Awaited and caught because an aborted or already-errored stream rejects here, and an
+      // unhandled rejection from a background capability probe would surface as a crash.
+      await reader.cancel().catch(() => undefined);
     }
 
     if (!actualModel) {

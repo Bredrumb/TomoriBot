@@ -808,6 +808,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           let lastMeaningfulAt = Date.now();
           let committedToAttempt = false;
           let recoveryLogged = false;
+          // True once the body no longer needs cancelling: either the stream ended on its own,
+          // or a retry path already cancelled it.
+          let readerSettled = false;
 
           const logRecovery = () => {
             if (!isRetry || recoveryLogged) return;
@@ -836,120 +839,136 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             }
           };
 
-          while (true) {
-            const readResult = (await readWithTimeout()) as {
-              done: boolean;
-              value?: Uint8Array;
-            };
+          try {
+            while (true) {
+              const readResult = (await readWithTimeout()) as {
+                done: boolean;
+                value?: Uint8Array;
+              };
 
-            if (readResult.done) break;
-            if (!readResult.value) continue;
-
-            buffer += decoder.decode(readResult.value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              const trimmedLine = line.trim();
-              if (!trimmedLine || trimmedLine.startsWith(":") || !trimmedLine.startsWith("data:")) continue;
-
-              const data = trimmedLine.slice(5).trim();
-              if (!data) continue;
-              if (data === "[DONE]") {
-                log.info("OpenrouterStreamAdapter: Stream completed [DONE]");
-                continue;
+              if (readResult.done) {
+                readerSettled = true;
+                break;
               }
+              if (!readResult.value) continue;
 
-              let parsed: unknown;
-              try {
-                parsed = JSON.parse(data);
-              } catch (parseError) {
-                log.warn(`OpenrouterStreamAdapter: Failed to parse SSE data: ${data}`, {
-                  error: parseError instanceof Error ? parseError.message : String(parseError),
-                });
-                continue;
-              }
+              buffer += decoder.decode(readResult.value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || "";
 
-              const normalizedChunk = this.normalizeOpenrouterChunk(parsed);
-              if (!normalizedChunk) continue;
+              for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine || trimmedLine.startsWith(":") || !trimmedLine.startsWith("data:")) continue;
 
-              const midStreamError = this.getMidStreamError(normalizedChunk);
-              if (midStreamError && !committedToAttempt) {
-                // Same rule as the fetch path: a message naming droppable params
-                // justifies a retry even without a generic classifier match.
-                const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
-                const queuedImageStrip = queueImageStripAttempt(i, attempt.body, midStreamError.message);
-                const degradationKind = classifyDegradableError({ ...midStreamError, degradeOn502: true });
-                if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
-                  log.warn(
-                    `OpenRouter received ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
-                    { model: config.model, errorMessage: midStreamError.message },
+                const data = trimmedLine.slice(5).trim();
+                if (!data) continue;
+                if (data === "[DONE]") {
+                  log.info("OpenrouterStreamAdapter: Stream completed [DONE]");
+                  continue;
+                }
+
+                let parsed: unknown;
+                try {
+                  parsed = JSON.parse(data);
+                } catch (parseError) {
+                  log.warn(`OpenrouterStreamAdapter: Failed to parse SSE data: ${data}`, {
+                    error: parseError instanceof Error ? parseError.message : String(parseError),
+                  });
+                  continue;
+                }
+
+                const normalizedChunk = this.normalizeOpenrouterChunk(parsed);
+                if (!normalizedChunk) continue;
+
+                const midStreamError = this.getMidStreamError(normalizedChunk);
+                if (midStreamError && !committedToAttempt) {
+                  // Same rule as the fetch path: a message naming droppable params
+                  // justifies a retry even without a generic classifier match.
+                  const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
+                  const queuedImageStrip = queueImageStripAttempt(i, attempt.body, midStreamError.message);
+                  const degradationKind = classifyDegradableError({ ...midStreamError, degradeOn502: true });
+                  if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
+                    log.warn(
+                      `OpenRouter received ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                      { model: config.model, errorMessage: midStreamError.message },
+                    );
+                    // Cancelled before aborting so the teardown is graceful rather than a
+                    // rejected read, which is why this path cancels here instead of leaving it
+                    // to the `finally` below.
+                    const cancelPromise = reader.cancel().catch(() => undefined);
+                    readerSettled = true;
+                    currentController.abort();
+                    await cancelPromise;
+                    this.resetPerAttemptState(personaSpeakerLabelRegex);
+                    continue attemptLoop;
+                  }
+                }
+
+                const chunksToEmit = this.splitChunkWithTextAndToolSignals(normalizedChunk);
+                for (const chunkToEmit of chunksToEmit) {
+                  const strippedChunk = this.stripThinkBlocksFromChunkContent(chunkToEmit);
+                  const spillGuardedChunk = this.applyReasoningContentSpillGuard(strippedChunk);
+                  const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(spillGuardedChunk);
+                  const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
+                  const commitsStream = this.isMeaningfulCommitmentChunk(guardResult.chunk);
+                  if (commitsStream && !committedToAttempt) {
+                    committedToAttempt = true;
+                    logRecovery();
+                  }
+
+                  if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
+                    yield {
+                      data: {
+                        choices: [{ index: 0, delta: { content: this.speakerGuardPendingTail } }],
+                      } satisfies OpenrouterStreamChunk,
+                      provider: "openrouter",
+                      metadata: { timestamp: Date.now(), model: config.model },
+                    };
+                    this.speakerGuardPendingTail = "";
+                  }
+
+                  const hasMeaningfulData = Boolean(
+                    guardResult.chunk.error ||
+                      guardResult.chunk.usage ||
+                      (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
                   );
-                  const cancelPromise = reader.cancel().catch(() => undefined);
-                  currentController.abort();
-                  await cancelPromise;
-                  this.resetPerAttemptState(personaSpeakerLabelRegex);
-                  continue attemptLoop;
-                }
-              }
+                  if (!hasMeaningfulData) {
+                    if (guardResult.stopTriggered) {
+                      log.warn(
+                        `OpenRouter speaker guard: generation stopped at detected speaker label "${guardResult.matchedSpeaker ?? "unknown"}"`,
+                      );
+                      return;
+                    }
+                    continue;
+                  }
 
-              const chunksToEmit = this.splitChunkWithTextAndToolSignals(normalizedChunk);
-              for (const chunkToEmit of chunksToEmit) {
-                const strippedChunk = this.stripThinkBlocksFromChunkContent(chunkToEmit);
-                const spillGuardedChunk = this.applyReasoningContentSpillGuard(strippedChunk);
-                const deduplicatedChunk = this.deduplicateChunkTextAgainstRecentStream(spillGuardedChunk);
-                const guardResult = this.applySpeakerBoundaryFallbackGuard(deduplicatedChunk);
-                const commitsStream = this.isMeaningfulCommitmentChunk(guardResult.chunk);
-                if (commitsStream && !committedToAttempt) {
-                  committedToAttempt = true;
-                  logRecovery();
-                }
-
-                if (this.shouldFlushSpeakerGuardTailBeforeNonTextChunk(guardResult.chunk)) {
+                  lastMeaningfulAt = Date.now();
                   yield {
-                    data: {
-                      choices: [{ index: 0, delta: { content: this.speakerGuardPendingTail } }],
-                    } satisfies OpenrouterStreamChunk,
+                    data: guardResult.chunk,
                     provider: "openrouter",
                     metadata: { timestamp: Date.now(), model: config.model },
                   };
-                  this.speakerGuardPendingTail = "";
-                }
 
-                const hasMeaningfulData = Boolean(
-                  guardResult.chunk.error ||
-                    guardResult.chunk.usage ||
-                    (guardResult.chunk.choices && guardResult.chunk.choices.length > 0),
-                );
-                if (!hasMeaningfulData) {
                   if (guardResult.stopTriggered) {
                     log.warn(
                       `OpenRouter speaker guard: generation stopped at detected speaker label "${guardResult.matchedSpeaker ?? "unknown"}"`,
                     );
                     return;
                   }
-                  continue;
-                }
-
-                lastMeaningfulAt = Date.now();
-                yield {
-                  data: guardResult.chunk,
-                  provider: "openrouter",
-                  metadata: { timestamp: Date.now(), model: config.model },
-                };
-
-                if (guardResult.stopTriggered) {
-                  log.warn(
-                    `OpenRouter speaker guard: generation stopped at detected speaker label "${guardResult.matchedSpeaker ?? "unknown"}"`,
-                  );
-                  return;
                 }
               }
-            }
 
-            if (Date.now() - lastMeaningfulAt > inactivityTimeoutMs) {
-              currentController.abort();
-              throw new Error("OpenRouter stream timed out due to inactivity");
+              if (Date.now() - lastMeaningfulAt > inactivityTimeoutMs) {
+                currentController.abort();
+                throw new Error("OpenRouter stream timed out due to inactivity");
+              }
+            }
+          } finally {
+            // Every exit other than a completed stream (retry, early return, inactivity
+            // timeout, or a consumer abandoning this generator) leaves the response body open,
+            // holding its buffers and connection until it is cancelled explicitly.
+            if (!readerSettled) {
+              await reader.cancel().catch(() => undefined);
             }
           }
 
