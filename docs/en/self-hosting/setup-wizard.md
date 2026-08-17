@@ -14,6 +14,13 @@ Users who want to use Docker Compose should skip this wizard, see
 `bun run setup` is the recommended self-host path for local Bun-based installs. It creates your `.env`, generates a `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, and installs the exact dependencies from `bun.lock` interactively, so just follow the prompts. It's safe
 to re-run; existing `.env` values are kept unless you choose to reconfigure them.
 
+## Get the code
+
+```sh
+git clone https://github.com/Bredrumb/TomoriBot.git
+cd TomoriBot
+```
+
 ## Choose a path
 
 Once you run the command, you'll pick one of two paths:
