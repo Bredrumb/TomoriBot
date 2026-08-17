@@ -155,7 +155,11 @@ interface AccumulatedToolCall {
   functionArguments: string;
 }
 
-const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "true").trim().toLowerCase() === "true";
+// Defaults off because Bun's `verbose` prints every request header, including the
+// `Authorization: Bearer` line, and it prints below application code so nothing here can
+// redact it. Enabling this writes the OpenRouter API key in clear text to container logs
+// and to anything shipping them onward.
+const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "false").trim().toLowerCase() === "true";
 
 /**
  * OpenRouter streaming adapter implementation
