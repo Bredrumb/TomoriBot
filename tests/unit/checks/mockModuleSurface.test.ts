@@ -107,8 +107,6 @@ describe("module mock surface scanner", () => {
   });
 });
 
-// Real-tree scanner, so runner contention rather than test size decides whether it fits
-// Bun's 5 s default. Same budget and reasoning as personaWorkflowBoundary.test.ts.
 describe("module mock surface guard on the real tree", () => {
   it("keeps high-risk module mocks full-surface and leak-scoped", async () => {
     const { violations, guardedMocks } = await auditMockModuleSurfaces();
@@ -128,4 +126,4 @@ describe("module mock surface guard on the real tree", () => {
         "createScopedModuleMocker from tests/helpers/mockSurface.ts.",
     ).toHaveLength(0);
   });
-}, 30_000);
+});

@@ -113,4 +113,4 @@ describe("renderPersonalCard PNG", () => {
     const png = await renderCardToPng(renderPersonalCard(SAMPLE_JA), CARD_W, getPersonalCardHeight(SAMPLE_JA));
     expect(png.byteLength).toBeGreaterThan(1000);
   });
-}, 30_000);
+});
