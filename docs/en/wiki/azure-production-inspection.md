@@ -164,6 +164,61 @@ and never needed again, which is harmless. Sustained nonzero `si` means the work
 oversubscribed. `/proc/pressure/memory` confirms it independently by measuring stall time, where
 `full` is the share of wall time every task was blocked.
 
+Three narrower probes answer questions the above cannot. **zram's real compression ratio**, since
+`swapon --show` reports the uncompressed size and hides how much RAM the device actually holds:
+
+```sh
+cat /sys/block/zram0/mm_stat   # orig_data_size compr_data_size mem_used_total ...
+```
+
+**The bot process's own split between resident and swapped pages.** Select on `comm`, because
+`pgrep -f bun` matches `docker-init` instead:
+
+```sh
+for p in /proc/[0-9]*; do [ "$(cat $p/comm 2>/dev/null)" = "bun" ] && \
+  grep -E "VmRSS|RssAnon|VmSwap" $p/status; done
+```
+
+**True cgroup commitment, which RSS hides.** `memory.events` is the authority on whether anything was
+actually killed, so it settles "was this an OOM" in one reading:
+
+```sh
+C=$(docker inspect -f "{{.Id}}" tomoribot-azure-tomoribot-1); B=/sys/fs/cgroup/system.slice/docker-$C.scope
+echo "current=$(cat $B/memory.current) swap=$(cat $B/memory.swap.current) swapmax=$(cat $B/memory.swap.max)"
+cat $B/memory.events
+```
+
+**A working-set number is meaningless without container uptime beside it.** The same host reads
+roughly half as much swap right after a restart as it does days later, so always pair these with
+`docker inspect -f '{{.State.StartedAt}}'`.
+
+### The observer is the during-incident record, and it is the only one
+
+`tomoribot-oom-observer.service` samples the host every 15 s to `/var/log/oom-observer.log`. It
+records only; it never kills anything. **It is the primary source for any incident that has already
+happened**, because every other pipeline fails exactly when it is needed: the bot's own metrics stop
+when the bot stalls, and a shipping agent stops when the host starves. Since AMA was removed it is
+also the *only* home for host memory percent, which `metric_samples` does not carry.
+
+```sh
+tail -5 /var/log/oom-observer.log
+systemctl is-active tomoribot-oom-observer     # the unit name has the tomoribot- prefix
+```
+
+Each line is flat `key=value`:
+
+| Field | Meaning |
+|---|---|
+| `avail_mb`, `cache_mb` | host available memory and page cache. **Both collapsing together is the reclaim-livelock signature** |
+| `mem_some`, `mem_full`, `io_full` | PSI, as `avg10/avg60/avg300`. `io_full` is the one that tracked every incident |
+| `majflt`, `allocstall` | cumulative counters, so read them as differences between lines, never as levels |
+| `zram_ram_mb`, `zram_orig_mb` | real RAM held against uncompressed bytes stored, so their ratio is the live compression ratio |
+| `cg_mb`, `cg_swap_mb` | container memory and swap. **`cg_swap_mb` is the number that predicts the swap-depth freeze**, not `cg_mb` |
+| `restarts`, `health`, `hz`, `hz_ms` | container restart count, Docker health, and `/healthz` status with latency |
+
+Read `hz_ms` rather than a one-off `curl`: a single fast probe says nothing, while a rising `hz_ms`
+across many samples is the earliest warning this host gives.
+
 ### Confirm zram survived, after every reboot
 
 An unattended kernel upgrade takes zram with it whenever the running kernel has no matching
@@ -276,64 +331,56 @@ echo $(( $(cat /sys/fs/cgroup/system.slice/docker-$C.scope/memory.swap.current) 
 **A working-set number is meaningless without the uptime beside it.** The same host reads roughly
 half as much swap immediately after a restart as it does days later.
 
-### Capturing a heap snapshot
+### Capturing a heap snapshot: RETIRED, do not do this
+
+> **The method is retired. Do not take a heap snapshot on a memory-constrained host, on a larger
+> one, or on any other.** It was attempted twice and caused an outage both times. What follows is
+> the reasoning, so it is not rediscovered, rather than a procedure to follow.
 
 `cache_sizes` counts cache *entries*, so it can name a cache that grows without telling you how many
 bytes it holds, and it does not decompose `external`/`array_buffers` at all. A heap snapshot is the
-only way to attribute those. `HEAP_SNAPSHOT_DIR` is set in the Azure compose file, so the handler is
-already armed; nothing is written until you signal it.
+only way to attribute those directly, which is why it keeps looking worth the risk. It is not.
 
-> **This has taken production down. Read the whole section before signalling.**
->
-> One attempt at ~13 h uptime, with zram already 99.2% full, **never completed and wrote no file**.
-> It allocated roughly 500 MB against a heap reporting 300-577 MB, drove available memory to 38 MB
-> and page cache from 270 MB down to 81 MB, starved the guest agent to `Not Ready` so Run Command
-> stopped responding, and needed `az vm restart` to clear. Cost: about 35 minutes of
-> degraded-to-unresponsive service and no data.
+**On a constrained host it does not finish.** The snapshot serializes a large fraction of the live
+heap as a single string, so peak allocation roughly doubles at the worst possible moment. It can
+collapse page cache, starve the guest agent to `Not Ready` so Run Command stops responding, and leave
+`az vm restart` as the only remaining lever, all without writing a file.
 
-**Taking one is not free**, and on an 842 MB host it is closer to unusable than to expensive. The
-snapshot serializes a large fraction of the live heap as a single string, so peak allocation roughly
-doubles at the worst possible moment. Preconditions, all of them, before you signal:
+**Giving it more memory does not make it safe, and that is the finding that retires the method.** On
+a host with ample headroom the snapshot completes and writes its files, and **still leaves the main
+thread spinning at 100% of a core indefinitely.** The container stays `healthy` and `/healthz` keeps
+returning 200 while nothing is served, so it fails silently until someone looks. There is therefore
+no host size on which this is acceptable.
 
-- **Low uptime.** Within a few minutes of a restart, while the container is near its floor. At depth
-  it will not finish.
-- **The quiet hour** (00:00 UTC is the measured traffic minimum), and not while zram is near full;
-  check `swapon --show` first, since a saturated device means every spilled page goes to disk.
-- **An abort trigger agreed in advance.** Available memory below ~50 MB *with* page cache collapsing
-  is the incident-1 clean-file eviction signature: stop waiting and restart the container.
-- **A recovery path that does not need the guest agent.** If `instanceView.vmAgent.statuses[0]`
-  reads `Not Ready`, Run Command is gone and `az vm restart` is the only lever left. Note the
-  `instanceView.` prefix: querying `vmAgent` at the object root silently returns `null`, which looks
-  identical to a dead agent.
+**That failure is also its own diagnostic class, and it is the one nothing else explains.** If the
+bot is unresponsive with **no memory pressure at all**, do not work through the swap table above:
 
-Prefer any cheaper attribution first. Cache entry counts, the `metric_samples` memory series, and
-the observer's `cg_swap` curve across a restart together answer most questions a snapshot would,
-without the allocation spike.
+| Signal | Swap-depth freeze | Reclaim livelock | **CPU starvation** |
+|---|---|---|---|
+| Memory pressure | high | extreme | **none** |
+| CPU | normal | low, all iowait | **one core pinned at 100%** |
+| `/healthz` | 200 | times out | **200, fast** |
+| Cause | uptime in swap | file-backed reclaim | **a heap snapshot, or any long synchronous main-thread job** |
 
-Signal the bot process directly from the host. The container's PID 1 is `docker-init`, so signalling
-the container would rely on forwarding; the host sees the real process:
+Reach for the cheaper attributions instead, all of which answer most of what a snapshot would without
+touching the main thread: cache entry counts, the `metric_samples` memory series described above, and
+the observer's `cg_swap` curve across a restart.
 
-```sh
-for p in /proc/[0-9]*; do [ "$(cat $p/comm 2>/dev/null)" = "bun" ] && kill -USR2 "${p#/proc/}"; done
-ls -la /var/log/tomoribot/*.heapsnapshot
-```
+**Taking one is not free**, and on a memory-constrained host it is closer to unusable than to
+expensive. The snapshot serializes a large fraction of the live heap as a single string, so peak
+allocation roughly doubles at the worst possible moment, and with headroom the *serialization itself*
+is what never gives the thread back.
 
-Completion is recorded as a `heap_snapshot` metric carrying the byte count and duration, so it lands
-in the host JSONL, which is now the only sink for log lines.
+`HEAP_SNAPSHOT_DIR` is still set in the Azure compose file and the `SIGUSR2` handler is still armed,
+so the capability has not been removed from the code. Treat that as a loaded footgun rather than as
+permission: **the signal is deliberately not documented here.** If a future change genuinely needs
+heap attribution, move the serialization off the main thread first and prove it on a throwaway host,
+because that is the defect, not the host size.
 
-**Analyse it off-host.** The file is far too large for Run Command's output cap, and parsing it in
-place would reproduce the exact memory pressure under investigation. Push it to blob storage with a
-SAS URL and open it locally in Chrome DevTools, which has a Comparison view built for diffing two
-snapshots:
-
-```sh
-curl -X PUT -H "x-ms-blob-type: BlockBlob" \
-  --data-binary @/var/log/tomoribot/<file>.heapsnapshot "<sas-url>"
-rm /var/log/tomoribot/<file>.heapsnapshot
-```
-
-Two snapshots taken hours apart and diffed by retained size are what identify the growing retainer;
-a single snapshot shows what is large, which is not the same question as what is growing.
+One recovery note worth keeping, since it applies to any guest-agent starvation: if
+`instanceView.vmAgent.statuses[0]` reads `Not Ready`, Run Command is gone and `az vm restart` is the
+only lever left. Note the `instanceView.` prefix, because querying `vmAgent` at the object root
+silently returns `null`, which looks identical to a dead agent.
 
 ### Scheduled restarts are routine
 

@@ -147,6 +147,7 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     webhookMutationLocks: webhook.webhookMutationLocks,
     webhookAvatarState: webhook.webhookAvatarState,
     persistedManagedWebhookIds: webhook.persistedManagedWebhookIds,
+    webhookFailure: webhook.webhookFailure,
     webhookIdentity: getWebhookIdentityCacheSize(),
 
     // Discord.js client caches
