@@ -36,6 +36,7 @@ import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
+import { eventLoopMonitor } from "@/utils/misc/eventLoopMonitor";
 import { log } from "@/utils/misc/logger";
 import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import { memoryGuard } from "@/utils/security/rateLimiter";
@@ -165,6 +166,12 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     heap_total_mb: processMemory.heapTotalMb,
     external_mb: processMemory.externalMb,
     array_buffers_mb: processMemory.arrayBuffersMb,
+
+    // Worst timer lag across the whole interval rather than the instant of the sample, since a
+    // stall lasting seconds would almost never coincide with a 5-minute sample. This is the only
+    // series that distinguishes a starved event loop from a healthy one, because Discord readiness
+    // and WebSocket ping both stay green through it.
+    event_loop_peak_lag_ms: eventLoopMonitor.takeIntervalPeakLagMs(),
   };
 }
 

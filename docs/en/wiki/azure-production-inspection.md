@@ -303,10 +303,11 @@ major-fault stalls hold handlers long enough for Bun's SQL pool to retire their 
 timeout; every database-touching handler then fails at once. Two readings look like exonerating
 evidence and are not:
 
-- **`/healthz` returns 200 throughout.** `healthTracker` only asserts that the Discord client is
-  ready, so a healthy 200 and a completely unresponsive bot are compatible states. It is on host port
-  **8081**, not 3000 or 8080; a `code=000` returned in under a millisecond is connection-refused, not
-  a hang.
+- **`/healthz` returns 200 throughout**, and its `eventLoop.stalenessMs` stays normal during this
+  class, which is what separates it from CPU starvation further down. `healthTracker` only asserts
+  that the Discord client is ready, so a healthy 200 and a completely unresponsive bot are compatible
+  states. It is on host port **8081**, not 3000 or 8080; a `code=000` returned in under a millisecond
+  is connection-refused, not a hang.
 - **The gateway stays green,** because its heartbeat is independent of handlers. Expect
   `connected: true` with a normal ping during the freeze.
 
@@ -360,7 +361,27 @@ bot is unresponsive with **no memory pressure at all**, do not work through the 
 | Memory pressure | high | extreme | **none** |
 | CPU | normal | low, all iowait | **one core pinned at 100%** |
 | `/healthz` | 200 | times out | **200, fast** |
+| `eventLoop.stalenessMs` | normal | n/a, no response | **far above the sample interval** |
 | Cause | uptime in swap | file-backed reclaim | **a heap snapshot, or any long synchronous main-thread job** |
+
+`eventLoop` is the field that makes this class visible at all, and it is the reason to read the
+`/healthz` body rather than just its status code:
+
+```sh
+curl -s http://127.0.0.1:8081/healthz | jq .eventLoop
+```
+
+`stalenessMs` is milliseconds since a timer callback last ran, so healthy readings sit between zero
+and one `sampleIntervalMs`. A large value means callbacks are not being scheduled while the endpoint
+still answers, which is precisely the starvation signature: a loop that yields between chunks of work
+serves a short probe in milliseconds while multi-step handlers behind it make no progress. A loop
+blocked outright returns nothing at all, so that case appears as a probe timeout instead.
+
+**It is reported, never enforced.** Staleness deliberately does not affect the 200/503 verdict,
+because the Compose healthcheck runs `curl -f` and a threshold nobody has calibrated would start
+marking the container unhealthy. For the longer history, `event_loop_peak_lag_ms` in `metric_samples`
+carries the worst lag per five-minute interval rather than an instantaneous reading, so a stall
+lasting seconds cannot fall between samples.
 
 Reach for the cheaper attributions instead, all of which answer most of what a snapshot would without
 touching the main thread: cache entry counts, the `metric_samples` memory series described above, and
