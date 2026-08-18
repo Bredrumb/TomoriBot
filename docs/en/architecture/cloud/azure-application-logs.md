@@ -12,6 +12,24 @@ operational rules that keep ingestion reliable and cheap.
 For monitoring a local instance with Grafana instead, see
 [Local Grafana Monitoring](/self-hosting/local-monitoring/).
 
+:::note[TomoriBot's own deployment no longer runs this pipeline]
+Everything below still works and is still supported. It is simply no longer what the reference
+deployment does: the Azure Monitor Agent was removed once the bot began writing its cache and
+process-memory samples straight into PostgreSQL, where Grafana already had a datasource. The reason
+was memory rather than cost. The agent held roughly 179 MB of resident set on a host with 842 MB of
+usable RAM, which is a fifth of the machine spent shipping telemetry.
+
+Choose this pipeline if you want log *search* over structured error records, which a table of
+counters cannot give you. Choose the database sink if your host is small, you already run Grafana
+against your bot's database, and per-cache and per-memory series are what you actually graph. See
+[Caching](/architecture/subsystems/caching/) for that design, and
+[Azure Production Deployment](/architecture/cloud/azure-production-deployment/) for the removal.
+
+The bot-side JSONL output in Step 1 is independent of the agent and is worth enabling either way: it
+survives container recreate and VM reboot, and it keeps recording during the incidents that stop a
+database write from landing.
+:::
+
 ## Pipeline overview
 
 ```text

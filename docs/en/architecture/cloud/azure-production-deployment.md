@@ -58,7 +58,7 @@ environment-scoped Run Command deployment succeeds.
 
 The workflow deliberately separates recurring releases from one-time lifecycle operations.
 
-### VM replacement protection and monitoring recovery
+### VM replacement protection
 
 Terraform plans that delete or replace the production VM stop before apply. After reviewing the
 saved plan, an operator may approve the replacement only through a manual dispatch with
@@ -76,26 +76,27 @@ a deliberate act, though: removing the VM from state or destroying it, never a p
 Verify a backport against the live host rather than trusting a clean plan, because Terraform no
 longer reports drift on this field.
 
-The Azure Monitor Linux Agent and both DCR associations are Terraform-managed children of the VM.
-The DCR definitions, DCE, Log Analytics workspace, and custom tables remain externally managed and
-are referenced through the non-sensitive DCR resource IDs in `terraform.ci.tfvars`. A normal
-Terraform apply installs the agent and restores both associations on the current VM. A later
-approved VM replacement destroys and recreates these attachments in the same dependency graph, so
-guest-memory and cache telemetry recover without a separate portal operation. Update the committed
-IDs only when an operator deliberately replaces a DCR.
+A replacement no longer has monitoring children to recover. The Azure Monitor Linux Agent and its
+two data collection rule associations were Terraform-managed children of the VM until the bot began
+writing its own telemetry to PostgreSQL, at which point they were removed: this stack installs no
+monitoring agent, and `terraform.ci.tfvars` carries no data collection rule IDs.
 
-To inventory the existing DCR IDs before the first adoption apply, authenticate Azure CLI and run:
+**The driver was memory, not cost.** On a host with 842 MB of usable RAM, the agent held roughly
+179 MB of resident set, a fifth of the machine spent shipping metrics that a table in a database the
+bot already holds a connection to can store instead. The bot now writes a row to `metric_samples`
+every `CACHE_METRICS_INTERVAL_MS`, and Grafana reads that table through the operator firewall rule
+it already needs. See [Caching](/architecture/subsystems/caching/) for the dual-sink design.
 
-```sh
-az resource list \
-  --resource-type Microsoft.Insights/dataCollectionRules \
-  --query "[].{name:name,resourceGroup:resourceGroup,id:id}" \
-  --output table
-```
+The three metric alerts are unaffected, because they read `Microsoft.Compute/virtualMachines`
+platform metrics served by the Azure guest agent rather than by the monitoring agent. That is
+measured rather than assumed: during a ten-hour window when the monitoring agent was dead, Available
+Memory Bytes and OS Disk Queue Depth both kept reporting.
 
-If the current VM already has an extension or association with the Terraform names, import that live
-object instead of deleting it; a recreated VM normally has no such child objects, so the first apply
-creates them.
+Reinstating the pipeline is a rollback, not a rebuild. The Log Analytics workspace, its custom
+tables, the data collection endpoint, and the rule definitions were always externally managed, so
+they survive untouched and only the extension and the two associations need re-adding to
+`monitoring.tf`. [Azure Application Logs](/architecture/cloud/azure-application-logs/) covers that
+pipeline for a deployment that wants it.
 
 ### Database bootstrap
 
@@ -135,10 +136,21 @@ is (re)started. It:
 3. fails the deploy (before the bot restarts) if migration does not report success.
 
 Destructive migrations (`DROP`, `ALTER COLUMN ... TYPE`, `TRUNCATE`, unfiltered `DELETE`, etc.) are still
-blocked upstream by the **Destructive migration gate** unless the deployer opts into a pre-deploy backup
-(a `(Checkpoint)` commit message on push, or `create_db_backup=true` on manual dispatch). This is why the
-gate matters: routine pushes now genuinely apply migrations, so an unguarded destructive change is caught
-before it reaches the database.
+blocked upstream by the **Destructive migration gate**. Routine pushes genuinely apply migrations, so the
+gate is what catches an unguarded destructive change before it reaches the database.
+
+:::caution[`(Checkpoint)` does not produce a backup on this deployment]
+A `(Checkpoint)` commit message, or `create_db_backup=true` on manual dispatch, skips the gate and then
+runs `az postgres flexible-server backup create`. **Azure rejects customer on-demand backups on the
+Burstable tier**, which is what this server runs (`Standard_B1ms`), so that step fails and takes the
+deploy down with it. The outcome is safe, because nothing deploys and the migration never reaches the
+database, but it is not a backup and the gate has been spent for nothing.
+
+The real recovery point on Burstable is **point-in-time restore from the automated backups**
+(`backup_retention_days`, 7 by default). Before shipping a destructive migration, record the current UTC
+timestamp as your restore target, or take an explicit logical dump. Re-enable the on-demand path only if
+this server moves to General Purpose or Memory Optimized, where Azure permits it.
+:::
 
 ### Recurring deployment
 
@@ -276,8 +288,10 @@ when a brief Discord disconnect is acceptable, then verify `/healthz`, Discord c
 public-FQDN database access over verified TLS, and Vertex WIF after the reboot.
 
 Docker uses `json-file` rotation with three 10 MiB files, live restore, and daemon-level
-`no-new-privileges`. Application error JSONL remains on `/var/log/tomoribot`; Azure Monitor retains
-ingested records for 30 days. Backup and application-data mounts remain under
+`no-new-privileges`. Application error JSONL remains on `/var/log/tomoribot`, which is the
+durable copy: it survives container recreate and VM reboot, and it is what incident triage greps.
+Cache and process-memory samples land in the `metric_samples` table, pruned on the write path after
+`METRIC_SAMPLE_RETENTION_DAYS` (30 by default). Backup and application-data mounts remain under
 `/var/lib/tomoribot` and require explicit operator retention decisions.
 
 Each deploy pulls a new image digest and leaves the previous one untagged, so
@@ -521,7 +535,9 @@ restart` does not increment `RestartCount`, so adopting a restart schedule does 
 **The application is rarely the only thing on the host that grows, and it is easily the only thing
 anything restarts.** On this deployment the search backend and the monitoring agent each roughly
 quadrupled between a fresh boot and thirteen hours of uptime, and together they were comparable in
-size to the headroom that separated a healthy host from a saturated one.
+size to the headroom that separated a healthy host from a saturated one. The monitoring agent was
+later removed outright, which is the stronger version of the same move: recycling bounds a
+co-tenant's growth, while deleting it reclaims the whole floor.
 
 Two properties make co-tenants worth recycling on the same timer:
 

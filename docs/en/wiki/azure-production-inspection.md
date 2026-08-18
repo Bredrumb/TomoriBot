@@ -56,6 +56,87 @@ Notes that save a round trip:
 - Keep these scripts read-only. Route writes through a migration or an explicitly confirmed
   one-off, never through casual triage.
 
+## Memory and cache telemetry: query `metric_samples`
+
+The Azure Monitor Agent was removed once the bot began writing its own telemetry to PostgreSQL, so
+`TomoriBotCacheMetrics_CL` and `TomoriBotLogs_CL` stopped receiving new rows. Triage now reads
+`metric_samples` through the same `probe.js` wrapper above. Rows are pruned on the write path after
+`METRIC_SAMPLE_RETENTION_DAYS` (30 by default).
+
+`metric_name` is the leading column of `idx_metric_samples_name_time`, so every query must filter on
+it or lose the index. There is one producer today, `cache_sizes`, emitted every
+`CACHE_METRICS_INTERVAL_MS` (5 min).
+
+**Memory growth. Aggregate with `min()`, never `avg()`.** `external_mb` sawtooths roughly 250 MB
+between GC cycles against daily growth under 100 MB, so an hourly mean reports which GC phase each
+sample landed in rather than accumulation. The post-GC floor is the baseline that survives
+collection:
+
+```sql
+SELECT date_trunc('hour', created_at) AS hr, count(*) AS n,
+       min((fields->>'heap_used_mb')::float)     AS heap_floor,
+       min((fields->>'external_mb')::float)      AS ext_floor,
+       min((fields->>'array_buffers_mb')::float) AS ab_floor
+  FROM metric_samples
+ WHERE metric_name = 'cache_sizes' AND created_at > now() - interval '24 hours'
+ GROUP BY 1 ORDER BY 1;
+```
+
+Fit only **full 12-sample hours**: a `min()` over a partial hour is biased high and tilts the slope
+at whichever end it sits. Prefer `array_buffers_mb`, whose residual scatter is about 1.6 MB, over
+`external_mb`, whose 95% confidence interval on a 10 h window spans zero. Splitting a window into
+first and second halves distinguishes a bounded working set from a leak faster than any fit does: a
+plateau is not a leak.
+
+**Did the emitter stall?** Use gaps, not counts. A restart *adds* a sample rather than costing one,
+because `cacheMetricsLogger.ts:214` emits before arming the interval, so a count cannot separate a
+stall from a busy day:
+
+```sql
+SELECT created_at, created_at - lag(created_at) OVER (ORDER BY created_at) AS gap
+  FROM metric_samples WHERE metric_name = 'cache_sizes'
+ ORDER BY gap DESC NULLS LAST LIMIT 5;
+```
+
+Anything beyond ~5 min is a stall. Steady state runs 12.09 samples/hour.
+
+**Cache entry counts**, which is the series that named the four lazy-expiry caches:
+
+```sql
+SELECT created_at,
+       (fields->>'shortTermMemory')::int  AS "shortTermMemory",
+       (fields->>'tomoriState')::int      AS "tomoriState",
+       (fields->>'userCache')::int        AS "userCache",
+       (fields->>'channelWhitelist')::int AS "channelWhitelist"
+  FROM metric_samples
+ WHERE metric_name = 'cache_sizes' AND created_at > now() - interval '6 hours'
+ ORDER BY created_at;
+```
+
+Double-quote the camelCase aliases: Postgres folds unquoted identifiers to lowercase, and the output
+would then disagree with the JSONB key names everything else refers to.
+
+**Errors** are in `error_logs`, but never size an incident from it. Insert failures are swallowed by
+design (`logger.ts:323-325`), so it under-records during exactly the pool-timeout incidents it exists
+to capture: one incident produced 2,775 level-50 lines in the host JSONL and about 21 rows here. The
+JSONL is the witness; the table is useful for the error-type *mix*, not the volume.
+
+### The Log Analytics path is historical
+
+`api.loganalytics.io` still answers for data already ingested, up to the workspace retention window,
+so the recipe below stays useful for looking backwards. It will not show anything newer than the
+agent removal.
+
+```bash
+TOKEN=$(az account get-access-token --resource https://api.loganalytics.io --query accessToken -o tsv)
+curl -s -X POST "https://api.loganalytics.io/v1/workspaces/c29999d0-e1bf-47c7-bfe2-dbfddc476b53/query" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"query":"TomoriBotCacheMetrics_CL | where TimeGenerated > ago(24h) | summarize n=count()"}'
+```
+
+The `log-analytics` CLI extension has no stable version and will not install, so
+`az monitor log-analytics query` fails outright. REST is the only route.
+
 ## Host memory and swap forensics
 
 Azure Monitor collects neither `/proc/pressure/*` nor `vmstat` swap rates, and
@@ -225,7 +306,7 @@ doubles at the worst possible moment. Preconditions, all of them, before you sig
   `instanceView.` prefix: querying `vmAgent` at the object root silently returns `null`, which looks
   identical to a dead agent.
 
-Prefer any cheaper attribution first. Cache entry counts, the `TomoriBotCacheMetrics_CL` series, and
+Prefer any cheaper attribution first. Cache entry counts, the `metric_samples` memory series, and
 the observer's `cg_swap` curve across a restart together answer most questions a snapshot would,
 without the allocation spike.
 
@@ -238,7 +319,7 @@ ls -la /var/log/tomoribot/*.heapsnapshot
 ```
 
 Completion is recorded as a `heap_snapshot` metric carrying the byte count and duration, so it lands
-in `TomoriBotLogs_CL` as well as the host JSONL.
+in the host JSONL, which is now the only sink for log lines.
 
 **Analyse it off-host.** The file is far too large for Run Command's output cap, and parsing it in
 place would reproduce the exact memory pressure under investigation. Push it to blob storage with a
