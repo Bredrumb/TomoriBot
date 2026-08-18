@@ -104,6 +104,11 @@ describe("persona workflow boundary scanner — synthetic cases", () => {
   });
 });
 
+// This suite parses every audited source file with the TypeScript compiler, one after another,
+// so its runtime tracks repository size and available CPU rather than anything under test. It
+// measures ~1.2 s locally but exceeded Bun's 5 s default on a CI runner executing test lanes
+// concurrently. Raised to the 30_000 already used by the card-rendering suites: still short enough
+// to catch a genuine hang, long enough that runner contention alone cannot fail the deploy.
 describe("persona workflow boundary — real source tree", () => {
   it("has no command or feature code bypassing the anchor workflow", async () => {
     const { violations } = await auditPersonaWorkflowBoundary();
@@ -119,4 +124,4 @@ describe("persona workflow boundary — real source tree", () => {
         "Every violation is listed above; the scanner lives in scripts/checks/lib/personaWorkflowBoundary.ts.",
     ).toHaveLength(0);
   });
-});
+}, 30_000);
