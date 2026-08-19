@@ -58,6 +58,65 @@ environment-scoped Run Command deployment succeeds.
 
 The workflow deliberately separates recurring releases from one-time lifecycle operations.
 
+### Production data protection
+
+The database is guarded in three independent places, because each one covers a path the others
+cannot see.
+
+**Terraform `prevent_destroy`** on the resource group, the PostgreSQL flexible server, and the
+database itself. This fails at `plan` time rather than at `apply`, so it also stops a `terraform
+destroy` run from a workstation, which no CI gate observes. Deliberate teardown means editing the
+`lifecycle` block first, and that friction is the point. The resource group is included because
+deleting one deletes everything inside it, including the server's backups.
+
+Firewall rules are deliberately **not** given `prevent_destroy`: the Grafana operator address
+rotates with the maintainer's ISP, and a rule that legitimately needs replacing must not require a
+code change. The destruction gate below still catches them.
+
+**The destruction gate** in the deploy workflow, described below, which additionally protects the
+firewall rules, networking, and alerts.
+
+**The destructive-migration gate**, which blocks a deploy introducing `DROP TABLE`, `DROP COLUMN`,
+`DROP CONSTRAINT`, `ALTER COLUMN ... TYPE`, `TRUNCATE`, or an unfiltered `DELETE` unless the
+deployer opted into a pre-deploy backup, either with `(Checkpoint)` in the commit message or
+`create_db_backup=true` on manual dispatch.
+
+That gate compares migration files against **the last successful deploy**, not the previous push.
+The distinction is the whole correctness of it: the gate is git-delta-scoped while the migration
+runner is database-state-scoped, so they desync on any failed run. If a deploy stops at the gate,
+the destructive migrations stay pending in the database, but a push-scoped diff on the next attempt
+finds no new migration files, passes, and the `DROP` statements then run at startup with no backup.
+Anchoring on the last green deploy keeps the window open until one actually succeeds. The base is
+read from this workflow's own run history, which is why the job requests `actions: read` and checks
+out with `fetch-depth: 0`. If no successful run is reachable it falls back to the push delta and
+emits a warning annotation rather than failing an otherwise valid deploy.
+
+### Destruction protection
+
+Three guards run between `terraform plan` and `terraform apply -auto-approve`. The first two select
+on a single resource type each (the PostgreSQL server, the VM), so a third, type-agnostic guard
+covers everything else.
+
+It always prints an inventory of every planned destroy, which is the part that matters most: a plan
+that legitimately removes a component still shows exactly what it removes, in the deploy log, before
+it happens. On top of that it fails the deploy when either condition holds:
+
+- **A protected resource would be destroyed or replaced.** The resource group, the database, the
+  PostgreSQL firewall rule, the NSG, the network interface, the virtual network, the subnet, the
+  public IP, or a metric alert. Losing any of these breaks production in a way the deploy still
+  reports as successful, and the list is kept to types that exist in `terraform/azure` so it can be
+  audited against the repo rather than drifting into aspiration.
+- **More than `MAX_UNAPPROVED_DESTROYS` resources would be destroyed** (3 by default). Retiring one
+  small component legitimately removes a handful at once, such as an extension plus its rule
+  associations. Beyond that a plan is more likely wrong than intended.
+
+A replacement counts: Terraform reports it as `delete,create`, and the guard matches on the presence
+of `delete` rather than on a pure destroy, so an in-place rebuild of the public IP is caught the same
+way an outright deletion is.
+
+Either failure is cleared the same way as the VM guard: review the saved plan, then dispatch manually
+with `allow_infrastructure_destruction=true`. Release-branch pushes cannot bypass it.
+
 ### VM replacement protection
 
 Terraform plans that delete or replace the production VM stop before apply. After reviewing the
@@ -116,7 +175,7 @@ merging. Later operator-requested reruns can be manually dispatched from `releas
 The administrator bundle contains only PostgreSQL connection fields, is staged for the one-shot
 container, and is deleted when Run Command exits. It is never installed as `/etc/tomoribot/secrets.json`.
 For an existing PostgreSQL server, bootstrap skips all schema and seed operations and changes only
-the runtime role and its privileges — schema and migrations are instead applied on every deploy by the
+the runtime role and its privileges: schema and migrations are instead applied on every deploy by the
 separate always-on step below. Schema-container failures are retained in the access-controlled
 Azure Run Command record without exposing that output in the public Actions log.
 
@@ -130,7 +189,7 @@ is (re)started. It:
 
 1. runs the same `initializeCli` entrypoint the local boot path uses (idempotent `schema.sql` plus the
    tracked `NNN_*.sql` migration runner), in a one-shot container using the database-only administrator
-   bundle — the only identity permitted to create tables or apply migrations in production;
+   bundle (the only identity permitted to create tables or apply migrations in production);
 2. touches no roles or grants: new tables inherit runtime and Grafana privileges automatically from the
    `ALTER DEFAULT PRIVILEGES` rules `bootstrap-database.sh` installs for the administrator role; and
 3. fails the deploy (before the bot restarts) if migration does not report success.

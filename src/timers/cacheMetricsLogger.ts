@@ -37,6 +37,7 @@ import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepo
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { eventLoopMonitor } from "@/utils/misc/eventLoopMonitor";
+import { collectHostMemorySnapshot } from "@/utils/misc/hostMemory";
 import { log } from "@/utils/misc/logger";
 import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import { memoryGuard } from "@/utils/security/rateLimiter";
@@ -191,6 +192,30 @@ function emitSnapshot(client: Client): void {
     void metricSampleRepository.recordSample("cache_sizes", snapshot);
   } catch (error) {
     log.error("Failed to emit cache metrics snapshot", error, {
+      errorType: "CacheMetricsLoggerError",
+    });
+  }
+
+  void emitHostSnapshot();
+}
+
+/**
+ * Emit one host memory and pressure sample to the Postgres sink.
+ *
+ * Unlike `cache_sizes` this deliberately has no `log.metric()` twin. The two-sink rule exists
+ * because the JSONL survives conditions the database does not, but `tomoribot-oom-observer`
+ * already writes these same host counters to disk every 15 s, so a 5-minute copy would duplicate
+ * a finer-grained record while adding to that file's unbounded growth. The database row is the
+ * part that did not exist: removing the AzureMonitorLinuxAgent left host memory with no
+ * queryable series at all.
+ */
+async function emitHostSnapshot(): Promise<void> {
+  try {
+    const snapshot = await collectHostMemorySnapshot();
+    if (!snapshot) return;
+    await metricSampleRepository.recordSample("host_memory", snapshot);
+  } catch (error) {
+    log.error("Failed to emit host memory snapshot", error, {
       errorType: "CacheMetricsLoggerError",
     });
   }

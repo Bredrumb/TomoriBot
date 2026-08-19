@@ -28,12 +28,13 @@ docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up -d
 
 すべてのパネルは、どの環境にも存在するテーブルのみを読み取ります。そのため、同じダッシュボードがセルフホスト環境でもクラウド環境でも動作します。
 
-次の2つのパネルは、データ元を有効にするまで空のままです。
+次のパネルは、データ元を有効にするまで空のままです。
 
 | パネル | 必要な設定 |
 |---|---|
 | Process Memory、Cache Entries | `metric_samples` の行。`CACHE_METRICS_INTERVAL_MS` ごとに書き込まれます。コレクタは `RUN_ENV=production` のときのみ動作するため、開発環境では何も表示されません。 |
 | Errors per Hour by Type | `ERROR_DB_LOGGING_ENABLED`（既定で有効）。障害が疑われる場面でグラフが平坦な場合、エラーが止まったのではなく、リポジトリのサーキットブレーカーが開いている可能性もあります。 |
+| Host Memory and Swap Tiers、Host Pressure (PSI) and Swap-In Rate | Linuxホストが必要です。これらは `/proc/meminfo`、`/proc/pressure/*`、`/proc/swaps`、`/sys/block/zram0` を読み取るため、macOSとWindowsでは空のままです。zramの系列にはzramスワップデバイスも必要ですが、デバイスがないホストでもメモリとPSIは記録されます。 |
 
 ## 編集内容の保存
 

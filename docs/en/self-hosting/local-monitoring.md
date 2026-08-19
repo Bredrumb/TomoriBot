@@ -31,12 +31,13 @@ locales, an emotion cloud, and which presets and models are in use.
 Every panel reads only tables that exist in any install, so the same dashboard works self-hosted
 and in a cloud deployment.
 
-Two panels stay empty until their source is switched on:
+Some panels stay empty until their source is switched on:
 
 | Panel | Needs |
 |---|---|
 | Process Memory, Cache Entries | `metric_samples` rows, written every `CACHE_METRICS_INTERVAL_MS`. The collector only runs when `RUN_ENV=production`, so a development instance shows nothing here. |
 | Errors per Hour by Type | `ERROR_DB_LOGGING_ENABLED` (on by default). A flat line during a suspected incident can also mean the repository's circuit breaker is open, not that errors stopped. |
+| Host Memory and Swap Tiers, Host Pressure (PSI) and Swap-In Rate | A Linux host. These read `/proc/meminfo`, `/proc/pressure/*`, `/proc/swaps` and `/sys/block/zram0`, so they stay empty on macOS and Windows. The zram series also needs a zram swap device; a host without one still reports memory and PSI. |
 
 ## Editing and keeping changes
 

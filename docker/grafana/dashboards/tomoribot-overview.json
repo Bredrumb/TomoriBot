@@ -876,7 +876,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "カスタム"
+              "options": "\u30ab\u30b9\u30bf\u30e0"
             },
             "properties": [
               {
@@ -891,7 +891,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "ボーイッシュ"
+              "options": "\u30dc\u30fc\u30a4\u30c3\u30b7\u30e5"
             },
             "properties": [
               {
@@ -919,7 +919,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "メスガキ"
+              "options": "\u30e1\u30b9\u30ac\u30ad"
             },
             "properties": [
               {
@@ -934,7 +934,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "ダウナー"
+              "options": "\u30c0\u30a6\u30ca\u30fc"
             },
             "properties": [
               {
@@ -1129,6 +1129,116 @@
       ],
       "title": "Models in Use",
       "type": "table"
+    },
+    {
+      "type": "timeseries",
+      "title": "Host Memory and Swap Tiers",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "tomoribot-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 7,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "decmbytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "tomoribot-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\",\n       (fields->>'swapfile_used_mb')::float AS swapfile_used_mb,\n       (fields->>'zram_used_mb')::float     AS zram_used_mb,\n       (fields->>'host_avail_mb')::float    AS host_avail_mb\nFROM metric_samples\nWHERE metric_name = 'host_memory' AND $__timeFilter(created_at)\nORDER BY created_at",
+          "refId": "A"
+        }
+      ],
+      "description": "Host memory split by swap tier. zram and the disk-backed /swapfile differ by roughly 100x in fault cost, so the aggregate cannot say whether the host is merely compressing or actually paging to disk. A rising swapfile_used_mb is the expensive case. swapon reports uncompressed size and cannot make this distinction."
+    },
+    {
+      "type": "timeseries",
+      "title": "Host Pressure (PSI) and Swap-In Rate",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "tomoribot-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 7,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 4,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "tomoribot-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\",\n       (fields->>'io_full_avg60')::float  AS io_full_avg60,\n       (fields->>'mem_full_avg60')::float AS mem_full_avg60,\n       (fields->>'swap_in_per_s')::float  AS swap_in_per_s\nFROM metric_samples\nWHERE metric_name = 'host_memory' AND $__timeFilter(created_at)\nORDER BY created_at",
+          "refId": "A"
+        }
+      ],
+      "description": "PSI full is the share of wall time every task was blocked, and io_full is the signal that tracked every host incident in this deployment. swap_in_per_s separates a large swap level that is merely cold pages evicted once (harmless) from a working set that is genuinely oversubscribed. The first sample after a restart carries no rate."
     }
   ],
   "refresh": "5m",
@@ -1145,6 +1255,6 @@
   "timezone": "",
   "title": "TomoriBot Overview",
   "uid": "tomoribot-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

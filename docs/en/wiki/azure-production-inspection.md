@@ -64,8 +64,8 @@ The Azure Monitor Agent was removed once the bot began writing its own telemetry
 `METRIC_SAMPLE_RETENTION_DAYS` (30 by default).
 
 `metric_name` is the leading column of `idx_metric_samples_name_time`, so every query must filter on
-it or lose the index. There is one producer today, `cache_sizes`, emitted every
-`CACHE_METRICS_INTERVAL_MS` (5 min).
+it or lose the index. There are two producers, both emitted every `CACHE_METRICS_INTERVAL_MS`
+(5 min): `cache_sizes` for this process's caches and memory, and `host_memory` for the host's.
 
 **Memory growth. Aggregate with `min()`, never `avg()`.** `external_mb` sawtooths roughly 250 MB
 between GC cycles against daily growth under 100 MB, so an hourly mean reports which GC phase each
@@ -115,6 +115,53 @@ SELECT created_at,
 
 Double-quote the camelCase aliases: Postgres folds unquoted identifiers to lowercase, and the output
 would then disagree with the JSONB key names everything else refers to.
+
+### Host memory and pressure: `host_memory`
+
+The bot reads the host's own `/proc/meminfo`, `/proc/pressure/*`, `/proc/swaps`, `/proc/vmstat`, and
+`/sys/block/zram0/mm_stat`. Docker does not virtualize those, so the container sees real host values
+without a host-side agent, which is what makes this possible after the agent was removed.
+
+Field names match the observer log's where they overlap, so a recipe written against one transfers.
+The observer remains the finer record at 15 s and the only one that keeps writing when the bot
+cannot reach Postgres; this series is the one that can be graphed and joined.
+
+**Is the host paging to disk, or merely compressing?** The single most useful query here, because
+zram and `/swapfile` differ by roughly 100x in fault cost and the aggregate hides which is which:
+
+```sql
+SELECT date_trunc('hour', created_at) AS hr,
+       round(avg((fields->>'swapfile_used_mb')::float)::numeric, 1) AS swapfile_mb,
+       round(avg((fields->>'zram_used_mb')::float)::numeric, 1)     AS zram_mb,
+       round(avg((fields->>'zram_ratio')::float)::numeric, 2)       AS ratio,
+       round(avg((fields->>'io_full_avg60')::float)::numeric, 2)    AS io_full60,
+       round(avg((fields->>'host_avail_mb')::float)::numeric, 0)    AS avail_mb
+  FROM metric_samples
+ WHERE metric_name = 'host_memory' AND created_at > now() - interval '24 hours'
+ GROUP BY 1 ORDER BY 1;
+```
+
+A rising `swapfile_used_mb` is the expensive case. A high `zram_used_mb` at a healthy `zram_ratio`
+is the cheap one, and `swapon --show` cannot tell them apart because it reports uncompressed size.
+
+**Swap-in rate, which levels cannot answer.** `swap_in_per_s`, `swap_out_per_s`, and
+`major_faults_per_s` are already differenced from `/proc/vmstat`'s cumulative counters, so they are
+read directly rather than with `lag()`. A large swap *used* with a near-zero swap-in rate is cold
+pages evicted once and never needed again, which is harmless; sustained nonzero swap-in means the
+working set is genuinely oversubscribed:
+
+```sql
+SELECT created_at,
+       (fields->>'swap_in_per_s')::float      AS swap_in,
+       (fields->>'major_faults_per_s')::float AS majflt,
+       (fields->>'mem_full_avg60')::float     AS mem_full60
+  FROM metric_samples
+ WHERE metric_name = 'host_memory' AND created_at > now() - interval '6 hours'
+ ORDER BY created_at;
+```
+
+The first sample after a container start carries no rate fields, because a rate needs a predecessor.
+Rates are also dropped rather than reported negative when the counters restart at a host reboot.
 
 **Errors** are in `error_logs`, but never size an incident from it. Insert failures are swallowed by
 design (`logger.ts:323-325`), so it under-records during exactly the pool-timeout incidents it exists
@@ -197,8 +244,9 @@ roughly half as much swap right after a restart as it does days later, so always
 `tomoribot-oom-observer.service` samples the host every 15 s to `/var/log/oom-observer.log`. It
 records only; it never kills anything. **It is the primary source for any incident that has already
 happened**, because every other pipeline fails exactly when it is needed: the bot's own metrics stop
-when the bot stalls, and a shipping agent stops when the host starves. Since AMA was removed it is
-also the *only* home for host memory percent, which `metric_samples` does not carry.
+when the bot stalls, and a shipping agent stops when the host starves. The `host_memory` producer
+above now carries the same host counters into SQL at 5 min resolution, but it stops with the bot, so
+the observer stays the during-incident record and the only one with 15 s granularity.
 
 ```sh
 tail -5 /var/log/oom-observer.log
