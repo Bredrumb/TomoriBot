@@ -58,6 +58,43 @@ environment-scoped Run Command deployment succeeds.
 
 The workflow deliberately separates recurring releases from one-time lifecycle operations.
 
+### Progress watchdog
+
+Docker restarts a container that *exits* and leaves a merely `unhealthy` one alone, so neither
+covers the case where the process is alive and reporting healthy while making no progress. That gap
+is not theoretical: a long synchronous main-thread job once pinned the event loop for over fifteen
+hours while the gateway stayed connected and `/healthz` kept answering 200.
+
+A host timer (`tomoribot-watchdog.timer`, every minute) probes `/healthz` and reads the
+`eventLoop.stalenessMs` field the bot publishes. Two shapes count as no progress, and they look
+different on the wire: a *starved* loop still answers with an inflated staleness, while a *fully
+blocked* one cannot answer at all, because the health server shares that loop, so the probe times
+out. Both increment the same counter.
+
+It runs on the host rather than inside the bot deliberately. An in-process detector stops running
+during exactly the starvation it exists to detect.
+
+Four rules keep it from becoming a restart loop, and all of them are configured in
+`/etc/tomoribot/watchdog.conf`:
+
+- **Consecutive failures**, not one. Five checks at a one-minute cadence, so roughly five minutes of
+  continuous failure. Acting on a single sample is how a naive threshold has already taken this host
+  down once.
+- **A startup grace period**, so a cold start is not read as a stall.
+- **A minimum interval between recycles.** A repeat inside that interval means the previous recycle
+  did not fix it, which is a worse problem than a single stall, so it is logged as an alert instead
+  of retried.
+- **Co-tenants first**, matching the daily recycle order. Recycling them alone was measured cutting
+  host IO pressure 43%, so the cheap rung sits below the expensive one.
+
+**It ships disarmed** (`WATCHDOG_ARMED=false`) and logs what it would have done. The staleness
+threshold has no calibration behind it yet, and arming a watchdog on an uncalibrated threshold is
+how you manufacture the outage you were trying to prevent. Arm it only after the observation period
+shows it would not have fired spuriously.
+
+Behaviour is covered by `bun run test-watchdog`, which extracts the script from `cloud-init.yaml` on
+every run rather than testing a copy, so the harness cannot drift from what ships.
+
 ### Production data protection
 
 The database is guarded in three independent places, because each one covers a path the others

@@ -251,6 +251,205 @@ write_files:
       [Install]
       WantedBy=timers.target
 
+  - path: /etc/tomoribot/watchdog.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      # Progress watchdog configuration. Sourced by tomoribot-progress-watchdog.sh, which sets
+      # these defaults itself first, so an absent or partial file is safe.
+      #
+      # ARMED=false means the watchdog evaluates and logs but never recycles anything. Leave it
+      # false until the staleness threshold below has a baseline: nothing has ever calibrated it,
+      # and a watchdog acting on an uncalibrated threshold is a restart-loop generator.
+      WATCHDOG_ARMED=false
+      # Event-loop staleness that counts as a stalled check. The monitor ticks once a second, so
+      # healthy staleness is a few hundred ms; 30s is far above noise and deliberately loose.
+      WATCHDOG_STALENESS_LIMIT_MS=30000
+      # Consecutive stalled checks required before acting. The timer runs every minute, so five
+      # means roughly five minutes of continuous failure. One bad check is never enough: that is
+      # how a naive threshold has already taken this host down once.
+      WATCHDOG_REQUIRED_FAILURES=5
+      # No action within this many seconds of container start, so a cold start cannot be read as
+      # a stall. The startup working set is reached within about ten minutes.
+      WATCHDOG_STARTUP_GRACE_SEC=900
+      # Minimum seconds between recycles, so a container that comes back still broken cannot be
+      # restarted in a loop.
+      WATCHDOG_MIN_ACTION_INTERVAL_SEC=3600
+  - path: /usr/local/sbin/tomoribot-progress-watchdog.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -uo pipefail
+
+      # Docker restarts a container that exits and leaves a merely unhealthy one alone, so the
+      # failure this covers is the one where the process is alive and reporting healthy while
+      # making no progress. That is not hypothetical: a heap snapshot once left the main thread
+      # pinned for 15.5 hours while Discord stayed connected and /healthz kept answering 200, and
+      # nothing recorded it. Readiness and websocket ping are both blind to it, which is why the
+      # bot publishes event-loop staleness separately.
+      #
+      # Two shapes count as no progress and they look different on the wire. A starved loop still
+      # answers /healthz, with an inflated stalenessMs. A fully blocked one cannot answer at all,
+      # because the health server shares that loop, so the probe times out instead. Treating only
+      # the first would miss the worse case.
+      #
+      # This runs on the host rather than in the bot deliberately: an in-process detector stops
+      # running during exactly the starvation it exists to detect.
+
+      # Defaults precede the config file so a missing or partial file cannot leave a variable
+      # unset under set -u, and so no brace-default syntax is needed. Terraform renders this file
+      # through templatefile(), which reads dollar-brace and percent-brace as directives.
+      WATCHDOG_ARMED=false
+      WATCHDOG_STALENESS_LIMIT_MS=30000
+      WATCHDOG_REQUIRED_FAILURES=5
+      WATCHDOG_STARTUP_GRACE_SEC=900
+      WATCHDOG_MIN_ACTION_INTERVAL_SEC=3600
+
+      CONF=/etc/tomoribot/watchdog.conf
+      if [ -r "$CONF" ]; then . "$CONF"; fi
+
+      # State lives on tmpfs so a reboot clears it, which is correct: booting already produced a
+      # fresh container, and an accumulated failure count describes a process that is gone.
+      STATE=/run/tomoribot-watchdog.state
+      FAILURES=0
+      LAST_ACTION_AT=0
+      if [ -r "$STATE" ]; then . "$STATE"; fi
+
+      save_state() {
+        printf 'FAILURES=%s\nLAST_ACTION_AT=%s\n' "$FAILURES" "$LAST_ACTION_AT" > "$STATE"
+      }
+
+      NOW=$(date +%s)
+
+      BODY=$(curl -sf --max-time 5 http://127.0.0.1:8081/healthz 2>/dev/null)
+      PROBE_RC=$?
+      REASON=""
+
+      if [ "$PROBE_RC" -ne 0 ]; then
+        REASON="probe failed rc=$PROBE_RC"
+        STALLED=1
+      else
+        # sed rather than jq, which is not installed on this host.
+        STALENESS=$(printf '%s' "$BODY" | sed -n 's/.*"stalenessMs":\([0-9]*\).*/\1/p' | head -1)
+        if [ -z "$STALENESS" ]; then
+          # A build with no eventLoop field is not a stall and must not be treated as one.
+          echo "no stalenessMs in /healthz body; this build predates the event-loop monitor, skipping"
+          FAILURES=0
+          save_state
+          exit 0
+        fi
+        if [ "$STALENESS" -ge "$WATCHDOG_STALENESS_LIMIT_MS" ]; then
+          REASON="staleness $STALENESS ms at or above the $WATCHDOG_STALENESS_LIMIT_MS ms limit"
+          STALLED=1
+        else
+          STALLED=0
+        fi
+      fi
+
+      if [ "$STALLED" -eq 0 ]; then
+        if [ "$FAILURES" -gt 0 ]; then echo "progress resumed after $FAILURES failed check(s)"; fi
+        FAILURES=0
+        save_state
+        exit 0
+      fi
+
+      FAILURES=$(( FAILURES + 1 ))
+      save_state
+      echo "no progress: $REASON (consecutive=$FAILURES of $WATCHDOG_REQUIRED_FAILURES)"
+
+      if [ "$FAILURES" -lt "$WATCHDOG_REQUIRED_FAILURES" ]; then exit 0; fi
+
+      CID=$(docker ps -q --filter 'label=com.docker.compose.service=tomoribot' | head -1)
+      if [ -z "$CID" ]; then
+        echo "no running tomoribot container; nothing to recycle"
+        exit 0
+      fi
+
+      STARTED=$(docker inspect -f '{{.State.StartedAt}}' "$CID")
+      AGE=$(( NOW - $(date -d "$STARTED" +%s) ))
+      if [ "$AGE" -lt "$WATCHDOG_STARTUP_GRACE_SEC" ]; then
+        echo "container is $AGE seconds old, inside the $WATCHDOG_STARTUP_GRACE_SEC second grace; not acting"
+        exit 0
+      fi
+
+      SINCE_ACTION=$(( NOW - LAST_ACTION_AT ))
+      if [ "$LAST_ACTION_AT" -ne 0 ] && [ "$SINCE_ACTION" -lt "$WATCHDOG_MIN_ACTION_INTERVAL_SEC" ]; then
+        # Repeating inside the limit means the previous recycle did not fix it, which is a
+        # different and worse problem than a single stall, so it is said louder.
+        echo "ALERT: still stalled $SINCE_ACTION seconds after the last recycle; rate limit holds, not acting"
+        exit 0
+      fi
+
+      if [ "$WATCHDOG_ARMED" != "true" ]; then
+        echo "OBSERVE-ONLY: would recycle co-tenants then the bot ($REASON, age=$AGE s). Set WATCHDOG_ARMED=true in $CONF to arm."
+        # The action time advances even when disarmed, so the rate limit is exercised during the
+        # observation period rather than meeting reality for the first time once armed.
+        LAST_ACTION_AT=$NOW
+        FAILURES=0
+        save_state
+        exit 0
+      fi
+
+      echo "ACTING: $REASON (age=$AGE s)"
+      LAST_ACTION_AT=$NOW
+      FAILURES=0
+      save_state
+
+      # Co-tenants first, matching the daily recycle order: recycling them alone was measured
+      # cutting host IO pressure 43%, and it is the cheaper rung. A failure here must not block
+      # the bot's own restart, which is the one that matters.
+      SEARX_CID=$(docker ps -q --filter 'label=com.docker.compose.service=searxng' | head -1)
+      if [ -n "$SEARX_CID" ]; then
+        docker restart -t 15 "$SEARX_CID" > /dev/null && echo "recycled searxng" || echo "WARNING: failed to recycle searxng"
+      fi
+
+      # Matches the scheduled recycle's grace: Docker's 10s default is short enough to SIGKILL
+      # the bot partway through its own shutdown.
+      docker restart -t 30 "$CID"
+
+      for _ in $(seq 1 30); do
+        if curl -sf -o /dev/null --max-time 5 http://127.0.0.1:8081/healthz; then
+          echo "healthy again after $(( $(date +%s) - NOW )) seconds"
+          exit 0
+        fi
+        sleep 3
+      done
+
+      # Exiting non-zero leaves the unit visibly failed, since a recycle that never came back
+      # must not look identical to a successful one.
+      echo "ERROR: not healthy within 90s of the watchdog recycle"
+      exit 1
+  - path: /etc/systemd/system/tomoribot-watchdog.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=TomoriBot event-loop progress watchdog
+      Requires=docker.service
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/tomoribot-progress-watchdog.sh
+      # Must exceed the co-tenant recycle plus the bot's 30s stop grace and 90s health wait.
+      TimeoutStartSec=180
+  - path: /etc/systemd/system/tomoribot-watchdog.timer
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Check TomoriBot event-loop progress every minute
+
+      [Timer]
+      OnBootSec=5min
+      OnUnitActiveSec=1min
+      AccuracySec=10s
+      # A missed run must not fire at boot: the boot itself produced a fresh container.
+      Persistent=false
+
+      [Install]
+      WantedBy=timers.target
 runcmd:
   - mkdir -p /etc/tomoribot
   - chmod 0700 /etc/tomoribot
@@ -269,3 +468,5 @@ runcmd:
   - sysctl --system
   - systemctl daemon-reload
   - systemctl enable --now tomoribot-restart.timer
+  # Safe to enable on a fresh host: the watchdog ships disarmed and only logs what it would do.
+  - systemctl enable --now tomoribot-watchdog.timer

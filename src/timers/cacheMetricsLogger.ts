@@ -38,6 +38,15 @@ import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { eventLoopMonitor } from "@/utils/misc/eventLoopMonitor";
 import { collectHostMemorySnapshot } from "@/utils/misc/hostMemory";
+import {
+  evaluatePressure,
+  initialPressureState,
+  isPressureDetectorArmed,
+  type PressureState,
+  pressureSampleFromHostFields,
+  pressureThresholdsFromEnv,
+  pressureVerdictFields,
+} from "@/utils/security/pressureDetector";
 import { log } from "@/utils/misc/logger";
 import { collectProcessMemorySnapshot } from "@/utils/misc/processMemory";
 import { memoryGuard } from "@/utils/security/rateLimiter";
@@ -53,6 +62,14 @@ import { getPersonaSpriteMessageCacheSize } from "@/utils/cache/personaSpriteMes
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 
 let intervalId: NodeJS.Timeout | null = null;
+
+/**
+ * Detector state is carried across intervals because dwell and rate limiting are defined over a
+ * sequence, not a sample. It resets with the process, which is correct: a container recreate is
+ * exactly the recovery the detector would have recommended.
+ */
+let pressureState: PressureState = initialPressureState();
+const processStartMs = Date.now();
 
 /**
  * Collects Discord.js client cache sizes. Iterates `client.guilds.cache` once
@@ -213,7 +230,30 @@ async function emitHostSnapshot(): Promise<void> {
   try {
     const snapshot = await collectHostMemorySnapshot();
     if (!snapshot) return;
-    await metricSampleRepository.recordSample("host_memory", snapshot);
+
+    // The detector reads this same snapshot rather than taking its own. `swap_in_per_s` is
+    // differenced against the previous call, so a second read would measure a near-zero interval
+    // and report a rate of roughly zero no matter what the host is doing.
+    const now = Date.now();
+    const { state, verdict } = evaluatePressure(
+      pressureState,
+      pressureSampleFromHostFields(snapshot, now),
+      processStartMs,
+      pressureThresholdsFromEnv(),
+    );
+    pressureState = state;
+
+    const armed = isPressureDetectorArmed();
+    if (verdict.wouldAct !== "none") {
+      log.warn(
+        `Host pressure ${verdict.level}: would ${verdict.wouldAct} (elevated duty ${verdict.elevatedDuty}, critical duty ${verdict.criticalDuty}, armed=${armed})`,
+      );
+    }
+
+    await metricSampleRepository.recordSample("host_memory", {
+      ...snapshot,
+      ...pressureVerdictFields(verdict, armed),
+    });
   } catch (error) {
     log.error("Failed to emit host memory snapshot", error, {
       errorType: "CacheMetricsLoggerError",
