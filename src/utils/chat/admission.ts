@@ -10,7 +10,7 @@ import { extractBridgeUserId } from "@/utils/bridges";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
+import { escapeRegExp, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { doesMessageMatchTrigger, isMatrixRelayMessage, isRealUserLikeMessage } from "@/utils/chat/triggerProcessor";
 import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat/channelQueue";
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
@@ -427,15 +427,18 @@ function createNaturalStopPatterns(): RegExp[] {
     "ちょっと待って",
   ];
 
+  // Only the single-word English stops take a word boundary. The Japanese phrases must stay
+  // unwrapped: Japanese writes without inter-word spaces, so a boundary would reject every
+  // natural form that continues past the phrase (「もういい」 inside 「もういいよ」).
   const patterns: RegExp[] = [];
   for (const stop of basicStops) {
-    patterns.push(new RegExp(`\\b${stop}\\b`, "i"));
+    patterns.push(new RegExp(wrapWithWordBoundary(stop), "iu"));
   }
   for (const polite of politeStops) {
     patterns.push(new RegExp(polite, "i"));
   }
   for (const dismiss of dismissive) {
-    patterns.push(new RegExp(`\\b${dismiss}\\b`, "i"));
+    patterns.push(new RegExp(wrapWithWordBoundary(dismiss), "iu"));
   }
   for (const jp of japanese) {
     patterns.push(new RegExp(jp, "i"));
@@ -498,7 +501,7 @@ export async function resolveAdmissionChannelScope(
       if (/[\u3040-\u30FF\u4E00-\u9FFF]/.test(baseWord)) {
         return message.content.includes(baseWord);
       }
-      return new RegExp(`\\b${escapeRegExp(baseWord)}\\b`, "i").test(message.content);
+      return new RegExp(wrapWithWordBoundary(escapeRegExp(baseWord)), "iu").test(message.content);
     });
   }
   if (!hasExplicitErrorVisibility && !shouldShowError && client.user && message.mentions.users.has(client.user.id)) {
@@ -591,7 +594,7 @@ export async function shouldBlockReplyToOtherBot(args: {
       if (/[\u3040-\u30FF\u4E00-\u9FFF]/.test(word)) {
         return message.content.includes(word);
       }
-      return new RegExp(`\\b${escapeRegExp(word)}\\b`, "i").test(message.content);
+      return new RegExp(wrapWithWordBoundary(escapeRegExp(word)), "iu").test(message.content);
     }) ||
     earlyAllPersonas.some((persona) => {
       const triggers = persona.trigger_words ?? [];

@@ -75,7 +75,7 @@ class EventLoopMonitor {
   }
 }
 
-export interface EventLoopSnapshot {
+interface EventLoopSnapshot {
   running: boolean;
   sampleIntervalMs: number;
 
