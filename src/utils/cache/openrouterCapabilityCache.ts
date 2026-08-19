@@ -92,6 +92,7 @@ const pricingCache = new Map<string, ModelPricing>();
  * Separate from startup cache to avoid unbounded memory growth
  */
 const onDemandCapabilityCache = new Map<string, ModelCapabilities>();
+const onDemandPricingCache = new Map<string, ModelPricing>();
 
 /**
  * Cache initialization state
@@ -206,6 +207,22 @@ function parseUsdPerMillion(value: string | number | undefined): number | undefi
 }
 
 /**
+ * Normalizes a model's prompt/completion rates to USD per million tokens.
+ *
+ * Both directions must parse: a half-priced model would silently bill one direction at
+ * zero, which is worse than reporting no price at all.
+ */
+function extractPricing(model: OpenRouterModel): ModelPricing | undefined {
+  const promptPricePerMillion = parseUsdPerMillion(model.pricing?.prompt);
+  const completionPricePerMillion = parseUsdPerMillion(model.pricing?.completion);
+  if (promptPricePerMillion === undefined || completionPricePerMillion === undefined) {
+    return undefined;
+  }
+
+  return { promptPricePerMillion, completionPricePerMillion };
+}
+
+/**
  * Initializes the OpenRouter capability cache by fetching models from the API
  *
  * This function:
@@ -263,8 +280,7 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
         contextLength: model.context_length ?? 0,
         maxCompletionTokens: model.top_provider?.max_completion_tokens,
       };
-      const promptPricePerMillion = parseUsdPerMillion(model.pricing?.prompt);
-      const completionPricePerMillion = parseUsdPerMillion(model.pricing?.completion);
+      const pricing = extractPricing(model);
 
       capabilityCache.set(model.id, capabilities);
       supportedParametersCache.set(model.id, new Set(model.supported_parameters ?? []));
@@ -275,11 +291,8 @@ export async function initializeOpenRouterCapabilityCache(): Promise<void> {
         }
       }
       tokenLimitsCache.set(model.id, tokenLimits);
-      if (promptPricePerMillion !== undefined && completionPricePerMillion !== undefined) {
-        pricingCache.set(model.id, {
-          promptPricePerMillion,
-          completionPricePerMillion,
-        });
+      if (pricing) {
+        pricingCache.set(model.id, pricing);
       }
     }
 
@@ -386,6 +399,7 @@ export function getOpenRouterOnDemandCapabilityCacheSize(): number {
 
 export function clearOpenRouterOnDemandCapabilityCache(): void {
   onDemandCapabilityCache.clear();
+  onDemandPricingCache.clear();
 }
 
 /**
@@ -407,7 +421,22 @@ export function getOpenRouterTokenLimits(modelCodename: string): ModelTokenLimit
  */
 export function getOpenRouterPricing(modelCodename: string): ModelPricing | undefined {
   if (!cacheReady) return undefined;
-  return pricingCache.get(modelCodename);
+  return pricingCache.get(modelCodename) ?? onDemandPricingCache.get(modelCodename);
+}
+
+/**
+ * Every model rate from the startup catalog fetch, keyed by OpenRouter codename.
+ *
+ * On-demand entries are excluded: they are registered one model at a time and persist their
+ * own rate at registration, so including them here would let a stale single-model probe
+ * overwrite the authoritative catalog value.
+ *
+ * @returns Empty map when the cache is not ready, so callers cannot mistake an unavailable
+ *   catalog for a catalog in which nothing is priced.
+ */
+export function getAllOpenRouterPricing(): ReadonlyMap<string, ModelPricing> {
+  if (!cacheReady) return new Map();
+  return pricingCache;
 }
 
 /**
@@ -595,6 +624,13 @@ export async function getOrFetchOpenRouterCapabilities(modelCodename: string): P
     };
 
     onDemandCapabilityCache.set(modelCodename, capabilities);
+
+    // The single-model endpoint reports pricing too. Keeping it lets a scoped registration
+    // persist a rate for a model the startup catalog fetch never saw.
+    const pricing = extractPricing(model);
+    if (pricing) {
+      onDemandPricingCache.set(modelCodename, pricing);
+    }
 
     log.info(
       `Fetched capabilities for ${modelCodename}: ` +
