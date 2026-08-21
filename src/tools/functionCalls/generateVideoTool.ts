@@ -540,6 +540,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
