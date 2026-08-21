@@ -97,6 +97,23 @@ When you submit, a modal opens. Fill in:
   Understanding** only for a vision model; **Structured Output** if the model handles JSON
   schemas well. For our example, Gemma 4 supports all of them, so tick them all.
 
+### Optional VRAM handoff for ComfyUI
+
+If the text model and ComfyUI share a GPU, enable exactly one VRAM handoff option in the text
+endpoint's **Enabled Capabilities** list. TomoriBot unloads the text model before a ComfyUI image
+or video job and makes later text requests wait until the GPU is ready again.
+
+- **Ollama:** select **Ollama VRAM Handoff**. The configured URL must expose Ollama's native
+  `/api/generate` route (the normal local Ollama service does); TomoriBot sends `keep_alive: 0`
+  before the media job, and Ollama reloads the model on the next text request.
+- **KoboldCpp:** select **KoboldCpp VRAM Handoff**, start KoboldCpp with `--admin` and
+  `--admindir`, and configure the endpoint's `auth_token` with the password accepted by its admin
+  reload API. TomoriBot uses that API to unload the model and restore the configured initial model.
+
+Do not enable a handoff for remote/proxy-backed text endpoints or select both strategies.
+For **Other Local Endpoint**, TomoriBot does not attempt automatic model unloading because there
+is no shared unload/reload API for generic OpenAI-compatible servers.
+
 TomoriBot validates the connection on submit. If it reports the endpoint is unreachable, the
 usual cause is a `localhost`/Docker mismatch or a missing/extra `/v1` (see
 [gotchas](#notes--gotchas)).
@@ -125,6 +142,8 @@ All of these use the same flow, only the URL and a couple of notes change.
 - Start with OpenAI-compat enabled (built in). Default: `http://127.0.0.1:5001/v1`.
 - `api_style`: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
 - Honors the **Context Window Override** like Ollama.
+- For **KoboldCpp VRAM Handoff**, also launch with `--admin` and `--admindir`; the endpoint token
+  must authenticate the `/api/admin/reload_config` requests used to unload and reload the model.
 - Loads GGUF models; the Model Name is whatever the loaded model reports (often the file
   stem), check KoboldCPP's `/v1/models` response.
 
