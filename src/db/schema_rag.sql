@@ -98,3 +98,26 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id ON document_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_document_chunks_server_family ON document_chunks(server_id, embedding_family);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_document_chunks_unique_idx ON document_chunks(document_id, chunk_index);
+
+-- Full-text search support for hybrid document retrieval. This lives in the
+-- optional RAG schema as well as its migration so a database that enables
+-- pgvector after migration 037 was skipped still receives the complete schema.
+SELECT add_column_if_not_exists('document_chunks', 'tsv', 'TSVECTOR');
+UPDATE document_chunks
+SET tsv = to_tsvector('english', content)
+WHERE tsv IS NULL;
+CREATE INDEX IF NOT EXISTS idx_document_chunks_tsv ON document_chunks USING GIN(tsv);
+
+CREATE OR REPLACE FUNCTION document_chunks_tsv_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.tsv := to_tsvector('english', NEW.content);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_document_chunks_tsv ON document_chunks;
+CREATE TRIGGER trg_document_chunks_tsv
+BEFORE INSERT OR UPDATE OF content
+ON document_chunks
+FOR EACH ROW EXECUTE FUNCTION document_chunks_tsv_update();
