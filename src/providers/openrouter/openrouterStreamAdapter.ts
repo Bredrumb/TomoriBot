@@ -46,12 +46,12 @@ import {
   buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
+  describeDegradationTrigger,
   extractRejectedParams,
   isMultimodalRejectionError,
   MAX_TARGETED_DEGRADATION_ATTEMPTS,
   stripImageBlocksWithNotice,
   type DegradableErrorInput,
-  type DegradableErrorKind,
 } from "@/providers/utils/paramDegradation";
 import type {
   ProcessedChunk,
@@ -327,28 +327,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         (delta.reasoning_details && delta.reasoning_details.length > 0) ||
         (delta.reasoningDetails && delta.reasoningDetails.length > 0),
     );
-  }
-
-  private describeDegradationKind(kind: DegradableErrorKind): string {
-    switch (kind) {
-      case "generic_400":
-        return "generic HTTP 400";
-      case "parameter_rejection_400":
-        return "parameter rejection (400)";
-      case "no_endpoints_404":
-        return "no endpoints found (404)";
-      case "backend_incompatible_502":
-        return "backend incompatible with parameters (502)";
-      case "provider_specific":
-        return "provider-specific parameter rejection";
-    }
-  }
-
-  /** Log label for whichever signal made the failed attempt eligible for a retry. */
-  private describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
-    if (kind) return this.describeDegradationKind(kind);
-    if (queuedImageStrip) return "a multimodal/image-input rejection";
-    return "an error naming request parameters";
   }
 
   private parseHttpErrorFromResponse(
@@ -789,7 +767,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             });
             if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
               log.warn(
-                `OpenRouter returned ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} on attempt '${attempt.label}', trying fallback payload`,
+                `OpenRouter returned ${describeDegradationTrigger(degradationKind, queuedImageStrip)} on attempt '${attempt.label}', trying fallback payload`,
                 { model: config.model, errorMessage: parsedError.errorMessage },
               );
               continue;
@@ -889,7 +867,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   const degradationKind = classifyDegradableError({ ...midStreamError, degradeOn502: true });
                   if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
                     log.warn(
-                      `OpenRouter received ${this.describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                      `OpenRouter received ${describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
                       { model: config.model, errorMessage: midStreamError.message },
                     );
                     // Cancelled before aborting so the teardown is graceful rather than a
@@ -1074,7 +1052,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           },
         };
       }
-      yield this.createProviderErrorChunk(error);
+      yield this.createProviderErrorChunk(error, context);
     }
   }
 

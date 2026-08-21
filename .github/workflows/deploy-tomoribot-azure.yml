@@ -590,9 +590,6 @@ jobs:
             PREV_REF="$LAST_GREEN"
             echo "Diffing migrations against the last successful deploy: $PREV_REF"
           fi
-            PREV_REF="$LAST_GREEN"
-            echo "Diffing migrations against the last successful deploy: $PREV_REF"
-          fi
 
           if [ -z "$PREV_REF" ]; then
             # No green deploy is reachable: either this is the first one, the run history has aged
