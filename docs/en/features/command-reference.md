@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **27**. Runnable slash commands: **241**.
+Top-level command groups: **27**. Runnable slash commands: **240**.
 
 ## `/bot`
 
@@ -347,7 +347,6 @@ Server commands.
 | `/server deliberate-trigger-mode` | Toggle deliberate trigger mode (DTM) for this server. |
 | `/server expressions edit` | Edit the emotion and usage instructions of a single emoji or sticker |
 | `/server expressions initialize` | Analyze and classify all custom emojis and stickers using AI vision |
-| `/server fast-regeneration` | Configure short-lived retry/continue reactions after Tomori replies. |
 | `/server matrix link` | Link a Discord channel to a Matrix room for bidirectional relay |
 | `/server matrix unlink` | Remove the Matrix bridge link from a Discord channel |
 | `/server member-permissions` | Configure what non-admin members can teach me. |
