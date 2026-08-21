@@ -241,7 +241,11 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
         providerRequiresPrefixCompletion(this.options.providerName) ||
         (context.tomoriState.llm?.supports_prefix_completion ?? false);
       if (enablePrefixCompletion) {
-        applyAssistantPrefixCompletion(requestBody, context.outputPrefill?.trim());
+        applyAssistantPrefixCompletion(
+          requestBody,
+          context.outputPrefill?.trim(),
+          this.options.requiresReasoningContentReplay,
+        );
       }
 
       const headers: Record<string, string> = {
