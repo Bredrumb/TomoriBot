@@ -2063,6 +2063,20 @@ export const imageSections: ModelSection<ImageInput>[] = [
         desc: "NovelAI Diffusion 4.5 curated model with refined outputs",
         ja: "NovelAI Diffusion 4.5 キュレーションモデル（洗練された出力）",
       },
+      {
+        provider: "novelai",
+        codename: "nai-diffusion-5-full",
+        isUncensored: true,
+        desc: "NovelAI Diffusion V5 full model with uncensored generation",
+        ja: "NovelAI Diffusion V5 フルモデル（無検閲生成対応）",
+      },
+      {
+        provider: "novelai",
+        codename: "nai-diffusion-5-curated",
+        isUncensored: true,
+        desc: "NovelAI Diffusion V5 curated model with refined outputs",
+        ja: "NovelAI Diffusion V5 キュレーションモデル（洗練された出力）",
+      },
     ],
   },
 ];

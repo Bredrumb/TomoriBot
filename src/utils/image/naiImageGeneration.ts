@@ -52,7 +52,8 @@ export interface NaiGenerationCharacterPayload {
 }
 
 export function isNaiV4Model(model: string): boolean {
-  return /nai-diffusion-4/.test(model);
+  // V5 retains the V4 structured prompt schema (v4_prompt/v4_negative_prompt).
+  return /nai-diffusion-[45]/.test(model);
 }
 
 export function classifyNaiImageError(error: unknown): NaiImageErrorKind {
