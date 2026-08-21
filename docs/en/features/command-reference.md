@@ -11,7 +11,7 @@ sidebar:
 
 Every slash command currently registered by TomoriBot, generated from the same command builders and English locale descriptions used for Discord registration.
 
-Top-level command groups: **27**. Runnable slash commands: **240**.
+Top-level command groups: **27**. Runnable slash commands: **241**.
 
 ## `/bot`
 
@@ -206,7 +206,7 @@ Novelai commands.
 | `/novelai image generate` | Generate a NovelAI image using imageboard-style tags and an optional character reference. |
 | `/novelai image parameters` | Override NovelAI image generation sampler and quality settings for this server. |
 | `/novelai preset text` | Apply a NovelAI sampling preset to this server's text generation settings. |
-| `/novelai usage` | Show this server's NovelAI Opus generation usage meter. |
+| `/novelai usage` | Show this server's NovelAI Opus generation usage meter (Manage Server required). |
 
 ## `/nsfw`
 
@@ -347,6 +347,7 @@ Server commands.
 | `/server deliberate-trigger-mode` | Toggle deliberate trigger mode (DTM) for this server. |
 | `/server expressions edit` | Edit the emotion and usage instructions of a single emoji or sticker |
 | `/server expressions initialize` | Analyze and classify all custom emojis and stickers using AI vision |
+| `/server fast-regeneration` | Configure short-lived retry/continue reactions after Tomori replies. |
 | `/server matrix link` | Link a Discord channel to a Matrix room for bidirectional relay |
 | `/server matrix unlink` | Remove the Matrix bridge link from a Discord channel |
 | `/server member-permissions` | Configure what non-admin members can teach me. |

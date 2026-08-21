@@ -34,7 +34,7 @@ export default {
       },
     },
     usage: {
-      description: `Show this server's NovelAI Opus generation usage meter.`,
+      description: `Show this server's NovelAI Opus generation usage meter (Manage Server required).`,
       title: `NovelAI Opus Generation Usage`,
       status_label: `Status`,
       status_available: `Available`,

@@ -34,7 +34,7 @@ export default {
       },
     },
     usage: {
-      description: `このサーバーのNovelAI Opus生成利用状況メーターを表示します。`,
+      description: `このサーバーのNovelAI Opus生成利用状況メーターを表示します（サーバー管理権限が必要です）。`,
       title: `NovelAI Opus生成利用状況`,
       status_label: `ステータス`,
       status_available: `利用可能`,

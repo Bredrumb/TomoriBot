@@ -24,13 +24,13 @@ async function resolveNovelAiApiKey(tomoriState: TomoriState): Promise<string | 
   return decryptApiKey(tomoriState.config.api_key, tomoriState.config.key_version || 1);
 }
 
-function renderUsageMeter(percent: number): string {
+export function renderUsageMeter(percent: number): string {
   const clampedPercent = Math.max(0, Math.min(100, Math.round(percent)));
   const filled = Math.round(clampedPercent / 10);
   return "█".repeat(filled) + "░".repeat(10 - filled);
 }
 
-function formatDuration(seconds: number): string {
+export function formatNovelAiUsageDuration(seconds: number): string {
   const safeSeconds = Math.max(0, Math.ceil(seconds));
   const minutes = Math.floor(safeSeconds / 60);
   const remainingSeconds = safeSeconds % 60;
@@ -43,10 +43,20 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
+  if (!interaction.guild || !interaction.memberPermissions?.has("ManageGuild")) {
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "general.errors.permission_denied_title",
+      descriptionKey: "general.errors.permission_denied_description",
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const serverId = interaction.guild?.id ?? interaction.user.id;
+    const serverId = interaction.guild.id;
     const tomoriState = await getCachedTomoriState(serverId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
@@ -94,7 +104,7 @@ export async function execute(
         },
         {
           name: localizer(locale, "commands.novelai.usage.next_percent_label"),
-          value: formatDuration(usage.timeUntilNextPercent),
+          value: formatNovelAiUsageDuration(usage.timeUntilNextPercent),
           inline: true,
         },
       );
