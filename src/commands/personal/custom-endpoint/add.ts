@@ -253,7 +253,7 @@ export async function execute(
         supportsStructOutput: parsed.supportsStructOutput,
         strictRoleAlternation: parsed.strictRoleAlternation,
         supportsPrefixCompletion: parsed.supportsPrefixCompletion,
-        extraConfig: {},
+        extraConfig: capability === "text" ? { handoff_strategy: parsed.handoffStrategy } : {},
       });
 
       if (!registered) {

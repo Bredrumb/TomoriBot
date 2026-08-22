@@ -94,6 +94,8 @@ const DEFAULT_CUSTOM_MODEL = "custom/default";
 export interface CustomProviderConfig extends ProviderConfig {
   /** Custom endpoint URL (e.g., http://localhost:11434/v1) */
   endpointUrl: string;
+  /** Stable custom-endpoint identity used to gate requests during a ComfyUI VRAM handoff. */
+  customEndpointId?: number | null;
   /** Whether the model supports image inputs (user-declared) */
   seesImages?: boolean;
   /** Whether the model supports video inputs (user-declared) */
@@ -411,21 +413,16 @@ export class CustomProvider
     // Get endpoint URL: prefer the server model config mirror (populated when the active text model
     // is a custom one). The mirror can be NULL when a persona override points at a custom LLM while
     // the global text model is non-custom. In that case fall back to the custom_endpoints table.
-    let endpointUrl = tomoriState.config.custom_endpoint_url ?? null;
-    let endpointModelNameHint: string | null = null;
-    let endpointNumCtxHint: number | null = null;
-    if (!endpointUrl) {
-      // Pass the active model id so the correct endpoint is chosen when the label hosts several
-      // text models; falls back to the label default when unset (legacy rows / single model).
-      const textEndpoint = await resolveCustomEndpointForProvider(
-        tomoriState.llm.llm_provider.toLowerCase(),
-        "text",
-        tomoriState.llm.llm_id,
-      );
-      endpointUrl = textEndpoint?.endpoint_url ?? null;
-      endpointModelNameHint = textEndpoint?.model_name ?? null;
-      endpointNumCtxHint = textEndpoint?.num_ctx ?? null;
-    }
+    // Resolve even when the legacy URL mirror is populated so stream requests can use the stable
+    // endpoint id for an explicit local-model handoff.
+    const textEndpoint = await resolveCustomEndpointForProvider(
+      tomoriState.llm.llm_provider.toLowerCase(),
+      "text",
+      tomoriState.llm.llm_id,
+    );
+    const endpointUrl = textEndpoint?.endpoint_url ?? tomoriState.config.custom_endpoint_url ?? null;
+    const endpointModelNameHint = textEndpoint?.model_name ?? null;
+    const endpointNumCtxHint = textEndpoint?.num_ctx ?? null;
 
     if (!endpointUrl) {
       throw new Error(
@@ -456,6 +453,7 @@ export class CustomProvider
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
       maxOutputTokens: tomoriState.config.llm_max_output_tokens ?? 4096,
       endpointUrl: endpointUrl,
+      customEndpointId: textEndpoint?.custom_endpoint_id ?? null,
       seesImages: tomoriState.llm.sees_images,
       seesVideos: tomoriState.llm.sees_videos,
       ...samplingParams,
@@ -500,7 +498,6 @@ export class CustomProvider
 
     try {
       const customConfig = config as CustomProviderConfig;
-
       const streamConfig: CustomStreamConfig = {
         ...customConfig,
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
