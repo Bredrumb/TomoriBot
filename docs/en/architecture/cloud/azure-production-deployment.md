@@ -297,12 +297,19 @@ endpoint, the runtime client sets pool-recycling options (`src/utils/db/client.t
 gateway silently reaps idle TCP connections after roughly four minutes without sending a RST; a
 pooled connection reaped this way becomes a black hole, so the next query hangs until an application
 timeout fires (~3 minutes). Chat turns exhibited this, but lightweight slash commands, which touch
-the pool more opportunistically, largely did not. `POSTGRES_IDLE_TIMEOUT_SECONDS` (default 30)
+the pool more opportunistically, largely did not. `POSTGRES_IDLE_TIMEOUT_SECONDS` (default 180)
 recycles idle connections before the gateway can reap them, `POSTGRES_MAX_LIFETIME_SECONDS`
-(default 600) caps total connection age, and `POSTGRES_CONNECTION_TIMEOUT_SECONDS` (default 10)
-turns a dead-path hang into a fast, retryable failure. Defaults are production-safe; tune only during
+(default 1800) caps total connection age, `POSTGRES_CONNECTION_TIMEOUT_SECONDS` (default 10)
+turns a dead-path hang into a fast, retryable failure, and `POSTGRES_POOL_MAX` (default 10) states
+the pool width explicitly instead of inheriting Bun's. Defaults are production-safe; tune only during
 an incident. This was fixed at the client layer deliberately, so the private endpoint stays removed
 and the free-tier cost target holds.
+
+Both timeouts sit as far from their motivating constraint as that constraint allows, because every
+firing is also a chance to hit the Bun defect described below. The gateway reap at roughly four
+minutes is the binding limit on the idle timer, not the much lower value it is tempting to pick;
+idle retirements were the larger share of a production cascade that left the bot unresponsive while
+every health signal stayed green.
 
 When tuning, keep `POSTGRES_IDLE_TIMEOUT_SECONDS` comfortably above the slowest single statement the
 bot issues. Bun measures that timer as wall-clock silence on the socket, and a statement the server
@@ -323,8 +330,14 @@ production this surfaced as `PostgresError: Max lifetime timeout reached after 1
 stale prepared-statement plans it originally handled, but the two paths differ: a cached-plan error
 calls `resetDatabaseConnection()` first, while a retired connection must not, because the pool has
 already discarded the dead socket and a reset would throw away the rest of a healthy pool.
-`POSTGRES_TRANSIENT_RETRY_ATTEMPTS` (default 2 total attempts) and
+`POSTGRES_TRANSIENT_RETRY_ATTEMPTS` (default 3 total attempts) and
 `POSTGRES_TRANSIENT_RETRY_DELAY_MS` (default 100) tune it.
+
+Three attempts rather than two because a cascade retires successive cohorts, so the second attempt
+frequently lands inside the same episode as the first. The delay is applied with full jitter,
+uniform over zero to the configured value: a mass retirement fails every in-flight caller within the
+same few milliseconds, and a fixed delay would re-synchronise exactly the callers that most need
+spreading out, landing them together on the replacement cohort.
 
 One retirement reaches the application under several codes, so the classifier matches a set rather
 than a single value. Alongside `ERR_POSTGRES_LIFETIME_TIMEOUT`, `ERR_POSTGRES_IDLE_TIMEOUT`, and
@@ -341,6 +354,59 @@ transaction is safe because a socket that dies mid-transaction makes the server 
 emoji and sticker reconciles qualify additionally because they are upsert-only. A non-idempotent
 write must not use it: if the socket dies between `COMMIT` being sent and its acknowledgement
 arriving, the replay double-applies.
+
+#### Reads that must not answer from a `catch`
+
+Retrying narrows the window; it does not close it. When every attempt is consumed inside one
+episode, the error reaches a repository, and what the repository does with it decides whether users
+see a brief pause or a bot that appears broken.
+
+A `catch` that returns a plausible default cannot distinguish an unreadable database from a real
+reading, so any question whose answer changes a decision must fail **closed** instead. These four
+paths now throw `DatabaseUnavailableError` rather than answering:
+
+| Read | Old answer on error | Why it mattered |
+|---|---|---|
+| `UserRepository.getPrivacyLevel` | `MINIMAL` (full personalization) | A user who chose `FULL` (completely invisible) was treated as fully personalizable for the length of every cascade |
+| `UserRepository.isBlacklisted` | `false` | A moderation control that lifts itself on a database hiccup is not a control |
+| `PersonaUserBlockRepository.loadActiveBlocksForUser` | `[]` | An empty list reads downstream as "no blocks apply", lifting every persona-level block |
+| `LlmProviderRepository.loadSavedProviderConfig` | `null` | Indistinguishable from "no row", so it rendered an "API Key Missing" embed telling an admin to run `/config setup` during a transient blip |
+
+The genuine-absence branches above each `catch` are deliberately kept separate: a user with no row
+really is new, and `MINIMAL` remains correct for them. Only the failure path changed.
+
+Callers that cannot propagate pick the restrictive side rather than inventing a value. Participant
+hydration fails closed per participant so one unreadable record does not abort a whole turn, while
+the user cache returns the restrictive pair **without storing it**, so a blip measured in seconds
+cannot pin a degraded answer for the full cache TTL. Chat turns and slash commands both surface a
+"Database Unreachable" notice that says the attempt is worth repeating, instead of setup
+instructions for a server that is already configured.
+
+#### Pool telemetry
+
+A single cascade once produced 8,276 error lines from repositories each blaming their own subsystem,
+which buried the one fact that mattered and made the log a load source during the incident. Only the
+first retirement in an episode is now logged, as a `pool_event` record; the rest are counted into the
+periodic `host_memory` metric sample as `pool_errors_5m`, `pool_lifetime_5m`, `pool_idle_5m`,
+`pool_other_5m`, `pool_retries_recovered_5m`, and `pool_retries_exhausted_5m`. `POOL_EVENT_EPISODE_QUIET_MS`
+(default 60000) sets how much silence starts a new episode.
+
+Two of those fields exist because they were previously unrecoverable. `pool_retries_recovered_5m`
+counts retirements a retry absorbed: the per-retry log line is `log.warn`, and the production logger
+is pinned at `error`, so only *exhausted* retries were ever visible and the masked-to-visible ratio
+could not be measured at all. And `pool_last_lifetime_phase_s` folds process uptime into the
+configured lifetime window, because Bun exposes no per-connection age. A pool whose connections were
+created in one burst retires them together, which shows up as lifetime failures clustering at a
+consistent phase; a flat distribution instead means age is not what drives retirement, and raising
+`POSTGRES_MAX_LIFETIME_SECONDS` would not help.
+
+These ride the existing `host_memory` sample rather than a series of their own so a cascade can be
+read against swap, PSI, and event-loop lag on one time axis.
+
+For the same reason, a failed metric write reports through `log.metric` rather than `log.warn`.
+Production pins pino at level `error`, so the previous warning was dropped before either sink and a
+telemetry blackout during a live outage left no trace anywhere. `log.error` is the wrong alternative
+here: it would attempt an `error_logs` insert down the same pool that just failed.
 
 ### Read-only production data inspection
 

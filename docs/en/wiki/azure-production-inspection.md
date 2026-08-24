@@ -163,6 +163,47 @@ SELECT created_at,
 The first sample after a container start carries no rate fields, because a rate needs a predecessor.
 Rates are also dropped rather than reported negative when the counters restart at a host reboot.
 
+### Pool retirement cascades: the `pool_*` fields
+
+Connection-pool retirements ride the same `host_memory` sample, so a cascade can be read against
+swap and PSI without joining anything. This is the first query to run when the bot is green on
+Discord and answering nothing:
+
+```sql
+SELECT date_trunc('hour', created_at) AS hr,
+       sum((fields->>'pool_errors_5m')::int)             AS errors,
+       sum((fields->>'pool_lifetime_5m')::int)           AS lifetime,
+       sum((fields->>'pool_idle_5m')::int)               AS idle,
+       sum((fields->>'pool_retries_recovered_5m')::int)  AS recovered,
+       sum((fields->>'pool_retries_exhausted_5m')::int)  AS exhausted,
+       round(avg((fields->>'swap_in_per_s')::float)::numeric, 0) AS swap_in
+  FROM metric_samples
+ WHERE metric_name = 'host_memory' AND created_at > now() - interval '24 hours'
+ GROUP BY 1 ORDER BY 1;
+```
+
+Read `recovered` against `exhausted`, not `errors` alone. Retirements are expected at some rate and
+are harmless when retries absorb them; only the exhausted ones reach a user. A rising `exhausted`
+with a flat `recovered` means the retry budget is too small for the episode length, which is a
+`POSTGRES_TRANSIENT_RETRY_ATTEMPTS` decision rather than a pool-timeout one.
+
+`pool_last_lifetime_phase_s` answers whether connections share a birthday. Bun exposes no
+per-connection age, so this folds process uptime into `POSTGRES_MAX_LIFETIME_SECONDS`. Values
+clustering near one phase across many episodes confirm a synchronised cohort and make raising the
+lifetime worthwhile; a scattered distribution means age is not the driver and the effort belongs
+elsewhere. `-1` means no lifetime retirement occurred in that interval, which is distinct from a
+retirement that happened to land on phase zero.
+
+The JSONL carries one `metric:pool_event` line per episode with the code, operation name, attempt
+number, and the same phase. Grep it to date an episode precisely:
+
+```sh
+grep '"metric":"pool_event"' /var/log/tomoribot/tomoribot.jsonl | tail -20
+```
+
+A `metric:metric_sink_failure` line means the sample writer itself could not reach the database.
+Treat a gap in `metric_samples` with no such line as unexplained rather than assumed.
+
 **Errors** are in `error_logs`, but never size an incident from it. Insert failures are swallowed by
 design (`logger.ts:323-325`), so it under-records during exactly the pool-timeout incidents it exists
 to capture: one incident produced 2,775 level-50 lines in the host JSONL and about 21 rows here. The
