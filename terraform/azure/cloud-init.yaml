@@ -450,6 +450,57 @@ write_files:
 
       [Install]
       WantedBy=timers.target
+
+  - path: /etc/logrotate.d/tomoribot-observer
+    owner: root:root
+    permissions: "0644"
+    content: |
+      # The observer samples every 15s and grew ~1.4 MB/day uncapped, on the OS disk of a host
+      # whose whole failure mode is resource exhaustion.
+      #
+      # Retention is 14 days rather than the usual few, because
+      # scripts/devtools/replayPressureDetector.ts reads this file to tune detector thresholds
+      # against real incidents. At roughly one incident per five days, a shorter window can leave
+      # the replay with no incident to replay.
+      /var/log/oom-observer.log {
+          daily
+          rotate 14
+          missingok
+          notifempty
+          compress
+          # Yesterday stays uncompressed so incident triage can grep it without a decompress step.
+          delaycompress
+          # Without this logrotate refuses the file outright, because /var/log is group-writable by
+          # `syslog` and it will not rotate inside a directory it considers insecure. The sibling
+          # config for the bot's own JSONL needs no `su`: that file sits in a 0750 directory.
+          su root syslog
+          # The observer redirects per sample rather than holding the file open, so it picks up the
+          # new inode on its next write. copytruncate would only add a lost-write race here.
+          create 0644 root root
+      }
+
+  - path: /etc/logrotate.d/tomoribot-jsonl
+    owner: root:root
+    permissions: "0644"
+    content: |
+      # The durable witness the runbook greps during an incident, and the only error record that
+      # survives when the database is unreachable. It reached 57 MB unrotated.
+      #
+      # A cascade day writes far more than a quiet one (one episode added ~0.5 MB in two hours
+      # against a ~1.6 MB/day baseline), so maxsize caps a bad day without waiting for midnight.
+      /var/log/tomoribot/tomoribot.jsonl {
+          daily
+          rotate 14
+          maxsize 100M
+          missingok
+          notifempty
+          compress
+          delaycompress
+          # Required, not preferred: pino holds this file open through
+          # `pino.destination({ append: true, sync: true })` and does not reopen on a signal, so
+          # renaming it would leave the bot writing to an unlinked inode until the next restart.
+          copytruncate
+      }
 runcmd:
   - mkdir -p /etc/tomoribot
   - chmod 0700 /etc/tomoribot

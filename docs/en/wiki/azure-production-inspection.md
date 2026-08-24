@@ -201,8 +201,34 @@ number, and the same phase. Grep it to date an episode precisely:
 grep '"metric":"pool_event"' /var/log/tomoribot/tomoribot.jsonl | tail -20
 ```
 
+**The JSONL is rotated now, so a single-file grep only sees today.** `/etc/logrotate.d/tomoribot-jsonl`
+keeps 14 daily rotations, and `delaycompress` leaves yesterday uncompressed. Any incident older than
+this midnight needs the rotations too:
+
+```sh
+zgrep -h '"metric":"pool_event"' /var/log/tomoribot/tomoribot.jsonl* | tail -40
+```
+
+`zgrep -h` reads plain and gzipped files alike, so the same line works whichever side of the
+compression boundary the episode fell on. The same applies to `/var/log/oom-observer.log*`, which the
+detector replay reads.
+
 A `metric:metric_sink_failure` line means the sample writer itself could not reach the database.
 Treat a gap in `metric_samples` with no such line as unexplained rather than assumed.
+
+### Reading it as a graph instead
+
+`docker/grafana/dashboards/tomoribot-overview.json` carries three panels for this, on the row
+directly under the host memory and pressure panels so they share a time axis: **Pool Retirements by
+Code**, **Pool Retry Outcome**, and **Lifetime Retirement Phase**. Grafana runs on the operator
+workstation (`docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up`), not on the
+VM, so the dashboard is provisioned from that file and new panels appear on a local Grafana restart
+rather than through a deploy.
+
+Reaching the production database from there depends on the `allow-grafana-operator` firewall rule,
+whose address comes from the `GRAFANA_EGRESS_IP` environment secret via `postgres.tf`. When Grafana
+reports it cannot connect, the cause is almost always an ISP address rotation: update the secret,
+not just the Azure rule, because the next `terraform apply` reverts a direct edit.
 
 **Errors** are in `error_logs`, but never size an incident from it. Insert failures are swallowed by
 design (`logger.ts:323-325`), so it under-records during exactly the pool-timeout incidents it exists

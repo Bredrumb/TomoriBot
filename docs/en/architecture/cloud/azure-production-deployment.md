@@ -95,6 +95,22 @@ shows it would not have fired spuriously.
 Behaviour is covered by `bun run test-watchdog`, which extracts the script from `cloud-init.yaml` on
 every run rather than testing a copy, so the harness cannot drift from what ships.
 
+**Installing it on a host that already exists is a separate step, and it is the easy thing to miss.**
+`cloud-init` is consumed once at provision time and never re-runs, and `vm.tf` carries
+`ignore_changes = [custom_data]` so Terraform will not push an edited `cloud-init.yaml` to a running
+VM either (that guard is what stops a comment change from planning a VM replacement). A deploy
+therefore does **not** deliver the watchdog to an existing host. Extract the four files from
+`cloud-init.yaml`, write them through the Run Command path, then `systemctl daemon-reload` and
+`systemctl enable --now tomoribot-watchdog.timer`. Extract rather than retype: the cloud-init copy
+is the one the test harness exercises. The entry in `cloud-init.yaml` is what makes a future
+rebuild come up with the watchdog already present.
+
+Verify the install by what the timer does, not by whether the files exist. On a healthy bot the
+script prints nothing at all and exits 0, so `journalctl -u tomoribot-watchdog.service` should show
+only `Starting` and `Finished` pairs at a one-minute cadence, and `/run/tomoribot-watchdog.state`
+should read `FAILURES=0`. Note the unit name: the script logs with plain `echo`, so its output
+belongs to the unit and `journalctl -t tomoribot-watchdog` finds nothing.
+
 ### Production data protection
 
 The database is guarded in three independent places, because each one covers a path the others
