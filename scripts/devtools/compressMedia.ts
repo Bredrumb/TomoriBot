@@ -16,7 +16,7 @@
  *      resolution, the old file is removed, and sibling release-notes.md references
  *      are rewritten. Files that are ALREADY WebP are left untouched because re-encoding a
  *      lossy format every run would accumulate generational artifacts.
- *      NOTE: published GitHub release bodies hotlink raw/main and must be updated
+ *      NOTE: published GitHub release bodies hotlink raw/release and must be updated
  *      separately (the command prints the exact `gh release edit` reminder per tag).
  *
  * A lossless-fit file is only overwritten when the result is actually smaller, so
@@ -242,7 +242,7 @@ async function main(): Promise<void> {
 
   if (releaseTags.size > 0) {
     console.log(
-      `\n⚠ Converted release cards. Their PUBLISHED GitHub release bodies hotlink raw/main and must be updated:`,
+      `\n⚠ Converted release cards. Their PUBLISHED GitHub release bodies hotlink raw/release and must be updated:`,
     );
     for (const tag of [...releaseTags].sort()) {
       console.log(`  - ${tag}: update the image link (.png → .webp) via \`gh release edit ${tag} ...\``);
