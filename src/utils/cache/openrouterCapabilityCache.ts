@@ -99,6 +99,25 @@ const onDemandPricingCache = new Map<string, ModelPricing>();
  */
 let cacheReady = false;
 
+const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+const DEFAULT_CATALOG_REFRESH_MIN_INTERVAL_MS = 60 * 1000;
+
+let lastCatalogAttemptAt: number | null = null;
+let catalogRefreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Floor on the gap between catalog refresh *attempts*.
+ *
+ * The gate counts attempts rather than successes so a codename OpenRouter does not publish
+ * cannot amplify into a fetch per chat turn: the account-setting path calls
+ * `getOrFetchOpenRouterCapabilities` whenever its stored capabilities are stale, and a
+ * misconfigured codename misses on every one of those calls. Zero disables it.
+ */
+function getCatalogRefreshMinIntervalMs(): number {
+  const parsed = Number.parseInt(process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS ?? "", 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_CATALOG_REFRESH_MIN_INTERVAL_MS;
+}
+
 /**
  * Determines if a model supports function calling
  *
@@ -223,104 +242,124 @@ function extractPricing(model: OpenRouterModel): ModelPricing | undefined {
 }
 
 /**
- * Initializes the OpenRouter capability cache by fetching models from the API
+ * Reads the OpenRouter catalog and replaces the cached snapshot.
  *
- * This function:
- * 1. Fetches all models from https://openrouter.ai/api/v1/models (public endpoint)
- * 2. Extracts capability information from each model
- * 3. Caches capabilities in memory for fast lookup
- * 4. Handles errors gracefully (non-fatal, falls back to database flags)
+ * The fetch completes before any cached map is touched, so a failed attempt leaves the
+ * previous catalog serving. Clearing first and refilling would strand every chat turn on
+ * database flags until the next success.
+ */
+async function loadOpenRouterCatalog(): Promise<void> {
+  const response = await fetch(OPENROUTER_MODELS_URL, {
+    headers: {
+      "Content-Type": "application/json",
+      ...buildOpenRouterAttributionHeaders(),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter API returned ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.data || !Array.isArray(data.data)) {
+    throw new Error("Unexpected API response format - missing data array");
+  }
+
+  const models: OpenRouterModel[] = data.data;
+
+  capabilityCache.clear();
+  supportedParametersCache.clear();
+  tokenizerCache.clear();
+  tokenLimitsCache.clear();
+  pricingCache.clear();
+
+  for (const model of models) {
+    const capabilities: ModelCapabilities = {
+      hasTools: detectToolSupport(model),
+      seesImages: detectImageSupport(model),
+      seesVideos: detectVideoSupport(model),
+      supportsStructuredOutput: detectStructuredOutputSupport(model),
+    };
+
+    const tokenLimits: ModelTokenLimits = {
+      contextLength: model.context_length ?? 0,
+      maxCompletionTokens: model.top_provider?.max_completion_tokens,
+    };
+    const pricing = extractPricing(model);
+
+    capabilityCache.set(model.id, capabilities);
+    supportedParametersCache.set(model.id, new Set(model.supported_parameters ?? []));
+    if (typeof model.architecture?.tokenizer === "string") {
+      const tokenizer = model.architecture.tokenizer.trim();
+      if (tokenizer.length > 0) {
+        tokenizerCache.set(model.id, tokenizer);
+      }
+    }
+    tokenLimitsCache.set(model.id, tokenLimits);
+    if (pricing) {
+      pricingCache.set(model.id, pricing);
+    }
+  }
+
+  cacheReady = true;
+
+  const toolModels = Array.from(capabilityCache.values()).filter((c) => c.hasTools).length;
+  const visionModels = Array.from(capabilityCache.values()).filter((c) => c.seesImages).length;
+  const videoModels = Array.from(capabilityCache.values()).filter((c) => c.seesVideos).length;
+  const pricedModels = pricingCache.size;
+
+  log.success(
+    `OpenRouter capability cache loaded: ${capabilityCache.size} models ` +
+      `(${toolModels} with tools, ${visionModels} with vision, ${videoModels} with video, ${pricedModels} with pricing)`,
+  );
+}
+
+/**
+ * Refresh entry point shared by startup and by on-demand misses.
  *
- * Should be called once at bot startup after LLM cache initialization.
+ * Concurrent callers share one in-flight fetch, and `force` skips the attempt cooldown that
+ * otherwise bounds how often a miss can reach the network.
+ */
+async function refreshOpenRouterCatalog(options?: { force?: boolean }): Promise<boolean> {
+  if (catalogRefreshInFlight) {
+    return catalogRefreshInFlight;
+  }
+
+  if (!options?.force && lastCatalogAttemptAt !== null) {
+    if (Date.now() - lastCatalogAttemptAt < getCatalogRefreshMinIntervalMs()) {
+      return cacheReady;
+    }
+  }
+
+  lastCatalogAttemptAt = Date.now();
+  catalogRefreshInFlight = (async () => {
+    try {
+      await loadOpenRouterCatalog();
+      return true;
+    } catch (error) {
+      log.warn(
+        `Failed to refresh OpenRouter capability cache (non-critical); keeping ${capabilityCache.size} cached models`,
+        error as Error,
+      );
+      return cacheReady;
+    } finally {
+      catalogRefreshInFlight = null;
+    }
+  })();
+
+  return catalogRefreshInFlight;
+}
+
+/**
+ * Warms the OpenRouter capability cache at startup.
  *
- * Error handling: Non-fatal - logs warning and continues with empty cache
- * on API failure, allowing fallback to database flags.
+ * Non-fatal: a failure leaves the cache unready and chat falls back to database flags until
+ * a later miss or refresh succeeds.
  */
 export async function initializeOpenRouterCapabilityCache(): Promise<void> {
-  try {
-    log.info("Initializing OpenRouter capability cache...");
-
-    capabilityCache.clear();
-    supportedParametersCache.clear();
-    tokenizerCache.clear();
-    tokenLimitsCache.clear();
-    pricingCache.clear();
-    cacheReady = false;
-
-    // Fetch models from OpenRouter API (no auth required - public endpoint)
-    const response = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: {
-        "Content-Type": "application/json",
-        ...buildOpenRouterAttributionHeaders(),
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenRouter API returned ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.data || !Array.isArray(data.data)) {
-      throw new Error("Unexpected API response format - missing data array");
-    }
-
-    const models: OpenRouterModel[] = data.data;
-    log.info(`Fetched ${models.length} models from OpenRouter API`);
-
-    for (const model of models) {
-      const capabilities: ModelCapabilities = {
-        hasTools: detectToolSupport(model),
-        seesImages: detectImageSupport(model),
-        seesVideos: detectVideoSupport(model),
-        supportsStructuredOutput: detectStructuredOutputSupport(model),
-      };
-
-      const tokenLimits: ModelTokenLimits = {
-        contextLength: model.context_length ?? 0,
-        maxCompletionTokens: model.top_provider?.max_completion_tokens,
-      };
-      const pricing = extractPricing(model);
-
-      capabilityCache.set(model.id, capabilities);
-      supportedParametersCache.set(model.id, new Set(model.supported_parameters ?? []));
-      if (typeof model.architecture?.tokenizer === "string") {
-        const tokenizer = model.architecture.tokenizer.trim();
-        if (tokenizer.length > 0) {
-          tokenizerCache.set(model.id, tokenizer);
-        }
-      }
-      tokenLimitsCache.set(model.id, tokenLimits);
-      if (pricing) {
-        pricingCache.set(model.id, pricing);
-      }
-    }
-
-    cacheReady = true;
-
-    const toolModels = Array.from(capabilityCache.values()).filter((c) => c.hasTools).length;
-    const visionModels = Array.from(capabilityCache.values()).filter((c) => c.seesImages).length;
-    const videoModels = Array.from(capabilityCache.values()).filter((c) => c.seesVideos).length;
-    const pricedModels = pricingCache.size;
-
-    log.success(
-      `OpenRouter capability cache initialized: ${capabilityCache.size} models ` +
-        `(${toolModels} with tools, ${visionModels} with vision, ${videoModels} with video, ${pricedModels} with pricing)`,
-    );
-  } catch (error) {
-    log.warn(
-      "Failed to initialize OpenRouter capability cache (non-critical) - " + "will fall back to database flags",
-      error as Error,
-    );
-
-    // Ensure caches are in a clean state even on error
-    capabilityCache.clear();
-    supportedParametersCache.clear();
-    tokenizerCache.clear();
-    tokenLimitsCache.clear();
-    pricingCache.clear();
-    cacheReady = false;
-  }
+  log.info("Initializing OpenRouter capability cache...");
+  await refreshOpenRouterCatalog({ force: true });
 }
 
 /**
@@ -553,34 +592,17 @@ export async function testAccountSettingModel(apiKey: string): Promise<
 }
 
 /**
- * Gets or fetches capabilities for an OpenRouter model
+ * Gets capabilities for an OpenRouter model, re-reading the catalog on a miss.
  *
- * This function provides a fallback mechanism for account-setting and other
- * dynamically-specified models that may not be in the startup cache:
- * 1. Checks the startup cache first (fastest)
- * 2. Checks the on-demand cache (previously fetched models)
- * 3. Fetches from OpenRouter API if not cached (for account-setting models)
- * 4. Caches the result to avoid repeated API calls
+ * Use this wherever the codename can be newer than the cached catalog: account-setting
+ * resolution and scoped model registration both accept a codename the startup snapshot
+ * never saw. The refresh is cooldown-gated, so a codename OpenRouter does not publish
+ * costs one fetch per window rather than one per call.
  *
- * @param modelCodename - Model codename (e.g., "anthropic/claude-3.5-sonnet" or "account-setting" user's model)
- * @returns ModelCapabilities if found or fetched, undefined on error or if cache not ready
- *
- * @example
- * // For registered models (in startup cache)
- * const capabilities = await getOrFetchOpenRouterCapabilities("anthropic/claude-3.5-sonnet");
- *
- * // For account-setting models (fetches on-demand if not cached)
- * const accountSettingCaps = await getOrFetchOpenRouterCapabilities("openai/gpt-4-turbo");
- * if (accountSettingCaps?.seesImages) {
- *   // User's account-setting model supports images
- * }
+ * @param modelCodename - Model codename (e.g., "anthropic/claude-3.5-sonnet")
+ * @returns ModelCapabilities if found or fetched, undefined when OpenRouter does not list it
  */
 export async function getOrFetchOpenRouterCapabilities(modelCodename: string): Promise<ModelCapabilities | undefined> {
-  if (!cacheReady) {
-    log.warn(`Cannot fetch capabilities for ${modelCodename}: cache not ready`);
-    return undefined;
-  }
-
   const cachedCapabilities = capabilityCache.get(modelCodename);
   if (cachedCapabilities) {
     return cachedCapabilities;
@@ -591,58 +613,10 @@ export async function getOrFetchOpenRouterCapabilities(modelCodename: string): P
     return onDemandCached;
   }
 
-  // Model not in either cache - fetch from OpenRouter API
-  try {
-    log.info(`Fetching capabilities on-demand for model: ${modelCodename}`);
-
-    const response = await fetch(`https://openrouter.ai/api/v1/models/${encodeURIComponent(modelCodename)}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...buildOpenRouterAttributionHeaders(),
-      },
-    });
-
-    if (!response.ok) {
-      log.warn(`Failed to fetch capabilities for ${modelCodename}: ${response.status} ${response.statusText}`);
-      return undefined;
-    }
-
-    const data = await response.json();
-
-    const model: OpenRouterModel | undefined = data.data;
-
-    if (!model) {
-      log.warn(`OpenRouter API returned no model data for ${modelCodename}`);
-      return undefined;
-    }
-
-    const capabilities: ModelCapabilities = {
-      hasTools: detectToolSupport(model),
-      seesImages: detectImageSupport(model),
-      seesVideos: detectVideoSupport(model),
-      supportsStructuredOutput: detectStructuredOutputSupport(model),
-    };
-
-    onDemandCapabilityCache.set(modelCodename, capabilities);
-
-    // The single-model endpoint reports pricing too. Keeping it lets a scoped registration
-    // persist a rate for a model the startup catalog fetch never saw.
-    const pricing = extractPricing(model);
-    if (pricing) {
-      onDemandPricingCache.set(modelCodename, pricing);
-    }
-
-    log.info(
-      `Fetched capabilities for ${modelCodename}: ` +
-        `tools=${capabilities.hasTools}, images=${capabilities.seesImages}, ` +
-        `videos=${capabilities.seesVideos}, structOutput=${capabilities.supportsStructuredOutput}`,
-    );
-
-    return capabilities;
-  } catch (error) {
-    log.warn(
-      `Error fetching capabilities for ${modelCodename}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return undefined;
-  }
+  // OpenRouter publishes no per-model metadata route: `/api/v1/models/{id}` answers 404 for
+  // every codename, live ones included, so a miss can only be resolved by re-reading the
+  // whole catalog. An unready cache means the startup fetch failed and this path is the only
+  // recovery from it, so it must not return early on `!cacheReady`.
+  await refreshOpenRouterCatalog();
+  return capabilityCache.get(modelCodename);
 }

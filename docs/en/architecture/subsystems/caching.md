@@ -161,7 +161,24 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 - Stores tools/vision/structured-output capability + token limits
 - Tool capability is derived primarily from the reported `tools` parameter, with a fallback for models whose OpenRouter description explicitly advertises native function/tool calling even when the metadata is incomplete.
 - `tool_choice` is tracked separately through cached `supported_parameters` and only sent when supported.
-- No runtime TTL/invalidation
+- No background TTL: the snapshot is replaced only by startup or by a miss
+
+`getOrFetchOpenRouterCapabilities` resolves a codename the startup snapshot never saw, which
+is how a model published after boot becomes registerable without a restart. OpenRouter serves
+no per-model metadata route (`/api/v1/models/{id}` answers 404 for every codename, live ones
+included), so a miss re-reads the whole catalog rather than probing one model:
+
+- The fetch completes before any cached map is touched, so a failed refresh leaves the
+  previous catalog serving instead of emptying it
+- Concurrent misses share one in-flight request, and attempts are rate-limited by
+  `OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS` (default 60s). The account-setting path calls
+  this per turn when its stored capabilities are stale, so an unpublished codename would
+  otherwise amplify into a fetch per chat turn
+- The lookup does not gate on `isOpenRouterCapabilityCacheReady()`. An unready cache means the
+  startup fetch failed, and this path is the only recovery from it short of a restart
+
+`isOpenRouterCapabilityCacheReady()` reports whether a usable snapshot exists at all; it says
+nothing about any individual model, so a lookup can still miss on a ready cache.
 
 ### 8) Gemini token-limit map (`geminiCapabilityCache.ts`)
 
