@@ -339,7 +339,7 @@ starts killing healthy long queries well before it buys any extra reaping headro
 
 Bun's pool fires those recycling timers without draining first: it marks the connection failed and
 rejects every queued and in-flight query on it, even when the query and the server are both healthy
-([oven-sh/bun#30646](https://github.com/oven-sh/bun/issues/30646), open as of Bun 1.3.14). In
+([oven-sh/bun#30646](https://github.com/oven-sh/bun/issues/30646), still reproducible on Bun 1.4.0). In
 production this surfaced as `PostgresError: Max lifetime timeout reached after 10m`
 (`ERR_POSTGRES_LIFETIME_TIMEOUT`) aborting a slash command and a guild emoji sync.
 
