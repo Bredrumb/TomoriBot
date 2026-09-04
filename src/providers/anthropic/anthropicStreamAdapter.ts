@@ -296,7 +296,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
       const anthropicError = new Error(JSON.stringify({ error: errorData }));
       Object.assign(anthropicError, { statusCode: response.status });
-      yield this.createProviderErrorChunk(anthropicError);
+      yield this.createProviderErrorChunk(anthropicError, context);
       return;
     }
 

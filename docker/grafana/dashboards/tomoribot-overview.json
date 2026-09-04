@@ -125,7 +125,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 14,
+        "y": 21,
         "w": 12,
         "h": 7
       },
@@ -231,7 +231,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 21,
         "w": 12,
         "h": 7
       },
@@ -334,7 +334,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 28,
         "w": 10,
         "h": 6
       },
@@ -455,7 +455,7 @@
       },
       "gridPos": {
         "x": 10,
-        "y": 21,
+        "y": 28,
         "w": 7,
         "h": 6
       },
@@ -524,7 +524,7 @@
       },
       "gridPos": {
         "x": 17,
-        "y": 21,
+        "y": 28,
         "w": 7,
         "h": 6
       },
@@ -674,7 +674,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 27,
+        "y": 34,
         "w": 6,
         "h": 6
       },
@@ -746,7 +746,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 27,
+        "y": 34,
         "w": 6,
         "h": 6
       },
@@ -876,7 +876,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "\u30ab\u30b9\u30bf\u30e0"
+              "options": "カスタム"
             },
             "properties": [
               {
@@ -891,7 +891,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "\u30dc\u30fc\u30a4\u30c3\u30b7\u30e5"
+              "options": "ボーイッシュ"
             },
             "properties": [
               {
@@ -919,7 +919,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "\u30e1\u30b9\u30ac\u30ad"
+              "options": "メスガキ"
             },
             "properties": [
               {
@@ -934,7 +934,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "\u30c0\u30a6\u30ca\u30fc"
+              "options": "ダウナー"
             },
             "properties": [
               {
@@ -962,7 +962,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 27,
+        "y": 34,
         "w": 6,
         "h": 6
       },
@@ -1087,7 +1087,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 27,
+        "y": 34,
         "w": 6,
         "h": 6
       },
@@ -1239,6 +1239,172 @@
         }
       ],
       "description": "PSI full is the share of wall time every task was blocked, and io_full is the signal that tracked every host incident in this deployment. swap_in_per_s separates a large swap level that is merely cold pages evicted once (harmless) from a working set that is genuinely oversubscribed. The first sample after a restart carries no rate."
+    },
+    {
+      "type": "timeseries",
+      "title": "Pool Retirements by Code",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "tomoribot-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 4,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "tomoribot-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\",\n       (fields->>'pool_lifetime_5m')::int AS lifetime_timeout,\n       (fields->>'pool_idle_5m')::int     AS idle_timeout,\n       (fields->>'pool_other_5m')::int    AS other\nFROM metric_samples\nWHERE metric_name = 'host_memory' AND $__timeFilter(created_at)\nORDER BY created_at",
+          "refId": "A"
+        }
+      ],
+      "description": "Connections Bun retired out from under a live query (oven-sh/bun#30646), counted per 5 minute sample. Read this against the host panels above: a cascade that tracks swap and PSI is a different problem from one that fires at a healthy memory reading. Retirements at some rate are normal and are not by themselves a fault; see the retry panel."
+    },
+    {
+      "type": "timeseries",
+      "title": "Pool Retry Outcome",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "tomoribot-postgres"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 14,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 4,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "tomoribot-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\",\n       (fields->>'pool_retries_recovered_5m')::int AS recovered,\n       (fields->>'pool_retries_exhausted_5m')::int AS exhausted\nFROM metric_samples\nWHERE metric_name = 'host_memory' AND $__timeFilter(created_at)\nORDER BY created_at",
+          "refId": "A"
+        }
+      ],
+      "description": "The panel that says whether users felt anything. Recovered retirements were absorbed by withTransientDbRetry and cost only latency; only exhausted ones reach a user as a failed turn or a Database Unreachable notice. Rising exhausted against flat recovered is a retry budget decision (POSTGRES_TRANSIENT_RETRY_ATTEMPTS), not a pool timeout one."
+    },
+    {
+      "type": "timeseries",
+      "title": "Lifetime Retirement Phase",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "tomoribot-postgres"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 14,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 0,
+            "fillOpacity": 0,
+            "showPoints": "always",
+            "spanNulls": false,
+            "pointSize": 6
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "tomoribot-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\",\n       NULLIF((fields->>'pool_last_lifetime_phase_s')::int, -1) AS phase_s\nFROM metric_samples\nWHERE metric_name = 'host_memory' AND $__timeFilter(created_at)\nORDER BY created_at",
+          "refId": "A"
+        }
+      ],
+      "description": "Process uptime folded into POSTGRES_MAX_LIFETIME_SECONDS, because Bun exposes no per-connection age. Points clustering at one height mean the pool was created in a burst and retires as a synchronised cohort, which is what would justify a driver level fix; a scattered band means age is not what drives retirement. The -1 sentinel (no lifetime retirement in that interval) is filtered out, so gaps here are the normal state."
     }
   ],
   "refresh": "5m",
@@ -1255,6 +1421,6 @@
   "timezone": "",
   "title": "TomoriBot Overview",
   "uid": "tomoribot-overview",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

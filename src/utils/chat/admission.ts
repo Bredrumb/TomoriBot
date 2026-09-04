@@ -9,6 +9,7 @@ import { transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentT
 import { extractBridgeUserId } from "@/utils/bridges";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
+import { getBlockedSendReason } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { escapeRegExp, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { doesMessageMatchTrigger, isMatrixRelayMessage, isRealUserLikeMessage } from "@/utils/chat/triggerProcessor";
@@ -22,6 +23,18 @@ import {
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
 import type { Message } from "discord.js";
+
+/**
+ * Whether a moderator has timed the bot out in this guild.
+ *
+ * Reads the cached member only. Fetching would turn a per-turn gate into a Discord round trip,
+ * and a stale answer is self-correcting: the send path still classifies the resulting 50013.
+ */
+function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
+  if (!client.user) return false;
+  const botMember = guild.members.cache.get(client.user.id);
+  return botMember?.isCommunicationDisabled() ?? false;
+}
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
   return {
@@ -227,6 +240,21 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
       : permissions.has("SendMessages");
     if (!canSend) {
       return blocked("cannot_send_in_channel");
+    }
+
+    // A timed-out member keeps every permission bit, so the check above passes while Discord
+    // rejects the send with 50013 regardless. Nothing in the bitfield expresses this, which is
+    // why it has to be read from the member. One production guild timed the bot out and drew
+    // 397 failed sends across two days, each one a completed LLM call thrown away.
+    if (isBotTimedOut(channel.guild, client)) {
+      return blocked("bot_timed_out_in_guild");
+    }
+
+    // Backstop for whatever the two checks above cannot see. They both reason about state that
+    // should predict a refusal; this one reacts to a refusal that actually happened, so it holds
+    // for causes not yet identified. Cleared the moment a send lands.
+    if (getBlockedSendReason(channel.id)) {
+      return blocked("recent_send_refused");
     }
   }
 

@@ -33,6 +33,7 @@ import { getStPresetCacheStats } from "@/utils/cache/stPresetCache";
 import { getTomoriStateCacheStats } from "@/utils/cache/tomoriStateCache";
 import { getUserCacheStats } from "@/utils/cache/userCache";
 import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
+import { drainPoolEventCounters } from "@/utils/db/poolEvents";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
@@ -250,9 +251,13 @@ async function emitHostSnapshot(): Promise<void> {
       );
     }
 
+    // Pool retirements ride this sample rather than a series of their own so a cascade can be
+    // read against swap, PSI and event-loop lag on one time axis. Cross-tabbing those by hand
+    // from separate sources is what turned the last diagnosis into an afternoon.
     await metricSampleRepository.recordSample("host_memory", {
       ...snapshot,
       ...pressureVerdictFields(verdict, armed),
+      ...drainPoolEventCounters(),
     });
   } catch (error) {
     log.error("Failed to emit host memory snapshot", error, {

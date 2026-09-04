@@ -26,7 +26,7 @@ export type PressureLevel = "normal" | "elevated" | "critical";
 export type PressureAction = "none" | "recycle_cotenants" | "recycle_bot" | "restart_vm";
 
 /** Why a recommendation was withheld even though the level warranted one. */
-export type PressureSuppression = "startup_grace" | "dwell" | "rate_limit" | null;
+type PressureSuppression = "startup_grace" | "dwell" | "rate_limit" | null;
 
 export interface PressureSample {
   atMs: number;
