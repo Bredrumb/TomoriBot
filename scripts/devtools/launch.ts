@@ -406,6 +406,21 @@ async function main(): Promise<void> {
 
   const childProcesses: ReturnType<typeof Bun.spawn>[] = [];
 
+  function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
+    try {
+      if (process.platform === "win32" && proc.pid) {
+        Bun.spawnSync(["taskkill", "/F", "/T", "/PID", String(proc.pid)], {
+          stdout: "ignore",
+          stderr: "ignore",
+        });
+      } else {
+        proc.kill();
+      }
+    } catch {
+      /* already exited */
+    }
+  }
+
   for (const flag of requested) {
     const def = SIDECARS[flag];
     try {
@@ -417,7 +432,7 @@ async function main(): Promise<void> {
       }
     } catch (err) {
       console.error(pc.red(`Failed to start sidecar "${flag}": ${err instanceof Error ? err.message : err}`));
-      for (const p of childProcesses) p.kill();
+      for (const p of childProcesses) terminateProcess(p);
       process.exit(1);
     }
   }
@@ -438,7 +453,7 @@ async function main(): Promise<void> {
     isShuttingDown = true;
     console.log(`\n${pc.yellow("[launch] Shutting down...")}`);
     for (const p of childProcesses) {
-      try { p.kill(); } catch { /* already exited */ }
+      terminateProcess(p);
     }
   };
   process.on("SIGINT", shutdown);
@@ -448,7 +463,7 @@ async function main(): Promise<void> {
   const exitCode = await bot.exited;
   for (const p of childProcesses) {
     if (p !== bot) {
-      try { p.kill(); } catch { /* already exited */ }
+      terminateProcess(p);
     }
   }
   process.exit(exitCode);
