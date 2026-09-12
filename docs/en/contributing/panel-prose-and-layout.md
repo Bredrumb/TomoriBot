@@ -95,6 +95,9 @@ what exposes the bug, so the two rules are always applied together.
 
 - `##` for a page title that contains major sections.
 - `###` for a page heading without nested sections, or for a major section heading.
+- A select may stand in for a heading when its closed value names the same thing. A closed select renders
+  its default option's label, so `/help` puts the section select where the section title would go and a
+  `##` line above it would only repeat the active section's name.
 - **Bold** for a nested subsection label.
 - Plain text for short explanations and empty states.
 - Quote rows (`>`) for current values, statuses, and entities.

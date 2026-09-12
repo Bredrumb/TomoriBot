@@ -186,23 +186,61 @@ describe("help dashboard", () => {
     }
   });
 
-  it("renders the page header and subsection header when a variant is active", () => {
+  it("carries the section name in the section select instead of a heading above the body", () => {
     const pageTitle = localizer("en-US", "commands.help.dashboard.sections.custom_endpoints");
     const variantTitle = localizer("en-US", "commands.help.dashboard.subsections.comfyui");
     expect(pageTitle).not.toBe(variantTitle);
 
-    const payload = buildHelpDashboardPayload("en-US", "setup", "custom-endpoints", "comfyui");
-    const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
-    const serialized = JSON.stringify(payload);
+    const container = getContainer("en-US", "setup", "custom-endpoints", "comfyui");
+    const serialized = JSON.stringify(container);
 
+    // The select's closed value is the section name, so no display may repeat it as a heading. The
+    // variant heading stays: the subsection select sits below the body rather than heading it.
     expect(serialized).toContain(pageTitle);
-    expect(serialized).toContain(variantTitle);
+    expect(textDisplays(container).some((content) => content.startsWith(`## ${pageTitle}`))).toBe(false);
 
-    const variantHeading = container.components.find(
-      (comp) =>
-        comp.type === ComponentType.TextDisplay && "content" in comp && comp.content.startsWith(`### ${variantTitle}`),
-    );
+    const variantHeading = textDisplays(container).find((content) => content.startsWith(`### ${variantTitle}`));
     expect(variantHeading).toBeDefined();
+  });
+
+  it("opens every screen with the section select in the title slot, above the always-rendered description", () => {
+    for (const category of HELP_CATEGORIES) {
+      for (const page of category.pages) {
+        const variantIds: (string | undefined)[] = [undefined, ...(page.variants ?? []).map((variant) => variant.id)];
+        for (const variantId of variantIds) {
+          const key = `${category.id}/${page.id}/${variantId ?? "default"}`;
+          const container = getContainer("en-US", category.id, page.id, variantId);
+          const displays = textDisplays(container);
+
+          expect(container.components[0]?.type, key).toBe(ComponentType.ActionRow);
+          expect(container.components[1]?.type, key).toBe(ComponentType.Separator);
+          expect(findRowIndex(container, "help:v2:page:"), key).toBe(2);
+          expect(displays[0], key).toBe(localizer("en-US", page.descriptionKey, page.variables?.("en-US")));
+          expect(
+            displays.some((content) => content.startsWith("## ")),
+            key,
+          ).toBe(false);
+
+          const separatorIndexes = container.components
+            .map((comp, index) => (comp.type === ComponentType.Separator ? index : -1))
+            .filter((index) => index >= 0);
+          expect(separatorIndexes, key).toHaveLength(2);
+
+          const chromeStart = separatorIndexes[1] ?? -1;
+          expect(chromeStart, key).toBeGreaterThan(3);
+
+          const topicSelectIndex = findRowIndex(container, "help:v2:variant:");
+          if (page.variants) {
+            expect(topicSelectIndex, key).toBe(chromeStart + 1);
+          } else {
+            expect(topicSelectIndex, key).toBe(-1);
+          }
+
+          const navIndex = findRowIndex(container, "help:v2:navigate:");
+          expect(navIndex, key).toBe(container.components.length - 1);
+        }
+      }
+    }
   });
 
   it("renders all page sections and footer when a page has no variants", () => {
@@ -322,6 +360,15 @@ function textDisplays(container: ContainerComponentData<ComponentInContainerData
   return container.components
     .filter((comp) => comp.type === ComponentType.TextDisplay && "content" in comp)
     .map((comp) => (comp as { content: string }).content);
+}
+
+function findRowIndex(container: ContainerComponentData<ComponentInContainerData>, customIdPrefix: string): number {
+  return container.components.findIndex(
+    (comp) =>
+      comp.type === ComponentType.ActionRow &&
+      "components" in comp &&
+      comp.components.some((child) => "customId" in child && child.customId?.startsWith(customIdPrefix)),
+  );
 }
 
 describe("help provider picker", () => {

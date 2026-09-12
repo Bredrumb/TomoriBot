@@ -44,8 +44,8 @@ git -C $RuntimeDir submodule update --init --recursive
 if ($LASTEXITCODE -ne 0) { throw "Failed to update CosyVoice submodules." }
 
 & $Python -m venv $VenvDir
-& $VenvPython -m pip install --upgrade pip setuptools wheel
-& $VenvPython -m pip install -r (Join-Path $RuntimeDir "requirements.txt")
+& $VenvPython -m pip install --upgrade pip "setuptools<72" wheel
+& $VenvPython -m pip install --no-build-isolation -r (Join-Path $RuntimeDir "requirements.txt")
 & $VenvPython -m pip install -r (Join-Path $ScriptDir "requirements.txt")
 
 $DownloadScript = @'
@@ -75,6 +75,17 @@ metadata_path.write_text(json.dumps(expected, sort_keys=True) + "\n", encoding="
 
 & $VenvPython -c $DownloadScript $ModelId $ModelDir $ModelRevision $InstallMetadata $(if ($AllowUpdate) { "1" } else { "0" })
 if ($LASTEXITCODE -ne 0) { throw "Failed to download the CosyVoice 3 model." }
+
+$TorchCheck = @'
+import torch
+print(f"PyTorch: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+else:
+    print("No CUDA device detected. CosyVoice 3 will run on CPU.")
+'@
+& $VenvPython -c $TorchCheck
 
 Write-Host ""
 Write-Host "CosyVoice 3 setup complete."

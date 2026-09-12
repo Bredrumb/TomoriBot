@@ -49,9 +49,21 @@ Recommended starting point:
 - Python **3.10-3.12**
 - NVIDIA GPU with **8 GB VRAM or more** for the official BF16 runtime; 12-16 GB gives comfortable headroom
 - Current NVIDIA driver and a CUDA-enabled PyTorch build for GPU acceleration
-- CPU is supported but substantially slower
+- CPU is supported as a fallback but is substantially slower
 
-The official package also exposes CPU and Apple MPS device selection. For TomoriBot on Windows, the standard Python package can run natively; WSL is not required. If your native Windows PyTorch installation does not detect CUDA, install a CUDA-enabled PyTorch build that matches your driver from the official PyTorch instructions.
+The official package also exposes CPU and Apple MPS device selection. For TomoriBot on Windows, the standard Python package can run natively; WSL is not required. The Windows PowerShell installer installs a CUDA-enabled PyTorch build (`cu124`) by default.
+
+To explicitly install on a CPU-only machine, pass the `-Cpu` switch:
+
+```powershell
+.\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
+```
+
+If your native Windows PyTorch installation ever needs a manual reinstall or driver realignment, install the CUDA-enabled PyTorch build directly into the sidecar's virtual environment:
+
+```powershell
+.\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
 
 OpenBMB reports about 0.30 RTF on an RTX 4090 with the standard runtime. Upstream also supports streaming generation and documents faster Nano-vLLM and vLLM-Omni serving options. TomoriBot's current `POST /synthesize` contract returns one WAV response, so this sidecar intentionally buffers the generated utterance instead of exposing a separate streaming protocol.
 

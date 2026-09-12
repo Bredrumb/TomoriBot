@@ -79,7 +79,22 @@ Fish Audio officially documents Linux/WSL for local S2 inference, so WSL is pref
 .\servers\tts\fishs2\.venv\Scripts\python.exe servers\tts\fishs2\server.py
 ```
 
+The PowerShell installer targets CUDA GPU acceleration (`cu124`) by default. To install on a CPU-only machine without an NVIDIA GPU, pass `-Cpu`:
+
+```powershell
+.\servers\tts\fishs2\install-fishs2.ps1 -Cpu
+```
+
+If PyTorch on Windows ever needs to be manually installed or updated with CUDA support, run:
+
+```powershell
+.\servers\tts\fishs2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
+
 If an upstream Fish Speech dependency fails to build on native Windows, use WSL instead.
+
+> [!WARNING]
+> **Native Windows performance limitation:** Fish Audio officially targets Linux and WSL2. On native Windows, PyTorch cannot use Triton for `torch.compile`, forcing the INT8 quantized model to run in uncompiled eager mode where weights are dynamically cast on every token. This makes generation significantly slower (~5s per token) on native Windows. For practical, fast voice synthesis on Windows machines, **running the installer inside WSL2 is strongly recommended**.
 
 The TomoriBot wrapper listens on `http://127.0.0.1:8015` by default. Internally it starts Fish
 Speech's own API server on port `8025` and translates TomoriBot's `/synthesize` request into Fish's

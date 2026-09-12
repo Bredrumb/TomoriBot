@@ -140,9 +140,19 @@ def start_fish_api() -> None:
     validate_bind_policy()
     require_installation()
 
+    api_server_script = str(FISH_SPEECH_DIR / "tools" / "api_server.py")
+    bootstrap = (
+        "import multiprocessing, runpy, sys; "
+        "multiprocessing.set_executable(sys.executable); "
+        "target = sys.argv.pop(1); "
+        "sys.argv[0] = target; "
+        "runpy.run_path(target, run_name='__main__')"
+    )
     command = [
         sys.executable,
-        str(FISH_SPEECH_DIR / "tools" / "api_server.py"),
+        "-c",
+        bootstrap,
+        api_server_script,
         "--llama-checkpoint-path",
         str(MODEL_DIR),
         "--decoder-checkpoint-path",
@@ -165,6 +175,15 @@ def stop_fish_api() -> None:
     global fish_process
     if fish_process is None or fish_process.poll() is not None:
         return
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(fish_process.pid)],
+                capture_output=True,
+                check=False,
+            )
+        except Exception:
+            pass
     fish_process.terminate()
     try:
         fish_process.wait(timeout=10)

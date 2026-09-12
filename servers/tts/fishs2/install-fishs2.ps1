@@ -1,5 +1,6 @@
 param(
-  [string]$Python = "python"
+  [string]$Python = "python",
+  [switch]$Cpu
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +14,8 @@ $RuntimeRepository = if ($env:FISH_S2_RUNTIME_REPOSITORY) { $env:FISH_S2_RUNTIME
 $RuntimeRef = if ($env:FISH_S2_RUNTIME_REF) { $env:FISH_S2_RUNTIME_REF } else { "2225e924e7d35cc0a1d24dbc67cd1819e6cf429f" }
 $ModelId = if ($env:FISH_S2_MODEL_ID) { $env:FISH_S2_MODEL_ID } else { "Imagilux/fishaudio-s2-pro" }
 $ModelRevision = if ($env:FISH_S2_MODEL_REVISION) { $env:FISH_S2_MODEL_REVISION } else { "9706ff036580881d87cc09465dd10014527bc481" }
+$UseCpu = $Cpu.IsPresent -or ($env:CPU_ONLY -match "^(1|true|yes|on)$")
+$CudaIndex = if ($env:TORCH_CUDA_INDEX) { $env:TORCH_CUDA_INDEX } else { "https://download.pytorch.org/whl/cu124" }
 $UpdateRuntime = $env:FISH_S2_UPDATE -match "^(1|true|yes|on)$"
 if ($UpdateRuntime) {
   if ($env:FISH_S2_UPDATE_REF) {
@@ -45,6 +48,12 @@ git -C $RuntimeDir checkout --detach --force $RuntimeRef
 
 & $Python -m venv $VenvDir
 & $VenvPython -m pip install --upgrade pip setuptools wheel
+
+if (-not $UseCpu) {
+  Write-Host "Installing CUDA-enabled PyTorch from $CudaIndex..."
+  & $VenvPython -m pip install torch torchvision torchaudio --index-url $CudaIndex
+}
+
 & $VenvPython -m pip install -r (Join-Path $ScriptDir "requirements.txt")
 & $VenvPython -m pip install -e $RuntimeDir
 
@@ -53,6 +62,17 @@ if ($UpdateRuntime -or -not (Test-Path (Join-Path $ModelDir "model.pth")) -or -n
   Write-Host "If Hugging Face requests authentication, accept the model license and run: hf auth login"
   & $HfExe download $ModelId --revision $ModelRevision --local-dir $ModelDir
 }
+
+$TorchCheck = @'
+import torch
+print(f"PyTorch: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+else:
+    print("No CUDA device detected. Fish S2 Pro will run on CPU.")
+'@
+& $VenvPython -c $TorchCheck
 
 Write-Host "Fish S2 Pro setup complete."
 Write-Host "Runtime: $RuntimeDir"

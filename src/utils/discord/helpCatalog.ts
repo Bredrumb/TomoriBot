@@ -33,14 +33,15 @@ export interface HelpSectionDefinition {
 }
 
 interface HelpContentDefinition {
+  /**
+   * The node's name. A variant renders it as its `###` heading; a page renders it nowhere, because
+   * the section select's closed value already shows the active section's name.
+   */
   titleKey: string;
   descriptionKey: string;
   docsPath: DocsPath;
   sections: readonly HelpSectionDefinition[];
   footerKey?: string;
-  introTitleKey?: string;
-  introDescriptionKey?: string;
-  titleHeadingLevel?: 2 | 3;
   showProviderPicker?: boolean;
   providerPickerFooterKey?: string;
   variables?: (locale: string) => HelpVariables;

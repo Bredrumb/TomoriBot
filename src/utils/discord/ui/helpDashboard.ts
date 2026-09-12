@@ -262,19 +262,14 @@ export function buildHelpDashboardPayload(
   const content: ComponentInContainerData[] = [
     buildCategoryRow(locale, category.id),
     { type: ComponentType.Separator, divider: true, spacing: 1 },
-  ];
-
-  if (page.introTitleKey && page.introDescriptionKey) {
-    content.push({
+    // The section select is the section header: a closed select renders its default option's label,
+    // which is the active section's name, so a heading display above it only repeats those words.
+    buildPageSelectRow(locale, category, page.id),
+    {
       type: ComponentType.TextDisplay,
-      content: `## ${localizer(locale, page.introTitleKey, pageVariables)}\n${localizer(locale, page.introDescriptionKey, pageVariables)}`,
-    });
-  }
-
-  content.push({
-    type: ComponentType.TextDisplay,
-    content: `${"#".repeat(page.titleHeadingLevel ?? 2)} ${localizer(locale, page.titleKey, pageVariables)}\n${localizer(locale, page.descriptionKey, pageVariables)}`,
-  });
+      content: localizer(locale, page.descriptionKey, pageVariables),
+    },
+  ];
 
   if (activeVariant) {
     content.push({
@@ -337,11 +332,6 @@ export function buildHelpDashboardPayload(
     }
   }
 
-  const variantSelect = buildVariantSelectRow(locale, category, page, activeVariant?.id);
-  if (variantSelect) {
-    content.push(variantSelect);
-  }
-
   if (category.id === "setup" && isHostedPolicyEnvironment()) {
     content.push({
       type: ComponentType.TextDisplay,
@@ -352,11 +342,14 @@ export function buildHelpDashboardPayload(
   const stops = buildHelpStops(category);
   const currentStopIndex = stops.findIndex((stop) => stop.pageId === page.id && stop.variantId === activeVariant?.id);
 
-  content.push(
-    { type: ComponentType.Separator, divider: true, spacing: 1 },
-    buildPageSelectRow(locale, category, page.id),
-    buildNavigationRow(locale, category, stops, Math.max(0, currentStopIndex)),
-  );
+  content.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
+
+  const variantSelect = buildVariantSelectRow(locale, category, page, activeVariant?.id);
+  if (variantSelect) {
+    content.push(variantSelect);
+  }
+
+  content.push(buildNavigationRow(locale, category, stops, Math.max(0, currentStopIndex)));
 
   const container: ContainerComponentData<ComponentInContainerData> = {
     type: ComponentType.Container,
