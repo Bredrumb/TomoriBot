@@ -8,7 +8,11 @@ import {
   type StringSelectMenuComponentData,
 } from "discord.js";
 import { HELP_CATEGORIES } from "@/utils/discord/helpCatalog";
-import { HELP_PROVIDER_IDS } from "@/utils/discord/helpProviderGuides";
+import {
+  HELP_OPTIONAL_PROVIDER_IDS,
+  HELP_PROVIDER_IDS,
+  HELP_TEXT_PROVIDER_IDS,
+} from "@/utils/discord/helpProviderGuides";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import {
   buildHelpDashboardPayload,
@@ -61,14 +65,14 @@ describe("help dashboard", () => {
     }
   });
 
-  it("asserts exactly 4 categories, 14 sections, and 17 subsections across the catalog", () => {
+  it("asserts exactly 4 categories, 15 sections, and 21 subsections across the catalog", () => {
     expect(HELP_CATEGORIES.map((c) => c.id)).toEqual(["setup", "features", "moderation", "plugins"]);
 
     const totalPages = HELP_CATEGORIES.flatMap((c) => c.pages);
-    expect(totalPages).toHaveLength(14);
+    expect(totalPages).toHaveLength(15);
 
     const totalSubsections = totalPages.flatMap((p) => p.variants ?? []);
-    expect(totalSubsections).toHaveLength(17);
+    expect(totalSubsections).toHaveLength(21);
 
     const container = getContainer("en-US", "setup", "personal-profile");
     const categoryRow = container.components[0];
@@ -159,11 +163,17 @@ describe("help dashboard", () => {
     }
   });
 
-  it("falls back to setup > personal-profile for invalid external state", () => {
+  it("lands on the Getting Started API key screen for invalid or absent external state", () => {
     const selection = resolveHelpSelection("unknown", "also-unknown");
     expect(selection.category.id).toBe("setup");
-    expect(selection.page.id).toBe("personal-profile");
+    expect(selection.page.id).toBe("getting-started");
     expect(selection.variant).toBeUndefined();
+
+    // A bare /help carries no route segments at all, so the argument-less call is the real landing
+    // screen and not just the invalid-input fallback.
+    const landing = resolveHelpSelection();
+    expect(landing.page.id).toBe("getting-started");
+    expect(landing.page.variants?.[0]?.id).toBe("get-api-key");
   });
 
   it("builds text-only provider modals with persistent route IDs", () => {
@@ -280,5 +290,168 @@ describe("help dashboard", () => {
       const lastButtons = lastNavRow && "components" in lastNavRow ? lastNavRow.components : [];
       expect(lastButtons[1]?.disabled).toBe(true);
     }
+  });
+});
+
+/**
+ * Setup > Getting Started > Get an API Key is the only screen that mounts a provider picker, so
+ * these assertions are the whole coverage of that render path. The expected option lists are taken
+ * from the catalog's own id tuples rather than hand-written copies, because a second literal list
+ * here would keep passing after the guide table itself moved.
+ *
+ * `buildProviderGuideModal` is reached only through the provider select route, so "reachable" means
+ * a value in one of these two pickers; asserting the modal renders would prove only that the guide
+ * exists.
+ */
+function findProviderSelects(categoryId: string, pageId: string, variantId?: string): StringSelectMenuComponentData[] {
+  const payload = buildHelpDashboardPayload("en-US", categoryId, pageId, variantId);
+  const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
+  const selects: StringSelectMenuComponentData[] = [];
+  for (const comp of container.components) {
+    if (comp.type !== ComponentType.ActionRow || !("components" in comp)) continue;
+    for (const child of comp.components) {
+      if (child.type === ComponentType.StringSelect && child.customId?.startsWith("help:v2:provider:")) {
+        selects.push(child);
+      }
+    }
+  }
+  return selects;
+}
+
+function textDisplays(container: ContainerComponentData<ComponentInContainerData>): string[] {
+  return container.components
+    .filter((comp) => comp.type === ComponentType.TextDisplay && "content" in comp)
+    .map((comp) => (comp as { content: string }).content);
+}
+
+describe("help provider picker", () => {
+  it("renders the nine text providers in order, with the custom endpoint last", () => {
+    const selects = findProviderSelects("setup", "getting-started", "get-api-key");
+    expect(selects).toHaveLength(2);
+
+    const [textPicker] = selects;
+    expect(textPicker?.type).toBe(ComponentType.StringSelect);
+    expect(textPicker?.customId).toBe("help:v2:provider:en-US:text");
+
+    const values = textPicker?.options.map((option) => option.value) ?? [];
+    expect(values).toEqual([...HELP_TEXT_PROVIDER_IDS]);
+    expect(values).toHaveLength(9);
+    expect(values.at(-1)).toBe("custom");
+  });
+
+  it("mounts every guide the catalog defines in one of the two pickers, with no repeated custom id", () => {
+    const selects = findProviderSelects("setup", "getting-started", "get-api-key");
+    const values = selects.flatMap((select) => select.options.map((option) => option.value));
+    expect(values).toEqual([...HELP_TEXT_PROVIDER_IDS, ...HELP_OPTIONAL_PROVIDER_IDS]);
+    // Nothing may be listed twice, and nothing outside the guide table may be offered, because the
+    // provider route validates a submitted value against `isHelpProviderId` and throws otherwise.
+    expect(new Set(values).size).toBe(values.length);
+    expect([...values].sort()).toEqual([...HELP_PROVIDER_IDS].sort());
+
+    // A Components V2 message rejects a repeated custom ID, so the two pickers must differ.
+    const customIds = selects.map((select) => select.customId);
+    expect(new Set(customIds).size).toBe(customIds.length);
+
+    const [textPicker, optionalPicker] = selects;
+    for (const excluded of HELP_OPTIONAL_PROVIDER_IDS) {
+      expect(textPicker?.options.map((option) => option.value)).not.toContain(excluded);
+    }
+    expect(optionalPicker?.options.map((option) => option.value)).toEqual([...HELP_OPTIONAL_PROVIDER_IDS]);
+  });
+
+  it("mounts a picker only on the explicit API key subsection", () => {
+    const mountedStops: string[] = [];
+    for (const category of HELP_CATEGORIES) {
+      for (const page of category.pages) {
+        // The variant-less call is not a separate landing screen: it resolves to the page's first
+        // variant, so it mounts the picker exactly where an explicit `get-api-key` call does.
+        const defaultExpected = category.id === "setup" && page.id === "getting-started" ? 2 : 0;
+        const defaults = findProviderSelects(category.id, page.id);
+        expect(defaults, `${category.id}/${page.id} (default variant)`).toHaveLength(defaultExpected);
+        if (defaults.length > 0) mountedStops.push(`${category.id}/${page.id}`);
+
+        for (const variant of page.variants ?? []) {
+          const key = `${category.id}/${page.id}/${variant.id}`;
+          const expected = key === "setup/getting-started/get-api-key" ? 2 : 0;
+          expect(findProviderSelects(category.id, page.id, variant.id), key).toHaveLength(expected);
+          if (expected > 0) mountedStops.push(key);
+        }
+      }
+    }
+
+    // Guard the guard: without this, a catalogue that lost the subsection entirely would satisfy
+    // every expectation above against an empty mount set.
+    expect(mountedStops).toEqual(["setup/getting-started", "setup/getting-started/get-api-key"]);
+
+    const gettingStarted = HELP_CATEGORIES.find((c) => c.id === "setup")?.pages.find((p) => p.id === "getting-started");
+    expect(gettingStarted?.variants?.[0]?.id).toBe("get-api-key");
+    expect(gettingStarted?.showProviderPicker).toBeUndefined();
+  });
+
+  it("gives every picker option a non-empty description inside Discord's cap", () => {
+    for (const select of findProviderSelects("setup", "getting-started", "get-api-key")) {
+      expect(select.options.length).toBeGreaterThan(0);
+      for (const option of select.options) {
+        expect(typeof option.label).toBe("string");
+        expect(option.description?.length ?? 0).toBeGreaterThan(0);
+        expect(option.description?.length ?? 0).toBeLessThanOrEqual(100);
+        expect(option.description).not.toContain("commands.help.");
+      }
+    }
+  });
+
+  it("shows the picker footer between the pickers and the section select", () => {
+    const container = getContainer("en-US", "setup", "getting-started", "get-api-key");
+    const pickerRowIndexes = container.components
+      .map((comp, index) => ({ comp, index }))
+      .filter(
+        ({ comp }) =>
+          comp.type === ComponentType.ActionRow &&
+          "components" in comp &&
+          comp.components.some(
+            (child) => child.type === ComponentType.StringSelect && child.customId?.startsWith("help:v2:provider:"),
+          ),
+      )
+      .map(({ index }) => index);
+    expect(pickerRowIndexes).toHaveLength(2);
+    expect(pickerRowIndexes[1]).toBe((pickerRowIndexes[0] ?? -1) + 1);
+
+    const footer = container.components[(pickerRowIndexes[1] ?? -1) + 1];
+    expect(footer?.type).toBe(ComponentType.TextDisplay);
+    const footerContent = footer && "content" in footer ? footer.content : "";
+
+    // Resolving the key with the variant's own variables and requiring the result to match is what
+    // makes this assertion able to fail: the footer's node declares `setup`, so rendering it with
+    // the page's variables instead would leave the token literal and disagree here.
+    const variant = HELP_CATEGORIES.find((c) => c.id === "setup")
+      ?.pages.find((p) => p.id === "getting-started")
+      ?.variants?.find((v) => v.id === "get-api-key");
+    if (!variant) throw new Error("Missing get-api-key variant");
+    const expectedFooter = localizer("en-US", variant.providerPickerFooterKey ?? "", variant.variables?.("en-US"));
+    expect(footerContent).toBe(expectedFooter);
+  });
+
+  it("resolves every command mention and breadcrumb in the new subsections", () => {
+    const gettingStarted = HELP_CATEGORIES.find((c) => c.id === "setup")?.pages.find((p) => p.id === "getting-started");
+    if (!gettingStarted) throw new Error("Missing Getting Started page");
+
+    for (const variant of gettingStarted.variants ?? []) {
+      const payload = buildHelpDashboardPayload("en-US", "setup", gettingStarted.id, variant.id);
+      const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
+      for (const content of textDisplays(container)) {
+        // The catalog renders an unknown command as inline code and an unknown breadcrumb as its raw
+        // key, so a token that never resolved leaves one of these two traces behind.
+        expect(content, variant.id).not.toContain("commands.help.");
+        expect(content, variant.id).not.toMatch(/\{[a-zA-Z]+\}/);
+      }
+    }
+
+    const persona = JSON.stringify(
+      buildHelpDashboardPayload("en-US", "setup", "getting-started", "create-first-persona"),
+    );
+    // The avatar control lives on the persona general page, so the breadcrumb that sets the avatar
+    // is the general one; the appearance page holds image-generation tags, not the avatar.
+    expect(persona).toContain("Persona > Identity &amp; Personality".replace("&amp;", "&"));
+    expect(persona).toMatch(/avatar/i);
   });
 });
