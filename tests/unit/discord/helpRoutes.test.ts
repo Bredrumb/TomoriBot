@@ -71,6 +71,54 @@ describe("help global interaction route", () => {
     expect(calls).toEqual(["showModal"]);
   });
 
+  it("opens a provider modal from either picker segment", async () => {
+    for (const pickerSegment of ["text", "optional"]) {
+      const calls: string[] = [];
+      const interaction = {
+        locale: "en-US",
+        guildLocale: null,
+        values: [pickerSegment === "text" ? "openrouter" : "elevenlabs"],
+        isButton: () => false,
+        isStringSelectMenu: () => true,
+        isModalSubmit: () => false,
+        showModal: async () => {
+          calls.push("showModal");
+        },
+        update: async () => {
+          calls.push("update");
+        },
+      } as unknown as StringSelectMenuInteraction;
+
+      await helpInteractionRoute.execute({} as Client, interaction, {
+        namespace: "help",
+        version: "v2",
+        segments: ["provider", "en-US", pickerSegment],
+      });
+
+      expect(calls).toEqual(["showModal"]);
+    }
+  });
+
+  it("rejects a provider value that is not a guide the modal can build", async () => {
+    const interaction = {
+      locale: "en-US",
+      guildLocale: null,
+      values: ["not-a-provider"],
+      isButton: () => false,
+      isStringSelectMenu: () => true,
+      isModalSubmit: () => false,
+      showModal: async () => {},
+    } as unknown as StringSelectMenuInteraction;
+
+    await expect(
+      helpInteractionRoute.execute({} as Client, interaction, {
+        namespace: "help",
+        version: "v2",
+        segments: ["provider", "en-US", "text"],
+      }),
+    ).rejects.toThrow("Invalid help provider selection");
+  });
+
   it("silently acknowledges an information-modal submission without repainting the panel", async () => {
     const calls: string[] = [];
     const interaction = {

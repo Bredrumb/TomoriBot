@@ -38,7 +38,9 @@
       page_reference: `the **{page}** page in \`/help\``,
       page_select_placeholder: `Choose a page`,
       guide_select_placeholder: `Choose a guide`,
+      subsection_select_placeholder: `Choose a topic`,
       provider_select_placeholder: `Choose Provider`,
+      optional_provider_select_placeholder: `Optional Services`,
       previous_button: `← Previous`,
       next_button: `Next →`,
       docs_link_label: `Read the Web Version`,
@@ -57,6 +59,8 @@
         description: `Choose a provider below to open its API key guide. Closing the guide returns you to this help panel.`,
       },
       sections: {
+        getting_started: `Getting Started`,
+        getting_started_description: `Key, triggers, persona, and what to try next`,
         personal_profile: `Personal Profile`,
         personal_profile_description: `Your nickname, your memories, your own provider`,
         custom_endpoints: `Custom Endpoints (Advanced)`,
@@ -87,6 +91,14 @@
         matrix_description: `Bridge a Matrix room to a Discord channel`,
       },
       subsections: {
+        get_api_key: `Get an API Key`,
+        get_api_key_description: `Where to get one, and how to keep it safe`,
+        change_trigger_behavior: `Change Trigger Behavior`,
+        change_trigger_behavior_description: `When and where I am allowed to answer`,
+        create_first_persona: `Create your First Persona`,
+        create_first_persona_description: `Edit me, generate a new one, or import one`,
+        explore_features: `Explore my Features!`,
+        explore_features_description: `A short tour of what I can do now`,
         nickname_pronouns: `Your Nickname and Pronouns`,
         nickname_pronouns_description: `How I address you, in every server`,
         personal_memories: `Personal Memories`,
@@ -1157,6 +1169,85 @@ Follow-up wording also works when recent context points to a tool, such as \`do 
 - If a thought-log channel is configured with {thoughtLogs}, successful deliberate-mode tool calls are logged there with the trigger that exposed the tool`,
       footer: `Deliberate tool mode decides which tools are shown to the model. The model still has to actually choose to call the exposed tool.`,
     },
+    getting_started: {
+      title: `Getting Started`,
+      description: `Four short steps from a quiet server to a real conversation.`,
+      get_api_key: {
+        title: `Get an API Key`,
+        description: `An API key is a password from an AI company that lets me use
+their model on your behalf. Whatever I generate is billed to
+that key, so treat it like any other password.
+To finish setup I need one:
+> **1.** Pick a provider below to open its guide.
+> **2.** Copy the key it gives you. **Do NOT share it** with
+> anyone, and never paste it into a channel: only into the
+> box {setup} opens for you.
+> **3.** Run {setup} and paste the key when I ask for it.`,
+        picker_footer: `-# The second list is optional: Brave Search adds web
+-# results, and ElevenLabs adds hosted speech. Each opens
+-# its own guide, and neither is needed to finish setup.
+-# Running your own text endpoint instead? Skip the key and
+-# read **Custom Endpoints (Advanced)** in this same page.`,
+      },
+      change_trigger_behavior: {
+        title: `Change Trigger Behavior`,
+        description: `Out of the box I answer when you @mention me or reply to me.
+You can widen that, narrow it, or turn it off per channel.
+
+**Where I am allowed to speak**
+I only reply in whitelisted channels. Add them under
+{moderationWhitelist}.
+> A channel that is not on the list stays quiet.
+
+**Speaking up on my own**
+{configAutoTrigger} lets me join in without being called,
+either every few messages or at random.
+
+**Only when you really mean it**
+Deliberate Trigger Mode makes me wait for {respond} instead
+of a mention. Turn it on in {configBehaviorTrigger}.`,
+      },
+      create_first_persona: {
+        title: `Create your First Persona`,
+        description: `A persona is my name, face, voice, and personality. Edit the
+one you already have, or make new ones.
+
+**Change the one you have**
+{configPersonaGeneral} sets my name, personality, and my
+avatar. It also decides how I address people.
+
+**Write a new one from a sentence**
+{personaGenerate} builds a whole persona from a short
+description. {personaCreate} gives you the blank form.
+
+**Bring one in from elsewhere**
+{personaImport} accepts character cards downloaded from card
+sites such as botbooru.`,
+        footer: `You can keep several personas at once. See **Multiple
+-# personas** under Features.`,
+      },
+      explore_features: {
+        title: `Explore my Features!`,
+        description: `Setup is done. Here is what I can do now that I can talk.
+
+- **Make images, video, and voice** with {generateImage},
+  {generateVideo}, and {generateVoice}.
+- **Search the web** and use other tools, switched on in
+  {configTools}.
+- **Use this server's emoji and stickers** once you run
+  {expressionsInitialize}.
+- **Greet new members** from {configWelcome}.
+- **Remember and remind**: just ask me to remind you, or
+  tell me something worth keeping.
+
+Most of my switches live in {config}, but not all of them.`,
+        footer: `**Brave Search** adds web results to the search I already
+-# do. It needs its own key, and **Get an API Key** under
+-# Setup opens its guide from the optional services list.
+-# The documentation site is the complete version of this
+-# panel, and it explains every setting in detail.`,
+      },
+    },
     personal_profile: {
       title: `Personal Profile`,
       description: `Settings that belong to you and follow you into every server\nI am in.`,
@@ -1191,7 +1282,7 @@ Follow-up wording also works when recent context points to a tool, such as \`do 
       text_to_speech: {
         title: `Text-to-Speech (for voice)`,
         description: `Register a speech endpoint the same way, then give each\npersona a voice.\n\nHosted services and self-hosted servers both work, among\nthem Chatterbox-Turbo, Qwen3-TTS, IrodoriTTS, and ElevenLabs.\nRegister the endpoint, then add a speech model to it.\n> Assign the voice in {configPersonaVoice}.\n> Tune speed and defaults in {configVoices}.`,
-        footer: `Voice messages you send me are transcribed through the\n-# same endpoint list, set up the same way.`,
+        footer: `Voice messages you send me are transcribed through the\n-# same endpoint list, set up the same way. For hosted\n-# voices, ElevenLabs has its own guide in **Get an API Key**\n-# under Setup, listed with the optional services.`,
       },
     },
     multiple_personas: {

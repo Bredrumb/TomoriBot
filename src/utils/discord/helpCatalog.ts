@@ -6,6 +6,7 @@ export const HELP_CATEGORY_IDS = ["setup", "features", "moderation", "plugins"] 
 export type HelpCategoryId = (typeof HELP_CATEGORY_IDS)[number];
 
 export const HELP_PAGE_IDS = [
+  "getting-started",
   "personal-profile",
   "custom-endpoints",
   "multiple-personas",
@@ -108,6 +109,81 @@ export function moderationPage(locale: string, breadcrumbKey: string): string {
 }
 
 const setupPages: readonly HelpPageDefinition[] = [
+  {
+    id: "getting-started",
+    labelKey: "commands.help.dashboard.sections.getting_started",
+    pickerDescriptionKey: "commands.help.dashboard.sections.getting_started_description",
+    titleKey: "commands.help.getting_started.title",
+    descriptionKey: "commands.help.getting_started.description",
+    docsPath: DOCS_PATHS.API_KEYS,
+    sections: [],
+    variants: [
+      {
+        id: "get-api-key",
+        labelKey: "commands.help.dashboard.subsections.get_api_key",
+        pickerDescriptionKey: "commands.help.dashboard.subsections.get_api_key_description",
+        titleKey: "commands.help.getting_started.get_api_key.title",
+        descriptionKey: "commands.help.getting_started.get_api_key.description",
+        docsPath: DOCS_PATHS.API_KEYS,
+        sections: [],
+        showProviderPicker: true,
+        providerPickerFooterKey: "commands.help.getting_started.get_api_key.picker_footer",
+        variables: () => ({
+          setup: mention("setup"),
+        }),
+      },
+      {
+        id: "change-trigger-behavior",
+        labelKey: "commands.help.dashboard.subsections.change_trigger_behavior",
+        pickerDescriptionKey: "commands.help.dashboard.subsections.change_trigger_behavior_description",
+        titleKey: "commands.help.getting_started.change_trigger_behavior.title",
+        descriptionKey: "commands.help.getting_started.change_trigger_behavior.description",
+        docsPath: DOCS_PATHS.CHATTING_TRIGGERS,
+        sections: [],
+        variables: (locale) => ({
+          moderationWhitelist: moderationPage(locale, "commands.help.breadcrumbs.moderation.whitelist"),
+          configAutoTrigger: configPage(locale, "commands.help.breadcrumbs.channels.auto-trigger"),
+          configBehaviorTrigger: configPage(locale, "commands.help.breadcrumbs.behavior.trigger"),
+          respond: mention("respond"),
+        }),
+      },
+      {
+        id: "create-first-persona",
+        labelKey: "commands.help.dashboard.subsections.create_first_persona",
+        pickerDescriptionKey: "commands.help.dashboard.subsections.create_first_persona_description",
+        titleKey: "commands.help.getting_started.create_first_persona.title",
+        descriptionKey: "commands.help.getting_started.create_first_persona.description",
+        docsPath: DOCS_PATHS.MULTIPLE_PERSONAS,
+        sections: [],
+        footerKey: "commands.help.getting_started.create_first_persona.footer",
+        variables: (locale) => ({
+          configPersonaGeneral: configPage(locale, "commands.help.breadcrumbs.persona.general"),
+          personaGenerate: mention("persona", "generate"),
+          personaCreate: mention("persona", "create"),
+          personaImport: mention("persona", "import"),
+        }),
+      },
+      {
+        id: "explore-features",
+        labelKey: "commands.help.dashboard.subsections.explore_features",
+        pickerDescriptionKey: "commands.help.dashboard.subsections.explore_features_description",
+        titleKey: "commands.help.getting_started.explore_features.title",
+        descriptionKey: "commands.help.getting_started.explore_features.description",
+        docsPath: DOCS_PATHS.FEATURES,
+        sections: [],
+        footerKey: "commands.help.getting_started.explore_features.footer",
+        variables: (locale) => ({
+          generateImage: mention("generate", "image"),
+          generateVideo: mention("generate", "video"),
+          generateVoice: mention("generate", "voice-message"),
+          configTools: configPage(locale, "commands.help.breadcrumbs.plugins.available-tools"),
+          expressionsInitialize: mention("expressions", "initialize"),
+          configWelcome: configPage(locale, "commands.help.breadcrumbs.channels.destinations"),
+          config: mention("config"),
+        }),
+      },
+    ],
+  },
   {
     id: "personal-profile",
     labelKey: "commands.help.dashboard.sections.personal_profile",

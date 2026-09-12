@@ -23,7 +23,8 @@ import {
   type HelpVariantDefinition,
 } from "@/utils/discord/helpCatalog";
 import {
-  PROVIDER_GUIDES,
+  HELP_OPTIONAL_PROVIDER_IDS,
+  HELP_TEXT_PROVIDER_IDS,
   getProviderGuide,
   getProviderGuideVariables,
   type HelpProviderId,
@@ -159,21 +160,34 @@ function buildNavigationRow(
   };
 }
 
-function buildProviderSelectRow(locale: string): ActionRowData<StringSelectMenuComponentData> {
+/**
+ * Two pickers share this screen, and a Components V2 message may not repeat a custom ID. The
+ * trailing segment names the picker rather than its contents, so the mounted guide set can change
+ * without orphaning a message that is still on screen.
+ */
+function buildProviderSelectRow(
+  locale: string,
+  pickerId: string,
+  providerIds: readonly HelpProviderId[],
+  placeholderKey: string,
+): ActionRowData<StringSelectMenuComponentData> {
   return {
     type: ComponentType.ActionRow,
     components: [
       {
         type: ComponentType.StringSelect,
-        customId: buildHelpCustomId("provider", locale),
-        placeholder: localizer(locale, "commands.help.dashboard.provider_select_placeholder"),
+        customId: buildHelpCustomId("provider", locale, pickerId),
+        placeholder: localizer(locale, placeholderKey),
         minValues: 1,
         maxValues: 1,
-        options: PROVIDER_GUIDES.map((provider) => ({
-          label: localizer(locale, provider.labelKey),
-          description: localizer(locale, provider.pickerDescriptionKey),
-          value: provider.id,
-        })),
+        options: providerIds.map((providerId) => {
+          const provider = getProviderGuide(providerId);
+          return {
+            label: localizer(locale, provider.labelKey),
+            description: safeSelectOptionText(localizer(locale, provider.pickerDescriptionKey)),
+            value: provider.id,
+          };
+        }),
       },
     ],
   };
@@ -195,7 +209,7 @@ function buildVariantSelectRow(
       {
         type: ComponentType.StringSelect,
         customId: buildHelpCustomId("variant", locale, category.id, page.id),
-        placeholder: localizer(locale, "commands.help.dashboard.guide_select_placeholder"),
+        placeholder: localizer(locale, "commands.help.dashboard.subsection_select_placeholder"),
         minValues: 1,
         maxValues: 1,
         options: page.variants.map((variant) => ({
@@ -241,6 +255,10 @@ export function buildHelpDashboardPayload(
   const { category, page, variant } = resolveHelpSelection(categoryId, pageId, variantId);
   const activeVariant = variant ?? page.variants?.[0];
   const pageVariables = page.variables?.(locale) ?? {};
+  // The picker footer belongs to whichever node declares the picker, so it needs that node's
+  // variables rather than the page's: a variant scoped to one subsection would otherwise render the
+  // page's tokens and leave its own unresolved.
+  const variantVariables = { ...pageVariables, ...activeVariant?.variables?.(locale) };
   const content: ComponentInContainerData[] = [
     buildCategoryRow(locale, category.id),
     { type: ComponentType.Separator, divider: true, spacing: 1 },
@@ -259,7 +277,6 @@ export function buildHelpDashboardPayload(
   });
 
   if (activeVariant) {
-    const variantVariables = { ...pageVariables, ...activeVariant.variables?.(locale) };
     content.push({
       type: ComponentType.TextDisplay,
       content: `### ${localizer(locale, activeVariant.titleKey, variantVariables)}\n${localizer(locale, activeVariant.descriptionKey, variantVariables)}`,
@@ -296,12 +313,26 @@ export function buildHelpDashboardPayload(
     }
   }
 
-  if (page.showProviderPicker) {
-    content.push(buildProviderSelectRow(locale));
-    if (page.providerPickerFooterKey) {
+  const pickerContent = activeVariant ?? page;
+  if (pickerContent.showProviderPicker) {
+    content.push(
+      buildProviderSelectRow(
+        locale,
+        "text",
+        HELP_TEXT_PROVIDER_IDS,
+        "commands.help.dashboard.provider_select_placeholder",
+      ),
+      buildProviderSelectRow(
+        locale,
+        "optional",
+        HELP_OPTIONAL_PROVIDER_IDS,
+        "commands.help.dashboard.optional_provider_select_placeholder",
+      ),
+    );
+    if (pickerContent.providerPickerFooterKey) {
       content.push({
         type: ComponentType.TextDisplay,
-        content: localizer(locale, page.providerPickerFooterKey, pageVariables),
+        content: localizer(locale, pickerContent.providerPickerFooterKey, variantVariables),
       });
     }
   }

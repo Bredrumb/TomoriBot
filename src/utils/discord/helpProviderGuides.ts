@@ -17,6 +17,29 @@ export const HELP_PROVIDER_IDS = [
 ] as const;
 export type HelpProviderId = (typeof HELP_PROVIDER_IDS)[number];
 
+/**
+ * The setup picker's subset, in picker order: every entry here answers a chat message, which is what
+ * the reader is choosing when a setup step asks them for an AI provider.
+ */
+export const HELP_TEXT_PROVIDER_IDS = [
+  "google",
+  "openrouter",
+  "deepseek",
+  "novelai",
+  "nvidia",
+  "zai",
+  "vertexexpress",
+  "vertex",
+  "custom",
+] as const;
+
+/**
+ * The two guides left out of the setup picker. `buildProviderGuideModal` is reached only through
+ * that picker, so a guide in neither list is unreachable in the client; these get their own picker
+ * on the same screen instead of being dropped from the panel.
+ */
+export const HELP_OPTIONAL_PROVIDER_IDS = ["brave", "elevenlabs"] as const;
+
 type HelpVariables = Record<string, string | number | boolean>;
 
 export interface ProviderGuideDefinition {
