@@ -126,6 +126,8 @@ def wait_for_upstream() -> None:
         if fish_process is not None and fish_process.poll() is not None:
             raise RuntimeError(f"Fish Speech API exited during startup with code {fish_process.returncode}.")
         try:
+            # UPSTREAM_URL hardcodes http:// and takes host and port from operator env, never from a request.
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             with urllib.request.urlopen(health_url, timeout=2) as response:
                 if 200 <= response.status < 300:
                     return
@@ -313,6 +315,7 @@ def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
     )
 
     try:
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
         with urllib.request.urlopen(request, timeout=SYNTHESIS_TIMEOUT_SECONDS) as response:
             audio = response.read()
     except urllib.error.HTTPError as exc:
