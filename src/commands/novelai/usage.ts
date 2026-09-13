@@ -45,7 +45,10 @@ export async function execute(
   _userData: UserRow,
   locale: string,
 ): Promise<void> {
-  if (!interaction.guild || !interaction.memberPermissions?.has("ManageGuild")) {
+  // A DM's workspace belongs to the caller, so only a server invocation needs Manage Server.
+  const isDMChannel = !interaction.guildId;
+  const hasManagePermission = isDMChannel || (interaction.memberPermissions?.has("ManageGuild") ?? false);
+  if (!hasManagePermission) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.permission_denied_title",
       descriptionKey: "general.errors.permission_denied_description",
@@ -58,7 +61,7 @@ export async function execute(
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const serverId = interaction.guild.id;
+    const serverId = interaction.guildId ?? interaction.user.id;
     const tomoriState = await getCachedTomoriState(serverId);
     if (!tomoriState) {
       await replyInfoEmbed(interaction, locale, {
