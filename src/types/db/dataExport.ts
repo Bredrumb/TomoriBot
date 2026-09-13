@@ -641,8 +641,6 @@ function getV2ExportSchema() {
   ]);
 }
 
-export const v2ExportSchema = getV2ExportSchema();
-
 type ConfigSectionName = keyof typeof V2_CONFIG_SECTION_SCHEMAS;
 type ConfigTableName = keyof typeof V1_CONFIG_TABLE_SCHEMAS;
 type V2ConfigSectionData = WorkspaceConfigExportData | PersonalConfigExportData;

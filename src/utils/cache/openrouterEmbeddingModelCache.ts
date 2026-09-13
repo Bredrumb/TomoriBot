@@ -42,11 +42,3 @@ export function refreshOpenRouterEmbeddingModelCacheIfStale(): Promise<boolean> 
 export function getOpenRouterEmbeddingModelCacheSize(): number {
   return embeddingCatalog.size();
 }
-
-export function isOpenRouterEmbeddingModelCacheReady(): boolean {
-  return embeddingCatalog.isReady();
-}
-
-export function resetOpenRouterEmbeddingModelCache(): void {
-  embeddingCatalog.reset();
-}

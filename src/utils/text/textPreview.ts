@@ -36,14 +36,6 @@ import {
  * title, description, and footer.
  */
 export const CV2_TEXT_PREVIEW_BUDGET = 3000;
-
-/**
- * Character budget for a preview rendered inside a standard embed description,
- * which Discord caps at 4096 characters. Kept equal to the Components V2 budget
- * so the same text truncates identically no matter which surface shows it.
- */
-export const EMBED_TEXT_PREVIEW_BUDGET = 3000;
-
 /**
  * Character budget for "here is what you just saved" confirmations.
  *

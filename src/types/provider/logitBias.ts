@@ -194,13 +194,6 @@ export function buildLogitBiasEntries(terms: string[], value: number): LogitBias
   }));
 }
 
-export function formatLogitBiasValue(value: number): string {
-  if (Number.isInteger(value)) {
-    return value.toString();
-  }
-  return Number.parseFloat(value.toFixed(4)).toString();
-}
-
 function parseNumericTokenId(term: string): string | null {
   if (!/^\d+$/.test(term)) return null;
 

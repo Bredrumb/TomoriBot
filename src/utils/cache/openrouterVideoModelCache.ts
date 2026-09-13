@@ -84,11 +84,3 @@ export function refreshOpenRouterVideoModelCacheIfStale(): Promise<boolean> {
 export function getOpenRouterVideoModelCacheSize(): number {
   return videoCatalog.size();
 }
-
-export function isOpenRouterVideoModelCacheReady(): boolean {
-  return videoCatalog.isReady();
-}
-
-export function resetOpenRouterVideoModelCache(): void {
-  videoCatalog.reset();
-}

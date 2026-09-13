@@ -32,8 +32,3 @@ export interface ResolvedRangeSelection<T> {
   totalCount: number;
   visibleItems: T[];
 }
-
-export type PanelActionResult<T> =
-  | { status: "success"; value: T; receipt: PanelReceipt }
-  | { status: "unchanged"; value: T; receipt: PanelReceipt }
-  | { status: "failed"; receipt: PanelReceipt };

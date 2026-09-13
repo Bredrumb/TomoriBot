@@ -221,7 +221,7 @@ export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: nu
  * Called before deletion so no persona is left pointing to a deleted sample.
  *
  */
-export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
+async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
   // speech_voice_name must clear with the sample id: every provider reads it as the active voice
   // name, so leaving it set makes a persona report a voice that no longer exists. The surviving
   // design prompt is the only remaining name source, and a surviving speech_voice_id is

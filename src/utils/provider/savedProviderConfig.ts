@@ -6,7 +6,6 @@ import type {
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
   AssembledServerConfig,
-  TomoriState,
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
@@ -69,32 +68,6 @@ export function shouldRefreshSavedDiffusionModel(
   model: Pick<DiffusionModelRow, "provider" | "is_deprecated"> | null,
 ): boolean {
   return model === null || model.is_deprecated || model.provider.toLowerCase() !== provider.toLowerCase();
-}
-
-export function buildSavedProviderSnapshotFromTomoriState(tomoriState: TomoriState): SavedProviderConfigUpsert {
-  return {
-    server_id: tomoriState.server_id,
-    provider: tomoriState.llm.llm_provider.toLowerCase(),
-    api_key: tomoriState.config.api_key,
-    key_version: tomoriState.config.key_version ?? 1,
-    llm_id: tomoriState.config.llm_id,
-    diffusion_model_id: tomoriState.config.diffusion_model_id ?? null,
-    embedding_model_id: tomoriState.config.embedding_model_id ?? null,
-    nai_diffusion_model_id: tomoriState.config.nai_diffusion_model_id ?? null,
-    video_model_id: tomoriState.config.video_model_id ?? null,
-    vision_llm_id: tomoriState.config.vision_llm_id ?? null,
-    nai_preset_name: tomoriState.config.nai_preset_name ?? null,
-    llm_temperature: tomoriState.config.llm_temperature,
-    llm_top_p: tomoriState.config.llm_top_p,
-    llm_top_k: tomoriState.config.llm_top_k,
-    llm_frequency_penalty: tomoriState.config.llm_frequency_penalty,
-    llm_presence_penalty: tomoriState.config.llm_presence_penalty,
-    llm_min_p: tomoriState.config.llm_min_p,
-    llm_disabled_params: tomoriState.config.llm_disabled_params ?? [],
-    llm_logit_biases: tomoriState.config.llm_logit_biases ?? [],
-    thinking_level: tomoriState.config.thinking_level,
-    fallback_model_refs: tomoriState.config.fallback_model_refs ?? [],
-  };
 }
 
 async function loadProviderDefaultSelectionIds(provider: string): Promise<ProviderDefaultSelectionIds> {
@@ -324,28 +297,6 @@ async function hasRegisteredCustomEndpointCapability(
   }
 
   return true;
-}
-
-export async function hasRegisteredCustomProvider(
-  provider: string,
-  owner: { serverId?: number; userId?: number },
-): Promise<boolean> {
-  const parsed = parseCustomProvider(provider);
-  if (!parsed) {
-    return false;
-  }
-
-  const connection = await llmProviderRepo.loadCustomEndpointConnectionById(parsed.connectionId);
-  if (connection) {
-    if (
-      (owner.serverId !== undefined && connection.server_id !== owner.serverId) ||
-      (owner.userId !== undefined && connection.user_id !== owner.userId)
-    ) {
-      return false;
-    }
-    rememberCustomProviderLabel(provider, connection.label);
-  }
-  return connection !== null;
 }
 
 export async function loadSavedProvidersForCapability(

@@ -24,9 +24,7 @@ export type UploadPreparationResult =
       descriptionKey: string;
     };
 
-async function prepareAttachmentForStorage(
-  attachment: CharRefAttachmentSource,
-): Promise<UploadPreparationResult> {
+async function prepareAttachmentForStorage(attachment: CharRefAttachmentSource): Promise<UploadPreparationResult> {
   if (!attachment.contentType?.startsWith("image/")) {
     return {
       success: false,

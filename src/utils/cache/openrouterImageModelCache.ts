@@ -43,11 +43,3 @@ export function refreshOpenRouterImageModelCacheIfStale(): Promise<boolean> {
 export function getOpenRouterImageModelCacheSize(): number {
   return imageCatalog.size();
 }
-
-export function isOpenRouterImageModelCacheReady(): boolean {
-  return imageCatalog.isReady();
-}
-
-export function resetOpenRouterImageModelCache(): void {
-  imageCatalog.reset();
-}

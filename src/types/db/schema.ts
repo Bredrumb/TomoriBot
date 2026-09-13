@@ -1482,8 +1482,6 @@ const setupProviderAccessCatalogSchema = z
     keyVersion: z.number().int().default(1),
   })
   .strict();
-export type SetupProviderAccessCatalog = z.infer<typeof setupProviderAccessCatalogSchema>;
-
 /**
  * Capability tokens the setup transaction maps onto `llms` capability columns.
  *
@@ -1523,15 +1521,11 @@ const setupProviderAccessCustomEndpointSchema = z
       .strict(),
   })
   .strict();
-export type SetupProviderAccessCustomEndpoint = z.infer<typeof setupProviderAccessCustomEndpointSchema>;
-
 const setupProviderAccessUserByokSchema = z
   .object({
     mode: z.literal("user-byok"),
   })
   .strict();
-export type SetupProviderAccessUserByok = z.infer<typeof setupProviderAccessUserByokSchema>;
-
 const setupProviderAccessSchema = z.discriminatedUnion("mode", [
   setupProviderAccessCatalogSchema,
   setupProviderAccessCustomEndpointSchema,

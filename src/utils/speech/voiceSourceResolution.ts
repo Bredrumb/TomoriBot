@@ -10,10 +10,7 @@ import type { CustomEndpointRow } from "@/types/db/schema";
 import { safeSelectOptionText } from "@/utils/discord/ui/interactionCore";
 import { resolveVoiceSourceCapabilities } from "@/utils/speech/voiceSourceCapabilities";
 
-export {
-  resolveVoiceSourceCapabilities,
-  type VoiceSourceCapabilities,
-} from "@/utils/speech/voiceSourceCapabilities";
+export { resolveVoiceSourceCapabilities } from "@/utils/speech/voiceSourceCapabilities";
 
 /** Identity of a voice source as it appears in the modal radio and the success embed. */
 type VoiceSourceId = "upload" | "typed-design" | "persona-sample" | "persona-design" | "elevenlabs";
