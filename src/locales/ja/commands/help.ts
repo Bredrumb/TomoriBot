@@ -142,7 +142,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
       },
       chatterbox: {
         title: `Chatterbox-Turbo 音声`,
-        description: `Chatterbox-Turbo は高速・軽量な英語専用の音声クローンサーバーです。\`[excited]\`・\`[whisper]\` のような角括弧デリバリータグで発話スタイルを制御できます。TomoriBotがこれらのタグをそのまま送信できるように、登録時は **Script Markup（スクリプトマークアップ）** を **Bracket Tags（角括弧タグ）** に設定してください。`,
+        description: `Chatterbox-Turboは高速で軽量な英語専用の音声クローンサーバーです。さらに小さいNanoも選べます。両モデルは\`[laugh]\`や\`[sigh]\`などのイベントタグに対応します。対応済みタグを保持するには、登録時に **Script Markup** を **Bracket Tags** に設定してください。`,
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 

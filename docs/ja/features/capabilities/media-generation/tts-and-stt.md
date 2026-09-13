@@ -39,7 +39,7 @@ Discord上で同じ手順を確認するには、`/help`の **機能** から **
 
 各エンジンにはそれぞれセットアップガイドがあります：
 
-- [Chatterbox-Turbo](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)：高速、英語のみ対応。`[excited]`のような括弧付きの表現タグをサポートします。
+- [Chatterbox-Turbo/Nano](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)：高速な英語専用の音声クローンです。`[laugh]`などの対応済みイベントタグを使えます。
 - [Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/)：多言語対応（10言語）。自然言語によるVoiceDesignモードを備えています。
 - [IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)：日本語特化。絵文字を感情の合図として読み取ります。
 

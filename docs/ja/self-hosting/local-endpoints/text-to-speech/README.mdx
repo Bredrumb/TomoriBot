@@ -14,7 +14,7 @@ TomoriBotは、speechをカスタムエンドポイント機能として扱い�
 
 <CardGrid>
   <LinkCard title="Chatterbox TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/"
-    description="Chatterbox-Turboによる高速なローカルボイスクローニングです。表現豊かな音声のためのブラケット配信タグをサポートしています。" />
+    description="英語の音声クローンとイベントタグに対応します。標準はTurboで、より小さいNanoも選べます。" />
   <LinkCard title="Qwen3-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
     description="クローンモードとVoiceDesignモードを備えた多言語ローカルTTSです。最大サイズですが最高の品質を誇ります。" />
   <LinkCard title="IrodoriTTS" href="/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/"
@@ -49,7 +49,7 @@ TomoriBotは、生成する前に音声スクリプトからDiscordのカスタ�
 
 | エンジン | モデルサイズ | 備考 |
 |---|---|---|
-| Chatterbox | 約0.5B (Turbo) | 現在最も高速なオプションです。 |
+| Chatterbox | 350M (Turbo)、110M (Nano) | 英語の音声クローンと対応済みイベントタグ。 |
 | Qwen3-TTS | 1.7B (12 Hz) | 個別のクローン + VoiceDesignモデル。一度に1つだけ読み込まれます。 |
 | IrodoriTTS | 500M (v2) | 日本語に特化。GPUでは`bf16`、CPUでは`fp32`。 |
 

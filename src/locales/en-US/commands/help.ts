@@ -276,7 +276,7 @@ ElevenLabs: choose **Add New Provider** and **ElevenLabs** in {elevenlabs}, then
       },
       chatterbox: {
         title: `Chatterbox-Turbo Speech`,
-        description: `Chatterbox-Turbo is a fast, lightweight English-only voice clone server. It supports bracket-style delivery tags such as \`[excited]\` or \`[whisper]\` to shape delivery: register it with **Script Markup** set to **Bracket Tags** so TomoriBot passes those tags through intact.`,
+        description: `Chatterbox-Turbo is a fast, lightweight English-only voice clone server. An optional Nano model is even smaller. Both support event tags such as \`[laugh]\` and \`[sigh]\`: register with **Script Markup** set to **Bracket Tags** so TomoriBot preserves supported tags.`,
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 

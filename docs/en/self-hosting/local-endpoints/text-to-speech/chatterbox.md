@@ -3,7 +3,7 @@ title: "Chatterbox TTS"
 aiGenerated: false
 ---
 
-Use `servers/tts/chatterbox/server.py` for a fast, multilingual TTS voice cloning endpoint. It defaults to Chatterbox-Turbo, preserving bracket delivery tags and fast inference.
+Use `servers/tts/chatterbox/server.py` for English voice cloning with supported event tags. The fast-model path defaults to Chatterbox-Turbo (350M parameters). Chatterbox-Nano (110M parameters) can be selected for smaller CPU-oriented deployments. This wrapper does not load Chatterbox Multilingual V3.
 
 ## Setup
 
@@ -33,6 +33,18 @@ python servers/tts/chatterbox/server.py
 
 Keep that terminal open while TomoriBot is using Chatterbox. The default endpoint URL is `http://127.0.0.1:8011`.
 
+### Optional: use Chatterbox-Nano
+
+Nano requires a Chatterbox build with the `nano=True` loader option. After the normal setup above, install the pinned upstream revision in the same virtual environment. The commit hash fixes the compatible source version; it is not a security guarantee. This command requires `git` and keeps the already installed runtime dependencies:
+
+```sh
+python -m pip install --no-deps --force-reinstall "git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2"
+```
+
+Then set `CHATTERBOX_FAST_MODEL=nano` before starting the wrapper. Leave the variable unset for Turbo. On Windows PowerShell, set it with `$env:CHATTERBOX_FAST_MODEL = "nano"`; on Linux or macOS, use `CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py`. The `/health` response reports `fast_model` so you can verify the loaded choice. Nano and Turbo use the same cloning request and supported event tags. Both are English-only.
+
+The `/config` fast-model toggle must stay enabled to use Nano or Turbo. Disabling it selects the older standard Chatterbox model for CFG weight and exaggeration tuning. Nano does not use those parameters.
+
 ## Register in TomoriBot
 
 Run `/providers`, choose **Add New Custom Endpoint**, and use the speech API compatibility:
@@ -51,16 +63,16 @@ Use `/providers` for endpoint registration and model setup. Then open `/config` 
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
-Chatterbox can use bracket delivery tags such as `[laugh]` and `[sigh]` when Turbo mode is enabled.
+Turbo and Nano can use bracket event tags such as `[laugh]` and `[sigh]` when the fast-model toggle is enabled.
 
 ## Optional Tuning
 
 Use `/config` under Models > TTS Parameters & Voices to tune the Chatterbox request payload:
 
-- `turbo` defaults to `true`. When enabled, TomoriBot keeps supported Chatterbox-Turbo event tags and strips unsupported bracket descriptors before the wrapper uses `ChatterboxTurboTTS.model.generate(...)`.
+- The fast-model toggle defaults to enabled. TomoriBot keeps supported Turbo/Nano event tags and strips unsupported bracket descriptors before the wrapper calls `ChatterboxTurboTTS.generate(...)`.
 - `cfg_weight` defaults to `0.5`. Minimum is `0`; TomoriBot does not set a hard maximum. It only applies when `turbo` is `false`; lower values can help slow fast reference voices, while higher values follow the reference more strongly.
 - `exaggeration` defaults to `0.5`. Minimum is `0`; TomoriBot does not set a hard maximum. It only applies when `turbo` is `false`; higher values make delivery more expressive or dramatic and may speed speech up.
 
-Supported Turbo event tags are `[clear throat]`, `[sigh]`, `[shush]`, `[cough]`, `[groan]`, `[sniff]`, `[gasp]`, `[chuckle]`, and `[laugh]`. Unsupported descriptors such as `[stammers]`, `[blushes]`, or `[smiles]` are stripped instead of being sent to TTS.
+Supported Turbo/Nano event tags are `[clear throat]`, `[sigh]`, `[shush]`, `[cough]`, `[groan]`, `[sniff]`, `[gasp]`, `[chuckle]`, and `[laugh]`. Unsupported descriptors such as `[excited]`, `[whisper]`, or `[smiles]` are stripped instead of being sent to TTS.
 
 When `turbo` is disabled, TomoriBot strips all bracket descriptors before sending text to TTS, then the wrapper lazily loads the standard `ChatterboxTTS` model and calls `model.generate(..., cfg_weight, exaggeration)`.
