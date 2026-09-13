@@ -64,6 +64,7 @@ source open to follow these.
   - [`local-endpoints/setup-chatmock.md`](./self-hosting/local-endpoints/setup-chatmock)
   - [`local-endpoints/setup-local-mcp.md`](./self-hosting/local-endpoints/setup-local-mcp)
   - [`local-endpoints/text-to-speech/`](./self-hosting/local-endpoints/text-to-speech/) — local TTS engines
+    - [`MOSS-TTS`](./self-hosting/local-endpoints/text-to-speech/moss) — experimental clone and voice-design auto endpoint
   - [`local-endpoints/speech-to-text/`](./self-hosting/local-endpoints/speech-to-text/) — local STT engines
 - [`self-hosting/maintenance.md`](./self-hosting/maintenance) — maintenance scripts, updating, backups/restore
 - [`self-hosting/safe-migration.md`](./self-hosting/safe-migration)
@@ -89,6 +90,7 @@ Per-task guides:
 - [`contributing/adding-persona-preset.md`](./contributing/adding-persona-preset)
 - [`contributing/adding-participant-extension.md`](./contributing/adding-participant-extension)
 - [`contributing/comment-policy.md`](./contributing/comment-policy) — durable comments and the advisory policy audit
+- [`contributing/panel-prose-and-layout.md`](./contributing/panel-prose-and-layout) — text width, markers, and structure inside a panel
 - [`contributing/raw-sql-boundary.md`](./contributing/raw-sql-boundary) — keeping raw SQL in the repository layer
 - [`contributing/docs-authoring.md`](./contributing/docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
 - [`contributing/dependency-security-policy.md`](./contributing/dependency-security-policy) — dependency overrides, patches, and audit exceptions

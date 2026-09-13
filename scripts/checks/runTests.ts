@@ -13,7 +13,9 @@
  * Test files are grouped into LANES that run concurrently: see {@link planLanes}
  * for the grouping rules and why they are safe.
  *
- * Invoke via `bun run test` (package.json): not `bun test tests/` directly.
+ * Invoke via `bun run test` (package.json), optionally followed by explicit test
+ * files for a focused disposable-database run. Do not call `bun test tests/`
+ * directly when database coverage is required.
  */
 
 import type { SQL } from "bun";
@@ -256,14 +258,17 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
     }
 
     // Spawn the batch and track it so signal-driven cleanup can terminate it.
+    const streamOutput = process.env.TOMORI_TEST_STREAM_OUTPUT === "true";
     const proc = Bun.spawn(["bun", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs], {
       env: { ...process.env, ...extraEnv },
-      stdout: "pipe",
-      stderr: "pipe",
+      stdout: streamOutput ? "inherit" : "pipe",
+      stderr: streamOutput ? "inherit" : "pipe",
     });
     liveProcesses.add(proc);
 
-    const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+    const [stdout, stderr] = streamOutput
+      ? ["", ""]
+      : await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = (await proc.exited) ?? 1;
     liveProcesses.delete(proc);
 
@@ -289,10 +294,14 @@ async function runTestFiles(files: string[], extraEnv: Record<string, string> = 
   const results = await Promise.all(lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile)));
 
   // Replay buffered output in fixed lane order so concurrent runs stay readable.
-  for (const result of results) {
-    const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
-    process.stdout.write(`\n──── lane: ${result.lane.id} (${fileCount} files) ────\n`);
-    process.stdout.write(result.output);
+  // TOMORI_TEST_QUIET is set by `vl` on the full-suite run, where it re-reports each
+  // failing file through the JUnit results instead of replaying every lane's output.
+  if (process.env.TOMORI_TEST_QUIET !== "true") {
+    for (const result of results) {
+      const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
+      process.stdout.write(`\n──── lane: ${result.lane.id} (${fileCount} files) ────\n`);
+      process.stdout.write(result.output);
+    }
   }
 
   const allOutfiles = results.flatMap((result) => result.junitOutfiles);
@@ -308,9 +317,15 @@ async function main(): Promise<void> {
     throw new Error("[test-runner] Refusing to run with RUN_ENV=production.");
   }
 
-  const testFiles = await discoverTestFiles();
+  const requestedFiles = process.argv.slice(2).filter((argument) => !argument.startsWith("--"));
+  const testFiles = requestedFiles.length > 0 ? requestedFiles : await discoverTestFiles();
+  if (requestedFiles.length > 0) process.env.TOMORI_TEST_STREAM_OUTPUT = "true";
   if (testFiles.length === 0) {
     console.error("[test-runner] No test files found under tests/.");
+    process.exit(1);
+  }
+  if (testFiles.some((file) => !file.replaceAll("\\", "/").startsWith("tests/") || !file.endsWith(".test.ts"))) {
+    console.error("[test-runner] Focused test paths must be .test.ts files under tests/.");
     process.exit(1);
   }
 

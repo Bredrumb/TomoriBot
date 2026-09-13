@@ -88,7 +88,7 @@ Remaining degraded features are listed in the table above. Current parity work f
 Setting up the bridge requires **two steps**:
 1. Invite `@tomoribot:yourdomain.com` to a Matrix room.
    - TomoriBot auto-accepts the invite and posts a short setup hint in the Matrix room telling users to finish the link from Discord, where to find the Internal Room ID, and that the room must stay unencrypted.
-2. Run `/server matrix link` in the Discord channel to link them.
+2. Run `/matrix link` in the Discord channel to link them.
    - On a successful link, TomoriBot posts a second Matrix-side onboarding note summarizing the usable Matrix commands (`/kill`, `/refresh`) and the main Matrix-specific limitations.
 
 That's it. The homeserver infrastructure is invisible to server admins — the same way Discord server admins don't think about Discord's servers when they add a bot.
@@ -143,9 +143,9 @@ src/utils/bridges/matrix/
 src/events/messageCreate/
   matrixRelay.ts        ← Watches for TomoriBot's own Discord messages and relays them to Matrix
 
-src/commands/server/matrix/
-  link.ts               ← /server matrix link command
-  unlink.ts             ← /server matrix unlink command
+src/commands/matrix/
+  link.ts               ← /matrix link command
+  unlink.ts             ← /matrix unlink command
 ```
 
 The split under `utils/bridges/` is intentional:
@@ -252,12 +252,12 @@ Bridge relay messages in Discord use a structured webhook username format:
 [Matrix|@user:host] DisplayName
 ```
 
-Example: `[Matrix|@bred:localhost] bred`
+Example: `[Matrix|@obonya:localhost] obonya`
 
 This format serves three purposes:
 1. `startsWith("[Matrix|")` — fast detection of Matrix relay messages in `tomoriChat.ts`
-2. `extractBridgeUserId()` — extracts `@bred:localhost` for the `matrixUserMap` (used by `contextBuilder.ts` to inject Matrix users into the AI's context)
-3. `stripBridgePrefix()` — extracts `bred` as the display name for history formatting and persona matching
+2. `extractBridgeUserId()` — extracts `@obonya:localhost` for the `matrixUserMap` (used by `contextBuilder.ts` to inject Matrix users into the AI's context)
+3. `stripBridgePrefix()` — extracts `obonya` as the display name for history formatting and persona matching
 
 When building context, Matrix users are listed with both display name and bridge ID (`User ID: @user:host`) so memory/reminder tools can target them using an explicit identifier.
 
@@ -282,27 +282,27 @@ On first use per bot session, the virtual user is:
 2. Given the persona's display name
 3. Given the persona's avatar (downloaded from Discord CDN, uploaded to the homeserver)
 
-An in-memory cache (`provisionedIntents`) prevents redundant provisioning API calls within a session. If the avatar URL changes (e.g., after `/persona swap`), the cache entry is invalidated on next restart.
+An in-memory cache (`provisionedIntents`) prevents redundant provisioning API calls within a session. If the avatar URL changes (for example, after `/config` > Persona > Identity & Personality), the cache entry is invalidated on next restart.
 
 ---
 
 ## Matrix Mentions
 
-TomoriBot's AI uses the `@{displayName}` placeholder format for mentioning users in responses (e.g., `@{bred}`). When relaying to Matrix, `matrixRelay.ts` resolves these placeholders to proper Matrix mention links:
+TomoriBot's AI uses the `@{displayName}` placeholder format for mentioning users in responses (e.g., `@{obonya}`). When relaying to Matrix, `matrixRelay.ts` resolves these placeholders to proper Matrix mention links:
 
 **Plain text body:**
 ```
-@bred:localhost
+@obonya:localhost
 ```
 
 **Formatted HTML body:**
 ```html
-<a href="https://matrix.to/#/@bred:localhost">bred</a>
+<a href="https://matrix.to/#/@obonya:localhost">obonya</a>
 ```
 
 **MSC3952 m.mentions field:**
 ```json
-{ "user_ids": ["@bred:localhost"] }
+{ "user_ids": ["@obonya:localhost"] }
 ```
 
 The `m.mentions` field tells the homeserver to notify the mentioned user even if the client doesn't parse HTML — a more reliable notification mechanism than content-based detection.
@@ -374,9 +374,9 @@ LLMs occasionally mangle Matrix user IDs. `resolveBridgeUserId()` in `userMappin
 
 | Failure mode | Example | Recovery |
 |---|---|---|
-| Dropped `@` prefix | `bred:localhost` | Prepend `@`, re-validate |
-| Plain display name | `bred` | Look up in `matrixDisplayNameToId` session map |
-| Valid ID | `@bred:localhost` | No-op, returned unchanged |
+| Dropped `@` prefix | `obonya:localhost` | Prepend `@`, re-validate |
+| Plain display name | `obonya` | Look up in `matrixDisplayNameToId` session map |
+| Valid ID | `@obonya:localhost` | No-op, returned unchanged |
 | Discord snowflake | `123456789012345678` | No-op, returned unchanged |
 
 This function is called by both `reminderTool.ts` and `memoryTool.ts` before any ID-dependent logic runs.
@@ -429,7 +429,7 @@ To support rooms hosted on `matrix.org` or other custom homeservers:
 
 ### Encryption limitation (unchanged)
 
-Bridged rooms must remain non-encrypted. `/server matrix link` intentionally blocks rooms with `m.room.encryption` enabled because E2EE cannot be disabled once turned on in Matrix rooms.
+Bridged rooms must remain non-encrypted. `/matrix link` intentionally blocks rooms with `m.room.encryption` enabled because E2EE cannot be disabled once turned on in Matrix rooms.
 
 ---
 

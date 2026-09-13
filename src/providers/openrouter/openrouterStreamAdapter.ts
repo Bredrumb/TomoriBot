@@ -17,6 +17,7 @@
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
+import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
@@ -40,7 +41,15 @@ import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAt
 import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
-import { assistantMediaRelocationNotice, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
+import {
+  applyAssistantPrefixCompletion,
+  assistantMediaRelocationNotice,
+  CONVERSATION_START_USER_TEXT,
+  ensureLeadingUserTurn,
+  mergeConsecutiveSameRole,
+  type NormalizableMessage,
+  relocateAssistantMediaContextItems,
+} from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
 import {
   buildDegradationAttempts,
@@ -405,7 +414,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
     // Cast config to OpenrouterStreamConfig to access provider-specific fields
     const openrouterConfig = config as OpenrouterStreamConfig;
 
-    const messages = await this.assembleOpenrouterContext(
+    let messages = await this.assembleOpenrouterContext(
       context.contextItems,
       context.currentTurnModelParts,
       context.functionInteractionHistory,
@@ -414,6 +423,18 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       openrouterConfig.seesVideos ?? false, // Default false: videos are strictly opt-in per model
       context.messageIdMap,
     );
+
+    // Strict role alternation: merge consecutive same-role turns and guarantee a leading user
+    // turn so proxied backends requiring alternating roles accept the history. Gated by the
+    // model row toggle; default off leaves the assembled context unchanged.
+    if (context.tomoriState.llm?.strict_role_alternation) {
+      const normalized = ensureLeadingUserTurn(
+        mergeConsecutiveSameRole(messages as unknown as NormalizableMessage[]),
+        () => ({ role: "user", content: CONVERSATION_START_USER_TEXT }),
+      );
+      messages = normalized as unknown as Array<Record<string, unknown>>;
+      log.info(`OpenrouterStreamAdapter: Applied strict role alternation (${messages.length} messages)`);
+    }
 
     // Ensure model is provided
     if (!config.model) {
@@ -636,6 +657,12 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
       if (config.apiKey && config.apiKey.trim() !== "") {
         headers.Authorization = `Bearer ${config.apiKey}`;
+      }
+
+      // Assistant prefix-completion: flag the trailing assistant prefill turn with `prefix: true`
+      // so backends supporting prefix completion continue the turn directly.
+      if (context.tomoriState.llm?.supports_prefix_completion) {
+        applyAssistantPrefixCompletion(requestBody, context.outputPrefill?.trim());
       }
 
       const inactivityTimeoutMs = config.inactivityTimeoutMs ?? 120000;
@@ -1764,15 +1791,32 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       );
 
       let parsedArgs: Record<string, unknown> = {};
+      // Set when the endpoint cut the argument payload short. The recovered keys are real,
+      // but the call itself is incomplete, so the flag travels with it to the tool loop.
+      let argumentsTruncated = false;
       if (accumulated.functionArguments) {
         try {
           parsedArgs = JSON.parse(accumulated.functionArguments);
           log.info(`OpenRouter: Successfully parsed tool call arguments: ${JSON.stringify(parsedArgs)}`);
         } catch (parseError) {
-          log.error(
-            `OpenRouter: Failed to parse accumulated arguments as JSON: "${accumulated.functionArguments}"`,
-            parseError,
-          );
+          const repaired = tryRepairIncompleteJson(accumulated.functionArguments);
+          if (repaired) {
+            parsedArgs = repaired;
+            argumentsTruncated = true;
+            // A metric rather than a warning: `log.warn` is filtered out whenever
+            // RUN_ENV=production, the only environment this truncation happens in.
+            log.metric("tool_arguments_truncated", {
+              adapter: "OpenRouterStreamAdapter",
+              tool_name: accumulated.functionName,
+              recovered_keys: Object.keys(repaired).length,
+              argument_chars: accumulated.functionArguments.length,
+            });
+          } else {
+            log.error(
+              `OpenRouter: Failed to parse accumulated arguments as JSON: "${accumulated.functionArguments}"`,
+              parseError,
+            );
+          }
         }
       }
 
@@ -1780,6 +1824,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         name: accumulated.functionName,
         args: parsedArgs,
       };
+      if (argumentsTruncated) {
+        functionCall.argumentsTruncated = true;
+      }
 
       // Include thought_signature if present (required for Gemini models)
       if (accumulated.thought_signature) {

@@ -17,7 +17,7 @@ Use this page to verify:
 
 - `/model parameters thinking_level:<value>` — for a server saved provider (you pick which
   saved provider via the interactive picker after running the command)
-- `/personal parameters thinking_level:<value>` — for your personal saved provider
+- `/personal config` — for your personal saved provider
 
 Current values:
 
@@ -38,7 +38,7 @@ Storage:
 
 That means the active value is:
 
-- visible in `/tool status`
+- visible in `/status`
 - reflected in `/tool prompt snapshot`
 - preserved in provider snapshots and restored by `/config provider switch`
 
@@ -257,7 +257,7 @@ When a tool call immediately follows the thinking block, KoboldCPP does not spli
 
 **Thought log suppression:**
 
-Thought logs are suppressed for private channels (channels listed under `/server private-channels`) regardless of model or provider. Test thought log routing in a non-private channel.
+Thought logs are suppressed for private channels (channels listed under `/config` > Channels > Channel Rules) regardless of model or provider. Test thought log routing in a non-private channel.
 
 ### NovelAI GLM
 

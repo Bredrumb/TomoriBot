@@ -227,7 +227,7 @@ export class MemoryTool extends BaseTool {
       }
     }
 
-    // Sanitize unknown {word} placeholders (e.g. {bredrumb}), so the LLM sometimes wraps
+    // Sanitize unknown {word} placeholders (e.g. {obonya}), so the LLM sometimes wraps
     // usernames in braces imitating {user}. Strip the braces so the name appears plainly.
     const memoryContent = sanitizeUnknownTemplatePlaceholders(memoryContentArg.trim());
 
@@ -281,7 +281,7 @@ export class MemoryTool extends BaseTool {
               scope: "server_wide",
               current_count: serverLimitCheck.currentCount,
               max_allowed: serverLimitCheck.maxAllowed,
-              reason: `Server memory limit of ${serverLimitCheck.maxAllowed} memories has been reached. Please inform the user that they need to use '/memory server remove' to remove some memories before I can learn new ones.`,
+              reason: `Server memory limit of ${serverLimitCheck.maxAllowed} memories has been reached. Please inform the user that they need to use '/memories' to remove some memories before I can learn new ones.`,
             },
           };
         }
@@ -295,7 +295,9 @@ export class MemoryTool extends BaseTool {
         );
 
         if (dbResult) {
-          log.success(`Tomori self-taught a server-wide memory (ID: ${dbResult.server_memory_id}): "${memoryContent}"`);
+          log.success(
+            `Tomori self-taught a server memory for her own persona lineage (ID: ${dbResult.server_memory_id}): "${memoryContent}"`,
+          );
 
           // Process memory content for display (convert {user} and {bot} tokens to actual names)
           // Security: Ensure we have a valid server ID to prevent user data mixing
@@ -307,7 +309,7 @@ export class MemoryTool extends BaseTool {
             memoryContent,
             context.client,
             serverId,
-            userRow.user_nickname, // Use triggerer's name for {user} replacement
+            userRow.user_nickname ?? context.message?.author.displayName ?? userRow.user_disc_id,
             tomoriState.persona_nickname, // Use bot's current nickname for {bot} replacement
             tomoriState?.config.personal_memories_enabled,
           );
@@ -353,18 +355,18 @@ export class MemoryTool extends BaseTool {
           };
         }
 
-        log.error("Failed to save server-wide memory via self-teach (DB error)");
+        log.error("Failed to save server memory via self-teach (DB error)");
         return {
           success: false,
-          error: "Database operation failed to save server-wide memory",
+          error: "Database operation failed to save server memory",
           data: {
             status: "memory_save_failed_db_error",
             scope: "server_wide",
-            reason: "Database operation failed to save server-wide memory",
+            reason: "Database operation failed to save server memory",
           },
         };
       } catch (error) {
-        log.error("Database error during server-wide memory save", error as Error);
+        log.error("Database error during server memory save", error as Error);
         return {
           success: false,
           error: "Database error occurred while saving memory",
@@ -391,7 +393,8 @@ export class MemoryTool extends BaseTool {
             },
           };
         }
-        const targetUserDisplayName = resolvedTargetUserLabel || targetUserRow.user_nickname;
+        const targetUserDisplayName =
+          resolvedTargetUserLabel || targetUserRow.user_nickname || targetUserRow.user_disc_id;
 
         // Check if user has opted out of personalization (privacy setting)
         const { PrivacyLevel } = await import("../../types/db/schema");
@@ -408,7 +411,7 @@ export class MemoryTool extends BaseTool {
             data: {
               status: "memory_save_failed_privacy_restricted",
               scope: "target_user",
-              reason: `The user ${targetUserDisplayName} has chosen to restrict personal memory storage. I cannot save personal memories about them unless they change their privacy settings using '/personal privacy'.`,
+              reason: `The user ${targetUserDisplayName} has chosen to restrict personal memory storage. I cannot save personal memories about them unless they change their privacy settings using '/personal config'.`,
             },
           };
         }
@@ -429,7 +432,7 @@ export class MemoryTool extends BaseTool {
               target_user: targetUserDisplayName,
               current_count: personalLimitCheck.currentCount,
               max_allowed: personalLimitCheck.maxAllowed,
-              reason: `Personal memory limit of ${personalLimitCheck.maxAllowed} memories has been reached for this user. Please inform the user that they need to use '/memory personal remove' to remove some of their memories before I can learn new ones about them.`,
+              reason: `Personal memory limit of ${personalLimitCheck.maxAllowed} memories has been reached for this user. Please inform the user that they need to use '/personal memories' to remove some of their memories before I can learn new ones about them.`,
             },
           };
         }

@@ -9,54 +9,69 @@ sidebar:
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-TomoriBot treats speech as a custom endpoint capability. Local engines run outside the bot as HTTP servers and implement `POST /synthesize`; most clone engines receive text plus the configured reference audio sample.
+TomoriBot treats speech as a custom endpoint capability. Local engines run outside the bot as HTTP servers and implement `POST /synthesize`; clone engines receive text plus the configured reference audio sample, while VoiceDesign-capable engines can also receive natural-language instructions.
 
 ## Available Engines
 
 <CardGrid>
-  <LinkCard title="Chatterbox TTS" href="/self-hosting/local-endpoints/text-to-speech/chatterbox/"
-    description="Fast local voice cloning through Chatterbox-Turbo, with supported bracket delivery tags for expressive speech." />
-  <LinkCard title="Qwen3-TTS" href="/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
-    description="Multilingual local TTS with clone and VoiceDesign modes. Largest but best quality." />
-  <LinkCard title="IrodoriTTS" href="/self-hosting/local-endpoints/text-to-speech/irodoritts/"
-    description="Japanese-focused voice cloning that preserves Unicode emoji markup for emotion control." />
+  <LinkCard title="Chatterbox TTS" href="/en/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+    description="English voice cloning with event tags. Turbo is the default; Nano is an optional smaller model." />
+  <LinkCard title="Qwen3-TTS" href="/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="Multilingual local TTS with clone and VoiceDesign modes." />
+  <LinkCard title="MOSS-TTS" href="/en/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="Trial auto endpoint: 4B multilingual voice cloning or text-described English/Chinese voice design." />
+  <LinkCard title="IrodoriTTS" href="/en/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="Japanese-focused voice cloning and VoiceDesign with Unicode emoji markup for emotion control." />
+  <LinkCard title="Fish Audio S2 Pro" href="/en/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="High-quality multilingual voice cloning with fine-grained bracket expression controls. Defaults to a 16 GB-friendly INT8 checkpoint." />
+  <LinkCard title="VoxCPM2" href="/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="30-language TTS with Voice Design, reference-audio cloning, transcript-assisted Ultimate Cloning, and natural-language delivery control." />
+  <LinkCard title="CosyVoice 3" href="/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="0.5B multilingual zero-shot and cross-lingual cloning with natural-language delivery instructions." />
 </CardGrid>
 
 ## Setup Flow
 
-1. Pick one engine from the cards above and start its wrapper from `servers/tts/`.
-2. Register it with `/provider custom-endpoint add` using capability `speech` and api style `tts-clone`.
-3. In the registration modal, choose the voice source mode and script markup listed in that engine's guide.
-
-Registration makes the endpoint active immediately. Use `/model speech` later only when switching between registered TTS endpoints.
+1. Pick one engine from the cards above and set up its wrapper from `servers/tts/`.
+2. In `/providers`, choose **Add New Custom Endpoint** and use API Compatibility `tts-clone`.
+3. Select the saved endpoint and use its model dropdown to add its Speech model, Voice Source Mode, and Script Markup.
+4. Open `/config` > Models > Switch Models and select the registered Speech model.
 
 ## Persona Voice Flow
 
 For clone engines, add and assign one voice sample per persona:
 
 1. Prepare a clean 10-20 second clip with one speaker and no background music.
-2. Run `/speech voice-add` and upload the sample. Any audio format is accepted; TomoriBot converts it to mono WAV.
-3. Run `/speech voice-assign`, then choose the persona and voice sample.
+2. Open `/config` under Models > TTS Parameters & Voices and upload the sample. Any audio format is accepted; TomoriBot converts it to mono WAV.
+3. Provide a matching transcript when the engine benefits from it. Fish S2 Pro forwards the stored reference transcript into the cloning request, and VoxCPM2 uses it for higher-fidelity Ultimate Cloning.
+4. Open `/config` under Persona > Voice, then choose the persona and voice sample.
 
-For Qwen3-TTS VoiceDesign, skip the audio sample and run `/speech voice-design set` for each persona instead.
+For Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS, or VoxCPM2 VoiceDesign, skip the audio sample and use Persona > Voice in `/config` to save a natural-language voice description for the persona. CosyVoice 3 uses Clone mode with a reference sample and accepts one-off delivery direction through `voice_instructions`.
 
-ElevenLabs users should use `/speech elevenlabs`; it registers the speech and transcription endpoints together.
+ElevenLabs users should choose **Add New Provider** and **ElevenLabs** in `/providers`; it registers the speech and transcription endpoints together.
 
-TomoriBot strips Discord custom emoji syntax such as `:pepega:` or `<:pepega:123456789012345678>` from generated voice scripts before synthesis. Unicode emojis are also stripped unless the speech endpoint uses emoji markup, which is intended for IrodoriTTS.
+TomoriBot strips Discord custom emoji syntax such as `:pepega:` or `<:pepega:123456789012345678>` from generated voice scripts before synthesis. Unicode emojis are also stripped unless the speech endpoint uses emoji markup, which is intended for IrodoriTTS. Bracket tags are preserved for endpoints such as Chatterbox Turbo and Fish S2 Pro when their Script Markup is set to **Bracket Tags**.
 
-## Hardware requirements
+VoxCPM2 uses **Plain** Script Markup. Its Voice Design and speaking-style controls travel through TomoriBot's `instruct` field, and the VoxCPM2 wrapper converts them to the model's native parenthesized natural-language control syntax.
 
-Local TTS engines are **much lighter than an LLM** — these are small models (roughly
-0.5B–1.7B parameters). Even a modest NVIDIA GPU (a few GB of VRAM is plenty) runs any of them
-comfortably and keeps synthesis fast. They also run on **CPU** — slower, but workable, since
-voice clips are short.
+CosyVoice 3 also uses **Plain** Script Markup. It maps transcript-backed references to zero-shot cloning, transcript-free references to cross-lingual cloning, and `voice_instructions` to its instruction-conditioned path. Inline bracket tags are removed because CosyVoice instructions apply to the whole utterance.
 
-| Engine | Model size | Notes |
-|---|---|---|
-| Chatterbox | ~0.5B (Turbo) | Fastest current option. |
-| Qwen3-TTS | 1.7B (12 Hz) | Separate clone + VoiceDesign models; only one loads at a time. |
-| IrodoriTTS | 500M (v2) | Japanese-focused; `bf16` on GPU, `fp32` on CPU. |
+## Compare the engines
 
-The first synthesis after startup (or after Qwen3-TTS swaps models in auto mode) is slower
-while the model loads into memory; later requests are fast. TomoriBot waits up to
-`TTS_SYNTHESIZE_TIMEOUT_MS` (default 240000 ms) for each response.
+All TomoriBot sidecars currently return a complete WAV. "Streaming path" means the upstream model or a separate serving backend has one; it does **not** mean Discord voice-chat streaming is implemented. Sizes are model parameters, **not** VRAM or download sizes. The 16 GB column is setup guidance, not a measured peak. We have no same-hardware, same-script latency benchmark, so the speed column describes the intended trade-off rather than ranking engines by milliseconds.
+
+| Engine | Model size; 16 GB GPU | Languages | Voice sources and controls | Speed / streaming path | Choose it for |
+|---|---|---|---|---|---|
+| [Chatterbox](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 350M Turbo or 110M Nano; yes, Nano can use CPU | English | Reference cloning, supported event tags; standard model offers CFG/exaggeration | Fast/small focus; wrapper returns full WAV | Small English clone setup or CPU experiments |
+| [Qwen3-TTS](/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 1.7B per mode; yes, models swap | 10, including English/Japanese | Clone or text-described VoiceDesign | Quality-focused; upstream streaming, wrapper buffers | General-purpose multilingual clone and Japanese VoiceDesign |
+| [MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/) | 4B clone + ~1.7B design, swapped; 16 GB is a trial target, not verified; 8B flagship likely no | Clone: 31, including Japanese; design: English/Chinese | Clone or text-described VoiceGenerator; clone language tags | Experimental; Local clone has upstream streaming backend, wrapper buffers | Compare MOSS clone quality or English/Chinese voice design |
+| [IrodoriTTS](/en/self-hosting/local-endpoints/text-to-speech/irodoritts/) | ~0.8B current v4.1 Small; ~3–4 GB VRAM observed in one local run | Japanese only | Clone or VoiceDesign; emoji style cues | Sampling steps trade quality for speed; wrapper buffers | Small-footprint Japanese voices and emoji-driven delivery |
+| [Fish S2 Pro](/en/self-hosting/local-endpoints/text-to-speech/fishs2/) | 4B; yes with default INT8, official BF16 recommends 24 GB+ | 83 claimed upstream | Reference cloning, free-form bracket expression tags | Heavy model; upstream streaming path, wrapper buffers | Fine-grained expressive cloning; check research-license terms |
+| [VoxCPM2](/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 2B; ~8 GB BF16 reported upstream | 30 | Clone, Voice Design, transcript-assisted Ultimate Cloning, delivery instructions | ~0.30 RTF on upstream RTX 4090; upstream streaming, wrapper buffers | One multilingual model with the broadest voice-source controls |
+| [CosyVoice 3](/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | 0.5B core; 16 GB comfortable, download/runtime larger | 9, including Japanese, plus Chinese dialects | Clone, cross-lingual clone, natural-language delivery | Low-latency focus; native text/audio streaming upstream, wrapper buffers | A future streaming candidate with cross-lingual cloning |
+
+Model size and language counts follow the [Chatterbox](https://github.com/resemble-ai/chatterbox), [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS), [MOSS](https://github.com/OpenMOSS/MOSS-TTS), [Irodori](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small), [Fish S2 Pro](https://huggingface.co/fishaudio/s2-pro), [VoxCPM2](https://huggingface.co/openbmb/VoxCPM2), and [CosyVoice 3](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) upstream pages. Check each guide for OS, driver, license, model revision, and memory details. A 16 GB GPU cannot necessarily host a TTS model and a large local LLM simultaneously.
+
+The Irodori VRAM figure is a single local observation, not a published minimum or cross-engine benchmark. Memory use varies with the runtime, precision, script length, and other GPU workloads.
+
+The first Qwen3-TTS auto request includes model loading. MOSS pre-downloads both models during setup and warms the clone model at startup by default, but either auto server still has to load the other model after a mode switch. TomoriBot waits up to `TTS_SYNTHESIZE_TIMEOUT_MS` (default 240000 ms) for each complete response.

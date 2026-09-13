@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { readFile, readdir } from "node:fs/promises";
 import { Glob } from "bun";
+import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
 
 /**
  * Lightweight logger that doesn't require database connection
@@ -91,6 +92,39 @@ const MODAL_KIND_LIMITS = {
 type ModalKind = keyof typeof MODAL_KIND_LIMITS;
 
 /**
+ * Message component slot length limits per Discord UI specification.
+ */
+const MESSAGE_SLOT_LIMITS = {
+  buttonLabel: 80,
+  selectPlaceholder: 150,
+  optionLabel: 100,
+  optionDescription: 100,
+} as const;
+type MessageSlotKind = keyof typeof MESSAGE_SLOT_LIMITS;
+
+/**
+ * A locale key that flows into a message component slot at runtime, traced from source.
+ */
+interface MessageSlotUsage {
+  key: string;
+  kind: MessageSlotKind;
+  files: Set<string>;
+}
+
+/**
+ * Length violation for a source-traced message component key.
+ */
+interface MessageSlotViolation {
+  key: string;
+  kind: MessageSlotKind;
+  maxLength: number;
+  value: string;
+  length: number;
+  locale: string;
+  files: Set<string>;
+}
+
+/**
  * A locale key that flows into a modal component at runtime, traced from a source file.
  * Tracked per (kind, key) so the same key used as both label and placeholder is reported
  * with both context-specific caps.
@@ -134,6 +168,7 @@ interface AnalysisResult {
   modalDescriptionViolations: ModalDescriptionViolation[];
   commandDescriptionViolations: CommandDescriptionViolation[];
   modalUsageViolations: ModalUsageViolation[];
+  messageSlotViolations: MessageSlotViolation[];
 }
 
 /**
@@ -286,6 +321,11 @@ function isValidLocalizationKey(key: string): boolean {
     // Database/SQL patterns - require whole SQL keywords so locale keys like
     // "commands.data.delete.success_personal_settings_title" are not rejected.
     /\b(?:SELECT|INSERT|UPDATE|DELETE)\b[\s\S]*\b(?:FROM|WHERE|INTO|SET)\b/i,
+    // Panel action telemetry keys (<surface>.<scope>.<resource>.<verb>). The surface is anchored to the
+    // known panel list because "workspace|personal" alone also matches real keys such as
+    // "commands.personal.stm.description", which would exempt the whole commands.personal namespace from
+    // validation. A new panel surface that omits itself here fails loudly as a missing key.
+    /^(?:mcps|st-presets|providers|moderation|personal-memories|personal-config|server-config|memories|setup)\.(?:workspace|personal)\.[a-z0-9-]+\.[a-z0-9-]+$/,
   ];
 
   for (const pattern of falsePositives) {
@@ -383,11 +423,7 @@ function getLocalizationAliases(key: string): string[] {
     "commands.server.always-reply.description": "commands.server.alwaysreply.description",
     "commands.server.deliberate-trigger-mode.description": "commands.server.deliberatetriggermode.description",
     "commands.personal.deliberate-trigger-mode.description": "commands.personal.deliberatetriggermode.description",
-    "commands.server.quota.image-generation.description": "commands.server.quota.imagegen.description",
-    "commands.server.quota.text-generation.description": "commands.server.quota.textgen.description",
-    "commands.server.quota.video-generation.description": "commands.server.quota.videogen.description",
     "commands.config.model-fallback.remove.description": "commands.config.remove.modelfallback.description",
-    "commands.config.model-override.remove.description": "commands.config.remove.modeloverride.description",
   };
   const pathAlias = pathAliases[key];
   if (pathAlias) {
@@ -731,6 +767,143 @@ async function checkModalComponentUsageLengths(
       if (!value) continue;
 
       const maxLength = MODAL_KIND_LIMITS[usage.kind];
+      if (value.length > maxLength) {
+        violations.push({
+          key: usage.key,
+          kind: usage.kind,
+          maxLength,
+          value,
+          length: value.length,
+          locale: localeName,
+          files: new Set(usage.files),
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Source-traces direct single-key localized strings flowing into message components:
+ * button labels, select placeholders, and select option labels and descriptions.
+ *
+ * Scope boundary: this scanner inspects only direct single-key slots (plain localizer calls).
+ * It cannot see composed or interpolated text, so it proves nothing about runtime concatenation;
+ * rendered payload integration tests remain the authority for composed text and message totals.
+ * Any slot whose argument is not a single literal key is skipped to avoid false positive assumptions.
+ */
+export async function extractMessageComponentUsages(): Promise<Map<string, MessageSlotUsage>> {
+  const usages = new Map<string, MessageSlotUsage>();
+  const srcPath = join(process.cwd(), "src");
+
+  const add = (key: string, kind: MessageSlotKind, file: string): void => {
+    const compositeKey = `${kind}::${key}`;
+    let entry = usages.get(compositeKey);
+    if (!entry) {
+      entry = { key, kind, files: new Set() };
+      usages.set(compositeKey, entry);
+    }
+    entry.files.add(file);
+  };
+
+  const glob = new Glob("**/*.ts");
+  for await (const file of glob.scan(srcPath)) {
+    if (file.includes("locales/")) continue;
+
+    const filePath = join(srcPath, file);
+    let content: string;
+    try {
+      content = await readFile(filePath, "utf-8");
+    } catch {
+      continue;
+    }
+
+    const setLabelPattern = /\.setLabel\s*\(\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']\s*\)\)/g;
+    let setLabelMatch: RegExpExecArray | null = setLabelPattern.exec(content);
+    while (setLabelMatch !== null) {
+      add(setLabelMatch[1], "buttonLabel", file);
+      setLabelMatch = setLabelPattern.exec(content);
+    }
+
+    const setPlaceholderPattern = /\.setPlaceholder\s*\(\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']\s*\)\)/g;
+    let setPlaceholderMatch: RegExpExecArray | null = setPlaceholderPattern.exec(content);
+    while (setPlaceholderMatch !== null) {
+      add(setPlaceholderMatch[1], "selectPlaceholder", file);
+      setPlaceholderMatch = setPlaceholderPattern.exec(content);
+    }
+
+    const labelPattern = /\blabel\s*:\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']/g;
+    let labelMatch: RegExpExecArray | null = labelPattern.exec(content);
+    while (labelMatch !== null) {
+      const range = findEnclosingObjectRange(content, labelMatch.index);
+      if (range) {
+        const obj = content.substring(range.start, range.end);
+        if (/\bvalue\s*:/.test(obj)) {
+          add(labelMatch[1], "optionLabel", file);
+        } else if (/\bcustomId\s*:|\burl\s*:|\bstyle\s*:|\btype\s*:/.test(obj)) {
+          add(labelMatch[1], "buttonLabel", file);
+        }
+      }
+      labelMatch = labelPattern.exec(content);
+    }
+
+    const descriptionPattern = /\bdescription\s*:\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']/g;
+    let descriptionMatch: RegExpExecArray | null = descriptionPattern.exec(content);
+    while (descriptionMatch !== null) {
+      const range = findEnclosingObjectRange(content, descriptionMatch.index);
+      if (range) {
+        const obj = content.substring(range.start, range.end);
+        if (/\bvalue\s*:/.test(obj)) {
+          add(descriptionMatch[1], "optionDescription", file);
+        }
+      }
+      descriptionMatch = descriptionPattern.exec(content);
+    }
+
+    const placeholderPattern = /\bplaceholder\s*:\s*localizer\s*\([^,]+,\s*["']([a-zA-Z0-9._-]+)["']/g;
+    let placeholderMatch: RegExpExecArray | null = placeholderPattern.exec(content);
+    while (placeholderMatch !== null) {
+      const range = findEnclosingObjectRange(content, placeholderMatch.index);
+      if (range) {
+        const obj = content.substring(range.start, range.end);
+        if (!/\blabelKey\s*:/.test(obj) && /\boptions\s*:|\bcustomId\s*:|\btype\s*:/.test(obj)) {
+          add(placeholderMatch[1], "selectPlaceholder", file);
+        }
+      }
+      placeholderMatch = placeholderPattern.exec(content);
+    }
+  }
+
+  return usages;
+}
+
+/**
+ * Validates each traced message component slot against the Discord ceiling for its kind.
+ * Skips missing keys because locale parity already reports those.
+ */
+export async function checkMessageComponentUsageLengths(
+  usages: Map<string, MessageSlotUsage>,
+  localeKeys: Map<string, Set<string>>,
+): Promise<MessageSlotViolation[]> {
+  const violations: MessageSlotViolation[] = [];
+
+  for (const [localeName, keysInLocale] of localeKeys) {
+    let stringValues: Map<string, string>;
+    try {
+      const localeObject = await loadMergedLocale(localeName);
+      stringValues = extractStringValues(localeObject);
+    } catch (error) {
+      log.error(`Failed to load locale for message component usage check: ${localeName}`, error);
+      continue;
+    }
+
+    for (const usage of usages.values()) {
+      const resolved = resolveLocalizationKey(usage.key, keysInLocale) ?? usage.key;
+      const value = stringValues.get(resolved);
+      if (!value) continue;
+
+      const maxLength = MESSAGE_SLOT_LIMITS[usage.kind];
       if (value.length > maxLength) {
         violations.push({
           key: usage.key,
@@ -1382,6 +1555,8 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   const commandDescriptionViolations = await checkCommandDescriptionLengths(localeKeys);
   const modalUsages = await extractModalComponentUsages();
   const modalUsageViolations = await checkModalComponentUsageLengths(modalUsages, localeKeys);
+  const messageUsages = await extractMessageComponentUsages();
+  const messageSlotViolations = await checkMessageComponentUsageLengths(messageUsages, localeKeys);
   const referencedKeysMap = await extractReferencedKeys(availableKeys);
   const referencedKeys = new Set(referencedKeysMap.keys());
 
@@ -1431,22 +1606,52 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
     modalDescriptionViolations,
     commandDescriptionViolations,
     modalUsageViolations,
+    messageSlotViolations,
   };
 }
 
-function displayResults(results: AnalysisResult): void {
-  const hasErrors =
-    results.parityIssues.length > 0 ||
+/**
+ * The blocking half of the analysis: anything here exits 1 and must print in full.
+ *
+ * Kept as its own predicate because the exit-code branch in main() and the display
+ * branch in displayResults() have to agree on which categories are fatal. When they
+ * drifted apart, a run could print "safe to push" while exiting 1.
+ */
+function hasFatalFindings(results: AnalysisResult): boolean {
+  return (
+    results.missingKeys.length > 0 ||
     results.modalTitleViolations.length > 0 ||
     results.modalDescriptionViolations.length > 0 ||
     results.commandDescriptionViolations.length > 0 ||
     results.modalUsageViolations.length > 0 ||
-    results.missingKeys.length > 0;
+    results.messageSlotViolations.length > 0
+  );
+}
+
+/** How much detail `displayResults` is allowed to print, and how to hint at more. */
+interface DisplayOptions {
+  verboseOutput: boolean;
+  rerunCommand: string;
+}
+
+function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }: DisplayOptions): void {
+  const hasErrors = hasFatalFindings(results) || results.parityIssues.length > 0;
 
   if (!hasErrors) {
     const localeNames = Array.from(results.localeKeys.keys());
     console.log(
       `✅ Locales OK (${localeNames.join(", ")} — ${results.availableKeys.size} keys, ${results.unusedKeys.length} unused)`,
+    );
+    return;
+  }
+
+  // An advisory-only run is the common state while locale coverage is incomplete, and
+  // the per-key listing behind it is ~99% of the output. Collapse it to a count plus
+  // the flag that expands it; the full report stays for anything that blocks.
+  if (!hasFatalFindings(results) && !verboseOutput) {
+    console.log(
+      `ℹ️  Localization keys advisory: ${results.parityIssues.length} keys missing in some locale ` +
+        `(advisory, exit 2). ${verboseOutputHint(rerunCommand)}`,
     );
     return;
   }
@@ -1458,10 +1663,17 @@ function displayResults(results: AnalysisResult): void {
   if (results.parityIssues.length > 0) {
     console.log("\n🌐 LOCALE PARITY ISSUES (Keys missing in some locales):");
     console.log("-".repeat(60));
-    for (const { key, missingIn, presentIn } of results.parityIssues.sort((a, b) => a.key.localeCompare(b.key))) {
-      console.log(`  ⚠️  ${key}`);
-      console.log(`     ✅ Present in: ${presentIn.join(", ")}`);
-      console.log(`     ❌ Missing in: ${missingIn.join(", ")}`);
+    if (verboseOutput) {
+      for (const { key, missingIn, presentIn } of results.parityIssues.sort((a, b) => a.key.localeCompare(b.key))) {
+        console.log(`  ⚠️  ${key}`);
+        console.log(`     ✅ Present in: ${presentIn.join(", ")}`);
+        console.log(`     ❌ Missing in: ${missingIn.join(", ")}`);
+      }
+    } else {
+      console.log(
+        `  ${results.parityIssues.length} keys missing in some locale ` +
+          `(advisory, not blocking). ${verboseOutputHint(rerunCommand)}`,
+      );
     }
   }
 
@@ -1511,6 +1723,37 @@ function displayResults(results: AnalysisResult): void {
       const list = byKind.get(kind);
       if (!list || list.length === 0) continue;
       console.log(`\n${KIND_HEADERS[kind]}:`);
+      console.log("-".repeat(60));
+      for (const { key, value, length, maxLength, locale, files } of list.sort((a, b) =>
+        a.key.localeCompare(b.key),
+      )) {
+        const filesPreview = Array.from(files).slice(0, 2).join(", ") + (files.size > 2 ? "..." : "");
+        console.log(`  ⚠️  ${key} [${locale}] (cap ${maxLength})`);
+        console.log(`     ❌ Too long: "${value}" (${length} characters)`);
+        console.log(`     📁 Used in: ${filesPreview}`);
+      }
+    }
+  }
+
+  if (results.messageSlotViolations.length > 0) {
+    const MESSAGE_KIND_HEADERS: Record<MessageSlotKind, string> = {
+      buttonLabel: "📏 MESSAGE BUTTON LABEL VIOLATIONS (label cap: ≤80 chars)",
+      selectPlaceholder: "📏 MESSAGE SELECT PLACEHOLDER VIOLATIONS (placeholder cap: ≤150 chars)",
+      optionLabel: "📏 MESSAGE SELECT OPTION LABEL VIOLATIONS (option label cap: ≤100 chars)",
+      optionDescription: "📏 MESSAGE SELECT OPTION DESCRIPTION VIOLATIONS (option description cap: ≤100 chars)",
+    };
+
+    const byKind = new Map<MessageSlotKind, MessageSlotViolation[]>();
+    for (const v of results.messageSlotViolations) {
+      const list = byKind.get(v.kind) ?? [];
+      list.push(v);
+      byKind.set(v.kind, list);
+    }
+
+    for (const kind of ["buttonLabel", "selectPlaceholder", "optionLabel", "optionDescription"] as MessageSlotKind[]) {
+      const list = byKind.get(kind);
+      if (!list || list.length === 0) continue;
+      console.log(`\n${MESSAGE_KIND_HEADERS[kind]}:`);
       console.log("-".repeat(60));
       for (const { key, value, length, maxLength, locale, files } of list.sort((a, b) =>
         a.key.localeCompare(b.key),
@@ -1582,41 +1825,49 @@ function displayUnusedKeys(unusedKeys: KeyUsage[]): void {
  * (modal titles, modal descriptions, command descriptions) block the PR gate
  * without paying for the full unused/parity source scan.
  */
-async function runStrictLengthsOnly(): Promise<void> {
+async function runStrictLengthsOnly(verboseOutput: boolean): Promise<void> {
   const { localeKeys } = await loadAvailableKeys();
   const modalTitleViolations = await checkModalTitleLengths(localeKeys);
   const modalDescriptionViolations = await checkModalDescriptionLengths(localeKeys);
   const commandDescriptionViolations = await checkCommandDescriptionLengths(localeKeys);
   const modalUsages = await extractModalComponentUsages();
   const modalUsageViolations = await checkModalComponentUsageLengths(modalUsages, localeKeys);
+  const messageUsages = await extractMessageComponentUsages();
+  const messageSlotViolations = await checkMessageComponentUsageLengths(messageUsages, localeKeys);
 
   const total =
     modalTitleViolations.length +
     modalDescriptionViolations.length +
     commandDescriptionViolations.length +
-    modalUsageViolations.length;
+    modalUsageViolations.length +
+    messageSlotViolations.length;
 
   if (total === 0) {
     console.log(
-      `✅ Discord length limits OK (titles, descriptions, command descriptions, ${modalUsages.size} traced modal slots)`,
+      `✅ Discord length limits OK (titles, descriptions, command descriptions, ${modalUsages.size} traced modal slots, ${messageUsages.size} traced message slots)`,
     );
     return;
   }
 
   // Reuse the same display formatting as the full report by funnelling violations
-  // through displayResults() with empty sets for the other categories.
-  displayResults({
-    missingKeys: [],
-    unusedKeys: [],
-    referencedKeys: new Set(),
-    availableKeys: new Set(),
-    localeKeys,
-    parityIssues: [],
-    modalTitleViolations,
-    modalDescriptionViolations,
-    commandDescriptionViolations,
-    modalUsageViolations,
-  });
+  // through displayResults() with empty sets for the other categories. Length
+  // violations always block, so this path never takes the quiet advisory branch.
+  displayResults(
+    {
+      missingKeys: [],
+      unusedKeys: [],
+      referencedKeys: new Set(),
+      availableKeys: new Set(),
+      localeKeys,
+      parityIssues: [],
+      modalTitleViolations,
+      modalDescriptionViolations,
+      commandDescriptionViolations,
+      modalUsageViolations,
+      messageSlotViolations,
+    },
+    { verboseOutput: verboseOutput, rerunCommand: "bun run check-locale-lengths" },
+  );
 
   process.exit(1);
 }
@@ -1625,9 +1876,10 @@ async function main(): Promise<void> {
   try {
     const listUnused = process.argv.includes("--list-unused");
     const strictLengths = process.argv.includes("--strict-lengths");
+    const verboseOutput = isVerboseOutput();
 
     if (strictLengths) {
-      await runStrictLengthsOnly();
+      await runStrictLengthsOnly(verboseOutput);
       return;
     }
 
@@ -1638,17 +1890,12 @@ async function main(): Promise<void> {
       return;
     }
 
-    displayResults(results);
+    displayResults(results, { verboseOutput, rerunCommand: "bun run check-locales" });
 
-    if (
-      results.missingKeys.length > 0 ||
-      results.parityIssues.length > 0 ||
-      results.modalTitleViolations.length > 0 ||
-      results.modalDescriptionViolations.length > 0 ||
-      results.commandDescriptionViolations.length > 0 ||
-      results.modalUsageViolations.length > 0
-    ) {
+    if (hasFatalFindings(results)) {
       process.exit(1);
+    } else if (results.parityIssues.length > 0) {
+      process.exit(2);
     }
   } catch (error) {
     log.error("Fatal error during localization key analysis", error);

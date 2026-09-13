@@ -63,6 +63,7 @@ import { getActiveTemperature, isParamDisabled } from "@/utils/provider/sampling
 import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { buildStreamContext } from "@/utils/provider/streamContext";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /**
  * Gets the default Google Gemini model with a robust fallback chain:
@@ -379,6 +380,7 @@ export class GoogleProvider
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };
@@ -536,7 +538,7 @@ export class GoogleProvider
 
     // Only attach tools for models that explicitly support function calling.
     // This prevents Google API 400 errors on models like gemma-3-27b-it.
-    if (tomoriState.llm.has_tools) {
+    if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }
 
@@ -616,11 +618,11 @@ export class GoogleProvider
         log.info(`GoogleProvider: Applied thinking config for model ${config.model}`);
       }
 
-      if (streamingContext && tomoriState.llm.has_tools) {
+      if (streamingContext && resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("GoogleProvider: Reloading tools with streaming context for context-aware availability");
         const contextAwareTools = await this.getTools(tomoriState, streamingContext);
         streamConfig.tools = contextAwareTools;
-      } else if (streamingContext && !tomoriState.llm.has_tools) {
+      } else if (streamingContext && !resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("GoogleProvider: Skipping context-aware tool reload - model doesn't support tools");
       }
 

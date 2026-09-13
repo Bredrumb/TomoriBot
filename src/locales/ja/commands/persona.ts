@@ -74,14 +74,14 @@ export default {
         persona_select_title: `ペルソナを選択`,
         no_sprites_title: `🟡 スプライトがありません`,
         no_sprites_description: `**{persona_name}** には編集できるスプライトがありません。`,
-        no_eligible_sprites_description: `編集できるスプライトを持つペルソナがまだありません。\`/persona sprites add\` で追加できます。`,
+        no_eligible_sprites_description: `編集できるスプライトを持つペルソナがまだありません。\`/config\` > Persona > Sprites で追加できます。`,
         select_modal_title: `スプライトを選択`,
         select_label: `編集するスプライト`,
         select_description: `編集するスプライトを選択してください。`,
         select_placeholder: `スプライトを選択...`,
         confirm_title: `スプライトを編集しますか？`,
         confirm_description: `次のスプライトを選択しました:
-> **{sprite_name}** — {identity_status}
+> **{sprite_name}**：{identity_status}
 > {instructions}
 
 **確認** を押すと編集モーダルを開きます。`,
@@ -104,7 +104,7 @@ export default {
         persona_select_title: `ペルソナを選択`,
         no_sprites_title: `🟡 スプライトがありません`,
         no_sprites_description: `**{persona_name}** には削除できるスプライトがありません。`,
-        no_eligible_sprites_description: `削除できるスプライトを持つペルソナがまだありません。\`/persona sprites add\` で追加できます。`,
+        no_eligible_sprites_description: `削除できるスプライトを持つペルソナがまだありません。\`/config\` > Persona > Sprites で追加できます。`,
         modal_title: `ペルソナスプライトを削除`,
         checkbox_label: `残すスプライト`,
         checkbox_label_continued: `残すスプライト（続き）`,
@@ -134,7 +134,7 @@ export default {
         failed_title: `🔴 エクスポート失敗`,
         all_images_failed_description: `**{persona_name}** のスプライト画像をどれも読み込めなかったため、エクスポートする内容がありませんでした。`,
         success_title: `🟢 スプライトをエクスポートしました`,
-        success_description: `**{persona_name}** のスプライトを{sprite_count}個エクスポートしました。この.zipを共有し、\`/persona sprites import\` でインポートできます。`,
+        success_description: `**{persona_name}** のスプライトを{sprite_count}個エクスポートしました。この.zipを共有し、\`/config\` > Persona > Sprites でインポートできます。`,
         success_partial_description: `**{persona_name}** のスプライトを{sprite_count}個エクスポートしました。画像を読み込めなかった{skipped_count}個のスプライトはスキップされました。`,
       },
       import: {
@@ -150,7 +150,7 @@ export default {
         archive_label: `スプライトアーカイブ`,
         archive_description: `/persona sprites export で作成した.zipをアップロードしてください。`,
         invalid_file_title: `🔴 無効なアーカイブ`,
-        invalid_file_description: `\`/persona sprites export\` で作成した有効なスプライト.zipをアップロードしてください。`,
+        invalid_file_description: `\`/config\` > Persona > Sprites で作成した有効なスプライト.zipをアップロードしてください。`,
         file_too_large_title: `🔴 アーカイブが大きすぎます`,
         file_too_large_description: `スプライトアーカイブが大きすぎます。最大ファイルサイズは{max_size}MBです。`,
         download_failed_title: `🔴 ダウンロード失敗`,
@@ -297,14 +297,14 @@ export default {
       avatar_failed_description: `ペルソナアバターのダウンロードに失敗しました。後でもう一度お試しください。`,
       embed_failed_title: `🔴 PNG処理に失敗しました`,
       embed_failed_description: `PNGファイルへのメタデータの埋め込みに失敗しました。もう一度お試しください。`,
-      error_no_server_data: `データベースにサーバーが見つかりません。まず \`/config setup\` を実行してください。`,
-      error_no_preset_data: `ペルソナデータが見つかりません。まず /config setup を実行してください。`,
+      error_no_server_data: `データベースにサーバーが見つかりません。まず \`/setup\` を実行してください。`,
+      error_no_preset_data: `ペルソナデータが見つかりません。まず /setup を実行してください。`,
       error_validation_failed: `エクスポートデータ構造の検証に失敗しました`,
       error_export_failed: `ペルソナデータのエクスポートに失敗しました`,
     },
     import: {
-      description: `PNGまたはJSONファイルからペルソナをインポートする`,
-      file_description: `ペルソナデータを含むPNGまたはJSONファイル`,
+      description: `PNG、JSON、またはCHARXファイルからペルソナをインポートする`,
+      file_description: `ペルソナデータを含むPNG、JSON、またはCHARXファイル`,
       type_description: `メインペルソナまたはオルタペルソナとしてインポート`,
       triggers_description: `任意の追加トリガー（カンマ区切り: "," または "、"）`,
       memories_description: `このペルソナの記憶（ユーザー・サーバー）を引き継ぎますか？`,
@@ -331,11 +331,11 @@ export default {
 
 これらのトリガーがメッセージに含まれると、このペルソナが応答します。`,
       alter_success_confirmation: `オルタペルソナ **{nickname}** が {trigger_count} 個の固有トリガーワードで正常にインポートされました！詳細なインポート情報がチャンネルに投稿されました。`,
-      alter_avatar_fallback_main: `🟡 このインポートにはアバター画像が含まれていなかったため、このオルタはフォールバックとして **{nickname}** の現在のメインペルソナアバターを使用します。変更したい場合は \`/persona avatar\` を使用できます。`,
+      alter_avatar_fallback_main: `🟡 このインポートにはアバター画像が含まれていなかったため、このオルタはフォールバックとして **{nickname}** の現在のメインペルソナアバターを使用します。変更したい場合は \`/config\` > Persona > General を使用できます。`,
       alter_avatar_warning: `⚠️ 上記のアバター画像埋め込みを削除しないでください。削除するとオルタペルソナのアバターが失われます。`,
       alter_dm_not_allowed_title: `🔴 DMではオルタペルソナは許可されていません`,
       alter_dm_not_allowed_description: `オルタペルソナはサーバーでのみインポートできます。ダイレクトメッセージではインポートできません。サーバーでこのコマンドを実行してください。`,
-      alter_no_triggers_warning: `⚠️ このペルソナにはトリガーワードがありません。\`/persona trigger add\`を使用してトリガーを追加するまで、メッセージに応答しません。`,
+      alter_no_triggers_warning: `⚠️ このペルソナにはトリガーワードがありません。\`/config\` > Persona > Generalを使用してトリガーを追加するまで、メッセージに応答しません。`,
       alter_name_conflict_title: `🔴 ペルソナ名が既に存在します`,
       alter_name_conflict_description: `**{name}** という名前のペルソナは既にこのサーバーに存在します。各ペルソナには固有の名前が必要です。
 
@@ -344,12 +344,23 @@ export default {
       alter_limit_description: `このサーバーには既に {current} 個のペルソナがあります。上限は {max} 個です。\`/persona remove\` でオルタを削除してからインポートしてください。`,
       failed_title: `🔴 インポートに失敗しました`,
       failed_description: `ペルソナのインポートに失敗しました。ファイルを確認してもう一度お試しください。`,
+      sprite_snapshot_failed_description: `現在のペルソナスプライトを読み込めないため、インポートを中止しました。ペルソナデータは変更されていません。もう一度お試しください。`,
+      sprite_cleanup_failed_description: `ペルソナはインポートされましたが、以前のスプライト行を削除できませんでした。インポートは完了していません。管理者に連絡してください。`,
+      sprite_storage_cleanup_partial_description: `ペルソナはインポートされましたが、以前のスプライト画像 {failed_count} 個をストレージから削除できませんでした。`,
       invalid_file_type_title: `🔴 無効なファイル形式`,
-      invalid_file_type_description: `ペルソナデータを含む有効な.pngまたは.jsonファイルをアップロードしてください。`,
+      invalid_file_type_description: `ペルソナデータを含む有効な.png、.json、または.charxファイルをアップロードしてください。`,
       file_too_large_title: `🔴 ファイルが大きすぎます`,
-      file_too_large_description: `ファイルが大きすぎます。最大ファイルサイズは10MBです。`,
+      file_too_large_description: `ファイルが大きすぎます。最大ファイルサイズは{max_size}MBです。`,
       download_failed_title: `🔴 ダウンロードに失敗しました`,
       download_failed_description: `添付ファイルのダウンロードに失敗しました。もう一度お試しください。`,
+      invalid_charx_title: `🔴 無効なキャラクターカードアーカイブ`,
+      invalid_charx_description: `この.charxファイルはCharacter Card V3アーカイブとして読み取れませんでした。配布元のサイトからカードを再ダウンロードするか、.png形式でエクスポートしたカードを使用してください。`,
+      card_conversion_failed_title: `🟡 キャラクターカードを検出しましたが変換に失敗しました`,
+      card_conversion_failed_description: `**{source}**からカードをデコードしましたが、Tomori形式への変換に失敗しました。デコードされた内容を検査用に添付しています。\`/support discord\`から、添付ファイルを付けて報告してください。`,
+      charx_not_card_description: `この.charxアーカイブは開けましたが、中のカードはキャラクターカードではありません。同じダウンロードに含まれる別のアーカイブではなく、キャラクターカード本体であることを確認してください。`,
+      charx_too_large_description: `このアーカイブ内のカードはインポートするには大きすぎます。カードの最大サイズは{max_size}MBです。`,
+      charx_assets_too_large_description: `このカードはインポートで確認できる量を超えるメディアを同梱しています。画像、音声、動画のアセットを含めずにエクスポートしたカードをお試しください。`,
+      charx_assets_ignored_description: `🟡 このカードに同梱されていた画像、音声、その他のメディアはインポートされませんでした。読み込まれたのはペルソナのテキストのみです。アバターは\`/server avatar\`で設定でき、スプライトは\`/config\` > Persona > Spritesで追加できます。`,
       invalid_png_title: `🔴 無効なPNGファイル`,
       invalid_png_description: `アップロードされたファイルは有効なPNG画像ではありません。`,
       no_metadata_title: `🔴 ペルソナデータが見つかりません`,
@@ -366,7 +377,7 @@ export default {
       error_invalid_trigger_word: `無効なトリガーワード: {details}`,
       error_dialogue_mismatch: `サンプル対話配列の長さが一致しません`,
       error_invalid_config: `ペルソナデータに無効な設定フィールドがあります`,
-      error_no_server_data: `データベースにサーバーが見つかりません。まず \`/config setup\` を実行してください。`,
+      error_no_server_data: `データベースにサーバーが見つかりません。まず \`/setup\` を実行してください。`,
       error_name_conflict: `**{name}** という名前のペルソナは既にこのサーバーに存在します。別の名前を使用してください。`,
       error_import_failed: `ペルソナデータのインポートに失敗しました`,
       error_not_json: `インポートしたファイルには有効なJSONデータが含まれている必要があります`,
@@ -374,7 +385,7 @@ export default {
       error_invalid_format: `無効なペルソナファイル形式`,
       error_invalid_type: `無効なペルソナタイプ: {type}。"preset"が期待されます`,
       avatar_update_skipped_dm: `ペルソナは正常にインポートされましたが、アバターとニックネームの更新はダイレクトメッセージでは利用できません。`,
-      refresh_reminder: `この会話で人格の更新を適用するには\`/tool refresh\`を実行してください`,
+      refresh_reminder: `この会話で人格の更新を適用するには\`/refresh\`を実行してください`,
     },
     remove: {
       description: `サーバーからオルタペルソナを削除する`,
@@ -462,35 +473,35 @@ export default {
       field_web_search: `ウェブ検索を使用しますか？`,
       field_additional_inst: `追加の指示`,
       wrong_provider_title: `🔴 互換性のないプロバイダー`,
-      wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/model text\`で対応プロバイダーに切り替えてください。`,
+      wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/config\` > Models > Switch Modelsで対応プロバイダーに切り替えてください。`,
       no_api_key_title: `🔴 APIキーがありません`,
-      no_api_key_description: `有効なプロバイダーが設定されていません。\`/setup\`（初回）または\`/provider add\`で登録してください。`,
+      no_api_key_description: `有効なプロバイダーが設定されていません。\`/setup\`（初回）または\`/providers\`で登録してください。`,
       model_incompatible_title: `互換性のないモデル`,
       model_incompatible_description: `現在のモデル（**{model_name}**）は、ペルソナ生成に必要な**構造化出力**をサポートしていません。
 
 **次のステップ:**
-\`/model text\`を使用して、構造化出力をサポートするモデル（例：「STRUCT」機能を持つモデル）に切り替えてください。`,
+\`/config\` > Models > Switch Modelsを使用して、構造化出力をサポートするモデル（例：「STRUCT」機能を持つモデル）に切り替えてください。`,
       image_vision_required_title: `🔴 画像ビジョンが必要`,
       image_vision_required_description: `画像がアップロードされましたが、現在のモデル（**{model_name}**）は**画像ビジョン**をサポートしておらず、ビジョンモデルも設定されていません。
 
 **次のステップ:**
-1. \`/model vision\`を使用して専用ビジョンモデルを設定する、または
-2. \`/model text\`を使用してビジョン対応モデルに切り替える、または
+1. \`/config\` > Models > Switch Modelsを使用して専用ビジョンモデルを設定する、または
+2. \`/config\` > Models > Switch Modelsを使用してビジョン対応モデルに切り替える、または
 3. 画像を削除して画像なしで再生成する`,
       vision_model_provider_unsupported_title: `🔴 ビジョンモデルのプロバイダー非対応`,
       vision_model_provider_unsupported_description: `ビジョンモデル（**{vision_model_name}**）はプロバイダー **{vision_provider}** に設定されていますが、このプロバイダーはペルソナプリセット生成に対応していません。
 
 **次のステップ:**
-1. \`/model vision\`を使用して対応プロバイダー（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）のビジョンモデルを設定する、または
-2. \`/model text\`を使用してビジョンとプリセット生成の両方に対応したプライマリモデルに切り替える`,
+1. \`/config\` > Models > Switch Modelsを使用して対応プロバイダー（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）のビジョンモデルを設定する、または
+2. \`/config\` > Models > Switch Modelsを使用してビジョンとプリセット生成の両方に対応したプライマリモデルに切り替える`,
       web_search_tools_required_title: `🔴 ウェブ検索を利用できません`,
       web_search_tools_required_description: `ウェブ検索が選択されましたが、現在のモデル（**{model_name}**）は**ツール**に対応していません。
 
 **次のステップ:**
-1. \`/model text\`を使用してツール対応モデルに切り替える、または
+1. \`/config\` > Models > Switch Modelsを使用してツール対応モデルに切り替える、または
 2. ウェブ検索なしで再生成する（質問されたら「いいえ」を選択）`,
       api_key_decrypt_failed_title: `🔴 APIキーエラー`,
-      api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/provider add\`で再設定してください。`,
+      api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/providers\`で再設定してください。`,
       invalid_image_title: `🔴 無効な画像`,
       invalid_image_description: `有効な画像ファイル(PNG、JPG、JPEGなど)をアップロードしてください。`,
       error_file_too_large: `アバター画像は{max_size}MB以下である必要があります。`,
@@ -521,11 +532,11 @@ export default {
       success_next_steps_title: `次のステップ`,
       success_next_steps_description: `1. 右側の添付PNGファイルをダウンロード
 2. PNGファイルと共に\`/persona import\`を使用
-3. \`/tool refresh\`を実行して新しい人格を適用
+3. \`/refresh\`を実行して新しい人格を適用
 または「今すぐインポート」ボタンを押す`,
       success_next_steps_description_dm: `1. 添付されたPNGファイルをダウンロード
 2. PNGファイルと共に\`/persona import\`を使用
-3. \`/tool refresh\`を実行して新しい人格を適用`,
+3. \`/refresh\`を実行して新しい人格を適用`,
       success_next_steps_footer: `あとで\`/persona\`でさらに編集できます。`,
       avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでインポートできませんのでご注意ください。`,
     },
@@ -576,7 +587,7 @@ export default {
       success_next_steps_title: `次のステップ`,
       success_next_steps_description: `1. 右側の添付PNGファイルをダウンロード
 2. PNGファイルと共に\`/persona import\`を使用
-3. \`/tool refresh\`を実行して新しい人格を適用
+3. \`/refresh\`を実行して新しい人格を適用
 または「今すぐインポート」ボタンを押す`,
       success_next_steps_footer: `あとで\`/persona\`でさらに編集できます。`,
       avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでは利用できませんのでご注意ください。`,
@@ -634,6 +645,8 @@ export default {
       api_error_title: `APIエラー`,
       api_error_description: `Discord APIを通じてアバターの更新に失敗しました。アバターを短時間で変更しすぎたことによるレート制限が原因であることが多いです。しばらく待ってから再度お試しください。
 -# {details}`,
+      rate_limited_title: `🟡 レート制限中`,
+      rate_limited_description: `Discordがこのサーバーのアバター変更頻度を制限しています。ペルソナは保存されましたが、サーバーアバターは更新されませんでした。しばらく待ってから再度お試しいただくか、サーバー設定から手動で変更してください。`,
       error_download_timeout: `アバターのダウンロードが15秒後にタイムアウトしました。もう一度お試しください。`,
       error_api_timeout: `Discord API呼び出しが15秒後にタイムアウトしました。もう一度お試しください。`,
     },
@@ -660,14 +673,14 @@ export default {
         already_exists_description: `単語 \`{word}\` は既にトリガーリストにあります。`,
         already_exists_multiple_description: `これらのトリガーワードは既に存在します: {words}。`,
         limit_exceeded_title: `トリガーワード上限に達しました`,
-        limit_exceeded_description: `このサーバーはトリガーワードを最大 {max_allowed} 個まで設定できます（現在 {current_count} 個）。新しいものを追加する前に、\`/persona trigger remove\`でいくつかのトリガーワードを削除してください。`,
+        limit_exceeded_description: `このサーバーはトリガーワードを最大 {max_allowed} 個まで設定できます（現在 {current_count} 個）。新しいものを追加する前に、\`/config\` > Persona > Generalでいくつかのトリガーワードを削除してください。`,
         success_title: `トリガーワードが追加されました`,
         success_description: `{persona_name} に {added_count} 個のトリガーワードを追加しました: {added_words}。現在 {word_count} 個のトリガーワードがあります。`,
       },
       remove: {
         description: `言及されたときに私が応答する単語を削除します。`,
         no_triggers_title: `トリガーワードがありません`,
-        no_triggers_description: `削除するカスタムトリガーワードが設定されていません。\`/persona trigger add\`で追加してください。`,
+        no_triggers_description: `削除するカスタムトリガーワードが設定されていません。\`/config\` > Persona > Generalで追加してください。`,
         select_description: `削除したいトリガーワードを選択してください`,
         modal_title: `トリガーワードの削除`,
         checkbox_label: `トリガーワード`,
@@ -680,6 +693,26 @@ export default {
         success_title: `トリガーワードを更新しました`,
         success_description: `次のトリガーワードを削除しました: {triggerWords}`,
       },
+    },
+    "naming-habits": {
+      description: `ペルソナがユーザー名を整形し呼びかける方法を設定します。`,
+      style_description: `編集する呼び方のバリエーションです。`,
+      masculine_option: `男性的`,
+      feminine_option: `女性的`,
+      neutral_option: `中立`,
+      modal_title: `ペルソナの呼び名習慣`,
+      prefix_label: `名前の接頭辞`,
+      prefix_description: `有効なニックネームの前に付けます。空欄で消去します。`,
+      suffix_label: `名前の接尾辞`,
+      suffix_description: `有効なニックネームの後に付けます。空欄で消去します。`,
+      address_term_label: `単独の呼びかけ語`,
+      address_term_description: `ペルソナ記述内の {user_term} を置換します。名前には付加されません。`,
+      neutral_required_title: `中立の呼びかけ語が必要です`,
+      neutral_required_description: `性別付きの語を追加する、または {user_term} を使う前に、空でない中立の呼びかけ語を設定してください。`,
+      no_permission_title: `権限が必要です`,
+      no_permission_description: `ペルソナの呼び名習慣を編集するには「サーバー管理」権限が必要です。`,
+      success_title: `呼び名習慣を更新しました`,
+      success_description: `**{persona}** の **{style}** バリエーションを更新しました。公式プリセット参照の場合は先に実体化しました。`,
     },
   },
 };

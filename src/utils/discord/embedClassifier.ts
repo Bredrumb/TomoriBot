@@ -11,7 +11,7 @@
  */
 
 import type { Embed } from "discord.js";
-import { localizer, getSupportedLocales, getLocaleSubKeys } from "@/utils/text/localizer";
+import { localizer, getSupportedLocales, getLocaleSubKeys, hasLocaleKey } from "@/utils/text/localizer";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 
 /** Target embed classifications recognized by the chat pipeline. */
@@ -24,7 +24,9 @@ type TargetEmbedType =
   | "compact_summary"
   | "compact_refresh"
   | "reward"
-  | "punish";
+  | "punish"
+  | "user_info_update"
+  | "user_moderation";
 
 export type TargetEmbedCheck = { isTarget: true; type: TargetEmbedType } | { isTarget: false; type: null };
 
@@ -42,10 +44,26 @@ function matchesLocalizedTitleTemplate(template: string, actualTitle: string): b
 }
 
 /**
+ * Collects the `embed_title` of every sub-namespace under `namespace`, skipping the ones the
+ * locale does not actually define.
+ *
+ * The existence check has to come from `hasLocaleKey` rather than from the returned string:
+ * a sub-namespace without an `embed_title` resolves to the English title through `localizer`'s
+ * per-key fallback, so nothing about the string marks it as absent from this locale.
+ */
+function collectSubKeyTitles(locale: string, namespace: string): string[] {
+  return getLocaleSubKeys(locale, namespace)
+    .map((name) => `${namespace}.${name}.embed_title`)
+    .filter((key) => hasLocaleKey(locale, key))
+    .map((key) => localizer(locale, key));
+}
+
+/**
  * Classifies an embed title against the set of bot-produced titles (memory
  * learning, reset, reminder-set, system injection, compact summary/refresh,
- * reward, punish). Scans across ALL supported locales so cross-locale servers
- * still detect bot-produced embeds correctly.
+ * reward, punish, user info update, user moderation). Scans across ALL
+ * supported locales so cross-locale servers still detect bot-produced embeds
+ * correctly.
  *
  * @returns An object with isTarget and the matched type
  */
@@ -69,50 +87,62 @@ export function checkTargetEmbedTitle(embedTitle: string | null | undefined): Ta
       localizer(supportedLocale, "reminders.task_set_title"),
     ];
 
+    // Tool notices that record an action already taken. Without these the
+    // persona cannot see her own past notice on a later turn and re-runs the
+    // tool when asked whether she already did it.
+    const userModerationTitles = [
+      localizer(supportedLocale, "tools.user_block.block_mute_title"),
+      localizer(supportedLocale, "tools.user_block.block_block_title"),
+      localizer(supportedLocale, "tools.user_block.unmute_success_title"),
+      localizer(supportedLocale, "tools.user_block.unblock_success_title"),
+    ];
+
     if (memoryLearningTitles.some((t) => matchesLocalizedTitleTemplate(t, embedTitle))) {
       return { isTarget: true, type: "memory_learning" };
     }
 
+    if (matchesLocalizedTitleTemplate(localizer(supportedLocale, "tools.user_info_update.success_title"), embedTitle)) {
+      return { isTarget: true, type: "user_info_update" };
+    }
+
+    if (userModerationTitles.some((t) => matchesLocalizedTitleTemplate(t, embedTitle))) {
+      return { isTarget: true, type: "user_moderation" };
+    }
+
     // Reset and system-injection titles
-    if (embedTitle === localizer(supportedLocale, "commands.tool.refresh.title")) {
+    if (embedTitle === localizer(supportedLocale, "commands.refresh.title")) {
       return { isTarget: true, type: "reset" };
     }
-    if (embedTitle === localizer(supportedLocale, "commands.bot.impersonate.system_title")) {
+    if (embedTitle === localizer(supportedLocale, "commands.impersonate.system_title")) {
       return { isTarget: true, type: "system_injection" };
     }
 
     // Scene-generation status embed: surfaced to the LLM so it knows a scripted
     //     scene is underway and can read the speaking order / instructions as context.
-    if (embedTitle === localizer(supportedLocale, "commands.bot.generate.scene.success_title")) {
+    if (embedTitle === localizer(supportedLocale, "commands.generate.scene.success_title")) {
       return { isTarget: true, type: "scene_directive" };
     }
 
     // Reward/punish titles: dynamically discovered from locale sub-keys
     //    so new reward/punish commands are automatically recognized
-    const rewardNames = getLocaleSubKeys(supportedLocale, "commands.reward");
-    const rewardTitles = rewardNames
-      .map((name) => localizer(supportedLocale, `commands.reward.${name}.embed_title`))
-      .filter((t) => !t.includes("."));
+    const rewardTitles = collectSubKeyTitles(supportedLocale, "commands.reward");
     if (rewardTitles.some((t) => embedTitle === t)) {
       return { isTarget: true, type: "reward" };
     }
 
-    const punishNames = getLocaleSubKeys(supportedLocale, "commands.punish");
-    const punishTitles = punishNames
-      .map((name) => localizer(supportedLocale, `commands.punish.${name}.embed_title`))
-      .filter((t) => !t.includes("."));
+    const punishTitles = collectSubKeyTitles(supportedLocale, "commands.punish");
     if (punishTitles.some((t) => embedTitle === t)) {
       return { isTarget: true, type: "punish" };
     }
 
     // Compact summary (conversation + scene + manual) and compact refresh variants
-    const compactSummaryTitle = localizer(supportedLocale, "commands.tool.compact.summary_title");
-    const compactSummaryRefreshed = localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed");
-    const compactSceneTitle = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title");
-    const compactSceneRefreshed = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed");
-    const compactManualTitle = localizer(supportedLocale, "commands.tool.compact.manual_entry_title");
-    const compactManualRefreshed = localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed");
-    const compactCharacterPrefix = localizer(supportedLocale, "commands.tool.compact.roleplay_character_title_prefix");
+    const compactSummaryTitle = localizer(supportedLocale, "commands.compact.summary_title");
+    const compactSummaryRefreshed = localizer(supportedLocale, "commands.compact.summary_title_refreshed");
+    const compactSceneTitle = localizer(supportedLocale, "commands.compact.roleplay_scene_title");
+    const compactSceneRefreshed = localizer(supportedLocale, "commands.compact.roleplay_scene_title_refreshed");
+    const compactManualTitle = localizer(supportedLocale, "commands.compact.manual_entry_title");
+    const compactManualRefreshed = localizer(supportedLocale, "commands.compact.manual_entry_title_refreshed");
+    const compactCharacterPrefix = localizer(supportedLocale, "commands.compact.roleplay_character_title_prefix");
 
     if (embedTitle === compactSummaryTitle || embedTitle === compactSceneTitle || embedTitle === compactManualTitle) {
       return { isTarget: true, type: "compact_summary" };

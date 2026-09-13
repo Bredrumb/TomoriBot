@@ -23,6 +23,7 @@ import {
   ZAI_GENERAL_CHAT_COMPLETIONS_URL,
 } from "@/providers/zai/zaiShared";
 import { resolveWelcomeDelayMs, waitForWelcomeDelay } from "@/events/guildMemberAdd/helpers/welcomeDelay";
+import { type WelcomeMembershipCheck, checkWelcomeMembership } from "@/events/guildMemberAdd/helpers/welcomeMembership";
 
 /**
  * Provider-to-chat-completions-URL mapping for vision model routing.
@@ -218,6 +219,19 @@ async function buildWelcomeContextItem(params: {
   };
 }
 
+/**
+ * An unverified membership is logged at error level because it is an operational fault rather than
+ * a departure, and `log.info` is dropped entirely under `RUN_ENV=production`.
+ */
+function logSkippedWelcome(member: GuildMember, check: WelcomeMembershipCheck, stage: string): void {
+  if (check.status === "unverified") {
+    log.error(`Skipping welcome for ${member.user.tag}: could not verify membership ${stage}`, check.error);
+    return;
+  }
+
+  log.info(`Skipping welcome for ${member.user.tag}: original membership ended ${stage}`);
+}
+
 async function triggerWelcomeMessage(client: Client, member: GuildMember): Promise<void> {
   const initialTomoriState = await getCachedTomoriState(member.guild.id);
   if (!initialTomoriState) return;
@@ -231,9 +245,9 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     log.info(`Waiting ${welcomeDelayMs}ms before welcoming ${member.user.tag}`);
     await waitForWelcomeDelay(welcomeDelayMs);
 
-    const currentMember = member.guild.members.cache.get(member.id);
-    if (!currentMember || currentMember.joinedTimestamp !== member.joinedTimestamp) {
-      log.info(`Skipping welcome for ${member.user.tag}: original membership ended during the onboarding grace period`);
+    const graceMembership = await checkWelcomeMembership(member);
+    if (graceMembership.status !== "active") {
+      logSkippedWelcome(member, graceMembership, "during the onboarding grace period");
       return;
     }
   }
@@ -307,6 +321,13 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
     avatarDescription,
   });
   const forcedMentions = await buildForcedMentionsForUser(member.id, client, member.guild);
+
+  const generationMembership = await checkWelcomeMembership(member);
+  if (generationMembership.status !== "active") {
+    logSkippedWelcome(member, generationMembership, "before welcome generation");
+    return;
+  }
+
   const welcomeStartTime = Date.now();
 
   suppressNextSelfReply(welcomeChannel.id);

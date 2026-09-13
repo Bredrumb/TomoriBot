@@ -2292,8 +2292,8 @@ function buildComfyUiPlaceholderMap(
     ),
     TOMORI_NEGATIVE_PROMPT: buildComfyUiNegativePrompt(options, inpaint, maskMode),
     TOMORI_VIDEO_NEGATIVE_PROMPT: buildComfyUiVideoNegativePrompt(),
-    TOMORI_MODEL: endpoint.model_name ?? endpoint.display_name,
-    TOMORI_MODEL_NAME: endpoint.model_name ?? endpoint.display_name,
+    TOMORI_MODEL: endpoint.model_name ?? "",
+    TOMORI_MODEL_NAME: endpoint.model_name ?? "",
     TOMORI_MODE: options.mode,
     TOMORI_IMAGE_MODE: inpaint ? "inpaint" : hasReference ? "img2img" : "txt2img",
     TOMORI_ASPECT_RATIO: options.aspectRatio ?? (options.mode === "video" ? "16:9" : "1:1"),
@@ -2701,7 +2701,10 @@ async function generateWithComfyUi(
   options: ComfyUiGenerationOptions,
 ): Promise<ComfyUiGenerationResponse> {
   const workflowPath = resolveComfyUiRuntimeWorkflowPath(endpoint);
-  const savedWorkflow = workflowPath ? loadComfyUiWorkflowFromPath(workflowPath) : endpoint.extra_config.workflow;
+  // A workflow uploaded with the endpoint is its configuration of record. Static paths remain
+  // available for legacy endpoints that have no uploaded workflow.
+  const savedWorkflow =
+    endpoint.extra_config.workflow ?? (workflowPath ? loadComfyUiWorkflowFromPath(workflowPath) : null);
   if (!savedWorkflow || typeof savedWorkflow !== "object") {
     throw new Error("ComfyUI workflow JSON is missing.");
   }

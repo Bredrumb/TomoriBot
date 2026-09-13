@@ -16,13 +16,13 @@ TomoriBotは、**話す**（テキスト読み上げ、TTS）ことと、**聞�
 ### ElevenLabs（クラウド、最も簡単）
 
 1. [ElevenLabs](https://elevenlabs.io/app/settings/api-keys)からAPIキーを取得します。
-2. `/speech elevenlabs`を実行し、キーを貼り付けます。この1つのコマンドで以下のことが行われます：
+2. `/providers`を実行し、キーを貼り付けます。この1つのコマンドで以下のことが行われます：
    - ElevenLabsの**音声**エンドポイント（および**文字起こし**エンドポイント）を登録します。
    - それらをアクティブとして選択します。
    - その場で1つのペルソナに音声を割り当てることができます。
-3. `/speech voice-assign`を使用して、追加のペルソナに音声を割り当てます。音声の閲覧は[ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library)で行えます。ここから自身の音声をクローンすることもできます。
+3. `/config`を使用して、追加のペルソナに音声を割り当てます。音声の閲覧は[ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library)で行えます。ここから自身の音声をクローンすることもできます。
 
-保存されたキーを更新するには、いつでも再度`/speech elevenlabs`を実行してください。
+保存されたキーを更新するには、いつでも再度`/providers`を実行してください。
 
 注意事項：
 
@@ -30,28 +30,29 @@ TomoriBotは、**話す**（テキスト読み上げ、TTS）ことと、**聞�
 - 音声メッセージの生成や読み上げ時には文字数がカウントされます。無料プランには月ごとの制限がありますので、ElevenLabsのダッシュボードを確認してください。
 - 音声での返信は`voice_message_enabled`によって制限されており、アクティブなペルソナに音声が割り当てられている必要があります。
 
-Discord上で同じ手順を確認するには、`/help speech`を実行してください。
+Discord上で同じ手順を確認するには、`/help`の **機能** から **音声生成** を開いてください。
 
 ### ローカルの音声クローンエンジン（セルフホスト）
 
 セルフホストのインスタンスでは、代わりにローカルの音声クローンサーバーを実行できます。一般的なフローは以下の通りです：
-ラッパーサーバーを起動し、`/provider custom-endpoint add`で登録し、`/model speech`で選択し、`/speech voice-add`でサンプルをアップロードし、最後に`/speech voice-assign`で割り当てます。どのような音声形式でも受け入れられます（モノラルのWAVに自動変換されます）。BGMのない10〜20秒のクリップが最適です。
+ラッパーサーバーを起動し、`/providers`で登録し、`/providers`で選択し、`/config`でサンプルをアップロードし、最後に`/config`で割り当てます。どのような音声形式でも受け入れられます（モノラルのWAVに自動変換されます）。BGMのない10〜20秒のクリップが最適です。
 
 各エンジンにはそれぞれセットアップガイドがあります：
 
-- [Chatterbox-Turbo](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)：高速、英語のみ対応。`[excited]`のような括弧付きの表現タグをサポートします。
+- [Chatterbox-Turbo/Nano](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)：高速な英語専用の音声クローンです。`[laugh]`などの対応済みイベントタグを使えます。
 - [Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/)：多言語対応（10言語）。自然言語によるVoiceDesignモードを備えています。
+- [MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/)：試用向けのAutoエンドポイント。多言語のクローンと英語・中国語の音声設計を切り替えます。
 - [IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)：日本語特化。絵文字を感情の合図として読み取ります。
 
-一覧については、[テキスト読み上げ（TTS）](/ja/self-hosting/local-endpoints/text-to-speech/)ハブをご覧ください。
+全エンジンと必要なハードウェアの比較は、[テキスト読み上げ（TTS）の比較表](/ja/self-hosting/local-endpoints/text-to-speech/)をご覧ください。
 
 ## 音声認識（STT）
 
-文字起こしのエンドポイントは、ユーザーの音声添付ファイルをテキストに変換し、バックグラウンドでの会話のコンテキストとして機能させます。文字起こしがチャットに**表示して投稿される**かどうかは、`/speech transcripts`で個別に制御されます。
+文字起こしのエンドポイントは、ユーザーの音声添付ファイルをテキストに変換し、バックグラウンドでの会話のコンテキストとして機能させます。文字起こしがチャットに**表示して投稿される**かどうかは、`/config` > Engine > Noticesで個別に制御されます。
 
 ### ElevenLabs（クラウド）
 
-上記ですでに説明した通り、`/speech elevenlabs`は音声とともに文字起こしのエンドポイントも登録します。文字起こしのエンドポイントを切り替えるには、`/model transcription`を使用します。
+上記ですでに説明した通り、`/providers`は音声とともに文字起こしのエンドポイントも登録します。文字起こしのエンドポイントを切り替えるには、`/providers`を使用します。
 
 ### ローカルエンジン（セルフホスト）
 
@@ -59,4 +60,4 @@ Discord上で同じ手順を確認するには、`/help speech`を実行して�
 - [KoboldCPP](/ja/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：ご使用のビルドがOpenAI互換の文字起こしエンドポイントを公開している場合に機能します。
 - [whisper.cpp](/ja/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
 
-一覧については、[音声認識（STT）](/ja/self-hosting/local-endpoints/speech-to-text/)ハブをご覧ください。Discordでの概要を確認するには、`/help transcription`を実行してください。
+一覧については、[音声認識（STT）](/ja/self-hosting/local-endpoints/speech-to-text/)ハブをご覧ください。Discordでの概要を確認するには、`/help`の **機能** から **文字起こし** を開いてください。

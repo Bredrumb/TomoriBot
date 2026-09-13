@@ -26,14 +26,10 @@ import {
   type AttachmentBuilder,
   ButtonStyle,
   ComponentType,
-  MessageFlags,
+  type MessageFlags,
   type ActionRowData,
   type ButtonComponentData,
-  type ButtonInteraction,
   type ChatInputCommandInteraction,
-  type ComponentInContainerData,
-  type ContainerComponentData,
-  type Message,
   type TopLevelComponentData,
 } from "discord.js";
 import { statRepository } from "@/utils/db/repositories";
@@ -48,7 +44,8 @@ import type {
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
-import { prettifyModelCodename } from "@/utils/provider/customProviderUtils";
+import { buildDashboardPagePayload, type DashboardPage } from "@/utils/metrics/status/statusPageRenderer";
+import { buildStatsDashboardButtonId } from "@/utils/discord/statsDashboardCatalog";
 
 /** Selectable time windows. `all_time` omits the bucket floor entirely. */
 export type Timeframe = "today" | "week" | "month" | "year" | "all_time";
@@ -61,12 +58,6 @@ export const DEFAULT_TIMEFRAME: Timeframe = "all_time";
 
 /** Scope choice for the personal view: current server vs. across all servers. */
 export type StatsScope = "this_server" | "global";
-
-/** Dashboard collector lifetime (env-configurable per CLAUDE.md rule #6). */
-const DASHBOARD_TIMEOUT_MS = (() => {
-  const raw = Number.parseInt(process.env.STATS_DASHBOARD_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : 300_000;
-})();
 
 /**
  * Resolves a timeframe to a `bucket >= from` floor (YYYY-MM-DD, UTC), or undefined
@@ -123,12 +114,12 @@ function modelCostList(locale: string, entries: ModelCostEntry[]): string {
   return entries
     .map(
       (e, i) =>
-        `**${i + 1}.** \`${prettifyModelCodename(e.model)}\`: ${fmtInt(e.inputTokens)} ${inShort} / ${fmtInt(e.outputTokens)} ${outShort} / ${fmtUsd(e.cost)}`,
+        `**${i + 1}.** \`${e.model}\`: ${fmtInt(e.inputTokens)} ${inShort} / ${fmtInt(e.outputTokens)} ${outShort} / ${fmtUsd(e.cost)}`,
     )
     .join("\n");
 }
 
-/** Title-cases a raw emotion key for display (matches the /server expressions UI). */
+/** Title-cases a raw emotion key for display (matches the /expressions UI). */
 function titleCaseEmotion(key: string): string {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
@@ -234,11 +225,6 @@ export interface StatsTab {
 const FOOTER_KEY = "commands.stats.footer";
 const DASHBOARD_COLOR = ColorCode.INFO;
 
-/** Resolves the dashboard accent color (hex string) to the numeric form CV2 needs. */
-function accentColor(): number {
-  return Number.parseInt(DASHBOARD_COLOR.replace("#", ""), 16);
-}
-
 /** Common page scaffolding (title + subtitle + footer) for a tab. */
 function page(titleKey: string, subtitle: string, fields: StatField[]): StatsTabPage {
   return { titleKey, subtitle, footerKey: FOOTER_KEY, fields };
@@ -246,15 +232,12 @@ function page(titleKey: string, subtitle: string, fields: StatField[]): StatsTab
 
 /**
  * Builds the rows of named tab buttons (≤5 per row); the active tab is disabled.
- * When `disableAll` is set (post-timeout paint), every button is disabled so the
- * card freezes in place, so buttons stay visible but unpressable instead of vanishing.
  */
 function buildTabButtonRows(
-  interactionId: string,
+  context: StatsDashboardViewContext,
   tabs: StatsTab[],
   activeIndex: number,
   locale: string,
-  disableAll = false,
 ): ActionRowData<ButtonComponentData>[] {
   const rows: ActionRowData<ButtonComponentData>[] = [];
   for (let i = 0; i < tabs.length; i += 5) {
@@ -265,9 +248,9 @@ function buildTabButtonRows(
         return {
           type: ComponentType.Button,
           style: index === activeIndex ? ButtonStyle.Primary : ButtonStyle.Secondary,
-          customId: `stats:${interactionId}:${tab.id}`,
+          customId: buildStatsDashboardButtonId(context, tab.id),
           label: localizer(locale, tab.labelKey),
-          disabled: disableAll || index === activeIndex,
+          disabled: index === activeIndex,
         } satisfies ButtonComponentData;
       }),
     });
@@ -275,124 +258,113 @@ function buildTabButtonRows(
   return rows;
 }
 
-/**
- * Renders one tab as a Components V2 container: an H3 title, the subtitle, a divider,
- * the stat fields (consecutive inline scalars merged into one block; ranked lists each
- * in their own labelled block), a muted footer, and (when `withButtons`) the tab
- * button rows inside the same card.
- */
-function buildTabContainer(
-  locale: string,
-  tabPage: StatsTabPage,
-  buttonRows: ActionRowData<ButtonComponentData>[],
-  withButtons: boolean,
-  iconUrl?: string,
-): TopLevelComponentData[] {
-  const components: ComponentInContainerData[] = [];
-
-  const titleText = `### ${localizer(locale, tabPage.titleKey)}`;
-  if (iconUrl) {
-    components.push({
-      type: ComponentType.Section,
-      components: [
-        { type: ComponentType.TextDisplay, content: titleText },
-        { type: ComponentType.TextDisplay, content: tabPage.subtitle },
-      ],
-      accessory: { type: ComponentType.Thumbnail, media: { url: iconUrl } },
-    });
-  } else {
-    components.push({ type: ComponentType.TextDisplay, content: titleText });
-    components.push({ type: ComponentType.TextDisplay, content: tabPage.subtitle });
-  }
-  components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
-
-  // Fields. Merge consecutive inline scalars into a single text block (one line
-  //    each, "**Name:** value"); flush it when a non-inline list field appears.
-  let scalarBuffer: string[] = [];
-  const flushScalars = () => {
-    if (scalarBuffer.length > 0) {
-      components.push({ type: ComponentType.TextDisplay, content: scalarBuffer.join("\n") });
-      scalarBuffer = [];
-    }
+/** Adapts statistics fields to the shared dashboard layout without losing visual separators. */
+function toDashboardPage(tabPage: StatsTabPage, iconUrl?: string): DashboardPage {
+  return {
+    titleKey: tabPage.titleKey,
+    description: tabPage.subtitle,
+    footerKey: tabPage.footerKey,
+    color: DASHBOARD_COLOR,
+    thumbnailUrl: iconUrl,
+    fields: tabPage.fields.map((field) =>
+      field.kind === "separator"
+        ? { separator: true }
+        : { nameKey: field.nameKey, value: field.value, inline: field.inline },
+    ),
   };
-  for (const field of tabPage.fields) {
-    if (field.kind === "separator") {
-      flushScalars();
-      components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
-      continue;
-    }
-    if (field.inline) {
-      scalarBuffer.push(`**${localizer(locale, field.nameKey)}:** ${field.value}`);
-    } else {
-      flushScalars();
-      components.push({
-        type: ComponentType.TextDisplay,
-        content: `**${localizer(locale, field.nameKey)}**\n${field.value}`,
-      });
-    }
-  }
-  flushScalars();
-
-  if (tabPage.footerKey) {
-    components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
-    components.push({ type: ComponentType.TextDisplay, content: `-# ${localizer(locale, tabPage.footerKey)}` });
-  }
-
-  if (withButtons) {
-    for (const row of buttonRows) components.push(row);
-  }
-
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: accentColor(),
-    components,
-  };
-  return [container];
 }
 
 /**
- * Builds the editReply/update payload for the active tab.
- * `disableAll` greys out every tab button for the final, post-timeout paint.
- * `iconFile` is re-attached on every paint so an `attachment://` icon ref (local
- * persona avatars in non-prod) keeps resolving across tab switches and the timeout.
+ * Builds the editReply/update payload for the active tab. `iconFile` is re-attached
+ * on every paint so an `attachment://` icon ref keeps resolving across tab switches.
  */
 export function buildStatsDashboardPayload(
-  interactionId: string,
+  context: StatsDashboardViewContext,
   tabs: StatsTab[],
   activeIndex: number,
-  locale: string,
   withButtons: boolean,
-  disableAll = false,
   iconUrl?: string,
   iconFile?: AttachmentBuilder,
 ): {
   components: TopLevelComponentData[];
   flags: MessageFlags.IsComponentsV2;
   files?: AttachmentBuilder[];
+};
+/**
+ * Compatibility overload for callers that only exercise the shared layout helper.
+ * Production renderers always provide a typed view context.
+ */
+export function buildStatsDashboardPayload(
+  legacyContext: string,
+  tabs: StatsTab[],
+  activeIndex: number,
+  locale: string,
+  withButtons: boolean,
+  iconUrl?: string,
+  iconFile?: AttachmentBuilder,
+): {
+  components: TopLevelComponentData[];
+  flags: MessageFlags.IsComponentsV2;
+  files?: AttachmentBuilder[];
+};
+export function buildStatsDashboardPayload(
+  contextOrLegacy: StatsDashboardViewContext | string,
+  tabs: StatsTab[],
+  activeIndex: number,
+  withButtonsOrLocale: boolean | string,
+  iconUrlOrWithButtons?: string | boolean,
+  iconFileOrUrl?: string | AttachmentBuilder,
+  legacyIconFile?: AttachmentBuilder,
+): {
+  components: TopLevelComponentData[];
+  flags: MessageFlags.IsComponentsV2;
+  files?: AttachmentBuilder[];
 } {
-  const buttonRows = buildTabButtonRows(interactionId, tabs, activeIndex, locale, disableAll);
+  const context: StatsDashboardViewContext =
+    typeof contextOrLegacy === "string"
+      ? {
+          view: "personal",
+          locale: withButtonsOrLocale as string,
+          ownerId: "00000000000000000",
+          serverId: 1,
+          guildId: "00000000000000000",
+          timeframe: "all_time",
+          scope: "global",
+        }
+      : contextOrLegacy;
+  const withButtons =
+    typeof contextOrLegacy === "string" ? iconUrlOrWithButtons === true : withButtonsOrLocale === true;
+  const iconUrl =
+    typeof contextOrLegacy === "string"
+      ? typeof iconFileOrUrl === "string"
+        ? iconFileOrUrl
+        : undefined
+      : typeof iconUrlOrWithButtons === "string"
+        ? iconUrlOrWithButtons
+        : undefined;
+  const iconFile =
+    typeof contextOrLegacy === "string"
+      ? legacyIconFile
+      : iconFileOrUrl && typeof iconFileOrUrl !== "string"
+        ? iconFileOrUrl
+        : undefined;
+  const buttonRows = buildTabButtonRows(context, tabs, activeIndex, context.locale);
   return {
-    components: buildTabContainer(locale, tabs[activeIndex].page, buttonRows, withButtons, iconUrl),
-    flags: MessageFlags.IsComponentsV2,
+    ...buildDashboardPagePayload({
+      locale: context.locale,
+      page: toDashboardPage(tabs[activeIndex].page, iconUrl),
+      buttonRows: withButtons ? buttonRows : [],
+    }),
     ...(iconFile ? { files: [iconFile] } : {}),
   };
 }
 
 /**
- * Renders a public, invoker-controlled tabbed dashboard. The interaction MUST already
- * be acknowledged with a PUBLIC deferral (the caller defers before its DB reads), so
- * this uses editReply for the first paint and a persistent component collector for tab
- * switches.
+ * Renders a public tabbed dashboard. The dashboard buttons are durable global routes,
+ * so each repaint is handled by the interaction router rather than a message collector.
  *
- * Bug fix (rapid tab switching → DiscordAPIError 10062 "Unknown interaction"): the old
- * one-shot awaitMessageComponent loop left a window with NO collector listening between
- * a click resolving and its update completing; a fast second click landed in that gap
- * and the failing update tore down the whole command. We now use a single persistent
- * createMessageComponentCollector (no listening gap) and wrap each button.update in
- * try/catch so a stale/expired interaction can never propagate and kill the dashboard.
- *
- * @param interaction - The acknowledged (publicly deferred) slash or button interaction.
- * @param invokerId   - Discord id allowed to operate the tab buttons.
+ * @param interaction - The acknowledged (publicly deferred) slash interaction.
+ * @param context     - Immutable view inputs encoded into every tab button.
  * @param tabs        - The tabs to render (first is shown initially).
  * @param iconUrl     - Optional avatar/icon URL pinned to the card's top-right corner
  *                      (user avatar for /personal, persona avatar for /persona, server
@@ -403,79 +375,43 @@ export function buildStatsDashboardPayload(
  *                      non-production). Re-attached on every repaint so the ref resolves.
  */
 export async function renderStatsDashboard(
-  interaction: ChatInputCommandInteraction | ButtonInteraction,
-  invokerId: string,
-  locale: string,
-  tabs: StatsTab[],
-  iconUrl?: string,
-  iconFile?: AttachmentBuilder,
-): Promise<void> {
-  return renderStatsDashboardWithReply(
-    (payload) => interaction.editReply(payload),
-    interaction.id,
-    invokerId,
-    locale,
-    tabs,
-    iconUrl,
-    iconFile,
-  );
-}
-
-/**
- * Renders the same public dashboard through a caller-owned one-shot public reply.
- * This is used by persona workflows after the private picker has been compacted.
- */
-export async function renderStatsDashboardWithReply(
-  reply: (payload: ReturnType<typeof buildStatsDashboardPayload>) => Promise<Message>,
-  interactionId: string,
-  invokerId: string,
-  locale: string,
+  interaction: ChatInputCommandInteraction,
+  context: StatsDashboardViewContext,
   tabs: StatsTab[],
   iconUrl?: string,
   iconFile?: AttachmentBuilder,
 ): Promise<void> {
   if (tabs.length === 0) return;
-  let activeIndex = 0;
-
-  const message = await reply(
-    buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
-  );
-
-  // Persistent collector, so no listening gap between clicks, so fast switches queue
-  //    instead of being dropped into a dead window.
-  const collector = message.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    time: DASHBOARD_TIMEOUT_MS,
-    filter: (i) => i.user.id === invokerId && i.customId.startsWith(`stats:${interactionId}:`),
-  });
-
-  collector.on("collect", async (button: ButtonInteraction) => {
-    const tabId = button.customId.split(":")[2];
-    const nextIndex = tabs.findIndex((t) => t.id === tabId);
-    if (nextIndex >= 0) activeIndex = nextIndex;
-    try {
-      // Acknowledge + repaint. Wrapped so a stale token (e.g. a duplicate click whose
-      //    interaction Discord no longer recognizes) never escapes to the command handler.
-      await button.update(
-        buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, false, iconUrl, iconFile),
-      );
-    } catch (error) {
-      log.warn("renderStatsDashboard: tab-switch update failed (stale interaction, ignored)", error as Error);
-    }
-  });
-
-  // Wait for the collector to end (timeout), then disable (but keep) the buttons so
-  //    the last viewed tab stays put with greyed-out, unpressable tabs.
-  await new Promise<void>((resolve) => collector.once("end", () => resolve()));
-
-  try {
-    await message.edit(
-      buildStatsDashboardPayload(interactionId, tabs, activeIndex, locale, true, true, iconUrl, iconFile),
-    );
-  } catch (error) {
-    log.warn("renderStatsDashboard: failed to disable dashboard buttons after timeout", error as Error);
-  }
+  await interaction.editReply(buildStatsDashboardPayload(context, tabs, 0, true, iconUrl, iconFile));
 }
+
+/**
+ * Renders the same public dashboard through a caller-owned one-shot public reply.
+ * Persona uses this after its private validation acknowledgement is deleted.
+ */
+export async function renderStatsDashboardWithReply(
+  reply: (payload: ReturnType<typeof buildStatsDashboardPayload>) => Promise<unknown>,
+  context: StatsDashboardViewContext,
+  tabs: StatsTab[],
+  iconUrl?: string,
+  iconFile?: AttachmentBuilder,
+): Promise<void> {
+  if (tabs.length === 0) return;
+  await reply(buildStatsDashboardPayload(context, tabs, 0, true, iconUrl, iconFile));
+}
+
+interface StatsDashboardViewContextBase {
+  locale: string;
+  ownerId: string;
+  serverId: number;
+  guildId: string;
+  timeframe: Timeframe;
+}
+
+export type StatsDashboardViewContext =
+  | (StatsDashboardViewContextBase & { view: "personal"; scope: StatsScope; timezoneOffset?: number | null })
+  | (StatsDashboardViewContextBase & { view: "persona"; personaId: number })
+  | (StatsDashboardViewContextBase & { view: "server" });
 
 /**
  * Builds the personal (`/stats personal`) dashboard tabs for one user.
@@ -582,9 +518,7 @@ export async function buildPersonalTabs(args: {
     .slice(0, 5)
     .map((c) => ({ label: lineageLabel(locale, names, c.lineageId), count: c.punishments }));
 
-  const favoriteModel = modelCost[0]
-    ? prettifyModelCodename(modelCost[0].model)
-    : localizer(locale, "commands.stats.empty");
+  const favoriteModel = modelCost[0] ? modelCost[0].model : localizer(locale, "commands.stats.empty");
 
   const overviewFields: StatField[] = [
     statField("commands.stats.fields.messages_personal", fmtInt(messages)),
@@ -985,9 +919,7 @@ export async function buildServerTabs(args: {
   const mostPopularPersonaName = popularPersonas[0]
     ? lineageLabel(locale, names, popularPersonas[0].lineageId)
     : localizer(locale, "commands.stats.empty");
-  const mostPopularModel = modelCost[0]
-    ? prettifyModelCodename(modelCost[0].model)
-    : localizer(locale, "commands.stats.empty");
+  const mostPopularModel = modelCost[0] ? modelCost[0].model : localizer(locale, "commands.stats.empty");
 
   // ── Overview (shared core; Images/Videos are deliberately omitted on the
   // persona view to keep this card focused on conversational affinity). ──

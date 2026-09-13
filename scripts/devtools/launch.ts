@@ -4,24 +4,24 @@ import { join } from "node:path";
 import { config } from "dotenv";
 import pc from "picocolors";
 import { resolvePythonExe } from "../lib/pyenv";
+import { DEFAULT_PYTHON_HEALTH_TIMEOUT_MS, resolvePositiveTimeoutMs } from "../lib/launchReadiness";
 
 config();
 
 // scripts/devtools/launch.ts
 //
-//   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts]
+//   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts] [--voxcpm2] [--fishs2] [--cosyvoice3]
 //
 //   Starts requested sidecar services, waits for them to be ready, then
 //   launches the bot in watch mode (equivalent to `bun run dev`).
 //
 //   Docker sidecars are started via docker inspect/start/run and polled until
 //   their healthcheck reports "healthy". Python sidecars are spawned directly
-//   from their pre-built venv and given a configurable startup delay.
+//   from their pre-built venv and polled through their JSON health endpoint.
 //
 //   Press Ctrl+C to stop everything.
 
 const ROOT = process.cwd();
-
 
 const argv = process.argv.slice(2);
 const flags = new Set(argv.filter((a) => a.startsWith("--")).map((a) => a.slice(2)));
@@ -39,6 +39,9 @@ ${pc.bold("Options:")}
   --qwen3tts    Start the Qwen3-TTS Python server (requires venv setup)
   --chatterbox  Start the Chatterbox TTS Python server (requires venv setup)
   --irodoritts  Start the IrodoriTTS Python server (requires venv setup)
+  --voxcpm2     Start the VoxCPM2 Python server (requires venv setup)
+  --fishs2      Start the Fish Audio S2 Pro Python server (requires venv + model setup)
+  --cosyvoice3  Start the CosyVoice 3 Python server (requires venv setup)
   --whisperx    Start the WhisperX transcription Python server (requires venv setup)
   --help        Show this message
 
@@ -46,10 +49,12 @@ ${pc.bold("Examples:")}
   bun run launch
   bun run launch --searxng --crawl4ai
   bun run launch --qwen3tts --searxng
+  bun run launch --voxcpm2
+  bun run launch --fishs2
+  bun run launch --cosyvoice3
 `);
   process.exit(0);
 }
-
 
 interface DockerSidecar {
   kind: "docker";
@@ -78,8 +83,14 @@ interface PythonSidecar {
   scriptRelPath: string;
   /** extra args passed to the script */
   scriptArgs?: string[];
-  /** milliseconds to wait after spawn before proceeding (default 3s) */
-  startupDelayMs?: number;
+  /** JSON health endpoint used to distinguish loading from ready. */
+  healthUrl: string;
+  /** Status values that mean the server can accept requests. */
+  readyStatuses?: readonly string[];
+  /** Maximum time to wait for the model to become ready. */
+  healthTimeoutMs?: number;
+  /** Headers sent to the health endpoint, such as a configured bearer token. */
+  healthHeaders?: Record<string, string>;
 }
 
 type SidecarDef = DockerSidecar | PythonSidecar;
@@ -133,7 +144,8 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "Qwen3-TTS",
     venvRelPath: "servers/tts/qwen3tts/.venv",
     scriptRelPath: "servers/tts/qwen3tts/server.py",
-    startupDelayMs: 5_000,
+    healthUrl: `http://127.0.0.1:${process.env.TOMORI_TTS_PORT ?? (process.env.TOMORI_TTS_MODE === "voice-design" ? "8014" : "8012")}/health`,
+    readyStatuses: ["ok", "idle"],
   },
 
   chatterbox: {
@@ -141,7 +153,7 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "Chatterbox TTS",
     venvRelPath: "servers/tts/chatterbox/.venv",
     scriptRelPath: "servers/tts/chatterbox/server.py",
-    startupDelayMs: 5_000,
+    healthUrl: `http://127.0.0.1:${process.env.TOMORI_TTS_PORT ?? "8011"}/health`,
   },
 
   irodoritts: {
@@ -149,7 +161,37 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "IrodoriTTS",
     venvRelPath: "servers/tts/irodoritts/.venv",
     scriptRelPath: "servers/tts/irodoritts/server.py",
-    startupDelayMs: 8_000,
+    healthUrl: `http://127.0.0.1:${process.env.TOMORI_TTS_PORT ?? "8013"}/health`,
+  },
+
+  voxcpm2: {
+    kind: "python",
+    displayName: "VoxCPM2",
+    venvRelPath: "servers/tts/voxcpm2/.venv",
+    scriptRelPath: "servers/tts/voxcpm2/server.py",
+    healthUrl: `http://127.0.0.1:${process.env.VOXCPM2_PORT ?? process.env.TOMORI_TTS_PORT ?? "8016"}/health`,
+  },
+
+  fishs2: {
+    kind: "python",
+    displayName: "Fish S2 Pro",
+    venvRelPath: "servers/tts/fishs2/.venv",
+    scriptRelPath: "servers/tts/fishs2/server.py",
+    healthUrl: `http://127.0.0.1:${process.env.FISH_S2_PORT ?? process.env.TOMORI_TTS_PORT ?? "8015"}/health`,
+    healthTimeoutMs: resolvePositiveTimeoutMs(process.env.FISH_S2_LAUNCH_TIMEOUT_MS, 240_000),
+    healthHeaders: {
+      ...(process.env.FISH_S2_API_KEY || process.env.TOMORI_TTS_API_KEY
+        ? { Authorization: `Bearer ${process.env.FISH_S2_API_KEY ?? process.env.TOMORI_TTS_API_KEY}` }
+        : {}),
+    },
+  },
+
+  cosyvoice3: {
+    kind: "python",
+    displayName: "CosyVoice 3",
+    venvRelPath: "servers/tts/cosyvoice3/.venv",
+    scriptRelPath: "servers/tts/cosyvoice3/server.py",
+    healthUrl: `http://127.0.0.1:${process.env.COSYVOICE3_PORT ?? process.env.TOMORI_TTS_PORT ?? "8017"}/health`,
   },
 
   whisperx: {
@@ -157,10 +199,9 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "WhisperX",
     venvRelPath: "servers/stt/.venv",
     scriptRelPath: "servers/stt/whisperx_server.py",
-    startupDelayMs: 10_000,
+    healthUrl: `http://127.0.0.1:${process.env.TOMORI_STT_PORT ?? process.env.TOMORI_TRANSCRIPTION_PORT ?? "8021"}/health`,
   },
 };
-
 
 /**
  * Checks whether a named Docker container exists (regardless of state).
@@ -220,6 +261,55 @@ async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<vo
   throw new Error(`Container "${containerName}" did not become healthy within ${timeoutMs / 1000}s.`);
 }
 
+type PythonHealthResult =
+  | { kind: "ready"; ready: boolean }
+  | { kind: "exit"; code: number }
+  | { kind: "retry" };
+
+async function probeJsonHealth(
+  url: string,
+  readyStatuses: readonly string[],
+  headers: Record<string, string> = {},
+): Promise<boolean> {
+  try {
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(3_000) });
+    if (!response.ok) return false;
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== "object" || !("status" in payload)) return false;
+    const status = payload.status;
+    return typeof status === "string" && readyStatuses.includes(status);
+  } catch {
+    return false;
+  }
+}
+
+async function waitForPythonReady(
+  proc: ReturnType<typeof Bun.spawn>,
+  def: PythonSidecar,
+  timeoutMs: number,
+): Promise<void> {
+  const readyStatuses = def.readyStatuses ?? ["ok"];
+  const processExit = proc.exited.then((code): PythonHealthResult => ({ kind: "exit", code }));
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const result = await Promise.race<PythonHealthResult>([
+      probeJsonHealth(def.healthUrl, readyStatuses, def.healthHeaders).then(
+        (ready): PythonHealthResult => ({ kind: "ready", ready }),
+      ),
+      processExit,
+      Bun.sleep(1_000).then((): PythonHealthResult => ({ kind: "retry" })),
+    ]);
+
+    if (result.kind === "exit") {
+      throw new Error(`Process exited before readiness (exit ${result.code}).`);
+    }
+    if (result.kind === "ready" && result.ready) return;
+  }
+
+  throw new Error(`Server did not report a ready JSON status within ${timeoutMs / 1000}s.`);
+}
+
 /**
  * Ensures a Docker sidecar is running. Creates the container via "docker run"
  * if it doesn't exist, or resumes it with "docker start" if it does.
@@ -256,21 +346,32 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
   console.log(`${label} ${pc.green("Healthy ✓")}`);
 }
 
-
 /**
- * Spawns a Python sidecar server from its pre-built venv and waits
- * `startupDelayMs` milliseconds for it to bind before returning the handle.
+ * Spawns a Python sidecar server from its pre-built venv and waits for JSON readiness before
+ * returning the handle.
  * Throws if the venv is missing (user must run setup first).
  */
-async function startPythonSidecar(def: PythonSidecar): Promise<ReturnType<typeof Bun.spawn>> {
-  const { displayName, venvRelPath, scriptRelPath, scriptArgs = [], startupDelayMs = 3_000 } = def;
+async function startPythonSidecar(
+  def: PythonSidecar,
+  flagName: string,
+): Promise<ReturnType<typeof Bun.spawn>> {
+  const {
+    displayName,
+    venvRelPath,
+    scriptRelPath,
+    scriptArgs = [],
+    healthTimeoutMs = resolvePositiveTimeoutMs(
+      process.env.TOMORI_TTS_STARTUP_TIMEOUT_MS,
+      DEFAULT_PYTHON_HEALTH_TIMEOUT_MS,
+    ),
+  } = def;
   const label = pc.magenta(`[${displayName}]`);
 
   const pythonExe = resolvePythonExe(venvRelPath);
   if (!existsSync(pythonExe)) {
     throw new Error(
       `${displayName} venv not found at "${join(ROOT, venvRelPath)}". ` +
-      `Run the setup instructions in the docs before using --${displayName.toLowerCase().replace(/[^a-z]/g, "")}.`,
+      `Run the setup instructions in the docs before using --${flagName}.`,
     );
   }
 
@@ -283,14 +384,17 @@ async function startPythonSidecar(def: PythonSidecar): Promise<ReturnType<typeof
     cwd: ROOT,
   });
 
-  // Give the Python HTTP server time to bind its port.
-  console.log(`${label} Waiting ${startupDelayMs / 1000}s for server to initialize...`);
-  await Bun.sleep(startupDelayMs);
-  console.log(`${label} ${pc.green("Started ✓")}`);
+  console.log(`${label} Waiting for JSON readiness (up to ${healthTimeoutMs / 1000}s)...`);
+  try {
+    await waitForPythonReady(proc, def, healthTimeoutMs);
+  } catch (error) {
+    try { proc.kill(); } catch { /* already exited */ }
+    throw new Error(`${displayName} did not become ready: ${error instanceof Error ? error.message : error}`);
+  }
+  console.log(`${label} ${pc.green("Ready ✓")}`);
 
   return proc;
 }
-
 
 async function main(): Promise<void> {
   const requested = [...flags].filter((f) => f in SIDECARS);
@@ -302,18 +406,33 @@ async function main(): Promise<void> {
 
   const childProcesses: ReturnType<typeof Bun.spawn>[] = [];
 
+  function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
+    try {
+      if (process.platform === "win32" && proc.pid) {
+        Bun.spawnSync(["taskkill", "/F", "/T", "/PID", String(proc.pid)], {
+          stdout: "ignore",
+          stderr: "ignore",
+        });
+      } else {
+        proc.kill();
+      }
+    } catch {
+      /* already exited */
+    }
+  }
+
   for (const flag of requested) {
     const def = SIDECARS[flag];
     try {
       if (def.kind === "docker") {
         await ensureDockerSidecar(def);
       } else {
-        const proc = await startPythonSidecar(def);
+        const proc = await startPythonSidecar(def, flag);
         childProcesses.push(proc);
       }
     } catch (err) {
       console.error(pc.red(`Failed to start sidecar "${flag}": ${err instanceof Error ? err.message : err}`));
-      for (const p of childProcesses) p.kill();
+      for (const p of childProcesses) terminateProcess(p);
       process.exit(1);
     }
   }
@@ -334,7 +453,7 @@ async function main(): Promise<void> {
     isShuttingDown = true;
     console.log(`\n${pc.yellow("[launch] Shutting down...")}`);
     for (const p of childProcesses) {
-      try { p.kill(); } catch { /* already exited */ }
+      terminateProcess(p);
     }
   };
   process.on("SIGINT", shutdown);
@@ -344,7 +463,7 @@ async function main(): Promise<void> {
   const exitCode = await bot.exited;
   for (const p of childProcesses) {
     if (p !== bot) {
-      try { p.kill(); } catch { /* already exited */ }
+      terminateProcess(p);
     }
   }
   process.exit(exitCode);

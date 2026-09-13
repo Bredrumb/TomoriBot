@@ -20,10 +20,13 @@ string and a `memory_scope` of either `server_wide` or `target_user`.
    critical state present).
 2. **Resolve target user** (scope `target_user` only) — `resolveUserTarget()`
    looks up the provided display name in the conversation/guild, disambiguating
-   multiple matches and handling bridge-user and bot-self fallbacks.
+   multiple matches and handling bridge-user and bot-self fallbacks. Persona-scoped
+   nicknames and affixed labels ("Master Sparrow") resolve too; see
+   `docs/en/architecture/pipelines/context-build/02-native-assembly/06-participants.md`
+   for the stage ladder.
 3. **Sanitize content** — `sanitizeUnknownTemplatePlaceholders()` strips
    brace-wrapped tokens that don't match `{user}` or `{bot}` (e.g. the LLM
-   writing `{bredrumb}` instead of the correct template token).
+   writing `{obonya}` instead of the correct template token).
 4. **Guard lineage** — blocks if `persona_lineage_id === 0` (reserved; signals
    an un-run schema migration).
 5. **Check limits** — `serverMemoryRepository.checkServerMemoryLimit()` or

@@ -1,7 +1,10 @@
 import type { DiffusionModelRow, EmbeddingModelRow, LlmRow, VideoGenerationModelRow } from "@/types/db/schema";
 import { getOpenRouterPricing, getOrFetchOpenRouterCapabilities } from "@/utils/cache/openrouterCapabilityCache";
+import { getOrFetchOpenRouterEmbeddingModel } from "@/utils/cache/openrouterEmbeddingModelCache";
+import { getOrFetchOpenRouterImageModel } from "@/utils/cache/openrouterImageModelCache";
 import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openrouterVideoModelCache";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
 
 export type OpenRouterModelRegistryScope =
@@ -16,7 +19,7 @@ export type OpenRouterModelRegistryScope =
 
 export type OpenRouterModelCapability = "text" | "embedding" | "image" | "video";
 
-export interface RegisteredOpenRouterModelEntry {
+interface RegisteredOpenRouterModelEntry {
   capability: OpenRouterModelCapability;
   codename: string;
   description: string | null;
@@ -38,19 +41,6 @@ export type RegisterOpenRouterModelResult =
     }
   | {
       status: "invalid_model";
-    };
-
-export type RemoveOpenRouterModelResult =
-  | {
-      status: "removed";
-      stillReferenced: boolean;
-      model: RegisteredOpenRouterModelEntry;
-    }
-  | {
-      status: "not_found";
-    }
-  | {
-      status: "already_available";
     };
 
 function normalizeModelCodename(modelName: string): string {
@@ -109,8 +99,33 @@ function buildRegisteredEntryFromVideoModel(model: VideoGenerationModelRow): Reg
   };
 }
 
-async function modelExistsInOpenRouterCatalog(modelCodename: string): Promise<boolean> {
-  return Boolean(await getOrFetchOpenRouterCapabilities(modelCodename));
+/**
+ * OpenRouter publishes one catalog per modality and lists a model in exactly the catalogs
+ * that serve it: embedding models are absent from `/models` entirely, and image generation
+ * has a far larger catalog than the handful of chat models with image output. Each
+ * capability therefore has to be checked against its own endpoint.
+ *
+ * `fresh` bypasses the shared refresh cooldown because this check only runs when someone is
+ * registering a codename by hand, and the codename they type is most often one OpenRouter
+ * published minutes ago. Answering that from a snapshot up to a TTL old reports a live model
+ * as nonexistent, and the amplification the cooldown guards against cannot happen here: the
+ * rate is one fetch per submitted registration, not one per chat turn.
+ */
+async function modelExistsInOpenRouterCatalog(
+  capability: OpenRouterModelCapability,
+  modelCodename: string,
+): Promise<boolean> {
+  const fresh = { fresh: true };
+  switch (capability) {
+    case "text":
+      return Boolean(await getOrFetchOpenRouterCapabilities(modelCodename, fresh));
+    case "embedding":
+      return Boolean(await getOrFetchOpenRouterEmbeddingModel(modelCodename, fresh));
+    case "image":
+      return Boolean(await getOrFetchOpenRouterImageModel(modelCodename, fresh));
+    case "video":
+      return Boolean(await getOrFetchOpenRouterVideoModelCapabilities(modelCodename, fresh));
+  }
 }
 
 async function upsertScopedOpenRouterLlm(modelCodename: string): Promise<LlmRow | null> {
@@ -132,6 +147,7 @@ async function upsertScopedOpenRouterLlm(modelCodename: string): Promise<LlmRow 
       seesYoutube: isOpenRouterGeminiModelCodename(modelCodename),
       supportsStructuredOutput: capabilities.supportsStructuredOutput,
     },
+    "openrouter",
     pricing
       ? { inputPerMillion: pricing.promptPricePerMillion, outputPerMillion: pricing.completionPricePerMillion }
       : null,
@@ -146,8 +162,11 @@ async function upsertScopedOpenRouterEmbeddingModel(modelCodename: string): Prom
     : null;
 }
 
-async function upsertScopedOpenRouterDiffusionModel(modelCodename: string): Promise<DiffusionModelRow | null> {
-  const diffusionModelId = await llmModelRepo.upsertScopedDiffusionModel(modelCodename);
+async function upsertScopedOpenRouterDiffusionModel(
+  modelCodename: string,
+  supports?: ImageEndpointSupports,
+): Promise<DiffusionModelRow | null> {
+  const diffusionModelId = await llmModelRepo.upsertScopedDiffusionModel(modelCodename, "openrouter", supports);
   return diffusionModelId
     ? await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", modelCodename)
     : null;
@@ -234,6 +253,7 @@ export async function registerOpenRouterModelForScope(
   scope: OpenRouterModelRegistryScope,
   capability: OpenRouterModelCapability,
   modelName: string,
+  imageSupports?: ImageEndpointSupports,
 ): Promise<RegisterOpenRouterModelResult> {
   const normalizedModelName = normalizeModelCodename(modelName);
   if (!normalizedModelName) {
@@ -257,13 +277,14 @@ export async function registerOpenRouterModelForScope(
     };
   }
 
+  // Validating before any upsert keeps a typo from creating a scoped row that no request
+  // can ever route to and that only shows up later as a provider-side model error.
+  if (!(await modelExistsInOpenRouterCatalog(capability, normalizedModelName))) {
+    return { status: "invalid_model" };
+  }
+
   switch (capability) {
     case "text": {
-      // Only text models appear in OpenRouter's LLM catalog, so validate before upserting
-      if (!(await modelExistsInOpenRouterCatalog(normalizedModelName))) {
-        return { status: "invalid_model" };
-      }
-
       const llm = await upsertScopedOpenRouterLlm(normalizedModelName);
       const entry = llm ? buildRegisteredEntryFromLlm(llm) : null;
       if (!entry) {
@@ -318,7 +339,7 @@ export async function registerOpenRouterModelForScope(
       };
     }
     case "image": {
-      const model = await upsertScopedOpenRouterDiffusionModel(normalizedModelName);
+      const model = await upsertScopedOpenRouterDiffusionModel(normalizedModelName, imageSupports);
       const entry = model ? buildRegisteredEntryFromDiffusionModel(model) : null;
       if (!entry) {
         return { status: "invalid_model" };
@@ -345,10 +366,6 @@ export async function registerOpenRouterModelForScope(
       };
     }
     case "video": {
-      if (!(await getOrFetchOpenRouterVideoModelCapabilities(normalizedModelName))) {
-        return { status: "invalid_model" };
-      }
-
       const model = await upsertScopedOpenRouterVideoModel(normalizedModelName);
       const entry = model ? buildRegisteredEntryFromVideoModel(model) : null;
       if (!entry) {
@@ -376,192 +393,4 @@ export async function registerOpenRouterModelForScope(
       };
     }
   }
-}
-
-export async function removeOpenRouterModelForScope(
-  scope: OpenRouterModelRegistryScope,
-  capability: OpenRouterModelCapability,
-  modelName: string,
-): Promise<RemoveOpenRouterModelResult> {
-  const normalizedModelName = normalizeModelCodename(modelName);
-  if (!normalizedModelName) {
-    return { status: "not_found" };
-  }
-
-  switch (capability) {
-    case "text": {
-      const model = await llmModelRepo.loadByProviderAndCodename("openrouter", normalizedModelName);
-      const entry = model ? buildRegisteredEntryFromLlm(model) : null;
-      if (!model || !entry) {
-        return { status: "not_found" };
-      }
-      if (!model.is_scoped_registration) {
-        return { status: "already_available" };
-      }
-
-      const deleted =
-        scope.kind === "server"
-          ? await llmProviderRepo.deleteOpenRouterModelRegistration({
-              serverId: scope.ownerId,
-              llmId: entry.modelId,
-            })
-          : await llmProviderRepo.deleteOpenRouterModelRegistration({
-              userId: scope.ownerId,
-              llmId: entry.modelId,
-            });
-
-      if (!deleted) {
-        return { status: "not_found" };
-      }
-
-      const remainingRegistrationCount = await llmModelRepo.countLlmRegistrations(entry.modelId);
-      const stillReferenced = await llmModelRepo.isLlmStillReferenced(entry.modelId);
-
-      if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await llmModelRepo.deleteOrphanedLlm(entry.modelId);
-      }
-
-      return {
-        status: "removed",
-        stillReferenced,
-        model: entry,
-      };
-    }
-    case "embedding": {
-      const model = await llmModelRepo.loadEmbeddingModelByProviderAndCodename("openrouter", normalizedModelName);
-      const entry = model ? buildRegisteredEntryFromEmbeddingModel(model) : null;
-      if (!model || !entry) {
-        return { status: "not_found" };
-      }
-      if (!model.is_scoped_registration) {
-        return { status: "already_available" };
-      }
-
-      const deleted =
-        scope.kind === "server"
-          ? await llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration({
-              serverId: scope.ownerId,
-              embeddingModelId: entry.modelId,
-            })
-          : await llmProviderRepo.deleteOpenRouterEmbeddingModelRegistration({
-              userId: scope.ownerId,
-              embeddingModelId: entry.modelId,
-            });
-
-      if (!deleted) {
-        return { status: "not_found" };
-      }
-
-      const remainingRegistrationCount = await llmModelRepo.countEmbeddingModelRegistrations(entry.modelId);
-      const stillReferenced = await llmModelRepo.isEmbeddingModelStillReferenced(entry.modelId);
-
-      if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await llmModelRepo.deleteOrphanedEmbeddingModel(entry.modelId);
-      }
-
-      return {
-        status: "removed",
-        stillReferenced,
-        model: entry,
-      };
-    }
-    case "image": {
-      const model = await llmModelRepo.loadDiffusionModelByProviderAndCodename("openrouter", normalizedModelName);
-      const entry = model ? buildRegisteredEntryFromDiffusionModel(model) : null;
-      if (!model || !entry) {
-        return { status: "not_found" };
-      }
-      if (!model.is_scoped_registration) {
-        return { status: "already_available" };
-      }
-
-      const deleted =
-        scope.kind === "server"
-          ? await llmProviderRepo.deleteOpenRouterImageModelRegistration({
-              serverId: scope.ownerId,
-              diffusionModelId: entry.modelId,
-            })
-          : await llmProviderRepo.deleteOpenRouterImageModelRegistration({
-              userId: scope.ownerId,
-              diffusionModelId: entry.modelId,
-            });
-
-      if (!deleted) {
-        return { status: "not_found" };
-      }
-
-      const remainingRegistrationCount = await llmModelRepo.countDiffusionModelRegistrations(entry.modelId);
-      const stillReferenced = await llmModelRepo.isDiffusionModelStillReferenced(entry.modelId);
-
-      if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await llmModelRepo.deleteOrphanedDiffusionModel(entry.modelId);
-      }
-
-      return {
-        status: "removed",
-        stillReferenced,
-        model: entry,
-      };
-    }
-    case "video": {
-      const model = await llmModelRepo.loadVideoGenerationModelByProviderAndCodename("openrouter", normalizedModelName);
-      const entry = model ? buildRegisteredEntryFromVideoModel(model) : null;
-      if (!model || !entry) {
-        return { status: "not_found" };
-      }
-      if (!model.is_scoped_registration) {
-        return { status: "already_available" };
-      }
-
-      const deleted =
-        scope.kind === "server"
-          ? await llmProviderRepo.deleteOpenRouterVideoModelRegistration({
-              serverId: scope.ownerId,
-              videoModelId: entry.modelId,
-            })
-          : await llmProviderRepo.deleteOpenRouterVideoModelRegistration({
-              userId: scope.ownerId,
-              videoModelId: entry.modelId,
-            });
-
-      if (!deleted) {
-        return { status: "not_found" };
-      }
-
-      const remainingRegistrationCount = await llmModelRepo.countVideoModelRegistrations(entry.modelId);
-      const stillReferenced = await llmModelRepo.isVideoModelStillReferenced(entry.modelId);
-
-      if (remainingRegistrationCount === 0 && !stillReferenced) {
-        await llmModelRepo.deleteOrphanedVideoModel(entry.modelId);
-      }
-
-      return {
-        status: "removed",
-        stillReferenced,
-        model: entry,
-      };
-    }
-  }
-}
-
-export async function loadRegisteredOpenRouterModelsForScope(
-  scope: OpenRouterModelRegistryScope,
-): Promise<RegisteredOpenRouterModelEntry[]> {
-  const [textModels, embeddingModels, imageModels, videoModels] = await Promise.all([
-    loadRegisteredOpenRouterEntriesForCapability(scope, "text"),
-    loadRegisteredOpenRouterEntriesForCapability(scope, "embedding"),
-    loadRegisteredOpenRouterEntriesForCapability(scope, "image"),
-    loadRegisteredOpenRouterEntriesForCapability(scope, "video"),
-  ]);
-
-  const capabilityOrder: Record<OpenRouterModelCapability, number> = {
-    text: 0,
-    embedding: 1,
-    image: 2,
-    video: 3,
-  };
-
-  return [...textModels, ...embeddingModels, ...imageModels, ...videoModels].sort(
-    (a, b) => capabilityOrder[a.capability] - capabilityOrder[b.capability] || a.codename.localeCompare(b.codename),
-  );
 }

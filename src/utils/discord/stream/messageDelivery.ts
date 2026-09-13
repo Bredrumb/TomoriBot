@@ -214,13 +214,18 @@ export class StreamMessageDelivery {
     if (!rawMessageChunks.length) return;
 
     const finalMessageChunks: string[] = [];
-    for (let chunk of rawMessageChunks) {
-      const originalChunk = chunk;
+    for (const chunk of rawMessageChunks) {
       if (textConfig.humanizerDegree === HumanizerDegree.HEAVY) {
-        chunk = humanizeString(chunk);
-        if (chunk !== originalChunk) {
-          log.info(`Stream Send: Humanized (D3) from "${originalChunk}" to "${chunk}"`);
+        // A humanizer flush becomes a real extra entry here, so it goes out as its own sent
+        // message (with typing simulation in between) rather than a linebreak inside one message.
+        const humanizedPieces = humanizeString(chunk);
+        if (humanizedPieces.length > 1 || humanizedPieces[0] !== chunk) {
+          log.info(`Stream Send: Humanized (D3) from "${chunk}" to ${JSON.stringify(humanizedPieces)}`);
         }
+        for (const piece of humanizedPieces) {
+          if (piece.trim()) finalMessageChunks.push(piece);
+        }
+        continue;
       }
       if (chunk.trim()) {
         finalMessageChunks.push(chunk);

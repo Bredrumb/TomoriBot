@@ -76,36 +76,50 @@ Expected startup stages include:
 Run in your test server:
 
 ```text
-/config setup
+/setup
 ```
 
-`/config setup` normally captures your initial provider credentials.
+The command requires **Manage Server** and answers with a private checklist panel that only you can
+operate. Its items are a draft: **Finish Setup** is the only control that writes, so opening, editing,
+or cancelling leaves the database untouched. A draft is process-local, so a restart discards it too;
+`SETUP_DRAFT_MAX_ENTRIES` (default 200) bounds pending drafts in `.env.optional.example`.
 
-If you are testing a server that should start in member-funded mode, `/config setup` also exposes a `None (User BYOK)` option. That bootstraps the server with no server-side text provider and immediately enables member BYOK, so users must configure their own personal providers.
+Under `RUN_ENV=development` the panel renders two steps:
 
-If you want to use only a self-hosted or proxy-backed custom endpoint, `/config setup` now also exposes `Custom Endpoint (finish after setup)`. That bootstraps the server without enabling BYOK, then you finish the provider setup with:
+- **AI Provider** offers one String Select with three access modes. **AI Provider (Recommended)**
+  opens the provider catalog plus an API key field and validates the key before encrypting it into the
+  draft. **Custom Endpoint (Advanced)** repaints the panel with **Configure Connection** and
+  **Configure Text Model**, and the model button stays disabled until a connection validates; both
+  write nothing before **Finish Setup**, unlike the same registration in `/providers`.
+  **User BYOK** is offered in guilds only and confirms that members must supply their own personal
+  providers, so the workspace keeps no server-side text provider.
+- **Starting Settings** is one four-row modal: persona, reply style, timezone, and the workspace
+  default system prompt. **Built-in Default (Recommended)** stores no prompt text, so it keeps
+  tracking the shipped default, and a catalog preset stores that preset's text at commit time.
+
+`RUN_ENV=production` adds a third step, **Policies**, which accepts the Terms of Service and the
+Privacy Policy in one modal; add `TEST_PRODUCTION=true` to exercise that layout locally without AWS
+Secrets Manager. The same switch decides whether `/legal terms-of-service` and
+`/legal privacy-policy` are registered, and `/legal license` is registered in every environment.
+
+To save and activate an additional provider afterward:
 
 ```text
-/provider custom-endpoint add
+/providers
 ```
 
-The add command registers the endpoint and makes it the current model for the selected capability.
-Later changes to that registration can be done in place with `/provider custom-endpoint edit`.
+Choose **Add New Custom Endpoint** to save its API compatibility and connection details, then select
+the saved entry and use its model dropdown to register and activate a model capability. Later changes
+to that registration can be done in place with `/providers`.
 
-If you want to save and activate an additional provider afterward:
-
-```text
-/provider add
-```
-
-Then use `/model text` whenever you want to switch to another saved provider or model later.
+Then use `/config` > Models > Switch Models whenever you want to switch to another saved provider or model later.
 
 Common saved providers:
 
 - `provider:openrouter`
 - `provider:novelai`
 
-The old inline `custom` provider path is deprecated. Use `/provider custom-endpoint add` instead.
+The old inline `custom` provider path is deprecated. Use `/providers` instead.
 
 ## Common Development Commands
 
@@ -125,6 +139,12 @@ bun run check-limits
 bun run check-media-size
 bun run compress-media
 ```
+
+`bun run vl` runs every validation gate and prints one verdict per gate, ending with a machine
+readable `vl-status:` line. It is quiet by default: a passing gate prints no output, and a failing
+gate prints its full detail. Pass `--verbose` to see everything each gate would print on its own. See
+[`development-tasks.md`](./development-tasks) for the full behavior and for the redirect pattern that
+keeps the exit code intact.
 
 `bun run check-runtime-imports` verifies that critical runtime dependencies load and that
 `bun.lock` preserves their compatible transitive versions. It also runs as a fatal check in
@@ -152,13 +172,13 @@ you must still update its published body (`gh release edit`).
 
 ## Quick Health Checks
 
-- `/tool ping`
-- `/tool status`
+- `/ping`
+- `/status`
 - Mention the bot or use trigger words in chat
 
 ## Troubleshooting
 
-- Command registration issues: run `/tool refresh`
+- Command registration issues: run `/refresh`
 - Type errors: `bun run check`
 - Formatting/lint: `bun run lint`
 - Locales mismatch: `bun run check-locales`

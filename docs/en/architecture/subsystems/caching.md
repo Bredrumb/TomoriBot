@@ -56,8 +56,8 @@ channels ~11,200, emojis ~6,500) against roughly 6,500 entries across every cach
 | Structured log line | `log.metric("cache_sizes", ...)` | container recreate, host reboot, and the bot stalling, since it lands in a host file |
 | `metric_samples` row | `metricSampleRepository.recordSample()` | whatever the database survives; it is the copy Grafana can graph |
 
-The same interval emits a second row under `metric_name = 'host_memory'`, sampling the host's
-`/proc` and `/sys` counters rather than this process's. It deliberately has no `log.metric()` twin:
+The same interval emits a second row under `metric_name = 'host_memory'`, sampling the host's `procfs`
+and `sysfs` counters rather than this process's. It deliberately has no `log.metric()` twin:
 `tomoribot-oom-observer` already writes those counters to disk every 15 s, so a 5-minute copy would
 duplicate a finer record while adding to that file's growth. The database row is the part that did
 not exist, since removing the monitoring agent left host memory with no queryable series.
@@ -144,7 +144,7 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
   - `updateShortTermMemorySummary`
   - `clearShortTermMemoryForUser`, `clearShortTermMemoryForChannel`, `clearShortTermMemoryForServerChannel`
 - Operational note:
-  - `/server stm manage` lists the current server's active server-shared STM entries across personas.
+  - `/memories` (Short-Term category) lists the current server's active server-shared STM entries across personas.
   - Unchecking an entry clears only that server-scoped STM entry; user-scoped cross-server STM entries are left intact.
 
 ### 6) LLM model cache (`llmCache.ts`)
@@ -154,31 +154,51 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 - No runtime TTL/invalidation
 - APIs: `initializeLLMCache`, `getCachedLLM`, `getCachedLLMsByProvider`, `getCachedDefaultLLM`
 
-### 7) OpenRouter capability cache (`openrouterCapabilityCache.ts`)
+### 7) OpenRouter model catalogs (`openrouterCatalog.ts` and friends)
 
-- Key: `llm_codename`
-- Warmed at startup from OpenRouter models API
-- Stores tools/vision/structured-output capability + token limits
+OpenRouter publishes one catalog per modality, and a model appears only in the catalogs that
+serve it. Embedding models are absent from `/api/v1/models` entirely, and image generation has
+a much larger catalog than the handful of chat models that can emit images, so each capability
+must be validated against its own endpoint:
+
+| Capability | Endpoint | Module |
+|---|---|---|
+| Text | `/api/v1/models` | `openrouterCapabilityCache.ts` |
+| Embedding | `/api/v1/embeddings/models` | `openrouterEmbeddingModelCache.ts` |
+| Image | `/api/v1/images/models` | `openrouterImageModelCache.ts` |
+| Video | `/api/v1/videos/models` | `openrouterVideoModelCache.ts` |
+
+All four share the refresh machinery in `openrouterCatalog.ts`:
+
+- Key: model codename, normalized to lowercase on both write and lookup
+- Warmed at startup, then refreshed on a cache miss and on a TTL
+- A refresh builds a replacement map and swaps it only on success, so a failed refresh leaves
+  the previous catalog serving rather than emptying it
+- Concurrent refreshes are collapsed into one request, and attempts are rate-limited by
+  `OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS` (default 60s) so an unrecognized codename cannot
+  amplify into a fetch per lookup
+- Interactive model registration passes `{ fresh: true }` to `getOrFetch`, which refreshes
+  before the lookup and ignores that rate limit. A codename someone types by hand is usually
+  one OpenRouter published minutes ago, and the rate is bounded by submitted registrations
+  rather than by chat turns
+- `OPENROUTER_CATALOG_TTL_MS` (default 6h) drives the background refresher in
+  `timers/openrouterCatalogRefresher.ts`, which exists for the synchronous readers: pricing,
+  context limits, tokenizer, and `supported_parameters` are consulted per turn and never
+  refresh on their own
+
+The text catalog additionally stores tools/vision/structured-output capability, token limits,
+tokenizer, and pricing:
+
 - Tool capability is derived primarily from the reported `tools` parameter, with a fallback for models whose OpenRouter description explicitly advertises native function/tool calling even when the metadata is incomplete.
 - `tool_choice` is tracked separately through cached `supported_parameters` and only sent when supported.
-- No background TTL: the snapshot is replaced only by startup or by a miss
 
-`getOrFetchOpenRouterCapabilities` resolves a codename the startup snapshot never saw, which
-is how a model published after boot becomes registerable without a restart. OpenRouter serves
-no per-model metadata route (`/api/v1/models/{id}` answers 404 for every codename, live ones
-included), so a miss re-reads the whole catalog rather than probing one model:
+Because a miss reaches the network, a startup fetch that fails is recoverable without a
+restart. `isOpenRouterCapabilityCacheReady()` reports whether a usable snapshot exists at all;
+it says nothing about any individual model, so a lookup can still miss on a ready catalog.
 
-- The fetch completes before any cached map is touched, so a failed refresh leaves the
-  previous catalog serving instead of emptying it
-- Concurrent misses share one in-flight request, and attempts are rate-limited by
-  `OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS` (default 60s). The account-setting path calls
-  this per turn when its stored capabilities are stale, so an unpublished codename would
-  otherwise amplify into a fetch per chat turn
-- The lookup does not gate on `isOpenRouterCapabilityCacheReady()`. An unready cache means the
-  startup fetch failed, and this path is the only recovery from it short of a restart
-
-`isOpenRouterCapabilityCacheReady()` reports whether a usable snapshot exists at all; it says
-nothing about any individual model, so a lookup can still miss on a ready cache.
+The catalogs are deliberately excluded from `emergencyCacheClearer.ts`: they are provider
+metadata rather than per-guild growth, and dropping one would gate chat on database flags until
+the next refresh window to reclaim a few hundred KB.
 
 ### 8) Gemini token-limit map (`geminiCapabilityCache.ts`)
 
@@ -312,10 +332,10 @@ The gate also avoids real database work, not just a `Map` write:
 `UserRepository.getPersonalSpotlightStatus` issues a `DELETE` for expired rows before its aggregate
 `SELECT`, so every miss was costing a write plus a `LEFT JOIN`.
 
-`invalidatePersonalSpotlightCache` drops the gate alongside matching triple keys. Both write paths
-(`commands/personal/spotlight/set.ts`, `commands/personal/spotlight/manage.ts`) already call it, so
-a server's first spotlight takes effect immediately rather than after the TTL. **Any new write path
-must call it too**, or the gate will keep answering "none" for up to the TTL.
+`invalidatePersonalSpotlightCache` drops the gate alongside matching triple keys. The spotlight
+write routes in `utils/discord/interactions/personalConfigSpotlightRoutes.ts` already call it, so a server's
+first spotlight takes effect immediately rather than after the TTL. **Any new write path must call
+it too**, or the gate will keep answering "none" for up to the TTL.
 
 ## Cache Invalidation Rules (Critical)
 
@@ -334,6 +354,7 @@ Common examples:
 - channel system prompt changes -> `invalidateChannelPromptCache(serverId, channelDiscId)` (handled inside `ChannelPromptRepository`)
 - persona sprite changes -> `invalidatePersonaSpriteCache(personaId)` (handled inside `PersonaSpriteRepository`)
 - personal spotlight create/remove -> `invalidatePersonalSpotlightCache(serverId, userId?, channelDiscId?)` (also drops the per-server gate)
+- successful MCP tool-name snapshot changes -> `invalidateGuildMcpConfigCache(serverId)` only; unchanged or failed metadata writes do not invalidate it, and display metadata does not invalidate Tomori state
 
 ## Emergency Memory Cleanup
 

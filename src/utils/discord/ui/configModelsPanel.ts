@@ -1,0 +1,983 @@
+import {
+  ButtonStyle,
+  ComponentType,
+  type ActionRowData,
+  type ButtonComponentData,
+  type ComponentInContainerData,
+  type SelectMenuComponentOptionData,
+  type StringSelectMenuComponentData,
+} from "discord.js";
+import type { LogitBiasEntry } from "@/types/provider/logitBias";
+import type { PanelReadStatus } from "@/types/discord/panel";
+import type { NaiPresetRow, SavedProviderConfigRow } from "@/types/db/schema";
+import {
+  CONFIG_CLEARABLE_MODEL_CAPABILITIES,
+  CONFIG_LOGIT_BIAS_PAGE_SIZE,
+  CONFIG_MODEL_CAPABILITY_ORDER,
+  CONFIG_MODEL_CLEAR_VALUE,
+  CONFIG_MODEL_PAGE_SIZE,
+  CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
+  CONFIG_ENDPOINT_PAGE_SIZE,
+  CONFIG_NAI_PRESET_NEXT_VALUE,
+  CONFIG_NAI_PRESET_PAGE_SIZE,
+  CONFIG_NAI_PRESET_PREVIOUS_VALUE,
+  CONFIG_ROUTE_NAMESPACE,
+  CONFIG_ROUTE_VERSION,
+  buildConfigRouteId,
+  buildConfigRouteSegments,
+  isConfigCatalogModelCapability,
+  type ConfigCatalogModelCapability,
+  type ConfigModelCapability,
+  type ConfigPage,
+} from "@/utils/discord/configPanelCatalog";
+import {
+  computeConfigEndpointFingerprint,
+  encodeConfigEndpointPageValue,
+  encodeConfigEndpointSelection,
+  encodeConfigProviderPageValue,
+  encodeConfigProviderRangeValue,
+} from "@/utils/discord/interactions/configModelLoaders";
+import type {
+  ConfigCapabilityEndpoint,
+  ConfigEndpointModelCapability,
+} from "@/utils/discord/interactions/configModelLoaders";
+import {
+  buildModelRoutingControl,
+  buildProviderPageEntries,
+  type ProviderSelectEntry,
+} from "@/utils/discord/ui/modelRoutingControls";
+import { buildPaginationRow, buildStateControlRow, withLinePrefix } from "@/utils/discord/ui/panel";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import {
+  buildProviderParameterBlock,
+  formatStoredParameterValue,
+} from "@/utils/discord/ui/personalConfigParameterControls";
+import {
+  DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
+  measureComponentTextLength,
+} from "@/utils/discord/ui/componentsV2Limits";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+import { formatStopStringForDisplay } from "@/utils/provider/stopStringConfig";
+import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { localizer } from "@/utils/text/localizer";
+import { buildConfigVoicesBody, type ConfigVoicesView } from "@/utils/discord/ui/configVoicesPanel";
+export type { ConfigVoicesView };
+
+/** Keeps the active preset line from consuming room needed by receipts and future parameter copy. */
+const CONFIG_NAI_PRESET_DISPLAY_HEADROOM = 256;
+
+interface ConfigNaiPresetView {
+  target: "kayra" | "erato" | null;
+  compatibility: "eligible" | "not-novelai" | "unsupported";
+  presets: NaiPresetRow[];
+  activePresetName: string | null;
+  fingerprint: string | null;
+  pageStart: number;
+}
+
+export const CONFIG_MODEL_CAPABILITY_LOCALE_KEYS: Record<ConfigModelCapability, string> = {
+  text: "commands.config.panel.capability_text",
+  vision: "commands.config.panel.capability_vision",
+  embedding: "commands.config.panel.capability_embedding",
+  image: "commands.config.panel.capability_image",
+  "nai-image": "commands.config.panel.capability_nai_image",
+  video: "commands.config.panel.capability_video",
+  tts: "commands.config.panel.capability_tts",
+  stt: "commands.config.panel.capability_stt",
+};
+
+/**
+ * Clearing Vision disables the image-understanding tools outright, while either image slot only
+ * contributes to one shared flag, so the two consequences cannot share one description.
+ */
+const MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS: Partial<Record<ConfigCatalogModelCapability, string>> = {
+  vision: "commands.config.panel.model_no_model_vision_description",
+  image: "commands.config.panel.model_no_model_image_description",
+  "nai-image": "commands.config.panel.model_no_model_image_description",
+};
+
+/** One server-default slot as the panel renders it. */
+interface ConfigModelSlotView {
+  capability: ConfigCatalogModelCapability;
+  currentModelName: string | null;
+  currentProvider: string | null;
+  eligibleProviders: string[];
+  /** Offset into the provider entry list the select is scrolled to. */
+  providerPageStart: number;
+  /** Provider whose catalog is spread across page entries, or null while none is expanded. */
+  expandedProvider: string | null;
+  expandedOptionCount: number;
+}
+
+/** Which capability's provider selector is expanded, and where its entry list is scrolled. */
+export interface ConfigSwitchModelsProviderPage {
+  capability: ConfigCatalogModelCapability;
+  provider?: string;
+  start: number;
+}
+
+export interface ConfigEndpointPage {
+  capability: ConfigEndpointModelCapability;
+  start: number;
+}
+
+export interface ConfigEndpointSlotView {
+  capability: ConfigEndpointModelCapability;
+  endpoints: ConfigCapabilityEndpoint[];
+  pageStart: number;
+}
+
+export interface ConfigSwitchModelsView {
+  slots: ConfigModelSlotView[];
+  channelOverrideCount: number;
+  personaOverrideCount: number;
+  imageGenerationEnabled: boolean;
+  videoGenerationEnabled: boolean;
+  speechCapabilityEnabled?: boolean;
+  endpointSlots?: ConfigEndpointSlotView[];
+}
+
+export interface ConfigParametersView {
+  textProviders: string[];
+  selectedProvider: string | null;
+  selectedConfig: SavedProviderConfigRow | null;
+  stopStrings: string[];
+  speakerPatternEnabled: boolean;
+  logitBiasEntries: LogitBiasEntry[];
+  logitBiasPageStart: number;
+  naiPresetView?: ConfigNaiPresetView;
+}
+
+interface ConfigFallbackSlotView {
+  label: string | null;
+}
+
+export interface ConfigFallbacksView {
+  slots: ConfigFallbackSlotView[];
+  providerEntries: Array<{ value: string; label: string }>;
+  /** Provider whose option list is spread across page entries, or null while none is expanded. */
+  expandedProvider: string | null;
+  /** Offset into the entry list the select is scrolled to. */
+  entryStart: number;
+  randomizerEnabled: boolean;
+  hasFallbacks: boolean;
+}
+
+export interface ConfigImageGenerationView {
+  positiveTags: string[];
+  negativeTags: string[];
+  sampler: string;
+  steps: string;
+  scale: string;
+  noiseSchedule: string;
+  cfgRescale: string;
+}
+
+export interface ConfigModelsPageInput {
+  locale: string;
+  page: ConfigPage;
+  readStatus: PanelReadStatus;
+  switchView?: ConfigSwitchModelsView;
+  parametersView?: ConfigParametersView;
+  fallbacksView?: ConfigFallbacksView;
+  imageView?: ConfigImageGenerationView;
+  voicesView?: ConfigVoicesView;
+}
+
+function heading(locale: string, titleKey: string, descriptionKey: string): ComponentInContainerData {
+  return {
+    type: ComponentType.TextDisplay,
+    content: `### ${localizer(locale, titleKey)}\n${localizer(locale, descriptionKey)}`,
+  };
+}
+
+function hasUsableModel(slot: ConfigModelSlotView): boolean {
+  // A model row can outlive its saved provider, so both the assignment and provider eligibility
+  // are required before the slot can back a generation request.
+  return (
+    slot.currentModelName !== null &&
+    slot.currentProvider !== null &&
+    slot.eligibleProviders.includes(slot.currentProvider)
+  );
+}
+
+function buildCapabilityNoticeLine(locale: string, view: ConfigSwitchModelsView): ComponentInContainerData | null {
+  // One Image flag enables either provider-specific image path, so one usable image slot is enough.
+  const hasUsableImageModel = view.slots.some(
+    (slot) => (slot.capability === "image" || slot.capability === "nai-image") && hasUsableModel(slot),
+  );
+  const hasUsableVideoModel = view.slots.some((slot) => slot.capability === "video" && hasUsableModel(slot));
+  const warnings: string[] = [];
+
+  if (!view.imageGenerationEnabled) {
+    warnings.push(localizer(locale, "commands.config.panel.image_generation_disabled_direction"));
+  } else if (!hasUsableImageModel) {
+    warnings.push(localizer(locale, "commands.config.panel.image_generation_missing_model"));
+  }
+
+  if (!view.videoGenerationEnabled) {
+    warnings.push(localizer(locale, "commands.config.panel.video_generation_disabled_direction"));
+  } else if (!hasUsableVideoModel) {
+    warnings.push(localizer(locale, "commands.config.panel.video_generation_missing_model"));
+  }
+
+  if (view.speechCapabilityEnabled === false) {
+    warnings.push(localizer(locale, "commands.config.panel.speech_capability_disabled_direction"));
+  } else if (view.speechCapabilityEnabled !== undefined) {
+    warnings.push(localizer(locale, "commands.config.panel.speech_capability_enabled_direction"));
+    const speechSlot = view.endpointSlots?.find((slot) => slot.capability === "tts");
+    const hasActiveSpeechEndpoint = speechSlot?.endpoints.some((endpoint) => endpoint.isActive && endpoint.id > 0);
+    if (!hasActiveSpeechEndpoint) {
+      warnings.push(localizer(locale, "commands.config.panel.speech_capability_missing_endpoint"));
+    }
+  }
+
+  if (warnings.length === 0) return null;
+  return {
+    type: ComponentType.TextDisplay,
+    content: warnings.map((warning) => withLinePrefix("-# ", warning)).join("\n"),
+  };
+}
+
+interface SwitchProviderOptionsInput {
+  locale: string;
+  capabilityLabel: string;
+  visibleEntries: readonly ProviderSelectEntry[];
+  showClear: boolean;
+  overflows: boolean;
+  rangeIndex: number;
+  rangeCount: number;
+  windowSize: number;
+  expandedProvider: string | null;
+}
+
+function buildSwitchProviderOptions(input: SwitchProviderOptionsInput): ProviderSelectEntry[] {
+  const options = [...input.visibleEntries];
+  if (input.overflows) {
+    // Wrapping past the last window is what keeps every entry reachable from any window without a
+    // second control: advancing repeatedly always returns to the first.
+    const nextRangeIndex = (input.rangeIndex + 1) % input.rangeCount;
+    options.push({
+      value: encodeConfigProviderRangeValue(nextRangeIndex * input.windowSize, input.expandedProvider),
+      label: localizer(input.locale, "commands.config.panel.model_provider_more_option", {
+        capability: input.capabilityLabel,
+        page: nextRangeIndex + 1,
+        total: input.rangeCount,
+      }),
+    });
+  }
+  if (options.length > 0 || input.showClear) return options;
+  return [{ value: "none", label: localizer(input.locale, "commands.config.panel.no_providers_option") }];
+}
+
+function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
+  const { locale } = input;
+  const view = input.switchView;
+  const writesDisabled = input.readStatus !== "fresh";
+  const components: ComponentInContainerData[] = [
+    heading(locale, "commands.config.panel.switch_models_title", "commands.config.panel.switch_models_description"),
+  ];
+  if (!view) return components;
+
+  for (const capability of CONFIG_MODEL_CAPABILITY_ORDER) {
+    if (!isConfigCatalogModelCapability(capability)) continue;
+    const slot = view.slots.find((candidate) => candidate.capability === capability);
+    if (!slot) continue;
+    const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS[capability]);
+
+    // The clear entry is re-prepended to every provider page, so it costs one option slot per
+    // page: the direct limit has to shrink or the last provider of each page would be sliced away
+    // with no page able to reach it.
+    const showClear = slot.currentModelName !== null && CONFIG_CLEARABLE_MODEL_CAPABILITIES.has(capability);
+    const clearDescriptionKey = showClear ? MODEL_CLEAR_DESCRIPTION_LOCALE_KEYS[capability] : undefined;
+    const directLimit = CONFIG_MODEL_PROVIDER_DIRECT_LIMIT - (showClear ? 1 : 0);
+
+    const { entries, expandedStartIndex, expandedPageCount } = buildProviderPageEntries({
+      providers: slot.eligibleProviders,
+      expandedProvider: slot.expandedProvider,
+      expandedOptionCount: slot.expandedOptionCount,
+      pageSize: CONFIG_MODEL_PAGE_SIZE,
+      locale,
+      pageLabelKey: "commands.config.panel.provider_page_label",
+      // A whole provider carries its bare name while a slice carries an offset, so the handler can
+      // tell "open this provider" from "open its first page" and expand only the former.
+      encodeProviderValue: (provider) => provider,
+      encodePageValue: (provider, start) => encodeConfigProviderPageValue(provider, start),
+    });
+
+    // Defaulting to the expansion's own offset keeps a freshly expanded provider on screen; a
+    // stored start means the reader paged deliberately and outranks it.
+    const entryStart = slot.expandedProvider ? slot.providerPageStart || expandedStartIndex : slot.providerPageStart;
+    // A window that does not hold every entry spends one option slot on its own advance entry, so
+    // the window shrinks by one rather than leaving the last entry of each window unreachable.
+    const overflows = entries.length > directLimit;
+    const windowSize = overflows ? directLimit - 1 : directLimit;
+    const rangeCount = Math.max(1, Math.ceil(entries.length / windowSize));
+    const rangeIndex = Math.min(Math.max(0, Math.floor(entryStart / windowSize)), rangeCount - 1);
+    const visibleEntries = entries.slice(rangeIndex * windowSize, rangeIndex * windowSize + windowSize);
+
+    components.push(
+      buildModelRoutingControl({
+        capabilityLabel,
+        activeModelName: slot.currentModelName,
+        activeProvider: slot.currentProvider,
+        providerEntries: buildSwitchProviderOptions({
+          locale,
+          capabilityLabel,
+          visibleEntries,
+          showClear,
+          overflows,
+          rangeIndex,
+          rangeCount,
+          windowSize,
+          expandedProvider: slot.expandedProvider,
+        }),
+        customId: buildConfigRouteId({ action: "model-provider-select", locale, capability }),
+        // A server has nothing to inherit from, so the leading entry is a clear rather than a
+        // server default, and only the slots whose absorbed command offered one carry it.
+        serverDefaultValue: showClear ? CONFIG_MODEL_CLEAR_VALUE : undefined,
+        serverDefaultLabel: showClear ? localizer(locale, "commands.config.panel.model_no_model_option") : undefined,
+        serverDefaultDescription: clearDescriptionKey ? localizer(locale, clearDescriptionKey) : undefined,
+        serverDefaultDisplay: localizer(locale, "commands.config.panel.none_label"),
+        // While expanded the active model is the least useful thing the placeholder could say: the
+        // reader has already chosen a provider and is looking for its pages.
+        placeholderOverride:
+          expandedPageCount > 0 && slot.expandedProvider
+            ? localizer(locale, "commands.config.panel.model_provider_page_placeholder", {
+                capability: capabilityLabel,
+                provider: getProviderDisplayName(slot.expandedProvider),
+              })
+            : undefined,
+        // A model assignment can outlive the provider it came from, so the clear entry keeps the
+        // select live even with nothing eligible left to pick; without it the select is inert
+        // rather than absent, and the placeholder is what keeps the assignment readable.
+        disabled: writesDisabled || (entries.length === 0 && !showClear),
+      }),
+    );
+  }
+
+  for (const capability of ["tts", "stt"] as const) {
+    const slot = view.endpointSlots?.find((candidate) => candidate.capability === capability);
+    if (!slot) continue;
+    const capabilityLabel = localizer(locale, CONFIG_MODEL_CAPABILITY_LOCALE_KEYS[capability]);
+    const overflows = slot.endpoints.length > CONFIG_ENDPOINT_PAGE_SIZE;
+    const windowSize = overflows ? CONFIG_ENDPOINT_PAGE_SIZE - 1 : CONFIG_ENDPOINT_PAGE_SIZE;
+    const rangeCount = Math.max(1, Math.ceil(slot.endpoints.length / windowSize));
+    const rangeIndex = Math.min(Math.max(0, Math.floor(slot.pageStart / windowSize)), rangeCount - 1);
+    const visibleStart = rangeIndex * windowSize;
+    const fingerprint = computeConfigEndpointFingerprint(capability, slot.endpoints);
+    const options: SelectMenuComponentOptionData[] = slot.endpoints
+      .slice(visibleStart, visibleStart + windowSize)
+      .map((endpoint, offset) => {
+        const displayName = `${endpoint.label}: ${endpoint.modelLabel}`;
+        return {
+          value: encodeConfigEndpointSelection(visibleStart + offset, fingerprint),
+          label: safeSelectOptionText(displayName, 100),
+          description: safeSelectOptionText(
+            localizer(
+              locale,
+              endpoint.isActive
+                ? "commands.providers.activate_option_active_description"
+                : "commands.providers.activate_option_description",
+              { capability: endpoint.capability, name: displayName },
+            ),
+            100,
+          ),
+          default: false,
+        };
+      });
+    if (overflows) {
+      const nextRangeIndex = (rangeIndex + 1) % rangeCount;
+      options.push({
+        value: encodeConfigEndpointPageValue(nextRangeIndex * windowSize),
+        label: safeSelectOptionText(
+          localizer(locale, "commands.config.panel.model_provider_more_option", {
+            capability: capabilityLabel,
+            page: nextRangeIndex + 1,
+            total: rangeCount,
+          }),
+          100,
+        ),
+        description: undefined,
+        default: false,
+      });
+    }
+    if (options.length === 0) {
+      options.push({
+        value: "ep-none",
+        label: safeSelectOptionText(localizer(locale, "commands.config.panel.no_endpoints_option"), 100),
+        description: safeSelectOptionText(
+          localizer(locale, "commands.config.panel.providers_endpoint_registration_hint"),
+          100,
+        ),
+        default: false,
+      });
+    }
+    const activeEndpoint = slot.endpoints.find((endpoint) => endpoint.isActive);
+    const placeholder = activeEndpoint
+      ? `${capabilityLabel}: ${activeEndpoint.label}: ${activeEndpoint.modelLabel}`
+      : `${capabilityLabel}: ${localizer(locale, "commands.providers.activate_placeholder")}`;
+    components.push({
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.StringSelect,
+          customId: buildConfigRouteId({ action: "endpoint-select", locale, capability }),
+          placeholder: safeSelectOptionText(placeholder, 150),
+          options,
+          disabled: writesDisabled || slot.endpoints.length === 0,
+        },
+      ],
+    });
+  }
+
+  components.push({
+    type: ComponentType.TextDisplay,
+    content: `-# ${localizer(locale, "commands.config.panel.manage_providers_hint")}`,
+  });
+
+  const capabilityNotice = buildCapabilityNoticeLine(locale, view);
+  if (capabilityNotice) components.push(capabilityNotice);
+
+  // Only Text carries narrower scopes, so the summary names those two editors rather than implying
+  // that the six other slots support overrides at all.
+  components.push({
+    type: ComponentType.TextDisplay,
+    content: `**${localizer(locale, "commands.config.panel.text_overrides_title")}**
+${localizer(locale, "commands.config.panel.text_overrides_description")}
+> ${localizer(locale, "commands.config.panel.channel_overrides_label")}: ${view.channelOverrideCount}
+${withLinePrefix("-# ", localizer(locale, "commands.config.panel.channel_overrides_hint"))}
+> ${localizer(locale, "commands.config.panel.persona_overrides_label")}: ${view.personaOverrideCount}
+${withLinePrefix("-# ", localizer(locale, "commands.config.panel.persona_overrides_hint"))}`,
+  });
+
+  return components;
+}
+
+function formatStopStringSummary(locale: string, stopStrings: readonly string[]): string {
+  if (stopStrings.length === 0) return localizer(locale, "commands.config.panel.none_label");
+  const visible = stopStrings.slice(0, 8).map((stop) => `\`${formatStopStringForDisplay(stop)}\``);
+  if (stopStrings.length > visible.length) {
+    visible.push(
+      localizer(locale, "commands.config.panel.stop_more_summary", { count: stopStrings.length - visible.length }),
+    );
+  }
+  return visible.join(", ");
+}
+
+function formatLogitBiasSummary(locale: string, entries: readonly LogitBiasEntry[]): string {
+  if (entries.length === 0) return localizer(locale, "commands.config.panel.none_label");
+  const visible = entries.slice(0, 6).map((entry) => `\`${entry.text}\` ${entry.value}`);
+  if (entries.length > visible.length) {
+    visible.push(
+      localizer(locale, "commands.config.panel.logit_more_summary", { count: entries.length - visible.length }),
+    );
+  }
+  return visible.join(", ");
+}
+
+function buildNaiPresetBlock(
+  locale: string,
+  view: ConfigNaiPresetView,
+  writesDisabled: boolean,
+  displayBudget: number,
+): ComponentInContainerData[] {
+  const isJapanese = locale.toLowerCase().startsWith("ja");
+  const explanationKey =
+    view.compatibility === "not-novelai"
+      ? "not_novelai"
+      : view.compatibility === "unsupported"
+        ? "not_kayra_erato"
+        : null;
+  const display = explanationKey
+    ? `**${localizer(locale, `commands.config.panel.nai_preset.${explanationKey}_title`)}**\n${localizer(
+        locale,
+        `commands.config.panel.nai_preset.${explanationKey}_description`,
+      )}`
+    : (() => {
+        const prefix = `**${localizer(locale, "commands.config.panel.nai_preset.select_label")}**\n${localizer(
+          locale,
+          "commands.config.panel.nai_preset.select_description",
+        )}\n> `;
+        const suffix = ` (${view.target})`;
+        const activeName = view.activePresetName ?? localizer(locale, "commands.config.panel.none_label");
+        const activeNameBudget = Math.max(
+          0,
+          displayBudget - getDiscordTextLength(prefix) - getDiscordTextLength(suffix),
+        );
+        return `${prefix}${truncateDiscordText(activeName, activeNameBudget)}${suffix}`;
+      })();
+
+  const pageCount = Math.max(1, Math.ceil(view.presets.length / CONFIG_NAI_PRESET_PAGE_SIZE));
+  const pageStart = Math.min(
+    Math.max(0, Math.floor(view.pageStart / CONFIG_NAI_PRESET_PAGE_SIZE) * CONFIG_NAI_PRESET_PAGE_SIZE),
+    (pageCount - 1) * CONFIG_NAI_PRESET_PAGE_SIZE,
+  );
+  const pageIndex = Math.floor(pageStart / CONFIG_NAI_PRESET_PAGE_SIZE);
+  const options: SelectMenuComponentOptionData[] =
+    view.compatibility === "eligible" && view.presets.length > 0
+      ? view.presets.slice(pageStart, pageStart + CONFIG_NAI_PRESET_PAGE_SIZE).map((preset, offset) => ({
+          label: safeSelectOptionText(preset.preset_name, 100),
+          value: String(pageStart + offset),
+          description: safeSelectOptionText(isJapanese ? preset.ja_preset_desc : preset.preset_desc, 100),
+          default: preset.preset_name === view.activePresetName,
+        }))
+      : [
+          {
+            label: safeSelectOptionText(localizer(locale, "commands.config.panel.nai_preset.select_label"), 100),
+            value: "__nai-preset-disabled__",
+            description: safeSelectOptionText(
+              localizer(
+                locale,
+                explanationKey
+                  ? `commands.config.panel.nai_preset.${explanationKey}_description`
+                  : "commands.config.panel.nai_preset.select_description",
+              ),
+              100,
+            ),
+            default: false,
+          },
+        ];
+  if (view.compatibility === "eligible" && pageCount > 1) {
+    options.unshift({
+      label: safeSelectOptionText(
+        localizer(locale, "commands.config.panel.model_provider_more_option", {
+          capability: localizer(locale, "commands.config.panel.nai_preset.select_label"),
+          page: pageIndex === 0 ? pageCount : pageIndex,
+          total: pageCount,
+        }),
+        100,
+      ),
+      value: CONFIG_NAI_PRESET_PREVIOUS_VALUE,
+      description: undefined,
+      default: false,
+    });
+    options.push({
+      label: safeSelectOptionText(
+        localizer(locale, "commands.config.panel.model_provider_more_option", {
+          capability: localizer(locale, "commands.config.panel.nai_preset.select_label"),
+          page: ((pageIndex + 1) % pageCount) + 1,
+          total: pageCount,
+        }),
+        100,
+      ),
+      value: CONFIG_NAI_PRESET_NEXT_VALUE,
+      description: undefined,
+      default: false,
+    });
+  }
+
+  return [
+    { type: ComponentType.TextDisplay, content: display },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.StringSelect,
+          customId:
+            view.compatibility === "eligible" && view.fingerprint
+              ? buildConfigRouteId({ action: "nai-preset-select", locale, start: pageStart, fp: view.fingerprint })
+              : buildConfigRouteId({ action: "nai-preset-select", locale, start: pageStart, fp: "00000000" }),
+          placeholder: safeSelectOptionText(
+            localizer(locale, "commands.config.panel.nai_preset.select_placeholder"),
+            150,
+          ),
+          options,
+          disabled: writesDisabled || view.compatibility !== "eligible" || view.presets.length === 0,
+        },
+      ],
+    } satisfies ActionRowData<StringSelectMenuComponentData>,
+  ];
+}
+
+function buildParametersBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
+  const { locale } = input;
+  const view = input.parametersView;
+  const writesDisabled = input.readStatus !== "fresh";
+  const components: ComponentInContainerData[] = [
+    heading(locale, "commands.config.panel.parameters_title", "commands.config.panel.parameters_description"),
+  ];
+  if (!view) return components;
+  const logitBiasPageCount = Math.max(1, Math.ceil(view.logitBiasEntries.length / CONFIG_LOGIT_BIAS_PAGE_SIZE));
+
+  if (!view.selectedProvider) {
+    components.push({
+      type: ComponentType.TextDisplay,
+      content: localizer(locale, "commands.config.panel.parameters_no_providers"),
+    });
+  } else {
+    const config = view.selectedConfig;
+    const formatValue = (value: number | null | undefined): string =>
+      value === null || value === undefined
+        ? localizer(locale, "commands.config.panel.none_label")
+        : formatStoredParameterValue(value);
+    components.push(
+      ...buildProviderParameterBlock({
+        providerOptions: view.textProviders.map((provider) => ({
+          value: provider,
+          label: getProviderDisplayName(provider),
+          default: provider === view.selectedProvider,
+        })),
+        copy: {
+          providerLabel: localizer(locale, "commands.config.panel.provider_label"),
+          providerSelectPlaceholder: localizer(locale, "commands.config.panel.parameters_provider_placeholder"),
+          samplingLabel: localizer(locale, "commands.config.panel.sampling_label"),
+          temperatureLabel: localizer(locale, "commands.config.panel.param_temperature_label"),
+          minPLabel: localizer(locale, "commands.config.panel.param_min_p_label"),
+          topPLabel: localizer(locale, "commands.config.panel.param_top_p_label"),
+          topKLabel: localizer(locale, "commands.config.panel.param_top_k_label"),
+          generationLabel: localizer(locale, "commands.config.panel.generation_label"),
+          frequencyLabel: localizer(locale, "commands.config.panel.param_frequency_label"),
+          presenceLabel: localizer(locale, "commands.config.panel.param_presence_label"),
+          maxOutputLabel: localizer(locale, "commands.config.panel.param_max_output_label"),
+          thinkingLabel: localizer(locale, "commands.config.panel.param_thinking_label"),
+          editSamplingLabel: localizer(locale, "commands.config.panel.edit_sampling_button"),
+          editGenerationLabel: localizer(locale, "commands.config.panel.edit_generation_button"),
+        },
+        values: {
+          providerDisplayName: getProviderDisplayName(view.selectedProvider),
+          temperature: formatValue(config?.llm_temperature),
+          minP: formatValue(config?.llm_min_p),
+          topP: formatValue(config?.llm_top_p),
+          topK: formatValue(config?.llm_top_k),
+          frequency: formatValue(config?.llm_frequency_penalty),
+          presence: formatValue(config?.llm_presence_penalty),
+          maxOutput: formatValue(config?.llm_max_output_tokens),
+          thinking: config?.thinking_level ?? localizer(locale, "commands.config.panel.none_label"),
+        },
+        routes: {
+          providerSelect: buildConfigRouteId({ action: "parameters-provider-select", locale }),
+          editSampling: buildConfigRouteId({ action: "sampling-open", locale, provider: view.selectedProvider }),
+          editGeneration: buildConfigRouteId({ action: "generation-open", locale, provider: view.selectedProvider }),
+        },
+        writesDisabled,
+      }),
+    );
+  }
+
+  components.push(
+    {
+      type: ComponentType.TextDisplay,
+      content: `**${localizer(locale, "commands.config.panel.stop_strings_title")}**
+${localizer(locale, "commands.config.panel.stop_strings_description")}
+> ${formatStopStringSummary(locale, view.stopStrings)}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "stop-add-open", locale }),
+          label: localizer(locale, "commands.config.panel.stop_add_button"),
+          disabled: writesDisabled,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "stop-manage-open", locale }),
+          label: localizer(locale, "commands.config.panel.stop_manage_button"),
+          disabled: writesDisabled,
+        },
+      ],
+    } satisfies ActionRowData<ButtonComponentData>,
+    {
+      type: ComponentType.TextDisplay,
+      content: `**${localizer(locale, "commands.config.panel.logit_bias_title")}**
+${localizer(locale, "commands.config.panel.logit_bias_description")}
+> ${formatLogitBiasSummary(locale, view.logitBiasEntries)}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "logit-add-open", locale }),
+          label: localizer(locale, "commands.config.panel.logit_add_button"),
+          disabled: writesDisabled,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "logit-upload-open", locale }),
+          label: localizer(locale, "commands.config.panel.logit_upload_button"),
+          disabled: writesDisabled,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "logit-manage-open", locale, start: view.logitBiasPageStart }),
+          label: localizer(locale, "commands.config.panel.logit_manage_button"),
+          disabled: writesDisabled || view.logitBiasEntries.length === 0 || logitBiasPageCount > 1,
+        },
+      ],
+    } satisfies ActionRowData<ButtonComponentData>,
+  );
+
+  // One modal can only present a page of entries, so past that the page is chosen before the modal
+  // opens rather than by a prev/next row, which cannot reach the page it is parked on.
+  if (logitBiasPageCount > 1) {
+    components.push({
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.StringSelect,
+          customId: buildConfigRouteId({ action: "logit-manage-select", locale }),
+          placeholder: localizer(locale, "commands.config.panel.logit_page_placeholder"),
+          options: Array.from({ length: Math.min(logitBiasPageCount, CONFIG_MODEL_PAGE_SIZE) }, (_page, index) => {
+            const start = index * CONFIG_LOGIT_BIAS_PAGE_SIZE;
+            const end = Math.min(start + CONFIG_LOGIT_BIAS_PAGE_SIZE, view.logitBiasEntries.length);
+            return {
+              label: safeSelectOptionText(
+                localizer(locale, "commands.config.panel.logit_page_option", { first: start + 1, last: end }),
+                100,
+              ),
+              value: String(start),
+            };
+          }),
+          disabled: writesDisabled,
+        },
+      ],
+    });
+  }
+
+  if (view.naiPresetView) {
+    const remainingTextLength = measureComponentTextLength(components);
+    const displayBudget = Math.max(
+      0,
+      DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - remainingTextLength - CONFIG_NAI_PRESET_DISPLAY_HEADROOM,
+    );
+    components.splice(1, 0, ...buildNaiPresetBlock(locale, view.naiPresetView, writesDisabled, displayBudget));
+  }
+
+  return components;
+}
+
+function buildFallbacksBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
+  const { locale } = input;
+  const view = input.fallbacksView;
+  const writesDisabled = input.readStatus !== "fresh";
+  const components: ComponentInContainerData[] = [
+    heading(locale, "commands.config.panel.fallbacks_title", "commands.config.panel.fallbacks_description"),
+  ];
+  if (!view) return components;
+
+  const noneLabel = localizer(locale, "commands.config.panel.none_label");
+  const slotLines = view.slots.map((slot, index) => `> ${index + 1}. ${slot.label ?? noneLabel}`).join("\n");
+
+  components.push({
+    type: ComponentType.TextDisplay,
+    content: `${localizer(locale, "commands.config.panel.fallback_order_description")}\n${slotLines}`,
+  });
+
+  // One expanded provider contributes an entry per option page, so the entry list outgrows a single
+  // select long before the provider list does; slicing it and paging the rest is what keeps the
+  // payload under Discord's 25-option ceiling.
+  const rangeCount = Math.max(1, Math.ceil(view.providerEntries.length / CONFIG_MODEL_PROVIDER_DIRECT_LIMIT));
+  const rangeIndex = Math.min(
+    Math.max(0, Math.floor(view.entryStart / CONFIG_MODEL_PROVIDER_DIRECT_LIMIT)),
+    rangeCount - 1,
+  );
+  const visibleEntries = view.providerEntries.slice(
+    rangeIndex * CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
+    rangeIndex * CONFIG_MODEL_PROVIDER_DIRECT_LIMIT + CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
+  );
+  const expandedEntryValue = view.expandedProvider ? encodeConfigProviderPageValue(view.expandedProvider, 0) : null;
+
+  const providerSelectRow: ActionRowData<StringSelectMenuComponentData> = {
+    type: ComponentType.ActionRow,
+    components: [
+      {
+        type: ComponentType.StringSelect,
+        customId: buildConfigRouteId({ action: "fallback-provider-select", locale }),
+        placeholder: safeSelectOptionText(
+          view.expandedProvider
+            ? localizer(locale, "commands.config.panel.fallback_provider_page_placeholder", {
+                provider: getProviderDisplayName(view.expandedProvider),
+              })
+            : localizer(locale, "commands.config.panel.fallback_provider_placeholder"),
+          150,
+        ),
+        options:
+          visibleEntries.length > 0
+            ? visibleEntries.map((entry) => ({
+                label: safeSelectOptionText(entry.label, 100),
+                value: entry.value,
+                default: entry.value === expandedEntryValue,
+              }))
+            : [
+                {
+                  label: safeSelectOptionText(localizer(locale, "commands.config.panel.no_providers_option"), 100),
+                  value: "none",
+                },
+              ],
+        disabled: writesDisabled || view.providerEntries.length === 0,
+      },
+    ],
+  };
+  components.push(providerSelectRow);
+
+  const fallbackPaginationRow = buildPaginationRow({
+    locale,
+    rangeIndex,
+    rangeCount,
+    namespace: CONFIG_ROUTE_NAMESPACE,
+    version: CONFIG_ROUTE_VERSION,
+    buildSegments: {
+      // The expansion has to ride along, or the next page rebuilds a shorter entry list and the
+      // offset it was given now points outside it.
+      page: (targetRangeIndex) =>
+        view.expandedProvider
+          ? buildConfigRouteSegments({
+              action: "fallback-provider-page",
+              locale,
+              provider: view.expandedProvider,
+              start: targetRangeIndex * CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
+            })
+          : buildConfigRouteSegments({
+              action: "fallback-provider-range",
+              locale,
+              start: targetRangeIndex * CONFIG_MODEL_PROVIDER_DIRECT_LIMIT,
+            }),
+    },
+    disabled: writesDisabled,
+  });
+  if (fallbackPaginationRow) components.push(fallbackPaginationRow);
+
+  components.push({
+    type: ComponentType.TextDisplay,
+    content: `**${localizer(locale, "commands.config.panel.randomizer_title")}**
+${localizer(locale, "commands.config.panel.randomizer_description")}${
+  view.hasFallbacks
+    ? ""
+    : `\n${withLinePrefix("-# ", localizer(locale, "commands.config.panel.randomizer_requires_fallback"))}`
+}`,
+  });
+
+  components.push(
+    buildStateControlRow(
+      [
+        {
+          value: false,
+          label: localizer(locale, "commands.config.options.disable"),
+          customId: buildConfigRouteId({ action: "randomizer-set", locale, enabled: false }),
+        },
+        {
+          value: true,
+          label: localizer(locale, "commands.config.options.enable"),
+          customId: buildConfigRouteId({ action: "randomizer-set", locale, enabled: true }),
+          // Enabling with an empty chain would be a silent no-op, so the precondition shows as an
+          // unavailable choice rather than as a button that reports a refusal after the fact.
+          available: view.hasFallbacks,
+        },
+      ],
+      view.randomizerEnabled,
+      writesDisabled,
+    ),
+    {
+      type: ComponentType.TextDisplay,
+      // Clearing every fallback slot leaves the stored flag on, so the selection above tracks the
+      // stored value while this sentence tracks the effective one. Collapsing the two would report
+      // a randomizer as running for a workspace whose chain is empty.
+      content: `> ${localizer(
+        locale,
+        view.randomizerEnabled && view.hasFallbacks
+          ? "commands.config.panel.randomizer_state_on"
+          : "commands.config.panel.randomizer_state_off",
+      )}`,
+    },
+  );
+
+  return components;
+}
+
+function renderTagBlock(tags: readonly string[]): string {
+  return ["```markdown", neutralizeFenceRuns(tags.join(", ")) || " ", "```"].join("\n");
+}
+
+function buildImageGenerationBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
+  const { locale } = input;
+  const view = input.imageView;
+  const writesDisabled = input.readStatus !== "fresh";
+  const components: ComponentInContainerData[] = [
+    heading(locale, "commands.config.panel.image_gen_title", "commands.config.panel.image_gen_description"),
+  ];
+  if (!view) return components;
+
+  components.push(
+    {
+      type: ComponentType.TextDisplay,
+      content: `**${localizer(locale, "commands.config.panel.image_defaults_title")}**
+${localizer(locale, "commands.config.panel.image_defaults_description")}
+${localizer(locale, "commands.config.panel.image_positive_label")}:
+${renderTagBlock(view.positiveTags)}
+${localizer(locale, "commands.config.panel.image_negative_label")}:
+${renderTagBlock(view.negativeTags)}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "image-tags-default-open", locale, negative: false }),
+          label: localizer(locale, "commands.config.panel.edit_positive_button"),
+          disabled: writesDisabled,
+        },
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "image-tags-default-open", locale, negative: true }),
+          label: localizer(locale, "commands.config.panel.edit_negative_button"),
+          disabled: writesDisabled,
+        },
+      ],
+    } satisfies ActionRowData<ButtonComponentData>,
+    {
+      type: ComponentType.TextDisplay,
+      content: `**${localizer(locale, "commands.config.panel.nai_parameters_title")}**
+${localizer(locale, "commands.config.panel.nai_parameters_description")}
+> ${localizer(locale, "commands.config.panel.nai_sampler_label")}: ${view.sampler}
+> ${localizer(locale, "commands.config.panel.nai_steps_label")}: ${view.steps}
+> ${localizer(locale, "commands.config.panel.nai_scale_label")}: ${view.scale}
+> ${localizer(locale, "commands.config.panel.nai_noise_label")}: ${view.noiseSchedule}
+> ${localizer(locale, "commands.config.panel.nai_rescale_label")}: ${view.cfgRescale}`,
+    },
+    {
+      type: ComponentType.ActionRow,
+      components: [
+        {
+          type: ComponentType.Button,
+          style: ButtonStyle.Secondary,
+          customId: buildConfigRouteId({ action: "nai-parameters-open", locale }),
+          label: localizer(locale, "commands.config.panel.edit_nai_button"),
+          disabled: writesDisabled,
+        },
+      ],
+    } satisfies ActionRowData<ButtonComponentData>,
+  );
+
+  return components;
+}
+
+export function buildConfigModelsBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
+  switch (input.page) {
+    case "switch":
+      return buildSwitchModelsBody(input);
+    case "parameters":
+      return buildParametersBody(input);
+    case "fallbacks":
+      return buildFallbacksBody(input);
+    case "image":
+      return buildImageGenerationBody(input);
+    case "voices":
+      return buildConfigVoicesBody({
+        locale: input.locale,
+        readStatus: input.readStatus,
+        view: input.voicesView,
+      });
+    default:
+      return [];
+  }
+}

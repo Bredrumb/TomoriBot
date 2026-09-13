@@ -8,7 +8,10 @@ Discord introduced new interactive input components for modals beyond the origin
 
 | Type | Name                              | Description                                           | Container |
 | ---- | --------------------------------- | ----------------------------------------------------- | --------- |
-| 4    | [Text Input](#text-input)         | Free-form text entry (original modal input)           | Action Row |
+| 4    | [Text Input](#text-input)         | Free-form text entry (original modal input)           | Action Row or Label |
+| 5    | [User Select](#user-select)       | Select a user from the server or client context       | Label     |
+| 6    | [Role Select](#role-select)       | Select a role from the server context                  | Label     |
+| 8    | [Channel Select](#channel-select) | Select a channel from the server context              | Label     |
 | 18   | [Label](#label)                   | Wrapper component for new modal inputs                | —         |
 | 21   | [Radio Group](#radio-group)       | Select exactly one option from a list                 | Label     |
 | 22   | [Checkbox Group](#checkbox-group) | Select one or many options from a list                | Label     |
@@ -16,7 +19,7 @@ Discord introduced new interactive input components for modals beyond the origin
 
 ### Key Differences from Message Components
 
-- **Label wrapper required**: Radio Group, Checkbox Group, and Checkbox must be placed inside a Label component (type 18), _not_ an Action Row. This is unlike Text Inputs which use Action Rows.
+- **Label wrapper required for structured inputs**: Radio Group, Checkbox Group, Checkbox, User Select, Role Select, and Channel Select must be placed inside a Label component (type 18), _not_ an Action Row. Text Inputs can use the older Action Row layout; TomoriBot's raw modal path wraps them in Labels so the same form can carry descriptions and structured inputs.
 - **Modal-only**: These components are only available in modals — they cannot be used in message payloads.
 - **Submit data structure**: The interaction response nests the input component inside the Label's `component` field, not in an `ActionRow.components` array.
 
@@ -291,6 +294,177 @@ A Checkbox is a single toggle for simple yes/no questions. Unlike Checkbox Group
 
 ---
 
+## User Select
+
+A User Select modal component allows picking a Discord user from the client/guild context. In modals, it is wrapped in a Label component (type 18).
+
+### User Select Structure
+
+| Field       | Type    | Description                                                          |
+| ----------- | ------- | -------------------------------------------------------------------- |
+| type        | integer | `5` for User Select                                                  |
+| custom_id   | string  | Developer-defined identifier for the input; 1-100 characters         |
+| min_values? | integer | Minimum number of users that must be selected (default: 1)           |
+| max_values? | integer | Maximum number of users that can be selected (default: 1)             |
+| required?   | boolean | Whether a selection is required before submitting (default: true)    |
+
+### Modal Payload Example
+
+```json
+{
+  "type": 9,
+  "data": {
+    "custom_id": "moderation:v1:user-blacklist-add-submit:en-US:nonce123",
+    "title": "Add Blacklist",
+    "components": [
+      {
+        "type": 18,
+        "label": "Member",
+        "description": "Choose a member to exclude from personalization.",
+        "component": {
+          "type": 5,
+          "custom_id": "userblacklist_add_user_nonce123",
+          "min_values": 1,
+          "max_values": 1,
+          "required": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### Submit Interaction Data Example
+
+```json
+{
+  "type": 5,
+  "data": {
+    "custom_id": "moderation:v1:user-blacklist-add-submit:en-US:nonce123",
+    "components": [
+      {
+        "id": 1,
+        "type": 18,
+        "component": {
+          "custom_id": "userblacklist_add_user_nonce123",
+          "id": 2,
+          "type": 5,
+          "values": ["123456789012345678"]
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Moderation compound modals
+
+TomoriBot's `/moderation` removal actions combine up to five Checkbox Groups with ten options each. Every entry
+is initially checked. Unchecking an entry expresses removal on submit, without a second confirmation. The route
+stores the presented values under the modal nonce and consumes that snapshot once, so it can distinguish an
+unchecked entry from an entry added concurrently after the modal opened. Lists above 50 entries must use a
+bounded fallback instead of silently truncating the modal.
+
+The `/moderation` **Personas** add modal combines a String Select for the configured persona with a native Channel
+Select restricted to text channels. The server persona limit is below Discord's 25-option String Select limit.
+
+---
+
+## Channel Select
+
+A Channel Select modal component allows picking a Discord channel from the server context, with optional channel type filtering (e.g. `GuildText`). In modals, it is wrapped in a Label component (type 18).
+
+### Channel Select Structure
+
+| Field          | Type             | Description                                                           |
+| -------------- | ---------------- | --------------------------------------------------------------------- |
+| type           | integer          | `8` for Channel Select                                                |
+| custom_id      | string           | Developer-defined identifier for the input; 1-100 characters          |
+| channel_types? | array of integer | Allowed channel type integers (e.g. `[0]` for GuildText)              |
+| min_values?    | integer          | Minimum number of channels that must be selected (default: 1)         |
+| max_values?    | integer          | Maximum number of channels that can be selected (default: 1)           |
+| required?      | boolean          | Whether a selection is required before submitting (default: true)     |
+
+### Modal Payload Example
+
+```json
+{
+  "type": 9,
+  "data": {
+    "custom_id": "moderation:v1:whitelist-channel-add-submit:en-US:nonce123",
+    "title": "Add or Edit Channel",
+    "components": [
+      {
+        "type": 18,
+        "label": "Channel",
+        "description": "Choose a text channel to whitelist.",
+        "component": {
+          "type": 8,
+          "custom_id": "whitelist_channel_add_channel_nonce123",
+          "channel_types": [0],
+          "min_values": 1,
+          "max_values": 1,
+          "required": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### Submit Interaction Data Example
+
+```json
+{
+  "type": 5,
+  "data": {
+    "custom_id": "moderation:v1:whitelist-channel-add-submit:en-US:nonce123",
+    "components": [
+      {
+        "id": 1,
+        "type": 18,
+        "component": {
+          "custom_id": "whitelist_channel_add_channel_nonce123",
+          "id": 2,
+          "type": 8,
+          "values": ["123456789012345678"]
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Role Select
+
+A Role Select modal component picks one or more roles from the current server. It uses component type `6` and
+is wrapped in a Label component (type `18`) in modal payloads. Routed Role Select values use the same
+nonce-bounded, consume-once transport as User and Channel Select fields.
+
+```json
+{
+  "type": 18,
+  "label": "Role",
+  "description": "Choose a role whose members can trigger me.",
+  "component": {
+    "type": 6,
+    "custom_id": "whitelist_role_add_role_nonce123",
+    "min_values": 1,
+    "max_values": 1,
+    "required": true
+  }
+}
+```
+
+Submission data carries the selected role snowflake in the nested component's `values` array. The handler must
+resolve it again through the current guild role manager and reject the everyone role before writing.
+
+---
+
 ## Component Selection Standards
 
 Use this decision guide when choosing between modal input types.
@@ -416,23 +590,53 @@ When a modal is editing an existing list of configured items, prefer Checkbox Gr
 - Pre-check every current entry and treat unchecked items as "remove" or "disable".
 - Use `min_values: 0` and `required: false` so users can submit with every item unchecked.
 - Chunk one category across multiple groups of 10 options, or split different entity types into separate groups.
-- Keep the first group descriptive and use "(Continued)" labels for later groups.
+- Give the first group a domain title such as **Whitelisted Personas** and a short instruction such as
+  "Uncheck box then submit to remove whitelist." Name later groups **Continuation (1)**,
+  **Continuation (2)**, and so on, without repeating the description.
 - Respect Discord's modal ceiling: 5 checkbox groups, 10 options each, 50 total entries.
-- If the list exceeds 50, warn clearly and fall back to a different management flow rather than silently truncating.
+- If the list exceeds 50, keep the originating control panel visible and show a temporary yellow selection receipt
+  above it with bounded range buttons such as `1-50` and `51-100`. A range button opens a modal containing only
+  that snapshot. Repaint or remove the receipt after the bounded workflow ends; never silently truncate.
 - For persistent setting commands, treat checked items as the stored enabled-set and write the full checked set back on submit.
 
 Implemented examples:
 
-- `/server whitelist remove` manages personas, channels, and roles in one modal.
-- `/server private-channels` manages the full saved private-channel set in one modal, with paginated fallback beyond 50 channels.
-- `/server rp-channels` manages the full saved RP-channel set in one modal, with paginated fallback beyond 50 channels.
-- `/server crosschannel-blocklist` manages a persistent channel blocklist with saved check states and paginated fallback beyond 50 channels.
-- `/config notice-embeds visibility` manages visible notice embed types in one modal.
-- `/config remove modeloverride` manages channel and persona overrides together in one modal.
-- `/config mcp remove` manages registered MCP servers in one modal.
-- `/model fallback` manages the fallback chain in one modal, and each slot can be cleared directly with the built-in `None` option.
-- `/config random-trigger remove` manages random triggers in one modal when the set fits, with paginated fallback beyond modal limits.
+- `/moderation` manages blacklist, channel, persona, and role removals through domain-specific checklist modals.
+- `/config` > Channels > Channel Rules manages the full saved private-channel set in one modal, with paginated fallback beyond 50 channels.
+- `/config` > Channels > Channel Rules manages the full saved RP-channel set in one modal, with paginated fallback beyond 50 channels.
+- `/config` > Channels > Channel Rules manages a persistent channel blocklist with saved check states and paginated fallback beyond 50 channels.
+- `/config` > Engine > Notices manages visible notice embed types in one modal.
+- `/model override remove` remains a combined aggregate managing channel and persona overrides together, opening direct raw modal batches up to 50, and offering page selection above that.
+- MCP registrations are deliberately excluded from this pattern: the `/config` > Plugins > MCP
+  Servers page removes one registration at a time behind an explicit confirmation, so selection
+  never becomes destructive consent.
+- `/config` > Models > Fallbacks & Randomizer manages the fallback chain in one modal, and each slot can be cleared directly with the built-in `None` option.
+- `/config` > Behavior > Trigger removes random triggers in one modal when the set fits; beyond 50 schedules, Remove first repaints the page into an explicit removal-range state whose selector opens each batch.
+- `/config` > Behavior > Trigger adds a random trigger for any persona page: past 24 selectable personas the Add button becomes a range select that opens the modal on the chosen page, because the modal repeats its fixed Random entry on every page and that entry spends one of Discord's 25 option slots.
 - `/server trigger remove` manages trigger words for the selected persona in one modal when the set fits, with paginated fallback beyond modal limits.
+
+### `/setup` Wizard Modals
+
+The setup wizard builds every modal in `src/utils/discord/ui/setupPanel.ts` from the draft it is editing,
+and each one is a working example of the nesting rule above. Copy the shape from here rather than from
+memory, because a raw component's `type` is a bare `number` and a wrong one still compiles, still
+submits, and reads back as nothing:
+
+| Modal | Builder | Rows |
+|---|---|---|
+| Provider API Key | `buildSetupCatalogModal` | Label (18) around a provider select (3), Label (18) around an API key input (4) |
+| Custom Endpoint connection | `buildSetupEndpointConnectionModal` | Label (18) around an API style select (3), then one Label (18) each around the label, URL, and optional auth token inputs (4) |
+| Custom Endpoint text model | `buildSetupEndpointModelModal` | Label (18) around the model code input (4), Label (18) around the context size input (4), Label (18) around a capability checkbox group (22) |
+| User BYOK | `buildSetupByokModal` | A Text Display (10) explaining the mode, then a required yes/no Radio Group (21) in a Label (18) |
+| Starting Settings | `buildSetupSettingsModal` | Four Labels (18): a persona select (3), a reply style select (3), a timezone input (4), and a system prompt select (3) |
+| Policies acceptance | `buildSetupPoliciesModal` | A Text Display (10) carrying both documentation links, then a required Checkbox Group (22) in a Label (18) with one option per document |
+
+Two consequences are load-bearing. Every value the wizard needs to read back sits inside a `type: 18`
+Label, because the raw-modal interception is gated on the packet carrying a type-18 component and walks
+only type-18 children: a control at the modal root renders, submits, and arrives empty. And a modal
+string select cannot be pre-filled, so the wizard's three selects reopen on their placeholders while
+its timezone text input comes back carrying the stored value, which has to parse as the value the
+editor wrote rather than as the label the panel shows.
 
 ---
 
@@ -446,12 +650,12 @@ These modals use a String Select with a small, fixed, mutually exclusive option 
 
 | Command                   | File                         | Custom ID              | Current Input | Options                                   | Why Radio Group                                     |
 | ------------------------- | ---------------------------- | ---------------------- | ------------- | ----------------------------------------- | --------------------------------------------------- |
-| `/config humanizer`       | `config/humanizer.ts`        | `humanizer_select`     | String Select | 4-5 (none/light/moderate/heavy; + inherit with `scope: Persona`) | Fixed set of mutually exclusive degrees             |
-| `/config setup`           | `config/setup.ts`            | `humanizer_degree`     | String Select | 4 (none/light/default/heavy)              | Same fixed humanizer degree set as above            |
-| `/personal privacy`       | `personal/privacy.ts`        | `privacy_select`       | String Select | 3 (minimal/partial/full)                  | Fixed set of 3 mutually exclusive levels            |
+| `/config` > Engine > General       | `config/humanizer.ts`        | `humanizer_select`     | String Select | 4-5 (none/light/moderate/heavy; + inherit with `scope: Persona`) | Fixed set of mutually exclusive degrees             |
+| `/setup`           | `utils/discord/ui/setupPanel.ts` | `humanizer_{nonce}`    | String Select | 4 (none/light/default/heavy)              | Same fixed humanizer degree set as above; shipped inside the Starting Settings modal's `type: 18` Label |
+| `/personal config`       | `utils/discord/ui/personalConfigPanel.ts` | `privacy_select`       | String Select | 3 (minimal/partial/full)                  | Fixed set of 3 mutually exclusive levels            |
 | `/generate image`         | `generate/image.ts`          | `aspect_ratio_select`  | String Select | 10 (1:1, 2:3, 3:2, 3:4, 4:3, etc.)      | Fixed set of 10 aspect ratios — at the limit        |
-| `/config mcp add`         | `config/mcp/add.ts`          | `mcp_server_type`      | String Select | 3 (none/web_search/url_fetcher)           | Fixed set of 3 server types; optional field         |
-| `/tool compact`           | `tool/compact.ts`            | `summary_type`         | String Select | 2 (conversation/roleplay)                 | Fixed binary mode selection                         |
+| `/config` > Plugins > MCP Servers Add form | `discord/ui/mcpsPanel.ts` | `server-type_{nonce}` | Radio Group | 3 (General Purpose/Web Search/URL Fetcher) | Already migrated: required routed field with General Purpose selected by default |
+| `/compact`           | `compact.ts`                 | `summary_type`         | String Select | 2 (conversation/roleplay)                 | Fixed binary mode selection                         |
 
 ### Strong Candidates — Checkbox / Checkbox Group (Boolean Selects)
 
@@ -459,17 +663,16 @@ These modals currently use a 2-option String Select (yes/no, true/false, enable/
 
 | Command                    | File                            | Custom ID              | Current Options          | Required | Migration Target                               |
 | -------------------------- | ------------------------------- | ---------------------- | ------------------------ | -------- | ---------------------------------------------- |
-| `/config mcp toggle`       | `config/mcp/toggle.ts`         | `mcp_enabled_select`   | Enable / Disable         | Yes      | **Checkbox Group** (1 option, required)        |
-| `/config random-trigger add`| `config/randomtrigger/add.ts`  | `respond_to_self`      | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
-| `/tool compact`            | `tool/compact.ts`              | `refresh_context`      | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
-| `/tool compact`            | `tool/compact.ts`              | `analyze_images`       | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
+| `/config` > Engine > Trigger| `config/randomtrigger/add.ts`  | `respond_to_self`      | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
+| `/compact`            | `compact.ts`                   | `refresh_context`      | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
+| `/compact`            | `compact.ts`                   | `analyze_images`       | Yes / No                 | Yes      | **Checkbox Group** (1 option, required)        |
 | `/config provider switch`  | `config/provider/switch.ts`    | `save_current_select`  | Yes / No (default: Yes)  | No       | **Checkbox** (default: true, rarely unchecked) |
-| `/bot respond`             | `bot/respond.ts`               | `use_reasoning`        | Yes / No                 | No       | **Checkbox** (optional toggle)                 |
+| `/respond`                 | `respond.ts`                   | `use_reasoning`        | Yes / No                 | No       | **Checkbox** (optional toggle)                 |
 | `/persona export`          | `persona/export.ts`            | `export_json_select`   | False / True             | No       | **Checkbox** (optional toggle)                 |
 
 > **Note on `/config provider switch`:** This modal has _two_ migration candidates — the save-current-config toggle becomes a **Checkbox** (default checked, since users almost always want to save). The provider select itself is dynamic (loaded from DB via `loadUniqueProviders()`), so it stays as a String Select.
 
-> **Note on `/tool compact`:** This modal has _three_ migration candidates — `summary_type` becomes a Radio Group, while `refresh_context` and `analyze_images` both become required Checkbox Groups.
+> **Note on `/compact`:** This modal has _three_ migration candidates — `summary_type` becomes a Radio Group, while `refresh_context` and `analyze_images` both become required Checkbox Groups.
 
 ### Strong Candidates — Checkbox Group Bulk Management
 
@@ -477,11 +680,9 @@ These commands still remove one dynamic item at a time, but the data shape is a 
 
 | Command                    | File                               | Current Input         | Why Checkbox Groups Fit                                                   | Notes                                                                 |
 | -------------------------- | ---------------------------------- | --------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `/persona attribute remove` | `persona/attribute/remove.ts`      | Persona picker + single paginated select | Personality attributes are usually reviewed and pruned in batches        | Needs index-safe array rewrite if duplicate attributes must be preserved |
+| `/config` > Persona > Identity & Personality | `persona/attribute/remove.ts`      | Persona picker + single paginated select | Personality attributes are usually reviewed and pruned in batches        | Needs index-safe array rewrite if duplicate attributes must be preserved |
 | `/scheduled-task remove` | `scheduled-task/remove.ts`      | Persona picker + single paginated select | Reminder cleanup is often batch-oriented, especially for stale schedules | Manager-only reminder views may need concise descriptions              |
-| `/memory document remove`   | `memory/document/remove.ts`        | Persona picker + single paginated select | Document cleanup is an obvious multi-select management flow              | Large lists should keep paginated fallback                             |
-| `/memory history remove`    | `memory/history/remove.ts`         | Persona picker + single paginated select | History entries are frequently pruned in groups                          | Large lists should keep paginated fallback                             |
-| `/persona sample-dialogue remove` | `persona/sample-dialogue/remove.ts` | Persona picker + single paginated select | Dialogue cleanup is often batch-oriented and already has index-safe removal | Good fit for index-valued checkbox groups                              |
+| `/config` > Persona > Identity & Personality | `persona/sample-dialogue/remove.ts` | Persona picker + single paginated select | Dialogue cleanup is often batch-oriented and already has index-safe removal | Good fit for index-valued checkbox groups                              |
 | `/persona remove`          | `persona/remove.ts`                | Single paginated select | Alter persona cleanup could be batch-managed                             | Should pair the bulk UI with stronger destructive-action messaging     |
 
 ### Not Candidates — Keep String Select
@@ -491,22 +692,20 @@ These modals have dynamic or large option sets that exceed Radio Group/Checkbox 
 | Command                          | File                             | Reason                                                    |
 | -------------------------------- | -------------------------------- | --------------------------------------------------------- |
 | `/config provider switch`        | `config/provider/switch.ts`      | Provider list is dynamic (DB via `loadUniqueProviders()`) |
-| `/model text`             | `config/model/text.ts`           | Dynamic model list, often 25+, uses pagination            |
-| `/model image`            | `config/model/image.ts`          | Dynamic model list, uses pagination                       |
-| `/model vision`           | `config/model/vision.ts`         | Dynamic model list, uses pagination                       |
-| `/model embedding`        | `config/model/embedding.ts`      | Dynamic model list, uses pagination                       |
-| `/model fallback`         | `config/model/fallback.ts`       | Dynamic model list, uses pagination                       |
-| `/config system-prompt preset`       | `config/system-prompt/preset.ts`     | Dynamic preset list from DB                               |
+| `/config` > Models > Switch Models             | `config/model/text.ts`           | Dynamic model list, often 25+, uses pagination            |
+| `/config` > Models > Switch Models            | `config/model/image.ts`          | Dynamic model list, uses pagination                       |
+| `/config` > Models > Switch Models           | `config/model/vision.ts`         | Dynamic model list, uses pagination                       |
+| `/config` > Models > Switch Models        | `config/model/embedding.ts`      | Dynamic model list, uses pagination                       |
+| `/config` > Models > Fallbacks & Randomizer         | `config/model/fallback.ts`       | Dynamic model list, uses pagination                       |
+| `/config` > Engine > General       | `config/system-prompt/preset.ts`     | Dynamic preset list from DB                               |
 | `/config provider add`            | `config/provider/add.ts`          | Provider select + text input combo; list may grow         |
-| `/persona prompt set`            | `persona/prompt/set.ts`         | Components V2 persona workflow first, then a prefilled free-form prompt modal (up to 16000 chars, 4 fields) |
-| `/persona attribute add`         | `persona/attribute/add.ts`      | Dynamic persona list, uses pagination                     |
-| `/persona sample-dialogue add`   | `persona/sample-dialogue/add.ts`| Dynamic persona list, uses pagination                     |
-| `/memory personal add`           | `memory/personal/add.ts`        | Dynamic memory list                                       |
-| `/memory server add`             | `memory/server/add.ts`          | Dynamic memory list                                       |
-| `/persona image-tags`        | `persona/image-tags.ts`      | Components V2 persona workflow, then a prefilled free-form tag modal |
-| `/persona attribute remove`      | `persona/attribute/remove.ts`   | Dynamic attribute list, uses pagination                   |
+| `/config` > Persona > Advanced            | `persona/prompt/set.ts`         | Components V2 persona workflow first, then a prefilled free-form prompt modal (up to 16000 chars, 4 fields) |
+| `/config` > Persona > Identity & Personality | `persona/attribute/add.ts`      | Dynamic persona list, uses pagination                     |
+| `/config` > Persona > Identity & Personality | `persona/sample-dialogue/add.ts`| Dynamic persona list, uses pagination                     |
+| `/config` > Persona > Appearance      | `persona/image-tags.ts`      | Components V2 persona workflow, then a prefilled free-form tag modal |
+| `/config` > Persona > Identity & Personality | `persona/attribute/remove.ts`   | Dynamic attribute list, uses pagination                   |
 | `/scheduled-task remove`      | `scheduled-task/remove.ts`   | Dynamic reminder list                                     |
-| `/server welcome-channel set`    | `server/welcome-channel/set.ts`  | Channel option + dynamic persona list                     |
+| `/config` > Channels > Logs & Welcome    | `server/welcome-channel/set.ts`  | Channel option + dynamic persona list                     |
 
 ### Not Candidates — Keep Text Input
 
@@ -514,18 +713,60 @@ These modals collect free-form text and have no structured option set:
 
 | Command                    | File                          | Reason                                                  |
 | -------------------------- | ----------------------------- | ------------------------------------------------------- |
-| `/config system-prompt set` | `config/system-prompt/set.ts`  | Free-form paragraph text (up to 16000 chars, 4 fields)  |
-| `/config random-trigger add`| `config/random-trigger/add.ts` | Free-form trigger word/phrase (text input portion stays) |
-| `/novelai attg`            | `novelai/attg.ts`             | 5 free-form text fields (author, title, tags, etc.)     |
-| `/personal image-tags`         | `personal/image-tags.ts`          | Free-form physical appearance image tag text            |
-| `/config image-tags default-negative`   | `config/image-tags/default-negative.ts`    | Free-form default negative tag text                     |
-| `/config image-tags default-positive`      | `config/image-tags/default-positive.ts`       | Free-form default positive tag text                  |
+| `/config` > Engine > General | `config/system-prompt/set.ts`  | Free-form paragraph text (up to 16000 chars, 4 fields)  |
+| `/config` > Engine > Trigger| `config/random-trigger/add.ts` | Free-form trigger word/phrase (text input portion stays) |
+| `/config` > Persona > Advanced | `utils/discord/ui/configModals.ts` | 5 free-form text fields (author, title, tags, etc.) |
+| `/personal config`         | `utils/discord/ui/personalConfigPanel.ts` | Free-form physical appearance image tag text            |
+| `/config` > Models > Image Generation Defaults   | `config/image-tags/default-negative.ts`    | Free-form default negative tag text                     |
+| `/config` > Models > Image Generation Defaults      | `config/image-tags/default-positive.ts`       | Free-form default positive tag text                  |
 | `/persona create`          | `persona/create.ts`           | Free-form text fields + file upload                     |
 | `/persona generate`        | `persona/generate.ts`         | Free-form name + file upload                            |
 | `/server trigger add`      | `server/trigger/add.ts`       | Free-form text fields (word, response, cooldown)        |
 | `/server avatar`           | `server/avatar.ts`            | Persona select + optional file upload                   |
-| `/tool comment`            | `tool/comment.ts`             | Free-form paragraph text                                |
-| `/memory personal import`  | `memory/personal/import.ts`   | File upload only                                        |
+| `/comment`                 | `comment.ts`                  | Free-form paragraph text                                |
+| `/import personal memories` | `import/personal/memories.ts` | File upload only                                      |
+
+### Provider Select To Model Modal
+
+`/config` > Models > Switch Models and `/personal config` > Models > Switch Models share one shape,
+built from `buildModelRoutingControl` and `buildProviderPageEntries` in
+`src/utils/discord/ui/modelRoutingControls.ts`:
+
+1. One String Select per capability, whose options are the eligible providers.
+2. Choosing a provider whose catalog fits a modal page opens a modal holding the model select.
+3. Choosing a provider whose catalog does not fit expands it in place into one option per page
+   (`Google (page 2)`), and choosing a page opens the modal on that slice.
+
+Two constraints force this shape rather than a second panel page. A modal select holds 25 options
+and cannot page inside itself, and a prev/next row cannot open the page it is parked on, so the
+range has to be chosen before the modal opens. Meanwhile a modal's components do not count against
+the forty-component panel budget, so moving the catalog there is what lets six capability selectors
+share one page.
+
+The two surfaces differ only where the domain differs. A user inherits from the server, so the
+leading option is `Using Server Default` on every capability; a server has nothing to inherit from,
+so the leading option is a clear, present only on the slots whose absorbed command offered one
+(`CONFIG_CLEARABLE_MODEL_CAPABILITIES`) and only while something is assigned.
+
+Range navigation also differs by budget. `/personal config` renders a prev/next pagination row
+beneath each selector. `/config` cannot: six selectors would spend eighteen components on
+navigation alone, so its provider entries carry their own advance option
+(`encodeConfigProviderRangeValue`) which wraps at the last window. Fallbacks keeps the pagination
+row, because that page has one selector and the room for it.
+
+### Split-Prompt Field Labelling
+
+A Discord text input holds 4,000 characters, so a long prompt is stored whole and split across
+several fields on open (`splitPromptIntoModalParts`) and rejoined on submit
+(`combineModalPromptParts`). Every such field must be labelled through
+`promptPartLabel`/`promptPartDescription` in `src/utils/discord/ui/modalPromptPartLabels.ts`, which
+renders `Channel Prompt (Part 2 of 4)` plus a description naming the part it continues. Identical
+labels on consecutive fields read as separate prompts and invite people to retype the whole thing
+in each one.
+
+The Channel Prompt, System Prompt, and Persona Prompt modals all use it. Two-field editors that
+already carry an explicit `(Part 2)` label, such as attribute and sample-dialogue editing, are
+unaffected.
 
 ### Button-To-Modal Confirmation Pattern
 
@@ -535,7 +776,7 @@ When a flow needs both a selection modal and a later prefilled edit modal, use:
 2. confirmation embed with buttons
 3. `showModal()` from the confirm button interaction
 
-This is the pattern used by the `/memory personal edit`, `/memory server edit`, `/persona attribute edit`, and `/persona sample-dialogue edit` flows.
+This is the pattern used by the attribute and sample-dialogue edit flows on `/config` > Persona > Identity & Personality.
 
 For persona-scoped flows that already have a persistent ephemeral picker message, prefer replacing that same message with the confirmation embed and later success state instead of spawning a second ephemeral thread.
 
@@ -548,4 +789,11 @@ Use `promptWithUnacknowledgedConfirmation()` instead so the confirm button inter
 
 ## discord.js Support Status
 
-As of discord.js v14.x, these components may not yet have dedicated builder classes. TomoriBot already uses `promptWithRawModal()` in `interactionHelper.ts` which sends raw component payloads via the Discord REST API — this approach will work for the new component types without waiting for discord.js builder support. The raw modal system already handles Label (type 18) wrapping for string selects and file uploads, so extending it to support Radio Group (type 21), Checkbox Group (type 22), and Checkbox (type 23) should be straightforward.
+The current discord.js builder/data surface does not model every one of these inputs. TomoriBot sends
+Label-wrapped raw modal payloads through Discord REST and intercepts the gateway submission before
+discord.js parsing, preserving Radio Group, Checkbox Group, Checkbox, select, and file-upload values.
+Most command-local flows use `promptWithRawModal()` and its bounded collector. The persistent MCP
+Add form, reached from `/config` > Plugins > MCP Servers, reuses the raw send and value interception
+without that collector: nonce-bounded `config:v2` modal submissions go through the global interaction
+router, and interception is installed during startup so an already-open supported modal remains
+routable after a process restart.

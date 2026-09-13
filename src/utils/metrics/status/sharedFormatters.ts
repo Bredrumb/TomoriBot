@@ -10,13 +10,48 @@ import type {
 import { CooldownType, PrivacyLevel, type TomoriState } from "@/types/db/schema";
 import { formatLlmDisplayLabel } from "@/utils/provider/modelDisplay";
 import { getThinkingLevelLocalizerKey } from "@/utils/provider/thinkingControl";
+import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 
 export const MAX_ITEMS_DISPLAY = 5; // Max channel/member items before switching to count-only
 export const MEMORY_TRUNCATE_LENGTH = 100; // Max chars per memory snippet
 export const ATTRIBUTE_TRUNCATE_LENGTH = 200; // Max chars per attribute snippet
 export const DIALOGUE_TRUNCATE_LENGTH = 140; // Max chars per sample dialogue side
-export const MAX_PROMPT_PREVIEW = Number.parseInt(process.env.SYSPROMPT_SHOW_MAX_PREVIEW || "3800", 10); // Max chars shown for system/persona prompts
+const MAX_PROMPT_PREVIEW = Number.parseInt(process.env.SYSPROMPT_SHOW_MAX_PREVIEW || "3800", 10); // Max chars shown for system/persona prompts
+
+/**
+ * Resolves the operator-configured maximum prompt preview length, falling back to MAX_PROMPT_PREVIEW.
+ */
+function resolveMaxPromptPreview(): number {
+  const envVal = process.env.SYSPROMPT_SHOW_MAX_PREVIEW;
+  if (envVal !== undefined) {
+    const parsed = Number.parseInt(envVal, 10);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return MAX_PROMPT_PREVIEW;
+}
+
+/**
+ * Formats a fenced code-block preview for a prompt, guaranteeing the output stays within 1,024 codepoints.
+ */
+export function formatPromptPreview(rawText: string, locale: string): string {
+  const neutralized = neutralizeFenceRuns(rawText);
+  const notice = localizer(locale, "commands.status.field_preview_clipped");
+  const fenceScaffolding = "```\n\n```\n";
+  // Discord embed field values are capped at 1,024 codepoints, so the body budget accounts for fence scaffolding and the notice.
+  const bodyBudget = 1024 - getDiscordTextLength(fenceScaffolding) - getDiscordTextLength(notice);
+  const maxBodyLength = Math.min(resolveMaxPromptPreview(), bodyBudget);
+  const textLength = getDiscordTextLength(neutralized);
+
+  if (textLength <= maxBodyLength) {
+    return `\`\`\`\n${neutralized}\n\`\`\``;
+  }
+
+  const clipped = truncateDiscordText(neutralized, maxBodyLength);
+  return `\`\`\`\n${clipped}\n\`\`\`\n${notice}`;
+}
 
 /**
  * Returns a user-friendly label for a privacy level.
@@ -64,7 +99,7 @@ export function truncateText(input: string, maxLength: number): string {
 }
 
 export function formatQuotaLimitValue(locale: string, limit: number): string {
-  return limit === 0 ? localizer(locale, "commands.tool.status.field_quota_unlimited") : String(limit);
+  return limit === 0 ? localizer(locale, "commands.status.field_quota_unlimited") : String(limit);
 }
 
 export function formatOmittedSamplingParams(
@@ -81,41 +116,71 @@ export function formatOmittedSamplingParams(
 
 /**
  * Formats an array of strings as a numbered list, truncating each item.
- * All items are included (nothing omitted).
+ * If the total formatted length exceeds maxTotalLength, clips the list and appends a clipped notice.
  * @param truncateLength - Max chars per item before truncation
+ * @param maxTotalLength - Max total chars for the entire list before clipping
  * @returns Formatted numbered list, or localized "None" if empty
  */
-export function formatNumberedList(items: string[], locale: string, truncateLength: number): string {
+export function formatNumberedList(
+  items: string[],
+  locale: string,
+  truncateLength: number,
+  maxTotalLength = 3000,
+): string {
   if (items.length === 0) {
     return localizer(locale, "commands.choices.none");
   }
-  return items
+  const fullText = items
     .map((item, index) => {
       return `${index + 1}. ${truncateText(item, truncateLength)}`;
     })
     .join("\n");
+
+  if (getDiscordTextLength(fullText) <= maxTotalLength) {
+    return fullText;
+  }
+
+  const notice = localizer(locale, "commands.status.field_preview_clipped");
+  const budget = Math.max(0, maxTotalLength - getDiscordTextLength(`\n${notice}`));
+  return `${truncateDiscordText(fullText, budget)}\n${notice}`;
 }
 
 /**
  * Formats an array of strings as a bullet list, truncating each item.
- * All items are included (nothing omitted).
+ * If the total formatted length exceeds maxTotalLength, clips the list and appends a clipped notice.
  * @param truncateLength - Max chars per item before truncation
+ * @param maxTotalLength - Max total chars for the entire list before clipping
  * @returns Formatted bullet list, or localized "None" if empty
  */
-export function formatBulletList(items: string[], locale: string, truncateLength: number): string {
+export function formatBulletList(
+  items: string[],
+  locale: string,
+  truncateLength: number,
+  maxTotalLength = 3000,
+): string {
   if (items.length === 0) {
     return localizer(locale, "commands.choices.none");
   }
-  return items
+  const fullText = items
     .map((item) => {
       return `• ${truncateText(item, truncateLength)}`;
     })
     .join("\n");
+
+  if (getDiscordTextLength(fullText) <= maxTotalLength) {
+    return fullText;
+  }
+
+  const notice = localizer(locale, "commands.status.field_preview_clipped");
+  const budget = Math.max(0, maxTotalLength - getDiscordTextLength(`\n${notice}`));
+  return `${truncateDiscordText(fullText, budget)}\n${notice}`;
 }
 
 /**
  * Formats sample dialogue pairs as a numbered list with truncation on each side.
+ * If the total formatted length exceeds maxTotalLength, clips the list and appends a clipped notice.
  * @param truncateLength - Max chars per dialogue side before truncation
+ * @param maxTotalLength - Max total chars for the entire list before clipping
  * @returns Formatted list, or localized "None" if empty
  */
 export function formatSampleDialogues(
@@ -123,17 +188,26 @@ export function formatSampleDialogues(
   dialoguesOut: string[],
   locale: string,
   truncateLength: number,
+  maxTotalLength = 3000,
 ): string {
   const pairCount = Math.max(dialoguesIn.length, dialoguesOut.length);
   if (pairCount === 0) {
     return localizer(locale, "commands.choices.none");
   }
 
-  return Array.from({ length: pairCount }, (_, index) => {
+  const fullText = Array.from({ length: pairCount }, (_, index) => {
     const input = truncateText(dialoguesIn[index] ?? localizer(locale, "commands.choices.none"), truncateLength);
     const output = truncateText(dialoguesOut[index] ?? localizer(locale, "commands.choices.none"), truncateLength);
     return `${index + 1}. ${input} -> ${output}`;
   }).join("\n");
+
+  if (getDiscordTextLength(fullText) <= maxTotalLength) {
+    return fullText;
+  }
+
+  const notice = localizer(locale, "commands.status.field_preview_clipped");
+  const budget = Math.max(0, maxTotalLength - getDiscordTextLength(`\n${notice}`));
+  return `${truncateDiscordText(fullText, budget)}\n${notice}`;
 }
 
 export function formatFallbackChain(
@@ -156,7 +230,7 @@ export function formatFallbackChain(
         const label =
           entry.kind === "llm"
             ? formatLlmDisplayLabel(entry.model, customModelName, otherModelCodename)
-            : `\`${truncateText(entry.endpoint.display_name, 48)}\` (${localizer(locale, "commands.tool.status.custom_endpoint_capability_label", { capability: entry.endpoint.capability })})`;
+            : `\`${truncateText(entry.endpoint.model_name || entry.endpoint.label, 48)}\` (${localizer(locale, "commands.status.custom_endpoint_capability_label", { capability: entry.endpoint.capability })})`;
         return `${index + 1}. ${label}`;
       })
       .join("\n");
@@ -180,9 +254,9 @@ export function formatCustomEndpoints(endpoints: CustomEndpointRow[], locale: st
   return endpoints
     .map((ep, index) => {
       const authLabel = ep.requires_auth
-        ? localizer(locale, "commands.tool.status.mcp_server_auth_present")
-        : localizer(locale, "commands.tool.status.mcp_server_auth_absent");
-      return `${index + 1}. **${truncateText(ep.display_name, 32)}** · ${ep.capability} · ${ep.api_style} · ${authLabel}`;
+        ? localizer(locale, "commands.status.mcp_server_auth_present")
+        : localizer(locale, "commands.status.mcp_server_auth_absent");
+      return `${index + 1}. **${truncateText(ep.model_name || ep.label, 32)}** · ${ep.capability} · ${ep.api_style} · ${authLabel}`;
     })
     .join("\n");
 }
@@ -196,7 +270,7 @@ export function formatRotationPoolValue(keys: TomoriState["rotation_keys"], loca
 
   return totalEntries === 0
     ? localizer(locale, "commands.choices.none")
-    : localizer(locale, "commands.tool.status.field_api_key_rotation_pool_value", {
+    : localizer(locale, "commands.status.field_api_key_rotation_pool_value", {
         total: totalEntries,
         additional: additionalKeys,
         enabled: enabledEntries,
@@ -214,7 +288,7 @@ export function formatStPresetNodeSummary(toggleableNodes: StPresetNodeRow[], lo
   }
 
   const enabledCount = toggleableNodes.filter((node) => node.is_enabled).length;
-  return localizer(locale, "commands.tool.status.field_st_preset_nodes_value", {
+  return localizer(locale, "commands.status.field_st_preset_nodes_value", {
     enabled: enabledCount,
     total: toggleableNodes.length,
   });

@@ -51,7 +51,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
 
   /**
    * Loads server memories scoped to a persona lineage, with optional user filter.
-   * Used by /memory server edit and /memory server remove to populate the selection list.
+   * Used by /memories to populate the selection list.
    *
    * @param userId           - If provided, only returns memories owned by this user
    * @returns Ordered array of ServerMemoryRow (newest first)
@@ -87,7 +87,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
 
   /**
    * Returns the set of persona lineage ids that have at least one server memory
-   * in the given server. Batched eligibility source for `/memory server` picker
+   * in the given server. Batched eligibility source for `/memories` picker
    * filters: it reproduces exactly the filters `loadServerMemoriesScoped` applies
    * (server scope, plus the optional owner filter) so the filtered picker and the
    * loader always agree.
@@ -116,6 +116,72 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
     } catch (error) {
       log.error(`Error loading lineage ids with server memories for server ${serverId}:`, error);
       return new Set();
+    }
+  }
+
+  /**
+   * Server memory count per persona lineage, for the panel's persona selector.
+   *
+   * Omits a lineage with no memories rather than mapping it to zero, matching
+   * `PersonalMemoryRepository.memoryCountsByLineage`. The panel must not substitute a guess when a
+   * lineage is absent: the count it renders is read as authoritative.
+   *
+   * @param userId - If provided, counts only memories taught by this user, matching the owner
+   *                 filter `loadServerMemoriesScoped` applies for a non-manager
+   */
+  async memoryCountsByLineage(serverId: number, userId?: number): Promise<Map<number, number>> {
+    try {
+      const rows =
+        userId !== undefined
+          ? await sql<Array<{ persona_lineage_id: number | string; count: number | string }>>`
+              SELECT persona_lineage_id, COUNT(*) AS count
+              FROM server_memories
+              WHERE server_id = ${serverId}
+                AND user_id = ${userId}
+              GROUP BY persona_lineage_id
+            `
+          : await sql<Array<{ persona_lineage_id: number | string; count: number | string }>>`
+              SELECT persona_lineage_id, COUNT(*) AS count
+              FROM server_memories
+              WHERE server_id = ${serverId}
+              GROUP BY persona_lineage_id
+            `;
+      return new Map(rows.map((row) => [Number(row.persona_lineage_id), Number(row.count)]));
+    } catch (error) {
+      log.error(`Error counting server memories by lineage for server ${serverId}:`, error);
+      return new Map();
+    }
+  }
+
+  /**
+   * Document count per persona, plus the serverwide scope's own count.
+   *
+   * Serverwide is a separate field because `persona_id IS NULL` is a real scope here with its own
+   * rows, and null cannot key a Map. Applies no `source_type` filter, matching `loadDocuments` and
+   * `personaIdsWithDocuments`, so a history-sourced document counts exactly as it does in the list
+   * the user is reading.
+   */
+  async documentCountsByPersona(serverId: number): Promise<{ byPersona: Map<number, number>; serverwide: number }> {
+    try {
+      const rows = await sql<Array<{ persona_id: number | string | null; count: number | string }>>`
+        SELECT persona_id, COUNT(*) AS count
+        FROM documents
+        WHERE server_id = ${serverId}
+        GROUP BY persona_id
+      `;
+      const byPersona = new Map<number, number>();
+      let serverwide = 0;
+      for (const row of rows) {
+        if (row.persona_id === null) {
+          serverwide = Number(row.count);
+          continue;
+        }
+        byPersona.set(Number(row.persona_id), Number(row.count));
+      }
+      return { byPersona, serverwide };
+    } catch (error) {
+      log.error(`Error counting documents by persona for server ${serverId}:`, error);
+      return { byPersona: new Map(), serverwide: 0 };
     }
   }
 
@@ -543,7 +609,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
 
   /**
    * Returns the set of persona ids that own at least one document in the given
-   * server. Batched eligibility source for the persona-scoped `/memory document`
+   * server. Batched eligibility source for the persona-scoped `/memories` (Documents)
    * picker filters. Mirrors `loadDocuments` for persona scope, which deliberately
    * applies **no** `source_type` filter: history-sourced documents count here
    * exactly as they do in that loader. Serverwide documents (`persona_id IS NULL`)
@@ -600,7 +666,7 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 
   /**
-   * Updates a single chunk's content and embedding. Used by /memory document view edit flow.
+   * Updates a single chunk's content and embedding. Used by /memories chunk edit flow.
    * The chunk's embedding_model_id and embedding_family are overwritten to match the
    * model that produced the new embedding, so retrieval keeps working.
    */

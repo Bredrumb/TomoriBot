@@ -23,7 +23,7 @@ lockfile versions**.
 
 Two forms are available:
 
-- Global: `"sanitize-html": ">=2.17.5"` applies everywhere.
+- Global: `"sanitize-html": ">=2.17.7"` applies everywhere.
 - Scoped: `"body-parser>qs": "6.15.2"` applies to one parent only.
 
 Prefer a floor (`>=`) over an exact pin so future patch releases arrive without another edit. Note

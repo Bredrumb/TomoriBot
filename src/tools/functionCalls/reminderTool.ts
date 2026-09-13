@@ -432,7 +432,7 @@ export class ReminderTool extends BaseTool {
       let actualNicknameInDB = requestedTargetUser || "Tomori";
       let resolvedTargetUserId = "";
       let resolvedTargetUserLabel = actualNicknameInDB;
-      // Target's personal timezone offset (/personal timezone): used only for the
+      // Target's personal timezone offset (/personal config): used only for the
       // dual-clock confirmation display, never for time interpretation
       let targetPersonalOffset: number | null = null;
 
@@ -494,7 +494,7 @@ export class ReminderTool extends BaseTool {
             };
           }
 
-          actualNicknameInDB = targetUserRow.user_nickname;
+          actualNicknameInDB = resolvedTargetUserLabel ?? targetUserRow.user_nickname ?? targetUserRow.user_disc_id;
           targetPersonalOffset = targetUserRow.timezone_offset ?? null;
         }
       }

@@ -12,6 +12,9 @@ and what tools fire — then turn it into a shareable infographic.
 Three commands open an interactive, tabbed dashboard (Overview, Personas, Models & Cost,
 Tools & Commands, Expression, Favorite People, Leaderboard):
 
+Text tabs are durable public dashboards controlled by the invoker. They remain available
+until the message is removed, and another user cannot operate the controls.
+
 - `/stats personal` — your own usage.
 - `/stats persona` — a persona's usage on this server.
 - `/stats server` — server-wide usage.
@@ -34,7 +37,7 @@ free-tier quotas, etc.).
 - **Persona Affinity** — a persona's stats on this server.
 - **Server Leaderboard** — server-wide standings.
 
-Fully-private users (`/personal privacy`) can't generate personal cards.
+Fully-private users (`/personal config`) can't generate personal cards.
 
 For how the cards are composed and rendered, see the architecture reference on the
 [stats infographic subsystem](/architecture/subsystems/stats-infographic/).

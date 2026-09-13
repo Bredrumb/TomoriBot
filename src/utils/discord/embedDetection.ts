@@ -12,9 +12,9 @@ import { localizer, getSupportedLocales } from "@/utils/text/localizer";
  * a conversation reset or compact-refresh boundary.
  *
  * Matches the following localizer keys across all supported locales:
- * - `commands.tool.refresh.title` (conversation reset)
- * - `commands.tool.compact.summary_title_refreshed` (compact summary refresh)
- * - `commands.tool.compact.roleplay_scene_title_refreshed` (compact scene refresh)
+ * - `commands.refresh.title` (conversation reset)
+ * - `commands.compact.summary_title_refreshed` (compact summary refresh)
+ * - `commands.compact.roleplay_scene_title_refreshed` (compact scene refresh)
  *
  * @returns True if the embed is a refresh/reset marker
  */
@@ -23,16 +23,16 @@ export function isRefreshMarkerEmbed(embed: Embed): boolean {
   if (!title) return false;
 
   for (const supportedLocale of getSupportedLocales()) {
-    const resetTitle = localizer(supportedLocale, "commands.tool.refresh.title");
+    const resetTitle = localizer(supportedLocale, "commands.refresh.title");
     if (title === resetTitle) return true;
 
-    const compactSummaryRefreshed = localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed");
+    const compactSummaryRefreshed = localizer(supportedLocale, "commands.compact.summary_title_refreshed");
     if (title === compactSummaryRefreshed) return true;
 
-    const compactSceneRefreshed = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed");
+    const compactSceneRefreshed = localizer(supportedLocale, "commands.compact.roleplay_scene_title_refreshed");
     if (title === compactSceneRefreshed) return true;
 
-    const compactManualRefreshed = localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed");
+    const compactManualRefreshed = localizer(supportedLocale, "commands.compact.manual_entry_title_refreshed");
     if (title === compactManualRefreshed) return true;
   }
 
@@ -54,14 +54,14 @@ function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_refresh" |
 
   for (const supportedLocale of getSupportedLocales()) {
     // Plain reset from /refresh
-    if (title === localizer(supportedLocale, "commands.tool.refresh.title")) {
+    if (title === localizer(supportedLocale, "commands.refresh.title")) {
       return "reset";
     }
     // Compact refresh markers: summary, scene, or manual refresh
     if (
-      title === localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed") ||
-      title === localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed") ||
-      title === localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed")
+      title === localizer(supportedLocale, "commands.compact.summary_title_refreshed") ||
+      title === localizer(supportedLocale, "commands.compact.roleplay_scene_title_refreshed") ||
+      title === localizer(supportedLocale, "commands.compact.manual_entry_title_refreshed")
     ) {
       return "compact_refresh";
     }

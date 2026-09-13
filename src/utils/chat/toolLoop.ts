@@ -6,6 +6,7 @@ import { statRepository } from "@/utils/db/repositories";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { routeHiddenToolNotice } from "@/utils/discord/toolProgressNotice";
+import { isStickerSendable } from "@/utils/discord/stickerAvailability";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { providerUsesApiFamily } from "@/utils/provider/providerInfoRegistry";
 import {
@@ -23,7 +24,10 @@ import {
   buildTailDirectiveMessage,
 } from "@/utils/chat/contextAnnotations";
 import { takeEnhancedContextItem } from "@/utils/chat/pendingEnhancedContext";
+import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/utils/chat/types";
+import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
+import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
 
 const MAX_FUNCTION_CALL_ITERATIONS = parseIntegerEnvFlag(process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS, 100, 1);
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
@@ -39,6 +43,13 @@ const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREA
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
 const TOOL_FAILURE_NOTICE_LIMIT = 1800;
+/**
+ * Fed back to the model when a provider cut a tool call's arguments short. It names the
+ * cause and the outcome so the retry is a fresh attempt rather than a repeat of the same
+ * call, and so the model does not assume the update landed.
+ */
+const TOOL_ARGUMENTS_TRUNCATED_REASON =
+  "The provider truncated this tool call's arguments mid-payload, so the call was not executed and nothing was updated. Reissue the call with the complete arguments in one message.";
 
 export interface ToolLoopParams {
   context: ChatTurnContext;
@@ -64,6 +75,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   let naiConsecutiveToolFailures = 0;
   let selectedStickerToSend: Sticker | null = null;
   let thoughtLog: GenerationTurnResult["thoughtLog"];
+  let toolResponseDelivered = false;
 
   for (let iteration = 0; iteration < MAX_FUNCTION_CALL_ITERATIONS; iteration++) {
     if (iteration === SOFT_WARN_ITERATION_THRESHOLD && params.context.shouldSurfaceUserErrors) {
@@ -95,13 +107,32 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           detailsText,
           thoughtLog,
           selectedStickerToSend ?? undefined,
+          toolResponseDelivered,
         );
       case "error":
       case "timeout":
         resetChannelFollowUpCount(params.context.channel.id);
-        return buildResult(streamResult.status, params.context, streamResults, finalText, detailsText, thoughtLog);
+        return buildResult(
+          streamResult.status,
+          params.context,
+          streamResults,
+          finalText,
+          detailsText,
+          thoughtLog,
+          undefined,
+          toolResponseDelivered,
+        );
       case "empty_response":
-        return buildResult("empty_response", params.context, streamResults, finalText, detailsText, thoughtLog);
+        return buildResult(
+          "empty_response",
+          params.context,
+          streamResults,
+          finalText,
+          detailsText,
+          thoughtLog,
+          undefined,
+          toolResponseDelivered,
+        );
       case "stopped_by_user":
         queueStopResponseIfPresent(params.context);
         resetChannelFollowUpCount(params.context.channel.id);
@@ -109,10 +140,28 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
         // forgets what it just said in the channel whenever a turn is cut short.
         finalText = streamResult.accumulatedText ?? finalText;
         detailsText = mergeDetails(detailsText, streamResult.detailsContent);
-        return buildResult("stopped_by_user", params.context, streamResults, finalText, detailsText, thoughtLog);
+        return buildResult(
+          "stopped_by_user",
+          params.context,
+          streamResults,
+          finalText,
+          detailsText,
+          thoughtLog,
+          undefined,
+          toolResponseDelivered,
+        );
       case "follow_up_interrupt":
         incrementChannelFollowUpCount(params.context.channel.id);
-        return buildResult("follow_up_interrupt", params.context, streamResults, finalText, detailsText, thoughtLog);
+        return buildResult(
+          "follow_up_interrupt",
+          params.context,
+          streamResults,
+          finalText,
+          detailsText,
+          thoughtLog,
+          undefined,
+          toolResponseDelivered,
+        );
       case "function_call": {
         detailsText = mergeDetails(detailsText, streamResult.detailsContent);
         setChannelToolCallChainActive(channelLocks.get(params.context.turn.lockedTurn.channelId), true);
@@ -123,10 +172,20 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           continue;
         }
         if (toolOutcome.kind === "abort") {
-          return buildResult(toolOutcome.status, params.context, streamResults, finalText, detailsText, thoughtLog);
+          return buildResult(
+            toolOutcome.status,
+            params.context,
+            streamResults,
+            finalText,
+            detailsText,
+            thoughtLog,
+            undefined,
+            toolResponseDelivered,
+          );
         }
 
         functionHistory.push(toolOutcome.historyEntry);
+        toolResponseDelivered ||= toolOutcome.responseDelivered;
         // Visible text emitted before the tool call now lives on that history
         // entry's assistant tool-call turn. Remove the same buffered parts from
         // the trailing prefill so providers do not receive it a second time.
@@ -141,7 +200,16 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           consecutiveToolErrors += 1;
           if (consecutiveToolErrors >= MAX_CONSECUTIVE_TOOL_ERRORS) {
             await emitToolErrorLoop(params.context);
-            return buildResult("error", params.context, streamResults, finalText, detailsText, thoughtLog);
+            return buildResult(
+              "error",
+              params.context,
+              streamResults,
+              finalText,
+              detailsText,
+              thoughtLog,
+              undefined,
+              toolResponseDelivered,
+            );
           }
         }
 
@@ -154,6 +222,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             detailsText,
             thoughtLog,
             selectedStickerToSend ?? undefined,
+            toolResponseDelivered,
           );
         }
 
@@ -174,6 +243,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
               detailsText,
               thoughtLog,
               selectedStickerToSend ?? undefined,
+              toolResponseDelivered,
             );
           }
 
@@ -201,6 +271,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
             detailsText,
             thoughtLog,
             selectedStickerToSend ?? undefined,
+            toolResponseDelivered,
           );
         }
 
@@ -225,7 +296,16 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
     });
   }
   selectedStickerToSend = null;
-  return buildResult("timeout", params.context, streamResults, finalText, detailsText, thoughtLog);
+  return buildResult(
+    "timeout",
+    params.context,
+    streamResults,
+    finalText,
+    detailsText,
+    thoughtLog,
+    undefined,
+    toolResponseDelivered,
+  );
 }
 
 async function streamOnce(
@@ -239,7 +319,7 @@ async function streamOnce(
   let timeoutId: NodeJS.Timeout | null = null;
 
   // Unified kill: aborts the HTTP request AND rejects the Promise.race.
-  // Stored on the lock entry so /bot kill and stale-lock release can trigger it externally.
+  // Stored on the lock entry so /kill and stale-lock release can trigger it externally.
   let killStream: ((reason: Error) => void) | null = null;
 
   const refreshTimeout = () => {
@@ -293,7 +373,7 @@ async function streamOnce(
     ]);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("SDK_CALL_TIMEOUT:")) {
-      // A pending stop request (e.g. /bot kill) makes this a terminal stop; no fallback runs, so
+      // A pending stop request (e.g. /kill) makes this a terminal stop; no fallback runs, so
       // no superseded-message cleanup will consume in-flight sends. Return immediately; settling
       // here would just make the kill wait out the abandoned stream for no benefit.
       if (StreamOrchestrator.hasStopRequest(channelId)) {
@@ -375,6 +455,7 @@ async function executeToolCall(
       functionName: string;
       success: boolean;
       endTurn: boolean;
+      responseDelivered: boolean;
       stickerSelection?: Sticker | null;
       historyEntry: ToolHistoryEntry;
     }
@@ -427,6 +508,59 @@ async function executeToolCall(
   const isBlockedByDeliberateAllowlist =
     params.context.deliberateToolModeActive && deliberateAllowedSet !== null && !deliberateAllowedSet.has(functionName);
 
+  // A truncated argument payload recovered by the adapter holds only the keys that arrived
+  // whole. Dispatching with that subset is worse than not dispatching at all: a tool whose
+  // arguments replace stored state (a category map, for instance) would write the surviving
+  // keys and silently drop the rest. No tool's semantics survive a partial call, so the
+  // model gets a synthetic failure instead and can retry with a complete one.
+  if (functionCall.argumentsTruncated) {
+    // `log.error` rather than `log.warn`, which is filtered out whenever RUN_ENV=production,
+    // the only environment this truncation happens in. The error sink is also how the
+    // incident that prompted this path was found.
+    await log.error(
+      `Tool call "${functionName}" was not dispatched: the provider truncated its argument payload`,
+      undefined,
+      {
+        serverId: params.tomoriState.server_id,
+        errorType: "TOOL_ARGUMENTS_TRUNCATED",
+        metadata: {
+          channelId: params.context.channel.id,
+          recoveredKeys: Object.keys(functionCall.args ?? {}).length,
+        },
+      },
+    );
+    // The recovered subset is not a meaningful call, so it is dropped from the replayed
+    // assistant turn rather than shown to the model as the arguments it produced.
+    functionCall.args = undefined;
+    const refusal: ToolResult = { success: false, error: TOOL_ARGUMENTS_TRUNCATED_REASON };
+    // The ordinary failure path emits this notice, and a refusal that returns before it
+    // would otherwise leave the truncation invisible in the thought log.
+    await emitFailedToolCallThoughtLog(toolContext, functionName, {}, refusal);
+    return {
+      kind: "history",
+      functionName,
+      success: false,
+      endTurn: false,
+      responseDelivered: false,
+      historyEntry: {
+        functionCall,
+        functionResponse: {
+          functionResponse: {
+            name: functionName,
+            response: {
+              result: {
+                status: "tool_execution_failed",
+                tool_name: functionName,
+                reason: TOOL_ARGUMENTS_TRUNCATED_REASON,
+              },
+            },
+          },
+        },
+        preToolCallTextParts: buildPreToolCallTextParts(streamResult),
+      },
+    };
+  }
+
   const startedAt = Date.now();
 
   const killPromise: Promise<ToolResult> | null = turnAbortSignal
@@ -468,7 +602,7 @@ async function executeToolCall(
         ...(killPromise ? [killPromise] : []),
       ]);
 
-  // If /bot kill fired, exit the turn immediately; don't feed the failed result back to the model.
+  // If /kill fired, exit the turn immediately; don't feed the failed result back to the model.
   if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {
     return { kind: "abort", status: "stopped_by_user" };
   }
@@ -513,7 +647,12 @@ async function executeToolCall(
 
   // When a tool call fails, surface a hidden thought-log notice explaining why.
   if (!toolResult.success) {
-    await emitFailedToolCallThoughtLog(toolContext, functionName, functionCall.args ?? {}, toolResult);
+    await emitFailedToolCallThoughtLog(
+      toolContext,
+      functionName,
+      redactToolParametersForStorage(functionName, functionCall.args ?? {}),
+      toolResult,
+    );
   }
 
   // When deliberate-tool-mode admitted the tool via a specific trigger,
@@ -548,8 +687,13 @@ async function executeToolCall(
   if (functionName === "select_sticker_for_response") {
     const stickerData = toolResult.data as { status?: string; sticker_id?: string; sticker_name?: string } | undefined;
     if (stickerData?.status === "sticker_selected_successfully") {
-      stickerSelection = params.context.guild?.stickers.cache.get(stickerData.sticker_id ?? "") ?? null;
-      log.success(`Sticker '${stickerData.sticker_name}' selected for sending`);
+      const resolved = params.context.guild?.stickers.cache.get(stickerData.sticker_id ?? "") ?? null;
+      stickerSelection = resolved && isStickerSendable(resolved) ? resolved : null;
+      if (stickerSelection) {
+        log.success(`Sticker '${stickerData.sticker_name}' selected for sending`);
+      } else {
+        log.warn(`Sticker '${stickerData.sticker_name}' is no longer sendable, dropping selection`);
+      }
     } else {
       stickerSelection = null;
     }
@@ -577,6 +721,7 @@ async function executeToolCall(
     functionName,
     success: toolResult.success,
     endTurn: toolResult.endTurn === true,
+    responseDelivered: toolResult.success && toolResult.responseDelivered === true,
     stickerSelection,
     historyEntry: {
       functionCall,
@@ -662,7 +807,7 @@ function truncateToolFailureNotice(value: string): string {
 }
 
 function codeBlock(value: string): string {
-  return `\`\`\`json\n${value.replace(/```/g, "`\u200b``")}\n\`\`\``;
+  return `\`\`\`json\n${neutralizeFenceRuns(value)}\n\`\`\``;
 }
 
 function handleEnhancedContextRestart(params: ToolLoopParams, data: unknown): boolean {
@@ -809,6 +954,7 @@ function buildResult(
   detailsText: string,
   thoughtLog: GenerationTurnResult["thoughtLog"],
   selectedSticker?: Sticker,
+  toolResponseDelivered = false,
 ): GenerationTurnResult {
   const text = detailsText.trim()
     ? `${responseText.trim()}\n\n[Scene Metadata]\n${detailsText.trim()}`
@@ -827,6 +973,7 @@ function buildResult(
             },
           ]
         : [],
+    toolResponseDelivered: toolResponseDelivered || undefined,
     thoughtLog,
     thoughtLogOwner: thoughtLog ? resolveThoughtLogOwner(context) : undefined,
     selectedSticker,
@@ -847,11 +994,4 @@ function resolveThoughtLogOwner(context: ChatTurnContext): GenerationTurnResult[
 function mergeDetails(existing: string, incoming: string | undefined): string {
   if (!incoming?.trim()) return existing;
   return existing ? `${existing}\n\n${incoming}` : incoming;
-}
-
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
 }

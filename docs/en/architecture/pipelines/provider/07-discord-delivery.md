@@ -174,7 +174,7 @@ contexts, not stylistic prose.
 
 `HumanizerDegree` (a `TomoriState.config` field) controls how the resulting blocks emit as
 messages after parsing. The value is per-answering-persona: a persona-level override
-(`persona_configs.humanizer_degree`, set via `/config humanizer` with `scope: Persona`) is
+(`persona_configs.humanizer_degree`, set via `/config` > Engine > General with `scope: Persona`) is
 overlaid onto that persona's `config.humanizer_degree` at state-load time, falling back to
 the server-wide `server_chat_configs` value when NULL:
 
@@ -182,11 +182,27 @@ the server-wide `server_chat_configs` value when NULL:
 |---|---|
 | `NONE` (0) | Aggregated delivery — chunks join into one message at flush boundaries (see Mission §) |
 | `LIGHT` / `MEDIUM` (1–2) | Each paragraph (`\n+`-separated) becomes its own Discord message |
-| `HEAVY` (3) | Each sentence becomes its own message; sentence splitting uses an abbreviation-aware regex (`createSentenceSplitRegex`) to avoid breaking on "Mr.", "e.g.", numbered references, etc. |
+| `HEAVY` (3) | Each sentence becomes its own message; sentence splitting uses an abbreviation-aware regex (`createSentenceSplitRegex`) to avoid breaking on "Mr.", "e.g.", numbered references, etc. `humanizeString()` then runs per sentence and can split it further (see below). |
 
 Standalone-punctuation chunks (a chunk that is purely `.,!?;:。！？、，` after trimming) are
 merged into the previous or next chunk by `mergeStandalonePunctuationChunks`, preventing orphan
 punctuation messages.
+
+At `HEAVY`, `humanizeString()` lowercases the sentence, strips semicolons, and independently rolls
+each comma (`,`/`、`) between remove / flush / keep and each run of `!`/`?`/`！`/`？` between flush /
+keep (marks are never removed). A "flush" strips the comma (the mark stays for `!`/`?`) and splits
+the sentence into an additional Discord message, sent through the same typing-simulated path as
+the sentence-per-message split above, because `sendSegment()` pushes every returned piece into
+`finalMessageChunks` rather than embedding a literal newline. An ASCII `,`/`!`/`?` only rolls when
+whitespace or the end of the text follows it, so tokens like `1,000`, `a,b`, `<@!id>`, `!help`,
+and `?...` are never stripped or split; full-width `、`/`！`/`？` have no such requirement because
+Japanese prose has no spaces. Any comma/mark inside `**bold**`, `*italic*`, `~~strikethrough~~`,
+`||spoiler||`, a `"quoted"` or `「quoted」` span, a parenthesized aside, or a
+`[markdown link](url)` is also left untouched, so a flush can never sever formatting across two
+messages. More messages per reply means a server's `send_message_limit` is reached sooner; that
+tradeoff is accepted. Sample dialogues and dialogue-history
+reconstruction call the same function; see
+[10-sample-dialogues.md](/architecture/pipelines/context-build/02-native-assembly/10-sample-dialogues/).
 
 ## Input
 
@@ -241,7 +257,7 @@ After this stage (per successful send):
 |---|---|
 | `sendWebhookMessageWithIdentity()` | `src/utils/discord/webhook/personaDispatch.ts`. The webhook persona dispatch path is the extension seam for persona-specific message appearance. A plugin adding a new persona display mode (e.g., custom embed layout) would extend here. → plugin plan candidate |
 | `chunkMessage()` | `src/utils/text/processors/chunkProcessor.ts`. Internal — message chunking is tightly coupled to Discord's 2000-character limit and the humanizer sentence-split regex. |
-| `humanizeString()` | `src/utils/text/processors/formatters.ts`. Internal — degree-3 humanization is a character-level noise function; no plugin-relevant seam. |
+| `humanizeString()` | `src/utils/text/processors/formatters.ts`. Internal: degree-3 humanization is a randomized comma/emphasis noise function that can split a sentence into extra messages; no plugin-relevant seam. |
 | Typing simulation (`sendChunksWithTyping`, `interruptibleDelay`) | Internal — typing simulation timing constants are configurable via `DISCORD_STREAMING_CONSTANTS`; the `HumanizerDegree` DB field is the user-facing control. |
 | `STREAMING_LIMITS.MAX_FLUSH_COUNT` | `src/utils/security/rateLimiter.ts`. Internal — an operational safety cap, not a plugin seam. The server-configured `send_message_limit` is the user-facing control. |
 | Aggregated-mode buffer (`pendingAggregatedText`, `flushAggregatedTextBuffer`) | Internal — aggregated delivery is driven by `HumanizerDegree.NONE`; not designed for external control. |
@@ -258,7 +274,10 @@ After this stage (per successful send):
 | `DISCORD_STREAMING_CONSTANTS` | `MIN_VISIBLE_TYPING_DURATION_MS` | `750` ms | Minimum typing delay shown |
 | `DISCORD_STREAMING_CONSTANTS` | `THINKING_PAUSE_CHANCE` | `0.25` | Probability of an extra "thinking" pause between chunks |
 | `DISCORD_STREAMING_CONSTANTS` | `MIN_RANDOM_PAUSE_MS` / `MAX_RANDOM_PAUSE_MS` | `250` / `1500` ms | Thinking pause duration range |
-| `STREAMING_LIMITS.MAX_FLUSH_COUNT` | `src/utils/security/rateLimiter.ts` | (see file) | Absolute safety cap on messages per stream |
+| `STREAMING_LIMITS.MAX_FLUSH_COUNT` | `src/utils/security/rateLimiter.ts` | `40` | Absolute safety cap on messages per stream; a HEAVY-degree reply with many commas/emphasis marks reaches this sooner than a plain sentence-per-message split would |
+| Env var | `HUMANIZER_COMMA_REMOVE_PROBABILITY` | `0.4` | Chance each comma is deleted outright (HEAVY only) |
+| Env var | `HUMANIZER_COMMA_FLUSH_PROBABILITY` | `0.2` | Chance each comma instead splits into a new message (HEAVY only) |
+| Env var | `HUMANIZER_EMPHASIS_FLUSH_PROBABILITY` | `0.5` | Chance each `!`/`?`/`！`/`？` run splits into a new message right after it (HEAVY only) |
 | Env var | `MARKDOWN_TABLE_BUTTON_TIMEOUT_MS` | `7 200 000` ms (2 h) | How long a rendered table's "Show Markdown" button stays interactive; matches the `MARKDOWN_TABLE_CACHE_TTL_MINUTES` default so the button never outlives its cached source |
 
 ## Related docs

@@ -118,7 +118,7 @@ function prepareVoiceDesignText(
  * This is intentionally separate from `ttsCloningAdapter.ts`. Clone models
  * synthesize from a stored speaker sample; voice-design models synthesize from
  * a persona-level natural-language prompt. Sending the prompt as `instruct`
- * makes the JSON body honest and keeps `/speech voice-add` focused on actual
+ * makes the JSON body honest and keeps `/config` focused on actual
  * reference samples.
  */
 export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignRequest): Promise<TtsCloneResult> {
@@ -165,7 +165,7 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
   let response: Response;
   const requestStartedAt = Date.now();
   log.info(
-    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.display_name}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_SYNTHESIZE_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
+    `[TtsVoiceDesign] Sending /synthesize | endpoint="${endpoint.model_name || endpoint.label}" label="${endpoint.label}" url="${endpointUrl}" mode=${getTtsVoiceMode(endpoint)} scriptChars=${processedScript.length} instructChars=${instruct.length} oneOffInstructionChars=${cleanedVoiceInstructions.length} timeoutMs=${TTS_SYNTHESIZE_TIMEOUT_MS} payloadLog=${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}`,
   );
   log.info(
     `[TtsVoiceDesign] Script ${TTS_VOICE_DESIGN_LOG_PAYLOADS ? "full" : "preview"}: ${previewForLog(processedScript)}`,

@@ -15,7 +15,9 @@ import { getCachedTomoriState, getCachedAllPersonas } from "@/utils/cache/tomori
 import { getCachedChannelLlm } from "@/utils/cache/channelLlmCache";
 import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
-import { llmProviderRepo } from "@/utils/db/repositories";
+import { llmProviderRepo, userNamingRepository, userRepository } from "@/utils/db/repositories";
+import { userPersonaNamingPairKey } from "@/utils/db/repositories/UserNamingRepository";
+import { resolveEffectiveUserNaming } from "@/utils/text/userNaming";
 import { buildContext } from "@/utils/text/contextBuilder";
 import { getCachedActivePreset } from "@/utils/cache/stPresetCache";
 import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
@@ -775,6 +777,35 @@ export async function execute(
       matrixUsers,
     });
 
+    // Mirrors the naming resolution in turnPlanner, since a snapshot that shows the raw
+    // Discord name is not a preview of the prompt the model actually receives.
+    const snapshotDisplayName =
+      interaction.user.displayName || interaction.user.globalName || interaction.user.username;
+    const isTriggererBlacklisted = await userRepository
+      .isBlacklisted(interaction.guild.id, interaction.user.id)
+      .catch(() => false);
+    const canUsePersonalizedNaming =
+      !isTriggererBlacklisted && effectivePersona.config.personal_memories_enabled !== false;
+    const snapshotNamingPreference =
+      canUsePersonalizedNaming && userData.user_id
+        ? (
+            await userNamingRepository
+              .loadPreferences([{ userId: userData.user_id, personaLineageId: effectivePersona.persona_lineage_id }])
+              .catch(() => null)
+          )?.get(userPersonaNamingPairKey(userData.user_id, effectivePersona.persona_lineage_id))
+        : undefined;
+    const snapshotNaming = resolveEffectiveUserNaming({
+      global: {
+        userNickname: canUsePersonalizedNaming ? userData.user_nickname : null,
+        prefixOverride: canUsePersonalizedNaming ? (userData.prefix_override ?? null) : null,
+        suffixOverride: canUsePersonalizedNaming ? (userData.suffix_override ?? null) : null,
+        addressingStyle: canUsePersonalizedNaming ? (userData.addressing_style ?? null) : null,
+      },
+      liveDisplayName: snapshotDisplayName,
+      persona: canUsePersonalizedNaming ? effectivePersona.naming_config : undefined,
+      preference: canUsePersonalizedNaming ? snapshotNamingPreference : null,
+    });
+
     const contextBuild = await buildContext({
       guildId: interaction.guild.id,
       serverName: interaction.guild.name,
@@ -787,9 +818,11 @@ export async function execute(
       // Thread → parent-channel privacy inheritance (mirrors tomoriChat.ts)
       parentChannelId: textChannel.isThread() ? textChannel.parentId : null,
       client,
-      triggererName: interaction.user.displayName || interaction.user.globalName || interaction.user.username,
+      triggererName: snapshotNaming.nickname,
+      triggererFormattedName: snapshotNaming.formattedName,
+      triggererAddressTerm: snapshotNaming.addressTerm,
       // snapshot.triggererUserRow unlocks STM context (actualTriggeringUserId guard inside buildContext)
-      snapshot: { triggererUserRow: userData, tomoriState: effectivePersona },
+      snapshot: { triggererUserRow: userData, tomoriState: effectivePersona, isTriggererBlacklisted },
       tomoriNickname: selectedPersona.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
       tomoriAttributes: selectedPersona.attribute_list,
       tomoriConfig: effectivePersona.config,
@@ -1009,22 +1042,22 @@ const TAG_LABELS: Record<string, TagLabel> = {
   [ContextItemTag.KNOWLEDGE_SERVER_EMOJIS]: { title: "Server Emojis", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_SERVER_STICKERS]: { title: "Server Stickers", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_PERSONA_SPRITES]: { title: "Persona Sprites", hint: "/persona sprites" },
-  [ContextItemTag.KNOWLEDGE_SERVER_MEMORIES]: { title: "Server Memories", hint: "/memory server" },
-  [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS]: { title: "Server Documents", hint: "/memory document add" },
+  [ContextItemTag.KNOWLEDGE_SERVER_MEMORIES]: { title: "Server Memories", hint: "/memories" },
+  [ContextItemTag.KNOWLEDGE_SERVER_DOCUMENTS]: { title: "Server Documents", hint: "/memories" },
   [ContextItemTag.KNOWLEDGE_SERVER_CONDITIONING]: { title: "Conditioning Log", hint: "/conditioning" },
-  [ContextItemTag.KNOWLEDGE_USER_MEMORIES]: { title: "Personal Memories", hint: "/memory personal" },
+  [ContextItemTag.KNOWLEDGE_USER_MEMORIES]: { title: "Personal Memories", hint: "/personal memories" },
   [ContextItemTag.KNOWLEDGE_USER_STATUS]: { title: "Discord Presence", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_CURRENT_CONTEXT]: { title: "Current Context", hint: "system-managed" },
   [ContextItemTag.KNOWLEDGE_USERS_IN_CONVERSATION]: {
     title: "Info on Users in Context",
     hint: "composite",
     subsections: [
-      { title: "Personal/Server Memories", hint: "/memory" },
+      { title: "Personal/Server Memories", hint: "/memories, /personal memories" },
       { title: "Discord Presence/Role/Channel", hint: "system-managed" },
       { title: "Other Personas' Public Attributes", hint: "/persona attribute" },
     ],
   },
-  [ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY]: { title: "Short-Term Memory", hint: "/server stm manage" },
+  [ContextItemTag.KNOWLEDGE_SHORT_TERM_MEMORY]: { title: "Short-Term Memory", hint: "/memories" },
   [ContextItemTag.DIALOGUE_SAMPLE]: { title: "Sample Dialogue", hint: "/persona sample-dialogue" },
   [ContextItemTag.DIALOGUE_HISTORY]: { title: "Conversation History", hint: "system-managed" },
   [ContextItemTag.CONTEXT_NOTE_INJECTION]: { title: "Context Note", hint: "/config context-note" },
@@ -1350,6 +1383,7 @@ async function fetchProviderTools(
       videogen_enabled: persona.config.videogen_enabled,
       voice_message_enabled: persona.config.voice_message_enabled,
       user_blocking_enabled: persona.config.user_blocking_enabled,
+      user_info_updates_enabled: persona.config.user_info_updates_enabled,
       thread_creation_enabled: persona.config.thread_creation_enabled,
     },
   };

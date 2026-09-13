@@ -102,9 +102,18 @@ the `REQUIRED_*_PROVIDERS` sets in `modelSeed.ts` in lockstep with `providerRequ
 
 ## Configuring a custom endpoint
 
-The two toggles appear as checkboxes in the `text` capability modal of
-`/provider custom-endpoint add|edit` and `/personal custom-endpoint add|edit` (the shared
-`text_capabilities` group in [`customEndpointCapabilityModal.ts`](../../src/utils/provider/customEndpointCapabilityModal.ts)).
+The two toggles appear under **Chat Completion Compatibilities** in the Text model modal opened from the
+model dropdown on a `/providers` or `/personal providers` entry page. They are deliberately separate from
+**Text Capabilities**: tool calling, image input, and structured output describe the model, while these two
+describe the backend's message parser.
+
+The group is offered only where the request path can act on it, which is the `openai-compatible` api family
+minus any flag that family already forces on. Custom endpoints resolve through the `custom` provider and so
+keep both. Anthropic forces alternation and never reads prefix completion; DeepSeek, Z.ai, and Z.ai Coding
+force prefix completion; OpenRouter, Google/Vertex, and NovelAI read neither column. Where a flag is not
+offered, its stored value is preserved rather than rewritten, so nothing changes for a workspace that set it
+before. `offeredChatCompatFlags` derives this from `apiFamily` plus `providerRequires*`, and the submit path
+re-derives it rather than trusting the submission.
 
 - **Strict Role Alternation** — enable when your proxy fronts a backend that requires strict
   user/assistant alternation and a leading user turn (e.g. **Claude behind an OpenAI-shaped proxy**).

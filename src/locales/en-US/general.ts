@@ -4,9 +4,9 @@
     confirm: `Confirm`,
     none: `None`,
     unknown: `Unknown`,
-    scoped_openrouter_model_description: `Added via /openrouter model`,
+    scoped_openrouter_model_description: `Added via /providers`,
     openrouter_model_moved_title: `Functionality Moved`,
-    openrouter_model_moved_description: `\`other-model\` selection has been moved to {add_command}. After using it, use \`/model text\` again to select it.`,
+    openrouter_model_moved_description: `\`other-model\` selection has been moved to {add_command}. After using it, use \`/config\` > Models > Switch Models again to select it.`,
     defaults: {
       bot_name: `Tomori`,
     },
@@ -14,10 +14,10 @@
       open_button_label: `Learn More`,
     },
     legal: {
-      policy_reference: `View the active Terms of Service and Privacy Policy anytime with \`/legal terms\` and \`/legal privacy\`.`,
-      setup_agreement: `Setting up TomoriBot means that you and your server members agree to its \`/legal terms\` and \`/legal privacy\` notices`,
-      provider_policy_reference: `For full details, see \`/legal privacy\` and \`/legal terms\``,
-      data_handling_reference: `**Privacy:** See \`/legal privacy\` for full data handling details`,
+      policy_reference: `View the active Terms of Service and Privacy Policy anytime with \`/legal terms-of-service\` and \`/legal privacy-policy\`.`,
+      setup_agreement: `Setting up TomoriBot means you accept its \`/legal terms-of-service\` and \`/legal privacy-policy\`, and that you will let your server members know how TomoriBot handles their messages`,
+      provider_policy_reference: `For full details, see \`/legal privacy-policy\` and \`/legal terms-of-service\``,
+      data_handling_reference: `**Privacy:** See \`/legal privacy-policy\` for full data handling details`,
     },
     api_styles: {
       openai_compatible: `OpenAI-Compatible`,
@@ -54,8 +54,8 @@
     },
     pagination: {
       page_info: `Page {current} of {total}`,
-      previous: `Previous`,
-      next: `Next`,
+      previous: `← Previous`,
+      next: `Next →`,
       cancel: `Cancel`,
       no_items: `There are no items to display.`,
       cancelled: `Selection has been cancelled.`,
@@ -92,6 +92,7 @@
       },
     },
     errors: {
+      outdated_panel: `This panel is outdated. Run {command} again.`,
       guild_only_title: `Server Only Command`,
       guild_only_description: `This command can only be used within a server.`,
       channel_only_title: `Channel Required`,
@@ -99,20 +100,20 @@
       channel_not_supported_title: `Unsupported Channel Type`,
       channel_not_supported_description: `Sorry, I can only work in server text channels or Direct Messages. Group DMs and other channel types are not supported.`,
       tomori_not_setup_title: `Initial Setup Required`,
-      tomori_not_setup_description: `This server still needs initial setup. A member with **Manage Server** permission should run \`/config setup\` first. Use \`/help setup\` or https://docs.tomoribot.app/en/introduction/quickstart/ for the short guide.`,
+      tomori_not_setup_description: `This server still needs initial setup. A member with **Manage Server** permission should run \`/setup\` first. Open \`/help\` to **Setup** for assistance, or read the official [short guide](https://docs.tomoribot.app/en/introduction/quickstart/).`,
       tomori_updating_title: `Currently Updating...`,
       tomori_updating_description: `I'm currently being updated and will be back shortly. Please try again in a few moments!`,
       tomori_not_setup_dm_footer: `DMs use a private setup, so most server-style settings still apply.`,
       api_key_missing_title: `API Key Missing`,
-      api_key_missing_description: `I need an active provider to respond. A member with **Manage Server** permission can run \`/config setup\` for first setup or \`/provider add\` to save a provider.`,
+      api_key_missing_description: `I need an active provider to respond. A member with **Manage Server** permission can run \`/setup\` for first setup or \`/providers\` to save a provider.`,
       api_key_error_title: `API Key Error`,
-      api_key_error_description: `There was an issue accessing or decrypting the configured provider credentials. Please reconfigure them using \`/provider add\`.`,
+      api_key_error_description: `There was an issue accessing or decrypting the configured provider credentials. Please reconfigure them using \`/providers\`.`,
       database_unavailable_title: `Database Unreachable`,
       database_unavailable_description: `I could not reach my database just now, so I do not know how this server is configured. Nothing is broken and no settings were changed. Please try again in a moment.`,
       personal_provider_required_title: `Personal Provider Required`,
-      personal_provider_required_description: `This server is using member-provided AI access for user-triggered messages. Run \`/help personal-provider\` and then \`/personal provider add\` to set up your own provider.`,
+      personal_provider_required_description: `Set up your provider with \`/personal providers\`, then use \`/personal config\` to choose it for text replies. This server is using member-provided AI access for user-triggered messages. Open \`/help\` to **Features**, then **Personal Providers** if you need help.`,
       personal_provider_credentials_error_title: `Personal Provider Error`,
-      personal_provider_credentials_error_description: `Your enabled personal provider could not be used. Update it with \`/personal provider add\` or disable it with \`/personal provider toggle-models\`.`,
+      personal_provider_credentials_error_description: `Your enabled personal provider could not be used. Update it with \`/personal providers\` or select another model with \`/personal config\`.`,
       context_error_title: `Context Building Error`,
       context_error_description: `I encountered an error while trying to understand the conversation context.`,
       critical_error_title: `Critical Error`,
@@ -134,14 +135,14 @@
       brave_api: {
         missing_key: {
           title: `Brave API Key Missing`,
-          description: `I need a Brave Search API key to perform searches, but one hasn't been configured for this server. A server member with \`Manage Server\` permissions can set one using \`/optional-key brave set\`.`,
-          footer: `Learn how using /help api-key`,
+          description: `I need a Brave Search API key to perform searches, but one hasn't been configured for this server. A server member with \`Manage Server\` permissions can set one using \`/providers\`.`,
+          footer: `Open /help to Setup, then Step 1: Get an API Key`,
         },
       },
       duckduckgo_rate_limit: {
         title: `DuckDuckGo Rate Limited`,
-        description: `DuckDuckGo search is currently rate limited. For more reliable searching, a server member with \`Manage Server\` permissions can set up Brave Search using \`/optional-key brave set\`.`,
-        footer: `Learn how using /help api-key`,
+        description: `DuckDuckGo search is currently rate limited. For more reliable searching, a server member with \`Manage Server\` permissions can set up Brave Search using \`/providers\`.`,
+        footer: `Open /help to Setup, then Step 1: Get an API Key`,
       },
       searxng_unreachable: {
         title: `SearXNG Unreachable`,
@@ -162,6 +163,8 @@
       persona_response_failed_description: `Failed to generate a response from persona **{personaName}**.
 
 > {errorMessage}`,
+      channel_missing_permissions_title: `Missing Permissions`,
+      channel_missing_permissions_description: `I don't have permission to read message history in this channel. Please ensure I have the **View Channel** and **Read Message History** permissions.`,
       webhook_missing_permissions_title: `Missing Webhook Permissions`,
       webhook_missing_permissions_description: `I can't create webhooks in this channel, so alter personas will use regular bot messages. Please grant me the **Manage Webhooks** permission in this channel to enable custom alter avatars.`,
       webhook_limit_title: `Webhook Limit Reached`,
@@ -195,11 +198,9 @@
   events: {
     addBot: {
       rejoin_title: `I'm Back!`,
-      rejoin_description: `Looks like I was re-added to this server. Existing settings and personas are still intact. Use \`/config\`, \`/persona\`, \`/memory\`, \`/server\`, and \`/provider add\` to review or change them.{legalNotice}`,
+      rejoin_description: `Looks like I was re-added to this server. Existing settings and personas are still intact. Use \`/config\`, \`/persona\`, \`/memories\`, and \`/providers\` to review or change them.{legalNotice}`,
       setup_prompt_title: `Successfully Added`,
-      setup_prompt_description: `Thanks for adding me. To start, someone with **Manage Server** permission should run \`/config setup\` to choose the initial persona and provider. Use \`/help setup\` or read the official [short guide](https://docs.tomoribot.app/en/introduction/quickstart/).
-
-Use \`/help api-key\` if you need provider key instructions.{legalNotice}`,
+      setup_prompt_description: `To start, someone with **Manage Server** permission should run \`/setup\` to choose the initial persona and provider. Open \`/help\` to **Setup** for assistance, or read the official [short guide](https://docs.tomoribot.app/en/introduction/quickstart/).{legalNotice}`,
     },
   },
   reminders: {

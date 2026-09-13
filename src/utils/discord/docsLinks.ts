@@ -3,14 +3,18 @@ import { localizer } from "@/utils/text/localizer";
 
 const DOCS_BASE_URL = "https://docs.tomoribot.app";
 
+export const SUPPORT_SERVER_URL = "https://discord.gg/bjCfHm9QsB";
+
 export const DOCS_PATHS = {
   QUICKSTART: "/introduction/quickstart/",
   FEATURES: "/features/",
   COMMAND_REFERENCE: "/features/command-reference/",
   CHATTING_TRIGGERS: "/features/chatting-personality/chatting-and-triggers/",
+  ROLEPLAY_CHANNELS: "/features/chatting-personality/chatting-and-triggers/#roleplay-channels",
   MULTIPLE_PERSONAS: "/features/chatting-personality/multiple-personas/",
   BEHAVIOR_TWEAKING: "/features/chatting-personality/behavior-tweaking/",
   MEMORY: "/features/knowledge/memory/",
+  SHORT_TERM_MEMORY: "/features/knowledge/memory/#short-term-memory-stm",
   MEMORY_TAGGING: "/features/knowledge/memory/#tagging",
   DATA_HANDLING: "/features/knowledge/data-handling/",
   PERSONALIZATION: "/features/knowledge/personalization/",
@@ -19,12 +23,16 @@ export const DOCS_PATHS = {
   TOOLS_EXTENSIONS: "/features/capabilities/tools-and-extensions/",
   MCP: "/features/capabilities/tools-and-extensions/#mcp",
   DELIBERATE_TOOL_MODE: "/features/capabilities/tools-and-extensions/#deliberate-tool-mode",
+  SCHEDULED_TASKS: "/features/capabilities/scheduled-tasks/",
   MEDIA_GENERATION: "/features/capabilities/media-generation/",
   TTS: "/features/capabilities/media-generation/tts-and-stt/#text-to-speech",
   STT: "/features/capabilities/media-generation/tts-and-stt/#speech-to-text",
   PROVIDERS_MODELS: "/features/setup-administration/providers-and-models/",
   API_KEYS: "/features/setup-administration/providers-and-models/#api-keys",
   CUSTOM_ENDPOINTS: "/features/setup-administration/providers-and-models/#custom-endpoints",
+  SERVER_MODERATION: "/features/setup-administration/server-moderation/",
+  QUOTAS: "/features/setup-administration/server-moderation/#cost-control-quotas",
+  USER_BYOK: "/features/setup-administration/server-moderation/#user-byok-bring-your-own-key",
   AGE_RESTRICTED_COMMANDS: "/features/setup-administration/age-restricted-commands/",
   MATRIX_BRIDGE: "/features/integrations/matrix-bridge/",
   SILLYTAVERN_PROMPT_PRESETS: "/features/integrations/sillytavern-support/#prompt-presets",
@@ -43,7 +51,7 @@ export const DOCS_PATHS = {
 
 export type DocsPath = (typeof DOCS_PATHS)[keyof typeof DOCS_PATHS] | string;
 
-function buildDocsUrl(path: DocsPath): string {
+export function buildDocsUrl(path: DocsPath): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;
   }

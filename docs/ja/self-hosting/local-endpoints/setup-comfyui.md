@@ -6,7 +6,7 @@ sidebar:
 
 TomoriBotは、自身の[ComfyUI](https://github.com/comfyanonymous/ComfyUI)インスタンスを通じて画像や動画を生成できます。プロンプトやサイズを置換した**APIフォーマットのワークフロー**を送信することでComfyUIを操作し、出力の準備ができるまでComfyUIの`/history`エンドポイントをポーリングします。
 
-このガイドでは、ComfyUIのインストール、実行、および登録について説明します。TomoriBot互換のワークフロー（`{TOMORI_*}`プレースホルダー）の**作成または編集**については、Discord内の詳細ヘルプ（`/help custom-endpoint endpoint:comfyui`、全4ページ）、およびGitHubの[ワークフローのREADME](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)を使用してください。
+このガイドでは、ComfyUIのインストール、実行、および登録について説明します。TomoriBot互換のワークフロー（`{TOMORI_*}`プレースホルダー）の**作成または編集**については、`/help`の **機能** から **カスタムエンドポイント** を開き、GitHubの[ワークフローのREADME](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)も使用してください。
 
 :::note[環境変数は不要です]
 ComfyUIはDiscordのスラッシュコマンドを通じて登録され、データベースに暗号化されて保存されます。
@@ -54,23 +54,22 @@ curl http://127.0.0.1:8188/system_stats
 | Anima v1 (画像) : `tomoribot-anima-v1-comfyui.json` | `txt2img`, `img2img`, `inpaint` |
 | WAN i2v loop (動画) : `tomoribot-wan-i2v-loop-video.json` | image-to-video |
 
-これらは**APIフォーマット**（ComfyUIが*Save (API Format)*でエクスポートするJSON）であり、通常のUI保存フォーマットではありません。独自に作成する場合は、TomoriBotが置換する`{TOMORI_*}`プレースホルダー（プロンプト、幅/高さ、シード、参照画像など）を含める必要があります。ワークフローのREADMEと`/help custom-endpoint endpoint:comfyui`を参照してください。
+これらは**APIフォーマット**（ComfyUIが*Save (API Format)*でエクスポートするJSON）であり、通常のUI保存フォーマットではありません。独自に作成する場合は、TomoriBotが置換する`{TOMORI_*}`プレースホルダー（プロンプト、幅/高さ、シード、参照画像など）を含める必要があります。ワークフローのREADMEと、`/help`の **機能** にある **カスタムエンドポイント** を参照してください。
 
 ## 3. Discordに登録する
 
-**`/provider custom-endpoint add`**（または`/personal custom-endpoint add`）を以下のように実行します。
+**`/providers`**（または`/personal providers`）で **Add New Custom Endpoint** を選び、以下を入力します。
 
 | フィールド | ComfyUI用の値 |
 |-------|-------------------|
 | `endpoint_label` | 選択した名前（例: `home-comfy`） |
-| `capability` | `image`（または`video`） |
-| `api_style` | `ComfyUI` |
+| API Compatibility | `ComfyUI` |
 | `endpoint_url` | `http://127.0.0.1:8188`（ルート、`/v1`は**なし**） |
 | `auth_token` | *(ComfyUIが認証の背後にない限り空白のままにします)* |
 
-続くモーダルで、ステップ2でダウンロードした**ワークフローの`.json`をアップロード**し、使用方法と一致するサポートモード（画像の場合は`txt2img` / `img2img` / `inpaint`）を選択します。選択した機能はワークフローと一致している必要があります（画像ワークフロー → `image`、動画ワークフロー → `video`）。
+保存したエンドポイントを選択し、**Add or Edit a Model** で画像または動画モデルを追加します。ステップ2でダウンロードした**ワークフローの`.json`をアップロード**し、使用方法と一致するサポートモード（画像の場合は`txt2img` / `img2img` / `inpaint`）を選択します。モデルの機能はワークフローと一致している必要があります（画像ワークフロー → `image`、動画ワークフロー → `video`）。
 
-これを登録すると、自動的にアクティブな`image`/`video`モデルになります。チャットでトモリに直接尋ねて生成をトリガーします。何らかの理由でアクティブにならない場合は、`/model image`（または`/model video`）を実行し、登録したComfyUIエンドポイントを選択します。
+これを登録すると、自動的にアクティブな`image`/`video`モデルになります。チャットでトモリに直接尋ねて生成をトリガーします。何らかの理由でアクティブにならない場合は、`/config` > Models > Switch Modelsを実行し、登録したComfyUIエンドポイントを選択します。
 
 ## トラブルシューティング
 

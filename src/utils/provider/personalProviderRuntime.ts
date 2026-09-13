@@ -19,7 +19,7 @@ function collectActiveConfigs(
 ): Partial<Record<PersonalProviderCapability, UserSavedProviderConfigRow>> {
   const active: Partial<Record<PersonalProviderCapability, UserSavedProviderConfigRow>> = {};
 
-  for (const capability of ["text", "embedding", "image", "video", "vision"] as const) {
+  for (const capability of ["text", "embedding", "image", "image_nai", "video", "vision"] as const) {
     // The model check keeps this in step with what the commands call active. Without
     // it an enabled row whose model pointer went NULL would swap its credential in
     // under the server's model, while the UI still reported the server default.
@@ -103,6 +103,7 @@ export async function applyPersonalProviderSelectionsToTomoriState(
     nextConfig.llm_disabled_params = activeConfigs.text.llm_disabled_params ?? nextConfig.llm_disabled_params;
     nextConfig.llm_logit_biases = activeConfigs.text.llm_logit_biases ?? nextConfig.llm_logit_biases;
     nextConfig.thinking_level = activeConfigs.text.thinking_level ?? nextConfig.thinking_level;
+    nextConfig.model_randomizer_enabled = activeConfigs.text.model_randomizer_enabled;
     const personalFallbackIds = (activeConfigs.text.fallback_model_refs ?? [])
       .filter((r) => r.type === "llm")
       .map((r) => r.id);
@@ -116,8 +117,8 @@ export async function applyPersonalProviderSelectionsToTomoriState(
   if (activeConfigs.image?.diffusion_model_id) {
     nextConfig.diffusion_model_id = activeConfigs.image.diffusion_model_id;
   }
-  if (activeConfigs.image?.nai_diffusion_model_id) {
-    nextConfig.nai_diffusion_model_id = activeConfigs.image.nai_diffusion_model_id;
+  if (activeConfigs.image_nai?.nai_diffusion_model_id) {
+    nextConfig.nai_diffusion_model_id = activeConfigs.image_nai.nai_diffusion_model_id;
   }
   if (activeConfigs.video?.video_model_id) {
     nextConfig.video_model_id = activeConfigs.video.video_model_id;

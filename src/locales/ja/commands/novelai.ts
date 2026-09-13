@@ -18,24 +18,21 @@ export default {
       cleared_me_description: `あなたのNovelAIキャラクター参照画像をクリアしました。`,
       cleared_persona_description: `**{persona_name}**のNovelAIキャラクター参照画像をクリアしました。`,
     },
-    preset: {
-      text: {
-        description: `このサーバーのテキスト生成設定にNovelAIサンプリングプリセットを適用します。`,
-        not_novelai_title: `NovelAIプロバイダーが必要です`,
-        not_novelai_description: `このコマンドはAIプロバイダーがNovelAIに設定されている場合にのみ使用できます。\`/model text\` でNovelAIモデルに切り替えてください。`,
-        not_kayra_erato_title: `KayraまたはEratoが必要です`,
-        not_kayra_erato_description: `サンプリングプリセットは **kayra-v1** および **llama-3-erato-v1** モデルのみで利用可能です。\`/model text\` でモデルを切り替えてください。`,
-        modal_title: `サンプリングプリセットを選択`,
-        select_label: `サンプリングプリセット`,
-        select_description: `テキスト生成に適用するプリセットを選択してください。`,
-        select_placeholder: `サンプリングプリセットを選択...`,
-        success_title: `プリセットを適用しました`,
-        success_description: `サンプリングプリセット **{preset_name}** を適用しました。温度、トップK、トップP、ミンPがサーバー設定に反映されました。`,
-      },
+    usage: {
+      description: `このサーバーのNovelAI Opus生成利用状況メーターを表示します（サーバー管理権限が必要です）。`,
+      title: `NovelAI Opus生成利用状況`,
+      status_label: `ステータス`,
+      status_available: `利用可能`,
+      status_unavailable: `現在利用できません`,
+      next_percent_label: `次の+1%まで`,
+      no_api_key_title: `NovelAI APIキーが必要です`,
+      no_api_key_description: `このサーバーではNovelAIプロバイダーの認証情報を利用できません。\`/providers\`で保存するか、メインプロバイダーをNovelAIに切り替えてください。`,
+      unavailable_title: `NovelAI利用状況メーターを取得できません`,
+      unavailable_description: `NovelAIからこのアカウントのOpus生成利用状況メーターが返されませんでした。APIキーとサブスクリプションを確認してから、もう一度お試しください。`,
     },
-    image: {
-      description: `このサーバーのNovelAI画像生成モデルとパラメータ上書きを管理します。`,
-      generate: {
+    generate: {
+      description: `NovelAIで画像やメディアを生成します。`,
+      image: {
         description: `画像掲示板タグ形式のプロンプトと任意のキャラクター参照画像でNovelAI画像を生成します。`,
         modal_title: `NovelAI画像生成`,
         prompt_label: `プロンプトタグ`,
@@ -58,9 +55,9 @@ export default {
         field_orientation: `向き`,
         field_negative_tags: `追加ネガティブタグ`,
         no_model_title: `NovelAI画像モデルが必要です`,
-        no_model_description: `現在、NovelAI画像生成は無効です。まず \`/model image\` でNovelAI画像モデルを選択してください。`,
+        no_model_description: `現在、NovelAI画像生成は無効です。まず \`/config\` > Models > Switch Models でNovelAI画像モデルを選択してください。`,
         no_api_key_title: `NovelAI APIキーが必要です`,
-        no_api_key_description: `このサーバーには利用可能なNovelAIプロバイダー認証情報がありません。\`/provider add\`で保存するか、メインプロバイダーをNovelAIに切り替えてください。`,
+        no_api_key_description: `このサーバーには利用可能なNovelAIプロバイダー認証情報がありません。\`/providers\`で保存するか、メインプロバイダーをNovelAIに切り替えてください。`,
         invalid_reference_title: `無効なキャラクター参照画像です`,
         invalid_reference_description: `キャラクター参照画像には、NovelAIが読み取れる有効な画像添付を指定してください。`,
         character_reference_requires_v4_title: `V4モデルが必要です`,
@@ -77,6 +74,9 @@ export default {
 {error}
 \`\`\``,
       },
+    },
+    image: {
+      description: `このサーバーのNovelAI画像生成モデルとパラメータ上書きを管理します。`,
       parameters: {
         description: `このサーバー用にNovelAI画像生成のサンプラーと品質設定を上書きします。`,
         modal_title: `NovelAI画像生成パラメータ`,
@@ -127,27 +127,6 @@ Noise schedule: {noise_schedule}
 Prompt Guidance Rescale: {cfg_rescale}
 \`\`\``,
       },
-    },
-    attg: {
-      description: `NovelAI KayraおよびEratoプロンプト用のAuthor/Title/Tags/Genre/Starsメタデータを設定します。`,
-      modal_title: `ATTGの設定`,
-      persona_select_title: `ペルソナを選択`,
-      author_label: `作者`,
-      author_placeholder: `例: 山田太郎`,
-      title_label: `タイトル`,
-      title_placeholder: `例: 私の物語`,
-      tags_label: `タグ`,
-      tags_placeholder: `例: ロマンス, 冒険`,
-      genre_label: `ジャンル`,
-      genre_placeholder: `例: ファンタジー, 日常`,
-      stars_label: `スター (Eratoのみ)`,
-      stars_placeholder: `1-5`,
-      invalid_stars_title: `スター値が無効です`,
-      invalid_stars_description: `スターは1〜5の整数か、空欄にしてください。`,
-      success_title: `ATTGメタデータを更新しました`,
-      success_description: `**{persona_name}**のATTGメタデータを更新しました。`,
-      cleared_title: `ATTGメタデータをクリアしました`,
-      cleared_description: `**{persona_name}**のATTGメタデータをすべてクリアしました。`,
     },
   },
 };

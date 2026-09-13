@@ -240,13 +240,31 @@ After this stage runs:
   `output_mention`, `tool_target`, and `copied_identity` purposes. Guild display names are
   likewise lookup-only input aliases unless another visible source supplies the same value.
 - Each entry's `aliases` (server nickname, global name, username, custom
-  nickname) plus its `displayLabel` are emitted as `conversationUsers` metadata
-  for tool-side user resolution (`resolveUserTarget`). The conversation stage of
-  that resolver matches input against the full alias set, but breaks ties by
+  nickname, the persona-relative effective nickname, and the composed
+  `formattedName`) plus its `displayLabel` are emitted as `conversationUsers`
+  metadata for tool-side user resolution (`resolveUserTarget`). The conversation
+  stage of that resolver matches input against the full alias set, but breaks ties by
   preferring a single candidate whose `displayLabel` (primary name) equals the
   input over candidates that only matched a secondary alias — so one user's
   server-nickname alias colliding with another user's actual name no longer
   forces a needless clarify round-trip.
+- When the conversation stage finds nothing, the resolver walks a guild ladder against
+  the same normalized input: guild display name, persona-scoped nickname
+  (`user_persona_naming_preferences` rows for the active `persona_lineage_id`), global
+  saved nickname (`user_personalization_configs.user_nickname`), global name, then
+  username. Persona names outrank the global nickname because both are user-authored,
+  but only the persona one was rendered to the model in this conversation.
+- A composed label such as "Master Sparrow" exists as an alias only while its owner sits
+  in the participant context, so two fallbacks run once the ladder misses. The resolver
+  first peels one persona-configured prefix and suffix off the input (every addressing
+  variant, longest first, since the target's own style is unknown until the account
+  resolves) and walks the ladder again; that reaches accounts carrying no stored nickname
+  at all. It then asks `findComposedNameCandidates()` for accounts whose stored nickname
+  appears somewhere inside the input, rebuilds each candidate's name through
+  `resolveEffectiveUserNaming()`, and accepts only an exact match. The second pass is what
+  covers affixes a user set for themselves (`prefix_override` / `suffix_override`), which
+  the persona-only strip cannot see. Both fallbacks preserve the ladder's ambiguity
+  behavior: two surviving candidates still return `ambiguous`.
 - Personal memories are filtered by privacy (`PrivacyLevel.MINIMAL`
   required) AND blacklist AND `personal_memories_enabled` AND
   conversation-corpus tag match (if `memory_tagging_enabled`).
@@ -263,8 +281,7 @@ After this stage runs:
 - Eligibility requires `message_sent`/`command_used` activity or meaningful
   state: personal memories, pending reminders/tasks, non-default
   personalization/image settings, timezone, privacy, or a deliberate-mode
-  preference. Registration language, the initial nickname, and default rows
-  alone do not qualify.
+  preference. Registration language and default rows alone do not qualify.
 - Visible authors, historical synthetic identities, bridges, real mentions, textual aliases,
   persona triggers, historical personas, and co-responders are isolated source functions.
   Repeated sources merge by typed key while preserving every reason and earliest seen order.
@@ -307,6 +324,45 @@ After this stage runs:
   `conversationUsers` compatibility projection.
 
 ## Configuration
+
+## Persona-relative naming and identity
+
+Participant identity remains the typed Discord user ID. Display headings are a projection for
+the receiving persona: persona-lineage override, global nickname, then live Discord name, with
+prefix and suffix resolved independently. Stable Discord-derived mention handles remain
+separate from display labels; exact plain and formatted names are additional collision-aware
+aliases, never reparsed to discover a target.
+
+Registration leaves the global nickname null, so an uncustomized user continues to follow
+their live Discord display name. Saving a global nickname opts into a stable custom value;
+clearing it restores the live fallback.
+
+`{user}` is the plain effective nickname, `{user_formatted}` is the deterministic formatted
+name, and `{user_term}` is a persona-authored standalone address term. Single- and
+double-brace forms are supported. Address terms are expanded in persona prompts, attributes,
+and sample dialogue, not participant fields.
+
+Dialogue user labels use the receiving persona's projection. A real mention in a historical
+persona-authored message uses that proven author persona's lineage; unproven or user-authored
+content falls back to the plain nickname. Required user-lineage preferences are batch-loaded.
+Gender identity and pronouns are sparse independent fields visible only at Minimal privacy.
+Timezone is omitted when unset and during user impersonation.
+
+The `naming` field names each resolved affix separately from the nickname, using the tool's own
+field words, and is emitted only when a prefix or suffix actually resolves:
+
+```text
+- Nerine calls Sparrow "Master Sparrow-san" (prefix "Master", suffix "-san")
+```
+
+A joined display name gives a model no way to tell an affix from the nickname, so a request to
+drop a title degrades into a nickname rewrite that re-composes the same string. The line does
+not state which precedence layer supplied an affix: `none` suppresses at any layer, and
+`update_user_info` closes the one case where a global `none` would be outranked, so the origin
+never has to reach the prompt.
+
+Adding a core field kind requires an entry in both `hydrateDiscordUser` and
+`CORE_FIELD_ENRICHERS`; a kind present in only one is dropped silently.
 
 | Source | Field | Effect |
 |---|---|---|
