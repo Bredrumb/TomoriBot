@@ -21,6 +21,7 @@ import {
   validateMemoryContent,
   validateSampleDialogue,
 } from "@/utils/misc/memoryLimits";
+import { removePresetSpritesAfterAvatarChange } from "@/utils/persona/avatarChangeSpriteCleanup";
 import { forkPointerForAvatarChange } from "@/utils/persona/pointerFork";
 import { PERSONA_LIMITS, memoryGuard, reserveAvatarQuota } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -91,7 +92,7 @@ type ConfigTriggerRemoveResult =
   | { status: "write-failed" };
 
 type ConfigAvatarResult =
-  | { status: "success"; scope: "main" | "alter"; cleared: boolean }
+  | { status: "success"; scope: "main" | "alter"; cleared: boolean; presetSpritesRemoved: number }
   | { status: "memory-critical" }
   | { status: "pointer-fork-failed" }
   | { status: "quota-exceeded"; resetAt: number | null }
@@ -907,7 +908,12 @@ export const configPersonaOperations: ConfigPersonaOperations = {
             ? { status: "guild-avatar-rate-limited" }
             : { status: "guild-avatar-failed", details: cleared.details };
         }
-        return { status: "success", scope: "main", cleared: true };
+        return {
+          status: "success",
+          scope: "main",
+          cleared: true,
+          presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+        };
       }
 
       if (persona.webhook_avatar_url) {
@@ -915,7 +921,12 @@ export const configPersonaOperations: ConfigPersonaOperations = {
       }
       await personaRepository.setAvatar(personaId, null);
       invalidateTomoriStateCache(serverDiscId);
-      return { status: "success", scope: "alter", cleared: true };
+      return {
+        status: "success",
+        scope: "alter",
+        cleared: true,
+        presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+      };
     }
 
     const validation = validateAvatarImage(attachment);
@@ -954,7 +965,12 @@ export const configPersonaOperations: ConfigPersonaOperations = {
           ? { status: "guild-avatar-rate-limited" }
           : { status: "guild-avatar-failed", details: applied.details };
       }
-      return { status: "success", scope: "main", cleared: false };
+      return {
+        status: "success",
+        scope: "main",
+        cleared: false,
+        presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+      };
     }
 
     const persistedAvatarUrl = await uploadPersonaAvatarToStorage({
@@ -972,7 +988,12 @@ export const configPersonaOperations: ConfigPersonaOperations = {
     }
     await personaRepository.setAvatar(personaId, persistedAvatarUrl);
     invalidateTomoriStateCache(serverDiscId);
-    return { status: "success", scope: "alter", cleared: false };
+    return {
+      status: "success",
+      scope: "alter",
+      cleared: false,
+      presetSpritesRemoved: await removePresetSpritesAfterAvatarChange(personaId, serverDiscId),
+    };
   },
 
   async promoteToMain({ alterPersona, mainPersona, serverDiscId, guildId, guildIdentity }) {

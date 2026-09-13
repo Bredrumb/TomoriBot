@@ -116,6 +116,10 @@ require the **Manage Server** permission):
 The **identity** toggle decorates the message name as `Label (Persona)` in Discord, which is
 especially useful for [alter personas](#alter-personas) that speak as distinct characters.
 
+Changing a default persona's avatar removes the sprites it came with, because they show the
+original character's face. Sprites you added yourself stay. Run `/persona default` to bring the
+default sprites back.
+
 ## Per-Channel Persona Picks
 
 Want to control which persona answers *you* in a specific channel without changing the

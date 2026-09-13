@@ -2600,17 +2600,21 @@ async function runPersonaWrite(
         guildIdentity,
       });
       switch (result.status) {
-        case "success":
-          return {
-            receipt: receipt(
-              locale,
-              "success",
-              key("avatar_success_heading"),
-              result.cleared ? key("avatar_cleared_detail") : key("avatar_success_detail"),
-              { name: persona.persona_nickname },
-            ),
-            telemetry: "server-config.workspace.persona-avatar.set",
-          };
+        case "success": {
+          const avatarReceipt = receipt(
+            locale,
+            "success",
+            key("avatar_success_heading"),
+            result.cleared ? key("avatar_cleared_detail") : key("avatar_success_detail"),
+            { name: persona.persona_nickname },
+          );
+          if (result.presetSpritesRemoved > 0) {
+            avatarReceipt.detail += `\n${localizer(locale, key("avatar_preset_sprites_removed_detail"), {
+              count: result.presetSpritesRemoved,
+            })}`;
+          }
+          return { receipt: avatarReceipt, telemetry: "server-config.workspace.persona-avatar.set" };
+        }
         case "memory-critical":
           return { receipt: receipt(locale, "error", key("avatar_busy_heading"), key("avatar_busy_detail")) };
         case "quota-exceeded":
