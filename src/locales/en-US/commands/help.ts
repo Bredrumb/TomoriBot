@@ -628,10 +628,10 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
       description: `Learn how to set up API keys for AI providers`,
       provider_description: `Choose your AI provider`,
       provider_choice_brave: `Brave Search`,
-      provider_choice_google: `Google Gemini (Recommended)`,
+      provider_choice_google: `Google Gemini (Recommended, Free)`,
       provider_choice_deepseek: `DeepSeek`,
       provider_choice_custom: `Custom Endpoint`,
-      provider_choice_nvidia: `NVIDIA NIM`,
+      provider_choice_nvidia: `NVIDIA NIM (Free)`,
       provider_choice_novelai: `NovelAI`,
       provider_choice_openrouter: `OpenRouter (Recommended)`,
       provider_description_google: `General-purpose and has generous free usage`,
@@ -1171,12 +1171,12 @@ Follow-up wording also works when recent context points to a tool, such as \`do 
     },
     getting_started: {
       title: `Getting Started`,
-      description: `Four short steps from a quiet server to a real conversation.`,
+      description: `Guide on how to get started with me and my features`,
       get_api_key: {
         title: `Get an API Key`,
-        description: `An API key is a password from an AI company that lets me use
-their model on your behalf. Whatever I generate is billed to
-that key, so treat it like any other password.
+        description: `An API key grants me access to an AI provider's model.
+Whatever I generate is billed to that key, so treat
+it like any other password.
 To finish setup I need one:
 > **1.** Pick a provider below to open its guide.
 > **2.** Copy the key it gives you. **Do NOT share it** with
@@ -1186,59 +1186,61 @@ To finish setup I need one:
         picker_footer: `-# The second list is optional: Brave Search adds web
 -# results, and ElevenLabs adds hosted speech. Each opens
 -# its own guide, and neither is needed to finish setup.
--# Running your own text endpoint instead? Skip the key and
+-# If your endpoint isn't listed, skip the key and
 -# read **Custom Endpoints (Advanced)** in this same page.`,
       },
       change_trigger_behavior: {
         title: `Change Trigger Behavior`,
-        description: `Out of the box I answer when you @mention me or reply to me.
-You can widen that, narrow it, or turn it off per channel.
+        description: `Out of the box I answer when you say my name, @mention me,
+or reply to me. You can widen that, narrow it, or turn it
+off per channel.
 
 **Where I am allowed to speak**
-I only reply in whitelisted channels. Add them under
-{moderationWhitelist}.
+You can make me only reply in whitelisted channels.
+Add them under {moderationWhitelist}.
 > A channel that is not on the list stays quiet.
 
 **Speaking up on my own**
-{configAutoTrigger} lets me join in without being called,
+{configAutoTrigger} lets me automatically send a message
 either every few messages or at random.
 
-**Only when you really mean it**
-Deliberate Trigger Mode makes me wait for {respond} instead
-of a mention. Turn it on in {configBehaviorTrigger}.`,
+**Trigger me with mentions only**
+Deliberate Trigger Mode prevents me from responding at a
+simple name call. Makes me wait for @mentions instead.
+Turn it on in {configBehaviorTrigger}.`,
       },
       create_first_persona: {
         title: `Create your First Persona`,
-        description: `A persona is my name, face, voice, and personality. Edit the
-one you already have, or make new ones.
+        description: `A *Persona* is me with a different name, avatar, personality,
+and more, but with the same features! Edit the one you
+already have, or make new ones.
 
 **Change the one you have**
-{configPersonaGeneral} sets my name, personality, and my
-avatar. It also decides how I address people.
+{configPersonaGeneral} sets my name, personality, and how I
+address people. {configPersonaAppearance} sets my avatar.
 
 **Write a new one from a sentence**
 {personaGenerate} builds a whole persona from a short
-description. {personaCreate} gives you the blank form.
+description. {personaCreate} gives you the blank template.
 
 **Bring one in from elsewhere**
 {personaImport} accepts character cards downloaded from card
-sites such as botbooru.`,
+sites such as botbooru or chub.`,
         footer: `You can keep several personas at once. See **Multiple
 -# personas** under Features.`,
       },
       explore_features: {
         title: `Explore my Features!`,
         description: `Setup is done. Here is what I can do now that I can talk.
-
-- **Make images, video, and voice** with {generateImage},
-  {generateVideo}, and {generateVoice}.
-- **Search the web** and use other tools, switched on in
-  {configTools}.
 - **Use this server's emoji and stickers** once you run
   {expressionsInitialize}.
 - **Greet new members** from {configWelcome}.
 - **Remember and remind**: just ask me to remind you, or
   tell me something worth keeping.
+- **Search the web** and use other tools, switched on in
+  {configTools}.
+- **Make images, video, and voice** with {generateImage},
+  {generateVideo}, and {generateVoice}.
 
 Most of my switches live in {config}, but not all of them.`,
         footer: `**Brave Search** adds web results to the search I already
@@ -1253,12 +1255,12 @@ Most of my switches live in {config}, but not all of them.`,
       description: `Settings that belong to you and follow you into every server\nI am in.`,
       nickname_pronouns: {
         title: `Your Nickname and Pronouns`,
-        description: `Tell me what to call you and I will use it everywhere.\n\nSet them in {personalProfile}.\n> Nickname: what I call you instead of your Discord name\n> Prefix and suffix: a title or honorific, like \`-san\`\n> Pronouns: \`she/her\`, \`they/them\`, \`any\`, or your name\n\nLeave a field blank and I fall back to your live Discord\nname and the persona's own naming habits.`,
+        description: `Tell me what to call you, which I will use everywhere.\n\nSet them in {personalProfile}.\n> Nickname: what I call you instead of your Discord name\n> Prefix and suffix: a title or honorific, like \`-san\`\n> Pronouns: \`she/her\`, \`they/them\`, \`any\`, or your name\n\nLeave a field blank and I fall back to your live Discord\nname and the persona's own naming habits.`,
         footer: `A single persona can address you differently. Set that\n-# under Profile > Persona-specific Preferences.`,
       },
       personal_memories: {
         title: `Personal Memories`,
-        description: `Things I remember about you specifically, in every server.\n\n**Just tell me**\nSay it in chat and I will save it myself. "Remember that I\nwork night shifts" is enough.\n\n**Or manage them by hand**\n{personalMemories} lists everything I hold about you and\nlets you edit or delete any single entry.\n\n**Decide how much I may use**\n{personalPrivacy} sets your privacy level, from full\npersonalization down to no personalization at all.`,
+        description: `Things I remember about you specifically, in every server.\n\n**Just tell me**\nSay it in chat and I will save it myself. A confirmation\nmessage will appear when this happens.\n\n**Or manage them by hand**\n{personalMemories} lists everything I hold about you and\nlets you edit or delete any single entry.\n\n**Decide how much I may use**\n{personalPrivacy} sets your privacy level, from full\npersonalization down to no personalization at all.`,
         footer: `These are separate from this server's shared memories,\n-# which anyone here can see and edit.`,
       },
       personal_providers: {
@@ -1271,7 +1273,7 @@ Most of my switches live in {config}, but not all of them.`,
       description: `Point me at an endpoint you run or trust: Ollama, LM Studio,\nLiteLLM, KoboldCPP, ComfyUI, or a self-hosted speech server.\n> {providers} registers one for the whole server.\n> {personalProviders} registers one for you alone.`,
       text_models: {
         title: `Text Models`,
-        description: `Choose **Add New Custom Endpoint**, then give it a label, a\nbase URL, and its API style. Add an auth token if it needs\none.\n\nSelect the saved label, choose **+ Add new Text Model**, and\nenter the exact model code the endpoint expects. Adding the\nmodel activates it.\n> Declare vision, tool use, and structured output honestly.\n> I trust those flags when I decide what to send you.\n\nSwitch to it later from {configSwitchModels}. If one label\ncarries several text models, I will ask which to use.`,
+        description: `Choose **Add New Custom Endpoint**, then give it a label, a\nbase URL, and its API style. Add an auth token if it needs\none.\n\nSelect the saved label, choose **+ Add new Text Model**, and\nenter the exact model code the endpoint expects. Adding the\nmodel activates it.\n> Declare vision, tool use, and structured output honestly.\n> I trust those flags when I decide what to send you.\n\nSwitch to it later from {configSwitchModels}.`,
         footer: `The full API-style and compatibility reference is on the\n-# documentation site.`,
       },
       comfyui: {
@@ -1287,20 +1289,20 @@ Most of my switches live in {config}, but not all of them.`,
     },
     multiple_personas: {
       title: `Multiple personas`,
-      description: `One of me is optional. Keep several, each with its own name,\nface, voice, memories, and trigger words.`,
+      description: `You can have multiple personas in one server, each with its\nown name, memories, and agendas!`,
       mains_alters_title: `Mains and alters`,
-      mains_alters_body: `The main persona is who I am by default. An alter is a\nsecond identity I can speak as, with its own name and avatar\non the message itself.`,
+      mains_alters_body: `The main persona is the persona representing me in the\nserver. An alter is a second identity I can speak as, with\nits own name and avatar on the message itself.`,
       bringing_in_title: `Bringing a persona in`,
-      bringing_in_body: `{personaImport} takes a character card as a file:\n> \`.png\` card, from TomoriBot or SillyTavern\n> \`.json\` card, from TomoriBot or SillyTavern\n> \`.charx\` archive, Character Card V3\n\nOnly the character's text is read. Bundled icons, sprites,\naudio, and video are skipped, so set those yourself under\n{configPersonaAppearance} and {configPersonaSprites}.`,
+      bringing_in_body: `{personaImport} takes a character card as a file:\n> \`.png\` card, from TomoriBot or SillyTavern\n> \`.json\` card, from TomoriBot or SillyTavern\n> \`.charx\` archive, Character Card V3\n\nOnly the character's text is read. Currently, bundled sprites,\naudio, and video are skipped, so set those yourself under\n{configPersonaAppearance} and {configPersonaSprites}.`,
       where_to_find_title: `Where to find cards`,
-      where_to_find_body: `Card sites such as botbooru host thousands of them. They are\nother people's sites, and a card written for another bot may\nnot convert cleanly.`,
+      where_to_find_body: `Card sites such as botbooru and chub host thousands of\nthem. They are other people's sites, and a card written for\nanother bot may not convert cleanly.`,
       talking_title: `Letting them talk to each other`,
       talking_body: `Give each persona its own trigger words and channels in\n{configPersonaTriggers}, and they will answer side by side\nin the same conversation.`,
       footer: `Share one of your own with {personaExport}.`,
     },
     media_generation: {
       title: `Media generation`,
-      description: `I can make images, video, and voice, either from a command or\nbecause you asked me to in conversation.\n> Each one counts against this server's quota. See **Quotas**\n> under Moderation.`,
+      description: `I can make images, video, and voice, either from a command or\nbecause you asked me to in conversation.\n> Each one counts against a server's quota. See **Quotas**\n> under Moderation.`,
       image_generation: {
         title: `Image Generation`,
         description: `{generateImage} opens a prompt box. Write your own prompt, or\nchoose **Draw what's happening now** and I will illustrate\nthe scene myself.\n> Attach up to three reference images to steer the result.\n> Pick the aspect ratio in the same box.\n\nAny provider or endpoint saved here that lists image support\ncan draw, and {providers} shows which of yours do. One that\ncannot use reference images says so and draws from the text.`,
@@ -1308,7 +1310,7 @@ Most of my switches live in {config}, but not all of them.`,
       },
       video_generation: {
         title: `Video Generation`,
-        description: `{generateVideo} takes a prompt, and optionally a starting\nframe from an image already in the channel.\n\nAny provider or endpoint that lists video support can make\none, ComfyUI video workflows included. {providers} shows\nwhich of yours do.\n> Video is slow and expensive everywhere. Expect a wait, and\n> expect a small quota to go with it.`,
+        description: `{generateVideo} takes a prompt, and optionally a starting\nframe from an image already in the channel.\n\nAny provider or endpoint that lists video support can make\none, ComfyUI video workflows included. {providers} shows\nwhich of yours do.\n> Video is slow and expensive everywhere. Expect a wait.`,
       },
       speech_generation: {
         title: `Speech Generation`,
@@ -1317,11 +1319,11 @@ Most of my switches live in {config}, but not all of them.`,
     },
     tons_of_tweakability: {
       title: `Tons of Tweakability`,
-      description: `Nearly everything about me is a setting. There are three\nplaces those settings live.`,
+      description: `Tweak me to you and your server members' preferences`,
       behavior_tuning: {
         title: `Behavior Tuning`,
-        description: `How I write, how I think, and what I am allowed to do.\n> **Model**: {configSwitchModels} picks who is actually\n> answering, and how smart or fast that is.\n> **Humanizer**: {configBehaviorGeneral} controls how\n> humanlike my delivery is, from formal to very casual.\n> **System instructions**: also {configBehaviorGeneral},\n> for standing orders that apply to every reply.\n> **Tools**: {configTools} decides which abilities I may\n> reach for, such as web search or image generation.`,
-        footer: `Sampler-level knobs (temperature and friends) sit under\n-# {configParameters} for anyone who wants them.`,
+        description: `How I write, how I think, and what I am allowed to do.\n> **Model**: {configSwitchModels} picks what model is\n> actually answering, as well as its parameters\n> **Humanizer**: {configBehaviorGeneral} controls how\n> humanlike my delivery is, from formal to very casual.\n> **System instructions**: also {configBehaviorGeneral},\n> for orders that apply to every reply.\n> **Tools**: {configTools} decides which capabilities I may\n> reach for, such as web search or image generation.`,
+        footer: `Sampler-level knobs (temperature and friends) sit under\n-# {configParameters} for adjusting randomness, etc.`,
       },
       server_wide_settings: {
         title: `Server-wide Settings`,
@@ -1339,7 +1341,7 @@ Most of my switches live in {config}, but not all of them.`,
       description: `I keep two kinds of memory: lasting facts, and a working note\nof the conversation happening right now.`,
       long_term_memory: {
         title: `Long-Term Memory`,
-        description: `Facts I keep permanently, for this server or for you.\n\n**Teach me**\nSay it in chat, or add it by hand in {memories} for the\nserver and {personalMemories} for yourself.\n\n**Make me forget**\nThe same two commands list every entry and delete any of\nthem.\n\n**Give me documents**\n{memories} also accepts uploaded files. I read the relevant\nparts back when they matter, instead of all of it at once.\n> A server memory reaches everyone here. A personal memory\n> only surfaces when you are part of the conversation.`,
+        description: `Facts I keep permanently, for this server or for you.\n\n**Teach me**\nSay it in chat, or add it by hand in {memories} for the\nserver and {personalMemories} for yourself.\n\n**Make me forget**\nThe same two commands list every entry and delete any of\nthem.\n\n**Give me documents**\n{memories} also accepts uploaded files. I read the relevant\nparts back when they matter, instead of all of it at once\nby using Retrieval Augmented Generation (RAG).\n> A server memory reaches everyone here. A personal memory\n> only surfaces when you are part of the conversation.`,
       },
       short_term_memory: {
         title: `Short-Term Memory`,
@@ -1348,7 +1350,7 @@ Most of my switches live in {config}, but not all of them.`,
       },
       rewards_punishments: {
         title: `Rewards and Punishments`,
-        description: `Small gestures I actually notice and remember.\n> {reward} for a headpat, hug, kiss, tickle, or feeding.\n> {punish} for a bonk, bite, pinch, spank, or squeeze.\n\nEach one posts a little scene in the channel, and I read it\nback later the same way I read the rest of the conversation.\nBe nice to me, or do not, and I will act accordingly.`,
+        description: `Fun commands I actually notice and remember. Be nice to\nme, or do not, and I will act accordingly.\n> {reward} for a headpat, hug, kiss, tickle, or feeding.\n> {punish} for a bonk, bite, pinch, spank, or squeeze.`,
         footer: `Pick which persona you meant when several are active.`,
       },
       memory_tagging: {
@@ -1359,7 +1361,7 @@ Most of my switches live in {config}, but not all of them.`,
     },
     scheduled_tasks: {
       title: `Scheduled Tasks`,
-      description: `I can come back later on my own, once or on a repeat.`,
+      description: `I can respond on a set timer, once or on a repeat.`,
       making_title: `Making one`,
       making_body: `Just ask. "Remind me to stretch at 14:30" or "every morning,\npost the standup question" is enough, and I will set it up\nand confirm the details.`,
       changing_title: `Changing or cancelling one`,
@@ -1378,7 +1380,7 @@ Most of my switches live in {config}, but not all of them.`,
     },
     quotas: {
       title: `Quotas`,
-      description: `A quota caps how much generation happens here, so one\nenthusiastic afternoon cannot spend a month of credits.`,
+      description: `A quota caps how much generation happens here, so one\ncannot accidentally spend a month of credits.`,
       spent_title: `How it is spent`,
       spent_body: `There are three separate pools: text, image, and video. Each\none is counted twice, per member and for the server as a\nwhole, and whichever runs out first stops the request.\n> A refused request tells you which pool ran out and when it\n> comes back.`,
       limits_title: `Setting the limits`,
@@ -1393,7 +1395,7 @@ Most of my switches live in {config}, but not all of them.`,
       filter_title: `I do not filter by default`,
       filter_body: `I ship with no content filter of my own, because filtering\ndegrades ordinary replies as much as it blocks anything else.\nWhat is appropriate here is the server manager's call, not\nmine.\n> Your AI provider still enforces its own rules on its own\n> side, and can refuse a request no matter what is set here.`,
       gated_title: `Deliberate adult features are gated`,
-      gated_body: `Anything explicitly adult sits behind {nsfw} and works only\nin channels Discord itself marks age-restricted.\n\n{nsfwJailbreaks} chooses which prompt strategies are active\nfor this server. Every one of them is off until a manager\nturns it on.\n> These strategies change how I am prompted. They can make\n> me refuse less, and they can make me stranger.`,
+      gated_body: `Anything explicitly adult sits behind {nsfw} and works only\nin channels Discord itself marks age-restricted.\n\n{nsfwJailbreaks} chooses which prompt strategies are active\nfor this server. Every one of them is off until a manager\nturns it on.\n> These strategies change how I am prompted. They can make\n> me refuse less but may also cause unintended behavior.`,
       footer: `By enabling these, the server's managers confirm the\n-# channel is adults-only and take responsibility for it.`,
     },
     user_byok: {
@@ -1402,7 +1404,7 @@ Most of my switches live in {config}, but not all of them.`,
       changes_title: `What it changes`,
       changes_body: `With BYOK on, a message from a member is answered only if\nthat member has saved a personal provider. The server's own\nprovider is not a fallback for them.\n> Turn it on in {moderationMemberAccess}, or choose it\n> during {setup}.`,
       suits_title: `Who it suits`,
-      suits_body: `A large or public server where one shared API key would be\ndrained in an afternoon. A small server is usually happier\nsharing one provider.`,
+      suits_body: `A large or public server where one shared API key would be\ndrained. A small server is usually happier sharing one provider.`,
       members_title: `What members have to do`,
       members_body: `Save a key in {personalProviders}. Point them at **Personal\nProviders (Advanced)** under Setup for the walkthrough.`,
       footer: `Servers only. A direct message has no members to bring\n-# keys, so the option is not offered there.`,
