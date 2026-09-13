@@ -26,7 +26,7 @@ import {
 
 export type SavedProviderCapability = "text" | "embedding" | "image" | "video" | "vision";
 
-export interface ProviderDefaultSelectionIds {
+interface ProviderDefaultSelectionIds {
   llm_id: number | null;
   diffusion_model_id: number | null;
   embedding_model_id: number | null;
@@ -97,7 +97,7 @@ export function buildSavedProviderSnapshotFromTomoriState(tomoriState: TomoriSta
   };
 }
 
-export async function loadProviderDefaultSelectionIds(provider: string): Promise<ProviderDefaultSelectionIds> {
+async function loadProviderDefaultSelectionIds(provider: string): Promise<ProviderDefaultSelectionIds> {
   const normalizedProvider = provider.toLowerCase();
 
   if (isCustomProvider(normalizedProvider)) {

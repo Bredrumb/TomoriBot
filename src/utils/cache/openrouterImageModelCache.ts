@@ -14,7 +14,7 @@ import {
 
 const OPENROUTER_IMAGE_MODELS_URL = "https://openrouter.ai/api/v1/images/models";
 
-export function parseOpenRouterImageModelList(payload: unknown): OpenRouterCatalogModelEntry[] {
+function parseOpenRouterImageModelList(payload: unknown): OpenRouterCatalogModelEntry[] {
   return parseOpenRouterCatalogModelList("image", payload);
 }
 

@@ -31,7 +31,7 @@ export interface GlobalInteractionRoute {
 }
 
 export type InteractionRouteDispatchResult = "handled" | "stale-version" | "unmatched";
-export const DISCORD_CUSTOM_ID_MAX_LENGTH = 100;
+const DISCORD_CUSTOM_ID_MAX_LENGTH = 100;
 
 export function buildInteractionRouteId(namespace: string, version: string, ...segments: string[]): string {
   const values = [namespace, version, ...segments];

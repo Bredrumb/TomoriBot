@@ -26,7 +26,7 @@ function readIntEnv(name: string, fallbackMs: number, minimum: number): number {
  * between a permanently invalid codename on the chat path and a fetch per turn, so the
  * window stays short rather than absent. Zero disables it.
  */
-export function getOpenRouterCatalogMinRefreshIntervalMs(): number {
+function getOpenRouterCatalogMinRefreshIntervalMs(): number {
   return readIntEnv("OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS", DEFAULT_MIN_REFRESH_INTERVAL_MS, 0);
 }
 
@@ -49,7 +49,7 @@ export interface OpenRouterCatalogSource<TEntry> {
   keyOf(entry: TEntry): string;
 }
 
-export interface OpenRouterCatalogStatus {
+interface OpenRouterCatalogStatus {
   ready: boolean;
   size: number;
   lastSuccessAt: number | null;

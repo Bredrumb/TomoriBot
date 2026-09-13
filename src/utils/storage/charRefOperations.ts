@@ -10,7 +10,7 @@ import { deleteCharRef, uploadCharRef, type CharRefEntityType } from "@/utils/st
  * `APIAttachment` satisfy it structurally, so neither caller needs a cast to reach the shared
  * preparation logic.
  */
-export interface CharRefAttachmentSource {
+interface CharRefAttachmentSource {
   contentType: string | null;
   size: number;
   url: string;
@@ -24,7 +24,7 @@ export type UploadPreparationResult =
       descriptionKey: string;
     };
 
-export async function prepareAttachmentForStorage(
+async function prepareAttachmentForStorage(
   attachment: CharRefAttachmentSource,
 ): Promise<UploadPreparationResult> {
   if (!attachment.contentType?.startsWith("image/")) {

@@ -23,7 +23,7 @@ export function formatStoredParameterValue(value: number): string {
   return String(Number(value.toPrecision(7)));
 }
 
-export interface ProviderParameterOption {
+interface ProviderParameterOption {
   value: string;
   label: string;
   default?: boolean;
@@ -46,7 +46,7 @@ export interface ProviderParameterBlockCopy {
   editGenerationLabel: string;
 }
 
-export interface ProviderParameterBlockValues {
+interface ProviderParameterBlockValues {
   providerDisplayName: string;
   temperature: string;
   minP: string;
@@ -58,7 +58,7 @@ export interface ProviderParameterBlockValues {
   thinking: string;
 }
 
-export interface ProviderParameterBlockRoutes {
+interface ProviderParameterBlockRoutes {
   providerSelect: string;
   editSampling: string;
   editGeneration: string;

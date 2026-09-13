@@ -6,12 +6,12 @@ import { normalizeMcpToolNameSnapshot } from "@/utils/mcp/mcpToolSnapshot";
 import { type RemoteUrlValidationResult, validateRemoteUrl } from "@/utils/security/remoteUrlSecurity";
 
 export const MAX_MCP_SERVERS_PER_WORKSPACE = Number(process.env.MAX_MCP_SERVERS_PER_GUILD) || 10;
-export const MCP_SERVER_TYPES = ["general", "web_search", "url_fetcher"] as const;
+const MCP_SERVER_TYPES = ["general", "web_search", "url_fetcher"] as const;
 export type McpServerType = (typeof MCP_SERVER_TYPES)[number];
 
 const MCP_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,31}$/;
 
-export interface McpConnectionTestResult {
+interface McpConnectionTestResult {
   success: boolean;
   toolCount: number;
   functionNames: string[];
@@ -72,7 +72,7 @@ export function parseMcpServerType(value: string | null | undefined): McpServerT
   return value === "web_search" || value === "url_fetcher" ? value : null;
 }
 
-export function toStoredMcpServerType(value: McpServerType): string | null {
+function toStoredMcpServerType(value: McpServerType): string | null {
   return value === "general" ? null : value;
 }
 

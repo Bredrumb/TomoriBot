@@ -22,7 +22,7 @@ type ToolExportShape = {
   mcp_servers: Array<{ name: string; url: string; server_type: string }>;
 };
 
-export type McpToolSnapshotUpdateResult = "updated" | "unchanged" | "not-found" | "failed";
+type McpToolSnapshotUpdateResult = "updated" | "unchanged" | "not-found" | "failed";
 export type BraveApiKeyStatusReadResult =
   | { status: "fresh"; configured: boolean }
   | { status: "unavailable"; configured: false };

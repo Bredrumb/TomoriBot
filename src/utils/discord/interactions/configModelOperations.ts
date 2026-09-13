@@ -190,59 +190,59 @@ export async function loadConfigModelChoices(
   }
 }
 
-export type ConfigModelSetResult =
+type ConfigModelSetResult =
   | { status: "success"; modelName: string; reembedded: boolean }
   | { status: "already-selected"; modelName: string }
   | { status: "openrouter-moved" }
   | { status: "not-found" | "no-models" | "write-failed" };
 
-export type ConfigModelClearResult =
+type ConfigModelClearResult =
   | { status: "success" }
   | { status: "already-clear" }
   | { status: "not-clearable" | "write-failed" };
 
-export type ConfigParameterResult =
+type ConfigParameterResult =
   | { status: "success" }
   | { status: "no-changes" | "invalid-value" | "not-found" | "write-failed" };
 
-export type ConfigNaiPresetResult = { status: "success" | "write-failed" | "not-found" };
+type ConfigNaiPresetResult = { status: "success" | "write-failed" | "not-found" };
 
-export type ConfigStopAddResult =
+type ConfigStopAddResult =
   | { status: "success"; addedCount: number; totalCount: number }
   | { status: "no-changes" | "invalid-input" | "write-failed" }
   | { status: "too-long"; maxLength: number }
   | { status: "too-many"; maxCount: number };
 
-export type ConfigStopManageResult =
+type ConfigStopManageResult =
   | { status: "success"; removedCount: number; speakerPatternEnabled: boolean }
   | { status: "no-changes" | "stale" | "write-failed" };
 
-export type ConfigLogitAddResult =
+type ConfigLogitAddResult =
   | { status: "success"; addedCount: number; updatedCount: number; totalCount: number }
   | { status: "no-changes" | "empty-terms" | "term-too-long" | "invalid-bias" | "write-failed" };
 
-export type ConfigLogitUploadResult =
+type ConfigLogitUploadResult =
   | { status: "success"; addedCount: number; updatedCount: number; totalCount: number }
   | { status: "no-changes" | "invalid-file" | "write-failed" };
 
-export type ConfigLogitRemoveResult =
+type ConfigLogitRemoveResult =
   | { status: "success"; removedCount: number }
   | { status: "no-changes" | "stale" | "write-failed" };
 
-export type ConfigFallbackResult =
+type ConfigFallbackResult =
   | { status: "success"; refs: FallbackModelRef[] }
   | { status: "no-changes" | "openrouter-moved" | "not-found" | "write-failed" }
   | { status: "primary-conflict"; primaryModelName: string };
 
-export type ConfigRandomizerResult =
+type ConfigRandomizerResult =
   | { status: "success"; enabled: boolean }
   | { status: "no-changes" | "requires-fallbacks" | "write-failed" };
 
-export type ConfigImageTagsResult =
+type ConfigImageTagsResult =
   | { status: "success"; tags: string[]; reset: boolean }
   | { status: "no-tags" | "too-many" | "tag-too-long" | "invalid" | "write-failed" };
 
-export type ConfigNaiParametersResult =
+type ConfigNaiParametersResult =
   | { status: "success" }
   | {
       status:
@@ -254,7 +254,7 @@ export type ConfigNaiParametersResult =
         | "write-failed";
     };
 
-export interface ConfigNaiParameterInput {
+interface ConfigNaiParameterInput {
   sampler: string | null;
   steps: string;
   scale: string;

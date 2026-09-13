@@ -34,7 +34,7 @@ export const CONFIG_PERMISSION_MODAL_SUBMIT_ACTIONS = new Set<ConfigPanelRoute["
   "permissions-manage-submit",
 ]);
 
-export const CONFIG_PERMISSION_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
+const CONFIG_PERMISSION_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "permissions-tool-use-set",
   "permissions-privacy-bypass-set",
 ]);

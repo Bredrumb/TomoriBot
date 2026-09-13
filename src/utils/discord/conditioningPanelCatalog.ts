@@ -27,7 +27,7 @@ export type ConditioningPanelRoute =
   | { action: "page"; locale: string; page: number }
   | { action: "remove-submit"; locale: string; page: number; fp: string; nonce: string };
 
-export type ConditioningAction = ConditioningPanelRoute["action"];
+type ConditioningAction = ConditioningPanelRoute["action"];
 
 type ConditioningRouteForAction<A extends ConditioningAction> = ConditioningPanelRoute extends infer R
   ? R extends { action: string }
@@ -37,7 +37,7 @@ type ConditioningRouteForAction<A extends ConditioningAction> = ConditioningPane
     : never
   : never;
 
-export type ConditioningRouteCodecs = {
+type ConditioningRouteCodecs = {
   [A in ConditioningAction]: RouteCodec<ConditioningRouteForAction<A>>;
 };
 
@@ -63,7 +63,7 @@ const nonceField: RouteFieldCodec<"nonce", string> = {
   decode: (v) => parseNonce(v),
 };
 
-export const CONDITIONING_ROUTE_CODECS: ConditioningRouteCodecs = {
+const CONDITIONING_ROUTE_CODECS: ConditioningRouteCodecs = {
   page: {
     wireToken: "page",
     fields: [pageField],
@@ -82,7 +82,7 @@ export function listConditioningPanelActions(): ConditioningAction[] {
   return Object.keys(CONDITIONING_ROUTE_CODECS) as ConditioningAction[];
 }
 
-export function buildConditioningRouteSegments(route: ConditioningPanelRoute): string[] {
+function buildConditioningRouteSegments(route: ConditioningPanelRoute): string[] {
   return buildRouteSegments(CONDITIONING_ROUTE_CODECS[route.action], route);
 }
 

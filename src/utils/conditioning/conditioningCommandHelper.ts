@@ -17,7 +17,7 @@ import { showRoutedRawModal } from "@/utils/discord/ui/modals";
 import { localizer } from "@/utils/text/localizer";
 import { loadConditioningManageEntriesWithPersonas } from "@/utils/discord/interactions/conditioningRoutes";
 
-export function hasManageGuildPermission(interaction: ChatInputCommandInteraction): boolean {
+function hasManageGuildPermission(interaction: ChatInputCommandInteraction): boolean {
   return interaction.memberPermissions?.has("ManageGuild") ?? false;
 }
 

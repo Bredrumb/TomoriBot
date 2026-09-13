@@ -117,14 +117,14 @@ type ConfigPromoteResult =
   | { status: "no-main-persona" }
   | { status: "write-failed" };
 
-export type ConfigStmEditResult = { status: "success" } | { status: "write-failed" };
+type ConfigStmEditResult = { status: "success" } | { status: "write-failed" };
 
-export type ConfigConditioningRemoveResult =
+type ConfigConditioningRemoveResult =
   | { status: "success"; deletedRows: number }
   | { status: "no-removals" }
   | { status: "write-failed" };
 
-export type ConfigAttributeAddResult =
+type ConfigAttributeAddResult =
   | { status: "success"; addedAttributes: string[]; selectedIndex: number }
   | { status: "invalid-file"; error: "invalid_format" | "file_too_large" | "download_failed" }
   | { status: "no-input" }
@@ -140,16 +140,16 @@ export type ConfigAttributeAddResult =
     }
   | { status: "write-failed" };
 
-export type ConfigAttributeEditResult =
+type ConfigAttributeEditResult =
   | { status: "success" }
   | { status: "unchanged" }
   | { status: "content-too-long"; currentLength: number; maxAllowed: number }
   | { status: "duplicate"; attribute: string }
   | { status: "write-failed" };
 
-export type ConfigAttributeRemoveResult = { status: "success"; removedAttribute: string } | { status: "write-failed" };
+type ConfigAttributeRemoveResult = { status: "success"; removedAttribute: string } | { status: "write-failed" };
 
-export type ConfigDialogueAddResult =
+type ConfigDialogueAddResult =
   | { status: "success"; addedDialogues: Array<{ userInput: string; botInput: string }>; selectedIndex: number }
   | { status: "invalid-file"; error: "invalid_format" | "file_too_large" | "download_failed" }
   | { status: "manual-pair-required" }
@@ -168,7 +168,7 @@ export type ConfigDialogueAddResult =
     }
   | { status: "write-failed" };
 
-export type ConfigDialogueEditResult =
+type ConfigDialogueEditResult =
   | { status: "success" }
   | { status: "unchanged" }
   | { status: "user-too-long"; currentLength: number; maxAllowed: number }
@@ -176,27 +176,27 @@ export type ConfigDialogueEditResult =
   | { status: "duplicate"; input: string }
   | { status: "write-failed" };
 
-export type ConfigDialogueRemoveResult =
+type ConfigDialogueRemoveResult =
   | { status: "success"; removedInput: string; removedOutput: string }
   | { status: "write-failed" };
 
-export type ConfigDialogueRepairResult =
+type ConfigDialogueRepairResult =
   | { status: "not-needed"; inputs: string[]; outputs: string[] }
   | { status: "repaired"; inputs: string[]; outputs: string[] }
   | { status: "write-failed" };
 
-export type ConfigImageTagsResult =
+type ConfigImageTagsResult =
   | { status: "success"; tags: string[] }
   | { status: "empty" | "too-many" | "tag-too-long" | "write-failed" };
 
-export type ConfigPromptSetResult = { status: "success" } | { status: "write-failed" };
-export type ConfigPromptRemoveResult = { status: "success" } | { status: "no-prompt" | "write-failed" };
-export type ConfigContextNoteResult = { status: "success" } | { status: "invalid-depth" | "write-failed" };
-export type ConfigHumanizerResult =
+type ConfigPromptSetResult = { status: "success" } | { status: "write-failed" };
+type ConfigPromptRemoveResult = { status: "success" } | { status: "no-prompt" | "write-failed" };
+type ConfigContextNoteResult = { status: "success" } | { status: "invalid-depth" | "write-failed" };
+type ConfigHumanizerResult =
   | { status: "success" }
   | { status: "unchanged" }
   | { status: "invalid-value" | "write-failed" };
-export type ConfigCharacterReferenceResult =
+type ConfigCharacterReferenceResult =
   | { status: "success"; cleared: boolean }
   | { status: "invalid-image"; titleKey: string; descriptionKey: string }
   | { status: "write-failed" };

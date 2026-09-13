@@ -30,9 +30,9 @@ import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-export const CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE = 10;
+const CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE = 10;
 
-export interface ConditioningScope {
+interface ConditioningScope {
   guildId: string;
   entries: ConditioningAggregateEntry[];
 }

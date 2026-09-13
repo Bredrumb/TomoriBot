@@ -151,7 +151,7 @@ export interface SetupWizardRoute {
   nonce: string;
 }
 
-export function buildSetupRouteId(route: SetupWizardRoute): string {
+function buildSetupRouteId(route: SetupWizardRoute): string {
   return buildInteractionRouteId(SETUP_ROUTE_NAMESPACE, SETUP_ROUTE_VERSION, route.action, route.locale, route.nonce);
 }
 
@@ -328,7 +328,7 @@ function describeSetupSettingsRejection(rawTimezone: string | undefined, timezon
  * would come back as an empty list and read here as "ready to set up", which is the one answer this
  * guard exists to prevent.
  */
-export async function readSetupHealth(workspaceKey: string): Promise<SetupHealthStatus> {
+async function readSetupHealth(workspaceKey: string): Promise<SetupHealthStatus> {
   const serverId = await serverRepository.loadServerIdByDiscId(workspaceKey);
   if (!serverId) return "ready";
   if (!(await personaRepository.hasMainPersona(serverId))) return "ready";
@@ -928,7 +928,7 @@ type SetupCommitOutcome =
  * invalidated only after the transaction returns. The `finally` owns the draft, so no exception on
  * any path can leave a claimed draft holding an encrypted credential.
  */
-export async function finishSetupWizardDraft(
+async function finishSetupWizardDraft(
   interaction: ChatInputCommandInteraction | GlobalRoutableInteraction,
   draft: SetupDraftRecord,
   locale: string,

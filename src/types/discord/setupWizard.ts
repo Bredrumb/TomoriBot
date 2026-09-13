@@ -3,7 +3,7 @@ import { customEndpointApiStyleSchema, setupCustomEndpointCapabilitySchema } fro
 
 export const SETUP_DRAFT_SCHEMA_VERSION = 1;
 
-export const setupDraftContextSchema = z.enum(["guild", "dm"]);
+const setupDraftContextSchema = z.enum(["guild", "dm"]);
 export type SetupDraftContext = z.infer<typeof setupDraftContextSchema>;
 
 export const setupDraftEndpointConnectionSchema = z

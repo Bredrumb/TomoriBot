@@ -13,7 +13,7 @@ import type { PanelReceipt } from "@/types/discord/panel";
 import { buildInteractionRouteId } from "@/utils/discord/interactions/routeRegistry";
 import { localizer } from "@/utils/text/localizer";
 
-export const PANEL_ACCENT_BY_TONE = {
+const PANEL_ACCENT_BY_TONE = {
   success: 0x57f287,
   warning: 0xfee75c,
   error: 0xed4245,

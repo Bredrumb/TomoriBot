@@ -71,7 +71,7 @@ export function buildHelpStops(category: HelpCategoryDefinition): HelpStop[] {
   return stops;
 }
 
-export function buildHelpCustomId(...segments: string[]): string {
+function buildHelpCustomId(...segments: string[]): string {
   return [HELP_ROUTE_NAMESPACE, HELP_ROUTE_VERSION, ...segments].join(":");
 }
 

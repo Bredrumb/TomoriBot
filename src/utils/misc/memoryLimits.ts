@@ -35,7 +35,7 @@ export interface MemoryValidationResult {
 /**
  * Types of memory validation errors
  */
-export type MemoryValidationError =
+type MemoryValidationError =
   | "CONTENT_TOO_LONG"
   | "PERSONAL_MEMORY_LIMIT_EXCEEDED"
   | "SERVER_MEMORY_LIMIT_EXCEEDED"

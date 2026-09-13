@@ -704,7 +704,7 @@ interface NovelAISubscriptionPerks {
  * `percent` is the API's meter value and `timeUntilNextPercent` is the time
  * until its next one-percent recovery.
  */
-export interface NovelAIUsageLimitStatus {
+interface NovelAIUsageLimitStatus {
   isNegative: boolean;
   percent: number;
   timeUntilNextPercent: number;

@@ -24,7 +24,7 @@ export type StPresetsAction = StPresetsPanelRoute["action"];
  * Host-neutral route input used by the panel renderer. Hosts provide the namespace, version, and
  * codec implementation while the panel keeps one semantic action set for every surface.
  */
-export type StPresetsPanelRouteInput = StPresetsPanelRoute;
+type StPresetsPanelRouteInput = StPresetsPanelRoute;
 
 export interface StPresetsPanelRouteAdapter {
   namespace: string;

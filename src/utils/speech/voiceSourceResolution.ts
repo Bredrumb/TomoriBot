@@ -16,7 +16,7 @@ export {
 } from "@/utils/speech/voiceSourceCapabilities";
 
 /** Identity of a voice source as it appears in the modal radio and the success embed. */
-export type VoiceSourceId = "upload" | "typed-design" | "persona-sample" | "persona-design" | "elevenlabs";
+type VoiceSourceId = "upload" | "typed-design" | "persona-sample" | "persona-design" | "elevenlabs";
 
 /** Request shape the source produces. */
 export type VoiceSourceShape = "clone" | "design" | "elevenlabs";

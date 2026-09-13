@@ -62,7 +62,7 @@ function rowId(row: GuildMcpServerRow): number {
   return row.guild_mcp_id ?? 0;
 }
 
-export function sortMcpConfigs(configs: readonly GuildMcpServerRow[]): GuildMcpServerRow[] {
+function sortMcpConfigs(configs: readonly GuildMcpServerRow[]): GuildMcpServerRow[] {
   return [...configs].sort((left, right) => {
     const createdDifference = (left.created_at?.getTime() ?? 0) - (right.created_at?.getTime() ?? 0);
     return createdDifference || rowId(left) - rowId(right);

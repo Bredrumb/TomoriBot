@@ -332,7 +332,7 @@ export const MODERATION_ROUTE_CODECS: ModerationRouteCodecs = {
   },
 };
 
-export type ModerationFixedRoute = Extract<ModerationPanelRoute, { action: ModerationFixedAction }>;
+type ModerationFixedRoute = Extract<ModerationPanelRoute, { action: ModerationFixedAction }>;
 
 const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<ModerationFixedAction, ModerationFixedRoute>(
   MODERATION_ROUTE_CODECS,

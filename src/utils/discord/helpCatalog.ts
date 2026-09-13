@@ -2,10 +2,10 @@ import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { DOCS_PATHS, type DocsPath } from "@/utils/discord/docsLinks";
 import { localizer } from "@/utils/text/localizer";
 
-export const HELP_CATEGORY_IDS = ["setup", "features", "moderation", "plugins"] as const;
+const HELP_CATEGORY_IDS = ["setup", "features", "moderation", "plugins"] as const;
 export type HelpCategoryId = (typeof HELP_CATEGORY_IDS)[number];
 
-export const HELP_PAGE_IDS = [
+const HELP_PAGE_IDS = [
   "getting-started",
   "personal-profile",
   "custom-endpoints",
@@ -26,7 +26,7 @@ export type HelpPageId = (typeof HELP_PAGE_IDS)[number];
 
 type HelpVariables = Record<string, string | number | boolean>;
 
-export interface HelpSectionDefinition {
+interface HelpSectionDefinition {
   titleKey: string;
   bodyKey: string;
   variables?: (locale: string) => HelpVariables;
@@ -97,15 +97,15 @@ export function breadcrumbPage(root: BreadcrumbRoot, locale: string, breadcrumbK
  * sentence naming several of them would repeat an identical token with nothing to tell the pages
  * apart. The breadcrumb carries the distinction the subcommand name used to.
  */
-export function configPage(locale: string, breadcrumbKey: string): string {
+function configPage(locale: string, breadcrumbKey: string): string {
   return renderBreadcrumbRoot("config", locale, breadcrumbKey);
 }
 
-export function personalConfigPage(locale: string, breadcrumbKey: string): string {
+function personalConfigPage(locale: string, breadcrumbKey: string): string {
   return renderBreadcrumbRoot("personal", locale, breadcrumbKey);
 }
 
-export function moderationPage(locale: string, breadcrumbKey: string): string {
+function moderationPage(locale: string, breadcrumbKey: string): string {
   return renderBreadcrumbRoot("moderation", locale, breadcrumbKey);
 }
 

@@ -1,6 +1,6 @@
 import type { TomoriState } from "@/types/db/schema";
 
-export const LEGACY_PERSONA_DESCRIPTION_PREFIX = "{bot}'s Description: ";
+const LEGACY_PERSONA_DESCRIPTION_PREFIX = "{bot}'s Description: ";
 
 export function resolvePrefillPrompt(persona: TomoriState): string | null {
   if (persona.persona_prompt?.trim()) {

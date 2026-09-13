@@ -50,7 +50,7 @@ const DROP_ORDER = [
 /** Which delivery-knob backend the expressiveness radio drives, if any. */
 export type ExpressivenessBackend = "chatterbox" | "elevenlabs";
 
-export interface ChatterboxDefaults {
+interface ChatterboxDefaults {
   cfgWeight: number;
   exaggeration: number;
 }

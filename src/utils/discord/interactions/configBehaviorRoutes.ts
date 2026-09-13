@@ -819,7 +819,7 @@ export const CONFIG_BEHAVIOR_D10_MODAL_SUBMIT_ACTIONS = new Set<ConfigPanelRoute
   "behavior-stm-prompt-submit",
 ]);
 
-export const CONFIG_BEHAVIOR_D10_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
+const CONFIG_BEHAVIOR_D10_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "behavior-tool-mode-set",
   "behavior-self-debug-set",
   "behavior-speech-transcripts-set",
@@ -827,7 +827,7 @@ export const CONFIG_BEHAVIOR_D10_DIRECT_ACTIONS = new Set<ConfigPanelRoute["acti
 
 const MAX_TOOL_TRIGGER_ENTRIES = 50;
 const MAX_NOTICE_ENTRIES = 50;
-export const MAX_WORKAROUND_ENTRIES = 50;
+const MAX_WORKAROUND_ENTRIES = 50;
 
 function fallbackD10View(state: TomoriState) {
   return {

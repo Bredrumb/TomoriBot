@@ -129,7 +129,7 @@ import { buildMcpsPanelComponents, type McpsPanelPage } from "@/utils/discord/ui
 import { buildStPresetsPanelComponents, type StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPanel";
 
 const RANDOM_TRIGGER_PAGE_SIZE = CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY;
-export const CONFIG_MCP_PANEL_PAGE_SIZE = 4;
+const CONFIG_MCP_PANEL_PAGE_SIZE = 4;
 
 export interface ConfigPanelPayload {
   components: TopLevelComponentData[];
@@ -3274,7 +3274,7 @@ ${localizer(locale, "commands.config.panel.plugins_nsfw_jailbreaks_description",
   ];
 }
 
-export interface PersonaRangeEntryInput {
+interface PersonaRangeEntryInput {
   locale: string;
   personas: readonly TomoriState[];
   pageSize: number;
@@ -3490,7 +3490,7 @@ function autoTriggerPersonaName(
   );
 }
 
-export function buildChannelsAutoTriggerBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
+function buildChannelsAutoTriggerBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
   const { locale, actor } = input;
   const view = input.channelsView?.autoTrigger;
   const writesDisabled = input.readStatus !== "fresh";
@@ -3646,7 +3646,7 @@ ${renderBoundedChannelRows(options.locale, options.members, options.budget, loca
   ];
 }
 
-export function buildChannelsRulesBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
+function buildChannelsRulesBody(input: ConfigPanelRenderInput): ComponentInContainerData[] {
   const { locale, actor } = input;
   const view = input.channelsView?.rules;
   const writesDisabled = input.readStatus !== "fresh";

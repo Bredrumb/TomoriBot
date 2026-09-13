@@ -153,13 +153,13 @@ export interface ConfigBehaviorView {
   memory?: ConfigBehaviorMemoryView;
 }
 
-export interface ConfigPermissionsCapabilitiesView {
+interface ConfigPermissionsCapabilitiesView {
   toolUseEnabled: boolean;
   includeElevenLabs: boolean;
   definitionStates: Readonly<Record<string, boolean>>;
 }
 
-export interface ConfigPermissionsPrivacyView {
+interface ConfigPermissionsPrivacyView {
   stmPrivacyBypass: boolean;
 }
 
@@ -168,21 +168,21 @@ export interface ConfigPermissionsView {
   privacy: ConfigPermissionsPrivacyView;
 }
 
-export interface ConfigChannelsDestinationsView {
+interface ConfigChannelsDestinationsView {
   thoughtLogChannelId: string | null;
   welcomeChannelId: string | null;
   welcomePrompt: string | null;
   welcomePersonaId: number | null;
 }
 
-export interface ConfigChannelsAutoTriggerView {
+interface ConfigChannelsAutoTriggerView {
   enabledChannels: ChecklistChannelTarget[];
   personaOverrides: AutochatPersonaOverride[];
   threshold: number;
   maxThreshold: number;
 }
 
-export interface ConfigChannelsRulesView {
+interface ConfigChannelsRulesView {
   privateChannels: ChecklistChannelTarget[];
   roleplayChannels: ChecklistChannelTarget[];
   crossChannelBlocklist: BlocklistChannelTarget[];

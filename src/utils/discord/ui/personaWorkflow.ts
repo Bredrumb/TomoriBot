@@ -37,7 +37,7 @@ export { isCollectorTimeoutError } from "./interactionCore";
 
 const DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS = 120000;
 const configuredWorkflowTimeout = Number.parseInt(process.env.PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS || "", 10);
-export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
+const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
   Number.isFinite(configuredWorkflowTimeout) && configuredWorkflowTimeout > 0
     ? configuredWorkflowTimeout
     : DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS;
@@ -61,7 +61,7 @@ export interface PersonaWorkflowComponentsV2Payload
 }
 
 /** A public response payload used only by the explicit visibility-change phase. */
-export type PersonaWorkflowPublicPayload = Omit<
+type PersonaWorkflowPublicPayload = Omit<
   InteractionReplyOptions,
   "ephemeral" | "fetchReply" | "withResponse"
 > & {
@@ -104,12 +104,12 @@ export interface PersonaWorkflowMessageController {
   delete(): Promise<void>;
 }
 
-export interface PersonaWorkflowInPlacePhase {
+interface PersonaWorkflowInPlacePhase {
   readonly deliveryPolicy: "replace-picker";
   readonly message: PersonaWorkflowMessageController;
 }
 
-export interface PersonaWorkflowPublicReplyPhase {
+interface PersonaWorkflowPublicReplyPhase {
   readonly deliveryPolicy: "separate-public";
   readonly privateMessage: PersonaWorkflowMessageController;
   reply(payload: PersonaWorkflowPublicPayload): Promise<Message>;
@@ -122,7 +122,7 @@ export type PersonaWorkflowModalResult =
   | { outcome: "error"; error: PersonaWorkflowUpdateError }
   | { outcome: "fatal"; error: PersonaWorkflowUpdateError };
 
-export interface PersonaWorkflowModalPhase {
+interface PersonaWorkflowModalPhase {
   readonly values: Readonly<Record<string, string>>;
   readonly multiValues: Readonly<Record<string, string[]>>;
   readonly attachments: Readonly<Record<string, APIAttachment>>;
@@ -135,7 +135,7 @@ export interface PersonaWorkflowModalPhase {
   unsafeInteraction(): ModalSubmitInteraction;
 }
 
-export interface PersonaWorkflowNestedButtonPhase {
+interface PersonaWorkflowNestedButtonPhase {
   readonly message: PersonaWorkflowMessageController;
   replace(payload: PersonaWorkflowComponentsV2Payload): Promise<Message>;
   beginInPlaceWork(): Promise<PersonaWorkflowInPlacePhase>;
@@ -153,9 +153,9 @@ export interface AnchorPrivateWorkflowPhase {
   useButton(button: ButtonInteraction): PersonaWorkflowNestedButtonPhase;
 }
 
-export type PersonaWorkflowModalSource = ModalOptions | (() => Promise<ModalOptions>);
+type PersonaWorkflowModalSource = ModalOptions | (() => Promise<ModalOptions>);
 
-export interface PersonaWorkflowSelectionPhase<TPersona extends TomoriState> {
+interface PersonaWorkflowSelectionPhase<TPersona extends TomoriState> {
   readonly persona: TPersona;
   readonly absoluteIndex: number;
   /** Stable id used to scope nested component custom ids. */
@@ -218,7 +218,7 @@ export type PersonaPickerWorkflowResult<TPersona extends TomoriState, TValue = v
  * concurrency backstop; divergence between the three reintroduces the wasted
  * round trip this option exists to remove.
  */
-export interface PersonaWorkflowEligibility<TPersona extends TomoriState> {
+interface PersonaWorkflowEligibility<TPersona extends TomoriState> {
   /**
    * Synchronous predicate deciding whether a persona qualifies. Class B callers
    * close over a precomputed `Set` of eligible keys so no per-persona query runs

@@ -45,7 +45,7 @@ type SpriteTransferFailure =
   | { status: "upload-failed" }
   | { status: "write-failed" };
 
-export type ConfigSpriteAddResult =
+type ConfigSpriteAddResult =
   | { status: "success"; spriteName: string; replaced: boolean }
   | SpriteNameFailure
   | SpriteImageFailure
@@ -53,7 +53,7 @@ export type ConfigSpriteAddResult =
   | { status: "instructions-too-long" }
   | { status: "limit-reached" };
 
-export type ConfigSpriteEditResult =
+type ConfigSpriteEditResult =
   | { status: "success"; spriteName: string }
   | SpriteNameFailure
   | SpriteImageFailure
@@ -63,12 +63,12 @@ export type ConfigSpriteEditResult =
   | { status: "no-changes" }
   | { status: "not-found" };
 
-export type ConfigSpriteRemoveResult =
+type ConfigSpriteRemoveResult =
   | { status: "success"; spriteName: string }
   | { status: "not-found" }
   | { status: "write-failed" };
 
-export type ConfigSpriteImportResult =
+type ConfigSpriteImportResult =
   | { status: "success"; created: number; replaced: number; failed: number }
   | { status: "invalid-file" }
   | { status: "file-too-large" }
@@ -81,7 +81,7 @@ export type ConfigSpriteImportResult =
   | { status: "download-failed" }
   | { status: "write-failed" };
 
-export type ConfigSpriteExportResult =
+type ConfigSpriteExportResult =
   | { status: "success"; buffer: Buffer; filename: string; spriteCount: number; skippedCount: number }
   | { status: "no-sprites" }
   | { status: "all-images-failed" }

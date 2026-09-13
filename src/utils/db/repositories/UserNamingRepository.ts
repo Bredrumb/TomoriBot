@@ -18,7 +18,7 @@ import { log } from "@/utils/misc/logger";
  */
 const COMPOSED_NAME_CANDIDATE_LIMIT = 50;
 
-export interface NamedUserMatch {
+interface NamedUserMatch {
   userId: number;
   userDiscId: string;
 }
@@ -28,7 +28,7 @@ export interface NamedUserMatch {
  * every naming layer unresolved so the caller can rebuild the composed label with
  * `resolveEffectiveUserNaming` instead of duplicating the layering rules in SQL.
  */
-export interface ComposedNameCandidate extends NamedUserMatch {
+interface ComposedNameCandidate extends NamedUserMatch {
   globalNickname: string | null;
   globalPrefixOverride: string | null;
   globalSuffixOverride: string | null;

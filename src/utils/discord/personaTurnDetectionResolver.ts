@@ -19,7 +19,7 @@ export interface FallbackPersonaResolutionOptions {
   fetchRecentMessages: () => Promise<Message[]>;
 }
 
-export function getChannelAutoTriggerPersona(
+function getChannelAutoTriggerPersona(
   personas: TomoriState[],
   effectiveChannelId: string,
   tomoriState: TomoriState,

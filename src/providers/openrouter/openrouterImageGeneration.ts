@@ -8,7 +8,7 @@ const OPENROUTER_ORIGIN = "https://openrouter.ai";
 const OPENROUTER_CHAT_URL = `${OPENROUTER_ORIGIN}/api/v1/chat/completions`;
 const OPENROUTER_IMAGES_URL = `${OPENROUTER_ORIGIN}/api/v1/images`;
 
-export interface OpenRouterImageReference {
+interface OpenRouterImageReference {
   mimeType: string;
   data: string;
 }

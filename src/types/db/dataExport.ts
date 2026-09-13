@@ -165,7 +165,7 @@ function normalizeJsonColumn(value: unknown): unknown {
  * Portable server_model_configs export fields.
  * Excludes model-selection FKs and encrypted credential mirrors.
  */
-export const serverModelConfigExportSchema = z.object({
+const serverModelConfigExportSchema = z.object({
   llm_temperature: z.number().min(0.0).max(2.0),
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
   llm_disabled_params: z.array(z.enum(SUPPORTED_PARAM_VALUES)).default([]),
@@ -175,7 +175,7 @@ export const serverModelConfigExportSchema = z.object({
  * Portable server_chat_configs export fields.
  * Excludes provider/model fallback refs because they are server-specific model pointers.
  */
-export const serverChatConfigExportSchema = z.object({
+const serverChatConfigExportSchema = z.object({
   llm_top_p: z.number().min(0.0).max(1.0).default(0.95),
   llm_top_k: z.number().int().min(0).max(40).default(0),
   llm_frequency_penalty: z.number().min(-2.0).max(2.0).default(0.0),
@@ -199,7 +199,7 @@ export const serverChatConfigExportSchema = z.object({
 });
 
 /** Portable server_member_permissions_configs export fields. */
-export const serverMemberPermissionsConfigExportSchema = z.object({
+const serverMemberPermissionsConfigExportSchema = z.object({
   server_memteaching_enabled: z.boolean().default(false),
   attribute_memteaching_enabled: z.boolean().default(false),
   sampledialogue_memteaching_enabled: z.boolean().default(false),
@@ -209,7 +209,7 @@ export const serverMemberPermissionsConfigExportSchema = z.object({
 });
 
 /** Portable server_capabilities_configs export fields. */
-export const serverCapabilitiesConfigExportSchema = z.object({
+const serverCapabilitiesConfigExportSchema = z.object({
   web_search_enabled: z.boolean().default(true),
   emoji_usage_enabled: z.boolean().default(true),
   sticker_usage_enabled: z.boolean().default(true),
@@ -227,19 +227,19 @@ export const serverCapabilitiesConfigExportSchema = z.object({
 });
 
 /** Portable server_notice_embeds_configs export fields. */
-export const serverNoticeEmbedsConfigExportSchema = z.object({
+const serverNoticeEmbedsConfigExportSchema = z.object({
   tool_notice_hidden_keys: z.array(z.string()).default([]),
 });
 
 /** Portable server_nsfw_configs export fields. */
-export const serverNsfwConfigExportSchema = z.object({
+const serverNsfwConfigExportSchema = z.object({
   uncensor_injection_enabled: z.boolean().optional(),
   uncensor_unicode_space_enabled: z.boolean().optional(),
   uncensor_sanitize_enabled: z.boolean().optional(),
 });
 
 /** Portable server_speech_configs export fields. */
-export const serverSpeechConfigExportSchema = z.object({
+const serverSpeechConfigExportSchema = z.object({
   voice_transcript_chat_mode: z.boolean().optional(),
   chatterbox_turbo_enabled: z.boolean().optional(),
   chatterbox_cfg_weight: z.number().min(0.0).optional(),
@@ -250,7 +250,7 @@ export const serverSpeechConfigExportSchema = z.object({
  * Portable server_channel_scope_configs export fields.
  * Discord channel IDs remain excluded because they are not portable.
  */
-export const serverChannelScopeConfigExportSchema = z.object({
+const serverChannelScopeConfigExportSchema = z.object({
   stm_privacy_bypass: z.boolean().optional(),
 });
 
@@ -258,10 +258,10 @@ export const serverChannelScopeConfigExportSchema = z.object({
  * server_auto_trigger_configs currently has no portable export fields.
  * Channel IDs, persona overrides, and channel-coupled thresholds are server-specific.
  */
-export const serverAutoTriggerConfigExportSchema = z.object({});
+const serverAutoTriggerConfigExportSchema = z.object({});
 
 /** Portable server_trigger_behavior_configs export fields. */
-export const serverTriggerBehaviorConfigExportSchema = z.object({
+const serverTriggerBehaviorConfigExportSchema = z.object({
   always_reply_enabled: z.boolean().optional(),
   deliberate_trigger_mode: z.boolean().optional(),
   deliberate_tool_mode: z.boolean().optional(), // Added May 2026
@@ -277,7 +277,7 @@ export const serverTriggerBehaviorConfigExportSchema = z.object({
  * Portable server_novelai_imagegen_configs export fields.
  * Excludes model-selection FKs.
  */
-export const serverNovelaiImagegenConfigExportSchema = z.object({
+const serverNovelaiImagegenConfigExportSchema = z.object({
   image_default_positive_tags: z.array(z.string()).optional(),
   image_default_negative_tags: z.array(z.string()).optional(),
   nai_sampler: z.string().nullable().optional(),
@@ -289,12 +289,12 @@ export const serverNovelaiImagegenConfigExportSchema = z.object({
 });
 
 /** Portable server_byok_configs export fields. */
-export const serverByokConfigExportSchema = z.object({
+const serverByokConfigExportSchema = z.object({
   user_byok_mode: z.boolean().optional(),
 });
 
 /** Portable server_memory_configs export fields. */
-export const serverMemoryConfigExportSchema = z.object({
+const serverMemoryConfigExportSchema = z.object({
   memory_tagging_enabled: z.boolean().optional(),
   channel_memory_enabled: z.boolean().optional(),
 });
@@ -303,7 +303,7 @@ export const serverMemoryConfigExportSchema = z.object({
  * Portable server_welcome_configs export fields.
  * Discord channel/persona references remain excluded.
  */
-export const serverWelcomeConfigExportSchema = z.object({
+const serverWelcomeConfigExportSchema = z.object({
   welcome_prompt: z.string().nullable().optional(),
 });
 
@@ -314,7 +314,7 @@ export const serverWelcomeConfigExportSchema = z.object({
  * Both keys are optional so exports predating STM customization still validate.
  * Per-channel durable STM *state* is intentionally NOT exported (design decision 8).
  */
-export const serverStmConfigExportSchema = z.object({
+const serverStmConfigExportSchema = z.object({
   stm_config: z
     .object({
       refresh_cadence: z.number().int(),
@@ -366,34 +366,34 @@ export type ServerConfigExport = z.infer<typeof serverConfigExportSchema>;
  * capability-class toggle and is claimed by `capabilities`; `model_randomizer_enabled` travels nowhere because
  * its fallback model pool is excluded, so carrying the flag alone would enable a randomizer over nothing.
  */
-export const workspaceChatConfigSectionSchema = serverModelConfigExportSchema
+const workspaceChatConfigSectionSchema = serverModelConfigExportSchema
   .merge(serverChatConfigExportSchema.omit({ self_debug_enabled: true, model_randomizer_enabled: true }))
   .merge(serverWelcomeConfigExportSchema)
   .strict();
 
-export const workspaceTriggersConfigSectionSchema = serverTriggerBehaviorConfigExportSchema.strict();
+const workspaceTriggersConfigSectionSchema = serverTriggerBehaviorConfigExportSchema.strict();
 
-export const workspaceCapabilitiesConfigSectionSchema = serverCapabilitiesConfigExportSchema
+const workspaceCapabilitiesConfigSectionSchema = serverCapabilitiesConfigExportSchema
   .merge(serverNoticeEmbedsConfigExportSchema)
   .merge(serverNsfwConfigExportSchema)
   .merge(serverChatConfigExportSchema.pick({ self_debug_enabled: true }))
   .strict();
 
-export const workspaceMemoryConfigSectionSchema = serverMemberPermissionsConfigExportSchema
+const workspaceMemoryConfigSectionSchema = serverMemberPermissionsConfigExportSchema
   .merge(serverChannelScopeConfigExportSchema)
   .merge(serverMemoryConfigExportSchema)
   .merge(serverStmConfigExportSchema)
   .strict();
 
-export const workspaceMediaConfigSectionSchema = serverNovelaiImagegenConfigExportSchema
+const workspaceMediaConfigSectionSchema = serverNovelaiImagegenConfigExportSchema
   .omit({ nai_preset_name: true })
   .strict();
 
-export const workspaceSpeechConfigSectionSchema = serverSpeechConfigExportSchema.strict();
+const workspaceSpeechConfigSectionSchema = serverSpeechConfigExportSchema.strict();
 
-export const workspaceAccessConfigSectionSchema = serverByokConfigExportSchema.strict();
+const workspaceAccessConfigSectionSchema = serverByokConfigExportSchema.strict();
 
-export const personalProfileConfigSectionSchema = personalSettingsExportDataSchema
+const personalProfileConfigSectionSchema = personalSettingsExportDataSchema
   .pick({
     user_nickname: true,
     language_pref: true,
@@ -406,15 +406,15 @@ export const personalProfileConfigSectionSchema = personalSettingsExportDataSche
   })
   .strict();
 
-export const personalPrivacyConfigSectionSchema = personalSettingsExportDataSchema
+const personalPrivacyConfigSectionSchema = personalSettingsExportDataSchema
   .pick({ privacy_level: true, shortterm_cache_crossserver_opt_in: true })
   .strict();
 
-export const personalAppearanceConfigSectionSchema = personalSettingsExportDataSchema
+const personalAppearanceConfigSectionSchema = personalSettingsExportDataSchema
   .pick({ physical_appearance_tags: true })
   .strict();
 
-export const personalResponseModesConfigSectionSchema = personalSettingsExportDataSchema
+const personalResponseModesConfigSectionSchema = personalSettingsExportDataSchema
   .pick({ impersonation_prompt: true, personal_dtm: true, personal_deliberate_tool_mode: true })
   .strict();
 
@@ -563,11 +563,11 @@ export const V2_CONFIG_SECTION_SCHEMAS = {
   response_modes: personalResponseModesConfigSectionSchema,
 } as const;
 
-export const EXPORT_BUCKET_NAME_MAX_LENGTH = 100;
+const EXPORT_BUCKET_NAME_MAX_LENGTH = 100;
 export const EXPORT_BUCKET_LABEL_MAX_LENGTH = 100;
 
 /** Strict bucket entries prevent internal identifiers from crossing the portability boundary. */
-export const memoryBucketSchema = z
+const memoryBucketSchema = z
   .object({
     name: z.string().trim().min(1).max(EXPORT_BUCKET_NAME_MAX_LENGTH),
     label: z.string().trim().min(1).max(EXPORT_BUCKET_LABEL_MAX_LENGTH),
@@ -627,12 +627,12 @@ export function getPersonalMemoriesV2ExportSchema() {
 export const workspaceMemoriesExportSchema = getWorkspaceMemoriesExportSchema();
 export const personalMemoriesV2ExportSchema = getPersonalMemoriesV2ExportSchema();
 
-export type WorkspaceMemoriesExport = z.infer<typeof workspaceMemoriesExportSchema>;
-export type PersonalMemoriesV2Export = z.infer<typeof personalMemoriesV2ExportSchema>;
+type WorkspaceMemoriesExport = z.infer<typeof workspaceMemoriesExportSchema>;
+type PersonalMemoriesV2Export = z.infer<typeof personalMemoriesV2ExportSchema>;
 export type WorkspaceMemoriesExportData = WorkspaceMemoriesExport["data"];
 export type PersonalMemoriesV2ExportData = PersonalMemoriesV2Export["data"];
 
-export function getV2ExportSchema() {
+function getV2ExportSchema() {
   return z.discriminatedUnion("type", [
     workspaceConfigExportSchema,
     personalConfigExportSchema,
@@ -675,21 +675,21 @@ const WORKSPACE_CONFIG_TABLE_NAMES = [
 
 const PERSONAL_CONFIG_TABLE_NAMES = ["personalSettings"] as const;
 
-export interface V2AdapterSuccess<TPayload> {
+interface V2AdapterSuccess<TPayload> {
   success: true;
   detectedSections: string[];
   payload: TPayload;
   droppedFields: string[];
 }
 
-export interface V2AdapterFailure {
+interface V2AdapterFailure {
   success: false;
   error: string;
 }
 
 export type V2AdapterResult<TPayload> = V2AdapterSuccess<TPayload> | V2AdapterFailure;
 
-export interface CombinedV2Payload {
+interface CombinedV2Payload {
   config: WorkspaceConfigExportData | PersonalConfigExportData;
   memories: WorkspaceMemoriesExportData | PersonalMemoriesV2ExportData;
 }
@@ -705,7 +705,7 @@ export interface ExportParseSuccess {
   droppedFields: string[];
 }
 
-export interface ExportParseFailure {
+interface ExportParseFailure {
   success: false;
   error: string;
 }

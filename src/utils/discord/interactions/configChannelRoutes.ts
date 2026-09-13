@@ -106,7 +106,7 @@ export const CONFIG_CHANNEL_MODAL_SUBMIT_ACTIONS = new Set<ConfigPanelRoute["act
   "channels-overrides-text-model-submit",
 ]);
 
-export const CONFIG_CHANNEL_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
+const CONFIG_CHANNEL_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "channels-log-clear",
   "channels-welcome-clear",
   "channels-overrides-prompt-clear",

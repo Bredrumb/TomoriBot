@@ -41,7 +41,7 @@ export interface VoiceSampleUpload {
 
 export type VoiceSampleUploadValidation = "ok" | "invalid-format" | "too-large";
 
-export function isAcceptedAudioFile(mimeType: string | null | undefined, filename: string | null | undefined): boolean {
+function isAcceptedAudioFile(mimeType: string | null | undefined, filename: string | null | undefined): boolean {
   const mime = mimeType?.toLowerCase().split(";")[0].trim() ?? "";
   if (ACCEPTED_MIME_TYPES.has(mime)) return true;
   return ACCEPTED_EXTENSION_REGEX.test(filename ?? "");

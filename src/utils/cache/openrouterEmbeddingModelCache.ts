@@ -13,7 +13,7 @@ import {
 
 const OPENROUTER_EMBEDDING_MODELS_URL = "https://openrouter.ai/api/v1/embeddings/models";
 
-export function parseOpenRouterEmbeddingModelList(payload: unknown): OpenRouterCatalogModelEntry[] {
+function parseOpenRouterEmbeddingModelList(payload: unknown): OpenRouterCatalogModelEntry[] {
   return parseOpenRouterCatalogModelList("embedding", payload);
 }
 

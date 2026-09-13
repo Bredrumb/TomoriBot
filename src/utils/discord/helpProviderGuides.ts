@@ -74,7 +74,7 @@ function providerGuide(
   };
 }
 
-export const PROVIDER_GUIDES: readonly ProviderGuideDefinition[] = [
+const PROVIDER_GUIDES: readonly ProviderGuideDefinition[] = [
   providerGuide("google", ["getting_key"]),
   providerGuide("openrouter", ["getting_key", "important"]),
   providerGuide("deepseek", ["getting_key"]),

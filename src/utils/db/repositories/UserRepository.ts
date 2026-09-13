@@ -1464,7 +1464,7 @@ class UserRepository implements IRepository<UserExportShape> {
 }
 
 /** Outcome of a successful personal erasure, carrying the keys post-commit invalidation needs. */
-export interface PersonalNukeResult {
+interface PersonalNukeResult {
   userDiscId: string;
   affectedServerIds: number[];
   remindersDeleted: number;

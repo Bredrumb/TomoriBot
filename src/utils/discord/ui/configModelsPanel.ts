@@ -66,7 +66,7 @@ export { buildConfigVoicesBody, type ConfigVoicesView };
 /** Keeps the active preset line from consuming room needed by receipts and future parameter copy. */
 const CONFIG_NAI_PRESET_DISPLAY_HEADROOM = 256;
 
-export interface ConfigNaiPresetView {
+interface ConfigNaiPresetView {
   target: "kayra" | "erato" | null;
   compatibility: "eligible" | "not-novelai" | "unsupported";
   presets: NaiPresetRow[];

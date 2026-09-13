@@ -137,7 +137,7 @@ function buildRetryButtonRow(
  * and a truncation notice when truncated (~80 codepoints). A budget of 200 ensures 10 lines
  * (10 * (200 + 80) = 2800) easily fit within Discord's 4000-codepoint TextDisplay limit.
  */
-export const MODERATION_NAME_PREVIEW_BUDGET = 200;
+const MODERATION_NAME_PREVIEW_BUDGET = 200;
 
 function renderModerationName(locale: string, value: string): string {
   const preview = buildTextPreview(value, MODERATION_NAME_PREVIEW_BUDGET);

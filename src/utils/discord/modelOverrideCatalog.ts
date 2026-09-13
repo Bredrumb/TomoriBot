@@ -23,7 +23,7 @@ export const MODEL_OVERRIDE_MODAL_CAPACITY = 50;
  * stays as a wire guard: Discord rejects an option description over 100 characters, and an
  * absurd codename or provider must not make the removal modal fail to open.
  */
-export const MODEL_OVERRIDE_MODEL_SUMMARY_MAX_LENGTH = DISCORD_SELECT_OPTION_DESCRIPTION_MAX;
+const MODEL_OVERRIDE_MODEL_SUMMARY_MAX_LENGTH = DISCORD_SELECT_OPTION_DESCRIPTION_MAX;
 
 export function formatModelOverrideModelSummary(llm: LlmRow): string {
   return truncateDiscordText(

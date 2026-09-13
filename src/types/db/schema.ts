@@ -1474,7 +1474,7 @@ export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSche
 /**
  * Discriminated provider access input for server setup.
  */
-export const setupProviderAccessCatalogSchema = z
+const setupProviderAccessCatalogSchema = z
   .object({
     mode: z.literal("catalog"),
     provider: z.string(),
@@ -1502,7 +1502,7 @@ export const setupCustomEndpointCapabilitySchema = z.enum([
 ]);
 export type SetupCustomEndpointCapability = z.infer<typeof setupCustomEndpointCapabilitySchema>;
 
-export const setupProviderAccessCustomEndpointSchema = z
+const setupProviderAccessCustomEndpointSchema = z
   .object({
     mode: z.literal("custom-endpoint"),
     connection: z
@@ -1525,14 +1525,14 @@ export const setupProviderAccessCustomEndpointSchema = z
   .strict();
 export type SetupProviderAccessCustomEndpoint = z.infer<typeof setupProviderAccessCustomEndpointSchema>;
 
-export const setupProviderAccessUserByokSchema = z
+const setupProviderAccessUserByokSchema = z
   .object({
     mode: z.literal("user-byok"),
   })
   .strict();
 export type SetupProviderAccessUserByok = z.infer<typeof setupProviderAccessUserByokSchema>;
 
-export const setupProviderAccessSchema = z.discriminatedUnion("mode", [
+const setupProviderAccessSchema = z.discriminatedUnion("mode", [
   setupProviderAccessCatalogSchema,
   setupProviderAccessCustomEndpointSchema,
   setupProviderAccessUserByokSchema,
