@@ -459,7 +459,12 @@ async function appendTextParts(
     }
 
     if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY && params.role === "model") {
-      processedContent = humanizeString(processedContent);
+      // content is already real, previously-delivered text, so re-rolling the same randomized
+      // comma/emphasis noise on every context build would just re-randomize already-final output
+      // and, since it never lands on the same result twice, defeat provider prompt-prefix caching
+      // for every turn after this one. suppressPunctuationNoise keeps only the deterministic
+      // casing/semicolon normalization, so a rebuilt prompt's history prefix stays byte-stable.
+      [processedContent] = humanizeString(processedContent, { suppressPunctuationNoise: true });
     }
     // Mentions, channel links, and roles still resolve here. Only the identity macros are left
     //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"

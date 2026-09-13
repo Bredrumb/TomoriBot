@@ -136,6 +136,16 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - **Text part assembly** — `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
+- **Humanizer transform is deterministic here**: at HEAVY, `content` (the
+  message's real, already-delivered text) is re-passed through
+  `humanizeString()` with `suppressPunctuationNoise: true`. Only casing and
+  semicolon stripping apply, with no randomized comma/emphasis remove-or-flush
+  roll, so every comma in `content` survives. `content` already reflects whatever noise live delivery rolled when
+  the message was originally sent, so re-rolling it independently on every
+  context build would just re-randomize already-final output without adding
+  fidelity, and would defeat provider-side prompt-prefix caching for every
+  turn after it (the same historical turn would render differently build to
+  build). See `src/utils/text/processors/formatters.ts`.
 - **Identity macros are preserved in message bodies** — this stage is the only
   `convertMentions` caller that handles raw prose it did not author, so it splits
   the conversion in two: the **author label** is converted with
