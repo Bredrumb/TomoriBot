@@ -6,7 +6,7 @@ Each engine lives in its own subfolder with its own `.venv` to keep dependencies
 
 | Engine | Folder | Default port |
 |---|---|---|
-| Chatterbox (Turbo by default, English, bracket tags) | `chatterbox/` | 8011 |
+| Chatterbox (Turbo by default, optional Nano, English, event tags) | `chatterbox/` | 8011 |
 | Qwen3-TTS 12Hz 1.7B Base / VoiceDesign auto mode (10 languages, plain text) | `qwen3tts/` | 8012 |
 | Irodori-TTS v4.1 (Japanese, clone + VoiceDesign, emoji tags) | `irodoritts/` | 8013 |
 | Qwen3-TTS 12Hz 1.7B VoiceDesign (natural-language voice descriptions) | `qwen3tts/server.py --mode voice-design` | 8014 |
@@ -56,7 +56,7 @@ For voice samples, open `/config` under Models > TTS Parameters & Voices. Tomori
 
 ## Engine notes
 
-Chatterbox defaults to Turbo. Use `/config` under Models > TTS Parameters & Voices to disable Turbo and set standard-model `cfg_weight` and `exaggeration` values for generated voice messages.
+Chatterbox defaults to Turbo. For the smaller Nano model, install the pinned upstream revision in the [Chatterbox guide](../../docs/en/self-hosting/local-endpoints/text-to-speech/chatterbox.md) and set `CHATTERBOX_FAST_MODEL=nano` before starting the sidecar. The `/config` fast-model toggle chooses the configured Turbo or Nano model when enabled; disabling it selects standard Chatterbox for `cfg_weight` and `exaggeration` tuning.
 
 Qwen3-TTS defaults to auto mode. One server URL can handle both clone and VoiceDesign requests: the server detects clone requests by `ref_audio`, detects VoiceDesign requests by `instruct`, and swaps the loaded model when needed. Start VoiceDesign only with `TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py` or `python servers/tts/qwen3tts/server.py --mode voice-design`.
 

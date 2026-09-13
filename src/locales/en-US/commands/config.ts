@@ -1209,29 +1209,29 @@ Reference text: {ref_text_hint}`,
           success_description: `Removed **{name}** and cleared any persona assignments that used it.`,
         },
         parameters: {
-          description: `Tune Chatterbox Turbo and standard-model speech generation.`,
+          description: `Tune Chatterbox fast and standard-model speech generation.`,
           modal_title: `Edit Chatterbox Parameters`,
           cfg_weight_label: `CFG weight`,
           exaggeration_label: `Exaggeration`,
-          turbo_label: `Chatterbox Turbo`,
+          turbo_label: `Chatterbox fast model`,
           cfg_weight_input_description: `Enter a CFG weight from 0 to 2, inclusive.`,
           exaggeration_input_description: `Enter an exaggeration value from 0 to 2, inclusive.`,
-          turbo_input_description: `Choose whether to use Chatterbox Turbo.`,
+          turbo_input_description: `Choose the configured Turbo or Nano fast model instead of standard Chatterbox.`,
           cfg_weight_description: `Standard model only: lower values can slow fast voices; higher values follow reference more.`,
           exaggeration_description: `Standard model only: higher values make delivery more dramatic and may speed speech up.`,
-          turbo_description: `Use Chatterbox-Turbo for faster generation and supported event tags.`,
+          turbo_description: `Use the configured Turbo or Nano model for fast generation and supported event tags.`,
           enabled_label: `enabled`,
           disabled_label: `disabled`,
           invalid_input_title: `Invalid Chatterbox Parameter`,
           invalid_input_description: `{settings} must be finite numbers from {min} to {max}, inclusive.`,
           success_title: `Chatterbox Parameters Updated`,
-          success_description: `Chatterbox Turbo: **{turbo}**
+          success_description: `Chatterbox fast model: **{turbo}**
 CFG weight: **{cfg_weight}**
 Exaggeration: **{exaggeration}**`,
-          turbo_notice: `Turbo is currently enabled, so CFG weight and exaggeration
+          turbo_notice: `The fast model is enabled, so CFG weight and exaggeration
 are saved but ignored. Supported event tags are kept;
 unsupported bracket descriptors are stripped.`,
-          standard_notice: `Turbo is currently disabled, so CFG weight and exaggeration
+          standard_notice: `The fast model is disabled, so CFG weight and exaggeration
 are active. Bracket descriptors like \`[laugh]\` or \`[whisper]\`
 will be stripped before speech generation.`,
         },
@@ -1240,7 +1240,7 @@ will be stripped before speech generation.`,
           description: `Manage Chatterbox parameters and reference voice samples
 for speech generation.`,
           parameters_title: `Chatterbox Parameters`,
-          parameters_turbo_label: `Chatterbox Turbo`,
+          parameters_turbo_label: `Chatterbox fast model`,
           parameters_cfg_label: `CFG weight`,
           parameters_exaggeration_label: `Exaggeration`,
           status_enabled: `Enabled`,

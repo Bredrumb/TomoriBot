@@ -195,18 +195,18 @@ export default {
           success_description: `**{name}** を削除し、それを使っていたペルソナ割り当てを解除しました。`,
         },
         parameters: {
-          description: `Chatterbox Turbo と標準モデルの音声生成を調整します。`,
+          description: `Chatterboxの高速モデルと標準モデルの音声生成を調整します。`,
           cfg_weight_description: `標準モデルのみ: 下げると速い声のペース調整に役立ち、上げると参照音声により強く寄せます。`,
           exaggeration_description: `標準モデルのみ: 上げるほど表現が強くドラマチックになり、発話が速くなる場合があります。`,
-          turbo_description: `高速生成と対応済みイベントタグ用に Chatterbox-Turbo を使います。CFG/表現調整を使う場合は無効化します。`,
+          turbo_description: `高速生成と対応済みイベントタグには、設定済みのTurboまたはNanoを使います。CFGと表現調整には標準モデルを選びます。`,
           enabled_label: `有効`,
           disabled_label: `無効`,
           success_title: `Chatterbox パラメータを更新しました`,
-          success_description: `Chatterbox Turbo: **{turbo}**
+          success_description: `Chatterbox高速モデル: **{turbo}**
 CFG weight: **{cfg_weight}**
 Exaggeration: **{exaggeration}**`,
-          turbo_notice: `現在 Turbo が有効なため、CFG weight と Exaggeration は保存されますが無視されます。対応済みイベントタグは保持され、未対応の角括弧記述は削除されます。`,
-          standard_notice: `現在 Turbo が無効なため、CFG weight と Exaggeration が有効です。\`[laugh]\` や \`[whisper]\` のような角括弧の記述は、音声生成前に削除されます。`,
+          turbo_notice: `高速モデルが有効なため、CFG weightとExaggerationは保存されますが無視されます。対応済みイベントタグは保持され、未対応の角括弧記述は削除されます。`,
+          standard_notice: `高速モデルが無効なため、CFG weightとExaggerationが有効です。\`[laugh]\`や\`[whisper]\`などの角括弧記述は音声生成前に削除されます。`,
         },
       },
     },

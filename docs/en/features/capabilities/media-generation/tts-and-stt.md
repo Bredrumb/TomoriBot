@@ -50,8 +50,7 @@ second clips with no background music work best.
 
 Each engine has its own setup guide:
 
-- [Chatterbox-Turbo](/self-hosting/local-endpoints/text-to-speech/chatterbox/) — fast, English-only, supports
-  bracket delivery tags like `[excited]`.
+- [Chatterbox-Turbo/Nano](/self-hosting/local-endpoints/text-to-speech/chatterbox/) — fast, English-only voice cloning with supported event tags such as `[laugh]`.
 - [Qwen3-TTS](/self-hosting/local-endpoints/text-to-speech/qwen3tts/) — multilingual (10 languages), plus a
   natural-language VoiceDesign mode.
 - [IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/) — Japanese-specialized, reads emoji

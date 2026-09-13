@@ -15,7 +15,7 @@ TomoriBot treats speech as a custom endpoint capability. Local engines run outsi
 
 <CardGrid>
   <LinkCard title="Chatterbox TTS" href="/self-hosting/local-endpoints/text-to-speech/chatterbox/"
-    description="Fast local voice cloning through Chatterbox-Turbo, with supported bracket delivery tags for expressive speech." />
+    description="English voice cloning with event tags. Turbo is the default; Nano is an optional smaller model." />
   <LinkCard title="Qwen3-TTS" href="/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
     description="Multilingual local TTS with clone and VoiceDesign modes." />
   <LinkCard title="IrodoriTTS" href="/self-hosting/local-endpoints/text-to-speech/irodoritts/"
@@ -60,7 +60,7 @@ Hardware requirements differ by engine, but all current reference sidecars are p
 
 | Engine | Model size | Notes |
 |---|---|---|
-| Chatterbox | ~0.5B (Turbo) | Fast local option with bracket delivery tags. |
+| Chatterbox | 350M (Turbo), 110M (Nano) | Fast English voice cloning with supported event tags. |
 | Qwen3-TTS | 1.7B (12 Hz) | Separate clone + VoiceDesign models; only one loads at a time. |
 | IrodoriTTS | ~0.5B | Japanese-focused clone + VoiceDesign. |
 | Fish S2 Pro | 4B | Official BF16 recommends 24 GB+ VRAM; TomoriBot defaults to an INT8 checkpoint intended for 16 GB consumer GPUs. |
