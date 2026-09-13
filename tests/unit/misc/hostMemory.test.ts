@@ -74,6 +74,7 @@ describe("collectHostMemorySnapshot", () => {
 
     expect(fields?.swapfile_used_mb).toBe(21.2);
     expect(fields?.zram_used_mb).toBe(760.75);
+    expect(fields?.zram_size_mb).toBe(1024);
   });
 
   it("reports the zram compression ratio, which swapon hides", async () => {
