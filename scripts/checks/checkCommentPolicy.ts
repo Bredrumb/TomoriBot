@@ -1,11 +1,14 @@
 ﻿import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
+import { isVerboseOutput } from "./lib/gateOutput";
 
 const DEFAULT_PATHS = ["src", "scripts", "tests", "apps"];
 const DEFAULT_EXCEPTIONS_PATH = "scripts/checks/comment-policy-exceptions.json";
 const POLICY_DOC_PATH = "docs/en/contributing/comment-policy.md";
 const DASH_PATTERN = /—|–| -- /;
+const DASH_SCAN_PATTERN = /—|–| -- /g;
+const LOCALE_PATH_PATTERN = /(?:^|\/)src\/locales\//;
 const NUMBERED_PREFIX_PATTERNS = [
   String.raw`\d+[a-z]?(?:\.\d+[a-z]?)*(?:-\d+[a-z]?)*\.`,
   String.raw`\d+\.\d+[a-z]?`,
@@ -154,6 +157,7 @@ interface CommentToken {
 interface ParsedArguments {
   auditNarration: boolean;
   baseRef?: string;
+  verboseOutput: boolean;
   paths: string[];
   staged: boolean;
 }
@@ -190,6 +194,7 @@ export async function checkCommentPolicy(
       ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
       ...collectStructuralCommentFindings(source, file),
       ...collectJsDocFindings(source, file, options),
+      ...collectLocaleStringFindings(source, file),
     ];
 
     for (const finding of fileFindings) {
@@ -244,6 +249,7 @@ export function inspectCommentPolicySource(
 ): CommentPolicyFinding[] {
   assertParseable(source, file);
   return [
+    ...collectLocaleStringFindings(source, file),
     ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
     ...collectStructuralCommentFindings(source, file),
     ...collectJsDocFindings(source, file, options),
@@ -341,6 +347,49 @@ function collectStructuralCommentFindings(source: string, file: string): Comment
   }
 
   return findings;
+}
+
+/**
+ * Applies the dash rule to locale string literals, which ship to users as prose and so carry the
+ * same restriction as comments. Scanning raw source text rather than the cooked literal value
+ * keeps the reported line accurate inside the multi-line templates the help locales are built
+ * from, where one literal can span a hundred lines.
+ */
+function collectLocaleStringFindings(source: string, file: string): CommentPolicyFinding[] {
+  if (!LOCALE_PATH_PATTERN.test(file)) {
+    return [];
+  }
+
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const sourceLines = source.split(/\r?\n/);
+  const flaggedLines = new Map<number, string>();
+
+  const record = (node: ts.Node): void => {
+    const raw = node.getText(sourceFile);
+    const start = node.getStart(sourceFile);
+    for (const match of raw.matchAll(DASH_SCAN_PATTERN)) {
+      if (match.index === undefined) continue;
+      const { line } = sourceFile.getLineAndCharacterOfPosition(start + match.index);
+      flaggedLines.set(line + 1, (sourceLines[line] ?? "").trim());
+    }
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) {
+      record(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  return Array.from(flaggedLines, ([line, text]) => ({
+    file,
+    line,
+    message: "Replace prose dashes in locale text with punctuation that states the relationship.",
+    rule: "prose-dash" as const,
+    severity: "error" as const,
+    text,
+  }));
 }
 
 function inspectCommentLine(
@@ -895,6 +944,7 @@ async function collectChangedLines(
 function parseArguments(args: string[]): ParsedArguments {
   const parsed: ParsedArguments = {
     auditNarration: false,
+    verboseOutput: isVerboseOutput(),
     paths: [],
     staged: false,
   };
@@ -902,6 +952,13 @@ function parseArguments(args: string[]): ParsedArguments {
     const value = args[index];
     if (value === "--audit") {
       parsed.auditNarration = true;
+      continue;
+    }
+    // Detail level, shared with the other gates so `vl` can forward one flag. Any other
+    // dash-prefixed value is a mistake, and accepting it as a path would silently
+    // replace the default roots with a nonexistent one and scan nothing at all.
+    if (value === "--verbose" || value === "--no-verbose") {
+      parsed.verboseOutput = value === "--verbose";
       continue;
     }
     if (value === "--staged") {
@@ -916,6 +973,9 @@ function parseArguments(args: string[]): ParsedArguments {
       parsed.baseRef = baseRef;
       index += 1;
       continue;
+    }
+    if (value.startsWith("--")) {
+      throw new Error(`Unknown flag: ${value}`);
     }
     parsed.paths.push(value);
   }
@@ -948,20 +1008,27 @@ async function main(): Promise<void> {
     repoRoot,
   });
 
-  console.log(`Comment policy guide: ${POLICY_DOC_PATH}`);
-
-  for (const finding of result.findings) {
-    const label = finding.severity === "error" ? "ERROR" : "WARN";
-    console.log(
-      `${label} ${finding.file}:${finding.line} [${finding.rule}] ${finding.message}`,
-    );
-    console.log(`  ${finding.text}`);
-  }
-
   const errors = result.findings.filter(
     (finding) => finding.severity === "error",
   );
   const warnings = result.findings.length - errors.length;
+
+  // Errors print in full under either mode: they are why anyone runs this. Warnings do
+  // not change the exit code, so under quiet mode their count is the whole report and
+  // the per-finding listing would be detail nobody can act on yet.
+  const printsDetail = errors.length > 0 || warnings === 0 || args.verboseOutput;
+  if (printsDetail) {
+    console.log(`Comment policy guide: ${POLICY_DOC_PATH}`);
+
+    for (const finding of result.findings) {
+      const label = finding.severity === "error" ? "ERROR" : "WARN";
+      console.log(
+        `${label} ${finding.file}:${finding.line} [${finding.rule}] ${finding.message}`,
+      );
+      console.log(`  ${finding.text}`);
+    }
+  }
+
   if (errors.length > 0) {
     console.error(
       `Comment policy failed: ${errors.length} error(s), ` +
@@ -972,7 +1039,10 @@ async function main(): Promise<void> {
   }
   console.log(
     `Comment policy passed: ${result.filesChecked} file(s), ` +
-      `${result.usedExceptions.length} exception(s), ${warnings} warning(s).`,
+      `${result.usedExceptions.length} exception(s), ${warnings} warning(s).` +
+      (warnings > 0 && !args.verboseOutput
+        ? ` Re-run with \`bun run audit-comments --verbose\` to list them.`
+        : ""),
   );
 }
 

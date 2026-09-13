@@ -15,7 +15,7 @@ export default {
       free_suffix: `無料枠あり`,
       already_existing_suffix: `Already Existing`,
       already_existing_description: `このプロバイダーは既に設定済みです。送信すると認証情報が更新されます。`,
-      custom_deprecated_description: `/provider custom-endpoint add に移動しました。リダイレクト案内を見るときだけ選択してください。`,
+      custom_deprecated_description: `/providers に移動しました。リダイレクト案内を見るときだけ選択してください。`,
       provider_choice_descriptions: {
         anthropic: `文章力と指示追従に強いClaudeモデル。`,
         deepseek: `低コストなチャット/推論モデル。`,
@@ -39,14 +39,14 @@ export default {
     remove: {
       description: `このサーバーから保存済みプロバイダー設定を削除します。`,
       no_saved_title: `保存済み設定がありません`,
-      no_saved_description: `削除する保存済みプロバイダー設定がありません。先に\`/provider add\`でプロバイダーを追加してください。`,
+      no_saved_description: `削除する保存済みプロバイダー設定がありません。先に\`/providers\`でプロバイダーを追加してください。`,
       picker_title: `プロバイダー設定を削除`,
       picker_description: `削除するプロバイダーを選択してください。保存されたAPIキーが削除され、依存するモデル選択がリセットされます。`,
       active_provider_note: `**{provider}**は現在のアクティブプロバイダーであるため、使用中は削除できません。先に\`/model\`で別のプロバイダーに切り替えてください。`,
-      custom_endpoint_note: `カスタムエンドポイント（ElevenLabsやローカルサーバーなど）を削除するには、代わりに\`/provider custom-endpoint remove\`を使用してください。`,
+      custom_endpoint_note: `カスタムエンドポイント（ElevenLabsやローカルサーバーなど）を削除するには、代わりに\`/providers\`を使用してください。`,
       select_placeholder: `削除するプロバイダーを選択...`,
       success_title: `保存済み設定を削除しました`,
-      success_description: `**{provider}**の保存済み設定を削除しました。再度使用するには\`/provider add\`で登録してください。`,
+      success_description: `**{provider}**の保存済み設定を削除しました。再度使用するには\`/providers\`で登録してください。`,
       auto_reassigned_description: `**{provider}** の保存済み設定を削除しました。
 
 依存していた選択も更新しました:
@@ -63,7 +63,7 @@ export default {
         provider_description: `APIキーに対応するAIプロバイダーを選択してください`,
         provider_placeholder: `プロバイダーを選択...`,
         api_key_label: `APIキーまたはエンドポイントURL`,
-        api_key_description: `このキーは安全に保存されます。取得方法については、'/help api-key'コマンドを使用してください。`,
+        api_key_description: `このキーは安全に保存されます。取得方法は /help のセットアップから「ステップ1：APIキーを取得」を開いて確認してください。`,
         api_key_description_with_custom: `APIキー、またはCustomの場合はOpenAIエンドポイントURL（例：http://localhost:11434/v1）`,
         api_key_placeholder: `このキーは誰とも共有しないでください`,
         bearer_token_label: `Bearerトークン（任意）`,
@@ -85,9 +85,9 @@ export default {
         success_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。`,
         success_with_model_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。モデルは自動的に\`{model_name}\`（このプロバイダーのデフォルト）に変更されました。`,
         custom_success_with_model_description: `カスタムのOpenAI互換エンドポイントが正常に保存されました。このエンドポイントへのリクエストでは \`{model_name}\` を使用します。`,
-        novelai_success_with_model_description: `NovelAIのAPIキーが正常に検証、暗号化、保存されました。モデルは自動的に\`{model_name}\`に変更されました。⚠️ **絵文字とスタンプの使用は自動的に無効化されました**。NovelAIのコンテキストを安定させるためです。\`/capabilities manage\`でいつでも再有効化できます。`,
-        zai_success_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。⚠️ **注意：** Z.aiの利用規約がコーディング/エージェントのシナリオのみに制限されました — 一般チャットでの使用は自己責任です。`,
-        zai_success_with_model_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。モデルは自動的に\`{model_name}\`に変更されました。⚠️ **注意：** Z.aiの利用規約がコーディング/エージェントのシナリオのみに制限されました — 一般チャットでの使用は自己責任です。`,
+        novelai_success_with_model_description: `NovelAIのAPIキーが正常に検証、暗号化、保存されました。モデルは自動的に\`{model_name}\`に変更されました。⚠️ **絵文字とスタンプの使用は自動的に無効化されました**。NovelAIのコンテキストを安定させるためです。\`/config\` > Permissionsでいつでも再有効化できます。`,
+        zai_success_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。⚠️ **注意：** Z.aiの利用規約がコーディング/エージェントのシナリオのみに制限されました。一般チャットでの使用は自己責任です。`,
+        zai_success_with_model_description: `{provider}のAPIキーが正常に検証、暗号化、保存されました。モデルは自動的に\`{model_name}\`に変更されました。⚠️ **注意：** Z.aiの利用規約がコーディング/エージェントのシナリオのみに制限されました。一般チャットでの使用は自己責任です。`,
       },
       delete: {
         description: `現在設定されているAIプロバイダーのAPIキーを削除します。`,
@@ -103,7 +103,7 @@ export default {
         action_purge: `すべてのキーを削除`,
         key_description: `ローテーションプールに追加するAPIキー（追加アクションに必要）`,
         no_main_key_title: `メインAPIキーがありません`,
-        no_main_key_description: `ローテーションキーを追加する前に、\`/provider add\`で有効なプロバイダー認証情報を登録する必要があります。`,
+        no_main_key_description: `ローテーションキーを追加する前に、\`/providers\`で有効なプロバイダー認証情報を登録する必要があります。`,
         custom_provider_title: `サポートされていません`,
         custom_provider_description: `カスタムプロバイダーではAPIキーローテーションはサポートされていません。`,
         key_required_title: `キーが必要です`,

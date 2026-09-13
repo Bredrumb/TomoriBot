@@ -1,68 +1,88 @@
-import type { ChatInputCommandInteraction, Client } from "discord.js";
+import { MessageFlags, type ChatInputCommandInteraction, type Client } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { showPersonalStatus } from "@/utils/metrics/status/personalPages";
-import { showPersonaStatus } from "@/utils/metrics/status/personaPages";
-import { showServerChannelsStatus } from "@/utils/metrics/status/serverChannelPages";
-import { showServerConfigStatus } from "@/utils/metrics/status/serverConfigPages";
-import { showServerModelStatus } from "@/utils/metrics/status/serverModelPages";
+import { buildPersonalStatusPages, showPersonalStatus } from "@/utils/metrics/status/personalPages";
+import { buildPersonaStatusPages } from "@/utils/metrics/status/personaPages";
+import { buildServerChannelPages } from "@/utils/metrics/status/serverChannelPages";
+import { buildServerConfigPages } from "@/utils/metrics/status/serverConfigPages";
+import { buildServerModelPages } from "@/utils/metrics/status/serverModelPages";
+import { resolveStatusDashboardCategories } from "@/utils/metrics/status/statusDashboard";
+import { renderStatusPageDashboard, type StatusCategory } from "@/utils/metrics/status/statusPageRenderer";
+
+export interface StatusCommandDependencies {
+  getCachedAllPersonas: typeof getCachedAllPersonas;
+  getCachedTomoriState: typeof getCachedTomoriState;
+  replyInfoEmbed: typeof replyInfoEmbed;
+  showPersonalStatus: typeof showPersonalStatus;
+  buildServerChannelPages: typeof buildServerChannelPages;
+  buildServerConfigPages: typeof buildServerConfigPages;
+  buildServerModelPages: typeof buildServerModelPages;
+  buildPersonalStatusPages: typeof buildPersonalStatusPages;
+  buildPersonaStatusPages: typeof buildPersonaStatusPages;
+  renderStatusPageDashboard: typeof renderStatusPageDashboard;
+}
+
+const defaultStatusCommandDependencies: StatusCommandDependencies = {
+  getCachedAllPersonas,
+  getCachedTomoriState,
+  replyInfoEmbed,
+  showPersonalStatus,
+  buildServerChannelPages,
+  buildServerConfigPages,
+  buildServerModelPages,
+  buildPersonalStatusPages,
+  buildPersonaStatusPages,
+  renderStatusPageDashboard,
+};
 
 /**
- * Executes the /tool status subcommand for personal, server, and persona status scopes.
+ * Executes the /status command for personal, server, and persona status categories.
  */
 export async function executeStatusCommand(
   client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
+  dependencies: StatusCommandDependencies = defaultStatusCommandDependencies,
 ): Promise<void> {
   const serverDiscId = interaction.guildId ?? interaction.user.id;
-  const scope = interaction.options.getString("scope", true);
+  const scope: StatusCategory = "persona";
 
   try {
-    if (scope === "personal") {
-      await showPersonalStatus(interaction, userData, locale);
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    const tomoriState = await dependencies.getCachedTomoriState(serverDiscId);
+
+    if (!tomoriState) {
+      await dependencies.replyInfoEmbed(interaction, locale, {
+        titleKey: "general.errors.tomori_not_setup_title",
+        descriptionKey: "general.errors.tomori_not_setup_description",
+        color: ColorCode.ERROR,
+      });
       return;
     }
 
-    if (scope === "persona") {
-      await showPersonaStatus(interaction, userData, serverDiscId, locale);
-      return;
-    }
+    const categories = await resolveStatusDashboardCategories(
+      client,
+      interaction,
+      userData,
+      serverDiscId,
+      tomoriState,
+      locale,
+      dependencies,
+    );
 
-    if (scope === "server_model" || scope === "server_config" || scope === "server_channels") {
-      const tomoriState = await getCachedTomoriState(serverDiscId);
+    const personas = await dependencies.getCachedAllPersonas(serverDiscId);
+    const mainPersona = personas.find((persona) => !persona.is_alter) ?? tomoriState;
+    const personaPages = await dependencies.buildPersonaStatusPages(mainPersona, userData, locale);
+    const personaCategory = categories.find((category) => category.id === "persona");
+    if (personaCategory) personaCategory.pages = personaPages;
 
-      if (!tomoriState) {
-        await replyInfoEmbed(interaction, locale, {
-          titleKey: "general.errors.tomori_not_setup_title",
-          descriptionKey: "general.errors.tomori_not_setup_description",
-          color: ColorCode.ERROR,
-        });
-        return;
-      }
-
-      if (scope === "server_model") {
-        await showServerModelStatus(client, interaction, serverDiscId, tomoriState, locale);
-        return;
-      }
-
-      if (scope === "server_config") {
-        await showServerConfigStatus(client, interaction, tomoriState, locale);
-        return;
-      }
-
-      await showServerChannelsStatus(client, interaction, serverDiscId, tomoriState, locale);
-      return;
-    }
-
-    log.error(`Invalid status scope received: ${scope}`);
-    await replyInfoEmbed(interaction, locale, {
-      titleKey: "general.errors.unknown_error_title",
-      descriptionKey: "general.errors.unknown_error_description",
-      color: ColorCode.ERROR,
+    await dependencies.renderStatusPageDashboard(interaction, locale, categories, scope, {
+      selectedPersonaId: mainPersona.persona_id,
+      personas,
     });
   } catch (error) {
     log.error(`Error executing status command for scope ${scope}:`, error, {
@@ -73,7 +93,7 @@ export async function executeStatusCommand(
         guildDiscordId: serverDiscId,
       },
     });
-    await replyInfoEmbed(interaction, locale, {
+    await dependencies.replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.unknown_error_title",
       descriptionKey: "general.errors.unknown_error_description",
       color: ColorCode.ERROR,

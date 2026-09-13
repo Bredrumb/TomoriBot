@@ -1,5 +1,6 @@
 export default {
   novelai: {
+    description: `Configure NovelAI text and image generation for this server.`,
     "character-reference": {
       description: `Upload or clear a NovelAI character reference image for yourself or a persona.`,
       target_description: `Choose whether to update your own profile or a server persona.`,
@@ -18,21 +19,6 @@ export default {
       cleared_me_description: `Cleared your NovelAI character reference image.`,
       cleared_persona_description: `Cleared the NovelAI character reference image for **{persona_name}**.`,
     },
-    preset: {
-      text: {
-        description: `Apply a NovelAI sampling preset to this server's text generation settings.`,
-        not_novelai_title: `NovelAI Provider Required`,
-        not_novelai_description: `This command only works when your AI provider is set to NovelAI. Use \`/model text\` to switch to a NovelAI model.`,
-        not_kayra_erato_title: `Kayra or Erato Required`,
-        not_kayra_erato_description: `Sampling presets are only available for the **kayra-v1** and **llama-3-erato-v1** models. Use \`/model text\` to switch models.`,
-        modal_title: `Choose Sampling Preset`,
-        select_label: `Sampling Preset`,
-        select_description: `Select a preset to apply to text generation.`,
-        select_placeholder: `Choose a sampling preset...`,
-        success_title: `Preset Applied`,
-        success_description: `Sampling preset **{preset_name}** has been applied. Temperature, top-K, top-P, and min-P have been updated in your server config.`,
-      },
-    },
     usage: {
       description: `Show this server's NovelAI Opus generation usage meter (Manage Server required).`,
       title: `NovelAI Opus Generation Usage`,
@@ -41,13 +27,13 @@ export default {
       status_unavailable: `Currently unavailable`,
       next_percent_label: `Next +1%`,
       no_api_key_title: `NovelAI API Key Required`,
-      no_api_key_description: `No NovelAI provider credentials are available for this server. Save them with \`/provider add\`, or switch your main provider to NovelAI.`,
+      no_api_key_description: `No NovelAI provider credentials are available for this server. Save them with \`/providers\`, or switch your main provider to NovelAI.`,
       unavailable_title: `NovelAI Usage Meter Unavailable`,
       unavailable_description: `NovelAI did not return an Opus generation usage meter for this account. Check the API key and subscription, then try again.`,
     },
-    image: {
-      description: `Manage server-wide NovelAI image generation model and parameter overrides.`,
-      generate: {
+    generate: {
+      description: `Generate NovelAI images and media.`,
+      image: {
         description: `Generate a NovelAI image using imageboard-style tags and an optional character reference.`,
         modal_title: `NovelAI Image Generate`,
         prompt_label: `Prompt Tags`,
@@ -70,9 +56,9 @@ export default {
         field_orientation: `Orientation`,
         field_negative_tags: `Extra Negative Tags`,
         no_model_title: `NovelAI Image Model Required`,
-        no_model_description: `NovelAI image generation is disabled right now. Select a NovelAI image model with \`/model image\` first.`,
+        no_model_description: `NovelAI image generation is disabled right now. Select a NovelAI image model with \`/config\` > Models > Switch Models first.`,
         no_api_key_title: `NovelAI API Key Required`,
-        no_api_key_description: `No NovelAI provider credentials are available for this server. Save them with \`/provider add\`, or switch your main provider to NovelAI.`,
+        no_api_key_description: `No NovelAI provider credentials are available for this server. Save them with \`/providers\`, or switch your main provider to NovelAI.`,
         invalid_reference_title: `Invalid Character Reference`,
         invalid_reference_description: `The character reference must be a valid image attachment that NovelAI can read.`,
         character_reference_requires_v4_title: `V4 Model Required`,
@@ -89,6 +75,9 @@ export default {
 {error}
 \`\`\``,
       },
+    },
+    image: {
+      description: `Manage server-wide NovelAI image generation model and parameter overrides.`,
       parameters: {
         description: `Override NovelAI image generation sampler and quality settings for this server.`,
         modal_title: `NovelAI Image Generation Parameters`,
@@ -139,27 +128,6 @@ Noise schedule: {noise_schedule}
 Prompt Guidance Rescale: {cfg_rescale}
 \`\`\``,
       },
-    },
-    attg: {
-      description: `Configure Author/Title/Tags/Genre/Stars metadata for NovelAI Kayra and Erato prompts.`,
-      modal_title: `ATTG Configuration`,
-      persona_select_title: `Select a Persona`,
-      author_label: `Author`,
-      author_placeholder: `e.g. Jane Doe`,
-      title_label: `Title`,
-      title_placeholder: `e.g. My Story`,
-      tags_label: `Tags`,
-      tags_placeholder: `e.g. romance, adventure`,
-      genre_label: `Genre`,
-      genre_placeholder: `e.g. fantasy, slice of life`,
-      stars_label: `Stars (Erato only)`,
-      stars_placeholder: `1-5`,
-      invalid_stars_title: `Invalid Stars Value`,
-      invalid_stars_description: `Stars must be a whole number between 1 and 5, or left empty.`,
-      success_title: `ATTG Metadata Updated`,
-      success_description: `Updated ATTG metadata for **{persona_name}**.`,
-      cleared_title: `ATTG Metadata Cleared`,
-      cleared_description: `Cleared all ATTG metadata for **{persona_name}**.`,
     },
   },
 };

@@ -316,6 +316,7 @@ function estimateToolSchemaTokens(): number {
         videogen_enabled: true,
         voice_message_enabled: true,
         user_blocking_enabled: true,
+        user_info_updates_enabled: true,
         thread_creation_enabled: true,
       },
     };
@@ -869,6 +870,7 @@ async function buildRuntimeParityContext(
     matrixUsers: new Map(),
   });
 
+  const triggererName = getTriggererName(interaction);
   const contextBuild = await buildContext({
     guildId: serverDiscId,
     serverName,
@@ -879,7 +881,9 @@ async function buildRuntimeParityContext(
     channelName,
     channelId: interaction.channelId,
     client,
-    triggererName: getTriggererName(interaction),
+    triggererName,
+    triggererFormattedName: triggererName,
+    triggererAddressTerm: "",
     tomoriNickname: tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     tomoriAttributes: tomoriState.attribute_list,
     tomoriConfig: tomoriState.config,

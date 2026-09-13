@@ -38,7 +38,7 @@ import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpoin
 import { generateOpenRouterImage } from "@/providers/openrouter/openrouterImageGeneration";
 import { ZAI_CODING_IMAGES_GENERATIONS_URL, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
+import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
@@ -981,9 +981,7 @@ export class GenerateImageTool extends BaseTool {
       }
 
       const modelCodename = await this.getDiffusionModelCodename(diffusionModelId);
-      const displayModelName = creds.customEndpoint
-        ? formatCustomEndpointModelDisplay(creds.customEndpoint)
-        : modelCodename;
+      const displayModelName = creds.customEndpoint ? formatCustomModelDisplay(creds.customEndpoint) : modelCodename;
 
       log.info(`Using diffusion model: ${modelCodename} for image generation`);
 

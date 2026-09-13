@@ -37,10 +37,6 @@ function escapeTableCell(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br />").trim();
 }
 
-function isUnresolvedLocaleKey(value: string): boolean {
-  return /^commands\.[a-zA-Z0-9_.-]+$/.test(value);
-}
-
 function humanizeCommandName(value: string): string {
   return value
     .split(/[-_\s]+/)
@@ -50,7 +46,7 @@ function humanizeCommandName(value: string): string {
 }
 
 function formatGroupDescription(group: CommandGroup): string {
-  if (group.description && !isUnresolvedLocaleKey(group.description)) {
+  if (group.description) {
     return group.description;
   }
 
@@ -138,6 +134,31 @@ function renderGroup(group: CommandGroup): string {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Every slash path a user can legitimately be told to type, including the intermediate
+ * root and group prefixes that prose often names on their own ("configure it under `/config`").
+ *
+ * Shares `buildGroups` with the reference generator so the two can never disagree about
+ * what is registered.
+ */
+export async function collectValidCommandPaths(): Promise<Set<string>> {
+  await initializeLocalizer();
+  const { registrationData } = await loadCommandData();
+  const paths = new Set<string>();
+
+  for (const group of buildGroups(registrationData)) {
+    paths.add(group.name);
+    for (const command of group.commands) {
+      const segments = command.path.split(" ");
+      for (let length = 1; length <= segments.length; length++) {
+        paths.add(segments.slice(0, length).join(" "));
+      }
+    }
+  }
+
+  return paths;
 }
 
 export async function generateCommandReferenceMarkdown(): Promise<string> {

@@ -1,16 +1,17 @@
 // locales/ja/commands.ts
 // Assembler: edit the individual files in commands/ instead.
 
-import speech from "./commands/speech";
+import learn from "./commands/learn";
 import choices from "./commands/choices";
 import stPreset from "./commands/st-preset";
 import tool from "./commands/tool";
+import status from "./commands/status";
 import data from "./commands/data";
 import persona from "./commands/persona";
 import help from "./commands/help";
 import legal from "./commands/legal";
 import novelai from "./commands/novelai";
-import bot from "./commands/bot";
+import impersonate from "./commands/impersonate";
 import conditioning from "./commands/conditioning";
 import reward from "./commands/reward";
 import punish from "./commands/punish";
@@ -29,24 +30,39 @@ import teach from "./commands/teach";
 import forget from "./commands/forget";
 import generate from "./commands/generate";
 import model from "./commands/model";
-import mcp from "./commands/mcp";
+import mcps from "./commands/mcps";
 import capabilities from "./commands/capabilities";
 import provider from "./commands/provider";
 import update from "./commands/update";
 import stats from "./commands/stats";
+import ping from "./commands/ping";
+import comment from "./commands/comment";
+import kill from "./commands/kill";
+import refresh from "./commands/refresh";
+import expressions from "./commands/expressions";
+import matrix from "./commands/matrix";
+import respond from "./commands/respond";
+import shared from "./commands/shared";
+import nuke from "./commands/nuke";
+import setup from "./commands/setup";
+import compact from "./commands/compact";
+import providers from "./commands/providers";
+import reset from "./commands/reset";
 
 export default {
   commands: {
-    ...speech,
+    ...providers,
+    ...learn,
     ...choices,
     ...stPreset,
     ...tool,
+    ...status,
     ...data,
     ...persona,
     ...help,
     ...legal,
     ...novelai,
-    ...bot,
+    ...impersonate,
     ...conditioning,
     ...reward,
     ...punish,
@@ -65,10 +81,22 @@ export default {
     ...forget,
     ...generate,
     ...model,
-    ...mcp,
+    ...mcps,
     ...capabilities,
     ...provider,
     ...update,
     ...stats,
+    ...ping,
+    ...comment,
+    ...kill,
+    ...refresh,
+    ...expressions,
+    ...matrix,
+    ...respond,
+    ...shared,
+    ...nuke,
+    ...setup,
+    ...compact,
+    ...reset,
   },
 };

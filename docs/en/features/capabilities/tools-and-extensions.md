@@ -12,7 +12,7 @@ her with MCP servers, and how to keep tool declarations lean with Deliberate Too
 ## Built-In Tools
 
 Tools depend on the active provider/model supporting tool calling, and many are gated behind
-a feature flag (a `/capabilities` toggle), a Discord permission, a model capability, or
+a feature flag (a `/config` > Permissions toggle), a Discord permission, a model capability, or
 an optional API key.
 
 | Tool | Prompt macro | Requires | What it does |
@@ -83,7 +83,7 @@ routes each call through an engine chain and returns the first success:
 **Brave → SearXNG → DuckDuckGo → IAsk**
 
 - **Brave** runs first when a Brave API key is configured (set it with
-  `/optional-key brave set`); it adds image, video, and news search. ⚠️ Set a $5 usage limit
+  `/providers`); it adds image, video, and news search. ⚠️ Set a $5 usage limit
   in the Brave dashboard to avoid surprise charges.
 - **DuckDuckGo** is the default when no key is set, cascading to **IAsk** on rate limits or empty results.
 - **SearXNG** and **Crawl4AI** are optional self-hosted sidecars that unlock more categories
@@ -103,12 +103,17 @@ Any publicly hosted MCP server with an HTTPS endpoint works. Using
 
 1. Create an account and generate an API key from your profile.
 2. Open an MCP in the catalog and copy its **connection URL** (e.g. `https://youtube.run.tools`).
-3. Run `/mcp add`, paste the connection URL into **URL**, and paste your Smithery key into
-   **Auth Token**.
+3. Open `/config` > Plugins > MCP Servers, choose **+ Add MCP**, paste the connection URL into **URL**, paste your
+   Smithery key into **Auth Token**, and choose the required **Server Type**. **General
+   Purpose** is selected by default.
 
 If a server needs no auth, leave **Auth Token** blank. Your auth token is encrypted at rest
-and never shown again. Remove a server anytime with `/mcp remove`, which disconnects it
-immediately and frees a slot.
+and never shown again. Open the same Config page to inspect configured state, enable or disable a server,
+or remove one with explicit confirmation. Removal disconnects it immediately and frees a slot.
+Each saved row also shows the bounded tool names from its last successful discovery. **None
+discovered** is a known zero-tool result; **Discovery unknown** identifies a legacy row or a server
+that has no successful snapshot yet. Opening the MCP management surface only reads saved metadata and does not contact the
+remote server.
 
 ### Local MCP Servers
 
@@ -141,12 +146,12 @@ prompt size and helps smaller/local models answer faster.
 ### Controls
 
 - `/server dtm` — server managers toggle it.
-- `/personal dtm` — users override it for themselves.
+- `/personal config` — users override it for themselves.
 - With a thought-log channel configured (`/server thought-logs`), successful deliberate-mode
   tool calls are logged there along with the trigger that exposed the tool.
 
 Deliberate Tool Mode only decides which tools are *shown* to the model — the model still has
-to choose to call one. Run `/help deliberate-tool-mode` for the Discord summary.
+to choose to call one. In `/help`, choose **Behavior**, then **Deliberate Tool Mode**, for the Discord summary.
 
 :::note
 **Deliberate Tool Mode** (this section) is unrelated to **Deliberate Trigger Mode**, which
@@ -154,3 +159,42 @@ controls how *she* is triggered — see
 [Chatting & Triggers](/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Both are
 abbreviated "DTM" in Discord.
 :::
+
+## Structured User Info Updates
+
+The built-in `update_user_info` tool handles explicit requests to change a registered user's
+nickname, prefix, suffix, gender identity, pronouns, addressing style, or numeric UTC offset.
+It uses the same collision-aware name, alias, mention, and Discord-ID resolver as other
+personal tools. An omitted target means the human who triggered the turn; `all` and `everyone`
+are never wildcard targets.
+
+Each field is its own optional parameter, so a change is expressed by passing the field. Removal
+is a `clear` list of field names, which keeps one rule for the text, enum, and numeric fields
+alike; a blank string is folded into a removal rather than rejected. There is no scope or action
+parameter, because scope follows the field:
+
+| Fields | Stored | Effect |
+|---|---|---|
+| nickname, prefix, suffix | per persona lineage | only the persona that made the change addresses them differently |
+| gender identity, pronouns, addressing style, timezone | once per user | every persona reads the same value |
+
+That split follows storage rather than preference: the identity fields have a single slot per
+user and no per-persona equivalent. The success notice labels persona-scoped rows with the
+persona's name, so the difference is visible rather than implied. An unlabelled row is global,
+which needs no explanation of its own because global is the unsurprising case.
+
+Participant context names each user's prefix and suffix separately from their nickname, so a
+request to drop a title resolves to an affix change instead of a nickname rewrite. A cleared
+affix is stored as an explicit suppression, so the removal cannot be undone by a lower
+precedence layer still supplying a value.
+
+When a nickname is submitted with an affix that is already resolved, the redundant affix is
+stripped by comparing against the resolved value; the nickname is never split on whitespace to
+guess a boundary. An update reports the resulting form of address whenever that name actually
+moved, so an addressing-style switch is visible in the same turn even though no naming field
+appeared in it, while a pronoun or timezone edit does not restate a name nothing touched.
+
+Every field is validated before one atomic write. Restrictive privacy blocks additions and
+changes but still permits clearing values. The tool cannot edit persona-wide address terms. The
+default-on User Info Updates switch in `/config` > Permissions controls both tool exposure and
+stale-invocation defense. Manual `/personal config` remains available when it is off.

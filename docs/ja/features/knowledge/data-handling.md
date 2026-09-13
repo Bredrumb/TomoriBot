@@ -4,7 +4,7 @@ sidebar:
   order: 4
 ---
 
-TomoriBotはデータに対して透明性を持つように設計されています。保存されているすべてのデータをエクスポート、インポート、または削除することができ、このページではその詳細を説明します。法的なテキストについては、`/legal privacy`および`/legal terms`を参照してください。
+TomoriBotはデータに対して透明性を持つように設計されています。保存されているすべてのデータをエクスポート、インポート、または削除することができ、このページではその詳細を説明します。法的なテキストについては、`/legal privacy-policy`および`/legal terms-of-service`を参照してください。
 
 :::note
 このページでは、Discord内でのユーザーごとの制御について説明します。**自身のインスタンスをセルフホストしていますか？**
@@ -35,31 +35,30 @@ TomoriBotはデータに対して透明性を持つように設計されてい�
 
 エクスポート可能なすべてのデータは、JSONファイルとしてDMに送信されます。
 
-- `/memory personal export`：個人のメモリー（1つのペルソナのスコープ、またはグローバルスコープ）。
-- `/memory server export`：選択したペルソナのサーバーメモリー。
-- `/personal config export`：個人の設定（ニックネーム、言語など）。
-- `/server config export`：サーバーの設定値（APIキーやトリガーは含まれません）。
+- `/export personal memories`：個人のメモリー（1つのペルソナのスコープ、またはグローバルスコープ）。
+- `/export memories`：選択したペルソナのサーバーメモリー。
+- `/export config`：サーバーの設定値（APIキーやトリガーは含まれません）。
 - `/persona export`：完全なペルソナの定義。
 
 ## データのインポート
 
 以前にエクスポートしたファイルを添付して復元します。
 
-- `/memory personal import`, `/memory server import`：ファイルタイプは自動的に検出されます。ターゲットのペルソナまたはグローバルスコープを選択します。
-- `/personal config import`, `/server config import`：サーバーのインポートには**サーバー管理**権限が必要です。
-- `/persona import`：ペルソナを復元します（SillyTavernカードのインポートも可能です。[SillyTavernサポート](/ja/features/integrations/sillytavern-support/)を参照）。
+- `/import personal memories`, `/import memories`：ファイルタイプは自動的に検出されます。ターゲットのペルソナまたはグローバルスコープを選択します。
+- `/import config`：サーバーのインポートには**サーバー管理**権限が必要です。
+- `/persona import`：ペルソナを復元します。PNGとJSONのSillyTavernカード、および`.charx`のCharacter Card V3アーカイブにも対応しており、いずれもキャラクターのテキストのみがインポートされます（[SillyTavernサポート](/ja/features/integrations/sillytavern-support/)を参照）。
 
 ## データの削除
 
 これらはデータを完全に削除またはリセットします。**元に戻すことはできません**。
 
-- `/memory personal remove`, `/memory server remove`
-- `/personal config remove`（個人設定をリセット）
-- `/server config remove`（サーバー設定をリセット）
+- `/personal memories`, `/memories`
+- `/reset config`（サーバー設定をリセット）
+- `/reset personal config`
 
 ## オプトアウト
 
-- `/personal privacy`：完全に不可視にするなど、トモリに対するご自身の可視性を制御します（メモリー機能を完全にオプトアウトできます）。
-- `/capabilities`：サーバー管理者は自己学習やその他の機能をオフにできます。
+- `/personal config`：完全に不可視にするなど、トモリに対するご自身の可視性を制御します（メモリー機能を完全にオプトアウトできます）。
+- `/config` > Permissions：サーバー管理者は自己学習やその他の機能をオフにできます。
 
 日常的なメモリーの仕組みについては、[メモリー](/ja/features/knowledge/memory/)を参照してください。

@@ -13,7 +13,8 @@ import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/util
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
-import { buildServerCustomProviderName, buildUserCustomProviderName } from "@/utils/provider/customProviderUtils";
+import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
+import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
 import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
@@ -379,18 +380,12 @@ async function createFallbackAttempt(
   disableAllTools: boolean,
 ): Promise<GenerationAttempt | null> {
   if (entry.kind === "custom_endpoint") {
-    const endpointUserId = entry.endpoint.user_id ?? null;
-    const endpointServerId = entry.endpoint.server_id ?? null;
-    const customProviderName = endpointUserId
-      ? buildUserCustomProviderName(endpointUserId, entry.endpoint.label)
-      : endpointServerId === primaryState.server_id
-        ? buildServerCustomProviderName(endpointServerId, entry.endpoint.label)
-        : null;
-    if (!customProviderName) {
-      log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: invalid owner scope.`);
+    if (!entry.endpoint.connection_id) {
+      log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: missing connection_id.`);
       return null;
     }
-
+    const customProviderName = buildCustomProviderName(entry.endpoint.connection_id);
+    const endpointUserId = entry.endpoint.user_id ?? null;
     const savedConfig = endpointUserId
       ? await llmProviderRepo.loadUserSavedProviderConfig(endpointUserId, customProviderName)
       : await llmProviderRepo.loadSavedProviderConfig(primaryState.server_id, customProviderName);
@@ -743,11 +738,4 @@ function shouldApplyLengthEmptyRetryTrim(
   retryCount: number,
 ): boolean {
   return emptyResponseFinishReason === "length" && retryCount > 0 && providerIsApiFamily(providerName, "openrouter");
-}
-
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
 }

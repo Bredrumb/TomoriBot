@@ -2,6 +2,7 @@ import type {
   CustomEndpointCapability,
   DiffusionModelRow,
   LlmRow,
+  PersonalProviderCapability,
   SavedProviderConfigRow,
   SavedProviderConfigUpsert,
   AssembledServerConfig,
@@ -10,7 +11,11 @@ import type {
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
-import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import {
+  isCustomProvider,
+  parseCustomProvider,
+  rememberCustomProviderLabel,
+} from "@/utils/provider/customProviderUtils";
 import {
   getStaticProviderInfo,
   supportsEmbeddingCapability,
@@ -220,7 +225,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
   baseConfig: AssembledServerConfig;
   existingConfig?: UserSavedProviderConfigRow | null;
   llmId?: number | null;
-  enabledCapabilities?: Array<"text" | "embedding" | "image" | "video" | "vision">;
+  enabledCapabilities?: PersonalProviderCapability[];
 }): Promise<UserSavedProviderConfigUpsert> {
   const normalizedProvider = params.provider.toLowerCase();
   const existingConfig = params.existingConfig ?? null;
@@ -262,6 +267,7 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
     llm_disabled_params: existingConfig?.llm_disabled_params ?? params.baseConfig.llm_disabled_params ?? [],
     llm_logit_biases: existingConfig?.llm_logit_biases ?? params.baseConfig.llm_logit_biases ?? [],
     thinking_level: existingConfig?.thinking_level ?? params.baseConfig.thinking_level,
+    model_randomizer_enabled: existingConfig?.model_randomizer_enabled ?? false,
     enabled_capabilities: enabledCapabilities,
     // Anything switched on here is owned here. Previously assigned capabilities are
     // kept even when currently off, so a re-enable still resolves to this provider.
@@ -291,58 +297,55 @@ function mapSavedCapabilityToCustomEndpointCapability(
 async function hasRegisteredCustomEndpointCapability(
   provider: string,
   capability: SavedProviderCapability,
+  owner: { serverId?: number; userId?: number },
 ): Promise<boolean> {
   const parsed = parseCustomProvider(provider);
   const endpointCapability = mapSavedCapabilityToCustomEndpointCapability(capability);
 
-  if (!parsed || parsed.ownerId === null || !endpointCapability) {
+  if (!parsed || !endpointCapability) {
     return false;
   }
 
-  const ownerId = parsed.ownerId;
+  const connection = await llmProviderRepo.loadCustomEndpointConnectionById(parsed.connectionId);
+  if (!connection || connection.capability !== endpointCapability) {
+    return false;
+  }
+  if (
+    (owner.serverId !== undefined && connection.server_id !== owner.serverId) ||
+    (owner.userId !== undefined && connection.user_id !== owner.userId)
+  ) {
+    return false;
+  }
+  rememberCustomProviderLabel(provider, connection.label);
 
-  // A label can host several models per capability, and loadCustomEndpoint returns only the most
-  // recently updated one. Vision therefore scans the whole label: a blank text model registered
-  // after an image-capable one must not hide the label from the vision picker.
   if (capability === "vision") {
-    const endpoints =
-      parsed.scope === "server"
-        ? await llmProviderRepo.loadCustomEndpointsForServer(ownerId)
-        : await llmProviderRepo.loadCustomEndpointsForUser(ownerId);
-
-    return endpoints.some(
-      (row) => row.label === parsed.label && row.capability === endpointCapability && row.sees_images,
-    );
+    const endpoints = await llmProviderRepo.loadCustomEndpointsByConnectionId(parsed.connectionId);
+    return endpoints.some((row) => row.capability === "text" && row.sees_images);
   }
 
-  const endpoint =
-    parsed.scope === "server"
-      ? await llmProviderRepo.loadCustomEndpoint({
-          serverId: parsed.ownerId,
-          label: parsed.label,
-          capability: endpointCapability,
-        })
-      : await llmProviderRepo.loadCustomEndpoint({
-          userId: parsed.ownerId,
-          label: parsed.label,
-          capability: endpointCapability,
-        });
-
-  return endpoint !== null;
+  return true;
 }
 
-export async function hasRegisteredCustomProvider(provider: string): Promise<boolean> {
+export async function hasRegisteredCustomProvider(
+  provider: string,
+  owner: { serverId?: number; userId?: number },
+): Promise<boolean> {
   const parsed = parseCustomProvider(provider);
-  if (!parsed || parsed.ownerId === null) {
+  if (!parsed) {
     return false;
   }
 
-  const registeredEndpoints =
-    parsed.scope === "server"
-      ? await llmProviderRepo.loadCustomEndpointsForServer(parsed.ownerId)
-      : await llmProviderRepo.loadCustomEndpointsForUser(parsed.ownerId);
-
-  return registeredEndpoints.some((endpoint) => endpoint.label === parsed.label);
+  const connection = await llmProviderRepo.loadCustomEndpointConnectionById(parsed.connectionId);
+  if (connection) {
+    if (
+      (owner.serverId !== undefined && connection.server_id !== owner.serverId) ||
+      (owner.userId !== undefined && connection.user_id !== owner.userId)
+    ) {
+      return false;
+    }
+    rememberCustomProviderLabel(provider, connection.label);
+  }
+  return connection !== null;
 }
 
 export async function loadSavedProvidersForCapability(
@@ -356,7 +359,7 @@ export async function loadSavedProvidersForCapability(
         return true;
       }
 
-      return await hasRegisteredCustomEndpointCapability(config.provider, capability);
+      return await hasRegisteredCustomEndpointCapability(config.provider, capability, { serverId });
     }),
   );
 
@@ -413,7 +416,7 @@ export async function loadUserSavedProvidersForCapability(
         return true;
       }
 
-      return await hasRegisteredCustomEndpointCapability(config.provider, capability);
+      return await hasRegisteredCustomEndpointCapability(config.provider, capability, { userId });
     }),
   );
 

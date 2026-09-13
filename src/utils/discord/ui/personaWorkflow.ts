@@ -28,6 +28,7 @@ import {
 } from "./interactionCore";
 import type { AvatarSessionCache } from "./interactionCore";
 import type { NoticeContainerOptions } from "./interactionCore";
+import { validateComponentsV2MessageLimits, type ComponentsV2MessagePayload } from "./componentsV2Limits";
 
 // Re-exported so anchor-workflow callers (e.g. commands/model/text.ts) can detect a
 // collector timeout without importing the heavy interactionCore module directly, keeping
@@ -40,39 +41,6 @@ export const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
   Number.isFinite(configuredWorkflowTimeout) && configuredWorkflowTimeout > 0
     ? configuredWorkflowTimeout
     : DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS;
-
-/**
- * Command files built on the anchor one-message workflow. The lock-down audit
- * (`tests/unit/commands/anchorMigrationLockdown.test.ts`) forbids every file listed here
- * from calling the pre-anchor picker/modal primitives (`promptForSavedProvider`,
- * `promptWithPaginatedModal`, `replaceProviderPickerWithInfo`, `promptWithRawModal`). Their
- * absence transitively guarantees the only modal path is the anchor controller, so no
- * post-modal terminal can escape it via `replyInfoEmbed`/`followUp`.
- *
- * Add a file here only once every one of its terminals renders on the anchor message.
- */
-export const MIGRATED_ANCHOR_CALLERS: readonly string[] = [
-  "src/commands/model/text.ts",
-  "src/commands/model/vision.ts",
-  "src/commands/model/video.ts",
-  "src/commands/model/image.ts",
-  "src/commands/model/embedding.ts",
-  "src/commands/personal/provider/model-text.ts",
-  "src/commands/personal/provider/model-vision.ts",
-  "src/commands/personal/provider/model-video.ts",
-  "src/commands/personal/provider/model-image.ts",
-  "src/commands/personal/provider/model-embedding.ts",
-  "src/commands/model/fallback.ts",
-  "src/commands/personal/model/fallback.ts",
-];
-
-/** Primitives a migrated caller must not reach for; see {@link MIGRATED_ANCHOR_CALLERS}. */
-export const PRE_ANCHOR_PRIMITIVES: readonly string[] = [
-  "promptForSavedProvider",
-  "promptWithPaginatedModal",
-  "replaceProviderPickerWithInfo",
-  "promptWithRawModal",
-];
 
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;
 type PersonaWorkflowMessageInteraction = ButtonInteraction | ModalMessageModalSubmitInteraction;
@@ -318,6 +286,17 @@ function assertComponentsV2Payload(payload: PersonaWorkflowComponentsV2Payload):
     throw new PersonaWorkflowUpdateError(
       "unsupported-replacement",
       "Anchor persona workflow updates cannot contain legacy content or embeds.",
+    );
+  }
+
+  const validation = validateComponentsV2MessageLimits(payload as unknown as ComponentsV2MessagePayload);
+  if (!validation.valid) {
+    const summary = validation.violations
+      .map((v) => `${v.path}: [${v.code}] observed ${v.observed} (limit ${v.limit})`)
+      .join("; ");
+    throw new PersonaWorkflowUpdateError(
+      "unsupported-replacement",
+      `Anchor persona workflow payload exceeded Discord limits: ${summary}`,
     );
   }
 }
@@ -810,7 +789,7 @@ function buildModalReadyPayload(locale: string, customId: string): PersonaWorkfl
       button: {
         customId,
         labelKey: "general.persona_workflow.open_modal_button",
-        style: ButtonStyle.Primary,
+        style: ButtonStyle.Secondary,
       },
     }),
     flags: MessageFlags.IsComponentsV2,

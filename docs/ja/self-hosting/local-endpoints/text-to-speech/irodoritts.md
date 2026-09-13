@@ -35,57 +35,80 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 デフォルトのエンドポイントURLは`http://127.0.0.1:8013`です。
 
-## Anime v4.1チェックポイントを使用する
+## 別のチェックポイントを使用する
 
-サイドカーを起動する前にモデルを指定します。
+デフォルトモデルは`Aratako/Irodori-TTS-v4.1-Small`です。環境変数を設定することで、互換性のあるHugging Faceリポジトリやコミュニティファインチューン（`phasefield-audio/Irodori-TTS-v4.1-Anime`など）、またはローカルのチェックポイントファイルを指定できます。
+
+サイドカー起動時（Pythonによる直接起動、または`bun run launch --irodoritts`）、サーバーはリポジトリ直下の`.env`（または`servers/tts/irodoritts/.env`）を自動的に読み込み、起動時に使用中のモデルIDをログ出力します。
+
+### `.env` を使用する場合（設定を保持）
+
+TomoriBotのルートにある`.env`ファイルに追記します。
+
+```env
+IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
+```
+
+### セッションごとに環境変数を指定する場合
+
+Windows PowerShellの場合:
 
 ```powershell
 $env:IRODORI_TTS_MODEL_ID = "phasefield-audio/Irodori-TTS-v4.1-Anime"
 .\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
 ```
 
-Bashの場合:
+Linux Bashの場合:
 
 ```bash
 IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
   servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 ```
 
+### ローカルのチェックポイントファイルを使用する場合
+
+チェックポイントファイル（`.pt`または`.safetensors`）をローカルにダウンロードしている場合は、`IRODORI_TTS_CHECKPOINT`にファイルパスを指定します。
+
+```env
+IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
+```
+
 現在のIrodoriは、チェックポイントとHugging Faceリポジトリ内のトークナイザー資産をまとめて取得します。モデル側が提供している場合は、`IRODORI_TTS_MODEL_ID`でHugging Faceのサブフォルダ版も指定できます。
 
 ## TomoriBotへの登録
 
-`/provider custom-endpoint add`を実行します。
+`/providers`で **Add New Custom Endpoint** を選びます。
 
-- `capability`: `speech`
-- `api_style`: `tts-clone`
+- API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`
 
-v4.1では以下の設定を推奨します。
+保存したエンドポイントを選択し、モデルドロップダウンから音声モデルを追加します。v4.1では以下の設定を推奨します。
 
 - `Voice Source Mode`: `Auto`
 - `Script Markup Style`: `Emoji`
 
-`Auto`では、同じIrodoriエンドポイントでTomoriBotの両方の音声モードを利用できます。
+`Auto`では、同じIrodoriエンドポイントでTomoriBotの両方の音声モードを利用できます。エモーション表現も途切れません。
 
-- `/speech voice-assign`で設定したペルソナは、保存済みの参照音声を使ってボイスクローニングします。
-- `/speech voice-design set`で設定したペルソナは、保存済みの自然言語プロンプトをIrodoriのキャプション条件として使用します。
+- Persona > Voiceで音声サンプルを割り当てたペルソナは、保存済みの参照音声を使ってボイスクローニングします。
+- Persona > VoiceでVoiceDesignプロンプトを設定したペルソナは、保存済みの自然言語プロンプトをIrodoriのキャプション条件として使用します。
 
-参照音声によるボイスクローニングだけを使いたい場合は、従来どおり`Clone`を選択しても構いません。
+参照音声によるボイスクローニングだけを使いたい場合は、Voice Source Modeで従来どおり`Voice Clone`を選択しても構いません。
+
+登録すると、エンドポイントはすぐに有効になります。今後、speechエンドポイントを切り替える場合にのみ`/providers`を使用します。
 
 ## ペルソナ音声のセットアップ
 
 ### ボイスクローニング
 
-1. 背景音楽のない、1人の話者によるクリアな日本語音声を用意します。
-2. `/speech voice-add`で音声をアップロードします。
-3. `/speech voice-assign`でペルソナと音声サンプルを割り当てます。
+1. 背景音楽のない、1人の話者による10〜20秒のクリアな日本語の音声クリップを準備します。
+2. `/config`を実行し、Models > TTS Parameters & Voicesでクリップをアップロードします。
+3. `/config`を実行し、Persona > Voiceでペルソナと音声サンプルを選択します。
 
 Irodori v4.1は旧v2より長い参照条件に対応していますが、単純な長さよりも音声の品質のほうが重要です。
 
 ### VoiceDesign
 
-1. `/speech voice-design set`を実行します。
+1. `/config`を実行し、Persona > Voiceを開きます。
 2. ペルソナを選択します。
 3. 希望する声質や話し方を自然言語で記述します。
 

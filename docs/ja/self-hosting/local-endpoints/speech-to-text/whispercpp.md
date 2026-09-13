@@ -19,19 +19,18 @@ whisper.cppのビルドが異なるエンドポイント形式を公開してい
 
 ## TomoriBotへの登録
 
-`/provider custom-endpoint add`を実行します。
+`/providers`で **Add New Custom Endpoint** を選びます。
 
-- `capability`: `transcription`
-- `api_style`: `openai-compatible-transcription`
+- API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: whisper.cppサーバーのルートURL
 
-モーダルで以下を設定します。
+保存したエンドポイントを選択し、**Add or Edit a Model** で新しい文字起こしモデルに以下を設定します。
 
 - `Transcription Model`: サーバーが報告するモデル名
 - `Transcription Language`: 任意の言語ヒント（例: `en`や`ja`）
 
-登録すると、エンドポイントはすぐに有効になります。今後、エンドポイントを切り替える場合にのみ`/model transcription`を使用します。
+登録すると、エンドポイントはすぐに有効になります。今後、エンドポイントを切り替える場合にのみ`/providers`を使用します。
 
 ## 文字起こしの使用
 
-登録後、TomoriBotは音声添付ファイルをバックグラウンドで文字起こしし、チャットコンテキストにテキストを追加します。文字起こしをチャットに表示して投稿したい場合にのみ、`/speech transcripts`を使用してください。
+登録後、TomoriBotは音声添付ファイルをバックグラウンドで文字起こしし、チャットコンテキストにテキストを追加します。文字起こしをチャットに表示して投稿したい場合にのみ、`/config` > Engine > Noticesを使用してください。

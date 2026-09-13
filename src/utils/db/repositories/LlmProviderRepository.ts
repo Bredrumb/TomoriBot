@@ -1,4 +1,5 @@
 import {
+  customEndpointConnectionSchema,
   customEndpointSchema,
   diffusionModelSchema,
   embeddingModelSchema,
@@ -12,6 +13,7 @@ import {
   videoGenerationModelSchema,
   type CustomEndpointApiStyle,
   type CustomEndpointCapability,
+  type CustomEndpointConnectionRow,
   type CustomEndpointRow,
   type DiffusionModelRow,
   type EmbeddingModelRow,
@@ -30,6 +32,7 @@ import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore"
 import { DatabaseUnavailableError } from "@/types/errors";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
+import { buildCustomProviderName, rememberCustomProviderLabel } from "@/utils/provider/customProviderUtils";
 import type { OpenRouterModelScope } from "./LlmModelRepository";
 import type { IRepository } from "./IRepository";
 
@@ -46,28 +49,88 @@ type ChannelLlmCacheOptions = LlmProviderCacheOptions & {
   channelDiscId?: string;
 };
 
+export type SavedProviderConfigsReadResult =
+  | { status: "fresh"; configs: SavedProviderConfigRow[] }
+  | { status: "unavailable"; configs: [] };
+
+type UserSavedProviderConfigsReadResult =
+  | { status: "fresh"; configs: UserSavedProviderConfigRow[] }
+  | { status: "unavailable"; configs: [] };
+
+export type CustomEndpointConnectionsReadResult =
+  | { status: "fresh"; connections: CustomEndpointConnectionRow[]; endpoints: CustomEndpointRow[] }
+  | { status: "unavailable"; connections: []; endpoints: [] };
+
 /**
- * LlmProviderRepository: saved provider configs, custom endpoints, and OpenRouter registrations.
+ * LlmProviderRepository: saved provider configs, custom endpoints, and scoped model registrations.
  *
- * Owns tables: saved_provider_configs, user_saved_provider_configs, custom_endpoints,
- * openrouter_model_registrations, openrouter_embedding_model_registrations,
- * openrouter_image_model_registrations, openrouter_video_model_registrations.
+ * Owns tables: saved_provider_configs, user_saved_provider_configs, custom_endpoint_connections,
+ * custom_endpoints, scoped_model_registrations, scoped_model_registrations,
+ * scoped_model_registrations, scoped_model_registrations.
  */
 class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
-  private async scopedLlmRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+  private hydrateCustomEndpointRow(row: unknown): CustomEndpointRow | null {
+    const parsed = customEndpointSchema.safeParse(row);
+    if (!parsed.success) return null;
+
+    rememberCustomProviderLabel(buildCustomProviderName(parsed.data.connection_id), parsed.data.label);
+    return parsed.data;
+  }
+
+  private hydrateCustomEndpointRows(rows: readonly unknown[]): CustomEndpointRow[] {
+    return rows.flatMap((row) => {
+      const endpoint = this.hydrateCustomEndpointRow(row);
+      return endpoint ? [endpoint] : [];
+    });
+  }
+
+  private async hydrateCustomProviderLabelsForOwner(owner: { serverId?: number; userId?: number }): Promise<void> {
+    try {
+      const rows =
+        owner.serverId !== undefined
+          ? await sql<unknown[]>`
+              SELECT connection_id, label
+              FROM custom_endpoint_connections
+              WHERE server_id = ${owner.serverId} AND user_id IS NULL
+            `
+          : owner.userId !== undefined
+            ? await sql<unknown[]>`
+                SELECT connection_id, label
+                FROM custom_endpoint_connections
+                WHERE user_id = ${owner.userId} AND server_id IS NULL
+              `
+            : [];
+
+      for (const row of rows) {
+        const connectionId = (row as { connection_id?: unknown }).connection_id;
+        const label = (row as { label?: unknown }).label;
+        if (typeof connectionId === "number" && typeof label === "string") {
+          rememberCustomProviderLabel(buildCustomProviderName(connectionId), label);
+        }
+      }
+    } catch (error) {
+      log.warn("Unable to hydrate custom provider labels for saved provider configs:", error);
+    }
+  }
+
+  private async scopedLlmRows(
+    scope: OpenRouterModelScope,
+    includeDeprecated: boolean,
+    provider = "openrouter",
+  ): Promise<unknown[]> {
     if (scope.kind === "server") {
       return includeDeprecated
         ? await sql`
             SELECT l.*
             FROM llms l
-            WHERE l.llm_provider = 'openrouter'
+            WHERE l.llm_provider = ${provider}
               AND (
                 COALESCE(l.is_scoped_registration, false) = false
                 OR (
                   COALESCE(l.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_model_registrations omr
+                    FROM scoped_model_registrations omr
                     WHERE omr.llm_id = l.llm_id
                       AND omr.server_id = ${scope.ownerId}
                       AND omr.user_id IS NULL
@@ -79,7 +142,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         : await sql`
             SELECT l.*
             FROM llms l
-            WHERE l.llm_provider = 'openrouter'
+            WHERE l.llm_provider = ${provider}
               AND l.is_deprecated = false
               AND (
                 COALESCE(l.is_scoped_registration, false) = false
@@ -87,7 +150,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                   COALESCE(l.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_model_registrations omr
+                    FROM scoped_model_registrations omr
                     WHERE omr.llm_id = l.llm_id
                       AND omr.server_id = ${scope.ownerId}
                       AND omr.user_id IS NULL
@@ -102,14 +165,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       ? await sql`
           SELECT l.*
           FROM llms l
-          WHERE l.llm_provider = 'openrouter'
+          WHERE l.llm_provider = ${provider}
             AND (
               COALESCE(l.is_scoped_registration, false) = false
               OR (
                 COALESCE(l.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_model_registrations omr
+                  FROM scoped_model_registrations omr
                   WHERE omr.llm_id = l.llm_id
                     AND omr.user_id = ${scope.ownerId}
                     AND omr.server_id IS NULL
@@ -121,7 +184,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       : await sql`
           SELECT l.*
           FROM llms l
-          WHERE l.llm_provider = 'openrouter'
+          WHERE l.llm_provider = ${provider}
             AND l.is_deprecated = false
             AND (
               COALESCE(l.is_scoped_registration, false) = false
@@ -129,7 +192,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 COALESCE(l.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_model_registrations omr
+                  FROM scoped_model_registrations omr
                   WHERE omr.llm_id = l.llm_id
                     AND omr.user_id = ${scope.ownerId}
                     AND omr.server_id IS NULL
@@ -140,20 +203,24 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         `;
   }
 
-  private async scopedEmbeddingModelRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+  private async scopedEmbeddingModelRows(
+    scope: OpenRouterModelScope,
+    includeDeprecated: boolean,
+    provider = "openrouter",
+  ): Promise<unknown[]> {
     if (scope.kind === "server") {
       return includeDeprecated
         ? await sql`
             SELECT em.*
             FROM embedding_models em
-            WHERE em.provider = 'openrouter'
+            WHERE em.provider = ${provider}
               AND (
                 COALESCE(em.is_scoped_registration, false) = false
                 OR (
                   COALESCE(em.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_embedding_model_registrations oemr
+                    FROM scoped_model_registrations oemr
                     WHERE oemr.embedding_model_id = em.embedding_model_id
                       AND oemr.server_id = ${scope.ownerId}
                       AND oemr.user_id IS NULL
@@ -165,7 +232,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         : await sql`
             SELECT em.*
             FROM embedding_models em
-            WHERE em.provider = 'openrouter'
+            WHERE em.provider = ${provider}
               AND em.is_deprecated = false
               AND (
                 COALESCE(em.is_scoped_registration, false) = false
@@ -173,7 +240,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                   COALESCE(em.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_embedding_model_registrations oemr
+                    FROM scoped_model_registrations oemr
                     WHERE oemr.embedding_model_id = em.embedding_model_id
                       AND oemr.server_id = ${scope.ownerId}
                       AND oemr.user_id IS NULL
@@ -188,14 +255,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       ? await sql`
           SELECT em.*
           FROM embedding_models em
-          WHERE em.provider = 'openrouter'
+          WHERE em.provider = ${provider}
             AND (
               COALESCE(em.is_scoped_registration, false) = false
               OR (
                 COALESCE(em.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_embedding_model_registrations oemr
+                  FROM scoped_model_registrations oemr
                   WHERE oemr.embedding_model_id = em.embedding_model_id
                     AND oemr.user_id = ${scope.ownerId}
                     AND oemr.server_id IS NULL
@@ -207,7 +274,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       : await sql`
           SELECT em.*
           FROM embedding_models em
-          WHERE em.provider = 'openrouter'
+          WHERE em.provider = ${provider}
             AND em.is_deprecated = false
             AND (
               COALESCE(em.is_scoped_registration, false) = false
@@ -215,7 +282,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 COALESCE(em.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_embedding_model_registrations oemr
+                  FROM scoped_model_registrations oemr
                   WHERE oemr.embedding_model_id = em.embedding_model_id
                     AND oemr.user_id = ${scope.ownerId}
                     AND oemr.server_id IS NULL
@@ -226,20 +293,24 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         `;
   }
 
-  private async scopedDiffusionModelRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+  private async scopedDiffusionModelRows(
+    scope: OpenRouterModelScope,
+    includeDeprecated: boolean,
+    provider = "openrouter",
+  ): Promise<unknown[]> {
     if (scope.kind === "server") {
       return includeDeprecated
         ? await sql`
             SELECT dm.*
             FROM image_diffusion_models dm
-            WHERE dm.provider = 'openrouter'
+            WHERE dm.provider = ${provider}
               AND (
                 COALESCE(dm.is_scoped_registration, false) = false
                 OR (
                   COALESCE(dm.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_image_model_registrations oimr
+                    FROM scoped_model_registrations oimr
                     WHERE oimr.diffusion_model_id = dm.diffusion_model_id
                       AND oimr.server_id = ${scope.ownerId}
                       AND oimr.user_id IS NULL
@@ -251,7 +322,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         : await sql`
             SELECT dm.*
             FROM image_diffusion_models dm
-            WHERE dm.provider = 'openrouter'
+            WHERE dm.provider = ${provider}
               AND dm.is_deprecated = false
               AND (
                 COALESCE(dm.is_scoped_registration, false) = false
@@ -259,7 +330,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                   COALESCE(dm.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_image_model_registrations oimr
+                    FROM scoped_model_registrations oimr
                     WHERE oimr.diffusion_model_id = dm.diffusion_model_id
                       AND oimr.server_id = ${scope.ownerId}
                       AND oimr.user_id IS NULL
@@ -274,14 +345,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       ? await sql`
           SELECT dm.*
           FROM image_diffusion_models dm
-          WHERE dm.provider = 'openrouter'
+          WHERE dm.provider = ${provider}
             AND (
               COALESCE(dm.is_scoped_registration, false) = false
               OR (
                 COALESCE(dm.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_image_model_registrations oimr
+                  FROM scoped_model_registrations oimr
                   WHERE oimr.diffusion_model_id = dm.diffusion_model_id
                     AND oimr.user_id = ${scope.ownerId}
                     AND oimr.server_id IS NULL
@@ -293,7 +364,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       : await sql`
           SELECT dm.*
           FROM image_diffusion_models dm
-          WHERE dm.provider = 'openrouter'
+          WHERE dm.provider = ${provider}
             AND dm.is_deprecated = false
             AND (
               COALESCE(dm.is_scoped_registration, false) = false
@@ -301,7 +372,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 COALESCE(dm.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_image_model_registrations oimr
+                  FROM scoped_model_registrations oimr
                   WHERE oimr.diffusion_model_id = dm.diffusion_model_id
                     AND oimr.user_id = ${scope.ownerId}
                     AND oimr.server_id IS NULL
@@ -312,20 +383,24 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         `;
   }
 
-  private async scopedVideoModelRows(scope: OpenRouterModelScope, includeDeprecated: boolean): Promise<unknown[]> {
+  private async scopedVideoModelRows(
+    scope: OpenRouterModelScope,
+    includeDeprecated: boolean,
+    provider = "openrouter",
+  ): Promise<unknown[]> {
     if (scope.kind === "server") {
       return includeDeprecated
         ? await sql`
             SELECT vm.*
             FROM video_generation_models vm
-            WHERE vm.provider = 'openrouter'
+            WHERE vm.provider = ${provider}
               AND (
                 COALESCE(vm.is_scoped_registration, false) = false
                 OR (
                   COALESCE(vm.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_video_model_registrations ovmr
+                    FROM scoped_model_registrations ovmr
                     WHERE ovmr.video_model_id = vm.video_model_id
                       AND ovmr.server_id = ${scope.ownerId}
                       AND ovmr.user_id IS NULL
@@ -337,7 +412,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         : await sql`
             SELECT vm.*
             FROM video_generation_models vm
-            WHERE vm.provider = 'openrouter'
+            WHERE vm.provider = ${provider}
               AND vm.is_deprecated = false
               AND (
                 COALESCE(vm.is_scoped_registration, false) = false
@@ -345,7 +420,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                   COALESCE(vm.is_scoped_registration, false) = true
                   AND EXISTS (
                     SELECT 1
-                    FROM openrouter_video_model_registrations ovmr
+                    FROM scoped_model_registrations ovmr
                     WHERE ovmr.video_model_id = vm.video_model_id
                       AND ovmr.server_id = ${scope.ownerId}
                       AND ovmr.user_id IS NULL
@@ -360,14 +435,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       ? await sql`
           SELECT vm.*
           FROM video_generation_models vm
-          WHERE vm.provider = 'openrouter'
+          WHERE vm.provider = ${provider}
             AND (
               COALESCE(vm.is_scoped_registration, false) = false
               OR (
                 COALESCE(vm.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_video_model_registrations ovmr
+                  FROM scoped_model_registrations ovmr
                   WHERE ovmr.video_model_id = vm.video_model_id
                     AND ovmr.user_id = ${scope.ownerId}
                     AND ovmr.server_id IS NULL
@@ -379,7 +454,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       : await sql`
           SELECT vm.*
           FROM video_generation_models vm
-          WHERE vm.provider = 'openrouter'
+          WHERE vm.provider = ${provider}
             AND vm.is_deprecated = false
             AND (
               COALESCE(vm.is_scoped_registration, false) = false
@@ -387,7 +462,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 COALESCE(vm.is_scoped_registration, false) = true
                 AND EXISTS (
                   SELECT 1
-                  FROM openrouter_video_model_registrations ovmr
+                  FROM scoped_model_registrations ovmr
                   WHERE ovmr.video_model_id = vm.video_model_id
                     AND ovmr.user_id = ${scope.ownerId}
                     AND ovmr.server_id IS NULL
@@ -408,6 +483,17 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
    * @param serverId - Internal server DB ID
    */
   async loadSavedProviderConfigs(serverId: number): Promise<SavedProviderConfigRow[]> {
+    const result = await this.loadSavedProviderConfigsResult(serverId);
+    if (result.status === "unavailable") {
+      throw new DatabaseUnavailableError(`Failed to read saved provider configs for server ${serverId}`);
+    }
+    return result.configs;
+  }
+
+  /**
+   * Loads saved server provider rows without presenting a failed database read as an empty collection.
+   */
+  async loadSavedProviderConfigsResult(serverId: number): Promise<SavedProviderConfigsReadResult> {
     try {
       const rows = await withTransientDbRetry(
         async () =>
@@ -419,7 +505,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         "load saved provider configs",
       );
 
-      if (!rows || rows.length === 0) return [];
+      if (!rows || rows.length === 0) return { status: "fresh", configs: [] };
 
       const validated: SavedProviderConfigRow[] = [];
       for (const row of rows) {
@@ -432,10 +518,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           );
         }
       }
-      return validated;
+      await this.hydrateCustomProviderLabelsForOwner({ serverId });
+      return { status: "fresh", configs: validated };
     } catch (error) {
       log.error(`Error loading saved provider configs for server ${serverId}:`, error);
-      throw new DatabaseUnavailableError(`Failed to read saved provider configs for server ${serverId}`);
+      return { status: "unavailable", configs: [] };
     }
   }
 
@@ -481,6 +568,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
    * @param userId - Internal user DB ID
    */
   async loadUserSavedProviderConfigs(userId: number): Promise<UserSavedProviderConfigRow[]> {
+    const result = await this.loadUserSavedProviderConfigsResult(userId);
+    if (result.status === "unavailable") {
+      throw new DatabaseUnavailableError(`Failed to read saved provider configs for user ${userId}`);
+    }
+    return result.configs;
+  }
+
+  async loadUserSavedProviderConfigsResult(userId: number): Promise<UserSavedProviderConfigsReadResult> {
     try {
       const rows = await withTransientDbRetry(
         async () =>
@@ -492,7 +587,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         "load user saved provider configs",
       );
 
-      if (!rows || rows.length === 0) return [];
+      if (!rows || rows.length === 0) return { status: "fresh", configs: [] };
 
       const validated: UserSavedProviderConfigRow[] = [];
       for (const row of rows) {
@@ -505,10 +600,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           );
         }
       }
-      return validated;
+      await this.hydrateCustomProviderLabelsForOwner({ userId });
+      return { status: "fresh", configs: validated };
     } catch (error) {
       log.error(`Error loading user saved provider configs for user ${userId}:`, error);
-      throw new DatabaseUnavailableError(`Failed to read saved provider configs for user ${userId}`);
+      return { status: "unavailable", configs: [] };
     }
   }
 
@@ -552,23 +648,70 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
    * @param serverId - Internal server DB ID
    */
   async loadCustomEndpointsForServer(serverId: number): Promise<CustomEndpointRow[]> {
-    try {
-      // Returns every model row; a label+capability may now hold several models (distinguished by
-      // model_name), so we no longer collapse with DISTINCT ON. Ordered for stable picker listing.
-      const rows = await sql<unknown[]>`
-        SELECT *
-        FROM custom_endpoints
-        WHERE server_id = ${serverId}
-          AND user_id IS NULL
-        ORDER BY label ASC, capability ASC, model_name ASC NULLS FIRST, custom_endpoint_id ASC
-      `;
+    return (await this.loadCustomEndpointConnectionsForServerResult(serverId)).endpoints;
+  }
 
-      return rows
-        .map((row) => customEndpointSchema.safeParse(row))
-        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+  /**
+   * Loads connection entities and their optional model rows together, including zero-model connections.
+   */
+  async loadCustomEndpointConnectionsForServerResult(serverId: number): Promise<CustomEndpointConnectionsReadResult> {
+    try {
+      const [connectionRows, endpointRows] = await Promise.all([
+        sql<unknown[]>`
+          SELECT connection_id, server_id, user_id, label, capability, api_style,
+                 endpoint_url, requires_auth, created_at, updated_at
+          FROM custom_endpoint_connections
+          WHERE server_id = ${serverId}
+            AND user_id IS NULL
+          ORDER BY created_at ASC, connection_id ASC
+        `,
+        sql<unknown[]>`
+        SELECT
+          ce.custom_endpoint_id,
+          ce.connection_id,
+          cec.server_id,
+          cec.user_id,
+          cec.label,
+          cec.capability,
+          cec.api_style,
+          cec.endpoint_url,
+          ce.model_name,
+          ce.model_ref_id,
+          ce.num_ctx,
+          cec.requires_auth,
+          ce.extra_config,
+          ce.has_tools,
+          ce.sees_images,
+          ce.sees_videos,
+          ce.supports_structoutput,
+          ce.strict_role_alternation,
+          ce.supports_prefix_completion,
+          ce.is_default,
+          ce.created_at,
+          ce.updated_at
+        FROM custom_endpoints ce
+        JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+        WHERE cec.server_id = ${serverId}
+          AND cec.user_id IS NULL
+        ORDER BY cec.label ASC, cec.capability ASC, ce.model_name ASC NULLS FIRST, ce.custom_endpoint_id ASC
+        `,
+      ]);
+
+      const connections: CustomEndpointConnectionRow[] = [];
+      for (const row of connectionRows) {
+        const parsed = customEndpointConnectionSchema.safeParse(row);
+        if (parsed.success) {
+          rememberCustomProviderLabel(buildCustomProviderName(parsed.data.connection_id), parsed.data.label);
+          connections.push(parsed.data);
+        } else {
+          log.warn(`Invalid custom endpoint connection row for server ${serverId}: ${parsed.error.message}`);
+        }
+      }
+
+      return { status: "fresh", connections, endpoints: this.hydrateCustomEndpointRows(endpointRows) };
     } catch (error) {
-      log.error(`Error loading custom endpoints for server ${serverId}:`, error);
-      return [];
+      log.error(`Error loading custom endpoint connections for server ${serverId}:`, error);
+      return { status: "unavailable", connections: [], endpoints: [] };
     }
   }
 
@@ -578,23 +721,67 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
    * @param userId - Internal user DB ID
    */
   async loadCustomEndpointsForUser(userId: number): Promise<CustomEndpointRow[]> {
-    try {
-      // Returns every model row; a label+capability may now hold several models (distinguished by
-      // model_name), so we no longer collapse with DISTINCT ON. Ordered for stable picker listing.
-      const rows = await sql<unknown[]>`
-        SELECT *
-        FROM custom_endpoints
-        WHERE user_id = ${userId}
-          AND server_id IS NULL
-        ORDER BY label ASC, capability ASC, model_name ASC NULLS FIRST, custom_endpoint_id ASC
-      `;
+    return (await this.loadCustomEndpointConnectionsForUserResult(userId)).endpoints;
+  }
 
-      return rows
-        .map((row) => customEndpointSchema.safeParse(row))
-        .flatMap((parsed) => (parsed.success ? [parsed.data] : []));
+  /** Loads user-owned connections and their optional model rows, including zero-model connections. */
+  async loadCustomEndpointConnectionsForUserResult(userId: number): Promise<CustomEndpointConnectionsReadResult> {
+    try {
+      const [connectionRows, endpointRows] = await Promise.all([
+        sql<unknown[]>`
+          SELECT connection_id, server_id, user_id, label, capability, api_style,
+                 endpoint_url, requires_auth, created_at, updated_at
+          FROM custom_endpoint_connections
+          WHERE user_id = ${userId}
+            AND server_id IS NULL
+          ORDER BY created_at ASC, connection_id ASC
+        `,
+        sql<unknown[]>`
+        SELECT
+          ce.custom_endpoint_id,
+          ce.connection_id,
+          cec.server_id,
+          cec.user_id,
+          cec.label,
+          cec.capability,
+          cec.api_style,
+          cec.endpoint_url,
+          ce.model_name,
+          ce.model_ref_id,
+          ce.num_ctx,
+          cec.requires_auth,
+          ce.extra_config,
+          ce.has_tools,
+          ce.sees_images,
+          ce.sees_videos,
+          ce.supports_structoutput,
+          ce.strict_role_alternation,
+          ce.supports_prefix_completion,
+          ce.is_default,
+          ce.created_at,
+          ce.updated_at
+        FROM custom_endpoints ce
+        JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+        WHERE cec.user_id = ${userId}
+          AND cec.server_id IS NULL
+        ORDER BY cec.label ASC, cec.capability ASC, ce.model_name ASC NULLS FIRST, ce.custom_endpoint_id ASC
+        `,
+      ]);
+
+      const connections: CustomEndpointConnectionRow[] = [];
+      for (const row of connectionRows) {
+        const parsed = customEndpointConnectionSchema.safeParse(row);
+        if (parsed.success) {
+          rememberCustomProviderLabel(buildCustomProviderName(parsed.data.connection_id), parsed.data.label);
+          connections.push(parsed.data);
+        } else {
+          log.warn(`Invalid custom endpoint connection row for user ${userId}: ${parsed.error.message}`);
+        }
+      }
+      return { status: "fresh", connections, endpoints: this.hydrateCustomEndpointRows(endpointRows) };
     } catch (error) {
-      log.error(`Error loading custom endpoints for user ${userId}:`, error);
-      return [];
+      log.error(`Error loading custom endpoint connections for user ${userId}:`, error);
+      return { status: "unavailable", connections: [], endpoints: [] };
     }
   }
 
@@ -612,7 +799,32 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const distinctIds = Array.from(new Set(ids));
       const placeholders = distinctIds.map((_, i) => `$${i + 1}`).join(", ");
       const rows = await sql.unsafe(
-        `SELECT * FROM custom_endpoints WHERE custom_endpoint_id IN (${placeholders})`,
+        `SELECT
+          ce.custom_endpoint_id,
+          ce.connection_id,
+          cec.server_id,
+          cec.user_id,
+          cec.label,
+          cec.capability,
+          cec.api_style,
+          cec.endpoint_url,
+          ce.model_name,
+          ce.model_ref_id,
+          ce.num_ctx,
+          cec.requires_auth,
+          ce.extra_config,
+          ce.has_tools,
+          ce.sees_images,
+          ce.sees_videos,
+          ce.supports_structoutput,
+          ce.strict_role_alternation,
+          ce.supports_prefix_completion,
+          ce.is_default,
+          ce.created_at,
+          ce.updated_at
+        FROM custom_endpoints ce
+        JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+        WHERE ce.custom_endpoint_id IN (${placeholders})`,
         distinctIds,
       );
 
@@ -620,6 +832,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       for (const row of rows) {
         const parsed = customEndpointSchema.safeParse(row);
         if (parsed.success && parsed.data.custom_endpoint_id !== undefined) {
+          rememberCustomProviderLabel(buildCustomProviderName(parsed.data.connection_id), parsed.data.label);
           rowMap.set(parsed.data.custom_endpoint_id, parsed.data);
         } else if (!parsed.success) {
           log.warn(
@@ -656,23 +869,69 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const rows =
         serverId !== null
           ? await sql`
-              SELECT *
-              FROM custom_endpoints
-              WHERE server_id = ${serverId}
-                AND user_id IS NULL
-                AND label = ${label}
-                AND capability = ${capability}
-              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              SELECT
+                ce.custom_endpoint_id,
+                ce.connection_id,
+                cec.server_id,
+                cec.user_id,
+                cec.label,
+                cec.capability,
+                cec.api_style,
+                cec.endpoint_url,
+                ce.model_name,
+                ce.model_ref_id,
+                ce.num_ctx,
+                cec.requires_auth,
+                ce.extra_config,
+                ce.has_tools,
+                ce.sees_images,
+                ce.sees_videos,
+                ce.supports_structoutput,
+                ce.strict_role_alternation,
+                ce.supports_prefix_completion,
+                ce.is_default,
+                ce.created_at,
+                ce.updated_at
+              FROM custom_endpoints ce
+              JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+              WHERE cec.server_id = ${serverId}
+                AND cec.user_id IS NULL
+                AND cec.label = ${label}
+                AND cec.capability = ${capability}
+              ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
               LIMIT 1
             `
           : await sql`
-              SELECT *
-              FROM custom_endpoints
-              WHERE user_id = ${userId}
-                AND server_id IS NULL
-                AND label = ${label}
-                AND capability = ${capability}
-              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              SELECT
+                ce.custom_endpoint_id,
+                ce.connection_id,
+                cec.server_id,
+                cec.user_id,
+                cec.label,
+                cec.capability,
+                cec.api_style,
+                cec.endpoint_url,
+                ce.model_name,
+                ce.model_ref_id,
+                ce.num_ctx,
+                cec.requires_auth,
+                ce.extra_config,
+                ce.has_tools,
+                ce.sees_images,
+                ce.sees_videos,
+                ce.supports_structoutput,
+                ce.strict_role_alternation,
+                ce.supports_prefix_completion,
+                ce.is_default,
+                ce.created_at,
+                ce.updated_at
+              FROM custom_endpoints ce
+              JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+              WHERE cec.user_id = ${userId}
+                AND cec.server_id IS NULL
+                AND cec.label = ${label}
+                AND cec.capability = ${capability}
+              ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
               LIMIT 1
             `;
 
@@ -687,7 +946,8 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         return null;
       }
 
-      return parsed.data;
+      const endpoint = this.hydrateCustomEndpointRow(rows[0]);
+      return endpoint;
     } catch (error) {
       const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
       log.error(`Error loading custom endpoint for ${owner}, label ${label}, capability ${capability}:`, error);
@@ -716,23 +976,69 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const rows =
         serverId !== null
           ? await sql`
-              SELECT *
-              FROM custom_endpoints
-              WHERE server_id = ${serverId}
-                AND user_id IS NULL
-                AND capability = ${capability}
-                AND model_ref_id = ${modelRefId}
-              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              SELECT
+                ce.custom_endpoint_id,
+                ce.connection_id,
+                cec.server_id,
+                cec.user_id,
+                cec.label,
+                cec.capability,
+                cec.api_style,
+                cec.endpoint_url,
+                ce.model_name,
+                ce.model_ref_id,
+                ce.num_ctx,
+                cec.requires_auth,
+                ce.extra_config,
+                ce.has_tools,
+                ce.sees_images,
+                ce.sees_videos,
+                ce.supports_structoutput,
+                ce.strict_role_alternation,
+                ce.supports_prefix_completion,
+                ce.is_default,
+                ce.created_at,
+                ce.updated_at
+              FROM custom_endpoints ce
+              JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+              WHERE cec.server_id = ${serverId}
+                AND cec.user_id IS NULL
+                AND cec.capability = ${capability}
+                AND ce.model_ref_id = ${modelRefId}
+              ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
               LIMIT 1
             `
           : await sql`
-              SELECT *
-              FROM custom_endpoints
-              WHERE user_id = ${userId}
-                AND server_id IS NULL
-                AND capability = ${capability}
-                AND model_ref_id = ${modelRefId}
-              ORDER BY updated_at DESC, custom_endpoint_id DESC
+              SELECT
+                ce.custom_endpoint_id,
+                ce.connection_id,
+                cec.server_id,
+                cec.user_id,
+                cec.label,
+                cec.capability,
+                cec.api_style,
+                cec.endpoint_url,
+                ce.model_name,
+                ce.model_ref_id,
+                ce.num_ctx,
+                cec.requires_auth,
+                ce.extra_config,
+                ce.has_tools,
+                ce.sees_images,
+                ce.sees_videos,
+                ce.supports_structoutput,
+                ce.strict_role_alternation,
+                ce.supports_prefix_completion,
+                ce.is_default,
+                ce.created_at,
+                ce.updated_at
+              FROM custom_endpoints ce
+              JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+              WHERE cec.user_id = ${userId}
+                AND cec.server_id IS NULL
+                AND cec.capability = ${capability}
+                AND ce.model_ref_id = ${modelRefId}
+              ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
               LIMIT 1
             `;
 
@@ -744,10 +1050,493 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         return null;
       }
 
-      return parsed.data;
+      const endpoint = this.hydrateCustomEndpointRow(rows[0]);
+      return endpoint;
     } catch (error) {
       log.error(`Error loading custom endpoint by model_ref_id ${modelRefId}/${capability}:`, error);
       return null;
+    }
+  }
+
+  /** Returns a custom endpoint connection by its primary key ID. */
+  async loadCustomEndpointConnectionById(connectionId: number): Promise<CustomEndpointConnectionRow | null> {
+    try {
+      const rows = await sql`
+        SELECT * FROM custom_endpoint_connections
+        WHERE connection_id = ${connectionId}
+        LIMIT 1
+      `;
+      if (!rows.length) return null;
+      const parsed = customEndpointConnectionSchema.safeParse(rows[0]);
+      if (parsed.success) {
+        rememberCustomProviderLabel(buildCustomProviderName(parsed.data.connection_id), parsed.data.label);
+      }
+      return parsed.success ? parsed.data : null;
+    } catch (error) {
+      log.error(`Error loading custom endpoint connection by id ${connectionId}:`, error);
+      return null;
+    }
+  }
+
+  /** Returns all endpoints belonging to a specific connection. */
+  async loadCustomEndpointsByConnectionId(connectionId: number): Promise<CustomEndpointRow[]> {
+    try {
+      const rows = await sql<unknown[]>`
+        SELECT
+          ce.custom_endpoint_id,
+          ce.connection_id,
+          cec.server_id,
+          cec.user_id,
+          cec.label,
+          cec.capability,
+          cec.api_style,
+          cec.endpoint_url,
+          ce.model_name,
+          ce.model_ref_id,
+          ce.num_ctx,
+          cec.requires_auth,
+          ce.extra_config,
+          ce.has_tools,
+          ce.sees_images,
+          ce.sees_videos,
+          ce.supports_structoutput,
+          ce.strict_role_alternation,
+          ce.supports_prefix_completion,
+          ce.is_default,
+          ce.created_at,
+          ce.updated_at
+        FROM custom_endpoints ce
+        JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+        WHERE ce.connection_id = ${connectionId}
+        ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
+      `;
+      return this.hydrateCustomEndpointRows(rows);
+    } catch (error) {
+      log.error(`Error loading custom endpoints by connection_id ${connectionId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns a custom endpoint for a connection, optionally matching a specific synthetic model ID.
+   */
+  async loadCustomEndpointByConnection(
+    connectionId: number,
+    capability: CustomEndpointCapability,
+    modelRefId?: number | null,
+  ): Promise<CustomEndpointRow | null> {
+    try {
+      const rows =
+        modelRefId != null
+          ? await sql`
+              SELECT
+                ce.custom_endpoint_id,
+                ce.connection_id,
+                cec.server_id,
+                cec.user_id,
+                cec.label,
+                cec.capability,
+                cec.api_style,
+                cec.endpoint_url,
+                ce.model_name,
+                ce.model_ref_id,
+                ce.num_ctx,
+                cec.requires_auth,
+                ce.extra_config,
+                ce.has_tools,
+                ce.sees_images,
+                ce.sees_videos,
+                ce.supports_structoutput,
+                ce.strict_role_alternation,
+                ce.supports_prefix_completion,
+                ce.is_default,
+                ce.created_at,
+                ce.updated_at
+              FROM custom_endpoints ce
+              JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+              WHERE ce.connection_id = ${connectionId}
+                AND cec.capability = ${capability}
+                AND ce.model_ref_id = ${modelRefId}
+              ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
+              LIMIT 1
+            `
+          : await sql`
+              SELECT
+                ce.custom_endpoint_id,
+                ce.connection_id,
+                cec.server_id,
+                cec.user_id,
+                cec.label,
+                cec.capability,
+                cec.api_style,
+                cec.endpoint_url,
+                ce.model_name,
+                ce.model_ref_id,
+                ce.num_ctx,
+                cec.requires_auth,
+                ce.extra_config,
+                ce.has_tools,
+                ce.sees_images,
+                ce.sees_videos,
+                ce.supports_structoutput,
+                ce.strict_role_alternation,
+                ce.supports_prefix_completion,
+                ce.is_default,
+                ce.created_at,
+                ce.updated_at
+              FROM custom_endpoints ce
+              JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+              WHERE ce.connection_id = ${connectionId}
+                AND cec.capability = ${capability}
+              ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
+              LIMIT 1
+            `;
+      if (!rows.length) return null;
+      return this.hydrateCustomEndpointRow(rows[0]);
+    } catch (error) {
+      log.error(`Error loading custom endpoint by connection ${connectionId}:`, error);
+      return null;
+    }
+  }
+
+  /** Deletes a custom endpoint connection and cascades to its models. */
+  async deleteCustomEndpointConnectionById(connectionId: number): Promise<boolean> {
+    try {
+      const result = await sql`
+        DELETE FROM custom_endpoint_connections
+        WHERE connection_id = ${connectionId}
+      `;
+      return result.count > 0;
+    } catch (error) {
+      log.error(`Error deleting custom endpoint connection ${connectionId}:`, error);
+      return false;
+    }
+  }
+
+  /** Reuses the connection identity needed by model rows and saved provider snapshots. */
+  async upsertCustomEndpointConnection(params: {
+    serverId?: number | null;
+    userId?: number | null;
+    label: string;
+    capability: CustomEndpointCapability;
+    apiStyle: CustomEndpointApiStyle;
+    endpointUrl: string;
+    requiresAuth: boolean;
+  }): Promise<number | null> {
+    const { serverId = null, userId = null, label, capability, apiStyle, endpointUrl, requiresAuth } = params;
+    try {
+      const rows =
+        serverId !== null
+          ? await sql<[{ connection_id: number }]>`
+              INSERT INTO custom_endpoint_connections (
+                server_id, user_id, label, capability, api_style, endpoint_url, requires_auth
+              ) VALUES (
+                ${serverId}, NULL, ${label}, ${capability}, ${apiStyle}, ${endpointUrl}, ${requiresAuth}
+              )
+              ON CONFLICT (server_id, label, capability) WHERE user_id IS NULL
+              DO UPDATE SET
+                api_style = EXCLUDED.api_style,
+                endpoint_url = EXCLUDED.endpoint_url,
+                requires_auth = custom_endpoint_connections.requires_auth OR EXCLUDED.requires_auth,
+                updated_at = CURRENT_TIMESTAMP
+              RETURNING connection_id
+            `
+          : await sql<[{ connection_id: number }]>`
+              INSERT INTO custom_endpoint_connections (
+                server_id, user_id, label, capability, api_style, endpoint_url, requires_auth
+              ) VALUES (
+                NULL, ${userId}, ${label}, ${capability}, ${apiStyle}, ${endpointUrl}, ${requiresAuth}
+              )
+              ON CONFLICT (user_id, label, capability) WHERE server_id IS NULL
+              DO UPDATE SET
+                api_style = EXCLUDED.api_style,
+                endpoint_url = EXCLUDED.endpoint_url,
+                requires_auth = custom_endpoint_connections.requires_auth OR EXCLUDED.requires_auth,
+                updated_at = CURRENT_TIMESTAMP
+              RETURNING connection_id
+            `;
+      return rows[0]?.connection_id ?? null;
+    } catch (error) {
+      log.error(`Error upserting custom endpoint connection for ${label}/${capability}:`, error);
+      return null;
+    }
+  }
+
+  /** Updates one server-owned endpoint group and its credential snapshots atomically. */
+  async updateServerCustomEndpointConnectionGroup(params: {
+    serverId: number;
+    connectionIds: number[];
+    label?: string;
+    endpointUrl?: string;
+    encryptedApiKey?: Buffer;
+    keyVersion?: number;
+  }): Promise<boolean> {
+    if (params.connectionIds.length === 0) return false;
+    try {
+      return await sql.begin(async (tx) => {
+        const owned = await tx<Array<{ connection_id: number }>>`
+          SELECT connection_id
+          FROM custom_endpoint_connections
+          WHERE server_id = ${params.serverId}
+            AND user_id IS NULL
+            AND connection_id = ANY(${sql.array(params.connectionIds, "int4")})
+          FOR UPDATE
+        `;
+        if (owned.length !== params.connectionIds.length) return false;
+
+        await tx`
+          UPDATE custom_endpoint_connections
+          SET
+            label = COALESCE(${params.label ?? null}, label),
+            endpoint_url = COALESCE(${params.endpointUrl ?? null}, endpoint_url),
+            requires_auth = CASE WHEN ${params.encryptedApiKey ?? null}::bytea IS NULL THEN requires_auth ELSE true END,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE connection_id = ANY(${sql.array(params.connectionIds, "int4")})
+        `;
+
+        if (params.encryptedApiKey) {
+          const providerKeys = params.connectionIds.map((connectionId) => `custom:${connectionId}`);
+          const updated = await tx`
+            UPDATE saved_provider_configs
+            SET
+              api_key = ${params.encryptedApiKey},
+              key_version = ${params.keyVersion ?? 1},
+              updated_at = CURRENT_TIMESTAMP
+            WHERE server_id = ${params.serverId}
+              AND provider = ANY(${sql.array(providerKeys, "text")})
+          `;
+          if (updated.count !== providerKeys.length) {
+            throw new Error("Endpoint credential snapshot count changed during group edit");
+          }
+        }
+        return true;
+      });
+    } catch (error) {
+      log.error(`Error updating custom endpoint group for server ${params.serverId}:`, error);
+      return false;
+    }
+  }
+
+  /** Updates one user-owned endpoint group and its credential snapshots atomically. */
+  async updateUserCustomEndpointConnectionGroup(params: {
+    userId: number;
+    connectionIds: number[];
+    label?: string;
+    endpointUrl?: string;
+    encryptedApiKey?: Buffer;
+    keyVersion?: number;
+  }): Promise<boolean> {
+    if (params.connectionIds.length === 0) return false;
+    try {
+      return await sql.begin(async (tx) => {
+        const owned = await tx<Array<{ connection_id: number }>>`
+          SELECT connection_id
+          FROM custom_endpoint_connections
+          WHERE user_id = ${params.userId}
+            AND server_id IS NULL
+            AND connection_id = ANY(${sql.array(params.connectionIds, "int4")})
+          FOR UPDATE
+        `;
+        if (owned.length !== params.connectionIds.length) return false;
+
+        await tx`
+          UPDATE custom_endpoint_connections
+          SET
+            label = COALESCE(${params.label ?? null}, label),
+            endpoint_url = COALESCE(${params.endpointUrl ?? null}, endpoint_url),
+            requires_auth = CASE WHEN ${params.encryptedApiKey ?? null}::bytea IS NULL THEN requires_auth ELSE true END,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE connection_id = ANY(${sql.array(params.connectionIds, "int4")})
+        `;
+
+        if (params.encryptedApiKey) {
+          const providerKeys = params.connectionIds.map((connectionId) => `custom:${connectionId}`);
+          const updated = await tx`
+            UPDATE user_saved_provider_configs
+            SET
+              api_key = ${params.encryptedApiKey},
+              key_version = ${params.keyVersion ?? 1},
+              updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ${params.userId}
+              AND provider = ANY(${sql.array(providerKeys, "text")})
+          `;
+          if (updated.count !== providerKeys.length) {
+            throw new Error("Personal endpoint credential snapshot count changed during group edit");
+          }
+        }
+        return true;
+      });
+    } catch (error) {
+      log.error(`Error updating custom endpoint group for user ${params.userId}:`, error);
+      return false;
+    }
+  }
+
+  /** Deletes a server provider snapshot, its rotation pool, and its scope-local model registrations atomically. */
+  async deleteServerProviderRegistration(serverId: number, provider: string): Promise<boolean> {
+    const normalizedProvider = provider.toLowerCase();
+    try {
+      return await sql.begin(async (tx) => {
+        const deleted = await tx`
+          DELETE FROM saved_provider_configs
+          WHERE server_id = ${serverId} AND provider = ${normalizedProvider}
+        `;
+        if (deleted.count === 0) return false;
+
+        await tx`
+          DELETE FROM api_key_rotation
+          WHERE server_id = ${serverId} AND provider = ${normalizedProvider}
+        `;
+        await tx`
+          DELETE FROM scoped_model_registrations registration
+          WHERE registration.server_id = ${serverId}
+            AND (
+              EXISTS (
+                SELECT 1 FROM llms model
+                WHERE model.llm_id = registration.llm_id AND model.llm_provider = ${normalizedProvider}
+              )
+              OR EXISTS (
+                SELECT 1 FROM embedding_models model
+                WHERE model.embedding_model_id = registration.embedding_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
+                SELECT 1 FROM image_diffusion_models model
+                WHERE model.diffusion_model_id = registration.diffusion_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
+                SELECT 1 FROM video_generation_models model
+                WHERE model.video_model_id = registration.video_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+            )
+        `;
+        return true;
+      });
+    } catch (error) {
+      log.error(`Error deleting server provider registration ${provider}:`, error);
+      return false;
+    }
+  }
+
+  /** Deletes a personal provider snapshot and its scope-local model registrations atomically. */
+  async deleteUserProviderRegistration(userId: number, provider: string): Promise<boolean> {
+    const normalizedProvider = provider.toLowerCase();
+    try {
+      return await sql.begin(async (tx) => {
+        const deleted = await tx`
+          DELETE FROM user_saved_provider_configs
+          WHERE user_id = ${userId} AND provider = ${normalizedProvider}
+        `;
+        if (deleted.count === 0) return false;
+
+        await tx`
+          DELETE FROM scoped_model_registrations registration
+          WHERE registration.user_id = ${userId}
+            AND (
+              EXISTS (
+                SELECT 1 FROM llms model
+                WHERE model.llm_id = registration.llm_id AND model.llm_provider = ${normalizedProvider}
+              )
+              OR EXISTS (
+                SELECT 1 FROM embedding_models model
+                WHERE model.embedding_model_id = registration.embedding_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
+                SELECT 1 FROM image_diffusion_models model
+                WHERE model.diffusion_model_id = registration.diffusion_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+              OR EXISTS (
+                SELECT 1 FROM video_generation_models model
+                WHERE model.video_model_id = registration.video_model_id
+                  AND model.provider = ${normalizedProvider}
+              )
+            )
+        `;
+        return true;
+      });
+    } catch (error) {
+      log.error(`Error deleting personal provider registration ${provider}:`, error);
+      return false;
+    }
+  }
+
+  /** Deletes server-owned endpoint connections, snapshots, and synthetic models as one durable entity group. */
+  async deleteServerCustomEndpointConnectionGroup(serverId: number, connectionIds: number[]): Promise<boolean> {
+    const uniqueIds = [...new Set(connectionIds)];
+    if (uniqueIds.length === 0) return false;
+    try {
+      return await sql.begin(async (tx) => {
+        const owned = await tx<Array<{ connection_id: number }>>`
+          SELECT connection_id
+          FROM custom_endpoint_connections
+          WHERE server_id = ${serverId}
+            AND user_id IS NULL
+            AND connection_id = ANY(${sql.array(uniqueIds, "int4")})
+          FOR UPDATE
+        `;
+        if (owned.length !== uniqueIds.length) return false;
+
+        const providerKeys = uniqueIds.map((connectionId) => `custom:${connectionId}`);
+        await tx`
+          DELETE FROM saved_provider_configs
+          WHERE server_id = ${serverId}
+            AND provider = ANY(${sql.array(providerKeys, "text")})
+        `;
+        await tx`
+          DELETE FROM custom_endpoint_connections
+          WHERE connection_id = ANY(${sql.array(uniqueIds, "int4")})
+        `;
+        await tx`DELETE FROM llms WHERE llm_provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM embedding_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM image_diffusion_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM video_generation_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        return true;
+      });
+    } catch (error) {
+      log.error(`Error deleting server endpoint connection group ${connectionIds.join(",")}:`, error);
+      return false;
+    }
+  }
+
+  /** Deletes user-owned endpoint connections, snapshots, and synthetic models as one durable entity group. */
+  async deleteUserCustomEndpointConnectionGroup(userId: number, connectionIds: number[]): Promise<boolean> {
+    const uniqueIds = [...new Set(connectionIds)];
+    if (uniqueIds.length === 0) return false;
+    try {
+      return await sql.begin(async (tx) => {
+        const owned = await tx<Array<{ connection_id: number }>>`
+          SELECT connection_id
+          FROM custom_endpoint_connections
+          WHERE user_id = ${userId}
+            AND server_id IS NULL
+            AND connection_id = ANY(${sql.array(uniqueIds, "int4")})
+          FOR UPDATE
+        `;
+        if (owned.length !== uniqueIds.length) return false;
+
+        const providerKeys = uniqueIds.map((connectionId) => `custom:${connectionId}`);
+        await tx`
+          DELETE FROM user_saved_provider_configs
+          WHERE user_id = ${userId}
+            AND provider = ANY(${sql.array(providerKeys, "text")})
+        `;
+        await tx`
+          DELETE FROM custom_endpoint_connections
+          WHERE connection_id = ANY(${sql.array(uniqueIds, "int4")})
+        `;
+        await tx`DELETE FROM llms WHERE llm_provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM embedding_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM image_diffusion_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        await tx`DELETE FROM video_generation_models WHERE provider = ANY(${sql.array(providerKeys, "text")})`;
+        return true;
+      });
+    } catch (error) {
+      log.error(`Error deleting personal endpoint connection group ${connectionIds.join(",")}:`, error);
+      return false;
     }
   }
 
@@ -755,7 +1544,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async loadOpenRouterModelRegistrationsForServer(serverId: number): Promise<OpenRouterModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE server_id = ${serverId} AND user_id IS NULL
         ORDER BY llm_id ASC
       `;
@@ -772,7 +1561,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async loadOpenRouterModelRegistrationsForUser(userId: number): Promise<OpenRouterModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE user_id = ${userId} AND server_id IS NULL
         ORDER BY llm_id ASC
       `;
@@ -791,7 +1580,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   ): Promise<OpenRouterEmbeddingModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_embedding_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE server_id = ${serverId} AND user_id IS NULL
         ORDER BY embedding_model_id ASC
       `;
@@ -810,7 +1599,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   ): Promise<OpenRouterEmbeddingModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_embedding_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE user_id = ${userId} AND server_id IS NULL
         ORDER BY embedding_model_id ASC
       `;
@@ -829,7 +1618,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   ): Promise<OpenRouterImageModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_image_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE server_id = ${serverId} AND user_id IS NULL
         ORDER BY diffusion_model_id ASC
       `;
@@ -846,7 +1635,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async loadOpenRouterImageModelRegistrationsForUser(userId: number): Promise<OpenRouterImageModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_image_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE user_id = ${userId} AND server_id IS NULL
         ORDER BY diffusion_model_id ASC
       `;
@@ -865,7 +1654,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   ): Promise<OpenRouterVideoModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_video_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE server_id = ${serverId} AND user_id IS NULL
         ORDER BY video_model_id ASC
       `;
@@ -882,7 +1671,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async loadOpenRouterVideoModelRegistrationsForUser(userId: number): Promise<OpenRouterVideoModelRegistrationRow[]> {
     try {
       const rows = await sql<unknown[]>`
-        SELECT * FROM openrouter_video_model_registrations
+        SELECT * FROM scoped_model_registrations
         WHERE user_id = ${userId} AND server_id IS NULL
         ORDER BY video_model_id ASC
       `;
@@ -901,20 +1690,24 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
    * @param scope             - {kind: "server"|"personal", ownerId: number}
    * @param includeDeprecated - Include deprecated models
    */
-  async loadScopedOpenRouterModels(scope: OpenRouterModelScope, includeDeprecated = false): Promise<LlmRow[]> {
+  async loadScopedOpenRouterModels(
+    scope: OpenRouterModelScope,
+    includeDeprecated = false,
+    provider = "openrouter",
+  ): Promise<LlmRow[]> {
     try {
-      const rows = await this.scopedLlmRows(scope, includeDeprecated);
+      const rows = await this.scopedLlmRows(scope, includeDeprecated, provider);
       const parsed = llmSchema.array().safeParse(rows);
       if (!parsed.success) {
         log.error(
-          `Failed to validate scoped OpenRouter model data for ${scope.kind} ${scope.ownerId}:`,
+          `Failed to validate scoped ${provider} model data for ${scope.kind} ${scope.ownerId}:`,
           parsed.error.flatten(),
         );
         return [];
       }
       return parsed.data;
     } catch (error) {
-      log.error(`Error loading scoped OpenRouter models for ${scope.kind} ${scope.ownerId}:`, error);
+      log.error(`Error loading scoped ${provider} models for ${scope.kind} ${scope.ownerId}:`, error);
       return [];
     }
   }
@@ -928,20 +1721,21 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async loadScopedOpenRouterEmbeddingModels(
     scope: OpenRouterModelScope,
     includeDeprecated = false,
+    provider = "openrouter",
   ): Promise<EmbeddingModelRow[]> {
     try {
-      const rows = await this.scopedEmbeddingModelRows(scope, includeDeprecated);
+      const rows = await this.scopedEmbeddingModelRows(scope, includeDeprecated, provider);
       const parsed = embeddingModelSchema.array().safeParse(rows);
       if (!parsed.success) {
         log.error(
-          `Failed to validate scoped OpenRouter embedding model data for ${scope.kind} ${scope.ownerId}:`,
+          `Failed to validate scoped ${provider} embedding model data for ${scope.kind} ${scope.ownerId}:`,
           parsed.error.flatten(),
         );
         return [];
       }
       return parsed.data;
     } catch (error) {
-      log.error(`Error loading scoped OpenRouter embedding models for ${scope.kind} ${scope.ownerId}:`, error);
+      log.error(`Error loading scoped ${provider} embedding models for ${scope.kind} ${scope.ownerId}:`, error);
       return [];
     }
   }
@@ -955,20 +1749,21 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async loadScopedOpenRouterDiffusionModels(
     scope: OpenRouterModelScope,
     includeDeprecated = false,
+    provider = "openrouter",
   ): Promise<DiffusionModelRow[]> {
     try {
-      const rows = await this.scopedDiffusionModelRows(scope, includeDeprecated);
+      const rows = await this.scopedDiffusionModelRows(scope, includeDeprecated, provider);
       const parsed = diffusionModelSchema.array().safeParse(rows);
       if (!parsed.success) {
         log.error(
-          `Failed to validate scoped OpenRouter diffusion model data for ${scope.kind} ${scope.ownerId}:`,
+          `Failed to validate scoped ${provider} diffusion model data for ${scope.kind} ${scope.ownerId}:`,
           parsed.error.flatten(),
         );
         return [];
       }
       return parsed.data;
     } catch (error) {
-      log.error(`Error loading scoped OpenRouter diffusion models for ${scope.kind} ${scope.ownerId}:`, error);
+      log.error(`Error loading scoped ${provider} diffusion models for ${scope.kind} ${scope.ownerId}:`, error);
       return [];
     }
   }
@@ -982,20 +1777,21 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   async loadScopedOpenRouterVideoGenerationModels(
     scope: OpenRouterModelScope,
     includeDeprecated = false,
+    provider = "openrouter",
   ): Promise<VideoGenerationModelRow[]> {
     try {
-      const rows = await this.scopedVideoModelRows(scope, includeDeprecated);
+      const rows = await this.scopedVideoModelRows(scope, includeDeprecated, provider);
       const parsed = videoGenerationModelSchema.array().safeParse(rows);
       if (!parsed.success) {
         log.error(
-          `Failed to validate scoped OpenRouter video model data for ${scope.kind} ${scope.ownerId}:`,
+          `Failed to validate scoped ${provider} video model data for ${scope.kind} ${scope.ownerId}:`,
           parsed.error.flatten(),
         );
         return [];
       }
       return parsed.data;
     } catch (error) {
-      log.error(`Error loading scoped OpenRouter video models for ${scope.kind} ${scope.ownerId}:`, error);
+      log.error(`Error loading scoped ${provider} video models for ${scope.kind} ${scope.ownerId}:`, error);
       return [];
     }
   }
@@ -1132,7 +1928,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           llm_id, diffusion_model_id, embedding_model_id,
           video_model_id,
           nai_diffusion_model_id, vision_llm_id, nai_preset_name,
-          thinking_level, enabled_capabilities, assigned_capabilities, fallback_model_refs,
+          thinking_level, model_randomizer_enabled, enabled_capabilities, assigned_capabilities, fallback_model_refs,
           llm_temperature, llm_top_p, llm_top_k,
           llm_frequency_penalty, llm_presence_penalty, llm_min_p,
           llm_max_output_tokens,
@@ -1142,7 +1938,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ${config.llm_id}, ${config.diffusion_model_id}, ${config.embedding_model_id},
           ${config.video_model_id ?? null},
           ${config.nai_diffusion_model_id}, ${config.vision_llm_id ?? null}, ${config.nai_preset_name},
-          ${config.thinking_level}, ${enabledCapabilitiesLiteral}::text[], ${assignedCapabilitiesLiteral}::text[],
+          ${config.thinking_level}, ${config.model_randomizer_enabled ?? false}, ${enabledCapabilitiesLiteral}::text[], ${assignedCapabilitiesLiteral}::text[],
           ${fallbackModelRefsJson}::jsonb,
           ${config.llm_temperature ?? null}, ${config.llm_top_p ?? null}, ${config.llm_top_k ?? null},
           ${config.llm_frequency_penalty ?? null}, ${config.llm_presence_penalty ?? null}, ${config.llm_min_p ?? null},
@@ -1194,6 +1990,26 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   }
 
   /**
+   * Updates the personal text model randomizer preference for a user and provider pair.
+   * Scoped on both user ID and provider to isolate writes across users and sibling providers.
+   */
+  async updatePersonalModelRandomizer(userId: number, provider: string, enabled: boolean): Promise<boolean> {
+    try {
+      const result = await sql`
+        UPDATE user_saved_provider_configs
+        SET model_randomizer_enabled = ${enabled}, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ${userId}
+          AND provider = ${provider.toLowerCase()}
+      `;
+
+      return result.count > 0;
+    } catch (error) {
+      log.error(`Error updating personal model randomizer for user ${userId}, provider ${provider}:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Deletes a personal saved provider config for a user + provider pair.
    *
    * @param userId   - Internal user DB ID
@@ -1232,7 +2048,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       endpointUrl: string;
       modelName?: string | null;
       modelRefId?: number | null;
-      displayName: string;
       numCtx?: number | null;
       requiresAuth: boolean;
       extraConfig?: Record<string, unknown>;
@@ -1258,7 +2073,6 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       endpointUrl,
       modelName = null,
       modelRefId = null,
-      displayName,
       numCtx = null,
       requiresAuth,
       extraConfig = {},
@@ -1273,107 +2087,157 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     } = params;
 
     try {
-      const rows =
-        customEndpointId !== null
-          ? await sql`
-              UPDATE custom_endpoints SET
-                api_style = ${apiStyle},
-                endpoint_url = ${endpointUrl},
-                model_name = ${modelName},
-                model_ref_id = ${modelRefId},
-                display_name = ${displayName},
-                num_ctx = ${numCtx},
-                requires_auth = ${requiresAuth},
-                extra_config = ${extraConfig}::jsonb,
-                has_tools = ${hasTools},
-                sees_images = ${seesImages},
-                sees_videos = ${seesVideos},
-                supports_structoutput = ${supportsStructOutput},
-                strict_role_alternation = ${strictRoleAlternation},
-                supports_prefix_completion = ${supportsPrefixCompletion},
-                is_default = ${isDefault},
-                updated_at = CURRENT_TIMESTAMP
-              WHERE custom_endpoint_id = ${customEndpointId}
-              RETURNING *
-            `
-          : serverId !== null
-            ? await sql`
-              INSERT INTO custom_endpoints (
-                server_id, user_id, label, capability, api_style,
-                endpoint_url, model_name, model_ref_id, display_name, num_ctx, requires_auth,
-                extra_config, has_tools, sees_images, sees_videos,
-                supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
-              ) VALUES (
-                ${serverId}, NULL, ${label}, ${capability}, ${apiStyle},
-                ${endpointUrl}, ${modelName}, ${modelRefId}, ${displayName}, ${numCtx}, ${requiresAuth},
-                ${extraConfig}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
-                ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
-              )
-              ON CONFLICT (server_id, label, capability, COALESCE(model_name, '')) WHERE user_id IS NULL
-              DO UPDATE SET
-                api_style = EXCLUDED.api_style,
-                endpoint_url = EXCLUDED.endpoint_url,
-                model_name = EXCLUDED.model_name,
-                model_ref_id = EXCLUDED.model_ref_id,
-                display_name = EXCLUDED.display_name,
-                num_ctx = EXCLUDED.num_ctx,
-                requires_auth = EXCLUDED.requires_auth,
-                extra_config = EXCLUDED.extra_config,
-                has_tools = EXCLUDED.has_tools,
-                sees_images = EXCLUDED.sees_images,
-                sees_videos = EXCLUDED.sees_videos,
-                supports_structoutput = EXCLUDED.supports_structoutput,
-                strict_role_alternation = EXCLUDED.strict_role_alternation,
-                supports_prefix_completion = EXCLUDED.supports_prefix_completion,
-                is_default = EXCLUDED.is_default,
-                updated_at = CURRENT_TIMESTAMP
-              RETURNING *
-            `
-            : userId !== null
-              ? await sql`
-                INSERT INTO custom_endpoints (
-                  server_id, user_id, label, capability, api_style,
-                  endpoint_url, model_name, model_ref_id, display_name, num_ctx, requires_auth,
-                  extra_config, has_tools, sees_images, sees_videos,
-                  supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
-                ) VALUES (
-                  NULL, ${userId}, ${label}, ${capability}, ${apiStyle},
-                  ${endpointUrl}, ${modelName}, ${modelRefId}, ${displayName}, ${numCtx}, ${requiresAuth},
-                  ${extraConfig}::jsonb, ${hasTools}, ${seesImages}, ${seesVideos},
-                  ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
-                )
-                ON CONFLICT (user_id, label, capability, COALESCE(model_name, '')) WHERE server_id IS NULL
-                DO UPDATE SET
-                  api_style = EXCLUDED.api_style,
-                  endpoint_url = EXCLUDED.endpoint_url,
-                  model_name = EXCLUDED.model_name,
-                  model_ref_id = EXCLUDED.model_ref_id,
-                  display_name = EXCLUDED.display_name,
-                  num_ctx = EXCLUDED.num_ctx,
-                  requires_auth = EXCLUDED.requires_auth,
-                  extra_config = EXCLUDED.extra_config,
-                  has_tools = EXCLUDED.has_tools,
-                  sees_images = EXCLUDED.sees_images,
-                  sees_videos = EXCLUDED.sees_videos,
-                  supports_structoutput = EXCLUDED.supports_structoutput,
-                  strict_role_alternation = EXCLUDED.strict_role_alternation,
-                  supports_prefix_completion = EXCLUDED.supports_prefix_completion,
-                  is_default = EXCLUDED.is_default,
-                  updated_at = CURRENT_TIMESTAMP
-                RETURNING *
-              `
-              : [];
+      let resolvedCustomEndpointId: number | null = customEndpointId;
 
-      if (!rows.length) return null;
+      if (customEndpointId !== null) {
+        resolvedCustomEndpointId = await sql.begin(async (tx) => {
+          const existingRows = await tx<[{ connection_id: number }]>`
+            SELECT connection_id FROM custom_endpoints WHERE custom_endpoint_id = ${customEndpointId} LIMIT 1
+          `;
+          if (!existingRows.length) return null;
+          const connectionId = existingRows[0].connection_id;
 
-      const parsed = customEndpointSchema.safeParse(rows[0]);
-      if (!parsed.success) {
-        log.warn(`Failed to validate custom endpoint ${label}/${capability}: ${parsed.error.message}`);
+          await tx`
+            UPDATE custom_endpoint_connections
+            SET
+              label = ${label},
+              capability = ${capability},
+              api_style = ${apiStyle},
+              endpoint_url = ${endpointUrl},
+              requires_auth = ${requiresAuth},
+              updated_at = CURRENT_TIMESTAMP
+            WHERE connection_id = ${connectionId}
+          `;
+
+          const updatedRows = await tx<[{ custom_endpoint_id: number }]>`
+            UPDATE custom_endpoints
+            SET
+              model_name = ${modelName},
+              model_ref_id = ${modelRefId},
+              num_ctx = ${numCtx},
+              extra_config = ${extraConfig},
+              has_tools = ${hasTools},
+              sees_images = ${seesImages},
+              sees_videos = ${seesVideos},
+              supports_structoutput = ${supportsStructOutput},
+              strict_role_alternation = ${strictRoleAlternation},
+              supports_prefix_completion = ${supportsPrefixCompletion},
+              is_default = ${isDefault},
+              updated_at = CURRENT_TIMESTAMP
+            WHERE custom_endpoint_id = ${customEndpointId}
+            RETURNING custom_endpoint_id
+          `;
+          if (!updatedRows.length) {
+            throw new Error(`Custom endpoint ${customEndpointId} not found during update`);
+          }
+
+          return customEndpointId;
+        });
+      } else if (serverId !== null) {
+        resolvedCustomEndpointId = await sql.begin(async (tx) => {
+          const [connRow] = await tx<[{ connection_id: number }]>`
+            INSERT INTO custom_endpoint_connections (
+              server_id, user_id, label, capability, api_style, endpoint_url, requires_auth
+            ) VALUES (
+              ${serverId}, NULL, ${label}, ${capability}, ${apiStyle}, ${endpointUrl}, ${requiresAuth}
+            )
+            ON CONFLICT (server_id, label, capability) WHERE user_id IS NULL
+            DO UPDATE SET
+              api_style = EXCLUDED.api_style,
+              endpoint_url = EXCLUDED.endpoint_url,
+              requires_auth = custom_endpoint_connections.requires_auth OR EXCLUDED.requires_auth,
+              updated_at = CURRENT_TIMESTAMP
+            RETURNING connection_id
+          `;
+          if (!connRow) return null;
+          const connectionId = connRow.connection_id;
+
+          const [epRow] = await tx<[{ custom_endpoint_id: number }]>`
+            INSERT INTO custom_endpoints (
+              connection_id, model_name, model_ref_id, num_ctx,
+              extra_config, has_tools, sees_images, sees_videos,
+              supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
+            ) VALUES (
+              ${connectionId}, ${modelName}, ${modelRefId}, ${numCtx},
+              ${extraConfig}, ${hasTools}, ${seesImages}, ${seesVideos},
+              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
+            )
+            ON CONFLICT (connection_id, COALESCE(model_name, ''))
+            DO UPDATE SET
+              model_ref_id = EXCLUDED.model_ref_id,
+              num_ctx = EXCLUDED.num_ctx,
+              extra_config = EXCLUDED.extra_config,
+              has_tools = EXCLUDED.has_tools,
+              sees_images = EXCLUDED.sees_images,
+              sees_videos = EXCLUDED.sees_videos,
+              supports_structoutput = EXCLUDED.supports_structoutput,
+              strict_role_alternation = EXCLUDED.strict_role_alternation,
+              supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              is_default = EXCLUDED.is_default,
+              updated_at = CURRENT_TIMESTAMP
+            RETURNING custom_endpoint_id
+          `;
+          if (!epRow) return null;
+          return epRow.custom_endpoint_id;
+        });
+      } else if (userId !== null) {
+        resolvedCustomEndpointId = await sql.begin(async (tx) => {
+          const [connRow] = await tx<[{ connection_id: number }]>`
+            INSERT INTO custom_endpoint_connections (
+              server_id, user_id, label, capability, api_style, endpoint_url, requires_auth
+            ) VALUES (
+              NULL, ${userId}, ${label}, ${capability}, ${apiStyle}, ${endpointUrl}, ${requiresAuth}
+            )
+            ON CONFLICT (user_id, label, capability) WHERE server_id IS NULL
+            DO UPDATE SET
+              api_style = EXCLUDED.api_style,
+              endpoint_url = EXCLUDED.endpoint_url,
+              requires_auth = custom_endpoint_connections.requires_auth OR EXCLUDED.requires_auth,
+              updated_at = CURRENT_TIMESTAMP
+            RETURNING connection_id
+          `;
+          if (!connRow) return null;
+          const connectionId = connRow.connection_id;
+
+          const [epRow] = await tx<[{ custom_endpoint_id: number }]>`
+            INSERT INTO custom_endpoints (
+              connection_id, model_name, model_ref_id, num_ctx,
+              extra_config, has_tools, sees_images, sees_videos,
+              supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
+            ) VALUES (
+              ${connectionId}, ${modelName}, ${modelRefId}, ${numCtx},
+              ${extraConfig}, ${hasTools}, ${seesImages}, ${seesVideos},
+              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
+            )
+            ON CONFLICT (connection_id, COALESCE(model_name, ''))
+            DO UPDATE SET
+              model_ref_id = EXCLUDED.model_ref_id,
+              num_ctx = EXCLUDED.num_ctx,
+              extra_config = EXCLUDED.extra_config,
+              has_tools = EXCLUDED.has_tools,
+              sees_images = EXCLUDED.sees_images,
+              sees_videos = EXCLUDED.sees_videos,
+              supports_structoutput = EXCLUDED.supports_structoutput,
+              strict_role_alternation = EXCLUDED.strict_role_alternation,
+              supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              is_default = EXCLUDED.is_default,
+              updated_at = CURRENT_TIMESTAMP
+            RETURNING custom_endpoint_id
+          `;
+          if (!epRow) return null;
+          return epRow.custom_endpoint_id;
+        });
+      } else {
         return null;
       }
 
+      if (resolvedCustomEndpointId === null) return null;
+
+      const hydrated = await this.loadCustomEndpointsByIds([resolvedCustomEndpointId]);
+      if (!hydrated.length) return null;
+
       if (serverId !== null && options.serverDiscId) invalidateTomoriStateCache(options.serverDiscId);
-      return parsed.data;
+      return hydrated[0];
     } catch (error) {
       const owner = serverId !== null ? `server ${serverId}` : `user ${userId}`;
       log.error(`Error upserting custom endpoint ${label}/${capability} for ${owner}:`, error);
@@ -1402,14 +2266,14 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const result =
         serverId !== null
           ? await sql`
-              DELETE FROM custom_endpoints
+              DELETE FROM custom_endpoint_connections
               WHERE server_id = ${serverId}
                 AND user_id IS NULL
                 AND label = ${label}
                 AND capability = ${capability}
             `
           : await sql`
-              DELETE FROM custom_endpoints
+              DELETE FROM custom_endpoint_connections
               WHERE user_id = ${userId}
                 AND server_id IS NULL
                 AND label = ${label}
@@ -1491,22 +2355,24 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const selectedRows =
         serverId !== null
           ? await sql<[{ custom_endpoint_id: number; label: string }]>`
-              SELECT custom_endpoint_id, label
-              FROM custom_endpoints
-              WHERE custom_endpoint_id = ${params.customEndpointId}
-                AND server_id = ${serverId}
-                AND user_id IS NULL
-                AND capability = ${params.capability}
+              SELECT ce.custom_endpoint_id, cec.label
+              FROM custom_endpoints ce
+              JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+              WHERE ce.custom_endpoint_id = ${params.customEndpointId}
+                AND cec.server_id = ${serverId}
+                AND cec.user_id IS NULL
+                AND cec.capability = ${params.capability}
               LIMIT 1
             `
           : userId !== null
             ? await sql<[{ custom_endpoint_id: number; label: string }]>`
-                SELECT custom_endpoint_id, label
-                FROM custom_endpoints
-                WHERE custom_endpoint_id = ${params.customEndpointId}
-                  AND user_id = ${userId}
-                  AND server_id IS NULL
-                  AND capability = ${params.capability}
+                SELECT ce.custom_endpoint_id, cec.label
+                FROM custom_endpoints ce
+                JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+                WHERE ce.custom_endpoint_id = ${params.customEndpointId}
+                  AND cec.user_id = ${userId}
+                  AND cec.server_id IS NULL
+                  AND cec.capability = ${params.capability}
                 LIMIT 1
               `
             : [];
@@ -1519,51 +2385,59 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       if (serverId !== null) {
         if (clearScope === "capability") {
           await sql`
-            UPDATE custom_endpoints
+            UPDATE custom_endpoints ce
             SET is_default = false,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE server_id = ${serverId}
-              AND user_id IS NULL
-              AND capability = ${params.capability}
-              AND custom_endpoint_id <> ${params.customEndpointId}
-              AND is_default = true
+            FROM custom_endpoint_connections cec
+            WHERE ce.connection_id = cec.connection_id
+              AND cec.server_id = ${serverId}
+              AND cec.user_id IS NULL
+              AND cec.capability = ${params.capability}
+              AND ce.custom_endpoint_id <> ${params.customEndpointId}
+              AND ce.is_default = true
           `;
         } else {
           await sql`
-            UPDATE custom_endpoints
+            UPDATE custom_endpoints ce
             SET is_default = false,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE server_id = ${serverId}
-              AND user_id IS NULL
-              AND label = ${selectedEndpoint.label}
-              AND capability = ${params.capability}
-              AND custom_endpoint_id <> ${params.customEndpointId}
-              AND is_default = true
+            FROM custom_endpoint_connections cec
+            WHERE ce.connection_id = cec.connection_id
+              AND cec.server_id = ${serverId}
+              AND cec.user_id IS NULL
+              AND cec.label = ${selectedEndpoint.label}
+              AND cec.capability = ${params.capability}
+              AND ce.custom_endpoint_id <> ${params.customEndpointId}
+              AND ce.is_default = true
           `;
         }
       } else if (userId !== null) {
         if (clearScope === "capability") {
           await sql`
-            UPDATE custom_endpoints
+            UPDATE custom_endpoints ce
             SET is_default = false,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ${userId}
-              AND server_id IS NULL
-              AND capability = ${params.capability}
-              AND custom_endpoint_id <> ${params.customEndpointId}
-              AND is_default = true
+            FROM custom_endpoint_connections cec
+            WHERE ce.connection_id = cec.connection_id
+              AND cec.user_id = ${userId}
+              AND cec.server_id IS NULL
+              AND cec.capability = ${params.capability}
+              AND ce.custom_endpoint_id <> ${params.customEndpointId}
+              AND ce.is_default = true
           `;
         } else {
           await sql`
-            UPDATE custom_endpoints
+            UPDATE custom_endpoints ce
             SET is_default = false,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = ${userId}
-              AND server_id IS NULL
-              AND label = ${selectedEndpoint.label}
-              AND capability = ${params.capability}
-              AND custom_endpoint_id <> ${params.customEndpointId}
-              AND is_default = true
+            FROM custom_endpoint_connections cec
+            WHERE ce.connection_id = cec.connection_id
+              AND cec.user_id = ${userId}
+              AND cec.server_id IS NULL
+              AND cec.label = ${selectedEndpoint.label}
+              AND cec.capability = ${params.capability}
+              AND ce.custom_endpoint_id <> ${params.customEndpointId}
+              AND ce.is_default = true
           `;
         }
       }
@@ -1571,22 +2445,26 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const result =
         serverId !== null
           ? await sql`
-              UPDATE custom_endpoints
+              UPDATE custom_endpoints ce
               SET is_default = true,
                   updated_at = CURRENT_TIMESTAMP
-              WHERE custom_endpoint_id = ${params.customEndpointId}
-                AND server_id = ${serverId}
-                AND user_id IS NULL
-                AND capability = ${params.capability}
+              FROM custom_endpoint_connections cec
+              WHERE ce.connection_id = cec.connection_id
+                AND ce.custom_endpoint_id = ${params.customEndpointId}
+                AND cec.server_id = ${serverId}
+                AND cec.user_id IS NULL
+                AND cec.capability = ${params.capability}
             `
           : await sql`
-              UPDATE custom_endpoints
+              UPDATE custom_endpoints ce
               SET is_default = true,
                   updated_at = CURRENT_TIMESTAMP
-              WHERE custom_endpoint_id = ${params.customEndpointId}
-                AND user_id = ${userId}
-                AND server_id IS NULL
-                AND capability = ${params.capability}
+              FROM custom_endpoint_connections cec
+              WHERE ce.connection_id = cec.connection_id
+                AND ce.custom_endpoint_id = ${params.customEndpointId}
+                AND cec.user_id = ${userId}
+                AND cec.server_id IS NULL
+                AND cec.capability = ${params.capability}
             `;
 
       const ok = result.count > 0;
@@ -1623,20 +2501,25 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
   }): Promise<OpenRouterModelRegistrationRow | null> {
     const { serverId = null, userId = null, llmId } = params;
 
+    // Every scoped_model_registrations arbiter here repeats the `<column> IS NOT NULL` half of its
+    // partial index predicate. Postgres infers a partial unique index only when the statement's WHERE
+    // implies the index's, so dropping that conjunct as redundant makes the upsert fail at runtime with
+    // 42P10, "no unique or exclusion constraint matching the ON CONFLICT specification". The same
+    // applies to the embedding, diffusion, and video registrations below.
     try {
       const rows =
         serverId !== null
           ? await sql`
-              INSERT INTO openrouter_model_registrations (server_id, user_id, llm_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, llm_id)
               VALUES (${serverId}, NULL, ${llmId})
-              ON CONFLICT (server_id, llm_id) WHERE user_id IS NULL
+              ON CONFLICT (server_id, llm_id) WHERE user_id IS NULL AND llm_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `
           : await sql`
-              INSERT INTO openrouter_model_registrations (server_id, user_id, llm_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, llm_id)
               VALUES (NULL, ${userId}, ${llmId})
-              ON CONFLICT (user_id, llm_id) WHERE server_id IS NULL
+              ON CONFLICT (user_id, llm_id) WHERE server_id IS NULL AND llm_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `;
@@ -1672,11 +2555,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const result =
         serverId !== null
           ? await sql`
-              DELETE FROM openrouter_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE server_id = ${serverId} AND user_id IS NULL AND llm_id = ${llmId}
             `
           : await sql`
-              DELETE FROM openrouter_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE user_id = ${userId} AND server_id IS NULL AND llm_id = ${llmId}
             `;
       return result.count > 0;
@@ -1703,16 +2586,16 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const rows =
         serverId !== null
           ? await sql`
-              INSERT INTO openrouter_embedding_model_registrations (server_id, user_id, embedding_model_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, embedding_model_id)
               VALUES (${serverId}, NULL, ${embeddingModelId})
-              ON CONFLICT (server_id, embedding_model_id) WHERE user_id IS NULL
+              ON CONFLICT (server_id, embedding_model_id) WHERE user_id IS NULL AND embedding_model_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `
           : await sql`
-              INSERT INTO openrouter_embedding_model_registrations (server_id, user_id, embedding_model_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, embedding_model_id)
               VALUES (NULL, ${userId}, ${embeddingModelId})
-              ON CONFLICT (user_id, embedding_model_id) WHERE server_id IS NULL
+              ON CONFLICT (user_id, embedding_model_id) WHERE server_id IS NULL AND embedding_model_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `;
@@ -1753,11 +2636,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const result =
         serverId !== null
           ? await sql`
-              DELETE FROM openrouter_embedding_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE server_id = ${serverId} AND user_id IS NULL AND embedding_model_id = ${embeddingModelId}
             `
           : await sql`
-              DELETE FROM openrouter_embedding_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE user_id = ${userId} AND server_id IS NULL AND embedding_model_id = ${embeddingModelId}
             `;
       return result.count > 0;
@@ -1787,16 +2670,16 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const rows =
         serverId !== null
           ? await sql`
-              INSERT INTO openrouter_image_model_registrations (server_id, user_id, diffusion_model_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, diffusion_model_id)
               VALUES (${serverId}, NULL, ${diffusionModelId})
-              ON CONFLICT (server_id, diffusion_model_id) WHERE user_id IS NULL
+              ON CONFLICT (server_id, diffusion_model_id) WHERE user_id IS NULL AND diffusion_model_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `
           : await sql`
-              INSERT INTO openrouter_image_model_registrations (server_id, user_id, diffusion_model_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, diffusion_model_id)
               VALUES (NULL, ${userId}, ${diffusionModelId})
-              ON CONFLICT (user_id, diffusion_model_id) WHERE server_id IS NULL
+              ON CONFLICT (user_id, diffusion_model_id) WHERE server_id IS NULL AND diffusion_model_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `;
@@ -1837,11 +2720,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const result =
         serverId !== null
           ? await sql`
-              DELETE FROM openrouter_image_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE server_id = ${serverId} AND user_id IS NULL AND diffusion_model_id = ${diffusionModelId}
             `
           : await sql`
-              DELETE FROM openrouter_image_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE user_id = ${userId} AND server_id IS NULL AND diffusion_model_id = ${diffusionModelId}
             `;
       return result.count > 0;
@@ -1871,16 +2754,16 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const rows =
         serverId !== null
           ? await sql`
-              INSERT INTO openrouter_video_model_registrations (server_id, user_id, video_model_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, video_model_id)
               VALUES (${serverId}, NULL, ${videoModelId})
-              ON CONFLICT (server_id, video_model_id) WHERE user_id IS NULL
+              ON CONFLICT (server_id, video_model_id) WHERE user_id IS NULL AND video_model_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `
           : await sql`
-              INSERT INTO openrouter_video_model_registrations (server_id, user_id, video_model_id)
+              INSERT INTO scoped_model_registrations (server_id, user_id, video_model_id)
               VALUES (NULL, ${userId}, ${videoModelId})
-              ON CONFLICT (user_id, video_model_id) WHERE server_id IS NULL
+              ON CONFLICT (user_id, video_model_id) WHERE server_id IS NULL AND video_model_id IS NOT NULL
               DO UPDATE SET updated_at = CURRENT_TIMESTAMP
               RETURNING *
             `;
@@ -1921,11 +2804,11 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const result =
         serverId !== null
           ? await sql`
-              DELETE FROM openrouter_video_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE server_id = ${serverId} AND user_id IS NULL AND video_model_id = ${videoModelId}
             `
           : await sql`
-              DELETE FROM openrouter_video_model_registrations
+              DELETE FROM scoped_model_registrations
               WHERE user_id = ${userId} AND server_id IS NULL AND video_model_id = ${videoModelId}
             `;
       return result.count > 0;

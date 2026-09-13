@@ -424,12 +424,22 @@ CREATE TABLE IF NOT EXISTS image_diffusion_models (
   is_deprecated BOOLEAN DEFAULT false,
   is_free BOOLEAN DEFAULT false,
   is_uncensored BOOLEAN DEFAULT false,
+  supports_txt2img BOOLEAN,
+  supports_img2img BOOLEAN,
+  supports_inpaint BOOLEAN,
+  supports_negative_prompt BOOLEAN,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Moved to prevent error on first-time DB creation!
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_scoped_registration', 'BOOLEAN', 'false');
+
+-- Nullable with no default: NULL means the model follows its provider's built-in image defaults.
+SELECT add_column_if_not_exists('image_diffusion_models', 'supports_txt2img', 'BOOLEAN');
+SELECT add_column_if_not_exists('image_diffusion_models', 'supports_img2img', 'BOOLEAN');
+SELECT add_column_if_not_exists('image_diffusion_models', 'supports_inpaint', 'BOOLEAN');
+SELECT add_column_if_not_exists('image_diffusion_models', 'supports_negative_prompt', 'BOOLEAN');
 
 -- Removed updated_at trigger for image_diffusion_models table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_image_diffusion_models_timestamp ON image_diffusion_models;
@@ -615,7 +625,7 @@ SELECT add_column_if_not_exists('persona_configs', 'humanizer_degree', 'INT', NU
 -- Alter personas still require explicit trigger words; main persona defers if an alter is triggered
 
 -- Deliberate trigger mode (April 2026)
--- When enabled, plain {trigger} words are blocked; only @{trigger}, replies, mentions, and /bot respond work
+-- When enabled, plain {trigger} words are blocked; only @{trigger}, replies, mentions, and /respond work
 
 -- Auto-chat shared range state (March 2026): autoch_next_target was here;
 -- moved to persona_autoch_runtime_state by migration 015 (Phase 6 Step #16B).
@@ -692,6 +702,7 @@ CREATE TABLE IF NOT EXISTS persona_presets (
   preset_sample_dialogues_out TEXT[] DEFAULT '{}',
   preset_language TEXT NOT NULL,
   preset_trigger_words TEXT[] DEFAULT '{}',
+  preset_naming_config JSONB NOT NULL DEFAULT '{"prefixes":{},"suffixes":{},"addressTerms":{}}'::JSONB,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -708,6 +719,7 @@ SELECT add_column_if_not_exists('persona_presets', 'preset_attribute_public_flag
 -- avatar and a content-hash version token, populated by the avatar seed step.
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_shared_url', 'TEXT');
 SELECT add_column_if_not_exists('persona_presets', 'preset_avatar_hash', 'TEXT');
+SELECT add_column_if_not_exists('persona_presets', 'preset_naming_config', 'JSONB', '''{"prefixes":{},"suffixes":{},"addressTerms":{}}''::JSONB', 'NOT NULL');
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_persona_presets_lineage_language_unique
   ON persona_presets(preset_lineage_id, preset_language)
@@ -816,8 +828,7 @@ DROP TRIGGER IF EXISTS update_server_stickers_timestamp ON server_stickers;
 CREATE TABLE IF NOT EXISTS users (
   user_id SERIAL PRIMARY KEY,
   user_disc_id TEXT UNIQUE NOT NULL,
-  user_nickname TEXT NOT NULL,
-  language_pref TEXT DEFAULT 'en',
+  language_pref TEXT DEFAULT 'en-US',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -835,12 +846,6 @@ SELECT add_column_if_not_exists('users', 'registration_locale', 'TEXT');
 --   user_personalization_configs.nai_char_ref_url
 --   user_personalization_configs.impersonation_prompt
 --   user_personalization_configs.personal_dtm
-
--- Personal deliberate tool mode (May 2026) - User-scoped tri-state: 'off', 'follow' (default), 'on'
-SELECT add_column_if_not_exists('users', 'personal_deliberate_tool_mode', 'TEXT', '''follow''');
-
--- Personal timezone offset (June 2026) - NULL = not set / not opted in; mirrors server timezone range (-12..+14)
-SELECT add_column_if_not_exists('users', 'timezone_offset', 'SMALLINT');
 
 -- Create updated_at trigger for users table
 DROP TRIGGER IF EXISTS update_users_timestamp ON users;
@@ -1580,9 +1585,9 @@ CREATE TABLE IF NOT EXISTS api_key_rotation (
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
 );
 
--- Only one main key pointer per server (unique partial index)
+-- Each provider pool owns one pointer to its saved primary credential.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_api_key_rotation_main_pointer
-  ON api_key_rotation(server_id) WHERE is_main_key_pointer = true;
+  ON api_key_rotation(server_id, provider) WHERE is_main_key_pointer = true;
 
 -- Index for efficient key selection queries
 CREATE INDEX IF NOT EXISTS idx_api_key_rotation_server_provider
@@ -2111,6 +2116,8 @@ CREATE INDEX IF NOT EXISTS idx_guild_mcp_servers_server ON guild_mcp_servers(ser
 -- Optional server_type column for deduplicating default MCP tools.
 -- Values: NULL (general), 'web_search', 'url_fetcher'
 SELECT add_column_if_not_exists('guild_mcp_servers', 'server_type', 'TEXT');
+-- NULL = unknown/legacy, empty = last discovery returned no tools.
+SELECT add_column_if_not_exists('guild_mcp_servers', 'last_discovered_tool_names', 'TEXT[]');
 
 -- Trigger for updated_at auto-update
 DROP TRIGGER IF EXISTS update_guild_mcp_servers_timestamp ON guild_mcp_servers;
@@ -2192,21 +2199,142 @@ CREATE TRIGGER update_saved_provider_configs_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================
--- Custom Endpoints (Phase 3)
+-- Custom Endpoints
 -- ============================================================
-CREATE TABLE IF NOT EXISTS custom_endpoints (
-  custom_endpoint_id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS custom_endpoint_connections (
+  connection_id SERIAL PRIMARY KEY,
   server_id INT NULL,
   user_id INT NULL,
   label TEXT NOT NULL,
   capability TEXT NOT NULL,
   api_style TEXT NOT NULL,
   endpoint_url TEXT NOT NULL,
+  requires_auth BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+  CHECK ((server_id IS NULL) <> (user_id IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_custom_endpoint_connections_server ON custom_endpoint_connections(server_id);
+CREATE INDEX IF NOT EXISTS idx_custom_endpoint_connections_user ON custom_endpoint_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_custom_endpoint_connections_label ON custom_endpoint_connections(label);
+
+-- The static snapshot runs before numbered migrations, so 070 must normalize
+-- legacy label collisions before the final owner-scope uniqueness is installed.
+DO $$
+DECLARE
+  final_connection_indexes_ready BOOLEAN;
+BEGIN
+  IF to_regclass('public.schema_migrations') IS NULL THEN
+    final_connection_indexes_ready := true;
+  ELSE
+    EXECUTE $query$
+      SELECT EXISTS (
+        SELECT 1
+        FROM public.schema_migrations
+        WHERE name = '070_custom_endpoint_codename_and_keys'
+      )
+    $query$ INTO final_connection_indexes_ready;
+
+    IF NOT final_connection_indexes_ready THEN
+      EXECUTE $query$
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'custom_endpoints'
+            AND column_name = 'connection_id'
+        )
+        AND NOT EXISTS (SELECT 1 FROM public.custom_endpoint_connections)
+        AND NOT EXISTS (SELECT 1 FROM public.custom_endpoints)
+      $query$ INTO final_connection_indexes_ready;
+    END IF;
+  END IF;
+
+  IF final_connection_indexes_ready THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoint_connections_server_unique
+      ON custom_endpoint_connections(server_id, label, capability)
+      WHERE user_id IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoint_connections_user_unique
+      ON custom_endpoint_connections(user_id, label, capability)
+      WHERE server_id IS NULL;
+  END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS update_custom_endpoint_connections_timestamp ON custom_endpoint_connections;
+CREATE TRIGGER update_custom_endpoint_connections_timestamp
+  BEFORE UPDATE ON custom_endpoint_connections
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE OR REPLACE FUNCTION enforce_custom_endpoint_group_url()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM custom_endpoint_connections sibling
+    WHERE sibling.connection_id <> NEW.connection_id
+      AND sibling.server_id IS NOT DISTINCT FROM NEW.server_id
+      AND sibling.user_id IS NOT DISTINCT FROM NEW.user_id
+      AND sibling.label = NEW.label
+      AND sibling.endpoint_url <> NEW.endpoint_url
+  ) THEN
+    RAISE EXCEPTION 'Custom endpoint capabilities grouped by one label must share one URL'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS enforce_custom_endpoint_group_url ON custom_endpoint_connections;
+DO $$
+DECLARE
+  endpoint_group_urls_ready BOOLEAN;
+BEGIN
+  IF to_regclass('public.schema_migrations') IS NULL THEN
+    endpoint_group_urls_ready := true;
+  ELSE
+    EXECUTE $query$
+      SELECT EXISTS (
+        SELECT 1
+        FROM public.schema_migrations
+        WHERE name = '073_unify_custom_endpoint_group_urls'
+      )
+    $query$ INTO endpoint_group_urls_ready;
+
+    IF NOT endpoint_group_urls_ready THEN
+      EXECUTE $query$
+        SELECT
+          NOT EXISTS (SELECT 1 FROM public.custom_endpoint_connections)
+          AND (
+            to_regclass('public.custom_endpoints') IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'custom_endpoints'
+                AND column_name = 'connection_id'
+            )
+          )
+      $query$ INTO endpoint_group_urls_ready;
+    END IF;
+  END IF;
+
+  IF endpoint_group_urls_ready THEN
+    CREATE CONSTRAINT TRIGGER enforce_custom_endpoint_group_url
+      AFTER INSERT OR UPDATE ON custom_endpoint_connections
+      DEFERRABLE INITIALLY DEFERRED
+      FOR EACH ROW EXECUTE FUNCTION enforce_custom_endpoint_group_url();
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS custom_endpoints (
+  custom_endpoint_id SERIAL PRIMARY KEY,
+  connection_id INT NOT NULL,
   model_name TEXT NULL,
   model_ref_id INT NULL,
-  display_name TEXT NOT NULL,
   num_ctx INT NULL,
-  requires_auth BOOLEAN DEFAULT false,
   extra_config JSONB DEFAULT '{}'::JSONB,
   has_tools BOOLEAN DEFAULT false,
   sees_images BOOLEAN DEFAULT false,
@@ -2217,35 +2345,24 @@ CREATE TABLE IF NOT EXISTS custom_endpoints (
   is_default BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+  FOREIGN KEY (connection_id) REFERENCES custom_endpoint_connections(connection_id) ON DELETE CASCADE
 );
 
-ALTER TABLE custom_endpoints
-  DROP CONSTRAINT IF EXISTS custom_endpoints_server_id_user_id_label_capability_key;
-
--- Idempotent self-heal for databases created before model_ref_id existed (migration 024).
-SELECT add_column_if_not_exists('custom_endpoints', 'model_ref_id', 'INT');
-
--- Idempotent self-heal for the strict chat-completion compatibility flags (migration 025).
-SELECT add_column_if_not_exists('custom_endpoints', 'strict_role_alternation', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('custom_endpoints', 'supports_prefix_completion', 'BOOLEAN', 'false');
-
-CREATE INDEX IF NOT EXISTS idx_custom_endpoints_server ON custom_endpoints(server_id);
-CREATE INDEX IF NOT EXISTS idx_custom_endpoints_user ON custom_endpoints(user_id);
-CREATE INDEX IF NOT EXISTS idx_custom_endpoints_label ON custom_endpoints(label);
--- Uniqueness is per (owner, label, capability, model_name): a single labeled connection may host
--- multiple models of the same capability, distinguished by model_name. COALESCE collapses NULL to ''
--- so at most one unnamed model can coexist with any number of named ones. Drop the older
--- model-agnostic indexes first (migration 024 widened the key).
-DROP INDEX IF EXISTS idx_custom_endpoints_server_label_capability_unique;
-DROP INDEX IF EXISTS idx_custom_endpoints_user_label_capability_unique;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoints_server_label_capability_model_unique
-  ON custom_endpoints(server_id, label, capability, COALESCE(model_name, ''))
-  WHERE user_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoints_user_label_capability_model_unique
-  ON custom_endpoints(user_id, label, capability, COALESCE(model_name, ''))
-  WHERE server_id IS NULL;
+-- Legacy pre-068 tables do not have connection_id until migration 068 adds it.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'custom_endpoints'
+      AND column_name = 'connection_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_custom_endpoints_connection ON custom_endpoints(connection_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_endpoints_connection_model_unique
+      ON custom_endpoints(connection_id, COALESCE(model_name, ''));
+  END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS update_custom_endpoints_timestamp ON custom_endpoints;
 CREATE TRIGGER update_custom_endpoints_timestamp
@@ -2253,132 +2370,67 @@ CREATE TRIGGER update_custom_endpoints_timestamp
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================
--- Scoped OpenRouter Model Registrations
--- Stores per-server / per-user visibility for extra OpenRouter model rows
--- that should not appear globally in every OpenRouter picker.
+-- Scoped Model Registrations
+-- Stores per-server / per-user visibility for extra rows under shared providers.
 -- ============================================================
-CREATE TABLE IF NOT EXISTS openrouter_model_registrations (
-  openrouter_model_registration_id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS scoped_model_registrations (
+  scoped_model_registration_id SERIAL PRIMARY KEY,
   server_id INT NULL,
   user_id INT NULL,
-  llm_id INT NOT NULL,
+  llm_id INT NULL,
+  embedding_model_id INT NULL,
+  diffusion_model_id INT NULL,
+  video_model_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (llm_id) REFERENCES llms(llm_id) ON DELETE CASCADE,
-  CHECK ((server_id IS NULL) <> (user_id IS NULL))
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_model_registrations_server_llm
-  ON openrouter_model_registrations(server_id, llm_id)
-  WHERE user_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_model_registrations_user_llm
-  ON openrouter_model_registrations(user_id, llm_id)
-  WHERE server_id IS NULL;
-CREATE INDEX IF NOT EXISTS idx_openrouter_model_registrations_server ON openrouter_model_registrations(server_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_model_registrations_user ON openrouter_model_registrations(user_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_model_registrations_llm ON openrouter_model_registrations(llm_id);
-
-DROP TRIGGER IF EXISTS update_openrouter_model_registrations_timestamp ON openrouter_model_registrations;
-CREATE TRIGGER update_openrouter_model_registrations_timestamp
-  BEFORE UPDATE ON openrouter_model_registrations
-  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
-
-CREATE TABLE IF NOT EXISTS openrouter_embedding_model_registrations (
-  openrouter_embedding_model_registration_id SERIAL PRIMARY KEY,
-  server_id INT NULL,
-  user_id INT NULL,
-  embedding_model_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (embedding_model_id) REFERENCES embedding_models(embedding_model_id) ON DELETE CASCADE,
-  CHECK ((server_id IS NULL) <> (user_id IS NULL))
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_embedding_model_registrations_server_model
-  ON openrouter_embedding_model_registrations(server_id, embedding_model_id)
-  WHERE user_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_embedding_model_registrations_user_model
-  ON openrouter_embedding_model_registrations(user_id, embedding_model_id)
-  WHERE server_id IS NULL;
-CREATE INDEX IF NOT EXISTS idx_openrouter_embedding_model_registrations_server
-  ON openrouter_embedding_model_registrations(server_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_embedding_model_registrations_user
-  ON openrouter_embedding_model_registrations(user_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_embedding_model_registrations_model
-  ON openrouter_embedding_model_registrations(embedding_model_id);
-
-DROP TRIGGER IF EXISTS update_openrouter_embedding_model_registrations_timestamp
-  ON openrouter_embedding_model_registrations;
-CREATE TRIGGER update_openrouter_embedding_model_registrations_timestamp
-  BEFORE UPDATE ON openrouter_embedding_model_registrations
-  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
-
-CREATE TABLE IF NOT EXISTS openrouter_image_model_registrations (
-  openrouter_image_model_registration_id SERIAL PRIMARY KEY,
-  server_id INT NULL,
-  user_id INT NULL,
-  diffusion_model_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (diffusion_model_id) REFERENCES image_diffusion_models(diffusion_model_id) ON DELETE CASCADE,
-  CHECK ((server_id IS NULL) <> (user_id IS NULL))
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_image_model_registrations_server_model
-  ON openrouter_image_model_registrations(server_id, diffusion_model_id)
-  WHERE user_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_image_model_registrations_user_model
-  ON openrouter_image_model_registrations(user_id, diffusion_model_id)
-  WHERE server_id IS NULL;
-CREATE INDEX IF NOT EXISTS idx_openrouter_image_model_registrations_server
-  ON openrouter_image_model_registrations(server_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_image_model_registrations_user
-  ON openrouter_image_model_registrations(user_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_image_model_registrations_model
-  ON openrouter_image_model_registrations(diffusion_model_id);
-
-DROP TRIGGER IF EXISTS update_openrouter_image_model_registrations_timestamp
-  ON openrouter_image_model_registrations;
-CREATE TRIGGER update_openrouter_image_model_registrations_timestamp
-  BEFORE UPDATE ON openrouter_image_model_registrations
-  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
-
-CREATE TABLE IF NOT EXISTS openrouter_video_model_registrations (
-  openrouter_video_model_registration_id SERIAL PRIMARY KEY,
-  server_id INT NULL,
-  user_id INT NULL,
-  video_model_id INT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (video_model_id) REFERENCES video_generation_models(video_model_id) ON DELETE CASCADE,
-  CHECK ((server_id IS NULL) <> (user_id IS NULL))
+  CHECK ((server_id IS NULL) <> (user_id IS NULL)),
+  CHECK (num_nonnulls(llm_id, embedding_model_id, diffusion_model_id, video_model_id) = 1)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_video_model_registrations_server_model
-  ON openrouter_video_model_registrations(server_id, video_model_id)
-  WHERE user_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openrouter_video_model_registrations_user_model
-  ON openrouter_video_model_registrations(user_id, video_model_id)
-  WHERE server_id IS NULL;
-CREATE INDEX IF NOT EXISTS idx_openrouter_video_model_registrations_server
-  ON openrouter_video_model_registrations(server_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_video_model_registrations_user
-  ON openrouter_video_model_registrations(user_id);
-CREATE INDEX IF NOT EXISTS idx_openrouter_video_model_registrations_model
-  ON openrouter_video_model_registrations(video_model_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_server_llm
+  ON scoped_model_registrations(server_id, llm_id) WHERE user_id IS NULL AND llm_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_user_llm
+  ON scoped_model_registrations(user_id, llm_id) WHERE server_id IS NULL AND llm_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_server_embedding
+  ON scoped_model_registrations(server_id, embedding_model_id)
+  WHERE user_id IS NULL AND embedding_model_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_user_embedding
+  ON scoped_model_registrations(user_id, embedding_model_id)
+  WHERE server_id IS NULL AND embedding_model_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_server_diffusion
+  ON scoped_model_registrations(server_id, diffusion_model_id)
+  WHERE user_id IS NULL AND diffusion_model_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_user_diffusion
+  ON scoped_model_registrations(user_id, diffusion_model_id)
+  WHERE server_id IS NULL AND diffusion_model_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_server_video
+  ON scoped_model_registrations(server_id, video_model_id)
+  WHERE user_id IS NULL AND video_model_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scoped_model_registrations_user_video
+  ON scoped_model_registrations(user_id, video_model_id)
+  WHERE server_id IS NULL AND video_model_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_scoped_model_registrations_server
+  ON scoped_model_registrations(server_id);
+CREATE INDEX IF NOT EXISTS idx_scoped_model_registrations_user
+  ON scoped_model_registrations(user_id);
+CREATE INDEX IF NOT EXISTS idx_scoped_model_registrations_llm
+  ON scoped_model_registrations(llm_id);
+CREATE INDEX IF NOT EXISTS idx_scoped_model_registrations_embedding
+  ON scoped_model_registrations(embedding_model_id);
+CREATE INDEX IF NOT EXISTS idx_scoped_model_registrations_diffusion
+  ON scoped_model_registrations(diffusion_model_id);
+CREATE INDEX IF NOT EXISTS idx_scoped_model_registrations_video
+  ON scoped_model_registrations(video_model_id);
 
-DROP TRIGGER IF EXISTS update_openrouter_video_model_registrations_timestamp
-  ON openrouter_video_model_registrations;
-CREATE TRIGGER update_openrouter_video_model_registrations_timestamp
-  BEFORE UPDATE ON openrouter_video_model_registrations
+DROP TRIGGER IF EXISTS update_scoped_model_registrations_timestamp ON scoped_model_registrations;
+CREATE TRIGGER update_scoped_model_registrations_timestamp
+  BEFORE UPDATE ON scoped_model_registrations
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================
@@ -2502,6 +2554,7 @@ CREATE INDEX IF NOT EXISTS idx_voice_samples_server ON voice_samples(server_id);
 -- User-configurable generation length cap per saved provider. NULL = use provider default (8192 or hardcoded fallback).
 SELECT add_column_if_not_exists('saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
 SELECT add_column_if_not_exists('user_saved_provider_configs', 'llm_max_output_tokens', 'INTEGER', 'NULL');
+SELECT add_column_if_not_exists('user_saved_provider_configs', 'model_randomizer_enabled', 'BOOLEAN', 'false', 'NOT NULL');
 
 -- ============================================================
 -- Server Config Split Tables (migration 002)
@@ -2555,7 +2608,7 @@ CREATE TRIGGER update_server_notice_embeds_configs_timestamp
 
 CREATE TABLE IF NOT EXISTS server_member_permissions_configs (
   server_id                          INT     PRIMARY KEY REFERENCES servers(server_id) ON DELETE CASCADE,
-  server_memteaching_enabled         BOOLEAN NOT NULL DEFAULT true,
+  server_memteaching_enabled         BOOLEAN NOT NULL DEFAULT false,
   attribute_memteaching_enabled      BOOLEAN NOT NULL DEFAULT false,
   sampledialogue_memteaching_enabled BOOLEAN NOT NULL DEFAULT false,
   self_teaching_enabled              BOOLEAN NOT NULL DEFAULT true,
@@ -2653,6 +2706,7 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
   short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
   verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false,
+  user_info_updates_enabled BOOLEAN NOT NULL DEFAULT true,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -2864,11 +2918,19 @@ CREATE TRIGGER update_persona_textgen_configs_timestamp
 
 CREATE TABLE IF NOT EXISTS user_personalization_configs (
   user_id                            INT     PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+  user_nickname                      TEXT,
   shortterm_cache_crossserver_opt_in BOOLEAN NOT NULL DEFAULT false,
   physical_appearance_tags                      TEXT[]  NOT NULL DEFAULT '{}',
   nai_char_ref_url                   TEXT,
   impersonation_prompt               TEXT,
   personal_dtm                       TEXT    NOT NULL DEFAULT 'follow',
+  personal_deliberate_tool_mode      TEXT    NOT NULL DEFAULT 'follow',
+  timezone_offset                    SMALLINT CHECK (timezone_offset IS NULL OR timezone_offset BETWEEN -12 AND 14),
+  prefix_override                    TEXT,
+  suffix_override                    TEXT,
+  gender_identity                    TEXT,
+  pronouns                           TEXT,
+  addressing_style                   TEXT CHECK (addressing_style IS NULL OR addressing_style IN ('masculine', 'feminine', 'neutral')),
   created_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -2877,6 +2939,41 @@ DROP TRIGGER IF EXISTS update_user_personalization_configs_timestamp ON user_per
 CREATE TRIGGER update_user_personalization_configs_timestamp
   BEFORE UPDATE ON user_personalization_configs
   FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS user_persona_naming_preferences (
+  user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  persona_lineage_id BIGINT NOT NULL,
+  nickname_override TEXT,
+  prefix_override TEXT,
+  suffix_override TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, persona_lineage_id)
+);
+
+DROP TRIGGER IF EXISTS update_user_persona_naming_preferences_timestamp
+  ON user_persona_naming_preferences;
+CREATE TRIGGER update_user_persona_naming_preferences_timestamp
+  BEFORE UPDATE ON user_persona_naming_preferences
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TABLE IF NOT EXISTS persona_naming_configs (
+  persona_id INT PRIMARY KEY REFERENCES personas(persona_id) ON DELETE CASCADE,
+  prefixes JSONB NOT NULL DEFAULT '{}'::JSONB,
+  suffixes JSONB NOT NULL DEFAULT '{}'::JSONB,
+  address_terms JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS update_persona_naming_configs_timestamp ON persona_naming_configs;
+CREATE TRIGGER update_persona_naming_configs_timestamp
+  BEFORE UPDATE ON persona_naming_configs
+  FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+INSERT INTO persona_naming_configs (persona_id)
+SELECT persona_id FROM personas
+ON CONFLICT (persona_id) DO NOTHING;
 
 -- Memory tag filtering toggle (May 2026)
 -- Note: memory_tagging_enabled and channel_memory_enabled now live in server_memory_configs (per-domain split).

@@ -29,8 +29,41 @@ localizer(locale, "commands.config.setup.description")
 
 - `initializeLocalizer()` must run during startup before lookups.
 - Missing locale code falls back to `en-US`.
-- Missing key falls back to returning the key string.
+- Missing key falls back to `en-US` for that key alone (see below).
 - Multi-line strings are dedented automatically on load.
+
+## Key Resolution and the `en-US` Fallback
+
+`localizer()` resolves in three steps, and the middle one is what keeps an incomplete locale
+usable:
+
+| Case | Result |
+|---|---|
+| Key present in the requested locale | That locale's string, with `{placeholder}` variables interpolated |
+| Key missing from the requested locale but present in `en-US` | The `en-US` string, with the same interpolation applied, plus one `warn` log |
+| Key missing from both | The key path itself, returned verbatim |
+
+The per-key retry means a locale that is 99% translated renders English for the remaining 1%
+instead of showing users a raw `commands.foo.bar_description` path. The `warn` fires once per
+`locale:key` per process, so a gap stays visible in development without flooding a hot path.
+
+`check-locales` stays strict: the fallback is a runtime safety net, not permission to ship
+parity gaps.
+
+Two consequences to keep in mind when writing new code:
+
+- **Do not infer key existence from the returned string.** A miss now yields English, which is
+  indistinguishable from a real translation. Use `hasLocaleKey(locale, key)` instead: it walks
+  only the requested locale's tree and never falls back. `embedClassifier.ts` depends on this
+  to decide which dynamically discovered reward and punish titles a locale actually defines.
+- **The miss-everywhere case is unchanged**, so callers that detect an unknown key by comparing
+  the result against the key still work. `openrouterStreamAdapter.ts` and
+  `openaiCompatibleErrorFormatter.ts` use that comparison, and `st-preset/node/toggle.ts` relies
+  on the verbatim echo to pass a dynamic label through `localizer()`.
+
+`getLocaleSubKeys(locale, path)` deliberately enumerates only what the requested locale defines
+and performs no fallback of any kind, so callers can pair it with `hasLocaleKey` to build a set
+of keys that genuinely exist in one locale.
 
 ## Locale File Shape
 
@@ -77,19 +110,19 @@ genai: {
   tips: {
     title: "💡 Tip",
     wait_and_retry: "Please wait a few minutes before trying again.",
-    openrouter_models: "Browse the [OpenRouter model list](https://openrouter.ai/models) and switch models with `/openrouter model add`.",
+    openrouter_models: "Browse the [OpenRouter model list](https://openrouter.ai/models) and switch models with `/providers`.",
     // ...one key per bullet
   },
 }
 ```
 
-Callers compose the bullet list by passing an ordered `tipKeys` array to `createTipEmbed()` (see
-[Tip embeds](./utils.md#tip-embeds)), including or omitting keys per branch. This is why tips are
+Callers compose the bullet list by passing an ordered `tipKeys` array to `createTipText()` (see
+[Tip modals](./utils.md#tip-modals)), including or omitting keys per branch. This is why tips are
 atomic: a conditional hint (e.g. an OpenRouter-only tip) is added by including its key in one branch,
 not by duplicating a whole paragraph string. Descriptions render markdown and hyperlinks.
 
-`genai.tips.support_server` is the one reserved key: `createTipEmbed()` appends it as the closing
-bullet of every rendered tip embed so the Official Support Server link is always offered. Do not put
+`genai.tips.support_server` is the one reserved key: `createTipText()` appends it as the closing
+bullet of every rendered tip modal so the Official Support Server link is always offered. Do not put
 it in a caller's `tipKeys` array.
 
 When adding a tip:

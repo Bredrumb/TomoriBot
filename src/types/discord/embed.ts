@@ -1,4 +1,4 @@
-import { ButtonStyle } from "discord.js";
+import type { ButtonStyle } from "discord.js";
 import type { ButtonInteraction, ColorResolvable, EmbedBuilder, MessageFlags } from "discord.js";
 
 /**
@@ -17,9 +17,8 @@ export interface StandardEmbedOptions {
   flags?: MessageFlags;
   timestamp?: boolean;
   /**
-   * Optional atomic tip-item locale keys. When present, embed senders append a separate green
-   * "💡 Tip" embed rendering these keys as a dashed bullet list. Prefer this over baking tips into
-   * the main embed's description/footer , so a footer cannot render markdown or hyperlinks.
+   * Optional atomic tip-item locale keys. When present, embed senders add a button that opens
+   * these keys as a dashed bullet list in a read-only text modal.
    */
   tipKeys?: string[];
   /** Shared interpolation vars applied to every tip item in {@link tipKeys}. */
@@ -50,6 +49,8 @@ export interface ConfirmationOptions {
   continueCustomId: string;
   cancelCustomId: string;
   timeout?: number;
+  continueStyle?: ButtonStyle.Secondary | ButtonStyle.Danger;
+  cancelStyle?: ButtonStyle.Secondary | ButtonStyle.Danger;
 }
 
 /**
@@ -75,14 +76,6 @@ export const TRANSLATOR_COLORS = {
   [TranslationProvider.GOOGLE]: "#DE3163", // Google red
   [TranslationProvider.BING]: "#7DDA58", // Bing green
 } as const satisfies Record<TranslationProvider, ColorResolvable>;
-
-/**
- * Discord button styles for translation providers
- */
-export const TRANSLATOR_STYLES = {
-  [TranslationProvider.GOOGLE]: ButtonStyle.Danger,
-  [TranslationProvider.BING]: ButtonStyle.Success,
-} as const satisfies Record<TranslationProvider, ButtonStyle>;
 
 export interface SummaryEmbedOptions extends StandardEmbedOptions {
   docsPath?: string;

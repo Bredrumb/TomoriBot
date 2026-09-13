@@ -1,6 +1,24 @@
 export default {
   personal: {
     description: `あなたの個人的な設定を管理します`,
+    nuke: {
+      description: `TomoriBotが保存しているあなたの情報を、すべてのサーバーから消去します。`,
+      confirmation_description: `個人データを完全に消去することを確認してください。取り消せません。`,
+      confirmation_choice_yes: `はい、消去します`,
+      confirmation_choice_no: `いいえ、中止します`,
+      cancelled_title: `消去を中止しました`,
+      cancelled_description: `何も変更されていません。データはそのままです。`,
+      no_data_title: `消去するものがありません`,
+      no_data_description: `TomoriBotにあなたの記録は保存されていません。`,
+      success_title: `個人データを消去しました`,
+      success_description: `すべてのサーバーで消去しました：個人メモリー、パーソナライズ設定と呼び名の設定、スポットライト、保存済みのプロバイダーキー、個人用エンドポイントと登録モデル、利用統計、およびあなたが作成した、またはあなた宛てのリマインダー**{reminders_deleted}**件。
+
+\`/reward\`と\`/punish\`で与えた人格の条件付けも削除されたため、該当サーバーの人格の振る舞いが全員にとって変わる場合があります。
+
+あなたが教えたサーバーメモリーとアップロードした資料はサーバーに属するため、作成者情報だけを外して保持されます。あなたに関する記述は\`/memories\`から削除してください。設定したオプトアウトはそのまま残ります。
+
+次のメッセージから、TomoriBotはあなたを新規ユーザーとして扱います。`,
+    },
     "image-tags": {
       description: `画像生成を補助するため、自分の外見・身体的特徴をカンマ区切り画像タグで設定します。`,
       modal_title: `自分の画像タグ`,
@@ -87,7 +105,7 @@ export default {
         success_title: `個人用OpenRouterモデルを追加しました`,
         success_description: `OpenRouterの{capability}モデル \`{model_name}\` を個人用プロバイダー一覧に登録し、現在の個人用{capability}モデルに設定しました。`,
         missing_provider_title: `個人用OpenRouterプロバイダーが保存されていません`,
-        missing_provider_description: `モデルは登録されましたが、個人用OpenRouterの保存済み認証情報がないため有効化できませんでした。先に \`/personal provider add\` でOpenRouterを追加してください。`,
+        missing_provider_description: `モデルは登録されましたが、個人用OpenRouterの保存済み認証情報がないため有効化できませんでした。先に \`/personal providers\` でOpenRouterを追加してください。`,
         already_registered_title: `既に登録されています`,
         already_registered_description: `OpenRouterの{capability}モデル \`{model_name}\` は個人用プロバイダー一覧に既に登録されています。`,
         already_available_title: `最初から利用可能です`,
@@ -135,7 +153,7 @@ export default {
     provider: {
       description: `全サーバーで自分のリクエストに使う個人AIプロバイダーを管理します。`,
       no_saved_title: `個人プロバイダーがありません`,
-      no_saved_description: `保存された個人プロバイダーがまだありません。\`/personal provider add\` で追加してください。`,
+      no_saved_description: `保存された個人プロバイダーがまだありません。\`/personal providers\` で追加してください。`,
       capability_text: `テキスト`,
       capability_embedding: `埋め込み`,
       capability_image: `画像`,
@@ -163,7 +181,7 @@ export default {
         api_key_description: `あなた自身のリクエストにのみ使用するAPIキーです。他の人には使われません。`,
         api_key_placeholder: `APIキーを貼り付け`,
         already_existing_suffix: `保存済み`,
-        custom_deprecated_description: `/personal custom-endpoint add に移動しました。リダイレクト案内を見るときだけ選択してください。`,
+        custom_deprecated_description: `/personal providers に移動しました。リダイレクト案内を見るときだけ選択してください。`,
         custom_moved_title: `カスタムエンドポイントは移動しました`,
         custom_moved_description: `旧来のカスタムエンドポイント用プロバイダーフローは非推奨です。{custom_models_add_command} でエンドポイントを登録し、{model_text_command} で有効化してください。更新後の案内は {help_custom_models_command} を参照してください。`,
         success_title: `個人プロバイダーを保存しました`,
@@ -171,7 +189,7 @@ export default {
 
 {scope_notice}
 
-どの機能で個人上書きを使うかは \`/personal provider toggle-models\` で選択できます。`,
+どの機能で個人上書きを使うかは \`/personal providers\` で選択できます。`,
         updated_description: `{provider} の個人プロバイダー設定を更新し、個人の **テキスト** 上書きを \`{model_name}\` で有効にしました。
 
 {scope_notice}`,
@@ -234,7 +252,7 @@ export default {
         group_label: `機能`,
         group_description: `チェックした機能は全サーバーで個人上書きになります。チェックを外した機能は各サーバーの既定に戻ります。`,
         provider_description: `割り当てプロバイダー: {provider}`,
-        none_set_description: `サーバー既定。\`/personal provider model-\` でモデルを選ぶと個人上書きが有効になります。`,
+        none_set_description: `サーバー既定。\`/personal config\` でモデルを選ぶと個人上書きが有効になります。`,
         missing_model_title: `モデルが必要です`,
         missing_model_description: `{capability} にはまだ個人モデルが設定されていません。`,
         success_title: `個人ルーティングを更新しました`,
@@ -243,12 +261,6 @@ export default {
 {active_summary}
 
 {scope_notice}`,
-        confirm_title: `個人上書きを有効にしますか？`,
-        confirm_description: `私を使うすべてのサーバーで、次の機能がサーバー既定から個人プロバイダーへ切り替わります。**この設定はあなた自身のリクエストにのみ影響し、このサーバーの他のメンバーには影響しません:**
-
-{newly_enabled}
-
-続行しますか？`,
       },
     },
     model: {
@@ -256,7 +268,7 @@ export default {
       fallback: {
         description: `個人テキスト上書きのフォールバックモデルを設定し、なしで各スロットをクリアできます。`,
         no_provider_title: `有効な個人テキストプロバイダーがありません`,
-        no_provider_description: `先に \`/personal provider add\` または \`/personal provider model-text\` で個人テキスト上書きを有効化してください。`,
+        no_provider_description: `先に \`/personal providers\` または \`/personal config\` で個人テキスト上書きを有効化してください。`,
         primary_conflict_title: `選択が無効です`,
         primary_conflict_description: `選択したフォールバックモデルの一つ以上が、このプロバイダーの個人プライマリモデル \`{model}\` と一致しています。別のモデルを選択してください。`,
         success_title: `個人フォールバックを更新しました`,
@@ -278,6 +290,7 @@ export default {
 これらのサンプラーは全サーバーであなた自身のリクエストにのみ適用されます。このサーバーの設定は変更されていません。`,
     },
     config: {
+      character_reference_uploaded: `アップロードして保存済み`,
       description: `個人設定データを管理します。`,
       export: {
         description: `個人設定をエクスポートします（サーバー設定、ペルソナ、記憶を除く）。`,
@@ -310,7 +323,7 @@ export default {
       success_title: `プライバシー設定が更新されました`,
       success_description: `プライバシーレベルが\`{previous_value}\`から\`{value}\`に変更されました。
 
-\`/personal privacy\`を使用していつでも変更できます。`,
+\`/personal config\`を使用していつでも変更できます。`,
       already_set_title: `変更はありません`,
       already_set_description: `プライバシーレベルは既に\`{value}\`に設定されています。`,
       invalid_value_description: `無効なプライバシーレベルが選択されました。もう一度お試しください。`,
@@ -341,16 +354,49 @@ export default {
       success_new_title: `個人タイムゾーンを設定しました`,
       success_new_description: `あなたの個人タイムゾーンが \`{timezone}\` に設定されました。`,
     },
-    nickname: {
-      description: `私があなたを呼ぶ名前を変更します。`,
-      option_description: `私があなたに使用すべきニックネーム（2〜32文字）。`,
-      invalid_length_title: `無効なニックネームの長さ`,
-      invalid_length: `ニックネームは {min}〜{max} 文字でなければなりません。`,
-      success_title: `個人的なニックネームが更新されました`,
-      success_description: `わかりました、これからはあなたのことを '{new_nickname}' と呼びます（以前は '{old_nickname}' でした）。`,
-      success_but_disabled_description: `わかりました、あなたのことを '{new_nickname}' と呼ぶことを覚えておきます（以前は '{old_nickname}' でした）。
+    profile: {
+      description: `プロフィールと呼ばれ方を管理します。`,
+      nickname: {
+        description: `ペルソナが使うニックネーム、接頭辞、接尾辞を設定します。`,
+        scope_description: `すべてのペルソナ、または1つのペルソナ系統だけに適用します。`,
+        global_option: `全体`,
+        persona_option: `ペルソナ`,
+        modal_title_global: `全体の呼び名設定`,
+        modal_title_persona: `ペルソナ別の呼び名設定`,
+        nickname_label: `ニックネーム`,
+        nickname_description: `私があなたを呼ぶ名前です。空欄の場合は現在のDiscord表示名を使用します。`,
+        nickname_placeholder: `おにい`,
+        prefix_label: `接頭辞`,
+        prefix_description: `ニックネームの前に付ける敬称です。空欄の場合はペルソナ既定値を使用します。`,
+        prefix_placeholder: `マスター、お嬢様`,
+        suffix_label: `接尾辞`,
+        suffix_description: `ニックネームの後に付ける敬称です。空欄の場合はペルソナ既定値を使用します。`,
+        suffix_placeholder: `くん、ちゃん、先輩`,
+        option_description: `私があなたに使用すべきニックネーム（2〜32文字）。`,
+        invalid_length_title: `無効なニックネームの長さ`,
+        invalid_length: `ニックネームは {min}〜{max} 文字でなければなりません。`,
+        success_title: `個人的なニックネームが更新されました`,
+        success_description_scoped: `**{scope}** のニックネーム、接頭辞、接尾辞の設定を更新しました。`,
+        success_description: `わかりました、これからはあなたのことを '{new_nickname}' と呼びます（以前は '{old_nickname}' でした）。`,
+        success_but_disabled_description: `わかりました、あなたのことを '{new_nickname}' と呼ぶことを覚えておきます（以前は '{old_nickname}' でした）。
 
 **警告:** 現在、このサーバーではパーソナライズが無効になっているため、このニックネームはここでは使用しません。パーソナライズが有効になっている他のサーバーでは使用します。`,
+      },
+      about: {
+        description: `任意のプロフィール情報と呼び方の好みを設定します。`,
+        modal_title: `あなたについて`,
+        gender_label: `性自認`,
+        gender_description: `任意の自由記述です。空欄で消去します。`,
+        pronouns_label: `代名詞`,
+        pronouns_description: `例：she/her、どれでも、名前を使用。`,
+        style_label: `希望する呼び方`,
+        style_description: `ペルソナの呼称バリエーションを選択します。他の項目から推測しません。`,
+        style_masculine: `男性的`,
+        style_feminine: `女性的`,
+        style_neutral: `中立`,
+        success_title: `プロフィールを更新しました`,
+        success_description: `プロフィールと呼び方の設定を更新しました。空欄の項目は消去されました。`,
+      },
     },
     impersonate: {
       description: `ユーザーなりすまし設定を管理します。`,
@@ -456,7 +502,7 @@ export default {
       follow_title: `個人明示的トリガーモード：サーバーに従う`,
       follow_description: `DTMの動作が**サーバー設定に従う**ようになりました。`,
       on_title: `個人明示的トリガーモード：オン`,
-      on_description: `サーバー設定に関わらず、DTMが**常に有効**です。\`@trigger\`、メンション、リプライ、または\`/bot respond\`でBotを呼び出してください。`,
+      on_description: `サーバー設定に関わらず、DTMが**常に有効**です。\`@trigger\`、メンション、リプライ、または\`/respond\`でBotを呼び出してください。`,
     },
     deliberatetoolmode: {
       description: `個人の明示的ツールモード設定を変更します。`,

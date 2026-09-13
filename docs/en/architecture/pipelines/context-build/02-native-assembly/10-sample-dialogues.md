@@ -35,9 +35,13 @@ items (one user + one model per pair, or just model if the user side is
 ## Side effects
 
 - **Humanizer transform** — when `humanizer_degree >= HumanizerDegree.HEAVY`,
-  both user and model sample text passes through `humanizeString` (typo
-  injection, casing tweaks). Mirrors the dialogue-history transform
-  (stage 11).
+  both user and model sample text passes through `humanizeString` with
+  `suppressPunctuationNoise: true`: casing tweaks and semicolon stripping still
+  apply, but the randomized comma/emphasis noise (remove/flush/keep) that live
+  delivery and dialogue-history reconstruction get is skipped, so the sample's
+  own commas reach the LLM untouched as a real example of comma usage to
+  imitate. (Before this noise existed, HEAVY stripped every comma from samples
+  and history; they are now all kept.) Otherwise mirrors the dialogue-history transform (stage 11).
 - **Uncensor input transforms** — `applyUncensorInputTransforms` applies
   unicode-space injection and/or sanitization based on
   `uncensorInputOptions`.

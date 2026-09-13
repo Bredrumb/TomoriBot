@@ -1,6 +1,7 @@
 /**
  * Image Generation Command
  * Allows users to generate AI images using the configured provider
+ * Supports manual prompting and automatic scene visualization
  * Supports text-to-image and image-to-image generation with up to 3 reference images
  * (Discord modal limit: 5 components total)
  */
@@ -33,10 +34,11 @@ import {
   resolveCapabilityCredentials,
 } from "@/utils/provider/credentialResolver";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
+import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { generateOpenRouterImage } from "@/providers/openrouter/openrouterImageGeneration";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 
 const MODAL_CUSTOM_ID = "generate_image_modal";
 const PROMPT_INPUT_ID = "prompt_input";
@@ -47,7 +49,19 @@ const REFERENCE_IMAGE_INPUT_IDS = ["image_upload_1", "image_upload_2", "image_up
  * Configure the subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("image").setDescription(localizer("en-US", "commands.generate.image.description"));
+  subcommand
+    .setName("image")
+    .setDescription(localizer("en-US", "commands.generate.image.description"))
+    .addStringOption((option) =>
+      option
+        .setName("mode")
+        .setDescription(localizer("en-US", "commands.generate.image.mode_description"))
+        .setRequired(true)
+        .addChoices(
+          { name: localizer("en-US", "commands.generate.image.mode_choice_manual"), value: "manual" },
+          { name: localizer("en-US", "commands.generate.image.mode_choice_auto"), value: "auto" },
+        ),
+    );
 
 /**
  * @param diffusionModelId - Database ID of the diffusion model
@@ -94,11 +108,17 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
  * Execute the image generation command
  */
 export async function execute(
-  _client: Client,
+  client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
 ): Promise<void> {
+  const mode = interaction.options.getString("mode", true);
+  if (mode === "auto") {
+    await executeAutoImageCommand(client, interaction, userData, locale);
+    return;
+  }
+
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -361,7 +381,7 @@ export async function execute(
 
     const modelCodename = await getDiffusionModelCodename(diffusionModelId);
     const displayModelName = imageCreds.customEndpoint
-      ? formatCustomEndpointModelDisplay(imageCreds.customEndpoint)
+      ? formatCustomModelDisplay(imageCreds.customEndpoint)
       : modelCodename;
 
     log.info(

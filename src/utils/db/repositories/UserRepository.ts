@@ -21,11 +21,19 @@ import type { IRepository } from "./IRepository";
 type UserExportShape = PersonalSettingsExportData;
 
 const USER_PERSONALIZATION_FIELD_NAMES = [
+  "user_nickname",
   "shortterm_cache_crossserver_opt_in",
   "physical_appearance_tags",
   "nai_char_ref_url",
   "impersonation_prompt",
   "personal_dtm",
+  "personal_deliberate_tool_mode",
+  "timezone_offset",
+  "prefix_override",
+  "suffix_override",
+  "gender_identity",
+  "pronouns",
+  "addressing_style",
 ] as const;
 
 type UserPersonalizationField = (typeof USER_PERSONALIZATION_FIELD_NAMES)[number];
@@ -100,12 +108,17 @@ class UserRepository implements IRepository<UserExportShape> {
           SELECT
             u.user_id,
             u.user_disc_id,
-            u.user_nickname,
+            upc.user_nickname,
             u.language_pref,
             u.registration_locale,
             u.privacy_level,
-            u.personal_deliberate_tool_mode,
-            u.timezone_offset,
+            COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
+            upc.timezone_offset,
+            upc.prefix_override,
+            upc.suffix_override,
+            upc.gender_identity,
+            upc.pronouns,
+            upc.addressing_style,
             u.created_at,
             u.updated_at,
             COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
@@ -149,12 +162,17 @@ class UserRepository implements IRepository<UserExportShape> {
             SELECT
               u.user_id,
               u.user_disc_id,
-              u.user_nickname,
+              upc.user_nickname,
               u.language_pref,
               u.registration_locale,
               u.privacy_level,
-              u.personal_deliberate_tool_mode,
-              u.timezone_offset,
+              COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
+              upc.timezone_offset,
+              upc.prefix_override,
+              upc.suffix_override,
+              upc.gender_identity,
+              upc.pronouns,
+              upc.addressing_style,
               u.created_at,
               u.updated_at,
               COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
@@ -164,7 +182,7 @@ class UserRepository implements IRepository<UserExportShape> {
               COALESCE(upc.personal_dtm, 'follow') AS personal_dtm
             FROM users u
             LEFT JOIN user_personalization_configs upc ON upc.user_id = u.user_id
-            WHERE regexp_replace(lower(trim(u.user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
+            WHERE regexp_replace(lower(trim(upc.user_nickname)), '[[:space:]]+', ' ', 'g') = ${nickname}
           `;
 
         const parsedUsers: UserRow[] = [];
@@ -200,12 +218,17 @@ class UserRepository implements IRepository<UserExportShape> {
               SELECT
                 u.user_id,
                 u.user_disc_id,
-                u.user_nickname,
+                upc.user_nickname,
                 u.language_pref,
                 u.registration_locale,
                 u.privacy_level,
-                u.personal_deliberate_tool_mode,
-                u.timezone_offset,
+                COALESCE(upc.personal_deliberate_tool_mode, 'follow') AS personal_deliberate_tool_mode,
+                upc.timezone_offset,
+                upc.prefix_override,
+                upc.suffix_override,
+                upc.gender_identity,
+                upc.pronouns,
+                upc.addressing_style,
                 u.created_at,
                 u.updated_at,
                 COALESCE(upc.shortterm_cache_crossserver_opt_in, false) AS shortterm_cache_crossserver_opt_in,
@@ -406,10 +429,13 @@ class UserRepository implements IRepository<UserExportShape> {
   }
 
   /**
-   * Registers a user (upsert: preserves existing nickname and preferences on conflict).
+   * Registers a user while preserving existing preferences on conflict.
+   * The observed Discord display name is diagnostic only. A null saved nickname
+   * keeps the user's name linked to their live Discord profile until they opt in
+   * to a custom name.
    * Invalidates the user cache after write.
    *
-   * @param language    - Registration locale
+   * @param language - Registration locale
    * @returns UserRow on success, null on failure
    */
   async register(userDiscId: string, displayName: string, language = "en"): Promise<UserRow | null> {
@@ -515,7 +541,7 @@ class UserRepository implements IRepository<UserExportShape> {
     return updated !== null;
   }
 
-  async setNickname(userId: number, nickname: string): Promise<boolean> {
+  async setNickname(userId: number, nickname: string | null): Promise<boolean> {
     const updated = await this.update(userId, { user_nickname: nickname });
     return updated !== null;
   }
@@ -925,6 +951,20 @@ class UserRepository implements IRepository<UserExportShape> {
     const user = await this.loadByDiscordId(userDiscId);
     if (!user) return null;
 
+    const personaNamingPreferences = await sql<
+      Array<{
+        persona_lineage_id: number;
+        nickname_override: string | null;
+        prefix_override: string | null;
+        suffix_override: string | null;
+      }>
+    >`
+      SELECT persona_lineage_id, nickname_override, prefix_override, suffix_override
+      FROM user_persona_naming_preferences
+      WHERE user_id = ${user.user_id as number}
+      ORDER BY persona_lineage_id
+    `;
+
     return {
       user_nickname: user.user_nickname,
       language_pref: user.language_pref,
@@ -934,12 +974,23 @@ class UserRepository implements IRepository<UserExportShape> {
       shortterm_cache_crossserver_opt_in: user.shortterm_cache_crossserver_opt_in,
       physical_appearance_tags: user.physical_appearance_tags ?? [],
       nai_char_ref_url: user.nai_char_ref_url ?? null,
+      personal_deliberate_tool_mode: user.personal_deliberate_tool_mode,
+      timezone_offset: user.timezone_offset ?? null,
+      prefix_override: user.prefix_override ?? null,
+      suffix_override: user.suffix_override ?? null,
+      gender_identity: user.gender_identity ?? null,
+      pronouns: user.pronouns ?? null,
+      addressing_style: user.addressing_style ?? null,
+      persona_naming_preferences: personaNamingPreferences.map((preference) => ({
+        ...preference,
+        persona_lineage_id: Number(preference.persona_lineage_id),
+      })),
     };
   }
 
   /**
    * Imports a previously exported user settings shape, merging into the existing row.
-   * Identity fields stay on users; personalization fields write to user_personalization_configs.
+   * Account identity stays on users; durable user settings write to user_personalization_configs.
    * Creates the user row first if it doesn't exist.
    *
    * @returns true on success, false on validation or write failure
@@ -955,14 +1006,13 @@ class UserRepository implements IRepository<UserExportShape> {
     const parsed = validated.data;
 
     try {
-      await this.registerUserRow(userDiscId, parsed.user_nickname, parsed.language_pref);
+      await this.registerUserRow(userDiscId, parsed.user_nickname ?? userDiscId, parsed.language_pref);
 
       const user = await this.loadByDiscordId(userDiscId);
       if (!user?.user_id) return false;
 
       await Promise.all([
         this.updateUserRow(user.user_id, {
-          user_nickname: parsed.user_nickname,
           language_pref: parsed.language_pref,
           privacy_level: parsed.privacy_level,
         }),
@@ -972,8 +1022,32 @@ class UserRepository implements IRepository<UserExportShape> {
           nai_char_ref_url: parsed.nai_char_ref_url ?? null,
           impersonation_prompt: parsed.impersonation_prompt ?? null,
           personal_dtm: parsed.personal_dtm,
+          user_nickname: parsed.user_nickname,
+          personal_deliberate_tool_mode: parsed.personal_deliberate_tool_mode,
+          timezone_offset: parsed.timezone_offset,
+          prefix_override: parsed.prefix_override,
+          suffix_override: parsed.suffix_override,
+          gender_identity: parsed.gender_identity,
+          pronouns: parsed.pronouns,
+          addressing_style: parsed.addressing_style,
         }),
       ]);
+
+      for (const preference of parsed.persona_naming_preferences) {
+        await sql`
+          INSERT INTO user_persona_naming_preferences (
+            user_id, persona_lineage_id, nickname_override, prefix_override, suffix_override
+          ) VALUES (
+            ${user.user_id}, ${preference.persona_lineage_id}, ${preference.nickname_override},
+            ${preference.prefix_override}, ${preference.suffix_override}
+          )
+          ON CONFLICT (user_id, persona_lineage_id) DO UPDATE SET
+            nickname_override = EXCLUDED.nickname_override,
+            prefix_override = EXCLUDED.prefix_override,
+            suffix_override = EXCLUDED.suffix_override,
+            updated_at = NOW()
+        `;
+      }
 
       invalidateUserCache(userDiscId);
       return true;
@@ -991,24 +1065,45 @@ class UserRepository implements IRepository<UserExportShape> {
       nai_char_ref_url: string | null | undefined;
       impersonation_prompt: string | null | undefined;
       personal_dtm: "off" | "follow" | "on" | undefined;
+      user_nickname: string | null;
+      personal_deliberate_tool_mode: "off" | "follow" | "on" | undefined;
+      timezone_offset: number | null | undefined;
+      prefix_override: string | null | undefined;
+      suffix_override: string | null | undefined;
+      gender_identity: string | null | undefined;
+      pronouns: string | null | undefined;
+      addressing_style: "masculine" | "feminine" | "neutral" | null | undefined;
     },
     client: SQL = sql,
   ): Promise<void> {
     await client`
       INSERT INTO user_personalization_configs (
-        user_id, shortterm_cache_crossserver_opt_in, physical_appearance_tags,
-        nai_char_ref_url, impersonation_prompt, personal_dtm
+        user_id, user_nickname, shortterm_cache_crossserver_opt_in, physical_appearance_tags,
+        nai_char_ref_url, impersonation_prompt, personal_dtm, personal_deliberate_tool_mode,
+        timezone_offset, prefix_override, suffix_override, gender_identity, pronouns,
+        addressing_style
       ) VALUES (
-        ${userId}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.physical_appearance_tags, "TEXT")},
+        ${userId}, ${data.user_nickname}, ${data.shortterm_cache_crossserver_opt_in}, ${sql.array(data.physical_appearance_tags, "TEXT")},
         ${data.nai_char_ref_url ?? null}, ${data.impersonation_prompt ?? null},
-        ${data.personal_dtm ?? "follow"}
+        ${data.personal_dtm ?? "follow"}, ${data.personal_deliberate_tool_mode ?? "follow"},
+        ${data.timezone_offset ?? null}, ${data.prefix_override ?? null}, ${data.suffix_override ?? null},
+        ${data.gender_identity ?? null}, ${data.pronouns ?? null},
+        ${data.addressing_style ?? null}
       )
       ON CONFLICT (user_id) DO UPDATE SET
+        user_nickname                      = EXCLUDED.user_nickname,
         shortterm_cache_crossserver_opt_in = EXCLUDED.shortterm_cache_crossserver_opt_in,
         physical_appearance_tags                      = EXCLUDED.physical_appearance_tags,
         nai_char_ref_url                   = EXCLUDED.nai_char_ref_url,
         impersonation_prompt               = EXCLUDED.impersonation_prompt,
         personal_dtm                       = EXCLUDED.personal_dtm,
+        personal_deliberate_tool_mode      = EXCLUDED.personal_deliberate_tool_mode,
+        timezone_offset                    = EXCLUDED.timezone_offset,
+        prefix_override                    = EXCLUDED.prefix_override,
+        suffix_override                    = EXCLUDED.suffix_override,
+        gender_identity                    = EXCLUDED.gender_identity,
+        pronouns                           = EXCLUDED.pronouns,
+        addressing_style                   = EXCLUDED.addressing_style,
         updated_at                         = NOW()
     `;
   }
@@ -1053,10 +1148,14 @@ class UserRepository implements IRepository<UserExportShape> {
     );
   }
 
-  private async ensureUserPersonalizationConfigRow(userId: number, client: SQL = sql): Promise<void> {
+  private async ensureUserPersonalizationConfigRow(
+    userId: number,
+    client: SQL = sql,
+    initialNickname: string | null = null,
+  ): Promise<void> {
     await client`
-      INSERT INTO user_personalization_configs (user_id)
-      VALUES (${userId})
+      INSERT INTO user_personalization_configs (user_id, user_nickname)
+      VALUES (${userId}, ${initialNickname})
       ON CONFLICT (user_id) DO NOTHING
     `;
   }
@@ -1074,12 +1173,10 @@ class UserRepository implements IRepository<UserExportShape> {
             WITH inserted_user AS (
               INSERT INTO users (
                 user_disc_id,
-                user_nickname,
                 language_pref,
                 registration_locale
               ) VALUES (
                 ${userDiscId},
-                ${displayName},
                 ${language},
                 ${language}
               )
@@ -1256,6 +1353,9 @@ class UserRepository implements IRepository<UserExportShape> {
     rawValue: unknown,
   ): void {
     switch (field) {
+      case "user_nickname":
+        patch.user_nickname = rawValue as string | null;
+        break;
       case "shortterm_cache_crossserver_opt_in":
         patch.shortterm_cache_crossserver_opt_in = rawValue as boolean;
         break;
@@ -1271,6 +1371,77 @@ class UserRepository implements IRepository<UserExportShape> {
       case "personal_dtm":
         patch.personal_dtm = rawValue as "off" | "follow" | "on";
         break;
+      case "personal_deliberate_tool_mode":
+        patch.personal_deliberate_tool_mode = rawValue as "off" | "follow" | "on";
+        break;
+      case "timezone_offset":
+        patch.timezone_offset = rawValue as number | null;
+        break;
+      case "prefix_override":
+        patch.prefix_override = rawValue as string | null;
+        break;
+      case "suffix_override":
+        patch.suffix_override = rawValue as string | null;
+        break;
+      case "gender_identity":
+        patch.gender_identity = rawValue as string | null;
+        break;
+      case "pronouns":
+        patch.pronouns = rawValue as string | null;
+        break;
+      case "addressing_style":
+        patch.addressing_style = rawValue as "masculine" | "feminine" | "neutral" | null;
+        break;
+    }
+  }
+
+  /**
+   * Erases a user's own record, cascading every personal table.
+   *
+   * `users` is the cascade root for the personal tables (memories, personalization config,
+   * persona naming preferences, spotlights, saved provider configs, custom endpoint connections,
+   * scoped model registrations, conditioning history, stat counters). The four remaining
+   * references are ON DELETE SET NULL, so server memories, reminders, uploaded documents, and
+   * error logs survive with the authorship link severed rather than deleting content a server
+   * owns. The Privacy Policy describes exactly this split.
+   *
+   * Spotlight server ids are read inside the same transaction before the delete because the
+   * cascade destroys the rows that post-commit cache invalidation needs to target.
+   */
+  async nukeUser(userId: number): Promise<PersonalNukeResult | null> {
+    try {
+      return await sql.begin(async (tx: SQL) => {
+        // Read the Discord id before the cascade: reminders key their target by that string, not
+        // by user_id, so it is unreachable once the row is gone.
+        const [user] = await tx<Array<{ user_disc_id: string }>>`
+          SELECT user_disc_id FROM users WHERE user_id = ${userId}
+        `;
+        if (!user) return null;
+
+        const spotlights = await tx<Array<{ server_id: number }>>`
+          SELECT DISTINCT server_id FROM personal_spotlights WHERE user_id = ${userId}
+        `;
+
+        // Reminders are ON DELETE SET NULL, so the cascade alone would leave both halves behind:
+        // one the user authored (their own prose and schedule, firing forever with a null creator
+        // nobody can claim) and one aimed at them (their Discord id and nickname, held by a row
+        // somebody else created). An erasure has to reach both.
+        const reminders = await tx`
+          DELETE FROM reminders
+          WHERE created_by_user_id = ${userId} OR user_discord_id = ${user.user_disc_id}
+        `;
+
+        await tx`DELETE FROM users WHERE user_id = ${userId}`;
+
+        return {
+          userDiscId: user.user_disc_id,
+          affectedServerIds: spotlights.map((row) => row.server_id),
+          remindersDeleted: reminders.count ?? 0,
+        };
+      });
+    } catch (error) {
+      log.error(`[PersonalNuke] Failed to erase user ${userId}`, error);
+      throw error;
     }
   }
 
@@ -1290,6 +1461,13 @@ class UserRepository implements IRepository<UserExportShape> {
     const escaped = values.map((value) => `"${String(value).replace(/(["\\])/g, "\\$1")}"`);
     return `{${escaped.join(",")}}`;
   }
+}
+
+/** Outcome of a successful personal erasure, carrying the keys post-commit invalidation needs. */
+export interface PersonalNukeResult {
+  userDiscId: string;
+  affectedServerIds: number[];
+  remindersDeleted: number;
 }
 
 /** Singleton instance: import this in callers. */

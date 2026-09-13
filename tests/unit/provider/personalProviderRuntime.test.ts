@@ -8,6 +8,7 @@ const fallback = { llm_id: 12, llm_provider: "google", llm_codename: "fallback" 
 const serverFallback = { llm_id: 90, llm_provider: "google", llm_codename: "server-fallback" } as LlmRow;
 const endpoint = {
   custom_endpoint_id: 5,
+  connection_id: 1,
   server_id: null,
   user_id: 4,
   label: "local",
@@ -45,11 +46,13 @@ function makeState(): TomoriState {
 
 function makePersonalRow(
   enabledCapabilities: UserSavedProviderConfigRow["enabled_capabilities"],
+  modelRandomizerEnabled = false,
 ): UserSavedProviderConfigRow {
   return {
     user_id: 4,
     provider: "custom:u4:local",
     enabled_capabilities: enabledCapabilities,
+    model_randomizer_enabled: modelRandomizerEnabled,
     llm_id: 11,
     fallback_model_refs: [
       { type: "custom_endpoint", id: 5 },
@@ -86,5 +89,45 @@ describe("personal provider fallback overlay", () => {
 
     expect(result.tomoriState.fallback_chain).toBe(state.fallback_chain);
     expect(result.tomoriState.fallback_llms).toBe(state.fallback_llms);
+  });
+
+  it("overlays personal model randomizer state when personal text is active", async () => {
+    rows = [makePersonalRow(["text"], true)];
+    const state = { ...makeState(), config: { ...makeState().config, model_randomizer_enabled: false } };
+
+    const { applyPersonalProviderSelectionsToTomoriState } = await import("@/utils/provider/personalProviderRuntime");
+    const result = await applyPersonalProviderSelectionsToTomoriState(state, 4);
+
+    expect(result.tomoriState.config.model_randomizer_enabled).toBe(true);
+  });
+
+  it("overlays Standard and NAI diffusion models independently when on different provider rows", async () => {
+    rows = [
+      {
+        user_id: 4,
+        provider: "openrouter",
+        enabled_capabilities: ["image"],
+        assigned_capabilities: ["image"],
+        diffusion_model_id: 101,
+        nai_diffusion_model_id: null,
+      } as UserSavedProviderConfigRow,
+      {
+        user_id: 4,
+        provider: "novelai",
+        enabled_capabilities: ["image_nai"],
+        assigned_capabilities: ["image_nai"],
+        diffusion_model_id: null,
+        nai_diffusion_model_id: 202,
+      } as UserSavedProviderConfigRow,
+    ];
+    const state = makeState();
+
+    const { applyPersonalProviderSelectionsToTomoriState } = await import("@/utils/provider/personalProviderRuntime");
+    const result = await applyPersonalProviderSelectionsToTomoriState(state, 4);
+
+    expect(result.activeConfigs.image?.provider).toBe("openrouter");
+    expect(result.activeConfigs.image_nai?.provider).toBe("novelai");
+    expect(result.tomoriState.config.diffusion_model_id).toBe(101);
+    expect(result.tomoriState.config.nai_diffusion_model_id).toBe(202);
   });
 });

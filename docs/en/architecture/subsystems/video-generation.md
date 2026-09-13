@@ -7,10 +7,11 @@ This document summarizes the current video generation stack.
 ## Command Surface
 
 - User-facing generation entrypoint: `src/commands/generate/video.ts`
-- Admin model selection: `src/commands/model/video.ts`
+- Admin model selection: `src/utils/discord/interactions/configModelRoutes.ts` (`/config` > Models > Switch Models)
 - Admin quota controls:
-  - `src/commands/server/quota/video-generation.ts`
-  - `src/commands/server/quota/reset.ts`
+  - `src/commands/moderation.ts`
+  - `src/commands/quota/reset/global.ts`
+  - `src/commands/quota/reset/user.ts`
 - Capability/help exposure:
   - `src/commands/help/features.ts`
   - `src/tools/functionCalls/reviewCapabilities.ts`
@@ -137,8 +138,8 @@ Defaults:
 
 Management commands:
 
-- `/server quota video-generation`
-- `/server quota reset`
+- `/moderation` (Quotas page)
+- `/quota reset`
 
 Reset behavior supports both:
 

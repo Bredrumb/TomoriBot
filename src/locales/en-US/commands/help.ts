@@ -1,5 +1,194 @@
 ﻿export default {
   help: {
+    description: `Browse setup, features, providers, memory, behavior, tools, media, and integration guides.`,
+    dashboard: {
+      header_title: `Getting Started with TomoriBot`,
+      header_description: `Learn how to set up TomoriBot, a customizable AI assistant and role-play system.`,
+      categories: {
+        setup: `Setup`,
+        features: `Features`,
+        moderation: `Moderation`,
+        plugins: `Plugins`,
+        memory: `Memory`,
+        behavior: `Behavior`,
+        integrations: `Integrations`,
+      },
+      pages: {
+        setup_step_1: `Step 1: Get an API Key`,
+        setup_step_2: `Step 2: Run the Setup Command`,
+        setup_step_3: `Step 3: Start Chatting`,
+        setup_step_4: `Step 4: Customize TomoriBot (Optional)`,
+        features: `Features`,
+        personal_providers: `Personal Providers`,
+        custom_endpoints: `Custom Endpoints`,
+        speech: `Speech`,
+        transcription: `Transcription`,
+        persistent_memory: `Persistent Memory`,
+        short_term_memory: `Short-Term Memory`,
+        memory_tagging: `Memory Tagging`,
+        customization: `Customization`,
+        personal_spotlight: `Personal Spotlight`,
+        deliberate_trigger_mode: `Deliberate Trigger Mode`,
+        deliberate_tool_mode: `Deliberate Tool Mode`,
+        age_restricted_commands: `Age-Restricted Commands`,
+        matrix: `Matrix`,
+        mcp: `MCP`,
+        sillytavern_presets: `SillyTavern Presets`,
+      },
+      page_reference: `the **{page}** page in \`/help\``,
+      page_select_placeholder: `Choose a page`,
+      guide_select_placeholder: `Choose a guide`,
+      subsection_select_placeholder: `Choose a topic`,
+      provider_select_placeholder: `Choose Provider`,
+      optional_provider_select_placeholder: `Optional Services`,
+      previous_button: `← Previous`,
+      next_button: `Next →`,
+      docs_link_label: `Read the Web Version`,
+      support_link_label: `Get Technical Support`,
+      variants: {
+        overview: `Overview`,
+        chatterbox: `Chatterbox-Turbo`,
+        qwen3tts: `Qwen3-TTS`,
+        irodoritts: `IrodoriTTS`,
+        elevenlabs: `ElevenLabs`,
+        whisperx: `WhisperX`,
+        koboldcpp: `KoboldCPP`,
+      },
+      api_keys: {
+        title: `Provider API Keys`,
+        description: `Choose a provider below to open its API key guide. Closing the guide returns you to this help panel.`,
+      },
+      sections: {
+        getting_started: `Getting Started`,
+        getting_started_description: `Key, triggers, persona, and what to try next`,
+        personal_profile: `Personal Profile`,
+        personal_profile_description: `Your nickname, your memories, your own provider`,
+        custom_endpoints: `Custom Endpoints (Advanced)`,
+        custom_endpoints_description: `Register an endpoint you run or trust`,
+        multiple_personas: `Multiple personas`,
+        multiple_personas_description: `Keep several identities and import character cards`,
+        media_generation: `Media generation`,
+        media_generation_description: `Make images, video, and voice messages`,
+        tons_of_tweakability: `Tons of Tweakability`,
+        tons_of_tweakability_description: `Where behavior, server, and personal settings live`,
+        memory: `Memory`,
+        memory_description: `What I remember, and for how long`,
+        scheduled_tasks: `Scheduled Tasks`,
+        scheduled_tasks_description: `Reminders and tasks I come back for on my own`,
+        server_moderation: `Server Moderation`,
+        server_moderation_description: `Who may use me here, and where`,
+        quotas: `Quotas`,
+        quotas_description: `Cap how much generation this server allows`,
+        age_restricted_commands: `Age-Restricted Commands`,
+        age_restricted_commands_description: `Adult features, and what I do not filter`,
+        user_byok: `User BYOK (Advanced)`,
+        user_byok_description: `Make every member bring their own key`,
+        sillytavern_presets: `SillyTavern Presets`,
+        sillytavern_presets_description: `Build my prompts from an imported preset`,
+        mcp_servers: `MCP Servers`,
+        mcp_servers_description: `Connect external tools I can actually use`,
+        matrix: `Matrix`,
+        matrix_description: `Bridge a Matrix room to a Discord channel`,
+      },
+      subsections: {
+        get_api_key: `Get an API Key`,
+        get_api_key_description: `Where to get one, and how to keep it safe`,
+        change_trigger_behavior: `Change Trigger Behavior`,
+        change_trigger_behavior_description: `When and where I am allowed to answer`,
+        create_first_persona: `Create your First Persona`,
+        create_first_persona_description: `Edit me, generate a new one, or import one`,
+        explore_features: `Explore my Features!`,
+        explore_features_description: `A short tour of what I can do now`,
+        nickname_pronouns: `Your Nickname and Pronouns`,
+        nickname_pronouns_description: `How I address you, in every server`,
+        personal_memories: `Personal Memories`,
+        personal_memories_description: `What I remember about you specifically`,
+        personal_providers: `Personal Providers (Advanced)`,
+        personal_providers_description: `Answer with your own key and model`,
+        text_models: `Text Models`,
+        text_models_description: `Register a chat endpoint and its model`,
+        comfyui: `ComfyUI (for video and image)`,
+        comfyui_description: `Upload a workflow and generate from it`,
+        text_to_speech: `Text-to-Speech (for voice)`,
+        text_to_speech_description: `Give each persona a real voice`,
+        image_generation: `Image Generation`,
+        image_generation_description: `Draw your prompt, or the current scene`,
+        video_generation: `Video Generation`,
+        video_generation_description: `Short clips, with an optional first frame`,
+        speech_generation: `Speech Generation`,
+        speech_generation_description: `Turn text into a voice message`,
+        behavior_tuning: `Behavior Tuning`,
+        behavior_tuning_description: `Model, humanizer, instructions, and tools`,
+        server_wide_settings: `Server-wide Settings`,
+        server_wide_settings_description: `Boundaries that apply to everyone here`,
+        personal_settings: `Personal Settings`,
+        personal_settings_description: `Your preferences, in every server`,
+        long_term_memory: `Long-Term Memory`,
+        long_term_memory_description: `Facts I keep permanently`,
+        short_term_memory: `Short-Term Memory`,
+        short_term_memory_description: `My working note of this conversation`,
+        rewards_punishments: `Rewards and Punishments`,
+        rewards_punishments_description: `Gestures I notice and remember`,
+        memory_tagging: `Memory Tagging (Advanced)`,
+        memory_tagging_description: `Wake a memory only when it is relevant`,
+        blacklisting: `Blacklisting`,
+        blacklisting_description: `Stop one member from triggering me`,
+      },
+    },
+    breadcrumbs: {
+      persona: {
+        general: `Persona > Identity & Personality`,
+        memories: `Persona > Memories`,
+        advanced: `Persona > Advanced`,
+        voice: `Persona > Voice`,
+        sprites: `Persona > Sprites`,
+        triggers: `Persona > Triggers`,
+      },
+      behavior: {
+        general: `Behavior > General Behavior`,
+        trigger: `Behavior > Trigger Behavior`,
+        experimental: `Behavior > Experimental Behavior`,
+        notices: `Behavior > Notice Behavior`,
+        memory: `Behavior > Advanced Memory`,
+      },
+      channels: {
+        destinations: `Channels > Logs & Welcome`,
+        "auto-trigger": `Channels > Auto-Trigger`,
+        rules: `Channels > Channel Rules`,
+        overrides: `Channels > Channel Overrides`,
+      },
+      plugins: {
+        "available-tools": `Plugins > Available Tools`,
+        "mcp-servers": `Plugins > MCP Servers`,
+        "sillytavern-presets": `Plugins > SillyTavern Presets`,
+      },
+      models: {
+        switch: `Models > Switch Models`,
+        voices: `Models > TTS Parameters & Voices`,
+        image: `Models > Image Generation Defaults`,
+        parameters: `Models > Text Samplers & Parameters`,
+      },
+      personal: {
+        profile: {
+          general: `Profile > General Preferences`,
+        },
+        privacy: {
+          controls: `Privacy > Privacy Controls`,
+        },
+        models: {
+          switch: `Models > Switch Models`,
+        },
+        advanced: {
+          spotlight: `Advanced > Personal Spotlight`,
+        },
+      },
+      moderation: {
+        "member-access": `Member Access`,
+        "user-blacklist": `User Blacklist`,
+        whitelist: `Whitelist`,
+        quotas: `Quotas`,
+      },
+    },
     "personal-provider": {
       description: `Learn how personal providers work.`,
       title: `Personal Providers`,
@@ -7,12 +196,12 @@
       setup_field: `Setup`,
       setup_value: `1. {add_command} saves a provider and immediately enables your personal **Text** model.
 2. {model_command} is optional. Use it only if you want a different text model than the default from step 1.
-3. {toggle_command} turns each capability's personal override on or off.`,
+3. Return to {toggle_command} to update credentials, endpoints, or model registrations.`,
       behavior_field: `Behavior`,
-      behavior_value: `An enabled capability overrides the server default for your requests only, across every server where you use TomoriBot. Selecting a model already enables that capability, so step 3 is mainly how you turn one back off. Thought logs attribute those turns, and you can tune them with {samplers_command} and {fallback_command}.`,
+      behavior_value: `An enabled capability overrides the server default for your requests only, across every server where you use TomoriBot. Selecting a model enables that capability. Thought logs attribute those turns, and you can tune them with {samplers_command} and {fallback_command}.`,
       byok_field: `BYOK Servers`,
       byok_value: `Servers can require member-provided providers with {byok_command}. If that mode is enabled, user-triggered messages need your personal provider before I can answer.`,
-      footer: `Server defaults live in /provider and /model. Personal overrides affect only your requests, in every server you use TomoriBot in.`,
+      footer: `Server credentials live in /providers and routing lives in /model. Personal overrides affect only your requests, in every server you use TomoriBot in.`,
     },
     custom_models: {
       description: `Learn how custom endpoints work.`,
@@ -22,16 +211,16 @@
       title: `Custom Endpoints`,
       description_body: `Custom endpoints let you register self-hosted or proxy-backed endpoints such as Ollama, LM Studio, LiteLLM, or ComfyUI as labeled provider bundles.`,
       server_field: `Server Scope`,
-      server_value: `Use {add_command} to register a server-wide endpoint and {remove_command} to remove selected capabilities from that label.`,
+      server_value: `Open {add_command}, choose **Add New Custom Endpoint**, and select the saved entry when you need to edit or remove it.`,
       personal_field: `Personal Scope`,
-      personal_value: `Use {add_command} to register your own labeled endpoint and {remove_command} to remove selected capabilities from it.`,
+      personal_value: `Open {add_command}, choose **Add New Custom Endpoint**, and select the saved entry when you need to edit or remove it.`,
       selection_field: `Selecting Them`,
-      selection_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}; if the label has several models for that capability, a picker lets you choose one. Vision-capable text endpoints also appear in \`/model vision\`. Re-run the add command with the same label and capability but a different model name to register an additional model on that connection (its endpoint URL and API style are inherited).`,
-      selection_summary_value: `After registration, choose the label from {text_command}, {image_command}, or {video_command}. If that label has several models for the same capability, TomoriBot will ask which one to use.`,
+      selection_value: `After saving a connection, select it and use its model dropdown to register the exact model code. Adding a model activates it. Later, choose the label on {text_command} for the text, image, or video slot; if the label has several models for that capability, a picker lets you choose one. Vision-capable text endpoints also appear there.`,
+      selection_summary_value: `After registration, choose the label on {text_command} for the text, image, or video slot. If that label has several models for the same capability, TomoriBot will ask which one to use.`,
       labels_field: `Labels And Removal`,
-      labels_value: `A label groups every capability under one custom provider bundle. {server_remove_command} and {personal_remove_command} remove only the capabilities you uncheck. {server_provider_remove_command} and {personal_provider_remove_command} delete the whole labeled bundle.`,
+      labels_value: `A label groups every capability under one custom provider bundle. Select the entry in {server_remove_command} or {personal_remove_command}, then choose **Remove** to review the impact and delete the whole labeled bundle.`,
       comfyui_page1_title: `ComfyUI Setup`,
-      comfyui_page1_description: `This guide assumes ComfyUI is already installed and running. Page 1 covers the minimum setup to reach a working \`/provider custom-endpoint add\` or \`/personal custom-endpoint add\` registration. You may also use the ready-to-use [ComfyUI workflows](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) from the GitHub repository instead.`,
+      comfyui_page1_description: `This guide assumes ComfyUI is already installed and running. Page 1 covers the minimum setup to reach a working \`/providers\` or \`/personal providers\` registration. You may also use the ready-to-use [ComfyUI workflows](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) from the GitHub repository instead.`,
       comfyui_page1_workflow_field: `1. Build The Workflow`,
       comfyui_page1_workflow_value: `Create and test the workflow in ComfyUI first. For images, the MVP should end in \`SaveImage\` so TomoriBot can download the finished file. A minimal image graph is usually: \`CheckpointLoaderSimple\` -> positive/negative \`CLIPTextEncode\` -> \`EmptyLatentImage\` -> \`KSampler\` -> \`VAEDecode\` -> \`SaveImage\`.`,
       comfyui_page1_placeholders_field: `2. Add Placeholders`,
@@ -39,7 +228,7 @@
       comfyui_page1_export_field: `3. Export And Edit The JSON`,
       comfyui_page1_export_value: `When the workflow works in ComfyUI, use Save (API Format). If you need numeric or boolean placeholders, edit the exported JSON before uploading and use them as the full value, for example \`"width": "{TOMORI_WIDTH}"\`, \`"height": "{TOMORI_HEIGHT}"\`, or \`"duration": "{TOMORI_VIDEO_DURATION}"\`.`,
       comfyui_page1_register_field: `4. Register And Activate`,
-      comfyui_page1_register_value: `Run {server_add_command} for a server-wide endpoint or {personal_add_command} for your own. Use your ComfyUI server URL for \`endpoint_url\` (for example \`http://127.0.0.1:8188\`), pick \`ComfyUI\` as \`api_style\`, choose \`Image\` or \`Video\` as the capability, then upload the exported JSON in the **Workflow JSON** file field that appears in the follow-up modal. Select the registered label from {image_command} or {video_command} to activate it.`,
+      comfyui_page1_register_value: `Open {server_add_command} for a server-wide endpoint or {personal_add_command} for your own. Choose **Add New Custom Endpoint**, use your ComfyUI server URL (for example \`http://127.0.0.1:8188\`), and choose \`ComfyUI\` for API Compatibility. Then select the saved endpoint, choose **+ Add new Image Model** or **+ Add new Video Model** from its model dropdown, enter the checkpoint code, and upload the exported JSON. Adding the model activates it.`,
       comfyui_page2_title: `ComfyUI Placeholders`,
       comfyui_page2_description: `Page 2 lists the main placeholders TomoriBot injects into ComfyUI workflows.`,
       comfyui_page2_core_field: `Core Values`,
@@ -66,7 +255,7 @@
       comfyui_page4_metadata_value: `TomoriBot also sends resolved values in \`extra_pnginfo\`, including prompt, model, mode, aspect ratio, width, height, size, reference-image count, and video-specific duration/resolution/audio fields. That is useful if you prefer a custom ComfyUI node that reads execution metadata instead of JSON placeholders.`,
       comfyui_summary_description: `ComfyUI custom endpoints let TomoriBot queue your saved image or video workflow and return the first saved output. The full setup guide covers workflow export, placeholders, reference images, polling, and output rules.`,
       comfyui_summary_register_field: `Register And Activate`,
-      comfyui_summary_register_value: `Register the endpoint with {server_add_command} or {personal_add_command}, then select its label from {image_command} or {video_command}. Use the docs button for the full ComfyUI workflow setup.`,
+      comfyui_summary_register_value: `Register the connection and its model with {server_add_command} or {personal_add_command}, then select its label on {image_command} for the image or video slot. Use the docs button for the full ComfyUI workflow setup.`,
     },
     speech: {
       description: `Learn how speech generation works.`,
@@ -74,24 +263,20 @@
       docs_title: `Full Docs`,
       docs_description: `See the [TTS docs](https://docs.tomoribot.app/en/features/capabilities/media-generation/tts-and-stt/#text-to-speech) and [local TTS setup guides](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/) for setup commands and wrapper notes.`,
       summary_title: `Using Speech`,
-      summary_description: `For local voice cloning, register a speech endpoint with {custom_endpoint_add}, pick it with {model_speech}, upload a sample with {voice_add}, then assign it with {voice_assign}. For ElevenLabs, run {elevenlabs}. VoiceDesign setups use {voice_design_set}.`,
+      summary_description: `For local voice cloning, register a speech connection and model with {custom_endpoint_add}, pick it with {model_speech}, upload a sample with {voice_add}, then assign it with {voice_assign}. For ElevenLabs, choose **Add New Provider** in {elevenlabs}. VoiceDesign setups use {voice_design_set}.`,
       overview: {
         title: `Speech Setup Overview`,
         description: `Speech endpoints let TomoriBot send native Discord voice messages using either a local clone server or ElevenLabs. For local voice cloning, any audio format is accepted (auto-converted to mono WAV). It is recommended to use 10-20 second clips with no background music.`,
         steps_title: `Setup Flow`,
         steps_description: `Local: start a wrapper server, register it with {custom_endpoint_add}, select it with {model_speech}, upload a sample with {voice_add}, then assign it with {voice_assign}.
 
-ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
+ElevenLabs: choose **Add New Provider** and **ElevenLabs** in {elevenlabs}, then use {voice_assign} later for more personas.
 
-**Per-engine setup guides:**
-• Chatterbox-Turbo → \`/help speech engine:Chatterbox-Turbo\`
-• Qwen3-TTS → \`/help speech engine:Qwen3-TTS\`
-• IrodoriTTS → \`/help speech engine:IrodoriTTS\`
-• ElevenLabs → \`/help speech engine:ElevenLabs\``,
+**Per-engine setup guides:** See the full TTS documentation linked at the bottom of the Speech page.`,
       },
       chatterbox: {
         title: `Chatterbox-Turbo Speech`,
-        description: `Chatterbox-Turbo is a fast, lightweight English-only voice clone server. It supports bracket-style delivery tags such as \`[excited]\` or \`[whisper]\` to shape delivery: register it with **Script Markup** set to **Bracket Tags** so TomoriBot passes those tags through intact.`,
+        description: `Chatterbox-Turbo is a fast, lightweight English-only voice clone server. An optional Nano model is even smaller. Both support event tags such as \`[laugh]\` and \`[sigh]\`: register with **Script Markup** set to **Bracket Tags** so TomoriBot preserves supported tags.`,
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
@@ -100,7 +285,7 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
 3. Install numpy first (build dep): \`pip install numpy\`, then install \`requirements.txt\`.
 4. *(GPU only)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
 5. Start \`server.py\`.
-6. Register with {custom_endpoint_add}: select \`Speech\` for capability, \`TTS-Clone\` for API Style, and \`Bracket Tags\` for Script Markup.
+6. Register with {custom_endpoint_add}: choose \`TTS-Clone\` for API Compatibility. Then select the saved endpoint, add a new speech model, and choose \`Bracket Tags\` for Script Markup.
 7. Select with {model_speech}, then run {voice_add} and {voice_assign}.`,
       },
       qwen3tts: {
@@ -116,14 +301,14 @@ ElevenLabs: run {elevenlabs}, then use {voice_assign} later for more personas.
 2. Navigate to the downloaded \`qwen3tts\` folder, create and activate a Python \`.venv\`.
 3. Install \`requirements.txt\`.
 4. *(GPU)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
-5. *(Optional)* Install flash-attn for speed — requires step 4, \`pip install wheel\`, then \`pip install flash-attn --no-build-isolation\` (takes 20-40m on Win). Skip initially.
+5. *(Optional)* Install flash-attn for speed: requires step 4, \`pip install wheel\`, then \`pip install flash-attn --no-build-isolation\` (takes 20-40m on Win). Skip initially.
 6. Start \`server.py\` for voice cloning, \`server.py --mode voice-design\` for Qwen3-TTS VoiceDesign only, or \`server.py --mode auto\` to detect clone vs VoiceDesign from each request on one URL.
-7. Register with {custom_endpoint_add}: select \`Speech\` capability, \`TTS-Clone\` API Style, and \`Plain\` Script Markup. For VoiceDesign, choose \`VoiceDesign\` as the voice source mode; TomoriBot treats it as instruct-capable automatically. In auto mode, you can register clone and VoiceDesign endpoints that point to the same server URL.
+7. Register with {custom_endpoint_add}: choose \`TTS-Clone\` for API Compatibility. Then select the saved endpoint, add a new speech model, and choose \`Plain\` Script Markup. For VoiceDesign, choose \`VoiceDesign\` as the voice source mode; TomoriBot treats it as instruct-capable automatically. In auto mode, you can register clone and VoiceDesign endpoints that point to the same server URL.
 8. Select with {model_speech}. For clone mode, run {voice_add} and {voice_assign}; for VoiceDesign, run {voice_design_set} for each persona.`,
       },
       irodoritts: {
         title: `IrodoriTTS Speech`,
-        description: `IrodoriTTS is a Japanese-specialized voice clone server. It reads emoji characters embedded in the speech text as emotion cues (e.g. 😊 for happy, 😢 for sad). Register it with **Script Markup** set to **Emoji Markers** — TomoriBot strips bracket tags before sending, leaving only the emoji markers the model expects.`,
+        description: `IrodoriTTS is a Japanese-specialized voice clone server. It reads emoji characters embedded in the speech text as emotion cues (e.g. 😊 for happy, 😢 for sad). Register it with **Script Markup** set to **Emoji Markers**: TomoriBot strips bracket tags before sending, leaving only the emoji markers the model expects.`,
         steps_title: `Setup Steps`,
         steps_description: `**Prerequisites**: Python 3.10+, CUDA 12.x + drivers (optional, for GPU)
 
@@ -135,14 +320,14 @@ Windows: \`install-irodori.ps1\`
 Linux/macOS: \`bash install-irodori.sh\`
 5. *(GPU only)* Reinstall PyTorch: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
 6. Start \`server.py\`.
-7. Register with {custom_endpoint_add}: select \`Speech\` for capability, \`TTS-Clone\` for API Style, and \`Emoji Markers\` for Script Markup.
+7. Register with {custom_endpoint_add}: choose \`TTS-Clone\` for API Compatibility. Then select the saved endpoint, add a new speech model, and choose \`Emoji Markers\` for Script Markup.
 8. Select with {model_speech}, then run {voice_add} and {voice_assign}.`,
       },
       elevenlabs: {
         title: `ElevenLabs Speech`,
-        description: `ElevenLabs uses the same speech endpoint system, but setup is handled by a shortcut command.`,
+        description: `ElevenLabs uses the same endpoint system and is available as a preset provider entry.`,
         steps_title: `Setup Steps`,
-        steps_description: `Run {elevenlabs} with your ElevenLabs API key. It registers speech and transcription endpoints and selects them. Then use {voice_assign} to assign a voice to each persona.`,
+        steps_description: `Open {elevenlabs}, choose **Add New Provider**, select **ElevenLabs**, and submit your API key. It registers speech and transcription endpoints and selects them. Then use {voice_assign} to assign a voice to each persona.`,
       },
     },
     transcription: {
@@ -151,17 +336,14 @@ Linux/macOS: \`bash install-irodori.sh\`
       docs_title: `Full Docs`,
       docs_description: `See the [STT docs](https://docs.tomoribot.app/en/features/capabilities/media-generation/tts-and-stt/#speech-to-text) and [local STT setup guides](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/).`,
       summary_title: `Using Transcription`,
-      summary_description: `Register a transcription endpoint with {custom_endpoint_add}, choose it with {model_transcription}, and use {speech_transcripts} only if you want transcripts visibly posted. ElevenLabs users can run {elevenlabs}.`,
+      summary_description: `Register a transcription connection and model with {custom_endpoint_add}, choose it with {model_transcription}, and use {speech_transcripts} only if you want transcripts visibly posted. ElevenLabs users can choose **Add New Provider** in {elevenlabs}.`,
       overview: {
         title: `Transcription Setup Overview`,
         description: `Transcription endpoints turn user audio attachments into text for background conversation context. Visible transcript posting is controlled separately by {speech_transcripts}.`,
         steps_title: `Recommended Path`,
-        steps_description: `Start with WhisperX: follow the local STT setup guide, register it with {custom_endpoint_add}, then select it with {model_transcription}. ElevenLabs users can run {elevenlabs}.
+        steps_description: `Start with WhisperX: follow the local STT setup guide, register its connection and model with {custom_endpoint_add}, then select it with {model_transcription}. ElevenLabs users can choose **Add New Provider** in {elevenlabs}.
 
-**Per-engine setup guides:**
-• WhisperX → \`/help transcription engine:WhisperX\`
-• KoboldCPP → \`/help transcription engine:KoboldCPP\`
-• ElevenLabs → \`/help transcription engine:ElevenLabs\``,
+**Per-engine setup guides:** See the full STT documentation linked at the bottom of the Transcription page.`,
       },
       whisperx: {
         title: `WhisperX Transcription`,
@@ -178,18 +360,18 @@ Linux/macOS: \`bash install-irodori.sh\`
 4. *(GPU only)* Reinstall PyTorch with CUDA support:
 \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
 5. Start \`whisperx_server.py\`.
-6. Register with {custom_endpoint_add}: select \`Transcription\` for capability, \`OpenAI Compatible\` for API Style, and set the model name matching your chosen size.
+6. Register with {custom_endpoint_add}: choose \`OpenAI Compatible Transcription\` for API Compatibility. Then select the saved endpoint and add a new transcription model whose name matches your chosen size.
 7. Select with {model_transcription}.`,
         models_title: `Available Models`,
         models_description: `Set \`WHISPERX_MODEL\` before starting, use the same name when registering.
 GPU runs **float16** · CPU runs **int8** (half the bytes, so CPU RAM < GPU VRAM)
 
-\`tiny\` — ~0.5 GB VRAM / ~200 MB RAM
-\`base\` — ~0.5 GB VRAM / ~300 MB RAM
-\`small\` — ~1 GB VRAM / ~600 MB RAM
-\`medium\` — ~2 GB VRAM / ~1.5 GB RAM
-\`large-v3\` — ~4–5 GB VRAM / ~2.5 GB RAM *(default, highest accuracy)*
-\`large-v3-turbo\` — ~2–3 GB VRAM / ~1.5 GB RAM *(recommended for limited VRAM)*
+\`tiny\`: ~0.5 GB VRAM / ~200 MB RAM
+\`base\`: ~0.5 GB VRAM / ~300 MB RAM
+\`small\`: ~1 GB VRAM / ~600 MB RAM
+\`medium\`: ~2 GB VRAM / ~1.5 GB RAM
+\`large-v3\`: ~4-5 GB VRAM / ~2.5 GB RAM *(default, highest accuracy)*
+\`large-v3-turbo\`: ~2-3 GB VRAM / ~1.5 GB RAM *(recommended for limited VRAM)*
 
 Transcription supports ~100 languages (auto-detected).`,
       },
@@ -201,9 +383,9 @@ Transcription supports ~100 languages (auto-detected).`,
       },
       elevenlabs: {
         title: `ElevenLabs Transcription`,
-        description: `ElevenLabs transcription is registered automatically by the speech shortcut.`,
+        description: `ElevenLabs transcription is registered automatically by its preset provider flow.`,
         steps_title: `Setup Steps`,
-        steps_description: `Run {elevenlabs}. It registers both speech and transcription endpoints and selects them. Use {speech_transcripts} only if you want transcripts visibly posted in chat.`,
+        steps_description: `Choose **Add New Provider** and **ElevenLabs** in {elevenlabs}. It registers both speech and transcription endpoints and selects them. Use {speech_transcripts} only if you want transcripts visibly posted in chat.`,
       },
     },
     "custom-endpoint": {
@@ -227,64 +409,64 @@ Transcription supports ~100 languages (auto-detected).`,
 - I can see content within shared embeds (like tweets, articles, etc.)`,
       search_title: `Search & Information`,
       search_description: `- I can search the web for current information
-- I can also do image, video, and news search (via \`/optional-key brave set\`)
+- I can also do image, video, and news search (via \`/providers\`)
 - I can fetch and read content from URLs`,
       personality_title: `Personality & Customization`,
-      personality_description: `- I can change my name and avatar using \`/config rename\` and \`/persona avatar\`
+      personality_description: `- I can change my name and avatar on \`/config\` > Persona > General
 - I can switch between different personas using \`/persona\` (you can also share and save personas using \`/persona export\`!)
 - Multiple characters can coexist as alter personas, each with their own triggers and webhook avatar
-- My behavior and tone can be tweaked with \`/persona attribute add\`, \`/persona sample-dialogue add\`, and \`/persona prompt set\`
-- A custom system prompt can be set with \`/config system-prompt\` to further shape my behavior
-- Learn more with \`/help customization\``,
+- My behavior and tone can be tweaked on \`/config\` > Persona > General and \`/config\` > Persona > Advanced
+- A custom system prompt can be set with \`/config\` > Behavior > General to further shape my behavior
+- Learn more on the **Customization** page in \`/help\``,
       memory_title: `Memory & Personalization`,
       memory_description: `- I can remember personal facts about you and server-wide information, persisting across conversations
 - Personal memories persist across servers (try talking to me in another server!)
-- I also keep [STM (short-term memory)](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal stm\`)
-- Change what I call you using \`/personal nickname\`
-- Use \`/memory\` and \`/persona\` commands to manually add or remove memories and persona data
-- I can use server emojis and stickers more accurately after registration with \`/server expressions initialize\`
-- Full invisibility is available via \`/personal privacy\` if you want to be completely unseen by me
-- Learn more with \`/help memory\``,
+- I also keep [STM (short-term memory)](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm) of recent conversations for channel and server awareness (opt into cross-server sharing with \`/personal config\`)
+- Change what I call you using \`/personal config\`
+- Use \`/memories\` and \`/persona\` commands to manually add or remove memories and persona data
+- I can use server emojis and stickers more accurately after registration with \`/expressions initialize\`
+- Full invisibility is available via \`/personal config\` if you want to be completely unseen by me
+- Learn more on the **Persistent Memory** page in \`/help\``,
       time_title: `Time Awareness`,
-      time_description: `- I know what time it currently is in the server (via \`/server timezone\`)
+      time_description: `- I know what time it currently is in the server (via \`/config\` > Behavior > General)
 - I can set up reminders for you (try asking me to remind you about something!)
 - Recurrent reminders and tasks are supported and are persona-specific, just tell me to do something`,
       alter_title: `Alter Personas`,
       alter_description: `- Multiple characters can coexist in one server via alter personas
 - Each alter has its own personality and is triggered by specific keywords
 - Alter personas use webhooks for distinct avatars
-- Multiple alters can respond to a single message (up to the \`/config trigger-match-limit\` limit)
+- Multiple alters can respond to a single message (up to the \`/config\` > Behavior > Trigger limit)
 - Replying to a webhook message continues the conversation as that persona
 - Manage alters with \`/persona import\` (alter option) and \`/persona remove\``,
       expressions_title: `Expressions & Reactions`,
       expressions_description: `- I can use your server's custom emojis naturally in conversation (case-insensitive \`:name:\` syntax)
 - I can send stickers as part of my replies
 - I can react to messages with relevant emojis
-- Register emojis and stickers with \`/server expressions initialize\` for higher accuracy`,
+- Register emojis and stickers with \`/expressions initialize\` for higher accuracy`,
       documents_title: `Document Knowledge Base`,
-      documents_description: `- Upload text, PDF, or Markdown files as server knowledge using \`/memory document add\`
-- Extract channel history into searchable knowledge with \`/memory history import\`
+      documents_description: `- Upload text, PDF, or Markdown files as server knowledge using \`/memories\`
+- Extract channel history into searchable knowledge with \`/learn history\`
 - I retrieve and reference relevant document content when answering questions
 - I can also read file attachments shared directly in chat (PDF, source code, markdown, JSON, YAML, and more): just ask me to read it!
-- Requires an embedding model (configure with \`/model embedding\`)
-- Remove uploaded or history-extracted documents with \`/memory document remove\` and \`/memory history remove\``,
+- Requires an embedding model (configure with \`/config\` > Models > Switch Models)
+- Remove uploaded or history-extracted documents with \`/memories\``,
       impersonation_title: `Impersonation & Tools`,
-      impersonation_description: `- Use \`/bot impersonate\` to send messages as yourself, a persona, or inject system messages
-- Set a reusable user-impersonation prompt with \`/personal impersonate prompt\`
-- \`/tools compact\` can summarize or roleplay-compress conversation history
-- \`/bot respond\` to trigger prefilled or guided messages from the bot`,
+      impersonation_description: `- Use \`/impersonate\` to send messages as yourself, a persona, or inject system messages
+- Set a reusable user-impersonation prompt with \`/personal config\`
+- \`/compact\` can summarize or roleplay-compress conversation history
+- \`/respond\` to trigger prefilled or guided messages from the bot`,
       imagegen_title: `Image Generation`,
       imagegen_description: `- I can generate images from text prompts or by editing reference images
 - Supports Text2Image and Image2Image with customizable aspect ratios
 - Use \`/generate image\` or just ask me to generate an image
 - Reference images can come from message attachments, stickers, emojis, or user avatars
- - Available on Google, Vertex AI, Vertex AI Express, OpenRouter, Z.ai, and NVIDIA NIM providers (configure with \`/model image\`)`,
+ - Available on Google, Vertex AI, Vertex AI Express, OpenRouter, Z.ai, and NVIDIA NIM providers (configure with \`/config\` > Models > Switch Models)`,
       videogen_title: `Video Generation`,
       videogen_description: `- I can generate short videos from text prompts or by animating reference images
 - Supports Text2Video and Image2Video with customizable aspect ratios
 - Use \`/generate video\` or just ask me to generate a video
 - Reference images can come from message attachments or user avatars
-- Available on Google, OpenRouter, and Z.ai providers (configure with \`/model video\`)`,
+- Available on Google, OpenRouter, and Z.ai providers (configure with \`/config\` > Models > Switch Models)`,
       footer: `Not all features are available for all AI providers. Recommended: Google Gemini. You can also just ask me what I can do!`,
     },
     setup: {
@@ -292,27 +474,23 @@ Transcription supports ~100 languages (auto-detected).`,
       title: `Getting Started with TomoriBot`,
       embed_description: `Here's how to set up TomoriBot in your server (or DMs!):`,
       step1_title: `Step 1: Get an API Key`,
-      step1_description: `TomoriBot supports multiple AI providers. You'll need an API key from one of them.
-- Use {helpApikey} to learn how to get one
-  - **Google Gemini** *(recommended)*: general-purpose, free usage, runs all features
-  - **DeepSeek** *(recommended)*: a very cheap and uncensored alternative
-  - **OpenRouter**: paid, reliable access to many AI models in one place
-  - **NovelAI**: uncensored role-playing, storytelling, and image generation
-- Do **NOT** share this API key with anyone else
-- Custom endpoints can add a Bearer auth token after setup via {configApiKeySet}`,
+      step1_description: `TomoriBot supports multiple AI providers. You need an API key from one of them before she can start working. An API Key is a private passkey that lets TomoriBot use the AI models of your chosen provider.
+
+For first-time setup, *Google Gemini* is recommended because it has a generous free tier, but if you already have experience with systems similar to TomoriBot, feel free to use any provider you already use. Choose a provider below to see how to get its API key.`,
+      provider_picker_footer: `After safely copying your API key, proceed to the next step. **Do not share your API key with anyone else.**`,
       step2_title: `Step 2: Run the Setup Command`,
       step2_description: `- Use {configSetup} to securely add your API key and initialize TomoriBot
-- (Recommended) Run {serverInitializeExpressions} so I can properly use your server's emojis/stickers
+- (Recommended) Run {expressionsInitialize} so I can properly use your server's emojis/stickers
 	- Your API key is encrypted and stored safely
 	- Each server has its own configuration`,
-      step3_title: `Step 3: Start Chatting!`,
+      step3_title: `Step 3: Start Chatting`,
       step3_description: `- Just mention me or reply to my messages to chat
-- Change how I get triggered using {serverTrigger}
+- Change how I get triggered using {personaTrigger}
 - I'll remember our conversations with my memory system (which you can disable using {configPermissions}!)
 - Set up auto-trigger with {serverAutotrigger} to chat without mentioning me`,
-      step4_title: `Optional: Customize Me`,
+      step4_title: `Step 4: Customize TomoriBot (Optional)`,
       step4_description: `- Use {persona} commands to completely change my personality (including alter personas!)
-- Configure my settings with {server}, {personal}, {memory}, and {config} commands
+- Configure my settings with {personal}, {memory}, and {config} commands
 - Use {memory} for memories/documents and {persona} for behavior shaping
 - Explore advanced features like document uploads, API key rotation, and uncensored mode`,
       need_help_title: `Need Help?`,
@@ -329,12 +507,12 @@ Transcription supports ~100 languages (auto-detected).`,
       setup_title: `Setup`,
       setup_description: `1. Invite {botUserId} to an unencrypted Matrix room.
 2. Copy that room's Internal Room ID.
-3. Run {serverMatrixLink} in the Discord channel you want to bridge and paste the room ID there.`,
+3. Run {matrixLink} in the Discord channel you want to bridge and paste the room ID there.`,
       room_id_title: `Finding the Room ID`,
       room_id_description: `In most Matrix clients, open Room Settings -> Advanced -> Internal Room ID.
 The ID looks like \`!abc:matrix.org\`.
 
-After the bot accepts an invite, it now posts a short reminder in the Matrix room, but you still need to finish the link from Discord with {serverMatrixLink}.`,
+After the bot accepts an invite, it now posts a short reminder in the Matrix room, but you still need to finish the link from Discord with {matrixLink}.`,
       usage_title: `Using It From Matrix`,
       usage_description: `- Talk in Matrix normally after the room is linked
 - Matrix messages relay into the linked Discord channel as webhook messages
@@ -349,7 +527,7 @@ After the bot accepts an invite, it now posts a short reminder in the Matrix roo
 - Embeds relay as plain text
 - Personal memories for Matrix users fall back to attributed server memories`,
       troubleshooting_title: `Important Notes`,
-      troubleshooting_description: `- If the bot does not auto-join, invite {botUserId} manually and rerun {serverMatrixLink} if needed
+      troubleshooting_description: `- If the bot does not auto-join, invite {botUserId} manually and rerun {matrixLink} if needed
 - Matrix encryption cannot be disabled later, so encrypted rooms must be replaced with a fresh unencrypted room
 - If a limitation is not listed above, assume it should work and report bugs in {supportServer}`,
     },
@@ -397,14 +575,14 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
     "st-preset": {
       description: `Learn how SillyTavern presets behave here`,
       embed1_title: `SillyTavern Presets`,
-      embed1_description: `Use {stPresetImport} to load a Prompt Manager preset, {stPresetToggle} to inspect which imported nodes are enabled, and {stPresetRemove} to go back to the normal layout.`,
+      embed1_description: `Use {configPlugins} to load Prompt Manager presets, inspect enabled nodes, and switch or disable active presets.`,
       embed1_controls_title: `What A Preset Controls`,
       embed1_controls_description: `- Prompt order and marker placement
 - Custom prompt nodes
 - Post-history / depth injection nodes
 - Which imported nodes start enabled or disabled`,
       embed1_still_sent_title: `What It Does Not Fully Replace`,
-      embed1_still_sent_description: `- The current system/persona blocks still exist: {configSystemPromptSet}, {personaPromptSet}, {personaAttributeAdd}, and {personaSampleDialogueAdd}
+      embed1_still_sent_description: `- The current system/persona blocks still exist: {configSystemPromptSet}, {personaPromptSet}, and the attributes and sample dialogues on {personaAttributeAdd}
 - Live chat history and retrieved document context still exist too
 - Automatic Tomori-only context still exists too: server memory, emoji/sticker context, users-in-conversation, STM, conditioning, and similar blocks`,
       embed1_mapping_title: `How Native Blocks Usually Map`,
@@ -418,17 +596,17 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
       embed1_system_prompt_description: `- While a preset is active, the built-in fallback system prompt is removed
 - If you set your own system prompt with {configSystemPromptSet}, it is still sent
 - In ST terms, the preset owns the layout, not every source of prompt text`,
-      embed1_footer: `Use /help st-preset again anytime after importing a preset`,
+      embed1_footer: `Return to the SillyTavern Presets page in /help anytime after importing a preset`,
       embed2_title: `Limits And Compatibility (Page 1)`,
       embed2_description: `These are the main reasons a preset author thinks something was ignored or moved.
-- Imported does not always mean sent: nodes disabled in \`prompt_order\` stay off until you enable them with {stPresetToggle}
+- Imported does not always mean sent: nodes disabled in \`prompt_order\` stay off until you enable them with {stPresets}
 - Comment-only nodes and nodes that become empty after \`{{trim}}\` are never sent
 - If enabled nodes still contain unsupported preset macros after import, the import summary warns you; those tags may still be sent literally or behave differently here
 - Unknown markers are skipped
 - Order is literal: if you place \`chatHistory\` before \`dialogueExamples\`, live chat comes first
 - I use the \`prompt_order\` in the .json with \`character_id: 100001\`, and falls back to \`100000\` only if \`100001\` is missing
 - If sample chats end up last, the bot adds a short separator so strict providers do not continue the example`,
-      embed2_footer: `If something looks missing, compare the imported node list in {stPresetToggle} against your preset JSON`,
+      embed2_footer: `If something looks missing, compare the imported node list in {stPresets} against your preset JSON`,
       embed3_title: `Limits And Compatibility (Page 2)`,
       embed3_description: `- Post-history / depth injections are merged into existing chat history entries, not inserted as standalone messages
 - Multiple nodes at the same depth are batched together
@@ -444,18 +622,29 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
 - \`worldInfo\` markers use retrieved document context instead of ST lorebooks
 - Some automatic server/context blocks may still be inserted even if your preset does not place explicit ST markers for them
 - Provider-specific behavior still applies: assistant prefill may work on some providers and be ignored on others`,
-      embed3_footer: `Use {stPresetRemove} to disable preset mode instantly`,
+      embed3_footer: `Use {stPresets} to disable preset mode instantly`,
     },
     "api-key": {
       description: `Learn how to set up API keys for AI providers`,
       provider_description: `Choose your AI provider`,
       provider_choice_brave: `Brave Search`,
-      provider_choice_google: `Google Gemini`,
+      provider_choice_google: `Google Gemini (Recommended, Free)`,
       provider_choice_deepseek: `DeepSeek`,
       provider_choice_custom: `Custom Endpoint`,
-      provider_choice_nvidia: `NVIDIA NIM`,
+      provider_choice_nvidia: `NVIDIA NIM (Free)`,
       provider_choice_novelai: `NovelAI`,
-      provider_choice_openrouter: `OpenRouter`,
+      provider_choice_openrouter: `OpenRouter (Recommended)`,
+      provider_description_google: `General-purpose and has generous free usage`,
+      provider_description_openrouter: `Paid but reliable and flexible; can generate images, videos, and voice`,
+      provider_description_deepseek: `Cheaper paid alternative that is fairly uncensored`,
+      provider_description_novelai: `For uncensored role-playing, storytelling, and image generation`,
+      provider_description_nvidia: `Hosted text, embedding, and image models`,
+      provider_description_zai: `GLM text and image models with coding-use policy limits`,
+      provider_description_vertexexpress: `Gemini through Google Cloud with API key authentication`,
+      provider_description_vertex: `Enterprise Gemini through Google Cloud credentials`,
+      provider_description_custom: `Self-hosted or proxy endpoint; authentication may be optional`,
+      provider_description_brave: `Optional web, image, video, and news search`,
+      provider_description_elevenlabs: `Speech and transcription API, not a text model`,
       provider_choice_zai: `Z.ai`,
       provider_choice_vertex: `Google Vertex AI`,
       provider_choice_vertexexpress: `Google Vertex AI Express`,
@@ -475,7 +664,7 @@ You may opt out of my Memory features by using the {personalPrivacy} command, as
       brave_important_description: `- This is separate from your main AI provider
 - Without Brave API key, I can still function and use built-in web search
 - Brave includes $5 in free monthly credits, but usage above that can be billed. If you only want the free tier, set a $5 usage limit in the [Brave usage limits dashboard](https://api-dashboard.search.brave.com/app/subscriptions/usage-limits)`,
-      brave_footer: `For setting up your main AI provider, use the other \`/help api-key\` options`,
+      brave_footer: `For your main AI provider, choose another provider from the API Keys page in \`/help\``,
       google_title: `Setting Up Google Gemini API Key`,
       google_description: `Google Gemini offers free and paid tiers with powerful AI models.
 - Free tier available
@@ -531,8 +720,9 @@ Use {helpCustomModels} for the full command guide, supported endpoint types, and
       zai_footer: `After setting up this provider, you may change its default model with {configModel}`,
       novelai_title: `Setting Up NovelAI API Key`,
       novelai_description: `NovelAI is a subscription-based service focused on creative storytelling and roleplay.
- - Unlimited uncensored messages
- - Currently only supports text generation (no vision or assistant features)
+- Unlimited uncensored messages
+- Supports uncensored text generation and NovelAI image generation, which is configured separately
+- NovelAI text models do not support vision input
 - [NovelAI Terms of Service](https://novelai.net/terms)`,
       novelai_getting_key_title: `Getting Your API Key:`,
       novelai_getting_key_description: `1. Visit [NovelAI](https://novelai.net/stories)
@@ -647,7 +837,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       how_it_works_title: `How It Works:`,
       how_it_works_description: `- **Personal memories** are tied to you specifically across all servers which I only keep in mind when replying in conversations you are actively participating in
 - **Server memories** only stay within the server, I always keep them in mind when replying in a conversation within the server
-- Memories persist until you remove them with the relevant \`/memory ... remove\` command`,
+- Memories persist until you remove them with \`/memories\` or \`/personal memories\``,
       tips_title: `Memory Tips:`,
       tips_description: `- Teach me your preferences, nicknames, and important facts
 - Use server memories for shared information, inside jokes, or server rules
@@ -655,12 +845,12 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
 - Keep memories concise and clear for best results{legalNotice}`,
       documents_title: `Document Knowledge Base`,
       documents_description: `Server administrators can upload documents for me to reference:
-- Use \`/memory document add\` to upload text, PDF, or Markdown files
-- Use \`/memory history import\` to extract channel history into document memories
+- Use \`/memories\` to upload text, PDF, or Markdown files
+- Use \`/learn history\` to extract channel history into document memories
 - Documents are chunked and stored as searchable embeddings
 - I automatically retrieve relevant content based on the conversation
-- Use \`/memory document remove\` or \`/memory history remove\` to remove stored documents
-- Requires an embedding model configured via \`/model embedding\``,
+- Use \`/memories\` to remove stored documents
+- Requires an embedding model configured via \`/config\` > Models > Switch Models`,
       shortterm_title: `Short-Term Memory`,
       shortterm_description: `In addition to persistent memories, I keep [STM (short-term memory)](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm) of recent conversations:
 - Recent messages are cached per channel, and each persona carries the latest STM across channels within the same server
@@ -709,7 +899,7 @@ Unknown placeholders are stripped automatically.`,
       channels_title: `Channel Tags`,
       channels_description: `- Memories with \`#channel\` tags will activate only in that channel
 - Channel tags can be combined with keyword tags
-- If using RAG, channel tags can also be applied to documents (\`/memory document add\`) and extracted histories (\`/memory history import\`)`,
+- If using RAG, channel tags can also be applied to documents (\`/memories\`) and extracted histories (\`/learn history\`)`,
     },
     spotlight: {
       description: `Learn what personal spotlight does and how to use it`,
@@ -753,7 +943,7 @@ If you set **hours = 0**, the spotlight stays until you remove it manually.`,
 - Plain trigger words in a message
 - Discord mentions
 - Replies to the persona
-- {botRespond} for manual replies
+- {respondCommand} for manual replies
 
 In practice, plain trigger words are the biggest difference because they can directly activate a persona just by naming its trigger.`,
       enabled_title: `What Changes When DTM Is On`,
@@ -761,7 +951,7 @@ In practice, plain trigger words are the biggest difference because they can dir
 - \`@{trigger}\` still works
 - Discord mentions still work
 - Replies still work
-- {botRespond} still works
+- {respondCommand} still works
 
 This means users must invoke personas more deliberately instead of accidentally triggering them with ordinary text.`,
       personal_title: `Server And Personal Control`,
@@ -778,9 +968,9 @@ This means users must invoke personas more deliberately instead of accidentally 
       embed1_title: `Customizing TomoriBot`,
       embed1_description: `TomoriBot is highly customizable! This is about **how I behave** (personality, tone, settings). For **what I remember** (facts, memories), see {helpMemory} instead!`,
       summary_personas_title: `Personas`,
-      summary_personas_description: `Use {personaCreate} or {personaGenerate} to create a persona, then refine it with {personaAttributeAdd} and {personaSampleDialogueAdd}. Personas can be switched, exported, imported, and used as separate alter identities.`,
+      summary_personas_description: `Use {personaCreate} or {personaGenerate} to create a persona, then refine its attributes and sample dialogues on {personaAttributeAdd}. Personas can be switched, exported, imported, and used as separate alter identities.`,
       summary_behavior_title: `Behavior Settings`,
-      summary_behavior_description: `Use {configModel}, {configHumanizer}, {configSystemPromptSet}, and {capabilitiesManage} for model selection, humanlike delivery, system instructions, and feature access.`,
+      summary_behavior_description: `Use {configModel} for model selection, {configHumanizer} for humanlike delivery and system instructions, and {capabilitiesManage} for feature access.`,
       summary_server_title: `Server Boundaries`,
       summary_server_description: `Admins can combine persona limits, whitelisted channels such as {serverWhitelistChannel}, auto-trigger settings, cooldowns, and role permissions to control where and how TomoriBot responds.`,
       embed1_personas_title: `Personality Personas`,
@@ -888,14 +1078,14 @@ Personalization:
 - {configPermissions} - Toggle my features on/off (including image generation)
 - {configUncensors} - Configure uncensored output options
 - {personalPrivacy} - Control your visibility to me (full invisibility option available)
-- {serverInitializeExpressions} - Register server emoji and sticker appearances so I use them correctly
+- {expressionsInitialize} - Register server emoji and sticker appearances so I use them correctly
 
 Document Knowledge Base:
 - {configModelEmbedding} - Configure an embedding model for document uploads and RAG`,
       embed4_footer: `If you have any more questions, join the support server with /support discord`,
       embed5_title: `Pro Tips`,
       embed5_description: `- Start with a persona (default or generated) as a foundation
-- Use \`/persona attribute add\` for quick personality tweaks
+- Use \`/config\` > Persona > General for quick personality tweaks
 - For Sample Dialogues, using examples that exhibit their attributes and traits as well is effective:
 \`\`\`
 User message: {user}: What's your favorite hobby?
@@ -914,20 +1104,20 @@ Bot response: {bot}: Fufu~ I like knitting tiny clothes for tiny plushies~♥
 **Using Smithery.ai:**
 **1.** Visit [smithery.ai](https://smithery.ai), create an account, and generate an API key from your profile.
 **2.** Browse the catalog and open an MCP you want. Copy the **connection URL** shown on its page (e.g. \`https://youtube.run.tools\`).
-**3.** Run {configMcpAdd}. Paste the connection URL into the **URL** field. In the **Auth Token** field, paste your Smithery API key.
+**3.** Open {configPlugins} and choose **+ Add MCP**. In the form, paste the connection URL into **URL**, paste your Smithery API key into **Auth Token**, and choose the required **Server Type**. **General Purpose** is selected by default.
 
 **Using other sources:**
-If an MCP server requires no authentication, leave the **Auth Token** field blank. Some servers may use a different auth format — check the server's documentation for details.
+If an MCP server requires no authentication, leave the **Auth Token** field blank. Some servers may use a different auth format. Check the server's documentation for details.
 
 Your auth token is encrypted at rest and never shown in plain text after saving.`,
-      online_summary_description: `Use {configMcpAdd} to register a publicly reachable HTTPS MCP server. Auth tokens are encrypted after saving; check the docs for provider-specific connection URL notes.`,
+      online_summary_description: `Open {configPlugins} and choose **+ Add MCP** to register a publicly reachable HTTPS MCP server. Auth tokens are encrypted after saving; check the docs for provider-specific connection URL notes.`,
       local_title: `Adding a Local MCP (Self-Hosted Only)`,
       local_description: `Local MCP servers are **only supported on self-hosted TomoriBot instances**. The public hosted bot requires HTTPS and blocks local/private addresses for security.
 
 If you are running your own instance, point the URL to your local server (e.g. \`http://localhost:3000/sse\`). No auth token is needed for local servers.`,
       local_summary_description: `Local MCP servers are self-host only because the public bot blocks local/private addresses. The docs explain how to run a local MCP and register its URL.`,
       removing_title: `Removing an MCP Server`,
-      removing_description: `Use {configMcpRemove} to unregister a server at any time. Removing it immediately disconnects the server and frees up a slot for a new one.`,
+      removing_description: `Open {configPlugins}, select the server, and choose **Remove**. Confirming immediately disconnects the server and frees a slot for a new one.`,
       security_title: `Security Warning`,
       security_description: `**Only add MCP servers you trust.**
 
@@ -978,6 +1168,277 @@ Follow-up wording also works when recent context points to a tool, such as \`do 
 - Users can override it for themselves with {personalDtm}
 - If a thought-log channel is configured with {thoughtLogs}, successful deliberate-mode tool calls are logged there with the trigger that exposed the tool`,
       footer: `Deliberate tool mode decides which tools are shown to the model. The model still has to actually choose to call the exposed tool.`,
+    },
+    getting_started: {
+      title: `Getting Started`,
+      description: `Guide on how to get started with me and my features`,
+      get_api_key: {
+        title: `Get an API Key`,
+        description: `An API key grants me access to an AI provider's model.
+Whatever I generate is billed to that key, so treat
+it like any other password.
+To finish setup I need one:
+> **1.** Pick a provider below to open its guide.
+> **2.** Copy the key it gives you. **Do NOT share it** with
+> anyone, and never paste it into a channel: only into the
+> box {setup} opens for you.
+> **3.** Run {setup} and paste the key when I ask for it.`,
+        picker_footer: `-# The second list is optional: Brave Search adds web
+-# results, and ElevenLabs adds hosted speech. Each opens
+-# its own guide, and neither is needed to finish setup.
+-# If your endpoint isn't listed, skip the key and
+-# read **Custom Endpoints (Advanced)** in this same page.`,
+      },
+      change_trigger_behavior: {
+        title: `Change Trigger Behavior`,
+        description: `Out of the box I answer when you say my name, @mention me,
+or reply to me. You can widen that, narrow it, or turn it
+off per channel.
+
+**Where I am allowed to speak**
+You can make me only reply in whitelisted channels.
+Add them under {moderationWhitelist}.
+> A channel that is not on the list stays quiet.
+
+**Speaking up on my own**
+{configAutoTrigger} lets me automatically send a message
+either every few messages or at random.
+
+**Trigger me with mentions only**
+Deliberate Trigger Mode prevents me from responding at a
+simple name call. Makes me wait for @mentions instead.
+Turn it on in {configBehaviorTrigger}.`,
+      },
+      create_first_persona: {
+        title: `Create your First Persona`,
+        description: `A *Persona* is me with a different name, avatar, personality,
+and more, but with the same features! Edit the one you
+already have, or make new ones.
+
+**Change the one you have**
+{configPersonaGeneral} sets my name, personality, and how I
+address people. {configPersonaAppearance} sets my avatar.
+
+**Write a new one from a sentence**
+{personaGenerate} builds a whole persona from a short
+description. {personaCreate} gives you the blank template.
+
+**Bring one in from elsewhere**
+{personaImport} accepts character cards downloaded from card
+sites such as botbooru or chub.`,
+        footer: `You can keep several personas at once. See **Multiple
+-# personas** under Features.`,
+      },
+      explore_features: {
+        title: `Explore my Features!`,
+        description: `Setup is done. Here is what I can do now that I can talk.
+- **Use this server's emoji and stickers** once you run
+  {expressionsInitialize}.
+- **Greet new members** from {configWelcome}.
+- **Remember and remind**: just ask me to remind you, or
+  tell me something worth keeping.
+- **Search the web** and use other tools, switched on in
+  {configTools}.
+- **Make images, video, and voice** with {generateImage},
+  {generateVideo}, and {generateVoice}.
+
+Most of my switches live in {config}, but not all of them.`,
+        footer: `**Brave Search** adds web results to the search I already
+-# do. It needs its own key, and **Get an API Key** under
+-# Setup opens its guide from the optional services list.
+-# The documentation site is the complete version of this
+-# panel, and it explains every setting in detail.`,
+      },
+    },
+    personal_profile: {
+      title: `Personal Profile`,
+      description: `Settings that belong to you and follow you into every server\nI am in.`,
+      nickname_pronouns: {
+        title: `Your Nickname and Pronouns`,
+        description: `Tell me what to call you, which I will use everywhere.\n\nSet them in {personalProfile}.\n> Nickname: what I call you instead of your Discord name\n> Prefix and suffix: a title or honorific, like \`-san\`\n> Pronouns: \`she/her\`, \`they/them\`, \`any\`, or your name\n\nLeave a field blank and I fall back to your live Discord\nname and the persona's own naming habits.`,
+        footer: `A single persona can address you differently. Set that\n-# under Profile > Persona-specific Preferences.`,
+      },
+      personal_memories: {
+        title: `Personal Memories`,
+        description: `Things I remember about you specifically, in every server.\n\n**Just tell me**\nSay it in chat and I will save it myself. A confirmation\nmessage will appear when this happens.\n\n**Or manage them by hand**\n{personalMemories} lists everything I hold about you and\nlets you edit or delete any single entry.\n\n**Decide how much I may use**\n{personalPrivacy} sets your privacy level, from full\npersonalization down to no personalization at all.`,
+        footer: `These are separate from this server's shared memories,\n-# which anyone here can see and edit.`,
+      },
+      personal_providers: {
+        title: `Personal Providers (Advanced)`,
+        description: `Answer with your own API key and your own model instead of\nwhatever the server uses, everywhere you talk to me.\n\n**Save a provider**\n{personalProviders} stores your key and turns on your\npersonal text model right away.\n\n**Pick a different model**\n{personalModels} switches models, and samplers and\nfallbacks sit beside it in the same category.\n> Your personal setup only affects replies you trigger.\n> Nobody else in the server is switched over.\n\nSome servers require this. If a server has User BYOK turned\non, I cannot answer you until you save a provider here.`,
+      },
+    },
+    custom_endpoints: {
+      title: `Custom Endpoints (Advanced)`,
+      description: `Point me at an endpoint you run or trust: Ollama, LM Studio,\nLiteLLM, KoboldCPP, ComfyUI, or a self-hosted speech server.\n> {providers} registers one for the whole server.\n> {personalProviders} registers one for you alone.`,
+      text_models: {
+        title: `Text Models`,
+        description: `Choose **Add New Custom Endpoint**, then give it a label, a\nbase URL, and its API style. Add an auth token if it needs\none.\n\nSelect the saved label, choose **+ Add new Text Model**, and\nenter the exact model code the endpoint expects. Adding the\nmodel activates it.\n> Declare vision, tool use, and structured output honestly.\n> I trust those flags when I decide what to send you.\n\nSwitch to it later from {configSwitchModels}.`,
+        footer: `The full API-style and compatibility reference is on the\n-# documentation site.`,
+      },
+      comfyui: {
+        title: `ComfyUI (for video and image)`,
+        description: `Build and test the workflow in ComfyUI first, then export it\nwith **Save (API Format)**.\n\nPut the prompt placeholder where the prompt belongs, and the\nother placeholders wherever you want size, duration, or the\nmodel code injected.\n\nRegister the endpoint with API Compatibility \`ComfyUI\` (for\nexample \`http://127.0.0.1:8188\`), then add an image or video\nmodel to it and upload the exported JSON.\n> The graph has to end in a real save node. Preview-only\n> nodes leave me with no file to download.`,
+        footer: `Ready-made workflows ship in the GitHub repository, and\n-# the full placeholder list is on the documentation site.`,
+      },
+      text_to_speech: {
+        title: `Text-to-Speech (for voice)`,
+        description: `Register a speech endpoint the same way, then give each\npersona a voice.\n\nHosted services and self-hosted servers both work, among\nthem Chatterbox-Turbo, Qwen3-TTS, IrodoriTTS, and ElevenLabs.\nRegister the endpoint, then add a speech model to it.\n> Assign the voice in {configPersonaVoice}.\n> Tune speed and defaults in {configVoices}.`,
+        footer: `Voice messages you send me are transcribed through the\n-# same endpoint list, set up the same way. For hosted\n-# voices, ElevenLabs has its own guide in **Get an API Key**\n-# under Setup, listed with the optional services.`,
+      },
+    },
+    multiple_personas: {
+      title: `Multiple personas`,
+      description: `You can have multiple personas in one server, each with its\nown name, memories, and agendas!`,
+      mains_alters_title: `Mains and alters`,
+      mains_alters_body: `The main persona is the persona representing me in the\nserver. An alter is a second identity I can speak as, with\nits own name and avatar on the message itself.`,
+      bringing_in_title: `Bringing a persona in`,
+      bringing_in_body: `{personaImport} takes a character card as a file:\n> \`.png\` card, from TomoriBot or SillyTavern\n> \`.json\` card, from TomoriBot or SillyTavern\n> \`.charx\` archive, Character Card V3\n\nOnly the character's text is read. Currently, bundled sprites,\naudio, and video are skipped, so set those yourself under\n{configPersonaAppearance} and {configPersonaSprites}.`,
+      where_to_find_title: `Where to find cards`,
+      where_to_find_body: `Make your own with {personaGenerate} or {personaCreate}, or\nlook for one that already exists.\n\nCard sites such as botbooru and chub host thousands of\nthem. They are other people's sites, and a card written for\nanother bot may not convert cleanly.`,
+      talking_title: `Letting them talk to each other`,
+      talking_body: `Give each persona its own trigger words and channels in\n{configPersonaTriggers}, and they will answer side by side\nin the same conversation.`,
+      footer: `Share one of your own with {personaExport}.`,
+    },
+    media_generation: {
+      title: `Media generation`,
+      description: `I can make images, video, and voice, either from a command or\nbecause you asked me to in conversation.\n> Each one counts against a server's quota. See **Quotas**\n> under Moderation.`,
+      image_generation: {
+        title: `Image Generation`,
+        description: `{generateImage} opens a prompt box. Write your own prompt, or\nchoose **Draw what's happening now** and I will illustrate\nthe scene myself.\n> Attach up to three reference images to steer the result.\n> Pick the aspect ratio in the same box.\n\nAny provider or endpoint saved here that lists image support\ncan draw, and {providers} shows which of yours do. One that\ncannot use reference images says so and draws from the text.`,
+        footer: `Defaults live in {configImageDefaults}.`,
+      },
+      video_generation: {
+        title: `Video Generation`,
+        description: `{generateVideo} takes a prompt, and optionally a starting\nframe from an image already in the channel.\n\nAny provider or endpoint that lists video support can make\none, ComfyUI video workflows included. {providers} shows\nwhich of yours do.\n> Video is slow and expensive everywhere. Expect a wait.`,
+      },
+      speech_generation: {
+        title: `Speech Generation`,
+        description: `{generateVoice} turns text into a voice message in the\ncurrent persona's voice.\n\nA speech endpoint has to be registered first, hosted or\nself-hosted: see **Custom Endpoints (Advanced)** under\nSetup.\n> Each persona can sound different. The voice comes from\n> {configPersonaVoice}.`,
+      },
+    },
+    tons_of_tweakability: {
+      title: `Tons of Tweakability`,
+      description: `Tweak me to you and your server members' preferences`,
+      behavior_tuning: {
+        title: `Behavior Tuning`,
+        description: `How I write, how I think, and what I am allowed to do.\n> **Model**: {configSwitchModels} picks what model is\n> actually answering, as well as its parameters\n> **Humanizer**: {configBehaviorGeneral} controls how\n> humanlike my delivery is, from formal to very casual.\n> **System instructions**: also {configBehaviorGeneral},\n> for orders that apply to every reply.\n> **Tools**: {configTools} decides which capabilities I may\n> reach for, such as web search or image generation.`,
+        footer: `Sampler-level knobs (temperature and friends) sit under\n-# {configParameters} for adjusting randomness, etc.`,
+      },
+      server_wide_settings: {
+        title: `Server-wide Settings`,
+        description: `Boundaries that apply to everyone in this server. Managers\nonly.\n> **Where I talk**: whitelisted channels, per-persona\n> channel limits, and cooldowns, all under {moderation}.\n> **When I talk on my own**: {configAutoTrigger}.\n> **Who may trigger me**: whitelisted roles, also under\n> {moderation}.\n> **Where my notes go**: {configWelcome} sets the log and\n> welcome channels.`,
+        footer: `Channel-level overrides can give one channel its own\n-# model or rules. See {configChannelOverrides}.`,
+      },
+      personal_settings: {
+        title: `Personal Settings`,
+        description: `Your own preferences, which quietly override the server's\nfor replies you trigger.\n> **Who I think you are**: nickname, pronouns, and privacy,\n> in {personalProfile}.\n> **What answers you**: your own provider and model, in\n> {personalProviders}.\n> **How I treat you**: response modes and Personal\n> Spotlight, in {personalConfig}.\n\nEverything here travels with you between servers.`,
+        footer: `Personal Spotlight lets one persona treat you as its\n-# focus, and is set in {personalSpotlight}.`,
+      },
+    },
+    memory_catalog: {
+      title: `Memory`,
+      description: `I keep two kinds of memory: lasting facts, and a working note\nof the conversation happening right now.`,
+      long_term_memory: {
+        title: `Long-Term Memory`,
+        description: `Facts I keep permanently, for this server or for you.\n\n**Teach me**\nSay it in chat, or add it by hand in {memories} for the\nserver and {personalMemories} for yourself.\n\n**Make me forget**\nThe same two commands list every entry and delete any of\nthem.\n\n**Give me documents**\n{memories} also accepts uploaded files. I read the relevant\nparts back when they matter, instead of all of it at once\nby using Retrieval Augmented Generation (RAG).\n> A server memory reaches everyone here. A personal memory\n> only surfaces when you are part of the conversation.`,
+      },
+      short_term_memory: {
+        title: `Short-Term Memory`,
+        description: `My working note of the conversation in this channel right\nnow, kept separately per channel.\n\nI summarize what is happening as we go, so a long thread\nstays coherent without resending every message.\n> **Refresh cadence**: how often I update that note.\n> **Render mode**: whether the summary replaces the recent\n> messages or sits beside them.\n> **Categories**: up to five labeled fields, such as\n> \`Goals\` or \`Inventory\`, instead of one free-form note.\n\nManagers tune all of it in {configAdvancedMemory}, and\n{memories} can clear an active note.`,
+        footer: `Ask me to remember something for good and it becomes a\n-# long-term memory instead.`,
+      },
+      rewards_punishments: {
+        title: `Rewards and Punishments`,
+        description: `Fun commands I actually notice and remember. Be nice to\nme, or do not, and I will act accordingly.\n> {reward} for a headpat, hug, kiss, tickle, or feeding.\n> {punish} for a bonk, bite, pinch, spank, or squeeze.`,
+        footer: `Pick which persona you meant when several are active.`,
+      },
+      memory_tagging: {
+        title: `Memory Tagging (Advanced)`,
+        description: `By default every memory in scope is sent with every message.\nTagging narrows that down.\n> **Keyword tags**: a tagged memory wakes up only when its\n> keyword appears in the conversation. An untagged memory is\n> always active.\n> **Channel tags**: a \`#channel\` tag limits a memory to that\n> channel, and combines with keyword tags.\n\nTurn both on in {configAdvancedMemory}, then use\n{toolPromptSnapshot} to see exactly which memories are\nactive right now.`,
+        footer: `Uploaded documents and extracted history can carry\n-# channel tags too.`,
+      },
+    },
+    scheduled_tasks: {
+      title: `Scheduled Tasks`,
+      description: `I can respond on a set timer, once or on a repeat.`,
+      making_title: `Making one`,
+      making_body: `Just ask. "Remind me to stretch at 14:30" or "every morning,\npost the standup question" is enough, and I will set it up\nand confirm the details.`,
+      changing_title: `Changing or cancelling one`,
+      changing_body: `{scheduledTaskEdit} opens any existing task: its content,\nnext trigger time, repeat interval, and whether it pings you.\n{scheduledTaskRemove} deletes one.`,
+      who_title: `Who can touch what`,
+      who_body: `You can always edit your own. Server managers can edit\nanyone's, since a task posts into a shared channel.\n> Times use the timezone set during setup, so double-check\n> that one before trusting a 6am alarm.`,
+    },
+    server_moderation: {
+      title: `Server Moderation`,
+      description: `Everything about who may use me here, and where. All of it\nneeds the Manage Server permission and lives in {moderation}.\n> **Member Access**: who may trigger me at all, and which\n> models they may reach.\n> **Whitelist**: the channels, roles, and personas I am\n> allowed to answer in.\n> **Quotas**: how much generation this server permits.\n> **User Blacklist**: individual members I must ignore.`,
+      blacklisting: {
+        title: `Blacklisting`,
+        description: `A blacklisted member cannot trigger me at all, in any\nchannel, with any persona.\n\nAdd one in {moderationBlacklist}. The same page lists every\ncurrent entry and removes them, one at a time or in bulk.\n> Blacklisting is about access, not deletion. Memories about\n> that member stay until someone removes them.`,
+        footer: `To silence a whole channel rather than a person, take the\n-# channel off the whitelist instead.`,
+      },
+    },
+    quotas: {
+      title: `Quotas`,
+      description: `A quota caps how much generation happens here, so one\ncannot accidentally spend a month of credits.`,
+      spent_title: `How it is spent`,
+      spent_body: `There are three separate pools: text, image, and video. Each\none is counted twice, per member and for the server as a\nwhole, and whichever runs out first stops the request.\n> A refused request tells you which pool ran out and when it\n> comes back.`,
+      limits_title: `Setting the limits`,
+      limits_body: `{moderationQuotas} sets the daily allowance for each pool.\nLeave a pool unlimited if you would rather not cap it.`,
+      starting_over_title: `Starting a pool over`,
+      starting_over_body: `{quotaResetUser} clears one member's daily usage, and\n{quotaResetGlobal} clears the server-wide pool. Both need\nManage Server.`,
+      footer: `Pools reset on their own daily. A manual reset is for\n-# when someone should not have to wait.`,
+    },
+    age_restricted_commands: {
+      title: `Age-Restricted Commands`,
+      description: `Adults only. Read this section before turning anything on.`,
+      filter_title: `I do not filter by default`,
+      filter_body: `I ship with no content filter of my own, because filtering\ndegrades ordinary replies as much as it blocks anything else.\nWhat is appropriate here is the server manager's call, not\nmine.\n> Your AI provider still enforces its own rules on its own\n> side, and can refuse a request no matter what is set here.`,
+      gated_title: `Deliberate adult features are gated`,
+      gated_body: `Anything explicitly adult sits behind {nsfw} and works only\nin channels Discord itself marks age-restricted.\n\n{nsfwJailbreaks} chooses which prompt strategies are active\nfor this server. Every one of them is off until a manager\nturns it on.\n> These strategies change how I am prompted. They can make\n> me refuse less but may also cause unintended behavior.`,
+      footer: `By enabling these, the server's managers confirm the\n-# channel is adults-only and take responsibility for it.`,
+    },
+    user_byok: {
+      title: `User BYOK (Advanced)`,
+      description: `BYOK means bring your own key: every member pays for their\nown replies with their own provider.`,
+      changes_title: `What it changes`,
+      changes_body: `With BYOK on, a message from a member is answered only if\nthat member has saved a personal provider. The server's own\nprovider is not a fallback for them.\n> Turn it on in {moderationMemberAccess}, or choose it\n> during {setup}.`,
+      suits_title: `Who it suits`,
+      suits_body: `A large or public server where one shared API key would be\ndrained. A small server is usually happier sharing one provider.`,
+      members_title: `What members have to do`,
+      members_body: `Save a key in {personalProviders}. Point them at **Personal\nProviders (Advanced)** under Setup for the walkthrough.`,
+      footer: `Servers only. A direct message has no members to bring\n-# keys, so the option is not offered there.`,
+    },
+    sillytavern_presets: {
+      title: `SillyTavern Presets`,
+      description: `Import a SillyTavern prompt preset and I will build my\nprompts the way that preset says to.`,
+      importing_title: `Importing one`,
+      importing_body: `{configStPresets} takes the exported preset JSON, then lets\nyou enable, disable, or remove it later.`,
+      controls_title: `What it controls`,
+      controls_body: `The preset takes over prompt ordering and the instruction\nblocks around the conversation.\n> An enabled preset overrides the system prompt from\n> {configBehaviorGeneral} and the persona prompt from\n> {configPersonaAdvanced}.`,
+      still_applies_title: `What still applies`,
+      still_applies_body: `Persona attributes, sample dialogue, memories, and tools are\nstill sent. The preset decides arrangement, not contents.`,
+      footer: `Turn the preset off to fall back to my own prompt layout\n-# with nothing lost.`,
+    },
+    mcp_servers: {
+      title: `MCP Servers`,
+      description: `MCP is a standard way to hand a tool to an AI. Connect one\nand its tools become things I can actually do.`,
+      hosted_title: `Hosted servers`,
+      hosted_body: `{configMcp} takes a URL and an optional auth token. Anything\nthat server exposes appears in my tool list.`,
+      local_title: `Local servers`,
+      local_body: `A server running on your own machine works the same way once\nit is reachable. The documentation site has the walkthrough.`,
+      before_title: `Before you connect one`,
+      before_body: `> An MCP server's tools run with whatever access you gave\n> it, and I will use them when they look relevant. Connect\n> servers you trust, and read what their tools do first.`,
+      footer: `Switch individual tools off any time in {configTools}.`,
+    },
+    matrix_bridge: {
+      title: `Matrix`,
+      description: `I can sit in a Matrix room and a Discord channel at once,\ncarrying the conversation between them.`,
+      linking_title: `Linking a room`,
+      linking_body: `{matrixLink} connects the current channel to a Matrix room\nID, which looks like \`!abcdef:matrix.org\`. Invite\n{matrixBotUser} to that room first.`,
+      reads_title: `How it reads`,
+      reads_body: `Messages from either side reach me as one conversation, and\nI answer in both.\n> Attachments, edits, and reactions do not all survive the\n> trip. Text is what travels reliably.`,
+      footer: `Nothing linked? Check that the invite was accepted before\n-# anything else.`,
     },
   },
 };

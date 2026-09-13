@@ -19,13 +19,7 @@ import type {
   SystemTriggerIdentity,
   TextQuotaSource,
 } from "@/utils/chat/types";
-
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
-}
+import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 
 export const CHANNEL_LOCK_TIMEOUT_MS = parseIntegerEnvFlag(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000);
 const DISCORD_TYPING_KEEPALIVE_INTERVAL_MS = parseIntegerEnvFlag(
@@ -89,7 +83,7 @@ export interface ChannelLockEntry {
   messageQueue: QueuedMessage[];
   /** Callback that aborts the active HTTP request and rejects the stream Promise.race. Set by toolLoop, cleared on release. */
   activeStreamKill?: ((reason: Error) => void) | null;
-  /** AbortController for the entire turn (streaming + tools). Aborted by /bot kill; signal forwarded to tools via ToolContext. */
+  /** AbortController for the entire turn (streaming + tools). Aborted by /kill; signal forwarded to tools via ToolContext. */
   activeTurnAbortController: AbortController | null;
 }
 
@@ -448,6 +442,8 @@ export function queueFollowUpForLockedTurn(args: {
   manualStreamingContextOverrides: QueuedMessage["manualStreamingContextOverrides"];
   isNaturalStopMessage: boolean;
   shouldSurfaceUserErrors?: boolean;
+  isUserImpersonation?: boolean;
+  impersonatedUserId?: string;
   onGenerationResult?: ChatGenerationResultHandler;
   onQueueDiscard?: QueuedMessageDiscardHandler;
 }): boolean {
@@ -472,8 +468,8 @@ export function queueFollowUpForLockedTurn(args: {
       isFollowUp: true,
       selectedPersonaId: args.lockEntry.activePersonaId,
       triggeredPersonaIds: args.lockEntry.activeTriggeredPersonaIds,
-      isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
-      impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
+      isUserImpersonation: args.isUserImpersonation,
+      impersonatedUserId: args.impersonatedUserId,
       textQuotaSource: args.textQuotaSource,
       textQuotaTriggerKey: args.textQuotaTriggerKey,
       textQuotaUserDiscId: args.textQuotaUserDiscId,
@@ -499,8 +495,8 @@ export function queueFollowUpForLockedTurn(args: {
     isFollowUp: true,
     selectedPersonaId: args.lockEntry.activePersonaId,
     triggeredPersonaIds: args.lockEntry.activeTriggeredPersonaIds,
-    isUserImpersonation: args.lockEntry.activeIsUserImpersonation,
-    impersonatedUserId: args.lockEntry.activeImpersonatedUserId,
+    isUserImpersonation: args.isUserImpersonation,
+    impersonatedUserId: args.impersonatedUserId,
     textQuotaSource: args.textQuotaSource,
     textQuotaTriggerKey: args.textQuotaTriggerKey,
     textQuotaUserDiscId: args.textQuotaUserDiscId,
@@ -667,7 +663,7 @@ export function getChannelTurnAbortSignal(channelId: string): AbortSignal | unde
 }
 
 /**
- * Force-kills the active turn for a channel (used by /bot kill).
+ * Force-kills the active turn for a channel (used by /kill).
  * Aborts the turn-level controller (cancels tool execution) and the stream kill (cancels HTTP + unblocks Promise.race).
  * @param channelId - Target channel
  * @returns true if anything was killed
@@ -681,7 +677,7 @@ export function forceKillChannelStream(channelId: string): boolean {
     killed = true;
   }
   if (lockEntry.activeStreamKill) {
-    lockEntry.activeStreamKill(new Error("SDK_CALL_TIMEOUT: killed by /bot kill"));
+    lockEntry.activeStreamKill(new Error("SDK_CALL_TIMEOUT: killed by /kill"));
     killed = true;
   }
   return killed;

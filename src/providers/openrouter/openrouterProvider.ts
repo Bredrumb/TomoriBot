@@ -73,6 +73,7 @@ import { resolveEffectiveOpenRouterSeesYouTube } from "@/utils/provider/openrout
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { buildActiveSamplingParams, getActiveTemperature } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /**
  * Gets the default OpenRouter model with a robust fallback chain:
@@ -398,6 +399,7 @@ export class OpenrouterProvider
         videogen_enabled: false,
         voice_message_enabled: false,
         user_blocking_enabled: false,
+        user_info_updates_enabled: false,
         thread_creation_enabled: false,
       },
     };
@@ -475,6 +477,7 @@ export class OpenrouterProvider
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };
@@ -688,7 +691,10 @@ export class OpenrouterProvider
       config.logitBias = runtimeLogitBias;
     }
 
-    if (effectiveHasTools) config.tools = await this.getTools(tomoriState);
+    // The catalog override above can raise effectiveHasTools above the flag the pipeline
+    // narrowed, which is how the Tool Use master toggle and the deliberate-tool kill switch
+    // both used to leak tools on this provider alone.
+    if (resolveToolsEnabled(tomoriState, effectiveHasTools)) config.tools = await this.getTools(tomoriState);
 
     return config;
   }

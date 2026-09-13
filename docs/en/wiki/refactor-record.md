@@ -24,7 +24,7 @@ Deferred candidates: video generation provider/model option tables, permission-s
 
 ## NovelAI Image Tags Decoupling
 
-Image tags moved out of `/novelai image-tags` into provider-neutral commands: `/persona image-tags`, `/personal image-tags`, and `/config image-tags default-positive/default-negative`. User and persona tags are rendered in context as public `Physical Appearance` lines. `generate_image` now receives default positive tag guidance, while default negative tags are consumed only by NovelAI or custom image endpoints with the `Negative Prompt` support checkbox enabled.
+Image tags moved out of `/novelai image-tags` into provider-neutral commands: `/config` > Persona > Appearance, `/personal config`, and the default tag fields on `/config` > Models > Image Generation Defaults. User and persona tags are rendered in context as public `Physical Appearance` lines. `generate_image` now receives default positive tag guidance, while default negative tags are consumed only by NovelAI or custom image endpoints with the `Negative Prompt` support checkbox enabled.
 
 ---
 
@@ -41,8 +41,8 @@ Records which refactor phases produced real responsibility-owned modules and whi
 | #3 Decouple `index.ts` | `src/index.ts`, 24 lines | `src/init/*` modules | Real split | Startup initialization |
 | #4b Repository pattern | Repository classes under `src/utils/db/repositories/`; `repositoryReadSql.ts` 7-line barrel; `repositoryWriteSql.ts` 6-line barrel | Domain SQL lives in `src/utils/db/repositories/*Sql.ts`; large LLM/persona/server transaction modules tracked in the Intentional Large File table | Real domain split with tracked compatibility barrels | Repository-owned SQL by domain |
 | #4b Import/Export split | `src/utils/db/repositories/ExportRepository.ts`, 671 lines; `src/utils/db/repositories/ImportRepository.ts`, 774 lines | Deleted `ImportExportRepository.ts`, `repositoryExportSql.ts`, `repositoryImportSql.ts`; no remaining sibling files | Complete | Export-direction SQL (ExportRepository); import-direction SQL + cache invalidation (ImportRepository) |
-| #5 `/tool status` split | `src/commands/tool/status.ts`, 32 lines; `src/utils/metrics/status/command.ts`, 73 lines | Deleted `statusCommandMetrics.ts` and `status/commandImplementation.ts`; owned modules under `src/utils/metrics/status/` are all <600 lines | Complete | Status command coordination, page builders, and redaction-aware formatters |
-| #5 `/tool compact` split | `src/commands/tool/compact.ts`, 33 lines | `src/utils/compaction/compactOrchestrator.ts`, 1,102 lines | Facade-only split | Compaction workflow stages |
+| #5 `/status` split | `src/commands/status.ts`; `src/utils/metrics/status/command.ts` | Deleted `statusCommandMetrics.ts`, `status/commandImplementation.ts`, and the obsolete `tool status` compatibility leaf; owned modules under `src/utils/metrics/status/` are all <600 lines | Complete | Canonical status command coordination, page builders, and redaction-aware formatters |
+| #5 `/compact` split | `src/commands/compact.ts`, 33 lines | `src/utils/compaction/compactOrchestrator.ts`, 1,102 lines | Facade-only split | Compaction workflow stages |
 | #6 Base stream adapter | Provider adapters and `BaseStreamAdapter` | Provider-specific large files remain provider-owned | No facade finding | Provider stream adapters |
 | #6.5 Provider registry | `src/utils/providerInfoRegistry.ts` and provider-local `providerInfo.ts` files | None identified | Real split | Provider metadata discovery |
 | #7 Tool registry split | `src/tools/toolRegistry.ts`, 514 lines | `src/tools/availability.ts`, 387 lines | Real partial split | Tool registry vs. availability |
@@ -282,7 +282,7 @@ Budget was ~1,000 lines per Repository file once SQL is inlined.
 | New repository | Tables owned |
 |---|---|
 | `LlmModelRepository` | `llms`, `embedding_models`, `diffusion_models`, `video_generation_models` |
-| `LlmProviderRepository` | `saved_provider_configs`, `user_saved_provider_configs`, `custom_endpoints`, `openrouter_*_registrations` |
+| `LlmProviderRepository` | `saved_provider_configs`, `user_saved_provider_configs`, `custom_endpoint_connections`, `custom_endpoints`, `openrouter_*_registrations` |
 | `LlmOverrideRepository` | `channel_llm_overrides`, `persona_llm_overrides`, fallback refs |
 
 `toExportShape()` / `fromExportShape()` moved to `LlmProviderRepository` (saved provider configs and OpenRouter registrations are the exportable state; model catalog is global seed data).
@@ -324,8 +324,8 @@ Records where cache invalidation lives after the repository migration. All inval
 
 | Cache | Call sites | Reason |
 |---|---|---|
-| Personal spotlight | `src/commands/personal/spotlight/set.ts`, `manage.ts` | Dedicated personal-spotlight DB module; ownership stays here unless it later moves under a repository |
+| Personal spotlight | `src/utils/discord/interactions/personalConfigSpotlightRoutes.ts` | Panel routes retain caller-owned writes and post-write invalidation unless they later move under a repository |
 | ST preset cache | `src/utils/db/stPresetDb.ts` (now `PresetRepository`) | Write-after-success placement preserved during fold |
 | Emoji/sticker cache | `src/events/guildEmojisUpdate/refreshEmojis.ts`, `guildStickersUpdate/refreshStickers.ts` | Event-driven cache; invalidation follows Discord events, not DB writes |
-| Matrix link cache | `src/commands/server/matrix/link.ts`, `unlink.ts` | Matrix bridge module — not part of the repository layer |
+| Matrix link cache | `src/commands/matrix/link.ts`, `unlink.ts` | Matrix bridge module - not part of the repository layer |
 | Webhook cache | `src/utils/discord/webhook/` internal helpers | Cache keys are Discord webhook lifecycle state, not repository reads |

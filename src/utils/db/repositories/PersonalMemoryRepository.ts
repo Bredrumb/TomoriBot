@@ -74,6 +74,31 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
   }
 
   /**
+   * Personal memory counts per persona lineage, for the `/personal memories` persona selector.
+   *
+   * Grouped rather than one count per persona: the selector renders up to 25 lineages, and the
+   * sibling eligibility query above exists for the same reason.
+   *
+   * Lineage `0` is excluded to match `loadForUserLineage(userId, lineageId, false)`, so a count
+   * always equals what selecting that persona will list.
+   */
+  async memoryCountsByLineage(userId: number): Promise<Map<number, number>> {
+    try {
+      const rows = await sql<Array<{ persona_lineage_id: number | string; count: string | number }>>`
+        SELECT persona_lineage_id, COUNT(*) AS count
+        FROM personal_memories
+        WHERE user_id = ${userId}
+          AND persona_lineage_id <> 0
+        GROUP BY persona_lineage_id
+      `;
+      return new Map(rows.map((row) => [Number(row.persona_lineage_id), Number(row.count)]));
+    } catch (error) {
+      log.error(`Error counting personal memories per lineage for user ${userId}:`, error);
+      return new Map();
+    }
+  }
+
+  /**
    * Returns the set of persona lineage ids for which this user has at least one
    * personal memory. Batched eligibility source for the persona-scoped `/memory
    * personal` picker filters, which load with `includeGlobalMemories = false`.
@@ -98,6 +123,64 @@ class PersonalMemoryRepository implements IRepository<PersonalMemoryExportShape>
     } catch (error) {
       log.error(`Error loading lineage ids with personal memories for user ${userId}:`, error);
       return new Set();
+    }
+  }
+
+  /**
+   * Destination candidates for a personal memory import: every non-zero lineage holding a memory, with the
+   * nickname the account most recently used for that lineage.
+   *
+   * The nickname join is deliberately unscoped by server. A personal lineage is account-global and may match
+   * personas in workspaces the account has left, so there is no single authoritative server to scope to; the label
+   * is untrusted display data and nothing keys off it. Lineage `0` is excluded here for the same reason
+   * {@link lineageIdsWithMemories} excludes it and is offered by the caller as its own account-wide destination.
+   *
+   * @param userId - Internal user DB ID
+   * @returns Destination lineages in ascending order, each with a nickname or null when no persona row matches.
+   */
+  async destinationLineages(userId: number): Promise<Array<{ lineageId: number; nickname: string | null }>> {
+    try {
+      const rows = await sql<Array<{ persona_lineage_id: number | string; persona_nickname: string | null }>>`
+        SELECT pm.persona_lineage_id,
+          (
+            SELECT p.persona_nickname
+            FROM personas p
+            WHERE p.persona_lineage_id = pm.persona_lineage_id
+            ORDER BY p.updated_at DESC NULLS LAST, p.persona_id DESC
+            LIMIT 1
+          ) AS persona_nickname
+        FROM personal_memories pm
+        WHERE pm.user_id = ${userId}
+          AND pm.persona_lineage_id <> 0
+        GROUP BY pm.persona_lineage_id
+      `;
+      return rows
+        .map((row) => ({ lineageId: Number(row.persona_lineage_id), nickname: row.persona_nickname ?? null }))
+        .filter((row) => Number.isSafeInteger(row.lineageId) && row.lineageId > 0)
+        .sort((left, right) => left.lineageId - right.lineageId);
+    } catch (error) {
+      log.error(`Error loading personal memory destination lineages for user ${userId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Returns the total count of personal memories for a user across all personas and global scope.
+   *
+   * @param userId - Internal user DB ID
+   * @returns Total count of personal memories
+   */
+  async countAllForUser(userId: number): Promise<number> {
+    try {
+      const rows = await sql<Array<{ count: string | number }>>`
+        SELECT COUNT(*) as count
+        FROM personal_memories
+        WHERE user_id = ${userId}
+      `;
+      return Number(rows[0]?.count ?? 0);
+    } catch (error) {
+      log.error(`Error counting personal memories for user ${userId}:`, error);
+      return 0;
     }
   }
 

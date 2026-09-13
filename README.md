@@ -61,7 +61,7 @@ TomoriBot supports long-term memory, multi-persona behavior, web and MCP tools, 
 
 You can [invite the public TomoriBot](https://discord.com/oauth2/authorize?client_id=841644102059556915) to your Discord server, or [self-host your own instance](#self-hosting) if you prefer full control over your privacy and API keys. TomoriBot uses best security practices and encryption that keeps data safe, but self-hosting ensures that all data remain entirely on your device. 
 
-After adding her to your server through either method above, run the `/config setup` command for instructions. Then you can simply say her name (or @ mention her) in order to get a response. 
+After adding her to your server through either method above, run the `/setup` command for instructions. Then you can simply say her name (or @ mention her) in order to get a response. 
 
 ## Feature Showcase
 
@@ -169,7 +169,7 @@ The recommended path for most self-hosters is the local Bun setup wizard. Its de
     bun run dev
     ```
 
-Once you see `TomoriBot up and running!`, run `/config setup` in Discord.
+Once you see `TomoriBot up and running!`, run `/setup` in Discord.
 
 ### B. Docker Compose Setup
 
@@ -201,12 +201,14 @@ bun run launch --searxng --crawl4ai
 
 # With a local TTS server after following the voice setup docs
 bun run launch --qwen3tts
+bun run launch --voxcpm2
+bun run launch --cosyvoice3
 
 # See all available flags
 bun run launch --help
 ```
 
-Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`, `--help`
+Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--whisperx`, `--help`
 
 **Ctrl+C** stops the bot and any Python sidecar processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running, stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
 
@@ -261,11 +263,11 @@ See the full **[Maintenance Documentation](https://docs.tomoribot.app/en/feature
 
 #### Basic Commands
 
-- `/config setup` - Initial bot setup for your server
+- `/setup` - Initial bot setup for your server
 - `/config` - Multiple ways to tweak TomoriBot
-- `/memory personal add` / `/memory personal remove` - Add / remove your personal memories
-- `/memory server add` / `/memory server remove` - Add / remove server-wide memories
-- `/server whitelist` / `/server user-blacklist` - Add / remove permissions from TomoriBot
+- `/personal memories` - Manage your personal memories
+- `/memories` - Manage server memories, documents, and short-term memory
+- `/moderation` - Manage member access, user blacklist, channel, persona, and role restrictions
 
 See the full **[Command Reference](https://docs.tomoribot.app/en/features/command-reference/)** for every slash command.
 
@@ -293,7 +295,7 @@ Contributions to TomoriBot are greatly appreciated! Please review the following 
 - **[Terms of Service](https://docs.tomoribot.app/en/legal/terms-of-service/)** - Rules and guidelines for using the bot
 - **[Privacy Policy](https://docs.tomoribot.app/en/legal/privacy-policy/)** - How we handle your data
 
-These documents are also accessible within Discord using `/legal terms` and `/legal privacy` commands.
+These documents are also accessible within Discord using `/legal terms-of-service` and `/legal privacy-policy` commands.
 
 ### For users self-hosting or using forks
 You control your own data and are responsible for your deployment's compliance under the [**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE).

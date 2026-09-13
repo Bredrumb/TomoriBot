@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Command System"
 ---
 
@@ -13,9 +13,10 @@ Flow:
 
 1. `loadCommandData()` scans command folders and top-level command files.
 2. Command metadata is built into `SlashCommandBuilder` trees.
-3. `handleCommands.ts` resolves a root command, or category + group + subcommand.
-4. Category cooldown is checked/set in `cooldowns` table (`COMMAND_CATEGORY`).
-5. Target `execute()` is called with `(client, interaction, userData, locale)`.
+3. `handleCommands.ts` classifies chat-input commands and globally routed component or modal interactions.
+4. For a chat-input command, it resolves a root command, or category + group + subcommand.
+5. Category cooldown is checked/set in `cooldowns` table (`COMMAND_CATEGORY`).
+6. Target `execute()` is called with `(client, interaction, userData, locale)`.
 
 `commandLoader.ts` is an ESM-only loader. It uses async directory reads while building slash-command registration data and dynamically imports command modules so command files can use top-level await. Do not add `require`, `module.exports`, or synchronous directory traversal to command discovery.
 
@@ -44,12 +45,188 @@ Command files import Discord UI helpers from responsibility-owned modules:
 - `src/utils/discord/ui/embeds.ts` - info and summary embed replies
 - `src/utils/discord/ui/statusComponents.ts` - Components V2 status replies and status-page pagination
 - `src/utils/discord/ui/pagination.ts` - generic choice pagination
+- `src/utils/discord/ui/panel.ts` - shared Components V2 panel containers, receipts, state controls, and pagination
+- `src/utils/discord/ui/personalConfigParameterControls.ts` - shared provider-parameter summaries and semantic edit rows
 - `src/utils/discord/ui/personaWorkflow.ts` - command-facing persona picker lifecycle, acknowledgment phases, and anchor-message controller
+- `src/utils/discord/ui/helpDashboard.ts` - the persistent Components V2 `/help` dashboard and provider information modals
 
 The low-level persona renderer remains private to `interactionCore.ts` and
 `personaWorkflow.ts`; it has no command-facing barrel or compatibility export.
 
 `src/utils/discord/interactionHelper.ts` remains only as the subsystem compatibility barrel. New command code should import from the owned module that matches the helper it uses.
+
+List panels use `buildPaginationRow(...)` for selector pagination. A row with Previous, a disabled
+`Page <current> of <total>` indicator, and Next sits below the select, keeping the panel body and
+the selected item in place across page transitions.
+
+### Globally routed persistent interactions
+
+Collector-owned workflows and globally routed panels solve different lifecycle problems:
+
+- A collector-owned workflow is a bounded command session. Its command invocation owns the collector, timeout, and terminal repaint.
+- A globally routed panel handles every matching button, select, or modal submission as a fresh `interactionCreate` event. It does not depend on the original command process or an in-memory collector remaining alive.
+
+The reusable global path is intentionally small:
+
+- `src/utils/discord/interactions/routeRegistry.ts` parses versioned custom IDs and dispatches an exact namespace/version route.
+- `src/utils/discord/interactions/router.ts` owns the registered route list and defensive error response.
+- Feature routes, such as `src/utils/discord/interactions/helpRoutes.ts`, validate their own action and state segments.
+
+Only IDs registered in this path are consumed. Every Discord message component type and modal
+submission can enter the global route registry. This uses Discord's common message-component guard
+instead of enumerating button and select variants, so a new native selector cannot be filtered out
+before its route acknowledges it. Unmatched component interactions return to the existing
+collector-owned behavior unchanged. Custom IDs must include a namespace and version, such as
+`help:v2:page:en-US:memory`, so incompatible future state can use a new version without silently
+changing old messages. Persistent help IDs also carry the panel locale so later interactions
+preserve the language selected by the slash-command dispatcher without another database read before
+`showModal()`.
+
+Deferred panel branches call `beginPanelInteraction(...)`. The helper owns `deferUpdate()` and runs
+it before authorization or state loading, so its callers cannot accidentally move asynchronous
+work ahead of acknowledgement. A branch that opens a modal stays outside this helper because
+`showModal()` must be that interaction's acknowledgement.
+
+Multi-step modal continuations and collection-derived operations (such as personal spotlight configuration and removal in `/personal config`) bind state to a deterministic actor- and workspace-scoped collection fingerprint in the custom ID instead of process-local memory. If the underlying collection drifts (for example, personas or active spotlight rows are added, removed, or reordered between render and submit), fingerprint verification fails closed and surfaces a localized stale-panel notice: drift prevents the requested identity-sensitive mutation, its success telemetry, and its success receipt or cache effects, while repository-owned read cleanup may still prune expired or orphaned records.
+
+`/help` is the pilot. `src/commands/help.ts` sends one ephemeral Components V2 panel, while `src/utils/discord/helpCatalog.ts` owns its four categories, fifteen sections, and twenty-one subsections. Category buttons, the section select, the subsection select, and Previous/Next controls repaint that message through fresh interactions. The panel renders no section heading: the section select occupies that slot and its closed value is the active section's name, with the section description directly below it. Setup's Getting Started section opens a text-only provider modal. Discord emits no interaction when a modal is dismissed, so dismissal leaves the underlying help message unchanged and its globally routed controls available for a later click. The exact way a Discord client returns focus to that message is client behavior and is not guaranteed by the bot.
+
+Do not move existing collectors to the global path merely because the registry exists. Use global routing only when the message is intended to outlive a bounded command session and every interaction can reconstruct its state from the custom ID plus durable data. Continue to use the anchor workflow for multi-step writes, validation, permissions, and cache invalidation that belong to one command session.
+
+### Panel failure observability
+
+A panel reports an expected refusal by returning a status object (`{ status: "write-failed" }`) and
+repainting with a red receipt. It does not throw, so the router's exception handler never sees it and
+the actor's failure leaves no trace unless something else records it. Two rules keep that class of
+failure traceable.
+
+**Every receipt repaint is observable.** `deliverGuardedPanel` takes the receipt in its delivery
+options and emits one `panel_failure` metric for an `error` or `warning` tone, carrying the locale,
+the tone, the namespace parsed from the interaction's custom ID, and a `reason` key. The
+per-namespace `repaint` helpers pass their receipt through, so a panel that repaints as failed is
+countable in production without each of the roughly 149 receipt literals opting in.
+
+The failure goes to both sinks with the same fields: `log.metric` for the host JSONL that survives a
+container recreate, and `metricSampleRepository.recordSample("panel_failure", fields)` for the
+Postgres row Grafana can graph. The database write is fire-and-forget and never awaited, because it
+can ride a prune on the write path and this runs before the Discord request; awaiting it would put a
+round trip in front of every failure repaint. The sink resolves lazily through
+`setPanelFailureSampleSink`, so importing `interactionCore` never drags the database client into a
+caller that only wants to deliver a panel, and tests can deliver without a live pool.
+
+The receipt travels beside the payload rather than inside it. Embedding a marker in the rendered
+content would spend the payload's Discord text budget and could push a receipt line past the panel
+prose width limit; passing it as an option keeps the outgoing payload byte-for-byte what the caller
+built.
+
+**A receipt that knows its action carries the join key.** Successes live in `stat_counters` as
+`panel_action`, keyed `<surface>.<scope>.<resource>.<verb>`. `reason` does not share that key space,
+so a receipt that knows which control it reports on sets `action` to the same identifier the success
+counter writes, and the metric emits it as an `action` field. The field is omitted rather than
+defaulted when the site does not know it: a placeholder would join to no counter while looking as
+though it had. Moderation and the provider panels set it today; other surfaces fall back to
+`namespace` plus `tone`, which compares surfaces but not individual controls.
+
+Both sides need aggregating before the join. `stat_counters` holds one row per server, user and
+bucket, so joining it directly to `metric_samples` fans the failure count out by the number of
+success rows:
+
+```sql
+WITH successes AS (
+  SELECT metric_key AS action, SUM(count) AS successes
+  FROM stat_counters WHERE metric = 'panel_action' GROUP BY 1
+), failures AS (
+  SELECT fields->>'action' AS action, COUNT(*) AS failures
+  FROM metric_samples WHERE metric_name = 'panel_failure' AND fields ? 'action' GROUP BY 1
+)
+SELECT COALESCE(s.action, f.action) AS action, COALESCE(s.successes, 0), COALESCE(f.failures, 0)
+FROM successes s FULL JOIN failures f USING (action);
+```
+
+Under `bun test` the default sink resolves to an inert one. Otherwise a suite that merely renders
+failure panels inserts a row per emission into whatever database the environment points at, which
+put hundreds of rows of test data into a live `metric_samples`. A test asserting on the sink installs
+its own through `setPanelFailureSampleSink`, which takes precedence.
+
+Successes have their own blind spot, closed the same way. `recordPanelActionStat` buffers its counter
+write and cannot observe a later flush failure, so a dead success counter would leave failures
+looking like the whole story. When the write path itself raises it reports `panel_action_failure`
+once per outage rather than once per action, and re-arms after the next write that reaches the
+recorder. That report is a metric, not `log.warn` (dropped by production's level pin) and not
+`log.error` (which would attempt an `error_logs` insert down the same pool that just failed).
+
+**`deliverGuardedPanel` is the only emitter of `panel_failure`.** A route that counts a failure
+itself and then repaints with a receipt would count the same failure twice, under two reason keys,
+so a site that needs to record detail a receipt cannot carry emits `panel_failure_detail` instead
+and names its cause on the receipt. Counting queries therefore stay on `panel_failure`, and a
+drill-down joins the two on `reason`. `tests/unit/discord/panelFailureSingleEmission.test.ts` scans
+the source to hold that invariant, because no test over the delivery helper can see a second
+emitter.
+
+**Group on `reason`, never on `heading`.** `PanelReceipt.reason` is an optional machine key naming
+the cause (`endpoint_add_unreachable`, `setup_commit_failed`). A receipt that does not set one falls
+back to `<namespace>_<tone>`, and a target with no route id falls back to `unknown`. The heading is
+localized, so grouping on it files one defect under a different label per locale.
+
+Two delivery paths bypass the chokepoint and stay out of the metric: a slash-command interaction
+carries no route id, and the notice payloads built by `buildTransferNoticePayload` carry no receipt
+object. A call site on either path that wants reporting passes a receipt explicitly, which is what
+the import-failure notices and the `/setup` terminal states do.
+
+**Genuinely broken paths log at error level where the cause is still in scope.** The `panel_failure`
+metric is deliberately not an `error_logs` row: most receipts are expected outcomes the actor can
+correct (bad input, a stale panel, an unavailable read), and the production log level filters `warn`
+out entirely, so neither `log.error` for all of them nor `log.warn` for any of them is right. Paths
+where a rollback succeeded, a cause would otherwise be discarded, or a caught error was never read
+call `log.error` at the point the cause still exists. That covers the thrown-away cause in the
+custom endpoint write rollback, the provider-construction failures reported to the actor as an
+unsupported provider, the eight moderation write catches that discarded their error, the moderation
+quota result's unused `error` field, the cross-server memory toggle, and the voice sample download,
+insert, and storage failures.
+
+An expected refusal that still needs to reach the production stream uses `log.metric`, not
+`log.warn`: an unreachable custom endpoint and an unparseable preset upload are both recorded that
+way, because the reason is diagnostic even though the failure is the actor's to correct. Their
+per-failure detail goes to `panel_failure_detail`, with the cause named on the receipt so the count
+still comes from the chokepoint.
+
+Most receipts still fall back to `<namespace>_<tone>`, which groups a whole panel rather than a
+cause. Explicit reasons exist where the cause is already known at the site: providers, moderation
+quota, moderation batch removals, transfer imports, and the `/setup` terminal states. Widening that
+coverage is additive and does not change the counting contract.
+
+Collector-owned pagination helpers (`replyPaginatedChoices`, `replyPaginatedPersonaChoicesV2`)
+follow the same split: an expiry stays at `warn`, while a callback failure or an abnormal collector
+end logs at error level with the interaction context.
+
+### The `/setup` wizard
+
+`/setup` is the largest consumer of the global route path. `src/utils/discord/interactions/setupRoutes.ts`
+registers the `setup:v1` namespace and `src/utils/discord/ui/setupPanel.ts` builds every panel and modal
+from the same draft, so each control and every modal submission arrives as its own `interactionCreate`
+rather than through a collector.
+
+- The custom ID carries only the action, the locale, and an opaque nonce. The nonce resolves a bounded
+  process-local draft (`setupDraftStore.ts`) bound to the actor, the workspace, and the guild-or-DM
+  context, so the panel outlives the command invocation but not the process. `SETUP_DRAFT_MAX_ENTRIES`
+  bounds pending drafts, and opening, editing, cancelling, or restarting the process writes nothing.
+- Every routed action rechecks the owner, the workspace, the context, `Manage Server`, the step set the
+  environment renders before it acts. A stale or forged nonce answers with the terminal session-ended
+  payload instead of repainting.
+- The step set is captured in the draft, so a draft created under one environment cannot complete a step
+  the other environment renders.
+- `Finish Setup` acknowledges the interaction before it claims the draft, because the claim, the catalog
+  and authorization revalidation, the transaction, the cache invalidation, a guild expression sync, and
+  a Discord REST avatar call all follow it.
+- A claimed draft is frozen: reads report `in-flight` and writes are refused until the commit releases or
+  consumes the claim, so a repeated press cannot run setup twice and a concurrent Cancel cannot zero the
+  credential being committed.
+- The receipt repaints the wizard's own ephemeral message as Components V2 text displays, because a
+  classic embed cannot be edited onto a Components V2 message.
+
+The wizard writes only on the final commit: no step control creates a provider, credential, or
+preference row, and the workspace's orphan recovery moved into the same transaction that creates the
+replacement rows.
 
 ## Webhook Helper Layout
 
@@ -79,15 +256,15 @@ Root command modules export:
 
 Grouped commands are represented by folders:
 
-- `src/commands/model/text.ts` -> `/model text`
+- `src/commands/export/personal/config.ts` -> `/export personal config`
 
 Model and provider flows that still call `promptForSavedProvider()` use one shared initial
 provider-selection embed. Model-selection callers pass the effective slot selection so
 the embed can show the active model codename and provider; channel and persona text
 commands resolve their scoped override before falling back to the server text model.
 
-The `/model *` and `/personal provider model-*` families no longer use that primitive.
-They render the provider picker, the `>25` range selector, the modal, and the terminal
+The live `/model *` family no longer uses that primitive.
+It renders the provider picker, the `>25` range selector, the modal, and the terminal
 result on one anchor ephemeral message through the shared helpers in
 `src/utils/discord/ui/anchorModelFlow.ts` (see the anchor message controller section
 below). `promptForSavedProvider()` is forbidden in those files, and the allow-list audit in
@@ -125,39 +302,52 @@ handler.
 
 ## Current Top-Level Categories
 
-- `bot`
-- `capabilities`
+- `comment`
+- `compact`
 - `conditioning`
 - `config`
 - `contribute`
 - `donate`
+- `export`
+- `expressions`
 - `generate`
 - `help`
+- `impersonate`
+- `import`
+- `kill`
+- `learn`
 - `legal`
-- `mcp`
-- `memory`
+- `matrix`
+- `memories`
 - `model`
+- `moderation`
 - `novelai`
 - `nsfw`
-- `openrouter`
-- `optional-key`
+- `nuke`
 - `persona`
 - `personal`
-- `provider`
+- `ping`
+- `providers`
+- `punish`
+- `quota`
+- `refresh`
+- `reset`
+- `respond`
+- `reward`
 - `scheduled-task`
-- `server`
-- `speech`
-- `st-preset`
+- `setup`
 - `stats`
+- `status`
 - `support`
 - `tool`
+- `update`
 
 ## Category Restrictions
 
 Defined in `commandLoader.ts`:
 
-- Guild-only categories: `server`, `conditioning`, `stats`
-- Manage Guild required by default: `config`, `server`
+- Guild-only categories: `conditioning`, `expressions`, `impersonate`, `matrix`, `moderation`, `nuke`, `punish`, `quota`, `reward`, `stats`
+- Manage Server required by default: `expressions`, `matrix`, `model`, `moderation`, `nsfw`, `nuke`, `providers`, `quota`, `setup`
 
 ## Localization Strategy for Command Metadata
 
@@ -177,8 +367,8 @@ Key pattern:
 
 Example path:
 
-- file: `src/commands/memory/personal/remove.ts`
-- command path: `memory.personal.remove`
+- file: `src/commands/export/personal/config.ts`
+- command path: `export.personal.config`
 
 Root command example:
 
@@ -276,12 +466,11 @@ Use when the user is managing an existing set of configured entries and batch ke
 
 Examples:
 
-- `/server whitelist remove`
-- `/config remove modeloverride` (channels + personas together)
-- `/config workarounds` (experimental server-scoped workaround toggles)
-- `/server stm manage` (active server-shared STM entries)
-- `/server private-channels`
-- `/server rp-channels`
+- `/moderation` User Blacklist and Whitelist removal actions
+- `/model override remove` (channels + personas together)
+- `/config` > Engine > Experimental (experimental server-scoped workaround toggles)
+- `/memories` Short-Term category (active server-shared STM entries)
+- `/config` > Channels > Channel Rules (private, roleplay, and cross-channel blocklist sets)
 
 Rules:
 
@@ -299,8 +488,8 @@ Use when one command owns the full enabled-set of a durable setting rather than 
 
 Example:
 
-- `/server crosschannel-blocklist`
-- `/server whitelist persona` (after the persona picker, the command owns that persona's full enabled channel set)
+- `/config` > Channels > Channel Rules
+- `/moderation` Personas (each write preserves the persona's complete enabled channel set)
 
 Rules:
 
@@ -308,8 +497,8 @@ Rules:
 - reopening the command must preload the current saved state
 - submit writes the full selected set back to storage, not just the latest delta intent
 - if the eligible option set exceeds one modal (`>50`), show a page-selection message first and launch page-scoped checkbox modals from there
-- durable server-scoped settings added through this pattern should also be surfaced in `/tool status`
-- keep [`status-command.md`](/architecture/subsystems/status-command/) in sync when `/tool status` coverage changes
+- durable server-scoped settings added through this pattern should also be surfaced in `/status`
+- keep [`status-command.md`](/architecture/subsystems/status-command/) in sync when `/status` coverage changes
 
 ### Pattern 3C: Modal -> Review Prompt -> Modal
 
@@ -317,7 +506,7 @@ Use when a command needs one modal to collect a bulk selection, then a follow-up
 
 Example:
 
-- `/personal spotlight set`
+- `/personal config` (spotlight workflow)
 
 Rules:
 
@@ -492,7 +681,7 @@ every filter the loader applies:
 
 Two traps are worth stating explicitly:
 
-- **Permission-dependent eligibility.** `/memory server edit`, `remove`, and `vectorize`
+- **Permission-dependent eligibility.** `/memories` Server category operations
   scope their loads by `hasManagePermission ? undefined : userData.user_id`. The batched
   availability query takes the same optional `userId`, so a manager and a non-manager can see
   different eligible sets for the same command in the same guild.
@@ -807,7 +996,7 @@ await runPersonaPickerWorkflow(interaction, locale, {
     );
 
     await publicPhase.reply({
-      content: localizer(locale, "commands.stats.persona.picker_description"),
+      content: localizer(locale, "commands.stats.generate.picker_description"),
       allowedMentions: { parse: [] },
     });
     return completePersonaWorkflow();
@@ -841,8 +1030,8 @@ An exception must never weaken the repository-wide scanner or add a directory-wi
 ### Pattern 4B: Anchor One-Shot Picker -> Modal
 
 Use for a config command shaped *pick a provider -> choose a value in a modal -> show the
-result*. The whole `/model *` family and its `/personal provider model-*` siblings are built
-this way, plus `/model fallback` and `/personal model fallback`.
+result*. The whole `/model *` family is built
+this way, plus `/config` > Models > Fallbacks & Randomizer.
 
 The command expresses only business intent — which model table to read, which column to
 write, which terminal copy to show. All lifecycle branching lives in the shared helpers in
@@ -886,7 +1075,7 @@ Rules:
   an interaction the controller owns, so the slash command cannot open it directly.
 
 **When the bridge does not fit.** The bridge slices exactly one select component and assumes
-every entry is a selectable option. `/model fallback` violates both — five selects over one
+every entry is a selectable option. `/config` > Models > Fallbacks & Randomizer violates both — five selects over one
 shared option list, with one entry per page reserved for an explicit "None" choice. Such a
 command picks its range on the anchor message first via `acquireModalOptionRange(...)`
 (passing a `pageSize` below 25 to reserve entries), then hands `openAnchorModal` an
@@ -946,45 +1135,119 @@ Rules:
 
 ## Representative Command Groups
 
-- `bot`: respond, generate(image/scene), kill, impersonate
+The primary MCP management surface is `/config` > Plugins > MCP Servers. The page's navigation is
+reconstructable and performs no writes. Routed navigation and mutation
+submissions derive guild or DM-workspace scope again and recheck Manage Server in guilds. The Add
+opener rechecks permission before showing the form; its submit repeats the full scope and permission
+checks. Entity mutations resolve stable MCP row IDs inside that scope before a write. Known unsupported
+route versions receive a localized stale-panel response; unrelated component IDs remain available to
+collector workflows.
+Healthy empty and collection views repaint automatically after transactions and do not expose a routine
+refresh control. Stale or unavailable reads expose a read-only **Retry** action; Retry reloads saved
+configuration and never connects to an MCP endpoint. The collection renders every supported registration
+in deterministic order with its own Enable/Disable and Remove actions, then a **+ Add MCP** action.
+Receipts render in a separate top-level container below the authoritative collection repaint.
+**+ Add MCP** opens one raw modal containing Name, URL, optional Auth Token, and the required
+General Purpose/Web Search/URL Fetcher Radio Group, with General Purpose selected by default. Its modal
+and field IDs carry bounded random nonces, and submission returns through the global router rather
+than an invocation-scoped modal collector, so a supported open modal can survive a process restart.
+
 - `config`: setup, model(text/image/embedding/video/vision/speech/transcription), api-key(rotation), provider(add/remove), custom-endpoint(add/edit/remove), image-tags(default-positive/default-negative), system-prompt(set/remove/preset), context-note(set), params(*), timezone, message-fetch-limit, self-debug, model-randomizer, workarounds, bot-permissions -> tool-use(toggle/manage), notice-embeds(visibility)
-- `speech`: elevenlabs, voice-add, voice-remove, voice-assign, transcripts, chatterbox(parameters)
+- `speech`: elevenlabs, voice-assign, transcripts, voice-design(set/remove)
 - `nsfw`: jailbreaks
 - `optional-key`: brave/set/remove
 - `server`: trigger(add/delete), whitelist(channel/persona/role/remove), stm(manage), cooldown(triggers), auto-trigger(channels/threshold), matrix(link/unlink), quota(image-generation/text-generation/video-generation/reset), rp-channels, crosschannel-blocklist, welcome-channel(set/remove), private-channels, user-blacklist(add/remove), member-permissions, always-reply, thought-logs-channel, channel-prompt
-- `novelai`: attg, image(params/generate), character-reference
+- `novelai`: generate(image)
 - `server`: trigger(add/delete), whitelist(channel/persona/role/remove), stm(manage), cooldown(triggers), auto-trigger(*), matrix(link/unlink), quota(image-generation/text-generation/video-generation/reset), rp-channels, crosschannel-blocklist, welcome-channel(set/remove), private-channels, user-blacklist(add/remove)
 - `persona`: create, generate, import, export, default, swap, remove, image-tags, sprites(add/edit/remove/export/import), attribute(add/edit/remove), sample-dialogue(add/edit/remove), prompt(set/remove), history(import/remove)
-- `memory`: document(add/remove), personal(add/edit/remove/import/export), server(add/edit/remove/import/export)
+- `memory`: document(add/remove)
+- `export`: config, memories, personal(config/memories)
+- `import`: config, memories, personal(config/memories)
 - `personal`: privacy, language, nickname, image-tags, cache, config(import/export/remove), provider(add/remove/model-text/model-embedding/model-image/model-video/model-vision/toggle-models), model(fallback), parameters, impersonate(prompt), spotlight(set/manage)
 - `scheduled-task`: edit, remove
 - `conditioning`: manage, reward(headpat/hug/kiss/tickle), punish(spank/pinch/bite/squeeze)
 - `tool`: ping, status, refresh, compact, comment
-- `stats`: personal(scope toggle), persona(picker), server — each takes an optional `timeframe` (default All-Time)
+- `stats`: personal(scope toggle), persona(autocomplete), server — each takes an optional `timeframe` (default All-Time)
 
-`/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an **optional** `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to **All-Time** when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`) — declared before `timeframe` because Discord rejects a required option after an optional one. The result is a **public, invoker-controlled tabbed dashboard** (`src/utils/stats/statsDashboard.ts`) built on **Components V2**: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (`STATS_DASHBOARD_TIMEOUT_MS`, default 5 min). The renderer uses a single **persistent** `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process. **Timeframe gating:** rewards/punishments and memories are all-time-only; daily telemetry, including generation totals, works for every timeframe. Span metrics (streaks, most-active hour/day) are hidden under the single-day `Today` view. `/stats persona` uses `runPersonaPickerWorkflow(...)` and its explicit `separate-public` phase: the selected button compacts the private picker, then exactly one public follow-up becomes the dashboard. Token and cost figures prefer provider-reported usage and fall back to character estimates when unavailable; they remain estimates because pricing can be incomplete or provider-dependent. Timeframe windows use the daily-bucket floor, so `Today` is the current UTC day, not a rolling 24h.
+`/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an **optional** `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to **All-Time** when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`) — declared before `timeframe` because Discord rejects a required option after an optional one. The result is a **public, invoker-controlled tabbed dashboard** (`src/utils/stats/statsDashboard.ts`) built on **Components V2**: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (`STATS_DASHBOARD_TIMEOUT_MS`, default 5 min). The renderer uses a single **persistent** `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process. **Timeframe gating:** rewards/punishments and memories are all-time-only; daily telemetry, including generation totals, works for every timeframe. Span metrics (streaks, most-active hour/day) are hidden under the single-day `Today` view. `/stats persona` uses autocomplete to select from all guild personas, validating the ID and rendering the public dashboard directly via follow-up after an initial private deferral. Token and cost figures prefer provider-reported usage and fall back to character estimates when unavailable; they remain estimates because pricing can be incomplete or provider-dependent. Timeframe windows use the daily-bucket floor, so `Today` is the current UTC day, not a rolling 24h.
 
-`/server auto-trigger` is channel-scoped and uses one shared cycle across its configured channels. Threshold `0` enables always-reply in those channels. Positive values use either a fixed trigger (`min = max`) or a shared inclusive random range (`min-max`), rerolling after each successful auto-trigger. The cycle only advances on qualifying real user-like messages; TomoriBot and alter webhook self-messages do not advance or consume the auto-trigger counter. Removing a channel disables auto-trigger behavior for that channel. `/server auto-trigger channels` can also target a single channel and assign one persona to that room's auto-trigger fallback instead of always using the main persona.
+`/config` > Channels > Auto-Trigger is channel-scoped and uses one shared cycle across its configured channels. Threshold `0` enables always-reply in those channels. Positive values use either a fixed trigger (`min = max`) or a shared inclusive random range (`min-max`), rerolling after each successful auto-trigger. The cycle only advances on qualifying real user-like messages; TomoriBot and alter webhook self-messages do not advance or consume the auto-trigger counter. Removing a channel disables auto-trigger behavior for that channel. The page can also target a single channel and assign one persona to that room's auto-trigger fallback instead of always using the main persona.
 
-`/server channel-prompt` is a flat, modal-driven command that scopes a system prompt to one channel. It takes a required `channel` option, then opens a prefilled 4-part modal (up to 16000 chars, part 1 optional) plus a Radio Group for Prompt Mode (`Append` / `Replace`). `Append` injects the channel prompt as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt; `Replace` substitutes the channel prompt for the server system prompt's slot — persona prompt and persona attributes are never affected. Submitting with all prompt parts empty removes the channel's override. State lives in the standalone `channel_prompt_overrides` table (per-channel, never exported) and is resolved per request via `getCachedChannelPrompt`. The override surfaces in `/tool prompt snapshot` under the `Channel Prompt` header.
+`/config` > Channels > Channel Overrides scopes a system prompt to one channel. It selects the channel, then opens a prefilled 4-part modal (up to 16000 chars, part 1 optional) plus a Radio Group for Prompt Mode (`Append` / `Replace`). `Append` injects the channel prompt as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt; `Replace` substitutes the channel prompt for the server system prompt's slot — persona prompt and persona attributes are never affected. Submitting with all prompt parts empty removes the channel's override. State lives in the standalone `channel_prompt_overrides` table (per-channel, never exported) and is resolved per request via `getCachedChannelPrompt`. The override surfaces in `/tool prompt snapshot` under the `Channel Prompt` header.
 
-`/persona sprites add` is a one-modal Manage Server flow that selects a persona, validates a sprite label, uploads an image, converts it to PNG, and upserts a `persona_sprites` row. Reusing a normalized label replaces the existing sprite. `/persona sprites edit` uses the persona workflow, sprite picker, and confirmation bridge before opening a prefilled modal for name, optional replacement image, usage instructions, and identity status; replacement images consume the shared avatar quota, while metadata-only edits do not. `/persona sprites remove` starts from `runPersonaPickerWorkflow(...)`, then uses its in-place modal bridge for checkbox groups where checked sprites are kept and unchecked sprites are deleted. When a persona has more than 25 modal options, the workflow shows localized range buttons on the anchor message before opening the selected checkbox slice. `/persona sprites export` selects a persona and bundles its sprites into a shareable `.zip` through the explicit public-result phase. `/persona sprites import` opens a single modal with a persona select plus a `.zip` file-upload field; it validates and converts every image up front, reserves one import-quota slot for the whole batch, overwrites on name conflicts, and rejects the entire import if it would exceed `PERSONA_SPRITE_MAX_PER_PERSONA`. The archive format (manifest + `sprites/` images) and its ZIP-bomb guards live in `src/utils/persona/spriteArchive.ts`. See [multi-persona](multi-persona) for the format details.
+`/config` > Persona > Sprites carries every sprite action for the selected persona. Add validates a
+sprite label, uploads an image, converts it to PNG, and upserts a `persona_sprites` row. Reusing a
+normalized label replaces the existing sprite. Edit opens a prefilled modal for name, optional
+replacement image, usage instructions, and identity status. A replacement image consumes the
+shared avatar quota, while a metadata-only edit does not. Remove uses a fingerprinted confirmation
+for the selected sprite. Export bundles the persona's sprites into a shareable `.zip`. Import takes
+a `.zip` file upload, validates and converts every image up front, reserves one import-quota slot
+for the whole batch, overwrites on name conflicts, and rejects the entire import if it would exceed
+`PERSONA_SPRITE_MAX_PER_PERSONA`. The archive format and its ZIP-bomb guards live in
+`src/utils/persona/spriteArchive.ts`. See [multi-persona](multi-persona) for the format details.
 
-`/bot generate image` is a modal-driven, fire-and-forget scene snapshot command. It plans against the current channel context with the active text provider, preparing its simplified-history participants through the same API as live chat, then renders with either the current provider's native image path or NovelAI's tag-based image tool when a NovelAI backend is available. Personal provider overlays apply before the hidden turn is built so personal text/image routing is respected.
+The sprite selector reserves its first option for `+ Add Sprite`, leaving 24 stored sprites per
+page. Selecting a stored sprite shows its image as a thumbnail beside its details. Public image
+URLs render directly, while local storage references are attached to the ephemeral panel and use an
+`attachment://` thumbnail URL. Persona avatar resolution and sprite-list loading run concurrently
+after the component interaction has been acknowledged. The add option is absent for actors who
+cannot mutate sprites because Discord cannot disable one select option.
 
-`/bot generate scene` is a modal-driven scripted text-scene command. V1 requires two different personas, optionally accepts a third, blocks duplicate selections, and only opens when the available persona set fits Discord's 25-option select limit. The `Rounds` field repeats the selected speaking order and is bounded by `BOT_GENERATE_SCENE_MAX_CYCLES` (default `10`; TomoriBot is BYOK so each generated turn bills the invoking user's own provider). Each generated turn receives a concise tail directive: additional instructions when provided, then "Begin your next reply as {persona}. Write only this character's next message." Scene turns keep tools enabled, suppress `/bot respond` continuation prompting, and use unique text-quota trigger keys so each generated turn is charged separately. Because every scene turn shares one trigger message, both reply-to-trigger mechanisms are suppressed for scene turns: the visual Discord reply (`replyToMessage` in `toolLoop.ts`) and the textual `buildQueuedReplyDirective` context directive (`contextPipeline.ts`) — otherwise every queued persona would render and be told to reply to the same unrelated message. The command-execution status embed (`commands.bot.generate.scene.success_title`) is sent non-ephemerally so it is classified as a `scene_directive` system embed and re-read into context as `[System: ...]`. For scene turns after the first, `triggererName` (what `{{user}}` resolves to in `turnPlanner.ts`) is overridden to the previous speaker in `sceneTurn.sequence`, so each persona treats the prior persona as the entity it is responding to rather than the command invoker; turn 0 has no prior speaker and keeps the invoker.
+`/config` > Persona > Triggers keeps trigger-word controls separate from Identity & Personality so
+collection selections and write receipts remain below Discord's 40-component message limit.
+Ordinary members may inspect trigger words, but both mutation buttons and their replayed routes
+require Manage Server.
+
+`/config` > Persona > Appearance owns per-persona image tags and the NovelAI character reference.
+The panel previews a trusted saved reference without exposing its storage URL or path, using a
+configured public URL directly and a local attachment fallback. Uploading a reference is required
+in the upload modal; clearing uses a separate confirmation.
+Appearance follows Memories in the page selector, followed by Voice and Overrides, with Advanced placed last. Advanced owns persona prompts, context notes, and
+ATTG metadata; Overrides owns response style and text-model overrides.
+Text model overrides use a provider picker followed by a modal model picker when the provider has
+at most 25 models; larger catalogs retain the paginated picker because Discord limits one select to
+25 options.
+
+Behavior pages place Advanced Memory before Notice Behavior and keep Experimental Behavior last.
+Trigger cooldown omits its stored duration while disabled. Notice Behavior marks each notice with
+a green or red status icon and explains that disabled notice embeds are redirected to Logs.
+
+`/config` > Models > Switch Models exposes eight capability slots. The six ordinary model-routing
+slots select a model from the registered provider catalogs and persist their corresponding model-column
+choices. TTS and STT are workspace-wide speech slots: each selects a registered, server-scoped endpoint
+and activates its selected scoped endpoint record (the active/default endpoint), without writing a model
+column. Each speech selector is bounded by Discord's 25-option limit and validates a freshly loaded scoped
+endpoint list before writing, so a stale choice cannot change state. TTS follows `voice_message_enabled`;
+STT has no equivalent flag. `/personal config` retains six personal model-routing slots and directs users
+to `/config` for workspace-wide TTS/STT.
+
+`/conditioning remove` shows the removal modal directly when stored conditioning entries are at or under
+the modal ceiling of 50. When more than 50 entries exist, it displays a minimal ephemeral page-select
+whose routed buttons each open the removal modal for a 50-entry batch. Modal submissions remain bound to a
+fingerprint of the exact entries presented. `/conditioning manage` is a temporary compatibility leaf running
+the same implementation.
+
+`/generate image` Auto mode is a modal-driven, fire-and-forget scene snapshot flow. It plans against the current channel context with the active text provider, preparing its simplified-history participants through the same API as live chat, then renders with either the current provider's native image path or NovelAI's tag-based image tool when a NovelAI backend is available. Personal provider overlays apply before the hidden turn is built so personal text/image routing is respected.
+
+`/generate scene` is a modal-driven scripted text-scene command. V1 requires two different personas, optionally accepts a third, blocks duplicate selections, and only opens when the available persona set fits Discord's 25-option select limit. The `Rounds` field repeats the selected speaking order and is bounded by `GENERATE_SCENE_MAX_CYCLES` (default `10`; TomoriBot is BYOK so each generated turn bills the invoking user's own provider). Each generated turn receives a concise tail directive: additional instructions when provided, then "Begin your next reply as {persona}. Write only this character's next message." Scene turns keep tools enabled, suppress `/respond` continuation prompting, and use unique text-quota trigger keys so each generated turn is charged separately. Because every scene turn shares one trigger message, both reply-to-trigger mechanisms are suppressed for scene turns: the visual Discord reply (`replyToMessage` in `toolLoop.ts`) and the textual `buildQueuedReplyDirective` context directive (`contextPipeline.ts`) — otherwise every queued persona would render and be told to reply to the same unrelated message. The command-execution status embed (`commands.generate.scene.success_title`) is sent non-ephemerally so it is classified as a `scene_directive` system embed and re-read into context as `[System: ...]`. For scene turns after the first, `triggererName` (what `{{user}}` resolves to in `turnPlanner.ts`) is overridden to the previous speaker in `sceneTurn.sequence`, so each persona treats the prior persona as the entity it is responding to rather than the command invoker; turn 0 has no prior speaker and keeps the invoker.
 
 `/generate video` is a modal-driven async generation command. It validates `videogen_enabled`, provider capability, API key, configured `video_model_id`, and server quota before polling the selected provider until the MP4 result is ready.
 
-`/config model-randomizer` is a server-level toggle (mirrors `/config self-debug`) for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured via `/model fallback`, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` — see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn).
+`/generate voice-message` is a modal-driven manual driver for the server's active speech endpoint, so auditioning a clone sample or a voice design prompt does not require a chat turn and a model that decides to call the tool. It accepts an optional `persona` (autocompleted through the same whitelist and personal-spotlight filter as `/impersonate persona`, then re-checked on submit because autocomplete output is only a client-side suggestion), an optional `voice_sample` attachment, and an optional `voice_design` prompt. The two overrides are never persisted: the uploaded buffer stays in memory for the invocation, and `resolveVoiceSourceCandidates` decides which of the four possible sources the modal offers, in the order upload, typed design prompt, persona sample, persona design prompt. An endpoint that accepts neither request shape, such as ElevenLabs, ignores both user options and uses the persona's stored voice id.
 
-`/config workarounds` is a checkbox-group modal for experimental compatibility patches. V1 exposes `Verbatim Tool-Calling`, a default-off server flag stored in `server_capabilities_configs.verbatim_tool_calling_enabled`. The command uses `promptWithRawModal(..., MessageFlags.Ephemeral)` as the first acknowledgement, writes only changed columns through `ConfigRepository.updateCapabilitiesConfig`, and invalidates TomoriState cache after a successful DB write.
+The command holds the same pre-modal line as the other `/generate` subcommands: it must acknowledge within three seconds without deferring, so `voice_sample` is validated on metadata only (MIME type and byte size) before the modal opens, and the download, duration check, and ffmpeg normalization happen after submission. It gates on `voice_message_enabled` and shares the trigger cooldown with message triggers, mirroring `/generate scene`. Because a voice message is sent under a persona's name and avatar, the command requires a guild text channel or thread, resolves a webhook rather than falling back to bot identity, and posts the transcript caption plus `setCachedVoiceTranscript` exactly as the tool path does. `audio_generated` is recorded once, on success only, with the same three backend keys as the tool.
+
+The randomizer on `/config` > Models > Fallbacks & Randomizer is a server-level toggle for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured on that same page, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` — see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn).
+
+The Compatibility section of `/config` > Engine > Experimental is a checkbox-group modal for experimental compatibility patches. V1 exposes `Verbatim Tool-Calling`, a default-off server flag stored in `server_capabilities_configs.verbatim_tool_calling_enabled`. It writes only changed columns through `ConfigRepository.updateCapabilitiesConfig` and invalidates TomoriState cache after a successful DB write.
 
 ### Personal-provider (BYOK) routing in commands
 
-Any command that performs AI work the invoking user triggers must overlay that user's personal (BYOK) provider onto the loaded server state via `applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id)` before reading `config.api_key`, deriving the provider/model name, or validating capabilities. The overlay returns the server state unchanged when the user has no enabled personal provider, so it is always safe to call. Commands that currently apply it: `/persona generate`, `/novelai image generate`, `/generate image`, `/generate video`, `/bot generate image`, `/memory document add`, `/memory history import`, `/server initialize expressions`, and `/tool estimate cost` (so its live estimate stays in parity with what would actually run for the user).
+Any command that performs AI work the invoking user triggers must honor that user's personal (BYOK) provider. TomoriState-consuming command handlers apply the user's personal provider onto the loaded server state via `applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id)` before reading `config.api_key`, deriving the provider/model name, or validating capabilities. The overlay returns the server state unchanged when the user has no enabled personal provider, so it is always safe to call. Commands that currently apply it: `/persona generate`, `/novelai generate image`, `/generate image`, `/generate video`, `/learn history`, `/expressions initialize`, and `/tool estimate cost` (so its live estimate stays in parity with what would actually run for the user).
 
-The one deliberate exception is `/model embedding`, which re-embeds **server-wide** documents under server credentials (`resolveCapabilityCredentials(serverId, "embedding")` with no `userId`). This is bulk maintenance of a pre-existing server resource rather than a fresh user action, so it intentionally stays on server credentials.
+In contrast, `/memories` resolves the invoking user's embedding credentials directly through the credential resolver via `resolveCapabilityCredentials(serverId, "embedding", { userId })` during document addition and memory vectorization operations.
+
+The one deliberate exception is `/config` > Models > Switch Models, which re-embeds **server-wide** documents under server credentials (`resolveCapabilityCredentials(serverId, "embedding")` with no `userId`). This is bulk maintenance of a pre-existing server resource rather than a fresh user action, so it intentionally stays on server credentials.
 
 Forward-looking command rewrite guidance (naming conventions, checklist-style settings pattern, migration map) is now part of `docs/en/contributing/adding-slash-command.md`. The runtime loader and current implementation still use the existing `src/commands/` structure.
 

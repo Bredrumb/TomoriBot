@@ -1,8 +1,8 @@
 export default {
   "st-preset": {
-    description: `Manage SillyTavern presets. Use /help st-preset.`,
+    description: `Manage SillyTavern presets. See SillyTavern Presets in /help.`,
     import: {
-      description: `Import a SillyTavern preset JSON file. Use /help st-preset.`,
+      description: `Import a SillyTavern preset JSON file. See SillyTavern Presets in /help.`,
       file_description: `The SillyTavern preset .json file to import`,
       invalid_file_title: `Invalid File`,
       file_too_large_title: `File Too Large`,
@@ -10,7 +10,7 @@ export default {
       download_failed: `Failed to download the attachment. Please try again.`,
       invalid_json: `The file could not be parsed as valid JSON.`,
       not_a_preset_title: `Unsupported Preset Format`,
-      not_a_preset_description: `This doesn't look like a supported SillyTavern preset. Only **Chat Completions** presets are supported — either a Prompt Manager \`prompts\` array, or an older preset with \`context.story_string\` + \`sysprompt.content\`.\n\n**Text-completions presets** (which use an \`instruct\` block) are not supported.`,
+      not_a_preset_description: `This doesn't look like a supported SillyTavern preset. Only **Chat Completions** presets are supported: either a Prompt Manager \`prompts\` array, or an older preset with \`context.story_string\` + \`sysprompt.content\`.\n\n**Text-completions presets** (which use an \`instruct\` block) are not supported.`,
       no_nodes: `No usable prompt nodes were found in this preset.`,
       success_title: `Preset Imported`,
       success_description: `**{name}** has been imported.
@@ -20,10 +20,13 @@ export default {
 • **{toggleable}** toggleable nodes (**{enabled}** enabled)
 {notes}
 Use {stPresetToggle} to adjust which nodes are active.
-Use {helpStPreset} to learn how imported presets behave here.
+Use {helpStPreset} (Integrations > SillyTavern Presets) to learn how imported presets behave here.
 Use {stPresetRemove} to revert to default behavior.`,
-      note_comment_only: `> **{count}** comment-only node(s) are visible in \`/st-preset node toggle\` but are never injected into the prompt.`,
-      note_disabled_by_preset: `> **{count}** node(s) are disabled by default in this preset. Use \`/st-preset node toggle\` to enable them.`,
+      note_comment_only: `> **{count}** comment-only node(s) are visible in
+> \`/config\` > Plugins > SillyTavern Presets but are never
+> injected into the prompt.`,
+      note_disabled_by_preset: `> **{count}** node(s) are disabled by default in this preset.
+> Use \`/config\` > Plugins > SillyTavern Presets to enable them.`,
       note_unsupported_macros: `> Enabled node(s) still reference unsupported preset macros: {macros}. Those parts may be sent literally or behave differently here.`,
       note_legacy_text_completion: `> This older text-completions preset was converted best-effort from legacy \`story_string\` fields. ST-only blocks such as \`persona\`, \`scenario\`, anchors, stop strings, and backend settings are still ignored.`,
     },
@@ -51,9 +54,11 @@ Use {stPresetRemove} to revert to default behavior.`,
       select_label: `Select a preset to activate`,
       select_placeholder: `Choose a preset...`,
       no_presets_title: `No Presets Found`,
-      no_presets_description: `No SillyTavern presets have been imported. Use \`/st-preset import\` to add one.`,
+      no_presets_description: `No SillyTavern presets have been imported.
+Use \`/config\` > Plugins > SillyTavern Presets to add one.`,
       single_preset_title: `Only One Preset`,
-      single_preset_description: `Only one preset is imported. Import more with \`/st-preset import\` before switching.`,
+      single_preset_description: `Only one preset is imported. Import more with
+\`/config\` > Plugins > SillyTavern Presets before switching.`,
       success_title: `Preset Switched`,
       success_description: `**{name}** is now the active SillyTavern preset.`,
     },
@@ -62,7 +67,8 @@ Use {stPresetRemove} to revert to default behavior.`,
       toggle: {
         description: `Toggle preset prompt nodes on or off`,
         no_preset_title: `No Preset Found`,
-        no_preset_description: `No active SillyTavern preset found for this server. Import one with \`/st-preset import\` first.`,
+        no_preset_description: `No active SillyTavern preset found for this server.
+Import one with \`/config\` > Plugins > SillyTavern Presets first.`,
         no_nodes_title: `No Toggleable Nodes`,
         no_nodes_description: `This preset has no toggleable prompt nodes.`,
         select_page_title: `Select Page`,

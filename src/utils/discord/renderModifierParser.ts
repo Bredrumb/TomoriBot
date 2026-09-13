@@ -113,6 +113,35 @@ export function parseLeadingRenderModifier(
   return null;
 }
 
+/**
+ * Parses a leading sprite modifier for `/impersonate persona`, where the persona is already
+ * fixed by the command's autocomplete option: unlike {@link parseLeadingRenderModifier}, the source
+ * name is optional. Accepts both "PersonaName (modifier): body" (delegated to the named parser)
+ * and the bare "(modifier): body" shape, since repeating the already-selected persona's name is
+ * redundant in this context. Callers still gate on an actual sprite match before treating the
+ * text as decorated; text that fails that lookup falls through to plain, unmodified content.
+ */
+export function parseLeadingImpersonationSpriteModifier(
+  text: string,
+  personaName: string,
+): LeadingRenderModifierMatch | null {
+  const named = parseLeadingRenderModifier(text, [personaName]);
+  if (named) return named;
+
+  if (!text.trim() || text.trimStart().startsWith("```")) return null;
+
+  const bare = new RegExp(`^\\s*\\(([^()\\n\\r:：]{1,${RENDER_MODIFIER_LIMIT}})\\)\\s*[:：][ \\t]*`, "u").exec(text);
+  const modifier = bare?.[1]?.trim();
+  if (!bare || !modifier) return null;
+
+  return {
+    sourceName: personaName,
+    modifier,
+    body: text.slice(bare[0].length),
+    matchedPrefix: bare[0],
+  };
+}
+
 // Rejects label candidates that are really markdown structure: list items ("- Name", "1. Name"),
 // blockquotes ("> Name"), and headings ("# Name"). Mirrors parseLeadingRenderModifier, which never
 // matches these because its pattern is anchored directly after leading whitespace.

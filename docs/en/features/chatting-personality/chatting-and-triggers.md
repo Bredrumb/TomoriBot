@@ -15,16 +15,15 @@ By default, she replies when you:
 - **Mention her** — `@TomoriBot`
 - **Reply** to one of her messages (including a persona's webhook message)
 - **Use a trigger word** — any plain word you've registered, said anywhere in a message
-- **Use `/bot respond`** — manually prompt a reply
+- **Use `/respond`** — manually prompt a reply
 
 Trigger words are the most convenient path: once a word is registered, simply naming it
 activates her. In a DM, just say hi — no trigger needed.
 
 ### Managing Trigger Words
 
-- `/server trigger add` — add a custom trigger word (also works for alter personas, so a
-  word can summon a specific character).
-- `/server trigger remove` — remove a trigger word.
+Server managers use `/config` > Persona > Triggers to add or remove a selected persona's trigger
+words. Ordinary members can inspect the page, but its mutation controls are disabled.
 
 ## Expressions & Reactions
 
@@ -33,8 +32,15 @@ messages:
 
 - Custom emojis are used naturally in conversation with case-insensitive `:name:` syntax.
 - Stickers can accompany replies; she can also add emoji reactions.
-- Run `/server expressions initialize` to register your server's emojis and stickers so she
+- Run `/expressions initialize` to register your server's emojis and stickers so she
   uses them accurately.
+
+## Roleplay Channels
+
+Roleplay channels suppress custom emoji and sticker use in her responses. People can also use
+`/tool delete turn` there to remove her latest turn without Manage Server permission.
+
+Configure the channels from the Channel Rules page in `/config`.
 
 ## Situational Awareness
 
@@ -45,7 +51,7 @@ what was said. This context includes:
 - **Where she is** — the current server's name and description (or that it's a Direct
   Message), and the current channel.
 - **The current time** — the server's local time and rough time of day, based on
-  `/server timezone`, plus each person's own local time if they've set `/personal timezone`.
+  `/config` > Engine > General, plus each person's own local time if they've set `/personal config`.
 - **Who's in the conversation** — participants' display names, how to mention them, any
   physical-appearance tags, and their pending reminders.
 - **What someone's up to (presence)** — a user's Discord activity: what they're **playing**,
@@ -53,7 +59,7 @@ what was said. This context includes:
   custom status.
 
 Presence is privacy-gated: it's only shared for users at the **Minimal** privacy level (the
-default — see `/personal privacy`) and only when the bot has Discord's *Guild Presences*
+default — see `/personal config`) and only when the bot has Discord's *Guild Presences*
 intent enabled. Users who raise their privacy, or self-hosts running without that intent,
 simply won't have their activity surfaced to her.
 
@@ -63,8 +69,8 @@ Auto-trigger lets her join the conversation without being named at all.
 
 - `/server autotrigger channels` — set the channels where she responds without a mention.
 - `/server autotrigger threshold` — set how many messages accumulate before she chimes in.
-- `/config random-trigger add`: add a probabilistic timer-based auto-trigger to a channel.
-- `/config random-trigger remove`: remove an existing random trigger.
+- `/config` > Behavior > Trigger: add a probabilistic timer-based auto-trigger to a channel.
+- `/config` > Behavior > Trigger: remove an existing random trigger.
 - ~~`/natres` — humanlike timing for autonomous responses~~ to be implemented
 
 Use this in a dedicated chat channel where you want her to feel like a participant rather
@@ -81,7 +87,7 @@ When DTM is on:
 - `@{trigger}` (the trigger word prefixed like a mention) still works
 - Discord mentions still work
 - Replies still work
-- `/bot respond` still works
+- `/respond` still works
 - **Plain trigger words no longer trigger her**
 
 This forces deliberate invocation instead of accidental activation.
@@ -89,12 +95,12 @@ This forces deliberate invocation instead of accidental activation.
 ### Server and Personal Control
 
 - `/server dtm` — server admins toggle the server-wide behavior.
-- `/personal dtm` — each user overrides it for themselves, with three modes:
+- `/personal config` — each user overrides it for themselves, with three modes:
   - **off** — always allow plain trigger words
   - **follow** — use the server setting
   - **on** — always require deliberate invocation
 
-Run `/help deliberate-trigger-mode` for the same summary in Discord.
+In `/help`, choose **Behavior**, then **Deliberate Trigger Mode**, for the same summary in Discord.
 
 :::note
 Don't confuse **Deliberate Trigger Mode** (this page — controls *how she's triggered*) with
@@ -102,4 +108,3 @@ Don't confuse **Deliberate Trigger Mode** (this page — controls *how she's tri
 turn. They share the "DTM" abbreviation but are unrelated. See
 [Tools & Extensions](/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 :::
-

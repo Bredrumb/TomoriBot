@@ -57,7 +57,7 @@ Sprites — unlike avatars — **do** fan out to pointer personas. A sprite imag
 
 `preset_sprites` holds the official sprite set keyed by `(preset_lineage_id, preset_language, sprite_key)`. Each image is uploaded **once** to the immutable shared `presets/{lineage}/{language}/sprites/{key}-{hash}.png` storage prefix (content-addressed filename), so N servers cost one stored copy. The catalog authors sprites via the optional `PersonaInput.sprites` array (image files live under the persona's `avatarPath` directory); `seedPersonaSpritesFromCatalog()` uploads each once (idempotent: same content → same filename → skipped) and reconciles removed sprites. See [adding-persona-preset](../../contributing/adding-persona-preset).
 
-Resolution is centralized in `PersonaSpriteRepository.listForPersona()`: for a pointer persona it returns the shared `preset_sprites` set (shaped as `PersonaSpriteRow`); for a materialized persona it returns the persona's own `persona_sprites` rows. Every downstream consumer (prompt context builder, render-modifier resolver, `/persona sprites export`) reads through that one method, so they are pointer-agnostic. Editing the catalog sprite set fans out to all still-pointer personas on the next boot.
+Resolution is centralized in `PersonaSpriteRepository.listForPersona()`: for a pointer persona it returns the shared `preset_sprites` set (shaped as `PersonaSpriteRow`); for a materialized persona it returns the persona's own `persona_sprites` rows. Every downstream consumer (prompt context builder, render-modifier resolver, `/config` > Persona > Sprites) reads through that one method, so they are pointer-agnostic. Editing the catalog sprite set fans out to all still-pointer personas on the next boot.
 
 The shared `presets/` images are **immutable and never deleted** by per-persona paths — `deletePersonaAvatarFromStorage` refuses any reference under that prefix (`isSharedPresetAssetReference`), so one server replacing/removing a sprite, or re-running `/persona default`, can never delete art other servers rely on. The guard covers both shared asset layouts: sprites (`presets/{lineage}/{language}/sprites/...`) and avatars (`presets/{lineage}/{language}/avatar-{hash}.png`).
 
@@ -78,7 +78,7 @@ The flags are still derived at seed time, not authored in each catalog row. `see
 
 Applying an official preset creates a **copy-on-write pointer** when the preset has a `preset_lineage_id`. The persona follows the live `persona_presets` row until the first local content edit materializes it into an independent copy.
 
-### `/config setup`
+### `/setup`
 
 Setup creates the main persona as a pointer to the selected official preset, stamps `persona_lineage_id` from the preset lineage, and applies the preset avatar to the bot's Discord guild avatar when running in a guild.
 
@@ -90,7 +90,7 @@ For the main/default target, re-pointing also **resets the avatar**: `applyPrese
 
 For `type=alter`, `/persona default` creates an alter pointer from the preset and leaves `personas.webhook_avatar_url` NULL — **no per-server upload**. The alter live-resolves the shared preset avatar (`preset_avatar_shared_url`) at load time, so N servers share one image and catalog avatar edits fan out on the next reseed.
 
-Preset-application avatar writes for the main persona are one-time operational Discord updates and do not materialize a pointer: `/config setup`, `/persona default`, and `/persona import` can establish or preserve the pointer while patching the guild avatar. Direct `/server avatar` edits are different; setting or resetting a persona avatar is deliberate customization and materializes a pointer before the avatar write.
+Preset-application avatar writes for the main persona are one-time operational Discord updates and do not materialize a pointer: `/setup`, `/persona default`, and `/persona import` can establish or preserve the pointer while patching the guild avatar. Direct `/server avatar` edits are different; setting or resetting a persona avatar is deliberate customization and materializes a pointer before the avatar write.
 
 All main-persona avatar uploads are re-encoded to PNG before the guild-member PATCH, same as alter avatars. Discord returns 200 OK for structurally corrupt image files but stores an unservable asset (the CDN returns 415 and clients silently keep the old avatar), so raw user bytes are never sent as-is.
 
@@ -116,6 +116,12 @@ Import re-links to an official preset pointer only when all of these are true:
 - The file does not carry persona-specific NovelAI/custom fields that are not part of official presets.
 
 If any exact-match check fails, import creates an independent copy with `is_pointer = false`. The imported `preset_lineage_id` is kept as provenance when present, but `preset_language` remains null.
+
+Main-persona imports snapshot the current sprite rows before changing the persona. A materialized import
+deletes those rows after the persona write and uses the rows returned by that delete for best-effort storage
+cleanup. An import that becomes a preset pointer deletes its persona rows inside the pointer transaction and
+uses the pre-import snapshot for storage cleanup. A snapshot or row-delete failure is reported as an incomplete
+import, while a storage-file failure is reported as partial cleanup. Shared `presets/` references are skipped.
 
 `/persona generate` emits the canonical six generated attributes and marks only the generated Appearance attribute public. `/persona create` emits an explicit all-private flag array because its single freeform description is not guaranteed to be an appearance-only field. SillyTavern card conversion also defaults converted attributes to private because ST cards do not carry Tomori public visibility metadata.
 
@@ -144,3 +150,16 @@ Migration `020_persona_preset_pointers.sql` adds the pointer columns and convert
 Migration `026_repair_legacy_persona_preset_pointers.sql` is the follow-up repair pass. It recognizes known official preset copy fingerprints from historical seed shapes, including the legacy form that stored `"{bot}'s Description: ..."` as the first attribute, and marks exact copies as pointers even when their memory lineage is custom/generated. It preserves `persona_lineage_id` so existing memories and conditioning stay in their original scope, and it does not rewrite avatars, nicknames, or copied child rows. Customized personas that do not match an official historical fingerprint stay independent copies.
 
 If a pointer references a missing official preset row, materialization fails closed by logging an error and refusing the fork. Runtime reads are more resilient: they log a warning and fall back to the persona's last copied snapshot instead of failing the whole state load.
+
+## Naming maps
+
+Every official language variant declares prefix, suffix, and standalone address-term maps for
+masculine, feminine, and neutral addressing styles. Empty maps are explicit and valid. A
+gendered address term requires a neutral fallback, and authored `{user_term}` content also
+requires a neutral term. `{user_formatted}` is used for user-vocative names in samples.
+
+Pointer personas read `preset_naming_config` live. `/config` > Persona > Identity & Personality
+materializes a pointer before saving a custom `persona_naming_configs` row, so other servers remain
+on the shared preset. Export emits the naming map; older imports default it to empty.
+Official-preset matching includes the map, preventing a customized persona from collapsing back
+into a pointer.

@@ -883,13 +883,34 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   /**
    * Delete every config-table row owned by this server across the 13 split tables.
-   * Used by `/config setup` to recover from the orphaned-alters state.
+   * Used by `/setup` to recover from the orphaned-alters state.
    * Wiping all configs frees the constraint without touching `personas` rows, so
    * alters survive the reset.
    *
    * @param serverId - Internal server DB ID
+   * @param txClient - Optional transaction SQL client
    */
-  async resetAllServerConfigs(serverId: number): Promise<void> {
+  async resetAllServerConfigs(serverId: number, txClient?: SQL): Promise<void> {
+    if (txClient) {
+      // Bun SQL transactions operate over a single dedicated database connection.
+      // Issuing concurrent statements via Promise.all on one transaction connection
+      // can interleave or corrupt protocol frames, so queries must run sequentially.
+      await txClient`DELETE FROM server_model_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_member_permissions_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_capabilities_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_notice_embeds_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_nsfw_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_speech_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_auto_trigger_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_channel_scope_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_trigger_behavior_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_byok_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_novelai_imagegen_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_memory_configs WHERE server_id = ${serverId}`;
+      return;
+    }
+
     await Promise.all([
       sql`DELETE FROM server_model_configs WHERE server_id = ${serverId}`,
       sql`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`,

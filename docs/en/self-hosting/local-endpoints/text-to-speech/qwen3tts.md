@@ -41,18 +41,15 @@ Auto mode inspects each `/synthesize` request: requests with `ref_audio` use the
 
 For most users, register the auto-mode server so one endpoint can support both voice-clone and VoiceDesign personas.
 
-Run `/provider custom-endpoint add`:
+Run `/providers`, choose **Add New Custom Endpoint**, and use the speech API compatibility:
 
-- `capability`: `speech`
-- `api_style`: `tts-clone`
+- API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8012`
 
-In the modal:
+After saving the connection, select it and use its model dropdown to add a Speech model. The model form
+asks for **Voice Source Mode** and **Script Markup**; choose `Auto` and `Plain` for the auto-mode server.
 
-- `Voice Source Mode`: `Auto`
-- `Script Markup Style`: `Plain`
-
-Registration makes the endpoint active immediately. Use `/model speech` later only when switching between speech endpoints.
+Use `/providers` for endpoint registration and model setup. Then open `/config` > Models > Switch Models to select and activate the registered endpoint.
 
 ## Set Up Persona Voices
 
@@ -61,20 +58,20 @@ Registration makes the endpoint active immediately. Use `/model speech` later on
 Use this for personas that should imitate a reference clip:
 
 1. Prepare a clean 10-20 second voice clip with one speaker and no background music.
-2. Run `/speech voice-add` and upload the clip.
-3. Run `/speech voice-assign`, then choose the persona and the voice sample.
+2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
+3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
 ### VoiceDesign
 
 Use this for personas that should use a written voice description instead of a sample:
 
-1. Run `/speech voice-design set`.
+1. Open `/config` under Persona > Voice and choose VoiceDesign.
 2. Choose the persona.
 3. Enter a natural-language voice prompt, such as the speaker's age, tone, accent, and delivery.
 
-Remove a persona's VoiceDesign prompt with `/speech voice-design remove`. During generation, TomoriBot sends the saved prompt in the `/synthesize` JSON body as `instruct`; one-off `voice_instructions` from the tool are appended
+Remove a persona's VoiceDesign prompt from Persona > Voice in `/config`. During generation, TomoriBot sends the saved prompt in the `/synthesize` JSON body as `instruct`; one-off `voice_instructions` from the tool are appended
 
-Auto mode keeps both setups. Personas configured with `/speech voice-assign` use clone synthesis; personas configured with `/speech voice-design set` use VoiceDesign synthesis.
+Auto mode keeps both setups. Personas configured under Persona > Voice in `/config` use clone synthesis or VoiceDesign synthesis according to their selection.
 
 ## (Optional) VoiceDesign-Only Server
 
@@ -97,4 +94,5 @@ TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py
 
 You can also pass `--mode voice-design` instead of setting `TOMORI_TTS_MODE`. The default VoiceDesign-only endpoint URL is `http://127.0.0.1:8014`.
 
-Register it the same way as auto mode, but use endpoint URL `http://127.0.0.1:8014` and select `VoiceDesign` as the voice source mode.
+Register it the same way as auto mode, but use endpoint URL `http://127.0.0.1:8014` and choose `VoiceDesign`
+as the Voice Source Mode on the Speech model.

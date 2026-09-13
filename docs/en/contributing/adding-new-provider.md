@@ -206,7 +206,7 @@ The failure only surfaces when the LLM calls an MCP-backed tool.
 ### Guild MCP Tools
 
 In addition to global MCP tools, each guild can register its own remote MCP servers
-via `/config mcp add`. Your tool adapter's `getAllToolsIn*Format()` method **must**
+via `/config` > Plugins > MCP Servers. Your tool adapter's `getAllToolsIn*Format()` method **must**
 also inject guild MCP tools by calling `getGuildMcpManager().getGuildMCPTools(serverId)`.
 
 The pattern (used by Google, OpenRouter, and OpenAI-compatible adapters):
@@ -319,12 +319,12 @@ When adding a provider, update the user-facing setup/help copy in the same chang
 
 Minimum reminders:
 
-- update `/help api-key` provider choices in `src/commands/help/api-key.ts`
-- add localized `/help api-key` copy in both locale trees (`src/locales/en-US/` and `src/locales/ja/`)
+- update the `/help` API Keys provider catalog in `src/utils/discord/helpProviderGuides.ts`
+- add localized API Keys copy in both locale trees (`src/locales/en-US/` and `src/locales/ja/`)
 - review the `/config params` success embed strings in both locale trees
 - keep those `/config params` provider lists accurate per parameter; do not add a provider unless that exact saved setting is wired through the provider runtime
-- if the provider changes onboarding guidance, also review `/help setup`
-- if the provider changes pricing guidance or model-tag expectations, review `/help cost` and any related help text
+- if the provider changes onboarding guidance, also review Setup Step 1 in `src/utils/discord/helpCatalog.ts`
+- if the provider changes pricing guidance or model-tag expectations, review `/tool estimate cost` and any related help text
 
 ## 9. Keep New Logic Inside the Provider Layer
 
@@ -370,9 +370,9 @@ Checklist:
   - confirm the assistant/tool loop shape matches TomoriBot's runtime
 - reasoning or thinking mode:
   - check for continuation-only fields that must be replayed within the same turn
-  - decide explicitly how the `thinking_level` option in `/model parameters` behaves for the provider: map it, or document a deliberate no-op
+  - decide explicitly how the `thinking_level` option in `/config` > Models > Text Samplers & Parameters behaves for the provider: map it, or document a deliberate no-op
   - DeepSeek example: preserve `reasoning_content` across tool sub-turns, but do not treat it as normal cross-turn chat history
-  - Z.ai example: the `thinking_level` option in `/model parameters` maps to `thinking: { type: "enabled" | "disabled" }`; active thinking removes temperature / top_p / frequency_penalty / presence_penalty
+  - Z.ai example: the `thinking_level` option in `/config` > Models > Text Samplers & Parameters maps to `thinking: { type: "enabled" | "disabled" }`; active thinking removes temperature / top_p / frequency_penalty / presence_penalty
 - structured output:
   - determine whether the provider offers strict schema mode or only JSON-object mode
   - implement provider-owned `callStructuredJSON()` for the contract the vendor actually supports
@@ -411,7 +411,7 @@ Use this as the last pass before you call a provider integration "done".
 
 ### Thinking Level
 
-- if the vendor has a verified request-side reasoning control, map the `thinking_level` option from `/model parameters` in the provider layer
+- if the vendor has a verified request-side reasoning control, map the `thinking_level` option from `/config` > Models > Text Samplers & Parameters in the provider layer
 - if the vendor only supports startup flags, GUI toggles, or backend-template-specific reasoning controls, do not invent a generic request field
 - document the result in `docs/en/architecture/subsystems/thinking-level.md` and the provider notes
 - if the provider only guarantees JSON objects, inject the required prompt guidance and validate locally with Zod
@@ -433,7 +433,7 @@ Use this as the last pass before you call a provider integration "done".
 - only implement this if the app already has a native image-generation path for the provider
 - implement the provider-owned image-generation capability instead of faking it through text chat
 - seed `image_diffusion_models` only for models that are actually wired and tested
-- confirm `/model image` and any image-generation commands use the provider cleanly
+- confirm `/config` > Models > Switch Models and any image-generation commands use the provider cleanly
 - if the provider has no native image generation, leave `featureSupport.imageGeneration = "none"` and do not seed image rows
 
 ### Embedding Models
@@ -481,8 +481,8 @@ Minimum test checklist:
 - provider is auto-discovered at startup
 - aliases resolve correctly
 - `/config provider add` and `/config provider switch` validation work
-- `/config setup` and provider-specific error formatting work
-- `/model text` shows the provider's seeded models
+- `/setup` and provider-specific error formatting work
+- `/config` > Models > Switch Models shows the provider's seeded models
 - normal chat streaming works
 - tool calling works if supported
 - structured output works if supported
@@ -592,7 +592,7 @@ The high-value shared pieces are:
 
 Keep these provider-owned: `providerInfo.ts`, base URL, auth header shape, API key validation strategy, provider display name/aliases, provider-specific locale namespace, request parameter policy, feature flags in `ProviderInfo.featureSupport`, optional runtime capability implementations, and provider-specific structured-output/image-generation/embedding/cost helpers that make vendor-specific HTTP requests.
 
-User-facing reminder: when adding a new provider in this family, also update `/help api-key` choices and localized provider instructions.
+User-facing reminder: when adding a new provider in this family, also update the `/help` API Keys choices and localized provider instructions.
 
 ### File Layout
 
@@ -688,7 +688,7 @@ Seed scope: one default general chat model; optionally one reasoning model; per-
 
 **Phase 5: Add `nvidia`** — keep supported model set small and curated; wire provider-owned embeddings and native image generation only when exact NVIDIA endpoint contract is implemented.
 
-**Phase 6: Optional Embedding Decoupling** — allow `/model embedding` to choose from any seeded embedding provider; stop coupling embedding selection to the active chat provider.
+**Phase 6: Optional Embedding Decoupling** — allow `/config` > Models > Switch Models to choose from any seeded embedding provider; stop coupling embedding selection to the active chat provider.
 
 ### Capability Checklist For Future OpenAI-Compatible Providers
 
@@ -724,8 +724,7 @@ The combined extraction + DeepSeek slice is successful when `custom` still works
 - `src/utils/provider/providerCapabilityResolver.ts`
 - `src/providers/utils/providerFeatureExecutors.ts`
 - `src/commands/config/api-key/set.ts`
-- `src/commands/model/image.ts`
-- `src/commands/model/embedding.ts`
+- `src/utils/discord/interactions/configModelOperations.ts`
 - `src/utils/db/repositories/LlmRepository.ts`
 
 ### Practical Recommendation

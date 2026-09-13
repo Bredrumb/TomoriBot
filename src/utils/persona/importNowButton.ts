@@ -12,6 +12,7 @@
 
 import {
   type ButtonInteraction,
+  ButtonStyle,
   type ChatInputCommandInteraction,
   type Client,
   ComponentType,
@@ -26,6 +27,7 @@ import {
   type PersonaResultButtonOptions,
   type PersonaResultContainerOptions,
 } from "@/utils/discord/ui/statusComponents";
+import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { importAlterPreset } from "@/utils/persona/importAlterPreset";
 import { localizer } from "@/utils/text/localizer";
@@ -58,14 +60,14 @@ export function importNowButton(state: ImportNowButtonState): PersonaResultButto
     return {
       customId: IMPORT_NOW_CUSTOM_ID,
       labelKey: "commands.persona.import_now.imported",
-      style: 2, // Secondary
+      style: ButtonStyle.Secondary,
       disabled: true,
     };
   }
   return {
     customId: IMPORT_NOW_CUSTOM_ID,
     labelKey: "commands.persona.import_now.button",
-    style: state === "expired" ? 2 : 3, // Secondary when expired, Success when active
+    style: ButtonStyle.Secondary,
     disabled: state === "expired",
   };
 }
@@ -228,10 +230,15 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     }
 
     try {
-      await interaction.editReply({
-        components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("done") }),
-        flags: MessageFlags.IsComponentsV2,
-      });
+      await interaction.editReply(
+        validateAndFallbackPanelPayload(
+          {
+            components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("done") }),
+            flags: MessageFlags.IsComponentsV2,
+          },
+          locale,
+        ),
+      );
     } catch (error) {
       log.warn("Import Now: failed to disable button after import", error as Error);
     }
@@ -264,10 +271,15 @@ export function attachImportNowCollector(params: ImportNowCollectorParams): void
     // Best-effort: grey out the button on timeout. Edits the original reply via
     // the source interaction token, which is still valid given the <15m timeout.
     try {
-      await sourceInteraction.editReply({
-        components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("expired") }),
-        flags: MessageFlags.IsComponentsV2,
-      });
+      await sourceInteraction.editReply(
+        validateAndFallbackPanelPayload(
+          {
+            components: buildPersonaResultContainer({ ...containerOptions, button: importNowButton("expired") }),
+            flags: MessageFlags.IsComponentsV2,
+          },
+          locale,
+        ),
+      );
     } catch (error) {
       log.warn("Import Now: failed to disable button after collector end", error as Error);
     }

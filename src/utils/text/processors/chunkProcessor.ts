@@ -127,7 +127,10 @@ function restoreMarkdownLinksFromPlaceholders(text: string, markdownLinks: strin
   return restoredText;
 }
 
-function findBalancedParentheses(text: string, startIndex = 0): { start: number; end: number; content: string } | null {
+export function findBalancedParentheses(
+  text: string,
+  startIndex = 0,
+): { start: number; end: number; content: string } | null {
   const openIndex = text.indexOf("(", startIndex);
   if (openIndex === -1) return null;
 
@@ -149,7 +152,7 @@ function findBalancedParentheses(text: string, startIndex = 0): { start: number;
   return { start: openIndex, end: closeIndex + 1, content: text.substring(openIndex, closeIndex + 1) };
 }
 
-function findQuotedString(text: string, startIndex = 0): { start: number; end: number; content: string } | null {
+export function findQuotedString(text: string, startIndex = 0): { start: number; end: number; content: string } | null {
   const openIndex = text.indexOf('"', startIndex);
   if (openIndex === -1) return null;
 
@@ -166,7 +169,7 @@ function findQuotedString(text: string, startIndex = 0): { start: number; end: n
   return null;
 }
 
-function findJapaneseQuotedString(
+export function findJapaneseQuotedString(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string } | null {
@@ -177,7 +180,7 @@ function findJapaneseQuotedString(
   return { start: openIndex, end: closeIndex + 1, content: text.substring(openIndex, closeIndex + 1) };
 }
 
-function findMarkdownBold(
+export function findMarkdownBold(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_bold" } | null {
@@ -210,7 +213,7 @@ function findMarkdownBold(
   return null;
 }
 
-function findMarkdownItalic(
+export function findMarkdownItalic(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_italic" } | null {
@@ -261,7 +264,7 @@ function findMarkdownItalic(
   return null;
 }
 
-function findMarkdownStrikethrough(
+export function findMarkdownStrikethrough(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_strikethrough" } | null {
@@ -274,6 +277,22 @@ function findMarkdownStrikethrough(
     end: closing + 2,
     content: text.substring(opening, closing + 2),
     type: "markdown_strikethrough",
+  };
+}
+
+export function findMarkdownSpoiler(
+  text: string,
+  startIndex = 0,
+): { start: number; end: number; content: string; type: "markdown_spoiler" } | null {
+  const opening = text.indexOf("||", startIndex);
+  if (opening === -1) return null;
+  const closing = text.indexOf("||", opening + 2);
+  if (closing === -1) return null;
+  return {
+    start: opening,
+    end: closing + 2,
+    content: text.substring(opening, closing + 2),
+    type: "markdown_spoiler",
   };
 }
 
@@ -311,7 +330,7 @@ function findMarkdownInlineCode(
   return null;
 }
 
-function findMarkdownLink(
+export function findMarkdownLink(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string; type: "markdown_link" } | null {

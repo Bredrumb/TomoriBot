@@ -39,6 +39,11 @@ non-runnable dispositions.
     bot-reply-block, full-privacy user
   - `"error"` — unexpected failure (rare)
 
+An accepted same-user conversational follow-up and a message queued behind a
+busy channel both use `"queued"`. Manual slash-command work, including user
+impersonation, skips follow-up replacement and enters the normal FIFO queue so
+the command payload remains intact.
+
 ## Side effects
 
 - **Voice transcription** — if the message has audio attachments, transcribes
@@ -81,7 +86,7 @@ trigger. Reminders (`reminderProcessor`) and boomerang follow-ups
 (`postTurnEffects`) pass the channel's most recent message, which in an active
 DM is frequently one of Tomori's own. Keying off the message author there would
 resolve the DM to the bot's ID, find no server row, and report a configured DM
-as needing `/config setup`. Guilds are immune because `guild.id` never depends
+as needing `/setup`. Guilds are immune because `guild.id` never depends
 on authorship.
 
 `userDiscId` follows the same rule: in a DM, a trigger message authored by the
@@ -140,7 +145,7 @@ Extensibility lives in the helpers it calls:
 |---|---|---|---|
 | `isMatrixRelayMessage`, `isRealUserLikeMessage` | `triggerProcessor.ts` | Trigger-source classification | A new bridge plugin would extend trigger detection here |
 | `transcribeMessageAudioAttachment` | `audioAttachmentTranscription.ts` | STT dispatch | STT providers register via `customEndpointService` — existing mechanism, not chat-specific |
-| `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona trigger guard that bypasses the follow-up path when the incoming message explicitly targets a different persona than the active one | → plugin plan candidate if plugins want to add admission policies |
+| `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona and manual-command guards that bypass follow-up replacement when the incoming message explicitly targets a different persona or represents command-owned work | → plugin plan candidate if plugins want to add admission policies |
 | `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal — tightly coupled to cascade-trigger limit semantics |
 
 **The stage itself is internal** — there is no current seam for "replace

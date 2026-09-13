@@ -1,7 +1,7 @@
 /**
  * SpeechRepository: manages voice sample CRUD and speech endpoint resolution.
  *
- * Owns tables: voice_samples, custom_endpoints (speech/transcription rows),
+ * Owns tables: voice_samples, custom_endpoints and custom_endpoint_connections (speech/transcription rows),
  * saved_provider_configs (credential lookup by provider name), and
  * persona_voice_configs.speech_voice_sample_id (persona voice assignment).
  *
@@ -15,8 +15,10 @@
  */
 import type { CustomEndpointRow, VoiceSampleRow } from "@/types/db/schema";
 import { customEndpointSchema, voiceSampleSchema } from "@/types/db/schema";
+import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
+import { deleteStoredVoiceSample } from "@/utils/storage/voiceSampleStorage";
 import type {} from "./IRepository";
 
 /**
@@ -40,12 +42,36 @@ export async function loadActiveEndpoint(
 ): Promise<CustomEndpointRow | null> {
   try {
     const rows = await sql`
-      SELECT * FROM custom_endpoints
-      WHERE server_id = ${serverId}
-        AND capability = ${capability}
-        AND user_id IS NULL
-        AND is_default = true
-      ORDER BY updated_at DESC, custom_endpoint_id DESC
+      SELECT
+        ce.custom_endpoint_id,
+        ce.connection_id,
+        cec.server_id,
+        cec.user_id,
+        cec.label,
+        cec.capability,
+        cec.api_style,
+        cec.endpoint_url,
+        ce.model_name,
+        ce.model_ref_id,
+        ce.num_ctx,
+        cec.requires_auth,
+        ce.extra_config,
+        ce.has_tools,
+        ce.sees_images,
+        ce.sees_videos,
+        ce.supports_structoutput,
+        ce.strict_role_alternation,
+        ce.supports_prefix_completion,
+        ce.is_default,
+        ce.created_at,
+        ce.updated_at
+      FROM custom_endpoints ce
+      JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
+      WHERE cec.server_id = ${serverId}
+        AND cec.capability = ${capability}
+        AND cec.user_id IS NULL
+        AND ce.is_default = true
+      ORDER BY ce.updated_at DESC, ce.custom_endpoint_id DESC
       LIMIT 1
     `;
     if (!rows || rows.length === 0) return null;
@@ -68,7 +94,7 @@ export async function loadActiveEndpoint(
  * Load encrypted credentials for a provider (keyed by internal provider name).
  * Returns null when no credentials are stored.
  *
- * @param providerName - Internal provider name (e.g. "custom:s123:label")
+ * @param providerName - Internal provider name (for example, "custom:123")
  * @returns Raw encrypted credential row or null
  */
 export async function loadEndpointCredentials(
@@ -196,12 +222,80 @@ export async function countPersonaVoiceSampleRefs(serverId: number, sampleId: nu
  *
  */
 export async function clearPersonaVoiceSampleRefs(serverId: number, sampleId: number): Promise<void> {
+  // speech_voice_name must clear with the sample id: every provider reads it as the active voice
+  // name, so leaving it set makes a persona report a voice that no longer exists. The surviving
+  // design prompt is the only remaining name source, and a surviving speech_voice_id is
+  // deliberately left nameless rather than inheriting the deleted sample's name.
+  // The regex tests for any non-whitespace character, which is what the JS `.trim()` truthiness
+  // check in the voice-assign clear ladder resolves to, and it leaves a NULL prompt NULL.
   await sql`
     UPDATE persona_voice_configs pvc
-    SET speech_voice_sample_id = NULL
+    SET speech_voice_sample_id = NULL,
+        speech_voice_name = CASE
+          WHEN pvc.speech_voice_design_prompt ~ '[^[:space:]]' THEN 'VoiceDesign'
+          ELSE NULL
+        END
     FROM personas p
     WHERE p.persona_id = pvc.persona_id
       AND p.server_id = ${serverId}
       AND pvc.speech_voice_sample_id = ${sampleId}
   `;
+}
+
+/** Identifies the sample to retire and the workspace whose cached state references it. */
+export interface VoiceSampleRemovalInput {
+  serverId: number;
+  /** Guild id, or the invoking user's id for a DM-backed workspace: the tomoriStateCache key. */
+  serverDiscId: string;
+  sampleId: number;
+  filePath: string;
+}
+
+export interface VoiceSampleRemovalResult {
+  storedFileRemoved: boolean;
+}
+
+/**
+ * Collaborators of removeVoiceSample, injectable so a test can observe call ordering.
+ * Bun cannot unregister `mock.module`, so mocking the sql client or the cache store would leak
+ * into every other test sharing the lane process.
+ */
+export interface VoiceSampleRemovalDeps {
+  clearRefs: typeof clearPersonaVoiceSampleRefs;
+  deleteRow: typeof deleteVoiceSample;
+  invalidateCache: typeof invalidateTomoriStateCache;
+  deleteStoredFile: typeof deleteStoredVoiceSample;
+}
+
+const DEFAULT_REMOVAL_DEPS: VoiceSampleRemovalDeps = {
+  clearRefs: clearPersonaVoiceSampleRefs,
+  deleteRow: deleteVoiceSample,
+  invalidateCache: invalidateTomoriStateCache,
+  deleteStoredFile: deleteStoredVoiceSample,
+};
+
+/**
+ * Retires a voice sample completely: clears every persona reference, deletes the row, invalidates
+ * cached state, then removes the stored audio file.
+ *
+ * Cache invalidation runs after the row delete commits and before stored-file cleanup, so a cleanup
+ * failure can never leave the deleted assignment being served from cache. Cleanup failure is
+ * reported rather than thrown, because the row is already gone and a retry would find nothing.
+ */
+export async function removeVoiceSample(
+  { serverId, serverDiscId, sampleId, filePath }: VoiceSampleRemovalInput,
+  deps: VoiceSampleRemovalDeps = DEFAULT_REMOVAL_DEPS,
+): Promise<VoiceSampleRemovalResult> {
+  await deps.clearRefs(serverId, sampleId);
+  await deps.deleteRow(sampleId);
+
+  deps.invalidateCache(serverDiscId);
+
+  try {
+    await deps.deleteStoredFile(filePath);
+    return { storedFileRemoved: true };
+  } catch (error) {
+    log.error(`SpeechRepository.removeVoiceSample: stored file cleanup failed for sample ${sampleId}`, error);
+    return { storedFileRemoved: false };
+  }
 }

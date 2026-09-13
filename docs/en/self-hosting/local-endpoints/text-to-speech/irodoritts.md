@@ -36,57 +36,83 @@ Available backends are:
 
 The default endpoint URL is `http://127.0.0.1:8013`.
 
-## Use the Anime v4.1 checkpoint
+## Using a Different Checkpoint
 
-Set the model before starting the sidecar:
+The default model is `Aratako/Irodori-TTS-v4.1-Small`. Compatible Hugging Face repositories, community fine-tunes (such as `phasefield-audio/Irodori-TTS-v4.1-Anime`), or local checkpoint files can be configured via environment variables.
+
+When starting the sidecar (directly with Python or via `bun run launch --irodoritts`), the server automatically reads the repository root `.env` (or a local `.env` in `servers/tts/irodoritts/`) and logs the active model ID on startup.
+
+### Via `.env` (Persistent)
+
+Add to your `.env` in the TomoriBot root:
+
+```env
+IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
+```
+
+### Via Environment Variable per Session
+
+In Windows PowerShell:
 
 ```powershell
 $env:IRODORI_TTS_MODEL_ID = "phasefield-audio/Irodori-TTS-v4.1-Anime"
 .\servers\tts\irodoritts\.venv\Scripts\python.exe servers\tts\irodoritts\server.py
 ```
 
-On Bash:
+On Linux Bash:
 
 ```bash
 IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
   servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 ```
 
+### Using a Local Checkpoint File
+
+If you have downloaded a checkpoint file (`.pt` or `.safetensors`) locally, set `IRODORI_TTS_CHECKPOINT` to its path:
+
+```env
+IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
+```
+
 Current Irodori downloads the checkpoint together with any tokenizer assets bundled in the Hugging Face repo. Hugging Face subfolder variants are also supported by `IRODORI_TTS_MODEL_ID` when the model repo provides them.
 
 ## Register in TomoriBot
 
-Run `/provider custom-endpoint add`:
+Run `/providers`, choose **Add New Custom Endpoint**, and use the speech API compatibility:
 
-- `capability`: `speech`
-- `api_style`: `tts-clone`
+- API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`
 
-For v4.1, the recommended modal settings are:
+After saving the connection, select it and use its model dropdown to add a Speech model. For v4.1, the
+recommended settings are:
 
 - `Voice Source Mode`: `Auto`
 - `Script Markup Style`: `Emoji`
 
-`Auto` lets the same Irodori endpoint support both TomoriBot voice modes:
+`Auto` lets the same Irodori endpoint support both TomoriBot voice modes, so emotion cues survive the send:
 
-- Personas with `/speech voice-assign` send a stored reference clip for voice cloning.
-- Personas with `/speech voice-design set` send the saved natural-language prompt as Irodori caption conditioning.
+- Personas with a voice sample assigned under Persona > Voice send a stored reference clip for voice cloning.
+- Personas with a VoiceDesign prompt set under Persona > Voice send the saved natural-language prompt as
+  Irodori caption conditioning.
 
-You can still choose `Clone` if you only want reference-audio voice cloning.
+You can still choose `Voice Clone` as the Voice Source Mode if you only want reference-audio voice cloning.
+
+Use `/providers` for endpoint registration and model setup. Then open `/config` > Models > Switch Models to
+select and activate the registered endpoint.
 
 ## Set up persona voices
 
 ### Voice cloning
 
-1. Prepare a clean Japanese voice clip with one speaker and no background music.
-2. Run `/speech voice-add` and upload the clip.
-3. Run `/speech voice-assign`, then choose the persona and the voice sample.
+1. Prepare a clean 10-20 second Japanese voice clip with one speaker and no background music.
+2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
+3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
 Irodori v4.1 supports longer reference conditioning than the old v2 model, but clean source audio remains more important than raw duration.
 
 ### VoiceDesign
 
-1. Run `/speech voice-design set`.
+1. Open `/config` under Persona > Voice.
 2. Choose the persona.
 3. Enter a natural-language description of the desired voice and delivery.
 

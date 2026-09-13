@@ -4,7 +4,7 @@
     confirm: `確認`,
     none: `なし`,
     unknown: `不明`,
-    scoped_openrouter_model_description: `/openrouter model から追加`,
+    scoped_openrouter_model_description: `/providers から追加`,
     openrouter_model_moved_title: `機能の場所が変わりました`,
     openrouter_model_moved_description: `\`other-model\` の直接選択は OpenRouter モデル登録に移動しました。まず {add_command} で正確なモデルコードネームを登録し、不要な登録は {remove_command} で削除してください。その後、通常の OpenRouter モデル一覧から登録済みモデルを選択してください。`,
     defaults: {
@@ -14,10 +14,10 @@
       open_button_label: `詳しく見る`,
     },
     legal: {
-      policy_reference: `現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms\` と \`/legal privacy\` で確認できます。`,
-      setup_agreement: `TomoriBotをセットアップすることで、あなたとサーバーメンバーは\`/legal terms\`と\`/legal privacy\`の通知に同意したことになります`,
-      provider_policy_reference: `詳細は\`/legal privacy\`と\`/legal terms\`をご覧ください`,
-      data_handling_reference: `**プライバシー:** データ処理の詳細は\`/legal privacy\`をご覧ください`,
+      policy_reference: `現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms-of-service\` と \`/legal privacy-policy\` で確認できます。`,
+      setup_agreement: `TomoriBotをセットアップすることで、\`/legal terms-of-service\`と\`/legal privacy-policy\`に同意し、メッセージの取り扱いをサーバーメンバーに知らせることになります`,
+      provider_policy_reference: `詳細は\`/legal privacy-policy\`と\`/legal terms-of-service\`をご覧ください`,
+      data_handling_reference: `**プライバシー:** データ処理の詳細は\`/legal privacy-policy\`をご覧ください`,
     },
     api_styles: {
       openai_compatible: `OpenAI互換`,
@@ -92,6 +92,7 @@
       },
     },
     errors: {
+      outdated_panel: `このパネルは古くなっています。{command} をもう一度実行してください。`,
       guild_only_title: `サーバー専用コマンド`,
       guild_only_description: `このコマンドはサーバー内でのみ使用できます。`,
       channel_only_title: `チャンネルが必要です`,
@@ -99,20 +100,20 @@
       channel_not_supported_title: `サポートされていないチャンネルタイプ`,
       channel_not_supported_description: `申し訳ありませんが、サーバーのテキストチャンネルまたはダイレクトメッセージでのみ動作します。グループDMやその他のチャンネルタイプはサポートされていません。`,
       tomori_not_setup_title: `初期設定が必要です`,
-      tomori_not_setup_description: `このサーバーではまだ初期設定が必要です。**サーバー管理**権限を持つメンバーがまず \`/config setup\` を実行してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/ja/introduction/quickstart/ で確認できます。`,
+      tomori_not_setup_description: `このサーバーではまだ初期設定が必要です。**サーバー管理**権限を持つメンバーがまず \`/setup\` を実行してください。案内が必要なときは \`/help\` の **セットアップ** を開くか、公式の[かんたんガイド](https://docs.tomoribot.app/ja/introduction/quickstart/)をご覧ください。`,
       tomori_updating_title: `現在アップデート中...`,
       tomori_updating_description: `現在アップデート中のため、まもなく復旧します。しばらくしてからもう一度お試しください！`,
       tomori_not_setup_dm_footer: `DMでは個人用の設定として扱われ、ほとんどのサーバー形式の設定が利用できます。`,
       api_key_missing_title: `APIキーがありません`,
-      api_key_missing_description: `応答するには有効なプロバイダー設定が必要です。**サーバー管理**権限を持つメンバーが、初回は \`/config setup\`、追加や更新は \`/provider add\` で設定できます。`,
+      api_key_missing_description: `応答するには有効なプロバイダー設定が必要です。**サーバー管理**権限を持つメンバーが、初回は \`/setup\`、追加や更新は \`/providers\` で設定できます。`,
       api_key_error_title: `APIキーエラー`,
-      api_key_error_description: `設定されたプロバイダー認証情報へのアクセスまたは復号化で問題が発生しました。\`/provider add\`で再設定してください。`,
+      api_key_error_description: `設定されたプロバイダー認証情報へのアクセスまたは復号化で問題が発生しました。\`/providers\`で再設定してください。`,
       database_unavailable_title: `データベースに接続できません`,
       database_unavailable_description: `ただいまデータベースに接続できず、このサーバーの設定を読み取れませんでした。故障ではなく、設定が変更されたわけでもありません。少し時間をおいてからもう一度お試しください。`,
       personal_provider_required_title: `個人プロバイダーが必要です`,
-      personal_provider_required_description: `このサーバーでは、ユーザーが発言したメッセージに対してメンバー自身のAIプロバイダー設定を使用しています。\`/help personal-provider\` を確認し、\`/personal provider add\` で設定してください。`,
+      personal_provider_required_description: `まず \`/personal providers\` でプロバイダーを設定し、次に \`/personal config\` でテキスト返信用に選択してください。このサーバーでは、ユーザーが発言したメッセージに対してメンバー自身のAIプロバイダー設定を使用しています。手順が必要な場合は \`/help\` の **機能** から **個人プロバイダー** を確認してください。`,
       personal_provider_credentials_error_title: `個人プロバイダーエラー`,
-      personal_provider_credentials_error_description: `有効になっている個人プロバイダーを使用できませんでした。\`/personal provider add\` で更新するか、\`/personal provider toggle-models\` で無効化してください。`,
+      personal_provider_credentials_error_description: `有効になっている個人プロバイダーを使用できませんでした。\`/personal providers\` で更新するか、\`/personal providers\` で無効化してください。`,
       context_error_title: `コンテキスト構築エラー`,
       context_error_description: `会話のコンテキストを理解しようとしているときにエラーが発生しました。`,
       critical_error_title: `重大なエラー`,
@@ -134,14 +135,14 @@
       brave_api: {
         missing_key: {
           title: `Brave APIキーがありません`,
-          description: `検索を実行するにはBrave Search APIキーが必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/optional-key brave set\`を使用して設定できます。`,
-          footer: `/help api-keyで詳細を確認してください`,
+          description: `検索を実行するにはBrave Search APIキーが必要ですが、このサーバーには設定されていません。\`サーバー管理\`権限を持つメンバーが\`/providers\`を使用して設定できます。`,
+          footer: `/help のセットアップから「ステップ1：APIキーを取得」を開いてください`,
         },
       },
       duckduckgo_rate_limit: {
         title: `DuckDuckGoがレート制限されています`,
-        description: `DuckDuckGo検索は現在レート制限されています。より信頼性の高い検索のために、\`サーバー管理\`権限を持つメンバーが\`/optional-key brave set\`を使用してBrave Searchを設定できます。`,
-        footer: `/help api-keyで詳細を確認してください`,
+        description: `DuckDuckGo検索は現在レート制限されています。より信頼性の高い検索のために、\`サーバー管理\`権限を持つメンバーが\`/providers\`を使用してBrave Searchを設定できます。`,
+        footer: `/help のセットアップから「ステップ1：APIキーを取得」を開いてください`,
       },
       searxng_unreachable: {
         title: `SearXNGに接続できません`,
@@ -162,6 +163,8 @@
       persona_response_failed_description: `ペルソナ **{personaName}** からの応答の生成に失敗しました。
 
 > {errorMessage}`,
+      channel_missing_permissions_title: `権限がありません`,
+      channel_missing_permissions_description: `このチャンネルのメッセージ履歴を読み取る権限がありません。**チャンネルを見る**および**メッセージ履歴を読む**権限があることを確認してください。`,
       webhook_missing_permissions_title: `Webhook 権限がありません`,
       webhook_missing_permissions_description: `このチャンネルでWebhookを作成できないため、オルタペルソナは通常メッセージで返信します。**Webhookの管理**権限を付与すると、オルタのアバターを表示できます。`,
       webhook_limit_title: `Webhookの上限に達しました`,
@@ -195,11 +198,9 @@
   events: {
     addBot: {
       rejoin_title: `TomoriBotが戻ってきました！`,
-      rejoin_description: `このサーバーに再追加されたようです。既存の設定とペルソナはそのまま残っています。\`/config\`、\`/persona\`、\`/memory\`、\`/server\`、\`/provider add\` で確認や変更ができます。{legalNotice}`,
+      rejoin_description: `このサーバーに再追加されたようです。既存の設定とペルソナはそのまま残っています。\`/config\`、\`/persona\`、\`/memories\`、\`/providers\` で確認や変更ができます。{legalNotice}`,
       setup_prompt_title: `TomoriBotの追加が完了しました`,
-      setup_prompt_description: `追加してくれてありがとうございます。始めるには、**サーバー管理**権限を持つメンバーが \`/config setup\` を実行して、初期ペルソナとプロバイダーを選択してください。短い案内は \`/help setup\` または https://docs.tomoribot.app/ja/introduction/quickstart/ で確認できます。
-
-プロバイダーのAPIキーが必要な場合は \`/help api-key\` を使ってください。{legalNotice}`,
+      setup_prompt_description: `始めるには、**サーバー管理**権限を持つメンバーが \`/setup\` を実行して、初期ペルソナとプロバイダーを選択してください。案内が必要なときは \`/help\` の **セットアップ** を開くか、公式の[かんたんガイド](https://docs.tomoribot.app/ja/introduction/quickstart/)をご覧ください。{legalNotice}`,
     },
   },
   reminders: {

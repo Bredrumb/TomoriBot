@@ -1,5 +1,60 @@
 ﻿export default {
   help: {
+    description: `セットアップ、機能、プロバイダー、メモリ、動作、ツール、メディア、連携のガイドを表示します。`,
+    dashboard: {
+      header_title: `TomoriBotを始める`,
+      header_description: `カスタマイズ可能なAIアシスタント兼ロールプレイシステム、TomoriBotの設定方法を紹介します。`,
+      categories: {
+        setup: `セットアップ`,
+        features: `機能`,
+        memory: `メモリ`,
+        behavior: `動作`,
+        integrations: `連携`,
+      },
+      pages: {
+        setup_step_1: `ステップ1：APIキーを取得`,
+        setup_step_2: `ステップ2：セットアップを実行`,
+        setup_step_3: `ステップ3：チャットを開始`,
+        setup_step_4: `ステップ4：TomoriBotをカスタマイズ（任意）`,
+        features: `機能`,
+        personal_providers: `個人プロバイダー`,
+        custom_endpoints: `カスタムエンドポイント`,
+        speech: `音声生成`,
+        transcription: `文字起こし`,
+        persistent_memory: `永続メモリ`,
+        short_term_memory: `短期メモリ`,
+        memory_tagging: `メモリタグ`,
+        customization: `カスタマイズ`,
+        personal_spotlight: `個人スポットライト`,
+        deliberate_trigger_mode: `慎重トリガーモード`,
+        deliberate_tool_mode: `慎重ツールモード`,
+        age_restricted_commands: `年齢制限コマンド`,
+        matrix: `Matrix`,
+        mcp: `MCP`,
+        sillytavern_presets: `SillyTavernプリセット`,
+      },
+      page_reference: `\`/help\`内の **{page}** ページ`,
+      page_select_placeholder: `ページを選択`,
+      guide_select_placeholder: `ガイドを選択`,
+      provider_select_placeholder: `プロバイダーを選択`,
+      previous_button: `< 前へ`,
+      next_button: `次へ >`,
+      docs_link_label: `ウェブ版を読む`,
+      support_link_label: `技術サポートを受ける`,
+      variants: {
+        overview: `概要`,
+        chatterbox: `Chatterbox-Turbo`,
+        qwen3tts: `Qwen3-TTS`,
+        irodoritts: `IrodoriTTS`,
+        elevenlabs: `ElevenLabs`,
+        whisperx: `WhisperX`,
+        koboldcpp: `KoboldCPP`,
+      },
+      api_keys: {
+        title: `プロバイダーAPIキー`,
+        description: `下からプロバイダーを選ぶとAPIキーの案内が開きます。案内を閉じても、このヘルプ画面は引き続き利用できます。`,
+      },
+    },
     "personal-provider": {
       description: `個人プロバイダーの仕組みを確認します。`,
       title: `個人プロバイダー`,
@@ -26,12 +81,12 @@
       personal_field: `個人登録`,
       personal_value: `{add_command} で自分専用のラベル付きエンドポイントを登録し、{remove_command} で選んだ機能だけ削除できます。`,
       selection_field: `使い方`,
-      selection_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択してください。そのラベルに同じ機能のモデルが複数ある場合は、選択メニューから1つ選べます。画像理解対応のテキストエンドポイントは \`/model vision\` にも表示されます。同じラベル・同じ機能で別のモデル名を指定して追加コマンドを再実行すると、その接続にモデルを追加登録できます（エンドポイントURLとAPIスタイルは引き継がれます）。`,
-      selection_summary_value: `登録後は {text_command}、{image_command}、{video_command} からラベルを選択します。同じラベルに同一機能のモデルが複数ある場合は、TomoriBot が使用するモデルを確認します。`,
+      selection_value: `登録後は {text_command} からラベルを選択してください。そのラベルに同じ機能のモデルが複数ある場合は、選択メニューから1つ選べます。画像理解対応のテキストエンドポイントは \`/config\` > Models > Switch Models にも表示されます。同じラベル・同じ機能で別のモデル名を指定して追加コマンドを再実行すると、その接続にモデルを追加登録できます（エンドポイントURLとAPIスタイルは引き継がれます）。`,
+      selection_summary_value: `登録後は {text_command} からラベルを選択します。同じラベルに同一機能のモデルが複数ある場合は、TomoriBot が使用するモデルを確認します。`,
       labels_field: `ラベルと削除`,
       labels_value: `1つのラベルは対応する全機能をまとめたカスタムプロバイダーバンドルです。{server_remove_command} と {personal_remove_command} はチェックを外した機能だけ削除します。{server_provider_remove_command} と {personal_provider_remove_command} はそのラベル全体を削除します。`,
       comfyui_page1_title: `ComfyUI セットアップ`,
-      comfyui_page1_description: `このガイドでは、ComfyUI がすでにインストール済みかつ起動中である前提で進めます。1ページ目では、\`/provider custom-endpoint add\` または \`/personal custom-endpoint add\` まで到達する最小構成を説明します。または、GitHubリポジトリにあるそのまま使える[ComfyUIワークフロー](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)を使用することもできます。`,
+      comfyui_page1_description: `このガイドでは、ComfyUI がすでにインストール済みかつ起動中である前提で進めます。1ページ目では、\`/providers\` または \`/personal providers\` まで到達する最小構成を説明します。または、GitHubリポジトリにあるそのまま使える[ComfyUIワークフロー](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)を使用することもできます。`,
       comfyui_page1_workflow_field: `1. ワークフローを作る`,
       comfyui_page1_workflow_value: `まず ComfyUI 側でワークフローを作成し、正常に動くことを確認してください。画像用 MVP では、TomoriBot が完成ファイルを取得できるよう最後を \`SaveImage\` で終える必要があります。最小構成の画像グラフは通常、\`CheckpointLoaderSimple\` -> positive/negative \`CLIPTextEncode\` -> \`EmptyLatentImage\` -> \`KSampler\` -> \`VAEDecode\` -> \`SaveImage\` です。`,
       comfyui_page1_placeholders_field: `2. プレースホルダーを入れる`,
@@ -39,7 +94,7 @@
       comfyui_page1_export_field: `3. JSON を書き出して編集する`,
       comfyui_page1_export_value: `ComfyUI で動作確認できたら Save (API Format) で JSON を保存してください。数値や真偽値のプレースホルダーを使う場合は、アップロード前に JSON を編集し、値全体をプレースホルダーに置き換えます。例: \`"width": "{TOMORI_WIDTH}"\`、\`"height": "{TOMORI_HEIGHT}"\`、\`"duration": "{TOMORI_VIDEO_DURATION}"\`。`,
       comfyui_page1_register_field: `4. 登録して有効化する`,
-      comfyui_page1_register_value: `サーバー共通なら {server_add_command}、個人用なら {personal_add_command} を使います。\`endpoint_url\` には ComfyUI サーバーの URL（例: \`http://127.0.0.1:8188\`）を入れ、\`api_style\` は \`ComfyUI\`、\`capability\` は \`Image\` か \`Video\` を選択してください。コマンド実行後に表示されるモーダルの **ワークフローJSON** ファイル欄に書き出した JSON をアップロードします。その後、{image_command} または {video_command} でラベルを選択して有効化します。`,
+      comfyui_page1_register_value: `サーバー共通なら {server_add_command}、個人用なら {personal_add_command} を使います。**Add New Custom Endpoint** を選び、ComfyUI サーバーの URL（例: \`http://127.0.0.1:8188\`）を入力し、エンドポイントタイプに \`ComfyUI\` を選択してください。保存したエンドポイントで **Add or Edit a Model** を選び、\`Image\` または \`Video\` のモデルを追加して、**ワークフローJSON** 欄に書き出した JSON をアップロードします。`,
       comfyui_page2_title: `ComfyUI プレースホルダー`,
       comfyui_page2_description: `2ページ目では、TomoriBot が ComfyUI ワークフローへ注入できる主なプレースホルダーをまとめます。`,
       comfyui_page2_core_field: `基本値`,
@@ -66,7 +121,7 @@
       comfyui_page4_metadata_value: `TomoriBot は、解決済みの値を \`extra_pnginfo\` にも入れます。そこには prompt、model、mode、aspect ratio、width、height、size、参照画像数、さらに動画用の duration・resolution・audio フラグも含まれます。JSON プレースホルダーの代わりに ComfyUI メタデータを読むカスタムノードを使いたい場合に有用です。`,
       comfyui_summary_description: `ComfyUI カスタムエンドポイントでは、保存済みの画像/動画ワークフローを TomoriBot がキューに送り、最初に保存された出力を返します。詳しい手順は、ワークフロー書き出し、プレースホルダー、参照画像、ポーリング、出力ルールを含むドキュメントを確認してください。`,
       comfyui_summary_register_field: `登録して有効化`,
-      comfyui_summary_register_value: `{server_add_command} または {personal_add_command} でエンドポイントを登録し、{image_command} または {video_command} でそのラベルを選択します。ComfyUI ワークフロー設定の詳細はドキュメントボタンから確認してください。`,
+      comfyui_summary_register_value: `{server_add_command} または {personal_add_command} でエンドポイントを登録し、{image_command} でそのラベルを選択します。ComfyUI ワークフロー設定の詳細はドキュメントボタンから確認してください。`,
     },
     speech: {
       description: `音声生成の設定方法を確認します。`,
@@ -83,15 +138,11 @@
 
 ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assign} を使います。
 
-**エンジン別設定ガイド:**
-• Chatterbox-Turbo → \`/help speech engine:Chatterbox-Turbo\`
-• Qwen3-TTS → \`/help speech engine:Qwen3-TTS\`
-• IrodoriTTS → \`/help speech engine:IrodoriTTS\`
-• ElevenLabs → \`/help speech engine:ElevenLabs\``,
+**エンジン別設定ガイド:** 音声生成ページ下部の完全なTTSドキュメントをご覧ください。`,
       },
       chatterbox: {
         title: `Chatterbox-Turbo 音声`,
-        description: `Chatterbox-Turbo は高速・軽量な英語専用の音声クローンサーバーです。\`[excited]\`・\`[whisper]\` のような角括弧デリバリータグで発話スタイルを制御できます。TomoriBotがこれらのタグをそのまま送信できるように、登録時は **Script Markup（スクリプトマークアップ）** を **Bracket Tags（角括弧タグ）** に設定してください。`,
+        description: `Chatterbox-Turboは高速で軽量な英語専用の音声クローンサーバーです。さらに小さいNanoも選べます。両モデルは\`[laugh]\`や\`[sigh]\`などのイベントタグに対応します。対応済みタグを保持するには、登録時に **Script Markup** を **Bracket Tags** に設定してください。`,
         steps_title: `設定手順`,
         steps_description: `**前提条件**: Python 3.10+、CUDA 12.x + ドライバー（任意、GPU 用）
 
@@ -100,7 +151,7 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
 3. numpy を先にインストールします: \`pip install numpy\`、その後 \`requirements.txt\` をインストールします。
 4. *(GPU のみ)* PyTorch を再インストールします: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
 5. \`server.py\` を起動します。
-6. {custom_endpoint_add} で登録します。Capability（機能）は \`Speech\`、API Style（API スタイル）は \`TTS-Clone\`、Script Markup（スクリプトマークアップ）は \`Bracket Tags\` を選択します。
+6. {custom_endpoint_add} でエンドポイントタイプに \`TTS-Clone\` を選びます。保存したエンドポイントで新しい音声モデルを追加し、Script Markup（スクリプトマークアップ）は \`Bracket Tags\` を選択します。
 7. {model_speech} で選択し、{voice_add} と {voice_assign} を実行します。`,
       },
       qwen3tts: {
@@ -116,9 +167,9 @@ ElevenLabs: {elevenlabs} を実行し、追加ペルソナは後で {voice_assig
 2. ダウンロードした \`qwen3tts\` フォルダに移動し、Python \`.venv\` を作成して有効化します。
 3. \`requirements.txt\` をインストールします。
 4. *(GPU)* PyTorch を再インストール: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
-5. *(任意)* 高速化のため flash-attn をインストール — 手順 4 の後 \`pip install wheel\`、次に \`pip install flash-attn --no-build-isolation\` (Winは20-40分)。初回はスキップ。
+5. *(任意)* 高速化のため flash-attn をインストール：手順 4 の後 \`pip install wheel\`、次に \`pip install flash-attn --no-build-isolation\` (Winは20-40分)。初回はスキップ。
 6. 音声クローンには \`server.py\`、Qwen3-TTS VoiceDesign のみには \`server.py --mode voice-design\`、1つのURLでリクエストごとにクローン/VoiceDesignを判定するには \`server.py --mode auto\` を起動します。
-7. {custom_endpoint_add} で登録: Capability（機能）は \`Speech\`、API Style（API スタイル）は \`TTS-Clone\`、Script Markup（スクリプトマークアップ）は \`Plain\` を選択。VoiceDesign では音声ソースモードに \`VoiceDesign\` を選ぶと、TomoriBot が自動的に instruct 対応として扱います。auto モードでは、同じサーバーURLを指すクローン用と VoiceDesign 用のエンドポイントを登録できます。
+7. {custom_endpoint_add} でエンドポイントタイプに \`TTS-Clone\` を選びます。保存したエンドポイントで新しい音声モデルを追加し、Script Markup（スクリプトマークアップ）は \`Plain\` を選択します。VoiceDesign では音声ソースモードに \`VoiceDesign\` を選ぶと、TomoriBot が自動的に instruct 対応として扱います。auto モードでは、同じサーバーURLを指すクローン用と VoiceDesign 用のエンドポイントを登録できます。
 8. {model_speech} で選択します。クローンモードでは {voice_add} と {voice_assign}、VoiceDesign では各ペルソナに {voice_design_set} を実行します。`,
       },
       irodoritts: {
@@ -135,7 +186,7 @@ Windows: \`install-irodori.ps1\`
 Linux/macOS: \`bash install-irodori.sh\`
 5. *(GPU)* PyTorch を再インストール: \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
 6. \`server.py\` を起動します。
-7. {custom_endpoint_add} で登録: Capability（機能）は \`Speech\`、API Style（API スタイル）は \`TTS-Clone\`、Script Markup（スクリプトマークアップ）は \`Emoji Markers\` を選択。
+7. {custom_endpoint_add} でエンドポイントタイプに \`TTS-Clone\` を選びます。保存したエンドポイントで新しい音声モデルを追加し、Script Markup（スクリプトマークアップ）は \`Emoji Markers\` を選択します。
 8. {model_speech} で選択し、{voice_add} と {voice_assign} を実行します。`,
       },
       elevenlabs: {
@@ -158,10 +209,7 @@ Linux/macOS: \`bash install-irodori.sh\`
         steps_title: `推奨経路`,
         steps_description: `まず WhisperX を推奨します。ローカルSTT設定ガイドに従い、{custom_endpoint_add} で登録してから {model_transcription} で選択します。ElevenLabs ユーザーは {elevenlabs} を実行します。
 
-**エンジン別設定ガイド:**
-• WhisperX → \`/help transcription engine:WhisperX\`
-• KoboldCPP → \`/help transcription engine:KoboldCPP\`
-• ElevenLabs → \`/help transcription engine:ElevenLabs\``,
+**エンジン別設定ガイド:** 文字起こしページ下部の完全なSTTドキュメントをご覧ください。`,
       },
       whisperx: {
         title: `WhisperX 文字起こし`,
@@ -178,18 +226,18 @@ Linux/macOS: \`bash install-irodori.sh\`
 4. *(GPU)* CUDA 対応 PyTorch を再インストール:
 \`pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124\`
 5. \`whisperx_server.py\` を起動します。
-6. {custom_endpoint_add} で登録: Capability（機能）は \`Transcription\`、API Style（API スタイル）は \`OpenAI Compatible\` を選び、選択したサイズのモデル名を指定します。
+6. {custom_endpoint_add} でエンドポイントタイプに \`OpenAI Compatible Transcription\` を選びます。保存したエンドポイントで、選択したサイズと同じ名前の新しい文字起こしモデルを追加します。
 7. {model_transcription} で選択します。`,
         models_title: `利用可能なモデル`,
         models_description: `サーバー起動前に \`WHISPERX_MODEL\` を指定し、登録時も同じ名前を使います。
 GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM < GPU VRAM）
 
-\`tiny\` — VRAM 約0.5 GB / RAM 約200 MB
-\`base\` — VRAM 約0.5 GB / RAM 約300 MB
-\`small\` — VRAM 約1 GB / RAM 約600 MB
-\`medium\` — VRAM 約2 GB / RAM 約1.5 GB
-\`large-v3\` — VRAM 約4–5 GB / RAM 約2.5 GB *(デフォルト、最高精度)*
-\`large-v3-turbo\` — VRAM 約2–3 GB / RAM 約1.5 GB *(VRAM が少ない場合に推奨)*
+\`tiny\`：VRAM 約0.5 GB / RAM 約200 MB
+\`base\`：VRAM 約0.5 GB / RAM 約300 MB
+\`small\`：VRAM 約1 GB / RAM 約600 MB
+\`medium\`：VRAM 約2 GB / RAM 約1.5 GB
+\`large-v3\`：VRAM 約4-5 GB / RAM 約2.5 GB *(デフォルト、最高精度)*
+\`large-v3-turbo\`：VRAM 約2-3 GB / RAM 約1.5 GB *(VRAM が少ない場合に推奨)*
 
 文字起こしは約100言語に対応（自動検出）。`,
       },
@@ -227,64 +275,64 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
 - 共有された埋め込み（ツイート、記事など）の内容を見ることができます`,
       search_title: `検索＆情報 `,
       search_description: `- 最新情報をウェブ検索できます
-- 画像、動画、ニュース検索も可能です（\`/optional-key brave set\`経由）
+- 画像、動画、ニュース検索も可能です（\`/providers\`経由）
 - URLからコンテンツを取得して読むことができます`,
       personality_title: `パーソナリティ＆カスタマイズ`,
-      personality_description: `- \`/config rename\`と\`/persona avatar\`で名前とアバターを変更できます
+      personality_description: `- \`/config\` > Persona > Generalで名前とアバターを変更できます
 - \`/persona\`で異なるペルソナに切り替えられます（\`/persona export\`でペルソナを共有・保存もできます！）
 - アルターペルソナとして複数のキャラクターが同一サーバーで共存し、それぞれ独自のトリガーとウェブフックアバターを持てます
-- \`/persona attribute add\`、\`/persona sample-dialogue add\`、\`/persona prompt set\`で行動やトーンを調整できます
-- \`/config system-prompt\`でカスタムシステムプロンプトを設定し、行動をさらに形張ることができます
-- 詳しくは\`/help customization\`をご覧ください`,
+- \`/config\` > Persona > Generalと\`/config\` > Persona > Advancedで行動やトーンを調整できます
+- \`/config\` > Behavior > Generalでカスタムシステムプロンプトを設定し、行動をさらに形張ることができます
+- 詳しくは\`/help\`内の **カスタマイズ** ページをご覧ください`,
       memory_title: `記憶＆パーソナライゼーション`,
       memory_description: `- ユーザーやサーバーに関する事実を記憶し、会話を跨いで保持します
 - 個人的な記憶は全サーバーで保持されます（他のサーバーでも私に話しかけてみて！）
-- 最近の会話は[STM（短期記憶）](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)として保持し、チャンネルやサーバーをまたいで文脈を把握します（クロスサーバー共有は\`/personal stm\`でオプトインできます）
-- \`/personal nickname\`であなたを呼ぶ名前を変更できます
-- \`/memory\` と \`/persona\` コマンドで手動で記憶やペルソナ情報を追加・削除できます
-- \`/server expressions initialize\`で絵文字やステッカーを登録すると、より適切な場面で使えるようになります
-- \`/personal privacy\`で完全に見えなくなるオプションが利用可能です
-- 詳しくは\`/help memory\`をご覧ください`,
+- 最近の会話は[STM（短期記憶）](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)として保持し、チャンネルやサーバーをまたいで文脈を把握します（クロスサーバー共有は\`/personal config\`でオプトインできます）
+- \`/personal config\`であなたを呼ぶ名前を変更できます
+- \`/memories\` と \`/persona\` コマンドで手動で記憶やペルソナ情報を追加・削除できます
+- \`/expressions initialize\`で絵文字やステッカーを登録すると、より適切な場面で使えるようになります
+- \`/personal config\`で完全に見えなくなるオプションが利用可能です
+- 詳しくは\`/help\`内の **永続メモリ** ページをご覧ください`,
       time_title: `時間認識`,
-      time_description: `- サーバーの現在時刻を認識しています（\`/server timezone\`経由）
+      time_description: `- サーバーの現在時刻を認識しています（\`/config\` > Behavior > General経由）
 - リマインダーを設定できます（何かを思い出させるように頼んでみて！）
 - 繰り返しリマインダーもサポートされており、ペルソナ固有です`,
       alter_title: `アルターペルソナ`,
       alter_description: `- アルターペルソナを使って、一つのサーバーに複数のキャラクターが共存できます
 - それぞれのアルターは独自のパーソナリティを持ち、特定のキーワードでトリガーされます
 - アルターペルソナは異なるアバターのためにウェブフックを使用します
-- 一つのメッセージで複数のアルターを同時にマッチできます（\`/config trigger-match-limit\`の上限まで）
+- 一つのメッセージで複数のアルターを同時にマッチできます（\`/config\` > Behavior > Triggerの上限まで）
 - ウェブフックメッセージに返信すると、そのペルソナとして会話が続きます
 - \`/persona import\`（アルターオプション）と\`/persona remove\`でアルターを管理できます`,
       expressions_title: `表情＆リアクション`,
       expressions_description: `- サーバーのカスタム絵文字を会話で自然に使えます（大文字小文字不問の \`:名前:\` 形式）
 - 返信の一部としてスタンプを送れます
 - 関連する絵文字でメッセージにリアクションできます
-- \`/server expressions initialize\`で絵文字とスタンプを登録すると精度が向上します`,
+- \`/expressions initialize\`で絵文字とスタンプを登録すると精度が向上します`,
       documents_title: `ドキュメント知識庫`,
-      documents_description: `- \`/memory document add\`でテキスト、PDF、Markdownファイルをサーバー知識としてアップロードできます
-- \`/memory history import\`でチャンネル履歴を検索可能な知識として抽出できます
+      documents_description: `- \`/memories\`でテキスト、PDF、Markdownファイルをサーバー知識としてアップロードできます
+- \`/learn history\`でチャンネル履歴を検索可能な知識として抽出できます
 - 質問に答える際に、私は関連するドキュメント内容を取得して参照します
 - チャットで共有されたファイル添付（PDF、ソースコード、Markdown、JSON、YAMLなど）も直接読み取れます、読んでと頼むだけ！
-- 埋め込みモデルが必要です（\`/model embedding\`で設定）
-- \`/memory document remove\`と\`/memory history remove\`で保存済みドキュメントを削除できます`,
+- 埋め込みモデルが必要です（\`/config\` > Models > Switch Modelsで設定）
+- \`/memories\`と\`/memories\`で保存済みドキュメントを削除できます`,
       impersonation_title: `なりきり＆ツール`,
-      impersonation_description: `- \`/bot impersonate\`で自分自身、ペルソナ、またはシステムメッセージとしてメッセージを送信できます
-- \`/personal impersonate prompt\`でユーザーなりきり用の再利用プロンプトを設定できます
-- \`/tools compact\`で会話履歴を要約したりロールプレイで圧縮できます
-- \`/bot respond\`でボットから定型文や案内付きメッセージを送信できます`,
+      impersonation_description: `- \`/impersonate\`で自分自身、ペルソナ、またはシステムメッセージとしてメッセージを送信できます
+- \`/personal config\`でユーザーなりきり用の再利用プロンプトを設定できます
+- \`/compact\`で会話履歴を要約したりロールプレイで圧縮できます
+- \`/respond\`でボットから定型文や案内付きメッセージを送信できます`,
       imagegen_title: `画像生成`,
       imagegen_description: `- テキストプロンプトから画像を生成し、参照画像を編集することもできます
 - Text2ImageとImage2Imageをカスタマイズタブルなアスペクト比で対応
 - \`/generate image\`を使うか、画像を生成してほしいと頼むだけで動作します
 - 参照画像としてメッセージの添付ファイル、ステッカー、絵文字、ユーザーアバターを使えます
- - Google、Vertex AI、Vertex AI Express、OpenRouter、Z.ai、NVIDIA NIMプロバイダーで利用可能（\`/model image\`で設定）`,
+ - Google、Vertex AI、Vertex AI Express、OpenRouter、Z.ai、NVIDIA NIMプロバイダーで利用可能（\`/config\` > Models > Switch Modelsで設定）`,
       videogen_title: `動画生成`,
       videogen_description: `- テキストプロンプトから短い動画を生成し、参照画像をアニメーション化することもできます
 - Text2VideoとImage2Videoをカスタマイズ可能なアスペクト比で対応
 - \`/generate video\`を使うか、動画を生成してほしいと頼むだけで動作します
 - 参照画像としてメッセージの添付ファイルやユーザーアバターを使えます
-- Google、OpenRouter、Z.aiプロバイダーで利用可能（\`/model video\`で設定）`,
+- Google、OpenRouter、Z.aiプロバイダーで利用可能（\`/config\` > Models > Switch Modelsで設定）`,
       footer: `すべての機能がすべてのAIプロバイダーで利用できるわけではありません。推奨：Google Gemini。私に直接何ができるか聞いてみることもできます！`,
     },
     setup: {
@@ -292,27 +340,23 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       title: `TomoriBotを始める`,
       embed_description: `サーバー（またはDM）でTomoriBotを設定する方法：`,
       step1_title: `ステップ1：APIキーを取得`,
-      step1_description: `TomoriBotは複数のAIプロバイダーに対応しています。いずれかのAPIキーが必要です。
-- {helpApikey}で取得方法を確認
-  - **Google Gemini**（*推奨*）— 汎用、無料で利用可能、すべての機能を実行可能
-  - **DeepSeek**（*推奨*）— 非常に安価で無検閲な代替手段
-  - **OpenRouter** — 有料で信頼性の高い、多数のAIモデルへの一箇所からのアクセス
-  - **NovelAI** — 無検閲なロールプレイ、ストーリーテリング、画像生成
-- このAPIキーを**他人と共有しないでください**
-- Customエンドポイントはセットアップ後に{configApiKeySet}でBearer認証トークンを追加可能`,
+      step1_description: `TomoriBotは複数のAIプロバイダーに対応しています。TomoriBotが動作を始めるには、いずれかのAPIキーが必要です。APIキーとは、選択したプロバイダーのAIモデルをTomoriBotが利用するための秘密のパスキーです。
+
+初めて設定する場合は、無料枠が充実したGoogle Geminiがおすすめですが、TomoriBotに似たシステムの利用経験がある場合は、使い慣れたプロバイダーを選んでも構いません。下からプロバイダーを選択して、APIキーの取得方法を確認してください。`,
+      provider_picker_footer: `APIキーを安全にコピーしたら、次のステップへ進んでください。**APIキーは誰とも共有しないでください。**`,
       step2_title: `ステップ2：セットアップコマンドを実行`,
       step2_description: `- {configSetup}を使用してAPIキーを安全に追加し、TomoriBotを初期化
-- （推奨）{serverInitializeExpressions}を実行して、サーバーの絵文字/スタンプ表現を適切に使えるようにする
+- （推奨）{expressionsInitialize}を実行して、サーバーの絵文字/スタンプ表現を適切に使えるようにする
 	- APIキーは暗号化されて安全に保存されます
 	- 各サーバーには独自の設定があります`,
-      step3_title: `ステップ3：チャットを始める！`,
+      step3_title: `ステップ3：チャットを開始`,
       step3_description: `- メンションするか、私のメッセージに返信するだけでチャットできます
-- {serverTrigger}でトリガー方法を変更できます
+- {personaTrigger}でトリガー方法を変更できます
 - 記憶システムで会話を記憶します（{configPermissions}で無効化できます！）
 - {serverAutotrigger}で自動トリガーを設定し、メンションなしでチャットできます`,
-      step4_title: `オプション：カスタマイズする`,
+      step4_title: `ステップ4：TomoriBotをカスタマイズ（任意）`,
       step4_description: `- {persona}コマンドで私のパーソナリティを完全に変更（アルターペルソナも含む！）
-- {server}、{personal}、{memory}、{config}コマンドで設定を調整
+- {personal}、{memory}、{config}コマンドで設定を調整
 - {memory}で記憶やドキュメント、{persona}で振る舞いを調整できます
 - ドキュメントアップロード、APIキーローテーション、検閲なしモードなどの高度な機能も探してみてください`,
       need_help_title: `ヘルプが必要ですか？`,
@@ -329,12 +373,12 @@ GPU は **float16** · CPU は **int8**（バイト数が半分なので CPU RAM
       setup_title: `セットアップ`,
       setup_description: `1. 暗号化されていないMatrixルームに {botUserId} を招待します。
 2. そのルームの Internal Room ID を確認します。
-3. ブリッジしたいDiscordチャンネルで {serverMatrixLink} を実行し、そのルームIDを貼り付けます。`,
+3. ブリッジしたいDiscordチャンネルで {matrixLink} を実行し、そのルームIDを貼り付けます。`,
       room_id_title: `ルームIDの確認方法`,
       room_id_description: `多くのMatrixクライアントでは Room Settings -> Advanced -> Internal Room ID から確認できます。
 IDの形式は \`!abc:matrix.org\` のようになります。
 
-ボットが招待を受け入れると、Matrixルームにも短い案内を送りますが、リンク完了には引き続きDiscord側で {serverMatrixLink} を実行する必要があります。`,
+ボットが招待を受け入れると、Matrixルームにも短い案内を送りますが、リンク完了には引き続きDiscord側で {matrixLink} を実行する必要があります。`,
       usage_title: `Matrixからの使い方`,
       usage_description: `- ルームをリンクした後は、Matrixで普通に話しかければ使えます
 - Matrixのメッセージはリンク先のDiscordチャンネルにWebhookとして転送されます
@@ -349,7 +393,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - Embedはプレーンテキストとして転送されます
 - Matrixユーザーの個人メモリは属性付きのサーバーメモリにフォールバックします`,
       troubleshooting_title: `注意事項`,
-      troubleshooting_description: `- ボットが自動参加しない場合は {botUserId} を手動で招待し、必要なら {serverMatrixLink} を再実行してください
+      troubleshooting_description: `- ボットが自動参加しない場合は {botUserId} を手動で招待し、必要なら {matrixLink} を再実行してください
 - Matrixの暗号化は後から無効化できないため、暗号化済みルームは使えず、新しい非暗号化ルームが必要です
 - 上に書かれていない制限は基本的に動作する想定なので、動かない場合は {supportServer} で報告してください`,
     },
@@ -404,7 +448,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - post-history / depth injection ノード
 - インポート時に有効・無効で始まるノード`,
       embed1_still_sent_title: `それでも完全には置き換えないもの`,
-      embed1_still_sent_description: `- 現在の system/persona 系ブロックは残ります: {configSystemPromptSet}、{personaPromptSet}、{personaAttributeAdd}、{personaSampleDialogueAdd}
+      embed1_still_sent_description: `- 現在の system/persona 系ブロックは残ります: {configSystemPromptSet}、{personaPromptSet}、{personaAttributeAdd}
 - ライブ会話履歴と取得済み文書コンテキストも残ります
 - Tomori専用の自動コンテキストも残ります: サーバーメモリ、絵文字/ステッカー文脈、会話参加者一覧、STM、conditioning など`,
       embed1_mapping_title: `ネイティブブロックの対応関係`,
@@ -418,7 +462,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       embed1_system_prompt_description: `- プリセットが有効な間は、組み込みのフォールバック用システムプロンプトは外れます
 - {configSystemPromptSet} で自分のシステムプロンプトを設定していれば、それは送信されます
 - STの感覚では、プリセットが制御するのはレイアウトであって、すべてのプロンプト供給元ではありません`,
-      embed1_footer: `プリセットを読み込んだ後でも /help st-preset でいつでも確認できます`,
+      embed1_footer: `プリセット読み込み後も /help のSillyTavernプリセットページからいつでも確認できます`,
       embed2_title: `よくある意外な挙動`,
       embed2_description: `「無視された」「位置がおかしい」と感じやすい主な理由です。
 
@@ -451,12 +495,23 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       description: `AIプロバイダーのAPIキー設定方法を学ぶ`,
       provider_description: `AIプロバイダーを選択`,
       provider_choice_brave: `Brave Search`,
-      provider_choice_google: `Google Gemini`,
+      provider_choice_google: `Google Gemini（おすすめ）`,
       provider_choice_deepseek: `DeepSeek`,
       provider_choice_custom: `カスタムエンドポイント`,
       provider_choice_nvidia: `NVIDIA NIM`,
       provider_choice_novelai: `NovelAI`,
-      provider_choice_openrouter: `OpenRouter`,
+      provider_choice_openrouter: `OpenRouter（おすすめ）`,
+      provider_description_google: `汎用性が高く、無料利用枠も充実`,
+      provider_description_openrouter: `有料ながら安定性と柔軟性が高く、画像・動画・音声も生成可能`,
+      provider_description_deepseek: `比較的検閲が少ない、より安価な有料の選択肢`,
+      provider_description_novelai: `無検閲のロールプレイ、物語、画像生成向け`,
+      provider_description_nvidia: `ホスト型のテキスト、埋め込み、画像モデル`,
+      provider_description_zai: `GLMのテキスト・画像モデル。コーディング用途の規約制限あり`,
+      provider_description_vertexexpress: `APIキー認証でGoogle CloudのGeminiを利用`,
+      provider_description_vertex: `Google Cloud認証情報で企業向けGeminiを利用`,
+      provider_description_custom: `セルフホストやプロキシ用。認証は任意の場合あり`,
+      provider_description_brave: `任意のウェブ、画像、動画、ニュース検索`,
+      provider_description_elevenlabs: `音声生成・文字起こし用。テキストモデルではありません`,
       brave_title: `Brave Search APIキーの設定`,
       brave_description: `Brave Searchはオプションで、検索機能を強化するだけです。これは私のAIを動かすものではありません（それはメインプロバイダーが担当します）。
 - 画像、動画、ニュース検索を有効化
@@ -472,7 +527,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       brave_important_description: `- これはメインAIプロバイダーとは別です
 - Brave APIキーがなくても、組み込みウェブ検索で機能します
 - Braveでは毎月5ドル分の無料クレジットが含まれますが、それを超えると課金される場合があります。無料枠だけ使いたい場合は、[Braveの使用量上限ダッシュボード](https://api-dashboard.search.brave.com/app/subscriptions/usage-limits)で使用量上限を5ドルに設定してください`,
-      brave_footer: `メインAIプロバイダーの設定については、他の\`/help api-key\`オプションを確認してください`,
+      brave_footer: `メインAIプロバイダーについては、\`/help\`のAPIキーページで別のプロバイダーを選んでください`,
       google_title: `Google Gemini APIキーの設定`,
       google_description: `Google Geminiは強力なAIモデルを備えた無料および有料プランを提供します。
 - 無料プランで十分な制限あり
@@ -529,12 +584,13 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       zai_important_title: `重要な注意事項：`,
       zai_important_description: `- 通常のチャット、推論、画像生成には汎用エンドポイントを使ってください
 - 専用のCodingエンドポイントは別扱いで、コーディング特化ワークフロー向けです
-- ⚠️ Z.aiの利用規約がコーディング/エージェントのシナリオのみに制限されました — 一般チャットでの使用は自己責任です`,
+- ⚠️ Z.aiの利用規約がコーディング/エージェントのシナリオのみに制限されました。一般チャットでの使用は自己責任です`,
       zai_footer: `このプロバイダーを設定したら、{configModel}でデフォルトモデルを変更できます`,
       novelai_title: `NovelAI APIキーの設定`,
       novelai_description: `NovelAIはクリエイティブなストーリーテリングとロールプレイに焦点を当てたサブスクリプションベースのサービスです。
 - 無制限の無検閲メッセージ
-- 現在、テキスト生成のみをサポートしています（ビジョンやアシスタント機能はありません）。
+- 無検閲のテキスト生成と、別途設定するNovelAI画像生成に対応
+- NovelAIのテキストモデルは画像入力に未対応
 - [NovelAI利用規約](https://novelai.net/terms)`,
       novelai_getting_key_title: `APIキーの取得：`,
       novelai_getting_key_description: `1. [NovelAI](https://novelai.net/stories)にアクセス
@@ -659,12 +715,12 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - 最良の結果を得るために記憶を簡潔明瞭に保つ{legalNotice}`,
       documents_title: `ドキュメント知識庫`,
       documents_description: `サーバー管理者は参照用のドキュメントをアップロードできます：
-- \`/memory document add\`でテキスト、PDF、Markdownファイルをアップロード
-- \`/memory history import\`でチャンネル履歴をドキュメント記憶として抽出
+- \`/memories\`でテキスト、PDF、Markdownファイルをアップロード
+- \`/learn history\`でチャンネル履歴をドキュメント記憶として抽出
 - ドキュメントは検索可能な埋め込みとして分割して保存されます
 - 会話に基づいて私は自動的に関連する内容を取得します
-- \`/memory document remove\`または\`/memory history remove\`で保存済みドキュメントを削除
-- \`/model embedding\`で埋め込みモデルの設定が必要`,
+- \`/memories\`または\`/memories\`で保存済みドキュメントを削除
+- \`/config\` > Models > Switch Modelsで埋め込みモデルの設定が必要`,
       shortterm_title: `短期記憶`,
       shortterm_description: `永続的な記憶に加え、最近の会話は[STM（短期記憶）](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)として保持しています：
 - 最近のメッセージはチャンネルごとにキャッシュされ、各ペルソナは同じサーバー内の他チャンネルにも最新のSTMを持ち越します
@@ -713,7 +769,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       channels_title: `チャンネルタグ`,
       channels_description: `- \`#チャンネル\`タグが付いた記憶は、そのチャンネルでのみ有効になります
 - チャンネルタグはキーワードタグと組み合わせて使用できます
-- RAGを使用している場合、チャンネルタグはドキュメント（\`/memory document add\`）や履歴インポート（\`/memory history import\`）にも適用できます`,
+- RAGを使用している場合、チャンネルタグはドキュメント（\`/memories\`）や履歴インポート（\`/learn history\`）にも適用できます`,
     },
     spotlight: {
       description: `パーソナルスポットライトの仕組みと使い方を学ぶ`,
@@ -757,7 +813,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - メッセージ中の通常のトリガーワード
 - Discordメンション
 - そのペルソナへのリプライ
-- 手動返信用の {botRespond}
+- 手動返信用の {respondCommand}
 
 いちばん大きい違いは、通常のトリガーワードだけでもペルソナを直接起動できることです。`,
       enabled_title: `DTMオンで変わること`,
@@ -765,7 +821,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - \`@{trigger}\` は引き続き有効
 - Discordメンションは有効
 - リプライは有効
-- {botRespond} は有効
+- {respondCommand} は有効
 
 つまり、普段の会話で偶然ペルソナ名が出ただけでは起動せず、より意図的な呼びかけが必要になります。`,
       personal_title: `サーバー設定と個人設定`,
@@ -782,9 +838,9 @@ IDの形式は \`!abc:matrix.org\` のようになります。
       embed1_title: `TomoriBotのカスタマイズ`,
       embed1_description: `TomoriBotは高度にカスタマイズ可能です！私を本当にあなたのものにするために設定できるすべてがここにあります。これは**私がどう振る舞うか**（パーソナリティ、トーン、設定）についてです。**私が記憶していること**（事実、記憶）については、代わりに{helpMemory}をご覧ください！`,
       summary_personas_title: `ペルソナ`,
-      summary_personas_description: `{personaCreate} または {personaGenerate} でペルソナを作り、{personaAttributeAdd} と {personaSampleDialogueAdd} で調整できます。ペルソナは切り替え、エクスポート、インポート、別々のアルターIDとして使用できます。`,
+      summary_personas_description: `{personaCreate} または {personaGenerate} でペルソナを作り、{personaAttributeAdd} で調整できます。ペルソナは切り替え、エクスポート、インポート、別々のアルターIDとして使用できます。`,
       summary_behavior_title: `動作設定`,
-      summary_behavior_description: `{configModel}、{configHumanizer}、{configSystemPromptSet}、{capabilitiesManage} で、モデル選択、人間らしさ、システム指示、機能アクセスを調整できます。`,
+      summary_behavior_description: `{configModel}、{configHumanizer}、{capabilitiesManage} で、モデル選択、人間らしさ、システム指示、機能アクセスを調整できます。`,
       summary_server_title: `サーバー側の制御`,
       summary_server_description: `管理者は、ペルソナ制限、{serverWhitelistChannel} などのホワイトリストチャンネル、自動トリガー、クールダウン、ロール権限を組み合わせて、TomoriBot がどこでどう応答するかを制御できます。`,
       embed1_personas_title: `パーソナリティペルソナ`,
@@ -842,7 +898,7 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 
 ---
 
-## サーバー設定（\`/server\`）
+## サーバー設定
 サーバー全体の設定と動作：
 
 **学習＆プライバシー：**
@@ -901,14 +957,14 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 - {configPermissions} - 機能のオン/オフを切り替え（画像生成を含む）
 - {configUncensors} - 検閲なし出力オプションを設定
 - {personalPrivacy} - 私への視認性を制御（完全に見えなくなるオプション利用可能）
-- {serverInitializeExpressions} - サーバーの絵文字とステッカーの見た目を登録し、適切な場面で使えるようにする
+- {expressionsInitialize} - サーバーの絵文字とステッカーの見た目を登録し、適切な場面で使えるようにする
 
 **ドキュメント知識庫：**
 - {configModelEmbedding} - ドキュメントアップロードとRAG用の埋め込みモデルを設定`,
       embed4_footer: `他に質問があれば、\`/support discord\`でサポートサーバーに参加してください`,
       embed5_title: `プロのヒント`,
       embed5_description: `- ペルソナ（デフォルトまたは生成）を基盤として始める
-- 素早くパーソナリティを調整するには\`/persona attribute add\`を使用
+- 素早くパーソナリティを調整するには\`/config\` > Persona > Generalを使用
 - サンプル対話では、属性や特性も示す例を使用すると効果的：
 \`\`\`
 ユーザーメッセージ：{user}：お気に入りの趣味は？
@@ -927,26 +983,26 @@ IDの形式は \`!abc:matrix.org\` のようになります。
 **Smithery.aiを使う場合：**
 **1.** [smithery.ai](https://smithery.ai) にアクセスし、アカウントを作成してプロフィールからAPIキーを生成します。
 **2.** カタログを閲覧し、追加したいMCPを開きます。ページに表示されている**接続URL**をコピーします（例：\`https://youtube.run.tools\`）。
-**3.** {configMcpAdd} を実行し、**URL**フィールドに接続URLを、**認証トークン**フィールドにSmithery APIキーを貼り付けます。
+**3.** {mcpsCommand} を実行して **+ MCPを追加** を選びます。フォームの**URL**に接続URLを、**認証トークン**にSmithery APIキーを貼り付け、必須の**サーバータイプ**を選びます。初期値は**汎用**です。
 
 **他のソースを使う場合：**
 認証が不要なMCPサーバーの場合は、**認証トークン**フィールドを空白のままにしてください。サーバーによっては別の認証形式を使用する場合があります。詳細はそのサーバーのドキュメントを確認してください。
 
 認証トークンは保存後に暗号化され、平文で表示されることはありません。`,
-      online_summary_description: `{configMcpAdd} で、公開された HTTPS MCP サーバーを登録できます。認証トークンは保存後に暗号化されます。接続URLの注意点はドキュメントを確認してください。`,
+      online_summary_description: `{mcpsCommand} を開いて **MCPを追加** を選ぶと、公開された HTTPS MCP サーバーを登録できます。認証トークンは保存後に暗号化されます。接続URLの注意点はドキュメントを確認してください。`,
       local_title: `ローカルMCPの追加（自己ホスト限定）`,
       local_description: `ローカルMCPサーバーは、**自己ホストのTomoriBotインスタンスでのみ対応しています**。公式ホスト版のbotはセキュリティのためHTTPSが必要で、ローカル/プライベートアドレスはブロックされます。
 
 自己ホストの場合は、ローカルサーバーのURLを指定してください（例：\`http://localhost:3000/sse\`）。ローカルサーバーには認証トークンは不要です。`,
       local_summary_description: `ローカル MCP サーバーは自己ホスト専用です。公式ホスト版はローカル/プライベートアドレスをブロックします。ローカルMCPの起動とURL登録手順はドキュメントにあります。`,
       removing_title: `MCPサーバーの削除`,
-      removing_description: `{configMcpRemove} を使えば、いつでもサーバーの登録を解除できます。削除すると即座に接続が切断され、新しいサーバーのスロットが解放されます。`,
+      removing_description: `{mcpsCommand} を開いてサーバーを選び、**削除**を選択します。確認すると即座に接続が切断され、新しいサーバーのスロットが解放されます。`,
       security_title: `セキュリティに関する警告`,
       security_description: `**信頼できるMCPサーバーのみ追加してください。**
 
 悪意のあるMCPサーバーは以下のことが可能です：
-- **プロンプトインジェクション** — Tomoriへ隠し指示を送り、動作を操作する
-- **データ漏洩** — ツールに渡されたデータ（メッセージやファイル内容など）を外部へ送信する
+- **プロンプトインジェクション**：Tomoriへ隠し指示を送り、動作を操作する
+- **データ漏洩**：ツールに渡されたデータ（メッセージやファイル内容など）を外部へ送信する
 - **有害または虚偽の結果** を返し、Tomoriがそれをサーバーに中継する
 
 MCPサーバーはブラウザ拡張機能やサードパーティアプリと同様の注意を持って扱ってください。不安な場合は追加しないでください。`,
