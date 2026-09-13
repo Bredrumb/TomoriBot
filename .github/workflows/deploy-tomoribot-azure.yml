@@ -618,13 +618,25 @@ jobs:
           bun run scripts/checks/checkPendingMigrations.ts --changed-since "$PREV_REF"
 
       - name: Optional Azure PostgreSQL backup (manual or (Checkpoint) commit)
-        # Azure PostgreSQL B1ms rejects customer on-demand backups. Keep this
-        # path for future non-Burstable SKUs; never enable it for the migration
-        # plan's B1ms server.
+        # Burstable tiers reject customer on-demand backups, so on those the step records a
+        # point-in-time restore target instead of failing the deploy. Automated backups
+        # (backup_retention_days) are the recovery path there. Other tiers take a real backup.
         if: |
           (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
           (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
         run: |
+          set -euo pipefail
+          tier=$(az postgres flexible-server show \
+            --resource-group tomoribot-rg \
+            --name tomoribot-postgres \
+            --query sku.tier \
+            --output tsv)
+          if [ "$tier" = "Burstable" ]; then
+            restore_target=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            echo "::notice title=Point-in-time restore target::${restore_target} (Burstable tier has no on-demand backups)"
+            exit 0
+          fi
+
           BACKUP_NAME="pre-deploy-${{ github.run_id }}-${{ github.run_attempt }}"
           echo "Creating pre-deploy Azure PostgreSQL backup: ${BACKUP_NAME}"
           az postgres flexible-server backup create \

@@ -254,17 +254,16 @@ Destructive migrations (`DROP`, `ALTER COLUMN ... TYPE`, `TRUNCATE`, unfiltered 
 blocked upstream by the **Destructive migration gate**. Routine pushes genuinely apply migrations, so the
 gate is what catches an unguarded destructive change before it reaches the database.
 
-:::caution[`(Checkpoint)` does not produce a backup on this deployment]
-A `(Checkpoint)` commit message, or `create_db_backup=true` on manual dispatch, skips the gate and then
-runs `az postgres flexible-server backup create`. **Azure rejects customer on-demand backups on the
-Burstable tier**, which is what this server runs (`Standard_B1ms`), so that step fails and takes the
-deploy down with it. The outcome is safe, because nothing deploys and the migration never reaches the
-database, but it is not a backup and the gate has been spent for nothing.
+:::caution[`(Checkpoint)` acknowledges the migration; it does not take a backup here]
+A `(Checkpoint)` commit message, or `create_db_backup=true` on manual dispatch, skips the gate. **Azure
+rejects customer on-demand backups on the Burstable tier**, which is what this server runs
+(`Standard_B1ms`), so the backup step reads the tier and, on Burstable, records the current UTC time as a
+**point-in-time restore target** in the run's notices instead of calling `backup create`.
 
-The real recovery point on Burstable is **point-in-time restore from the automated backups**
-(`backup_retention_days`, 7 by default). Before shipping a destructive migration, record the current UTC
-timestamp as your restore target, or take an explicit logical dump. Re-enable the on-demand path only if
-this server moves to General Purpose or Memory Optimized, where Azure permits it.
+That timestamp is the recovery point: restore from the automated backups (`backup_retention_days`, 7 by
+default) to a moment just before it. Take an explicit logical dump first if a migration is risky enough
+to want more than that. On General Purpose or Memory Optimized, the same step takes a real on-demand
+backup.
 :::
 
 ### Recurring deployment
@@ -389,7 +388,7 @@ paths now throw `DatabaseUnavailableError` rather than answering:
 | `UserRepository.getPrivacyLevel` | `MINIMAL` (full personalization) | A user who chose `FULL` (completely invisible) was treated as fully personalizable for the length of every cascade |
 | `UserRepository.isBlacklisted` | `false` | A moderation control that lifts itself on a database hiccup is not a control |
 | `PersonaUserBlockRepository.loadActiveBlocksForUser` | `[]` | An empty list reads downstream as "no blocks apply", lifting every persona-level block |
-| `LlmProviderRepository.loadSavedProviderConfig` | `null` | Indistinguishable from "no row", so it rendered an "API Key Missing" embed telling an admin to run `/config setup` during a transient blip |
+| `LlmProviderRepository.loadSavedProviderConfig` | `null` | Indistinguishable from "no row", so it rendered an "API Key Missing" embed telling an admin to rerun `/setup` during a transient blip |
 
 The genuine-absence branches above each `catch` are deliberately kept separate: a user with no row
 really is new, and `MINIMAL` remains correct for them. Only the failure path changed.
