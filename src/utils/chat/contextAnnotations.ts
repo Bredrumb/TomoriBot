@@ -13,7 +13,7 @@ import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { compactWhitespace, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { formatTimestampInline } from "@/utils/text/contextBuilder";
-import { getSupportedLocales, localizer } from "@/utils/text/localizer";
+import { matchesProtocolTemplateKey, classifyProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
@@ -46,8 +46,6 @@ const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/3gpp",
 ];
 const DISCORD_MESSAGE_LINK_PATTERN = /discord(?:app)?\.com\/channels\/(?:@me|\d+)\/(\d+)\/(\d+)/;
-const REPLY_CONTEXT_URL_SENTINEL = "https://discord.com/channels/0/0";
-const REPLY_CONTEXT_USER_SENTINEL = "__tomori_user__";
 
 export type ReactionContextBudgetState = {
   callsUsed: number;
@@ -262,26 +260,15 @@ function extractReplyContextTargetFromEmbed(embed: Embed): { channelId: string; 
   const description = embed.description?.trim() ?? "";
   const authorName = embed.author?.name?.trim() ?? "";
   const footerText = embed.footer?.text?.trim() ?? "";
-  const hasReplyDescription = matchesLocalizedReplyContextTemplate(
-    description,
+  const hasReplyMarker = classifyProtocolEmbed(embed) === "reply_context";
+  const hasReplyDescription = matchesProtocolTemplateKey(
     "genai.message_interaction.reply_context_description",
-    { message_url: REPLY_CONTEXT_URL_SENTINEL },
+    description,
   );
-  const hasReplyAuthor = matchesLocalizedReplyContextTemplate(
-    authorName,
-    "genai.message_interaction.reply_context_author",
-    { user: REPLY_CONTEXT_USER_SENTINEL },
-  );
-  const hasReplyFooter = matchesLocalizedReplyContextTemplate(
-    footerText,
-    "genai.message_interaction.reply_context_footer",
-    {
-      user: REPLY_CONTEXT_USER_SENTINEL,
-      message_url: REPLY_CONTEXT_URL_SENTINEL,
-    },
-  );
+  const hasReplyAuthor = matchesProtocolTemplateKey("genai.message_interaction.reply_context_author", authorName);
+  const hasReplyFooter = matchesProtocolTemplateKey("genai.message_interaction.reply_context_footer", footerText);
 
-  if (!hasReplyDescription && !hasReplyAuthor && !hasReplyFooter) {
+  if (!hasReplyMarker && !hasReplyDescription && !hasReplyAuthor && !hasReplyFooter) {
     return null;
   }
 
@@ -294,24 +281,6 @@ function extractReplyContextTargetFromEmbed(embed: Embed): { channelId: string; 
     channelId: match[1],
     messageId: match[2],
   };
-}
-
-function matchesLocalizedReplyContextTemplate(
-  text: string,
-  templateKey: string,
-  placeholderValues: Record<string, string>,
-): boolean {
-  for (const locale of getSupportedLocales()) {
-    const template = localizer(locale, templateKey, placeholderValues);
-    let pattern = escapeRegExp(template);
-    for (const placeholderValue of Object.values(placeholderValues)) {
-      pattern = pattern.replaceAll(escapeRegExp(placeholderValue), ".+?");
-    }
-    if (new RegExp(`^${pattern}$`).test(text)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export function annotateRecentMessageMetadataInContext(params: {

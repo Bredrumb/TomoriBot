@@ -2,12 +2,13 @@ import type { Embed } from "discord.js";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import {
   checkTargetEmbedTitle,
+  checkTargetEmbed,
   formatSystemProducedEmbedHint,
   processLinkEmbed,
 } from "@/utils/discord/embedClassifier";
 import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
 import { ColorCode } from "@/utils/misc/logger";
-import { getSupportedLocales, localizer } from "@/utils/text/localizer";
+import { classifyProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { truncateForSystemContext } from "@/utils/chat/contextDirectives";
 
@@ -35,7 +36,7 @@ export function processEmbedsFromMessage(args: {
   let processedSystemEmbed = false;
 
   for (const embed of args.embeds) {
-    const embedCheck = checkTargetEmbedTitle(embed.title);
+    const embedCheck = checkTargetEmbed(embed);
     if (embedCheck.isTarget && embed.description) {
       const embedContent = formatTargetEmbedForContext(
         { title: embed.title, description: embed.description },
@@ -140,27 +141,8 @@ function formatTargetEmbedForContext(
     : formatSystemProducedEmbedHint(embedBody);
 }
 
-function checkSelfDebugDiagnosticEmbedTitle(embedTitle: string | null): boolean {
-  if (!embedTitle) return false;
-
-  for (const supportedLocale of getSupportedLocales()) {
-    const diagnosticTitles = [
-      localizer(supportedLocale, "genai.fallback_used_title"),
-      localizer(supportedLocale, "genai.error_stream_timeout_title"),
-      localizer(supportedLocale, "genai.empty_response_title"),
-      localizer(supportedLocale, "genai.max_iterations_title"),
-      localizer(supportedLocale, "genai.no_response_title"),
-    ];
-    if (diagnosticTitles.includes(embedTitle)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function shouldIncludeSelfDebugEmbed(embed: Embed): boolean {
-  return embed.color === ERROR_EMBED_COLOR_DECIMAL || checkSelfDebugDiagnosticEmbedTitle(embed.title);
+  return embed.color === ERROR_EMBED_COLOR_DECIMAL || classifyProtocolEmbed(embed) === "diagnostic";
 }
 
 function formatTomoriSelfDebugEmbedAsSystemMessage(embed: Embed): string | null {

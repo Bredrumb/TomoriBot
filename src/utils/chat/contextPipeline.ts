@@ -33,7 +33,7 @@ import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
-import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
+import { checkTargetEmbed } from "@/utils/discord/embedClassifier";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
@@ -619,7 +619,7 @@ async function buildSimplifiedHistory(
   let resetType: "reset" | "compact_refresh" | null = null;
   for (let i = messages.length - 1; i >= 0; i--) {
     for (const embed of messages[i].embeds) {
-      const embedCheck = checkTargetEmbedTitle(embed.title);
+      const embedCheck = checkTargetEmbed(embed);
       if (embedCheck.isTarget && (embedCheck.type === "reset" || embedCheck.type === "compact_refresh")) {
         resetIndex = i;
         resetType = embedCheck.type === "compact_refresh" ? "compact_refresh" : "reset";

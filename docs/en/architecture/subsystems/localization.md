@@ -32,6 +32,20 @@ localizer(locale, "commands.config.setup.description")
 - Locale lookup tries an exact authored code, then an alias, then an unambiguous base-language match, then `en-US`. For example, `es-ES` uses the authored `es-419` tree once that tree exists; unsupported codes use English.
 - Missing key falls back to `en-US` for that key alone (see below).
 - Multi-line strings are dedented automatically on load.
+- Rendered strings used as embed protocol data are registered in `src/utils/discord/embedProtocol.ts`.
+  Startup builds one reverse lookup from the authored locale trees and fails on a title collision
+  between distinct protocol keys. Template keys must retain the same placeholder names and counts
+  across authored locales; target-title templates also need literal text around a placeholder.
+  Reply-context field templates are matched only against their own embed fields, not against titles.
+  Each released locale's protocol-key values are immutable because
+  Discord already stores unmarked historical embeds using those values.
+
+New bot-produced protocol embeds carry a `[tomori:v1:<kind>]` footer token. The classifier reads the
+token first, then uses the precomputed localized title lookup for older messages. Reset markers drop
+the marker message from history; compact-refresh markers keep their summary message as the new
+conversation opener. The Matrix relay serializes footer text along with title and description, so
+the token remains in its plain-text copy. A Matrix `/refresh` also writes the token on its Discord
+embed. Components V2 notices have no embeds and continue to use their reconstructed title text.
 
 ## Key Resolution and the `en-US` Fallback
 

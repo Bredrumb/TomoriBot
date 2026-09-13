@@ -1,6 +1,7 @@
 import type { ChatInputCommandInteraction, Client, Message, SlashCommandSubcommandBuilder } from "discord.js";
 import { EmbedBuilder, MessageFlags, PermissionFlagsBits } from "discord.js";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
+import { stampProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import type { ConditioningType, TomoriState, UserRow } from "@/types/db/schema";
@@ -254,6 +255,7 @@ export function createConditioningInteractionCommand(
       }
 
       interactionEmbed.setDescription(embedDescription);
+      stampProtocolEmbed(interactionEmbed, type === "reward" ? "reward" : "punish");
 
       await interaction.reply({
         embeds: [interactionEmbed],

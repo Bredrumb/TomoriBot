@@ -15,6 +15,7 @@ import { personaRepository } from "@/utils/db/repositories";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { sendCooldownDM } from "@/utils/discord/cooldownDM";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
+import { stampProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { safeSelectOptionText } from "@/utils/discord/interactionHelper";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { promptWithRawModal } from "@/utils/discord/ui/modals";
@@ -428,16 +429,19 @@ export async function execute(
 
   await modalInteraction.reply({
     embeds: [
-      new EmbedBuilder()
-        .setTitle(localizer(locale, "commands.generate.scene.success_title"))
-        .setDescription(descriptionLines.join("\n"))
-        .setColor(ColorCode.SUCCESS)
-        .setFooter({
-          text: localizer(locale, "commands.generate.scene.success_footer", {
-            user: interaction.user.username,
+      stampProtocolEmbed(
+        new EmbedBuilder()
+          .setTitle(localizer(locale, "commands.generate.scene.success_title"))
+          .setDescription(descriptionLines.join("\n"))
+          .setColor(ColorCode.SUCCESS)
+          .setFooter({
+            text: localizer(locale, "commands.generate.scene.success_footer", {
+              user: interaction.user.username,
+            }),
+            iconURL: executorAvatarUrl,
           }),
-          iconURL: executorAvatarUrl,
-        }),
+        "scene_directive",
+      ),
     ],
   });
 

@@ -4,6 +4,7 @@ import { Glob } from "bun";
 import { isDiscordLocaleCode, LOCALE_ALIASES, type LocaleCode } from "@/constants/locales";
 import type { LocaleObject, Locales, LocaleValue, LocalizerVariables } from "../../types/discord/global";
 import { log } from "../misc/logger";
+import { initializeEmbedProtocol } from "@/utils/discord/embedProtocol";
 
 const locales: Locales = {};
 let isInitialized = false; // Track initialization state
@@ -87,6 +88,12 @@ export async function initializeLocalizer(): Promise<void> {
     if (Object.keys(locales).length > 0) {
       log.success(`Successfully loaded locales: [${Object.keys(locales).join(", ")}]`);
       isInitialized = true;
+      try {
+        initializeEmbedProtocol();
+      } catch (error) {
+        isInitialized = false;
+        throw error;
+      }
     } else {
       log.warn("No locale files were loaded. Check the src/locales directory.");
       throw new Error("No locale files were loaded");

@@ -7,6 +7,7 @@ import { promptWithPaginatedModal, safeSelectOptionText } from "@/utils/discord/
 import { sliceMessagesAtResetMarker } from "@/utils/discord/embedDetection";
 import {
   checkTargetEmbedTitle,
+  checkTargetEmbed,
   processLinkEmbed,
   formatSystemProducedEmbedHint,
 } from "@/utils/discord/embedClassifier";
@@ -640,7 +641,7 @@ export async function execute(
       const embedTextSegments: string[] = [];
       if (message.embeds.length > 0) {
         for (const embed of message.embeds) {
-          const embedCheck = checkTargetEmbedTitle(embed.title);
+          const embedCheck = checkTargetEmbed(embed);
           if (embedCheck.isTarget && embed.description) {
             const type = embedCheck.type;
             if (type === "system_injection" || type === "compact_summary" || type === "compact_refresh") {

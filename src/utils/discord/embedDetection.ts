@@ -5,38 +5,17 @@
  */
 
 import type { Embed, Message } from "discord.js";
-import { localizer, getSupportedLocales } from "@/utils/text/localizer";
+import { classifyProtocolEmbed } from "./embedProtocol";
 
 /**
  * Checks whether a single embed is a "refresh marker": an embed that signals
  * a conversation reset or compact-refresh boundary.
  *
- * Matches the following localizer keys across all supported locales:
- * - `commands.refresh.title` (conversation reset)
- * - `commands.compact.summary_title_refreshed` (compact summary refresh)
- * - `commands.compact.roleplay_scene_title_refreshed` (compact scene refresh)
- *
- * @returns True if the embed is a refresh/reset marker
+ * New embeds carry a footer marker; older embeds use the startup title lookup.
  */
 export function isRefreshMarkerEmbed(embed: Embed): boolean {
-  const title = embed.title;
-  if (!title) return false;
-
-  for (const supportedLocale of getSupportedLocales()) {
-    const resetTitle = localizer(supportedLocale, "commands.refresh.title");
-    if (title === resetTitle) return true;
-
-    const compactSummaryRefreshed = localizer(supportedLocale, "commands.compact.summary_title_refreshed");
-    if (title === compactSummaryRefreshed) return true;
-
-    const compactSceneRefreshed = localizer(supportedLocale, "commands.compact.roleplay_scene_title_refreshed");
-    if (title === compactSceneRefreshed) return true;
-
-    const compactManualRefreshed = localizer(supportedLocale, "commands.compact.manual_entry_title_refreshed");
-    if (title === compactManualRefreshed) return true;
-  }
-
-  return false;
+  const kind = classifyProtocolEmbed(embed);
+  return kind === "reset" || kind === "compact_refresh";
 }
 
 /**
@@ -45,29 +24,10 @@ export function isRefreshMarkerEmbed(embed: Embed): boolean {
  * history: plain resets drop the marker itself, compact-refreshes keep it
  * (since the compact summary IS the new conversation opener).
  *
- * @returns "compact_refresh" if the embed is a compact-summary refresh marker,
- *          "reset" if it's a plain `/refresh` marker, null otherwise
  */
 function classifyRefreshMarkerEmbed(embed: Embed): "reset" | "compact_refresh" | null {
-  const title = embed.title;
-  if (!title) return null;
-
-  for (const supportedLocale of getSupportedLocales()) {
-    // Plain reset from /refresh
-    if (title === localizer(supportedLocale, "commands.refresh.title")) {
-      return "reset";
-    }
-    // Compact refresh markers: summary, scene, or manual refresh
-    if (
-      title === localizer(supportedLocale, "commands.compact.summary_title_refreshed") ||
-      title === localizer(supportedLocale, "commands.compact.roleplay_scene_title_refreshed") ||
-      title === localizer(supportedLocale, "commands.compact.manual_entry_title_refreshed")
-    ) {
-      return "compact_refresh";
-    }
-  }
-
-  return null;
+  const kind = classifyProtocolEmbed(embed);
+  return kind === "reset" || kind === "compact_refresh" ? kind : null;
 }
 
 /**
