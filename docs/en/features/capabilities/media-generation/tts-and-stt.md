@@ -50,13 +50,14 @@ second clips with no background music work best.
 
 Each engine has its own setup guide:
 
-- [Chatterbox-Turbo/Nano](/self-hosting/local-endpoints/text-to-speech/chatterbox/) — fast, English-only voice cloning with supported event tags such as `[laugh]`.
-- [Qwen3-TTS](/self-hosting/local-endpoints/text-to-speech/qwen3tts/) — multilingual (10 languages), plus a
+- [Chatterbox-Turbo/Nano](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/) — fast, English-only voice cloning with supported event tags such as `[laugh]`.
+- [Qwen3-TTS](/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/) — multilingual (10 languages), plus a
   natural-language VoiceDesign mode.
-- [IrodoriTTS](/self-hosting/local-endpoints/text-to-speech/irodoritts/) — Japanese-specialized, reads emoji
+- [MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/) — trial auto endpoint for multilingual cloning or English/Chinese voice design.
+- [IrodoriTTS](/en/self-hosting/local-endpoints/text-to-speech/irodoritts/) — Japanese-specialized, reads emoji
   as emotion cues.
 
-See the [Text-to-Speech](/self-hosting/local-endpoints/text-to-speech/) hub for the full list.
+See the [Text-to-Speech comparison table](/en/self-hosting/local-endpoints/text-to-speech/) for the full list and hardware guidance.
 
 ## Speech-to-Text
 

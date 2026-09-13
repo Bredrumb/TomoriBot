@@ -64,6 +64,7 @@ source open to follow these.
   - [`local-endpoints/setup-chatmock.md`](./self-hosting/local-endpoints/setup-chatmock)
   - [`local-endpoints/setup-local-mcp.md`](./self-hosting/local-endpoints/setup-local-mcp)
   - [`local-endpoints/text-to-speech/`](./self-hosting/local-endpoints/text-to-speech/) — local TTS engines
+    - [`MOSS-TTS`](./self-hosting/local-endpoints/text-to-speech/moss) — experimental clone and voice-design auto endpoint
   - [`local-endpoints/speech-to-text/`](./self-hosting/local-endpoints/speech-to-text/) — local STT engines
 - [`self-hosting/maintenance.md`](./self-hosting/maintenance) — maintenance scripts, updating, backups/restore
 - [`self-hosting/safe-migration.md`](./self-hosting/safe-migration)

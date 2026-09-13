@@ -16,9 +16,17 @@ TomoriBotは、speechをカスタムエンドポイント機能として扱い�
   <LinkCard title="Chatterbox TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/"
     description="英語の音声クローンとイベントタグに対応します。標準はTurboで、より小さいNanoも選べます。" />
   <LinkCard title="Qwen3-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
-    description="クローンモードとVoiceDesignモードを備えた多言語ローカルTTSです。最大サイズですが最高の品質を誇ります。" />
+    description="クローンモードとVoiceDesignモードを備えた多言語ローカルTTSです。" />
+  <LinkCard title="MOSS-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="試用向けAutoエンドポイント。4Bの多言語クローンと英語・中国語の音声設計を切り替えます。" />
   <LinkCard title="IrodoriTTS" href="/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/"
     description="感情制御のためにUnicode絵文字マークアップを保持する、日本語に特化したボイスクローニングです。" />
+  <LinkCard title="Fish Audio S2 Pro" href="/en/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="多言語の音声クローンと自由形式の表現タグ。セットアップガイドは英語です。" />
+  <LinkCard title="VoxCPM2" href="/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="30言語でクローンとVoice Designに対応。セットアップガイドは英語です。" />
+  <LinkCard title="CosyVoice 3" href="/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="言語横断クローンと上流ストリーミングに対応。セットアップガイドは英語です。" />
 </CardGrid>
 
 ## セットアップ手順
@@ -37,20 +45,28 @@ TomoriBotは、speechをカスタムエンドポイント機能として扱い�
 2. `/config`を実行してサンプルをアップロードします。任意の音声形式を使用できます。TomoriBotはそれをモノラルのWAVに変換します。
 3. `/config`を実行し、ペルソナと音声サンプルを選択します。
 
-Qwen3-TTSのVoiceDesignの場合、音声サンプルはスキップし、代わりに各ペルソナに対して`/config`を実行します。
+Qwen3-TTSまたはMOSS-VoiceGeneratorのVoiceDesignの場合、音声サンプルを使わず、`/config`のPersona > Voiceに声の説明を保存します。
 
 ElevenLabsのユーザーは`/providers`を使用する必要があります。これにより、speechとtranscriptionのエンドポイントが一緒に登録されます。
 
 TomoriBotは、生成する前に音声スクリプトからDiscordのカスタム絵文字構文（`:pepega:`や`<:pepega:123456789012345678>`など）を削除します。speechエンドポイントがIrodoriTTS向けに意図された絵文字マークアップを使用しない限り、Unicode絵文字も削除されます。
 
-## ハードウェア要件
+## エンジン比較
 
-ローカルのTTSエンジンは**LLMよりもはるかに軽量**です。これらは小さなモデル（約0.5B〜1.7Bパラメーター）です。一般的なNVIDIA GPU（数GBのVRAMで十分です）でも、これらのいずれかを快適に実行し、合成を高速に保つことができます。音声クリップは短いため、速度は落ちますが**CPU**でも動作します。
+TomoriBotの現行ラッパーはすべて完成したWAVを返します。「上流ストリーミング」はモデルや別の配信バックエンドの機能であり、Discordボイスチャットへのストリーミング実装を意味しません。モデルサイズはパラメーター数で、VRAM使用量やダウンロード容量ではありません。16 GB欄は試用の目安であり、実測最大値ではありません。同一GPU・同一スクリプトでの速度比較はまだないため、速度欄は傾向のみ示します。
 
-| エンジン | モデルサイズ | 備考 |
-|---|---|---|
-| Chatterbox | 350M (Turbo)、110M (Nano) | 英語の音声クローンと対応済みイベントタグ。 |
-| Qwen3-TTS | 1.7B (12 Hz) | 個別のクローン + VoiceDesignモデル。一度に1つだけ読み込まれます。 |
-| IrodoriTTS | 500M (v2) | 日本語に特化。GPUでは`bf16`、CPUでは`fp32`。 |
+| エンジン | サイズ・16 GB GPU | 対応言語 | 音声ソース・制御 | 速度・ストリーミング | 選ぶ理由 |
+|---|---|---|---|---|---|
+| [Chatterbox](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/) | Turbo 350M、Nano 110M。対応、NanoはCPUも可 | 英語 | 参照音声クローン、対応済みイベントタグ。標準モデルにはCFG・表現調整 | 小型・高速重視。ラッパーはWAV一括返却 | 軽量な英語クローンやCPUでの試用 |
+| [Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 各モード1.7B。対応、モデルを入れ替え | 日本語・英語を含む10言語 | クローンまたはテキストによるVoiceDesign | 品質重視。上流はストリーミング対応、ラッパーは一括返却 | 汎用の多言語クローンと日本語の音声設計 |
+| [MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/) | クローン4B、設計約1.7Bを入れ替え。16 GBは未検証の試用目標、8B版は厳しい | クローン31言語（日本語含む）、設計は英語・中国語 | クローンまたはVoiceGeneratorによる音声設計。クローンは言語タグ対応 | 試験的。4Bの上流にストリーミング配信手段、ラッパーは一括返却 | MOSSのクローン品質や英語・中国語の音声設計を比較 |
+| [IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 現行v4.1 Smallは約0.8B。一つのローカル実行例でVRAM約3〜4 GB | 日本語のみ | クローン、VoiceDesign、絵文字による表現 | サンプリング回数で速度と品質を調整。ラッパーは一括返却 | 小さなメモリで使える日本語音声と絵文字表現 |
+| [Fish S2 Pro](/en/self-hosting/local-endpoints/text-to-speech/fishs2/) | 4B。標準INT8なら16 GB目安、公式BF16は24 GB以上推奨 | 上流の公称83言語 | 参照音声クローン、自由形式の角括弧表現タグ | 重いモデル。上流にはストリーミング手段、ラッパーは一括返却 | 細かな表現制御。研究ライセンスに注意 |
+| [VoxCPM2](/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 2B。公式BF16実行は約8 GBと報告 | 30言語 | クローン、Voice Design、トランスクリプト付きUltimate Cloning、発話指示 | 上流RTX 4090で約0.30 RTF。上流はストリーミング対応、ラッパーは一括返却 | 一つの多言語モデルで幅広い音声ソースを扱う |
+| [CosyVoice 3](/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | 中核0.5B。16 GBが目安、全体の容量はより大きい | 日本語を含む9言語と中国語方言 | クローン、言語をまたぐクローン、自然言語による発話指示 | 低遅延重視。上流はテキスト・音声ストリーミング対応、ラッパーは一括返却 | 将来のストリーミング候補と言語横断クローン |
 
-起動後（またはQwen3-TTSがオートモードでモデルを入れ替えた後）の最初の合成は、モデルがメモリに読み込まれるため遅くなりますが、それ以降のリクエストは高速になります。TomoriBotは各レスポンスを最大`TTS_SYNTHESIZE_TIMEOUT_MS`（デフォルトは240000ミリ秒）待機します。
+サイズと言語数は[Chatterbox](https://github.com/resemble-ai/chatterbox)、[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)、[MOSS](https://github.com/OpenMOSS/MOSS-TTS)、[Irodori](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small)、[Fish S2 Pro](https://huggingface.co/fishaudio/s2-pro)、[VoxCPM2](https://huggingface.co/openbmb/VoxCPM2)、[CosyVoice 3](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512)の上流資料を参照しています。OS、ドライバー、ライセンス、モデルの版、メモリの詳細は各ガイドを確認してください。16 GBのGPUでも、大きなLLMとTTSを同時に載せられるとは限りません。
+
+IrodoriのVRAM値は一つのローカル実行例であり、公式の最小要件や他モデルとの比較結果ではありません。実際のメモリ使用量は実行環境、精度、スクリプト長、他のGPU処理によって変わります。
+
+起動後やQwen3-TTS・MOSSのAutoモード切り替え後は、モデルの読み込みに時間がかかります。TomoriBotはWAV全体の返却を`TTS_SYNTHESIZE_TIMEOUT_MS`（標準240000ミリ秒）まで待ちます。
