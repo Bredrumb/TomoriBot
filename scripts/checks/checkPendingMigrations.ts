@@ -22,7 +22,7 @@
  * hold production DB credentials at the pre-Terraform stage. Local pre-push
  * hooks can use --all for a no-DB sanity check.
  *
- * See docs/guides/safe-migration.md (the (Checkpoint) convention) for the
+ * See docs/en/self-hosting/safe-migration.md (the (Checkpoint) convention) for the
  * commit-message lever that satisfies this gate.
  */
 
@@ -217,11 +217,13 @@ async function main(): Promise<void> {
     for (const f of r.findings) console.error(`    - ${f}`);
   }
   console.error(
-    "\nDeploy gate failed: this deploy contains destructive migrations without a snapshot.",
+    "\nDeploy gate failed: this deploy contains destructive migrations that nobody has acknowledged.",
     "\nResolve by EITHER:",
-    "\n  - adding '(Checkpoint)' to the deploy commit message (triggers an RDS/Cloud SQL snapshot before migration), OR",
-    "\n  - dispatching the deploy workflow manually with create_db_snapshot=true.",
-    "\nSee docs/guides/safe-migration.md for the full (Checkpoint) convention.",
+    "\n  - adding '(Checkpoint)' to the deploy commit message, OR",
+    "\n  - dispatching the deploy workflow manually with create_db_backup=true.",
+    "\nEither takes a pre-deploy backup where the database tier supports one; otherwise the deploy",
+    "\nrecords a point-in-time restore target instead.",
+    "\nSee docs/en/self-hosting/safe-migration.md for the full (Checkpoint) convention.",
   );
   process.exit(1);
 }
