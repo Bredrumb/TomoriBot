@@ -113,8 +113,10 @@ jobs:
       - name: Check localization keys
         if: github.event_name != 'pull_request'
         run: |
-          output=$(bun run check-locales 2>&1)
-          exitCode=$?
+          # Actions runs this under `bash -e`, and the advisory exit 2 would abort a bare assignment
+          # before the branches below could classify it, so the status is captured without tripping it.
+          exitCode=0
+          output=$(bun run check-locales 2>&1) || exitCode=$?
           echo "$output"
           if [ $exitCode -eq 1 ]; then
             echo "Critical error: Missing localization keys found!"
