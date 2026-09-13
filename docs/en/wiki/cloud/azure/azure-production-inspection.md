@@ -216,11 +216,49 @@ detector replay reads.
 A `metric:metric_sink_failure` line means the sample writer itself could not reach the database.
 Treat a gap in `metric_samples` with no such line as unexplained rather than assumed.
 
+### Memory pressure events and zram saturation
+
+The same sample carries Bun's `memoryPressure` event, the kernel's own critical low-memory verdict
+(a PSI trigger on Linux). It is observed only; nothing acts on it.
+
+- `memory_pressure_events_5m`: events since the previous sample.
+- `memory_pressure_listener`: 1 once the listener is registered.
+- `memory_pressure_trigger_writable`: 1 when a trigger file (`/sys/fs/cgroup/memory.pressure` or
+  `/proc/pressure/memory`) was writable at startup, 0 when present but read-only, -1 when absent.
+
+**Read the trigger field before the event count.** Container runtimes usually mount cgroupfs
+read-only, and at 0 or -1 a flat zero means the event could never fire, not that the host was calm.
+The first event in each interval also writes one `metric:memory_pressure` JSONL line with the
+process uptime, which dates an episode more precisely than the 5-minute sample.
+
+**Did heap growth slow?** `zram_size_mb` records the device size, so saturation is judged against
+the device rather than a constant. Per UTC day, which matches the 00:00Z recycle:
+
+```sql
+SELECT day,
+       round((EXTRACT(EPOCH FROM (min(created_at) FILTER (WHERE saturated) - day)) / 3600)::numeric, 1)
+         AS hours_to_saturation,
+       count(*) FILTER (WHERE saturated) AS saturated_samples,
+       sum((fields->>'memory_pressure_events_5m')::int) AS pressure_events
+  FROM (SELECT date_trunc('day', created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS day, created_at, fields,
+               (fields->>'zram_used_mb')::float >= 0.97 * COALESCE((fields->>'zram_size_mb')::float, 1024)
+                 AS saturated
+          FROM metric_samples
+         WHERE metric_name = 'host_memory' AND created_at > now() - interval '14 days') s
+ GROUP BY day ORDER BY day;
+```
+
+A later first crossing with fewer saturated samples means the cycle is filling more slowly. Rows
+written before `zram_size_mb` existed fall back to a 1024 MB device. Compare only against days on
+the same device size, and check traffic from `stat_counters` (`message_sent`) before crediting a
+change: a quiet day saturates late for reasons that have nothing to do with the code.
+
 ### Reading it as a graph instead
 
 `docker/grafana/dashboards/tomoribot-overview.json` carries three panels for this, on the row
 directly under the host memory and pressure panels so they share a time axis: **Pool Retirements by
-Code**, **Pool Retry Outcome**, and **Lifetime Retirement Phase**. Grafana runs on the operator
+Code**, **Pool Retry Outcome**, and **Lifetime Retirement Phase**. The row below them holds
+**Memory Pressure Events** and **zram Time to Saturation per Cycle**. Grafana runs on the operator
 workstation (`docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up`), not on the
 VM, so the dashboard is provisioned from that file and new panels appear on a local Grafana restart
 rather than through a deploy.

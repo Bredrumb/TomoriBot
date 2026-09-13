@@ -258,10 +258,11 @@ write_files:
       # Progress watchdog configuration. Sourced by tomoribot-progress-watchdog.sh, which sets
       # these defaults itself first, so an absent or partial file is safe.
       #
-      # ARMED=false means the watchdog evaluates and logs but never recycles anything. Leave it
-      # false until the staleness threshold below has a baseline: nothing has ever calibrated it,
-      # and a watchdog acting on an uncalibrated threshold is a restart-loop generator.
-      WATCHDOG_ARMED=false
+      # ARMED=false means the watchdog evaluates and logs but never recycles anything. Production
+      # runs armed after an observation period with zero would-act lines, so a rebuild matches it.
+      # The staleness limit below still has no degradation baseline, which is why the consecutive
+      # failure, startup grace, and minimum-interval guards must stay in place.
+      WATCHDOG_ARMED=true
       # Event-loop staleness that counts as a stalled check. The monitor ticks once a second, so
       # healthy staleness is a few hundred ms; 30s is far above noise and deliberately loose.
       WATCHDOG_STALENESS_LIMIT_MS=30000

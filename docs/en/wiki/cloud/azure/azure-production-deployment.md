@@ -88,10 +88,12 @@ Four rules keep it from becoming a restart loop, and all of them are configured 
 - **Co-tenants first**, matching the daily recycle order. Recycling them alone was measured cutting
   host IO pressure 43%, so the cheap rung sits below the expensive one.
 
-**It ships disarmed** (`WATCHDOG_ARMED=false`) and logs what it would have done. The staleness
-threshold has no calibration behind it yet, and arming a watchdog on an uncalibrated threshold is
-how you manufacture the outage you were trying to prevent. Arm it only after the observation period
-shows it would not have fired spuriously.
+**It ships armed** (`WATCHDOG_ARMED=true`) because production ran it disarmed through an observation
+period that logged zero would-act lines. On a new deployment, consider setting it to `false` first:
+disarmed, it logs `OBSERVE-ONLY` with what it would have done, and arming a watchdog before seeing
+that log on your own host is how you manufacture the outage you were trying to prevent. The
+staleness threshold still has no calibration against a real degradation, which is why the guards
+above must stay in place.
 
 Behaviour is covered by `bun run test-watchdog`, which extracts the script from `cloud-init.yaml` on
 every run rather than testing a copy, so the harness cannot drift from what ships.
