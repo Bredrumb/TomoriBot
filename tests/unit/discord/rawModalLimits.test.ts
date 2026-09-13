@@ -14,7 +14,7 @@ import type { TomoriState } from "@/types/db/schema";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import type { RawModalPayload } from "@/utils/discord/ui/configModals";
 import {
-  AUTO_TRIGGER_PERSONA_PAGE_SIZE,
+  SELECT_OPTION_LIMIT as AUTO_TRIGGER_PERSONA_PAGE_SIZE,
   buildConfigAutoTriggerConfigureModal,
   buildConfigWelcomeModal,
   WELCOME_PERSONA_PAGE_SIZE,

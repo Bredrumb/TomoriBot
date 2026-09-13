@@ -33,9 +33,6 @@ export const SELECT_OPTION_LIMIT = 25;
  */
 export const WELCOME_PERSONA_PAGE_SIZE = SELECT_OPTION_LIMIT - 1;
 
-/** Personas one Auto-Trigger configure page carries; it reserves no fixed entry. */
-export const AUTO_TRIGGER_PERSONA_PAGE_SIZE = SELECT_OPTION_LIMIT;
-
 /** Personas that can back a select option at all, in the order every page slices them. */
 export function selectablePersonas(personas: readonly TomoriState[]): readonly TomoriState[] {
   return personas.filter((persona) => persona.persona_id !== undefined);
@@ -295,7 +292,8 @@ export function buildConfigAutoTriggerConfigureModal(
 ): RawModalPayload {
   const mainPersona = personas.find((persona) => !persona.is_alter) ?? personas[0];
   const selectedPersonaId = currentPersonaId ?? mainPersona?.persona_id ?? null;
-  const personaOptions = buildPersonaSelectOptions(personas, selectedPersonaId, start, AUTO_TRIGGER_PERSONA_PAGE_SIZE);
+  // Auto-Trigger has no fixed Random entry, so every select slot can hold a persona.
+  const personaOptions = buildPersonaSelectOptions(personas, selectedPersonaId, start, SELECT_OPTION_LIMIT);
 
   return {
     custom_id: buildConfigRouteId({ action: "channels-autoch-configure-submit", locale, fp, nonce }),

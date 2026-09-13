@@ -23,6 +23,14 @@ function makeResult(
   };
 }
 
+function installCompletion(incoming: ChatIncoming): Promise<void> {
+  const completion = installUserImpersonationCompletion(incoming);
+  if (completion === null) {
+    throw new Error("Expected impersonation completion tracking");
+  }
+  return completion;
+}
+
 describe("user impersonation generation completion", () => {
   it("does not install completion tracking for normal chat turns", () => {
     const incoming = makeIncoming({ isUserImpersonation: false });
@@ -31,11 +39,10 @@ describe("user impersonation generation completion", () => {
 
   it("resolves only after a completed generation result", async () => {
     const incoming = makeIncoming();
-    const completion = installUserImpersonationCompletion(incoming);
-    expect(completion).not.toBeNull();
+    const completion = installCompletion(incoming);
 
     await incoming.onGenerationResult?.(makeResult("completed"));
-    await expect(completion!).resolves.toBeUndefined();
+    await expect(completion).resolves.toBeUndefined();
   });
 
   it("turns normalized provider errors into rejected completion errors", async () => {
@@ -52,7 +59,7 @@ describe("user impersonation generation completion", () => {
     expect(getUserImpersonationGenerationError(result)?.message).toBe("provider exploded");
 
     const incoming = makeIncoming();
-    const completion = installUserImpersonationCompletion(incoming)!;
+    const completion = installCompletion(incoming);
     const caught = completion.catch((error: unknown) => error);
     await incoming.onGenerationResult?.(result);
 
@@ -62,7 +69,7 @@ describe("user impersonation generation completion", () => {
 
   it("rejects timeout results so the slash command can show its timeout embed", async () => {
     const incoming = makeIncoming();
-    const completion = installUserImpersonationCompletion(incoming)!;
+    const completion = installCompletion(incoming);
     const caught = completion.catch((error: unknown) => error);
     await incoming.onGenerationResult?.(
       makeResult("timeout", [{ status: "timeout", data: new Error("Stream timed out due to inactivity.") }]),
@@ -77,7 +84,7 @@ describe("user impersonation generation completion", () => {
     );
 
     const incoming = makeIncoming();
-    const completion = installUserImpersonationCompletion(incoming)!;
+    const completion = installCompletion(incoming);
     const caught = completion.catch((error: unknown) => error);
     await incoming.onGenerationResult?.(makeResult("skipped"));
 
@@ -86,7 +93,7 @@ describe("user impersonation generation completion", () => {
 
   it("rejects when a queued impersonation is discarded before generation", async () => {
     const incoming = makeIncoming();
-    const completion = installUserImpersonationCompletion(incoming)!;
+    const completion = installCompletion(incoming);
     const caught = completion.catch((error: unknown) => error);
     await incoming.onQueueDiscard?.("stale_lock_release");
 
@@ -104,7 +111,7 @@ describe("user impersonation generation completion", () => {
       },
     });
 
-    const completion = installUserImpersonationCompletion(incoming)!;
+    const completion = installCompletion(incoming);
     await incoming.onGenerationResult?.(makeResult("completed"));
     await completion;
     expect(seen).toEqual(["generation"]);
@@ -114,7 +121,7 @@ describe("user impersonation generation completion", () => {
         seen.push("discard");
       },
     });
-    const discardedCompletion = installUserImpersonationCompletion(discardedIncoming)!;
+    const discardedCompletion = installCompletion(discardedIncoming);
     const caught = discardedCompletion.catch((error: unknown) => error);
     await discardedIncoming.onQueueDiscard?.("channel_queue_cleared");
     await caught;

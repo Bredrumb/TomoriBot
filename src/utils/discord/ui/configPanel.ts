@@ -86,7 +86,7 @@ import {
 } from "@/utils/discord/ui/panel";
 import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
 import {
-  AUTO_TRIGGER_PERSONA_PAGE_SIZE,
+  SELECT_OPTION_LIMIT as AUTO_TRIGGER_PERSONA_PAGE_SIZE,
   selectablePersonas,
   WELCOME_PERSONA_PAGE_SIZE,
 } from "@/utils/discord/ui/configChannelModals";
