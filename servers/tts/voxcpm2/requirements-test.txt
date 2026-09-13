@@ -1,4 +1,0 @@
-fastapi>=0.115,<1
-numpy>=1.26,<3
-soundfile>=0.12,<1
-uvicorn>=0.30,<1
