@@ -41,9 +41,10 @@ Discord上で同じ手順を確認するには、`/help`の **機能** から **
 
 - [Chatterbox-Turbo/Nano](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/)：高速な英語専用の音声クローンです。`[laugh]`などの対応済みイベントタグを使えます。
 - [Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/)：多言語対応（10言語）。自然言語によるVoiceDesignモードを備えています。
+- [MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/)：試用向けのAutoエンドポイント。多言語のクローンと英語・中国語の音声設計を切り替えます。
 - [IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)：日本語特化。絵文字を感情の合図として読み取ります。
 
-一覧については、[テキスト読み上げ（TTS）](/ja/self-hosting/local-endpoints/text-to-speech/)ハブをご覧ください。
+全エンジンと必要なハードウェアの比較は、[テキスト読み上げ（TTS）の比較表](/ja/self-hosting/local-endpoints/text-to-speech/)をご覧ください。
 
 ## 音声認識（STT）
 

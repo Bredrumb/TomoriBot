@@ -8,6 +8,7 @@ Each engine lives in its own subfolder with its own `.venv` to keep dependencies
 |---|---|---|
 | Chatterbox (Turbo by default, optional Nano, English, event tags) | `chatterbox/` | 8011 |
 | Qwen3-TTS 12Hz 1.7B Base / VoiceDesign auto mode (10 languages, plain text) | `qwen3tts/` | 8012 |
+| MOSS-TTS Local v1.5 / VoiceGenerator auto mode (plain text) | `moss/` | 8018 |
 | Irodori-TTS v4.1 (Japanese, clone + VoiceDesign, emoji tags) | `irodoritts/` | 8013 |
 | Qwen3-TTS 12Hz 1.7B VoiceDesign (natural-language voice descriptions) | `qwen3tts/server.py --mode voice-design` | 8014 |
 | Fish Audio S2 Pro INT8 (multilingual cloning, bracket expression tags) | `fishs2/` | 8015 |
@@ -59,6 +60,8 @@ For voice samples, open `/config` under Models > TTS Parameters & Voices. Tomori
 Chatterbox defaults to Turbo. For the smaller Nano model, install the pinned upstream revision in the [Chatterbox guide](../../docs/en/self-hosting/local-endpoints/text-to-speech/chatterbox.md) and set `CHATTERBOX_FAST_MODEL=nano` before starting the sidecar. The `/config` fast-model toggle chooses the configured Turbo or Nano model when enabled; disabling it selects standard Chatterbox for `cfg_weight` and `exaggeration` tuning.
 
 Qwen3-TTS defaults to auto mode. One server URL can handle both clone and VoiceDesign requests: the server detects clone requests by `ref_audio`, detects VoiceDesign requests by `instruct`, and swaps the loaded model when needed. Start VoiceDesign only with `TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py` or `python servers/tts/qwen3tts/server.py --mode voice-design`.
+
+MOSS-TTS uses the same auto request shapes. Its default clone checkpoint is the 4B Local Transformer v1.5 for a 16 GB GPU trial; `MOSS_TTS_CLONE_MODEL_ID` can select the 8B flagship on larger hardware. See the [MOSS setup guide](../../docs/en/self-hosting/local-endpoints/text-to-speech/moss.md) for the separate Python environment and model limitations.
 
 Irodori-TTS v4.1 also supports TomoriBot's `Auto` voice source mode from one endpoint. Clone requests use `ref_audio`; VoiceDesign requests use `instruct`, which the wrapper maps to Irodori caption conditioning.
 
