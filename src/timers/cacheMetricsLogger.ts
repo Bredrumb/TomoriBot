@@ -39,6 +39,7 @@ import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { eventLoopMonitor } from "@/utils/misc/eventLoopMonitor";
 import { collectHostMemorySnapshot } from "@/utils/misc/hostMemory";
+import { drainMemoryPressureCounters, installMemoryPressureListener } from "@/utils/misc/memoryPressureEvents";
 import {
   evaluatePressure,
   initialPressureState,
@@ -260,6 +261,7 @@ async function emitHostSnapshot(): Promise<void> {
       ...snapshot,
       ...pressureVerdictFields(verdict, armed),
       ...drainPoolEventCounters(),
+      ...drainMemoryPressureCounters(),
     });
   } catch (error) {
     log.error("Failed to emit host memory snapshot", error, {
@@ -289,6 +291,8 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
   // Resolve interval from explicit argument, env var, or fallback default
   const resolved = intervalMs ?? Number.parseInt(process.env.CACHE_METRICS_INTERVAL_MS || "", 10);
   const finalInterval = Number.isFinite(resolved) && resolved > 0 ? resolved : DEFAULT_INTERVAL_MS;
+
+  installMemoryPressureListener();
 
   // Emit an immediate sample so CloudWatch has a baseline right after boot
   emitSnapshot(client);

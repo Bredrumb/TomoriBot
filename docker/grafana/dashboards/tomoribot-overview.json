@@ -1405,6 +1405,116 @@
         }
       ],
       "description": "Process uptime folded into POSTGRES_MAX_LIFETIME_SECONDS, because Bun exposes no per-connection age. Points clustering at one height mean the pool was created in a burst and retires as a synchronised cohort, which is what would justify a driver level fix; a scattered band means age is not what drives retirement. The -1 sentinel (no lifetime retirement in that interval) is filtered out, so gaps here are the normal state."
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory Pressure Events",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "tomoribot-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "tomoribot-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT created_at AS \"time\",\n       (fields->>'memory_pressure_events_5m')::int        AS events,\n       (fields->>'memory_pressure_trigger_writable')::int AS trigger_writable\nFROM metric_samples\nWHERE metric_name = 'host_memory' AND $__timeFilter(created_at)\n  AND fields ? 'memory_pressure_events_5m'\nORDER BY created_at",
+          "refId": "A"
+        }
+      ],
+      "description": "Bun's memoryPressure event per 5 minute sample: the kernel's own critical low-memory verdict, observed only. Read it against the zram panel beside it. trigger_writable is 1 when a PSI trigger file was writable, 0 when present but read-only, -1 when absent; at 0 or -1 a flat zero means the event could never fire, not that the host was calm."
+    },
+    {
+      "type": "timeseries",
+      "title": "zram Time to Saturation per Cycle",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "tomoribot-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "h"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "tomoribot-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT day AS \"time\",\n       round((EXTRACT(EPOCH FROM (min(created_at) FILTER (WHERE saturated) - day)) / 3600)::numeric, 1) AS hours_to_saturation,\n       round((count(*) FILTER (WHERE saturated) * 5 / 60.0)::numeric, 1) AS hours_saturated\nFROM (\n  SELECT date_trunc('day', created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS day,\n         created_at,\n         (fields->>'zram_used_mb')::float >= 0.97 * COALESCE((fields->>'zram_size_mb')::float, 1024) AS saturated\n  FROM metric_samples\n  WHERE metric_name = 'host_memory' AND $__timeFilter(created_at)\n) s\nGROUP BY day\nORDER BY day",
+          "refId": "A"
+        }
+      ],
+      "description": "Per UTC day, which matches the 00:00Z recycle: hours from the cycle start until zram first reaches 97% of the device, and total hours spent there. A later first crossing and fewer saturated hours mean heap growth is slowing; a day with no bar never saturated. Rows written before zram_size_mb existed assume the 1024 MB device. hours_saturated assumes the default 5 minute CACHE_METRICS_INTERVAL_MS."
     }
   ],
   "refresh": "5m",
@@ -1421,6 +1531,6 @@
   "timezone": "",
   "title": "TomoriBot Overview",
   "uid": "tomoribot-overview",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }
