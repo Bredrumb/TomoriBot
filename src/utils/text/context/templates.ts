@@ -289,7 +289,7 @@ export async function buildSampleDialogueContextItems(params: {
     const isUnpairedSample = userSampleText === UNPAIRED_SAMPLE_DIALOGUE_SENTINEL;
     if (!isUnpairedSample) {
       if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
-        userSampleText = humanizeString(userSampleText);
+        [userSampleText] = humanizeString(userSampleText, { suppressPunctuationNoise: true });
       }
       contextItems.push({
         role: "user",
@@ -320,7 +320,7 @@ export async function buildSampleDialogueContextItems(params: {
 
     let modelSampleText = speakerPattern.test(rawOut) ? rawOut : `${params.botName}: ${rawOut}`;
     if (params.tomoriConfig.humanizer_degree >= HumanizerDegree.HEAVY) {
-      modelSampleText = humanizeString(modelSampleText);
+      [modelSampleText] = humanizeString(modelSampleText, { suppressPunctuationNoise: true });
     }
     contextItems.push({
       role: "model",
