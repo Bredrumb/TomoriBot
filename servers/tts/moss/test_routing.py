@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from routing import resolve_mode, resolve_request_mode
+from routing import resolve_mode, resolve_request_mode, resolve_warm_mode
 
 
 class MossRoutingTests(unittest.TestCase):
@@ -26,6 +26,12 @@ class MossRoutingTests(unittest.TestCase):
     self.assertEqual(resolve_mode("voice_clone"), "clone")
     self.assertEqual(resolve_mode("design"), "voice-design")
     self.assertEqual(resolve_mode("AUTO"), "auto")
+
+  def test_warm_mode_is_explicit(self) -> None:
+    self.assertEqual(resolve_warm_mode("voice_design"), "voice-design")
+    self.assertEqual(resolve_warm_mode("off"), "none")
+    with self.assertRaises(ValueError):
+      resolve_warm_mode("auto")
 
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@ Chatterbox defaults to Turbo. For the smaller Nano model, install the pinned ups
 
 Qwen3-TTS defaults to auto mode. One server URL can handle both clone and VoiceDesign requests: the server detects clone requests by `ref_audio`, detects VoiceDesign requests by `instruct`, and swaps the loaded model when needed. Start VoiceDesign only with `TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py` or `python servers/tts/qwen3tts/server.py --mode voice-design`.
 
-MOSS-TTS uses the same auto request shapes. Its default clone checkpoint is the 4B Local Transformer v1.5 for a 16 GB GPU trial; `MOSS_TTS_CLONE_MODEL_ID` can select the 8B flagship on larger hardware. See the [MOSS setup guide](../../docs/en/self-hosting/local-endpoints/text-to-speech/moss.md) for the separate Python environment and model limitations.
+MOSS-TTS uses the same auto request shapes. Its default clone checkpoint is the 4B Local Transformer v1.5 for a 16 GB GPU trial; `MOSS_TTS_CLONE_MODEL_ID` can select the 8B flagship on larger hardware. Run `python servers/tts/moss/prefetch_models.py` during setup to cache both models and their audio tokenizers. Auto mode warms clone at startup by default; `MOSS_TTS_WARM_MODE` can select voice-design or none. See the [MOSS setup guide](../../docs/en/self-hosting/local-endpoints/text-to-speech/moss.md) for the separate Python environment and model limitations.
 
 Irodori-TTS v4.1 also supports TomoriBot's `Auto` voice source mode from one endpoint. Clone requests use `ref_audio`; VoiceDesign requests use `instruct`, which the wrapper maps to Irodori caption conditioning.
 

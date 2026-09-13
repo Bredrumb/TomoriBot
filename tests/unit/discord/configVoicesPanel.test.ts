@@ -67,7 +67,7 @@ describe("configVoicesPanel", () => {
     expect(components[1].type).toBe(ComponentType.TextDisplay);
     const paramsText = (components[1] as TextDisplayComponentData).content;
     expect(paramsText).toContain("Chatterbox Parameters");
-    expect(paramsText).toContain("Turbo is currently disabled");
+    expect(paramsText).toContain("The fast model is disabled");
 
     expect(components[2].type).toBe(ComponentType.ActionRow);
     const editParamsRow = components[2] as ActionRowData<ButtonComponentData>;
@@ -119,7 +119,7 @@ describe("configVoicesPanel", () => {
     };
     const body = buildConfigVoicesBody({ locale: "en-US", readStatus: "fresh", view: viewTurboOn });
     const paramsText = body[1] as TextDisplayComponentData;
-    expect(paramsText.content).toContain("Chatterbox Turbo: Enabled");
+    expect(paramsText.content).toContain("Chatterbox fast model: Enabled");
     const hasTurboRoute = body.some(
       (component) =>
         component.type === ComponentType.ActionRow &&

@@ -320,6 +320,8 @@ const featurePages: readonly HelpPageDefinition[] = [
     footerKey: "commands.help.multiple_personas.footer",
     variables: (locale) => ({
       personaImport: mention("persona", "import"),
+      personaGenerate: mention("persona", "generate"),
+      personaCreate: mention("persona", "create"),
       configPersonaAppearance: configPage(locale, "commands.help.breadcrumbs.persona.general"),
       configPersonaSprites: configPage(locale, "commands.help.breadcrumbs.persona.sprites"),
       configPersonaTriggers: configPage(locale, "commands.help.breadcrumbs.persona.triggers"),
