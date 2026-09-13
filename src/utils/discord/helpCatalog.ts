@@ -159,6 +159,7 @@ const setupPages: readonly HelpPageDefinition[] = [
         footerKey: "commands.help.getting_started.create_first_persona.footer",
         variables: (locale) => ({
           configPersonaGeneral: configPage(locale, "commands.help.breadcrumbs.persona.general"),
+          configPersonaAppearance: configPage(locale, "commands.help.breadcrumbs.persona.general"),
           personaGenerate: mention("persona", "generate"),
           personaCreate: mention("persona", "create"),
           personaImport: mention("persona", "import"),
