@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import io
 import unittest
 import wave
@@ -28,6 +29,9 @@ class FakeProcessor:
   def __call__(self, _conversations: object, mode: str) -> dict[str, torch.Tensor]:
     assert mode == "generation"
     return {"input_ids": torch.zeros((1, 1), dtype=torch.long), "attention_mask": torch.ones((1, 1), dtype=torch.long)}
+
+  def encode_audios_from_wav(self, wavs: list[torch.Tensor], _sampling_rate: int) -> list[torch.Tensor]:
+    return [torch.zeros((wav.shape[-1] // 80, 32), dtype=torch.long) for wav in wavs]
 
   def decode(self, _output: object) -> list[SimpleNamespace]:
     return [SimpleNamespace(audio_codes_list=[torch.zeros((1, 800), dtype=torch.float32)])]
@@ -62,11 +66,13 @@ class MossServerTests(unittest.TestCase):
     server.DTYPE = "float32"
     server.DEFAULT_LANGUAGE = ""
     self.processors: list[FakeProcessor] = []
+    self.processor_options: list[dict[str, object]] = []
     self.model_ids: list[str] = []
 
-    def make_processor(_model_id: str, **_kwargs: object) -> FakeProcessor:
+    def make_processor(_model_id: str, **kwargs: object) -> FakeProcessor:
       next_processor = FakeProcessor()
       self.processors.append(next_processor)
+      self.processor_options.append(kwargs)
       return next_processor
 
     def make_model(model_id: str, **_kwargs: object) -> FakeModel:
@@ -90,6 +96,7 @@ class MossServerTests(unittest.TestCase):
     message = self.processors[0].messages[0]
     self.assertEqual(message["language"], "Japanese")
     self.assertEqual(len(message["reference"]), 1)
+    self.assertIsInstance(message["reference"][0], torch.Tensor)
     self.assertNotIn("instruction", message)
 
   def test_auto_swaps_to_voice_generator(self) -> None:
@@ -107,6 +114,39 @@ class MossServerTests(unittest.TestCase):
 
     self.assertEqual(raised.exception.status_code, 400)
     self.assertEqual(self.model_ids, [])
+
+  def test_auto_warms_selected_model_before_serving(self) -> None:
+    server.WARM_MODE = "voice-design"
+    self.addCleanup(setattr, server, "WARM_MODE", "clone")
+
+    async def run_lifespan() -> None:
+      async with server.lifespan(server.app):
+        self.assertEqual(server.active_mode, "voice-design")
+
+    with patch("huggingface_hub.snapshot_download", side_effect=["cached-model", "cached-codec"]) as download:
+      with patch.object(server, "codec_id_from_snapshot", return_value="cached-codec-id"):
+        asyncio.run(run_lifespan())
+    self.assertEqual(self.model_ids, ["cached-model"])
+    self.assertNotIn("local_files_only", self.processor_options[0])
+    self.assertEqual(download.call_count, 2)
+    self.assertEqual(download.call_args_list[0].kwargs, {"repo_id": server.DESIGN_MODEL_ID, "local_files_only": True})
+    self.assertEqual(
+      download.call_args_list[1].kwargs,
+      {
+        "repo_id": "cached-codec-id",
+        "local_files_only": True,
+        "allow_patterns": ["config.json", "*.safetensors", "*.safetensors.index.json"],
+      },
+    )
+
+  def test_auto_warm_reports_missing_prefetch_without_downloading(self) -> None:
+    with patch("huggingface_hub.snapshot_download", side_effect=OSError("not cached")):
+      async def run_lifespan() -> None:
+        async with server.lifespan(server.app):
+          pass
+
+      with self.assertRaisesRegex(RuntimeError, "prefetch_models.py"):
+        asyncio.run(run_lifespan())
 
 
 if __name__ == "__main__":

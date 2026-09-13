@@ -6,6 +6,7 @@ import binascii
 import gc
 import importlib.util
 import io
+import json
 import os
 import sys
 import tempfile
@@ -21,11 +22,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from routing import resolve_mode, resolve_request_mode
+from routing import resolve_mode, resolve_request_mode, resolve_warm_mode
 
 
 DEFAULT_CLONE_MODEL_ID = "OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5"
 DEFAULT_DESIGN_MODEL_ID = "OpenMOSS-Team/MOSS-VoiceGenerator"
+DEFAULT_CODEC_IDS = {
+  "clone": "OpenMOSS-Team/MOSS-Audio-Tokenizer-v2",
+  "voice-design": "OpenMOSS-Team/MOSS-Audio-Tokenizer",
+}
 
 
 def read_startup_mode() -> str:
@@ -38,6 +43,7 @@ def read_startup_mode() -> str:
 
 
 MODE = resolve_mode(read_startup_mode())
+WARM_MODE = resolve_warm_mode(os.getenv("MOSS_TTS_WARM_MODE", "clone")) if MODE == "auto" else MODE
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
 PORT = int(os.getenv("TOMORI_TTS_PORT", "8018"))
 DEVICE = os.getenv("MOSS_TTS_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
@@ -71,6 +77,18 @@ def model_id_for_mode(mode: str) -> str:
   return CLONE_MODEL_ID if mode == "clone" else DESIGN_MODEL_ID
 
 
+def codec_id_from_snapshot(snapshot_path: str, mode: str) -> str:
+  config_path = Path(snapshot_path) / "processor_config.json"
+  config = json.loads(config_path.read_text(encoding="utf-8"))
+  nested = config.get("audio_tokenizer")
+  if isinstance(nested, dict) and isinstance(nested.get("audio_tokenizer_name_or_path"), str):
+    return nested["audio_tokenizer_name_or_path"]
+  configured = config.get("audio_tokenizer_name_or_path")
+  if isinstance(configured, str) and configured.strip():
+    return configured
+  return DEFAULT_CODEC_IDS[mode]
+
+
 def resolve_dtype() -> torch.dtype:
   if DTYPE.lower() in {"bf16", "bfloat16"}:
     return torch.bfloat16
@@ -100,7 +118,7 @@ def unload_model() -> None:
     torch.cuda.empty_cache()
 
 
-def load_model_for_mode(mode: str) -> None:
+def load_model_for_mode(mode: str, local_files_only: bool = False) -> None:
   global model, processor, active_mode
   if model is not None and active_mode == mode:
     return
@@ -110,16 +128,28 @@ def load_model_for_mode(mode: str) -> None:
   from transformers import AutoModel, AutoProcessor
 
   model_id = model_id_for_mode(mode)
+  model_path = model_id
+  if local_files_only:
+    from huggingface_hub import snapshot_download
+
+    model_path = snapshot_download(repo_id=model_id, local_files_only=True)
+    codec_id = codec_id_from_snapshot(model_path, mode)
+    snapshot_download(
+      repo_id=codec_id,
+      local_files_only=True,
+      allow_patterns=["config.json", "*.safetensors", "*.safetensors.index.json"],
+    )
   print(f"[MOSS-TTS] Loading mode={mode} model_id={model_id}", flush=True)
   next_processor = AutoProcessor.from_pretrained(
-    model_id,
+    model_path,
     trust_remote_code=True,
     **({"normalize_inputs": True} if mode == "voice-design" else {}),
   )
   next_processor.audio_tokenizer = next_processor.audio_tokenizer.to(DEVICE)
   next_model = AutoModel.from_pretrained(
-    model_id,
+    model_path,
     trust_remote_code=True,
+    local_files_only=local_files_only,
     attn_implementation=resolve_attention(),
     torch_dtype=resolve_dtype(),
   ).to(DEVICE)
@@ -147,11 +177,21 @@ def decode_reference(raw_base64: str, directory: str) -> str:
   return str(path)
 
 
+def encode_reference(path: str) -> torch.Tensor:
+  # A path reference makes the MOSS processor call torchaudio.load, which in torchaudio 2.9+ routes through
+  # torchcodec and needs FFmpeg shared DLLs that a Windows venv rarely has. Decoding with soundfile and
+  # handing the processor pre-encoded codes keeps FFmpeg out of the clone path.
+  assert processor is not None
+  samples, sampling_rate = sf.read(path, dtype="float32", always_2d=True)
+  waveform = torch.from_numpy(samples.T.copy())
+  return processor.encode_audios_from_wav([waveform], sampling_rate)[0]
+
+
 def generate_audio(mode: str, text: str, instruct: Optional[str], language: Optional[str], reference: Optional[str]) -> bytes:
   assert model is not None and processor is not None
   message_kwargs = {"text": text}
   if mode == "clone":
-    message_kwargs["reference"] = [reference]
+    message_kwargs["reference"] = [encode_reference(reference)]
     selected_language = (language or DEFAULT_LANGUAGE).strip()
     if selected_language:
       message_kwargs["language"] = LANGUAGE_NAMES.get(selected_language.lower(), selected_language)
@@ -180,9 +220,18 @@ def generate_audio(mode: str, text: str, instruct: Optional[str], language: Opti
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-  if MODE != "auto":
+  initial_mode = WARM_MODE if MODE == "auto" else MODE
+  if initial_mode != "none":
     with model_lock:
-      load_model_for_mode(MODE)
+      try:
+        load_model_for_mode(initial_mode, local_files_only=MODE == "auto")
+      except OSError as exc:
+        if MODE != "auto":
+          raise
+        raise RuntimeError(
+          "MOSS startup model is not fully cached. Run python servers/tts/moss/prefetch_models.py "
+          "before starting the server, or set MOSS_TTS_WARM_MODE=none."
+        ) from exc
   yield
 
 
@@ -194,6 +243,7 @@ def health() -> dict[str, str]:
   return {
     "status": "ok" if model is not None else "idle",
     "mode": MODE,
+    "warm_mode": WARM_MODE,
     "active_mode": active_mode or "none",
     "model_id": model_id_for_mode(active_mode) if active_mode else "",
     "device": DEVICE,

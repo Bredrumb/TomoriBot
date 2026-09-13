@@ -14,6 +14,15 @@ def resolve_mode(raw_mode: str) -> str:
   raise ValueError("TOMORI_TTS_MODE must be 'clone', 'voice-design', or 'auto'.")
 
 
+def resolve_warm_mode(raw_mode: str) -> str:
+  normalized = raw_mode.strip().lower().replace("_", "-")
+  if normalized in {"none", "off"}:
+    return "none"
+  if normalized in {"clone", "voice-design"}:
+    return normalized
+  raise ValueError("MOSS_TTS_WARM_MODE must be 'clone', 'voice-design', or 'none'.")
+
+
 def resolve_request_mode(server_mode: str, ref_audio: Optional[str], instruct: Optional[str]) -> str:
   has_reference = bool(ref_audio and ref_audio.strip())
   has_instruction = bool(instruct and instruct.strip())

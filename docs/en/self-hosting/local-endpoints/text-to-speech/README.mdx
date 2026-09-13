@@ -74,4 +74,4 @@ Model size and language counts follow the [Chatterbox](https://github.com/resemb
 
 The Irodori VRAM figure is a single local observation, not a published minimum or cross-engine benchmark. Memory use varies with the runtime, precision, script length, and other GPU workloads.
 
-The first synthesis after startup, or after Qwen3-TTS or MOSS auto mode swaps models, includes model loading. TomoriBot waits up to `TTS_SYNTHESIZE_TIMEOUT_MS` (default 240000 ms) for each complete response.
+The first Qwen3-TTS auto request includes model loading. MOSS pre-downloads both models during setup and warms the clone model at startup by default, but either auto server still has to load the other model after a mode switch. TomoriBot waits up to `TTS_SYNTHESIZE_TIMEOUT_MS` (default 240000 ms) for each complete response.

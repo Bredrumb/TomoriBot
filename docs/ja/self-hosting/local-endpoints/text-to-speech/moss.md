@@ -18,6 +18,7 @@ servers\tts\moss\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install --extra-index-url https://download.pytorch.org/whl/cu128 "moss-tts[torch-runtime] @ git+https://github.com/OpenMOSS/MOSS-TTS.git"
 python -m pip install -r servers\tts\moss\requirements.txt
+python servers\tts\moss\prefetch_models.py
 python servers\tts\moss\server.py
 ```
 
@@ -29,10 +30,13 @@ source servers/tts/moss/.venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install --extra-index-url https://download.pytorch.org/whl/cu128 "moss-tts[torch-runtime] @ git+https://github.com/OpenMOSS/MOSS-TTS.git"
 python -m pip install -r servers/tts/moss/requirements.txt
+python servers/tts/moss/prefetch_models.py
 python servers/tts/moss/server.py
 ```
 
-標準URLは`http://127.0.0.1:8018`です。最初の合成時にモデルを読み込みます。`GET /health`の`active_mode`と`model_id`で確認できます。初回リクエスト前の`idle`は正常です。このラッパーはHugging Faceの`trust_remote_code=True`を使うため、信頼できるソースからのみインストールし、更新時には上流の変更を確認してください。
+事前ダウンロードでは、クローンモデル、VoiceGenerator、および両モデルが使う音声トークナイザーをHugging Faceのキャッシュに保存します。各リポジトリのダウンロード前にキャッシュ先の空き容量を確認し、既にキャッシュ済みのファイルは再利用します。容量不足なら空きを増やすか、事前ダウンロードとサーバー起動の前に同じシェルで`HF_HOME`を空き容量の多いドライブに設定してください。モデルIDを変更した場合は再実行してください。片方だけを試すなら`--mode clone`または`--mode voice-design`を指定できますが、もう片方の初回使用時にはダウンロードが発生する場合があります。
+
+標準URLは`http://127.0.0.1:8018`です。Autoモードでは、HTTPサーバーの起動完了前にキャッシュ済みのクローンモデルを読み込みます。事前ダウンロードしていない場合は、不意にダウンロードを始めず起動に失敗します。代わりにVoiceGeneratorを読み込むには`MOSS_TTS_WARM_MODE=voice-design`、起動時に読み込まない場合は`MOSS_TTS_WARM_MODE=none`を設定します。GPUには一度に一つのモデルだけを保持します。`GET /health`の`warm_mode`、`active_mode`、`model_id`で確認できます。このラッパーはHugging Faceの`trust_remote_code=True`を使うため、信頼できるソースからのみインストールし、更新時には上流の変更を確認してください。
 
 ## TomoriBotへの登録
 
@@ -44,4 +48,4 @@ TomoriBotの現在のクローンアダプターは言語タグを送りませ�
 
 サイドカーは自身のプロセス環境変数を読みます。ボットの`.env`に値を追加しても、別途起動したPythonプロセスには自動で渡されません。
 
-十分なメモリがある環境で8Bモデルを試す場合は`MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`を設定します。その他の設定は`.env.optional.example`を参照してください。初回読み込みやCPU推論には、ボット側の`TTS_SYNTHESIZE_TIMEOUT_MS`を増やす必要がある場合があります。
+十分なメモリがある環境で8Bモデルを試す場合は、事前ダウンロードより前に`MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`を設定します。その他の設定は`.env.optional.example`を参照してください。モデルの切り替えやCPU推論には、ボット側の`TTS_SYNTHESIZE_TIMEOUT_MS`を増やす必要がある場合があります。
