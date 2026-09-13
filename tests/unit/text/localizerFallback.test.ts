@@ -6,8 +6,8 @@ import { pathToFileURL } from "node:url";
 
 /**
  * `initializeLocalizer()` scans `<cwd>/src/locales` once per process and latches, and the
- * repository's own `ja` tree is currently at full key parity with `en-US`, so no real key can
- * exercise the per-key fallback. These cases run against a synthetic two-locale tree in a
+ * repository's own `ja` tree changes as translations land, so a fixed real key would be brittle.
+ * These cases run against a synthetic two-locale tree in a
  * child process instead: real loader, real lookup, no module mocking and no shared state.
  */
 type Probe = {
@@ -29,14 +29,14 @@ describe("localizer per-key en-US fallback", () => {
   beforeAll(async () => {
     workspace = await mkdtemp(join(tmpdir(), "tomori-localizer-"));
     await mkdir(join(workspace, "src", "locales", "en-US"), { recursive: true });
-    await mkdir(join(workspace, "src", "locales", "partial"), { recursive: true });
+    await mkdir(join(workspace, "src", "locales", "ja"), { recursive: true });
 
     await writeFile(
       join(workspace, "src", "locales", "en-US", "general.ts"),
       "export default { probe: { shared: `English shared`, english_only: `Hello {name}` } };\n",
     );
     await writeFile(
-      join(workspace, "src", "locales", "partial", "general.ts"),
+      join(workspace, "src", "locales", "ja", "general.ts"),
       "export default { probe: { shared: `Partial shared` } };\n",
     );
 
@@ -47,10 +47,10 @@ describe("localizer per-key en-US fallback", () => {
         `import { initializeLocalizer, localizer, hasLocaleKey } from ${JSON.stringify(pathToFileURL(LOCALIZER_PATH).href)};`,
         "await initializeLocalizer();",
         "console.log(`__PROBE__${JSON.stringify({",
-        '  hit: localizer("partial", "probe.shared"),',
-        '  fallback: localizer("partial", "probe.english_only", { name: "Sparrow" }),',
-        '  missEverywhere: localizer("partial", "probe.absent"),',
-        '  hasKeyInPartialLocale: hasLocaleKey("partial", "probe.english_only"),',
+        '  hit: localizer("ja", "probe.shared"),',
+        '  fallback: localizer("ja", "probe.english_only", { name: "Sparrow" }),',
+        '  missEverywhere: localizer("ja", "probe.absent"),',
+        '  hasKeyInPartialLocale: hasLocaleKey("ja", "probe.english_only"),',
         '  hasKeyInFallbackLocale: hasLocaleKey("en-US", "probe.english_only"),',
         '  hasKeyInUnloadedLocale: hasLocaleKey("zz", "probe.shared"),',
         "})}`);",

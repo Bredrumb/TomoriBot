@@ -1,4 +1,5 @@
 import type { GlobalInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import { isDiscordLocaleCode } from "@/constants/locales";
 import { isHelpProviderId } from "@/utils/discord/helpProviderGuides";
 import {
   HELP_ROUTE_NAMESPACE,
@@ -7,7 +8,6 @@ import {
   buildProviderGuideModal,
   resolveHelpSelection,
 } from "@/utils/discord/ui/helpDashboard";
-import { getSupportedLocales } from "@/utils/text/localizer";
 import { deliverGuardedPanel } from "@/utils/discord/interactions/panelController";
 
 function resolveLocale(locale?: string | null, guildLocale?: string | null): string {
@@ -20,7 +20,7 @@ export const helpInteractionRoute: GlobalInteractionRoute = {
   async execute(_client, interaction, route): Promise<void> {
     const [action, routeLocale, firstValue, secondValue, thirdValue] = route.segments;
     const locale =
-      routeLocale && getSupportedLocales().includes(routeLocale)
+      routeLocale && isDiscordLocaleCode(routeLocale)
         ? routeLocale
         : resolveLocale(interaction.locale, interaction.guildLocale);
 

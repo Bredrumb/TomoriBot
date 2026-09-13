@@ -5,7 +5,8 @@ import { buildPersonalConfigModalFieldId } from "@/utils/discord/ui/personalConf
 import { takeRawModalFileUpload, takeRawModalSelectValue } from "@/utils/discord/ui/modals";
 import { MAX_TAG_LENGTH, MAX_TAGS } from "@/utils/image/tagHelpers";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
-import { localizer } from "@/utils/text/localizer";
+import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
 import {
   noChangesReceipt,
   repaint,
@@ -40,10 +41,7 @@ export async function handlePersonalConfigProfileWrites(context: PersonalConfigP
           userDiscId: interaction.user.id,
         });
       }
-      const langLabel =
-        language === "ja"
-          ? localizer(route.locale, "commands.personal.config.language_ja")
-          : localizer(route.locale, "commands.personal.config.language_en");
+      const langLabel = getLocaleEndonym(language);
       await repaint(interaction, {
         locale: route.locale,
         scope: context.scope,
@@ -53,7 +51,7 @@ export async function handlePersonalConfigProfileWrites(context: PersonalConfigP
           tone: "success",
           heading: localizer(route.locale, "commands.personal.config.language_updated_heading"),
           detail: localizer(route.locale, "commands.personal.config.language_updated_detail", {
-            language: langLabel,
+            language: escapeDiscordMarkdown(langLabel),
           }),
         },
         dependencies,

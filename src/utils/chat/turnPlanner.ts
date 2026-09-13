@@ -454,7 +454,7 @@ async function loadOrRegisterTriggerUser(
   const existing = await getCachedUserRow(userDiscId);
   if (existing) return existing;
 
-  const locale = manualTriggerInvoker?.locale ?? (guild?.preferredLocale.startsWith("ja") ? "ja" : "en-US");
+  const locale = manualTriggerInvoker?.locale ?? guild?.preferredLocale ?? "en-US";
   const displayName = resolvePreferredDiscordDisplayName({
     memberDisplayName: manualTriggerInvoker?.member?.displayName ?? message.member?.displayName,
     user: manualTriggerInvoker ? { username: manualTriggerInvoker.username } : message.author,

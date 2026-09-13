@@ -101,7 +101,7 @@ Every official preset deliberately bundles the shared base word (`tomori`) along
 
 To prevent this, `PersonaRepository.loadAllForServer` collapses trigger words to a single owner every time it assembles a server's persona set (`applyTriggerWordOwnership`). Ownership is awarded by priority:
 
-1. **Main persona(s)** (`is_alter = false`) — never trimmed, and they additionally reserve the configured base trigger words (`BASE_TRIGGER_WORDS`, both shipped locales) even if their stored list omits them, so an alter can never steal the bot's own name.
+1. **Main persona(s)** (`is_alter = false`) are never trimmed. They reserve the locale's base trigger words from `general.defaults.base_trigger_words` even if their stored list omits them, so an alter cannot steal the bot's own name. The global `BASE_TRIGGER_WORDS` setting still applies to chat trigger detection.
 2. **Alters in creation order** (ascending `persona_id`) — the first-created alter wins a contested word; later personas drop it.
 
 A persona keeps only the words no higher-priority persona already owns. Two identical alters (e.g. two *Default* alters, each `[tomori, rose]`) therefore resolve to: main owns `tomori`, the older alter owns `rose`, and the newer alter ends up with **no addressable trigger** (reachable only by @mention, reply, or its webhook identity).

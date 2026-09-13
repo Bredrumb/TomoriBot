@@ -19,6 +19,28 @@ beforeAll(async () => {
 });
 
 describe("help global interaction route", () => {
+  it("keeps a routed Discord locale even before its translation is authored", async () => {
+    let payload = "";
+    const interaction = {
+      locale: "en-US",
+      guildLocale: "en-US",
+      isButton: () => true,
+      isStringSelectMenu: () => false,
+      isModalSubmit: () => false,
+      update: async (nextPayload: unknown) => {
+        payload = JSON.stringify(nextPayload);
+      },
+    } as unknown as ButtonInteraction;
+
+    await helpInteractionRoute.execute({} as Client, interaction, {
+      namespace: "help",
+      version: "v2",
+      segments: ["category", "de", "features"],
+    });
+
+    expect(payload).toContain("help:v2:page:de:features");
+  });
+
   it("preserves the panel locale carried by the custom ID", async () => {
     let payload = "";
     const interaction = {

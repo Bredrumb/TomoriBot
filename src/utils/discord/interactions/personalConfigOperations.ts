@@ -1,4 +1,5 @@
 import { DEFAULT_THINKING_LEVEL, isThinkingLevelValue } from "@/constants/thinkingLevels";
+import { getRegisterableLocales } from "@/utils/text/localizer";
 import type { APIAttachment } from "discord.js";
 import {
   PrivacyLevel,
@@ -194,7 +195,7 @@ export interface PersonalConfigOperations {
 
 export const personalConfigOperations: PersonalConfigOperations = {
   async setLanguage({ userId, userDiscId, language }) {
-    if (language !== "en-US" && language !== "ja") {
+    if (!getRegisterableLocales().some((code) => code === language)) {
       return { status: "invalid-value" };
     }
     const ok = await userRepository.setLanguage(userId, language);

@@ -44,7 +44,7 @@ describe("status dashboard route catalog", () => {
   it("rejects unknown fields and parses selected page values separately", () => {
     const unknownCategory = parseInteractionRoute("status:v1:category:en-US:unknown");
     const extraField = parseInteractionRoute("status:v1:category:en-US:models:extra");
-    const unsupportedLocale = parseInteractionRoute("status:v1:category:fr:models");
+    const unsupportedLocale = parseInteractionRoute("status:v1:category:zz:models");
     const invalidPersonaId = parseInteractionRoute("status:v1:persona-page:en-US:0:25");
     const invalidRangeStart = parseInteractionRoute("status:v1:persona-page:en-US:42:-1");
     expect(unknownCategory).not.toBeNull();

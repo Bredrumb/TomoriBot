@@ -30,7 +30,7 @@ export interface LocaleObject {
   [key: string]: LocaleValue;
 }
 
-export type LocaleValue = string | LocaleObject;
+export type LocaleValue = string | string[] | LocaleObject;
 
 export interface Locales {
   [locale: string]: LocaleObject;

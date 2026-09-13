@@ -17,7 +17,8 @@ Currently loaded from source:
 - Locale structure: `src/locales/{locale}/` directories, one `.ts` file per category
 - Categories: `general`, `commands`, `providers`, `tools`, `bridges`
 - At boot, `initializeLocalizer()` scans each locale directory, imports all category slices, and merges them into a single tree via `Object.assign`
-- Locale values are nested objects, accessed through dot-path keys
+- Locale values are nested objects accessed through dot-path keys. `general.defaults.base_trigger_words` is a string array used for locale-specific persona defaults.
+- Directory names must be [Discord locale codes](https://docs.discord.com/developers/reference#locales). Unsupported names and alias-key directories are logged and skipped, so they cannot break command registration.
 
 Example lookup:
 
@@ -28,7 +29,7 @@ localizer(locale, "commands.config.setup.description")
 ## Important Behaviors
 
 - `initializeLocalizer()` must run during startup before lookups.
-- Missing locale code falls back to `en-US`.
+- Locale lookup tries an exact authored code, then an alias, then an unambiguous base-language match, then `en-US`. For example, `es-ES` uses the authored `es-419` tree once that tree exists; unsupported codes use English.
 - Missing key falls back to `en-US` for that key alone (see below).
 - Multi-line strings are dedented automatically on load.
 
@@ -47,8 +48,18 @@ The per-key retry means a locale that is 99% translated renders English for the 
 instead of showing users a raw `commands.foo.bar_description` path. The `warn` fires once per
 `locale:key` per process, so a gap stays visible in development without flooding a hot path.
 
-`check-locales` stays strict: the fallback is a runtime safety net, not permission to ship
-parity gaps.
+`check-locales` treats missing translations as an advisory exit 2 while the Japanese catch-up is
+pending. A source key missing from every locale remains a blocking error.
+
+`getSupportedLocales()` returns authored locale directories only. `getRegisterableLocales()` adds
+aliases whose source tree is loaded, so command descriptions, option descriptions, and choice names
+register under both `es-419` and `es-ES` once Spanish content ships. The personal language control
+lists authored locales, not aliases.
+
+Command registration emits a locale-specific description or choice only when that authored locale
+defines the key; an English runtime fallback is not advertised as a translation. Panel route tokens
+accept any known Discord locale from a stored preference, including locales that currently render
+through English fallback.
 
 Two consequences to keep in mind when writing new code:
 
@@ -68,6 +79,12 @@ of keys that genuinely exist in one locale.
 ## Locale File Shape
 
 Each locale exports a nested object (not a flat key-value map).
+
+`general.language_name` is the locale's endonym shown in `/personal config` > Profile > General.
+`general.defaults.bot_name` and `general.defaults.base_trigger_words` own localized defaults.
+`BASE_TRIGGER_WORDS` remains a global chat-trigger detection setting and does not supply the
+locale-specific persona default list. The language modal uses a String Select, which holds at most
+25 options; beyond that, the picker needs pagination or another selection flow.
 
 ```ts
 export default {
@@ -135,6 +152,8 @@ When adding a tip:
 ## User Language Preference
 
 - User preference is stored in `users.language_pref`.
+- Registration writes the observed Discord locale to `language_pref` and `registration_locale` for a new user. A guild join uses the guild's preferred locale; a slash-command registration uses the interaction locale. Chat registration uses the invoker locale when available, otherwise the guild locale. Existing preferences are not reset on registration. `registration_locale` is analytics data and never controls routing.
+- Unsupported stored preferences remain intact. The localizer resolves them at read time, so a matching authored locale begins serving those users when its content ships without a database rewrite. `/personal config` > Profile > General lets a user change the preference explicitly.
 - Most interaction replies receive `locale`/`userData.language_pref` and should use that for response text.
 
 ## Adding or Changing Locale Keys

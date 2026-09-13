@@ -1,5 +1,6 @@
 ﻿export default {
   general: {
+    language_name: `日本語`,
     yes: `はい`,
     confirm: `確認`,
     none: `なし`,
@@ -9,6 +10,7 @@
     openrouter_model_moved_description: `\`other-model\` の直接選択は OpenRouter モデル登録に移動しました。まず {add_command} で正確なモデルコードネームを登録し、不要な登録は {remove_command} で削除してください。その後、通常の OpenRouter モデル一覧から登録済みモデルを選択してください。`,
     defaults: {
       bot_name: `ともり`,
+      base_trigger_words: ["tomori", "tomo", "トモリ", "ともり"],
     },
     docs: {
       open_button_label: `詳しく見る`,

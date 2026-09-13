@@ -36,6 +36,7 @@ import {
   SPOTLIGHT_PERSONA_PAGE_SIZE,
 } from "@/utils/discord/personalConfigPanelCatalog";
 import {
+  buildLanguageModal,
   buildModelSelectModal,
   buildPersonalConfigModalFieldId,
   buildSpotlightAutoTriggerModal,
@@ -53,7 +54,7 @@ import type { ModelParameterOptions } from "@/utils/discord/modelParametersConfi
 import type { PersonalConfigManagedCapability } from "@/utils/discord/personalConfigPanelCatalog";
 import { parseInteractionRoute, type ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { getRegisterableLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
 
@@ -545,6 +546,12 @@ describe("personalConfigPanelCatalog", () => {
       category: "profile",
       page: "appearance",
     });
+  });
+
+  it("round-trips a Discord locale without an authored translation", () => {
+    const route = { action: "category" as const, locale: "de", category: "profile" as const, page: "general" as const };
+    const customId = buildPersonalConfigRouteId(route);
+    expect(parsePersonalConfigPanelRoute(requireRoute(customId))).toEqual(route);
   });
 
   it("builds and parses modal open and submit routes", () => {
@@ -6935,6 +6942,24 @@ describe("Raw modal component types and their option bounds", () => {
   const RADIO = 21;
   const CHECKBOX = 22;
   const STRING_SELECT = 3;
+
+  it("offers authored languages as endonyms in a 25-option-capable select", () => {
+    const modal = buildLanguageModal("en-US", "nonce123456", "ja");
+    const control = modal.components[0]?.component;
+    const options = (control?.options ?? []) as Array<{ value: string; label: string; default?: boolean }>;
+
+    expect(control?.type).toBe(STRING_SELECT);
+    expect(options).toEqual([
+      { value: "en-US", label: "English", default: false },
+      { value: "ja", label: "日本語", default: true },
+    ]);
+    assertBounds(modal, "language");
+    expect(getRegisterableLocales()).toEqual(["en-US", "ja"]);
+
+    const unsupported = buildLanguageModal("en-US", "nonce123456", "pt-BR");
+    const unsupportedOptions = (unsupported.components[0]?.component?.options ?? []) as Array<{ default?: boolean }>;
+    expect(unsupportedOptions.every((option) => option.default === false)).toBe(true);
+  });
 
   const assertBounds = (modal: { components: Array<{ component?: Record<string, unknown> }> }, label: string) => {
     for (const row of modal.components) {

@@ -1,5 +1,6 @@
 ﻿export default {
   general: {
+    language_name: `English`,
     yes: `Yes`,
     confirm: `Confirm`,
     none: `None`,
@@ -9,6 +10,7 @@
     openrouter_model_moved_description: `\`other-model\` selection has been moved to {add_command}. After using it, use \`/config\` > Models > Switch Models again to select it.`,
     defaults: {
       bot_name: `Tomori`,
+      base_trigger_words: ["tomori", "tomo"],
     },
     docs: {
       open_button_label: `Learn More`,

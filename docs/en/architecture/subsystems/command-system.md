@@ -1163,7 +1163,7 @@ than an invocation-scoped modal collector, so a supported open modal can survive
 - `memory`: document(add/remove)
 - `export`: config, memories, personal(config/memories)
 - `import`: config, memories, personal(config/memories)
-- `personal`: privacy, language, nickname, image-tags, cache, config(import/export/remove), provider(add/remove/model-text/model-embedding/model-image/model-video/model-vision/toggle-models), model(fallback), parameters, impersonate(prompt), spotlight(set/manage)
+- `personal`: `/personal config` contains privacy, language, naming, appearance, model routing, and spotlight controls. Other personal subcommands cover providers, memories, and reset flows.
 - `scheduled-task`: edit, remove
 - `conditioning`: manage, reward(headpat/hug/kiss/tickle), punish(spank/pinch/bite/squeeze)
 - `tool`: ping, status, refresh, compact, comment

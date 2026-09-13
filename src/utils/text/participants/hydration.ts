@@ -132,7 +132,7 @@ interface ParticipantHydrationDiagnostics {
 
 export interface ParticipantHydrationDependencies {
   loadUserRow(discordId: string): Promise<UserRow | null>;
-  registerUser(discordId: string, displayName: string, language: "en-US" | "ja"): Promise<UserRow | null>;
+  registerUser(discordId: string, displayName: string, language: string): Promise<UserRow | null>;
   isBlacklisted(guildId: string, discordId: string): Promise<boolean>;
   getPrivacyLevel(discordId: string): Promise<PrivacyLevel>;
   loadPersonalMemories(userId: number, lineageId: number): Promise<PersonalMemoryRow[]>;
@@ -324,7 +324,7 @@ async function hydrateDiscordUserBase(
   const member = await dependencies.loadMember(params.client, params.guildId, discordId).catch(() => null);
   if (!userRow && !params.referencedUserIds?.has(discordId) && member) {
     const guild = params.client.guilds.cache.get(params.guildId);
-    const language = guild?.preferredLocale.startsWith("ja") ? "ja" : "en-US";
+    const language = guild?.preferredLocale ?? "en-US";
     const registrationDisplayName = resolvePreferredDiscordDisplayName({
       memberDisplayName: member.displayName,
       user: member.user,

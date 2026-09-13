@@ -14,6 +14,20 @@ beforeAll(async () => initializeLocalizer());
 const ownerId = "123456789012345678";
 
 describe("stats dashboard route catalog", () => {
+  it("round-trips a Discord locale without an authored translation", () => {
+    const route = {
+      view: "personal" as const,
+      locale: "de",
+      ownerId,
+      serverId: 9,
+      timeframe: "month" as const,
+      scope: "global" as const,
+      tab: "overview" as const,
+    };
+    const parsed = parseInteractionRoute(buildStatsDashboardRouteId(route));
+    expect(parsed ? parseStatsDashboardRoute(parsed) : null).toEqual(route);
+  });
+
   it("round-trips each view and keeps the target tab in the wire contract", () => {
     const routes = [
       {
