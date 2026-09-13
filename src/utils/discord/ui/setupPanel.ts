@@ -49,6 +49,7 @@ import { ColorCode } from "@/utils/misc/logger";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { localizer } from "@/utils/text/localizer";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
+import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
 import type { ComponentsV2MessagePayload } from "@/utils/discord/ui/componentsV2Limits";
 
 export interface SetupWizardPayloadInput {
@@ -128,8 +129,10 @@ export function toSetupSettingsCatalogs(
   if (personaPresets.some((preset) => preset.persona_preset_name.length > SETUP_OPTION_VALUE_LIMIT)) return null;
   if (promptPresets.some((preset) => preset.system_prompt_preset_name.length > SETUP_OPTION_VALUE_LIMIT)) return null;
 
+  const sortedPersonas = orderPersonaPresetChoices(personaPresets);
+
   return {
-    personas: personaPresets.map((preset) => ({
+    personas: sortedPersonas.map((preset) => ({
       id: preset.persona_preset_id,
       name: preset.persona_preset_name,
       description: preset.persona_preset_desc,

@@ -78,6 +78,8 @@ The flags are still derived at seed time, not authored in each catalog row. `see
 
 Applying an official preset creates a **copy-on-write pointer** when the preset has a `preset_lineage_id`. The persona follows the live `persona_presets` row until the first local content edit materializes it into an independent copy.
 
+Preset selectors in both `/setup` (Starting Settings) and `/persona default` order the Default Tomori preset first, followed by remaining presets alphabetically.
+
 ### `/setup`
 
 Setup creates the main persona as a pointer to the selected official preset, stamps `persona_lineage_id` from the preset lineage, and applies the preset avatar to the bot's Discord guild avatar when running in a guild.
