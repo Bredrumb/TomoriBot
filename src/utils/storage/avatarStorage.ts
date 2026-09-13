@@ -309,7 +309,10 @@ export async function uploadPersonaAvatarToStorage(options: AvatarUploadOptions)
       log.success(`[Avatar Storage] Uploaded ${assetLogLabel} to S3 (${publicUrl})`);
       return publicUrl;
     } catch (error) {
-      log.warn(`[Avatar Storage] Failed to upload ${assetLogLabel} to S3`, error);
+      await log.error(`[Avatar Storage] Failed to upload ${assetLogLabel} to S3`, error, {
+        errorType: "S3UploadError",
+        metadata: { bucket: config.bucket, key },
+      });
       return null;
     }
   }
@@ -440,7 +443,10 @@ async function uploadSharedPresetObject(relativeKey: string, buffer: Buffer, log
       log.success(`[Avatar Storage] Uploaded ${logLabel} to S3 (${publicUrl})`);
       return publicUrl;
     } catch (error) {
-      log.warn(`[Avatar Storage] Failed to upload ${logLabel} to S3`, error);
+      await log.error(`[Avatar Storage] Failed to upload ${logLabel} to S3`, error, {
+        errorType: "S3UploadError",
+        metadata: { bucket: config.bucket, key },
+      });
       return null;
     }
   }
@@ -575,7 +581,10 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
         log.info(`[Avatar Storage] Deleted avatar object ${key} from GCS`);
         return true;
       } catch (error) {
-        log.warn(`[Avatar Storage] Failed to delete avatar object ${key} from GCS`, error);
+        await log.error(`[Avatar Storage] Failed to delete avatar object ${key} from GCS`, error, {
+          errorType: "GcsDeleteError",
+          metadata: { bucket: config.bucket, key },
+        });
         return false;
       }
     }
@@ -591,7 +600,10 @@ export async function deletePersonaAvatarFromStorage(reference: string): Promise
       log.info(`[Avatar Storage] Deleted avatar object ${key} from S3`);
       return true;
     } catch (error) {
-      log.warn(`[Avatar Storage] Failed to delete avatar object ${key} from S3`, error);
+      await log.error(`[Avatar Storage] Failed to delete avatar object ${key} from S3`, error, {
+        errorType: "S3DeleteError",
+        metadata: { bucket: config.bucket, key },
+      });
       return false;
     }
   }

@@ -189,7 +189,10 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
           log.success(`[Voice Sample Storage] Uploaded voice sample to GCS (${publicUrl})`);
           return publicUrl;
         } catch (error) {
-          log.warn("[Voice Sample Storage] Failed to upload voice sample to GCS", error);
+          await log.error("[Voice Sample Storage] Failed to upload voice sample to GCS", error, {
+            errorType: "GcsUploadError",
+            metadata: { bucket: config.bucket, key },
+          });
           return null;
         }
       }
@@ -209,7 +212,10 @@ export async function storeVoiceSample(options: VoiceSampleStoreOptions): Promis
         log.success(`[Voice Sample Storage] Uploaded voice sample to S3 (${publicUrl})`);
         return publicUrl;
       } catch (error) {
-        log.warn("[Voice Sample Storage] Failed to upload voice sample to S3", error);
+        await log.error("[Voice Sample Storage] Failed to upload voice sample to S3", error, {
+          errorType: "S3UploadError",
+          metadata: { bucket: config.bucket, key },
+        });
         return null;
       }
     }
@@ -277,7 +283,10 @@ export async function deleteStoredVoiceSample(reference: string): Promise<boolea
         log.info(`[Voice Sample Storage] Deleted voice sample object ${key} from GCS`);
         return true;
       } catch (error) {
-        log.warn(`[Voice Sample Storage] Failed to delete voice sample object ${key} from GCS`, error);
+        await log.error(`[Voice Sample Storage] Failed to delete voice sample object ${key} from GCS`, error, {
+          errorType: "GcsDeleteError",
+          metadata: { bucket: config.bucket, key },
+        });
         return false;
       }
     }
@@ -293,7 +302,10 @@ export async function deleteStoredVoiceSample(reference: string): Promise<boolea
       log.info(`[Voice Sample Storage] Deleted voice sample object ${key} from S3`);
       return true;
     } catch (error) {
-      log.warn(`[Voice Sample Storage] Failed to delete voice sample object ${key} from S3`, error);
+      await log.error(`[Voice Sample Storage] Failed to delete voice sample object ${key} from S3`, error, {
+        errorType: "S3DeleteError",
+        metadata: { bucket: config.bucket, key },
+      });
       return false;
     }
   }

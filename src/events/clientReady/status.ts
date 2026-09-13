@@ -146,7 +146,7 @@ const handler = async (client: Client): Promise<void> => {
 
       const normalStatus: ActivityOptions[] = [
         {
-          name: `Sprites Update! /update`,
+          name: `Commands Update! /update`,
           type: ActivityType.Playing,
         },
         {
