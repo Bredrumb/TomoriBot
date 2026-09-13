@@ -78,10 +78,6 @@ const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<ConditioningAction, Conditio
   CONDITIONING_ROUTE_CODECS,
 );
 
-export function listConditioningPanelActions(): ConditioningAction[] {
-  return Object.keys(CONDITIONING_ROUTE_CODECS) as ConditioningAction[];
-}
-
 function buildConditioningRouteSegments(route: ConditioningPanelRoute): string[] {
   return buildRouteSegments(CONDITIONING_ROUTE_CODECS[route.action], route);
 }

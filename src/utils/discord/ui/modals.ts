@@ -1,7 +1,6 @@
 export {
   acknowledgeModalSubmitForRefresh,
   initializeRawModalInterception,
-  promptWithModal,
   promptWithPaginatedModal,
   promptWithRawModal,
   safeModalLocalizer,

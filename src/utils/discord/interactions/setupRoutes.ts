@@ -177,27 +177,12 @@ export function buildSetupDashboardRouteId(input: { locale: string; nonce: strin
   return buildSetupRouteId({ action: "dashboard", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupDashboardRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "dashboard" ? parsed : null;
-}
-
 export function buildSetupCancelRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "cancel", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupCancelRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "cancel" ? parsed : null;
-}
-
 export function buildSetupPoliciesRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "policies", locale: input.locale, nonce: input.nonce });
-}
-
-export function parseSetupPoliciesRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "policies" ? parsed : null;
 }
 
 export function buildSetupPoliciesSubmitRouteId(input: { locale: string; nonce: string }): string {
@@ -213,11 +198,6 @@ export function buildSetupSettingsRouteId(input: { locale: string; nonce: string
   return buildSetupRouteId({ action: "settings", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupSettingsRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "settings" ? parsed : null;
-}
-
 export function buildSetupSettingsSubmitRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "settings-submit", locale: input.locale, nonce: input.nonce });
 }
@@ -231,18 +211,8 @@ export function buildSetupProviderModeRouteId(input: { locale: string; nonce: st
   return buildSetupRouteId({ action: "provider-mode", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupProviderModeRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "provider-mode" ? parsed : null;
-}
-
 export function buildSetupProviderCatalogSubmitRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "provider-catalog-submit", locale: input.locale, nonce: input.nonce });
-}
-
-export function parseSetupProviderCatalogSubmitRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "provider-catalog-submit" ? parsed : null;
 }
 
 export function buildSetupProviderByokSubmitRouteId(input: { locale: string; nonce: string }): string {
@@ -258,47 +228,20 @@ export function buildSetupEndpointConnectionRouteId(input: { locale: string; non
   return buildSetupRouteId({ action: "endpoint-connection", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupEndpointConnectionRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "endpoint-connection" ? parsed : null;
-}
-
 export function buildSetupEndpointConnectionSubmitRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "endpoint-connection-submit", locale: input.locale, nonce: input.nonce });
-}
-
-export function parseSetupEndpointConnectionSubmitRoute(
-  route: ParsedInteractionRoute | string,
-): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "endpoint-connection-submit" ? parsed : null;
 }
 
 export function buildSetupEndpointModelRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "endpoint-model", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupEndpointModelRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "endpoint-model" ? parsed : null;
-}
-
 export function buildSetupEndpointModelSubmitRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "endpoint-model-submit", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupEndpointModelSubmitRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "endpoint-model-submit" ? parsed : null;
-}
-
 export function buildSetupFinishRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "finish", locale: input.locale, nonce: input.nonce });
-}
-
-export function parseSetupFinishRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "finish" ? parsed : null;
 }
 
 /**

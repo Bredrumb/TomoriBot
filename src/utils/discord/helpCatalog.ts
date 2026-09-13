@@ -88,10 +88,6 @@ function renderBreadcrumbRoot(root: BreadcrumbRoot, locale: string, breadcrumbKe
   return `${rootMention} > ${localizer(locale, breadcrumbKey)}`;
 }
 
-export function breadcrumbPage(root: BreadcrumbRoot, locale: string, breadcrumbKey: string): string {
-  return renderBreadcrumbRoot(root, locale, breadcrumbKey);
-}
-
 /**
  * Every dissolved leaf now reaches its destination through the same bare `/config` mention, so a
  * sentence naming several of them would repeat an identical token with nothing to tell the pages

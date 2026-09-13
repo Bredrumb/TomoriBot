@@ -44,7 +44,7 @@ Command files import Discord UI helpers from responsibility-owned modules:
 - `src/utils/discord/ui/modals.ts` - raw, legacy, and paginated modal prompts
 - `src/utils/discord/ui/embeds.ts` - info and summary embed replies
 - `src/utils/discord/ui/statusComponents.ts` - Components V2 status replies and status-page pagination
-- `src/utils/discord/ui/pagination.ts` - generic choice pagination
+- `src/utils/discord/ui/interactionCore.ts` - generic choice pagination
 - `src/utils/discord/ui/panel.ts` - shared Components V2 panel containers, receipts, state controls, and pagination
 - `src/utils/discord/ui/personalConfigParameterControls.ts` - shared provider-parameter summaries and semantic edit rows
 - `src/utils/discord/ui/personaWorkflow.ts` - command-facing persona picker lifecycle, acknowledgment phases, and anchor-message controller

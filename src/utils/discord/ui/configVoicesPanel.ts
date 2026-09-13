@@ -75,8 +75,6 @@ export function decodeVoiceSampleOptionValue(value: string): { index: number; fp
   return { index, fp };
 }
 
-export const decodeVoiceSampleSelectValue = decodeVoiceSampleOptionValue;
-
 export function resolveSelectedVoiceSample(
   view: ConfigVoicesView,
 ): { sample: VoiceSampleRow; preview?: ConfigVoiceSamplePreview } | null {

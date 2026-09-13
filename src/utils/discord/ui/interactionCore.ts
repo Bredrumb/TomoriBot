@@ -6,8 +6,6 @@ import {
   ComponentType,
   EmbedBuilder,
   MessageFlags,
-  ModalBuilder,
-  TextInputBuilder,
   TextInputStyle,
   InteractionResponseType,
 } from "discord.js";
@@ -846,113 +844,6 @@ export async function promptWithUnacknowledgedConfirmation(
             components: [],
           },
     );
-    return { outcome: "timeout" };
-  }
-}
-
-/**
- * @description Prompts the user with a modal form and awaits their response.
- * Discord handles modal timeouts naturally (~15 minutes), so no artificial timeout is applied.
- */
-export async function promptWithModal(
-  interaction: ChatInputCommandInteraction | ButtonInteraction,
-  locale: string,
-  options: ModalOptions,
-): Promise<ModalResult> {
-  const { modalTitleKey, modalCustomId, components } = options;
-
-  const modal = new ModalBuilder().setCustomId(modalCustomId).setTitle(localizer(locale, modalTitleKey));
-
-  // Create Modal Components (Text Inputs Only - String Selects Not Yet Supported)
-  const rows = components.map((component) => {
-    if (isModalInputField(component)) {
-      const textInput = new TextInputBuilder()
-        .setCustomId(component.customId)
-        .setLabel(localizer(locale, component.labelKey))
-        .setStyle(component.style || TextInputStyle.Short)
-        .setRequired(component.required !== false)
-        .setMaxLength(component.maxLength || 256); // Discord API limit
-
-      if (component.descriptionKey) {
-        // Note: Discord.js does not support descriptions on TextInputs yet
-        // For now, we can add the description to the placeholder or label
-        const description = localizer(locale, component.descriptionKey);
-        if (!component.placeholder) {
-          textInput.setPlaceholder(description.substring(0, 100)); // Discord limit
-        }
-      }
-
-      if (component.placeholder) {
-        const placeholder =
-          typeof component.placeholder === "string" && component.placeholder.startsWith("commands.")
-            ? localizer(locale, component.placeholder)
-            : component.placeholder;
-        textInput.setPlaceholder(placeholder);
-      }
-      if (component.minLength) textInput.setMinLength(component.minLength);
-      if (component.value) textInput.setValue(component.value);
-
-      return new ActionRowBuilder<TextInputBuilder>().addComponents(textInput);
-    } else if (isModalSelectField(component)) {
-      // String selects in modals are not yet supported by Discord.js
-      const fallbackInput = new TextInputBuilder()
-        .setCustomId(component.customId)
-        .setLabel(localizer(locale, component.labelKey))
-        .setStyle(TextInputStyle.Short)
-        .setRequired(component.required !== false)
-        .setMaxLength(256); // Discord API limit
-
-      if (component.placeholder) {
-        const placeholder =
-          typeof component.placeholder === "string" && component.placeholder.startsWith("commands.")
-            ? localizer(locale, component.placeholder)
-            : component.placeholder;
-        fallbackInput.setPlaceholder(placeholder);
-      } else {
-        const optionsText = component.options.map((opt) => opt.label).join(", ");
-        fallbackInput.setPlaceholder(`Options: ${optionsText.substring(0, 95)}...`);
-      }
-
-      return new ActionRowBuilder<TextInputBuilder>().addComponents(fallbackInput);
-    }
-
-    throw new Error(`Unsupported modal component type: ${component}`);
-  });
-
-  modal.addComponents(...rows);
-
-  // Show Modal
-  try {
-    await interaction.showModal(modal);
-  } catch (error) {
-    log.error("Failed to show modal:", error);
-    return { outcome: "timeout" };
-  }
-
-  // Wait for submission (use Discord's natural timeout duration ~15 minutes)
-  try {
-    const submitted = await interaction.awaitModalSubmit({
-      time: 600000, // 10 minutes - matches Discord's natural modal timeout
-      filter: (i) => i.customId === modalCustomId && i.user.id === interaction.user.id,
-    });
-
-    const values: Record<string, string> = {};
-    for (const component of components) {
-      if (isModalInputField(component)) {
-        values[component.customId] = submitted.fields.getTextInputValue(component.customId);
-      } else if (isModalSelectField(component)) {
-        const field = submitted.fields.getField(component.customId);
-        if (field && "value" in field) {
-          values[component.customId] = field.value;
-        }
-      }
-    }
-
-    return { outcome: "submit", values, interaction: submitted };
-  } catch (error) {
-    // This will only catch actual errors, not artificial timeouts
-    // Discord's natural timeout or user cancellation will be handled by command timeout
-    log.warn(`Modal submission failed for user ${interaction.user.id}:`, error);
     return { outcome: "timeout" };
   }
 }

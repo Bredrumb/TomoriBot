@@ -30,11 +30,6 @@ import type { AvatarSessionCache } from "./interactionCore";
 import type { NoticeContainerOptions } from "./interactionCore";
 import { validateComponentsV2MessageLimits, type ComponentsV2MessagePayload } from "./componentsV2Limits";
 
-// Re-exported so anchor-workflow callers (e.g. commands/model/text.ts) can detect a
-// collector timeout without importing the heavy interactionCore module directly, keeping
-// their unit-test module graph small.
-export { isCollectorTimeoutError } from "./interactionCore";
-
 const DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS = 120000;
 const configuredWorkflowTimeout = Number.parseInt(process.env.PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS || "", 10);
 const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
@@ -44,9 +39,6 @@ const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
 
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;
 type PersonaWorkflowMessageInteraction = ButtonInteraction | ModalMessageModalSubmitInteraction;
-
-/** The only supported delivery policies for a persona-picker workflow. */
-export type PersonaWorkflowDeliveryPolicy = "replace-picker" | "separate-public";
 
 /**
  * A Components V2 edit payload. Legacy content and embeds are impossible to
@@ -61,10 +53,7 @@ export interface PersonaWorkflowComponentsV2Payload
 }
 
 /** A public response payload used only by the explicit visibility-change phase. */
-type PersonaWorkflowPublicPayload = Omit<
-  InteractionReplyOptions,
-  "ephemeral" | "fetchReply" | "withResponse"
-> & {
+type PersonaWorkflowPublicPayload = Omit<InteractionReplyOptions, "ephemeral" | "fetchReply" | "withResponse"> & {
   ephemeral?: never;
   fetchReply?: never;
   withResponse?: never;

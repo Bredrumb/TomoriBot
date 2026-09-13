@@ -30,7 +30,7 @@ import * as realLocalizer from "@/utils/text/localizer";
 // They must appear before the first dynamic import() of any command module.
 //
 // Key design choice: mock @/utils/discord/ui/interactionCore rather than the
-// individual barrel re-exports (ui/modals, ui/embeds, ui/buttons, etc.).
+// individual barrel re-exports (ui/modals, ui/embeds, etc.).
 // The barrels just re-export from interactionCore, so mocking the source once
 // keeps all import paths consistent and avoids "ambiguous multiple bindings"
 // errors that arise when two barrels independently re-export the same name
@@ -75,7 +75,7 @@ scopedMock.module("@/utils/text/localizer", () => ({
 
 /**
  * interactionCore mock: the single source that all UI barrels re-export from.
- * Mocking here ensures ui/modals, ui/embeds, ui/buttons, etc. all see the same
+ * Mocking here ensures ui/modals, ui/embeds, etc. all see the same
  * stub without creating duplicate-binding conflicts in the barrel chain.
  *
  * replyInfoEmbed faithfully replicates state-based routing so reply() / editReply()
@@ -127,14 +127,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   acknowledgeModalSubmitForRefresh: async () => undefined,
   promptWithConfirmation: async () => ({ confirmed: false }),
   promptWithUnacknowledgedConfirmation: async () => ({ confirmed: false }),
-  promptWithModal: async (
-    interaction: { showModal: (...a: unknown[]) => Promise<void> },
-    _locale: string,
-    _options: unknown,
-  ) => {
-    await interaction.showModal({});
-    return { outcome: "timeout" as const };
-  },
   replyPaginatedChoices: async () => ({ outcome: "timeout" }),
   replyPaginatedPersonaChoicesV2: async () => ({ outcome: "timeout", reason: "timeout" }),
   replyPaginatedStatusPages: async () => undefined,

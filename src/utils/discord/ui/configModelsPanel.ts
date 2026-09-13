@@ -61,7 +61,7 @@ import { formatStopStringForDisplay } from "@/utils/provider/stopStringConfig";
 import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 import { buildConfigVoicesBody, type ConfigVoicesView } from "@/utils/discord/ui/configVoicesPanel";
-export { buildConfigVoicesBody, type ConfigVoicesView };
+export type { ConfigVoicesView };
 
 /** Keeps the active preset line from consuming room needed by receipts and future parameter copy. */
 const CONFIG_NAI_PRESET_DISPLAY_HEADROOM = 256;
