@@ -108,7 +108,7 @@ describe("transfer route catalog and codecs", () => {
       "other:v1:cancel:en-US:nonce-1234",
       "transfer:v2:cancel:en-US:nonce-1234",
       "transfer:v1:unknown:en-US:nonce-1234",
-      "transfer:v1:cancel:fr:nonce-1234",
+      "transfer:v1:cancel:xx:nonce-1234",
       "transfer:v1:memory-strategy:en-US:nonce-1234:x",
       "transfer:v1:mbsel:en-US:nonce-1234:-1",
       "transfer:v1:mbpage:en-US:nonce-1234:not-a-number",
