@@ -205,7 +205,7 @@ function transformModalSubmissionPacket(packet: RawDiscordWebSocketPacket): void
 
 type InterceptableDiscordClient = {
   ws?: {
-    handlePacket?: (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => unknown;
+    handlePacket?: (packet?: RawDiscordWebSocketPacket, shard?: RawDiscordShard) => unknown;
   };
 };
 
@@ -218,9 +218,9 @@ function setupWebSocketInterception(client: unknown) {
     if (wsManager?.handlePacket) {
       const originalHandlePacket = wsManager.handlePacket.bind(wsManager);
 
-      wsManager.handlePacket = (packet: RawDiscordWebSocketPacket, shard: RawDiscordShard) => {
+      wsManager.handlePacket = (packet?: RawDiscordWebSocketPacket, shard?: RawDiscordShard) => {
         // Intercept INTERACTION_CREATE packets for modal submissions
-        if (packet.t === "INTERACTION_CREATE" && packet.d?.type === 5 && packet.d?.data?.components) {
+        if (packet?.t === "INTERACTION_CREATE" && packet.d?.type === 5 && packet.d?.data?.components) {
           const hasComponentType18 = packet.d.data.components.some((comp: RawDiscordComponent) => comp.type === 18);
 
           if (hasComponentType18) {

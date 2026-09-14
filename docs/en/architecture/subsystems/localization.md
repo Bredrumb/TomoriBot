@@ -32,6 +32,9 @@ localizer(locale, "commands.config.setup.description")
 - `initializeLocalizer()` must run during startup before lookups.
 - Locale lookup tries an exact authored code, then an alias, then an unambiguous base-language match, then `en-US`. For example, `es-ES` uses the authored `es-419` tree once that tree exists; unsupported codes use English.
 - Missing key falls back to `en-US` for that key alone (see below).
+- Panel route IDs accept Discord locale codes even when no translation is loaded. This keeps
+  controls usable for users whose Discord language is not yet authored; their text falls back to
+  `en-US`.
 - Multi-line strings are dedented automatically on load.
 - Values interpolated into user-facing strings resolve through the same authored-locale chain, so their language matches the sentence around them: dates through `formatTimeWithOffset(date, offset, options, locale)`, durations through `formatLocalizedDuration()`, and integer grouping through `formatLocaleInteger()`. Durations use `Intl` unit formatting rather than locale keys because some languages have several plural forms. Model-facing text keeps English values: `formatTimeRemaining()`, tool results, and context builders that omit the locale.
 - Rendered strings used as embed protocol data are registered in `src/utils/discord/embedProtocol.ts`.
