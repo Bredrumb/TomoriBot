@@ -168,7 +168,7 @@ export const PUBLISHED_DOCS_LOCALES: readonly DocsLocaleId[] = DOCS_LOCALES.filt
   (locale) => locale.id,
 );
 
-export const DOCS_LOCALE_IDS: readonly DocsLocaleId[] = DOCS_LOCALES.map((locale) => locale.id);
+const DOCS_LOCALE_IDS: readonly DocsLocaleId[] = DOCS_LOCALES.map((locale) => locale.id);
 
 /**
  * Discord keys that reuse another locale's docs tree, inverted from the bot's alias registry so a
@@ -220,8 +220,8 @@ export function resolveDocsLocale(locale: string): DocsLocaleId {
   return baseMatches.length === 1 ? baseMatches[0] : DEFAULT_DOCS_LOCALE_ID;
 }
 
-/** The `/en`-style path segment for a locale, already resolved to a published docs tree. */
-export function resolveDocsLocalePath(locale: string): string {
+/** `/en`-style path segment for a locale, already resolved to a published docs tree. */
+function resolveDocsLocalePath(locale: string): string {
   return `/${resolveDocsLocale(locale)}`;
 }
 
@@ -286,8 +286,6 @@ export const LEGAL_DOC_ROUTES = {
   "privacy-policy": "/legal/privacy-policy/",
   "terms-of-service": "/legal/terms-of-service/",
 } as const satisfies DocsRouteMap;
-
-export type LegalDocRoute = keyof typeof LEGAL_DOC_ROUTES;
 
 export const DOCS_BASE_URL = "https://docs.tomoribot.app";
 

@@ -20,15 +20,12 @@ import {
  * wiring.
  */
 
-export { DEFAULT_DOCS_LOCALE_ID, DOCS_BASE_URL, DOCS_LOCALES, PUBLISHED_DOCS_LOCALES };
-export type { DocsLocaleId };
-
-export interface DocsLinkTag {
+interface DocsLinkTag {
   tag: "link";
   attrs: Record<string, string>;
 }
 
-export interface DocsMetaTag {
+interface DocsMetaTag {
   tag: "meta";
   attrs: Record<string, string>;
 }
@@ -37,11 +34,6 @@ export interface DocsMetaTag {
 export type DocsHeadTag = DocsLinkTag | DocsMetaTag;
 
 const LOCALE_IDS: readonly string[] = DOCS_LOCALES.map((locale) => locale.id);
-
-/** True when the locale's page tree exists, so its root is a real route rather than a redirect. */
-export function isPublishedDocsLocale(locale: string): locale is DocsLocaleId {
-  return (PUBLISHED_DOCS_LOCALES as readonly string[]).includes(locale);
-}
 
 /** The locale segment at the front of a content entry id, or undefined for an unprefixed id. */
 export function localeFromEntryId(entryId: string): string | undefined {
@@ -86,7 +78,7 @@ export function findEntryFile(docsRoot: string, locale: string, baseId: string):
  * `/ja/x/` route serving English content is a fallback, and telling Google it is the Japanese
  * version competes the same English text against itself.
  */
-export function entryExists(docsRoot: string, locale: string, baseId: string): boolean {
+function entryExists(docsRoot: string, locale: string, baseId: string): boolean {
   return findEntryFile(docsRoot, locale, baseId) !== undefined;
 }
 
