@@ -70,7 +70,11 @@ export default {
     custom_endpoint_bootstrap_field: `カスタムエンドポイント`,
     custom_endpoint_bootstrap_value: `次に {custom_models_add_command} でエンドポイントを登録し、{model_text_command} または対応するモデルコマンドで有効化してください。詳しい手順は {help_custom_models_command}、{help_speech_command}、{help_transcription_command} を確認してください。`,
     dm_context_explanation_title: `ダイレクトメッセージについて`,
-    dm_context_explanation: `このダイレクトメッセージでも「サーバー」として参照します。つまり、すべての「サーバー」機能が同じように動作しますが、私たちだけのプライベートな空間です！このダイレクトメッセージを私との1対1サーバーと考えてください。「サーバーメモリー」はここでのみの私の記憶です。`,
+    dm_context_explanation: `このダイレクトメッセージでも「サーバー」として参照します。
+つまり、すべての「サーバー」機能が同じように動作しますが、
+私たちだけのプライベートな空間です！このダイレクトメッセージを
+私との1対1サーバーと考えてください。「サーバーメモリー」は
+ここでのみの私の記憶です。`,
     already_setup_title: `既に設定済みです`,
     already_setup_summary_description: `このサーバーは既に設定されています。現在のテキストプロバイダー状態と、すぐに変更するための手順を表示します。`,
     current_provider_field: `現在のテキストプロバイダー`,

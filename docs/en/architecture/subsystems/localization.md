@@ -188,6 +188,19 @@ bun run check-locales
 ```
 
 This validates cross-locale key parity and catches missing keys.
+Follow with the placeholder, marker, and link validation gates:
+
+```bash
+bun run check-locale-placeholders --locale=<target>  # placeholder parity against en-US
+bun run check-locale-lengths                         # Discord 45/100 code-point caps
+bun run check-locale-markers                         # embed protocol key uniqueness and templates
+bun run check-locale-links --locale=<target>         # project doc routes and heading fragments
+```
+
+Use `--locale=<code>` to validate a specific translation target. Running `check-locale-placeholders`
+or `check-locale-links` across the entire repository surfaces pre-existing Japanese catch-up debt
+(command modernization placeholder drifts and untranslated documentation anchors), which is
+reconciled during the Japanese catch-up phase.
 
 ## Discord Length Limits
 
@@ -195,15 +208,15 @@ Discord silently truncates several text slots past their cap, so a separate stri
 (`bun run check-locale-lengths`, also run as a fatal step in `bun run vl`) source-traces each
 locale key to the Discord component it feeds and flags any value that overruns:
 
-- Command descriptions — ≤100 chars
+- Command descriptions and choice names — ≤100 chars
 - Modal titles / input labels — ≤45 chars
 - Modal placeholders / Label descriptions — ≤100 chars
 - **Select / checkbox option `label` and `description`** — ≤100 chars (traced from
   `{ value, label: localizer(...), description: localizer(...) }` option literals)
 
 Both the `en-US` and `ja` values must fit. Shorten the reported string rather than relying on
-Discord's truncation — the cap is counted in characters (code points), so compact Japanese text
-usually fits where English does not.
+Discord's truncation — the cap is counted in characters (code points), matching Discord backend
+measurements, so compact Japanese text usually fits where English does not.
 
 ## Best Practices
 

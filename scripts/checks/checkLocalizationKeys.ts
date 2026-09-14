@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { readFile, readdir } from "node:fs/promises";
 import { Glob } from "bun";
+import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
 
 /**
@@ -529,7 +530,7 @@ async function checkModalTitleLengths(localeKeys: Map<string, Set<string>>): Pro
         const value = stringValues.get(key);
         if (!value) continue;
 
-        const length = value.length;
+        const length = getDiscordTextLength(value);
 
         if (length < MIN_LENGTH || length > MAX_LENGTH) {
           violations.push({
@@ -571,7 +572,7 @@ async function checkModalDescriptionLengths(
         const value = stringValues.get(key);
         if (!value) continue;
 
-        const length = value.length;
+        const length = getDiscordTextLength(value);
 
         // Check if length violates Discord constraint (only max, no min)
         if (length > MAX_LENGTH) {
@@ -767,13 +768,14 @@ async function checkModalComponentUsageLengths(
       if (!value) continue;
 
       const maxLength = MODAL_KIND_LIMITS[usage.kind];
-      if (value.length > maxLength) {
+      const length = getDiscordTextLength(value);
+      if (length > maxLength) {
         violations.push({
           key: usage.key,
           kind: usage.kind,
           maxLength,
           value,
-          length: value.length,
+          length,
           locale: localeName,
           files: new Set(usage.files),
         });
@@ -904,13 +906,14 @@ export async function checkMessageComponentUsageLengths(
       if (!value) continue;
 
       const maxLength = MESSAGE_SLOT_LIMITS[usage.kind];
-      if (value.length > maxLength) {
+      const length = getDiscordTextLength(value);
+      if (length > maxLength) {
         violations.push({
           key: usage.key,
           kind: usage.kind,
           maxLength,
           value,
-          length: value.length,
+          length,
           locale: localeName,
           files: new Set(usage.files),
         });
@@ -943,7 +946,7 @@ async function checkCommandDescriptionLengths(
         const value = stringValues.get(key);
         if (!value) continue;
 
-        const length = value.length;
+        const length = getDiscordTextLength(value);
 
         if (length < MIN_LENGTH || length > MAX_LENGTH) {
           violations.push({

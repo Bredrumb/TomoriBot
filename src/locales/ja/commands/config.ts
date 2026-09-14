@@ -206,8 +206,10 @@ export default {
           success_description: `Chatterbox高速モデル: **{turbo}**
 CFG weight: **{cfg_weight}**
 Exaggeration: **{exaggeration}**`,
-          turbo_notice: `高速モデルが有効なため、CFG weightとExaggerationは保存されますが無視されます。対応済みイベントタグは保持され、未対応の角括弧記述は削除されます。`,
-          standard_notice: `高速モデルが無効なため、CFG weightとExaggerationが有効です。\`[laugh]\`や\`[whisper]\`などの角括弧記述は音声生成前に削除されます。`,
+          turbo_notice: `高速モデルが有効なため、CFG weightとExaggerationは保存されますが
+無視されます。対応済みイベントタグは保持され、未対応の角括弧記述は削除されます。`,
+          standard_notice: `高速モデルが無効なため、CFG weightとExaggerationが有効です。
+\`[laugh]\`や\`[whisper]\`などの角括弧記述は音声生成前に削除されます。`,
         },
       },
     },

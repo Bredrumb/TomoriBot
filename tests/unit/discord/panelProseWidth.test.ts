@@ -17,7 +17,7 @@ import {
   type SetupSettingsCatalogs,
 } from "@/utils/discord/ui/setupPanel";
 import { SETUP_DRAFT_SCHEMA_VERSION, type SetupDraftRecord } from "@/types/discord/setupWizard";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { getSupportedLocales, hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 await initializeLocalizer();
 
@@ -156,20 +156,23 @@ describe("panel prose width", () => {
     }
   });
 
-  it("keeps every authored panel line at or under 65 characters", () => {
+  it("keeps every authored panel line at or under 65 characters across all authored locales", () => {
     const violations: string[] = [];
 
-    for (const [file, keys] of keysByFile) {
-      for (const key of keys) {
-        const text = localizer("en-US", key);
-        // A key that resolves to itself is composed at runtime or missing; the composed-key
-        // tests own that case and an unresolved key has no authored width to measure.
-        if (text === key) continue;
+    for (const locale of getSupportedLocales()) {
+      for (const [file, keys] of keysByFile) {
+        for (const key of keys) {
+          if (!hasLocaleKey(locale, key)) continue;
+          const text = localizer(locale, key);
+          // A key that resolves to itself is composed at runtime or missing; the composed-key
+          // tests own that case and an unresolved key has no authored width to measure.
+          if (text === key) continue;
 
-        for (const line of text.split("\n")) {
-          const width = renderedWidth(line);
-          if (width > MAX_PANEL_PROSE_LINE) {
-            violations.push(`${file} ${key} (${width}): ${line.slice(0, 72)}`);
+          for (const line of text.split("\n")) {
+            const width = renderedWidth(line);
+            if (width > MAX_PANEL_PROSE_LINE) {
+              violations.push(`[${locale}] ${file} ${key} (${width}): ${line.slice(0, 72)}`);
+            }
           }
         }
       }

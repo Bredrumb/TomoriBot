@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Adding a New Locale"
 ---
 
@@ -21,7 +21,13 @@ legacy title. New embeds also carry a stable footer marker, but historical embed
 still depend on the released title. Add any new key used to classify an embed or reply-context notice
 to that registry before shipping it.
 
-4. Run `bun run check-locales` to inspect parity, then `bun run check`, `bun run lint`, and `bun run check-locale-lengths`.
+4. Run the localization safety gates, then `bun run check` and `bun run lint`:
+   - `bun run check-locales`: Verifies key parity across locale files (advisory exit 2 in CI; exit 1 fatal when keys are missing everywhere).
+   - `bun run check-locale-placeholders`: Validates `{placeholder}` parity against `en-US` (missing English placeholders are fatal exit 1; extra placeholders are advisory exit 0 warnings). Use `--locale=<code>` to check a specific locale.
+   - `bun run check-locale-lengths`: Verifies Discord length limits (modal titles/input labels <=45; command descriptions, choice names, placeholders, select options <=100; counted in Unicode code points).
+   - `bun run check-locale-markers`: Verifies embed protocol keys, template placeholder parity, literal anchors, and title collisions.
+   - `bun run check-locale-links`: Validates project-owned documentation routes and heading fragments. Use `--locale=<code>` to check a specific locale.
+   - `bun run find-stale-translations`: Identifies untranslated English strings using per-locale expected scripts.
 
 ## Notes
 
@@ -35,9 +41,13 @@ to that registry before shipping it.
 ## Quality Gate
 
 ```bash
-bun run check-locales   # verify key parity across all locale files
-bun run check           # TypeScript strict mode
-bun run lint            # Biome formatting
+bun run check-locales              # key parity (advisory exit 2 in CI; exit 1 fatal)
+bun run check-locale-placeholders  # placeholder parity (exit 1 on missing placeholders)
+bun run check-locale-lengths       # Discord 45/100 code-point caps (fatal on overrun)
+bun run check-locale-markers       # embed protocol key uniqueness and templates (fatal)
+bun run check-locale-links         # project doc routes and heading fragments (fatal)
+bun run check                      # TypeScript strict mode
+bun run lint                       # Biome formatting
 ```
 
 ## Related Docs
