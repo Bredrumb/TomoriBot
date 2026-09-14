@@ -5,6 +5,7 @@ import {
   DEFAULT_DOCS_LOCALE_ID,
   DOCS_BASE_URL,
   DOCS_LOCALES,
+  DOCS_LOCALE_ALIASES,
   DOCS_ROUTES,
   PUBLISHED_DOCS_LOCALES,
   buildDefaultLocaleDocsPageUrl,
@@ -57,6 +58,18 @@ describe("docs locale configuration", () => {
     // the English endonym as the anchor label.
     expect(getDocsLocaleConfig("ja")?.notices.englishLinkText).toBe("英語版");
     expect(getDocsLocaleConfig("en")?.notices.englishLinkText).toBe("English");
+  });
+
+  it("keys the alias map in the casing every lookup normalizes to", () => {
+    // The alias lookup lowercases the caller's tag, because an `Accept-Language` range arrives that
+    // way. A camel-cased key such as `es-ES` is therefore unreachable, and the alias silently
+    // degrades to the base-language branch, which picks a locale only while one is published for
+    // that base. This asserts the map's shape because the round trip cannot: `es-419` is not
+    // published yet, so both paths currently resolve to English and would hide the difference.
+    expect(DOCS_LOCALE_ALIASES["es-es"]).toBe("es-419");
+    for (const key of Object.keys(DOCS_LOCALE_ALIASES)) {
+      expect(key).toBe(key.toLowerCase());
+    }
   });
 
   it("exposes the default locale config used for fallbacks", () => {

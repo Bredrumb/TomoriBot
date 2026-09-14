@@ -24,8 +24,11 @@ const DEFAULT_LOCALE = "en";
 /**
  * Discord keys that reuse another published locale's tree. Mirrors the bot's alias registry, so an
  * `es-ES` browser reaches the same Spanish pages its interface strings come from.
+ *
+ * Keys are lowercased because the lookup normalizes the caller's tag first, and a lowercased tag
+ * would otherwise miss a camel-cased key.
  */
-const LOCALE_ALIASES: Record<string, string> = { "es-ES": "es-419" };
+const LOCALE_ALIASES: Record<string, string> = { "es-es": "es-419" };
 
 /**
  * Picks the published locale a browser's `Accept-Language` header asks for.
@@ -58,7 +61,6 @@ export function resolveLocaleFromHeader(header: string | null | undefined): stri
 
     const alias = LOCALE_ALIASES[candidate.tag] ?? LOCALE_ALIASES[candidate.tag.split("-")[0]];
     if (alias && (PUBLISHED_LOCALES as readonly string[]).includes(alias)) return alias;
-
     const base = candidate.tag.split("-")[0];
     const baseMatches = PUBLISHED_LOCALES.filter((locale) => locale.split("-")[0].toLowerCase() === base);
     if (baseMatches.length === 1) return baseMatches[0];

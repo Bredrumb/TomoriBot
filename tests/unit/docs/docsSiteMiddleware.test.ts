@@ -44,6 +44,21 @@ describe("docs site root middleware", () => {
     expect(resolveLocaleFromHeader(null)).toBe("en");
   });
 
+  it("resolves this copy's alias key in the casing a lookup produces", async () => {
+    // The middleware's alias table is a separate literal from the shared map, so it can drift on its
+    // own. Key casing is the failure that hides: the lookup lowercases the tag, and a camel-cased
+    // key is then unreachable, exactly as it was before this was caught in the shared map.
+    const source = await Bun.file(new URL("../../../apps/docs/functions/_middleware.ts", import.meta.url)).text();
+    const declaration = source.match(/const LOCALE_ALIASES[^=]*=\s*\{([^}]*)\}/);
+
+    expect(declaration).not.toBeNull();
+    const aliasKeys = [...(declaration?.[1] ?? "").matchAll(/"([^"]+)":/g)].map((match) => match[1]);
+    expect(aliasKeys.length).toBeGreaterThan(0);
+    for (const key of aliasKeys) {
+      expect(key).toBe(key.toLowerCase());
+    }
+  });
+
   it("redirects the site root to the matched locale's introduction page", async () => {
     const response = await onRequest({
       request: new Request("https://docs.example.test/", {

@@ -181,12 +181,22 @@ const DOCS_LOCALE_IDS: readonly DocsLocaleId[] = DOCS_LOCALES.map((locale) => lo
  * Discord keys that reuse another locale's docs tree, inverted from the bot's alias registry so a
  * single alias decision covers runtime strings and docs destinations. Spanish is authored once in
  * neutral Latin American register, and an `es-ES` client must land on the same pages.
+ *
+ * Keys are lowercased because every lookup normalizes the caller's tag first: an `Accept-Language`
+ * range arrives lowercased, and object property access would otherwise miss `es-ES` entirely.
  */
 export const DOCS_LOCALE_ALIASES: Readonly<Record<string, DocsLocaleId>> = Object.fromEntries(
   Object.entries(LOCALE_ALIASES)
     .filter(([alias, source]) => alias !== source && DOCS_LOCALE_IDS.includes(source))
-    .map(([alias, source]) => [alias, source]),
+    .map(([alias, source]) => [alias.toLowerCase(), source]),
 );
+
+/** Case-insensitive alias lookup, which is the only form any caller here can use. */
+function aliasTargetOf(tag: string): DocsLocaleId | undefined {
+  const normalized = tag.toLowerCase();
+  const alias = DOCS_LOCALE_ALIASES[normalized] ?? DOCS_LOCALE_ALIASES[normalized.split("-")[0]];
+  return alias ? publishedLocaleOf(alias) : undefined;
+}
 
 const docsLocaleById = new Map<string, DocsLocaleConfig>(DOCS_LOCALES.map((locale) => [locale.id, locale]));
 
@@ -216,13 +226,12 @@ export function resolveDocsLocale(locale: string): DocsLocaleId {
   const exact = publishedLocaleOf(locale);
   if (exact) return exact;
 
-  const [base] = locale.toLowerCase().split("-");
   // An alias is only usable once its source tree is published: pointing an `es-ES` reader at
   // `/es-419/` before that tree exists would send them to a route the site does not serve.
-  const alias = DOCS_LOCALE_ALIASES[locale] ?? DOCS_LOCALE_ALIASES[base];
-  const aliasTarget = alias ? publishedLocaleOf(alias) : undefined;
+  const aliasTarget = aliasTargetOf(locale);
   if (aliasTarget) return aliasTarget;
 
+  const [base] = locale.toLowerCase().split("-");
   const baseMatches = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === base);
   return baseMatches.length === 1 ? baseMatches[0] : DEFAULT_DOCS_LOCALE_ID;
 }
@@ -378,8 +387,7 @@ export function matchAcceptLanguage(header: string | null | undefined): DocsLoca
 
     // A range such as `pt` or `pt-PT` carries no locale of its own here, so it resolves through the
     // same alias-then-base-language order as an explicit bot locale rather than silently missing.
-    const alias = DOCS_LOCALE_ALIASES[candidate.tag] ?? DOCS_LOCALE_ALIASES[candidate.tag.split("-")[0]];
-    const aliasTarget = alias ? publishedLocaleOf(alias) : undefined;
+    const aliasTarget = aliasTargetOf(candidate.tag);
     if (aliasTarget) return aliasTarget;
 
     const base = candidate.tag.split("-")[0];
