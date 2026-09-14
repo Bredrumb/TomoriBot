@@ -27,6 +27,7 @@ import {
   getStoredPersonalProviderForCapability,
 } from "@/utils/provider/personalProviderHelpers";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
+import { resolveDescription } from "@/utils/text/localizer";
 
 export interface PersonalConfigScope {
   userId: number;
@@ -112,6 +113,7 @@ export async function loadAvailableModelsForCapability(
   userId: number,
   provider: string,
   capability: PersonalConfigManagedCapability,
+  locale = "en-US",
 ): Promise<Array<{ id: number; name: string; description?: string }>> {
   try {
     if (capability === "text") {
@@ -121,7 +123,11 @@ export async function loadAvailableModelsForCapability(
       });
       return (models ?? [])
         .filter((m) => typeof m.llm_id === "number")
-        .map((m) => ({ id: m.llm_id as number, name: m.llm_codename, description: m.llm_description ?? undefined }));
+        .map((m) => ({
+          id: m.llm_id as number,
+          name: m.llm_codename,
+          description: resolveDescription(m.descriptions, locale, m.llm_description) ?? undefined,
+        }));
     }
     if (capability === "vision") {
       const models = await llmModelRepo.loadAvailableModelsForProvider(provider, false, {
@@ -130,7 +136,11 @@ export async function loadAvailableModelsForCapability(
       });
       return (models ?? [])
         .filter((m) => typeof m.llm_id === "number" && m.sees_images)
-        .map((m) => ({ id: m.llm_id as number, name: m.llm_codename, description: m.llm_description ?? undefined }));
+        .map((m) => ({
+          id: m.llm_id as number,
+          name: m.llm_codename,
+          description: resolveDescription(m.descriptions, locale, m.llm_description) ?? undefined,
+        }));
     }
     if (capability === "embedding") {
       const models = await llmModelRepo.loadAvailableEmbeddingModels(provider, false, {
@@ -142,7 +152,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.embedding_model_id as number,
           name: m.codename,
-          description: m.model_description ?? undefined,
+          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
         }));
     }
     if (capability === "image") {
@@ -155,7 +165,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.diffusion_model_id as number,
           name: m.codename,
-          description: m.model_description ?? undefined,
+          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
         }));
     }
     if (capability === "image_nai") {
@@ -168,7 +178,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.diffusion_model_id as number,
           name: m.codename,
-          description: m.model_description ?? undefined,
+          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
         }));
     }
     if (capability === "video") {
@@ -181,7 +191,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.video_model_id as number,
           name: m.codename,
-          description: m.model_description ?? undefined,
+          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
         }));
     }
   } catch (error) {

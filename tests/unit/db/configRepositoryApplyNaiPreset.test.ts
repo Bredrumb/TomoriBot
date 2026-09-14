@@ -32,6 +32,7 @@ const preset = {
   is_default: true,
   preset_desc: "Default Kayra preset",
   ja_preset_desc: "Default Kayra preset",
+  descriptions: { "en-US": "Default Kayra preset" },
   parameters: { temperature: 1.2, top_p: 0.9, top_k: 20, min_p: 0.05 },
 } satisfies NaiPresetRow;
 

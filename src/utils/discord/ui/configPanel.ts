@@ -105,7 +105,7 @@ import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortT
 import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import {
@@ -1701,7 +1701,10 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
             options: input.view.models.slice(start, start + pageSize).map((model) => ({
               label: safeSelectOptionText(model.llm_codename, 100),
               value: model.llm_codename,
-              description: model.llm_description ? safeSelectOptionText(model.llm_description, 100) : undefined,
+              description: safeSelectOptionText(
+                resolveDescription(model.descriptions, locale, model.llm_description) ?? "",
+                100,
+              ),
               default: model.llm_id === persona.persona_llm?.llm_id,
             })),
             disabled: writesDisabled || textState === "disabled",

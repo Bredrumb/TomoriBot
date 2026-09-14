@@ -77,6 +77,7 @@ function makeNaiPreset(name: string, target: "kayra" | "erato" = "kayra") {
     is_default: false,
     preset_desc: `English description for ${name}`,
     ja_preset_desc: `Japanese description for ${name}`,
+    descriptions: { "en-US": `English description for ${name}`, ja: `Japanese description for ${name}` },
     parameters: {},
   };
 }

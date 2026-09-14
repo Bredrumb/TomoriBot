@@ -1,14 +1,15 @@
 import type { SQL } from "bun";
-import { str } from "./sql";
+import { jsonb, str } from "./sql";
 import { systemPromptSections } from "./systemPrompts";
 import type { SystemPromptInput } from "./types";
 
 const SYSTEM_PROMPT_COLUMNS =
-  "system_prompt_preset_name, system_prompt_preset_desc, ja_description, preset_prompt_text";
+  "system_prompt_preset_name, system_prompt_preset_desc, ja_description, descriptions, preset_prompt_text";
 
 const SYSTEM_PROMPT_ON_CONFLICT = `ON CONFLICT (system_prompt_preset_name) DO UPDATE SET
   system_prompt_preset_desc = EXCLUDED.system_prompt_preset_desc,
   ja_description = EXCLUDED.ja_description,
+  descriptions = EXCLUDED.descriptions,
   preset_prompt_text = EXCLUDED.preset_prompt_text,
   updated_at = CURRENT_TIMESTAMP`;
 
@@ -17,7 +18,13 @@ function rowsOf(): SystemPromptInput[] {
 }
 
 function renderSystemPromptTuple(preset: SystemPromptInput): string {
-  return [str(preset.name), str(preset.desc), str(preset.jaDescription), str(preset.promptText)].join(", ");
+  return [
+    str(preset.name),
+    str(preset.desc),
+    preset.i18n?.ja ? str(preset.i18n.ja) : "NULL",
+    jsonb({ "en-US": preset.desc, ...preset.i18n }),
+    str(preset.promptText),
+  ].join(", ");
 }
 
 export function validateSystemPrompts(): string[] {
@@ -38,7 +45,7 @@ export function validateSystemPrompts(): string[] {
   return errors;
 }
 
-function buildSystemPromptSeedStatements(): string[] {
+export function buildSystemPromptSeedStatements(): string[] {
   const currentPresets = rowsOf();
 
   if (currentPresets.length === 0) {

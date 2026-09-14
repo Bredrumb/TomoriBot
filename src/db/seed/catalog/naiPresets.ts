@@ -11,7 +11,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         modelTarget: "kayra",
         isDefault: true,
         desc: "Balanced and relaxed, a reliable all-purpose preset for natural roleplay.",
-        jaDesc: "バランスが取れたリラックスしたプリセット。自然なロールプレイに最適。",
+        i18n: { ja: "バランスが取れたリラックスしたプリセット。自然なロールプレイに最適。" },
         parameters: {
           order: [2, 3, 0, 4, 1],
           temperature: 1.35,
@@ -39,7 +39,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Asper-Kayra",
         modelTarget: "kayra",
         desc: "Crisp and focused, lower temperature with Typical Sampling for steady, disciplined prose.",
-        jaDesc: "温度低めでTypical Samplingを使用。落ち着いた規律ある文体に最適。",
+        i18n: { ja: "温度低めでTypical Samplingを使用。落ち着いた規律ある文体に最適。" },
         parameters: {
           order: [5, 0, 1, 3],
           temperature: 1.16,
@@ -66,7 +66,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Blended-Coffee-Kayra",
         modelTarget: "kayra",
         desc: "Smooth and grounded, blends top-K and tail-free for consistent, natural storytelling.",
-        jaDesc: "トップKとテールフリーを組み合わせた滑らかで安定した文体。",
+        i18n: { ja: "トップKとテールフリーを組み合わせた滑らかで安定した文体。" },
         parameters: {
           order: [0, 1, 2, 3],
           temperature: 1.0,
@@ -92,7 +92,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Blook-Kayra",
         modelTarget: "kayra",
         desc: "Bold repetition-fighter, very aggressive phrase rep penalty keeps outputs fresh and varied.",
-        jaDesc: "非常に攻撃的なフレーズ繰り返しペナルティで新鮮でバラエティ豊かな出力を実現。",
+        i18n: { ja: "非常に攻撃的なフレーズ繰り返しペナルティで新鮮でバラエティ豊かな出力を実現。" },
         parameters: {
           order: [2, 3, 1, 0],
           temperature: 1.0,
@@ -119,7 +119,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "CosmicCube-Kayra",
         modelTarget: "kayra",
         desc: "Mirostat entropy sampling, experimental entropy-based sampler for unpredictable, cosmic outputs.",
-        jaDesc: "ミロスタットエントロピーサンプリング。予測不可能で宇宙的な出力のための実験的サンプラー。",
+        i18n: { ja: "ミロスタットエントロピーサンプリング。予測不可能で宇宙的な出力のための実験的サンプラー。" },
         parameters: {
           order: [8, 5, 0, 3],
           temperature: 0.9,
@@ -146,7 +146,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Fresh-Coffee-Kayra",
         modelTarget: "kayra",
         desc: "Light and clean, fresher top-K outputs with minimal phrase repetition penalty.",
-        jaDesc: "軽くクリーンなトップK出力。フレーズ繰り返しペナルティを最小化。",
+        i18n: { ja: "軽くクリーンなトップK出力。フレーズ繰り返しペナルティを最小化。" },
         parameters: {
           order: [0, 1, 2, 3],
           temperature: 1.0,
@@ -173,7 +173,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Green-Active-Writer-Kayra",
         modelTarget: "kayra",
         desc: "High-energy mirostat writer, creative and dynamic at temperature 1.5 with strong anti-repetition.",
-        jaDesc: "高エネルギーなミロスタットライター。温度1.5で創造的かつダイナミック、強い反復防止付き。",
+        i18n: { ja: "高エネルギーなミロスタットライター。温度1.5で創造的かつダイナミック、強い反復防止付き。" },
         parameters: {
           order: [0, 8, 5, 3],
           temperature: 1.5,
@@ -200,7 +200,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Pilotfish-Kayra",
         modelTarget: "kayra",
         desc: "Multi-sampler blend, layered top-K/P/A/Typical for rich narrative variety.",
-        jaDesc: "複数のサンプラーを組み合わせた豊かなナラティブバリエーション。",
+        i18n: { ja: "複数のサンプラーを組み合わせた豊かなナラティブバリエーション。" },
         parameters: {
           order: [0, 4, 1, 2, 5, 3],
           temperature: 1.31,
@@ -229,7 +229,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Pro_Writer-Kayra",
         modelTarget: "kayra",
         desc: "Refined narrative, tuned for written prose quality using top-A and Typical Sampling.",
-        jaDesc: "洗練されたナラティブ。トップAとTypical Samplingによる高品質な文章向け。",
+        i18n: { ja: "洗練されたナラティブ。トップAとTypical Samplingによる高品質な文章向け。" },
         parameters: {
           order: [3, 4, 5, 0],
           temperature: 1.06,
@@ -256,7 +256,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Stelenes-Kayra",
         modelTarget: "kayra",
         desc: "Maximum chaos, very high temperature (2.5) for maximally experimental and unpredictable text.",
-        jaDesc: "最大カオス。温度2.5による極めて実験的で予測不可能なテキスト生成。",
+        i18n: { ja: "最大カオス。温度2.5による極めて実験的で予測不可能なテキスト生成。" },
         parameters: {
           order: [3, 0, 5],
           temperature: 2.5,
@@ -281,7 +281,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Tea_Time-Kayra",
         modelTarget: "kayra",
         desc: "Quiet and mellow, top-A and Typical with aggressive phrase guard for tranquil outputs.",
-        jaDesc: "トップAとTypical、攻撃的フレーズガードで穏やかで落ち着いた出力を実現。",
+        i18n: { ja: "トップAとTypical、攻撃的フレーズガードで穏やかで落ち着いた出力を実現。" },
         parameters: {
           order: [5, 0, 4],
           temperature: 1.0,
@@ -307,7 +307,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Tesseract-Kayra",
         modelTarget: "kayra",
         desc: "Sharp and precise, very low temperature (0.895) for highly deterministic, focused responses.",
-        jaDesc: "非常に低い温度（0.895）による高度に決定論的でフォーカスした応答。",
+        i18n: { ja: "非常に低い温度（0.895）による高度に決定論的でフォーカスした応答。" },
         parameters: {
           order: [0, 5],
           temperature: 0.895,
@@ -332,8 +332,9 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Writers-Daemon-Kayra",
         modelTarget: "kayra",
         desc: "Daemon-driven mirostat, comprehensive multi-sampler with high entropy for creative writing.",
-        jaDesc:
-          "デーモン駆動のミロスタット。高エントロピーの包括的マルチサンプラーでクリエイティブライティングに最適。",
+        i18n: {
+          ja: "デーモン駆動のミロスタット。高エントロピーの包括的マルチサンプラーでクリエイティブライティングに最適。",
+        },
         parameters: {
           order: [8, 0, 5, 3, 2, 4],
           temperature: 1.5,
@@ -363,7 +364,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         modelTarget: "erato",
         isDefault: true,
         desc: "Novel-style writing, Shosetsu (小説) tuned for structured narrative with strong rep control.",
-        jaDesc: "「小説」スタイル。整理されたナラティブと強い反復制御に最適化。",
+        i18n: { ja: "「小説」スタイル。整理されたナラティブと強い反復制御に最適化。" },
         parameters: {
           order: [9, 10],
           temperature: 1.0,
@@ -394,7 +395,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Dragonfruit",
         modelTarget: "erato",
         desc: "Fruity and vivid, complex sampler chain with mirostat for elaborate and colorful prose.",
-        jaDesc: "複雑なサンプラーチェーンとミロスタットで鮮やかで精巧な文体を実現。",
+        i18n: { ja: "複雑なサンプラーチェーンとミロスタットで鮮やかで精巧な文体を実現。" },
         parameters: {
           order: [0, 5, 9, 10, 8, 4],
           temperature: 1.37,
@@ -425,7 +426,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Golden Arrow",
         modelTarget: "erato",
         desc: "Classic and balanced, standard tail-free sampling for coherent, flowing narrative.",
-        jaDesc: "クラシックでバランスの取れた、テールフリーサンプリングによる一貫した滑らかなナラティブ。",
+        i18n: { ja: "クラシックでバランスの取れた、テールフリーサンプリングによる一貫した滑らかなナラティブ。" },
         parameters: {
           order: [9, 2],
           temperature: 1.0,
@@ -456,7 +457,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Wilder",
         modelTarget: "erato",
         desc: "Wild and expansive, high top-K (300) for more varied and adventurous outputs.",
-        jaDesc: "高いトップK（300）による多様で冒険的な出力。",
+        i18n: { ja: "高いトップK（300）による多様で冒険的な出力。" },
         parameters: {
           order: [9, 10],
           temperature: 1.0,
@@ -487,7 +488,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Zany Scribe",
         modelTarget: "erato",
         desc: "Zany and unpredictable, high frequency/presence penalties for maximally varied outputs.",
-        jaDesc: "高い頻度・存在ペナルティによる最大限に多様な出力。",
+        i18n: { ja: "高い頻度・存在ペナルティによる最大限に多様な出力。" },
         parameters: {
           order: [9, 2],
           temperature: 1.0,

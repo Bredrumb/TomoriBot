@@ -135,6 +135,28 @@ function processLocaleStrings(obj: unknown): LocaleValue {
 }
 
 const FALLBACK_LOCALE = "en-US";
+
+/** Resolve a row description while old rows and columns remain readable during migration. */
+export function resolveDescription(
+  descriptions: Record<string, string> | null | undefined,
+  locale: string,
+  legacyEnglish: string | null | undefined,
+): string | null {
+  if (descriptions) {
+    const base = locale.split("-")[0];
+    for (const key of [locale, base]) {
+      const value = descriptions[key];
+      if (typeof value === "string" && value.length > 0) return value;
+    }
+    const matching = Object.entries(descriptions).find(
+      ([key, value]) => key.split("-")[0] === base && typeof value === "string" && value.length > 0,
+    );
+    if (matching) return matching[1];
+    const english = descriptions[FALLBACK_LOCALE];
+    if (typeof english === "string" && english.length > 0) return english;
+  }
+  return legacyEnglish ?? null;
+}
 const DEFAULT_BASE_TRIGGER_WORDS = ["tomori", "tomo"];
 
 /** Exact and alias matches win; a base language matches only when it is unambiguous. */

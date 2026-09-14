@@ -45,7 +45,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: null,
-        ja: null,
       },
       {
         provider: "google",
@@ -60,7 +59,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Lightweight version optimized for speed and efficiency",
-        ja: "速度と効率を最適化した軽量版モデル",
+        i18n: { ja: "速度と効率を最適化した軽量版モデル" },
       },
       {
         provider: "google",
@@ -75,7 +74,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: null,
-        ja: null,
       },
       {
         provider: "google",
@@ -90,7 +88,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Experimental model for general-purpose applications (deprecated, use gemini-2.5-flash)",
-        ja: "実験的な汎用アプリケーション向けモデル（非推奨、gemini-2.5-flashを使用）",
+        i18n: { ja: "実験的な汎用アプリケーション向けモデル（非推奨、gemini-2.5-flashを使用）" },
       },
       {
         provider: "google",
@@ -105,7 +103,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Balanced model for general-purpose applications (deprecated, use gemini-3.5-flash-lite)",
-        ja: "汎用アプリケーション向けのバランス型モデル（非推奨、gemini-3.5-flash-liteを使用）",
+        i18n: { ja: "汎用アプリケーション向けのバランス型モデル（非推奨、gemini-3.5-flash-liteを使用）" },
       },
       {
         provider: "google",
@@ -121,7 +119,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Most capable model for complex reasoning and analysis",
-        ja: "複雑な推論と分析に最も優れたモデル",
+        i18n: { ja: "複雑な推論と分析に最も優れたモデル" },
       },
       {
         provider: "google",
@@ -134,7 +132,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest model with enhanced performance and capabilities (deprecated, use gemini-3.5-flash)",
-        ja: "強化されたパフォーマンスと機能を備えた最新のモデル（非推奨、gemini-3.5-flashを使用）",
+        i18n: { ja: "強化されたパフォーマンスと機能を備えた最新のモデル（非推奨、gemini-3.5-flashを使用）" },
       },
       {
         provider: "google",
@@ -147,7 +145,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest preview model with enhanced performance and capabilities (deprecated, use gemini-3-flash)",
-        ja: "強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、gemini-3-flashを使用）",
+        i18n: { ja: "強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、gemini-3-flashを使用）" },
       },
       {
         provider: "google",
@@ -161,7 +159,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest Gemini 3.1 Flash Lite preview model with full multimodal and tool capabilities (deprecated, use gemini-3.5-flash)",
-        ja: "ツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル（非推奨、gemini-3.5-flashを使用）",
+        i18n: {
+          ja: "ツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル（非推奨、gemini-3.5-flashを使用）",
+        },
       },
       {
         provider: "google",
@@ -174,7 +174,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Gemini 3.1 Flash Lite stable model with full multimodal and tool capabilities",
-        ja: "ツール利用を含むフルマルチモーダル機能に対応したGemini 3.1 Flash Lite安定版モデル",
+        i18n: { ja: "ツール利用を含むフルマルチモーダル機能に対応したGemini 3.1 Flash Lite安定版モデル" },
       },
       {
         provider: "google",
@@ -187,7 +187,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Fast and efficient Gemini 3.5 Flash model for general-purpose applications",
-        ja: "汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル",
+        i18n: { ja: "汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル" },
       },
       {
         provider: "google",
@@ -201,7 +201,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Gemini 3.5 Flash Lite stable model with full multimodal and tool capabilities",
-        ja: "ツール利用を含むフルマルチモーダル機能に対応したGemini 3.5 Flash Lite安定版モデル",
+        i18n: { ja: "ツール利用を含むフルマルチモーダル機能に対応したGemini 3.5 Flash Lite安定版モデル" },
       },
       {
         provider: "google",
@@ -214,7 +214,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Fast and efficient Gemini 3.6 Flash model for general-purpose applications",
-        ja: "汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル",
+        i18n: { ja: "汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル" },
       },
       {
         provider: "google",
@@ -227,7 +227,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Latest Gemini 3.7 Flash model for general-purpose applications",
-        ja: "汎用アプリケーション向けの最新Gemini 3.7 Flashモデル",
+        i18n: { ja: "汎用アプリケーション向けの最新Gemini 3.7 Flashモデル" },
       },
       {
         provider: "google",
@@ -238,7 +238,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Advanced Gemini 3.5 Pro model for complex reasoning and analysis",
-        ja: "複雑な推論と分析向けの高度なGemini 3.5 Proモデル",
+        i18n: { ja: "複雑な推論と分析向けの高度なGemini 3.5 Proモデル" },
       },
       {
         provider: "google",
@@ -253,7 +253,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Preview model focused on advanced reasoning and analysis (deprecated, use gemini-3.1-pro-preview)",
-        ja: "高度な推論と分析に特化したプレビューモデル（非推奨、gemini-3.1-pro-preview を使用）",
+        i18n: { ja: "高度な推論と分析に特化したプレビューモデル（非推奨、gemini-3.1-pro-preview を使用）" },
       },
       {
         provider: "google",
@@ -267,7 +267,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Latest Gemini 3.1 Pro model focused on advanced reasoning and analysis",
-        ja: "高度な推論と分析に特化した最新のGemini 3.1 Proモデル",
+        i18n: { ja: "高度な推論と分析に特化した最新のGemini 3.1 Proモデル" },
       },
       {
         provider: "google",
@@ -282,7 +282,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest Gemini 3.1 Pro preview model focused on advanced reasoning and analysis (deprecated, use gemini-3.1-pro)",
-        ja: "高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル（非推奨、gemini-3.1-proを使用）",
+        i18n: { ja: "高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル（非推奨、gemini-3.1-proを使用）" },
       },
       {
         provider: "google",
@@ -292,7 +292,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesVideos: true,
         supportsStructoutput: true,
         desc: "Google Gemma 4.31B IT model with tool use, image understanding, video understanding, and structured output support",
-        ja: "ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4.31B ITモデル",
+        i18n: { ja: "ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4.31B ITモデル" },
       },
       {
         provider: "google",
@@ -302,7 +302,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesVideos: true,
         supportsStructoutput: true,
         desc: "Google Gemma 4 26B A4B IT MoE model with tool use, image understanding, video understanding, and structured output support",
-        ja: "ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4 26B A4B IT MoEモデル",
+        i18n: { ja: "ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4 26B A4B IT MoEモデル" },
       },
       {
         provider: "google",
@@ -311,7 +311,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         isDeprecated: true,
         desc: "Instruction-tuned Gemma model with image understanding",
-        ja: "画像理解に対応した指示調整済みGemmaモデル",
+        i18n: { ja: "画像理解に対応した指示調整済みGemmaモデル" },
       },
     ],
   },
@@ -330,7 +330,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Lightweight version optimized for speed and efficiency via Vertex AI",
-        ja: "Vertex AI経由の速度と効率を最適化した軽量版モデル",
+        i18n: { ja: "Vertex AI経由の速度と効率を最適化した軽量版モデル" },
       },
       {
         provider: "vertex",
@@ -344,7 +344,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Balanced model for general-purpose applications via Vertex AI (deprecated, use gemini-3.5-flash-lite)",
-        ja: "Vertex AI経由の汎用アプリケーション向けバランス型モデル（非推奨、gemini-3.5-flash-liteを使用）",
+        i18n: { ja: "Vertex AI経由の汎用アプリケーション向けバランス型モデル（非推奨、gemini-3.5-flash-liteを使用）" },
       },
       {
         provider: "vertex",
@@ -359,7 +359,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Most capable model for complex reasoning and analysis via Vertex AI",
-        ja: "Vertex AI経由の複雑な推論と分析に最も優れたモデル",
+        i18n: { ja: "Vertex AI経由の複雑な推論と分析に最も優れたモデル" },
       },
       {
         provider: "vertex",
@@ -371,7 +371,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest model with enhanced performance and capabilities via Vertex AI (deprecated, model not available on Vertex, use gemini-3.5-flash)",
-        ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のモデル（非推奨、Vertexでは利用不可、gemini-3.5-flashを使用）",
+        i18n: {
+          ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のモデル（非推奨、Vertexでは利用不可、gemini-3.5-flashを使用）",
+        },
       },
       {
         provider: "vertex",
@@ -383,7 +385,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest preview model with enhanced performance and capabilities via Vertex AI (deprecated, model not available on Vertex, use gemini-3-flash)",
-        ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、Vertexでは利用不可、gemini-3-flashを使用）",
+        i18n: {
+          ja: "Vertex AI経由の強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、Vertexでは利用不可、gemini-3-flashを使用）",
+        },
       },
       {
         provider: "vertex",
@@ -397,7 +401,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest Gemini 3.1 Flash Lite preview model with full multimodal and tool capabilities via Vertex AI (deprecated, use gemini-3.5-flash)",
-        ja: "Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル（非推奨、gemini-3.5-flashを使用）",
+        i18n: {
+          ja: "Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応した最新のGemini 3.1 Flash Liteプレビューモデル（非推奨、gemini-3.5-flashを使用）",
+        },
       },
       {
         provider: "vertex",
@@ -410,7 +416,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Gemini 3.1 Flash Lite stable model with full multimodal and tool capabilities via Vertex AI",
-        ja: "Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応したGemini 3.1 Flash Lite安定版モデル",
+        i18n: {
+          ja: "Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応したGemini 3.1 Flash Lite安定版モデル",
+        },
       },
       {
         provider: "vertex",
@@ -423,7 +431,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Fast and efficient Gemini 3.5 Flash model for general-purpose applications via Vertex AI",
-        ja: "Vertex AI経由の汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル",
+        i18n: { ja: "Vertex AI経由の汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル" },
       },
       {
         provider: "vertex",
@@ -437,7 +445,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Gemini 3.5 Flash Lite stable model with full multimodal and tool capabilities via Vertex AI",
-        ja: "Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応したGemini 3.5 Flash Lite安定版モデル",
+        i18n: {
+          ja: "Vertex AI経由のツール利用を含むフルマルチモーダル機能に対応したGemini 3.5 Flash Lite安定版モデル",
+        },
       },
       {
         provider: "vertex",
@@ -450,7 +460,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Fast and efficient Gemini 3.6 Flash model for general-purpose applications via Vertex AI",
-        ja: "Vertex AI経由の汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル",
+        i18n: { ja: "Vertex AI経由の汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル" },
       },
       {
         provider: "vertex",
@@ -463,7 +473,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Latest Gemini 3.7 Flash model for general-purpose applications via Vertex AI",
-        ja: "Vertex AI経由の汎用アプリケーション向けの最新Gemini 3.7 Flashモデル",
+        i18n: { ja: "Vertex AI経由の汎用アプリケーション向けの最新Gemini 3.7 Flashモデル" },
       },
       {
         provider: "vertex",
@@ -474,7 +484,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Advanced Gemini 3.5 Pro model for complex reasoning and analysis via Vertex AI",
-        ja: "Vertex AI経由の複雑な推論と分析向けの高度なGemini 3.5 Proモデル",
+        i18n: { ja: "Vertex AI経由の複雑な推論と分析向けの高度なGemini 3.5 Proモデル" },
       },
       {
         provider: "vertex",
@@ -488,7 +498,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Latest Gemini 3.1 Pro model focused on advanced reasoning and analysis via Vertex AI",
-        ja: "Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proモデル",
+        i18n: { ja: "Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proモデル" },
       },
       {
         provider: "vertex",
@@ -503,7 +513,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest Gemini 3.1 Pro preview model focused on advanced reasoning and analysis via Vertex AI (deprecated, use gemini-3.1-pro)",
-        ja: "Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル（非推奨、gemini-3.1-proを使用）",
+        i18n: {
+          ja: "Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル（非推奨、gemini-3.1-proを使用）",
+        },
       },
       {
         provider: "vertex",
@@ -513,7 +525,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Vision-capable Vertex-hosted Gemma 4.31B IT model with tool use and structured output (video disabled) (deprecated, model not available on Vertex)",
-        ja: "動画非対応ながらツール利用と構造化出力をサポートするVertex AI向けGemma 4.31B ITモデル (非推奨、Vertexでは利用不可)",
+        i18n: {
+          ja: "動画非対応ながらツール利用と構造化出力をサポートするVertex AI向けGemma 4.31B ITモデル (非推奨、Vertexでは利用不可)",
+        },
       },
       {
         provider: "vertex",
@@ -521,7 +535,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         isDeprecated: true,
         desc: "Instruction-tuned Gemma model with image understanding via Vertex AI",
-        ja: "Vertex AI経由の画像理解に対応した指示調整済みGemmaモデル",
+        i18n: { ja: "Vertex AI経由の画像理解に対応した指示調整済みGemmaモデル" },
       },
     ],
   },
@@ -537,7 +551,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Gemini 2.0 Flash model available through Vertex AI Express",
-        ja: "Vertex AI Expressで利用できるGemini 2.0 Flashモデル",
+        i18n: { ja: "Vertex AI Expressで利用できるGemini 2.0 Flashモデル" },
       },
       {
         provider: "vertexexpress",
@@ -548,7 +562,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Gemini 2.0 Flash Lite model available through Vertex AI Express",
-        ja: "Vertex AI Expressで利用できるGemini 2.0 Flash Liteモデル",
+        i18n: { ja: "Vertex AI Expressで利用できるGemini 2.0 Flash Liteモデル" },
       },
       {
         provider: "vertexexpress",
@@ -559,7 +573,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Gemini 2.5 Flash Lite model available through Vertex AI Express",
-        ja: "Vertex AI Expressで利用できるGemini 2.5 Flash Liteモデル",
+        i18n: { ja: "Vertex AI Expressで利用できるGemini 2.5 Flash Liteモデル" },
       },
       {
         provider: "vertexexpress",
@@ -571,7 +585,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Preview Gemini 2.5 Flash Lite model available through Vertex AI Express (deprecated, use gemini-2.5-flash-lite-09-2025)",
-        ja: "Vertex AI Expressで利用できるGemini 2.5 Flash Liteプレビューモデル（非推奨、gemini-2.5-flash-lite-09-2025を使用）",
+        i18n: {
+          ja: "Vertex AI Expressで利用できるGemini 2.5 Flash Liteプレビューモデル（非推奨、gemini-2.5-flash-lite-09-2025を使用）",
+        },
       },
       {
         provider: "vertexexpress",
@@ -582,7 +598,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Lightweight Gemini 2.5 Flash Lite model via Vertex AI Express",
-        ja: "Vertex AI Express経由の軽量Gemini 2.5 Flash Liteモデル",
+        i18n: { ja: "Vertex AI Express経由の軽量Gemini 2.5 Flash Liteモデル" },
       },
       {
         provider: "vertexexpress",
@@ -594,7 +610,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Balanced Gemini 2.5 Flash model via Vertex AI Express",
-        ja: "Vertex AI Express経由のバランス型Gemini 2.5 Flashモデル",
+        i18n: { ja: "Vertex AI Express経由のバランス型Gemini 2.5 Flashモデル" },
       },
       {
         provider: "vertexexpress",
@@ -607,7 +623,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Most capable Gemini 2.5 Pro model via Vertex AI Express",
-        ja: "Vertex AI Express経由で利用できる最も高性能なGemini 2.5 Proモデル",
+        i18n: { ja: "Vertex AI Express経由で利用できる最も高性能なGemini 2.5 Proモデル" },
       },
       {
         provider: "vertexexpress",
@@ -617,7 +633,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Gemini 3 Flash model via Vertex AI Express (deprecated, model not available on Vertex, use gemini-3.5-flash)",
-        ja: "Vertex AI Express経由で利用できるGemini 3 Flashモデル（非推奨、Vertexでは利用不可、gemini-3.5-flashを使用）",
+        i18n: {
+          ja: "Vertex AI Express経由で利用できるGemini 3 Flashモデル（非推奨、Vertexでは利用不可、gemini-3.5-flashを使用）",
+        },
       },
       {
         provider: "vertexexpress",
@@ -627,7 +645,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Preview Gemini 3 Flash model via Vertex AI Express (deprecated, model not available on Vertex, use gemini-3-flash)",
-        ja: "Vertex AI Express経由で利用できるGemini 3 Flashプレビューモデル（非推奨、Vertexでは利用不可、gemini-3-flashを使用）",
+        i18n: {
+          ja: "Vertex AI Express経由で利用できるGemini 3 Flashプレビューモデル（非推奨、Vertexでは利用不可、gemini-3-flashを使用）",
+        },
       },
       {
         provider: "vertexexpress",
@@ -639,7 +659,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Gemini 3 Pro model focused on reasoning via Vertex AI Express",
-        ja: "Vertex AI Express経由の推論特化Gemini 3 Proモデル",
+        i18n: { ja: "Vertex AI Express経由の推論特化Gemini 3 Proモデル" },
       },
       {
         provider: "vertexexpress",
@@ -652,7 +672,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Preview Gemini 3 Pro model focused on reasoning via Vertex AI Express (deprecated, use gemini-3-pro)",
-        ja: "Vertex AI Express経由の推論特化Gemini 3 Proプレビューモデル（非推奨、gemini-3-proを使用）",
+        i18n: { ja: "Vertex AI Express経由の推論特化Gemini 3 Proプレビューモデル（非推奨、gemini-3-proを使用）" },
       },
       {
         provider: "vertexexpress",
@@ -665,7 +685,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Gemini 3.1 Pro model via Vertex AI Express (deprecated, use gemini-3.1-pro-preview)",
-        ja: "Vertex AI Express経由のGemini 3.1 Proモデル（非推奨、gemini-3.1-pro-previewを使用）",
+        i18n: { ja: "Vertex AI Express経由のGemini 3.1 Proモデル（非推奨、gemini-3.1-pro-previewを使用）" },
       },
       {
         provider: "vertexexpress",
@@ -677,7 +697,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Latest Gemini 3.1 Pro preview model via Vertex AI Express",
-        ja: "Vertex AI Express経由の最新Gemini 3.1 Proプレビューモデル",
+        i18n: { ja: "Vertex AI Express経由の最新Gemini 3.1 Proプレビューモデル" },
       },
       {
         provider: "vertexexpress",
@@ -688,7 +708,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Gemini 3.5 Flash Lite stable model via Vertex AI Express",
-        ja: "Vertex AI Express経由のGemini 3.5 Flash Lite安定版モデル",
+        i18n: { ja: "Vertex AI Express経由のGemini 3.5 Flash Lite安定版モデル" },
       },
       {
         provider: "vertexexpress",
@@ -699,7 +719,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Fast and efficient Gemini 3.5 Flash model for general-purpose applications via Vertex AI Express",
-        ja: "Vertex AI Express経由の汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル",
+        i18n: { ja: "Vertex AI Express経由の汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル" },
       },
       {
         provider: "vertexexpress",
@@ -710,7 +730,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Fast and efficient Gemini 3.6 Flash model for general-purpose applications via Vertex AI Express",
-        ja: "Vertex AI Express経由の汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル",
+        i18n: { ja: "Vertex AI Express経由の汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル" },
       },
       {
         provider: "vertexexpress",
@@ -721,7 +741,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Latest Gemini 3.7 Flash model for general-purpose applications via Vertex AI Express",
-        ja: "Vertex AI Express経由の汎用アプリケーション向けの最新Gemini 3.7 Flashモデル",
+        i18n: { ja: "Vertex AI Express経由の汎用アプリケーション向けの最新Gemini 3.7 Flashモデル" },
       },
     ],
   },
@@ -735,19 +755,19 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isSmartest: true,
         hasTools: true,
         desc: "Latest NovelAI roleplay model with enhanced creativity and character consistency",
-        ja: "創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル",
+        i18n: { ja: "創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル" },
       },
       {
         provider: "novelai",
         codename: "kayra-v1",
         desc: "Legacy Kayra model for storytelling and roleplay",
-        ja: "ストーリーテリングとロールプレイ向けのレガシーKayraモデル",
+        i18n: { ja: "ストーリーテリングとロールプレイ向けのレガシーKayraモデル" },
       },
       {
         provider: "novelai",
         codename: "llama-3-erato-v1",
         desc: "Based on the Llama 3 70B Base model, trained on the most high-quality NovelAI storytelling dataset",
-        ja: "Llama 3 70Bベースモデルを基に、NovelAI最高品質のストーリーテリングデータセットで学習したモデル",
+        i18n: { ja: "Llama 3 70Bベースモデルを基に、NovelAI最高品質のストーリーテリングデータセットで学習したモデル" },
       },
     ],
   },
@@ -762,7 +782,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "General-use model that can see images and is also great in role-play (deprecated, use stepfun/step-3.5-flash)",
-        ja: "画像を見ることができ、ロールプレイにも優れた汎用モデル（非推奨、stepfun/step-3.5-flash を使用）",
+        i18n: { ja: "画像を見ることができ、ロールプレイにも優れた汎用モデル（非推奨、stepfun/step-3.5-flash を使用）" },
       },
       {
         provider: "openrouter",
@@ -770,7 +790,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         isDeprecated: true,
         desc: "Fast Stepfun model with tool support only",
-        ja: "ツール利用のみに対応した高速Stepfunモデル",
+        i18n: { ja: "ツール利用のみに対応した高速Stepfunモデル" },
       },
       {
         provider: "openrouter",
@@ -780,7 +800,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "State-of-the-art human-aligned model that also performs natural role-play",
-        ja: "自然なロールプレイも可能な最先端の人間調整型モデル",
+        i18n: { ja: "自然なロールプレイも可能な最先端の人間調整型モデル" },
       },
       {
         provider: "openrouter",
@@ -790,7 +810,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest State-of-the-art human-aligned model that also performs natural role-play",
-        ja: "最新の自然なロールプレイも可能な最先端の人間調整型モデル",
+        i18n: { ja: "最新の自然なロールプレイも可能な最先端の人間調整型モデル" },
       },
       {
         provider: "openrouter",
@@ -799,7 +819,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Fast GLM 4.7 variant for responsive general-purpose tasks",
-        ja: "応答性の高い汎用タスク向けの高速GLM 4.7バリアント",
+        i18n: { ja: "応答性の高い汎用タスク向けの高速GLM 4.7バリアント" },
       },
       {
         provider: "openrouter",
@@ -809,7 +829,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Latest GLM 5 model with advanced natural language understanding and roleplay capabilities",
-        ja: "高度な自然言語理解とロールプレイ機能を備えた最新のGLM 5モデル",
+        i18n: { ja: "高度な自然言語理解とロールプレイ機能を備えた最新のGLM 5モデル" },
       },
       {
         provider: "openrouter",
@@ -820,7 +840,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesVideos: true,
         supportsStructoutput: true,
         desc: "Multimodal GLM model for visual understanding, document analysis, video input, and tool use",
-        ja: "視覚理解・文書分析・動画入力・ツール利用に対応するマルチモーダルGLMモデル",
+        i18n: { ja: "視覚理解・文書分析・動画入力・ツール利用に対応するマルチモーダルGLMモデル" },
       },
       {
         provider: "openrouter",
@@ -830,7 +850,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Free OpenRouter Pony Alpha model with tools and structured output support (DEPRECATED)",
-        ja: "ツールと構造化出力に対応した無料のOpenRouter Pony Alphaモデル（非推奨）",
+        i18n: { ja: "ツールと構造化出力に対応した無料のOpenRouter Pony Alphaモデル（非推奨）" },
       },
       {
         provider: "openrouter",
@@ -841,7 +861,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Uncensored model specializing in creative writing and role-play",
-        ja: "創作とロールプレイに特化した無検閲モデル",
+        i18n: { ja: "創作とロールプレイに特化した無検閲モデル" },
       },
       {
         provider: "openrouter",
@@ -851,7 +871,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Cost-efficient Experimental Model that is also great in role-play",
-        ja: "ロールプレイにも優れたコスト効率の良い実験モデル",
+        i18n: { ja: "ロールプレイにも優れたコスト効率の良い実験モデル" },
       },
       {
         provider: "openrouter",
@@ -861,7 +881,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Cost-efficient stable model that is also great in role-play (deprecated, use ~deepseek/deepseek-v4-flash-latest)",
-        ja: "ロールプレイにも優れたコスト効率の良い安定版モデル（非推奨、~deepseek/deepseek-v4-flash-latestを使用）",
+        i18n: {
+          ja: "ロールプレイにも優れたコスト効率の良い安定版モデル（非推奨、~deepseek/deepseek-v4-flash-latestを使用）",
+        },
       },
       {
         provider: "openrouter",
@@ -873,7 +895,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Fast and cost-efficient stable model that is also great in roleplay (deprecated, use ~deepseek/deepseek-v4-flash-latest)",
-        ja: "ロールプレイにも優れた高速でコスト効率の良い安定版モデル（非推奨、~deepseek/deepseek-v4-flash-latestを使用）",
+        i18n: {
+          ja: "ロールプレイにも優れた高速でコスト効率の良い安定版モデル（非推奨、~deepseek/deepseek-v4-flash-latestを使用）",
+        },
       },
       {
         provider: "openrouter",
@@ -882,7 +906,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isUncensored: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the DeepSeek V4 Flash family",
-        ja: "DeepSeek V4 Flashファミリーの最新モデルへ常にリダイレクトされます",
+        i18n: { ja: "DeepSeek V4 Flashファミリーの最新モデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -893,7 +917,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Advanced Chimera DeepSeek model that is great at role-playing",
-        ja: "ロールプレイに優れた高度なChimera DeepSeekモデル",
+        i18n: { ja: "ロールプレイに優れた高度なChimera DeepSeekモデル" },
       },
       {
         provider: "openrouter",
@@ -904,7 +928,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Fast and efficient general-purpose model",
-        ja: "高速かつ効率的な汎用モデル",
+        i18n: { ja: "高速かつ効率的な汎用モデル" },
       },
       {
         provider: "openrouter",
@@ -917,7 +941,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest fast and efficient general-purpose model",
-        ja: "高速かつ効率的な汎用モデル",
+        i18n: { ja: "高速かつ効率的な汎用モデル" },
       },
       {
         provider: "openrouter",
@@ -927,7 +951,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest Grok model from xAI",
-        ja: "xAIの最新Grokモデルへ常にリダイレクトされます",
+        i18n: { ja: "xAIの最新Grokモデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -939,7 +963,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Gemini 3 Flash preview via OpenRouter with tool use, image understanding, and YouTube video support (deprecated, use google/gemini-3.5-flash)",
-        ja: "OpenRouter経由でツール利用・画像理解・YouTube動画処理に対応したGemini 3 Flashプレビュー（非推奨、google/gemini-3.5-flashを使用）",
+        i18n: {
+          ja: "OpenRouter経由でツール利用・画像理解・YouTube動画処理に対応したGemini 3 Flashプレビュー（非推奨、google/gemini-3.5-flashを使用）",
+        },
       },
       {
         provider: "openrouter",
@@ -953,7 +979,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest Gemini 3.1 Flash Lite preview via OpenRouter with full multimodal, tool, and YouTube video capabilities",
-        ja: "OpenRouter経由でフルマルチモーダル機能・ツール利用・YouTube動画処理に対応した最新のGemini 3.1 Flash Liteプレビューモデル",
+        i18n: {
+          ja: "OpenRouter経由でフルマルチモーダル機能・ツール利用・YouTube動画処理に対応した最新のGemini 3.1 Flash Liteプレビューモデル",
+        },
       },
       {
         provider: "openrouter",
@@ -965,7 +993,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Efficient multimodal Gemini model for low-latency, high-volume workloads",
-        ja: "低レイテンシかつ高スループットのワークロード向けに最適化された効率的なマルチモーダルGeminiモデル",
+        i18n: {
+          ja: "低レイテンシかつ高スループットのワークロード向けに最適化された効率的なマルチモーダルGeminiモデル",
+        },
       },
       {
         provider: "openrouter",
@@ -977,7 +1007,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Gemini 3 Pro preview via OpenRouter with tool, image, video, and YouTube support (deprecated, use google/gemini-3.1-pro-preview)",
-        ja: "OpenRouter経由でツール利用・画像理解・動画・YouTube処理に対応したGemini 3 Proプレビュー（非推奨、google/gemini-3.1-pro-preview を使用）",
+        i18n: {
+          ja: "OpenRouter経由でツール利用・画像理解・動画・YouTube処理に対応したGemini 3 Proプレビュー（非推奨、google/gemini-3.1-pro-preview を使用）",
+        },
       },
       {
         provider: "openrouter",
@@ -991,7 +1023,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest Gemini 3.1 Pro preview via OpenRouter with tool, image, video, and YouTube support",
-        ja: "OpenRouter経由でツール利用・画像理解・動画・YouTube処理に対応した最新のGemini 3.1 Proプレビュー",
+        i18n: { ja: "OpenRouter経由でツール利用・画像理解・動画・YouTube処理に対応した最新のGemini 3.1 Proプレビュー" },
       },
       {
         provider: "openrouter",
@@ -1002,7 +1034,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the Google Gemini Flash family",
-        ja: "Google Gemini Flashファミリーの最新モデルへ常にリダイレクトされます",
+        i18n: { ja: "Google Gemini Flashファミリーの最新モデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -1014,7 +1046,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the Google Gemini Pro family",
-        ja: "Google Gemini Proファミリーの最新モデルへ常にリダイレクトされます",
+        i18n: { ja: "Google Gemini Proファミリーの最新モデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -1026,7 +1058,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "OpenRouter-hosted Google Gemma 4.31B IT model with tool use, vision, and structured output support (video disabled)",
-        ja: "動画非対応ながらツール利用・画像理解・構造化出力に対応するOpenRouter経由のGoogle Gemma 4.31B ITモデル",
+        i18n: {
+          ja: "動画非対応ながらツール利用・画像理解・構造化出力に対応するOpenRouter経由のGoogle Gemma 4.31B ITモデル",
+        },
       },
       {
         provider: "openrouter",
@@ -1037,7 +1071,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Free OpenRouter-hosted Google Gemma 4.31B IT model with tool use, vision, and structured output support (video disabled)",
-        ja: "動画非対応ながらツール利用・画像理解・構造化出力に対応するOpenRouter経由の無料版Google Gemma 4.31B ITモデル",
+        i18n: {
+          ja: "動画非対応ながらツール利用・画像理解・構造化出力に対応するOpenRouter経由の無料版Google Gemma 4.31B ITモデル",
+        },
       },
       {
         provider: "openrouter",
@@ -1047,7 +1083,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "State-of-the-art performance in complex tasks and problems, also great in role-playing and creative writing",
-        ja: "複雑なタスクや問題に優れた最先端性能を持ち、ロールプレイや創作にも秀でたモデル",
+        i18n: { ja: "複雑なタスクや問題に優れた最先端性能を持ち、ロールプレイや創作にも秀でたモデル" },
       },
       {
         provider: "openrouter",
@@ -1059,7 +1095,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Balanced Claude model with strong quality, speed, and cost tradeoffs",
-        ja: "品質・速度・コストのバランスに優れたClaudeモデル",
+        i18n: { ja: "品質・速度・コストのバランスに優れたClaudeモデル" },
       },
       {
         provider: "openrouter",
@@ -1068,7 +1104,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the Anthropic Claude Sonnet family",
-        ja: "Anthropic Claude Sonnetファミリーの最新モデルへ常にリダイレクトされます",
+        i18n: { ja: "Anthropic Claude Sonnetファミリーの最新モデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -1078,7 +1114,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the Anthropic Claude Opus family",
-        ja: "Anthropic Claude Opusファミリーの最新モデルへ常にリダイレクトされます",
+        i18n: { ja: "Anthropic Claude Opusファミリーの最新モデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -1090,7 +1126,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Lightweight version of claude-sonnet-4.5",
-        ja: "claude-sonnet-4.5の軽量版",
+        i18n: { ja: "claude-sonnet-4.5の軽量版" },
       },
       {
         provider: "openrouter",
@@ -1099,7 +1135,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the Anthropic Claude Haiku family",
-        ja: "Anthropic Claude Haikuファミリーの最新モデルへ常にリダイレクトされます",
+        i18n: { ja: "Anthropic Claude Haikuファミリーの最新モデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -1111,7 +1147,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "State-of-the-art performance in complex tasks and problems",
-        ja: "複雑なタスクや問題に優れた最先端性能",
+        i18n: { ja: "複雑なタスクや問題に優れた最先端性能" },
       },
       {
         provider: "openrouter",
@@ -1125,7 +1161,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "State-of-the-art performance, more conversational",
-        ja: "複雑なタスクや問題に優れた最先端性能",
+        i18n: { ja: "複雑なタスクや問題に優れた最先端性能" },
       },
       {
         provider: "openrouter",
@@ -1134,7 +1170,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Always resolves to OpenAI's latest Instant chat model used in ChatGPT",
-        ja: "ChatGPTで使用されるOpenAIの最新Instantチャットモデルへ常に解決されます",
+        i18n: { ja: "ChatGPTで使用されるOpenAIの最新Instantチャットモデルへ常に解決されます" },
       },
       {
         provider: "openrouter",
@@ -1144,7 +1180,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Mistral’s most capable model to date, cheap and multimodal",
-        ja: "Mistral史上最も高性能で、低コストなマルチモーダルモデル",
+        i18n: { ja: "Mistral史上最も高性能で、低コストなマルチモーダルモデル" },
       },
       {
         provider: "openrouter",
@@ -1152,7 +1188,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         isDeprecated: true,
         desc: "Lightweight tool-capable model designed for creative writing and role-playing",
-        ja: "創作（文章執筆・ロールプレイ）に特化した軽量ツール対応モデル",
+        i18n: { ja: "創作（文章執筆・ロールプレイ）に特化した軽量ツール対応モデル" },
       },
       {
         provider: "openrouter",
@@ -1162,7 +1198,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Multimodal lightweight general-purpose model from Mistral",
-        ja: "Mistralの軽量マルチモーダル汎用モデル",
+        i18n: { ja: "Mistralの軽量マルチモーダル汎用モデル" },
       },
       {
         provider: "openrouter",
@@ -1171,7 +1207,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isUncensored: true,
         isDeprecated: true,
         desc: "Free general-purpose model that also performs good role-play",
-        ja: "ロールプレイにも優れた無料の汎用モデル",
+        i18n: { ja: "ロールプレイにも優れた無料の汎用モデル" },
       },
       {
         provider: "openrouter",
@@ -1179,7 +1215,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isFree: true,
         isDeprecated: true,
         desc: "Free general-purpose model",
-        ja: "無料の汎用モデル",
+        i18n: { ja: "無料の汎用モデル" },
       },
       {
         provider: "openrouter",
@@ -1190,7 +1226,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isUncensored: true,
         isDeprecated: true,
         desc: "Free model for solving complex tasks and problems",
-        ja: "複雑なタスクや問題の解決に適した無料モデル",
+        i18n: { ja: "複雑なタスクや問題の解決に適した無料モデル" },
       },
       {
         provider: "openrouter",
@@ -1200,7 +1236,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         isDeprecated: true,
         desc: "Free multimodal model with enhanced reasoning and vision capabilities",
-        ja: "強化された推論とビジョン機能を備えた無料のマルチモーダルモデル",
+        i18n: { ja: "強化された推論とビジョン機能を備えた無料のマルチモーダルモデル" },
       },
       {
         provider: "openrouter",
@@ -1209,7 +1245,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         isDeprecated: true,
         desc: "Free lightweight model with thinking mode for reasoning and agent tasks",
-        ja: "推論とエージェントタスク向けのシンキングモードを備えた無料軽量モデル",
+        i18n: { ja: "推論とエージェントタスク向けのシンキングモードを備えた無料軽量モデル" },
       },
       {
         provider: "openrouter",
@@ -1218,7 +1254,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         isDeprecated: true,
         desc: "Free experimental model for creative storytelling and character interaction",
-        ja: "創作とキャラクター対話に特化した無料の実験モデル",
+        i18n: { ja: "創作とキャラクター対話に特化した無料の実験モデル" },
       },
       {
         provider: "openrouter",
@@ -1229,7 +1265,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Qwen 3.5 35B A3B model with tool use, vision, and structured output support (deprecated)",
-        ja: "ツール利用・画像理解・構造化出力に対応したQwen 3.5 35B A3Bモデル（非推奨）",
+        i18n: { ja: "ツール利用・画像理解・構造化出力に対応したQwen 3.5 35B A3Bモデル（非推奨）" },
       },
       {
         provider: "openrouter",
@@ -1242,7 +1278,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Qwen 3.5 27B model with tool use, vision, and structured output support",
-        ja: "ツール利用・画像理解・構造化出力に対応したQwen 3.5 27Bモデル",
+        i18n: { ja: "ツール利用・画像理解・構造化出力に対応したQwen 3.5 27Bモデル" },
       },
       {
         provider: "openrouter",
@@ -1255,7 +1291,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Fast Qwen 3.5 Flash (02-23) model with tool use, vision, and structured output support",
-        ja: "ツール利用・画像理解・構造化出力に対応した高速Qwen 3.5 Flash（02-23）モデル",
+        i18n: { ja: "ツール利用・画像理解・構造化出力に対応した高速Qwen 3.5 Flash（02-23）モデル" },
       },
       {
         provider: "openrouter",
@@ -1266,7 +1302,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Nemotron model with tool use and structured output support",
-        ja: "ツール利用と構造化出力に対応したNemotronモデル",
+        i18n: { ja: "ツール利用と構造化出力に対応したNemotronモデル" },
       },
       {
         provider: "openrouter",
@@ -1276,7 +1312,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Free Nemotron model with tool use and structured output support (deprecated, use non-free variant)",
-        ja: "ツール利用と構造化出力に対応した無料のNemotronモデル（非推奨、有料バージョンを使用）",
+        i18n: { ja: "ツール利用と構造化出力に対応した無料のNemotronモデル（非推奨、有料バージョンを使用）" },
       },
       {
         provider: "openrouter",
@@ -1286,7 +1322,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Moonshot AI's state-of-the-art native multimodal model",
-        ja: "Moonshot AIの最先端ネイティブ・マルチモーダルモデル",
+        i18n: { ja: "Moonshot AIの最先端ネイティブ・マルチモーダルモデル" },
       },
       {
         provider: "openrouter",
@@ -1298,7 +1334,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest Moonshot AI native multimodal model",
-        ja: "Moonshot AIの最新ネイティブ・マルチモーダルモデル",
+        i18n: { ja: "Moonshot AIの最新ネイティブ・マルチモーダルモデル" },
       },
       {
         provider: "openrouter",
@@ -1307,7 +1343,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Always redirects to the latest model in the MoonshotAI Kimi family",
-        ja: "MoonshotAI Kimiファミリーの最新モデルへ常にリダイレクトされます",
+        i18n: { ja: "MoonshotAI Kimiファミリーの最新モデルへ常にリダイレクトされます" },
       },
       {
         provider: "openrouter",
@@ -1318,21 +1354,23 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesVideos: true,
         supportsStructoutput: true,
         desc: "Cost-efficient omnimodal model for agentic tasks and image and video understanding",
-        ja: "エージェントタスクと画像・動画理解に対応するコスト効率の高いオムニモーダルモデル",
+        i18n: { ja: "エージェントタスクと画像・動画理解に対応するコスト効率の高いオムニモーダルモデル" },
       },
       {
         provider: "openrouter",
         codename: "aion-labs/aion-2.0",
         isDeprecated: true,
         desc: "Cheap role-play fine-tune of DeepSeek with no tools, vision, or structured output support",
-        ja: "ツール・画像理解・構造化出力に対応しない、DeepSeekベースの低コストなロールプレイ特化ファインチューニングモデル",
+        i18n: {
+          ja: "ツール・画像理解・構造化出力に対応しない、DeepSeekベースの低コストなロールプレイ特化ファインチューニングモデル",
+        },
       },
       {
         provider: "openrouter",
         codename: "account-setting",
         isDeprecated: true,
         desc: "Legacy codename (deprecated, use other-model)",
-        ja: "旧コードネーム（非推奨、other-modelを使用）",
+        i18n: { ja: "旧コードネーム（非推奨、other-modelを使用）" },
       },
       {
         provider: "openrouter",
@@ -1343,7 +1381,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesYoutube: true,
         supportsStructoutput: true,
         desc: "Advanced: Use any OpenRouter model by entering its codename",
-        ja: "上級者向け：コードネームを入力して任意のOpenRouterモデルを使用",
+        i18n: { ja: "上級者向け：コードネームを入力して任意のOpenRouterモデルを使用" },
       },
       {
         provider: "openrouter",
@@ -1355,7 +1393,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Extremely efficient and cheap multimodal model, recommended to pair with a blind model for image captioning",
-        ja: "非常に効率的で安価なマルチモーダルモデル、画像キャプション用にテキスト専用モデルとペアリングすることを推奨",
+        i18n: {
+          ja: "非常に効率的で安価なマルチモーダルモデル、画像キャプション用にテキスト専用モデルとペアリングすることを推奨",
+        },
       },
     ],
   },
@@ -1372,7 +1412,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast and cost-efficient default DeepSeek v4 model with tool support and structured output",
-        ja: "ツール利用と構造化出力に対応した、高速でコスト効率の良いデフォルトのDeepSeek v4モデル",
+        i18n: { ja: "ツール利用と構造化出力に対応した、高速でコスト効率の良いデフォルトのDeepSeek v4モデル" },
       },
       {
         provider: "deepseek",
@@ -1384,7 +1424,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Experimental DeepSeek v4 Flash model with image vision capabilities",
-        ja: "画像認識機能を持つ実験的なDeepSeek v4 Flashモデル",
+        i18n: { ja: "画像認識機能を持つ実験的なDeepSeek v4 Flashモデル" },
       },
       {
         provider: "deepseek",
@@ -1396,7 +1436,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Highly capable DeepSeek v4 model with tool support and structured output",
-        ja: "ツール利用と構造化出力に対応した、高性能なDeepSeek v4モデル",
+        i18n: { ja: "ツール利用と構造化出力に対応した、高性能なDeepSeek v4モデル" },
       },
       {
         provider: "deepseek",
@@ -1408,7 +1448,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "DeepSeek chat model for general text generation, seeded tool use, and JSON structured output (deprecated, use deepseek-v4-flash)",
-        ja: "汎用テキスト生成、シード済みツール利用、JSON構造化出力に対応したDeepSeekチャットモデル（非推奨、deepseek-v4-flashを使用）",
+        i18n: {
+          ja: "汎用テキスト生成、シード済みツール利用、JSON構造化出力に対応したDeepSeekチャットモデル（非推奨、deepseek-v4-flashを使用）",
+        },
       },
       {
         provider: "deepseek",
@@ -1422,7 +1464,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Reasoning-focused DeepSeek model with thinking mode, seeded tool use, and JSON structured output (deprecated, use deepseek-v4-flash)",
-        ja: "シンキングモード、シード済みツール利用、JSON構造化出力に対応した、推論特化のDeepSeekモデル（非推奨、deepseek-v4-flashを使用）",
+        i18n: {
+          ja: "シンキングモード、シード済みツール利用、JSON構造化出力に対応した、推論特化のDeepSeekモデル（非推奨、deepseek-v4-flashを使用）",
+        },
       },
     ],
   },
@@ -1437,7 +1481,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Default NVIDIA NIM chat model with tool support and structured output",
-        ja: "ツール利用と構造化出力に対応した、NVIDIA NIMのデフォルトチャットモデル",
+        i18n: { ja: "ツール利用と構造化出力に対応した、NVIDIA NIMのデフォルトチャットモデル" },
       },
       {
         provider: "nvidia",
@@ -1449,13 +1493,13 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Most capable multimodal NVIDIA NIM model in TomoriBot's curated set",
-        ja: "TomoriBotの厳選NVIDIA NIMセット内で最も高性能なマルチモーダルモデル",
+        i18n: { ja: "TomoriBotの厳選NVIDIA NIMセット内で最も高性能なマルチモーダルモデル" },
       },
       {
         provider: "nvidia",
         codename: "moonshotai/kimi-k2-instruct",
         desc: "General-purpose NVIDIA NIM text model without tool or structured-output support",
-        ja: "ツール利用や構造化出力に対応しない、NVIDIA NIMの汎用テキストモデル",
+        i18n: { ja: "ツール利用や構造化出力に対応しない、NVIDIA NIMの汎用テキストモデル" },
       },
       {
         provider: "nvidia",
@@ -1464,7 +1508,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Tool-capable NVIDIA NIM GLM model with structured output support",
-        ja: "ツール利用と構造化出力に対応した、NVIDIA NIMのGLMモデル",
+        i18n: { ja: "ツール利用と構造化出力に対応した、NVIDIA NIMのGLMモデル" },
       },
       {
         provider: "nvidia",
@@ -1473,7 +1517,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Latest tool-capable NVIDIA NIM GLM 5.2 model with structured output support",
-        ja: "ツール利用と構造化出力に対応した、最新のNVIDIA NIM GLM 5.2モデル",
+        i18n: { ja: "ツール利用と構造化出力に対応した、最新のNVIDIA NIM GLM 5.2モデル" },
       },
       {
         provider: "nvidia",
@@ -1481,7 +1525,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isFree: true,
         hasTools: true,
         desc: "Fast NVIDIA NIM chat model with tool support only",
-        ja: "ツール利用のみに対応した高速NVIDIA NIMチャットモデル",
+        i18n: { ja: "ツール利用のみに対応した高速NVIDIA NIMチャットモデル" },
       },
       {
         provider: "nvidia",
@@ -1490,7 +1534,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         isDeprecated: true,
         desc: "Vision-capable NVIDIA NIM Gemma model for image understanding",
-        ja: "画像理解に対応した、NVIDIA NIMのGemmaビジョンモデル",
+        i18n: { ja: "画像理解に対応した、NVIDIA NIMのGemmaビジョンモデル" },
       },
       {
         provider: "nvidia",
@@ -1500,7 +1544,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isFree: true,
         desc: "Vision-capable NVIDIA NIM Gemma 4.31B IT model with tool use and structured output (video disabled)",
-        ja: "動画非対応ながらツール利用と構造化出力に対応するNVIDIA NIM向けGemma 4.31B ITモデル",
+        i18n: { ja: "動画非対応ながらツール利用と構造化出力に対応するNVIDIA NIM向けGemma 4.31B ITモデル" },
       },
       {
         provider: "nvidia",
@@ -1510,7 +1554,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isFree: true,
         desc: "Fast and cost-efficient DeepSeek v4 model via NVIDIA NIM with tool support and structured output",
-        ja: "NVIDIA NIM経由でツール利用と構造化出力に対応した、高速でコスト効率の良いDeepSeek v4モデル",
+        i18n: { ja: "NVIDIA NIM経由でツール利用と構造化出力に対応した、高速でコスト効率の良いDeepSeek v4モデル" },
       },
       {
         provider: "nvidia",
@@ -1520,7 +1564,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isFree: true,
         desc: "DeepSeek v4 Flash 0731 version via NVIDIA NIM",
-        ja: "NVIDIA NIM経由のDeepSeek v4 Flash 0731バージョン",
+        i18n: { ja: "NVIDIA NIM経由のDeepSeek v4 Flash 0731バージョン" },
       },
       {
         provider: "nvidia",
@@ -1530,7 +1574,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isFree: true,
         desc: "MiniMax M3 Preview — multimodal MoE vision-language model with reasoning, coding, and tool-calling capabilities",
-        ja: "MiniMax M3 Preview — 推論・コーディング・ツール呼び出し対応のマルチモーダルMoEビジョン言語モデル",
+        i18n: {
+          ja: "MiniMax M3 Preview — 推論・コーディング・ツール呼び出し対応のマルチモーダルMoEビジョン言語モデル",
+        },
       },
       {
         provider: "nvidia",
@@ -1540,7 +1586,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isFree: true,
         desc: "Kimi K2.6 — 1T multimodal MoE for long-horizon coding, agentic tool use, and image/video understanding",
-        ja: "Kimi K2.6 — 長期コーディング・エージェントツール利用・画像/動画理解向け1TマルチモーダルMoEモデル",
+        i18n: {
+          ja: "Kimi K2.6 — 長期コーディング・エージェントツール利用・画像/動画理解向け1TマルチモーダルMoEモデル",
+        },
       },
       {
         provider: "nvidia",
@@ -1556,7 +1604,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isFree: true,
         desc: "Nemotron 3 Ultra 550B — open hybrid Mamba-Transformer MoE with 1M context for agentic reasoning, coding, and planning",
-        ja: "Nemotron 3 Ultra 550B — エージェント推論・コーディング・計画向けの1Mコンテキスト対応オープンハイブリッドMamba-Transformer MoEモデル",
+        i18n: {
+          ja: "Nemotron 3 Ultra 550B — エージェント推論・コーディング・計画向けの1Mコンテキスト対応オープンハイブリッドMamba-Transformer MoEモデル",
+        },
       },
       {
         provider: "nvidia",
@@ -1565,7 +1615,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isFree: true,
         desc: "Fast and lightweight Nemotron 3.5 Lightning 30B model for general-purpose applications",
-        ja: "汎用アプリケーション向けの高速で軽量なNemotron 3.5 Lightning 30Bモデル",
+        i18n: { ja: "汎用アプリケーション向けの高速で軽量なNemotron 3.5 Lightning 30Bモデル" },
       },
     ],
   },
@@ -1581,7 +1631,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Text-only GLM model great for roleplaying",
-        ja: "ロールプレイ向けに最適化されたテキスト専用GLMモデル",
+        i18n: { ja: "ロールプレイ向けに最適化されたテキスト専用GLMモデル" },
       },
       {
         provider: "zaicoding",
@@ -1593,7 +1643,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Vision-capable GLM model with image understanding, tool use, and structured output",
-        ja: "画像理解、ツール利用、構造化出力に対応したビジョン対応GLMモデル",
+        i18n: { ja: "画像理解、ツール利用、構造化出力に対応したビジョン対応GLMモデル" },
       },
       {
         provider: "zaicoding",
@@ -1605,7 +1655,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Fast vision-capable GLM model routed through the Z.ai Coding endpoint",
-        ja: "Z.ai Codingエンドポイント経由で利用する高速なビジョン対応GLMモデル",
+        i18n: { ja: "Z.ai Codingエンドポイント経由で利用する高速なビジョン対応GLMモデル" },
       },
       {
         provider: "zaicoding",
@@ -1619,7 +1669,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Reasoning-capable GLM model with thinking mode, tool use, and structured output",
-        ja: "シンキングモード、ツール利用、構造化出力に対応した推論対応GLMモデル",
+        i18n: { ja: "シンキングモード、ツール利用、構造化出力に対応した推論対応GLMモデル" },
       },
       {
         provider: "zaicoding",
@@ -1630,7 +1680,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast GLM model routed through the Z.ai Coding endpoint",
-        ja: "Z.ai Codingエンドポイント経由で利用する高速GLMモデル",
+        i18n: { ja: "Z.ai Codingエンドポイント経由で利用する高速GLMモデル" },
       },
       {
         provider: "zaicoding",
@@ -1642,7 +1692,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Most capable GLM model with advanced reasoning, tool use, and structured output",
-        ja: "高度な推論、ツール利用、構造化出力に対応した最も高性能なGLMモデル",
+        i18n: { ja: "高度な推論、ツール利用、構造化出力に対応した最も高性能なGLMモデル" },
       },
       {
         provider: "zaicoding",
@@ -1654,7 +1704,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Latest flagship GLM model with advanced reasoning and tool support",
-        ja: "最新のフラッグシップGLMモデル（高度な推論・ツール対応）",
+        i18n: { ja: "最新のフラッグシップGLMモデル（高度な推論・ツール対応）" },
       },
       {
         provider: "zaicoding",
@@ -1665,7 +1715,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast variant of GLM-5 with tool support",
-        ja: "GLM-5の高速版（ツール対応）",
+        i18n: { ja: "GLM-5の高速版（ツール対応）" },
       },
       {
         provider: "zaicoding",
@@ -1678,7 +1728,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Vision-capable GLM-5 Turbo tuned for long contexts and reliable tool chains",
-        ja: "長文コンテキスト対応と安定したツール連携に調整されたビジョン対応GLM-5 Turboモデル",
+        i18n: { ja: "長文コンテキスト対応と安定したツール連携に調整されたビジョン対応GLM-5 Turboモデル" },
       },
     ],
   },
@@ -1694,7 +1744,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Text-only GLM model great for roleplaying",
-        ja: "ロールプレイ向けに最適化されたテキスト専用GLMモデル",
+        i18n: { ja: "ロールプレイ向けに最適化されたテキスト専用GLMモデル" },
       },
       {
         provider: "zai",
@@ -1706,7 +1756,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Vision-capable GLM model from the general Z.ai API",
-        ja: "通常のZ.ai APIで利用するビジョン対応GLMモデル",
+        i18n: { ja: "通常のZ.ai APIで利用するビジョン対応GLMモデル" },
       },
       {
         provider: "zai",
@@ -1718,7 +1768,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Fast vision-capable GLM model from the general Z.ai API",
-        ja: "通常のZ.ai APIで利用する高速なビジョン対応GLMモデル",
+        i18n: { ja: "通常のZ.ai APIで利用する高速なビジョン対応GLMモデル" },
       },
       {
         provider: "zai",
@@ -1732,7 +1782,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Reasoning-capable GLM model from the general Z.ai API",
-        ja: "通常のZ.ai APIで利用する推論対応GLMモデル",
+        i18n: { ja: "通常のZ.ai APIで利用する推論対応GLMモデル" },
       },
       {
         provider: "zai",
@@ -1743,7 +1793,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast GLM model from the general Z.ai API",
-        ja: "通常のZ.ai APIで利用する高速GLMモデル",
+        i18n: { ja: "通常のZ.ai APIで利用する高速GLMモデル" },
       },
       {
         provider: "zai",
@@ -1755,7 +1805,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Most capable GLM model from the general Z.ai API",
-        ja: "通常のZ.ai APIで利用する最も高性能なGLMモデル",
+        i18n: { ja: "通常のZ.ai APIで利用する最も高性能なGLMモデル" },
       },
       {
         provider: "zai",
@@ -1767,7 +1817,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Latest flagship GLM model from the general Z.ai API",
-        ja: "通常のZ.ai APIで利用する最新のフラッグシップGLMモデル",
+        i18n: { ja: "通常のZ.ai APIで利用する最新のフラッグシップGLMモデル" },
       },
       {
         provider: "zai",
@@ -1778,7 +1828,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast variant of GLM-5 from the general Z.ai API",
-        ja: "通常のZ.ai APIで利用するGLM-5の高速版",
+        i18n: { ja: "通常のZ.ai APIで利用するGLM-5の高速版" },
       },
       {
         provider: "zai",
@@ -1791,7 +1841,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Vision-capable GLM-5 Turbo tuned for long contexts and reliable tool chains",
-        ja: "長文コンテキスト対応と安定したツール連携に調整されたビジョン対応GLM-5 Turboモデル",
+        i18n: { ja: "長文コンテキスト対応と安定したツール連携に調整されたビジョン対応GLM-5 Turboモデル" },
       },
     ],
   },
@@ -1808,7 +1858,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Fast and cost-efficient Claude model for general tasks",
-        ja: "汎用タスク向けの高速でコスト効率の良いClaudeモデル",
+        i18n: { ja: "汎用タスク向けの高速でコスト効率の良いClaudeモデル" },
       },
       {
         provider: "anthropic",
@@ -1821,7 +1871,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Balanced Claude model — best mix of quality, speed, and cost",
-        ja: "品質・速度・コストの最適なバランスを持つClaudeモデル",
+        i18n: { ja: "品質・速度・コストの最適なバランスを持つClaudeモデル" },
       },
       {
         provider: "anthropic",
@@ -1835,7 +1885,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Most capable Claude model with extended thinking for complex reasoning",
-        ja: "複雑な推論向けの拡張思考機能を持つ最高性能のClaudeモデル",
+        i18n: { ja: "複雑な推論向けの拡張思考機能を持つ最高性能のClaudeモデル" },
       },
       {
         provider: "anthropic",
@@ -1849,7 +1899,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Most capable Claude model with extended thinking for complex reasoning",
-        ja: "複雑な推論向けの拡張思考機能を持つ最高性能のClaudeモデル",
+        i18n: { ja: "複雑な推論向けの拡張思考機能を持つ最高性能のClaudeモデル" },
       },
       {
         provider: "anthropic",
@@ -1862,7 +1912,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Next-generation intelligence for long-running agents",
-        ja: "長時間実行エージェント向けの次世代インテリジェンス",
+        i18n: { ja: "長時間実行エージェント向けの次世代インテリジェンス" },
       },
       {
         provider: "anthropic",
@@ -1876,7 +1926,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Next-generation flagship Claude model for complex reasoning and long-running agents",
-        ja: "複雑な推論と長時間実行エージェント向けの次世代フラッグシップClaudeモデル",
+        i18n: { ja: "複雑な推論と長時間実行エージェント向けの次世代フラッグシップClaudeモデル" },
       },
       {
         provider: "anthropic",
@@ -1889,7 +1939,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         desc: "Next-generation balanced Claude model for coding, reasoning, and agentic tasks",
-        ja: "コーディング・推論・エージェントタスク向けの次世代バランス型Claudeモデル",
+        i18n: { ja: "コーディング・推論・エージェントタスク向けの次世代バランス型Claudeモデル" },
       },
     ],
   },
@@ -1905,7 +1955,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isFree: true,
         isUncensored: true,
         desc: "Self-hosted OpenAI-compatible endpoint (Ollama, KoboldCPP, vLLM, LocalAI)",
-        ja: "セルフホスト型OpenAI互換エンドポイント（Ollama、KoboldCPP、vLLM、LocalAI）",
+        i18n: { ja: "セルフホスト型OpenAI互換エンドポイント（Ollama、KoboldCPP、vLLM、LocalAI）" },
       },
     ],
   },
@@ -1920,33 +1970,37 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "gemini-2.5-flash-image",
         isDefault: true,
         desc: "Fast and efficient image generation model with balanced quality and speed",
-        ja: "品質と速度のバランスが取れた高速で効率的な画像生成モデル",
+        i18n: { ja: "品質と速度のバランスが取れた高速で効率的な画像生成モデル" },
       },
       {
         provider: "google",
         codename: "gemini-3.1-flash-image",
         desc: "Latest fast image generation model with Gemini 3.1 Flash",
-        ja: "Gemini 3.1 Flashによる最新の高速画像生成モデル",
+        i18n: { ja: "Gemini 3.1 Flashによる最新の高速画像生成モデル" },
       },
       {
         provider: "google",
         codename: "gemini-3.1-flash-image-preview",
         isDeprecated: true,
         desc: "Latest fast image generation preview model with Gemini 3.1 Flash (deprecated, use gemini-3.1-flash-image)",
-        ja: "Gemini 3.1 Flashによる最新の高速画像生成プレビューモデル（非推奨、gemini-3.1-flash-imageを使用）",
+        i18n: {
+          ja: "Gemini 3.1 Flashによる最新の高速画像生成プレビューモデル（非推奨、gemini-3.1-flash-imageを使用）",
+        },
       },
       {
         provider: "google",
         codename: "gemini-3-pro-image",
         desc: "Advanced image generation model with higher resolution support (1K/2K/4K) and enhanced quality",
-        ja: "高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル",
+        i18n: { ja: "高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル" },
       },
       {
         provider: "google",
         codename: "gemini-3-pro-image-preview",
         isDeprecated: true,
         desc: "Advanced image generation model with higher resolution support (1K/2K/4K) and enhanced quality (deprecated, use gemini-3-pro-image)",
-        ja: "高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル（非推奨、gemini-3-pro-imageを使用）",
+        i18n: {
+          ja: "高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル（非推奨、gemini-3-pro-imageを使用）",
+        },
       },
     ],
   },
@@ -1958,33 +2012,33 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "google/gemini-2.5-flash-image",
         isDefault: true,
         desc: "Fast and efficient image generation via OpenRouter with balanced quality and speed",
-        ja: "OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成",
+        i18n: { ja: "OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成" },
       },
       {
         provider: "openrouter",
         codename: "google/gemini-3.1-flash-image-preview",
         desc: "Latest fast image generation via OpenRouter with Gemini 3.1 Flash Image Preview",
-        ja: "Gemini 3.1 Flash Image PreviewによるOpenRouter経由の最新高速画像生成",
+        i18n: { ja: "Gemini 3.1 Flash Image PreviewによるOpenRouter経由の最新高速画像生成" },
       },
       {
         provider: "openrouter",
         codename: "google/gemini-3.1-flash-image",
         isDeprecated: true,
         desc: "Not a valid OpenRouter model ID (deprecated, use google/gemini-3.1-flash-image-preview)",
-        ja: "有効なOpenRouterモデルIDではありません（非推奨、google/gemini-3.1-flash-image-previewを使用）",
+        i18n: { ja: "有効なOpenRouterモデルIDではありません（非推奨、google/gemini-3.1-flash-image-previewを使用）" },
       },
       {
         provider: "openrouter",
         codename: "google/gemini-3-pro-image-preview",
         desc: "Advanced image generation via OpenRouter with enhanced quality and resolution options",
-        ja: "OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成",
+        i18n: { ja: "OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成" },
       },
       {
         provider: "openrouter",
         codename: "google/gemini-3-pro-image",
         isDeprecated: true,
         desc: "Not a valid OpenRouter model ID (deprecated, use google/gemini-3-pro-image-preview)",
-        ja: "有効なOpenRouterモデルIDではありません（非推奨、google/gemini-3-pro-image-previewを使用）",
+        i18n: { ja: "有効なOpenRouterモデルIDではありません（非推奨、google/gemini-3-pro-image-previewを使用）" },
       },
     ],
   },
@@ -1996,33 +2050,37 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "gemini-2.5-flash-image",
         isDefault: true,
         desc: "Fast and efficient Gemini image generation via Vertex AI with balanced quality and speed",
-        ja: "Vertex AI経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル",
+        i18n: { ja: "Vertex AI経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル" },
       },
       {
         provider: "vertex",
         codename: "gemini-3.1-flash-image",
         desc: "Latest fast image generation via Vertex AI with Gemini 3.1 Flash Image",
-        ja: "Gemini 3.1 Flash ImageによるVertex AI経由の最新高速画像生成",
+        i18n: { ja: "Gemini 3.1 Flash ImageによるVertex AI経由の最新高速画像生成" },
       },
       {
         provider: "vertex",
         codename: "gemini-3.1-flash-image-preview",
         isDeprecated: true,
         desc: "Latest fast image generation via Vertex AI with Gemini 3.1 Flash Image Preview (deprecated, use gemini-3.1-flash-image)",
-        ja: "Gemini 3.1 Flash Image PreviewによるVertex AI経由の最新高速画像生成（非推奨、gemini-3.1-flash-imageを使用）",
+        i18n: {
+          ja: "Gemini 3.1 Flash Image PreviewによるVertex AI経由の最新高速画像生成（非推奨、gemini-3.1-flash-imageを使用）",
+        },
       },
       {
         provider: "vertex",
         codename: "gemini-3-pro-image",
         desc: "Advanced image generation via Vertex AI with enhanced quality and resolution options",
-        ja: "Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成",
+        i18n: { ja: "Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成" },
       },
       {
         provider: "vertex",
         codename: "gemini-3-pro-image-preview",
         isDeprecated: true,
         desc: "Advanced image generation via Vertex AI with enhanced quality and resolution options (deprecated, use gemini-3-pro-image)",
-        ja: "Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、gemini-3-pro-imageを使用）",
+        i18n: {
+          ja: "Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、gemini-3-pro-imageを使用）",
+        },
       },
     ],
   },
@@ -2034,45 +2092,49 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "gemini-2.5-flash-image",
         isDefault: true,
         desc: "Fast and efficient Gemini image generation via Vertex AI Express with balanced quality and speed",
-        ja: "Vertex AI Express経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル",
+        i18n: { ja: "Vertex AI Express経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル" },
       },
       {
         provider: "vertexexpress",
         codename: "gemini-3.1-flash-image",
         desc: "Latest fast image generation via Vertex AI Express with Gemini 3.1 Flash Image",
-        ja: "Gemini 3.1 Flash ImageによるVertex AI Express経由の最新高速画像生成",
+        i18n: { ja: "Gemini 3.1 Flash ImageによるVertex AI Express経由の最新高速画像生成" },
       },
       {
         provider: "vertexexpress",
         codename: "gemini-3.1-flash-image-preview",
         isDeprecated: true,
         desc: "Latest fast image generation via Vertex AI Express with Gemini 3.1 Flash Image Preview (deprecated, use gemini-3.1-flash-image)",
-        ja: "Gemini 3.1 Flash Image PreviewによるVertex AI Express経由の最新高速画像生成（非推奨、gemini-3.1-flash-imageを使用）",
+        i18n: {
+          ja: "Gemini 3.1 Flash Image PreviewによるVertex AI Express経由の最新高速画像生成（非推奨、gemini-3.1-flash-imageを使用）",
+        },
       },
       {
         provider: "vertexexpress",
         codename: "gemini-3-pro-image",
         desc: "Advanced image generation via Vertex AI Express with enhanced quality and resolution options",
-        ja: "Vertex AI Express経由の強化された品質と解像度オプションを備えた高度な画像生成",
+        i18n: { ja: "Vertex AI Express経由の強化された品質と解像度オプションを備えた高度な画像生成" },
       },
       {
         provider: "vertexexpress",
         codename: "gemini-3-pro-image-preview",
         isDeprecated: true,
         desc: "Advanced image generation via Vertex AI Express with enhanced quality and resolution options (deprecated, use gemini-3-pro-image)",
-        ja: "Vertex AI Express経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、gemini-3-pro-imageを使用）",
+        i18n: {
+          ja: "Vertex AI Express経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、gemini-3-pro-imageを使用）",
+        },
       },
       {
         provider: "openrouter",
         codename: "openai/gpt-5-image-mini",
         desc: "Lightweight OpenAI image generation model via OpenRouter",
-        ja: "OpenRouter経由の軽量なOpenAI画像生成モデル",
+        i18n: { ja: "OpenRouter経由の軽量なOpenAI画像生成モデル" },
       },
       {
         provider: "openrouter",
         codename: "bytedance-seed/seedream-4.5",
         desc: "Latest in-house image generation model developed by ByteDance. Cheap and high performance",
-        ja: "ByteDanceが開発した最新の自社製画像生成モデル。低コストかつ高性能",
+        i18n: { ja: "ByteDanceが開発した最新の自社製画像生成モデル。低コストかつ高性能" },
       },
     ],
   },
@@ -2084,7 +2146,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "zai/glm-image",
         isDefault: true,
         desc: "Z.ai native image generation model with HD quality output",
-        ja: "HD品質の出力に対応したZ.aiネイティブ画像生成モデル",
+        i18n: { ja: "HD品質の出力に対応したZ.aiネイティブ画像生成モデル" },
       },
     ],
   },
@@ -2097,7 +2159,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         isDefault: true,
         isFree: true,
         desc: "NVIDIA-hosted FLUX.1-dev image generation model",
-        ja: "NVIDIAホストのFLUX.1-dev画像生成モデル",
+        i18n: { ja: "NVIDIAホストのFLUX.1-dev画像生成モデル" },
       },
       {
         // NVIDIA retired the hosted endpoint on 2026-04-15; every request now 404s.
@@ -2105,7 +2167,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "stabilityai/stable-diffusion-3-medium",
         isDeprecated: true,
         desc: "Retired by NVIDIA (not selectable)",
-        ja: "NVIDIAにより提供終了（選択不可）",
+        i18n: { ja: "NVIDIAにより提供終了（選択不可）" },
       },
     ],
   },
@@ -2117,21 +2179,21 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "nai-diffusion-3-furry",
         isUncensored: true,
         desc: "NovelAI furry-specialized diffusion model",
-        ja: "NovelAIのファーリー特化型拡散モデル",
+        i18n: { ja: "NovelAIのファーリー特化型拡散モデル" },
       },
       {
         provider: "novelai",
         codename: "nai-diffusion-4-5-full",
         isUncensored: true,
         desc: "NovelAI Diffusion 4.5 full model with uncensored generation",
-        ja: "NovelAI Diffusion 4.5 フルモデル（無検閲生成対応）",
+        i18n: { ja: "NovelAI Diffusion 4.5 フルモデル（無検閲生成対応）" },
       },
       {
         provider: "novelai",
         codename: "nai-diffusion-4-5-curated",
         isUncensored: true,
         desc: "NovelAI Diffusion 4.5 curated model with refined outputs",
-        ja: "NovelAI Diffusion 4.5 キュレーションモデル（洗練された出力）",
+        i18n: { ja: "NovelAI Diffusion 4.5 キュレーションモデル（洗練された出力）" },
       },
       {
         provider: "novelai",
@@ -2139,14 +2201,14 @@ export const imageSections: ModelSection<ImageInput>[] = [
         isDefault: true,
         isUncensored: true,
         desc: "NovelAI Diffusion V5 full model with uncensored generation",
-        ja: "NovelAI Diffusion V5 フルモデル（無検閲生成対応）",
+        i18n: { ja: "NovelAI Diffusion V5 フルモデル（無検閲生成対応）" },
       },
       {
         provider: "novelai",
         codename: "nai-diffusion-5-curated",
         isUncensored: true,
         desc: "NovelAI Diffusion V5 curated model with refined outputs",
-        ja: "NovelAI Diffusion V5 キュレーションモデル（洗練された出力）",
+        i18n: { ja: "NovelAI Diffusion V5 キュレーションモデル（洗練された出力）" },
       },
     ],
   },
@@ -2161,19 +2223,19 @@ export const videoSections: ModelSection<VideoInput>[] = [
         codename: "veo-3.1-generate-preview",
         isDefault: true,
         desc: "Google Veo 3.1 — 8-second 720p/1080p/4K videos with native audio generation",
-        ja: "Google Veo 3.1 — ネイティブオーディオ生成付き8秒の720p/1080p/4K動画",
+        i18n: { ja: "Google Veo 3.1 — ネイティブオーディオ生成付き8秒の720p/1080p/4K動画" },
       },
       {
         provider: "google",
         codename: "veo-3.1-fast-generate-preview",
         desc: "Google Veo 3.1 Fast — faster video generation with reduced quality",
-        ja: "Google Veo 3.1 Fast — 品質を抑えた高速動画生成",
+        i18n: { ja: "Google Veo 3.1 Fast — 品質を抑えた高速動画生成" },
       },
       {
         provider: "google",
         codename: "veo-3.1-lite-generate-preview",
         desc: "Google Veo 3.1 Lite — lightweight video generation (no 4K support)",
-        ja: "Google Veo 3.1 Lite — 軽量な動画生成（4K非対応）",
+        i18n: { ja: "Google Veo 3.1 Lite — 軽量な動画生成（4K非対応）" },
       },
     ],
   },
@@ -2185,25 +2247,25 @@ export const videoSections: ModelSection<VideoInput>[] = [
         codename: "bytedance/seedance-1-5-pro",
         isDefault: true,
         desc: "ByteDance Seedance 1.5 Pro — high-quality video generation with 4-12s duration",
-        ja: "ByteDance Seedance 1.5 Pro — 4〜12秒の高品質動画生成",
+        i18n: { ja: "ByteDance Seedance 1.5 Pro — 4〜12秒の高品質動画生成" },
       },
       {
         provider: "openrouter",
         codename: "google/veo-3.1",
         desc: "Google Veo 3.1 via OpenRouter — 8-second videos with native audio",
-        ja: "OpenRouter経由のGoogle Veo 3.1 — ネイティブオーディオ付き8秒動画",
+        i18n: { ja: "OpenRouter経由のGoogle Veo 3.1 — ネイティブオーディオ付き8秒動画" },
       },
       {
         provider: "openrouter",
         codename: "alibaba/wan-2.6",
         desc: "Alibaba Wan 2.6 — versatile video generation with multiple resolutions",
-        ja: "Alibaba Wan 2.6 — 複数解像度対応の多機能動画生成",
+        i18n: { ja: "Alibaba Wan 2.6 — 複数解像度対応の多機能動画生成" },
       },
       {
         provider: "openrouter",
         codename: "openai/sora-2-pro",
         desc: "OpenAI Sora 2 Pro — high-fidelity video generation up to 20 seconds",
-        ja: "OpenAI Sora 2 Pro — 最大20秒の高忠実度動画生成",
+        i18n: { ja: "OpenAI Sora 2 Pro — 最大20秒の高忠実度動画生成" },
       },
     ],
   },
@@ -2215,7 +2277,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         codename: "cogvideox-3",
         isDefault: true,
         desc: "CogVideoX-3 — Z.ai video generation with up to 4K resolution and audio support",
-        ja: "CogVideoX-3 — 最大4K解像度とオーディオ対応のZ.ai動画生成",
+        i18n: { ja: "CogVideoX-3 — 最大4K解像度とオーディオ対応のZ.ai動画生成" },
       },
     ],
   },
@@ -2230,7 +2292,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         codename: "gemini-embedding-001",
         family: "gemini-embedding-001",
         desc: "Gemini embedding model for document retrieval",
-        ja: "文書検索向けのGemini埋め込みモデル",
+        i18n: { ja: "文書検索向けのGemini埋め込みモデル" },
       },
       {
         provider: "google",
@@ -2238,14 +2300,14 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "gemini-embedding-2",
         isDefault: true,
         desc: "Default Gemini embedding model for document retrieval",
-        ja: "文書検索向けのGeminiデフォルト埋め込みモデル",
+        i18n: { ja: "文書検索向けのGeminiデフォルト埋め込みモデル" },
       },
       {
         provider: "vertex",
         codename: "gemini-embedding-001",
         family: "gemini-embedding-001",
         desc: "Gemini embedding model for document retrieval via Vertex AI",
-        ja: "Vertex AI経由の文書検索向けGemini埋め込みモデル",
+        i18n: { ja: "Vertex AI経由の文書検索向けGemini埋め込みモデル" },
       },
       {
         provider: "vertex",
@@ -2253,7 +2315,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "gemini-embedding-2",
         isDefault: true,
         desc: "Default Gemini embedding model for document retrieval via Vertex AI",
-        ja: "Vertex AI経由の文書検索向けGeminiデフォルト埋め込みモデル",
+        i18n: { ja: "Vertex AI経由の文書検索向けGeminiデフォルト埋め込みモデル" },
       },
     ],
   },
@@ -2265,14 +2327,14 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         codename: "google/gemini-embedding-001",
         family: "gemini-embedding-001",
         desc: "Gemini embedding model via OpenRouter (same family as Google)",
-        ja: "OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）",
+        i18n: { ja: "OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）" },
       },
       {
         provider: "openrouter",
         codename: "google/gemini-embedding-2",
         family: "gemini-embedding-2",
         desc: "Gemini embedding model via OpenRouter (same family as Google)",
-        ja: "OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）",
+        i18n: { ja: "OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）" },
       },
       {
         provider: "openrouter",
@@ -2280,14 +2342,14 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "multilingual-e5-large",
         isDefault: true,
         desc: "Default multilingual embedding model via OpenRouter",
-        ja: "OpenRouter経由のデフォルト多言語埋め込みモデル",
+        i18n: { ja: "OpenRouter経由のデフォルト多言語埋め込みモデル" },
       },
       {
         provider: "openrouter",
         codename: "perplexity/pplx-embed-v1-4b",
         family: "pplx-embed-v1-4b",
         desc: "Perplexity embedding model via OpenRouter",
-        ja: "OpenRouter経由のPerplexity埋め込みモデル",
+        i18n: { ja: "OpenRouter経由のPerplexity埋め込みモデル" },
       },
       {
         provider: "openrouter",
@@ -2295,7 +2357,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "qwen3-embedding-8b",
         isDeprecated: true,
         desc: "Deprecated embedding model (not selectable)",
-        ja: "非推奨の埋め込みモデル（選択不可）",
+        i18n: { ja: "非推奨の埋め込みモデル（選択不可）" },
       },
       {
         provider: "openrouter",
@@ -2303,7 +2365,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "text-embedding-3-small",
         isDeprecated: true,
         desc: "Deprecated embedding model (not selectable)",
-        ja: "非推奨の埋め込みモデル（選択不可）",
+        i18n: { ja: "非推奨の埋め込みモデル（選択不可）" },
       },
       {
         provider: "nvidia",
@@ -2311,7 +2373,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "nv-embed-v1",
         isDefault: true,
         desc: "Default NVIDIA NIM embedding model for retrieval and document indexing",
-        ja: "検索と文書インデックス向けのNVIDIA NIMデフォルト埋め込みモデル",
+        i18n: { ja: "検索と文書インデックス向けのNVIDIA NIMデフォルト埋め込みモデル" },
       },
     ],
   },

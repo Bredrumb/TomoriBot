@@ -15,6 +15,8 @@ This guide walks through adding a new column to an existing TomoriBot database t
 
 2. Update the Zod schema and TypeScript types in `src/types/db/schema.ts` to include the new field.
 
+   For model and preset descriptions, use the existing nullable `descriptions JSONB` locale map rather than adding a language column. Add translations to the typed seed catalog's `i18n` field; keep the English source in `desc`. The catalog seeders write both JSONB and the legacy columns during the read-through release.
+
 3. Wire read/write usage in the relevant `src/utils/db/` module. Use Bun SQL template literals:
 
    ```ts

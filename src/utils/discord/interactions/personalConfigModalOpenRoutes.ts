@@ -422,6 +422,7 @@ export async function handlePersonalConfigModalOpen(
         cachedScope.userId,
         provider,
         route.capability,
+        route.locale,
       );
 
       if (availableModels.length === 0) {
@@ -532,6 +533,7 @@ export async function handlePersonalConfigModalOpen(
       cachedScope.userId,
       route.provider,
       route.capability,
+      route.locale,
     );
     const start = route.start;
     if (

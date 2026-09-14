@@ -13,7 +13,7 @@ import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 import { promptPartDescription, promptPartLabel } from "@/utils/discord/ui/modalPromptPartLabels";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 
 const LABEL = 18 as const;
 const CHANNEL_SELECT = 8 as const;
@@ -131,7 +131,10 @@ export function buildConfigChannelTextModelModal(
           options: models.map((model) => ({
             label: safeSelectOptionText(model.llm_codename, 100),
             value: model.llm_codename,
-            description: model.llm_description ? safeSelectOptionText(model.llm_description, 100) : undefined,
+            description: safeSelectOptionText(
+              resolveDescription(model.descriptions, locale, model.llm_description) ?? "",
+              100,
+            ),
             default: model.llm_id === currentModelId,
           })),
         },

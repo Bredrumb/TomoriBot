@@ -259,6 +259,7 @@ export async function handlePersonalConfigModelRoutes(context: PersonalConfigPos
       context.scope.userId,
       route.provider,
       route.capability,
+      route.locale,
     );
     const validModel = availableModels.find((m) => m.id === modelId);
 
@@ -356,6 +357,7 @@ export async function handlePersonalConfigModelRoutes(context: PersonalConfigPos
       context.scope.userId,
       route.provider,
       route.capability,
+      route.locale,
     );
 
     const start = route.chooserPage * PERSONAL_MODEL_PAGE_SIZE;
@@ -397,6 +399,7 @@ export async function handlePersonalConfigModelRoutes(context: PersonalConfigPos
       context.scope.userId,
       route.provider,
       route.capability,
+      route.locale,
     );
     // Counting through the renderer's own builder keeps the bound check on the list the reader is
     // actually paging: an expanded provider contributes a page per slice, not a single entry.

@@ -61,6 +61,7 @@ export interface PersonalConfigRouteDependencies {
     userId: number,
     provider: string,
     capability: PersonalConfigManagedCapability,
+    locale?: string,
   ): Promise<Array<{ id: number; name: string; description?: string }>>;
   loadActiveSpotlights(serverId: number, userId: number): Promise<PersonalSpotlightStatus[]>;
   loadGuildPersonas(guildId: string): Promise<Array<{ id: number; name: string; isAlter: boolean }>>;
@@ -316,6 +317,7 @@ export async function repaint(
         scope.userId,
         selectedModelProvider,
         selectedCapability,
+        options.locale,
       );
       modelTotalCount = models.length;
     } catch {

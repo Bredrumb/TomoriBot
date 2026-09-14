@@ -419,7 +419,7 @@ export async function handleConfigModelModalOpen(
       return true;
     }
 
-    const models = await dependencies.loadModelChoices(state, capability, provider);
+    const models = await dependencies.loadModelChoices(state, capability, provider, locale);
     if (models.length === 0) {
       await interaction.reply({
         content: localizer(locale, "commands.model.text.no_models_description", {
@@ -518,7 +518,7 @@ export async function handleConfigModelModalOpen(
     return true;
   }
 
-  const options = await dependencies.loadFallbackOptions(state, decoded.provider);
+  const options = await dependencies.loadFallbackOptions(state, decoded.provider, locale);
   if (options.length === 0) {
     await interaction.reply({
       content: localizer(locale, "commands.model.fallback.no_models_description"),

@@ -307,8 +307,9 @@ export interface ConfigRouteDependencies {
     state: TomoriState,
     capability: ConfigCatalogModelCapability,
     provider: string,
+    locale: string,
   ): Promise<ConfigModelChoice[]>;
-  loadFallbackOptions(state: TomoriState, provider: string): Promise<ConfigFallbackOption[]>;
+  loadFallbackOptions(state: TomoriState, provider: string, locale: string): Promise<ConfigFallbackOption[]>;
   loadModelProviders(state: TomoriState, capability: ConfigModelCapability): Promise<string[]>;
   createGuildIdentity(guildId: string, interaction: GlobalRoutableInteraction): GuildIdentityPort;
   recordAction(input: RecordPanelActionInput): void;
