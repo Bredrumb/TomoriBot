@@ -312,14 +312,48 @@ const nonDefaultLocalePatterns = (suffix: string) =>
   DOCS_LOCALES.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID).map((locale) => `${locale.id}${suffix}`);
 
 /**
- * Sitemap filter for URLs that must not be advertised: internal wiki pages and every untranslated
- * locale route. Fallback routes are not knowable from a URL alone, and leaving a `noindex` URL in
- * the sitemap makes Search Console report "Submitted URL marked 'noindex'", so anything under a
- * non-default locale is held back until its translation exists.
+ * Sitemap filter for URLs that must not be advertised: internal wiki pages and every locale route
+ * that only serves the default locale's content. A `noindex` URL left in the sitemap makes Search
+ * Console report "Submitted URL marked 'noindex'", so a fallback has to stay out while the real
+ * translations under the same locale root stay in.
  */
-const nonDefaultRootPattern = new RegExp(`^/(?:${DOCS_LOCALES.map((locale) => locale.id).join("|")})/`);
+const fallbackRoutePattern = buildFallbackRoutePattern();
+
+function buildFallbackRoutePattern() {
+  const fallbacks: string[] = [];
+
+  // Walked from the default locale's tree because a fallback exists only in the build output: the
+  // route is generated for every default-locale page that a locale has no file for, so the locale
+  // tree by itself cannot list them.
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolutePath);
+        continue;
+      }
+      if (!isMarkdownFile(entry.name)) continue;
+
+      const relativePath = relative(defaultLocaleTarget, absolutePath).replaceAll("\\", "/");
+      const slug = relativePath.replace(/README\.mdx?$/i, "index").replace(/\.mdx?$/i, "");
+      const route = slug.replace(/(^|\/)index$/, "").replace(/\/+$/, "");
+
+      for (const locale of sidebarLocales) {
+        if (locale.id === DEFAULT_DOCS_LOCALE_ID) continue;
+        if (existsSync(join(docsTarget, locale.id, relativePath))) continue;
+        fallbacks.push(`^/${locale.id}/${route ? `${route}/` : ""}$`);
+      }
+    }
+  };
+
+  walk(defaultLocaleTarget);
+
+  // An empty alternation matches everything, so a site with no fallbacks gets a pattern that cannot.
+  return new RegExp(fallbacks.length > 0 ? fallbacks.join("|") : "(?!)");
+}
+
 const isInternalOrFallbackPath = (pathname: string): boolean =>
-  /\/wiki(\/|$)/.test(pathname) || nonDefaultRootPattern.test(pathname);
+  /\/wiki(\/|$)/.test(pathname) || fallbackRoutePattern.test(pathname);
 
 export default defineConfig({
   site: "https://docs.tomoribot.app",
