@@ -10,6 +10,8 @@ import {
   DOCS_LOCALES,
   PUBLISHED_DOCS_LOCALES,
   getDocsLocaleConfig,
+  normalizePageId,
+  pageIdToRoute,
 } from "../../src/constants/docsLocales";
 
 // Starlight's autogenerate resolves pages by stripping the hardcoded
@@ -322,9 +324,33 @@ const fallbackRoutePattern = buildFallbackRoutePattern();
 function buildFallbackRoutePattern() {
   const fallbacks: string[] = [];
 
+  // Counterpart ids are collected once per locale, compared as normalized page ids rather than raw
+  // paths. A translation authored as `index.md` where the default locale uses `README.mdx` is the
+  // same page, and a path comparison would wrongly drop it from the sitemap as a fallback.
+  const localePageIds = new Map(
+    sidebarLocales
+      .filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID)
+      .map((locale) => [locale.id, collectPageIds(resolve(docsTarget, locale.id))]),
+  );
+
   // Walked from the default locale's tree because a fallback exists only in the build output: the
-  // route is generated for every default-locale page that a locale has no file for, so the locale
+  // route is generated for every default-locale page that a locale has no file for, so a locale
   // tree by itself cannot list them.
+  for (const [pageId, route] of collectPageIds(defaultLocaleTarget)) {
+    for (const [localeId, pageIds] of localePageIds) {
+      if (pageIds.has(pageId)) continue;
+      fallbacks.push(`^/${localeId}/${route ? `${route}/` : ""}$`);
+    }
+  }
+
+  // An empty alternation matches everything, so a site with no fallbacks gets a pattern that cannot.
+  return new RegExp(fallbacks.length > 0 ? fallbacks.join("|") : "(?!)");
+}
+
+/** Normalized page ids and their routes for one locale tree. */
+function collectPageIds(localeRoot: string): Map<string, string> {
+  const pages = new Map<string, string>();
+
   const walk = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const absolutePath = join(directory, entry.name);
@@ -334,22 +360,13 @@ function buildFallbackRoutePattern() {
       }
       if (!isMarkdownFile(entry.name)) continue;
 
-      const relativePath = relative(defaultLocaleTarget, absolutePath).replaceAll("\\", "/");
-      const slug = relativePath.replace(/README\.mdx?$/i, "index").replace(/\.mdx?$/i, "");
-      const route = slug.replace(/(^|\/)index$/, "").replace(/\/+$/, "");
-
-      for (const locale of sidebarLocales) {
-        if (locale.id === DEFAULT_DOCS_LOCALE_ID) continue;
-        if (existsSync(join(docsTarget, locale.id, relativePath))) continue;
-        fallbacks.push(`^/${locale.id}/${route ? `${route}/` : ""}$`);
-      }
+      const pageId = normalizePageId(relative(localeRoot, absolutePath));
+      pages.set(pageId, pageIdToRoute(pageId));
     }
   };
 
-  walk(defaultLocaleTarget);
-
-  // An empty alternation matches everything, so a site with no fallbacks gets a pattern that cannot.
-  return new RegExp(fallbacks.length > 0 ? fallbacks.join("|") : "(?!)");
+  walk(localeRoot);
+  return pages;
 }
 
 const isInternalOrFallbackPath = (pathname: string): boolean =>

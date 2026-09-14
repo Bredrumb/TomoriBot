@@ -22,7 +22,12 @@ export interface DocsLocaleNotices {
   draftsBody: string;
   /** Page is a generated translation of a human-written source page. */
   translatedTitle: string;
-  /** `{english}` is replaced with the link to the default-locale page. */
+  /** Visible text of the link to the default-locale page, which the locale owns. */
+  englishLinkText: string;
+  /**
+   * `{english}` is replaced with a link to the default-locale page. The surrounding sentence stays
+   * in the template because a language may need different wording or a different link position.
+   */
   translatedBody: string;
 }
 
@@ -52,6 +57,7 @@ const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
     draftsBody:
       "This specific page uses temporary drafts written and maintained by Generative AI. While verified to be accurate, please cross-verify with source code.",
     translatedTitle: "About This Translation",
+    englishLinkText: "English",
     translatedBody:
       "This page is a Generative AI translation of the {english} page. Check the English page if anything is unclear.",
   },
@@ -60,6 +66,7 @@ const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
     draftsBody:
       "このページは生成AIによって作成された下書きです。内容は確認済みですが、正確な情報はソースコードもあわせてご確認ください。",
     translatedTitle: "翻訳について",
+    englishLinkText: "英語版",
     translatedBody: "このページは{english}を生成AIが翻訳したものです。不明な点がある場合は英語版をご確認ください。",
   },
 };
@@ -191,7 +198,10 @@ export function getDocsLocaleConfig(id: string): DocsLocaleConfig | undefined {
 export const DEFAULT_DOCS_LOCALE_ID: DocsLocaleId = DEFAULT_DOCS_LOCALE;
 
 function publishedLocaleOf(id: string): DocsLocaleId | undefined {
-  return PUBLISHED_DOCS_LOCALES.find((published) => published === id);
+  // Compared case-insensitively because an `Accept-Language` range arrives lowercased while the
+  // table keeps each locale's canonical casing (`pt-BR`, `zh-TW`).
+  const normalized = id.toLowerCase();
+  return PUBLISHED_DOCS_LOCALES.find((published) => published.toLowerCase() === normalized);
 }
 
 /**
@@ -206,17 +216,14 @@ export function resolveDocsLocale(locale: string): DocsLocaleId {
   const exact = publishedLocaleOf(locale);
   if (exact) return exact;
 
-  const [base] = locale.split("-");
+  const [base] = locale.toLowerCase().split("-");
   // An alias is only usable once its source tree is published: pointing an `es-ES` reader at
   // `/es-419/` before that tree exists would send them to a route the site does not serve.
   const alias = DOCS_LOCALE_ALIASES[locale] ?? DOCS_LOCALE_ALIASES[base];
   const aliasTarget = alias ? publishedLocaleOf(alias) : undefined;
   if (aliasTarget) return aliasTarget;
 
-  const baseExact = publishedLocaleOf(base);
-  if (baseExact) return baseExact;
-
-  const baseMatches = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0] === base);
+  const baseMatches = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === base);
   return baseMatches.length === 1 ? baseMatches[0] : DEFAULT_DOCS_LOCALE_ID;
 }
 
@@ -289,6 +296,29 @@ export const LEGAL_DOC_ROUTES = {
 
 export const DOCS_BASE_URL = "https://docs.tomoribot.app";
 
+const PAGE_EXTENSION_PATTERN = /\.mdx?$/i;
+
+/**
+ * Normalizes a doc source path, relative to a locale root, into the entry id both locales share.
+ *
+ * `README.md`, `README.mdx`, `index.md`, and `index.mdx` all mean the directory root, and `.md` and
+ * `.mdx` are interchangeable for the same page. Comparing normalized ids is what lets a counterpart
+ * lookup treat `ja/x/index.md` as the translation of `en/x/README.mdx`, which a raw path comparison
+ * would misread as a missing translation.
+ */
+export function normalizePageId(relativePath: string): string {
+  return relativePath
+    .replaceAll("\\", "/")
+    .replace(/^\.?\//, "")
+    .replace(/README\.mdx?$/i, "index")
+    .replace(PAGE_EXTENSION_PATTERN, "");
+}
+
+/** URL path segment for a normalized page id, with the directory-root marker removed. */
+export function pageIdToRoute(pageId: string): string {
+  return pageId.replace(/(^|\/)index$/, "").replace(/\/+$/, "");
+}
+
 /**
  * Prefixes an authored locale onto a locale-less docs route.
  *
@@ -353,10 +383,7 @@ export function matchAcceptLanguage(header: string | null | undefined): DocsLoca
     if (aliasTarget) return aliasTarget;
 
     const base = candidate.tag.split("-")[0];
-    const baseExact = publishedLocaleOf(base);
-    if (baseExact) return baseExact;
-
-    const baseMatches = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0] === base);
+    const baseMatches = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === base);
     if (baseMatches.length === 1) return baseMatches[0];
   }
 

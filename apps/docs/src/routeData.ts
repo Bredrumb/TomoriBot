@@ -48,9 +48,10 @@ export const onRequest = defineRouteMiddleware((context) => {
   const { entry, head } = starlightRoute;
 
   const baseId = stripLocaleFromEntryId(entry.id);
-  // The route's own locale, not the entry's id prefix: a fallback route carries the default
-  // locale's entry, and the description budget has to follow the language the reader sees.
+  // The route's own locale decides the budget, except on a fallback route, which serves the default
+  // locale's English body: an 80-character budget there would clip English mid-sentence.
   const locale = starlightRoute.locale ?? localeFromEntryId(entry.id) ?? DEFAULT_DOCS_LOCALE_ID;
+  const budgetLocale = starlightRoute.isFallback ? DEFAULT_DOCS_LOCALE_ID : locale;
 
   // Keep internal wiki pages out of search indexes. Same for untranslated fallback pages: they
   // serve the default locale's content verbatim, so indexing one creates duplicate-content
@@ -75,7 +76,7 @@ export const onRequest = defineRouteMiddleware((context) => {
   // Frontmatter description present → Starlight already emitted the tags.
   if (entry.data.description) return;
 
-  const maxLength = getDocsLocaleConfig(locale)?.descriptionMaxLength ?? 160;
+  const maxLength = getDocsLocaleConfig(budgetLocale)?.descriptionMaxLength ?? 160;
   const description = deriveDescription(entry.body ?? "", maxLength);
   if (!description) return;
 

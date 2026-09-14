@@ -47,8 +47,16 @@ describe("docs locale configuration", () => {
       expect(locale.notices.draftsTitle.length).toBeGreaterThan(0);
       expect(locale.notices.draftsBody.length).toBeGreaterThan(0);
       expect(locale.notices.translatedTitle.length).toBeGreaterThan(0);
+      expect(locale.notices.englishLinkText.length).toBeGreaterThan(0);
       expect(locale.notices.translatedBody).toContain("{english}");
     }
+  });
+
+  it("lets a locale name the source language in its own words", () => {
+    // The link text ships inside the locale's own sentence, so a Japanese reader must not be shown
+    // the English endonym as the anchor label.
+    expect(getDocsLocaleConfig("ja")?.notices.englishLinkText).toBe("英語版");
+    expect(getDocsLocaleConfig("en")?.notices.englishLinkText).toBe("English");
   });
 
   it("exposes the default locale config used for fallbacks", () => {
@@ -79,6 +87,15 @@ describe("docs locale resolution", () => {
 
   it("falls back to English for an unsupported language", () => {
     expect(resolveDocsLocale("de")).toBe(DEFAULT_DOCS_LOCALE_ID);
+  });
+
+  it("accepts a locale tag in any case", () => {
+    // An `Accept-Language` range arrives lowercased while the table keeps canonical casing, so the
+    // two paths must agree on `JA` and on a region code such as `pt-br`.
+    expect(resolveDocsLocale("JA")).toBe("ja");
+    expect(resolveDocsLocale("ja-jp")).toBe("ja");
+    expect(matchAcceptLanguage("JA")).toBe("ja");
+    expect(matchAcceptLanguage("PT-BR")).toBe(DEFAULT_DOCS_LOCALE_ID);
   });
 
   it("falls back to English for an ambiguous base language", () => {

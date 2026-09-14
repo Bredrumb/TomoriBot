@@ -59,14 +59,15 @@ const mode = resolveTranslationNoticeMode({
   entryId: entry.id,
   locale,
   aiGenerated: entry.data.aiGenerated !== false,
+  isFallback: Astro.locals.starlightRoute.isFallback,
 });
 
-// The notice links to the source page, which lives in the default locale and keeps English wording
-// even on pages whose own locale has not translated it. The anchor is injected as HTML because the
-// surrounding paragraph is authored per locale in the shared table, so it cannot be JSX here. No
-// user input reaches this string.
+// The notice links to the source page, which lives in the default locale. Both the sentence and the
+// link text come from the page locale's template, so a locale can name the language in its own
+// words. The anchor is injected as HTML because the template cannot be JSX, and no user input
+// reaches it.
 const englishUrl = buildDefaultLocaleDocsPageUrl(baseId);
-const englishLink = `<a href="${englishUrl}">${getDocsLocaleConfig(DEFAULT_DOCS_LOCALE_ID)?.label ?? "English"}</a>`;
+const englishLink = `<a href="${englishUrl}">${notices?.englishLinkText ?? "English"}</a>`;
 const translatedBody = (notices?.translatedBody ?? "").replace("{english}", englishLink);
 ---
 

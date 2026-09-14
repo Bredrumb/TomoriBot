@@ -24,10 +24,11 @@ from it, so a locale is described once:
 The module is imported by the bot runtime and by the Astro build, so it must stay dependency-free: no
 Node built-ins, and no project module other than `src/constants/locales.ts`.
 
-`apps/docs/functions/_middleware.ts` is the one exception. A Cloudflare Pages deploy bundles that file on
-its own, so it cannot resolve a path above the published directory and keeps its own copy of the published
-locale list and the `Accept-Language` matching rules. A test holds the two copies identical, so edit both
-when the matching rules change.
+`apps/docs/functions/_middleware.ts` cannot import it. The Pages Functions bundler follows relative paths
+outside the published directory, but it does not apply the repo's `@/*` tsconfig alias, and the shared table
+needs one for `@/constants/locales`. The middleware therefore keeps its own copy of the published locale
+list and the `Accept-Language` matching rules, and a test holds the two copies identical. Edit both when
+either changes.
 
 ### The publish flag
 
@@ -51,7 +52,7 @@ These are the only files a new locale has to touch. Everything else follows from
 | `apps/docs/functions/_middleware.ts` | Add the locale to the middleware's own published-locale list. |
 | `docs/{locale}/**` | The translated page tree. |
 | `apps/docs/public/_redirects` | Add the locale root pair: `/xx /xx/ 301` and `/xx/ /xx/introduction/ 200`. |
-| `src/locales/{locale}/general.ts` | Hardcoded docs URLs inside locale strings, which carry their own locale prefix. |
+| `src/locales/{locale}/**` | Hardcoded docs URLs inside locale strings, which carry their own locale prefix. |
 | `.github/README_{locale}.md` | The translated README, plus a switcher row pointing back at `../README.md`. |
 | `README.md` | Add the new locale to the switcher row so English readers can reach it. |
 
@@ -118,7 +119,7 @@ published.
 
 That list of published locales is the middleware's own copy, so publishing a locale means adding it to both
 `src/constants/docsLocales.ts` and `apps/docs/functions/_middleware.ts`.
-`tests/unit/docs/docsSiteMiddleware.test.ts` fails if the two copies disagree on any header.
+`tests/unit/docs/docsSiteMiddleware.test.ts` fails if the two copies disagree on any header it covers.
 
 ## Machine-Readable Output
 

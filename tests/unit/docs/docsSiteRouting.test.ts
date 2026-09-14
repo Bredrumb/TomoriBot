@@ -102,7 +102,9 @@ describe("docs site routing", () => {
     });
 
     it("emits nothing for a locale-fallback route", () => {
-      expect(buildHreflangAlternates(docsRoot, "features/only-english", { isFallback: true, site: SITE })).toEqual([]);
+      // A genuine pair, so the empty result is the guard's doing rather than the page existing in
+      // one locale only. The case above asserts the same pair with the flag off.
+      expect(buildHreflangAlternates(docsRoot, "features/pair", { isFallback: true, site: SITE })).toEqual([]);
     });
 
     it("emits nothing when only one locale has the page", () => {
@@ -167,6 +169,20 @@ describe("docs site routing", () => {
           entryId: "en/features/only-english",
           locale: "ja",
           aiGenerated: true,
+        }),
+      ).toBe("drafts");
+    });
+
+    it("never claims a fallback route is a translation of a human-written page", () => {
+      // The fallback serves the default locale's own page, so a translation notice would promise a
+      // translation and link to identical content. `isFallback` outranks the human-written source.
+      expect(
+        resolveTranslationNoticeMode({
+          docsRoot,
+          entryId: "ja/features/human",
+          locale: "ja",
+          aiGenerated: true,
+          isFallback: true,
         }),
       ).toBe("drafts");
     });

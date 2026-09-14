@@ -162,11 +162,13 @@ export function resolveTranslationNoticeMode(options: {
   entryId: string;
   locale: string;
   aiGenerated: boolean;
+  /** True when the route serves the default locale's page, so it has no translation of its own. */
+  isFallback?: boolean;
 }): TranslationNoticeMode {
   if (!options.aiGenerated) return "none";
 
   const baseId = stripLocaleFromEntryId(options.entryId);
-  if (options.locale === DEFAULT_DOCS_LOCALE_ID) return "drafts";
+  if (options.locale === DEFAULT_DOCS_LOCALE_ID || options.isFallback) return "drafts";
 
   const sourceFile = findEntryFile(options.docsRoot, DEFAULT_DOCS_LOCALE_ID, baseId);
   if (!sourceFile) return "drafts";

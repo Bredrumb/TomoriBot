@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEFAULT_DOCS_LOCALE_ID } from "../../../src/constants/docsLocales";
 
 const distRoot = fileURLToPath(new URL("../dist/", import.meta.url));
 const contentRoot = fileURLToPath(new URL("../src/content/docs/", import.meta.url));
@@ -33,11 +34,22 @@ function collectTextFiles(directory: string): string[] {
   return files;
 }
 
-/** Locale roots that exist in the content tree, which is the set of routes the build emits. */
+/**
+ * Locale roots whose page tree exists, which is the set of routes the build emits.
+ *
+ * The directory listing is sorted and the default locale is resolved by name rather than by taking
+ * the first entry, because `readdirSync` order is filesystem-dependent: an indexed ext4 directory
+ * returns hash order, so a translated locale could otherwise be mistaken for the default one.
+ */
 function publishedLocaleIds(): string[] {
-  return readdirSync(contentRoot, { withFileTypes: true })
+  const ids = readdirSync(contentRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
+    .map((entry) => entry.name)
+    .sort();
+
+  const index = ids.indexOf(DEFAULT_DOCS_LOCALE_ID);
+  if (index > 0) ids.unshift(...ids.splice(index, 1));
+  return ids;
 }
 
 /**
@@ -122,18 +134,20 @@ for (const file of collectTextFiles(distRoot)) {
 
 /** Whether a locale has a real source file for a page id, mirroring the docs routing rule. */
 function localeHasPage(locale: string, pageId: string): boolean {
-  if (pageId === "index") {
-    return ["README.md", "README.mdx", "index.md", "index.mdx"].some((name) =>
-      existsSync(join(contentRoot, locale, name)),
-    );
-  }
+  return entryFileCandidates(pageId).some((candidate) => existsSync(join(contentRoot, locale, candidate)));
+}
+
+/**
+ * Source filenames that produce a page id, matching the docs routing rule: a directory index has
+ * four possible sources, and `.md` and `.mdx` are interchangeable for any page.
+ */
+function entryFileCandidates(pageId: string): string[] {
+  if (pageId === "index") return ["README.md", "README.mdx", "index.md", "index.mdx"];
   if (pageId.endsWith("/index")) {
     const directory = pageId.slice(0, -"/index".length);
-    return ["README.md", "README.mdx", "index.md", "index.mdx"].some((name) =>
-      existsSync(join(contentRoot, locale, directory, name)),
-    );
+    return ["README.md", "README.mdx", "index.md", "index.mdx"].map((name) => `${directory}/${name}`);
   }
-  return [`${pageId}.md`, `${pageId}.mdx`].some((name) => existsSync(join(contentRoot, locale, name)));
+  return [`${pageId}.md`, `${pageId}.mdx`];
 }
 
 /** Whether a page id falls under an internal-only section, which is never advertised. */
@@ -163,6 +177,7 @@ for (const locale of translatedLocales) {
 
     const isFallback = !localeHasPage(locale, pageId);
     const isTranslation = localeHasPage(defaultLocale, pageId);
+    const publishedLocales = [defaultLocale, ...translatedLocales];
 
     if (isFallback) {
       checkedFallbacks += 1;
@@ -177,7 +192,12 @@ for (const locale of translatedLocales) {
     if (!isTranslation) continue;
 
     checkedPairs += 1;
-    const expected = [defaultLocale, locale, "x-default"];
+    // One alternate per locale that really has the page, in the published locale order, plus
+    // x-default. A third tree changes both lists, so neither can be hardcoded to the current pair.
+    const expected = [
+      ...publishedLocales.filter((candidate) => localeHasPage(candidate, pageId)),
+      "x-default",
+    ];
     if (hreflangs.join(",") !== expected.join(",")) {
       throw new Error(
         `${locale}/${pageId}/ emitted hreflang [${hreflangs.join(", ")}] but expected [${expected.join(", ")}]`,

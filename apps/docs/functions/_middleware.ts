@@ -4,11 +4,12 @@
  * Only the site root needs a decision. Static assets serve every other route, so branching there
  * would add a worker invocation without changing the response.
  *
- * This file is deliberately self-contained. It is bundled on its own during a Pages deploy, so it
- * cannot import the shared locale table from `src/constants/docsLocales.ts`: that path sits outside
- * the published directory and the bundler resolves nothing above it. The locale list and matching
- * rules below are the middleware's own copy, and `tests/unit/docs/docsSiteMiddleware.test.ts` holds
- * them identical to `matchAcceptLanguage` in the shared table for every header it can distinguish.
+ * The locale list and matching rules are this file's own copy rather than an import of
+ * `src/constants/docsLocales.ts`. That import resolves at runtime but not at deploy time: the Pages
+ * Functions bundler follows relative paths outside the published directory, yet it does not apply
+ * the repo's `@/*` tsconfig alias, which the shared table needs for `@/constants/locales`.
+ * `tests/unit/docs/docsSiteMiddleware.test.ts` holds the two copies identical for every header they
+ * can disagree on, so edit both together.
  */
 
 /**
@@ -59,14 +60,24 @@ export function resolveLocaleFromHeader(header: string | null | undefined): stri
     if (alias && (PUBLISHED_LOCALES as readonly string[]).includes(alias)) return alias;
 
     const base = candidate.tag.split("-")[0];
-    const baseMatches = PUBLISHED_LOCALES.filter((locale) => locale.split("-")[0] === base);
+    const baseMatches = PUBLISHED_LOCALES.filter((locale) => locale.split("-")[0].toLowerCase() === base);
     if (baseMatches.length === 1) return baseMatches[0];
   }
 
   return DEFAULT_LOCALE;
 }
 
-export const onRequest = async (context) => {
+/**
+ * The subset of Cloudflare's `EventContext` this middleware uses. Declared locally because the
+ * published directory has no dependency on `@cloudflare/workers-types`, and an untyped parameter
+ * would leave the file out of every typecheck the repo runs.
+ */
+interface PagesEventContext {
+  request: Request;
+  next: () => Promise<Response>;
+}
+
+export const onRequest = async (context: PagesEventContext): Promise<Response> => {
   const url = new URL(context.request.url);
 
   if (url.pathname === "/") {

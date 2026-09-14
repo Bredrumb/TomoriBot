@@ -3,11 +3,11 @@ import { matchAcceptLanguage } from "@/constants/docsLocales";
 import { onRequest, resolveLocaleFromHeader } from "../../../apps/docs/functions/_middleware";
 
 /**
- * The Pages Functions middleware is bundled on its own during deploy, so it cannot import the
- * shared locale table and keeps its own copy of the matching rules. These headers are the ones the
- * two copies could plausibly disagree on: quality ordering, rejection, wildcards, aliases, and
- * region tags. A divergence means the site root sends a visitor somewhere the rest of the site
- * would not.
+ * The Pages Functions middleware cannot import the shared locale table: the deploy bundler does not
+ * apply the repo's `@/*` tsconfig alias, which that module needs. It therefore keeps its own copy of
+ * the matching rules. These headers are the ones the two copies could plausibly disagree on: quality
+ * ordering, rejection, wildcards, aliases, region tags, and casing. A divergence means the site root
+ * sends a visitor somewhere the rest of the site would not.
  */
 const HEADERS = [
   "ja",
