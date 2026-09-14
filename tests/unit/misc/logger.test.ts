@@ -109,4 +109,23 @@ describe("buildLogStreams", () => {
     for (const secret of secrets) expect(serialized).not.toContain(secret);
     expect(serialized).toContain("[REDACTED]");
   });
+
+  test("long strings are capped without keeping half of a credential that straddles the cut", () => {
+    const secret = "straddling-password";
+    // The password starts just before the default 4096-character cap and ends past it.
+    const prefix = "x".repeat(4096 - 30);
+    const sanitized = sanitizeLogPayload(
+      `${prefix} postgresql://tomori:${secret}@db.example.com/tomori ${"y".repeat(100_000)}`,
+    ) as string;
+
+    expect(sanitized).not.toContain(secret);
+    expect(sanitized).not.toContain("straddling");
+    expect(sanitized).toContain("[TRUNCATED");
+    expect(sanitized.length).toBeLessThan(4200);
+  });
+
+  test("strings under the cap are only redacted, never truncated", () => {
+    const value = `short ${"z".repeat(1000)}`;
+    expect(sanitizeLogPayload(value)).toBe(value);
+  });
 });

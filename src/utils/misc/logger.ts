@@ -183,7 +183,22 @@ function normalizeSensitiveKey(key: string): string {
 
 const SENSITIVE_NORMALIZED_KEYS = new Set(SENSITIVE_LOG_KEYS.map(normalizeSensitiveKey));
 
+// An unbounded string (a base64 avatar data URI reached 111 KB) is copied by every redaction regex
+// and then written whole to both sinks, and the Docker json-file driver splits any line past 16 KB.
+const parsedLogMaxStringLength = Number.parseInt(process.env.LOG_MAX_STRING_LENGTH || "", 10);
+const LOG_MAX_STRING_LENGTH =
+  Number.isFinite(parsedLogMaxStringLength) && parsedLogMaxStringLength > 0 ? parsedLogMaxStringLength : 4096;
+// Redaction runs this far past the cap before the tail is dropped, so a credential straddling the cut
+// is matched whole; cutting first could leave a password that lost its trailing `@` unredacted.
+const REDACTION_OVERLAP_CHARS = 512;
+
 function sanitizeLogString(value: string): string {
+  if (value.length <= LOG_MAX_STRING_LENGTH) return redactLogString(value);
+  const redactedHead = redactLogString(value.slice(0, LOG_MAX_STRING_LENGTH + REDACTION_OVERLAP_CHARS));
+  return `${redactedHead.slice(0, LOG_MAX_STRING_LENGTH)}...[TRUNCATED ${value.length - LOG_MAX_STRING_LENGTH} chars]`;
+}
+
+function redactLogString(value: string): string {
   return value
     .replace(/((?:https?|postgres(?:ql)?):\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${REDACTED}@`)
     .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, `$1 ${REDACTED}`)

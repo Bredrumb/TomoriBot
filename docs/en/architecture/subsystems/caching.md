@@ -264,6 +264,9 @@ the next refresh window to reclaim a few hundred KB.
   the miss avoids re-querying them every turn
 - Entries are **immutable** (a sent message's sprite never changes), so the cache needs no
   invalidation; the TTL only bounds memory (`PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES`, default 120)
+- Expired entries are swept on the write path at most once every 10 minutes. Expiry is otherwise
+  lazy (an entry is dropped only when that message is looked up again), so without the sweep the TTL
+  would free nothing until restart
 - Context builds prime it with one batched query (`primePersonaSpriteMessageRecords`) over the
   fetched history window's webhook message IDs; sends seed it directly (`recordPersonaSpriteMessage`)
 - On transient DB errors the prime/lookup skips seeding instead of negative-caching, so real

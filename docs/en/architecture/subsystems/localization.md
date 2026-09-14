@@ -30,6 +30,9 @@ localizer(locale, "commands.config.setup.description")
 - `initializeLocalizer()` must run during startup before lookups.
 - Missing locale code falls back to `en-US`.
 - Missing key falls back to `en-US` for that key alone (see below).
+- Panel route IDs accept Discord locale codes even when no translation is loaded. This keeps
+  controls usable for users whose Discord language is not yet authored; their text falls back to
+  `en-US`.
 - Multi-line strings are dedented automatically on load.
 
 ## Key Resolution and the `en-US` Fallback

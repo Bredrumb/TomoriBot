@@ -19,6 +19,7 @@ import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
+import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -225,7 +226,9 @@ export async function execute(
       return;
     }
 
-    const presetSelectOptions: SelectOption[] = presets.map((preset: TomoriPresetRow) => ({
+    const sortedPresets = orderPersonaPresetChoices(presets);
+
+    const presetSelectOptions: SelectOption[] = sortedPresets.map((preset: TomoriPresetRow) => ({
       label: safeSelectOptionText(preset.persona_preset_name),
       value: safeSelectOptionText(preset.persona_preset_name),
       description: safeSelectOptionText(preset.persona_preset_desc),

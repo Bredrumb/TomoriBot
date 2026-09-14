@@ -160,8 +160,10 @@ async function createUserImpersonationTarget(
     context.impersonatedUserId,
     undefined,
   );
+  // A whitespace-only display name is truthy, so it would reach Discord as the webhook name.
+  const displayName = identity.displayName.trim() || "User";
   const webhook = await webhookTargetChannel.createWebhook({
-    name: identity.displayName || "User",
+    name: displayName,
     avatar: identity.avatarUrl || undefined,
     reason: "TomoriBot user impersonation",
   });
@@ -170,9 +172,9 @@ async function createUserImpersonationTarget(
   return {
     webhook,
     temporaryWebhook: webhook,
-    personaUsername: identity.displayName || "User",
+    personaUsername: displayName,
     personaAvatarUrl: identity.avatarUrl,
-    prefixStrippingName: identity.displayName || "User",
+    prefixStrippingName: displayName,
     webhookTargetChannel,
   };
 }

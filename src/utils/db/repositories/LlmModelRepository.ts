@@ -10,7 +10,7 @@ import {
   type VideoGenerationModelRow,
 } from "@/types/db/schema";
 import { getCachedLLM } from "@/utils/cache/llmCache";
-import { sql } from "@/utils/db/client";
+import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
@@ -871,8 +871,10 @@ class LlmModelRepository {
     }
 
     try {
-      const rows =
-        await sql`SELECT * FROM image_diffusion_models WHERE diffusion_model_id = ${diffusionModelId} LIMIT 1`;
+      const rows = await withTransientDbRetry(
+        () => sql`SELECT * FROM image_diffusion_models WHERE diffusion_model_id = ${diffusionModelId} LIMIT 1`,
+        `load diffusion model ${diffusionModelId}`,
+      );
       if (!rows.length) {
         log.warn(`No diffusion model found for diffusion_model_id ${diffusionModelId}`);
         return null;

@@ -1,5 +1,5 @@
 import type { ChatInputCommandInteraction, Client } from "discord.js";
-import { MessageFlags, EmbedBuilder } from "discord.js";
+import { MessageFlags, EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
@@ -256,10 +256,9 @@ export async function executePersonaImpersonation(
       color: ColorCode.SUCCESS,
     });
   } catch (error) {
-    log.error("Failed to send impersonated message", {
-      error,
-      personaId: selectedPersona.persona_id,
-      serverId,
+    await log.error("Failed to send impersonated message", error, {
+      errorType: "PersonaImpersonationError",
+      metadata: { personaId: selectedPersona.persona_id, serverId },
     });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.impersonate.webhook_error_title",
@@ -403,6 +402,22 @@ export async function executeUserImpersonation(
       return;
     }
 
+    // The temporary webhook is created inside the chat turn, where a missing permission reaches the
+    // user as a generic generation error and reaches Discord as a 50013 on every attempt.
+    const webhookTargetChannel = resolveGuildWebhookTargetChannel(channel);
+    const botMember = webhookTargetChannel?.guild.members.me;
+    if (
+      !webhookTargetChannel ||
+      (botMember && !webhookTargetChannel.permissionsFor(botMember).has(PermissionFlagsBits.ManageWebhooks))
+    ) {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.impersonate.missing_permissions_title",
+        descriptionKey: "commands.impersonate.missing_permissions_description",
+        color: ColorCode.ERROR,
+      });
+      return;
+    }
+
     if (isNoticeEmbedVisible(tomoriState.config, "impersonation_notice")) {
       try {
         const invokerAvatarUrl = interaction.member
@@ -482,11 +497,11 @@ export async function executeUserImpersonation(
       ],
     });
   } catch (error) {
-    log.error("Failed to handle user impersonation", {
-      error,
-      userId: interaction.user.id,
-      impersonatedUserId,
-      guildId: interaction.guildId,
+    // The error goes in the error slot, not a metadata object: only a real Error gets its fields
+    // filtered, so a wrapped discord.js error carried its whole request body (a data URI avatar).
+    await log.error("Failed to handle user impersonation", error, {
+      errorType: "UserImpersonationError",
+      metadata: { userId: interaction.user.id, impersonatedUserId, guildId: interaction.guildId },
     });
 
     if (interaction.deferred || interaction.replied) {

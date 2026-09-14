@@ -7,6 +7,31 @@ import {
 } from "@/utils/discord/ui/modals";
 
 describe("routed raw modal gateway support", () => {
+  it("forwards the packetless readiness drain to Discord.js", () => {
+    const globalState = globalThis as GlobalDiscordState;
+    const previousPatchState = globalState.__webSocketPatched;
+    delete globalState.__webSocketPatched;
+
+    try {
+      const calls: Array<[RawDiscordWebSocketPacket | undefined, RawDiscordShard | undefined]> = [];
+      const client = {
+        ws: {
+          handlePacket: (packet?: RawDiscordWebSocketPacket, shard?: RawDiscordShard) => {
+            calls.push([packet, shard]);
+            return true;
+          },
+        },
+      };
+      initializeRawModalInterception(client);
+
+      expect(client.ws.handlePacket()).toBe(true);
+      expect(calls).toEqual([[undefined, undefined]]);
+    } finally {
+      if (previousPatchState === undefined) delete globalState.__webSocketPatched;
+      else globalState.__webSocketPatched = previousPatchState;
+    }
+  });
+
   it("transforms a nonce-bounded Radio Group submission and consumes its intercepted value once", () => {
     const globalState = globalThis as GlobalDiscordState;
     const previousPatchState = globalState.__webSocketPatched;

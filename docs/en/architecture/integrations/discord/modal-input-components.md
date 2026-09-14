@@ -797,3 +797,5 @@ Add form, reached from `/config` > Plugins > MCP Servers, reuses the raw send an
 without that collector: nonce-bounded `config:v2` modal submissions go through the global interaction
 router, and interception is installed during startup so an already-open supported modal remains
 routable after a process restart.
+The gateway wrapper forwards packetless readiness calls unchanged. Discord.js uses these calls to
+drain packets queued before the client became ready.

@@ -244,7 +244,10 @@ export async function uploadCharRef(options: CharRefUploadOptions): Promise<stri
       log.success(`[CharRef Storage] Uploaded ${options.entityType} character reference to ${publicUrl}`);
       return publicUrl;
     } catch (error) {
-      log.warn(`[CharRef Storage] Failed to upload ${options.entityType} character reference to S3`, error);
+      await log.error(`[CharRef Storage] Failed to upload ${options.entityType} character reference to S3`, error, {
+        errorType: "S3UploadError",
+        metadata: { bucket: config.bucket, key },
+      });
       return null;
     }
   }
@@ -293,7 +296,10 @@ export async function deleteCharRef(urlOrPath: string): Promise<boolean> {
       log.info(`[CharRef Storage] Deleted remote character reference ${key}`);
       return true;
     } catch (error) {
-      log.warn(`[CharRef Storage] Failed to delete remote character reference ${key}`, error);
+      await log.error(`[CharRef Storage] Failed to delete remote character reference ${key}`, error, {
+        errorType: "S3DeleteError",
+        metadata: { bucket: config.bucket, key },
+      });
       return false;
     }
   }
