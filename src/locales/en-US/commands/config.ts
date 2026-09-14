@@ -1750,16 +1750,6 @@ Restored now ({restored_count}): {restored_list}`,
     },
     voice: {
       description: `Manage persona voice settings.`,
-      transcripts: {
-        description: `Toggle voice transcript chat mode.`,
-        set_description: `Enable to post transcripts as chat messages; disable to use internal cache.`,
-        already_set_title: `Already Set`,
-        already_enabled_description: `Voice transcript chat mode is already enabled for this server.`,
-        already_disabled_description: `Voice transcript chat mode is already disabled for this server.`,
-        success_title: `Voice Transcript Mode Updated`,
-        enabled_success: `Voice transcript chat mode is now **enabled**. Voice messages will be transcribed and posted as visible chat messages via webhook. Audio will not be passed to the AI directly.`,
-        disabled_success: `Voice transcript chat mode is now **disabled**. Transcripts will be handled internally as before.`,
-      },
       elevenlabs: {
         description: `Choose an ElevenLabs voice for a persona.`,
         select_persona_title: `Select Persona Voice Target`,

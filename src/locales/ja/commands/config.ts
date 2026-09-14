@@ -695,16 +695,6 @@ Exaggeration: **{exaggeration}**`,
     },
     voice: {
       description: `ペルソナごとの音声設定を管理します。`,
-      transcripts: {
-        description: `音声トランスクリプトのチャットモードを切り替えます。`,
-        set_description: `有効にするとトランスクリプトをチャットメッセージとして投稿します。無効にすると内部キャッシュを使用します。`,
-        already_set_title: `既に設定済み`,
-        already_enabled_description: `このサーバーでは音声トランスクリプトのチャットモードは既に有効になっています。`,
-        already_disabled_description: `このサーバーでは音声トランスクリプトのチャットモードは既に無効になっています。`,
-        success_title: `音声トランスクリプトモードを更新しました`,
-        enabled_success: `音声トランスクリプトのチャットモードが**有効**になりました。音声メッセージはトランスクリプトされ、Webhookを通じてチャットメッセージとして投稿されます。音声ファイルはAIに直接渡されません。`,
-        disabled_success: `音声トランスクリプトのチャットモードが**無効**になりました。トランスクリプトは従来通り内部で処理されます。`,
-      },
       elevenlabs: {
         description: `ペルソナに使うElevenLabs音声を選択します。`,
         select_persona_title: `音声を設定するペルソナを選択`,
