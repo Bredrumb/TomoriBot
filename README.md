@@ -1,5 +1,13 @@
 ## English | [日本語](.github/README_ja.md)
 
+<!-- Language switcher slots for the language-expansion target locales.
+     Each entry joins the switcher row above when its translated README lands as
+     .github/README_<code>.md. Entries stay unlinked until then so the repository front page never
+     carries a broken link. Labels are the endonyms from src/constants/docsLocales.ts.
+     Planned: pt-BR Português (Brasil) | es-419 Español (Latinoamérica) | fr Français
+     | zh-TW 繁體中文 | zh-CN 简体中文 | vi Tiếng Việt | ru Русский | ko 한국어
+     See docs/en/contributing/adding-locale/readme-and-repo.md. -->
+
 > [!NOTE]
 > This README is a quick overview. For the full, up-to-date documentation (setup guides, feature walkthroughs, provider info, and more) visit **[docs.tomoribot.app](https://docs.tomoribot.app/)**.
 

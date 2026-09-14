@@ -86,7 +86,7 @@ Per-task guides:
 - [`contributing/adding-setup-module.md`](./contributing/adding-setup-module)
 - [`contributing/adding-db-column.md`](./contributing/adding-db-column)
 - [`contributing/adding-new-provider.md`](./contributing/adding-new-provider)
-- [`contributing/adding-locale.md`](./contributing/adding-locale)
+- [`contributing/adding-locale/`](./contributing/adding-locale/) — locale codes, UI strings, seed descriptions, docs and README scope, and the verification sequence
 - [`contributing/docs-site-localization.md`](./contributing/docs-site-localization) — docs routes, locale config, hreflang, and translated READMEs
 - [`contributing/adding-persona-preset.md`](./contributing/adding-persona-preset)
 - [`contributing/adding-participant-extension.md`](./contributing/adding-participant-extension)

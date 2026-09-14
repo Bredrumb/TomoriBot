@@ -26,9 +26,9 @@ Node built-ins, and no project module other than `src/constants/locales.ts`.
 
 `apps/docs/functions/_middleware.ts` cannot import it. The Pages Functions bundler follows relative paths
 outside the published directory, but it does not apply the repo's `@/*` tsconfig alias, and the shared table
-needs one for `@/constants/locales`. The middleware therefore keeps its own copy of the published locale
-list and the `Accept-Language` matching rules, and a test holds the two copies identical. Edit both when
-either changes.
+needs one for `@/constants/locales`. The middleware therefore keeps its own copy of the routed locale list
+and the `Accept-Language` matching rules, and a test pins that list against `DOCS_LOCALES` while comparing
+the two matchers. Edit both when either changes.
 
 ### The publish flag
 
@@ -42,31 +42,35 @@ A locale entry has a `docsTree` flag. While it is `false`:
 Setting it to `true` is the act of publishing. `tests/unit/docs/docsLocaleConfig.test.ts` fails if the flag
 and the `docs/` directory disagree, in either direction.
 
-## Shared Files a Locale Addition Must Edit
+## Shared Files a Locale Addition Touches
 
-These are the only files a new locale has to touch. Everything else follows from the table.
+These are the only files a new locale has to touch. Everything else is already staged for every locale
+in `DOCS_LOCALES`, or derives from it.
 
 | File | Edit |
 |---|---|
 | `src/constants/docsLocales.ts` | Add or update the locale entry, then set `docsTree: true` to publish. |
-| `apps/docs/functions/_middleware.ts` | Add the locale to the middleware's own published-locale list. |
 | `docs/{locale}/**` | The translated page tree. |
-| `apps/docs/public/_redirects` | Add the locale root pair: `/xx /xx/ 301` and `/xx/ /xx/introduction/ 200`. |
-| `src/locales/{locale}/**` | Hardcoded docs URLs inside locale strings, which carry their own locale prefix. |
+| `src/locales/{locale}/**` | Hardcoded docs URLs inside locale strings, which carry their own locale prefix. Repoint them to `/{locale}/` once the tree is published. |
 | `.github/README_{locale}.md` | The translated README, plus a switcher row pointing back at `../README.md`. |
-| `README.md` | Add the new locale to the switcher row so English readers can reach it. |
+| `README.md` | The locale's switcher entry becomes a live link once its translated file exists. |
+
+`apps/docs/functions/_middleware.ts` and `apps/docs/public/_redirects` are already staged for every
+target locale in `DOCS_LOCALES`. Their entries name the locale root without claiming content exists, so
+`docsTree: true` plus the page tree is the whole publish step. `tests/unit/docs/docsSiteMiddleware.test.ts`
+fails if the middleware's routed list and `DOCS_LOCALES` disagree.
 
 Pages that stay English-only are linked with an explicit English destination, per the scope rule below.
 `bun run check-locale-links` resolves each project-owned route in the linking file's own locale tree first and
 then in the default tree, so a link to an untranslated page passes while a link to a page that exists nowhere
 fails.
 
-The redirect pair is the one edit nothing can derive for you: `_redirects` is a static asset, so a published
-locale without its pair serves a 404 at its own root even though every page under it works. The Astro
-redirect map is generated from the locale table, so it needs no edit.
+The redirect pair is the entry nothing can derive from the table, because `_redirects` is a static
+asset. It is written for every target locale ahead of its content, so publishing a locale needs no edit
+there. The Astro redirect map is generated from the locale table and needs no edit either.
 
-An unpublished locale root is not redirected to English either. It 404s, which is the honest answer for a
-URL the site does not serve, and it keeps a locale from looking published before its content lands.
+An unpublished locale root is not redirected to English. It 404s, which is the honest answer for a URL
+the site does not serve, and it keeps a locale from looking published before its content lands.
 
 ## Localized Page Scope
 
@@ -111,15 +115,17 @@ locale only when its tree exists and otherwise returns English. Two consequences
 
 ## Accept-Language at the Site Root
 
-The site root has no content of its own, so `functions/_middleware.ts` redirects `/` to the best published
+The site root has no content of its own, so `functions/_middleware.ts` redirects `/` to the best routed
 locale for the visitor's `Accept-Language` header. Matching is quality-aware: the highest `q` value wins,
 `q=0` rejects a language, and an exact code, registered alias, or unambiguous base language matches. It falls
 back to the default locale, including for an ambiguous base such as `zh` when both Chinese trees are
 published.
 
-That list of published locales is the middleware's own copy, so publishing a locale means adding it to both
-`src/constants/docsLocales.ts` and `apps/docs/functions/_middleware.ts`.
-`tests/unit/docs/docsSiteMiddleware.test.ts` fails if the two copies disagree on any header it covers.
+That routed list is the middleware's own copy and is already wider than the published set: it names every
+locale root in `DOCS_LOCALES`, so a staged locale can receive the site-root redirect before its content
+lands. A staged root answers with a 404 until `docsTree` flips, which is why registering roots early is safe.
+`tests/unit/docs/docsSiteMiddleware.test.ts` pins the list against `DOCS_LOCALES` and compares the two
+matchers on every header a published locale answers.
 
 ## Machine-Readable Output
 

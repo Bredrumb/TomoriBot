@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { matchAcceptLanguage } from "@/constants/docsLocales";
+import { DOCS_LOCALES, PUBLISHED_DOCS_LOCALES, matchAcceptLanguage } from "@/constants/docsLocales";
 import { onRequest, resolveLocaleFromHeader } from "../../../apps/docs/functions/_middleware";
 
 /**
  * The Pages Functions middleware cannot import the shared locale table: the deploy bundler does not
  * apply the repo's `@/*` tsconfig alias, which that module needs. It therefore keeps its own copy of
- * the matching rules. These headers are the ones the two copies could plausibly disagree on: quality
- * ordering, rejection, wildcards, aliases, region tags, and casing. A divergence means the site root
- * sends a visitor somewhere the rest of the site would not.
+ * the routed locale list and the matching rules. These headers are the ones the two copies could
+ * plausibly disagree on: quality ordering, rejection, wildcards, aliases, region tags, and casing. A
+ * divergence means the site root sends a visitor somewhere the rest of the site would not.
  */
 const HEADERS = [
   "ja",
@@ -32,10 +32,55 @@ const HEADERS = [
   "  JA  ",
 ];
 
+/** The middleware's routed list, read from source because it is not exported. */
+async function readRoutedLocales(): Promise<string[]> {
+  const source = await Bun.file(new URL("../../../apps/docs/functions/_middleware.ts", import.meta.url)).text();
+  const declaration = source.match(/const ROUTED_LOCALES[^=]*=\s*\[([^\]]*)\]/);
+
+  expect(declaration).not.toBeNull();
+  return [...(declaration?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
 describe("docs site root middleware", () => {
-  it("agrees with the shared locale matcher on every header", () => {
+  it("routes every locale the shared table registers", async () => {
+    // Pinned as an exact set in both directions. The middleware covers target locales whose trees
+    // have not landed yet, so this list can be wider than the published set, but it must never be
+    // missing one: a published locale that is absent here sends its readers to the wrong language.
+    const routed = await readRoutedLocales();
+
+    expect(routed).toEqual(DOCS_LOCALES.map((locale) => locale.id));
+    for (const published of PUBLISHED_DOCS_LOCALES) {
+      expect(routed).toContain(published);
+    }
+  });
+
+  it("agrees with the shared locale matcher wherever the shared matcher picks a tree", () => {
+    // Scoped two ways, both of them the staging state rather than a rule disagreement.
+    //
+    // First, the shared matcher returns the default locale for any header it cannot serve, so a
+    // comparison is only meaningful where it picked a non-default locale. A header such as `es-ES`
+    // resolves to English in the shared table while `es-419` is unpublished, and the middleware
+    // routes the staged Spanish root; comparing those two would assert that staging does not exist.
+    //
+    // Second, a header the middleware answers with an unpublished locale is skipped, because the
+    // shared matcher is allowed to disagree there by design. `only ever answers with a routed locale`
+    // covers the value's validity.
     for (const header of HEADERS) {
-      expect(`${header} -> ${resolveLocaleFromHeader(header)}`).toBe(`${header} -> ${matchAcceptLanguage(header)}`);
+      const shared = matchAcceptLanguage(header);
+      if (shared === "en" || !PUBLISHED_DOCS_LOCALES.includes(shared)) continue;
+
+      const middleware = resolveLocaleFromHeader(header);
+      if (!PUBLISHED_DOCS_LOCALES.includes(middleware)) continue;
+
+      expect(`${header} -> ${middleware}`).toBe(`${header} -> ${shared}`);
+    }
+  });
+
+  it("only ever answers with a routed locale", async () => {
+    const routed = await readRoutedLocales();
+
+    for (const header of [...HEADERS, null, "pt-PT", "es-MX", "zh-HK"]) {
+      expect(routed).toContain(resolveLocaleFromHeader(header));
     }
   });
 

@@ -8,15 +8,32 @@
  * `src/constants/docsLocales.ts`. That import resolves at runtime but not at deploy time: the Pages
  * Functions bundler follows relative paths outside the published directory, yet it does not apply
  * the repo's `@/*` tsconfig alias, which the shared table needs for `@/constants/locales`.
- * `tests/unit/docs/docsSiteMiddleware.test.ts` holds the two copies identical for every header they
- * can disagree on, so edit both together.
+ * `tests/unit/docs/docsSiteMiddleware.test.ts` pins this list against the shared table and compares
+ * the two matchers on every header they can disagree on, so edit both together.
  */
 
 /**
- * Locales whose page tree exists, which are the roots the site actually serves. A locale from the
- * shared table appears here only once its `docsTree` flag is true.
+ * Every locale root the shared table registers, including the target locales whose page trees have
+ * not landed yet. A root in this list is a real route: it serves its tree once `docsTree` is true and
+ * a 404 until then, which is the honest answer for a URL with no content behind it. Registering the
+ * roots ahead of the content is what lets translation lanes work without touching this file.
+ *
+ * Must stay a superset of `PUBLISHED_DOCS_LOCALES` in `src/constants/docsLocales.ts`. Dropping a
+ * published locale here sends the site root to the default locale for readers whose language the site
+ * does serve.
  */
-const PUBLISHED_LOCALES = ["en", "ja"] as const;
+const ROUTED_LOCALES = [
+  "en",
+  "ja",
+  "pt-BR",
+  "es-419",
+  "fr",
+  "zh-TW",
+  "zh-CN",
+  "vi",
+  "ru",
+  "ko",
+] as const;
 
 /** Locale used when the header asks for nothing this site serves. */
 const DEFAULT_LOCALE = "en";
@@ -31,7 +48,7 @@ const DEFAULT_LOCALE = "en";
 const LOCALE_ALIASES: Record<string, string> = { "es-es": "es-419" };
 
 /**
- * Picks the published locale a browser's `Accept-Language` header asks for.
+ * Picks the locale root a browser's `Accept-Language` header asks for.
  *
  * Quality values are honored and `q=0` rejects a language outright, because a plain prefix test
  * treats `ja;q=0, en` as a Japanese request. Ranges match by exact code, alias, or base language;
@@ -56,13 +73,13 @@ export function resolveLocaleFromHeader(header: string | null | undefined): stri
     // A wildcard states no preference beyond "something I can read", so the default answers it.
     if (candidate.tag === "*") return DEFAULT_LOCALE;
 
-    const exact = PUBLISHED_LOCALES.find((locale) => locale.toLowerCase() === candidate.tag);
+    const exact = ROUTED_LOCALES.find((locale) => locale.toLowerCase() === candidate.tag);
     if (exact) return exact;
 
     const alias = LOCALE_ALIASES[candidate.tag] ?? LOCALE_ALIASES[candidate.tag.split("-")[0]];
-    if (alias && (PUBLISHED_LOCALES as readonly string[]).includes(alias)) return alias;
+    if (alias && (ROUTED_LOCALES as readonly string[]).includes(alias)) return alias;
     const base = candidate.tag.split("-")[0];
-    const baseMatches = PUBLISHED_LOCALES.filter((locale) => locale.split("-")[0].toLowerCase() === base);
+    const baseMatches = ROUTED_LOCALES.filter((locale) => locale.split("-")[0].toLowerCase() === base);
     if (baseMatches.length === 1) return baseMatches[0];
   }
 

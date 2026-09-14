@@ -16,11 +16,34 @@
 # the locale's introduction page at its own root. Rules are static, so each new
 # locale listed with `docsTree: true` in src/constants/docsLocales.ts needs its
 # own pair here; the Astro redirect map is generated from that table and this
-# file is not. See docs/en/contributing/docs-site-localization.md.
+# file is not. See docs/en/contributing/adding-locale/documentation.md.
+#
+# Every target locale is listed here ahead of its page tree, so a translation
+# lane never edits this file. Until that locale's `docsTree` flag flips, the
+# rewrite target does not exist and the root serves a 404, which is the honest
+# answer for a URL with no content behind it.
 
 # Japanese locale root
 /ja /ja/ 301
 /ja/ /ja/introduction/ 200
+
+# Target locale roots, staged for the language-expansion translation lanes
+/pt-BR /pt-BR/ 301
+/pt-BR/ /pt-BR/introduction/ 200
+/es-419 /es-419/ 301
+/es-419/ /es-419/introduction/ 200
+/fr /fr/ 301
+/fr/ /fr/introduction/ 200
+/zh-TW /zh-TW/ 301
+/zh-TW/ /zh-TW/introduction/ 200
+/zh-CN /zh-CN/ 301
+/zh-CN/ /zh-CN/introduction/ 200
+/vi /vi/ 301
+/vi/ /vi/introduction/ 200
+/ru /ru/ 301
+/ru/ /ru/introduction/ 200
+/ko /ko/ 301
+/ko/ /ko/introduction/ 200
 
 # /features/ restructure: flat pages moved into task-based sub-categories,
 # then the whole English tree moved under /en/ (Language Split). Destinations

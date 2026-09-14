@@ -449,7 +449,15 @@ export default defineConfig({
     "/contributing/adding-db-column/": "/en/contributing/adding-db-column/",
     "/contributing/adding-event-handler/": "/en/contributing/adding-event-handler/",
     "/contributing/adding-feature-flag-tool/": "/en/contributing/adding-feature-flag-tool/",
-    "/contributing/adding-locale/": "/en/contributing/adding-locale/",
+    // A locale-prefixed key here would shadow the guide's own index page: Astro resolves the
+    // redirect map before the content collection, so `/en/contributing/adding-locale/` would serve a
+    // meta-refresh to itself instead of the overview.
+    "/contributing/adding-locale/locale-codes/": "/en/contributing/adding-locale/locale-codes/",
+    "/contributing/adding-locale/ui-strings/": "/en/contributing/adding-locale/ui-strings/",
+    "/contributing/adding-locale/seed-catalog/": "/en/contributing/adding-locale/seed-catalog/",
+    "/contributing/adding-locale/documentation/": "/en/contributing/adding-locale/documentation/",
+    "/contributing/adding-locale/readme-and-repo/": "/en/contributing/adding-locale/readme-and-repo/",
+    "/contributing/adding-locale/verification/": "/en/contributing/adding-locale/verification/",
     "/contributing/adding-new-provider/": "/en/contributing/adding-new-provider/",
     "/contributing/adding-participant-extension/": "/en/contributing/adding-participant-extension/",
     "/contributing/adding-persona-preset/": "/en/contributing/adding-persona-preset/",
