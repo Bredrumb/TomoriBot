@@ -24,6 +24,7 @@ import {
   getFollowUpToolIntentResult,
   getRecentToolAffordanceNames,
   getRecentTriggeredToolIntentResult,
+  matchesLocaleDeliberateToolPack,
   resolveDeliberateToolContextTurns,
   resolveDeliberateToolMode,
 } from "@/utils/tools/deliberateToolMode";
@@ -326,7 +327,10 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // generate_voice_message, and create_task is suppressed during reminder
   // execution (we don't want the bot to schedule a nested reminder).
   if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
-    if (/\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose)) {
+    if (
+      /\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose) ||
+      matchesLocaleDeliberateToolPack("voice", reminderData.reminder_purpose)
+    ) {
       deliberateToolAllowedNames.push("generate_voice_message");
       deliberateToolTriggerMatches.push({
         toolName: "generate_voice_message",

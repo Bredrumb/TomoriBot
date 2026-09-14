@@ -219,7 +219,7 @@ ${
   const libraryPreview = buildTextPreview(libraryBody, CV2_TEXT_PREVIEW_BUDGET);
   const libraryFooterKey = textPreviewFooterKey(libraryPreview);
   const finalLibraryText = libraryFooterKey
-    ? `${libraryPreview.text}\n-# ${localizer(locale, libraryFooterKey, textPreviewFooterVars(libraryPreview))}`
+    ? `${libraryPreview.text}\n-# ${localizer(locale, libraryFooterKey, textPreviewFooterVars(libraryPreview, locale))}`
     : libraryPreview.text;
 
   const libraryHeader: TextDisplayComponentData = {

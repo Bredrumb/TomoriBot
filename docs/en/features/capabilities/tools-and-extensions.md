@@ -142,6 +142,12 @@ prompt size and helps smaller/local models answer faster.
   but angrier" after a voice-message request.
 - Server managers can add literal **custom trigger phrases** with `/server trigger add` — for
   example mapping `pic`, `img`, or `pfp` to image generation.
+- The built-in triggers read English phrasing. Other languages reach the same tools through
+  each language's keyword list. Every shipped language's list is checked on every message,
+  whatever your language setting is, so a bilingual server works in both languages.
+- Custom phrases in Japanese, Chinese, or Korean also match inside longer words, because those
+  languages do not separate words with spaces. A phrase ending in `*` matches any word that
+  starts with it: `remind*` covers `reminder` and `reminding`.
 
 ### Controls
 

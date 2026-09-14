@@ -15,7 +15,7 @@ import { presetRepository } from "@/utils/db/repositories/PresetRepository";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolvePersonaAvatarPublicUrl, uploadPersonaAvatarToStorage } from "@/utils/storage/avatarStorage";
-import { getBaseTriggerWords } from "@/utils/text/localizer";
+import { getAllBaseTriggerWords } from "@/utils/text/localizer";
 import { selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { PresetExportData } from "@/types/preset/presetExport";
 
@@ -120,8 +120,7 @@ export async function importAlterPreset(params: ImportAlterPresetParams): Promis
   //    ("tomori" etc.) too: they belong to the main persona regardless of locale,
   //    and the loader's single-owner dedup would strip them from an alter anyway.
   const claimedTriggerWords = [
-    ...getBaseTriggerWords("en-US"),
-    ...getBaseTriggerWords("ja"),
+    ...getAllBaseTriggerWords(),
     ...allPersonas.flatMap((persona) => persona.trigger_words ?? []),
   ];
 

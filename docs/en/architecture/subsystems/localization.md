@@ -18,6 +18,7 @@ Currently loaded from source:
 - Categories: `general`, `commands`, `providers`, `tools`, `bridges`
 - At boot, `initializeLocalizer()` scans each locale directory, imports all category slices, and merges them into a single tree via `Object.assign`
 - Locale values are nested objects accessed through dot-path keys. `general.defaults.base_trigger_words` is a string array used for locale-specific persona defaults.
+- `tools.intent_packs` holds keyword lists that let non-English messages reach detectors whose built-in patterns are English: `deliberate.<target>` for each Deliberate Tool Mode target and `explicit_memory` for explicit memory requests. `src/utils/text/localeIntentPacks.ts` unions every authored locale's list instead of following the user's preference, because members of a bilingual server type in either language. Entries are literal text with an optional trailing `*` word stem, no regex syntax, and at least two characters when written in Han, kana, or Hangul; those scripts match as substrings. `getLocaleStringList()` reads one locale's list with no English fallback. English deliberate packs stay empty because the built-in patterns already cover English.
 - Directory names must be [Discord locale codes](https://docs.discord.com/developers/reference#locales). Unsupported names and alias-key directories are logged and skipped, so they cannot break command registration.
 
 Example lookup:
@@ -32,6 +33,7 @@ localizer(locale, "commands.config.setup.description")
 - Locale lookup tries an exact authored code, then an alias, then an unambiguous base-language match, then `en-US`. For example, `es-ES` uses the authored `es-419` tree once that tree exists; unsupported codes use English.
 - Missing key falls back to `en-US` for that key alone (see below).
 - Multi-line strings are dedented automatically on load.
+- Values interpolated into user-facing strings resolve through the same authored-locale chain, so their language matches the sentence around them: dates through `formatTimeWithOffset(date, offset, options, locale)`, durations through `formatLocalizedDuration()`, and integer grouping through `formatLocaleInteger()`. Durations use `Intl` unit formatting rather than locale keys because some languages have several plural forms. Model-facing text keeps English values: `formatTimeRemaining()`, tool results, and context builders that omit the locale.
 - Rendered strings used as embed protocol data are registered in `src/utils/discord/embedProtocol.ts`.
   Startup builds one reverse lookup from the authored locale trees and fails on a title collision
   between distinct protocol keys. Template keys must retain the same placeholder names and counts
@@ -96,6 +98,8 @@ Each locale exports a nested object (not a flat key-value map).
 
 `general.language_name` is the locale's endonym shown in `/personal config` > Profile > General.
 `general.defaults.bot_name` and `general.defaults.base_trigger_words` own localized defaults.
+Trigger-word reservation reads `getAllBaseTriggerWords()`, the union across authored locales, so an
+alter can never claim the bot's name in any shipped language.
 `BASE_TRIGGER_WORDS` remains a global chat-trigger detection setting and does not supply the
 locale-specific persona default list. The language modal uses a String Select, which holds at most
 25 options; beyond that, the picker needs pagination or another selection flow.

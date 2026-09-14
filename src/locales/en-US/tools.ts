@@ -164,5 +164,33 @@ export default {
       reading_offset_line: `Starting from character {start_index}`,
       reading_footer: `This may take a moment depending on the page size`,
     },
+    intent_packs: {
+      // English stays empty because the built-in patterns in deliberateToolMode.ts already cover
+      // English grammar; keywords here would widen English matching beyond those patterns.
+      deliberate: {
+        image: [],
+        video: [],
+        voice: [],
+        reminder: [],
+        "cross-channel": [],
+        search: [],
+        memory: [],
+        "media-analysis": [],
+        "message-action": [],
+        "user-blocking": [],
+        "user-info": [],
+        sticker: [],
+        thread: [],
+        capabilities: [],
+      },
+      explicit_memory: [
+        "remember",
+        "don't forget",
+        "note",
+        "commit to memory",
+        "for future conversations",
+        "for future reference",
+      ],
+    },
   },
 };

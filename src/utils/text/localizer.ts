@@ -5,6 +5,7 @@ import { isDiscordLocaleCode, LOCALE_ALIASES, type LocaleCode } from "@/constant
 import type { LocaleObject, Locales, LocaleValue, LocalizerVariables } from "../../types/discord/global";
 import { log } from "../misc/logger";
 import { initializeEmbedProtocol } from "@/utils/discord/embedProtocol";
+import { initializeIntentPacks } from "@/utils/text/localeIntentPacks";
 
 const locales: Locales = {};
 let isInitialized = false; // Track initialization state
@@ -90,6 +91,7 @@ export async function initializeLocalizer(): Promise<void> {
       isInitialized = true;
       try {
         initializeEmbedProtocol();
+        initializeIntentPacks();
       } catch (error) {
         isInitialized = false;
         throw error;
@@ -298,6 +300,24 @@ export function hasLocaleKey(locale: string, key: string): boolean {
 }
 
 /**
+ * A string-list leaf from exactly one authored locale, with no `en-US` fallback. Intent packs take
+ * the union across locales, so substituting English for a missing list would silently duplicate it.
+ */
+export function getLocaleStringList(locale: string, key: string): string[] | undefined {
+  if (!isInitialized) return undefined;
+
+  let value: unknown = locales[locale];
+  for (const segment of key.split(".")) {
+    if (typeof value !== "object" || value === null || Array.isArray(value) || !Object.hasOwn(value, segment)) {
+      return undefined;
+    }
+    value = (value as Record<string, unknown>)[segment];
+  }
+
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? [...value] : undefined;
+}
+
+/**
  * Uses the localization system to fetch the appropriate bot name based on the server's locale.
  * Falls back to the generic environment default when no locale key is available.
  * @param locale - The locale code (e.g., 'en-US', 'ja')
@@ -335,4 +355,19 @@ export function getBaseTriggerWords(locale: string): string[] {
   };
 
   return readWords(resolveSupportedLocale(locale)) ?? readWords(FALLBACK_LOCALE) ?? [...DEFAULT_BASE_TRIGGER_WORDS];
+}
+
+/** Groups an integer the way the resolved authored locale does, matching the sentence around it. */
+export function formatLocaleInteger(value: number, locale: string): string {
+  return Math.round(value).toLocaleString(resolveSupportedLocale(locale));
+}
+
+/**
+ * Base trigger words from every authored locale, deduplicated. Trigger-word reservation uses the
+ * union because a server's members can address the bot in any language the bot ships, and an alter
+ * must never claim the bot's localized name.
+ */
+export function getAllBaseTriggerWords(localeCodes: readonly string[] = getSupportedLocales()): string[] {
+  const codes = localeCodes.length > 0 ? localeCodes : [FALLBACK_LOCALE];
+  return [...new Set(codes.flatMap((code) => getBaseTriggerWords(code)))];
 }

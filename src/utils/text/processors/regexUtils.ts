@@ -16,3 +16,14 @@ export function escapeRegExp(s: string): string {
 export function wrapWithWordBoundary(pattern: string): string {
   return `(?<![\\p{L}\\p{N}\\p{M}_])${pattern}(?![\\p{L}\\p{N}\\p{M}_])`;
 }
+
+const UNSPACED_SCRIPT_PATTERN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+/**
+ * True for text containing Han, kana, or Hangul. Words in those scripts must be matched as
+ * substrings: Han and kana prose has no spaces, and Hangul attaches particles directly to the noun
+ * (토모리야), so {@link wrapWithWordBoundary} would reject nearly every real use.
+ */
+export function isUnspacedScriptText(text: string): boolean {
+  return UNSPACED_SCRIPT_PATTERN.test(text);
+}

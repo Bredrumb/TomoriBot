@@ -515,15 +515,12 @@ export async function executeUserImpersonation(
           : localizer(locale, "genai.generic_error_description", {
               error_message: error instanceof Error ? error.message : "Unknown error",
             });
+      const errorEmbed = new EmbedBuilder()
+        .setTitle(localizer(locale, isTimeoutError ? "genai.error_stream_timeout_title" : "genai.generic_error_title"))
+        .setDescription(description)
+        .setColor(ColorCode.ERROR);
       await interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(
-              localizer(locale, isTimeoutError ? "genai.error_stream_timeout_title" : "genai.generic_error_title"),
-            )
-            .setDescription(description)
-            .setColor(ColorCode.ERROR),
-        ],
+        embeds: [isTimeoutError ? stampProtocolEmbed(errorEmbed, "diagnostic") : errorEmbed],
       });
     }
   }

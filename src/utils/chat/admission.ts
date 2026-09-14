@@ -11,7 +11,7 @@ import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHel
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
 import { getBlockedSendReason } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { escapeRegExp, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
+import { escapeRegExp, isUnspacedScriptText, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { doesMessageMatchTrigger, isMatrixRelayMessage, isRealUserLikeMessage } from "@/utils/chat/triggerProcessor";
 import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat/channelQueue";
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
@@ -34,6 +34,15 @@ function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
   if (!client.user) return false;
   const botMember = guild.members.cache.get(client.user.id);
   return botMember?.isCommunicationDisabled() ?? false;
+}
+
+/**
+ * Admission runs before the trigger user is loaded or registered, so their stored language
+ * preference is unavailable; the invoker's client locale and then the guild locale are the best
+ * signals at this depth.
+ */
+function resolveAdmissionNoticeLocale(incoming: ChatIncoming): string {
+  return incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US";
 }
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
@@ -378,11 +387,15 @@ async function evaluateAudioTranscriptionAdmission(args: {
       transcriptionResult.failureReason !== "no_endpoint" &&
       transcriptionResult.failureReason !== "missing_api_key"
     ) {
-      await sendStandardEmbed(message.channel as Parameters<typeof sendStandardEmbed>[0], "en-US", {
-        color: ColorCode.WARN,
-        titleKey: "general.errors.voice_transcription_failed_title",
-        descriptionKey: "general.errors.voice_transcription_failed_description",
-      });
+      await sendStandardEmbed(
+        message.channel as Parameters<typeof sendStandardEmbed>[0],
+        resolveAdmissionNoticeLocale(incoming),
+        {
+          color: ColorCode.WARN,
+          titleKey: "general.errors.voice_transcription_failed_title",
+          descriptionKey: "general.errors.voice_transcription_failed_description",
+        },
+      );
     }
     return {
       incoming,
@@ -526,7 +539,7 @@ export async function resolveAdmissionChannelScope(
     Boolean(incoming.manualTriggerInvoker || incoming.reminderRecipientID || incoming.reminderData?.self_reminder);
   if (!hasExplicitErrorVisibility && !shouldShowError && message.content) {
     shouldShowError = BASE_TRIGGER_WORDS.some((baseWord) => {
-      if (/[\u3040-\u30FF\u4E00-\u9FFF]/.test(baseWord)) {
+      if (isUnspacedScriptText(baseWord)) {
         return message.content.includes(baseWord);
       }
       return new RegExp(wrapWithWordBoundary(escapeRegExp(baseWord)), "iu").test(message.content);
@@ -545,7 +558,7 @@ export async function resolveAdmissionChannelScope(
   }
 
   if (shouldShowError && "send" in channel && message.author.id !== client.user?.id) {
-    const errorEmbed = createStandardEmbed("en-US", {
+    const errorEmbed = createStandardEmbed(resolveAdmissionNoticeLocale(incoming), {
       color: ColorCode.ERROR,
       titleKey: "general.errors.channel_not_supported_title",
       descriptionKey: "general.errors.channel_not_supported_description",

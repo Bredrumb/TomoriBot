@@ -3,7 +3,6 @@ import type {
   ProviderFeatureImplementation,
   ProviderFeatureName,
   ProviderInfo,
-  SupportedParam,
 } from "@/types/provider/interfaces";
 import { getCustomProviderDisplayName, isCustomProvider } from "@/utils/provider/customProviderUtils";
 import * as path from "node:path";
@@ -163,14 +162,4 @@ export function getAllProviderChoices(): Array<{ name: string; value: string }> 
  */
 export function getProviderAddChoiceDescriptionKey(providerName: string): string | undefined {
   return providerAddChoiceDescriptionKeys[normalizeProviderName(providerName)];
-}
-
-/**
- * Returns a locale-formatted list of provider display names
- * that support the given generation parameter.
- */
-export function getProviderDisplayNamesForParam(param: SupportedParam, locale: string): string {
-  const separator = locale === "ja" ? "\u3001" : ", ";
-  const names = providerInfos.filter((info) => info.supportedParams.includes(param)).map((info) => info.displayName);
-  return names.join(separator);
 }

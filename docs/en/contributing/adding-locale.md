@@ -10,6 +10,8 @@ This guide walks through adding support for a new display language in TomoriBot.
 
 2. Add `general.language_name` as the language's own name, plus localized `general.defaults.bot_name` and `general.defaults.base_trigger_words`. The language picker in `/personal config` > Profile > General reads the names from authored locale files. Its String Select can hold at most 25 locales; adding more requires a paginated picker.
 
+   Also fill `tools.intent_packs`: the words and short phrases native speakers type when asking for each Deliberate Tool Mode target, plus phrases for an explicit "remember this" request. These are not translations of the English patterns. Lean toward catching more requests rather than fewer, end an entry with `*` to match a word stem, and never use regex syntax. Entries in Chinese, Japanese, or Korean need at least two characters.
+
 3. Add UI keys from `en-US`. Missing translations fall back per key to English and appear as advisory parity findings, while a source key absent from every locale is blocking. `initializeLocalizer()` discovers valid authored directories at startup. Command registration also emits active aliases automatically.
 
 Protocol keys listed in `src/utils/discord/embedProtocol.ts` are persisted through rendered embed text. A

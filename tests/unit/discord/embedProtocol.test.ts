@@ -140,4 +140,15 @@ describe("embed protocol", () => {
     );
     expect(findReplyContextTargetInMessage(message(marked))).toEqual({ channelId: "2", messageId: "3" });
   });
+
+  it("stamps reminder delivery-failure notices as diagnostics in every authored locale", () => {
+    for (const locale of ["en-US", "ja"]) {
+      for (const titleKey of ["reminders.reminder_triggered_title", "reminders.task_triggered_title"]) {
+        const embed = createStandardEmbed(locale, { titleKey, description: "Original content" });
+        expect(embed.toJSON().footer?.text).toContain("[tomori:v1:diagnostic]");
+        expect(classifyProtocolTitle(localizer(locale, titleKey))).toBe("diagnostic");
+        expect(checkTargetEmbed(embed.toJSON() as unknown as Embed).isTarget).toBe(false);
+      }
+    }
+  });
 });

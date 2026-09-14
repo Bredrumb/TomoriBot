@@ -145,7 +145,9 @@ A chunk break can only happen at the boundary *between* such regions, never insi
 - URLs (matched outside markdown link parens) — never split.
 - Markdown spans: bold (`**` / `__`), italic (`*` / `_`), strikethrough (`~~`),
   inline code (`` ` ``), and links (`[text](url)`).
-- Quoted strings: English `"..."` and Japanese `「...」`.
+- Quoted strings: straight `"..."` and every distinct open/close pair in `PAIRED_QUOTE_MARKS`
+  (`「」`, `『』`, `｢｣`, `«»`, `‹›`, `“”`, `〈〉`, `《》`). `'` and `‘’` are excluded because they
+  double as apostrophes.
 - Balanced parentheses `(...)`.
 - Discord custom emoji tags `<:name:id>` and `<a:name:id>`.
 
@@ -188,16 +190,19 @@ Standalone-punctuation chunks (a chunk that is purely `.,!?;:。！？、，` af
 merged into the previous or next chunk by `mergeStandalonePunctuationChunks`, preventing orphan
 punctuation messages.
 
-At `HEAVY`, `humanizeString()` lowercases the sentence, strips semicolons, and independently rolls
-each comma (`,`/`、`) between remove / flush / keep and each run of `!`/`?`/`！`/`？` between flush /
+At `HEAVY`, `humanizeString()` lowercases the sentence, strips semicolons (`;`/`；`), and independently rolls
+each comma (`,`/`、`/`，`/`､`) between remove / flush / keep and each run of `!`/`?`/`！`/`？` between flush /
 keep (marks are never removed). A "flush" strips the comma (the mark stays for `!`/`?`) and splits
 the sentence into an additional Discord message, sent through the same typing-simulated path as
 the sentence-per-message split above, because `sendSegment()` pushes every returned piece into
 `finalMessageChunks` rather than embedding a literal newline. An ASCII `,`/`!`/`?` only rolls when
 whitespace or the end of the text follows it, so tokens like `1,000`, `a,b`, `<@!id>`, `!help`,
-and `?...` are never stripped or split; full-width `、`/`！`/`？` have no such requirement because
-Japanese prose has no spaces. Any comma/mark inside `**bold**`, `*italic*`, `~~strikethrough~~`,
-`||spoiler||`, a `"quoted"` or `「quoted」` span, a parenthesized aside, or a
+and `?...` are never stripped or split; full-width `、`/`，`/`！`/`？` have no such requirement because
+CJK prose has no spaces. Every rule classifies by character script, never by the user's locale,
+because a persona can reply in a language other than the user's preference: lowercasing applies to
+every cased script (accented Latin, Cyrillic, Greek) and leaves uncased scripts unchanged, and
+sender prefixes and inline code are protected in any script. Any comma/mark inside `**bold**`, `*italic*`, `~~strikethrough~~`,
+`||spoiler||`, a `"quoted"` span or any `PAIRED_QUOTE_MARKS` pair, a parenthesized aside, or a
 `[markdown link](url)` is also left untouched, so a flush can never sever formatting across two
 messages. More messages per reply means a server's `send_message_limit` is reached sooner; that
 tradeoff is accepted. Sample dialogues and dialogue-history

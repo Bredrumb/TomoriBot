@@ -1515,7 +1515,7 @@ async function runPersonaWrite(
           tone: "success",
           heading: localizer(locale, "commands.forget.personaprompt.success_title"),
           detail: preview.truncated
-            ? `${detail}\n-# ${localizer(locale, textPreviewFooterKey(preview) as string, textPreviewFooterVars(preview))}`
+            ? `${detail}\n-# ${localizer(locale, textPreviewFooterKey(preview) as string, textPreviewFooterVars(preview, locale))}`
             : detail,
         },
         telemetry: "server-config.workspace.persona-prompt.remove",

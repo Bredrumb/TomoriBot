@@ -15,6 +15,10 @@
     docs: {
       open_button_label: `詳しく見る`,
     },
+    duration: {
+      now: `今すぐ`,
+      under_a_minute: `1分未満`,
+    },
     legal: {
       policy_reference: `現在の利用規約とプライバシーポリシーは、いつでも \`/legal terms-of-service\` と \`/legal privacy-policy\` で確認できます。`,
       setup_agreement: `TomoriBotをセットアップすることで、\`/legal terms-of-service\`と\`/legal privacy-policy\`に同意し、メッセージの取り扱いをサーバーメンバーに知らせることになります`,

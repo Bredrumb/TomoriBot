@@ -2,7 +2,7 @@ import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamConfig } from "@/types/stream/interfaces";
 import { type ChunkProcessingResult, DISCORD_STREAMING_CONSTANTS, type StreamState } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
-import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
+import { createSentenceSplitRegex, PAIRED_QUOTE_MARKS } from "@/utils/text/processors/chunkProcessor";
 import {
   extractMarkdownTableSegments,
   findMarkdownTableBlockAt,
@@ -62,7 +62,9 @@ export function findRegularOverflowFlushIndex(buffer: string, targetLength: numb
     if (!ch) return false;
 
     if (ch === "\n") return true;
-    if (!/[.!?。！？]/.test(ch)) return false;
+    // Full-width terminators need no following whitespace because CJK prose has no spaces.
+    if (/[。！？．｡]/.test(ch)) return true;
+    if (!/[.!?]/.test(ch)) return false;
 
     const nextChar = buffer[index + 1];
     return nextChar === undefined || /\s/.test(nextChar);
@@ -206,10 +208,12 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
     return true;
   }
 
-  const japOpenCount = (buffer.match(/「/g) || []).length;
-  const japCloseCount = (buffer.match(/」/g) || []).length;
-  if (japOpenCount !== japCloseCount) {
-    log.info("Stream: Buffer has unbalanced Japanese quotes");
+  // Only surplus openers hold the buffer, for the same never-closing stall described above.
+  const unclosedQuotePair = PAIRED_QUOTE_MARKS.find(
+    ([open, close]) => buffer.split(open).length > buffer.split(close).length,
+  );
+  if (unclosedQuotePair) {
+    log.info(`Stream: Buffer has an unclosed ${unclosedQuotePair[0]} quote`);
     return true;
   }
 
@@ -286,12 +290,12 @@ function appendUnbalancedMarkerClosers(buffer: string): string {
     fixes.push("closing quote");
   }
 
-  const japOpenCount = (fixedBuffer.match(/「/g) || []).length;
-  const japCloseCount = (fixedBuffer.match(/」/g) || []).length;
-  if (japOpenCount > japCloseCount) {
-    const missingCount = japOpenCount - japCloseCount;
-    fixedBuffer += "」".repeat(missingCount);
-    fixes.push(`${missingCount} Japanese closing quote(s)`);
+  for (const [open, close] of PAIRED_QUOTE_MARKS) {
+    const missingCount = fixedBuffer.split(open).length - fixedBuffer.split(close).length;
+    if (missingCount > 0) {
+      fixedBuffer += close.repeat(missingCount);
+      fixes.push(`${missingCount} closing ${close} quote(s)`);
+    }
   }
 
   const doubleStar = (fixedBuffer.match(/\*\*/g) || []).length;

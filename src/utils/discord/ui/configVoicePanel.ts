@@ -132,7 +132,7 @@ function hasStoredVoice(persona: TomoriState | null): boolean {
 function renderPromptPreview(locale: string, prompt: string): string {
   const preview = buildTextPreview(prompt, Math.min(CV2_TEXT_PREVIEW_BUDGET, 2200));
   const footerKey = textPreviewFooterKey(preview);
-  const footer = footerKey ? `\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview))}` : "";
+  const footer = footerKey ? `\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview, locale))}` : "";
   return ["```markdown", `${preview.text}${footer}`, "```"].join("\n");
 }
 

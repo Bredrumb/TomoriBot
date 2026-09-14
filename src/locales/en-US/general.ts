@@ -15,6 +15,10 @@
     docs: {
       open_button_label: `Learn More`,
     },
+    duration: {
+      now: `now`,
+      under_a_minute: `less than a minute`,
+    },
     legal: {
       policy_reference: `View the active Terms of Service and Privacy Policy anytime with \`/legal terms-of-service\` and \`/legal privacy-policy\`.`,
       setup_agreement: `Setting up TomoriBot means you accept its \`/legal terms-of-service\` and \`/legal privacy-policy\`, and that you will let your server members know how TomoriBot handles their messages`,

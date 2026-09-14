@@ -58,6 +58,12 @@ export const PROTOCOL_KEYS: ProtocolEntry[] = [
     "max_iterations_title",
     "no_response_title",
   ].map((name) => ({ key: `genai.${name}`, kind: "diagnostic" as const })),
+  // Delivery-failure notices are diagnostic, not reminder_set: reminder_set would inject them into
+  // every model turn, while diagnostic surfaces them only when self-debug is enabled.
+  ...["reminder_triggered_title", "task_triggered_title"].map((name) => ({
+    key: `reminders.${name}`,
+    kind: "diagnostic" as const,
+  })),
   ...["reply_context_description", "reply_context_author", "reply_context_footer"].map((name) => ({
     key: `genai.message_interaction.${name}`,
     kind: "reply_context" as const,

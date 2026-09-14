@@ -42,7 +42,7 @@ import type {
   TopUserEntry,
 } from "@/utils/db/repositories/StatRepository";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
-import { localizer } from "@/utils/text/localizer";
+import { formatLocaleInteger, localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { buildDashboardPagePayload, type DashboardPage } from "@/utils/metrics/status/statusPageRenderer";
 import { buildStatsDashboardButtonId } from "@/utils/discord/statsDashboardCatalog";
@@ -85,8 +85,8 @@ export function resolveWindowFrom(timeframe: Timeframe): string | undefined {
 }
 
 /** Locale-grouped integer (e.g. 12,345). */
-function fmtInt(n: number): string {
-  return Math.round(n).toLocaleString("en-US");
+function fmtInt(n: number, locale: string): string {
+  return formatLocaleInteger(n, locale);
 }
 
 /** USD cost with 4 decimals (estimates are small). */
@@ -100,7 +100,9 @@ function fmtUsd(n: number): string {
  */
 function rankedList(locale: string, entries: Array<{ label: string; count: number }>, unit?: string): string {
   if (entries.length === 0) return localizer(locale, "commands.stats.empty");
-  return entries.map((e, i) => `**${i + 1}.** ${e.label}: \`${fmtInt(e.count)}\`${unit ? ` ${unit}` : ""}`).join("\n");
+  return entries
+    .map((e, i) => `**${i + 1}.** ${e.label}: \`${fmtInt(e.count, locale)}\`${unit ? ` ${unit}` : ""}`)
+    .join("\n");
 }
 
 /**
@@ -114,7 +116,7 @@ function modelCostList(locale: string, entries: ModelCostEntry[]): string {
   return entries
     .map(
       (e, i) =>
-        `**${i + 1}.** \`${e.model}\`: ${fmtInt(e.inputTokens)} ${inShort} / ${fmtInt(e.outputTokens)} ${outShort} / ${fmtUsd(e.cost)}`,
+        `**${i + 1}.** \`${e.model}\`: ${fmtInt(e.inputTokens, locale)} ${inShort} / ${fmtInt(e.outputTokens, locale)} ${outShort} / ${fmtUsd(e.cost)}`,
     )
     .join("\n");
 }
@@ -521,12 +523,12 @@ export async function buildPersonalTabs(args: {
   const favoriteModel = modelCost[0] ? modelCost[0].model : localizer(locale, "commands.stats.empty");
 
   const overviewFields: StatField[] = [
-    statField("commands.stats.fields.messages_personal", fmtInt(messages)),
+    statField("commands.stats.fields.messages_personal", fmtInt(messages, locale)),
     statField("commands.stats.fields.favorite_persona_short", favoritePersonaName),
     statField("commands.stats.fields.favorite_model", favoriteModel),
     sepField(),
-    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
-    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens, locale)),
+    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens, locale)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
   if (!isToday) {
@@ -559,17 +561,17 @@ export async function buildPersonalTabs(args: {
   if (isAllTime) {
     overviewFields.push(
       sepField(),
-      statField("commands.stats.fields.personal_memories", fmtInt(memoriesSaved)),
-      statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards)),
-      statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
+      statField("commands.stats.fields.personal_memories", fmtInt(memoriesSaved, locale)),
+      statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards, locale)),
+      statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments, locale)),
     );
   }
   overviewFields.push(
     sepField(),
-    statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
-    statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
+    statField("commands.stats.fields.images", fmtInt(generations.imageGenerations, locale)),
+    statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations, locale)),
   );
-  overviewFields.push(statField("commands.stats.fields.commands", fmtInt(commands)));
+  overviewFields.push(statField("commands.stats.fields.commands", fmtInt(commands, locale)));
 
   const personaFields: StatField[] = [
     statField("commands.stats.fields.favorite_persona", favoritePersonaText, false),
@@ -615,9 +617,9 @@ export async function buildPersonalTabs(args: {
       labelKey: "commands.stats.tabs.models_label",
       page: page("commands.stats.tabs.models_title", subtitle, [
         statField("commands.stats.fields.top_models", modelCostList(locale, modelCost), false),
-        statField("commands.stats.fields.model_diversity", fmtInt(models.length)),
-        statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
-        statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+        statField("commands.stats.fields.model_diversity", fmtInt(models.length, locale)),
+        statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens, locale)),
+        statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens, locale)),
         statField("commands.stats.fields.est_cost", fmtUsd(cost)),
       ]),
     },
@@ -734,19 +736,19 @@ export async function buildPersonaTabs(args: {
   // ── Overview (mirrors the personal/server core: messages, cost, memories,
   //    rewards/punishments; raw token volume lives in the Models tab). ──
   const overviewFields: StatField[] = [
-    statField("commands.stats.fields.messages_persona", fmtInt(messages)),
+    statField("commands.stats.fields.messages_persona", fmtInt(messages, locale)),
     sepField(),
-    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
-    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens, locale)),
+    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens, locale)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
   if (isAllTime) {
     overviewFields.push(
       sepField(),
-      statField("commands.stats.fields.personal_memories_created", fmtInt(personalMemoryCount)),
-      statField("commands.stats.fields.server_memories_created", fmtInt(serverMemoryCount)),
-      statField("commands.stats.fields.rewards_received", fmtInt(conditioning.rewards)),
-      statField("commands.stats.fields.punishments_received", fmtInt(conditioning.punishments)),
+      statField("commands.stats.fields.personal_memories_created", fmtInt(personalMemoryCount, locale)),
+      statField("commands.stats.fields.server_memories_created", fmtInt(serverMemoryCount, locale)),
+      statField("commands.stats.fields.rewards_received", fmtInt(conditioning.rewards, locale)),
+      statField("commands.stats.fields.punishments_received", fmtInt(conditioning.punishments, locale)),
     );
   }
 
@@ -809,8 +811,8 @@ export async function buildPersonaTabs(args: {
       labelKey: "commands.stats.tabs.models_label",
       page: page("commands.stats.tabs.models_title", subtitle, [
         statField("commands.stats.fields.top_models", modelCostList(locale, modelCost), false),
-        statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
-        statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+        statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens, locale)),
+        statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens, locale)),
         statField("commands.stats.fields.est_cost", fmtUsd(cost)),
       ]),
     },
@@ -925,28 +927,28 @@ export async function buildServerTabs(args: {
   // persona view to keep this card focused on conversational affinity). ──
   // Group 1: trigger count + top persona + top model.
   const overviewFields: StatField[] = [
-    statField("commands.stats.fields.messages", fmtInt(messages)),
+    statField("commands.stats.fields.messages", fmtInt(messages, locale)),
     statField("commands.stats.fields.most_popular_persona", mostPopularPersonaName),
     statField("commands.stats.fields.most_popular_model", mostPopularModel),
     sepField(),
-    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
-    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+    statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens, locale)),
+    statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens, locale)),
     statField("commands.stats.fields.est_cost", fmtUsd(cost)),
   ];
   if (isAllTime) {
     overviewFields.push(
       sepField(),
-      statField("commands.stats.fields.server_memories", fmtInt(serverMemoryCount)),
-      statField("commands.stats.fields.member_memories", fmtInt(memberMemoryCount)),
-      statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards)),
-      statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments)),
+      statField("commands.stats.fields.server_memories", fmtInt(serverMemoryCount, locale)),
+      statField("commands.stats.fields.member_memories", fmtInt(memberMemoryCount, locale)),
+      statField("commands.stats.fields.rewards", fmtInt(conditioning.rewards, locale)),
+      statField("commands.stats.fields.punishments", fmtInt(conditioning.punishments, locale)),
     );
   }
   overviewFields.push(
     sepField(),
-    statField("commands.stats.fields.images", fmtInt(generations.imageGenerations)),
-    statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations)),
-    statField("commands.stats.fields.commands", fmtInt(commands)),
+    statField("commands.stats.fields.images", fmtInt(generations.imageGenerations, locale)),
+    statField("commands.stats.fields.videos", fmtInt(generations.videoGenerations, locale)),
+    statField("commands.stats.fields.commands", fmtInt(commands, locale)),
   );
 
   const leaderboardFields: StatField[] = [
@@ -999,8 +1001,8 @@ export async function buildServerTabs(args: {
       labelKey: "commands.stats.tabs.models_label",
       page: page("commands.stats.tabs.models_title", subtitle, [
         statField("commands.stats.fields.top_models", modelCostList(locale, modelCost), false),
-        statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens)),
-        statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens)),
+        statField("commands.stats.fields.tokens_in", fmtInt(tokens.inputTokens, locale)),
+        statField("commands.stats.fields.tokens_out", fmtInt(tokens.outputTokens, locale)),
         statField("commands.stats.fields.est_cost", fmtUsd(cost)),
       ]),
     },

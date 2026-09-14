@@ -26,6 +26,7 @@ import {
   neutralizeFenceRuns,
   truncateDiscordText,
 } from "@/utils/text/discordTextLimits";
+import { formatLocaleInteger } from "@/utils/text/localizer";
 
 /**
  * Character budget for a preview rendered inside a Components V2 workflow card.
@@ -114,9 +115,9 @@ export function textPreviewFooterKey(preview: TextPreview): string | undefined {
  *
  * @returns Localizer vars with thousands-separated counts.
  */
-export function textPreviewFooterVars(preview: TextPreview): Record<string, string> {
+export function textPreviewFooterVars(preview: TextPreview, locale: string): Record<string, string> {
   return {
-    shown: preview.shownChars.toLocaleString("en-US"),
-    total: preview.totalChars.toLocaleString("en-US"),
+    shown: formatLocaleInteger(preview.shownChars, locale),
+    total: formatLocaleInteger(preview.totalChars, locale),
   };
 }

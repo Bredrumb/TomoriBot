@@ -760,7 +760,7 @@ function renderProviderName(locale: string, value: string): string {
   const rendered = escapeDiscordMarkdown(preview.text);
   const footerKey = textPreviewFooterKey(preview);
   if (!footerKey) return rendered;
-  return `${rendered}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview))}`;
+  return `${rendered}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview, locale))}`;
 }
 
 function buildCapabilitySection(
@@ -803,7 +803,7 @@ function capEntryBody(locale: string, body: string): string {
   const preview = buildTextPreview(body, ENTRY_BODY_LIMIT);
   const footerKey = textPreviewFooterKey(preview);
   if (!footerKey) return preview.text;
-  return `${preview.text}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview))}`;
+  return `${preview.text}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview, locale))}`;
 }
 
 function buildEntryActions(
