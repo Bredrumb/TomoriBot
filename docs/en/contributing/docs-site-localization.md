@@ -34,10 +34,16 @@ the two matchers. Edit both when either changes.
 
 A locale entry has a `docsTree` flag. While it is `false`:
 
-- The locale root is not a route, so nothing 404s into a locale that has no content.
+- The locale root serves a 404 rather than serving English, which is the honest answer for a URL with no
+  content behind it.
 - Starlight does not register the locale, so no sidebar, sitemap, or alternate is emitted for it.
 - The bot's docs links resolve to English instead of a prefix that does not exist.
-- The site root never redirects a browser to it.
+
+The flag governs content and link building, not request routing. Routing comes from the middleware's own
+routed list, which already names every locale root in `DOCS_LOCALES`, so the site root can send a visitor
+whose `Accept-Language` matches a staged locale to that locale's root and answer with a 404 until the flag
+flips. That is the intended staging state rather than a bug: the URL exists and answers honestly instead of
+silently serving English under a locale address.
 
 Setting it to `true` is the act of publishing. `tests/unit/docs/docsLocaleConfig.test.ts` fails if the flag
 and the `docs/` directory disagree, in either direction.
@@ -87,6 +93,25 @@ fallback behavior. That fallback route:
 - Shows the locale's own draft disclaimer, so a reader knows the page is not translated yet.
 
 Publishing a translation flips all four automatically and adds the alternate pair.
+
+### Links inside a translated page
+
+Starlight emits a per-locale route set but does not rewrite a root-relative `href` in page source into the
+current locale's prefix. An unprefixed route in a translated file therefore resolves through the bare-route
+redirect and ejects the reader into English.
+
+- English pages keep unprefixed routes such as `/features/knowledge/memory/`.
+- A translated page prefixes its own locale for a destination that exists in that locale:
+  `/ja/features/knowledge/memory/`.
+- A translated page links to `/en/...` for a page outside the reader-facing scope or one whose translation
+  has not landed.
+- Fragments follow the destination page's own headings, in whichever tree that destination lives.
+
+The `ja` tree is the worked example: most of its links carry `/ja/`, and the ones that carry `/en/` are pages
+the Japanese tree does not have. Two links under `docs/ja/legal/` still use unprefixed routes and send a
+Japanese reader to English; Japanese catch-up owns fixing them.
+`bun run check-locale-links` only scans absolute `docs.tomoribot.app` URLs, so this rule has no automated
+backstop for Markdown source.
 
 ## Review Notices and `aiGenerated`
 

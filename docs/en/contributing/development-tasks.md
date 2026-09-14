@@ -15,7 +15,7 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 | Add a built-in tool | [`adding-builtin-tool.md`](/contributing/adding-builtin-tool/) |
 | Add a DB column | [`adding-db-column.md`](/contributing/adding-db-column/) |
 | Add a Full Install setup module | [`adding-setup-module.md`](/contributing/adding-setup-module/) |
-| Add a locale | [`adding-locale.md`](/contributing/adding-locale/) |
+| Add a locale | [`adding-locale/`](/contributing/adding-locale/) |
 | Add a new AI provider | [`adding-new-provider.md`](/contributing/adding-new-provider/) |
 | Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) |
 | Add a persona preset | [`adding-persona-preset.md`](/contributing/adding-persona-preset/) |

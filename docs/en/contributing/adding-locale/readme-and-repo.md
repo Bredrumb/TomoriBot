@@ -25,19 +25,30 @@ for languages you are not writing. The English label stays `English` in every la
 The two surfaces use **different** link rules, and mixing them up is the most common localization
 defect:
 
+Links are the surface where a translated page and a translated README diverge most, because the two are
+rendered by different systems:
+
 | Surface | Rule |
 |---|---|
-| Docs source Markdown under `docs/` | Root-relative, unprefixed by locale: `/features/knowledge/memory/`. The docs router applies the active locale |
-| Translated README under `.github/` | Target-locale absolute docs URL for a page that exists in that locale, and the English absolute URL for an excluded or missing page |
+| English docs Markdown under `docs/en/` | Root-relative, unprefixed route: `/features/knowledge/memory/`. English is where those routes resolve |
+| Translated docs Markdown under `docs/{locale}/` | Root-relative with the page's own locale prefix when the destination exists in that locale: `/ja/features/knowledge/memory/`. The English destination when it does not |
+| Translated README under `.github/` | Absolute target-locale docs URL for a page that exists in that locale, and the absolute English URL for an excluded or missing page |
 | Everything else in a README (relative paths, images, code, command examples, badges) | Unchanged |
 
 A README is rendered by GitHub, which knows nothing about the docs router, so a root-relative
 `/features/...` link there resolves to `github.com/features/...`. Always write the full
 `https://docs.tomoribot.app/...` destination in a README.
 
-Within docs source, a root-relative route is what lets the site serve the English page at the locale
-URL when the translation is missing. Prefer the English destination for anything in
-`architecture/`, `contributing/`, or `wiki/`, because those sections stay English in every locale.
+The locale prefix in translated docs source is what keeps a reader in their language. Starlight does not
+rewrite root-relative `href` values into the current locale's prefix, in Markdown links or in component
+props, so an unprefixed route in a translated page resolves through the bare-route redirect into English.
+A card `href` is therefore written per locale file: the English file keeps the unprefixed route and the
+translated file writes its own prefix. Prefer the English destination only for anything in
+`architecture/`, `contributing/`, or `wiki/`, which stay English in every locale, or for a page whose
+translation has not landed.
+
+The full rule, with the evidence behind it, is in
+[Documentation](/contributing/adding-locale/documentation/).
 
 ## Fragments
 
@@ -53,9 +64,11 @@ heading changes its anchor:
 
 Verify fragments against the rendered target in the locale you are writing, not against the English
 page. `bun run check-locale-links` extracts anchors from explicit `<a id="...">` tags, `{#custom-id}`
-suffixes, and slugified headings, then fails on a fragment that resolves to nothing. It resolves a
-project-owned route in the linking file's own locale tree first and then in the default tree, so a
-link to an untranslated English page passes while a link to a page that exists nowhere fails.
+suffixes, and slugified headings, then fails on a fragment that resolves to nothing. It scans absolute
+`docs.tomoribot.app` URLs, which covers locale strings and READMEs, and it resolves a project-owned
+route in the linking file's own locale tree first and then in the default tree, so a link to an
+untranslated English page passes while a link to a page that exists nowhere fails. It does not read
+root-relative Markdown links in `docs/`, so a docs fragment is on the translator and the reviewer.
 
 ## Third-Party URLs
 

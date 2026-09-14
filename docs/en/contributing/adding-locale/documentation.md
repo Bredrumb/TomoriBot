@@ -82,7 +82,12 @@ makes the locale a real route. While it is `false`:
 - Starlight registers no locale for it, so there is no sidebar, sitemap entry, or `hreflang` alternate
   configured for it.
 - The bot's docs links resolve to English instead of a prefix that does not exist.
-- The site root never redirects a browser to it.
+
+The flag governs content and link building. It does **not** govern request routing, because the
+middleware decides that from its own routed list, which already names every locale root in the shared
+table. So the site root can send a visitor whose `Accept-Language` matches a staged locale to that
+locale's root, where they get a 404 until `docsTree` flips. That is the intended staging state: the URL
+exists and answers honestly instead of silently serving English under a locale address.
 
 The pre-staged shared surfaces a locale relies on:
 
@@ -113,12 +118,11 @@ Functions bundler follows relative imports outside the published directory but d
 repo's `@/*` tsconfig alias, which the shared table needs. A test pins the routed list against
 `DOCS_LOCALES` and compares the two matchers on every header they can disagree on.
 
-The routed list is wider than the published set on purpose: it names every locale root the shared
-table registers, whether or not that locale's tree has landed. A staged root serves its content once
-`docsTree` is true and a 404 until then, so registering the roots ahead of the content is what lets a
-translation lane work without editing the middleware. Because of that, the site root can send a
-visitor to a staged root that has no page behind it yet, which is the intended staging state rather
-than a rule disagreement.
+The routed list names every locale root the shared table registers, whether or not that locale's tree
+has landed, and that is why the site root can answer a staged locale with a 404. Registering the roots
+ahead of the content is what lets a translation lane work without editing the middleware. Because the
+routed list is wider than `PUBLISHED_DOCS_LOCALES`, the two resolvers legitimately diverge on a staged
+locale, and the test compares them only where the shared matcher picked a published tree.
 
 An `es-ES` browser reaches the `es-419` tree through `DOCS_LOCALE_ALIASES`, which is inverted from the
 bot's `LOCALE_ALIASES` so one alias decision covers runtime strings and docs destinations.
@@ -135,20 +139,41 @@ paraphrasing.
 
 ## Translated Docs And Locale Strings
 
-Two link rules apply, and they are opposites by design:
+A translated page must link to the destination a reader of that language should land on, and the docs
+build does not do that for you. Starlight emits a per-locale route set, but it does not rewrite a
+root-relative `href` in page source into the current locale's prefix, so an unprefixed route in a
+translated file resolves through the bare-route redirect and ejects the reader into English.
 
-- **Docs source Markdown keeps root-relative, unprefixed routes.** Write `/features/knowledge/memory/`
-  and let the router apply the active locale. A hardcoded `/pt-BR/features/...` in a Markdown file is a
-  bug, because it breaks the English fallback for that same page and pins the route to one locale.
-- **Locale strings carry absolute URLs with the locale prefix**, because they are static text that no
-  builder can rewrite at runtime. Inside an authored locale tree those URLs are hardcoded absolute
-  destinations prefixed with the published locale, so repointing them to `/{locale}/...` is the last
-  in-tree edit for a locale. The `ja` tree is the worked example, and its URLs live in `general.ts`,
-  `providers.ts`, `commands/config.ts`, `commands/memories.ts`, `commands/personal.ts`,
-  `commands/refresh.ts`, `commands/setup.ts`, and `commands/shared.ts`.
+That makes the rule per locale, not per section:
+
+- **English pages (`docs/en/**`) and any page outside the translated scope** keep root-relative,
+  unprefixed routes such as `/features/knowledge/memory/`. English is where those routes point.
+- **A translated page (`docs/{locale}/**`) prefixes routes with its own locale** when the destination
+  exists in that locale: `/ja/features/knowledge/memory/`. Use the locale code, not the language name.
+- **A translated page links to English when the destination is not translated**, either because it is
+  outside the reader-facing scope (`architecture/`, `contributing/`, `wiki/`) or because its
+  translation has not landed yet. `/en/self-hosting/...` is the correct destination in a Japanese page
+  for a page the Japanese tree does not have.
+- **Fragments still follow the destination's headings.** A link to a translated page uses that
+  heading's anchor; a link to the English page keeps the English anchor.
+
+The `ja` tree is the worked example and shows both directions: 206 links point at `/ja/...`, and the
+handful that point at `/en/...` are pages the Japanese tree does not carry. A few unprefixed routes
+remain and each one sends a Japanese reader to English: the two cross-links under `docs/ja/legal/`
+(`/legal/terms-of-service/` and `/legal/privacy-policy/`) and the `CardGrid` hrefs in
+`docs/ja/features/knowledge/README.mdx`. Japanese catch-up owns fixing them, and they are the reason
+this rule is stated explicitly rather than implied. Note that a component `href` follows the same rule
+as a Markdown link: it is written per locale file, because the English file must keep the unprefixed
+route.
+
+Inside an authored locale tree the runtime strings are a separate surface. They cannot call a builder,
+because they are static text, so their URLs are absolute and already carry the locale prefix. In `ja`
+those URLs live in `general.ts`, `providers.ts`, `commands/config.ts`, `commands/memories.ts`,
+`commands/personal.ts`, `commands/refresh.ts`, `commands/setup.ts`, and `commands/shared.ts`.
 
 `bun run check-locale-links` resolves each locale string's destination against the docs tree, so a
-repointed URL that does not exist fails the gate.
+repointed URL that does not exist fails the gate. It ignores root-relative Markdown links, so the docs
+link rule above has no automated backstop and rests on the translator and the reviewer.
 
 ## Related Docs
 
