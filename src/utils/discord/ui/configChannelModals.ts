@@ -131,10 +131,7 @@ export function buildConfigChannelTextModelModal(
           options: models.map((model) => ({
             label: safeSelectOptionText(model.llm_codename, 100),
             value: model.llm_codename,
-            description: safeSelectOptionText(
-              resolveDescription(model.descriptions, locale, model.llm_description) ?? "",
-              100,
-            ),
+            description: safeSelectOptionText(resolveDescription(model.descriptions, locale) ?? "", 100),
             default: model.llm_id === currentModelId,
           })),
         },

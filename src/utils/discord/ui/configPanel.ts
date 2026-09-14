@@ -1701,10 +1701,7 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
             options: input.view.models.slice(start, start + pageSize).map((model) => ({
               label: safeSelectOptionText(model.llm_codename, 100),
               value: model.llm_codename,
-              description: safeSelectOptionText(
-                resolveDescription(model.descriptions, locale, model.llm_description) ?? "",
-                100,
-              ),
+              description: safeSelectOptionText(resolveDescription(model.descriptions, locale) ?? "", 100),
               default: model.llm_id === persona.persona_llm?.llm_id,
             })),
             disabled: writesDisabled || textState === "disabled",

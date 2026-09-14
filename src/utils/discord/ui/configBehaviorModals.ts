@@ -681,7 +681,7 @@ export function buildBehaviorPresetModal(
         presets.map((preset) => ({
           label: preset.system_prompt_preset_name,
           value: preset.system_prompt_preset_name,
-          description: resolveDescription(preset.descriptions, locale, preset.system_prompt_preset_desc) ?? "",
+          description: resolveDescription(preset.descriptions, locale) ?? "",
         })),
       ),
     ],

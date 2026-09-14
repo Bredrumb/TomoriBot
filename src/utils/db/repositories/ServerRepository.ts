@@ -762,12 +762,12 @@ class ServerRepository implements IRepository<ServerExportShape> {
               llm_provider, llm_codename, has_tools, sees_images, sees_videos,
               sees_youtube, supports_structoutput, strict_role_alternation, supports_prefix_completion,
               is_smartest, is_default, is_reasoning, is_deprecated, is_free, is_uncensored,
-              llm_description, ja_description
+              llm_description, descriptions
             ) VALUES (
               ${customProviderName}, ${codename}, ${hasTools}, ${seesImages}, ${seesVideos},
               false, ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion},
               false, true, false, false, false, false,
-              ${displayName}, ${displayName}
+              ${displayName}, ${{ "en-US": displayName }}
             )
             ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
               has_tools = EXCLUDED.has_tools,
@@ -777,7 +777,7 @@ class ServerRepository implements IRepository<ServerExportShape> {
               strict_role_alternation = EXCLUDED.strict_role_alternation,
               supports_prefix_completion = EXCLUDED.supports_prefix_completion,
               llm_description = EXCLUDED.llm_description,
-              ja_description = EXCLUDED.ja_description,
+              descriptions = jsonb_set(COALESCE(llms.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${displayName}::text)),
               updated_at = CURRENT_TIMESTAMP
             RETURNING llm_id
           `;

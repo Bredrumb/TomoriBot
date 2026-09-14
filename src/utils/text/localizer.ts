@@ -136,11 +136,10 @@ function processLocaleStrings(obj: unknown): LocaleValue {
 
 const FALLBACK_LOCALE = "en-US";
 
-/** Resolve a row description while old rows and columns remain readable during migration. */
+/** Resolve a row description from its locale-keyed descriptions JSONB map. */
 export function resolveDescription(
   descriptions: Record<string, string> | null | undefined,
   locale: string,
-  legacyEnglish: string | null | undefined,
 ): string | null {
   if (descriptions) {
     const base = locale.split("-")[0];
@@ -155,7 +154,7 @@ export function resolveDescription(
     const english = descriptions[FALLBACK_LOCALE];
     if (typeof english === "string" && english.length > 0) return english;
   }
-  return legacyEnglish ?? null;
+  return null;
 }
 const DEFAULT_BASE_TRIGGER_WORDS = ["tomori", "tomo"];
 

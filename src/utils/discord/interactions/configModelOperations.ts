@@ -150,7 +150,7 @@ export async function loadConfigModelChoices(
         .map((model) => ({
           id: model.llm_id,
           name: model.llm_codename,
-          description: resolveDescription(model.descriptions, locale, model.llm_description),
+          description: resolveDescription(model.descriptions, locale),
         }));
     }
     case "embedding": {
@@ -163,7 +163,7 @@ export async function loadConfigModelChoices(
         .map((model) => ({
           id: model.embedding_model_id,
           name: model.codename,
-          description: resolveDescription(model.descriptions, locale, model.model_description),
+          description: resolveDescription(model.descriptions, locale),
         }));
     }
     case "image":
@@ -177,7 +177,7 @@ export async function loadConfigModelChoices(
         .map((model) => ({
           id: model.diffusion_model_id,
           name: model.codename,
-          description: resolveDescription(model.descriptions, locale, model.model_description),
+          description: resolveDescription(model.descriptions, locale),
         }));
     }
     case "video": {
@@ -190,7 +190,7 @@ export async function loadConfigModelChoices(
         .map((model) => ({
           id: model.video_model_id,
           name: model.codename,
-          description: resolveDescription(model.descriptions, locale, model.model_description),
+          description: resolveDescription(model.descriptions, locale),
         }));
     }
   }

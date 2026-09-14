@@ -49,7 +49,7 @@ interface TableSpec<T extends RowLike> {
 const llmSpec: TableSpec<LlmInput> = {
   table: "llms",
   columns:
-    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, ja_description, descriptions, input_price_per_million, output_price_per_million",
+    "llm_provider, llm_codename, is_smartest, is_default, is_reasoning, is_deprecated, is_free, has_tools, sees_images, sees_videos, sees_youtube, is_uncensored, supports_structoutput, strict_role_alternation, supports_prefix_completion, llm_description, descriptions, input_price_per_million, output_price_per_million",
   tuple: (m) =>
     [
       str(m.provider),
@@ -68,7 +68,6 @@ const llmSpec: TableSpec<LlmInput> = {
       bool(m.strictRoleAlternation),
       bool(m.supportsPrefixCompletion),
       desc(m.desc),
-      desc(m.i18n?.ja ?? null),
       jsonb(localizedDescriptions(m)),
       num(m.inputPricePerMillion),
       num(m.outputPricePerMillion),
@@ -81,7 +80,6 @@ const llmSpec: TableSpec<LlmInput> = {
   // Curated (non-scoped, possibly NULL) rows still upsert normally and get normalized to false.
   onConflict: `ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
   llm_description = EXCLUDED.llm_description,
-  ja_description = EXCLUDED.ja_description,
   descriptions = EXCLUDED.descriptions,
   is_smartest = EXCLUDED.is_smartest,
   is_default = EXCLUDED.is_default,
@@ -108,8 +106,7 @@ const llmSpec: TableSpec<LlmInput> = {
 
 const imageSpec: TableSpec<ImageInput> = {
   table: "image_diffusion_models",
-  columns:
-    "provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, ja_description, descriptions",
+  columns: "provider, codename, is_default, is_deprecated, is_free, is_uncensored, model_description, descriptions",
   tuple: (m) =>
     [
       str(m.provider),
@@ -119,14 +116,12 @@ const imageSpec: TableSpec<ImageInput> = {
       bool(m.isFree),
       bool(m.isUncensored),
       desc(m.desc),
-      desc(m.i18n?.ja ?? null),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
   // WHERE guard: preserve scoped OpenRouter image registrations across the per-boot reseed.
   // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
-  ja_description = EXCLUDED.ja_description,
   descriptions = EXCLUDED.descriptions,
   is_default = EXCLUDED.is_default,
   is_deprecated = EXCLUDED.is_deprecated,
@@ -143,7 +138,7 @@ const imageSpec: TableSpec<ImageInput> = {
 
 const videoSpec: TableSpec<VideoInput> = {
   table: "video_generation_models",
-  columns: "provider, codename, is_default, is_deprecated, is_free, model_description, ja_description, descriptions",
+  columns: "provider, codename, is_default, is_deprecated, is_free, model_description, descriptions",
   tuple: (m) =>
     [
       str(m.provider),
@@ -152,14 +147,12 @@ const videoSpec: TableSpec<VideoInput> = {
       bool(m.isDeprecated),
       bool(m.isFree),
       desc(m.desc),
-      desc(m.i18n?.ja ?? null),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
   // WHERE guard: preserve scoped OpenRouter video registrations across the per-boot reseed.
   // See the llmSpec onConflict note for the full rationale.
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_description = EXCLUDED.model_description,
-  ja_description = EXCLUDED.ja_description,
   descriptions = EXCLUDED.descriptions,
   is_default = EXCLUDED.is_default,
   is_deprecated = EXCLUDED.is_deprecated,
@@ -175,8 +168,7 @@ const videoSpec: TableSpec<VideoInput> = {
 
 const embeddingSpec: TableSpec<EmbeddingInput> = {
   table: "embedding_models",
-  columns:
-    "provider, codename, model_family, is_default, is_deprecated, model_description, ja_description, descriptions",
+  columns: "provider, codename, model_family, is_default, is_deprecated, model_description, descriptions",
   tuple: (m) =>
     [
       str(m.provider),
@@ -185,7 +177,6 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
       bool(m.isDefault),
       bool(m.isDeprecated),
       desc(m.desc),
-      desc(m.i18n?.ja ?? null),
       jsonb(localizedDescriptions(m)),
     ].join(", "),
   // WHERE guard: preserve scoped OpenRouter embedding registrations across the per-boot reseed.
@@ -193,7 +184,6 @@ const embeddingSpec: TableSpec<EmbeddingInput> = {
   onConflict: `ON CONFLICT (provider, codename) DO UPDATE SET
   model_family = EXCLUDED.model_family,
   model_description = EXCLUDED.model_description,
-  ja_description = EXCLUDED.ja_description,
   descriptions = EXCLUDED.descriptions,
   is_default = EXCLUDED.is_default,
   is_deprecated = EXCLUDED.is_deprecated,

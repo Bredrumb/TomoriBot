@@ -17,7 +17,6 @@ export type DiffusionModelFields = {
   provider: string;
   codename: string;
   model_description: string | null;
-  ja_description: string | null;
   descriptions: Record<string, string> | null;
   is_default: boolean;
   is_deprecated: boolean;

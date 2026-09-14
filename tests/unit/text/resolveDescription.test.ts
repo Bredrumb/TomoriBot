@@ -9,16 +9,16 @@ describe("resolveDescription", () => {
     pt: "Generic Portuguese",
   };
 
-  it("uses exact, base, matching base, English, then legacy English", () => {
-    expect(resolveDescription(descriptions, "pt-BR", "Legacy")).toBe("Portuguese");
-    expect(resolveDescription(descriptions, "pt-PT", "Legacy")).toBe("Generic Portuguese");
-    expect(resolveDescription({ "pt-BR": "Portuguese" }, "pt-PT", "Legacy")).toBe("Portuguese");
-    expect(resolveDescription(descriptions, "fr", "Legacy")).toBe("English");
-    expect(resolveDescription({ ja: "Japanese" }, "fr", "Legacy")).toBe("Legacy");
-    expect(resolveDescription(null, "ja", null)).toBeNull();
+  it("uses exact, base, matching base, then English", () => {
+    expect(resolveDescription(descriptions, "pt-BR")).toBe("Portuguese");
+    expect(resolveDescription(descriptions, "pt-PT")).toBe("Generic Portuguese");
+    expect(resolveDescription({ "pt-BR": "Portuguese" }, "pt-PT")).toBe("Portuguese");
+    expect(resolveDescription(descriptions, "fr")).toBe("English");
+    expect(resolveDescription({ ja: "Japanese" }, "fr")).toBeNull();
+    expect(resolveDescription(null, "ja")).toBeNull();
   });
 
   it("ignores empty translations", () => {
-    expect(resolveDescription({ ja: "", "en-US": "English" }, "ja", "Legacy")).toBe("English");
+    expect(resolveDescription({ ja: "", "en-US": "English" }, "ja")).toBe("English");
   });
 });

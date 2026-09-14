@@ -139,7 +139,7 @@ export function toSetupSettingsCatalogs(
     })),
     prompts: promptPresets.map((preset) => ({
       name: preset.system_prompt_preset_name,
-      description: resolveDescription(preset.descriptions, locale, preset.system_prompt_preset_desc) ?? "",
+      description: resolveDescription(preset.descriptions, locale) ?? "",
     })),
     promptTexts: new Map(promptPresets.map((preset) => [preset.system_prompt_preset_name, preset.preset_prompt_text])),
   };

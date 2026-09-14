@@ -220,7 +220,6 @@ export const llmSchema = z.object({
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
   llm_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   // Official per-model pricing (USD per million tokens, uncached standard rate). Null for
   // free/non-metered providers. OpenRouter rows are not seeded with a price but are refreshed
@@ -239,7 +238,6 @@ export const diffusionModelSchema = z.object({
   codename: z.string(),
   is_scoped_registration: z.boolean().default(false), // Shared-provider registration; exclude from global image pickers unless joined for the owner
   model_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   is_default: z.boolean().default(false),
   is_deprecated: z.boolean().default(false),
@@ -262,7 +260,6 @@ export const videoGenerationModelSchema = z.object({
   codename: z.string(),
   is_scoped_registration: z.boolean().default(false), // Shared-provider registration; exclude from global video pickers unless joined for the owner
   model_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   is_default: z.boolean().default(false),
   is_deprecated: z.boolean().default(false),
@@ -279,7 +276,6 @@ export const embeddingModelSchema = z.object({
   model_family: z.string(),
   is_scoped_registration: z.boolean().default(false), // Shared-provider registration; exclude from global embedding pickers unless joined for the owner
   model_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   is_default: z.boolean().default(false),
   is_deprecated: z.boolean().default(false),
@@ -946,7 +942,6 @@ export const naiPresetSchema = z.object({
   model_target: z.string(), // "kayra" or "erato"
   is_default: z.boolean(),
   preset_desc: z.string(), // EN human-readable description
-  ja_preset_desc: z.string().nullable(), // Legacy JA human-readable description
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   parameters: z.record(z.string(), z.unknown()),
   created_at: z.date().optional(),
@@ -1012,7 +1007,6 @@ const systemPromptPresetSchema = z.object({
   system_prompt_preset_id: z.number(),
   system_prompt_preset_name: z.string(),
   system_prompt_preset_desc: z.string(),
-  ja_description: z.string().nullable().optional(),
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   preset_prompt_text: z.string(),
   created_at: z.date().optional(),

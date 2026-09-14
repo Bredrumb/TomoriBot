@@ -518,10 +518,7 @@ function buildNaiPresetBlock(
       ? view.presets.slice(pageStart, pageStart + CONFIG_NAI_PRESET_PAGE_SIZE).map((preset, offset) => ({
           label: safeSelectOptionText(preset.preset_name, 100),
           value: String(pageStart + offset),
-          description: safeSelectOptionText(
-            resolveDescription(preset.descriptions, locale, preset.preset_desc) ?? "",
-            100,
-          ),
+          description: safeSelectOptionText(resolveDescription(preset.descriptions, locale) ?? "", 100),
           default: preset.preset_name === view.activePresetName,
         }))
       : [

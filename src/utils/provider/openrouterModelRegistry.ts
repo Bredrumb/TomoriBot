@@ -56,7 +56,7 @@ function buildRegisteredEntryFromLlm(llm: LlmRow): RegisteredOpenRouterModelEntr
   return {
     capability: "text",
     codename: llm.llm_codename,
-    description: resolveDescription(llm.descriptions, "en-US", llm.llm_description) ?? llm.llm_codename,
+    description: resolveDescription(llm.descriptions, "en-US") ?? llm.llm_codename,
     modelId: llm.llm_id,
   };
 }
@@ -69,7 +69,7 @@ function buildRegisteredEntryFromEmbeddingModel(model: EmbeddingModelRow): Regis
   return {
     capability: "embedding",
     codename: model.codename,
-    description: resolveDescription(model.descriptions, "en-US", model.model_description) ?? model.codename,
+    description: resolveDescription(model.descriptions, "en-US") ?? model.codename,
     modelId: model.embedding_model_id,
   };
 }
@@ -82,7 +82,7 @@ function buildRegisteredEntryFromDiffusionModel(model: DiffusionModelRow): Regis
   return {
     capability: "image",
     codename: model.codename,
-    description: resolveDescription(model.descriptions, "en-US", model.model_description) ?? model.codename,
+    description: resolveDescription(model.descriptions, "en-US") ?? model.codename,
     modelId: model.diffusion_model_id,
   };
 }
@@ -95,7 +95,7 @@ function buildRegisteredEntryFromVideoModel(model: VideoGenerationModelRow): Reg
   return {
     capability: "video",
     codename: model.codename,
-    description: resolveDescription(model.descriptions, "en-US", model.model_description) ?? model.codename,
+    description: resolveDescription(model.descriptions, "en-US") ?? model.codename,
     modelId: model.video_model_id,
   };
 }

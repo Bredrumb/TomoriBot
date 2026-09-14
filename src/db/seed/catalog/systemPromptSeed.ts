@@ -3,12 +3,10 @@ import { jsonb, str } from "./sql";
 import { systemPromptSections } from "./systemPrompts";
 import type { SystemPromptInput } from "./types";
 
-const SYSTEM_PROMPT_COLUMNS =
-  "system_prompt_preset_name, system_prompt_preset_desc, ja_description, descriptions, preset_prompt_text";
+const SYSTEM_PROMPT_COLUMNS = "system_prompt_preset_name, system_prompt_preset_desc, descriptions, preset_prompt_text";
 
 const SYSTEM_PROMPT_ON_CONFLICT = `ON CONFLICT (system_prompt_preset_name) DO UPDATE SET
   system_prompt_preset_desc = EXCLUDED.system_prompt_preset_desc,
-  ja_description = EXCLUDED.ja_description,
   descriptions = EXCLUDED.descriptions,
   preset_prompt_text = EXCLUDED.preset_prompt_text,
   updated_at = CURRENT_TIMESTAMP`;
@@ -21,7 +19,6 @@ function renderSystemPromptTuple(preset: SystemPromptInput): string {
   return [
     str(preset.name),
     str(preset.desc),
-    preset.i18n?.ja ? str(preset.i18n.ja) : "NULL",
     jsonb({ "en-US": preset.desc, ...preset.i18n }),
     str(preset.promptText),
   ].join(", ");

@@ -416,7 +416,7 @@ export async function loadConfigFallbackOptions(
     .map((model) => ({
       value: model.llm_codename,
       label: model.llm_codename,
-      description: resolveDescription(model.descriptions, locale, model.llm_description) ?? undefined,
+      description: resolveDescription(model.descriptions, locale) ?? undefined,
     }));
 }
 

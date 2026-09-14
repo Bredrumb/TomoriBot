@@ -126,7 +126,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.llm_id as number,
           name: m.llm_codename,
-          description: resolveDescription(m.descriptions, locale, m.llm_description) ?? undefined,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
         }));
     }
     if (capability === "vision") {
@@ -139,7 +139,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.llm_id as number,
           name: m.llm_codename,
-          description: resolveDescription(m.descriptions, locale, m.llm_description) ?? undefined,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
         }));
     }
     if (capability === "embedding") {
@@ -152,7 +152,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.embedding_model_id as number,
           name: m.codename,
-          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
         }));
     }
     if (capability === "image") {
@@ -165,7 +165,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.diffusion_model_id as number,
           name: m.codename,
-          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
         }));
     }
     if (capability === "image_nai") {
@@ -178,7 +178,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.diffusion_model_id as number,
           name: m.codename,
-          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
         }));
     }
     if (capability === "video") {
@@ -191,7 +191,7 @@ export async function loadAvailableModelsForCapability(
         .map((m) => ({
           id: m.video_model_id as number,
           name: m.codename,
-          description: resolveDescription(m.descriptions, locale, m.model_description) ?? undefined,
+          description: resolveDescription(m.descriptions, locale) ?? undefined,
         }));
     }
   } catch (error) {
