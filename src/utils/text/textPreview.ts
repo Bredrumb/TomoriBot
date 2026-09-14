@@ -16,8 +16,7 @@
  * every call site the same honest "how much was hidden" line.
  *
  * Callers interpolate {@link TextPreview.text} into a locale string that owns
- * the code fence, matching the existing convention in
- * `commands.config.prompt.change.success_description`.
+ * the code fence.
  */
 
 import {

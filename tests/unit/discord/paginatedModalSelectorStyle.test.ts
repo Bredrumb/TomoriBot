@@ -29,12 +29,12 @@ interface RecordedCall {
 function makeOptions(count: number, selectorStyle?: "legacy" | "componentsV2"): ModalOptions {
   return {
     modalCustomId: "test_modal",
-    modalTitleKey: "commands.model.text.modal_title",
+    modalTitleKey: "commands.providers.add_provider_modal_title",
     selectorStyle,
     components: [
       {
         customId: "sel",
-        labelKey: "commands.model.text.select_label",
+        labelKey: "commands.providers.provider_label",
         options: Array.from({ length: count }, (_, index) => ({
           label: `option-${index}`,
           value: `value-${index}`,

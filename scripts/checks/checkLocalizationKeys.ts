@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { readFile, readdir } from "node:fs/promises";
 import { Glob } from "bun";
+import { PROTOCOL_KEYS } from "@/utils/discord/embedProtocol";
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
 
@@ -320,11 +321,11 @@ function isValidLocalizationKey(key: string): boolean {
     /^node:|^@\w+/,
     /^\d{3}_/,
     // Database/SQL patterns - require whole SQL keywords so locale keys like
-    // "commands.data.delete.success_personal_settings_title" are not rejected.
+    // "commands.data.delete.no_permission_title" are not rejected.
     /\b(?:SELECT|INSERT|UPDATE|DELETE)\b[\s\S]*\b(?:FROM|WHERE|INTO|SET)\b/i,
     // Panel action telemetry keys (<surface>.<scope>.<resource>.<verb>). The surface is anchored to the
     // known panel list because "workspace|personal" alone also matches real keys such as
-    // "commands.personal.stm.description", which would exempt the whole commands.personal namespace from
+    // "commands.personal.memories.description", which would exempt the whole commands.personal namespace from
     // validation. A new panel surface that omits itself here fails loudly as a missing key.
     /^(?:mcps|st-presets|providers|moderation|personal-memories|personal-config|server-config|memories|setup)\.(?:workspace|personal)\.[a-z0-9-]+\.[a-z0-9-]+$/,
   ];
@@ -672,7 +673,7 @@ async function extractModalComponentUsages(): Promise<Map<string, ModalKeyUsage>
 
   const glob = new Glob("**/*.ts");
   for await (const file of glob.scan(srcPath)) {
-    if (file.includes("locales/")) continue;
+    if (file.replaceAll("\\", "/").startsWith("locales/")) continue;
 
     const filePath = join(srcPath, file);
     let content: string;
@@ -1280,6 +1281,71 @@ const KNOWN_DYNAMIC_LOCALE_KEYS = new Set([
 ]);
 
 /**
+ * Template-key consumers cannot be reduced to one literal key. These patterns mirror the
+ * runtime namespaces cataloged in the dead-key sweep and are deliberately narrower than
+ * their parent command roots so retired command surfaces remain visible in the report.
+ */
+const DYNAMIC_KEY_PATTERNS = [
+  /^commands\.(?:reward|punish)\./,
+  /^genai\./,
+  /^commands\.mcps\./,
+  /^commands\.choices\./,
+  /^commands\.conditioning\.shared\./,
+  /^commands\.config\.humanizer\.choice_/,
+  /^commands\.config\.thinking-level\.choice_/,
+  /^commands\.config\.panel\./,
+  /^commands\.config\.cooldown\.type\.choice_/,
+  /^commands\.config\.custom_models\.(?:remove\.checkbox_|capability_modal\.[a-z_]+(?:_edit)?_title$)/,
+  /^commands\.help\.api-key\./,
+  /^commands\.server\.stm\.categories-edit\.slot_/,
+  /^commands\.data\.import\.error_/,
+  /^commands\.persona\.import\.error_/,
+  /^commands\.export\.(?:personal\.)?memories\.scope_choice_/,
+  /^commands\.generate\.voice-message\.(?:backend_|modal\.)/,
+  /^commands\.(?:personal\.)?memories\./,
+  /^commands\.personal\.config\.mode_/,
+  /^commands\.personal\.deliberatetriggermode\./,
+  /^commands\.personal\.deliberatetoolmode\./,
+  /^commands\.personal\.custom_models\.remove\.checkbox_/,
+  /^commands\.openrouter\.models\.remove\.checkbox_/,
+  /^commands\.personal\.provider\.capability_/,
+  /^commands\.server\.deliberate-tool-trigger\.action_/,
+  /^commands\.personal\.profile\.about\.style_/,
+  /^commands\.providers\.(?:api_|capabilities\.|edit_|endpoint_|entry_kind_|model_|remove_impact_|script_|voice_)/,
+  /^commands\.setup\.(?:humanizer_option_|wizard\.)/,
+  /^tools\.search\.category_labels\./,
+  /^tools\.user_block\./,
+  /^tools\.user_info_update\.field_/,
+  /^tools\.intent_packs\./,
+  /^general\.text_preview\./,
+  /^general\.persona_workflow\.items\./,
+];
+
+const DYNAMIC_EXACT_KEYS = new Set([
+  "general.duration.now",
+  "general.duration.under_a_minute",
+  "general.defaults.base_trigger_words",
+  "commands.legal.license-only.description",
+  "commands.config.cooldown.type.choice_strict_server_wide",
+]);
+
+function isRuntimeDerivedKey(key: string): boolean {
+  return DYNAMIC_EXACT_KEYS.has(key) || DYNAMIC_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+function extractConstructedLocaleKeys(content: string, availableKeys: Set<string>): string[] {
+  const keys: string[] = [];
+  const prefixPattern = /`((?:commands|general|events|genai|reminders|tools|matrix)\.[a-zA-Z0-9_.-]+)\$\{/g;
+  for (const match of content.matchAll(prefixPattern)) {
+    if (match[1].split(".").filter(Boolean).length < 3) continue;
+    for (const key of availableKeys) {
+      if (key.startsWith(match[1])) keys.push(key);
+    }
+  }
+  return keys;
+}
+
+/**
  * Detects getLocaleSubKeys(locale, "prefix") calls and marks all available keys
  * under that prefix as referenced. This function enumerates locale sub-keys at
  * runtime so all child keys under the prefix are implicitly used.
@@ -1324,11 +1390,42 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
   const expectedKeys: ExpectedMetadataKey[] = [];
   const commandsPath = join(process.cwd(), "src", "commands");
 
+  const addOptionMetadata = (content: string, commandPath: string, file: string): void => {
+    const names = [...content.matchAll(/\.setName\(["']([^"']+)["']\)/g)].map((match) => match[1]);
+    const optionNames = names.slice(1);
+    for (const optionName of optionNames) {
+      expectedKeys.push({ key: `${commandPath}.${optionName}_description`, file, strict: false });
+    }
+    if (optionNames.length > 0) {
+      expectedKeys.push({ key: `${commandPath}.option_description`, file, strict: false });
+    }
+
+    const choiceValues = [...content.matchAll(/\bvalue\s*:\s*["']([^"']+)["']/g)].map((match) => match[1]);
+    for (const choiceValue of choiceValues) {
+      expectedKeys.push({ key: `commands.choices.${choiceValue}`, file, strict: false });
+      expectedKeys.push({ key: `${commandPath}.${choiceValue}_option`, file, strict: false });
+      for (const optionName of optionNames) {
+        expectedKeys.push({ key: `${commandPath}.${optionName}_choice_${choiceValue}`, file, strict: false });
+        expectedKeys.push({ key: `${commandPath}.${optionName}_${choiceValue}`, file, strict: false });
+      }
+    }
+  };
+
   try {
     const { readdir } = await import("node:fs/promises");
     const categories = await readdir(commandsPath, { withFileTypes: true });
 
     for (const cat of categories) {
+      if (cat.isFile() && cat.name.endsWith(".ts")) {
+        const file = `src/commands/${cat.name}`;
+        const content = await readFile(join(commandsPath, cat.name), "utf-8");
+        const nameMatch = content.match(/\.setName\(["']([^"']+)["']\)/);
+        if (nameMatch) {
+          expectedKeys.push({ key: `commands.${nameMatch[1]}.description`, file, strict: false });
+          addOptionMetadata(content, `commands.${nameMatch[1]}`, file);
+        }
+        continue;
+      }
       if (!cat.isDirectory()) continue;
       const catName = cat.name;
 
@@ -1370,6 +1467,7 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
               file: relativePath,
               strict: true,
             });
+            addOptionMetadata(content, `commands.${catName}.${sub.name}.${subcommandName}`, relativePath);
 
             if (catName === "conditioning" && (sub.name === "reward" || sub.name === "punish")) {
               expectedKeys.push({
@@ -1398,6 +1496,7 @@ async function extractExpectedCommandMetadataKeys(): Promise<ExpectedMetadataKey
           file: relativePath,
           strict: true,
         });
+        addOptionMetadata(content, `commands.${catName}.${subcommandName}`, relativePath);
       }
     }
   } catch (error) {
@@ -1425,10 +1524,10 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
   ];
 
   try {
-    const glob = new Glob("**/*.ts");
+    const glob = new Glob("**/*.{ts,tsx}");
     for await (const file of glob.scan(srcPath)) {
       // Skip locale files; other source files may still contain valid locale keys.
-      if (file.includes("locales/")) {
+      if (file.replaceAll("\\", "/").startsWith("locales/")) {
         continue;
       }
 
@@ -1444,7 +1543,7 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
             const key = match[1];
             const matchIndex = match.index;
 
-            if (isInSetDeclaration(content, matchIndex)) {
+            if (!availableKeys.has(key) && isInSetDeclaration(content, matchIndex)) {
               match = pattern.exec(content);
               continue;
             }
@@ -1482,6 +1581,11 @@ async function extractReferencedKeys(availableKeys: Set<string>): Promise<Map<st
           if (!referencedKeys.has(key)) {
             referencedKeys.set(key, new Set());
           }
+          referencedKeys.get(key)?.add(file);
+        }
+
+        for (const key of extractConstructedLocaleKeys(content, availableKeys)) {
+          if (!referencedKeys.has(key)) referencedKeys.set(key, new Set());
           referencedKeys.get(key)?.add(file);
         }
 
@@ -1583,6 +1687,10 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
 
   // Add keys that are provably used but cannot be detected statically
   for (const key of KNOWN_DYNAMIC_LOCALE_KEYS) referencedKeys.add(key);
+  for (const { key } of PROTOCOL_KEYS) referencedKeys.add(key);
+  for (const key of availableKeys) {
+    if (isRuntimeDerivedKey(key)) referencedKeys.add(key);
+  }
 
   const missingKeys: KeyUsage[] = [];
   for (const [key, files] of referencedKeysMap) {

@@ -698,8 +698,8 @@ import { hasAttributes } from "@/utils/discord/ui/personaEligibility";
 const eligible = allPersonas.filter(hasAttributes);
 if (eligible.length === 0) {
   await replyInfoEmbed(interaction, locale, {
-    titleKey: "commands.forget.attribute.no_attributes_title",
-    descriptionKey: "commands.forget.attribute.no_attributes",
+    titleKey: "general.pagination.select_persona_title",
+    descriptionKey: "general.pagination.persona_no_attributes",
     color: ColorCode.WARN,
     flags: MessageFlags.Ephemeral,
   });
@@ -710,8 +710,8 @@ await runPersonaPickerWorkflow(interaction, locale, {
   personas: allPersonas, // full list — the workflow filters for display
   eligibility: {
     isEligible: hasAttributes,
-    emptyTitleKey: "commands.forget.attribute.no_attributes_title",
-    emptyDescriptionKey: "commands.forget.attribute.no_attributes",
+    emptyTitleKey: "general.pagination.select_persona_title",
+    emptyDescriptionKey: "general.pagination.persona_no_attributes",
     itemsLabelKey: "general.persona_workflow.items.attributes",
   },
   onSelected: async (selection) => {
@@ -884,11 +884,11 @@ await runPersonaPickerWorkflow(interaction, locale, {
       );
       return {
         modalCustomId: "memory_edit_select",
-        modalTitleKey: "commands.memory.personal.edit.select_modal_title",
+        modalTitleKey: "commands.personal.memories.edit_modal_title",
         components: [
           {
             customId: "memory_select",
-            labelKey: "commands.memory.personal.edit.select_label",
+            labelKey: "commands.personal.memories.modal_content_label",
             required: true,
             options: memories.map((memory) => ({
               label: memory.content,
@@ -919,11 +919,12 @@ await runPersonaPickerWorkflow(interaction, locale, {
         locale,
         color: updated ? ColorCode.SUCCESS : ColorCode.ERROR,
         titleKey: updated
-          ? "commands.memory.personal.edit.success_title"
+          ? "commands.personal.memories.edited_heading"
           : "general.errors.update_failed_title",
         descriptionKey: updated
-          ? "commands.memory.personal.edit.success_description"
+          ? "commands.personal.memories.edited_detail"
           : "general.errors.update_failed_description",
+        descriptionVars: updated ? { memory: "replacement text" } : undefined,
       }),
     );
     return retryPersonaWorkflow();

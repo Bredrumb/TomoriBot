@@ -70,6 +70,13 @@ instead of showing users a raw `commands.foo.bar_description` path. The `warn` f
 `check-locales` treats missing translations as an advisory exit 2 while the Japanese catch-up is
 pending. A source key missing from every locale remains a blocking error.
 
+`bun run list-unused-locales` reports keys without a known runtime consumer. Its scanner includes
+TypeScript and TSX literals, template-built key namespaces, command metadata generated from the live
+command tree, help guide key construction, runtime string lists, and the embed protocol registry.
+Review each reported key against routes, tests, documentation generation, and persisted protocol
+titles before deleting it. A key hidden from this report because of a dynamic namespace is protected
+from automatic pruning; the namespace is not proof that every child is rendered.
+
 `getSupportedLocales()` returns authored locale directories only. `getRegisterableLocales()` adds
 aliases whose source tree is loaded, so command descriptions, option descriptions, and choice names
 register under both `es-419` and `es-ES` once Spanish content ships. The personal language control

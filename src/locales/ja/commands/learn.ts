@@ -26,8 +26,6 @@ export default {
       model_incompatible_description: `現在のモデルは構造化出力をサポートしていないため、履歴抽出に使用できません。\`/config\` > Models > Switch Modelsで対応モデルに切り替えてください。`,
       no_embedding_model_title: `埋め込みモデルが未設定です`,
       no_embedding_model_description: `埋め込みモデルが設定されていません。\`/config\` > Models > Switch Modelsで設定してください。`,
-      no_api_key_title: `APIキーが未設定です`,
-      no_api_key_description: `履歴の抽出と埋め込みには保存済みの埋め込みプロバイダー認証情報が必要です。\`/providers\` で設定してください。`,
       invalid_start_id_title: `開始メッセージIDが無効です`,
       invalid_start_id_description: `このチャンネルでID \`{start_message_id}\` のメッセージが見つかりませんでした。IDが正しく、このチャンネル内のものか確認してください（メッセージを右クリック→「メッセージIDをコピー」）。`,
       invalid_end_id_title: `終端メッセージIDが無効です`,
@@ -52,7 +50,6 @@ export default {
       server_chunk_limit_description: `このスコープ（{scope}）のチャンク上限 {max_chunks} を超えるため追加できません。先に文書を削除してください。`,
       progress_fetching: `チャンネルメッセージを取得中...`,
       progress_extracting: `{message_count}件のメッセージから知識を抽出中（ウィンドウ {current}/{total}）...`,
-      progress_embedding: `{fact_count}件のファクトの埋め込みを生成中...`,
       success_title: `履歴を抽出しました`,
       success_description: `**{message_count}**件のメッセージから**{fact_count}**件のファクトを抽出し、**{name}**として{scope}に保存しました（{chunk_count}チャンク）。`,
       success_automatic_description: `**{message_count}**件のメッセージから**{fact_count}**件のファクトを抽出しました。

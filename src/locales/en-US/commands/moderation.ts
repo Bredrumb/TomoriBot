@@ -50,7 +50,6 @@ export default {
     member_access_invalid_input: `The modal submission could not be processed. Open the editor again to retry.`,
 
     // User blacklist
-    user_blacklist_title: `User Blacklist`,
     user_blacklist_count: `Blacklisted Members \`({count})\``,
     personalization_blacklist_section: `Personalization Blacklist`,
     personalization_blacklist_description: `I do not load personal memories or saved names for these members:`,
@@ -58,7 +57,6 @@ export default {
     persona_blocks_description: `The following members have persona-specific\ninteraction restrictions:`,
     personalization_blacklist_empty: `No members blacklisted from personalization.`,
     persona_blocks_empty: `No active persona user blocks.`,
-    user_blacklist_empty: `No blacklisted members or active persona blocks.`,
     add_blacklist: `+ Add Blacklist`,
     remove_blacklist: `- Remove Blacklist`,
     user_blacklist_add_title: `Add Blacklist`,
@@ -76,7 +74,6 @@ export default {
     user_blacklist_add_failed_detail: `The database write failed. Retry to refresh current settings.`,
     user_blacklist_add_invalid_user: `The selected user could not be found or is no longer in this server.`,
     user_blacklist_add_invalid_input: `The modal submission could not be processed. Open the editor again to retry.`,
-    remove: `Remove`,
     remove_confirm: `Remove`,
     cancel: `Cancel`,
     user_blacklist_remove_title: `Remove Blacklisted Member`,
@@ -91,29 +88,23 @@ export default {
     user_blacklist_remove_failed_detail: `The database write failed. Retry to refresh current settings.`,
     changed_receipt: `Blacklist state changed`,
     changed_receipt_detail: `That entry is no longer present in the blacklist. The panel now shows current state.`,
-    block_expires: `Expires: {time}`,
-    block_permanent: `Permanent`,
 
     // Whitelist
-    whitelist_title: `Server Whitelist`,
     select_page_placeholder: `Choose whitelist page...`,
     page_channels: `Channels`,
     page_channels_description: `Whitelisted channels and cooldown overrides`,
-    page_persona_channels: `Persona Channels`,
     page_personas: `Personas`,
     page_persona_channels_description: `Per-persona channel restrictions`,
     page_roles: `Roles`,
     page_roles_description: `Whitelisted roles for bot triggers`,
 
     // Whitelist: Channels
-    whitelist_channels_title: `Whitelisted Channels`,
     whitelist_channels_count: `Whitelisted Channels \`({count})\``,
     whitelist_channels_description: `I can only be triggered in the following channels:`,
     whitelist_channels_empty: `No channels are whitelisted.\nThe bot can respond in any accessible channel.`,
     cooldown_inherited: `Inherited server global cooldown`,
     cooldown_custom: `Cooldown: {type}, {length}s`,
     cooldown_instant: `Cooldown: {type}, Instant`,
-    add_channel: `+ Add Channel`,
     add_or_edit_channel: `+ Add or Edit Channel`,
     remove_channel: `- Remove Channel`,
     whitelist_channel_add_title: `Add or Edit Channel`,
@@ -146,12 +137,10 @@ export default {
     whitelist_changed_receipt_detail: `That channel is no longer present in the whitelist. The panel now shows current state.`,
 
     // Whitelist: Persona Channels
-    whitelist_persona_channels_title: `Personas`,
     whitelist_persona_channels_count: `Personas \`({count})\``,
     whitelist_persona_channels_description: `The following personas can only respond in their listed channels:`,
     whitelist_persona_channels_empty: `No persona channel restrictions configured.\nPersonas can respond in all allowed channels.`,
     persona_channels_restriction: `**{persona}** restricted to: {channels}`,
-    manage_persona_channels: `Manage Persona Channels`,
     add_persona: `+ Add Persona`,
     remove_persona: `- Remove Persona`,
     persona_channel_remove_title: `Remove Personas`,
@@ -167,7 +156,6 @@ export default {
     persona_channel_remove_success_detail: `Removed {count} persona channel entries.`,
 
     // Whitelist: Roles
-    whitelist_roles_title: `Whitelisted Roles`,
     whitelist_roles_count: `Whitelisted Roles \`({count})\``,
     whitelist_roles_description: `Only the following roles can trigger me:`,
     whitelist_roles_empty: `No roles are whitelisted. Any member can trigger the bot.`,

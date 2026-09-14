@@ -1,10 +1,6 @@
 export default {
   novelai: {
     "character-reference": {
-      description: `自分またはペルソナ用のNovelAIキャラクター参照画像を保存またはクリアします。`,
-      target_description: `自分のプロフィールかサーバーのペルソナかを選択します。`,
-      image_description: `保存する参照画像。空欄で現在の画像をクリアします。`,
-      persona_select_title: `ペルソナを選択`,
       invalid_image_title: `無効な画像`,
       invalid_image_description: `キャラクター参照画像には画像添付ファイルを指定してください。`,
       download_failed_title: `ダウンロードに失敗しました`,
@@ -72,59 +68,6 @@ export default {
         error_description: `NovelAIで画像を生成できませんでした。
 \`\`\`
 {error}
-\`\`\``,
-      },
-    },
-    image: {
-      description: `このサーバーのNovelAI画像生成モデルとパラメータ上書きを管理します。`,
-      parameters: {
-        description: `このサーバー用にNovelAI画像生成のサンプラーと品質設定を上書きします。`,
-        modal_title: `NovelAI画像生成パラメータ`,
-        sampler_label: `サンプラー`,
-        sampler_description: `変更したいSamplerを選択してください。未選択のままなら現在の値を維持します。`,
-        sampler_placeholder_current: `現在の上書き値: {sampler}`,
-        sampler_placeholder_default: `現在、上書きなし`,
-        option_default_suffix: `（デフォルト）`,
-        sampler_option_k_euler_ancestral: `Euler Ancestral`,
-        sampler_option_k_euler: `Euler`,
-        sampler_option_k_dpmpp_2s_ancestral: `DPM++ 2S Ancestral`,
-        sampler_option_k_dpmpp_2m_sde: `DPM++ 2M SDE`,
-        sampler_option_k_dpmpp_2m: `DPM++ 2M`,
-        sampler_option_k_dpmpp_sde: `DPM++ SDE`,
-        steps_label: `ステップ数`,
-        steps_description: `1〜50の整数。空欄でデフォルトを使います。`,
-        steps_placeholder: `例: 23`,
-        scale_label: `プロンプトガイダンス`,
-        scale_description: `0.0〜10.0の小数。空欄でデフォルトを使います。`,
-        scale_placeholder: `例: 5`,
-        noise_schedule_label: `ノイズスケジュール`,
-        noise_schedule_description: `変更したいNoise Scheduleを選択してください。未選択のままなら現在の値を維持します。`,
-        noise_schedule_placeholder_current: `現在の上書き値: {noise_schedule}`,
-        noise_schedule_placeholder_default: `現在、上書きなし`,
-        noise_schedule_option_karras: `Karras`,
-        noise_schedule_option_exponential: `指数`,
-        noise_schedule_option_polyexponential: `多項指数`,
-        cfg_rescale_label: `プロンプトガイダンス再スケール`,
-        cfg_rescale_description: `0.0〜1.0の小数。空欄でデフォルトを使います。`,
-        cfg_rescale_placeholder: `例: 0.0`,
-        invalid_sampler_title: `無効なSamplerです`,
-        invalid_sampler_description: `Samplerは次のいずれかである必要があります: {options}。`,
-        invalid_steps_title: `無効なStepsです`,
-        invalid_steps_description: `Stepsは{min}〜{max}の整数で入力してください。`,
-        invalid_scale_title: `無効なPrompt Guidanceです`,
-        invalid_scale_description: `Prompt Guidanceは{min}〜{max}の数値で入力してください。`,
-        invalid_noise_schedule_title: `無効なNoise Scheduleです`,
-        invalid_noise_schedule_description: `Noise scheduleは次のいずれかである必要があります: {options}。`,
-        invalid_cfg_rescale_title: `無効なPrompt Guidance Rescaleです`,
-        invalid_cfg_rescale_description: `Prompt Guidance Rescaleは{min}〜{max}の数値で入力してください。`,
-        success_title: `画像生成パラメータを更新しました`,
-        success_description: `このサーバーの有効なNovelAI画像生成パラメータ:
-\`\`\`
-Sampler: {sampler}
-Steps: {steps}
-Prompt Guidance: {scale}
-Noise schedule: {noise_schedule}
-Prompt Guidance Rescale: {cfg_rescale}
 \`\`\``,
       },
     },
