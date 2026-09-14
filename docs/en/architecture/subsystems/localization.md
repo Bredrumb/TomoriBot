@@ -204,10 +204,31 @@ bun run check-locale-markers                         # embed protocol key unique
 bun run check-locale-links --locale=<target>         # project doc routes and heading fragments
 ```
 
-Use `--locale=<code>` to validate a specific translation target. Running `check-locale-placeholders`
-or `check-locale-links` across the entire repository surfaces pre-existing Japanese catch-up debt
-(command modernization placeholder drifts and untranslated documentation anchors), which is
-reconciled during the Japanese catch-up phase.
+Use `--locale=<code>` to validate a specific translation target. `check-locale-links` resolves a
+project-owned route in the linking file's own locale tree first and then in the default locale, so a
+link to a page whose translation has not landed yet passes, and only a route that exists in neither
+tree fails. Running it across the entire repository surfaces pre-existing Japanese catch-up debt (two
+heading fragments whose Japanese pages use different headings), which is reconciled during the
+Japanese catch-up phase.
+
+## Docs Destinations and the Second Locale Table
+
+`src/constants/docsLocales.ts` lists the locales the docs site serves, separately from the authored
+locale trees. The two are related but not the same: a locale can have runtime strings before its
+documentation is translated, and the docs prefix has to exist as a route before the bot may link to
+it.
+
+- `src/utils/discord/docsLinks.ts` and `src/utils/misc/docsUrl.ts` both route through
+  `buildLocalizedDocsPath()`, which prefixes an authored docs locale and otherwise returns the
+  default locale. `DOCS_PATHS` therefore holds locale-less routes only.
+- `src/constants/locales.ts` owns the Discord locale keys and the `es-ES` to `es-419` alias. The
+  docs table inverts that same alias map, so one alias decision covers runtime strings and docs
+  URLs.
+- Locale strings keep absolute docs URLs, including the prefix, because static text cannot call a
+  builder. `tests/unit/docs/docsRouteRegistry.test.ts` resolves each of them against `docs/`.
+
+Adding a docs locale, including the sidebar, hreflang, and README surfaces, is covered in
+[Docs Site Localization](/contributing/docs-site-localization/).
 
 ## Discord Length Limits
 

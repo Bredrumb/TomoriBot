@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Development Tasks"
 ---
 
@@ -20,6 +20,7 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 | Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) |
 | Add a persona preset | [`adding-persona-preset.md`](/contributing/adding-persona-preset/) |
 | Add or move docs pages | [`docs-authoring.md`](/contributing/docs-authoring/) |
+| Localize the docs site or READMEs | [`docs-site-localization.md`](/contributing/docs-site-localization/) |
 | Write or review code comments | [`comment-policy.md`](/contributing/comment-policy/) |
 
 ## Development Checklist

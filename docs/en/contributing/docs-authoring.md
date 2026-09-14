@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Docs Authoring Conventions"
 sidebar:
   order: 3
@@ -93,25 +93,32 @@ Filenames and folder names are URL slugs. Keep them short, lowercase, and stable
 ### The `aiGenerated` disclaimer and translations
 
 The disclaimer note is injected at render time by the `MarkdownContent.astro` override in
-`apps/docs` (never written into markdown files), and it is locale-aware. Which notice a
-page shows:
+`apps/docs` (never written into markdown files), and it is locale-aware. The wording for each
+locale lives in `src/constants/docsLocales.ts`, and a locale with no entry of its own falls back to
+the default locale's strings. Which notice a page shows:
 
-| Page | EN source `aiGenerated` | Notice shown |
+| Page | `aiGenerated` in its own file | Notice shown |
 |---|---|---|
-| English page, flag unset or `true` | n/a | English "Disclaimer" (AI drafts) |
-| English page, flag `false` | n/a | None |
-| Japanese page under `docs/ja/`, flag unset | unset or `true` | Japanese 免責事項 (AI drafts + translation) |
-| Japanese page under `docs/ja/`, flag unset | `false` (human-written) | Japanese 翻訳について (AI translation of a human page, links to the English version). Hidden by default; see below |
-| Japanese page with its own `aiGenerated: false` | any | None (translation has been human-reviewed) |
+| Any page, flag unset or `true` | draft | The page locale's draft disclaimer |
+| Any page, flag `false` | reviewed or human-written | None |
+| Translated page whose English source is `aiGenerated: false` | draft | The page locale's translation notice, linking to the English page. Hidden by default; see below |
 
-The 翻訳について notice is reader-facing only when `DOCS_SHOW_TRANSLATION_NOTICE=true` is
-set in the docs build environment; it defaults to hidden. Review state is tracked in
-frontmatter either way: a `docs/ja/` page without `aiGenerated: false` is an unreviewed
-machine translation (`grep -rL "aiGenerated: false" docs/ja/` lists them).
+The translation notice is reader-facing only when `DOCS_SHOW_TRANSLATION_NOTICE=true` is set in the
+docs build environment; it defaults to hidden. Review state is tracked in frontmatter either way: a
+translated page without `aiGenerated: false` is an unreviewed machine translation
+(`grep -rL "aiGenerated: false" docs/ja/` lists them).
 
-Practical rules: machine-translated pages must NOT carry `aiGenerated: false` (delete the
-line when translating a page that has it). After a human reviews and corrects a
-translation, set `aiGenerated: false` in the translated file to clear its notice.
+Practical rules: machine-translated pages must NOT carry `aiGenerated: false` (delete the line when
+translating a page that has it). After a human reviews and corrects a translation, set
+`aiGenerated: false` in the translated file to clear its notice.
+
+### Locale surfaces
+
+Translated pages are served at `/{locale}/` routes, so a locale is added to
+`src/constants/docsLocales.ts` rather than to a page's frontmatter. Sidebar labels fall back to the
+English label on any group or page whose locale has no counterpart file, and pages without a
+translation are served with English content, `noindex`, and no `hreflang` alternate. Adding a locale
+and its page tree is covered in [Docs Site Localization](/contributing/docs-site-localization/).
 
 ## SEO
 
@@ -120,12 +127,16 @@ The docs site handles most SEO automatically:
 - **Meta descriptions**: when a page has no `description` frontmatter, the route middleware
   (`apps/docs/src/routeData.ts`) derives one from the page's first prose paragraph at build
   time. A hand-written `description:` always wins, so add one when the opening paragraph
-  does not summarize the page well. Keep it under ~160 characters.
+  does not summarize the page well. Keep it under ~160 characters, or under ~80 for a locale whose
+  script is written without spaces; the per-locale budget lives in `src/constants/docsLocales.ts`.
 - **First paragraphs matter**: because they become search snippets, open each page with one
   or two plain sentences that describe the page, before any heading, list, aside, or
   component.
 - **Internal pages**: everything under `docs/en/wiki/` is marked `noindex` and stays out of
   search engines. Put maintainer-only records there.
+- **hreflang**: alternates are emitted only for pages that exist in both the default locale and the
+  current locale, and `x-default` points at the English page. A locale route serving English
+  fallback content emits none, and is `noindex` as well.
 - **robots.txt / sitemap**: `apps/docs/public/robots.txt` advertises the auto-generated
   `sitemap-index.xml`. No per-page action needed.
 
@@ -138,10 +149,12 @@ The docs build also generates `llms.txt` entrypoints for AI agents:
 - `llms-small.txt` and the “TomoriBot introduction and features” set contain the curated
   English user-facing surface.
 - Self-hosting/public reference and contributor/architecture sets remain available for
-  deeper investigation, while the complete set contains all public locales.
+  deeper investigation. Every set is English-only: `starlight-llms-txt` reads the default
+  locale's entries, so a translated page never reaches these files.
 - `wiki/` is excluded from every generated text set, including `llms-full.txt`. The docs
-  package build runs `scripts/checkLlmsOutput.ts` to fail if a wiki page leaks or a curated
-  set becomes empty.
+  package build runs `scripts/checkLlmsOutput.ts` to fail if a wiki page leaks, a curated
+  set becomes empty, a non-default locale URL appears, or a fallback route advertises an
+  `hreflang` alternate.
 
 Keep page IDs in `apps/docs/astro.config.mts` synchronized when moving a page between these
 audiences. The local `starlight-llms-txt` dependency patch adds full-output exclusions because

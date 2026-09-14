@@ -9,11 +9,16 @@
 # with and without its trailing slash.
 
 # Site root is handled by functions/_middleware.ts (Accept-Language based
-# redirect to /en/introduction/ or /ja/introduction/), which runs before
+# redirect to the best published locale's introduction page), which runs before
 # these rules and never falls through to them for "/" — no rule needed here.
+#
+# Locale roots: one 301 for the slashless form plus one 200 rewrite that serves
+# the locale's introduction page at its own root. Rules are static, so each new
+# locale listed with `docsTree: true` in src/constants/docsLocales.ts needs its
+# own pair here; the Astro redirect map is generated from that table and this
+# file is not. See docs/en/contributing/docs-site-localization.md.
 
-# Japanese locale root: same rewrite. The slashless /ja form first normalizes
-# to the canonical trailing-slash URL, then the rewrite serves the content.
+# Japanese locale root
 /ja /ja/ 301
 /ja/ /ja/introduction/ 200
 

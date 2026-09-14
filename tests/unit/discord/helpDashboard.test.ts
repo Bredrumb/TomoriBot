@@ -120,7 +120,7 @@ describe("help dashboard", () => {
     expect(comfyButtons).toHaveLength(2);
     expect(JSON.stringify(comfyButtons)).toContain("Read the Web Version");
     expect(JSON.stringify(comfyButtons)).toContain(
-      "https://docs.tomoribot.app/self-hosting/local-endpoints/setup-comfyui/",
+      "https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-comfyui/",
     );
     expect(JSON.stringify(comfyButtons)).toContain("Get Technical Support");
     expect(JSON.stringify(comfyButtons)).toContain("discord.gg/bjCfHm9QsB");
@@ -129,7 +129,7 @@ describe("help dashboard", () => {
     const personasFooter = personasPayload.components.at(-1);
     const personasButtons = personasFooter && "components" in personasFooter ? personasFooter.components : [];
     expect(JSON.stringify(personasButtons)).toContain(
-      "https://docs.tomoribot.app/features/chatting-personality/multiple-personas/",
+      "https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/",
     );
   });
 

@@ -358,7 +358,9 @@ describe("config panel shell", () => {
       expect(serialized).toContain("`/nsfw`");
       expect(serialized).toContain("NSFW-marked channels");
       expect(serialized).toContain("users of legal age");
-      expect(serialized).toContain("https://docs.tomoribot.app/features/setup-administration/age-restricted-commands/");
+      expect(serialized).toContain(
+        "https://docs.tomoribot.app/en/features/setup-administration/age-restricted-commands/",
+      );
       expect(customIds).toContain(
         buildConfigRouteId({ action: "page", locale: "en-US", category: "plugins", page: "nsfw-jailbreaks" }),
       );

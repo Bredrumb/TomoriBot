@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
+import { PUBLISHED_DOCS_LOCALES } from "@/constants/docsLocales";
 import { type LocaleCode, isDiscordLocaleCode } from "@/constants/locales";
 
 const log = {
@@ -80,17 +81,45 @@ export function extractDocAnchors(content: string): Set<string> {
 }
 
 /**
+ * Strips a published locale root from a docs URL pathname, so the file lookup sees the route the
+ * locale trees share. Without this, `/ja/features/command-reference/` reads as a file named
+ * `ja/features/...` and every prefixed link reports as broken.
+ */
+export function stripLocaleRoot(urlPath: string): string {
+  const [first, ...rest] = urlPath.replace(/^\//, "").split("/");
+  if (!(PUBLISHED_DOCS_LOCALES as readonly string[]).includes(first)) return urlPath;
+  return rest.length > 0 ? `/${rest.join("/")}` : "/";
+}
+
+/** Locale directory a source file documents, which decides which tree a route must resolve in. */
+export function sourceLocaleOf(sourceFile: string): string | undefined {
+  const normalized = sourceFile.replaceAll("\\", "/");
+  const readmeMatch = normalized.match(/(?:^|\/)README_([A-Za-z-]+)\.md$/);
+  if (readmeMatch && isDiscordLocaleCode(readmeMatch[1])) return readmeMatch[1];
+  const docsMatch = normalized.match(/(?:^|\/)docs\/([^/]+)\//);
+  if (docsMatch && (PUBLISHED_DOCS_LOCALES as readonly string[]).includes(docsMatch[1])) return docsMatch[1];
+  const localeMatch = normalized.match(/(?:^|\/)locales\/([^/]+)\//);
+  if (localeMatch && isDiscordLocaleCode(localeMatch[1])) return localeMatch[1];
+  return undefined;
+}
+
+/**
  * Resolves a doc URL pathname to a markdown file path under docs/.
+ *
+ * A route resolves in the source file's own locale tree first and then in the default locale,
+ * because the site serves the default locale's content at a URL whose translation does not exist
+ * yet. A route with no page in either tree is genuinely broken.
  */
 export function resolveDocPath(
   urlPath: string,
   docFiles: Set<string>,
   publicFiles?: Set<string>,
+  locale?: string,
 ): string | null {
-  const clean = urlPath.replace(/^\//, "").replace(/\/$/, "");
+  const clean = stripLocaleRoot(urlPath).replace(/^\//, "").replace(/\/$/, "");
 
-  // Root path / or locale landing roots (e.g. /en, /ja)
-  if (!clean || clean === "" || clean === "en" || clean === "ja" || isDiscordLocaleCode(clean)) {
+  // Root path / or a locale landing root (e.g. /en, /ja)
+  if (!clean || clean === "" || isDiscordLocaleCode(clean)) {
     return "ROOT";
   }
 
@@ -108,9 +137,16 @@ export function resolveDocPath(
     `${clean}/index.mdx`,
   ];
 
-  for (const candidate of candidates) {
-    if (docFiles.has(candidate)) {
-      return candidate;
+  const localeRoots =
+    locale && (PUBLISHED_DOCS_LOCALES as readonly string[]).includes(locale)
+      ? [locale, "en"]
+      : ["en", ...(PUBLISHED_DOCS_LOCALES as readonly string[])];
+  for (const localeRoot of localeRoots) {
+    for (const candidate of candidates) {
+      const localeCandidate = `${localeRoot}/${candidate}`;
+      if (docFiles.has(localeCandidate)) {
+        return localeCandidate;
+      }
     }
   }
 
@@ -270,9 +306,10 @@ export async function validateLocaleLinks(options?: {
 
     const links = extractProjectDocLinks(content, relPath);
     totalLinksChecked += links.length;
+    const sourceLocale = sourceLocaleOf(relPath);
 
     for (const link of links) {
-      const resolved = resolveDocPath(link.pathname, docFiles, publicFiles);
+      const resolved = resolveDocPath(link.pathname, docFiles, publicFiles, sourceLocale);
 
       if (!resolved) {
         findings.push({

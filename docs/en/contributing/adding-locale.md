@@ -29,6 +29,11 @@ to that registry before shipping it.
    - `bun run check-locale-links`: Validates project-owned documentation routes and heading fragments. Use `--locale=<code>` to check a specific locale.
    - `bun run find-stale-translations`: Identifies untranslated English strings using per-locale expected scripts.
 
+5. Publish the locale's docs site, translated README, and bot docs links by following
+   [Docs Site Localization](/contributing/docs-site-localization/). The runtime strings in step 3
+   make the interface readable; that guide makes the documentation and repository surfaces reachable
+   in the new language.
+
 ## Notes
 
 - Keys follow dot-notation: `commands.{category}.{subcommand}.{key}`
@@ -53,3 +58,4 @@ bun run lint                       # Biome formatting
 ## Related Docs
 
 - [Localization System](/architecture/subsystems/localization/): key naming, `localizer()` API, locale discovery
+- [Docs Site Localization](/contributing/docs-site-localization/): docs routes, sidebar labels, hreflang, and READMEs

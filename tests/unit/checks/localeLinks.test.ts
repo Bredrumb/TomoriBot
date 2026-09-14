@@ -4,6 +4,8 @@ import {
   extractProjectDocLinks,
   resolveDocPath,
   slugifyHeading,
+  sourceLocaleOf,
+  stripLocaleRoot,
   validateLocaleLinks,
 } from "../../../scripts/checks/checkLocaleLinks";
 
@@ -54,14 +56,14 @@ Some intro text with [link](/somewhere).
     ]);
 
     // Exact .md file
-    expect(resolveDocPath("/en/features/knowledge/memory", docFiles)).toBe("en/features/knowledge/memory.md");
-    expect(resolveDocPath("/en/features/knowledge/memory/", docFiles)).toBe("en/features/knowledge/memory.md");
+    expect(resolveDocPath("/features/knowledge/memory", docFiles)).toBe("en/features/knowledge/memory.md");
+    expect(resolveDocPath("/features/knowledge/memory/", docFiles)).toBe("en/features/knowledge/memory.md");
 
     // Exact .mdx file
-    expect(resolveDocPath("/en/introduction/quickstart/", docFiles)).toBe("en/introduction/quickstart.mdx");
+    expect(resolveDocPath("/introduction/quickstart/", docFiles)).toBe("en/introduction/quickstart.mdx");
 
     // Directory README.mdx
-    expect(resolveDocPath("/en/self-hosting/local-endpoints/text-to-speech/", docFiles)).toBe(
+    expect(resolveDocPath("/self-hosting/local-endpoints/text-to-speech/", docFiles)).toBe(
       "en/self-hosting/local-endpoints/text-to-speech/README.mdx",
     );
 
@@ -72,7 +74,40 @@ Some intro text with [link](/somewhere).
     expect(resolveDocPath("/llms.txt", docFiles)).toBe("STATIC_ASSET");
 
     // Non-existent route
-    expect(resolveDocPath("/en/features/non-existent-page", docFiles)).toBeNull();
+    expect(resolveDocPath("/features/non-existent-page", docFiles)).toBeNull();
+  });
+
+  it("resolves a locale-prefixed route in the source file's own tree", () => {
+    const docFiles = new Set([
+      "en/features/knowledge/memory.md",
+      "en/contributing/README.md",
+      "ja/features/knowledge/memory.md",
+    ]);
+
+    // A translated page resolves in its own locale.
+    expect(resolveDocPath("/ja/features/knowledge/memory/", docFiles, undefined, "ja")).toBe(
+      "ja/features/knowledge/memory.md",
+    );
+
+    // An untranslated page falls back to the default locale's tree, which is what the site serves.
+    expect(resolveDocPath("/ja/contributing/", docFiles, undefined, "ja")).toBe("en/contributing/README.md");
+
+    // A route with no page in either tree is still broken.
+    expect(resolveDocPath("/ja/features/missing/", docFiles, undefined, "ja")).toBeNull();
+  });
+
+  it("strips a published locale root without touching an unprefixed route", () => {
+    expect(stripLocaleRoot("/ja/features/knowledge/memory/")).toBe("/features/knowledge/memory/");
+    expect(stripLocaleRoot("/ja/")).toBe("/");
+    expect(stripLocaleRoot("/features/knowledge/memory/")).toBe("/features/knowledge/memory/");
+  });
+
+  it("reads the locale a source file documents", () => {
+    expect(sourceLocaleOf("src\\locales\\ja\\commands\\setup.ts")).toBe("ja");
+    expect(sourceLocaleOf(".github/README_ja.md")).toBe("ja");
+    expect(sourceLocaleOf("docs/ja/legal/privacy-policy.md")).toBe("ja");
+    expect(sourceLocaleOf("src/locales/en-US/general.ts")).toBe("en-US");
+    expect(sourceLocaleOf("README.md")).toBeUndefined();
   });
 
   it("extracts only project-owned links and ignores third-party URLs", () => {
@@ -111,12 +146,13 @@ External resources:
     expect(resolveDocPath("/ja/", docFiles)).toBe("ROOT");
   });
 
-  it("rejects unauthored locales and includes .github READMEs for translated targets", async () => {
+  it("rejects unauthored locales and scans the .github README for a translated target", async () => {
     expect(validateLocaleLinks({ locale: "fr" })).rejects.toThrow("no source files");
 
-    // Japanese scan includes .github/README_ja.md
+    // The Japanese scan covers .github/README_ja.md. Its project-owned routes resolve through the
+    // locale-aware lookup, so the scan reports only the pre-existing Japanese fragment drift.
     const summary = await validateLocaleLinks({ locale: "ja" });
-    const hasGithubReadme = summary.findings.some((f) => f.sourceFile.includes("README_ja.md"));
-    expect(hasGithubReadme).toBe(true);
+    expect(summary.totalLinksChecked).toBeGreaterThan(0);
+    expect(summary.findings.every((finding) => finding.type === "missing_fragment")).toBe(true);
   });
 });

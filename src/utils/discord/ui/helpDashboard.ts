@@ -234,7 +234,7 @@ function buildPersistentFooterRow(
         type: ComponentType.Button,
         style: ButtonStyle.Link,
         label: localizer(locale, "commands.help.dashboard.docs_link_label"),
-        url: buildDocsUrl(docsPath),
+        url: buildDocsUrl(locale, docsPath),
       },
       {
         type: ComponentType.Button,
@@ -400,7 +400,7 @@ export function buildProviderGuideModal(locale: string, providerId: HelpProvider
         `**${localizer(locale, section.titleKey, variables)}**\n${localizer(locale, section.bodyKey, variables)}`,
     ),
     ...(guide.footerKey ? [`-# ${localizer(locale, guide.footerKey, variables)}`] : []),
-    `-# [${localizer(locale, "commands.help.dashboard.docs_link_label")}](<${buildDocsUrl(guide.docsPath)}>)`,
+    `-# [${localizer(locale, "commands.help.dashboard.docs_link_label")}](<${buildDocsUrl(locale, guide.docsPath)}>)`,
   ];
 
   const modal = new ModalBuilder()

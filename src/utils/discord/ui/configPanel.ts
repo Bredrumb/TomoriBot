@@ -3269,7 +3269,7 @@ ${localizer(locale, "commands.config.panel.plugins_nsfw_jailbreaks_description",
     },
     {
       type: ComponentType.TextDisplay,
-      content: `[${localizer(locale, "commands.config.panel.plugins_nsfw_jailbreaks_docs_label")}](${buildDocsUrl(DOCS_PATHS.AGE_RESTRICTED_COMMANDS)})`,
+      content: `[${localizer(locale, "commands.config.panel.plugins_nsfw_jailbreaks_docs_label")}](${buildDocsUrl(locale, DOCS_PATHS.AGE_RESTRICTED_COMMANDS)})`,
     },
   ];
 }
@@ -3669,7 +3669,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
 
   const privateTitle = localizer(locale, "commands.config.panel.channels_rules_private_title");
   const privateDesc = localizer(locale, "commands.config.panel.channels_rules_private_description");
-  const roleplayTitle = `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(DOCS_PATHS.ROLEPLAY_CHANNELS)})`;
+  const roleplayTitle = `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(locale, DOCS_PATHS.ROLEPLAY_CHANNELS)})`;
   const roleplayDesc = localizer(locale, "commands.config.panel.channels_rules_roleplay_description");
   const blocklistTitle = localizer(locale, "commands.config.panel.channels_rules_blocklist_title");
   const blocklistDesc = localizer(locale, "commands.config.panel.channels_rules_blocklist_description");
@@ -3769,7 +3769,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
       : []),
     ...buildChannelRulesCollectionSection({
       locale,
-      title: `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(DOCS_PATHS.ROLEPLAY_CHANNELS)})`,
+      title: `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(locale, DOCS_PATHS.ROLEPLAY_CHANNELS)})`,
       description: localizer(locale, "commands.config.panel.channels_rules_roleplay_description"),
       members: view.roleplayChannels.map((channel) => `<#${channel.id}>`),
       budget: rulesPerSectionBudget,

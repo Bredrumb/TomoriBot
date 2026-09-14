@@ -2,170 +2,86 @@ import { defineRouteMiddleware } from "@astrojs/starlight/route-data";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildHreflangAlternates,
+  deriveDescription,
+  localeFromEntryId,
+  stripLocaleFromEntryId,
+  withoutHreflangAlternates,
+} from "./docsRouting";
+import { DEFAULT_DOCS_LOCALE_ID, DOCS_BASE_URL, getDocsLocaleConfig } from "../../../src/constants/docsLocales";
 
 /**
- * Maximum length for auto-derived meta descriptions. Google truncates snippets
- * around 155-160 characters for Latin-script text, but only around 80
- * full-width characters for Japanese, so the limit is locale-dependent.
- */
-const MAX_DESCRIPTION_LENGTH = 160;
-const MAX_DESCRIPTION_LENGTH_JA = 80;
-
-/**
- * Absolute path to the content root (the src/content/docs junction pointing at
- * repo-root docs/). Used to check whether a page has a counterpart in the
- * other locale so hreflang alternates are only emitted for real pairs.
- */
-const docsRoot = join(dirname(fileURLToPath(import.meta.url)), "content/docs");
-
-/**
- * Checks whether a docs entry exists on disk for the given locale-less entry
- * id (e.g. "introduction/index" or "features/knowledge/memory").
+ * Content root, which is the src/content/docs junction pointing at repo-root docs/.
  *
- * Mirrors the id scheme from content.config.ts: `index` ids come from README
- * files (or literal index files), other ids map to `<id>.md`/`<id>.mdx`.
- *
- * @param baseId - Entry id without an "en/" or "ja/" locale prefix.
- * @returns True when a source file exists for that id in that locale.
+ * Two anchors because a module URL is rewritten by the bundler: route middleware runs from
+ * `dist/.prerender/chunks/`, where an `import.meta.url`-relative path lands inside the build output.
+ * The working directory is the Astro project root for `astro dev` and `astro build` alike, and the
+ * candidates stay separate strings rather than one resolved `..` chain so the dev path is exact.
  */
-function entryExists(baseId: string, locale: "en" | "ja"): boolean {
-  const base = join(docsRoot, locale, baseId);
-  const candidates =
-    baseId === "index" || baseId.endsWith("/index")
-      ? ["README.md", "README.mdx", "index.md", "index.mdx"].map((name) => join(base, "..", name))
-      : [`${base}.md`, `${base}.mdx`];
-  return candidates.some((candidate) => existsSync(candidate));
-}
+const docsRoot = resolveDocsRoot(
+  dirname(fileURLToPath(import.meta.url)),
+  process.cwd(),
+);
 
-/**
- * Derives a plain-text meta description from the first prose paragraph of a
- * Markdown/MDX body.
- *
- * Skips frontmatter-adjacent noise (imports, headings, code fences, asides,
- * images, tables, lists, JSX/HTML blocks) until it finds real prose, then
- * strips inline Markdown syntax and truncates at a word boundary.
- *
- * @param body - Raw Markdown source of the page (frontmatter already removed).
- * @returns A cleaned description string, or `undefined` when no prose exists.
- */
-function deriveDescription(body: string, maxLength: number): string | undefined {
-  // Strip HTML comments up front because they can span multiple lines, so the
-  // line-based filtering below cannot reliably skip their continuations.
-  const lines = body.replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/);
-  const paragraph: string[] = [];
-  let insideFence = false;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-
-    if (line.startsWith("```") || line.startsWith("~~~")) {
-      insideFence = !insideFence;
-      continue;
-    }
-    if (insideFence) continue;
-
-    if (line === "") {
-      if (paragraph.length > 0) break;
-      continue;
-    }
-
-    const isNonProse =
-      line.startsWith("#") || // headings
-      line.startsWith("import ") || // MDX imports
-      line.startsWith("export ") || // MDX exports
-      line.startsWith(":::") || // asides/admonitions
-      line.startsWith("!") || // standalone images
-      line.startsWith("|") || // tables
-      line.startsWith(">") || // blockquotes
-      line.startsWith("<") || // JSX/HTML blocks
-      /^[-*+]\s/.test(line) || // unordered lists
-      /^\d+\.\s/.test(line); // ordered lists
-    if (isNonProse) {
-      if (paragraph.length > 0) break;
-      continue;
-    }
-
-    paragraph.push(line);
-  }
-
-  if (paragraph.length === 0) return undefined;
-
-  const text = paragraph
-    .join(" ")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1") // images → alt text
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → link text
-    .replace(/`([^`]+)`/g, "$1") // inline code
-    .replace(/(\*\*|__)(.*?)\1/g, "$2") // bold
-    .replace(/(\*|_)(.*?)\1/g, "$2") // italic
-    .replace(/<[^>]+>/g, "") // stray inline HTML/JSX
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (text.length === 0) return undefined;
-  if (text.length <= maxLength) return text;
-
-  // Truncate at the last word boundary that fits, then add an ellipsis.
-  //    (Japanese prose has no spaces, so the hard cut is the boundary there.)
-  const clipped = text.slice(0, maxLength);
-  const lastSpace = clipped.lastIndexOf(" ");
-  return `${clipped.slice(0, lastSpace > 0 ? lastSpace : maxLength)}…`;
+function resolveDocsRoot(moduleDir: string, workingDir: string): string {
+  const candidates = [
+    join(workingDir, "src", "content", "docs"),
+    join(moduleDir, "content", "docs"),
+    join(moduleDir, "..", "content", "docs"),
+    join(moduleDir, "..", "..", "..", "content", "docs"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 /**
  * Starlight route middleware for SEO head tags.
  *
- * - Auto-derives a per-page meta description from the page's first prose
- *    paragraph whenever the frontmatter has no explicit `description`. A
- *    hand-written `description:` in frontmatter always wins (Starlight emits
- *    it before this middleware runs, so we simply do nothing in that case).
- * - Marks internal `wiki/` pages as `noindex` because they are hidden from the
- *    sidebar and are maintainer-facing, so they should not appear in search
- *    results or compete with the user-facing pages.
- * - Emits hreflang alternate links for pages that exist in both English and
- *    Japanese, so Google serves each locale's page to the right audience
- *    instead of treating the pair as competing (or duplicate) content.
+ * - Auto-derives a per-page meta description from the page's first prose paragraph whenever the
+ *   frontmatter has no explicit `description`. A hand-written `description:` always wins, because
+ *   Starlight emits it before this middleware runs.
+ * - Marks internal `wiki/` pages as `noindex`, along with every locale-fallback route.
+ * - Replaces Starlight's hreflang alternates with ones derived from the pages that really exist.
  */
 export const onRequest = defineRouteMiddleware((context) => {
   const { starlightRoute } = context.locals;
   const { entry, head } = starlightRoute;
 
-  // Keep internal wiki pages out of search indexes. Same for untranslated
-  // /ja/ fallback pages: they serve the English content verbatim, so indexing
-  // them would create duplicate-content competition with the English pages.
-  // A fallback page becomes indexable automatically once its translation
-  // lands (the route stops being a fallback).
-  const isJa = entry.id === "ja" || entry.id.startsWith("ja/");
-  const baseId = entry.id.replace(/^(?:en|ja)\/?/, "");
+  const baseId = stripLocaleFromEntryId(entry.id);
+  // The route's own locale, not the entry's id prefix: a fallback route carries the default
+  // locale's entry, and the description budget has to follow the language the reader sees.
+  const locale = starlightRoute.locale ?? localeFromEntryId(entry.id) ?? DEFAULT_DOCS_LOCALE_ID;
+
+  // Keep internal wiki pages out of search indexes. Same for untranslated fallback pages: they
+  // serve the default locale's content verbatim, so indexing one creates duplicate-content
+  // competition with the page it copies. A fallback becomes indexable automatically once its
+  // translation lands, because the route stops being a fallback.
   const isWiki = baseId === "wiki" || baseId.startsWith("wiki/");
   if (isWiki || starlightRoute.isFallback) {
     head.push({ tag: "meta", attrs: { name: "robots", content: "noindex" } });
   }
 
-  // hreflang pairs. Fallback pages (ja URL serving English content) are NOT
-  // pairs only emit when a real translated source file exists, otherwise
-  // Google would be told duplicate English content is "the Japanese version".
-  if (baseId && entryExists(baseId, "ja") && entryExists(baseId, "en")) {
-    const site = context.site ?? new URL("https://docs.tomoribot.app");
-    const slug = baseId.replace(/(^|\/)index$/, "").replace(/\/$/, "");
-    const enUrl = new URL(slug ? `/en/${slug}/` : "/en/", site).href;
-    const jaUrl = new URL(slug ? `/ja/${slug}/` : "/ja/", site).href;
-    head.push({ tag: "link", attrs: { rel: "alternate", hreflang: "en", href: enUrl } });
-    head.push({ tag: "link", attrs: { rel: "alternate", hreflang: "ja", href: jaUrl } });
-    head.push({ tag: "link", attrs: { rel: "alternate", hreflang: "x-default", href: enUrl } });
-  }
+  // Starlight emits an alternate for every configured locale regardless of whether that locale has
+  // a source file, which would advertise a fallback route as a translation. Rebuild the set from
+  // the files on disk instead of trying to suppress individual tags.
+  const alternates = buildHreflangAlternates(docsRoot, baseId, {
+    isFallback: starlightRoute.isFallback,
+    site: context.site ?? DOCS_BASE_URL,
+  });
+  const headWithoutAlternates = withoutHreflangAlternates(head);
+  head.length = 0;
+  head.push(...headWithoutAlternates, ...alternates);
 
   // Frontmatter description present → Starlight already emitted the tags.
   if (entry.data.description) return;
 
-  const description = deriveDescription(
-    entry.body ?? "",
-    isJa ? MAX_DESCRIPTION_LENGTH_JA : MAX_DESCRIPTION_LENGTH,
-  );
+  const maxLength = getDocsLocaleConfig(locale)?.descriptionMaxLength ?? 160;
+  const description = deriveDescription(entry.body ?? "", maxLength);
   if (!description) return;
 
-  // Starlight falls back to the site-wide `description` config for pages
-  // without one, so the head already contains generic description tags.
-  // Overwrite those in place (pushing would emit duplicate meta tags).
+  // Starlight falls back to the site-wide `description` config for pages without one, so the head
+  // already contains generic description tags. Overwrite those in place, since pushing would emit
+  // duplicate meta tags.
   for (const tag of head) {
     if (tag.tag !== "meta") continue;
     if (tag.attrs?.name === "description" || tag.attrs?.property === "og:description") {

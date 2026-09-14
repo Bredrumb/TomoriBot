@@ -87,6 +87,7 @@ Per-task guides:
 - [`contributing/adding-db-column.md`](./contributing/adding-db-column)
 - [`contributing/adding-new-provider.md`](./contributing/adding-new-provider)
 - [`contributing/adding-locale.md`](./contributing/adding-locale)
+- [`contributing/docs-site-localization.md`](./contributing/docs-site-localization) — docs routes, locale config, hreflang, and translated READMEs
 - [`contributing/adding-persona-preset.md`](./contributing/adding-persona-preset)
 - [`contributing/adding-participant-extension.md`](./contributing/adding-participant-extension)
 - [`contributing/comment-policy.md`](./contributing/comment-policy) — durable comments and the advisory policy audit

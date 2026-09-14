@@ -27,6 +27,7 @@ conventions, then jump to the guide for your task.
 - [`adding-db-column.md`](./adding-db-column)
 - [`adding-new-provider.md`](./adding-new-provider)
 - [`adding-locale.md`](./adding-locale)
+- [`docs-site-localization.md`](./docs-site-localization) — docs routes, locale config, hreflang, and translated READMEs
 - [`adding-persona-preset.md`](./adding-persona-preset)
 
 ## Testing Your Changes
