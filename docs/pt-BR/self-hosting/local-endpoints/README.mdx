@@ -1,0 +1,83 @@
+---
+title: "Endpoints Locais e de Hospedagem Própria"
+aiGenerated: false
+sidebar:
+  label: "Visão Geral"
+  groupLabel: "Endpoints Locais e de Hospedagem Própria"
+  order: 4
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+> **Aviso:** Esta tradução é fornecida para conveniência. A versão em inglês é a oficial e controla em caso de divergências.
+
+É totalmente possível executar uma instância do TomoriBot com tudo local, desde a geração de texto até utilitários MCP. Todos os endpoints abaixo são compatíveis com OpenAI ou são pequenos wrappers de referência, registrados através dos comandos `/providers` e armazenados criptografados no banco de dados (sem necessidade de `.env`).
+Escolha uma capacidade para configurar:
+
+## Texto e Embeddings
+
+<CardGrid>
+  <LinkCard title="LLM Local" href="/en/self-hosting/local-endpoints/setup-local-llm/"
+    description="Qualquer servidor compatível com OpenAI, como Ollama, KoboldCPP, LM Studio, vLLM ou LiteLLM para geração de texto e embeddings." />
+  <LinkCard title="Codex CLI via ChatMock" href="/en/self-hosting/local-endpoints/setup-chatmock/"
+    description="Uma ponte local compatível com OpenAI que permite que o TomoriBot use modelos Codex CLI." />
+</CardGrid>
+
+## Imagem e Vídeo
+
+<CardGrid>
+  <LinkCard title="ComfyUI" href="/en/self-hosting/local-endpoints/setup-comfyui/"
+    description="Gere imagens e vídeos curtos através da sua própria instância do ComfyUI usando um fluxo de trabalho em formato de API." />
+</CardGrid>
+
+## Voz
+
+<CardGrid>
+  <LinkCard title="Text-to-Speech" href="/en/self-hosting/local-endpoints/text-to-speech/"
+    description="Motores de TTS locais (Chatterbox, Qwen3-TTS, IrodoriTTS, Fish S2 Pro, VoxCPM2, CosyVoice 3) para mensagens de voz nativas no Discord, clonagem de voz e VoiceDesign." />
+  <LinkCard title="Speech-to-Text" href="/en/self-hosting/local-endpoints/speech-to-text/"
+    description="Transcreva anexos de áudio localmente com WhisperX, whisper.cpp ou KoboldCPP." />
+</CardGrid>
+
+## Pesquisa na Web e Extração (Web Search & Fetching)
+
+<CardGrid>
+  <LinkCard title="SearXNG" href="/en/self-hosting/local-endpoints/setup-searxng/"
+    description="Proxy de metapesquisa que respeita a privacidade como uma ferramenta web_search local para evitar limites de taxa públicos." />
+  <LinkCard title="Crawl4AI" href="/en/self-hosting/local-endpoints/setup-crawl4ai/"
+    description="Extração de markdown renderizado pelo navegador para sites com muito JS, alimentando a ferramenta fetch_url." />
+</CardGrid>
+
+## Ferramentas Personalizadas
+
+<CardGrid>
+  <LinkCard title="Servidor MCP Local" href="/en/self-hosting/local-endpoints/setup-local-mcp/"
+    description="Execute um servidor MCP local para estender o TomoriBot com suas próprias ferramentas (apenas instâncias de hospedagem própria)." />
+</CardGrid>
+
+## Iniciando Sidecars com `bun run launch`
+
+Em vez de iniciar os serviços de sidecar manualmente, use `bun run launch`, que inicia os sidecars solicitados, aguarda que estejam prontos e então lança o bot no modo de observação automaticamente:
+
+```sh
+# Apenas o bot, idêntico a bun run dev
+bun run launch
+
+# Com sidecars Docker do SearXNG e Crawl4AI
+bun run launch --searxng --crawl4ai
+
+# Com um servidor TTS local (o venv deve ser configurado primeiro — veja o guia de Text-to-Speech abaixo)
+bun run launch --qwen3tts
+bun run launch --fishs2
+bun run launch --voxcpm2
+bun run launch --cosyvoice3
+
+# Veja todas as flags disponíveis
+bun run launch --help
+```
+
+Flags disponíveis: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--whisperx`
+
+Os sidecars Docker (`--searxng`, `--crawl4ai`) são criados na primeira execução e reutilizados nas execuções subsequentes. Os sidecars TTS/STT em Python exigem que seu venv seja configurado uma vez de antemão; veja os guias individuais de configuração em [Text-to-Speech](/pt-BR/self-hosting/local-endpoints/text-to-speech/) e [Speech-to-Text](/pt-BR/self-hosting/local-endpoints/speech-to-text/).
+
+**Ctrl+C** para o bot e qualquer processo de sidecar em Python. Os contêineres Docker são intencionalmente mantidos em execução. Pare-os manualmente com `docker stop searxng` / `docker stop crawl4ai` quando terminar.

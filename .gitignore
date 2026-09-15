@@ -1,6 +1,17 @@
 nul
 temp_*
 .venv*
+
+# Temp/scratch folders dropped in the repo root by local tooling (e.g. ollama scratch dirs).
+# Scoped to a tmp-/temp- prefix, not a bare substring: "*temp*/" would also match template.ts,
+# ISSUE_TEMPLATE/, and systemPrompts.ts (contains "temp" as "sys-temp-rompts").
+tmp-*/
+temp-*/
+.tmp-*/
+
+# Root-level scratch .txt output/prompts (e.g. captured check-locales stdout). Root-scoped so it
+# doesn't hide apps/docs/public/robots.txt or servers/*/requirements.txt.
+/*.txt
 # Throwaway output from the /stats infographic render harnesses (scripts/devtools/)
 .spike-output/
 .spike-output-docker/

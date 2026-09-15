@@ -1,0 +1,39 @@
+---
+title: "Speech-to-Text (Motores Locais)"
+sidebar:
+  label: "Visão Geral"
+  groupLabel: "Speech-to-Text"
+  order: 8
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+O TomoriBot trata speech-to-text como a capacidade de endpoint personalizado `transcription`. Os anexos de áudio são transcritos em segundo plano e adicionados ao contexto da conversa quando existe um endpoint de transcrição ativo.
+
+A postagem visível de transcrições é separada. `/config` > Engine > Notices controla apenas se as transcrições de mensagens de voz são postadas no chat; ele não ativa ou desativa o STT em segundo plano.
+
+## Motores Disponíveis
+
+<CardGrid>
+  <LinkCard title="WhisperX" href="/pt-BR/self-hosting/local-endpoints/speech-to-text/whisperx/"
+    description="Transcrição local amigável para iniciantes usando o servidor de referência WhisperX sob servers/stt." />
+  <LinkCard title="whisper.cpp" href="/pt-BR/self-hosting/local-endpoints/speech-to-text/whispercpp/"
+    description="Use um servidor HTTP whisper.cpp leve quando ele expõe um endpoint de transcrição compatível com a OpenAI." />
+  <LinkCard title="KoboldCPP" href="/pt-BR/self-hosting/local-endpoints/speech-to-text/koboldcpp/"
+    description="Use o STT baseado no Whisper do KoboldCPP quando sua build expuser uma transcrição de áudio compatível com a OpenAI." />
+</CardGrid>
+
+## Fluxo de Configuração
+
+1. Inicie um servidor STT a partir dos guias de motores acima.
+2. Em `/providers`, escolha **Add New Custom Endpoint** e use a compatibilidade de API `openai-compatible-transcription`.
+3. Selecione o endpoint salvo e use seu menu suspenso de modelo para adicionar o código do modelo relatado pelo servidor.
+4. Abra `/config` > Models > Switch Models para selecionar e ativar o endpoint registrado.
+
+## Fluxo de Transcrição
+
+Quando um endpoint de transcrição está ativo, o TomoriBot lê os anexos de áudio suportados em segundo plano e adiciona a transcrição ao contexto do chat. Nenhuma atribuição de persona é necessária.
+
+Use `/config` > Engine > Notices apenas se você também quiser que essas transcrições sejam postadas visivelmente no chat.
+
+Usuários da ElevenLabs devem escolher **Add New Provider** e **ElevenLabs** em `/providers`; isso registra a transcrição juntamente com a fala.
