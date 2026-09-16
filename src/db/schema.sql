@@ -2083,6 +2083,20 @@ CREATE TABLE IF NOT EXISTS nai_presets (
 CREATE INDEX IF NOT EXISTS idx_nai_presets_model_target ON nai_presets(model_target, is_default);
 SELECT add_column_if_not_exists('nai_presets', 'descriptions', 'JSONB');
 
+-- Legacy column removed by migration 082; relax the NOT NULL constraint
+-- here so the seed insert (which runs before migrations) does not fail on
+-- databases that predate migration 081.
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'nai_presets'
+      AND column_name = 'ja_preset_desc'
+  ) THEN
+    ALTER TABLE nai_presets ALTER COLUMN ja_preset_desc DROP NOT NULL;
+  END IF;
+END $$;
+
 -- Link active preset by name to server config (nullable for non-NAI providers)
 
 -- Add fallback model chain for automatic provider failover (March 2026)

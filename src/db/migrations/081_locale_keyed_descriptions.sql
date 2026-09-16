@@ -20,8 +20,20 @@ UPDATE embedding_models SET descriptions = jsonb_strip_nulls(jsonb_build_object(
 UPDATE system_prompt_presets SET descriptions = jsonb_strip_nulls(jsonb_build_object(
   'en-US', NULLIF(system_prompt_preset_desc, ''), 'ja', NULLIF(ja_description, '')
 )) WHERE descriptions IS NULL;
-UPDATE nai_presets SET descriptions = jsonb_strip_nulls(jsonb_build_object(
-  'en-US', NULLIF(preset_desc, ''), 'ja', NULLIF(ja_preset_desc, '')
-)) WHERE descriptions IS NULL;
-
-ALTER TABLE nai_presets ALTER COLUMN ja_preset_desc DROP NOT NULL;
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'nai_presets'
+      AND column_name = 'ja_preset_desc'
+  ) THEN
+    EXECUTE 'UPDATE nai_presets SET descriptions = jsonb_strip_nulls(jsonb_build_object(
+      ''en-US'', NULLIF(preset_desc, ''''), ''ja'', NULLIF(ja_preset_desc, '''')
+    )) WHERE descriptions IS NULL';
+    ALTER TABLE nai_presets ALTER COLUMN ja_preset_desc DROP NOT NULL;
+  ELSE
+    UPDATE nai_presets SET descriptions = jsonb_strip_nulls(jsonb_build_object(
+      'en-US', NULLIF(preset_desc, '')
+    )) WHERE descriptions IS NULL;
+  END IF;
+END $$;
