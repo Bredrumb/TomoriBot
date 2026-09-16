@@ -168,11 +168,15 @@ export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferR
   //    For other bracket-tags/emoji endpoints, strip only for the caption text.
   let processedScript: string;
   let captionText: string;
-  const shouldStripBracketTagsForTts = scriptMarkup === "plain" || chatterbox?.turboEnabled === false;
+  // Callers attach the persona's Chatterbox settings to every clone request, with Turbo defaulting
+  // on, so applying them unconditionally would strip Fish S2 Pro's free-form expression tags down
+  // to Turbo's whitelist.
+  const chatterboxTagRules = isChatterboxEndpoint(endpoint) ? chatterbox : undefined;
+  const shouldStripBracketTagsForTts = scriptMarkup === "plain" || chatterboxTagRules?.turboEnabled === false;
   if (shouldStripBracketTagsForTts) {
     processedScript = stripAllBracketTags(script);
     captionText = processedScript;
-  } else if (chatterbox?.turboEnabled === true) {
+  } else if (chatterboxTagRules?.turboEnabled === true) {
     processedScript = stripUnsupportedChatterboxTurboTags(script);
     captionText = stripElevenLabsExpressionTags(processedScript);
   } else {
