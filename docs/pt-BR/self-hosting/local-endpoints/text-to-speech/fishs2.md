@@ -21,7 +21,7 @@ O TomoriBot não redistribui os pesos do modelo. Cada usuário de hospedagem pr�
 ## Hardware e Sistema Operacional
 
 > [!IMPORTANT]
-> **Use Linux ou WSL2 para o Fish Speech:** a Fish Audio tem como alvo oficial o Linux e o WSL2. O Fish S2 Pro usa uma arquitetura Dual-Autoregressive (Dual-AR): 36 camadas lentas de transformer mais 10 passagens rápidas de codebook, totalizando 76 avaliações de camada por token. No Linux, o OpenAI Triton compila esse loop aninhado diretamente em kernels de GPU fundidos (`torch.compile(backend="inductor")`), e os benchmarks upstream demonstram que isso permite síntese em tempo real em GPUs de servidor Linux.
+> **Use Linux ou WSL2 para o Fish Speech:** a Fish Audio tem como alvo oficial o Linux e o WSL2. O Fish S2 Pro usa uma arquitetura Dual-Autoregressive (Dual-AR): 36 camadas lentas de transformer mais 10 passagens rápidas de codebook, totalizando 76 avaliações de camada por token. No Linux, o OpenAI Triton pode compilar esse loop aninhado em kernels de GPU fundidos (`torch.compile(backend="inductor")`), e os benchmarks upstream demonstram que isso permite síntese em tempo real em GPUs de servidor Linux. O wrapper deixa a compilação desativada por padrão, então defina `FISH_S2_COMPILE=1` para usá-la.
 >
 > No Windows nativo, o Triton não é suportado, o que força o PyTorch ao modo eager não compilado, com mais de 120.000 despachos sequenciais de kernels CUDA pelo driver WDDM do Windows. Isso causa um travamento severo de despacho e deixa a geração em **~8-10 minutos** (~65s de processamento por segundo de áudio) para o mesmo clipe. Para uma inferência utilizável, **execute o Fish S2 Pro dentro do Linux ou do WSL2**.
 
@@ -45,10 +45,15 @@ servers/tts/fishs2/.venv/bin/python servers/tts/fishs2/server.py
 
 O instalador:
 
-1. clona `Imagilux/fish-speech` em `servers/tts/fishs2/fish-speech/`;
+1. clona `Imagilux/fish-speech` em `servers/tts/fishs2/fish-speech/` e faz checkout do commit de runtime fixado;
 2. cria o `.venv` isolado;
 3. instala o Fish Speech e as dependências do wrapper do TomoriBot; e
 4. baixa o checkpoint BF16 oficial `fishaudio/s2-pro` em `fish-speech/checkpoints/fish-speech-s2-pro/`.
+
+Uma reinstalação normal permanece no commit de runtime fixado `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` em vez de
+seguir uma branch em movimento. A revisão do modelo usa `main` por padrão; fixe `FISH_S2_MODEL_REVISION` em
+uma revisão imutável do Hugging Face quando a implantação precisar ser reproduzível. As configurações do instalador
+estão listadas em [Variáveis do instalador](#variáveis-do-instalador).
 
 O modelo no Hugging Face é restrito (gated). Aceite a licença no Hugging Face primeiro. Se o download pedir autenticação, execute:
 
@@ -78,6 +83,10 @@ Se o PyTorch no Windows precisar ser instalado ou atualizado manualmente com sup
 ```powershell
 .\servers\tts\fishs2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
+
+O TomoriBot para de esperar por uma mensagem de voz após `TTS_SYNTHESIZE_TIMEOUT_MS` (padrão 240000 ms), o que
+é menos do que um clipe leva no Windows nativo. Aumente esse valor no `.env` do TomoriBot (por exemplo,
+`TTS_SYNTHESIZE_TIMEOUT_MS=900000`) enquanto estiver avaliando no Windows.
 
 ## Transcrição de Referência Obrigatória
 
@@ -147,6 +156,21 @@ Como o endpoint usa a marcação `Bracket Tags`, o TomoriBot preserva essas tags
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Comprimento máximo do script aceito pelo wrapper |
 | `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` | Tempo máximo para esperar pela API aninhada do Fish |
 | `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` | Tempo máximo para esperar por uma requisição de síntese no upstream |
+| `FISH_S2_LAUNCH_TIMEOUT_MS` | `240000` | Quanto tempo `bun run launch --fishs2` espera pela verificação de saúde do wrapper |
+
+### Variáveis do instalador
+
+Lidas por `install-fishs2.sh` e `install-fishs2.ps1`. Registre qualquer valor que você sobrescrever para que a implantação possa ser reproduzida.
+
+| Variável | Padrão | Propósito |
+|---|---|---|
+| `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` | Repositório do runtime do Fish Speech, por exemplo um espelho revisado |
+| `FISH_S2_RUNTIME_REF` | `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` | Commit do runtime usado na instalação |
+| `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | Repositório do Hugging Face a baixar |
+| `FISH_S2_MODEL_REVISION` | `main` | Revisão do Hugging Face a baixar |
+| `FISH_S2_UPDATE` | `0` | Defina como `1` para atualizar deliberadamente o runtime e baixar o modelo novamente |
+| `FISH_S2_UPDATE_REF` | não definido | Ref do runtime para uma atualização. Sem ela, um `FISH_S2_RUNTIME_REF` explícito é mantido; caso contrário, a atualização usa `main` |
+| `FISH_S2_UPDATE_MODEL_REVISION` | não definido | Revisão do modelo para uma atualização, com a mesma precedência de `FISH_S2_UPDATE_REF` |
 
 O áudio de referência deve ser um arquivo PCM RIFF/WAVE não compactado e não vazio. O limite de tamanho decodificado é verificado antes da inferência para evitar que uma requisição base64 muito grande consuma memória ilimitada.
 
@@ -171,5 +195,7 @@ $env:FISH_S2_MODEL_DIR = "servers/tts/fishs2/fish-speech/checkpoints/fish-speech
 $env:FISH_S2_MODEL_REVISION = "9706ff036580881d87cc09465dd10014527bc481"
 .\servers\tts\fishs2\install-fishs2.ps1
 ```
+
+Inicie o `server.py` no mesmo shell, ou defina as mesmas três variáveis antes de iniciá-lo, para que o wrapper carregue o diretório INT8 em vez do padrão BF16.
 
 O checkpoint INT8 reduz os pesos do transformer de ~10,3 GB para ~5,1 GB, mantendo os embeddings de áudio e as camadas do codec em BF16, e cabe em ~10 GB de VRAM no total.

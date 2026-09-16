@@ -31,6 +31,7 @@
     "check-locale-placeholders": "bun run scripts/checks/checkLocalePlaceholders.ts",
     "check-locale-markers": "bun run scripts/checks/checkLocaleMarkers.ts",
     "check-locale-links": "bun run scripts/checks/checkLocaleLinks.ts",
+    "check-intent-packs": "bun run scripts/checks/checkIntentPackSmoke.ts",
     "generate-command-reference": "bun run scripts/devtools/generateCommandReference.ts",
     "check-command-reference": "bun run scripts/checks/checkCommandReference.ts",
     "check-command-mentions": "bun run scripts/checks/checkCommandMentions.ts",

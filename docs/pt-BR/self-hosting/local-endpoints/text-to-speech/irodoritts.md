@@ -32,10 +32,10 @@ Os scripts de configuração criam `servers/tts/irodoritts/.venv`, de modo que `
 
 Os backends disponíveis são:
 
-- `cu128` — NVIDIA CUDA 12.8 no Windows/Linux
-- `cpu` — Apenas CPU, ou macOS CPU/MPS via PyPI
-- `rocm` — AMD ROCm no Linux/WSL
-- `xpu` — Intel XPU no Windows/Linux
+- `cu128`: NVIDIA CUDA 12.8 no Windows/Linux
+- `cpu`: Apenas CPU, ou macOS CPU/MPS via PyPI
+- `rocm`: AMD ROCm no Linux/WSL
+- `xpu`: Intel XPU no Windows/Linux
 
 O URL do endpoint padrão é `http://127.0.0.1:8013`.
 

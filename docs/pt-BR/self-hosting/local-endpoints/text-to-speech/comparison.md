@@ -22,8 +22,8 @@ Esta página traz resultados empíricos de benchmark, tempos de síntese e clipe
 
 Os tempos informam o **tempo total de geração** (segundos de relógio desde a requisição até o áudio pronto) e o **Real-Time Factor (RTF)**, definido como o tempo de geração dividido pela duração do áudio:
 
-- **RTF < 1.0 (negrito):** o motor gera a fala mais rápido que o tempo real (por exemplo, `0.50× RTF` renderiza um clipe de 10 segundos em 5 segundos). Isso é necessário para chat de voz ao vivo, porque o bot consegue transmitir pacotes de áudio continuamente sem ficar para trás.
-- **RTF > 1.0:** a geração demora mais que o áudio falado. Serve para respostas estáticas de `/synthesize` em canais de texto, mas em uma chamada de voz ao vivo o buffer de reprodução esvaziaria e o áudio pausaria.
+- **RTF < 1.0 (negrito):** o motor gera a fala mais rápido que o tempo real (por exemplo, `0.50× RTF` renderiza um clipe de 10 segundos em 5 segundos). Só esses motores conseguiriam acompanhar uma chamada de voz ao vivo, que o TomoriBot não implementa hoje.
+- **RTF > 1.0:** a geração demora mais que o áudio falado. O TomoriBot envia cada mensagem de voz como um arquivo completo, então um RTF maior significa apenas uma espera mais longa.
 
 | Motor | Windows nativo<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Amostra de áudio |
 |---|---|---|---|---|
@@ -43,11 +43,11 @@ Os tempos informam o **tempo total de geração** (segundos de relógio desde a 
 
 ## Clonagem de Voz em Japonês
 
-### Prompt do Benchmark
+### Prompt do Benchmark em Japonês
 
 > *「そんな顔して……ほんとは私にやられたいんでしょ？ざぁこざぁこ～♡」*
 
-### Desempenho e Comparação de Áudio
+### Desempenho e Comparação de Áudio em Japonês
 
 | Motor | Windows nativo<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Amostra de áudio |
 |---|---|---|---|---|
@@ -65,13 +65,13 @@ Os tempos informam o **tempo total de geração** (segundos de relógio desde a 
 - **Escolha o [CosyVoice 3](/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** se você precisa de clonagem zero-shot multilíngue de alta qualidade com direção de entrega em linguagem natural (`"Speak in English with excitement"`).
 - **Escolha o [VoxCPM2](/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** se você precisa de suporte multilíngue abrangente (30 idiomas), Ultimate Cloning assistida por transcrição e design de voz natural.
 - **Escolha o [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** se você quer clonagem limpa em vários idiomas, com design de voz flexível e boa aderência ao prompt.
-- **Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** se o seu bot fala japonês. É o motor mais rápido disponível (~4s no Windows) e interpreta nativamente emojis Unicode (`😊`, `😢`, `😡`) para modular a emoção da personagem.
+- **Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** se o seu bot fala japonês. Foi o único motor exclusivo para japonês medido (~4s, 0.47× RTF no Windows) e interpreta nativamente emojis Unicode (`😊`, `😢`, `😡`) para modular a emoção da personagem.
 
 ---
 
 ## Compare os Motores
 
-Todos os sidecars do TomoriBot atualmente retornam um WAV completo para o bot.
+Todos os sidecars do TomoriBot atualmente retornam um WAV completo para o bot. "Caminho de streaming" significa que o modelo upstream ou um backend de serviço separado tem um; isso **não** significa que o streaming de chat de voz do Discord está implementado. Os tamanhos são parâmetros de modelo, **não** tamanhos de VRAM ou de download, e a coluna de 16 GB é uma orientação de configuração, não um pico medido. A coluna de velocidade descreve a troca pretendida de cada motor; os tempos medidos acima vêm de uma única máquina Windows e não classificam os motores no Linux.
 
 | Motor | Tamanho do modelo; GPU de 16 GB | Idiomas | Fontes de voz e controles | Velocidade / caminho de streaming | Escolha para |
 |---|---|---|---|---|---|

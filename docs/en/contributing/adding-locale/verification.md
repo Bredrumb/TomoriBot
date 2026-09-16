@@ -20,6 +20,7 @@ bun run check-locale-lengths                       # Discord 45/100 code-point c
 bun run check-locale-markers                       # protocol keys, templates, collisions
 bun run check-locale-links --locale=<code>         # project routes and heading fragments
 bun run find-stale-translations --locale=<code>    # untranslated English strings
+bun run check-intent-packs --locale=<code> --requests=<file.json>  # natural requests reach tools
 # Add --export to write the review list to scripts/maintenance/stale-translations.json.
 
 # Repository gates
@@ -49,6 +50,7 @@ advertises an alternate fails the build rather than warning.
 | `check-locale-markers` | A protocol key absent from an authored locale, a template placeholder mismatch, a missing literal anchor, or two keys rendering the same title | Exit 1 |
 | `check-locale-links` | A project-owned docs route or heading fragment that resolves to nothing | Exit 1 |
 | `find-stale-translations` | Values that are byte-identical to English, plus English-looking text in a non-Latin script, checked against each locale's expected script | Exit 0 with a report; it exits 1 only for an unauthored locale, so it never passes vacuously |
+| `check-intent-packs` | A deliberate target or `explicit_memory` pack that is empty for the locale, fewer than three requests for a target, or a request that does not reach its expected tools | Exit 1 |
 | `check-seed-catalogs` | `i18n` map shape, persona uniqueness, unpaired sample dialogues, sprite validity | Exit 1 |
 | `check` | Any type error, including a `pt-br` key that is not a `LocaleCode` | Exit 1 |
 | `test` | Behavior regressions | Exit 1 |

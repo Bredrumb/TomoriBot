@@ -57,7 +57,7 @@ Para usar o modelo Standard:
 3. **Desative** a opção **Fast Model (Turbo)**.
 4. Na próxima geração, o wrapper baixa e carrega sob demanda o modelo Standard de 0.5B na memória.
 
-Quando a alternância de fast-model está desativada, o TomoriBot exibe dois controles deslizantes em `/config`:
+Os dois valores são campos de texto no modal **Edit Parameters**. Eles podem ser editados a qualquer momento, e a página avisa que são ignorados enquanto o fast-model estiver ativado:
 - **`cfg_weight`** (padrão `0.5`): ajusta o quanto o áudio sintetizado segue o ritmo e o estilo vocal da referência.
 - **`exaggeration`** (padrão `0.5`): controla a intensidade emocional e a inflexão dramática da entrega.
 
@@ -65,6 +65,8 @@ Quando a alternância de fast-model está desativada, o TomoriBot exibe dois con
 > O Chatterbox Standard não suporta tags de evento entre colchetes inline (como `[laughs]` ou `[sigh]`). O TomoriBot remove automaticamente as tags entre colchetes do texto do prompt quando a alternância Fast Model está desativada.
 
 ## Registrar no TomoriBot
+
+Inclua `Chatterbox` no rótulo do endpoint ou no nome do modelo. O TomoriBot só reconhece um endpoint do Chatterbox por esse nome (ou por uma URL de endpoint que o contenha), então a lista de tags permitidas do Turbo, a remoção de tags do modelo Standard e as opções do Chatterbox em `/generate voice-message` só se aplicam quando ele está presente.
 
 Execute `/providers`, escolha **Add New Custom Endpoint** e use a compatibilidade da API de fala:
 

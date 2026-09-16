@@ -101,11 +101,21 @@ Authoring rules:
   accepted, and a violating entry throws at startup rather than silently matching everything.
 - **Lean toward recall.** A false positive only exposes a tool the model already has, and only while
   the mode is off, so missing a real request costs more than an extra match.
+- **Cover the registers people type in chat.** Include casual and formal imperatives, spellings with
+  and without diacritics, and phrasings with demonstratives. The pilot pack carried only formal
+  Portuguese imperatives and missed most casual requests.
+- **Keep a stem from starting common words in another supported language.** Matching unions every
+  locale, so `cita*` would also fire on English "citation"; use a longer phrase instead.
 - **Two characters minimum in Han, kana, or Hangul.** A single ideograph or syllable matched as a
   substring would fire on most messages in that script.
 - **English deliberate packs stay empty by design.** The built-in English patterns in
   `deliberateToolMode.ts` already cover English phrasing, and entries there would widen matching past
   those patterns.
+
+Verify a pack with natural requests rather than by reading its entries. Write a request file before
+looking at the pack, with at least three casual requests per deliberate target and for
+`explicit_memory`, then run `bun run check-intent-packs --locale=<code> --requests=<file.json>`.
+Requests written after reading the pack tend to reuse its wording and pass without proving coverage.
 
 Matching is script aware: a pack entry containing Han, kana, or Hangul is matched as a substring,
 because those scripts have no spaces and Hangul attaches particles directly to the noun. Latin,
