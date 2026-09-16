@@ -57,7 +57,7 @@ export default {
     personal_routing_hint: `Para escolher modelos e fallbacks pessoais ativos, abra \`/personal config\` > Modelos.`,
     read_only_action_pending: `Esta ação está atualmente indisponível.`,
     changed_receipt: `Lista de provedores alterada`,
-    changed_receipt_detail: `Essa entrada não existe mais. O painel agora mostra o estado atual.`,
+    changed_receipt_detail: `Essa entrada não existe mais. O painel já mostra o estado atual.`,
     change_failed: `Alteração de provedor indisponível`,
     add_provider_modal_title: `Adicionar Novo Provedor`,
     provider_label: `Provedor`,

@@ -15,18 +15,31 @@ describe("official persona naming catalog", () => {
         addressTerms: { masculine: "bro", feminine: "sis", neutral: "fam" },
       },
       "4:ja": { prefixes: {}, suffixes: {}, addressTerms: {} },
+      "4:pt-BR": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "mano", feminine: "mana", neutral: "parça" },
+      },
       "50:en-US": {
         prefixes: { masculine: "Master", feminine: "Mistress", neutral: "Master" },
         suffixes: {},
         addressTerms: {},
       },
       "50:ja": { prefixes: {}, suffixes: { neutral: "様" }, addressTerms: {} },
+      "50:pt-BR": {
+        prefixes: { masculine: "Mestre", feminine: "Mestra", neutral: "Mestre" },
+        suffixes: {},
+        addressTerms: {},
+      },
       "716:en-US": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:ja": { prefixes: {}, suffixes: {}, addressTerms: {} },
+      "716:pt-BR": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "1770:en-US": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "1770:ja": { prefixes: {}, suffixes: {}, addressTerms: {} },
+      "1770:pt-BR": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "3585:en-US": { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },
       "3585:ja": { prefixes: {}, suffixes: { neutral: "先輩" }, addressTerms: {} },
+      "3585:pt-BR": { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },
     });
   });
 

@@ -6949,14 +6949,16 @@ describe("Raw modal component types and their option bounds", () => {
     const options = (control?.options ?? []) as Array<{ value: string; label: string; default?: boolean }>;
 
     expect(control?.type).toBe(STRING_SELECT);
-    expect(options).toEqual([
+    // The locale list follows directory enumeration, whose order the filesystem does not guarantee.
+    expect([...options].sort((left, right) => left.value.localeCompare(right.value))).toEqual([
       { value: "en-US", label: "English", default: false },
       { value: "ja", label: "日本語", default: true },
+      { value: "pt-BR", label: "Português (Brasil)", default: false },
     ]);
     assertBounds(modal, "language");
-    expect(getRegisterableLocales()).toEqual(["en-US", "ja"]);
+    expect(getRegisterableLocales().sort()).toEqual(["en-US", "ja", "pt-BR"]);
 
-    const unsupported = buildLanguageModal("en-US", "nonce123456", "pt-BR");
+    const unsupported = buildLanguageModal("en-US", "nonce123456", "de");
     const unsupportedOptions = (unsupported.components[0]?.component?.options ?? []) as Array<{ default?: boolean }>;
     expect(unsupportedOptions.every((option) => option.default === false)).toBe(true);
   });

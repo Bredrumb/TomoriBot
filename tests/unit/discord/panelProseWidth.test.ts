@@ -21,6 +21,12 @@ import { getSupportedLocales, hasLocaleKey, initializeLocalizer, localizer } fro
 
 await initializeLocalizer();
 
+/**
+ * Rendered walks run per locale because a translation, not the English source, is what usually
+ * overflows a thumbnail row or a `-# ` marker line, and the static scan measures neither.
+ */
+const AUTHORED_LOCALES = getSupportedLocales();
+
 const PANEL_UI_DIR = "src/utils/discord/ui";
 
 /**
@@ -194,7 +200,7 @@ describe("panel prose width", () => {
     expect(thumbnailPanels.sort()).toEqual([...THUMBNAIL_PANELS_WITH_RENDER_COVERAGE].sort());
   });
 
-  it("holds persona-scoped memories to 40 characters beside its avatar", () => {
+  it.each(AUTHORED_LOCALES)("holds persona-scoped memories to 40 characters beside its avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -205,7 +211,7 @@ describe("panel prose width", () => {
     ];
     const build = (selectedPersonaAvatarUrl: string | null) =>
       buildPersonalMemoriesPanelPayload({
-        locale: "en-US",
+        locale,
         category: "persona",
         selectedLineageId: 1770,
         personas,
@@ -221,7 +227,7 @@ describe("panel prose width", () => {
     expect(collectProseWidthViolations(build(null))).toEqual([]);
   });
 
-  it("holds persona naming to 40 characters beside its avatar", () => {
+  it.each(AUTHORED_LOCALES)("holds persona naming to 40 characters beside its avatar [%s]", (locale) => {
     const user = {
       user_id: 1,
       user_disc_id: "user-123",
@@ -238,7 +244,7 @@ describe("panel prose width", () => {
     ];
     const build = (selectedPersonaAvatarUrl: string | null) =>
       buildPersonalConfigPanelPayload({
-        locale: "en-US",
+        locale,
         category: "profile",
         page: "persona",
         user,
@@ -256,7 +262,7 @@ describe("panel prose width", () => {
     expect(collectProseWidthViolations(build(null))).toEqual([]);
   });
 
-  it("holds workspace persona memories to 40 characters beside its avatar", () => {
+  it.each(AUTHORED_LOCALES)("holds workspace persona memories to 40 characters beside its avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -267,7 +273,7 @@ describe("panel prose width", () => {
     ];
     const build = (selectedPersonaAvatarUrl: string | null) =>
       buildMemoriesPanelPayload({
-        locale: "en-US",
+        locale,
         category: "memories",
         selectedLineageId: 1770,
         personas,
@@ -288,7 +294,7 @@ describe("panel prose width", () => {
    * coverage check above still passed, because the Memories page already puts this builder in the
    * covered set.
    */
-  it("holds workspace documents to 40 characters beside its persona avatar", () => {
+  it.each(AUTHORED_LOCALES)("holds workspace documents to 40 characters beside its persona avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -299,7 +305,7 @@ describe("panel prose width", () => {
     ];
     const build = (selectedDocumentPersonaId: number, selectedPersonaAvatarUrl: string | null) =>
       buildMemoriesPanelPayload({
-        locale: "en-US",
+        locale,
         category: "documents",
         selectedLineageId: selectedDocumentPersonaId,
         selectedDocumentPersonaId,
@@ -331,7 +337,9 @@ describe("panel prose width", () => {
    * two integer columns carry their widest in-range values instead, since they cannot pick up the
    * artifact.
    */
-  it("holds the Models parameter summary to 65 characters in every provider state", () => {
+  it.each(
+    AUTHORED_LOCALES,
+  )("holds the Models parameter summary to 65 characters in every provider state [%s]", (locale) => {
     const user = {
       user_id: 1,
       user_disc_id: "user-123",
@@ -353,7 +361,7 @@ describe("panel prose width", () => {
 
     const build = (parametersProviders: string[]) =>
       buildPersonalConfigPanelPayload({
-        locale: "en-US",
+        locale,
         category: "models",
         page: "parameters",
         user,
@@ -385,7 +393,7 @@ describe("panel prose width", () => {
    * behind the same thumbnail Section. Each is walked because a heading only one of them reaches
    * would otherwise never be measured.
    */
-  it("holds /config Persona General to 40 characters beside its avatar", () => {
+  it.each(AUTHORED_LOCALES)("holds /config Persona General to 40 characters beside its avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -406,7 +414,7 @@ describe("panel prose width", () => {
     ];
     const build = (actor: ConfigActor, selectedPersonaId: number, avatarUrl: string | null) =>
       buildConfigPanelPayload({
-        locale: "en-US",
+        locale,
         actor,
         category: "persona",
         page: "general",
@@ -431,7 +439,7 @@ describe("panel prose width", () => {
    * a Thumbnail, and the loop below renders it with no sprites at all. The widest legal sprite name
    * and usage note are the inputs that decide whether those lines fit, so they are walked here.
    */
-  it("holds /config Persona Sprites to 40 characters beside its sprite image", () => {
+  it.each(AUTHORED_LOCALES)("holds /config Persona Sprites to 40 characters beside its sprite image [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -453,7 +461,7 @@ describe("panel prose width", () => {
     };
     const build = (actor: ConfigActor, selectedPersonaAvatarUrl: string | null) =>
       buildConfigPanelPayload({
-        locale: "en-US",
+        locale,
         actor,
         category: "persona",
         page: "sprites",
@@ -475,7 +483,7 @@ describe("panel prose width", () => {
     expect(collectProseWidthViolations(build(dmOwner, null))).toEqual([]);
   });
 
-  it("holds every /config page placeholder and confirmation to 65 characters", () => {
+  it.each(AUTHORED_LOCALES)("holds every /config page placeholder and confirmation to 65 characters [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -495,11 +503,13 @@ describe("panel prose width", () => {
       } as unknown as TomoriState,
     ];
     const actor: ConfigActor = { workspaceKind: "guild", isManager: true };
+    // Collected rather than asserted per page, so a translation pass sees every overflowing page at once.
+    const pageViolations: Array<ProseWidthViolation & { page: string }> = [];
 
     for (const [category, pages] of Object.entries(CONFIG_PAGES_BY_CATEGORY)) {
       for (const page of pages) {
         const payload = buildConfigPanelPayload({
-          locale: "en-US",
+          locale,
           actor,
           category: category as ConfigCategory,
           page,
@@ -507,12 +517,15 @@ describe("panel prose width", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
         });
-        expect(collectProseWidthViolations(payload), `${category}/${page}`).toEqual([]);
+        for (const violation of collectProseWidthViolations(payload)) {
+          pageViolations.push({ page: `${category}/${page}`, ...violation });
+        }
       }
     }
+    expect(pageViolations).toEqual([]);
 
     const confirm = buildConfigPanelPayload({
-      locale: "en-US",
+      locale,
       actor,
       category: "persona",
       page: "general",
@@ -531,7 +544,9 @@ describe("panel prose width", () => {
    * which reach their documented maximum before truncation, and the DM explanation is a paragraph
    * that has to carry its own line breaks to stay inside the column.
    */
-  it("holds the setup receipt to 65 characters for every provider mode and context", () => {
+  it.each(
+    AUTHORED_LOCALES,
+  )("holds the setup receipt to 65 characters for every provider mode and context [%s]", (locale) => {
     const maxEndpointLabel = "e".repeat(40);
     const maxModelCode = "m".repeat(200);
 
@@ -542,7 +557,7 @@ describe("panel prose width", () => {
       context: "guild" | "dm",
     ) =>
       buildSetupSuccessPayload({
-        locale: "en-US",
+        locale,
         context,
         providerAccess,
         modelName,
@@ -600,7 +615,7 @@ describe("panel prose width", () => {
    * label, the custom model code, and the two catalog preset names each reach the longest value their
    * own editor accepts, and are truncated for display before they land here.
    */
-  it("holds the setup wizard anchor to 65 characters for every draft state", () => {
+  it.each(AUTHORED_LOCALES)("holds the setup wizard anchor to 65 characters for every draft state [%s]", (locale) => {
     const maxEndpointLabel = "e".repeat(40);
     const maxModelCode = "m".repeat(200);
     const maxProviderId = "g".repeat(40);
@@ -637,7 +652,7 @@ describe("panel prose width", () => {
           requiresPolicies: false,
           ...overrides,
         },
-        locale: "en-US",
+        locale,
         isHosted,
         nonce: "nonce-abc-12345",
         settingsCatalogs,

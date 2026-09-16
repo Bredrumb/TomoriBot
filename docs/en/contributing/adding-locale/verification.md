@@ -57,11 +57,33 @@ Two gates are known to report pre-existing debt that is not caused by a new loca
 
 - `check-locales` reports the Japanese parity gap as an advisory exit 2. Nothing is missing
   everywhere, so the run still proves the required invariant.
-- `check-locale-links` reports two Japanese heading-fragment drifts under
-  `commands.help.st-preset.*` and `commands.help.mcp.*`. Japanese catch-up owns them.
+- `check-locale-links --locale=ja` reports two Japanese heading-fragment drifts, in
+  `src/locales/ja/providers.ts` and `src/locales/ja/commands/setup.ts`. Japanese catch-up owns them.
 
 Report a gate failure with its exact output rather than describing it. A gate that was not run is not a
 passed gate.
+
+## Locale Failures Only `test` Reports
+
+Passing every localization gate does not make `bun run test` pass, because several locale checks live
+only in the unit lane:
+
+- **Panel line width.** `tests/unit/discord/panelProseWidth.test.ts` holds every authored panel line
+  to 65 characters, or 40 beside a thumbnail. `check-locale-lengths` measures Discord's hard caps, not
+  this layout budget, so a translation that runs longer than English passes one and fails the other.
+  The static scan measures the bare string; the payload walks run once per authored locale and
+  measure the rendered line, including a `-# ` or `> ` marker and the thumbnail budget. Shorten the
+  wording. Add a line break only where the builder applies the marker per line (`withLinePrefix`),
+  because a string rendered as `` `-# ${text}` `` loses the subtext style after its first line.
+- **Fixtures that list the authored locales.** The personal language picker test asserts every
+  endonym in `tests/unit/discord/personalConfigRoutes.test.ts`, and
+  `tests/unit/db/personaNamingCatalog.test.ts` asserts each persona's `namingConfig` per language.
+  Both are exact on purpose, so they fail when a locale lands. Add the new locale's reviewed values
+  instead of loosening the assertion.
+- **Docs publication.** `tests/unit/docs/docsLocaleConfig.test.ts` fails when a `docsTree` flag and
+  the directories under `docs/` disagree, and `tests/unit/docs/docsSiteMiddleware.test.ts` pins the
+  routed locale list to `DOCS_LOCALES`. Flipping `docsTree` is the change these tests expect, so they
+  stay green only when the tree and the flag land together.
 
 ## The Gate No Script Replaces
 

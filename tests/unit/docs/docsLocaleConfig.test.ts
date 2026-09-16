@@ -108,7 +108,7 @@ describe("docs locale resolution", () => {
     expect(resolveDocsLocale("JA")).toBe("ja");
     expect(resolveDocsLocale("ja-jp")).toBe("ja");
     expect(matchAcceptLanguage("JA")).toBe("ja");
-    expect(matchAcceptLanguage("PT-BR")).toBe(DEFAULT_DOCS_LOCALE_ID);
+    expect(matchAcceptLanguage("PT-BR")).toBe("pt-BR");
   });
 
   it("falls back to English for an ambiguous base language", () => {
@@ -117,6 +117,10 @@ describe("docs locale resolution", () => {
 });
 
 describe("docs URL building", () => {
+  // Each locale lane flips its own `docsTree`, so a hardcoded "unpublished" locale goes stale on the
+  // next publication. An unlisted tag keeps the fallback covered once every planned tree ships.
+  const unpublishedLocale = DOCS_LOCALES.find((locale) => !locale.docsTree)?.id ?? "de";
+
   it("prefixes a published locale onto every registered route", () => {
     for (const route of Object.values(DOCS_ROUTES)) {
       expect(buildLocalizedDocsPath("ja", route)).toBe(`/ja${route}`);
@@ -124,7 +128,7 @@ describe("docs URL building", () => {
   });
 
   it("returns English for a locale whose docs tree does not exist", () => {
-    expect(buildLocalizedDocsPath("pt-BR", DOCS_ROUTES.MEMORY)).toBe(`/en${DOCS_ROUTES.MEMORY}`);
+    expect(buildLocalizedDocsPath(unpublishedLocale, DOCS_ROUTES.MEMORY)).toBe(`/en${DOCS_ROUTES.MEMORY}`);
   });
 
   it("keeps fragments intact", () => {

@@ -45,7 +45,24 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 
 Em seguida, defina `CHATTERBOX_FAST_MODEL=nano` antes de iniciar o wrapper. Deixe a variável indefinida para o Turbo. No Windows PowerShell, defina-a com `$env:CHATTERBOX_FAST_MODEL = "nano"`; no Linux ou macOS, use `CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py`. A resposta de `/health` reporta `fast_model` para que você possa verificar a escolha carregada. Nano e Turbo usam a mesma solicitação de clonagem e tags de eventos suportadas. Ambos funcionam apenas em inglês.
 
-A alternância de fast-model em `/config` deve permanecer habilitada para usar o Nano ou o Turbo. Desativá-la seleciona o modelo padrão mais antigo do Chatterbox para ajuste de peso CFG e exagero. O Nano não usa esses parâmetros.
+A alternância de fast-model em `/config` deve permanecer habilitada para usar o Nano ou o Turbo. Desativá-la seleciona o modelo Standard de 0.5B do Chatterbox para ajuste de peso CFG e exagero.
+
+### Chatterbox Standard (0.5B com CFG e Exaggeration)
+
+O modelo base original de 0.5B do Chatterbox (`ChatterboxTTS`) já vem integrado ao wrapper do servidor. Ele troca as tags de evento entre colchetes inline do Turbo por um controle vocal refinado usando **Classifier-Free Guidance (`cfg_weight`)** e **`exaggeration`** emocional.
+
+Para usar o modelo Standard:
+1. Inicie o wrapper do servidor normalmente.
+2. No Discord, execute `/config` > **Models** > **TTS Parameters & Voices**.
+3. **Desative** a opção **Fast Model (Turbo)**.
+4. Na próxima geração, o wrapper baixa e carrega sob demanda o modelo Standard de 0.5B na memória.
+
+Quando a alternância de fast-model está desativada, o TomoriBot exibe dois controles deslizantes em `/config`:
+- **`cfg_weight`** (padrão `0.5`): ajusta o quanto o áudio sintetizado segue o ritmo e o estilo vocal da referência.
+- **`exaggeration`** (padrão `0.5`): controla a intensidade emocional e a inflexão dramática da entrega.
+
+> [!NOTE]
+> O Chatterbox Standard não suporta tags de evento entre colchetes inline (como `[laughs]` ou `[sigh]`). O TomoriBot remove automaticamente as tags entre colchetes do texto do prompt quando a alternância Fast Model está desativada.
 
 ## Registrar no TomoriBot
 
