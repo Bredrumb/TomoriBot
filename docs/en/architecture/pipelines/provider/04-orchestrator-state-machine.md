@@ -20,6 +20,13 @@ determine the shape of the final `StreamResult`. Three concerns are woven throug
    stage 07) are raised *during* the write; resolving them there cancels the upstream response one
    chunk sooner than waiting for the next loop iteration would.
 
+   A stop the delivery layer raised itself skips the flush instead of taking it. The stop request is
+   cleared before the flush runs, so a flush would reach the send path with nothing left to consult
+   and post the buffered text as a real Discord call: for a destination the bot cannot post into
+   that is a second rejected send, and the stop it raises on the way out is registered after the
+   clear, so it outlives the stream and silently aborts the next turn. The skip list covers the send
+   and flush limits for the same reason they are raised at all.
+
 2. **Chunk routing** — after stop checks, the `ProcessedChunk.type` determines the path:
    - `"text"` → stage 05 (`StreamBufferFlusher.processTextChunk`)
    - `"function_call"` → flush the pending buffer → return `{ status: "function_call", data: functionCall }`

@@ -5,6 +5,7 @@ import type {
   Interaction,
   Message,
   Presence,
+  RateLimitData,
   VoiceState,
   GuildEmoji,
   Sticker,
@@ -24,6 +25,7 @@ export type EventArg =
   | Interaction
   | Message
   | GuildEmoji
+  | RateLimitData
   | Sticker;
 
 export interface LocaleObject {

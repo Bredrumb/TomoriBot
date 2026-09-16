@@ -199,6 +199,17 @@ function isProviderError(value: unknown): value is ProviderError {
 }
 
 async function emitGenerationError(context: ChatTurnContext, error: unknown): Promise<void> {
+  if (context.streamingContext?.generationErrorReported) {
+    // The same failed turn reports through the stream result and again from the turn's catch
+    // block. Logging both turns one failure into two `Generation failed` rows for one message id
+    // and sends the user a second error embed.
+    log.warn(`Suppressing repeat generation error report for message ${context.message.id}`, error);
+    return;
+  }
+  if (context.streamingContext) {
+    context.streamingContext.generationErrorReported = true;
+  }
+
   log.error(`Generation failed for message ${context.message.id}`, error);
   if (context.isUserImpersonation) {
     throw error instanceof Error ? error : new Error("User impersonation failed before a reply could be sent.");
@@ -225,7 +236,13 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
       personaUsername: context.responseTarget?.personaUsername,
       personaAvatarUrl: context.responseTarget?.personaAvatarUrl,
     },
-  );
+  ).catch((embedError: unknown) => {
+    // Reporting a failure must not itself fail. The two causes worth naming are a channel the
+    // send cannot reach (deleted, or the bot lost access), where the retry this would trigger
+    // reports the same failure again and turns one error into a burst, and the same refusal the
+    // original send already reported.
+    log.warn(`Failed to send the generation error embed for message ${context.message.id}`, embedError);
+  });
 }
 
 export async function handleStopResponse(originalStopMessage: Message, client: Client): Promise<void> {

@@ -4,7 +4,7 @@ import { startHealthServer } from "@/init/healthServer";
 import { registerHeapSnapshotHandler } from "@/init/heapSnapshot";
 import { loadSecrets } from "@/init/secrets";
 import { initStartupBackup } from "@/init/backup";
-import { createDiscordClient, resolvePresenceIntentEnabled } from "@/init/discord";
+import { createDiscordClient, isTransientGatewayError, resolvePresenceIntentEnabled } from "@/init/discord";
 import { initDatabase } from "@/init/database";
 import { initLoaders } from "@/init/loaders";
 import { initBridges } from "@/init/bridges";
@@ -64,26 +64,42 @@ await initBridges(client);
 initTimers(client);
 
 // Login, so triggers clientReady which starts all deferred timers.
-// Awaited inside a try/catch as a defensive net: resolvePresenceIntentEnabled
-// already prevents requesting an unapproved privileged intent, so a
-// DisallowedIntents rejection here is a rare edge (e.g. the Presence Intent was
-// revoked between the approval probe and login). We exit loudly rather than
-// re-wiring the client in place (which would duplicate one-time init like the
-// Matrix bridge and quota-cleanup interval); the probe on the next restart
-// self-heals by booting without the privileged intent.
+//
+// Retrying this in-process is not available: `Client#login` awaits `client.destroy()` on failure,
+// which sets `ws.destroyed` permanently (discord.js only clears it in the WebSocket manager's
+// constructor), drops `client.token`, and never restarts the cache sweepers. A second `login()`
+// therefore leaves `isReady()` false forever, which the health endpoint reports as 503 and the
+// container runtime reads as a dead process. Rebuilding the client instead is not an option
+// either: the Matrix bridge closes over the instance it was handed. So a failed connect exits and
+// the restart policy retries with a fresh process, which is the only path that yields a client
+// that can actually report ready.
+//
+// A transient gateway failure is still distinguished from a misconfiguration, because the two
+// need different operator responses and the runtime backoff cannot tell them apart.
 try {
   await client.login(process.env.DISCORD_TOKEN);
 } catch (error) {
   if (isDisallowedIntentsError(error)) {
     log.error(
       "Discord rejected login: a requested privileged intent is not approved for this bot. " +
-        "This is unexpected because approval is probed before connecting — check whether the " +
+        "This is unexpected because approval is probed before connecting. Check whether the " +
         "Presence Intent was revoked. Restarting will re-probe and boot without the intent " +
         "(presence context degrades gracefully).",
       error as Error,
     );
     process.exit(1);
   }
-  log.error("Discord login failed", error as Error);
+
+  const transient = isTransientGatewayError(error);
+  log.error(
+    transient
+      ? "Discord login failed because the gateway is unreachable. The process will exit so the " +
+          "container runtime restarts it with backoff; no action is needed if Discord recovers."
+      : "Discord login failed",
+    error as Error,
+  );
+  // Best effort: the handshake already failed, so this only avoids leaving a half-open socket and
+  // a session Discord would hold until it times out.
+  await client.destroy().catch(() => undefined);
   process.exit(1);
 }

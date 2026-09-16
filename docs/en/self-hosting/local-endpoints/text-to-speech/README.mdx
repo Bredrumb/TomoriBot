@@ -15,7 +15,7 @@ TomoriBot treats speech as a custom endpoint capability. Local engines run outsi
 
 <CardGrid>
   <LinkCard title="Chatterbox TTS" href="/en/self-hosting/local-endpoints/text-to-speech/chatterbox/"
-    description="English voice cloning with event tags. Turbo is the default; Nano is an optional smaller model." />
+    description="English voice cloning with event tags. Turbo is the default; Nano and Standard are optional variants." />
   <LinkCard title="Qwen3-TTS" href="/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
     description="Multilingual local TTS with clone and VoiceDesign modes." />
   <LinkCard title="MOSS-TTS" href="/en/self-hosting/local-endpoints/text-to-speech/moss/"
@@ -28,6 +28,8 @@ TomoriBot treats speech as a custom endpoint capability. Local engines run outsi
     description="30-language TTS with Voice Design, reference-audio cloning, transcript-assisted Ultimate Cloning, and natural-language delivery control." />
   <LinkCard title="CosyVoice 3" href="/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
     description="0.5B multilingual zero-shot and cross-lingual cloning with natural-language delivery instructions." />
+  <LinkCard title="TTS Engine Comparison" href="/en/self-hosting/local-endpoints/text-to-speech/comparison/"
+    description="Empirical synthesis timings, audio sample players, and speed comparisons across all 7 engines." />
 </CardGrid>
 
 ## Setup Flow
@@ -56,22 +58,6 @@ VoxCPM2 uses **Plain** Script Markup. Its Voice Design and speaking-style contro
 
 CosyVoice 3 also uses **Plain** Script Markup. It maps transcript-backed references to zero-shot cloning, transcript-free references to cross-lingual cloning, and `voice_instructions` to its instruction-conditioned path. Inline bracket tags are removed because CosyVoice instructions apply to the whole utterance.
 
-## Compare the engines
+## Engine Comparison
 
-All TomoriBot sidecars currently return a complete WAV. "Streaming path" means the upstream model or a separate serving backend has one; it does **not** mean Discord voice-chat streaming is implemented. Sizes are model parameters, **not** VRAM or download sizes. The 16 GB column is setup guidance, not a measured peak. We have no same-hardware, same-script latency benchmark, so the speed column describes the intended trade-off rather than ranking engines by milliseconds.
-
-| Engine | Model size; 16 GB GPU | Languages | Voice sources and controls | Speed / streaming path | Choose it for |
-|---|---|---|---|---|---|
-| [Chatterbox](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 350M Turbo or 110M Nano; yes, Nano can use CPU | English | Reference cloning, supported event tags; standard model offers CFG/exaggeration | Fast/small focus; wrapper returns full WAV | Small English clone setup or CPU experiments |
-| [Qwen3-TTS](/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 1.7B per mode; yes, models swap | 10, including English/Japanese | Clone or text-described VoiceDesign | Quality-focused; upstream streaming, wrapper buffers | General-purpose multilingual clone and Japanese VoiceDesign |
-| [MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/) | 4B clone + ~1.7B design, swapped; 16 GB is a trial target, not verified; 8B flagship likely no | Clone: 31, including Japanese; design: English/Chinese | Clone or text-described VoiceGenerator; clone language tags | Experimental; Local clone has upstream streaming backend, wrapper buffers | Compare MOSS clone quality or English/Chinese voice design |
-| [IrodoriTTS](/en/self-hosting/local-endpoints/text-to-speech/irodoritts/) | ~0.8B current v4.1 Small; ~3–4 GB VRAM observed in one local run | Japanese only | Clone or VoiceDesign; emoji style cues | Sampling steps trade quality for speed; wrapper buffers | Small-footprint Japanese voices and emoji-driven delivery |
-| [Fish S2 Pro](/en/self-hosting/local-endpoints/text-to-speech/fishs2/) | 4B; yes with default INT8, official BF16 recommends 24 GB+ | 83 claimed upstream | Reference cloning, free-form bracket expression tags | Heavy model; upstream streaming path, wrapper buffers | Fine-grained expressive cloning; check research-license terms |
-| [VoxCPM2](/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 2B; ~8 GB BF16 reported upstream | 30 | Clone, Voice Design, transcript-assisted Ultimate Cloning, delivery instructions | ~0.30 RTF on upstream RTX 4090; upstream streaming, wrapper buffers | One multilingual model with the broadest voice-source controls |
-| [CosyVoice 3](/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | 0.5B core; 16 GB comfortable, download/runtime larger | 9, including Japanese, plus Chinese dialects | Clone, cross-lingual clone, natural-language delivery | Low-latency focus; native text/audio streaming upstream, wrapper buffers | A future streaming candidate with cross-lingual cloning |
-
-Model size and language counts follow the [Chatterbox](https://github.com/resemble-ai/chatterbox), [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS), [MOSS](https://github.com/OpenMOSS/MOSS-TTS), [Irodori](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small), [Fish S2 Pro](https://huggingface.co/fishaudio/s2-pro), [VoxCPM2](https://huggingface.co/openbmb/VoxCPM2), and [CosyVoice 3](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) upstream pages. Check each guide for OS, driver, license, model revision, and memory details. A 16 GB GPU cannot necessarily host a TTS model and a large local LLM simultaneously.
-
-The Irodori VRAM figure is a single local observation, not a published minimum or cross-engine benchmark. Memory use varies with the runtime, precision, script length, and other GPU workloads.
-
-The first Qwen3-TTS auto request includes model loading. MOSS pre-downloads both models during setup and warms the clone model at startup by default, but either auto server still has to load the other model after a mode switch. TomoriBot waits up to `TTS_SYNTHESIZE_TIMEOUT_MS` (default 240000 ms) for each complete response.
+For side-by-side empirical latency benchmarks, audio sample playback, and a detailed feature matrix comparing all supported sidecars, see **[TTS Engine Comparison](./comparison/)**.

@@ -17,7 +17,7 @@
 
 /** Discord rejects a send from a timed-out member with 50013, indistinguishable from a real
  * permission gap at the API level, so both share one reason. */
-export type SendFailureReason = "missing_permissions" | "missing_access";
+export type SendFailureReason = "missing_permissions" | "missing_access" | "channel_gone";
 
 interface SendFailureEntry {
   reason: SendFailureReason;
@@ -47,6 +47,16 @@ export function classifySendFailure(error: unknown): SendFailureReason | null {
 
   if (code === 50001 || code === "50001") {
     return "missing_access";
+  }
+
+  // 10003 is the REST answer that the channel no longer exists, which Discord never reverses for
+  // that id, so there is no recovery to wait for. The client-side `ChannelNotCached` is
+  // deliberately excluded: it only means the channel was absent from the local cache, which an
+  // uncached thread or an evicted DM entry also produces, so caching it would blacklist a live
+  // channel for the whole TTL over a local eviction. The send path resolves that case with a REST
+  // fetch instead.
+  if (code === 10003 || code === "10003") {
+    return "channel_gone";
   }
 
   return null;

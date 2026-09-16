@@ -33,14 +33,36 @@ describe("send failure classification", () => {
   });
 
   // Caching a transient failure would silence a channel that is merely having a bad minute,
-  // which is a worse outcome than the wasted call the cache exists to prevent.
+  // which is a worse outcome than the wasted call the cache exists to prevent. A deleted channel
+  // is the opposite case and is classified below: Discord never reissues a channel snowflake, so
+  // there is no recovery for that id to wait for.
   it.each([
     ["a rate limit", 429],
-    ["an unknown channel", 10003],
     ["a server fault", 50035],
     ["no code at all", undefined],
   ])("does not cache %s", (_label, code) => {
     expect(classifySendFailure(code === undefined ? new Error("boom") : discordError(code))).toBeNull();
+  });
+});
+
+describe("channel-gone classification", () => {
+  it.each([10003, "10003"])("treats %s as a channel that cannot receive messages", (code) => {
+    expect(classifySendFailure(discordError(code))).toBe("channel_gone");
+  });
+
+  // `ChannelNotCached` only says the channel was absent from the local cache, which an uncached
+  // thread or an evicted DM entry also produces. Caching it would block a live channel for the
+  // whole TTL, so the send path resolves that case with a REST fetch instead.
+  it("does not cache a local cache miss as a deleted channel", () => {
+    expect(
+      classifySendFailure(Object.assign(new Error("Could not find the channel"), { code: "ChannelNotCached" })),
+    ).toBeNull();
+  });
+
+  it("keeps a deleted channel blocked after the first report", () => {
+    expect(noteSendFailure(CHANNEL, "channel_gone").isFirstOfEpisode).toBe(true);
+    expect(noteSendFailure(CHANNEL, "channel_gone").isFirstOfEpisode).toBe(false);
+    expect(getBlockedSendReason(CHANNEL)).toBe("channel_gone");
   });
 });
 
