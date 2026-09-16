@@ -51,3 +51,61 @@ describe("CosyVoice 3 clone adapter contract", () => {
     });
   });
 });
+
+const CHATTERBOX_SETTINGS = { turboEnabled: true, cfgWeight: 0.5, exaggeration: 0.5 };
+
+function bracketTagEndpoint(label: string): CustomEndpointRow {
+  return {
+    label,
+    api_style: "tts-clone",
+    endpoint_url: "https://tts.example.test",
+    extra_config: { script_markup: "bracket-tags" },
+  } as unknown as CustomEndpointRow;
+}
+
+describe("bracket tag handling", () => {
+  it("keeps free-form expression tags for a non-Chatterbox endpoint carrying Chatterbox settings", async () => {
+    requestBody = null;
+
+    await synthesizeSpeechViaTtsCloneBuffer({
+      endpoint: bracketTagEndpoint("Fish S2 Pro"),
+      refAudio: Buffer.from("reference-audio"),
+      refText: "Reference words",
+      script: "[whisper] Keep your voice down. [excited] Wait!",
+      apiKey: "",
+      chatterbox: CHATTERBOX_SETTINGS,
+    });
+
+    expect(requestBody).toMatchObject({ text: "[whisper] Keep your voice down. [excited] Wait!" });
+  });
+
+  it("limits a Chatterbox Turbo endpoint to its supported event tags", async () => {
+    requestBody = null;
+
+    await synthesizeSpeechViaTtsCloneBuffer({
+      endpoint: bracketTagEndpoint("Chatterbox Turbo"),
+      refAudio: Buffer.from("reference-audio"),
+      refText: null,
+      script: "[whisper] Keep your voice down. [laugh] Wait!",
+      apiKey: "",
+      chatterbox: CHATTERBOX_SETTINGS,
+    });
+
+    expect(requestBody).toMatchObject({ text: "Keep your voice down. [laugh] Wait!" });
+  });
+
+  it("strips every tag for standard Chatterbox", async () => {
+    requestBody = null;
+
+    await synthesizeSpeechViaTtsCloneBuffer({
+      endpoint: bracketTagEndpoint("Chatterbox"),
+      refAudio: Buffer.from("reference-audio"),
+      refText: null,
+      script: "[laugh] Keep your voice down.",
+      apiKey: "",
+      chatterbox: { ...CHATTERBOX_SETTINGS, turboEnabled: false },
+    });
+
+    expect(requestBody).toMatchObject({ text: "Keep your voice down." });
+  });
+});

@@ -29,10 +29,10 @@ The setup scripts create `servers/tts/irodoritts/.venv`, so `bun run launch --ir
 
 Available backends are:
 
-- `cu128` — NVIDIA CUDA 12.8 on Windows/Linux
-- `cpu` — CPU-only, or macOS CPU/MPS through PyPI
-- `rocm` — AMD ROCm on Linux/WSL
-- `xpu` — Intel XPU on Windows/Linux
+- `cu128`: NVIDIA CUDA 12.8 on Windows/Linux
+- `cpu`: CPU-only, or macOS CPU/MPS through PyPI
+- `rocm`: AMD ROCm on Linux/WSL
+- `xpu`: Intel XPU on Windows/Linux
 
 The default endpoint URL is `http://127.0.0.1:8013`.
 
