@@ -17,7 +17,7 @@
 
 /** Discord rejects a send from a timed-out member with 50013, indistinguishable from a real
  * permission gap at the API level, so both share one reason. */
-export type SendFailureReason = "missing_permissions" | "missing_access";
+export type SendFailureReason = "missing_permissions" | "missing_access" | "channel_gone";
 
 interface SendFailureEntry {
   reason: SendFailureReason;
@@ -47,6 +47,13 @@ export function classifySendFailure(error: unknown): SendFailureReason | null {
 
   if (code === 50001 || code === "50001") {
     return "missing_access";
+  }
+
+  // A deleted channel is permanent, not transient: Discord never reuses a channel snowflake, so
+  // there is no recovery for this id to wait for. `ChannelNotCached` covers the client-side throw
+  // from `Message#reply`, which reaches here without ever issuing a request.
+  if (code === 10003 || code === "10003" || code === "ChannelNotCached") {
+    return "channel_gone";
   }
 
   return null;

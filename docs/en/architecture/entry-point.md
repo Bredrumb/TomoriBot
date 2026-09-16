@@ -57,7 +57,7 @@ sidebar:
     - cache metrics logger init
     - OpenRouter catalog refresher init
 16. Initialize upload quota cleanup scheduler.
-17. `await client.login(DISCORD_TOKEN)` inside a try/catch — a `DisallowedIntents` rejection (privileged intent requested without approval) is logged as an actionable misconfiguration and exits, rather than leaving the process alive but disconnected.
+17. `await client.login(DISCORD_TOKEN)` in a retry loop. A transport failure (the gateway edge answering a connect attempt with a non-101 status, a socket error, a 5xx) is retried in-process with exponential backoff, doubling from one second to `DISCORD_LOGIN_MAX_DELAY_MS` (default 60s) with up to a fifth of jitter. Exiting instead would let the container restart policy turn one Discord-side incident into a connect attempt per restart with no backoff, and Discord counts those against the daily identify budget. Failures retrying cannot change exit: a `DisallowedIntents` rejection is logged as an actionable misconfiguration, and an invalid token exits with the REST error. `isTransientGatewayError()` in `src/init/discord.ts` draws that line. Retry progress is readable at `/health` under `discord.loginAttempt` and `discord.lastLoginFailureAt`.
 
 ## Error Criticality
 
@@ -65,19 +65,21 @@ sidebar:
   - due automatic startup backup failure in non-production
   - database init failure
   - tool registry init failure
-  - Discord login failure (including `DisallowedIntents` for an unapproved privileged intent)
+  - Discord login failure that is not a transient gateway error (an invalid token, or `DisallowedIntents` for an unapproved privileged intent)
 - Non-fatal (warn and continue):
   - cache warmup failures
   - pg_cron setup failures
   - matrix init failure
   - cooldown cleanup failure
   - scheduled work/memory monitor/quota cleanup init failures
+  - transient Discord login failures, which are retried in-process
 
 ## Discord Client Configuration Notes
 
 - `GuildPresences` is a privileged intent resolved by `resolvePresenceIntentEnabled()` in `src/init/discord.ts`. Before the client is built, it probes `GET /applications/@me` and includes the intent only when Discord reports it as enabled (`ApplicationFlags.GatewayPresence` or `GatewayPresenceLimited`). This is self-resolving: the intent turns on automatically on the next restart once Discord approves it — no code or env change. If the probe fails (e.g. network error), it falls back to the legacy default: enabled outside production, disabled in production.
 - Consumers detect the intent at runtime via `client.options.intents.has(GatewayIntentBits.GuildPresences)` (see the participants context builder) and omit presence/status lines when it is absent, so toggling it needs no other code changes.
 - Sweeper configuration is enabled for message/user cache pressure control.
+- Gateway session lifecycle is logged at the rate-limit level for `shardDisconnect`, `shardReconnecting`, `shardResume`, and `invalidated`, so a resumed session (which replays missed dispatches) is distinguishable from a fresh identify. `shardError` reports at error level once per shard per episode and at warn level for the repeats, because discord.js retries the handshake itself and one outage otherwise writes an identical `error_logs` row per attempt.
 
 ## clientReady Event Work
 

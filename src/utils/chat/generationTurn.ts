@@ -11,6 +11,7 @@ import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/ut
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
@@ -154,7 +155,17 @@ async function runGenerationAttempts(
         );
       }
 
-      const isRetryableStatus = result.status === "error" || result.status === "timeout";
+      // A destination channel that no longer exists fails for every key and every model alike.
+      // Retrying would burn a full generation per fallback arm and then discard it at the same
+      // send, so this attempt is terminal: the matching case in `isDeliveryStop` below keeps the
+      // model fallback loop from picking it up.
+      if (isGoneChannelResult(result)) {
+        log.warn(`Abandoning ${attempt.label}: the destination channel is gone.`);
+        break;
+      }
+
+      const isRetryableStatus =
+        (result.status === "error" || result.status === "timeout") && !isGoneChannelResult(result);
       if (!isRetryableStatus || index === attempts.length - 1) {
         if (index > 0 && shouldSendFallbackNotice(context, result)) {
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
@@ -294,6 +305,18 @@ function getRetryExcludedKeyIds(excludedKeyIds: Set<number>, rotationKeyId: numb
     ids.add(rotationKeyId);
   }
   return [...ids];
+}
+
+/**
+ * A destination channel that no longer exists fails for every key and every model alike.
+ *
+ * Retrying would burn a full generation per fallback arm and then discard it at the same send.
+ * The classifier is shared with the send path so the "retrying cannot help" set has one
+ * definition. A refused send after a permission change or a timeout is deliberately excluded: it
+ * can clear on its own, so it keeps its fallback arms.
+ */
+function isGoneChannelResult(result: GenerationTurnResult): boolean {
+  return result.streamResults.some((streamResult) => classifySendFailure(streamResult.data) === "channel_gone");
 }
 
 async function emitStreamErrors(responseSink: ChatResponseSink, streamResults: StreamResult[]): Promise<void> {

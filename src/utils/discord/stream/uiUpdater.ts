@@ -1,8 +1,9 @@
-import type { BaseGuildTextChannel, Message } from "discord.js";
+import type { BaseGuildTextChannel, Message, ReplyOptions } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { SpriteMessageRecordInfo, StreamState } from "@/types/stream/types";
 import { recordPersonaSpriteMessage } from "@/utils/cache/personaSpriteMessageCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import { isChannelGoneError, resolveReplyChannel, type SendableChannel } from "@/utils/discord/resolveSendableChannel";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
@@ -64,6 +65,53 @@ function resolveWebhookTargetChannel(channel: StreamContext["channel"]): BaseGui
 
 function resolveWebhookThreadId(channel: StreamContext["channel"]): string | undefined {
   return "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
+}
+
+/**
+ * Signals that the destination channel cannot be reached, raised before a send is attempted.
+ *
+ * A deleted channel is not retryable and no fallback can rescue it, so this carries the same code
+ * a REST 10003 would report and takes the quiet teardown path in the send catch rather than the
+ * error path.
+ */
+class ChannelGoneError extends Error {
+  public readonly code = 10003;
+
+  public constructor(channelId: string | undefined) {
+    super(`Destination channel ${channelId ?? "unknown"} is gone`);
+    this.name = "ChannelGoneError";
+  }
+}
+
+/**
+ * Picks the channel that will receive the next stream message, and the reply reference when the
+ * turn is answering a source message.
+ *
+ * `replyToMessage.reply()` cannot be used here: discord.js resolves `message.channel` from the
+ * cache at call time and throws `ChannelNotCached` when the entry is absent, which a turn that
+ * streams for minutes can outlive. This resolves the destination by id instead, and the reply is
+ * carried as an explicit reference, which is the same payload `Message#reply` would build.
+ *
+ * @param context - Turn context, whose channel was captured at admission
+ * @returns The destination channel and reply reference, or null when the channel is unreachable
+ */
+async function resolveReplyTarget(
+  context: StreamContext,
+): Promise<{ channel: SendableChannel; reply: ReplyOptions | undefined } | null> {
+  const reply: ReplyOptions | undefined = context.replyToMessage
+    ? { messageReference: context.replyToMessage.id, failIfNotExists: false }
+    : undefined;
+
+  // The channel captured at admission is an object, so it survives cache eviction and needs no
+  // lookup. A partial entry is the one case where it cannot be sent into, and that is what falls
+  // through to the REST lookup that separates "never cached" from "deleted".
+  const captured = context.channel;
+  if (typeof (captured as { send?: unknown }).send === "function") {
+    return { channel: captured as SendableChannel, reply };
+  }
+
+  const resolved = await resolveReplyChannel(context.client, context.replyToMessage, captured.id);
+  return resolved ? { channel: resolved, reply } : null;
 }
 
 export function isUserImpersonationStreamContext(context: StreamContext): boolean {
@@ -222,12 +270,17 @@ export class StreamUiUpdater {
         deliveredWebhookIdentity = identity;
         state.hasRepliedToOriginalMessage = true;
       } else if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
-        sentMessage = await context.replyToMessage.reply({
+        const target = await resolveReplyTarget(context);
+        if (!target) {
+          throw new ChannelGoneError(context.replyToMessage.channelId);
+        }
+
+        sentMessage = await target.channel.send({
           ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
           ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
           ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+          ...(target.reply ? { reply: target.reply } : {}),
           allowedMentions: regularAllowedMentions,
-          failIfNotExists: false,
         });
         state.hasRepliedToOriginalMessage = true;
       } else {
@@ -245,6 +298,19 @@ export class StreamUiUpdater {
       this.recordSuccessfulSend(payload, textForAccumulation, context, state, sentMessage, deliveredWebhookIdentity);
       return sentMessage;
     } catch (discordError) {
+      // A deleted channel is final: nothing can be posted, and neither webhook recovery nor the
+      // bot fallback can change that. Tearing the stream down quietly is the same treatment the
+      // deterministic limits above get, and it keeps one deletion from producing a burst of
+      // error rows across the orchestrator, the generation turn, and the queue.
+      if (isChannelGoneError(discordError)) {
+        log.warn(
+          `Stream Send: destination channel ${context.channel.id} is gone, stopping the stream`,
+          discordError as Error,
+        );
+        this.deps.requestStop(context.channel.id, "channel_deleted");
+        return null;
+      }
+
       const recoveredMessage = await this.tryRecoverWebhookSend(
         discordError,
         payload,
@@ -501,20 +567,18 @@ export class StreamUiUpdater {
         });
       }
 
-      const fallbackMessage = context.replyToMessage
-        ? await context.replyToMessage.reply({
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
-            ...(payload.components?.length ? { components: payload.components } : {}),
-            allowedMentions: regularAllowedMentions,
-            failIfNotExists: false,
-          })
-        : await context.channel.send({
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
-            ...(payload.components?.length ? { components: payload.components } : {}),
-            allowedMentions: regularAllowedMentions,
-          });
+      const target = await resolveReplyTarget(context);
+      if (!target) {
+        throw new ChannelGoneError(context.replyToMessage?.channelId ?? context.channel.id);
+      }
+
+      const fallbackMessage = await target.channel.send({
+        ...(payload.content !== undefined ? { content: payload.content } : {}),
+        ...(payload.files?.length ? { files: payload.files } : {}),
+        ...(payload.components?.length ? { components: payload.components } : {}),
+        ...(target.reply ? { reply: target.reply } : {}),
+        allowedMentions: regularAllowedMentions,
+      });
 
       state.hasRepliedToOriginalMessage = true;
       this.recordSuccessfulSend(payload, textForState, context, state, fallbackMessage);

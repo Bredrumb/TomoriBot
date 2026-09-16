@@ -112,6 +112,12 @@ export interface StreamingContext {
   outputPrefill?: string; // Optional prefill to output before streaming (hybrid prefix)
   outputPrefillState?: { sent: boolean }; // Tracks if prefill was already output (avoid duplicates on retry)
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
+  /**
+   * True once the turn has logged its generation failure. One failed turn reaches the emitter
+   * twice (the stream result carries the error, and the turn's catch block reports it again), and
+   * a second row for the same message id reads as a second failure.
+   */
+  generationErrorReported?: boolean;
   forcedMentions?: Array<{
     handle: string;
     userId: string;

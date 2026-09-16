@@ -1,4 +1,4 @@
-import { ChannelType, MessageFlags, type ModalSubmitInteraction } from "discord.js";
+import { ChannelType, ComponentType, MessageFlags, type ModalSubmitInteraction } from "discord.js";
 import type { PanelAction } from "@/constants/panelActions";
 import { CooldownType, type RandomTriggerRow, type TomoriState } from "@/types/db/schema";
 import type { ServerStmConfigRow } from "@/types/db/schema";
@@ -254,7 +254,12 @@ async function repaintBehavior(
 
 function getText(modalInteraction: ModalSubmitInteraction, field: string, nonce: string): string {
   const id = buildConfigModalFieldId(field, nonce);
-  return modalInteraction.fields.fields.has(id) ? modalInteraction.fields.getTextInputValue(id) : "";
+  // A presence check is not enough: discord.js records every submitted component under its custom
+  // id regardless of type, so a radio, select, or checkbox field read as text passes `has` and
+  // then throws from the type check, taking the whole route down. Absent and wrong-typed both
+  // read as empty, which lands in the caller's invalid-input receipt.
+  const component = modalInteraction.fields.fields.get(id);
+  return component?.type === ComponentType.TextInput ? modalInteraction.fields.getTextInputValue(id) : "";
 }
 
 function parseInteger(value: string, min: number, max: number): number | null {
@@ -535,11 +540,15 @@ async function runGeneralWrite(
     };
   }
   if (route.action === "behavior-humanizer-submit" && modalInteraction) {
-    const value = parseInteger(
-      getText(modalInteraction, BEHAVIOR_HUMANIZER_FIELD, route.nonce),
-      HUMANIZER_MIN,
-      HUMANIZER_MAX,
+    // The degree is a radio group, not a text input. discord.js keys submitted components by their
+    // custom id whatever their type, so reading it as text finds the id, fails the type check, and
+    // throws out of the route. The intercepted select store is where radio values land.
+    const rawValue = dependencies.takeSelectValue(
+      modalInteraction.id,
+      buildConfigModalFieldId(BEHAVIOR_HUMANIZER_FIELD, route.nonce),
     );
+    if (rawValue === undefined) return { receipt: staleReceipt(locale) };
+    const value = parseInteger(rawValue, HUMANIZER_MIN, HUMANIZER_MAX);
     if (value === null)
       return { receipt: invalid(locale, "humanizer_invalid_detail", { min: HUMANIZER_MIN, max: HUMANIZER_MAX }) };
     const current = (await behaviorView(scope, dependencies))?.general.humanizerDegree ?? HUMANIZER_DEFAULT;
@@ -674,7 +683,14 @@ async function runTriggerWrite(
   }
   if (route.action === "behavior-cooldown-submit") {
     const submitted = modal(interaction);
-    const cooldownType = parseInteger(getText(submitted, BEHAVIOR_COOLDOWN_TYPE_FIELD, route.nonce), 0, 3);
+    // Same split as the humanizer modal: the cooldown type is a radio group, and only the length
+    // is a text input.
+    const cooldownTypeRaw = dependencies.takeSelectValue(
+      submitted.id,
+      buildConfigModalFieldId(BEHAVIOR_COOLDOWN_TYPE_FIELD, route.nonce),
+    );
+    if (cooldownTypeRaw === undefined) return { receipt: staleReceipt(locale) };
+    const cooldownType = parseInteger(cooldownTypeRaw, 0, 3);
     const cooldownLength = parseInteger(getText(submitted, BEHAVIOR_COOLDOWN_LENGTH_FIELD, route.nonce), 1, 86400);
     if (cooldownType === null || cooldownLength === null)
       return { receipt: invalid(locale, "cooldown_invalid_detail", { min: 1, max: 86400 }) };

@@ -379,6 +379,18 @@ Root command example:
 
 Discord requires interaction acknowledgement within ~3 seconds.
 
+### Measuring the window
+
+`beginPanelInteraction` acknowledges through `acknowledgePanelInteraction`, which emits a
+`panel_ack` metric per routed config panel carrying `route`, `ack_latency_ms`, and `over_deadline`.
+The latency is measured from Discord's `interaction.createdTimestamp`, not from the start of the
+handler, because the two causes of an expired window have opposite fixes: an interaction that
+arrives late (a gateway backlog, a resumed session replaying a dispatch, a stalled REST callback)
+has already spent part of its window before the bot sees it, while a slow handler spends it inside
+the route. Only the second shows up as local elapsed time, so a handler-side measurement cannot
+distinguish them. `over_deadline` counts the occurrences that lost the race; a `10062 Unknown
+interaction` from the ack itself is the same event seen from the other side.
+
 ### 3-Second Rule
 
 On slash command invoke, acknowledge within 3 seconds using one of:

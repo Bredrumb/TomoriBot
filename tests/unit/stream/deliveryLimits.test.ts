@@ -143,6 +143,7 @@ describe("internal stop requests do not outlive their stream", () => {
     expect(INTERNAL_STOP_REQUESTER_IDS.has("send_message_limit")).toBe(true);
     expect(INTERNAL_STOP_REQUESTER_IDS.has("flush_limit")).toBe(true);
     expect(INTERNAL_STOP_REQUESTER_IDS.has("speaker_guard")).toBe(true);
+    expect(INTERNAL_STOP_REQUESTER_IDS.has("channel_deleted")).toBe(true);
   });
 
   it("clears an internal stop so the next turn starts clean", () => {

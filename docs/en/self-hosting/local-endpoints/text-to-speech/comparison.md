@@ -13,7 +13,7 @@ This page provides empirical benchmark results, synthesis timings, and audio com
 
 ### Benchmark Prompts
 
-- **Standard Prompt** *(used for Chatterbox, MOSS-TTS, CosyVoice 3, VoxCPM2, Qwen3-TTS)*:
+- **Standard Prompt** *(used for Chatterbox Turbo/Nano, MOSS-TTS, CosyVoice 3, VoxCPM2, Qwen3-TTS)*:
   > *"Pain and pleasure are two sides of the same coin. Go on now... flip it. Either way, I'll let you feel all of me."*
 - **Fish Audio S2 Pro Prompt** *(tested with bracket expression tags)*:
   > *"Pain and pleasure are two sides of the same coin. [laughs] Go on now... flip it. [whispers] Either way, I'll let you feel all of me."*
@@ -29,6 +29,7 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 |---|---|---|---|---|
 | **[Fish Audio S2 Pro](./fishs2/)** | ~8–10 min<sup>(2)</sup><br/>*(~65× RTF)* | Untested | Untested | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
 | **[Chatterbox (Turbo)](./chatterbox/)** | **~5.0s** *(8.7s clip)*<br/>**0.57× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
+| **[Chatterbox (Nano)](./chatterbox/)** | **~3.0s** *(8.0s clip)*<br/>**0.38× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
 | **[MOSS-TTS](./moss/)** | ~12.0s *(8.8s clip)*<br/>1.36× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
 | **[CosyVoice 3](./cosyvoice3/)** | **~6.0s** *(13.9s clip)*<br/>**0.43× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
 | **[VoxCPM2](./voxcpm2/)** | ~8.0s *(7.4s clip)*<br/>1.09× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
@@ -58,7 +59,7 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 ## Which Engine Should You Choose?
 
 - **Choose [Fish Audio S2 Pro](./fishs2/)** if you want the highest possible vocal fidelity, fine-grained expressive bracket tags (`[whisper]`, `[laughs]`, `[sigh]`), and you have access to **Linux or WSL2** where Triton compiler fusion can be enabled.
-- **Choose [Chatterbox Turbo](./chatterbox/)** if you want rapid English voice cloning with small VRAM footprint and support for event tags (`[laughter]`, `[sigh]`, `[giggle]`).
+- **Choose [Chatterbox Turbo / Nano](./chatterbox/)** if you want rapid English voice cloning with small VRAM footprint (Nano synthesizes in ~3.0s, Turbo in ~5.0s) and support for event tags (`[laughter]`, `[sigh]`, `[giggle]`).
 - **Choose [MOSS-TTS](./moss/)** for experimental multi-modal voice cloning and text-described English/Chinese voice generation.
 - **Choose [CosyVoice 3](./cosyvoice3/)** if you need high-quality multilingual zero-shot cloning with natural language delivery direction (`"Speak in English with excitement"`).
 - **Choose [VoxCPM2](./voxcpm2/)** if you need comprehensive multilingual support (30 languages), transcript-assisted Ultimate Cloning, and natural voice design.

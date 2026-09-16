@@ -65,6 +65,7 @@ export type StreamStopReason =
   | "speaker_guard"
   | "send_message_limit"
   | "flush_limit"
+  | "channel_deleted"
   | "unknown";
 
 type ThoughtLogKind = "summary" | "raw";

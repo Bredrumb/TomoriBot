@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Utils and Helpers"
 ---
 
@@ -53,7 +53,22 @@ This is a current map of shared utility modules under `src/utils/`.
 - `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`; new code imports the owned webhook module directly
 - `embedHelper.ts`: shared embed builders and senders (`createStandardEmbed`, `createSummaryEmbed`, `createTipText`, `sendStandardEmbed`) — see [Tip modals](#tip-modals) below
 - `textDisplayModal.ts`: reusable read-only text modal, trigger button, and collector wiring
+- `resolveSendableChannel.ts`: cache-first, REST-fallback channel resolution for send paths, plus `isChannelGoneError` for the deleted-channel case
 - `historyFetcher.ts`, `historyFormatter.ts`
+
+#### Sending into a channel the cache no longer holds
+
+`resolveSendableChannel(client, channelId)` returns the channel or `null`, and never throws.
+`Message#channel` and `Message#reply` resolve through the client cache only, so discord.js raises
+`ChannelNotCached` once an entry is gone. That happens both for a deleted channel and for one that
+was never populated, and only a REST fetch separates them, so a long streaming turn re-resolves its
+destination by id instead of trusting the `Message` it captured at admission.
+
+`isChannelGoneError(error)` recognizes both halves of one deletion: the client-side
+`ChannelNotCached` and the REST `10003`. A deleted channel is terminal, so the stream send path
+tears down quietly from it and `classifySendFailure` caches it as `channel_gone`, which stops
+`generationTurn` from re-driving the fallback models and rotation keys for a send that can never
+land.
 
 #### Tip modals
 
