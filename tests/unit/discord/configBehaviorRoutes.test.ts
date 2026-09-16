@@ -6,7 +6,7 @@
  * acknowledgement assertions on the actual wiring.
  */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { PermissionsBitField, type Client } from "discord.js";
+import { ComponentType, PermissionsBitField, type Client } from "discord.js";
 import type { RandomTriggerRow, TomoriState } from "@/types/db/schema";
 import * as shortTermMemoryCache from "@/utils/cache/shortTermMemoryCache";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
@@ -26,12 +26,15 @@ import { InteractionRouteRegistry, parseInteractionRoute } from "@/utils/discord
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import { buildConfigModalFieldId, CONFIG_PERSONA_PROMPT_PART_FIELDS } from "@/utils/discord/ui/configModals";
 import {
+  BEHAVIOR_COOLDOWN_LENGTH_FIELD,
+  BEHAVIOR_COOLDOWN_TYPE_FIELD,
   BEHAVIOR_FETCH_LIMIT_FIELD,
   BEHAVIOR_HUMANIZER_FIELD,
   BEHAVIOR_RANDOM_CHANNEL_FIELD,
   BEHAVIOR_RANDOM_PERSONA_FIELD,
   BEHAVIOR_RANDOM_PROMPT_FIELD,
   BEHAVIOR_RANDOM_SETTINGS_FIELD,
+  buildBehaviorCooldownModal,
   buildBehaviorMemoryTaggingModal,
   buildBehaviorNoticeVisibilityModal,
   buildBehaviorStmParametersModal,
@@ -104,6 +107,8 @@ interface Harness {
   modals: unknown[];
   deferredAtWrite: boolean[];
   telemetry: string[];
+  /** Values the intercepted modal store holds, keyed by interaction id then field id. */
+  selectValues: Map<string, Map<string, string>>;
 }
 
 function makeHarness(inGuild = true): Harness {
@@ -124,6 +129,7 @@ function makeHarness(inGuild = true): Harness {
     modals: [],
     deferredAtWrite: [],
     telemetry: [],
+    selectValues: new Map(),
     dependencies: {
       resolveScope: async () => scope,
       getPersonaAvatarData: async () => ({ url: null, files: [] }),
@@ -134,7 +140,8 @@ function makeHarness(inGuild = true): Harness {
       takeFileUpload: () => undefined,
       takeAvatarUpload: () => undefined,
       takeCheckboxValues: () => [],
-      takeSelectValue: () => undefined,
+      takeSelectValue: (interactionId: string, fieldId: string) =>
+        harness.selectValues.get(interactionId)?.get(fieldId),
       recordAction: ({ action }) => {
         harness.telemetry.push(action);
       },
@@ -172,6 +179,10 @@ function makeInteraction(
   options: {
     kind?: "button" | "modal" | "select";
     fields?: Record<string, string>;
+    /** Component type per field id, for modal fields that are not text inputs. */
+    componentTypes?: Record<string, number>;
+    /** Values the reader should find in the intercepted store, keyed by field id. */
+    selectValues?: Record<string, string>;
     values?: string[];
     isManager?: boolean;
     inGuild?: boolean;
@@ -181,8 +192,11 @@ function makeInteraction(
   let deferred = false;
   const kind = options.kind ?? "button";
   const inGuild = options.inGuild ?? true;
+  const interactionId = "interaction-1";
+  harness.selectValues.set(interactionId, new Map(Object.entries(options.selectValues ?? {})));
+
   return {
-    id: "interaction-1",
+    id: interactionId,
     customId,
     user: { id: "user-1", username: "Sparrow" },
     channelId: "channel-1",
@@ -190,6 +204,7 @@ function makeInteraction(
     guildId: inGuild ? "guild-1" : null,
     guild: inGuild ? { id: "guild-1", channels: { cache: new Map([["channel-1", { type: 0 }]]) } } : null,
     client: { user: null },
+    createdTimestamp: Date.now(),
     memberPermissions: {
       has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
     },
@@ -218,7 +233,16 @@ function makeInteraction(
       return payload;
     },
     fields: {
-      fields: new Map(Object.entries(options.fields ?? {})),
+      // Components carry their type because the reader checks it: discord.js keys every submitted
+      // component by custom id whatever its type, so a field read as text must actually be a text
+      // input. Defaulting to TextInput keeps the common case short while letting a test model a
+      // radio or select field with `componentTypes`.
+      fields: new Map(
+        Object.entries(options.fields ?? {}).map(([fieldId, value]) => [
+          fieldId,
+          { customId: fieldId, type: options.componentTypes?.[fieldId] ?? ComponentType.TextInput, value },
+        ]),
+      ),
       getTextInputValue: (fieldId: string) => options.fields?.[fieldId] ?? "",
     },
     values: options.values ?? [],
@@ -238,6 +262,33 @@ function collectRawComponentTypes(value: unknown): number[] {
     ...(typeof record.type === "number" ? [record.type] : []),
     ...Object.values(record).flatMap(collectRawComponentTypes),
   ];
+}
+
+/**
+ * Maps each modal field's custom id to the type of the component the reader will actually receive.
+ *
+ * The component carrying a custom id sits one level below the label that wraps it, so the type of
+ * interest is the innermost one.
+ */
+function collectModalFieldTypes(payload: unknown): Map<string, number> {
+  const types = new Map<string, number>();
+
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const entry of value) walk(entry);
+      return;
+    }
+    if (typeof value !== "object" || value === null) return;
+
+    const record = value as Record<string, unknown>;
+    if (typeof record.custom_id === "string" && typeof record.type === "number") {
+      types.set(record.custom_id, record.type);
+    }
+    for (const entry of Object.values(record)) walk(entry);
+  };
+
+  walk(payload);
+  return types;
 }
 
 const D9_WIRE_CONTRACT: ReadonlyArray<readonly [string, Parameters<typeof buildConfigRouteId>[0]]> = [
@@ -428,6 +479,19 @@ describe("config Behavior routes", () => {
     }
   });
 
+  it("never renders a field the write path reads as text as a radio group", () => {
+    // A radio group is keyed by custom id like any other component, so reading it with
+    // `getTextInputValue` finds the id, fails the type check, and throws out of the route. Pinning
+    // the types makes a builder change that breaks that pairing fail in CI rather than in a guild.
+    const nonce = "nonce1234567";
+    const humanizerFields = collectModalFieldTypes(buildBehaviorHumanizerModal("en-US", nonce, 1));
+    const cooldownFields = collectModalFieldTypes(buildBehaviorCooldownModal("en-US", nonce, 0, 5));
+
+    expect(humanizerFields.get(buildConfigModalFieldId(BEHAVIOR_HUMANIZER_FIELD, nonce))).toBe(21);
+    expect(cooldownFields.get(buildConfigModalFieldId(BEHAVIOR_COOLDOWN_TYPE_FIELD, nonce))).toBe(21);
+    expect(cooldownFields.get(buildConfigModalFieldId(BEHAVIOR_COOLDOWN_LENGTH_FIELD, nonce))).toBe(4);
+  });
+
   it("emits literal raw modal component types for Behavior inputs", () => {
     const addModal = buildBehaviorRandomAddModal("en-US", "nonce1234567", [makeState()]);
     const humanizerModal = buildBehaviorHumanizerModal("en-US", "nonce1234567", 1);
@@ -580,7 +644,10 @@ describe("config Behavior routes", () => {
     updateTrigger.mockRestore();
   });
 
-  it("uses the raw global humanizer value and returns a no-op without writing", async () => {
+  it("reads the humanizer degree from the store, not from the modal text fields", async () => {
+    // The degree is rendered as a radio group, so it never arrives as text. Carrying the value as
+    // a text field must therefore leave the setting untouched: the reader is looking somewhere
+    // else, and reading it as text is what threw the route out of the interaction entirely.
     const harness = makeHarness(false);
     const update = spyOn(configRepository, "updateChatConfig").mockResolvedValue(true);
     const field = buildConfigModalFieldId(BEHAVIOR_HUMANIZER_FIELD, "nonce1234567");
@@ -589,7 +656,40 @@ describe("config Behavior routes", () => {
       makeInteraction(
         harness,
         buildConfigRouteId({ action: "behavior-humanizer-submit", locale: "en-US", nonce: "nonce1234567" }),
-        { kind: "modal", inGuild: false, fields: { [field]: "1" } },
+        { kind: "modal", inGuild: false, fields: { [field]: "3" } },
+      ),
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(harness.edits.length).toBeGreaterThan(0);
+    update.mockRestore();
+  });
+
+  it("writes the chosen humanizer degree and reports it", async () => {
+    const harness = makeHarness(false);
+    const update = spyOn(configRepository, "updateChatConfig").mockResolvedValue(true);
+    const field = buildConfigModalFieldId(BEHAVIOR_HUMANIZER_FIELD, "nonce1234567");
+    await dispatch(
+      harness,
+      makeInteraction(
+        harness,
+        buildConfigRouteId({ action: "behavior-humanizer-submit", locale: "en-US", nonce: "nonce1234567" }),
+        { kind: "modal", inGuild: false, selectValues: { [field]: "3" } },
+      ),
+    );
+    expect(update).toHaveBeenCalledWith(9, { humanizer_degree: 3 });
+    expect(harness.telemetry).toContain("server-config.workspace.humanizer.set");
+    update.mockRestore();
+  });
+
+  it("rejects a humanizer submission whose value is missing from the store", async () => {
+    const harness = makeHarness(false);
+    const update = spyOn(configRepository, "updateChatConfig").mockResolvedValue(true);
+    await dispatch(
+      harness,
+      makeInteraction(
+        harness,
+        buildConfigRouteId({ action: "behavior-humanizer-submit", locale: "en-US", nonce: "nonce1234567" }),
+        { kind: "modal", inGuild: false },
       ),
     );
     expect(update).not.toHaveBeenCalled();

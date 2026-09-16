@@ -54,7 +54,7 @@ import {
   type ConfigPanelRoute,
 } from "@/utils/discord/configPanelCatalog";
 import { setGuildBotAvatar, setGuildBotNickname } from "@/utils/discord/guildIdentity";
-import { beginPanelInteraction } from "@/utils/discord/interactions/panelController";
+import { acknowledgePanelInteraction, beginPanelInteraction } from "@/utils/discord/interactions/panelController";
 import {
   isConfigRouteAuthorized,
   PERSONA_ADVANCED_ACTION_BY_ROUTE,
@@ -2984,6 +2984,7 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
       }
 
       const scope = await beginPanelInteraction(interaction, {
+        acknowledge: () => acknowledgePanelInteraction(interaction, route.action),
         authorize: () => isConfigRouteAuthorized(route, actor),
         onDenied: async () => {
           const fallbackScope = await dependencies.resolveScope(interaction, false);

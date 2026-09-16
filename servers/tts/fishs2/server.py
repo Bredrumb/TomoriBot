@@ -29,7 +29,7 @@ FISH_SPEECH_DIR = Path(os.getenv("FISH_SPEECH_DIR", ROOT / "fish-speech")).resol
 MODEL_DIR = Path(
     os.getenv(
         "FISH_S2_MODEL_DIR",
-        FISH_SPEECH_DIR / "checkpoints" / "fish-speech-s2-pro-int8",
+        FISH_SPEECH_DIR / "checkpoints" / "fish-speech-s2-pro",
     )
 ).resolve()
 
@@ -43,10 +43,10 @@ MAX_REFERENCE_AUDIO_BYTES = int(
     os.getenv("FISH_S2_MAX_REF_AUDIO_BYTES", os.getenv("TOMORI_TTS_MAX_REF_AUDIO_BYTES", str(10 * 1024 * 1024)))
 )
 STARTUP_TIMEOUT_SECONDS = float(os.getenv("FISH_S2_STARTUP_TIMEOUT_SECONDS", "180"))
-SYNTHESIS_TIMEOUT_SECONDS = float(os.getenv("FISH_S2_SYNTHESIS_TIMEOUT_SECONDS", "240"))
+SYNTHESIS_TIMEOUT_SECONDS = float(os.getenv("FISH_S2_SYNTHESIS_TIMEOUT_SECONDS", "1800"))
 COMPILE = os.getenv("FISH_S2_COMPILE", "0").lower() in {"1", "true", "yes", "on"}
 HALF = os.getenv("FISH_S2_HALF", "0").lower() in {"1", "true", "yes", "on"}
-MODEL_ID = os.getenv("FISH_S2_MODEL_ID", "Imagilux/fishaudio-s2-pro")
+MODEL_ID = os.getenv("FISH_S2_MODEL_ID", "fishaudio/s2-pro")
 API_KEY = (os.getenv("FISH_S2_API_KEY") or os.getenv("TOMORI_TTS_API_KEY") or "").strip()
 ALLOW_INSECURE_REMOTE = os.getenv("FISH_S2_ALLOW_INSECURE_REMOTE", "0").lower() in {
     "1",
@@ -286,9 +286,17 @@ def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
         raise HTTPException(status_code=400, detail=f"text exceeds {MAX_TEXT_CHARS} characters.")
     if not payload.ref_audio.strip():
         raise HTTPException(status_code=400, detail="ref_audio is required for Fish S2 Pro voice cloning.")
+    if not payload.ref_text or not payload.ref_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "ref_text (reference audio transcript) is required for Fish S2 Pro voice cloning. "
+                "Fish Speech requires the transcript to align phonemes; without it, voice cloning conditioning is dropped."
+            ),
+        )
 
     reference_audio = decode_reference_audio(payload.ref_audio)
-    reference_text = payload.ref_text.strip() if payload.ref_text else ""
+    reference_text = payload.ref_text.strip()
 
     request_data = {
         "text": text,

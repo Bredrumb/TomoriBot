@@ -280,8 +280,17 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     log.info(`Stream loop breaking due to stop request for channel ${context.channel.id}.`);
     const stopRequest = peekStopRequest(context.channel.id);
     const stopReason = getStopReason(stopRequest);
+    // A stop raised by the delivery layer has no reason to flush at all, and flushing is not
+    // harmless: the clear below runs first, so by the time the flush reaches the send path there is
+    // no stop left to consult and the text goes to Discord as a real call. For a destination the
+    // bot cannot post into that means a second rejected send and a re-registered stop that outlives
+    // the stream. The two caps below already skip for the same reason.
     const shouldSkipBufferFlush =
-      (stopRequest?.requesterId === "flush_limit" || stopRequest?.requesterId === "speaker_guard") &&
+      (stopRequest?.requesterId === "flush_limit" ||
+        stopRequest?.requesterId === "speaker_guard" ||
+        stopRequest?.requesterId === "channel_deleted" ||
+        stopRequest?.requesterId === "missing_access" ||
+        stopRequest?.requesterId === "send_message_limit") &&
       !stopRequest?.stopContext;
 
     clearStopRequest(context.channel.id);

@@ -4,12 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_DIR="${SCRIPT_DIR}/fish-speech"
 VENV_DIR="${SCRIPT_DIR}/.venv"
-MODEL_DIR="${FISH_S2_MODEL_DIR:-${RUNTIME_DIR}/checkpoints/fish-speech-s2-pro-int8}"
+MODEL_DIR="${FISH_S2_MODEL_DIR:-${RUNTIME_DIR}/checkpoints/fish-speech-s2-pro}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 RUNTIME_REPOSITORY="${FISH_S2_RUNTIME_REPOSITORY:-https://github.com/Imagilux/fish-speech.git}"
 RUNTIME_REF="${FISH_S2_RUNTIME_REF:-2225e924e7d35cc0a1d24dbc67cd1819e6cf429f}"
-MODEL_ID="${FISH_S2_MODEL_ID:-Imagilux/fishaudio-s2-pro}"
-MODEL_REVISION="${FISH_S2_MODEL_REVISION:-9706ff036580881d87cc09465dd10014527bc481}"
+MODEL_ID="${FISH_S2_MODEL_ID:-fishaudio/s2-pro}"
+MODEL_REVISION="${FISH_S2_MODEL_REVISION:-main}"
 UPDATE_RUNTIME="${FISH_S2_UPDATE:-0}"
 
 if [[ "${UPDATE_RUNTIME,,}" =~ ^(1|true|yes|on)$ ]]; then

@@ -33,6 +33,16 @@ class HealthTracker {
   private readonly maxPingLatency: number = 5000;
 
   /**
+   * Failed gateway connection attempts since the last established session
+   */
+  private gatewayFailureCount: number = 0;
+
+  /**
+   * When the most recent gateway connection attempt failed
+   */
+  private lastGatewayFailureAt: number | null = null;
+
+  /**
    * Initialize the health tracker with a Discord client
    */
   initialize(client: Client): void {
@@ -137,10 +147,48 @@ class HealthTracker {
   }
 
   /**
+   * Records a failed gateway connection attempt.
+   *
+   * A gateway incident otherwise leaves no durable trace once the log rows are rate-limited, so
+   * the count and the timestamp of the latest attempt are what separate "discord.js is retrying
+   * and will recover" from "this process has never connected".
+   */
+  recordGatewayFailure(): void {
+    this.gatewayFailureCount++;
+    this.lastGatewayFailureAt = Date.now();
+  }
+
+  /** Clears the failure streak once a session is established or resumed. */
+  recordGatewayConnected(): void {
+    this.gatewayFailureCount = 0;
+    this.lastGatewayFailureAt = null;
+  }
+
+  /**
    * Get WebSocket ping latency in milliseconds
    */
   getWebSocketPing(): number {
     return this.client?.ws.ping ?? -1;
+  }
+
+  /**
+   * Reports connection progress for the health endpoint.
+   *
+   * These are counters rather than a verdict, so they deliberately do not feed `healthy`: a
+   * reconnecting gateway is expected to recover.
+   *
+   * Login is absent by design. A failed login exits the process, so any state recorded for it
+   * would be unreadable by the probe that is meant to report it; the exit code and the log line
+   * are what carry that outcome.
+   */
+  getConnectionState(): {
+    gatewayFailureCount: number;
+    lastGatewayFailureAt: string | null;
+  } {
+    return {
+      gatewayFailureCount: this.gatewayFailureCount,
+      lastGatewayFailureAt: this.lastGatewayFailureAt ? new Date(this.lastGatewayFailureAt).toISOString() : null,
+    };
   }
 }
 
