@@ -10,7 +10,6 @@ import { initLoaders } from "@/init/loaders";
 import { initBridges } from "@/init/bridges";
 import { initTimers } from "@/init/timers";
 import { initMediaProcessing } from "@/init/media";
-import { healthTracker } from "@/utils/misc/healthTracker";
 import { log } from "@/utils/misc/logger";
 
 /**
@@ -66,56 +65,41 @@ initTimers(client);
 
 // Login, so triggers clientReady which starts all deferred timers.
 //
-// A gateway that cannot complete the handshake is retried in-process rather than exited on: the
-// container restarts the process when it exits, so exiting turns one Discord-side incident into a
-// connect attempt per restart with no backoff, and Discord counts those against the daily
-// identify budget. The process stays up and gives Discord time to recover instead. Only failures
-// that retrying cannot change (a rejected token, an unapproved privileged intent) exit, because
-// those need a human and a restart loop would hide the reason.
-const LOGIN_MAX_DELAY_MS = Math.max(Number.parseInt(process.env.DISCORD_LOGIN_MAX_DELAY_MS || "", 10) || 60_000, 1_000);
-const LOGIN_BASE_DELAY_MS = 1_000;
-
-/**
- * Waits before the next login attempt, doubling to a ceiling and jittering by up to a fifth.
- *
- * The jitter matters when several processes share a token: without it, replicas that failed
- * together reconnect together and keep colliding on the same gateway window.
- */
-function loginRetryDelay(attempt: number): number {
-  const backoff = Math.min(LOGIN_BASE_DELAY_MS * 2 ** (attempt - 1), LOGIN_MAX_DELAY_MS);
-  return Math.round(backoff * (0.8 + Math.random() * 0.4));
-}
-
-let loginAttempt = 0;
-for (;;) {
-  loginAttempt++;
-  try {
-    await client.login(process.env.DISCORD_TOKEN);
-    healthTracker.recordLoginSuccess();
-    break;
-  } catch (error) {
-    if (isDisallowedIntentsError(error)) {
-      log.error(
-        "Discord rejected login: a requested privileged intent is not approved for this bot. " +
-          "This is unexpected because approval is probed before connecting. Check whether the " +
-          "Presence Intent was revoked. Restarting will re-probe and boot without the intent " +
-          "(presence context degrades gracefully).",
-        error as Error,
-      );
-      process.exit(1);
-    }
-
-    if (!isTransientGatewayError(error)) {
-      log.error("Discord login failed", error as Error);
-      process.exit(1);
-    }
-
-    healthTracker.recordLoginAttempt(loginAttempt);
-    const delay = loginRetryDelay(loginAttempt);
-    log.rateLimit(
-      `Discord login attempt ${loginAttempt} failed (gateway unreachable); retrying in ${Math.round(delay / 1000)}s`,
-      { attempt: loginAttempt, retryInMs: delay, reason: error instanceof Error ? error.message : String(error) },
+// Retrying this in-process is not available: `Client#login` awaits `client.destroy()` on failure,
+// which sets `ws.destroyed` permanently (discord.js only clears it in the WebSocket manager's
+// constructor), drops `client.token`, and never restarts the cache sweepers. A second `login()`
+// therefore leaves `isReady()` false forever, which the health endpoint reports as 503 and the
+// container runtime reads as a dead process. Rebuilding the client instead is not an option
+// either: the Matrix bridge closes over the instance it was handed. So a failed connect exits and
+// the restart policy retries with a fresh process, which is the only path that yields a client
+// that can actually report ready.
+//
+// A transient gateway failure is still distinguished from a misconfiguration, because the two
+// need different operator responses and the runtime backoff cannot tell them apart.
+try {
+  await client.login(process.env.DISCORD_TOKEN);
+} catch (error) {
+  if (isDisallowedIntentsError(error)) {
+    log.error(
+      "Discord rejected login: a requested privileged intent is not approved for this bot. " +
+        "This is unexpected because approval is probed before connecting. Check whether the " +
+        "Presence Intent was revoked. Restarting will re-probe and boot without the intent " +
+        "(presence context degrades gracefully).",
+      error as Error,
     );
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    process.exit(1);
   }
+
+  const transient = isTransientGatewayError(error);
+  log.error(
+    transient
+      ? "Discord login failed because the gateway is unreachable. The process will exit so the " +
+          "container runtime restarts it with backoff; no action is needed if Discord recovers."
+      : "Discord login failed",
+    error as Error,
+  );
+  // Best effort: the handshake already failed, so this only avoids leaving a half-open socket and
+  // a session Discord would hold until it times out.
+  await client.destroy().catch(() => undefined);
+  process.exit(1);
 }

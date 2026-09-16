@@ -43,7 +43,24 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 
 Then set `CHATTERBOX_FAST_MODEL=nano` before starting the wrapper. Leave the variable unset for Turbo. On Windows PowerShell, set it with `$env:CHATTERBOX_FAST_MODEL = "nano"`; on Linux or macOS, use `CHATTERBOX_FAST_MODEL=nano python servers/tts/chatterbox/server.py`. The `/health` response reports `fast_model` so you can verify the loaded choice. Nano and Turbo use the same cloning request and supported event tags. Both are English-only.
 
-The `/config` fast-model toggle must stay enabled to use Nano or Turbo. Disabling it selects the older standard Chatterbox model for CFG weight and exaggeration tuning. Nano does not use those parameters.
+The `/config` fast-model toggle must stay enabled to use Nano or Turbo. Disabling it selects the standard Chatterbox 0.5B model for CFG weight and exaggeration tuning.
+
+### Standard Chatterbox (0.5B with CFG & Exaggeration)
+
+The original 0.5B base Chatterbox model (`ChatterboxTTS`) is built directly into the server wrapper. It trades Turbo's inline bracket event tags for fine-grained vocal control using **Classifier-Free Guidance (`cfg_weight`)** and emotional **`exaggeration`**.
+
+To use the Standard model:
+1. Start the server wrapper as normal.
+2. In Discord, run `/config` > **Models** > **TTS Parameters & Voices**.
+3. Toggle **OFF** the **Fast Model (Turbo)** option.
+4. On the next generation, the wrapper lazily downloads and loads the standard 0.5B model into memory.
+
+When the fast-model toggle is disabled, TomoriBot exposes two sliders in `/config`:
+- **`cfg_weight`** (default `0.5`): Adjusts how closely the synthesized audio adheres to the reference tempo and vocal style.
+- **`exaggeration`** (default `0.5`): Controls the emotional intensity and dramatic inflection of the delivery.
+
+> [!NOTE]
+> Standard Chatterbox does not support inline bracket event tags (such as `[laughs]` or `[sigh]`). TomoriBot automatically strips bracket tags from prompt text when the Fast Model toggle is turned off.
 
 ## Register in TomoriBot
 

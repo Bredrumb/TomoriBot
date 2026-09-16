@@ -155,17 +155,18 @@ async function runGenerationAttempts(
         );
       }
 
-      // A destination channel that no longer exists fails for every key and every model alike.
-      // Retrying would burn a full generation per fallback arm and then discard it at the same
-      // send, so this attempt is terminal: the matching case in `isDeliveryStop` below keeps the
-      // model fallback loop from picking it up.
-      if (isGoneChannelResult(result)) {
-        log.warn(`Abandoning ${attempt.label}: the destination channel is gone.`);
+      // A destination the bot cannot post into fails for every key and every model alike, whether
+      // the channel was deleted or access to it was revoked. Retrying would burn a full generation
+      // per fallback arm and then discard it at the same send, so this attempt is terminal: the
+      // status it returns is a stop, which `isRetryableStatus` below already excludes, and this
+      // break keeps the model fallback loop from picking it up.
+      if (isUnreachableDestinationResult(result)) {
+        log.warn(`Abandoning ${attempt.label}: the destination channel cannot receive messages.`);
         break;
       }
 
       const isRetryableStatus =
-        (result.status === "error" || result.status === "timeout") && !isGoneChannelResult(result);
+        (result.status === "error" || result.status === "timeout") && !isUnreachableDestinationResult(result);
       if (!isRetryableStatus || index === attempts.length - 1) {
         if (index > 0 && shouldSendFallbackNotice(context, result)) {
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
@@ -308,15 +309,29 @@ function getRetryExcludedKeyIds(excludedKeyIds: Set<number>, rotationKeyId: numb
 }
 
 /**
- * A destination channel that no longer exists fails for every key and every model alike.
+ * A destination the bot cannot post into fails for every key and every model alike, whether the
+ * channel was deleted or access to it was revoked.
  *
  * Retrying would burn a full generation per fallback arm and then discard it at the same send.
  * The classifier is shared with the send path so the "retrying cannot help" set has one
  * definition. A refused send after a permission change or a timeout is deliberately excluded: it
  * can clear on its own, so it keeps its fallback arms.
+ *
+ * The reason arrives as a stop more often than as an error, because the send path raises the stop
+ * itself, so both routes are read here rather than depending on the status alone. An error-level
+ * result keeps its fallback arms unless this says otherwise, and a 50001 that reached the turn as
+ * data would otherwise be retried across every arm.
  */
-function isGoneChannelResult(result: GenerationTurnResult): boolean {
-  return result.streamResults.some((streamResult) => classifySendFailure(streamResult.data) === "channel_gone");
+function isUnreachableDestinationResult(result: GenerationTurnResult): boolean {
+  return result.streamResults.some((streamResult) => {
+    const classified = classifySendFailure(streamResult.data);
+    return (
+      classified === "channel_gone" ||
+      classified === "missing_access" ||
+      streamResult.stopReason === "channel_deleted" ||
+      streamResult.stopReason === "missing_access"
+    );
+  });
 }
 
 async function emitStreamErrors(responseSink: ChatResponseSink, streamResults: StreamResult[]): Promise<void> {

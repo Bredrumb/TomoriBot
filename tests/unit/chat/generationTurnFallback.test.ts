@@ -769,6 +769,73 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(fallbackNoticeCalls).toHaveLength(0);
   });
 
+  /**
+   * A destination the bot cannot post into fails identically for every key and every model, so
+   * spending a generation per remaining arm only to discard it at the same send is waste. A 50001
+   * arrives here as error data rather than as a stop, which is the route that used to keep its
+   * fallback arms.
+   */
+  it("abandons the fallback chain when the destination refuses the send for missing access", async () => {
+    const primaryModel = makeLlm(1, "primary-model");
+    const fallbackModel = makeLlm(2, "fallback-model");
+    const context = makeContext(primaryModel, fallbackModel);
+    const sink: ChatResponseSink = {
+      emitStreamResult: async () => undefined,
+      emitError: async () => undefined,
+      finalize: async () => undefined,
+    };
+
+    const refusedResult: GenerationTurnResult = {
+      status: "error",
+      streamResults: [{ status: "error", data: Object.assign(new Error("Missing Access"), { code: 50001 }) }],
+      personaResponses: [],
+    };
+    // Queued behind it so a consumed fallback attempt would be visible rather than silent.
+    queuedResults.push(refusedResult, {
+      status: "completed",
+      streamResults: [{ status: "completed", accumulatedText: "fallback ran" }],
+      personaResponses: [],
+    });
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    // Abandoning the attempt falls through to the skipped result, and the queued fallback is still
+    // there: that is the evidence no second generation was spent.
+    expect(result.status).toBe("skipped");
+    expect(queuedResults).toHaveLength(1);
+    expect(fallbackNoticeCalls).toHaveLength(0);
+  });
+
+  it("abandons the fallback chain when the destination is reported as deleted", async () => {
+    const primaryModel = makeLlm(1, "primary-model");
+    const fallbackModel = makeLlm(2, "fallback-model");
+    const context = makeContext(primaryModel, fallbackModel);
+    const sink: ChatResponseSink = {
+      emitStreamResult: async () => undefined,
+      emitError: async () => undefined,
+      finalize: async () => undefined,
+    };
+
+    const goneResult: GenerationTurnResult = {
+      status: "error",
+      streamResults: [{ status: "error", data: Object.assign(new Error("Unknown Channel"), { code: 10003 }) }],
+      personaResponses: [],
+    };
+    queuedResults.push(goneResult, {
+      status: "completed",
+      streamResults: [{ status: "completed", accumulatedText: "fallback ran" }],
+      personaResponses: [],
+    });
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(result.status).toBe("skipped");
+    expect(queuedResults).toHaveLength(1);
+    expect(fallbackNoticeCalls).toHaveLength(0);
+  });
+
   it("suppresses completed fallback notice when a follow-up request is already pending", async () => {
     const primaryModel = makeLlm(1, "primary-model");
     const fallbackModel = makeLlm(2, "fallback-model");

@@ -49,10 +49,13 @@ export function classifySendFailure(error: unknown): SendFailureReason | null {
     return "missing_access";
   }
 
-  // A deleted channel is permanent, not transient: Discord never reuses a channel snowflake, so
-  // there is no recovery for this id to wait for. `ChannelNotCached` covers the client-side throw
-  // from `Message#reply`, which reaches here without ever issuing a request.
-  if (code === 10003 || code === "10003" || code === "ChannelNotCached") {
+  // 10003 is the REST answer that the channel no longer exists, which Discord never reverses for
+  // that id, so there is no recovery to wait for. The client-side `ChannelNotCached` is
+  // deliberately excluded: it only means the channel was absent from the local cache, which an
+  // uncached thread or an evicted DM entry also produces, so caching it would blacklist a live
+  // channel for the whole TTL over a local eviction. The send path resolves that case with a REST
+  // fetch instead.
+  if (code === 10003 || code === "10003") {
     return "channel_gone";
   }
 

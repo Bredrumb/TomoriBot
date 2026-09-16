@@ -50,12 +50,13 @@ describe("channel-gone classification", () => {
     expect(classifySendFailure(discordError(code))).toBe("channel_gone");
   });
 
-  // Raised client-side by `Message#reply` before any request is issued, so it arrives without a
-  // numeric code at all.
-  it("treats a cache miss on the source message as a channel that is gone", () => {
+  // `ChannelNotCached` only says the channel was absent from the local cache, which an uncached
+  // thread or an evicted DM entry also produces. Caching it would block a live channel for the
+  // whole TTL, so the send path resolves that case with a REST fetch instead.
+  it("does not cache a local cache miss as a deleted channel", () => {
     expect(
       classifySendFailure(Object.assign(new Error("Could not find the channel"), { code: "ChannelNotCached" })),
-    ).toBe("channel_gone");
+    ).toBeNull();
   });
 
   it("keeps a deleted channel blocked after the first report", () => {

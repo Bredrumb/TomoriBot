@@ -30,6 +30,7 @@ export const INTERNAL_STOP_REQUESTER_IDS: ReadonlySet<string> = new Set([
   "send_message_limit",
   "flush_limit",
   "channel_deleted",
+  "missing_access",
 ]);
 
 export function isSilentSpeakerGuardStop(requesterId: string | undefined, state: StreamState): boolean {
@@ -49,6 +50,8 @@ function getStopReasonFromRequesterId(requesterId?: string): StreamStopReason {
       return "flush_limit";
     case "channel_deleted":
       return "channel_deleted";
+    case "missing_access":
+      return "missing_access";
     default:
       return "user_request";
   }

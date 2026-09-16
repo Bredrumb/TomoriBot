@@ -13,7 +13,7 @@ This page provides empirical benchmark results, synthesis timings, and audio com
 
 ### Benchmark Prompts
 
-- **Standard Prompt** *(used for Chatterbox Turbo/Nano, MOSS-TTS, CosyVoice 3, VoxCPM2, Qwen3-TTS)*:
+- **Standard Prompt** *(used for Chatterbox Standard/Turbo/Nano, MOSS-TTS, CosyVoice 3, VoxCPM2, Qwen3-TTS)*:
   > *"Pain and pleasure are two sides of the same coin. Go on now... flip it. Either way, I'll let you feel all of me."*
 - **Fish Audio S2 Pro Prompt** *(tested with bracket expression tags)*:
   > *"Pain and pleasure are two sides of the same coin. [laughs] Go on now... flip it. [whispers] Either way, I'll let you feel all of me."*
@@ -28,8 +28,9 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 | Engine | Windows Native<sup>(1)</sup><br/>(RTX 4070 Ti SUPER) | Linux / WSL2 | macOS<br/>(Apple Silicon) | Audio Sample |
 |---|---|---|---|---|
 | **[Fish Audio S2 Pro](./fishs2/)** | ~8–10 min<sup>(2)</sup><br/>*(~65× RTF)* | Untested | Untested | <audio controls preload="none" src="/audio/tts/fish-s2-pro.wav"></audio> |
-| **[Chatterbox (Turbo)](./chatterbox/)** | **~5.0s** *(8.7s clip)*<br/>**0.57× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
+| **[Chatterbox (Turbo, Default)](./chatterbox/)** | **~5.0s** *(8.7s clip)*<br/>**0.57× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-turbo.wav"></audio> |
 | **[Chatterbox (Nano)](./chatterbox/)** | **~3.0s** *(8.0s clip)*<br/>**0.38× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox-nano.wav"></audio> |
+| **[Chatterbox (Standard)](./chatterbox/)** | **~6.0s** *(7.8s clip)*<br/>**0.77× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/chatterbox.wav"></audio> |
 | **[MOSS-TTS](./moss/)** | ~12.0s *(8.8s clip)*<br/>1.36× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/moss-tts.wav"></audio> |
 | **[CosyVoice 3](./cosyvoice3/)** | **~6.0s** *(13.9s clip)*<br/>**0.43× RTF** | Untested | Untested | <audio controls preload="none" src="/audio/tts/cosy-voice-3.wav"></audio> |
 | **[VoxCPM2](./voxcpm2/)** | ~8.0s *(7.4s clip)*<br/>1.09× RTF | Untested | Untested | <audio controls preload="none" src="/audio/tts/voxcpm2.wav"></audio> |
@@ -59,7 +60,7 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 ## Which Engine Should You Choose?
 
 - **Choose [Fish Audio S2 Pro](./fishs2/)** if you want the highest possible vocal fidelity, fine-grained expressive bracket tags (`[whisper]`, `[laughs]`, `[sigh]`), and you have access to **Linux or WSL2** where Triton compiler fusion can be enabled.
-- **Choose [Chatterbox Turbo / Nano](./chatterbox/)** if you want rapid English voice cloning with small VRAM footprint (Nano synthesizes in ~3.0s, Turbo in ~5.0s) and support for event tags (`[laughter]`, `[sigh]`, `[giggle]`).
+- **Choose [Chatterbox (Turbo / Nano / Standard)](./chatterbox/)** for English voice cloning with small VRAM footprint. Nano (~3.0s, 0.38× RTF) provides maximum speed on CPU/GPU, Turbo (~5.0s, 0.57× RTF) supports paralinguistic event tags (`[laughter]`, `[sigh]`), and Standard (~6.0s, 0.77× RTF) enables creative CFG guidance and emotional exaggeration tuning.
 - **Choose [MOSS-TTS](./moss/)** for experimental multi-modal voice cloning and text-described English/Chinese voice generation.
 - **Choose [CosyVoice 3](./cosyvoice3/)** if you need high-quality multilingual zero-shot cloning with natural language delivery direction (`"Speak in English with excitement"`).
 - **Choose [VoxCPM2](./voxcpm2/)** if you need comprehensive multilingual support (30 languages), transcript-assisted Ultimate Cloning, and natural voice design.
@@ -74,7 +75,7 @@ All TomoriBot sidecars currently return a complete WAV to the bot.
 
 | Engine | Model size; 16 GB GPU | Languages | Voice sources and controls | Speed / streaming path | Choose it for |
 |---|---|---|---|---|---|
-| [Chatterbox](./chatterbox/) | 350M Turbo or 110M Nano; yes, Nano can use CPU | English | Reference cloning, supported event tags; standard model offers CFG/exaggeration | Fast/small focus; wrapper returns full WAV | Small English clone setup or CPU experiments |
+| [Chatterbox](./chatterbox/) | 350M Turbo (default), 110M Nano, or 500M Standard; yes, Nano can use CPU | English | Reference cloning, supported event tags; standard model offers CFG/exaggeration | Fast/small focus; wrapper returns full WAV | Small English clone setup or CPU experiments |
 | [Qwen3-TTS](./qwen3tts/) | 1.7B per mode; yes, models swap | 10, including English/Japanese | Clone or text-described VoiceDesign | Quality-focused; upstream streaming, wrapper buffers | General-purpose multilingual clone and Japanese VoiceDesign |
 | [MOSS-TTS](./moss/) | 4B clone + ~1.7B design, swapped; 16 GB is a trial target, not verified; 8B flagship likely no | Clone: 31, including Japanese; design: English/Chinese | Clone or text-described VoiceGenerator; clone language tags | Experimental; Local clone has upstream streaming backend, wrapper buffers | Compare MOSS clone quality or English/Chinese voice design |
 | [IrodoriTTS](./irodoritts/) | ~0.8B current v4.1 Small; ~3–4 GB VRAM observed in one local run | Japanese only | Clone or VoiceDesign; emoji style cues | Sampling steps trade quality for speed; wrapper buffers | Small-footprint Japanese voices and emoji-driven delivery |

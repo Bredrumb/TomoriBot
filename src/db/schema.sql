@@ -401,7 +401,7 @@ SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'fal
 SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
-SELECT add_column_if_not_exists('llms', 'descriptions', 'JSONB');
+SELECT add_column_if_not_exists('llms', 'ja_description', 'TEXT');
 -- Per-model official pricing (USD per million tokens, uncached standard rate). Nullable on purpose:
 -- OpenRouter rows are priced dynamically from its live API cache, and free/non-metered providers
 -- (novelai subscription, nvidia free tier, custom bootstrap) leave these NULL. Seeded from the typed
@@ -419,7 +419,7 @@ CREATE TABLE IF NOT EXISTS image_diffusion_models (
   codename TEXT NOT NULL,
   is_scoped_registration BOOLEAN DEFAULT false,
   model_description TEXT,
-  descriptions JSONB,
+  ja_description TEXT,
   is_default BOOLEAN DEFAULT false,
   is_deprecated BOOLEAN DEFAULT false,
   is_free BOOLEAN DEFAULT false,
@@ -434,7 +434,6 @@ CREATE TABLE IF NOT EXISTS image_diffusion_models (
 
 -- Moved to prevent error on first-time DB creation!
 SELECT add_column_if_not_exists('image_diffusion_models', 'is_scoped_registration', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('image_diffusion_models', 'descriptions', 'JSONB');
 
 -- Nullable with no default: NULL means the model follows its provider's built-in image defaults.
 SELECT add_column_if_not_exists('image_diffusion_models', 'supports_txt2img', 'BOOLEAN');
@@ -458,7 +457,7 @@ CREATE TABLE IF NOT EXISTS video_generation_models (
   codename TEXT NOT NULL,
   is_scoped_registration BOOLEAN DEFAULT false,
   model_description TEXT,
-  descriptions JSONB,
+  ja_description TEXT,
   is_default BOOLEAN DEFAULT false,
   is_deprecated BOOLEAN DEFAULT false,
   is_free BOOLEAN DEFAULT false,
@@ -486,7 +485,7 @@ CREATE TABLE IF NOT EXISTS embedding_models (
   model_family TEXT NOT NULL,
   is_scoped_registration BOOLEAN DEFAULT false,
   model_description TEXT,
-  descriptions JSONB,
+  ja_description TEXT,
   is_default BOOLEAN DEFAULT false,
   is_deprecated BOOLEAN DEFAULT false,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -495,7 +494,6 @@ CREATE TABLE IF NOT EXISTS embedding_models (
 
 -- Moved to prevent error on first-time DB creation!
 SELECT add_column_if_not_exists('embedding_models', 'is_scoped_registration', 'BOOLEAN', 'false');
-SELECT add_column_if_not_exists('embedding_models', 'descriptions', 'JSONB');
 
 -- Removed updated_at trigger for embedding_models table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_embedding_models_timestamp ON embedding_models;
@@ -734,7 +732,7 @@ CREATE TABLE IF NOT EXISTS system_prompt_presets (
   system_prompt_preset_id SERIAL PRIMARY KEY,
   system_prompt_preset_name TEXT NOT NULL UNIQUE,
   system_prompt_preset_desc TEXT NOT NULL,
-  descriptions JSONB,
+  ja_description TEXT,
   preset_prompt_text TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -742,7 +740,6 @@ CREATE TABLE IF NOT EXISTS system_prompt_presets (
 
 -- Removed updated_at trigger for system_prompt_presets table (static metadata, rarely changes)
 DROP TRIGGER IF EXISTS update_system_prompt_presets_timestamp ON system_prompt_presets;
-SELECT add_column_if_not_exists('system_prompt_presets', 'descriptions', 'JSONB');
 
 CREATE TABLE IF NOT EXISTS server_emojis (
   server_emoji_id SERIAL PRIMARY KEY,

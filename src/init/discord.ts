@@ -169,8 +169,23 @@ export function createDiscordClient(includePresences: boolean): Client {
 
   // Session lifecycle is the other half of a connection failure: without these, a resumed session
   // and a fresh identify are indistinguishable in the logs, and an event gap is invisible.
-  client.on("shardDisconnect", (event, shardId) => {
+  //
+  // The reporter is cleared only where a session is actually established. Clearing it on a
+  // disconnect would re-arm error level for the next attempt of the same outage, which is the
+  // repetition the reporter exists to absorb.
+  client.on("shardReady", (shardId) => {
     gatewayErrorReporter.reset(shardId);
+    healthTracker.recordGatewayConnected();
+    log.rateLimit(`Discord gateway shard ready (shard ${shardId})`, { shardId });
+  });
+
+  client.on("shardResume", (shardId, replayedEvents) => {
+    gatewayErrorReporter.reset(shardId);
+    healthTracker.recordGatewayConnected();
+    log.rateLimit(`Discord gateway session resumed (shard ${shardId})`, { shardId, replayedEvents });
+  });
+
+  client.on("shardDisconnect", (event, shardId) => {
     log.rateLimit(`Discord gateway disconnected (shard ${shardId})`, {
       code: event.code,
       reason: event.reason ?? "",
@@ -180,11 +195,6 @@ export function createDiscordClient(includePresences: boolean): Client {
 
   client.on("shardReconnecting", (shardId) => {
     log.rateLimit(`Discord gateway reconnecting (shard ${shardId})`, { shardId });
-  });
-
-  client.on("shardResume", (shardId, replayedEvents) => {
-    gatewayErrorReporter.reset(shardId);
-    log.rateLimit(`Discord gateway session resumed (shard ${shardId})`, { shardId, replayedEvents });
   });
 
   client.on("invalidated", () => {
