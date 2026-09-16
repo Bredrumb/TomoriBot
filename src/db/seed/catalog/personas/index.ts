@@ -1,14 +1,19 @@
 import type { CatalogSection, PersonaInput } from "../types";
 import { persona as defaultEn } from "./default/en-US";
 import { persona as defaultJa } from "./default/ja";
+import { persona as defaultPtBr } from "./default/pt-BR";
 import { persona as brattyEn } from "./bratty/en-US";
 import { persona as brattyJa } from "./bratty/ja";
+import { persona as brattyPtBr } from "./bratty/pt-BR";
 import { persona as gloomyEn } from "./gloomy/en-US";
 import { persona as gloomyJa } from "./gloomy/ja";
+import { persona as gloomyPtBr } from "./gloomy/pt-BR";
 import { persona as shyEn } from "./shy/en-US";
 import { persona as shyJa } from "./shy/ja";
+import { persona as shyPtBr } from "./shy/pt-BR";
 import { persona as nerineEn } from "./loyal/en-US";
 import { persona as nerineJa } from "./loyal/ja";
+import { persona as nerinePtBr } from "./loyal/pt-BR";
 
 export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-kun", rows: [defaultEn] },
@@ -21,4 +26,9 @@ export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-san (Japanese)", rows: [gloomyJa] },
   { comment: "Shy Tomori (Lilya) Japanese Version", rows: [shyJa] },
   { comment: "ネリネ（廃盤モデル）(Japanese)", rows: [nerineJa] },
+  { comment: "Tomori-kun (Brazilian Portuguese)", rows: [defaultPtBr] },
+  { comment: "Tomori-chan (Brazilian Portuguese)", rows: [brattyPtBr] },
+  { comment: "Tomori-san (Brazilian Portuguese)", rows: [gloomyPtBr] },
+  { comment: "Shy Tomori (Lilya) Brazilian Portuguese Version", rows: [shyPtBr] },
+  { comment: "Loyal Tomori (Brazilian Portuguese)", rows: [nerinePtBr] },
 ];

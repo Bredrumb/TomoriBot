@@ -1,6 +1,5 @@
 ---
 title: "Locke, a Desequilibrada"
-aiGenerated: false
 sidebar:
   order: 6
 ---

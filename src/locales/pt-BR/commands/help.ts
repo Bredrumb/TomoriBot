@@ -6,7 +6,7 @@ export default {
         setup: `Configuração`,
         features: `Recursos`,
         moderation: `Moderação`,
-        plugins: `Plugins`,
+        plugins: `Plug-ins`,
       },
       pages: {
         custom_endpoints: `Endpoints Personalizados`,

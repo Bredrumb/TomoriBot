@@ -1,6 +1,5 @@
 ---
 title: "Rose, a Garota Masculina"
-aiGenerated: false
 sidebar:
   order: 1
 ---

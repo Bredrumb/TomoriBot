@@ -1,7 +1,6 @@
 ---
 title: Política de Privacidade
 description: Como a instância oficial hospedada do TomoriBot coleta, armazena e exclui seus dados.
-aiGenerated: false
 ---
 
 *Aviso: Esta é uma tradução fornecida por conveniência. Em caso de conflito, a versão em inglês prevalece.*

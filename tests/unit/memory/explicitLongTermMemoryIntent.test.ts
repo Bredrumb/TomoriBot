@@ -3,8 +3,8 @@ import { hasExplicitLongTermMemoryIntent } from "@/utils/memory/explicitLongTerm
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { EXPLICIT_MEMORY_PACK_KEY, getIntentPackUnion } from "@/utils/text/localeIntentPacks";
 
-// The phrase lists that were hardcoded before they moved into the locale trees. Matching must not
-// change for either shipped language.
+// The phrase lists that were hardcoded before they moved into the locale trees. Keep their matching
+// behavior stable while asserting every shipped locale contributes its registered phrases.
 const PREVIOUS_ENGLISH_PHRASES = [
   "remember",
   "don't forget",
@@ -24,20 +24,29 @@ const PREVIOUS_JAPANESE_PHRASES = [
   "今後のために覚えて",
   "後で使えるように覚えて",
 ];
+const PT_BR_PHRASES = [
+  "lembre",
+  "não se esqueça",
+  "não esqueça",
+  "note",
+  "guarde na memória",
+  "para conversas futuras",
+  "para referência futura",
+];
 
 beforeAll(async () => {
   await initializeLocalizer();
 });
 
 describe("explicit long-term memory intent", () => {
-  it("unions exactly the previous English and Japanese phrases", () => {
+  it("unions the registered phrases from every shipped locale", () => {
     expect([...getIntentPackUnion(EXPLICIT_MEMORY_PACK_KEY)].sort()).toEqual(
-      [...PREVIOUS_ENGLISH_PHRASES, ...PREVIOUS_JAPANESE_PHRASES].sort(),
+      [...new Set([...PREVIOUS_ENGLISH_PHRASES, ...PREVIOUS_JAPANESE_PHRASES, ...PT_BR_PHRASES])].sort(),
     );
   });
 
-  it("matches every previous phrase inside a sentence, after NFKC and case folding", () => {
-    for (const phrase of [...PREVIOUS_ENGLISH_PHRASES, ...PREVIOUS_JAPANESE_PHRASES]) {
+  it("matches every registered phrase inside a sentence, after NFKC and case folding", () => {
+    for (const phrase of [...PREVIOUS_ENGLISH_PHRASES, ...PREVIOUS_JAPANESE_PHRASES, ...PT_BR_PHRASES]) {
       expect(hasExplicitLongTermMemoryIntent(`ok ${phrase} this`)).toBe(true);
     }
     expect(hasExplicitLongTermMemoryIntent("ＲＥＭＥＭＢＥＲ   this")).toBe(true);

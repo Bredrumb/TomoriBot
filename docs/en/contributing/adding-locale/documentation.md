@@ -65,8 +65,9 @@ draft disclaimer, and native review clears the flag page by page later.
 
 The notice wording itself lives in `LOCALE_NOTICES` in `src/constants/docsLocales.ts`, including
 `englishLinkText`, so a locale names the source language in its own words rather than showing an
-English endonym inside its own sentence. A locale with no entry falls back to the default locale's
-copy, which keeps a newly published locale readable while its notices are still being authored.
+English endonym inside its own sentence. Add this locale-owned notice entry before setting `docsTree`
+to `true`. A locale with no entry falls back to the default locale's copy only while its tree is
+staged and unpublished.
 
 ## Publishing A Locale
 
@@ -93,10 +94,10 @@ The pre-staged shared surfaces a locale relies on:
 
 | File | Pre-staged state | Publish-time edit |
 |---|---|---|
-| `src/constants/docsLocales.ts` | The locale row and its endonym | Set `docsTree: true` |
+| `src/constants/docsLocales.ts` | The locale row and its endonym | Add the locale's `LOCALE_NOTICES` entry and set `docsTree: true` |
 | `apps/docs/functions/_middleware.ts` | The locale is in the routed list | None |
 | `apps/docs/public/_redirects` | The `/xx` and `/xx/` root pair | None |
-| `README.md` switcher | The locale table row | None |
+| `README.md` switcher | The locale's endonym as staged plain text | Replace it with the locale README link |
 | `src/locales/{code}/**` docs URLs | English-prefixed absolute URLs | Repoint to `/{locale}/` once the tree is published |
 
 `tests/unit/docs/docsLocaleConfig.test.ts` fails when the `docsTree` flags and the directories under

@@ -157,14 +157,14 @@ até que o BYOK seja desligado.`,
 - Use \`/persona\` para mudar meu nome, visual e personalidade.
 - Use \`/config\` para ajustar como eu ajo e o que posso fazer.
 - Use \`/memories\` para me ensinar sobre você.`,
-      receipt_learn_more: `Leia a [Wiki Oficial](https://docs.tomoribot.app/en/features/) ou abra {help}
+      receipt_learn_more: `Leia a [Wiki Oficial](https://docs.tomoribot.app/pt-BR/features/) ou abra {help}
 (então Features) para mais do que posso fazer.
-- [Múltiplas Personas](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/) = visuais, vozes e gatilhos
-- [Chat & Gatilhos](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/) = quando e como eu participo
-- [Memória](https://docs.tomoribot.app/en/features/knowledge/memory/) = pessoas, fatos e contexto
-- [Personalização](https://docs.tomoribot.app/en/features/knowledge/personalization/) = como você gosta de ser tratado
-- [Geração de Mídia](https://docs.tomoribot.app/en/features/capabilities/media-generation/) = imagens, vídeo e voz
-- [Ferramentas e Extensões](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/) = pesquisa na web e mais`,
+- [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/) = visuais, vozes e gatilhos
+- [Chat & Gatilhos](https://docs.tomoribot.app/pt-BR/features/chatting-personality/chatting-and-triggers/) = quando e como eu participo
+- [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/) = pessoas, fatos e contexto
+- [Personalização](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/) = como você gosta de ser tratado
+- [Geração de Mídia](https://docs.tomoribot.app/pt-BR/features/capabilities/media-generation/) = imagens, vídeo e voz
+- [Ferramentas e Extensões](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/) = pesquisa na web e mais`,
       permission_denied: `Você precisa da permissão Gerenciar Servidor para configurar.`,
       env_mismatch: `A configuração do ambiente mudou. Por favor, reinicie a configuração.`,
       forbidden: `Esta sessão de configuração pertence a outro usuário ou canal.`,
@@ -232,7 +232,7 @@ até que o BYOK seja desligado.`,
       custom_endpoint_cap_prefix_completion_desc: `Suporta continuar um turno parcial do assistente.`,
       provider_byok_guild_only: `O modo BYOK de Usuário só está disponível em servidores. Escolha outro provedor para mensagens diretas.`,
       byok_modal_title: `Confirmar BYOK de Usuário`,
-      byok_modal_notice: `Quando o BYOK de Usuário está ativo, as pessoas no servidor usam seus próprios provedores. O servidor não terá um fallback. Eles podem configurar um com {command}. [Saiba mais sobre BYOK de Usuário](https://docs.tomoribot.app/en/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)`,
+      byok_modal_notice: `Quando o BYOK de Usuário está ativo, as pessoas no servidor usam seus próprios provedores. O servidor não terá um fallback. Eles podem configurar um com {command}. [Saiba mais sobre BYOK de Usuário](https://docs.tomoribot.app/pt-BR/features/setup-administration/server-moderation/#byok-de-usuário-traga-sua-própria-chave)`,
       byok_confirm_label: `Ativar BYOK de Usuário`,
       byok_confirm_yes: `Sim, ativar BYOK de Usuário`,
       byok_confirm_no: `Não, manter configuração anterior`,

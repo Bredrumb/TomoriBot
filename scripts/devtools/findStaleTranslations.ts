@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Glob } from "bun";
 import { type LocaleCode, isDiscordLocaleCode } from "@/constants/locales";
@@ -335,6 +335,7 @@ async function main(): Promise<void> {
     console.log("Run with --export to write stale-translations.json for batch translation.");
   } else {
     const outputPath = join(process.cwd(), "scripts", "maintenance", "stale-translations.json");
+    await mkdir(join(process.cwd(), "scripts", "maintenance"), { recursive: true });
     await writeFile(outputPath, JSON.stringify(stale, null, 2), "utf-8");
     log.success(`Exported ${stale.length} entries to ${outputPath}`);
   }

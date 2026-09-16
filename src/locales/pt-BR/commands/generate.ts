@@ -139,7 +139,7 @@ export default {
         instructions_description: `Direção única de cena adicionada a cada turno gerado`,
         instructions_placeholder: `ex. mantenha tenso, fique na taverna, faça respostas curtas`,
         main_persona_description: `Persona Principal`,
-        alter_persona_description: `Alter Persona`,
+        alter_persona_description: `Alterar Persona`,
       },
     },
 
@@ -197,7 +197,7 @@ export default {
         script_placeholder_plain: `Bom dia! Você dormiu bem?`,
         voice_source_label: `Fonte da Voz`,
         voice_source_description: `Escolha qual voz esta mensagem usa`,
-        mode_clone: `Clone`,
+        mode_clone: `Clonar`,
         mode_design: `Design`,
         source_sample_fallback: `amostra atribuída`,
         source_upload_label: `Usar Voz Enviada`,

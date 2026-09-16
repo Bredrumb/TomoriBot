@@ -12,6 +12,10 @@ temp-*/
 # Root-level scratch .txt output/prompts (e.g. captured check-locales stdout). Root-scoped so it
 # doesn't hide apps/docs/public/robots.txt or servers/*/requirements.txt.
 /*.txt
+# Root-level throwaway .mjs/.cjs scripts (e.g. locale comparison helpers). Root-scoped so it
+# doesn't hide real modules in subdirectories.
+/*.mjs
+/*.cjs
 # Throwaway output from the /stats infographic render harnesses (scripts/devtools/)
 .spike-output/
 .spike-output-docker/
@@ -23,6 +27,7 @@ __pycache__/
 
 # Script outputs
 backups/*
+scripts/maintenance/stale-translations.json
 
 # DB migration rehearsal working dir (contains prod/dev data dumps & snapshots)
 rehearsal/

@@ -160,7 +160,7 @@ export default {
     custom_endpoint_capability_label: `{capability}`,
     field_vision_model: `Modelo de Visão`,
     field_fallback_models: `Modelos de Fallback`,
-    field_logit_biases: `Logit Biases`,
+    field_logit_biases: `Vieses de Logit`,
     field_diffusion_model: `Modelo de Imagem`,
     field_video_model: `Modelo de Vídeo`,
     field_embedding_model: `Modelo de Embedding`,

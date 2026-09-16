@@ -7,6 +7,11 @@ is a usable display language even before its documentation exists. The tree mirr
 `src/locales/en-US/` and splits by area: `general.ts`, `tools.ts`, `providers.ts`, `bridges.ts`,
 `commands.ts`, and `commands/`.
 
+`commands.ts` is an executable assembler, not a static inventory. Its imports must point to the new
+locale's `./commands/<file>` modules. Leaving `../en-US/commands/<file>` imports in a copied assembler
+makes an apparently translated command tree render English at runtime. Before accepting a locale, verify
+that its assembler has no `../en-US/commands/` imports and that it loads successfully.
+
 ## Structure And Key Patterns
 
 Copy the English tree's shape rather than inventing one. Keys are dot-notation paths

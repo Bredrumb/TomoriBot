@@ -69,6 +69,15 @@ const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
     englishLinkText: "英語版",
     translatedBody: "このページは{english}を生成AIが翻訳したものです。不明な点がある場合は英語版をご確認ください。",
   },
+  "pt-BR": {
+    draftsTitle: "Aviso",
+    draftsBody:
+      "Esta página usa rascunhos temporários escritos e mantidos por IA generativa. Confira o código-fonte caso precise confirmar algum detalhe.",
+    translatedTitle: "Sobre esta tradução",
+    englishLinkText: "inglês",
+    translatedBody:
+      "Esta página é uma tradução por IA generativa da página em {english}. Consulte a página em inglês se algo não estiver claro.",
+  },
 };
 
 function defineDocsLocale(definition: DocsLocaleDefinition): DocsLocaleDefinition & { notices: DocsLocaleNotices } {
@@ -97,13 +106,13 @@ export const DOCS_LOCALES = [
   // Planned target locales. `docsTree: false` keeps the locale out of the published route set, out
   // of the Accept-Language match, and out of bot URLs, so adding the row here is safe before its
   // content exists. Flipping the flag is what publishes the locale, and the flip must land in the
-  // same change as the page tree plus the entries listed in docs/en/contributing/adding-locale.md.
+  // same change as the page tree plus the entries listed in docs/en/contributing/adding-locale/.
   defineDocsLocale({
     id: "pt-BR",
     botLocaleCode: "pt-BR",
     lang: "pt-BR",
     label: "Português (Brasil)",
-    docsTree: false,
+    docsTree: true,
     descriptionMaxLength: 160,
   }),
   defineDocsLocale({

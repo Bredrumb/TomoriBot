@@ -20,6 +20,7 @@ bun run check-locale-lengths                       # Discord 45/100 code-point c
 bun run check-locale-markers                       # protocol keys, templates, collisions
 bun run check-locale-links --locale=<code>         # project routes and heading fragments
 bun run find-stale-translations --locale=<code>    # untranslated English strings
+# Add --export to write the review list to scripts/maintenance/stale-translations.json.
 
 # Repository gates
 bun run check-seed-catalogs   # i18n map shape and catalog invariants

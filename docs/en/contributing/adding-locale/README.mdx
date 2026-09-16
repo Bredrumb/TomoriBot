@@ -73,10 +73,10 @@ The remaining shared files are pre-staged so a translation lane does not have to
 
 | Shared file | Pre-staged for every target locale | What a locale lane still does |
 |---|---|---|
-| `src/constants/docsLocales.ts` | The locale row with its endonym and description budget | Flip `docsTree` to `true` when the page tree lands |
+| `src/constants/docsLocales.ts` | The locale row with its endonym and description budget | Add locale-owned draft and translation notices, then flip `docsTree` to `true` when the page tree lands |
 | `apps/docs/functions/_middleware.ts` | The routed locale list | Nothing |
 | `apps/docs/public/_redirects` | The two-line locale root pair | Nothing |
-| `README.md` language switcher | The locale table | Nothing |
+| `README.md` language switcher | The locale's endonym is staged as plain text | Replace that endonym with the locale README link once the file lands |
 | `src/db/seed/catalog/**` | One `i18n` map per entry | One dedicated lane owns all locale keys |
 
 The `docsTree` flag is the publish switch. While it is `false`, the docs build registers no route, no

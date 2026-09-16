@@ -12,7 +12,8 @@ export default {
       no_changes_title: "Nenhuma Alteração Feita",
       no_changes_description: "A lista de verificação da estratégia de jailbreak não foi alterada.",
       success_title: "Estratégias de Jailbreak Atualizadas",
-      success_description: "Suas configurações de estratégia de jailbreak foram atualizadas. **{enabled_count}** opção(ões) estão ativas no momento.",
+      success_description:
+        "Suas configurações de estratégia de jailbreak foram atualizadas. **{enabled_count}** opção(ões) estão ativas no momento.",
     },
   },
 };

@@ -11,7 +11,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         modelTarget: "kayra",
         isDefault: true,
         desc: "Balanced and relaxed, a reliable all-purpose preset for natural roleplay.",
-        i18n: { ja: "バランスが取れたリラックスしたプリセット。自然なロールプレイに最適。" },
+        i18n: {
+          ja: "バランスが取れたリラックスしたプリセット。自然なロールプレイに最適。",
+          "pt-BR": "Equilibrada e relaxada, uma predefinição versátil e confiável para roleplay natural.",
+        },
         parameters: {
           order: [2, 3, 0, 4, 1],
           temperature: 1.35,
@@ -39,7 +42,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Asper-Kayra",
         modelTarget: "kayra",
         desc: "Crisp and focused, lower temperature with Typical Sampling for steady, disciplined prose.",
-        i18n: { ja: "温度低めでTypical Samplingを使用。落ち着いた規律ある文体に最適。" },
+        i18n: {
+          ja: "温度低めでTypical Samplingを使用。落ち着いた規律ある文体に最適。",
+          "pt-BR": "Focada e precisa, temperatura menor com Typical Sampling para prosa firme e disciplinada.",
+        },
         parameters: {
           order: [5, 0, 1, 3],
           temperature: 1.16,
@@ -66,7 +72,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Blended-Coffee-Kayra",
         modelTarget: "kayra",
         desc: "Smooth and grounded, blends top-K and tail-free for consistent, natural storytelling.",
-        i18n: { ja: "トップKとテールフリーを組み合わせた滑らかで安定した文体。" },
+        i18n: {
+          ja: "トップKとテールフリーを組み合わせた滑らかで安定した文体。",
+          "pt-BR": "Suave e realista, mistura top-K e tail-free para narração natural e consistente.",
+        },
         parameters: {
           order: [0, 1, 2, 3],
           temperature: 1.0,
@@ -92,7 +101,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Blook-Kayra",
         modelTarget: "kayra",
         desc: "Bold repetition-fighter, very aggressive phrase rep penalty keeps outputs fresh and varied.",
-        i18n: { ja: "非常に攻撃的なフレーズ繰り返しペナルティで新鮮でバラエティ豊かな出力を実現。" },
+        i18n: {
+          ja: "非常に攻撃的なフレーズ繰り返しペナルティで新鮮でバラエティ豊かな出力を実現。",
+          "pt-BR": "Combate repetições, penalidade de frase agressiva mantém as respostas variadas.",
+        },
         parameters: {
           order: [2, 3, 1, 0],
           temperature: 1.0,
@@ -119,7 +131,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "CosmicCube-Kayra",
         modelTarget: "kayra",
         desc: "Mirostat entropy sampling, experimental entropy-based sampler for unpredictable, cosmic outputs.",
-        i18n: { ja: "ミロスタットエントロピーサンプリング。予測不可能で宇宙的な出力のための実験的サンプラー。" },
+        i18n: {
+          ja: "ミロスタットエントロピーサンプリング。予測不可能で宇宙的な出力のための実験的サンプラー。",
+          "pt-BR": "Amostragem Mirostat, experimental para respostas cósmicas e imprevisíveis.",
+        },
         parameters: {
           order: [8, 5, 0, 3],
           temperature: 0.9,
@@ -146,7 +161,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Fresh-Coffee-Kayra",
         modelTarget: "kayra",
         desc: "Light and clean, fresher top-K outputs with minimal phrase repetition penalty.",
-        i18n: { ja: "軽くクリーンなトップK出力。フレーズ繰り返しペナルティを最小化。" },
+        i18n: {
+          ja: "軽くクリーンなトップK出力。フレーズ繰り返しペナルティを最小化。",
+          "pt-BR": "Leve e limpa, respostas top-K com penalidade mínima de repetição de frase.",
+        },
         parameters: {
           order: [0, 1, 2, 3],
           temperature: 1.0,
@@ -173,7 +191,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Green-Active-Writer-Kayra",
         modelTarget: "kayra",
         desc: "High-energy mirostat writer, creative and dynamic at temperature 1.5 with strong anti-repetition.",
-        i18n: { ja: "高エネルギーなミロスタットライター。温度1.5で創造的かつダイナミック、強い反復防止付き。" },
+        i18n: {
+          ja: "高エネルギーなミロスタットライター。温度1.5で創造的かつダイナミック、強い反復防止付き。",
+          "pt-BR": "Mirostat de alta energia, dinâmico e criativo (temp 1.5) com forte antirrepetição.",
+        },
         parameters: {
           order: [0, 8, 5, 3],
           temperature: 1.5,
@@ -200,7 +221,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Pilotfish-Kayra",
         modelTarget: "kayra",
         desc: "Multi-sampler blend, layered top-K/P/A/Typical for rich narrative variety.",
-        i18n: { ja: "複数のサンプラーを組み合わせた豊かなナラティブバリエーション。" },
+        i18n: {
+          ja: "複数のサンプラーを組み合わせた豊かなナラティブバリエーション。",
+          "pt-BR": "Mistura de amostradores top-K/P/A/Typical para rica variedade de narração.",
+        },
         parameters: {
           order: [0, 4, 1, 2, 5, 3],
           temperature: 1.31,
@@ -229,7 +253,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Pro_Writer-Kayra",
         modelTarget: "kayra",
         desc: "Refined narrative, tuned for written prose quality using top-A and Typical Sampling.",
-        i18n: { ja: "洗練されたナラティブ。トップAとTypical Samplingによる高品質な文章向け。" },
+        i18n: {
+          ja: "洗練されたナラティブ。トップAとTypical Samplingによる高品質な文章向け。",
+          "pt-BR": "Narrativa refinada, ajustada para qualidade de prosa (top-A e Typical Sampling).",
+        },
         parameters: {
           order: [3, 4, 5, 0],
           temperature: 1.06,
@@ -256,7 +283,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Stelenes-Kayra",
         modelTarget: "kayra",
         desc: "Maximum chaos, very high temperature (2.5) for maximally experimental and unpredictable text.",
-        i18n: { ja: "最大カオス。温度2.5による極めて実験的で予測不可能なテキスト生成。" },
+        i18n: {
+          ja: "最大カオス。温度2.5による極めて実験的で予測不可能なテキスト生成。",
+          "pt-BR": "Caos máximo (temp 2.5) para textos extremamente experimentais e imprevisíveis.",
+        },
         parameters: {
           order: [3, 0, 5],
           temperature: 2.5,
@@ -281,7 +311,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Tea_Time-Kayra",
         modelTarget: "kayra",
         desc: "Quiet and mellow, top-A and Typical with aggressive phrase guard for tranquil outputs.",
-        i18n: { ja: "トップAとTypical、攻撃的フレーズガードで穏やかで落ち着いた出力を実現。" },
+        i18n: {
+          ja: "トップAとTypical、攻撃的フレーズガードで穏やかで落ち着いた出力を実現。",
+          "pt-BR": "Calma e suave, top-A e Typical com guarda de frase agressiva para saídas tranquilas.",
+        },
         parameters: {
           order: [5, 0, 4],
           temperature: 1.0,
@@ -307,7 +340,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Tesseract-Kayra",
         modelTarget: "kayra",
         desc: "Sharp and precise, very low temperature (0.895) for highly deterministic, focused responses.",
-        i18n: { ja: "非常に低い温度（0.895）による高度に決定論的でフォーカスした応答。" },
+        i18n: {
+          ja: "非常に低い温度（0.895）による高度に決定論的でフォーカスした応答。",
+          "pt-BR": "Afiada e precisa, temperatura baixa (0.895) para respostas determinísticas.",
+        },
         parameters: {
           order: [0, 5],
           temperature: 0.895,
@@ -364,7 +400,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         modelTarget: "erato",
         isDefault: true,
         desc: "Novel-style writing, Shosetsu (小説) tuned for structured narrative with strong rep control.",
-        i18n: { ja: "「小説」スタイル。整理されたナラティブと強い反復制御に最適化。" },
+        i18n: {
+          ja: "「小説」スタイル。整理されたナラティブと強い反復制御に最適化。",
+          "pt-BR": "Estilo romance, Shosetsu (小説) ajustado para narrativa estruturada e controle de repetição.",
+        },
         parameters: {
           order: [9, 10],
           temperature: 1.0,
@@ -395,7 +434,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Dragonfruit",
         modelTarget: "erato",
         desc: "Fruity and vivid, complex sampler chain with mirostat for elaborate and colorful prose.",
-        i18n: { ja: "複雑なサンプラーチェーンとミロスタットで鮮やかで精巧な文体を実現。" },
+        i18n: {
+          ja: "複雑なサンプラーチェーンとミロスタットで鮮やかで精巧な文体を実現。",
+          "pt-BR": "Vívida, cadeia complexa de amostradores com mirostat para prosa colorida e elaborada.",
+        },
         parameters: {
           order: [0, 5, 9, 10, 8, 4],
           temperature: 1.37,
@@ -426,7 +468,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Golden Arrow",
         modelTarget: "erato",
         desc: "Classic and balanced, standard tail-free sampling for coherent, flowing narrative.",
-        i18n: { ja: "クラシックでバランスの取れた、テールフリーサンプリングによる一貫した滑らかなナラティブ。" },
+        i18n: {
+          ja: "クラシックでバランスの取れた、テールフリーサンプリングによる一貫した滑らかなナラティブ。",
+          "pt-BR": "Clássica e equilibrada, tail-free padrão para uma narrativa coerente e fluida.",
+        },
         parameters: {
           order: [9, 2],
           temperature: 1.0,
@@ -457,7 +502,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Wilder",
         modelTarget: "erato",
         desc: "Wild and expansive, high top-K (300) for more varied and adventurous outputs.",
-        i18n: { ja: "高いトップK（300）による多様で冒険的な出力。" },
+        i18n: {
+          ja: "高いトップK（300）による多様で冒険的な出力。",
+          "pt-BR": "Selvagem e expansiva, alto top-K (300) para resultados mais aventureiros.",
+        },
         parameters: {
           order: [9, 10],
           temperature: 1.0,
@@ -488,7 +536,10 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         name: "Erato-Zany Scribe",
         modelTarget: "erato",
         desc: "Zany and unpredictable, high frequency/presence penalties for maximally varied outputs.",
-        i18n: { ja: "高い頻度・存在ペナルティによる最大限に多様な出力。" },
+        i18n: {
+          ja: "高い頻度・存在ペナルティによる最大限に多様な出力。",
+          "pt-BR": "Excêntrica, altas penalidades de presença/frequência para máxima variedade.",
+        },
         parameters: {
           order: [9, 2],
           temperature: 1.0,

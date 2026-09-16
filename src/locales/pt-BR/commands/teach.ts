@@ -9,7 +9,7 @@ export default {
     document: {
       description: "Envie um documento para eu consultar usando Geração Aumentada por Recuperação.",
       main_persona_description: "Persona Principal",
-      alter_persona_description: "Alter Persona",
+      alter_persona_description: `Alterar Persona`,
     },
     personaprompt: {
       description: "Defina um prompt específico da persona adicionado após o sysprompt",
@@ -19,7 +19,7 @@ export default {
       part3_placeholder: "Mais instruções da persona...",
       part4_placeholder: "Instruções finais da persona...",
       success_title: "Prompt da Persona Atualizado",
-      success_description: "Prompt da persona atualizado para \"{persona_name}\".",
+      success_description: 'Prompt da persona atualizado para "{persona_name}".',
     },
     memory: {
       description: "Gerenciar minhas memórias",

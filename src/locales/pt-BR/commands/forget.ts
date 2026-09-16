@@ -12,9 +12,10 @@ export default {
     personaprompt: {
       description: "Limpar um prompt específico da persona",
       no_prompt_title: "Nenhum Prompt da Persona",
-      no_prompt_description: "Não há nenhum prompt específico da persona para limpar. Defina um em `/config` > Persona > Avançado.",
+      no_prompt_description:
+        "Não há nenhum prompt específico da persona para limpar. Defina um em `/config` > Persona > Avançado.",
       success_title: "Prompt da Persona Limpo",
-      success_description: "Prompt da persona limpo para \"{persona_name}\".",
+      success_description: 'Prompt da persona limpo para "{persona_name}".',
       success_description_with_prompt: `Prompt da persona limpo para "{persona_name}". Aqui está caso você queira manter uma cópia:
 \`\`\`
 {removed_prompt}

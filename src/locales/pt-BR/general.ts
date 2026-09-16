@@ -88,7 +88,7 @@ export default {
       channel_not_supported_title: `Tipo de Canal Não Suportado`,
       channel_not_supported_description: `Desculpe, só posso trabalhar em canais de texto de servidores ou Mensagens Diretas. DMs de grupo e outros tipos de canais não são suportados.`,
       tomori_not_setup_title: `Configuração Inicial Necessária`,
-      tomori_not_setup_description: `Este servidor ainda precisa de configuração inicial. Um membro com a permissão **Gerenciar Servidor** deve executar \`/setup\` primeiro. Abra \`/help\` em **Setup** para assistência, ou leia o [guia rápido](https://docs.tomoribot.app/en/introduction/quickstart/) oficial.`,
+      tomori_not_setup_description: `Este servidor ainda precisa de configuração inicial. Um membro com a permissão **Gerenciar Servidor** deve executar \`/setup\` primeiro. Abra \`/help\` em **Setup** para assistência, ou leia o [guia rápido](https://docs.tomoribot.app/pt-BR/introduction/quickstart/) oficial.`,
       tomori_updating_title: `Atualizando no Momento...`,
       tomori_updating_description: `Estou sendo atualizada no momento e voltarei em breve. Por favor, tente novamente em alguns instantes!`,
       tomori_not_setup_dm_footer: `DMs usam uma configuração privada, então a maioria das configurações no estilo servidor ainda se aplica.`,
@@ -160,7 +160,7 @@ export default {
       rejoin_title: `Estou de Volta!`,
       rejoin_description: `Parece que fui adicionada novamente a este servidor. As configurações e personas existentes ainda estão intactas. Use \`/config\`, \`/persona\`, \`/memories\` e \`/providers\` para revisá-las ou alterá-las.{legalNotice}`,
       setup_prompt_title: `Adicionada com Sucesso`,
-      setup_prompt_description: `Para começar, alguém com a permissão **Gerenciar Servidor** deve executar \`/setup\` para escolher a persona inicial e o provedor. Abra \`/help\` em **Setup** para assistência, ou leia o [guia rápido](https://docs.tomoribot.app/en/introduction/quickstart/) oficial.{legalNotice}`,
+      setup_prompt_description: `Para começar, alguém com a permissão **Gerenciar Servidor** deve executar \`/setup\` para escolher a persona inicial e o provedor. Abra \`/help\` em **Setup** para assistência, ou leia o [guia rápido](https://docs.tomoribot.app/pt-BR/introduction/quickstart/) oficial.{legalNotice}`,
     },
   },
   reminders: {

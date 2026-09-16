@@ -1,6 +1,5 @@
 ---
 title: "Aphel, a Sombria"
-aiGenerated: false
 sidebar:
   order: 3
 ---

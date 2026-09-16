@@ -1,6 +1,5 @@
 ---
 title: "Nerine, a Leal"
-aiGenerated: false
 sidebar:
   order: 5
 ---
