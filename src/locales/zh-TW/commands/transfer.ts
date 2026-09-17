@@ -64,7 +64,7 @@ export default {
     memory_export_persona_required_title: "請選擇人格",
     memory_export_persona_required_description: "「選取的人格」範圍需要指定人格。請挑一個，或改用其他範圍。",
     memory_export_persona_invalid_title: "無法使用該人格",
-    memory_export_persona_invalid_description: "那個人在這個伺服器不存在，所以沒有匯出任何內容。",
+    memory_export_persona_invalid_description: "這個伺服器沒有那個人格，所以沒有匯出任何內容。",
     memory_preview_title: "檢查記憶匯入",
     memory_preview_description: "這個{ownership}匯入只包含記憶。",
     memory_preview_exclusions: "不包含文件與人格。",
