@@ -3,6 +3,7 @@ export default {
     description: `私をおしおきして応答をトリガーします。`,
     spank: {
       description: `ぺしっとして応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしておしおきするの？`,
       embed_title: `🖐️ スパンク・タイム！`,
       embed_description: `{user}は{bot}をぺしっとしました。`,
@@ -11,6 +12,7 @@ export default {
     },
     pinch: {
       description: `つねって応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしておしおきするの？`,
       embed_title: `🤏 ピンチ・タイム！`,
       embed_description: `{user}は{bot}をつねりました。`,
@@ -19,6 +21,7 @@ export default {
     },
     bite: {
       description: `甘噛みして応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしておしおきするの？`,
       embed_title: `🦷 バイト・タイム！`,
       embed_description: `{user}は{bot}を甘噛みしました。`,
@@ -27,6 +30,7 @@ export default {
     },
     bonk: {
       description: `ポカッとして応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしておしおきするの？`,
       embed_title: `🔨 ボンク！`,
       embed_description: `{user}は{bot}をポカッと叩きました。`,
@@ -35,6 +39,7 @@ export default {
     },
     squeeze: {
       description: `ぎゅっとして応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしておしおきするの？`,
       embed_title: `👐 スクイーズ・タイム！`,
       embed_description: `{user}は{bot}をぎゅっと握りました。`,

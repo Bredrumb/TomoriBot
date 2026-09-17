@@ -19,10 +19,10 @@ export default {
     fallback_used_details_description: `次のモデルが先に失敗したため、フォールバック枠 {slot} の \`{success_model}\` で応答しました:
 {failure_list}`,
     fallback_used_failure_line: `{index}. {model} は {error_detail} で失敗しました`,
-    fallback_used_details_button: `Fallback Used`,
-    fallback_used_hide_footer: `\`/config\` > Behavior > Notices でこれを非表示にし、詳細を思考ログへ回せます`,
+    fallback_used_details_button: `フォールバック使用`,
+    fallback_used_hide_footer: `\`/config\` > 動作 > 通知動作 でこれを非表示にし、詳細を思考ログへ回せます`,
     markdown_table: {
-      show_button: `Show Markdown`,
+      show_button: `マークダウンを表示`,
       source_expired: `この表のマークダウンはキャッシュから消えているため、ソースを表示できません。`,
       source_attached: `この表は長すぎてそのまま表示できないため、ファイルとして添付します:`,
     },
@@ -83,11 +83,13 @@ export default {
       button: `できること`,
       wait_and_retry: `数分お待ちいただいてから、もう一度お試しください。`,
       api_key_rotation: `このサーバーで複数のキーをお持ちの場合は、\`/providers\` を設定してキーを順番に使用できます。`,
-      model_fallback: `耐障害性を高めるには、\`/config\` > Models > Fallbacks & Randomizer でバックアップモデルを追加してください。`,
+      model_fallback: `耐障害性を高めるには、\`/config\` > モデル > フォールバックとランダマイザー でバックアップモデルを追加してください。`,
       model_fallback_personal: `耐障害性を高めるには、\`/personal config\` でバックアップモデルを追加してください。`,
       openrouter_free_models: `[OpenRouterの無料モデル一覧](https://openrouter.ai/models?max_price=0&output_modalities=text)から \`/providers\` で無料モデルを追加できます。`,
+      openrouter_free_models_personal: `[OpenRouterの無料モデル一覧](https://openrouter.ai/models?max_price=0&output_modalities=text)から \`/personal providers\` で無料モデルを追加できます。`,
       openrouter_models: `[OpenRouterのモデル一覧](https://openrouter.ai/models)を確認し、\`/providers\` でモデルを切り替えてください。`,
-      choose_supported_model: `サポートされているモデルIDを \`/config\` > Models > Switch Models またはカスタムエンドポイント設定で選択してください。`,
+      openrouter_models_personal: `[OpenRouterのモデル一覧](https://openrouter.ai/models)を確認し、\`/personal providers\` でモデルを登録してから、\`/personal config\` で切り替えてください。`,
+      choose_supported_model: `サポートされているモデルIDを \`/config\` > モデル > モデルの切り替え またはカスタムエンドポイント設定で選択してください。`,
       choose_supported_model_personal: `サポートされているモデルIDを \`/personal config\` またはカスタムエンドポイント設定で選択してください。`,
       verify_api_key: `このサーバーのAPIキーをもう一度確認してから、再試行してください。`,
       verify_api_key_personal: `\`/personal providers\` で個人APIキーをもう一度確認してから、再試行してください。`,
@@ -95,17 +97,17 @@ export default {
       openrouter_privacy_settings: `[OpenRouter プライバシー設定](https://openrouter.ai/settings/privacy)で「Data Policy」を調整してこのモデルを許可するか、別のモデルを選択してください。`,
       openrouter_fund_account: `1日1000回までの無料モデルリクエストのロックを解除するには、OpenRouterアカウントに少なくとも10クレジットを追加してください。`,
       reduce_context_length: `メッセージを短くするか、\`/refresh\` でコンテキストをクリアしてみてください。`,
-      reduce_output_tokens: `\`/config\` > Models > Samplers & Parameters（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
+      reduce_output_tokens: `\`/config\` > モデル > テキストサンプラーとパラメーター（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
       reduce_output_tokens_personal: `\`/personal config\`（出力トークン）で応答の長さの上限を下げると、会話履歴のための余裕を増やせます。`,
-      openrouter_add_credits: `[OpenRouterクレジット](https://openrouter.ai/settings/credits)でクレジットを追加するか、\`/config\` > Models > Samplers & Parameters（出力トークン）で応答の長さを下げてください。`,
+      openrouter_add_credits: `[OpenRouterクレジット](https://openrouter.ai/settings/credits)でクレジットを追加するか、\`/config\` > モデル > テキストサンプラーとパラメーター（出力トークン）で応答の長さを下げてください。`,
       openrouter_add_credits_personal: `[OpenRouterクレジット](https://openrouter.ai/settings/credits)でクレジットを追加するか、\`/personal config\`（出力トークン）で応答の長さを下げてください。`,
       top_up_provider_balance: `APIキー自体は有効ですが、そのアカウントの残高が不足しています。プロバイダーのサイトで残高を追加してから、もう一度お試しください。メッセージを短くしたり応答の長さを下げたりしても解決しません。`,
       deepseek_top_up: `[DeepSeekのチャージページ](https://platform.deepseek.com/top_up)で残高を追加してください。`,
-      adjust_parameters: `\`/config\` > Models > Samplers & Parameters を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
+      adjust_parameters: `\`/config\` > モデル > テキストサンプラーとパラメーター を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
       adjust_parameters_personal: `\`/personal config\` を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
-      switch_model_provider: `\`/config\` > Models > Switch Models または \`/providers\` で別のモデルやプロバイダーに切り替えてください。`,
+      switch_model_provider: `\`/config\` > モデル > モデルの切り替え または \`/providers\` で別のモデルやプロバイダーに切り替えてください。`,
       switch_model_provider_personal: `\`/personal config\` で切り替えるか、\`/personal providers\` で **テキスト** をオフにするとこのサーバーのモデルを使用します。`,
-      disable_personal_text_override: `このリクエストエラーはあなたの[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#your-own-providers)からのものです。代わりにこのサーバーの設定モデルを使いたい場合は、\`/personal providers\` で **テキスト** を無効にしてください。`,
+      disable_personal_text_override: `このリクエストエラーはあなたの[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#個人のプロバイダー)からのものです。代わりにこのサーバーの設定モデルを使いたい場合は、\`/personal providers\` で **テキスト** を無効にしてください。`,
       support_server: `[公式サポートサーバー](https://discord.gg/bjCfHm9QsB)でサポートを受けられます。`,
       shorten_message: `メッセージを短くしてから、もう一度送信してください。`,
       refresh_context: `\`/refresh\` で会話コンテキストをクリアしてください。`,
@@ -187,37 +189,37 @@ export default {
       "500_default_message": `このモデルを提供している NVIDIA のバックエンドで障害が発生しました。多くの場合は一時的なものなので、少し待ってからもう一度お試しください。以下の詳細は NVIDIA 自身の報告であり、これが正確な情報です：リクエストパラメータが記載されている場合は、推測せずにその設定を見直してください。`,
       // NVIDIA 自身のテキストが除去可能なリクエストパラメータを名指しした場合のみ、500_default_message の代わりに表示されます。
       // すべての 500 でこの原因を断定していたため、実際には送信していない設定をユーザーに変更させていました。
-      "500_parameter_default_message": `NVIDIA はこのモデルで一部のリクエストパラメータを拒否しました。詳細に \`min_p\` などの未対応サンプラーパラメータが表示されている場合は、\`/config\` > Models > Samplers & Parameters で \`0\` に設定して無効にしてください。詳細に \`logit_bias\` が表示されている場合は、\`/config\` > Models > Samplers & Parameters で保存済みエントリを削除してください。`,
+      "500_parameter_default_message": `NVIDIA はこのモデルで一部のリクエストパラメータを拒否しました。詳細に \`min_p\` などの未対応サンプラーパラメータが表示されている場合は、\`/config\` > モデル > テキストサンプラーとパラメーター で \`0\` に設定して無効にしてください。詳細に \`logit_bias\` が表示されている場合は、\`/config\` > モデル > テキストサンプラーとパラメーター で保存済みエントリを削除してください。`,
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname}が新しいことを学びました！`,
-      server_memory_learned_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を保存しました:
+      server_memory_learned_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を保存しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 {persona_nickname}が記憶を更新しました！`,
-      server_memory_updated_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を更新しました:
+      server_memory_updated_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を更新しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname}が記憶を削除しました！`,
-      server_memory_deleted_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を削除しました:
+      server_memory_deleted_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を削除しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname}が{user_nickname}さんについて新しいことを学びました！`,
-      personal_memory_learned_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を保存しました:
+      personal_memory_learned_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を保存しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname}が{user_nickname}さんについての記憶を更新しました！`,
-      personal_memory_updated_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を更新しました:
+      personal_memory_updated_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を更新しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname}が{user_nickname}さんについての記憶を削除しました！`,
-      personal_memory_deleted_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を削除しました:
+      personal_memory_deleted_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を削除しました:
 \`\`\`
 {memory_content}
 \`\`\``,

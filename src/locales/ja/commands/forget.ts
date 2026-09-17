@@ -12,7 +12,7 @@
     personaprompt: {
       description: `ペルソナ専用プロンプトをクリアします`,
       no_prompt_title: `ペルソナプロンプトがありません`,
-      no_prompt_description: `クリアできるペルソナ専用プロンプトがありません。\`/config\` > Persona > Advanced で設定できます。`,
+      no_prompt_description: `クリアできるペルソナ専用プロンプトがありません。\`/config\` > ペルソナ > 高度な設定 で設定できます。`,
       success_title: `ペルソナプロンプトをクリアしました`,
       success_description: `「{persona_name}」のペルソナプロンプトをクリアしました。`,
       success_description_with_prompt: `「{persona_name}」のペルソナプロンプトをクリアしました。控えが必要な場合は以下をコピーしてください：

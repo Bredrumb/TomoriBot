@@ -23,7 +23,7 @@ export default {
     sprites: {
       add: {
         sprite_name_label: `スプライト名`,
-        sprite_name_description: `Tomori (mad): のような行で使うラベルです。同じラベルは置き換えます。`,
+        sprite_name_description: `スプライトのラベルです。同じラベルを使用すると対応するスプライトが置き換えられます。`,
         sprite_name_placeholder: `mad`,
         image_label: `スプライト画像`,
         image_description: `PNG、JPG、GIFをアップロードしてください。PNGに変換されます。`,
@@ -31,7 +31,7 @@ export default {
         instructions_description: `このスプライトを使う場面の任意の説明です。`,
         instructions_placeholder: `怒っている、いらだっている、不満そうな時に使う。`,
         identity_label: `アイデンティティとして保存`,
-        identity_description: `DIDの交代人格のように、装飾された「スプライト（ペルソナ）」名をDiscordに直接表示します。通常のスプライトの場合はチェックを外してください。`,
+        identity_description: `Discordに装飾された「スプライト（ペルソナ）」名を表示します。オルタに便利です。オフで通常。`,
       },
       edit: {
         image_description: `任意。PNG、JPG、GIFをアップロードすると画像を置き換えます。`,
@@ -73,7 +73,7 @@ export default {
     name_conflict_title: `🔴 ペルソナ名の競合`,
     name_conflict_description: `**{name}** という名前のペルソナは既にこのサーバーに存在します。ペルソナ名はサーバー内で一意である必要があります。`,
     export: {
-      description: `の人格を共有可能なPNGファイルとしてエクスポートする`,
+      description: `現在の人格を共有可能なPNGファイルとしてエクスポートする`,
       export_json_select_label: `JSONをエクスポート`,
       export_json_select_description: `任意：インポート可能なJSONファイルとしてエクスポート（アバター画像なし）`,
       persona_modal_title: `ペルソナを選択`,
@@ -127,11 +127,11 @@ export default {
 
 これらのトリガーがメッセージに含まれると、このペルソナが応答します。`,
       alter_success_confirmation: `オルタペルソナ **{nickname}** が {trigger_count} 個の固有トリガーワードで正常にインポートされました！詳細なインポート情報がチャンネルに投稿されました。`,
-      alter_avatar_fallback_main: `🟡 このインポートにはアバター画像が含まれていなかったため、このオルタはフォールバックとして **{nickname}** の現在のメインペルソナアバターを使用します。変更したい場合は \`/config\` > Persona > General を使用できます。`,
+      alter_avatar_fallback_main: `🟡 このインポートにはアバター画像が含まれていなかったため、このオルタはフォールバックとして **{nickname}** の現在のメインペルソナアバターを使用します。変更したい場合は \`/config\` > ペルソナ > アイデンティティと性格 を使用できます。`,
       alter_avatar_warning: `⚠️ 上記のアバター画像埋め込みを削除しないでください。削除するとオルタペルソナのアバターが失われます。`,
       alter_dm_not_allowed_title: `🔴 DMではオルタペルソナは許可されていません`,
       alter_dm_not_allowed_description: `オルタペルソナはサーバーでのみインポートできます。ダイレクトメッセージではインポートできません。サーバーでこのコマンドを実行してください。`,
-      alter_no_triggers_warning: `⚠️ このペルソナにはトリガーワードがありません。\`/config\` > Persona > Generalを使用してトリガーを追加するまで、メッセージに応答しません。`,
+      alter_no_triggers_warning: `⚠️ このペルソナにはトリガーワードがありません。\`/config\` > ペルソナ > アイデンティティと性格を使用してトリガーを追加するまで、メッセージに応答しません。`,
       alter_name_conflict_title: `🔴 ペルソナ名が既に存在します`,
       alter_name_conflict_description: `**{name}** という名前のペルソナは既にこのサーバーに存在します。各ペルソナには固有の名前が必要です。
 
@@ -156,7 +156,7 @@ export default {
       charx_not_card_description: `この.charxアーカイブは開けましたが、中のカードはキャラクターカードではありません。同じダウンロードに含まれる別のアーカイブではなく、キャラクターカード本体であることを確認してください。`,
       charx_too_large_description: `このアーカイブ内のカードはインポートするには大きすぎます。カードの最大サイズは{max_size}MBです。`,
       charx_assets_too_large_description: `このカードはインポートで確認できる量を超えるメディアを同梱しています。画像、音声、動画のアセットを含めずにエクスポートしたカードをお試しください。`,
-      charx_assets_ignored_description: `🟡 このカードに同梱されていた画像、音声、その他のメディアはインポートされませんでした。読み込まれたのはペルソナのテキストのみです。アバターは\`/server avatar\`で設定でき、スプライトは\`/config\` > Persona > Spritesで追加できます。`,
+      charx_assets_ignored_description: `🟡 このカードに同梱されていた画像、音声、その他のメディアはインポートされませんでした。読み込まれたのはペルソナのテキストのみです。アバターは\`/server avatar\`で設定でき、スプライトは\`/config\` > ペルソナ > スプライトで追加できます。`,
       invalid_png_title: `🔴 無効なPNGファイル`,
       invalid_png_description: `アップロードされたファイルは有効なPNG画像ではありません。`,
       no_metadata_title: `🔴 ペルソナデータが見つかりません`,
@@ -207,7 +207,7 @@ export default {
       select_description: `適用するプリセットを選択してください。これにより、現在の属性と対話が上書きされます。`,
       select_placeholder: `プリセットを選択...`,
       no_presets_title: `利用可能なプリセットがありません`,
-      no_presets_description: `データベースに人格プリセットがありません。\`/support discord\`で報告してください。`,
+      no_presets_description: `お使いの言語で利用できる人格プリセットがありません。\`/support discord\`で報告してください。`,
       preset_not_found: `選択されたプリセットが見つかりませんでした。`,
       success_title: `プリセットが適用されました`,
       success_details_description: `プリセット **{preset_name}** をペルソナ **{nickname}** に適用しました！
@@ -249,32 +249,32 @@ export default {
       field_web_search: `ウェブ検索を使用しますか？`,
       field_additional_inst: `追加の指示`,
       wrong_provider_title: `🔴 互換性のないプロバイダー`,
-      wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/config\` > Models > Switch Modelsで対応プロバイダーに切り替えてください。`,
+      wrong_provider_description: `ペルソナ生成には対応プロバイダーが必要です。現在のプロバイダーは **{current_provider}** です。\`/config\` > モデル > モデルの切り替えで対応プロバイダーに切り替えてください。`,
       no_api_key_title: `🔴 APIキーがありません`,
       no_api_key_description: `有効なプロバイダーが設定されていません。\`/setup\`（初回）または\`/providers\`で登録してください。`,
       model_incompatible_title: `互換性のないモデル`,
       model_incompatible_description: `現在のモデル（**{model_name}**）は、ペルソナ生成に必要な**構造化出力**をサポートしていません。
 
 **次のステップ:**
-\`/config\` > Models > Switch Modelsを使用して、構造化出力をサポートするモデル（例：「STRUCT」機能を持つモデル）に切り替えてください。`,
+\`/config\` > モデル > モデルの切り替えを使用して、構造化出力をサポートするモデル（例：「STRUCT」機能を持つモデル）に切り替えてください。`,
       image_vision_required_title: `🔴 画像ビジョンが必要`,
       image_vision_required_description: `画像がアップロードされましたが、現在のモデル（**{model_name}**）は**画像ビジョン**をサポートしておらず、ビジョンモデルも設定されていません。
 
 **次のステップ:**
-1. \`/config\` > Models > Switch Modelsを使用して専用ビジョンモデルを設定する、または
-2. \`/config\` > Models > Switch Modelsを使用してビジョン対応モデルに切り替える、または
+1. \`/config\` > モデル > モデルの切り替えを使用して専用ビジョンモデルを設定する、または
+2. \`/config\` > モデル > モデルの切り替えを使用してビジョン対応モデルに切り替える、または
 3. 画像を削除して画像なしで再生成する`,
       vision_model_provider_unsupported_title: `🔴 ビジョンモデルのプロバイダー非対応`,
       vision_model_provider_unsupported_description: `ビジョンモデル（**{vision_model_name}**）はプロバイダー **{vision_provider}** に設定されていますが、このプロバイダーはペルソナプリセット生成に対応していません。
 
 **次のステップ:**
-1. \`/config\` > Models > Switch Modelsを使用して対応プロバイダー（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）のビジョンモデルを設定する、または
-2. \`/config\` > Models > Switch Modelsを使用してビジョンとプリセット生成の両方に対応したプライマリモデルに切り替える`,
+1. \`/config\` > モデル > モデルの切り替えを使用して対応プロバイダー（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）のビジョンモデルを設定する、または
+2. \`/config\` > モデル > モデルの切り替えを使用してビジョンとプリセット生成の両方に対応したプライマリモデルに切り替える`,
       web_search_tools_required_title: `🔴 ウェブ検索を利用できません`,
       web_search_tools_required_description: `ウェブ検索が選択されましたが、現在のモデル（**{model_name}**）は**ツール**に対応していません。
 
 **次のステップ:**
-1. \`/config\` > Models > Switch Modelsを使用してツール対応モデルに切り替える、または
+1. \`/config\` > モデル > モデルの切り替えを使用してツール対応モデルに切り替える、または
 2. ウェブ検索なしで再生成する（質問されたら「いいえ」を選択）`,
       api_key_decrypt_failed_title: `🔴 APIキーエラー`,
       api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/providers\`で再設定してください。`,

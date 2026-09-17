@@ -24,6 +24,27 @@ const PREVIOUS_JAPANESE_PHRASES = [
   "今後のために覚えて",
   "後で使えるように覚えて",
 ];
+const JAPANESE_CATCH_UP_PHRASES = [
+  "これ覚えといて",
+  "これ忘れないで",
+  "このこと覚えて",
+  "この件を記憶",
+  "頭に入れといて",
+  "心に留めて",
+  "覚えといてね",
+  "忘れちゃだめ",
+  "忘れないようにして",
+  "今後も覚えてて",
+  "記憶に残して",
+  "メモっといて",
+  "しっかり覚えて",
+  "大事なこととして覚えて",
+  "覚えてて",
+  "覚えとい",
+  "覚えてお",
+  "忘れんな",
+  "忘れないでね",
+];
 const PT_BR_PHRASES = [
   "lembre",
   "não se esqueça",
@@ -45,12 +66,24 @@ beforeAll(async () => {
 describe("explicit long-term memory intent", () => {
   it("unions the registered phrases from every shipped locale", () => {
     expect([...getIntentPackUnion(EXPLICIT_MEMORY_PACK_KEY)].sort()).toEqual(
-      [...new Set([...PREVIOUS_ENGLISH_PHRASES, ...PREVIOUS_JAPANESE_PHRASES, ...PT_BR_PHRASES])].sort(),
+      [
+        ...new Set([
+          ...PREVIOUS_ENGLISH_PHRASES,
+          ...PREVIOUS_JAPANESE_PHRASES,
+          ...JAPANESE_CATCH_UP_PHRASES,
+          ...PT_BR_PHRASES,
+        ]),
+      ].sort(),
     );
   });
 
   it("matches every registered phrase inside a sentence, after NFKC and case folding", () => {
-    for (const phrase of [...PREVIOUS_ENGLISH_PHRASES, ...PREVIOUS_JAPANESE_PHRASES, ...PT_BR_PHRASES]) {
+    for (const phrase of [
+      ...PREVIOUS_ENGLISH_PHRASES,
+      ...PREVIOUS_JAPANESE_PHRASES,
+      ...JAPANESE_CATCH_UP_PHRASES,
+      ...PT_BR_PHRASES,
+    ]) {
       expect(hasExplicitLongTermMemoryIntent(`ok ${phrase} this`)).toBe(true);
     }
     expect(hasExplicitLongTermMemoryIntent("ＲＥＭＥＭＢＥＲ   this")).toBe(true);

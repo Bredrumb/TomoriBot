@@ -126,6 +126,22 @@ describe("locale intent packs", () => {
     expect(matchesLocaleDeliberateToolPack("voice", "音声で知らせて")).toBe(true);
   });
 
+  it("keeps memory tools hidden for Japanese save and forget phrasing that is not a memory request", () => {
+    // Japanese pack entries match as substrings, so a bare save or forget verb would expose memory writes
+    // for any file, image, or setting a user asks to save.
+    for (const request of [
+      "画像を保存して",
+      "このファイル保存して",
+      "設定を保存してください",
+      "パスワード忘れてた",
+      "記憶力が悪い",
+    ]) {
+      expect(getDeliberateToolAllowedNames(request)).not.toContain("create_long_term_memory");
+      expect(getDeliberateToolAllowedNames(request)).not.toContain("update_long_term_memory");
+    }
+    expect(getDeliberateToolAllowedNames("これ記憶に保存して")).toContain("create_long_term_memory");
+  });
+
   it("defines every pack as a string list in every authored locale", () => {
     for (const locale of getSupportedLocales()) {
       for (const key of ALL_PACK_KEYS) {

@@ -54,7 +54,6 @@ export default {
       select_embed_title: `メンバー教育権限`,
       select_embed_description: `管理者以外のメンバーが**教えられる**ことを選択してください。チェックあり = 許可。`,
     },
-
     alwaysreply: {
       description: `メインペルソナの常時応答モードを切り替えます。`,
     },

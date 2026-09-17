@@ -40,9 +40,9 @@ python servers/tts/moss/server.py
 
 ## TomoriBotへの登録
 
-`/providers`で **Add New Custom Endpoint** を選び、API Compatibilityを`tts-clone`、endpoint URLを`http://127.0.0.1:8018`にします。Speechモデルの **Voice Source Mode** は`Auto`、**Script Markup** は`Plain`を選択します。その後、`/config` > Models > Switch Modelsで有効化します。
+`/providers`で **新しいカスタムエンドポイントを追加** を選び、API互換性を`tts-clone`、エンドポイントURLを`http://127.0.0.1:8018`にします。音声モデルの **音声ソースモード** は`自動`、**スクリプトのマークアップ形式** は`プレーン`を選択します。その後、`/config` > モデル > モデルの切り替えで有効化します。
 
-音声クローンには、`/config` > Models > TTS Parameters & Voicesで参照クリップをアップロードし、Persona > Voiceで割り当てます。音声設計には、代わりにPersona > Voiceで自然言語の声の説明を保存します。MOSS-TTSは参照音声を使いますが、任意の参照トランスクリプトは使いません。MOSS-VoiceGeneratorが明示的に対応する高品質な言語は英語と中国語で、日本語は含まれません。4Bのクローンモデルは日本語に対応しますが、言語タグを指定すると多言語合成が改善されます。
+音声クローンには、`/config` > モデル > TTSパラメーターと音声で参照クリップをアップロードし、ペルソナ > 音声で割り当てます。音声設計には、代わりにペルソナ > 音声で自然言語の声の説明を保存します。MOSS-TTSは参照音声を使いますが、任意の参照トランスクリプトは使いません。MOSS-VoiceGeneratorが明示的に対応する高品質な言語は英語と中国語で、日本語は含まれません。4Bのクローンモデルは日本語に対応しますが、言語タグを指定すると多言語合成が改善されます。
 
 TomoriBotの現在のクローンアダプターは言語タグを送りません。単一言語の試用では、起動前に`MOSS_TTS_DEFAULT_LANGUAGE=Japanese`（または`English`、`Chinese`など）を設定してください。手動の`/synthesize`リクエストでは`language`を個別に指定できます。多言語を混ぜる場合は未設定にし、日本語の出力品質を評価してください。
 

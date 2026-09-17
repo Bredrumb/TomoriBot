@@ -1,6 +1,9 @@
 export default {
   status: {
     description: `現在の個人、サーバー、またはペルソナのステータスを表示します。`,
+    scope_choice_behavior: `動作`,
+    scope_choice_models: `モデル`,
+    scope_choice_access: `アクセス`,
     scope_choice_personal: `個人`,
     scope_choice_persona: `ペルソナ`,
     personal_title: `個人ステータス`,
@@ -24,6 +27,8 @@ export default {
     server_page6_description: `NovelAI画像生成パラメーター`,
     server_page7_title: `サーバーステータス: 連携とアクセス`,
     server_page7_description: `秘匿情報を伏せた認証状態、外部連携、STプリセット状態`,
+    server_page8_title: `サーバーステータス: 機能`,
+    server_page8_description: `これらは \`/config\` > 権限 で管理します。`,
     server_page9_title: `サーバーステータス: 機能とモデレーション`,
     server_page9_description: `機能トグルとモデレーション設定`,
     server_page10_title: `サーバーステータス: クォータ`,
@@ -127,7 +132,8 @@ export default {
     persona_model_server_default: `サーバーデフォルト`,
     field_system_prompt: `システムプロンプト`,
     field_persona_prompt: `ペルソナプロンプト`,
-    field_persona_prompt_not_set: `*(未設定)*`,
+    field_persona_prompt_not_set: `*(設定なし)*`,
+    field_preview_clipped: `プレビューはDiscordの制限に合わせて切り取られました。`,
     field_physical_appearance_tags: `身体的外見`,
     field_nai_attg: `NAI ATTGメタデータ`,
     nai_attg_not_set: `*(未設定)*`,

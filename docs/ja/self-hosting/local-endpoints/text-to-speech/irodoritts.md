@@ -2,7 +2,7 @@
 title: "IrodoriTTS"
 ---
 
-Irodori-TTS v4.1は、日本語向けの音声合成モデルです。1つのチェックポイントでボイスクローニングとキャプションベースのVoiceDesignに対応しています。TomoriBotでは`servers/tts/irodoritts/`のローカルFastAPIラッパーを介して実行します。
+Irodori-TTS v4.1は、日本語向けの音声合成モデルです。1つのチェックポイントでボイスクローニングとキャプションベースのボイスデザインに対応しています。TomoriBotでは`servers/tts/irodoritts/`のローカルFastAPIラッパーを介して実行します。
 
 デフォルトモデルは`Aratako/Irodori-TTS-v4.1-Small`です。`IRODORI_TTS_MODEL_ID`を設定すると、`phasefield-audio/Irodori-TTS-v4.1-Anime`などの互換Hugging Faceチェックポイントも使用できます。
 
@@ -28,10 +28,10 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 利用可能なバックエンド:
 
-- `cu128` — Windows/LinuxのNVIDIA CUDA 12.8
-- `cpu` — CPUのみ、またはmacOSのCPU/MPS
-- `rocm` — Linux/WSLのAMD ROCm
-- `xpu` — Windows/LinuxのIntel XPU
+- `cu128`：Windows/LinuxのNVIDIA CUDA 12.8
+- `cpu`：CPUのみ、またはmacOSのCPU/MPS
+- `rocm`：Linux/WSLのAMD ROCm
+- `xpu`：Windows/LinuxのIntel XPU
 
 デフォルトのエンドポイントURLは`http://127.0.0.1:8013`です。
 
@@ -77,42 +77,42 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 
 ## TomoriBotへの登録
 
-`/providers`で **Add New Custom Endpoint** を選びます。
+`/providers`で **新しいカスタムエンドポイントを追加** を選びます。
 
-- API Compatibility: `tts-clone`
+- API互換性: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`
 
 保存したエンドポイントを選択し、モデルドロップダウンから音声モデルを追加します。v4.1では以下の設定を推奨します。
 
-- `Voice Source Mode`: `Auto`
-- `Script Markup Style`: `Emoji`
+- 音声ソースモード: 自動
+- スクリプトマークアップ形式: 絵文字
 
-`Auto`では、同じIrodoriエンドポイントでTomoriBotの両方の音声モードを利用できます。エモーション表現も途切れません。
+自動では、同じIrodoriエンドポイントでTomoriBotの両方の音声モードを利用できます。エモーション表現も途切れません。
 
-- Persona > Voiceで音声サンプルを割り当てたペルソナは、保存済みの参照音声を使ってボイスクローニングします。
-- Persona > VoiceでVoiceDesignプロンプトを設定したペルソナは、保存済みの自然言語プロンプトをIrodoriのキャプション条件として使用します。
+- ペルソナ > 音声で音声サンプルを割り当てたペルソナは、保存済みの参照音声を使ってボイスクローニングします。
+- ペルソナ > 音声でボイスデザインプロンプトを設定したペルソナは、保存済みの自然言語プロンプトをIrodoriのキャプション条件として使用します。
 
-参照音声によるボイスクローニングだけを使いたい場合は、Voice Source Modeで従来どおり`Voice Clone`を選択しても構いません。
+参照音声によるボイスクローニングだけを使いたい場合は、音声ソースモードで従来どおり音声クローンを選択しても構いません。
 
-登録すると、エンドポイントはすぐに有効になります。今後、speechエンドポイントを切り替える場合にのみ`/providers`を使用します。
+登録すると、エンドポイントはすぐに有効になります。今後、音声エンドポイントを切り替える場合にのみ`/providers`を使用します。
 
 ## ペルソナ音声のセットアップ
 
 ### ボイスクローニング
 
 1. 背景音楽のない、1人の話者による10〜20秒のクリアな日本語の音声クリップを準備します。
-2. `/config`を実行し、Models > TTS Parameters & Voicesでクリップをアップロードします。
-3. `/config`を実行し、Persona > Voiceでペルソナと音声サンプルを選択します。
+2. `/config`を実行し、モデル > TTSパラメーターと音声でクリップをアップロードします。
+3. `/config`を実行し、ペルソナ > 音声でペルソナと音声サンプルを選択します。
 
 Irodori v4.1は旧v2より長い参照条件に対応していますが、単純な長さよりも音声の品質のほうが重要です。
 
 ### VoiceDesign
 
-1. `/config`を実行し、Persona > Voiceを開きます。
+1. `/config`を実行し、ペルソナ > 音声を開きます。
 2. ペルソナを選択します。
 3. 希望する声質や話し方を自然言語で記述します。
 
-TomoriBotはこのプロンプトを`instruct`として送信し、Irodoriラッパーがv4.1の`caption`条件に変換します。VoiceDesignでは参照音声は不要です。
+TomoriBotはこのプロンプトを`instruct`として送信し、Irodoriラッパーがv4.1の`caption`条件に変換します。ボイスデザインでは参照音声は不要です。
 
 TomoriBotはTTSへ送信する前にDiscordのカスタム絵文字構文を削除します。`script_markup: emoji`では、Unicode絵文字をIrodoriのテキスト条件用に保持します。
 
@@ -152,7 +152,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_T_SCHEDULE_MODE` | `linear` | サンプリングスケジュール（`linear` / `sway`） |
 | `IRODORI_SWAY_COEFF` | `-1.0` | `sway`使用時の係数 |
 | `IRODORI_CFG_SCALE_TEXT` | `3.0` | テキスト条件のguidance scale |
-| `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Caption / VoiceDesign条件のguidance scale |
+| `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Caption / ボイスデザイン条件のguidance scale |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | 参照話者条件のguidance scale |
 | `IRODORI_MAX_REF_SECONDS` | チェックポイント側のデフォルト | 参照音声長の任意上限 |
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | 1リクエストあたりのテキスト長上限 |

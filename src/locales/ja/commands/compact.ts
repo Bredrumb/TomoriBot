@@ -64,7 +64,7 @@ export default {
     add_to_docs_rag_unavailable_title: `ローカルRAGが利用できません`,
     add_to_docs_rag_unavailable_description: `ドキュメントストアにはpgvector拡張が有効なPostgreSQLが必要です。`,
     add_to_docs_no_permission_title: `権限がありません`,
-    add_to_docs_no_permission_description: `Manage Server権限が必要か、サーバーでメモリ教育が有効である必要があります。`,
+    add_to_docs_no_permission_description: `**サーバー管理**権限が必要か、サーバーでメモリ教育が有効である必要があります。`,
     add_to_docs_no_embedding_title: `埋め込みモデルがありません`,
     add_to_docs_no_embedding_description: `ドキュメントストアを使用するには埋め込みモデルを設定してください。`,
     add_to_docs_no_persona_title: `ペルソナが必要です`,

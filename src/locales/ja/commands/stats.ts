@@ -9,9 +9,12 @@ export default {
     },
     persona: {
       description: `このサーバーでのペルソナの使用統計を表示します。`,
+      persona_description: `統計を表示するペルソナ。`,
       timeframe_description: `集計する期間。`,
       no_personas_title: `ペルソナがありません`,
       no_personas_description: `このサーバーには統計を表示できるペルソナがまだありません。`,
+      not_found_title: `ペルソナが見つかりません`,
+      not_found_description: `選択されたペルソナはこのサーバーで見つかりませんでした。`,
       chosen_title: `{name}が選択されました`,
     },
     server: {
@@ -20,8 +23,8 @@ export default {
     },
 
     empty: `（なし）`,
-    footer: `トークン数はプロバイダーの実使用量（報告時）、コストは定価ベースの概算です。生成数とごほうび／おしおきは累計です。`,
-    unknown_persona: `ペルソナ #{id}`,
+    footer: `トークン数はプロバイダーの実使用量（報告時）、コストは定価ベースの概算です。`,
+    unknown_persona: `不明なペルソナ #{id}`,
     days: `{count}日`,
     local_suffix: `現地時間`,
     weekday_names: `日曜日,月曜日,火曜日,水曜日,木曜日,金曜日,土曜日`,

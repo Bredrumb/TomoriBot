@@ -1,5 +1,6 @@
 export default {
   novelai: {
+    description: `このサーバーのNovelAIテキスト・画像生成を設定します。`,
     "character-reference": {
       invalid_image_title: `無効な画像`,
       invalid_image_description: `キャラクター参照画像には画像添付ファイルを指定してください。`,
@@ -51,7 +52,7 @@ export default {
         field_orientation: `向き`,
         field_negative_tags: `追加ネガティブタグ`,
         no_model_title: `NovelAI画像モデルが必要です`,
-        no_model_description: `現在、NovelAI画像生成は無効です。まず \`/config\` > Models > Switch Models でNovelAI画像モデルを選択してください。`,
+        no_model_description: `現在、NovelAI画像生成は無効です。まず \`/config\` > モデル > モデルの切り替え でNovelAI画像モデルを選択してください。`,
         no_api_key_title: `NovelAI APIキーが必要です`,
         no_api_key_description: `このサーバーには利用可能なNovelAIプロバイダー認証情報がありません。\`/providers\`で保存するか、メインプロバイダーをNovelAIに切り替えてください。`,
         invalid_reference_title: `無効なキャラクター参照画像です`,
