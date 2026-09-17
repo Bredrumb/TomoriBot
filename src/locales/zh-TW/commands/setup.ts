@@ -8,7 +8,7 @@ export default {
     humanizer_option_default_label: `預設`,
     humanizer_option_default_desc: `具備輕度功能，再加上打字指示與訊息之間的隨機思考停頓。`,
     humanizer_option_heavy_label: `重度`,
-    humanizer_option_heavy_desc: `具備預設功能，再加上句子層級分割與口語風格（小寫、減少標點）。`,
+    humanizer_option_heavy_desc: `具備預設功能，再加上句子層級的分段與口語化文字（小寫、減少標點）。`,
     next_steps_title: `建議的後續步驟`,
     learn_more_title: `深入了解`,
     heads_up_title: `幾件需要注意的事`,
@@ -21,39 +21,40 @@ export default {
 程式開發與代理用途。用 Z.ai 進行一般聊天
 需自行承擔風險，且可能違反他們的條款。`,
     byok_bootstrap_field: `使用者 BYOK`,
-    byok_bootstrap_value: `已在設定過程中啟用。成員現在需要個人供應商，才能使用由使用者觸發的訊息。之後可以用 {toggle_command} 停用，成員設定流程請看 {help_personal_provider}（然後選功能 > 個人供應商）。`,
-    dm_context_explanation_title: `關於私人訊息`,
-    dm_context_explanation: `我還是會把這個私人訊息稱作「伺服器」。
+    byok_bootstrap_value: `已在設定過程中啟用。成員現在需要個人供應商，才能使用使用者觸發的訊息。之後可以用 {toggle_command}
+停用，成員設定流程請看 {help_personal_provider}（然後選功能 > 個人供應商）。`,
+    dm_context_explanation_title: `關於私訊`,
+    dm_context_explanation: `我還是會把這個私訊稱作「伺服器」。
 意思是所有「伺服器」功能在這裡的運作方式都一樣，
 只是這裡只有我們兩個，而且是私下進行！把這個
-私人訊息想成跟我一對一的伺服器，因此它的伺服器記憶
+私訊想成跟我一對一的伺服器，因此它的伺服器記憶
 只限這裡，也就是我在這裡的記憶。`,
     already_setup_title: `已完成設定`,
     already_setup_summary_description: `這個伺服器已經設定完成。以下是目前的文字供應商狀態，以及最快的變更方式。`,
     current_provider_field: `目前的文字供應商`,
     current_byok_field: `使用者 BYOK`,
-    current_byok_enabled_value: `已啟用。成員需要個人供應商，才能使用由使用者觸發的訊息。用 {toggle_command} 切換。`,
-    current_byok_disabled_value: `已停用。沒有啟用個人供應商時，由使用者觸發的訊息可以使用伺服器供應商。用 {toggle_command} 切換。`,
+    current_byok_enabled_value: `已啟用。成員需要個人供應商，才能使用使用者觸發的訊息。用 {toggle_command} 切換。`,
+    current_byok_disabled_value: `已停用。沒有啟用個人供應商時，使用者觸發的訊息可以使用伺服器供應商。用 {toggle_command} 切換。`,
     already_setup_next_steps_field: `後續步驟`,
     already_setup_next_steps_value: `用 {provider_add_command} 儲存另一個伺服器供應商，用 {model_text_command} 切換使用中的文字模型，用 {byok_toggle_command} 切換 BYOK 模式，或用 {help_personal_provider}（功能 > 個人供應商）查看成員的個人供應商流程。`,
     broken_state_title: `設定損毀`,
     broken_state_description: `這個伺服器有人格，但設定不完整。伺服器設定或 AI 模型參照遺失，或已被移除。
 
-請試著用 {model_text_command} 指派可用的模型，或用 {provider_add_command} 註冊新的供應商。`,
+請改用 {model_text_command} 指派可用的模型，或用 {provider_add_command} 註冊新的供應商。`,
     already_setup_description: `我已經為這個伺服器設定完成。要修改我的設定，請使用 \`/config\`、\`/persona\` 與 \`/memories\` 等其他指令。
 
 				如果你要變更我的供應商，請用 \`/providers\` 註冊並啟用新的預設文字供應商。`,
     wizard: {
       title: `設定 TomoriBot`,
       intro: `完成下方每個項目，然後結束設定。`,
-      intro_ready: `所有必要項目都就緒了。確認之後就能結束設定。`,
+      intro_ready: `所有必要項目都已經就緒。確認無誤後就能結束設定。`,
       progress: `進度：{done}/{total} 已完成`,
       policies_name: `政策`,
       policies_description: `閱讀並接受服務條款與隱私權政策。`,
       policies_pending: `尚未閱讀。`,
       policies_completed: `已閱讀並接受政策。`,
       policies_button_start: `閱讀並接受政策`,
-      policies_button_edit: `閱讀政策`,
+      policies_button_edit: `重新閱讀政策`,
       policies_modal_title: `政策`,
       policies_modal_context: `結束設定前，請先閱讀 TomoriBot 的政策。
 
@@ -61,17 +62,17 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
 回答時，會讀取該頻道最近的訊息做為脈絡，並傳送給
 這個伺服器的 AI 供應商。供應商與自訂端點各有自己的
 條款與隱私做法，請另外閱讀那些內容。`,
-      policies_modal_acceptance: `繼續即表示你確認已閱讀並接受 TomoriBot 的 [服務條款]({terms_url}) 與 [隱私權政策]({privacy_url})。成員隨時可以用 \`/legal\` 閱讀這兩份文件，但只有你能告訴他們這裡現在有 AI 在回覆，以及它會讀取什麼來回覆。`,
+      policies_modal_acceptance: `繼續即表示你確認已閱讀並接受 TomoriBot 的 [服務條款]({terms_url}) 與 [隱私權政策]({privacy_url})。成員隨時可以用 \`/legal\` 閱讀這兩份文件，但只有你能告訴他們這裡現在有 AI 在回覆，以及它會讀取哪些訊息來回覆。`,
       policies_modal_choice_label: `三項都確認才能繼續`,
       policies_choice_terms: `我接受 TomoriBot 的服務條款`,
       policies_choice_privacy: `我已閱讀 TomoriBot 的隱私權政策`,
       policies_choice_members: `我會告訴成員 TomoriBot 是會讀取最近訊息來回覆的 AI`,
       policies_required: `三項都確認才能繼續。`,
-      policies_denied: `政策接受不是這次設定的一部分。`,
+      policies_denied: `這個設定流程不需要同意政策。`,
       provider_name: `AI 供應商`,
       provider_description: `選擇回覆要如何取用 AI 模型。`,
       provider_pending: `尚未選擇供應商。`,
-      provider_hint: `需要 API 金鑰嗎？請開啟 {help}，然後選設定 > 步驟 1。`,
+      provider_hint: `需要 API 金鑰嗎？開啟 {help}，然後選設定 > 步驟 1。`,
       provider_catalog_encrypted: `API 金鑰已加密。`,
       provider_byok_summary: `已啟用使用者 BYOK 模式。`,
       provider_custom_pending: `端點設定待完成。`,
@@ -90,7 +91,7 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
       settings_persona_description: `選擇我在設定完成後使用的人格。`,
       settings_persona_placeholder: `選擇一個人格預設集...`,
       settings_humanizer_label: `擬人化程度`,
-      settings_humanizer_description: `我的回覆要多像真人？以規則為基礎，不是由 AI 決定，因此不會增加延遲或 token 成本。`,
+      settings_humanizer_description: `我的回覆要多像真人？以規則為基礎，不是由 AI 決定，所以不會增加延遲或 token 成本。`,
       settings_humanizer_placeholder: `選擇一種回覆風格...`,
       settings_timezone_label: `時區位移`,
       settings_timezone_description: `用於提醒與時間感知。留空則使用 UTC。`,
@@ -112,18 +113,18 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
       settings_summary_reply_style: `回覆風格：{style}`,
       settings_summary_timezone: `時區：{tz}`,
       settings_summary_system_prompt: `系統提示詞：{prompt}`,
-      finish_label: `結束設定`,
+      finish_label: `完成設定`,
       cancel_label: `取消`,
       cancelled_title: `設定已取消`,
       cancelled_description: `設定已取消。任何已輸入的憑證都已移除。`,
       session_ended_title: `設定工作階段已結束`,
-      session_ended_description: `這個設定工作階段已經無法使用。請執行 /setup 重新開始。`,
+      session_ended_description: `這個設定工作階段已經無法使用。請執行 \`/setup\` 重新開始。`,
       commit_failed_title: `設定未完成`,
-      commit_failed_description: `沒有儲存任何內容。請執行 /setup 重新開始。`,
+      commit_failed_description: `沒有儲存任何內容。請執行 \`/setup\` 重新開始。`,
       change_failed_title: `設定變更未儲存`,
-      commit_in_progress: `這個設定正在儲存中。請稍等一下。`,
+      commit_in_progress: `這個設定正在儲存中，請稍等一下。`,
       commit_in_progress_title: `設定正在儲存`,
-      receipt_footer_avatar_skipped_dm: `私人訊息中無法更新頭像，
+      receipt_footer_avatar_skipped_dm: `私訊中無法更新頭像，
 因此已略過預設集的頭像。`,
       receipt_footer_avatar_failed: `無法在這個伺服器更新預設集的
 頭像。你之後可以再設定一次。`,
@@ -137,13 +138,13 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
       receipt_desc_byok: `我已經以使用者 BYOK 模式為這個伺服器設定完成，
 身分是 \`{persona}\`！在 BYOK 關閉之前，每位成員都會
 用自己的供應商回答。`,
-      receipt_desc_dm: `我已經以 \`{persona}\` 的身分為我們的私人訊息設定完成了！`,
-      receipt_desc_dm_with_model: `我已經以 \`{persona}\` 的身分為我們的私人訊息設定完成了！
-我會透過 \`{provider}\` 用 \`{model_name}\` 模型回答。`,
-      receipt_desc_custom_endpoint_dm: `我已經為我們的私人訊息設定完成了！我會以
+      receipt_desc_dm: `我已經以 \`{persona}\` 的身分為我們的私訊設定完成了！`,
+      receipt_desc_dm_with_model: `我已經以 \`{persona}\` 的身分為我們的私訊設定完成了！
+我會用 \`{provider}\` 的 \`{model_name}\` 模型回答。`,
+      receipt_desc_custom_endpoint_dm: `我已經為我們的私訊設定完成了！我會以
 \`{persona}\` 的身分，透過你的 \`{endpoint}\` 端點
 用 \`{model_name}\` 回答。`,
-      receipt_desc_byok_dm: `我已經以使用者 BYOK 模式為我們的私人訊息設定完成，
+      receipt_desc_byok_dm: `我已經以使用者 BYOK 模式為我們的私訊設定完成，
 身分是 \`{persona}\`！在 BYOK 關閉之前，你的每則訊息
 都會使用你自己的供應商。`,
       receipt_next_steps: `- 在聊天中**標註我**就能開始對話！
@@ -176,7 +177,7 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
       catalog_provider_description: `選擇你擁有 API 金鑰的 AI 供應商。`,
       catalog_api_key_label: `API 金鑰`,
       catalog_api_key_description: `會經驗證並加密。設定完成前，金鑰不會儲存在任何地方。`,
-      catalog_api_key_help: `不確定怎麼取得 API 金鑰嗎？請開啟 {help}，然後選設定 > 步驟 1。`,
+      catalog_api_key_help: `不確定怎麼取得 API 金鑰嗎？開啟 {help}，然後選設定 > 步驟 1。`,
       catalog_api_key_placeholder: `請不要把這組金鑰分享給任何人`,
       custom_endpoint_hint: `適合自己架設或信任特定端點的進階使用者。`,
       custom_endpoint_connection_pending: `連線：尚未設定`,
