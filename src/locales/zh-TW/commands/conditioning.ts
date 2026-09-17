@@ -22,7 +22,7 @@ export default {
       empty_title: `沒有制約記憶`,
       empty_description: `這個伺服器沒有可管理的長期制約紀錄。`,
       page_select_prompt: `找到 {total} 筆制約紀錄。選擇一批來移除：`,
-      page_select_prompt_capped: `找到 {total} 筆制約紀錄。下方顯示最近
+      page_select_prompt_capped: `找到 {total} 筆制約紀錄。下面是最近顯示的
 {shown} 筆，移除一些就能觸及其餘項目。`,
     },
     panel: {

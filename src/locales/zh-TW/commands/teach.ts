@@ -9,7 +9,7 @@ export default {
     document: {
       description: `上傳文件，讓我用檢索增強生成（RAG）參考。`,
       main_persona_description: `主要人格`,
-      alter_persona_description: `alter 人格`,
+      alter_persona_description: `alter`,
     },
     personaprompt: {
       description: `設定附加在系統提示詞之後的人格專屬提示詞`,

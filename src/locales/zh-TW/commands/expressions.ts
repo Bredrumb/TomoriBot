@@ -9,7 +9,7 @@ export default {
       model_incompatible_title: `模型不相容`,
       model_incompatible_description: `你目前的模型（{model_name}）不支援 {missing_capability}。請用 \`/config\` > 模型 > 切換模型，改用同時具備圖片視覺與結構化輸出功能的模型。`,
       vision_fallback_title: `沒有相容的模型`,
-      vision_fallback_description: `你的聊天模型（**{chat_model}**）與視覺模型（**{vision_model}**）都不支援表情符號初始化所需的功能。這項功能需要同時具備圖片視覺與結構化輸出的模型。請用 \`/config\` > 模型 > 切換模型切換任一個位置。`,
+      vision_fallback_description: `你的聊天模型（**{chat_model}**）與視覺模型（**{vision_model}**）都不支援表情符號初始化所需的功能。這項功能需要同時具備圖片視覺與結構化輸出的模型。請用 \`/config\` > 模型 > 切換模型，切換任一個位置。`,
       already_initialized_title: `沒有需要初始化的項目`,
       already_initialized_description: `所有表情符號與貼圖都已經分析並分類完成。`,
       partial_success_title: `部分成功`,

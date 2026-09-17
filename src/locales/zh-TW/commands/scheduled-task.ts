@@ -13,7 +13,7 @@ export default {
       select_repeat_text: ` | 每 {hours} 小時重複一次`,
       select_manager_created_by_text: ` | 由 {creator_name} 建立`,
       no_entries_title: `沒有排程任務`,
-      no_entries: `沒有可以編輯的排程任務或提醒。請叫我提醒你，或請我排一項任務來建立。`,
+      no_entries: `沒有排程任務或提醒可以編輯。請叫我提醒你，或請我排一項任務來建立。`,
       confirm_title: `要編輯這項排程任務嗎？`,
       confirm_description: `**內容：** {reminder_purpose}
 **下次觸發：** {reminder_time}
@@ -62,7 +62,7 @@ export default {
       select_repeat_text: ` | 每 {hours} 小時重複一次`,
       select_manager_created_by_text: ` | 由 {creator_name} 建立`,
       no_entries_title: `沒有排程任務`,
-      no_entries: `沒有可以移除的排程任務或提醒。請叫我提醒你，或請我排一項任務來建立。`,
+      no_entries: `沒有排程任務或提醒可以移除。請叫我提醒你，或請我排一項任務來建立。`,
       success_title: `排程任務已移除`,
       success_description: `已成功移除：「{reminder_purpose}」`,
     },

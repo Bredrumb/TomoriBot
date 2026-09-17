@@ -92,7 +92,7 @@ export default {
         json_option: `JSON`,
         no_permission_title: `權限不足`,
         no_permission_description: `你需要 **管理伺服器** 權限，或由伺服器擁有者透過 \`/moderation\` 開放給成員使用。`,
-        modal_title: `選擇人格`,
+        modal_title: `選擇人格對象`,
         persona_select_label: `人格`,
         persona_select_description: `選擇要為哪個人格製作提示詞快照。`,
         persona_select_placeholder: `選擇一個人格...`,
@@ -132,7 +132,7 @@ export default {
       success_title: `場景圖片已發布`,
       success_description: `我依最近的頻道脈絡規劃了鏡頭，並在這個頻道發布圖片。`,
       modal: {
-        title: `場景圖片`,
+        title: `場景圖片設定`,
         prompt_label: `額外指示（選填）`,
         prompt_description: `加入任何你想讓場景規劃器遵守的修正、氣氛或細節`,
         prompt_placeholder: `例如：聚焦在雨上、柔和一點、讓兩個角色都清楚入鏡`,
