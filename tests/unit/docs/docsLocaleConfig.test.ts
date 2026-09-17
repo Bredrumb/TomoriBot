@@ -111,8 +111,14 @@ describe("docs locale resolution", () => {
     expect(matchAcceptLanguage("PT-BR")).toBe("pt-BR");
   });
 
-  it("falls back to English for an ambiguous base language", () => {
-    expect(resolveDocsLocale("zh")).toBe(DEFAULT_DOCS_LOCALE_ID);
+  it("resolves a Chinese base language only while one Chinese tree is published", () => {
+    // `zh` alone cannot choose between `zh-TW` and `zh-CN`, so the base-language branch picks a
+    // locale only while exactly one of them is published. Both published means the tag is genuinely
+    // ambiguous and resolves to the default; the shared helper keeps that rule.
+    const chineseTrees = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === "zh");
+    const expected = chineseTrees.length === 1 ? chineseTrees[0] : DEFAULT_DOCS_LOCALE_ID;
+
+    expect(resolveDocsLocale("zh")).toBe(expected);
   });
 });
 
@@ -190,8 +196,11 @@ describe("Accept-Language matching", () => {
     expect(matchAcceptLanguage(null)).toBe(DEFAULT_DOCS_LOCALE_ID);
   });
 
-  it("falls back to English for an ambiguous base language", () => {
-    expect(matchAcceptLanguage("zh")).toBe(DEFAULT_DOCS_LOCALE_ID);
+  it("resolves a Chinese base language only while one Chinese tree is published", () => {
+    const chineseTrees = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === "zh");
+    const expected = chineseTrees.length === 1 ? chineseTrees[0] : DEFAULT_DOCS_LOCALE_ID;
+
+    expect(matchAcceptLanguage("zh")).toBe(expected);
   });
 
   it("answers a wildcard with the default locale", () => {

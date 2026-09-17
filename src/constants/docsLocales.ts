@@ -78,6 +78,14 @@ const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
     translatedBody:
       "Esta página é uma tradução por IA generativa da página em {english}. Consulte a página em inglês se algo não estiver claro.",
   },
+  "zh-TW": {
+    draftsTitle: "免責聲明",
+    draftsBody: "這一頁目前使用生成式 AI 撰寫與維護的臨時草稿。內容雖已確認正確，仍請對照原始碼再次查核。",
+    translatedTitle: "關於這份翻譯",
+    englishLinkText: "英文版",
+    translatedBody:
+      "這一頁是 {english}的生成式 AI 翻譯。翻譯僅為方便閱讀，內容以英文版為準，若有不清楚的地方請查看英文頁面。",
+  },
 };
 
 function defineDocsLocale(definition: DocsLocaleDefinition): DocsLocaleDefinition & { notices: DocsLocaleNotices } {
@@ -136,7 +144,7 @@ export const DOCS_LOCALES = [
     botLocaleCode: "zh-TW",
     lang: "zh-TW",
     label: "繁體中文",
-    docsTree: false,
+    docsTree: true,
     descriptionMaxLength: 80,
   }),
   defineDocsLocale({
