@@ -6954,9 +6954,10 @@ describe("Raw modal component types and their option bounds", () => {
       { value: "en-US", label: "English", default: false },
       { value: "ja", label: "日本語", default: true },
       { value: "pt-BR", label: "Português (Brasil)", default: false },
+      { value: "zh-TW", label: "繁體中文", default: false },
     ]);
     assertBounds(modal, "language");
-    expect(getRegisterableLocales().sort()).toEqual(["en-US", "ja", "pt-BR"]);
+    expect(getRegisterableLocales().sort()).toEqual(["en-US", "ja", "pt-BR", "zh-TW"]);
 
     const unsupported = buildLanguageModal("en-US", "nonce123456", "de");
     const unsupportedOptions = (unsupported.components[0]?.component?.options ?? []) as Array<{ default?: boolean }>;
