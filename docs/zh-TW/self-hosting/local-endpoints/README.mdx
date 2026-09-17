@@ -1,0 +1,81 @@
+---
+title: "本機與自架端點"
+aiGenerated: false
+sidebar:
+  label: "總覽"
+  groupLabel: "本機與自架端點"
+  order: 4
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBot 完全可以在所有東西都本機的情況下運行，從文字生成到 MCP 工具都是。底下每一個端點都是 OpenAI 相容，或是小型的參考包裝，透過 `/providers` 指令註冊，並以加密形式存在資料庫中（不需要 `.env`）。
+挑一項功能來設定：
+
+## 文字與嵌入
+
+<CardGrid>
+  <LinkCard title="本機 LLM" href="/zh-TW/self-hosting/local-endpoints/setup-local-llm/"
+    description="任何 OpenAI 相容的伺服器，例如 Ollama、KoboldCPP、LM Studio、vLLM 或 LiteLLM，用於文字生成與嵌入。" />
+  <LinkCard title="透過 ChatMock 使用 Codex CLI" href="/zh-TW/self-hosting/local-endpoints/setup-chatmock/"
+    description="本機的 OpenAI 相容橋接，讓 TomoriBot 使用 Codex CLI 的模型。" />
+</CardGrid>
+
+## 圖片與影片
+
+<CardGrid>
+  <LinkCard title="ComfyUI" href="/zh-TW/self-hosting/local-endpoints/setup-comfyui/"
+    description="用你自己的 ComfyUI 執行個體，透過 API 格式的工作流程生成圖片與短片。" />
+</CardGrid>
+
+## 語音
+
+<CardGrid>
+  <LinkCard title="文字轉語音" href="/zh-TW/self-hosting/local-endpoints/text-to-speech/"
+    description="本機 TTS 引擎（Chatterbox、Qwen3-TTS、IrodoriTTS、Fish S2 Pro、VoxCPM2、CosyVoice 3），支援原生的 Discord 語音訊息、語音複製與 VoiceDesign。" />
+  <LinkCard title="語音轉文字" href="/zh-TW/self-hosting/local-endpoints/speech-to-text/"
+    description="用 WhisperX、whisper.cpp 或 KoboldCPP 在本機轉錄音訊附件。" />
+</CardGrid>
+
+## 網頁搜尋與擷取
+
+<CardGrid>
+  <LinkCard title="SearXNG" href="/zh-TW/self-hosting/local-endpoints/setup-searxng/"
+    description="尊重隱私的中繼搜尋代理，作為本機 web_search 工具，避開公開的速率限制。" />
+  <LinkCard title="Crawl4AI" href="/zh-TW/self-hosting/local-endpoints/setup-crawl4ai/"
+    description="為大量使用 JavaScript 的網站，以瀏覽器渲染擷取 markdown，支援 fetch_url 工具。" />
+</CardGrid>
+
+## 自訂工具
+
+<CardGrid>
+  <LinkCard title="本機 MCP 伺服器" href="/zh-TW/self-hosting/local-endpoints/setup-local-mcp/"
+    description="運行本機 MCP 伺服器，用你自己的工具擴充 TomoriBot（僅限自架執行個體）。" />
+</CardGrid>
+
+## 用 `bun run launch` 啟動 sidecar
+
+不必手動啟動 sidecar 服務，改用 `bun run launch`，它會啟動指定的 sidecar、等待它們就緒，然後自動以監看模式啟動 bot：
+
+```sh
+# Bot only, identical to bun run dev
+bun run launch
+
+# With SearXNG and Crawl4AI Docker sidecars
+bun run launch --searxng --crawl4ai
+
+# With a local TTS server (venv must be set up first — see the Text-to-Speech guide below)
+bun run launch --qwen3tts
+bun run launch --fishs2
+bun run launch --voxcpm2
+bun run launch --cosyvoice3
+
+# See all available flags
+bun run launch --help
+```
+
+可用的旗標：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--whisperx`
+
+Docker sidecar（`--searxng`、`--crawl4ai`）會在第一次執行時建立，之後重複使用。Python 的 TTS 與 STT sidecar 需要事先設定好它們的 venv；請看[文字轉語音](/zh-TW/self-hosting/local-endpoints/text-to-speech/)與[語音轉文字](/zh-TW/self-hosting/local-endpoints/speech-to-text/)底下的個別設定指南。
+
+**Ctrl+C** 會停止 bot 與任何 Python sidecar 行程。Docker 容器刻意維持運行。結束時請用 `docker stop searxng` 或 `docker stop crawl4ai` 手動停止它們。
