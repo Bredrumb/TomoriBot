@@ -10,7 +10,7 @@ export default {
     stale_warning: `因為讀取失敗，儲存的資料可能已經過期。\n在重新讀取成功之前，無法進行寫入操作。`,
     retry: `重試`,
     memories_title: `[伺服器記憶](https://docs.tomoribot.app/en/features/knowledge/memory/#personal-vs-server-memories)`,
-    memories_description: `這個人格在這個伺服器\n使用中時，這些記憶\n都會生效。`,
+    memories_description: `只要這個人格在這裡使用中，\n這些記憶就會在整個\n伺服器生效。`,
     persona_default_name: `人格`,
     persona_select_placeholder: `選擇一個人格來查看記憶...`,
     persona_memory_count: `{count} 則記憶`,
@@ -60,8 +60,7 @@ export default {
     empty_content_heading: `需要記憶內容`,
     empty_content_detail: `送出前請先輸入記憶內容。`,
     batch_added_heading: `已新增伺服器記憶`,
-    batch_added_detail: `已儲存 {added} 則記憶。略過 {skipped} 則
-已存在的重複內容。`,
+    batch_added_detail: `已儲存 {added} 則記憶，略過 {skipped} 則已存在的重複內容。`,
     batch_file_invalid_heading: `檔案無法讀取`,
     batch_file_invalid_detail: `這個上傳檔不是可讀取的編號行 .txt 檔。`,
     batch_file_too_large_heading: `檔案太大`,
@@ -72,11 +71,11 @@ export default {
     batch_limit_reached_heading: `空間不足`,
     batch_limit_reached_detail: `這個檔案有 {requested} 則新記憶，
 但 {max} 則的額度只剩下 {available} 則。`,
-    blacklisted_error_heading: `使用者已被封鎖`,
-    blacklisted_error_detail: `你在這個伺服器已被禁止
-教導伺服器記憶。`,
+    blacklisted_error_heading: `使用者已被列入黑名單`,
+    blacklisted_error_detail: `你在這個伺服器已被列入黑名單，
+無法教導伺服器記憶。`,
     teaching_disabled_error_heading: `教導功能已停用`,
-    teaching_disabled_error_detail: `這個伺服器已停用成員教導記憶的功能。`,
+    teaching_disabled_error_detail: `這個伺服器已停用成員教導記憶。`,
     empty_memory_label: `（空白記憶）`,
     no_memories: `這個人格還沒有教導過任何伺服器記憶。`,
     no_owned_memories: `你還沒有教導這個人格任何內容。`,
@@ -88,8 +87,8 @@ export default {
     documents_description: `附加到這個伺服器或
 單一人格的參考文件。`,
     documents_teaching_disabled: `這個伺服器已停用成員存取文件的功能。`,
-    document_scope_persona: `人格範圍`,
-    document_scope_serverwide: `伺服器層級範圍`,
+    document_scope_persona: `單一人格`,
+    document_scope_serverwide: `整個伺服器`,
     document_persona_placeholder: `選擇一個人格來查看文件...`,
     document_persona_count: `{count} 份文件`,
     document_persona_count_one: `1 份文件`,
@@ -102,8 +101,8 @@ export default {
     document_select_placeholder: `選擇或新增文件...`,
     documents_empty: `這個範圍還沒有儲存任何文件。`,
     document_no_chunks: `這份文件沒有已儲存的分段。`,
-    previous: `← 上一頁`,
-    next: `下一頁 →`,
+    previous: `← 上一個`,
+    next: `下一個 →`,
     document_remove_button: `移除文件`,
     document_remove_title: `移除文件`,
     document_remove_description: `要移除「{name}」與所有已儲存的分段嗎？
@@ -127,7 +126,7 @@ export default {
     document_chunk_edit_title: `編輯文件分段`,
     document_chunk_content_label: `分段內容`,
     vectorize_button: `向量化`,
-    vectorize_title: `把記憶移為文件`,
+    vectorize_title: `將記憶移為文件`,
     vectorize_impact: `這則記憶將不再是記憶，而是變成一份文件。
 它的內容會移到「文件」分類。
 
@@ -159,8 +158,8 @@ export default {
     vectorize_partial_failure_heading: `文件已建立，記憶仍保留`,
     vectorize_partial_failure_detail: `已建立「{name}」，但無法移除
 原本的記憶。請手動移除。`,
-    document_rag_disabled_heading: `文件功能無法使用`,
-    document_rag_disabled_detail: `這個部署環境無法使用文件儲存功能。`,
+    document_rag_disabled_heading: `文件無法使用`,
+    document_rag_disabled_detail: `這個部署環境無法使用文件儲存。`,
     document_memory_critical_heading: `伺服器忙碌中`,
     document_memory_critical_detail: `文件處理暫時無法使用。`,
     document_invalid_name_heading: `文件名稱無效`,
@@ -184,19 +183,19 @@ export default {
     document_duplicate_heading: `文件名稱已被使用`,
     document_duplicate_detail: `請在這個文件範圍改用其他名稱。`,
     document_quota_heading: `已達文件額度`,
-    document_quota_detail: `你的文件處理額度目前已經用完。`,
+    document_quota_detail: `你的文件處理額度目前已經用完了。`,
     embedding_credentials_missing_heading: `缺少嵌入憑證`,
     embedding_credentials_missing_detail: `請先設定嵌入供應商再繼續。`,
     embedding_model_missing_heading: `缺少嵌入模型`,
     embedding_model_missing_detail: `請先設定嵌入模型再繼續。`,
     stm_title: `[短期記憶](https://docs.tomoribot.app/en/features/knowledge/memory/#short-term-memory-stm)`,
     stm_empty: `這個伺服器沒有使用中的短期記憶項目。`,
-    stm_active_count: `有 {count} 個使用中的短期記憶項目。`,
+    stm_active_count: `有 {count} 則使用中的短期記憶。`,
     stm_manager_only: `你需要「管理伺服器」權限才能查看
-伺服器的短期記憶。`,
+這個伺服器的短期記憶。`,
     stm_unscoped: `無範圍`,
     stm_manage_button: `清除短期記憶`,
-    stm_too_many: `目前有 {count} 個使用中的項目。管理工具最多支援 {max} 個。`,
+    stm_too_many: `目前有 {count} 則使用中的短期記憶。管理工具最多支援 {max} 則。`,
     stm_modal_title: `管理短期記憶`,
     stm_checkbox_label: `要保留的項目`,
     stm_checkbox_label_continued: `更多要保留的項目`,
@@ -205,6 +204,6 @@ export default {
     stm_changed_state_detail: `在對話框開啟期間，使用中的項目已變更。
 沒有清除任何內容。請重新開啟管理工具。`,
     stm_cleared_heading: `短期記憶已清除`,
-    stm_cleared_detail: `已清除 {count} 個短期記憶項目。`,
+    stm_cleared_detail: `已清除 {count} 則短期記憶。`,
   },
 };
