@@ -161,7 +161,7 @@ export default {
       // English grammar; keywords here would widen English matching beyond those patterns.
       deliberate: {
         image: ["画一", "画一张", "画个", "生成图", "做图", "来张图", "生成一张", "改图", "修图", "重绘", "图片"],
-        video: ["视频", "影片", "生成视频", "做个视频", "来段视频", "动图", "短视频", "视频生成", "剪辑"],
+        video: ["视频", "生成视频", "做个视频", "来段视频", "动图", "短视频", "视频生成", "剪辑"],
         voice: ["语音", "朗读", "念出来", "念一下", "配音", "语音合成", "转写", "语音识别", "说出", "读出来"],
         reminder: ["提醒", "定时", "日程", "闹钟", "预约", "待办", "别忘", "到时候"],
         "cross-channel": [

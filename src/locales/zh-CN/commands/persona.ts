@@ -318,7 +318,7 @@ export default {
     create: {
       description: `手动创建一个简单的人格预设集`,
       modal: {
-        title: `创建人格`,
+        title: `创建新人格`,
         character_name_label: `角色名称`,
         character_name_description: `名称用逗号分隔（"," 或 "、"）：全部都会成为触发词，第一个作为显示名称。`,
         character_name_placeholder: `例如：初音未来, Miku, 初音ミク`,

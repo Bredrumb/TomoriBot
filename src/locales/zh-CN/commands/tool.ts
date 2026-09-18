@@ -92,7 +92,7 @@ export default {
         json_option: `JSON`,
         no_permission_title: `权限不足`,
         no_permission_description: `你需要**管理服务器**权限，或由服务器所有者通过 \`/moderation\` 为成员开启这项功能。`,
-        modal_title: `选择人格`,
+        modal_title: `选择目标人格`,
         persona_select_label: `人格`,
         persona_select_description: `选择要导出哪个人格的提示词快照。`,
         persona_select_placeholder: `选择人格…`,
@@ -132,7 +132,7 @@ export default {
       success_title: `场景图像已发布`,
       success_description: `我根据最近的频道上下文规划了画面，并把图像发到了这个频道。`,
       modal: {
-        title: `场景图像`,
+        title: `场景图像生成`,
         prompt_label: `额外要求（可选）`,
         prompt_description: `写下你希望场景规划器遵守的修正、氛围或细节`,
         prompt_placeholder: `例如：突出雨景、柔和一点、把两个角色都清楚地画出来`,
