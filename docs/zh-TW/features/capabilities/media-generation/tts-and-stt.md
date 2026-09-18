@@ -39,12 +39,12 @@ TomoriBot 可以**說話**（文字轉語音），也可以**聆聽**（語音�
 
 各引擎有自己的設定指南：
 
-- [Chatterbox-Turbo/Nano](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/)：快速、僅支援英文的語音複製，支援 `[laugh]` 這類事件標籤。
-- [Qwen3-TTS](/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/)：多語言（10 種語言），另有自然語言的 VoiceDesign 模式。
-- [MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/)：供多語言複製或英文與中文語音設計試用的自動端點。
-- [IrodoriTTS](/en/self-hosting/local-endpoints/text-to-speech/irodoritts/)：日文專精，會把表情符號讀成情緒提示。
+- [Chatterbox-Turbo/Nano](/zh-TW/self-hosting/local-endpoints/text-to-speech/chatterbox/)：快速、僅支援英文的語音複製，支援 `[laugh]` 這類事件標籤。
+- [Qwen3-TTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/qwen3tts/)：多語言（10 種語言），另有自然語言的 VoiceDesign 模式。
+- [MOSS-TTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/moss/)：供多語言複製或英文與中文語音設計試用的自動端點。
+- [IrodoriTTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/irodoritts/)：日文專精，會把表情符號讀成情緒提示。
 
-完整清單與硬體建議請看[文字轉語音比較表](/en/self-hosting/local-endpoints/text-to-speech/)。
+完整清單與硬體建議請看[文字轉語音比較表](/zh-TW/self-hosting/local-endpoints/text-to-speech/)。
 
 ## 語音轉文字
 
@@ -56,8 +56,8 @@ TomoriBot 可以**說話**（文字轉語音），也可以**聆聽**（語音�
 
 ### 本機引擎（自架）
 
-- [WhisperX](/en/self-hosting/local-endpoints/speech-to-text/whisperx/)：推薦的本機路線；約 100 種語言、GPU 加速、多種模型大小。
-- [KoboldCPP](/en/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：如果你的版本提供與 OpenAI 相容的轉錄端點就能使用。
-- [whisper.cpp](/en/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
+- [WhisperX](/zh-TW/self-hosting/local-endpoints/speech-to-text/whisperx/)：推薦的本機路線；約 100 種語言、GPU 加速、多種模型大小。
+- [KoboldCPP](/zh-TW/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：如果你的版本提供與 OpenAI 相容的轉錄端點就能使用。
+- [whisper.cpp](/zh-TW/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
 
-完整清單請看[語音轉文字](/en/self-hosting/local-endpoints/speech-to-text/)中樞。Discord 裡的摘要請執行 `/help`，然後選擇 **功能** 與 **轉錄**。
+完整清單請看[語音轉文字](/zh-TW/self-hosting/local-endpoints/speech-to-text/)中樞。Discord 裡的摘要請執行 `/help`，然後選擇 **功能** 與 **轉錄**。

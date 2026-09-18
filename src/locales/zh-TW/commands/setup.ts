@@ -157,14 +157,14 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
 - 用 \`/persona\` 變更我的名字、外觀與個性。
 - 用 \`/config\` 調整我的行為與我能做的事。
 - 用 \`/memories\` 教我有關你的事。`,
-      receipt_learn_more: `閱讀[官方 Wiki](https://docs.tomoribot.app/en/features/)，或開啟 {help}
+      receipt_learn_more: `閱讀[官方 Wiki](https://docs.tomoribot.app/zh-TW/features/)，或開啟 {help}
 （然後選功能），了解我還能做什麼。
-- [多個人格](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞
-- [聊天與觸發](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話
-- [記憶](https://docs.tomoribot.app/en/features/knowledge/memory/) = 人物、事實與脈絡
-- [個人化](https://docs.tomoribot.app/en/features/knowledge/personalization/) = 你希望被怎麼對待
-- [媒體生成](https://docs.tomoribot.app/en/features/capabilities/media-generation/) = 圖片、影片與語音
-- [工具與擴充](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/) = 網頁搜尋與自訂工具`,
+- [多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞
+- [聊天與觸發](https://docs.tomoribot.app/zh-TW/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話
+- [記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/) = 人物、事實與脈絡
+- [個人化](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/) = 你希望被怎麼對待
+- [媒體生成](https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/) = 圖片、影片與語音
+- [工具與擴充](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/) = 網頁搜尋與自訂工具`,
       permission_denied: `你需要「管理伺服器」權限才能進行設定。`,
       env_mismatch: `環境設定已變更。請重新開始設定。`,
       forbidden: `這個設定工作階段屬於其他使用者或頻道。`,
@@ -232,7 +232,7 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
       custom_endpoint_cap_prefix_completion_desc: `支援接續寫到一半的助理對話輪。`,
       provider_byok_guild_only: `使用者 BYOK 模式只能在伺服器中使用。私人訊息請選擇其他供應商模式。`,
       byok_modal_title: `確認使用者 BYOK`,
-      byok_modal_notice: `啟用使用者 BYOK 後，這個伺服器的人會用自己的已儲存供應商來取得回覆。這個伺服器不會提供備援。他們可以用 {command} 設定。[深入了解使用者 BYOK](https://docs.tomoribot.app/en/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)`,
+      byok_modal_notice: `啟用使用者 BYOK 後，這個伺服器的人會用自己的已儲存供應商來取得回覆。這個伺服器不會提供備援。他們可以用 {command} 設定。[深入了解使用者 BYOK](https://docs.tomoribot.app/zh-TW/features/setup-administration/server-moderation/#使用者-byok自備金鑰)`,
       byok_confirm_label: `啟用使用者 BYOK`,
       byok_confirm_yes: `是，啟用使用者 BYOK`,
       byok_confirm_no: `否，保留先前的設定`,

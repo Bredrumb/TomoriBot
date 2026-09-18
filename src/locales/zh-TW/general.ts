@@ -88,7 +88,7 @@ export default {
       channel_not_supported_title: `不支援的頻道類型`,
       channel_not_supported_description: `抱歉，我只能在伺服器文字頻道或私訊中運作。不支援群組私訊與其他頻道類型。`,
       tomori_not_setup_title: `需要先完成初始設定`,
-      tomori_not_setup_description: `這個伺服器還沒有完成初始設定。請有 **管理伺服器** 權限的成員先執行 \`/setup\`。需要協助的話，可以開啟 \`/help\` 的 **設定**，或閱讀官方[簡短指南](https://docs.tomoribot.app/en/introduction/quickstart/)。`,
+      tomori_not_setup_description: `這個伺服器還沒有完成初始設定。請有 **管理伺服器** 權限的成員先執行 \`/setup\`。需要協助的話，可以開啟 \`/help\` 的 **設定**，或閱讀官方[簡短指南](https://docs.tomoribot.app/zh-TW/introduction/quickstart/)。`,
       tomori_updating_title: `正在更新...`,
       tomori_updating_description: `我目前正在更新，很快就會回來。請稍後再試一次！`,
       tomori_not_setup_dm_footer: `私訊使用獨立的設定，所以大部分伺服器風格的設定仍然適用。`,
@@ -160,7 +160,7 @@ export default {
       rejoin_title: `我回來了！`,
       rejoin_description: `看起來我又被加回這個伺服器了。現有的設定與人格都還在。你可以用 \`/config\`、\`/persona\`、\`/memories\` 與 \`/providers\` 查看或修改。{legalNotice}`,
       setup_prompt_title: `成功加入`,
-      setup_prompt_description: `首先，請有 **管理伺服器** 權限的人執行 \`/setup\`，選擇初始人格與供應商。需要協助的話，可以開啟 \`/help\` 的 **設定**，或閱讀官方[簡短指南](https://docs.tomoribot.app/en/introduction/quickstart/)。{legalNotice}`,
+      setup_prompt_description: `首先，請有 **管理伺服器** 權限的人執行 \`/setup\`，選擇初始人格與供應商。需要協助的話，可以開啟 \`/help\` 的 **設定**，或閱讀官方[簡短指南](https://docs.tomoribot.app/zh-TW/introduction/quickstart/)。{legalNotice}`,
     },
   },
   reminders: {

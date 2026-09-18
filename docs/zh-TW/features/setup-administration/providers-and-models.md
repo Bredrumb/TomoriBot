@@ -85,9 +85,9 @@ API 相容性決定了服務實作的請求路徑與內容，因此也決定了�
 
 執行這些伺服器的完整逐步說明請看：
 
-- [設定：本機 LLM](/en/self-hosting/local-endpoints/setup-local-llm/)：Ollama、KoboldCPP、LM Studio、vLLM、LiteLLM。
-- [設定：ComfyUI](/en/self-hosting/local-endpoints/setup-comfyui/)：本機圖片與影片生成。
-- [設定：ChatMock](/en/self-hosting/local-endpoints/setup-chatmock/)：ChatGPT 帳號與 Codex CLI。
+- [設定：本機 LLM](/zh-TW/self-hosting/local-endpoints/setup-local-llm/)：Ollama、KoboldCPP、LM Studio、vLLM、LiteLLM。
+- [設定：ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/)：本機圖片與影片生成。
+- [設定：ChatMock](/zh-TW/self-hosting/local-endpoints/setup-chatmock/)：ChatGPT 帳號與 Codex CLI。
 
 ## 支援的供應商
 
@@ -106,7 +106,7 @@ API 相容性決定了服務實作的請求路徑與內容，因此也決定了�
 | **Z.ai** | ✅ | ✅ | ✅ | – | 有免費模型；⚠️ 使用條款限定程式開發與代理用途 |
 | **Z.ai Coding** | ✅ | ✅ | – | – | 訂閱方案 |
 | **Google Vertex AI** | ✅ | ✅ | ✅ | ✅ | 包含「免費」的 Express 版本 |
-| **Codex CLI (via ChatMock)** | ✅ | ✅ | ✅ | – | [設定](/en/self-hosting/local-endpoints/setup-chatmock/) |
+| **Codex CLI (via ChatMock)** | ✅ | ✅ | ✅ | – | [設定](/zh-TW/self-hosting/local-endpoints/setup-chatmock/) |
 
 ### 圖片生成
 
@@ -134,4 +134,4 @@ API 相容性決定了服務實作的請求路徑與內容，因此也決定了�
 |---|---|---|
 | **ElevenLabs** | ✅ | ✅ |
 
-本機語音引擎收錄在[自架](/en/self-hosting/)底下。內建的網頁搜尋與 URL 抓取引擎請看[工具與擴充](/zh-TW/features/capabilities/tools-and-extensions/#網頁搜尋與-url-讀取)。
+本機語音引擎收錄在[自架](/zh-TW/self-hosting/)底下。內建的網頁搜尋與 URL 抓取引擎請看[工具與擴充](/zh-TW/features/capabilities/tools-and-extensions/#網頁搜尋與-url-讀取)。

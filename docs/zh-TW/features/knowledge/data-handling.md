@@ -7,7 +7,7 @@ sidebar:
 TomoriBot 的設計目標是對你的資料保持透明。你可以匯出、匯入或刪除她儲存的一切，這一頁會清楚列出那究竟是什麼。法律條文請看 `/legal privacy-policy` 與 `/legal terms-of-service`。
 
 :::note
-這一頁涵蓋的是 Discord 內、以使用者為單位的控制項。**要自架自己的執行個體嗎？**整份資料庫的備份與還原屬於主機端操作，請看[維護與備份](/en/self-hosting/maintenance/)。
+這一頁涵蓋的是 Discord 內、以使用者為單位的控制項。**要自架自己的執行個體嗎？**整份資料庫的備份與還原屬於主機端操作，請看[維護與備份](/zh-TW/self-hosting/maintenance/)。
 :::
 
 ## 她儲存什麼

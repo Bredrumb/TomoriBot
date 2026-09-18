@@ -60,7 +60,7 @@ TomoriBot 具備代理能力：聊天之外，她可以呼叫**工具**來搜尋
 
 - 設定了 Brave API 金鑰時，**Brave** 會優先執行（用 `/providers` 設定）；它會加入圖片、影片與新聞搜尋。⚠️ 請在 Brave 儀表板設定 $5 使用上限，以免收到意外的帳單。
 - 沒有設定金鑰時，**DuckDuckGo** 是預設選項，遇到速率限制或沒有結果時會串接至 **IAsk**。
-- **SearXNG** 與 **Crawl4AI** 是選用的自架 sidecar，可以解鎖更多分類與瀏覽器渲染的頁面抓取，請看[自架](/en/self-hosting/)。
+- **SearXNG** 與 **Crawl4AI** 是選用的自架 sidecar，可以解鎖更多分類與瀏覽器渲染的頁面抓取，請看[自架](/zh-TW/self-hosting/)。
 
 要讀取特定頁面時，她使用 `fetch_url`。NovelAI 不支援這項功能。
 
@@ -80,7 +80,7 @@ TomoriBot 具備代理能力：聊天之外，她可以呼叫**工具**來搜尋
 
 ### 本機 MCP 伺服器
 
-本機 MCP 伺服器**只支援自架執行個體**：公開託管的 bot 要求 HTTPS，並封鎖本機與私人位址。如果你自己跑執行個體，請看[設定：本機 MCP 伺服器](/en/self-hosting/local-endpoints/setup-local-mcp/)。
+本機 MCP 伺服器**只支援自架執行個體**：公開託管的 bot 要求 HTTPS，並封鎖本機與私人位址。如果你自己跑執行個體，請看[設定：本機 MCP 伺服器](/zh-TW/self-hosting/local-endpoints/setup-local-mcp/)。
 
 :::danger[只新增你信任的 MCP 伺服器]
 惡意的 MCP 伺服器可以用隱藏的指示對她進行**提示詞注入**、**外洩**使用者傳給它工具的資料，或回傳**有害或錯誤的結果**，再由她轉達到你伺服器。把 MCP 伺服器當成瀏覽器擴充功能看待：有疑慮就不要新增。新增之前一定要先檢視 MCP 所描述的工具。

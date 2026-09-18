@@ -27,6 +27,6 @@ TomoriBot 可以依文字提示詞生成短片，也可以把參考圖片做成�
 
 原生影片生成可在 **Google、OpenRouter** 與 **Z.ai** 上使用。完整對照表請看[供應商與模型](/zh-TW/features/setup-administration/providers-and-models/#支援的供應商)。
 
-要透過 ComfyUI 做**本機**影片生成（例如 WAN 圖片生影片工作流），請看[設定：ComfyUI](/en/self-hosting/local-endpoints/setup-comfyui/)。
+要透過 ComfyUI 做**本機**影片生成（例如 WAN 圖片生影片工作流），請看[設定：ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/)。
 
 關於內部的生成與輪詢架構，請看[影片生成](/en/architecture/subsystems/video-generation/)的參考。

@@ -15,7 +15,7 @@ TomoriBot 可以依文字提示詞生成圖片，也可以透過編輯參考圖�
 - **可自訂的長寬比**。
 - **參考圖片**可以來自訊息附件、貼圖、表情符號，或使用者與人格的頭像。把她的注意力指向某則訊息，或指名某位使用者或人格，就能把他們的頭像拉進來當參考。
 
-哪些編輯模式可用取決於後端。文字生圖與圖片生圖在內建的雲端供應商（Google、Vertex、OpenRouter）上可用，而**內補與外補是由本機 [ComfyUI](/en/self-hosting/local-endpoints/setup-comfyui/) 自訂端點**提供的，並受該端點宣告的能力管制。後端做不到的事就單純不會出現在她面前，所以她不會提供你的設定不支援的模式。
+哪些編輯模式可用取決於後端。文字生圖與圖片生圖在內建的雲端供應商（Google、Vertex、OpenRouter）上可用，而**內補與外補是由本機 [ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/) 自訂端點**提供的，並受該端點宣告的能力管制。後端做不到的事就單純不會出現在她面前，所以她不會提供你的設定不支援的模式。
 
 當她生成圖片時，會使用你人格的「外觀」脈絡，加上預設的正向與負向標籤（在後端支援負向提示詞的情況下）。結果會以 Discord 媒體畫廊的形式送出，並附上生成當下的細節，包括任何被參考的使用者或人格。
 
@@ -37,4 +37,4 @@ TomoriBot 可以依文字提示詞生成圖片，也可以透過編輯參考圖�
 
 原生圖片生成可在 **Google、Vertex AI、Vertex AI Express、OpenRouter、Z.ai、NVIDIA NIM** 與 **NovelAI** 上使用（動漫風格；原生內補已完成並即將推出，目前因為還在調整邊緣混合而停用）。完整的支援對照表與如何新增供應商，請看[供應商與模型](/zh-TW/features/setup-administration/providers-and-models/#支援的供應商)。
 
-要用自己的硬體做**本機**圖片生成（透過 ComfyUI），請看[設定：ComfyUI](/en/self-hosting/local-endpoints/setup-comfyui/)。
+要用自己的硬體做**本機**圖片生成（透過 ComfyUI），請看[設定：ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/)。
