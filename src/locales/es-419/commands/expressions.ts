@@ -20,7 +20,7 @@ export default {
     },
     edit: {
       description: `Edita la emoción y las instrucciones de uso de un solo emoji o sticker`,
-      expression_description: `El nombre en bruto del emoji (por ejemplo, :happycat:) o del sticker (por ejemplo, Dog Dance) a editar`,
+      expression_description: `Nombre del emoji (p. ej. :happycat:) o del sticker (p. ej. Dog Dance) que quieres editar`,
       no_permission_title: `Permiso requerido`,
       no_permission_description: `Necesitas el permiso **Administrar servidor** para editar las expresiones del servidor.`,
       not_found_title: `Expresión no encontrada`,

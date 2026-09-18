@@ -72,6 +72,24 @@ const PT_BR_PHRASES = [
   "para conversas futuras",
   "para referência futura",
 ];
+const ES_419_PHRASES = [
+  "recuerda que*",
+  "recuerda esto*",
+  "acuérdate de*",
+  "acuerdate de*",
+  "no olvides que*",
+  "no se te olvide*",
+  "que no se te olvide*",
+  "guarda en tu memoria*",
+  "guarda esto en tu memoria*",
+  "guárdalo en tu memoria*",
+  "guardalo en tu memoria*",
+  "memoriza*",
+  "ten presente que*",
+  "ten en cuenta que*",
+  "anota que*",
+  "para futuras conversaciones",
+];
 
 beforeAll(async () => {
   await initializeLocalizer();
@@ -87,6 +105,7 @@ describe("explicit long-term memory intent", () => {
           ...JAPANESE_CATCH_UP_PHRASES,
           ...ZH_TW_PHRASES,
           ...PT_BR_PHRASES,
+          ...ES_419_PHRASES,
         ]),
       ].sort(),
     );
@@ -99,6 +118,7 @@ describe("explicit long-term memory intent", () => {
       ...JAPANESE_CATCH_UP_PHRASES,
       ...ZH_TW_PHRASES,
       ...PT_BR_PHRASES,
+      ...ES_419_PHRASES,
     ]) {
       expect(hasExplicitLongTermMemoryIntent(`ok ${phrase} this`)).toBe(true);
     }

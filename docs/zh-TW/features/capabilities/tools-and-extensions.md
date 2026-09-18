@@ -14,9 +14,9 @@ TomoriBot 具備代理能力：聊天之外，她可以呼叫**工具**來搜尋
 |---|---|---|---|
 | 檢視功能 | `{capabilities_tool}` | — | 回答前先確認目前聊天可用的能力、指令或設定。 |
 | 建立或更新長期記憶 | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | 儲存或取代穩定的伺服器事實或使用者偏好。 |
-| 更新短期記憶 | `{short_term_memory_tool}` | —（NovelAI 不支援） | 為目前頻道或故事線儲存臨時的工作記憶。 |
+| 更新短期記憶 | `{short_term_memory_tool}` | （NovelAI 不支援） | 為目前頻道或故事線儲存臨時的工作記憶。 |
 | 建立或更新任務 | `{task_tool}` / `{task_update_tool}` | — | 安排或編輯提醒與自我任務（請看[排程任務](/zh-TW/features/capabilities/scheduled-tasks/)）。 |
-| 跨頻道訊息 | `{cross_channel_tool}` | —（NovelAI 不支援） | 在其他頻道或討論串行動，並可選擇回報。 |
+| 跨頻道訊息 | `{cross_channel_tool}` | （NovelAI 不支援） | 在其他頻道或討論串行動，並可選擇回報。 |
 | 建立討論串 | `{create_thread_tool}` | `thread_creation_enabled` + 討論串權限 | 開啟公開討論串並送出它的起始訊息。 |
 | 選擇貼圖 | `{sticker_tool}` | `sticker_usage_enabled` | 在回覆中加上相符的伺服器貼圖。 |
 | 管理訊息 | `{manage_message_tool}` | `manage_message_enabled` | 釘選、編輯或刪除最近的訊息（釘選需要 `Manage Messages`）。 |
