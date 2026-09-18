@@ -15,7 +15,7 @@ description: 管理官方托管 TomoriBot 实例使用的条款。
 
 - **Server**：部署了 TomoriBot 的 Discord 服务器或社群
 - **Memories**：通过指令教给 TomoriBot 的事实或信息，或它通过 `remember_this_fact` 函数工具自学到的这类事实
-- **Persona/Preset**：可配置的性格与行为档案，会改变 TomoriBot 的回复方式
+- **Persona/Preset**：可配置的性格与行为画像，会改变 TomoriBot 的回复方式
 - **Provider**：你配置 TomoriBot 使用的第三方 AI 或搜索服务（例如 Google、NovelAI、OpenRouter、Brave Search）
 - **Hosted Instance**：作为 Discord 公开 bot 维护的官方 TomoriBot 服务，区别于自部署的副本
 - **API Key**：你提供用来把 TomoriBot 连接到你所选 Provider 的认证凭据

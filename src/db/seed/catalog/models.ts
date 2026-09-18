@@ -1066,7 +1066,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
           "pt-BR": "Baseado no Llama 3 70B, treinado no melhor dataset de storytelling da NovelAI",
           "es-419": "Basado en Llama 3 70B, entrenado con el mejor conjunto de datos narrativos de NovelAI",
           "zh-TW": "以 Llama 3 70B 基礎模型為底，使用 NovelAI 最高品質故事資料集訓練",
-          "zh-CN": "以 Llama 3 70B 基础模型为底，使用 NovelAI 最高品质故事数据集训练",
+          "zh-CN": "以 Llama 3 70B 基础模型为底，使用 NovelAI 最高质量故事数据集训练",
         },
       },
     ],
@@ -1537,7 +1537,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
           "pt-BR": "Modelo Claude balanceado com ótima qualidade, velocidade e custo",
           "es-419": "Modelo Claude equilibrado con buen balance de calidad, velocidad y costo",
           "zh-TW": "品質、速度與成本兼顧的均衡型 Claude 模型",
-          "zh-CN": "品质、速度与成本兼顾的均衡型 Claude 模型",
+          "zh-CN": "质量、速度与成本兼顾的均衡型 Claude 模型",
         },
       },
       {
@@ -2700,7 +2700,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
           "pt-BR": "Modelo Claude balanceado — melhor mistura de qualidade, velocidade e custo",
           "es-419": "Modelo Claude equilibrado: la mejor combinación de calidad, velocidad y costo",
           "zh-TW": "品質、速度與成本搭配最均衡的 Claude 模型",
-          "zh-CN": "品质、速度与成本搭配最均衡的 Claude 模型",
+          "zh-CN": "质量、速度与成本搭配最均衡的 Claude 模型",
         },
       },
       {
@@ -2841,7 +2841,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração de imagem rápida e eficiente com qualidade e velocidade equilibradas",
           "es-419": "Modelo de generación de imágenes rápido y eficiente, con calidad y velocidad equilibradas",
           "zh-TW": "品質與速度均衡、快速高效的圖像生成模型",
-          "zh-CN": "品质与速度均衡、快速高效的图像生成模型",
+          "zh-CN": "画质与速度均衡、快速高效的图像生成模型",
         },
       },
       {
@@ -2876,7 +2876,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração de imagem avançada com suporte a maior resolução (1K/2K/4K)",
           "es-419": "Modelo avanzado de generación de imágenes con mayor resolución (1K/2K/4K) y calidad mejorada",
           "zh-TW": "支援更高解析度（1K/2K/4K）與強化品質的進階圖像生成模型",
-          "zh-CN": "支持更高分辨率（1K/2K/4K）与强化品质的进阶图像生成模型",
+          "zh-CN": "支持更高分辨率（1K/2K/4K）与强化画质的进阶图像生成模型",
         },
       },
       {
@@ -2887,7 +2887,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル（非推奨、gemini-3-pro-imageを使用）",
           "zh-TW": "支援更高解析度（1K/2K/4K）與強化品質的進階圖像生成模型（已淘汰，請改用 gemini-3-pro-image）",
-          "zh-CN": "支持更高分辨率（1K/2K/4K）与强化品质的进阶图像生成模型（已淘汰，请改用 gemini-3-pro-image）",
+          "zh-CN": "支持更高分辨率（1K/2K/4K）与强化画质的进阶图像生成模型（已淘汰，请改用 gemini-3-pro-image）",
         },
       },
     ],
@@ -2905,7 +2905,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração de imagem rápida via OpenRouter, balanceada",
           "es-419": "Generación de imágenes rápida y eficiente vía OpenRouter, con calidad y velocidad equilibradas",
           "zh-TW": "經由 OpenRouter、品質與速度均衡的快速高效圖像生成",
-          "zh-CN": "经由 OpenRouter、品质与速度均衡的快速高效图像生成",
+          "zh-CN": "经由 OpenRouter、画质与速度均衡的快速高效图像生成",
         },
       },
       {
@@ -2942,7 +2942,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração de imagem avançada via OpenRouter com melhor resolução",
           "es-419": "Generación de imágenes avanzada vía OpenRouter con mejor calidad y opciones de resolución",
           "zh-TW": "經由 OpenRouter、具備強化品質與解析度選項的進階圖像生成",
-          "zh-CN": "经由 OpenRouter、具备强化品质与分辨率选项的进阶图像生成",
+          "zh-CN": "经由 OpenRouter、具备强化画质与分辨率选项的进阶图像生成",
         },
       },
       {
@@ -2973,7 +2973,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração Gemini rápida via Vertex AI com qualidade balanceada",
           "es-419": "Generación de imágenes Gemini rápida y eficiente vía Vertex AI, con calidad equilibrada",
           "zh-TW": "經由 Vertex AI、品質與速度均衡的快速高效 Gemini 圖像生成",
-          "zh-CN": "经由 Vertex AI、品质与速度均衡的快速高效 Gemini 图像生成",
+          "zh-CN": "经由 Vertex AI、画质与速度均衡的快速高效 Gemini 图像生成",
         },
       },
       {
@@ -3010,7 +3010,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração avançada de imagens via Vertex AI com qualidade aprimorada",
           "es-419": "Generación de imágenes avanzada vía Vertex AI con calidad mejorada",
           "zh-TW": "經由 Vertex AI、具備強化品質與解析度選項的進階圖像生成",
-          "zh-CN": "经由 Vertex AI、具备强化品质与分辨率选项的进阶图像生成",
+          "zh-CN": "经由 Vertex AI、具备强化画质与分辨率选项的进阶图像生成",
         },
       },
       {
@@ -3021,7 +3021,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成（非推奨、gemini-3-pro-imageを使用）",
           "zh-TW": "經由 Vertex AI、具備強化品質與解析度選項的進階圖像生成（已淘汰，請改用 gemini-3-pro-image）",
-          "zh-CN": "经由 Vertex AI、具备强化品质与分辨率选项的进阶图像生成（已淘汰，请改用 gemini-3-pro-image）",
+          "zh-CN": "经由 Vertex AI、具备强化画质与分辨率选项的进阶图像生成（已淘汰，请改用 gemini-3-pro-image）",
         },
       },
     ],
@@ -3039,7 +3039,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração Gemini rápida via Vertex AI Express",
           "es-419": "Generación de imágenes Gemini rápida y eficiente vía Vertex AI Express, con calidad equilibrada",
           "zh-TW": "經由 Vertex AI Express、品質與速度均衡的快速高效 Gemini 圖像生成",
-          "zh-CN": "经由 Vertex AI Express、品质与速度均衡的快速高效 Gemini 图像生成",
+          "zh-CN": "经由 Vertex AI Express、画质与速度均衡的快速高效 Gemini 图像生成",
         },
       },
       {
@@ -3076,7 +3076,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "pt-BR": "Geração avançada via Vertex AI Express com qualidade aprimorada",
           "es-419": "Generación de imágenes avanzada vía Vertex AI Express con mejor calidad y opciones de resolución",
           "zh-TW": "經由 Vertex AI Express、具備強化品質與解析度選項的進階圖像生成",
-          "zh-CN": "经由 Vertex AI Express、具备强化品质与分辨率选项的进阶图像生成",
+          "zh-CN": "经由 Vertex AI Express、具备强化画质与分辨率选项的进阶图像生成",
         },
       },
       {
@@ -3089,7 +3089,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
           "zh-TW":
             "經由 Vertex AI Express、具備強化品質與解析度選項的進階圖像生成（已淘汰，請改用 gemini-3-pro-image）",
           "zh-CN":
-            "经由 Vertex AI Express、具备强化品质与分辨率选项的进阶图像生成（已淘汰，请改用 gemini-3-pro-image）",
+            "经由 Vertex AI Express、具备强化画质与分辨率选项的进阶图像生成（已淘汰，请改用 gemini-3-pro-image）",
         },
       },
       {
@@ -3298,7 +3298,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
           "pt-BR": "ByteDance Seedance 1.5 Pro — vídeos de 4-12s de alta qualidade",
           "es-419": "ByteDance Seedance 1.5 Pro: video de alta calidad con duración de 4 a 12 segundos",
           "zh-TW": "ByteDance Seedance 1.5 Pro：高品質影片生成，長度 4 到 12 秒",
-          "zh-CN": "ByteDance Seedance 1.5 Pro：高品质视频生成，长度 4 到 12 秒",
+          "zh-CN": "ByteDance Seedance 1.5 Pro：高质量视频生成，长度 4 到 12 秒",
         },
       },
       {

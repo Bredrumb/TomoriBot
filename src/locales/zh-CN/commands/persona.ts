@@ -196,7 +196,7 @@ export default {
       success_description: `已成功移除副人格 **{nickname}**。`,
     },
     default: {
-      description: `应用一套预设人格配置`,
+      description: `应用一套人格预设集`,
       type_description: `应用到主人格／默认人格，或创建为副人格`,
       type_choice_default: `默认人格`,
       type_choice_alter: `副人格`,

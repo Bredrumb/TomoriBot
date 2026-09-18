@@ -213,7 +213,7 @@ TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同�
 | 指令 | 摘要 |
 |---|---|
 | `/persona create` | 手动创建一个简单的人格预设集 |
-| `/persona default` | 应用一个预设的人格配置 |
+| `/persona default` | 应用一套人格预设集 |
 | `/persona export` | 把当前人格导出成可分享的 PNG 文件 |
 | `/persona generate` | AI 驱动的人格生成（需要兼容的提供方） |
 | `/persona import` | 从 PNG、JSON 或 CHARX 文件导入一个人格 |
