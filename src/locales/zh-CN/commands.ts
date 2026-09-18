@@ -23,6 +23,43 @@ import generate from "./commands/generate";
 import stats from "./commands/stats";
 import setup from "./commands/setup";
 import compact from "./commands/compact";
+import choices from "./commands/choices";
+import stPreset from "./commands/st-preset";
+import stPresets from "./commands/st-presets";
+import data from "./commands/data";
+import legal from "./commands/legal";
+import impersonate from "./commands/impersonate";
+import conditioning from "./commands/conditioning";
+import reward from "./commands/reward";
+import punish from "./commands/punish";
+import support from "./commands/support";
+import contribute from "./commands/contribute";
+import donate from "./commands/donate";
+import nsfw from "./commands/nsfw";
+import openrouter from "./commands/openrouter";
+import optionalKey from "./commands/optional-key";
+import scheduledTask from "./commands/scheduled-task";
+import memory from "./commands/memory";
+import teach from "./commands/teach";
+import forget from "./commands/forget";
+import model from "./commands/model";
+import mcps from "./commands/mcps";
+import capabilities from "./commands/capabilities";
+import provider from "./commands/provider";
+import update from "./commands/update";
+import ping from "./commands/ping";
+import comment from "./commands/comment";
+import kill from "./commands/kill";
+import refresh from "./commands/refresh";
+import expressions from "./commands/expressions";
+import matrix from "./commands/matrix";
+import respond from "./commands/respond";
+import shared from "./commands/shared";
+import nuke from "./commands/nuke";
+import quota from "./commands/quota";
+import reset from "./commands/reset";
+import exportCommands from "./commands/export";
+import importCommands from "./commands/import";
 
 export default {
   commands: {
@@ -43,5 +80,42 @@ export default {
     ...stats,
     ...setup,
     ...compact,
+    ...choices,
+    ...stPreset,
+    ...stPresets,
+    ...data,
+    ...legal,
+    ...impersonate,
+    ...conditioning,
+    ...reward,
+    ...punish,
+    ...support,
+    ...contribute,
+    ...donate,
+    ...nsfw,
+    ...openrouter,
+    ...optionalKey,
+    ...scheduledTask,
+    ...memory,
+    ...teach,
+    ...forget,
+    ...model,
+    ...mcps,
+    ...capabilities,
+    ...provider,
+    ...update,
+    ...ping,
+    ...comment,
+    ...kill,
+    ...refresh,
+    ...expressions,
+    ...matrix,
+    ...respond,
+    ...shared,
+    ...nuke,
+    ...quota,
+    ...reset,
+    ...exportCommands,
+    ...importCommands,
   },
 };
