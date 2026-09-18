@@ -91,11 +91,11 @@ describe("docs locale resolution", () => {
     expect(resolveDocsLocale("ja-JP")).toBe("ja");
   });
 
-  it("does not route the es-ES alias to a Spanish tree that is not published yet", () => {
-    // es-ES reuses es-419 strings, but an unpublished alias target must not become a docs prefix:
-    // the reader would land on a route the site does not serve.
-    expect(resolveDocsLocale("es-ES")).toBe(DEFAULT_DOCS_LOCALE_ID);
-    expect(matchAcceptLanguage("es-ES,es;q=0.9")).toBe(DEFAULT_DOCS_LOCALE_ID);
+  it("routes the es-ES alias to the published es-419 tree", () => {
+    // es-ES has no tree of its own and reuses es-419, so the alias only becomes a docs prefix
+    // once es-419 is published; before that it stayed on English to avoid an unserved route.
+    expect(resolveDocsLocale("es-ES")).toBe("es-419");
+    expect(matchAcceptLanguage("es-ES,es;q=0.9")).toBe("es-419");
   });
 
   it("falls back to English for an unsupported language", () => {

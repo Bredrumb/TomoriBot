@@ -120,7 +120,7 @@ export const DOCS_LOCALES = [
     botLocaleCode: "es-419",
     lang: "es-419",
     label: "Español (Latinoamérica)",
-    docsTree: false,
+    docsTree: true,
     descriptionMaxLength: 160,
   }),
   defineDocsLocale({

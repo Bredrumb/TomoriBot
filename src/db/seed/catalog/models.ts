@@ -62,6 +62,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "速度と効率を最適化した軽量版モデル",
           "pt-BR": "Versão leve otimizada para velocidade e eficiência",
+          "es-419": "Versión ligera optimizada para velocidad y eficiencia",
         },
       },
       {
@@ -94,6 +95,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "実験的な汎用アプリケーション向けモデル（非推奨、gemini-2.5-flashを使用）",
           "pt-BR": "Modelo experimental para uso geral (obsoleto, use gemini-2.5-flash)",
+          "es-419": "Modelo experimental para aplicaciones de uso general (obsoleto, usa gemini-2.5-flash)",
         },
       },
       {
@@ -112,6 +114,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "汎用アプリケーション向けのバランス型モデル（非推奨、gemini-3.5-flash-liteを使用）",
           "pt-BR": "Modelo balanceado para uso geral (obsoleto, use gemini-3.5-flash-lite)",
+          "es-419": "Modelo equilibrado para aplicaciones de uso general (obsoleto, usa gemini-3.5-flash-lite)",
         },
       },
       {
@@ -131,6 +134,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑な推論と分析に最も優れたモデル",
           "pt-BR": "Modelo mais capaz para raciocínio complexo e análise",
+          "es-419": "El modelo más capaz para razonamiento y análisis complejos",
         },
       },
       {
@@ -147,6 +151,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "強化されたパフォーマンスと機能を備えた最新のモデル（非推奨、gemini-3.5-flashを使用）",
           "pt-BR": "Modelo mais recente com desempenho aprimorado (obsoleto, use gemini-3.5-flash)",
+          "es-419": "Modelo más reciente con rendimiento y capacidades mejoradas (obsoleto, usa gemini-3.5-flash)",
         },
       },
       {
@@ -163,6 +168,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "強化されたパフォーマンスと機能を備えた最新のプレビューモデル（非推奨、gemini-3-flashを使用）",
           "pt-BR": "Modelo de visualização mais recente (obsoleto, use gemini-3-flash)",
+          "es-419": "Modelo de vista previa más reciente con rendimiento mejorado (obsoleto, usa gemini-3-flash)",
         },
       },
       {
@@ -195,6 +201,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用を含むフルマルチモーダル機能に対応したGemini 3.1 Flash Lite安定版モデル",
           "pt-BR": "Modelo estável Gemini 3.1 Flash Lite multimodal e com ferramentas",
+          "es-419": "Modelo estable Gemini 3.1 Flash Lite con capacidades multimodales y de herramientas",
         },
       },
       {
@@ -211,6 +218,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル",
           "pt-BR": "Modelo Gemini 3.5 Flash rápido e eficiente para uso geral",
+          "es-419": "Modelo Gemini 3.5 Flash rápido y eficiente para aplicaciones de uso general",
         },
       },
       {
@@ -228,6 +236,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用を含むフルマルチモーダル機能に対応したGemini 3.5 Flash Lite安定版モデル",
           "pt-BR": "Modelo estável Gemini 3.5 Flash Lite multimodal e com ferramentas",
+          "es-419": "Modelo estable Gemini 3.5 Flash Lite con capacidades multimodales y de herramientas",
         },
       },
       {
@@ -244,6 +253,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル",
           "pt-BR": "Modelo Gemini 3.6 Flash rápido e eficiente para uso geral",
+          "es-419": "Modelo Gemini 3.6 Flash rápido y eficiente para aplicaciones de uso general",
         },
       },
       {
@@ -260,6 +270,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "汎用アプリケーション向けの最新Gemini 3.7 Flashモデル",
           "pt-BR": "Modelo Gemini 3.7 Flash mais recente para uso geral",
+          "es-419": "El modelo Gemini 3.7 Flash más reciente para aplicaciones de uso general",
         },
       },
       {
@@ -274,6 +285,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑な推論と分析向けの高度なGemini 3.5 Proモデル",
           "pt-BR": "Modelo avançado Gemini 3.5 Pro para raciocínio complexo e análise",
+          "es-419": "Modelo avanzado Gemini 3.5 Pro para razonamiento y análisis complejos",
         },
       },
       {
@@ -292,6 +304,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "高度な推論と分析に特化したプレビューモデル（非推奨、gemini-3.1-pro-preview を使用）",
           "pt-BR": "Modelo de prévia focado em raciocínio avançado (obsoleto, use gemini-3.1-pro-preview)",
+          "es-419": "Modelo de vista previa centrado en razonamiento avanzado (obsoleto, usa gemini-3.1-pro-preview)",
         },
       },
       {
@@ -309,6 +322,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "高度な推論と分析に特化した最新のGemini 3.1 Proモデル",
           "pt-BR": "Modelo Gemini 3.1 Pro mais recente focado em raciocínio avançado e análise",
+          "es-419": "El modelo Gemini 3.1 Pro más reciente, centrado en razonamiento y análisis avanzados",
         },
       },
       {
@@ -327,6 +341,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "高度な推論と分析に特化した最新のGemini 3.1 Proプレビューモデル（非推奨、gemini-3.1-proを使用）",
           "pt-BR": "Prévia do Gemini 3.1 Pro focado em raciocínio avançado (obsoleto, use gemini-3.1-pro)",
+          "es-419": "Vista previa de Gemini 3.1 Pro centrada en razonamiento avanzado (obsoleto, usa gemini-3.1-pro)",
         },
       },
       {
@@ -340,6 +355,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4.31B ITモデル",
           "pt-BR": "Gemma 4.31B IT com ferramentas, visão, vídeo e saída estruturada",
+          "es-419": "Gemma 4.31B IT de Google con herramientas, comprensión de imagen y video, y salida estructurada",
         },
       },
       {
@@ -353,6 +369,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用・画像理解・動画理解・構造化出力に対応するGoogleのGemma 4 26B A4B IT MoEモデル",
           "pt-BR": "Gemma 4 26B A4B IT MoE com ferramentas, visão, vídeo e saída estruturada",
+          "es-419": "Gemma 4 26B A4B IT MoE de Google con herramientas, visión, video y salida estructurada",
         },
       },
       {
@@ -365,6 +382,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "画像理解に対応した指示調整済みGemmaモデル",
           "pt-BR": "Modelo Gemma ajustado por instruções com compreensão de imagem",
+          "es-419": "Modelo Gemma ajustado por instrucciones con comprensión de imagen",
         },
       },
     ],
@@ -387,6 +405,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の速度と効率を最適化した軽量版モデル",
           "pt-BR": "Versão leve otimizada para velocidade e eficiência via Vertex AI",
+          "es-419": "Versión ligera optimizada para velocidad y eficiencia vía Vertex AI",
         },
       },
       {
@@ -404,6 +423,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の汎用アプリケーション向けバランス型モデル（非推奨、gemini-3.5-flash-liteを使用）",
           "pt-BR": "Modelo balanceado para uso geral via Vertex AI (obsoleto, use gemini-3.5-flash-lite)",
+          "es-419": "Modelo equilibrado para uso general vía Vertex AI (obsoleto, usa gemini-3.5-flash-lite)",
         },
       },
       {
@@ -422,6 +442,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の複雑な推論と分析に最も優れたモデル",
           "pt-BR": "Modelo mais capaz para raciocínio complexo e análise via Vertex AI",
+          "es-419": "El modelo más capaz para razonamiento y análisis complejos vía Vertex AI",
         },
       },
       {
@@ -497,6 +518,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル",
           "pt-BR": "Gemini 3.5 Flash rápido e eficiente para uso geral via Vertex AI",
+          "es-419": "Gemini 3.5 Flash rápido y eficiente para uso general vía Vertex AI",
         },
       },
       {
@@ -529,6 +551,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル",
           "pt-BR": "Gemini 3.6 Flash rápido e eficiente para uso geral via Vertex AI",
+          "es-419": "Gemini 3.6 Flash rápido y eficiente para uso general vía Vertex AI",
         },
       },
       {
@@ -545,6 +568,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の汎用アプリケーション向けの最新Gemini 3.7 Flashモデル",
           "pt-BR": "Modelo Gemini 3.7 Flash mais recente para uso geral via Vertex AI",
+          "es-419": "El Gemini 3.7 Flash más reciente para uso general vía Vertex AI",
         },
       },
       {
@@ -559,6 +583,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の複雑な推論と分析向けの高度なGemini 3.5 Proモデル",
           "pt-BR": "Gemini 3.5 Pro avançado para raciocínio complexo e análise via Vertex AI",
+          "es-419": "Gemini 3.5 Pro avanzado para razonamiento y análisis complejos vía Vertex AI",
         },
       },
       {
@@ -576,6 +601,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の高度な推論と分析に特化した最新のGemini 3.1 Proモデル",
           "pt-BR": "Gemini 3.1 Pro focado em raciocínio avançado via Vertex AI",
+          "es-419": "Gemini 3.1 Pro más reciente, centrado en razonamiento avanzado, vía Vertex AI",
         },
       },
       {
@@ -616,6 +642,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI経由の画像理解に対応した指示調整済みGemmaモデル",
           "pt-BR": "Modelo Gemma com compreensão de imagem via Vertex AI",
+          "es-419": "Modelo Gemma ajustado por instrucciones con comprensión de imagen vía Vertex AI",
         },
       },
     ],
@@ -635,6 +662,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Expressで利用できるGemini 2.0 Flashモデル",
           "pt-BR": "Modelo Gemini 2.0 Flash via Vertex AI Express",
+          "es-419": "Modelo Gemini 2.0 Flash disponible mediante Vertex AI Express",
         },
       },
       {
@@ -649,6 +677,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Expressで利用できるGemini 2.0 Flash Liteモデル",
           "pt-BR": "Modelo Gemini 2.0 Flash Lite via Vertex AI Express",
+          "es-419": "Modelo Gemini 2.0 Flash Lite disponible mediante Vertex AI Express",
         },
       },
       {
@@ -663,6 +692,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Expressで利用できるGemini 2.5 Flash Liteモデル",
           "pt-BR": "Modelo Gemini 2.5 Flash Lite via Vertex AI Express",
+          "es-419": "Modelo Gemini 2.5 Flash Lite disponible mediante Vertex AI Express",
         },
       },
       {
@@ -691,6 +721,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の軽量Gemini 2.5 Flash Liteモデル",
           "pt-BR": "Modelo leve Gemini 2.5 Flash Lite via Vertex AI Express",
+          "es-419": "Modelo ligero Gemini 2.5 Flash Lite vía Vertex AI Express",
         },
       },
       {
@@ -706,6 +737,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由のバランス型Gemini 2.5 Flashモデル",
           "pt-BR": "Modelo balanceado Gemini 2.5 Flash via Vertex AI Express",
+          "es-419": "Modelo equilibrado Gemini 2.5 Flash vía Vertex AI Express",
         },
       },
       {
@@ -722,6 +754,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由で利用できる最も高性能なGemini 2.5 Proモデル",
           "pt-BR": "Modelo mais capaz Gemini 2.5 Pro via Vertex AI Express",
+          "es-419": "El Gemini 2.5 Pro más capaz vía Vertex AI Express",
         },
       },
       {
@@ -761,6 +794,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の推論特化Gemini 3 Proモデル",
           "pt-BR": "Gemini 3 Pro focado em raciocínio via Vertex AI Express",
+          "es-419": "Gemini 3 Pro centrado en razonamiento vía Vertex AI Express",
         },
       },
       {
@@ -777,6 +811,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の推論特化Gemini 3 Proプレビューモデル（非推奨、gemini-3-proを使用）",
           "pt-BR": "Prévia do Gemini 3 Pro via Vertex AI Express (obsoleto)",
+          "es-419": "Vista previa de Gemini 3 Pro centrada en razonamiento, vía Vertex AI Express (obsoleto)",
         },
       },
       {
@@ -793,6 +828,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由のGemini 3.1 Proモデル（非推奨、gemini-3.1-pro-previewを使用）",
           "pt-BR": "Gemini 3.1 Pro via Vertex AI Express (obsoleto, use preview)",
+          "es-419": "Gemini 3.1 Pro vía Vertex AI Express (obsoleto, usa gemini-3.1-pro-preview)",
         },
       },
       {
@@ -808,6 +844,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の最新Gemini 3.1 Proプレビューモデル",
           "pt-BR": "Prévia mais recente do Gemini 3.1 Pro via Vertex AI Express",
+          "es-419": "Última vista previa de Gemini 3.1 Pro vía Vertex AI Express",
         },
       },
       {
@@ -822,6 +859,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由のGemini 3.5 Flash Lite安定版モデル",
           "pt-BR": "Modelo estável Gemini 3.5 Flash Lite via Vertex AI Express",
+          "es-419": "Modelo estable Gemini 3.5 Flash Lite vía Vertex AI Express",
         },
       },
       {
@@ -836,6 +874,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の汎用アプリケーション向けの高速で効率的なGemini 3.5 Flashモデル",
           "pt-BR": "Gemini 3.5 Flash rápido e eficiente via Vertex AI Express",
+          "es-419": "Gemini 3.5 Flash rápido y eficiente para uso general vía Vertex AI Express",
         },
       },
       {
@@ -850,6 +889,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の汎用アプリケーション向けの高速で効率的なGemini 3.6 Flashモデル",
           "pt-BR": "Gemini 3.6 Flash rápido e eficiente via Vertex AI Express",
+          "es-419": "Gemini 3.6 Flash rápido y eficiente para uso general vía Vertex AI Express",
         },
       },
       {
@@ -864,6 +904,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の汎用アプリケーション向けの最新Gemini 3.7 Flashモデル",
           "pt-BR": "Gemini 3.7 Flash mais recente via Vertex AI Express",
+          "es-419": "El Gemini 3.7 Flash más reciente para uso general vía Vertex AI Express",
         },
       },
     ],
@@ -881,6 +922,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "創造性とキャラクター一貫性を強化した最新のNovelAIロールプレイモデル",
           "pt-BR": "Modelo NovelAI para roleplay com criatividade e consistência aprimoradas",
+          "es-419": "El modelo de rol de NovelAI más reciente, con creatividad y consistencia de personaje mejoradas",
         },
       },
       {
@@ -890,6 +932,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ストーリーテリングとロールプレイ向けのレガシーKayraモデル",
           "pt-BR": "Modelo legado Kayra para storytelling e roleplay",
+          "es-419": "Modelo Kayra heredado para narrativa y juego de rol",
         },
       },
       {
@@ -899,6 +942,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Llama 3 70Bベースモデルを基に、NovelAI最高品質のストーリーテリングデータセットで学習したモデル",
           "pt-BR": "Baseado no Llama 3 70B, treinado no melhor dataset de storytelling da NovelAI",
+          "es-419": "Basado en Llama 3 70B, entrenado con el mejor conjunto de datos narrativos de NovelAI",
         },
       },
     ],
@@ -917,6 +961,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "画像を見ることができ、ロールプレイにも優れた汎用モデル（非推奨、stepfun/step-3.5-flash を使用）",
           "pt-BR": "Modelo geral com visão, ótimo para roleplay (obsoleto)",
+          "es-419": "Modelo con visión, también excelente para el rol (obsoleto, usa stepfun/step-3.5-flash)",
         },
       },
       {
@@ -928,6 +973,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用のみに対応した高速Stepfunモデル",
           "pt-BR": "Modelo rápido Stepfun apenas com suporte a ferramentas",
+          "es-419": "Modelo rápido de Stepfun solo con soporte de herramientas",
         },
       },
       {
@@ -941,6 +987,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "自然なロールプレイも可能な最先端の人間調整型モデル",
           "pt-BR": "Modelo avançado alinhado a humanos, excelente para roleplay natural",
+          "es-419": "Modelo de vanguardia alineado con humanos, también natural en el juego de rol",
         },
       },
       {
@@ -954,6 +1001,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "最新の自然なロールプレイも可能な最先端の人間調整型モデル",
           "pt-BR": "Modelo avançado mais recente, excelente para roleplay natural",
+          "es-419": "El más reciente modelo de vanguardia alineado con humanos, natural en el juego de rol",
         },
       },
       {
@@ -966,6 +1014,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "応答性の高い汎用タスク向けの高速GLM 4.7バリアント",
           "pt-BR": "Variante rápida do GLM 4.7 para tarefas gerais",
+          "es-419": "Variante rápida de GLM 4.7 para tareas generales con respuesta ágil",
         },
       },
       {
@@ -979,6 +1028,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "高度な自然言語理解とロールプレイ機能を備えた最新のGLM 5モデル",
           "pt-BR": "GLM 5 com compreensão avançada de linguagem natural e roleplay",
+          "es-419": "El modelo GLM 5 más reciente, con comprensión avanzada del lenguaje natural y capacidad de rol",
         },
       },
       {
@@ -993,6 +1043,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "視覚理解・文書分析・動画入力・ツール利用に対応するマルチモーダルGLMモデル",
           "pt-BR": "GLM multimodal para visão, análise de documentos, vídeo e ferramentas",
+          "es-419": "Modelo GLM multimodal para comprensión visual, análisis de documentos, video y herramientas",
         },
       },
       {
@@ -1006,6 +1057,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツールと構造化出力に対応した無料のOpenRouter Pony Alphaモデル（非推奨）",
           "pt-BR": "Modelo gratuito Pony Alpha via OpenRouter com ferramentas (OBSOLETO)",
+          "es-419": "Modelo gratuito Pony Alpha de OpenRouter con herramientas y salida estructurada (OBSOLETO)",
         },
       },
       {
@@ -1020,6 +1072,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "創作とロールプレイに特化した無検閲モデル",
           "pt-BR": "Modelo sem censura especializado em escrita criativa e roleplay",
+          "es-419": "Modelo sin censura especializado en escritura creativa y juego de rol",
         },
       },
       {
@@ -1033,6 +1086,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ロールプレイにも優れたコスト効率の良い実験モデル",
           "pt-BR": "Modelo experimental econômico, ótimo para roleplay",
+          "es-419": "Modelo experimental económico, también excelente para el rol",
         },
       },
       {
@@ -1071,6 +1125,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "DeepSeek V4 Flashファミリーの最新モデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo mais recente da família DeepSeek V4 Flash",
+          "es-419": "Siempre redirige al modelo más reciente de la familia DeepSeek V4 Flash",
         },
       },
       {
@@ -1085,6 +1140,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ロールプレイに優れた高度なChimera DeepSeekモデル",
           "pt-BR": "Modelo avançado Chimera DeepSeek, ótimo para roleplay",
+          "es-419": "Modelo avanzado Chimera DeepSeek, excelente para el juego de rol",
         },
       },
       {
@@ -1096,7 +1152,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Fast and efficient general-purpose model",
-        i18n: { ja: "高速かつ効率的な汎用モデル", "pt-BR": "Modelo de uso geral rápido e eficiente" },
+        i18n: {
+          ja: "高速かつ効率的な汎用モデル",
+          "pt-BR": "Modelo de uso geral rápido e eficiente",
+          "es-419": "Modelo de uso general rápido y eficiente",
+        },
       },
       {
         provider: "openrouter",
@@ -1109,7 +1169,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Latest fast and efficient general-purpose model",
-        i18n: { ja: "高速かつ効率的な汎用モデル", "pt-BR": "Modelo de uso geral mais recente, rápido e eficiente" },
+        i18n: {
+          ja: "高速かつ効率的な汎用モデル",
+          "pt-BR": "Modelo de uso geral mais recente, rápido e eficiente",
+          "es-419": "El modelo de uso general más reciente, rápido y eficiente",
+        },
       },
       {
         provider: "openrouter",
@@ -1122,6 +1186,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "xAIの最新Grokモデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo Grok mais recente da xAI",
+          "es-419": "Siempre redirige al modelo Grok más reciente de xAI",
         },
       },
       {
@@ -1197,6 +1262,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "OpenRouter経由でツール利用・画像理解・動画・YouTube処理に対応した最新のGemini 3.1 Proプレビュー",
           "pt-BR": "Prévia do Gemini 3.1 Pro via OpenRouter com visão, vídeo e YouTube",
+          "es-419": "Última vista previa de Gemini 3.1 Pro vía OpenRouter con herramientas, imagen, video y YouTube",
         },
       },
       {
@@ -1211,6 +1277,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Google Gemini Flashファミリーの最新モデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo mais recente da família Gemini Flash",
+          "es-419": "Siempre redirige al modelo más reciente de la familia Gemini Flash",
         },
       },
       {
@@ -1226,6 +1293,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Google Gemini Proファミリーの最新モデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo mais recente da família Gemini Pro",
+          "es-419": "Siempre redirige al modelo más reciente de la familia Gemini Pro",
         },
       },
       {
@@ -1266,6 +1334,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑なタスクや問題に優れた最先端性能を持ち、ロールプレイや創作にも秀でたモデル",
           "pt-BR": "Desempenho avançado em tarefas complexas, ótimo para roleplay e escrita",
+          "es-419":
+            "Rendimiento de vanguardia en tareas complejas, también excelente para el rol y la escritura creativa",
         },
       },
       {
@@ -1281,6 +1351,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "品質・速度・コストのバランスに優れたClaudeモデル",
           "pt-BR": "Modelo Claude balanceado com ótima qualidade, velocidade e custo",
+          "es-419": "Modelo Claude equilibrado con buen balance de calidad, velocidad y costo",
         },
       },
       {
@@ -1293,6 +1364,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Anthropic Claude Sonnetファミリーの最新モデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo mais recente Claude Sonnet",
+          "es-419": "Siempre redirige al modelo más reciente de la familia Claude Sonnet",
         },
       },
       {
@@ -1306,6 +1378,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Anthropic Claude Opusファミリーの最新モデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo mais recente Claude Opus",
+          "es-419": "Siempre redirige al modelo más reciente de la familia Claude Opus",
         },
       },
       {
@@ -1318,7 +1391,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "Lightweight version of claude-sonnet-4.5",
-        i18n: { ja: "claude-sonnet-4.5の軽量版", "pt-BR": "Versão leve do claude-sonnet-4.5" },
+        i18n: {
+          ja: "claude-sonnet-4.5の軽量版",
+          "pt-BR": "Versão leve do claude-sonnet-4.5",
+          "es-419": "Versión ligera de claude-sonnet-4.5",
+        },
       },
       {
         provider: "openrouter",
@@ -1330,6 +1407,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Anthropic Claude Haikuファミリーの最新モデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo mais recente Claude Haiku",
+          "es-419": "Siempre redirige al modelo más reciente de la familia Claude Haiku",
         },
       },
       {
@@ -1345,6 +1423,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑なタスクや問題に優れた最先端性能",
           "pt-BR": "Desempenho avançado em tarefas e problemas complexos",
+          "es-419": "Rendimiento de vanguardia en tareas y problemas complejos",
         },
       },
       {
@@ -1359,7 +1438,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         supportsStructoutput: true,
         isDeprecated: true,
         desc: "State-of-the-art performance, more conversational",
-        i18n: { ja: "複雑なタスクや問題に優れた最先端性能", "pt-BR": "Desempenho avançado, mais coloquial" },
+        i18n: {
+          ja: "複雑なタスクや問題に優れた最先端性能",
+          "pt-BR": "Desempenho avançado, mais coloquial",
+          "es-419": "Rendimiento de vanguardia, más conversacional",
+        },
       },
       {
         provider: "openrouter",
@@ -1371,6 +1454,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ChatGPTで使用されるOpenAIの最新Instantチャットモデルへ常に解決されます",
           "pt-BR": "Sempre resolve para o modelo Instant mais recente da OpenAI (ChatGPT)",
+          "es-419": "Siempre apunta al modelo Instant más reciente de OpenAI usado en ChatGPT",
         },
       },
       {
@@ -1384,6 +1468,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Mistral史上最も高性能で、低コストなマルチモーダルモデル",
           "pt-BR": "Modelo mais capaz da Mistral, econômico e multimodal",
+          "es-419": "El modelo más capaz de Mistral hasta ahora, económico y multimodal",
         },
       },
       {
@@ -1395,6 +1480,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "創作（文章執筆・ロールプレイ）に特化した軽量ツール対応モデル",
           "pt-BR": "Modelo leve com ferramentas, projetado para escrita criativa e roleplay",
+          "es-419": "Modelo ligero con herramientas, diseñado para la escritura creativa y el juego de rol",
         },
       },
       {
@@ -1408,6 +1494,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Mistralの軽量マルチモーダル汎用モデル",
           "pt-BR": "Modelo multimodal leve de uso geral da Mistral",
+          "es-419": "Modelo multimodal ligero de uso general de Mistral",
         },
       },
       {
@@ -1420,6 +1507,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ロールプレイにも優れた無料の汎用モデル",
           "pt-BR": "Modelo de uso geral gratuito, também bom para roleplay",
+          "es-419": "Modelo gratuito de uso general, también bueno para el rol",
         },
       },
       {
@@ -1428,7 +1516,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isFree: true,
         isDeprecated: true,
         desc: "Free general-purpose model",
-        i18n: { ja: "無料の汎用モデル", "pt-BR": "Modelo de uso geral gratuito" },
+        i18n: {
+          ja: "無料の汎用モデル",
+          "pt-BR": "Modelo de uso geral gratuito",
+          "es-419": "Modelo gratuito de uso general",
+        },
       },
       {
         provider: "openrouter",
@@ -1442,6 +1534,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑なタスクや問題の解決に適した無料モデル",
           "pt-BR": "Modelo gratuito para resolver tarefas e problemas complexos",
+          "es-419": "Modelo gratuito para resolver tareas y problemas complejos",
         },
       },
       {
@@ -1455,6 +1548,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "強化された推論とビジョン機能を備えた無料のマルチモーダルモデル",
           "pt-BR": "Modelo multimodal gratuito com raciocínio e visão aprimorados",
+          "es-419": "Modelo multimodal gratuito con razonamiento y visión mejorados",
         },
       },
       {
@@ -1467,6 +1561,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "推論とエージェントタスク向けのシンキングモードを備えた無料軽量モデル",
           "pt-BR": "Modelo leve gratuito com modo de pensamento para raciocínio",
+          "es-419": "Modelo ligero gratuito con modo de pensamiento para razonamiento y tareas de agente",
         },
       },
       {
@@ -1479,6 +1574,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "創作とキャラクター対話に特化した無料の実験モデル",
           "pt-BR": "Modelo experimental gratuito para storytelling criativo e interação",
+          "es-419": "Modelo experimental gratuito para narrativa creativa e interacción de personajes",
         },
       },
       {
@@ -1493,6 +1589,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用・画像理解・構造化出力に対応したQwen 3.5 35B A3Bモデル（非推奨）",
           "pt-BR": "Modelo Qwen 3.5 35B A3B com ferramentas e visão (obsoleto)",
+          "es-419": "Modelo Qwen 3.5 35B A3B con herramientas, visión y salida estructurada (obsoleto)",
         },
       },
       {
@@ -1509,6 +1606,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用・画像理解・構造化出力に対応したQwen 3.5 27Bモデル",
           "pt-BR": "Modelo Qwen 3.5 27B com ferramentas e visão",
+          "es-419": "Modelo Qwen 3.5 27B con herramientas, visión y salida estructurada",
         },
       },
       {
@@ -1525,6 +1623,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用・画像理解・構造化出力に対応した高速Qwen 3.5 Flash（02-23）モデル",
           "pt-BR": "Modelo rápido Qwen 3.5 Flash (02-23) com ferramentas e visão",
+          "es-419": "Modelo rápido Qwen 3.5 Flash (02-23) con herramientas, visión y salida estructurada",
         },
       },
       {
@@ -1539,6 +1638,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用と構造化出力に対応したNemotronモデル",
           "pt-BR": "Modelo Nemotron com suporte a ferramentas e saída estruturada",
+          "es-419": "Modelo Nemotron con herramientas y salida estructurada",
         },
       },
       {
@@ -1552,6 +1652,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用と構造化出力に対応した無料のNemotronモデル（非推奨、有料バージョンを使用）",
           "pt-BR": "Modelo gratuito Nemotron com ferramentas e saída estruturada (obsoleto)",
+          "es-419":
+            "Modelo Nemotron gratuito con herramientas y salida estructurada (obsoleto, usa la variante de pago)",
         },
       },
       {
@@ -1565,6 +1667,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Moonshot AIの最先端ネイティブ・マルチモーダルモデル",
           "pt-BR": "Modelo multimodal nativo de última geração da Moonshot AI",
+          "es-419": "El modelo multimodal nativo de vanguardia de Moonshot AI",
         },
       },
       {
@@ -1580,6 +1683,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Moonshot AIの最新ネイティブ・マルチモーダルモデル",
           "pt-BR": "Modelo multimodal nativo mais recente da Moonshot AI",
+          "es-419": "El modelo multimodal nativo más reciente de Moonshot AI",
         },
       },
       {
@@ -1592,6 +1696,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "MoonshotAI Kimiファミリーの最新モデルへ常にリダイレクトされます",
           "pt-BR": "Redireciona sempre para o modelo mais recente MoonshotAI Kimi",
+          "es-419": "Siempre redirige al modelo más reciente de la familia Kimi de MoonshotAI",
         },
       },
       {
@@ -1606,6 +1711,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "エージェントタスクと画像・動画理解に対応するコスト効率の高いオムニモーダルモデル",
           "pt-BR": "Modelo omnimodal econômico para tarefas autônomas, imagens e vídeos",
+          "es-419": "Modelo omnimodal económico para tareas agénticas y comprensión de imagen y video",
         },
       },
       {
@@ -1625,6 +1731,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "旧コードネーム（非推奨、other-modelを使用）",
           "pt-BR": "Codinome legado (obsoleto, use other-model)",
+          "es-419": "Nombre de código heredado (obsoleto, usa other-model)",
         },
       },
       {
@@ -1639,6 +1746,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "上級者向け：コードネームを入力して任意のOpenRouterモデルを使用",
           "pt-BR": "Avançado: Use qualquer modelo OpenRouter inserindo seu codinome",
+          "es-419": "Avanzado: usa cualquier modelo de OpenRouter escribiendo su nombre de código",
         },
       },
       {
@@ -1673,6 +1781,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用と構造化出力に対応した、高速でコスト効率の良いデフォルトのDeepSeek v4モデル",
           "pt-BR": "Modelo padrão DeepSeek v4 rápido e econômico com ferramentas",
+          "es-419": "Modelo predeterminado DeepSeek v4, rápido y económico, con herramientas y salida estructurada",
         },
       },
       {
@@ -1688,6 +1797,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "画像認識機能を持つ実験的なDeepSeek v4 Flashモデル",
           "pt-BR": "Modelo experimental DeepSeek v4 Flash com capacidade de visão",
+          "es-419": "Modelo experimental DeepSeek v4 Flash con capacidad de visión de imágenes",
         },
       },
       {
@@ -1703,6 +1813,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用と構造化出力に対応した、高性能なDeepSeek v4モデル",
           "pt-BR": "DeepSeek v4 de alta capacidade com ferramentas e saída estruturada",
+          "es-419": "Modelo DeepSeek v4 muy capaz, con herramientas y salida estructurada",
         },
       },
       {
@@ -1751,6 +1862,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用と構造化出力に対応した、NVIDIA NIMのデフォルトチャットモデル",
           "pt-BR": "Modelo de chat padrão NVIDIA NIM com suporte a ferramentas",
+          "es-419": "Modelo de chat predeterminado de NVIDIA NIM con herramientas y salida estructurada",
         },
       },
       {
@@ -1766,6 +1878,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "TomoriBotの厳選NVIDIA NIMセット内で最も高性能なマルチモーダルモデル",
           "pt-BR": "Modelo multimodal NVIDIA NIM mais capaz na seleção do TomoriBot",
+          "es-419": "El modelo multimodal NVIDIA NIM más capaz del catálogo seleccionado de TomoriBot",
         },
       },
       {
@@ -1775,6 +1888,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用や構造化出力に対応しない、NVIDIA NIMの汎用テキストモデル",
           "pt-BR": "Modelo de texto de uso geral NVIDIA NIM (sem ferramentas)",
+          "es-419": "Modelo de texto NVIDIA NIM de uso general sin herramientas ni salida estructurada",
         },
       },
       {
@@ -1787,6 +1901,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用と構造化出力に対応した、NVIDIA NIMのGLMモデル",
           "pt-BR": "Modelo NVIDIA NIM GLM com ferramentas e saída estruturada",
+          "es-419": "Modelo GLM de NVIDIA NIM con herramientas y salida estructurada",
         },
       },
       {
@@ -1799,6 +1914,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用と構造化出力に対応した、最新のNVIDIA NIM GLM 5.2モデル",
           "pt-BR": "Modelo mais recente NVIDIA NIM GLM 5.2 com suporte a ferramentas",
+          "es-419": "El más reciente modelo NVIDIA NIM GLM 5.2 con herramientas y salida estructurada",
         },
       },
       {
@@ -1810,6 +1926,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ツール利用のみに対応した高速NVIDIA NIMチャットモデル",
           "pt-BR": "Modelo de chat rápido NVIDIA NIM apenas com ferramentas",
+          "es-419": "Modelo de chat rápido de NVIDIA NIM solo con herramientas",
         },
       },
       {
@@ -1822,6 +1939,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "画像理解に対応した、NVIDIA NIMのGemmaビジョンモデル",
           "pt-BR": "Modelo NVIDIA NIM Gemma com visão para compreensão de imagens",
+          "es-419": "Modelo Gemma de NVIDIA NIM con visión para comprensión de imágenes",
         },
       },
       {
@@ -1835,6 +1953,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "動画非対応ながらツール利用と構造化出力に対応するNVIDIA NIM向けGemma 4.31B ITモデル",
           "pt-BR": "NVIDIA NIM Gemma 4.31B IT com ferramentas e visão (sem vídeo)",
+          "es-419": "Gemma 4.31B IT de NVIDIA NIM con visión, herramientas y salida estructurada (sin video)",
         },
       },
       {
@@ -1848,6 +1967,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "NVIDIA NIM経由でツール利用と構造化出力に対応した、高速でコスト効率の良いDeepSeek v4モデル",
           "pt-BR": "DeepSeek v4 rápido e econômico via NVIDIA NIM com ferramentas",
+          "es-419": "DeepSeek v4 rápido y económico vía NVIDIA NIM, con herramientas y salida estructurada",
         },
       },
       {
@@ -1861,6 +1981,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "NVIDIA NIM経由のDeepSeek v4 Flash 0731バージョン",
           "pt-BR": "DeepSeek v4 Flash versão 0731 via NVIDIA NIM",
+          "es-419": "Versión 0731 de DeepSeek v4 Flash vía NVIDIA NIM",
         },
       },
       {
@@ -1915,6 +2036,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "汎用アプリケーション向けの高速で軽量なNemotron 3.5 Lightning 30Bモデル",
           "pt-BR": "Nemotron 3.5 Lightning 30B rápido e leve para aplicações gerais",
+          "es-419": "Nemotron 3.5 Lightning 30B, rápido y ligero, para aplicaciones de uso general",
         },
       },
     ],
@@ -1934,6 +2056,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ロールプレイ向けに最適化されたテキスト専用GLMモデル",
           "pt-BR": "Modelo GLM apenas de texto, excelente para roleplay",
+          "es-419": "Modelo GLM solo de texto, excelente para el rol",
         },
       },
       {
@@ -1949,6 +2072,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "画像理解、ツール利用、構造化出力に対応したビジョン対応GLMモデル",
           "pt-BR": "Modelo GLM com capacidade de visão, ferramentas e saída estruturada",
+          "es-419": "Modelo GLM con visión, comprensión de imagen, herramientas y salida estructurada",
         },
       },
       {
@@ -1964,6 +2088,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Z.ai Codingエンドポイント経由で利用する高速なビジョン対応GLMモデル",
           "pt-BR": "Modelo rápido GLM com visão roteado via endpoint Z.ai Coding",
+          "es-419": "Modelo GLM rápido con visión, enrutado por el endpoint de Z.ai Coding",
         },
       },
       {
@@ -1981,6 +2106,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "シンキングモード、ツール利用、構造化出力に対応した推論対応GLMモデル",
           "pt-BR": "GLM capaz de raciocínio com modo de pensamento e ferramentas",
+          "es-419": "Modelo GLM con razonamiento, modo de pensamiento, herramientas y salida estructurada",
         },
       },
       {
@@ -1995,6 +2121,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "Z.ai Codingエンドポイント経由で利用する高速GLMモデル",
           "pt-BR": "Modelo GLM rápido roteado pelo endpoint Z.ai Coding",
+          "es-419": "Modelo GLM rápido enrutado por el endpoint de Z.ai Coding",
         },
       },
       {
@@ -2010,6 +2137,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "高度な推論、ツール利用、構造化出力に対応した最も高性能なGLMモデル",
           "pt-BR": "Modelo GLM mais capaz com raciocínio avançado e ferramentas",
+          "es-419": "El modelo GLM más capaz, con razonamiento avanzado, herramientas y salida estructurada",
         },
       },
       {
@@ -2025,6 +2153,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "最新のフラッグシップGLMモデル（高度な推論・ツール対応）",
           "pt-BR": "Modelo GLM de ponta mais recente com raciocínio e ferramentas",
+          "es-419": "El modelo GLM insignia más reciente, con razonamiento avanzado y herramientas",
         },
       },
       {
@@ -2036,7 +2165,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast variant of GLM-5 with tool support",
-        i18n: { ja: "GLM-5の高速版（ツール対応）", "pt-BR": "Variante rápida do GLM-5 com suporte a ferramentas" },
+        i18n: {
+          ja: "GLM-5の高速版（ツール対応）",
+          "pt-BR": "Variante rápida do GLM-5 com suporte a ferramentas",
+          "es-419": "Variante rápida de GLM-5 con soporte de herramientas",
+        },
       },
       {
         provider: "zaicoding",
@@ -2052,6 +2185,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "長文コンテキスト対応と安定したツール連携に調整されたビジョン対応GLM-5 Turboモデル",
           "pt-BR": "GLM-5 Turbo com visão ajustado para contextos longos",
+          "es-419": "GLM-5 Turbo con visión, ajustado para contextos largos y cadenas de herramientas confiables",
         },
       },
     ],
@@ -2071,6 +2205,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "ロールプレイ向けに最適化されたテキスト専用GLMモデル",
           "pt-BR": "Modelo GLM apenas de texto, excelente para roleplay",
+          "es-419": "Modelo GLM solo de texto, excelente para el rol",
         },
       },
       {
@@ -2086,6 +2221,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "通常のZ.ai APIで利用するビジョン対応GLMモデル",
           "pt-BR": "Modelo GLM com visão da API Z.ai geral",
+          "es-419": "Modelo GLM con visión de la API general de Z.ai",
         },
       },
       {
@@ -2101,6 +2237,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "通常のZ.ai APIで利用する高速なビジョン対応GLMモデル",
           "pt-BR": "Modelo rápido GLM com visão da API Z.ai geral",
+          "es-419": "Modelo GLM rápido con visión de la API general de Z.ai",
         },
       },
       {
@@ -2118,6 +2255,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "通常のZ.ai APIで利用する推論対応GLMモデル",
           "pt-BR": "Modelo GLM com raciocínio da API Z.ai geral",
+          "es-419": "Modelo GLM con razonamiento de la API general de Z.ai",
         },
       },
       {
@@ -2129,7 +2267,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast GLM model from the general Z.ai API",
-        i18n: { ja: "通常のZ.ai APIで利用する高速GLMモデル", "pt-BR": "Modelo GLM rápido da API Z.ai geral" },
+        i18n: {
+          ja: "通常のZ.ai APIで利用する高速GLMモデル",
+          "pt-BR": "Modelo GLM rápido da API Z.ai geral",
+          "es-419": "Modelo GLM rápido de la API general de Z.ai",
+        },
       },
       {
         provider: "zai",
@@ -2144,6 +2286,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "通常のZ.ai APIで利用する最も高性能なGLMモデル",
           "pt-BR": "Modelo GLM mais capaz da API Z.ai geral",
+          "es-419": "El modelo GLM más capaz de la API general de Z.ai",
         },
       },
       {
@@ -2159,6 +2302,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "通常のZ.ai APIで利用する最新のフラッグシップGLMモデル",
           "pt-BR": "Modelo GLM de ponta mais recente da API Z.ai geral",
+          "es-419": "El modelo GLM insignia más reciente de la API general de Z.ai",
         },
       },
       {
@@ -2170,7 +2314,11 @@ export const llmSections: ModelSection<LlmInput>[] = [
         hasTools: true,
         supportsStructoutput: true,
         desc: "Fast variant of GLM-5 from the general Z.ai API",
-        i18n: { ja: "通常のZ.ai APIで利用するGLM-5の高速版", "pt-BR": "Variante rápida do GLM-5 da API Z.ai geral" },
+        i18n: {
+          ja: "通常のZ.ai APIで利用するGLM-5の高速版",
+          "pt-BR": "Variante rápida do GLM-5 da API Z.ai geral",
+          "es-419": "Variante rápida de GLM-5 de la API general de Z.ai",
+        },
       },
       {
         provider: "zai",
@@ -2186,6 +2334,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "長文コンテキスト対応と安定したツール連携に調整されたビジョン対応GLM-5 Turboモデル",
           "pt-BR": "GLM-5 Turbo com visão ajustado para contextos longos",
+          "es-419": "GLM-5 Turbo con visión, ajustado para contextos largos y cadenas de herramientas confiables",
         },
       },
     ],
@@ -2206,6 +2355,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "汎用タスク向けの高速でコスト効率の良いClaudeモデル",
           "pt-BR": "Modelo Claude rápido e econômico para tarefas gerais",
+          "es-419": "Modelo Claude rápido y económico para tareas generales",
         },
       },
       {
@@ -2222,6 +2372,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "品質・速度・コストの最適なバランスを持つClaudeモデル",
           "pt-BR": "Modelo Claude balanceado — melhor mistura de qualidade, velocidade e custo",
+          "es-419": "Modelo Claude equilibrado: la mejor combinación de calidad, velocidad y costo",
         },
       },
       {
@@ -2239,6 +2390,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑な推論向けの拡張思考機能を持つ最高性能のClaudeモデル",
           "pt-BR": "Modelo Claude mais capaz com raciocínio estendido",
+          "es-419": "El modelo Claude más capaz, con pensamiento extendido para razonamiento complejo",
         },
       },
       {
@@ -2256,6 +2408,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑な推論向けの拡張思考機能を持つ最高性能のClaudeモデル",
           "pt-BR": "Modelo Claude mais capaz com raciocínio estendido",
+          "es-419": "El modelo Claude más capaz, con pensamiento extendido para razonamiento complejo",
         },
       },
       {
@@ -2272,6 +2425,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "長時間実行エージェント向けの次世代インテリジェンス",
           "pt-BR": "Inteligência de última geração para agentes de longa execução",
+          "es-419": "Inteligencia de nueva generación para agentes de ejecución prolongada",
         },
       },
       {
@@ -2289,6 +2443,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "複雑な推論と長時間実行エージェント向けの次世代フラッグシップClaudeモデル",
           "pt-BR": "Claude de última geração para raciocínio complexo",
+          "es-419": "Claude insignia de nueva generación para razonamiento complejo y agentes de larga duración",
         },
       },
       {
@@ -2305,6 +2460,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "コーディング・推論・エージェントタスク向けの次世代バランス型Claudeモデル",
           "pt-BR": "Claude balanceado de última geração para código e raciocínio",
+          "es-419": "Claude equilibrado de nueva generación para programación, razonamiento y tareas agénticas",
         },
       },
     ],
@@ -2324,6 +2480,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         i18n: {
           ja: "セルフホスト型OpenAI互換エンドポイント（Ollama、KoboldCPP、vLLM、LocalAI）",
           "pt-BR": "Endpoint self-hosted compatível com OpenAI (Ollama, vLLM, etc.)",
+          "es-419": "Endpoint autoalojado compatible con OpenAI (Ollama, KoboldCPP, vLLM, LocalAI)",
         },
       },
     ],
@@ -2342,6 +2499,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "品質と速度のバランスが取れた高速で効率的な画像生成モデル",
           "pt-BR": "Geração de imagem rápida e eficiente com qualidade e velocidade equilibradas",
+          "es-419": "Modelo de generación de imágenes rápido y eficiente, con calidad y velocidad equilibradas",
         },
       },
       {
@@ -2351,6 +2509,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Gemini 3.1 Flashによる最新の高速画像生成モデル",
           "pt-BR": "Geração de imagem rápida mais recente com Gemini 3.1 Flash",
+          "es-419": "El modelo de generación de imágenes rápido más reciente con Gemini 3.1 Flash",
         },
       },
       {
@@ -2369,6 +2528,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "高解像度対応（1K/2K/4K）と強化された品質を備えた高度な画像生成モデル",
           "pt-BR": "Geração de imagem avançada com suporte a maior resolução (1K/2K/4K)",
+          "es-419": "Modelo avanzado de generación de imágenes con mayor resolución (1K/2K/4K) y calidad mejorada",
         },
       },
       {
@@ -2393,6 +2553,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "OpenRouter経由の品質と速度のバランスが取れた高速で効率的な画像生成",
           "pt-BR": "Geração de imagem rápida via OpenRouter, balanceada",
+          "es-419": "Generación de imágenes rápida y eficiente vía OpenRouter, con calidad y velocidad equilibradas",
         },
       },
       {
@@ -2402,6 +2563,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Gemini 3.1 Flash Image PreviewによるOpenRouter経由の最新高速画像生成",
           "pt-BR": "Geração de imagem rápida via OpenRouter com Gemini 3.1 Flash",
+          "es-419": "Generación de imágenes rápida más reciente vía OpenRouter con Gemini 3.1 Flash Image Preview",
         },
       },
       {
@@ -2412,6 +2574,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "有効なOpenRouterモデルIDではありません（非推奨、google/gemini-3.1-flash-image-previewを使用）",
           "pt-BR": "ID OpenRouter inválido (obsoleto)",
+          "es-419": "No es un ID de modelo válido en OpenRouter (obsoleto, usa google/gemini-3.1-flash-image-preview)",
         },
       },
       {
@@ -2421,6 +2584,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "OpenRouter経由の強化された品質と解像度オプションを備えた高度な画像生成",
           "pt-BR": "Geração de imagem avançada via OpenRouter com melhor resolução",
+          "es-419": "Generación de imágenes avanzada vía OpenRouter con mejor calidad y opciones de resolución",
         },
       },
       {
@@ -2431,6 +2595,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "有効なOpenRouterモデルIDではありません（非推奨、google/gemini-3-pro-image-previewを使用）",
           "pt-BR": "ID OpenRouter inválido (obsoleto)",
+          "es-419": "No es un ID de modelo válido en OpenRouter (obsoleto, usa google/gemini-3-pro-image-preview)",
         },
       },
     ],
@@ -2446,6 +2611,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Vertex AI経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル",
           "pt-BR": "Geração Gemini rápida via Vertex AI com qualidade balanceada",
+          "es-419": "Generación de imágenes Gemini rápida y eficiente vía Vertex AI, con calidad equilibrada",
         },
       },
       {
@@ -2455,6 +2621,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Gemini 3.1 Flash ImageによるVertex AI経由の最新高速画像生成",
           "pt-BR": "Geração de imagem mais recente via Vertex AI (Gemini 3.1 Flash)",
+          "es-419": "Generación de imágenes rápida más reciente vía Vertex AI con Gemini 3.1 Flash Image",
         },
       },
       {
@@ -2473,6 +2640,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Vertex AI経由の強化された品質と解像度オプションを備えた高度な画像生成",
           "pt-BR": "Geração avançada de imagens via Vertex AI com qualidade aprimorada",
+          "es-419": "Generación de imágenes avanzada vía Vertex AI con calidad mejorada",
         },
       },
       {
@@ -2497,6 +2665,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由で利用する、品質と速度のバランスが取れた高速Gemini画像生成モデル",
           "pt-BR": "Geração Gemini rápida via Vertex AI Express",
+          "es-419": "Generación de imágenes Gemini rápida y eficiente vía Vertex AI Express, con calidad equilibrada",
         },
       },
       {
@@ -2506,6 +2675,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Gemini 3.1 Flash ImageによるVertex AI Express経由の最新高速画像生成",
           "pt-BR": "Geração rápida via Vertex AI Express (Gemini 3.1 Flash)",
+          "es-419": "Generación de imágenes rápida más reciente vía Vertex AI Express con Gemini 3.1 Flash Image",
         },
       },
       {
@@ -2524,6 +2694,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "Vertex AI Express経由の強化された品質と解像度オプションを備えた高度な画像生成",
           "pt-BR": "Geração avançada via Vertex AI Express com qualidade aprimorada",
+          "es-419": "Generación de imágenes avanzada vía Vertex AI Express con mejor calidad y opciones de resolución",
         },
       },
       {
@@ -2542,6 +2713,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "OpenRouter経由の軽量なOpenAI画像生成モデル",
           "pt-BR": "Modelo leve de geração de imagens da OpenAI via OpenRouter",
+          "es-419": "Modelo ligero de generación de imágenes de OpenAI vía OpenRouter",
         },
       },
       {
@@ -2551,6 +2723,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "ByteDanceが開発した最新の自社製画像生成モデル。低コストかつ高性能",
           "pt-BR": "Geração de imagens nativa da ByteDance. Barato e de alto desempenho",
+          "es-419": "Modelo propio de generación de imágenes de ByteDance: económico y de alto rendimiento",
         },
       },
     ],
@@ -2566,6 +2739,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "HD品質の出力に対応したZ.aiネイティブ画像生成モデル",
           "pt-BR": "Geração nativa de imagens Z.ai com qualidade HD",
+          "es-419": "Modelo nativo de Z.ai para generación de imágenes con salida en calidad HD",
         },
       },
     ],
@@ -2582,6 +2756,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "NVIDIAホストのFLUX.1-dev画像生成モデル",
           "pt-BR": "Modelo de geração de imagem FLUX.1-dev via NVIDIA",
+          "es-419": "Modelo de generación de imágenes FLUX.1-dev alojado por NVIDIA",
         },
       },
       {
@@ -2590,7 +2765,11 @@ export const imageSections: ModelSection<ImageInput>[] = [
         codename: "stabilityai/stable-diffusion-3-medium",
         isDeprecated: true,
         desc: "Retired by NVIDIA (not selectable)",
-        i18n: { ja: "NVIDIAにより提供終了（選択不可）", "pt-BR": "Aposentado pela NVIDIA (não selecionável)" },
+        i18n: {
+          ja: "NVIDIAにより提供終了（選択不可）",
+          "pt-BR": "Aposentado pela NVIDIA (não selecionável)",
+          "es-419": "Retirado por NVIDIA (no seleccionable)",
+        },
       },
     ],
   },
@@ -2605,6 +2784,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "NovelAIのファーリー特化型拡散モデル",
           "pt-BR": "Modelo de difusão NovelAI especializado em furry",
+          "es-419": "Modelo de difusión de NovelAI especializado en furry",
         },
       },
       {
@@ -2615,6 +2795,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "NovelAI Diffusion 4.5 フルモデル（無検閲生成対応）",
           "pt-BR": "Modelo completo NovelAI Diffusion 4.5 sem censura",
+          "es-419": "Modelo completo NovelAI Diffusion 4.5 con generación sin censura",
         },
       },
       {
@@ -2625,6 +2806,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "NovelAI Diffusion 4.5 キュレーションモデル（洗練された出力）",
           "pt-BR": "Modelo curado NovelAI Diffusion 4.5 com saídas refinadas",
+          "es-419": "Modelo curado NovelAI Diffusion 4.5 con resultados refinados",
         },
       },
       {
@@ -2636,6 +2818,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "NovelAI Diffusion V5 フルモデル（無検閲生成対応）",
           "pt-BR": "Modelo completo NovelAI Diffusion V5 sem censura",
+          "es-419": "Modelo completo NovelAI Diffusion V5 con generación sin censura",
         },
       },
       {
@@ -2646,6 +2829,7 @@ export const imageSections: ModelSection<ImageInput>[] = [
         i18n: {
           ja: "NovelAI Diffusion V5 キュレーションモデル（洗練された出力）",
           "pt-BR": "Modelo curado NovelAI Diffusion V5 com saídas refinadas",
+          "es-419": "Modelo curado NovelAI Diffusion V5 con resultados refinados",
         },
       },
     ],
@@ -2664,6 +2848,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "Google Veo 3.1 — ネイティブオーディオ生成付き8秒の720p/1080p/4K動画",
           "pt-BR": "Google Veo 3.1 — vídeos de 8 segundos com áudio nativo",
+          "es-419": "Google Veo 3.1: videos de 8 segundos en 720p/1080p/4K con audio nativo",
         },
       },
       {
@@ -2673,6 +2858,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "Google Veo 3.1 Fast — 品質を抑えた高速動画生成",
           "pt-BR": "Google Veo 3.1 Fast — geração de vídeo mais rápida",
+          "es-419": "Google Veo 3.1 Fast: generación de video más rápida con calidad reducida",
         },
       },
       {
@@ -2682,6 +2868,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "Google Veo 3.1 Lite — 軽量な動画生成（4K非対応）",
           "pt-BR": "Google Veo 3.1 Lite — geração de vídeo leve (sem 4K)",
+          "es-419": "Google Veo 3.1 Lite: generación de video ligera (sin soporte 4K)",
         },
       },
     ],
@@ -2697,6 +2884,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "ByteDance Seedance 1.5 Pro — 4〜12秒の高品質動画生成",
           "pt-BR": "ByteDance Seedance 1.5 Pro — vídeos de 4-12s de alta qualidade",
+          "es-419": "ByteDance Seedance 1.5 Pro: video de alta calidad con duración de 4 a 12 segundos",
         },
       },
       {
@@ -2706,6 +2894,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "OpenRouter経由のGoogle Veo 3.1 — ネイティブオーディオ付き8秒動画",
           "pt-BR": "Google Veo 3.1 via OpenRouter — vídeos de 8s com áudio nativo",
+          "es-419": "Google Veo 3.1 vía OpenRouter: videos de 8 segundos con audio nativo",
         },
       },
       {
@@ -2715,6 +2904,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "Alibaba Wan 2.6 — 複数解像度対応の多機能動画生成",
           "pt-BR": "Alibaba Wan 2.6 — geração versátil de vídeo em várias resoluções",
+          "es-419": "Alibaba Wan 2.6: generación de video versátil con varias resoluciones",
         },
       },
       {
@@ -2724,6 +2914,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "OpenAI Sora 2 Pro — 最大20秒の高忠実度動画生成",
           "pt-BR": "OpenAI Sora 2 Pro — geração de vídeo de alta fidelidade (20s)",
+          "es-419": "OpenAI Sora 2 Pro: video de alta fidelidad de hasta 20 segundos",
         },
       },
     ],
@@ -2739,6 +2930,7 @@ export const videoSections: ModelSection<VideoInput>[] = [
         i18n: {
           ja: "CogVideoX-3 — 最大4K解像度とオーディオ対応のZ.ai動画生成",
           "pt-BR": "CogVideoX-3 — vídeos Z.ai com resolução até 4K e áudio",
+          "es-419": "CogVideoX-3: generación de video de Z.ai con resolución de hasta 4K y audio",
         },
       },
     ],
@@ -2757,6 +2949,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "文書検索向けのGemini埋め込みモデル",
           "pt-BR": "Modelo de embedding Gemini para recuperação de documentos",
+          "es-419": "Modelo de embeddings Gemini para recuperación de documentos",
         },
       },
       {
@@ -2768,6 +2961,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "文書検索向けのGeminiデフォルト埋め込みモデル",
           "pt-BR": "Modelo de embedding Gemini padrão para documentos",
+          "es-419": "Modelo de embeddings Gemini predeterminado para recuperación de documentos",
         },
       },
       {
@@ -2778,6 +2972,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "Vertex AI経由の文書検索向けGemini埋め込みモデル",
           "pt-BR": "Modelo de embedding Gemini para documentos via Vertex AI",
+          "es-419": "Modelo de embeddings Gemini para recuperación de documentos vía Vertex AI",
         },
       },
       {
@@ -2789,6 +2984,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "Vertex AI経由の文書検索向けGeminiデフォルト埋め込みモデル",
           "pt-BR": "Modelo de embedding Gemini padrão via Vertex AI",
+          "es-419": "Modelo de embeddings Gemini predeterminado vía Vertex AI",
         },
       },
     ],
@@ -2804,6 +3000,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）",
           "pt-BR": "Embedding Gemini via OpenRouter (mesma família do Google)",
+          "es-419": "Modelo de embeddings Gemini vía OpenRouter (misma familia que Google)",
         },
       },
       {
@@ -2814,6 +3011,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "OpenRouter経由のGemini埋め込みモデル（Googleと同一ファミリー）",
           "pt-BR": "Embedding Gemini via OpenRouter (mesma família do Google)",
+          "es-419": "Modelo de embeddings Gemini vía OpenRouter (misma familia que Google)",
         },
       },
       {
@@ -2825,6 +3023,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "OpenRouter経由のデフォルト多言語埋め込みモデル",
           "pt-BR": "Modelo de embedding multilíngue padrão via OpenRouter",
+          "es-419": "Modelo de embeddings multilingüe predeterminado vía OpenRouter",
         },
       },
       {
@@ -2835,6 +3034,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "OpenRouter経由のPerplexity埋め込みモデル",
           "pt-BR": "Modelo de embedding Perplexity via OpenRouter",
+          "es-419": "Modelo de embeddings Perplexity vía OpenRouter",
         },
       },
       {
@@ -2843,7 +3043,11 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "qwen3-embedding-8b",
         isDeprecated: true,
         desc: "Deprecated embedding model (not selectable)",
-        i18n: { ja: "非推奨の埋め込みモデル（選択不可）", "pt-BR": "Modelo de embedding obsoleto (não selecionável)" },
+        i18n: {
+          ja: "非推奨の埋め込みモデル（選択不可）",
+          "pt-BR": "Modelo de embedding obsoleto (não selecionável)",
+          "es-419": "Modelo de embeddings obsoleto (no seleccionable)",
+        },
       },
       {
         provider: "openrouter",
@@ -2851,7 +3055,11 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         family: "text-embedding-3-small",
         isDeprecated: true,
         desc: "Deprecated embedding model (not selectable)",
-        i18n: { ja: "非推奨の埋め込みモデル（選択不可）", "pt-BR": "Modelo de embedding obsoleto (não selecionável)" },
+        i18n: {
+          ja: "非推奨の埋め込みモデル（選択不可）",
+          "pt-BR": "Modelo de embedding obsoleto (não selecionável)",
+          "es-419": "Modelo de embeddings obsoleto (no seleccionable)",
+        },
       },
       {
         provider: "nvidia",
@@ -2862,6 +3070,7 @@ export const embeddingSections: ModelSection<EmbeddingInput>[] = [
         i18n: {
           ja: "検索と文書インデックス向けのNVIDIA NIMデフォルト埋め込みモデル",
           "pt-BR": "Modelo de embedding padrão NVIDIA NIM para documentos",
+          "es-419": "Modelo de embeddings predeterminado de NVIDIA NIM para recuperación e indexación de documentos",
         },
       },
     ],

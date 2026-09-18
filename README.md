@@ -1,4 +1,4 @@
-## English | [日本語](.github/README_ja.md) | [Português (Brasil)](.github/README_pt-BR.md)
+## English | [日本語](.github/README_ja.md) | [Português (Brasil)](.github/README_pt-BR.md) | [Español (Latinoamérica)](.github/README_es-419.md)
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as

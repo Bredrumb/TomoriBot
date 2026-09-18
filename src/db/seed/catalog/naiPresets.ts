@@ -14,6 +14,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "バランスが取れたリラックスしたプリセット。自然なロールプレイに最適。",
           "pt-BR": "Equilibrada e relaxada, uma predefinição versátil e confiável para roleplay natural.",
+          "es-419": "Equilibrado y relajado, preajuste confiable para roleplay natural.",
         },
         parameters: {
           order: [2, 3, 0, 4, 1],
@@ -45,6 +46,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "温度低めでTypical Samplingを使用。落ち着いた規律ある文体に最適。",
           "pt-BR": "Focada e precisa, temperatura menor com Typical Sampling para prosa firme e disciplinada.",
+          "es-419": "Preciso y enfocado, con menor temperatura y Typical Sampling para prosa firme.",
         },
         parameters: {
           order: [5, 0, 1, 3],
@@ -75,6 +77,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "トップKとテールフリーを組み合わせた滑らかで安定した文体。",
           "pt-BR": "Suave e realista, mistura top-K e tail-free para narração natural e consistente.",
+          "es-419": "Suave y estable, combina top-K y tail-free para una narración natural.",
         },
         parameters: {
           order: [0, 1, 2, 3],
@@ -104,6 +107,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "非常に攻撃的なフレーズ繰り返しペナルティで新鮮でバラエティ豊かな出力を実現。",
           "pt-BR": "Combate repetições, penalidade de frase agressiva mantém as respostas variadas.",
+          "es-419": "Combate repeticiones con una penalización agresiva para respuestas variadas.",
         },
         parameters: {
           order: [2, 3, 1, 0],
@@ -134,6 +138,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "ミロスタットエントロピーサンプリング。予測不可能で宇宙的な出力のための実験的サンプラー。",
           "pt-BR": "Amostragem Mirostat, experimental para respostas cósmicas e imprevisíveis.",
+          "es-419": "Muestreo de entropía Mirostat para resultados cósmicos e impredecibles.",
         },
         parameters: {
           order: [8, 5, 0, 3],
@@ -164,6 +169,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "軽くクリーンなトップK出力。フレーズ繰り返しペナルティを最小化。",
           "pt-BR": "Leve e limpa, respostas top-K com penalidade mínima de repetição de frase.",
+          "es-419": "Ligero y limpio, con salidas top-K frescas y mínima penalización de repetición.",
         },
         parameters: {
           order: [0, 1, 2, 3],
@@ -194,6 +200,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "高エネルギーなミロスタットライター。温度1.5で創造的かつダイナミック、強い反復防止付き。",
           "pt-BR": "Mirostat de alta energia, dinâmico e criativo (temp 1.5) com forte antirrepetição.",
+          "es-419": "Mirostat enérgico y creativo (temp. 1.5) con fuerte control de repeticiones.",
         },
         parameters: {
           order: [0, 8, 5, 3],
@@ -224,6 +231,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "複数のサンプラーを組み合わせた豊かなナラティブバリエーション。",
           "pt-BR": "Mistura de amostradores top-K/P/A/Typical para rica variedade de narração.",
+          "es-419": "Mezcla top-K/P/A/Typical para una gran variedad narrativa.",
         },
         parameters: {
           order: [0, 4, 1, 2, 5, 3],
@@ -256,6 +264,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "洗練されたナラティブ。トップAとTypical Samplingによる高品質な文章向け。",
           "pt-BR": "Narrativa refinada, ajustada para qualidade de prosa (top-A e Typical Sampling).",
+          "es-419": "Narrativa refinada, optimizada para prosa de calidad con top-A y Typical Sampling.",
         },
         parameters: {
           order: [3, 4, 5, 0],
@@ -286,6 +295,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "最大カオス。温度2.5による極めて実験的で予測不可能なテキスト生成。",
           "pt-BR": "Caos máximo (temp 2.5) para textos extremamente experimentais e imprevisíveis.",
+          "es-419": "Caos máximo, temperatura muy alta (2.5) para texto experimental e impredecible.",
         },
         parameters: {
           order: [3, 0, 5],
@@ -314,6 +324,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "トップAとTypical、攻撃的フレーズガードで穏やかで落ち着いた出力を実現。",
           "pt-BR": "Calma e suave, top-A e Typical com guarda de frase agressiva para saídas tranquilas.",
+          "es-419": "Tranquilo y suave, top-A y Typical con control agresivo de frases.",
         },
         parameters: {
           order: [5, 0, 4],
@@ -343,6 +354,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "非常に低い温度（0.895）による高度に決定論的でフォーカスした応答。",
           "pt-BR": "Afiada e precisa, temperatura baixa (0.895) para respostas determinísticas.",
+          "es-419": "Agudo y preciso, temperatura muy baja (0.895) para respuestas deterministas.",
         },
         parameters: {
           order: [0, 5],
@@ -370,6 +382,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         desc: "Daemon-driven mirostat, comprehensive multi-sampler with high entropy for creative writing.",
         i18n: {
           ja: "デーモン駆動のミロスタット。高エントロピーの包括的マルチサンプラーでクリエイティブライティングに最適。",
+          "es-419": "Mirostat impulsado por daemon, con alta entropía para escritura creativa.",
         },
         parameters: {
           order: [8, 0, 5, 3, 2, 4],
@@ -403,6 +416,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "「小説」スタイル。整理されたナラティブと強い反復制御に最適化。",
           "pt-BR": "Estilo romance, Shosetsu (小説) ajustado para narrativa estruturada e controle de repetição.",
+          "es-419": "Estilo novela, Shosetsu (小説) para narrativa estructurada y control de repeticiones.",
         },
         parameters: {
           order: [9, 10],
@@ -437,6 +451,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "複雑なサンプラーチェーンとミロスタットで鮮やかで精巧な文体を実現。",
           "pt-BR": "Vívida, cadeia complexa de amostradores com mirostat para prosa colorida e elaborada.",
+          "es-419": "Vívido, con cadena compleja de muestreo y mirostat para prosa elaborada y colorida.",
         },
         parameters: {
           order: [0, 5, 9, 10, 8, 4],
@@ -471,6 +486,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "クラシックでバランスの取れた、テールフリーサンプリングによる一貫した滑らかなナラティブ。",
           "pt-BR": "Clássica e equilibrada, tail-free padrão para uma narrativa coerente e fluida.",
+          "es-419": "Clásico y equilibrado, tail-free estándar para narrativa coherente y fluida.",
         },
         parameters: {
           order: [9, 2],
@@ -505,6 +521,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "高いトップK（300）による多様で冒険的な出力。",
           "pt-BR": "Selvagem e expansiva, alto top-K (300) para resultados mais aventureiros.",
+          "es-419": "Salvaje y amplio, top-K alto (300) para resultados variados y aventureros.",
         },
         parameters: {
           order: [9, 10],
@@ -539,6 +556,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
         i18n: {
           ja: "高い頻度・存在ペナルティによる最大限に多様な出力。",
           "pt-BR": "Excêntrica, altas penalidades de presença/frequência para máxima variedade.",
+          "es-419": "Excéntrico e impredecible, con altas penalizaciones para máxima variedad.",
         },
         parameters: {
           order: [9, 2],
