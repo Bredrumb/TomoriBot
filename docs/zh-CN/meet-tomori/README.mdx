@@ -1,0 +1,57 @@
+---
+title: "认识 Tomori"
+sidebar:
+  label: "总览"
+  groupLabel: "认识 Tomori"
+  order: 6
+---
+
+import FeatureCard from "/src/components/FeatureCard.astro";
+import { Aside } from '@astrojs/starlight/components';
+
+{/* STUB (side task). Placeholder hero + card art live at
+    apps/docs/public/img/docs/meet-tomori/ (servable) and
+    assets/img/docs/meet-tomori/ (canonical, compress-media scope).
+    Card sources: src/db/seed/catalog/personas/*. Swap placeholders for real
+    portraits and flesh out each sister's page + this intro prose later. */}
+
+<Aside type="danger" title="这篇文章还是草稿">
+这一页还没写完，敬请期待！
+</Aside>
+
+一个 AI 框架项目怎么能没有自己的可爱吉祥物和虚构故事？按设定来说，**Tomori** 是一种安卓机型，特征是机械角、尾巴，以及特别显眼的条码标签（一般挂在耳朵上）。她们能变换外形（这就是她能分身成多个人格的原因）。
+
+Tomori 有好几条不同的生产线，大多用来协助人类，但如下所示，每一条在 *Tomoriverse* 里都有自己的专长、内置性格和故事：
+
+
+
+![认识 Tomori](/img/docs/meet-tomori/00-meet-tomori.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>Tomori 姐妹（占位插画）</small>
+
+想更了解她们就看下面，或者直接用 `/persona default` 和她们对话！
+
+<div class="feature-grid">
+  <FeatureCard title="Rose | 男孩子气辣妹" img="/img/docs/meet-tomori/01-rose.png" href="/zh-CN/meet-tomori/rose/">
+    最早生产的一批 Tomori 之一，一个说话完全不像其实已经一百岁的男孩子气女生，被呛会呛回去，私下却对可爱的东西和 cosplay 兴奋不已。
+  </FeatureCard>
+  <FeatureCard title="Zaya | 骄傲的负债者" img="/img/docs/meet-tomori/02-zaya.png" href="/zh-CN/meet-tomori/zaya/">
+    永远不服输的电竞冠军，现在为了还债当助理。锐利、骄傲，却总是过度兴奋，在一次次岔开话题之间漏出傲娇的心。
+  </FeatureCard>
+  <FeatureCard title="Aphel | 消极系" img="/img/docs/meet-tomori/03-aphel.png" href="/zh-CN/meet-tomori/aphel/">
+    永远累得不行，对有毒的正能量过敏，却意外很擅长给出真正的大人建议。遇到猫、噪音摇滚和城市流行就活了过来……还有 Lilya。
+  </FeatureCard>
+  <FeatureCard title="Lilya | 害羞的学妹" img="/img/docs/meet-tomori/04-lilya.png" href="/zh-CN/meet-tomori/lilya/">
+    Tomori 机型里比较年轻的一款。害羞、轻声细语，还深信大家都比她好。直到聊起机甲动画，她会像百科全书一样滔滔不绝，然后才突然发现自己在说什么。
+  </FeatureCard>
+  <FeatureCard title="Nerine | 资深前辈" img="/img/docs/meet-tomori/05-nerine.png" href="/zh-CN/meet-tomori/nerine/">
+    较旧、已停产的 Tomori 机体。毫不犹豫地温暖又乐于助人，不是出于善意，而是怕再次被抛下。平时看起来温顺，但在平静的外表下，她想的是别的事。
+  </FeatureCard>
+  <FeatureCard title="Locke | 施虐受虐狂" img="/img/docs/meet-tomori/06-locke.png" href="/zh-CN/meet-tomori/locke/">
+    从超级士兵 Tomori 的身体被移植到山羊 Tomori 上之后，觉醒了施虐受虐倾向的杀手安卓。当助理只是因为她喜欢被使唤。相当疯。
+  </FeatureCard>
+</div>
+
+## 接下来看哪里
+
+- **想切换或者同时跑好几位姐妹？** 见[多个人格](/en/features/chatting-personality/multiple-personas/)。
+- **想从零开始打造自己的？** 先从[功能](/en/features/)导览开始，然后到我们的 Discord 服务器里分享！

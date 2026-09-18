@@ -44,7 +44,7 @@ const ROUTED_LOCALES = [
  * a better answer than the default locale's page. Keep the two lists in step: an empty tree behind a
  * published locale is the only way they disagree without failing a test.
  */
-const PUBLISHED_LOCALES = ["en", "ja", "pt-BR", "zh-TW"] as const;
+const PUBLISHED_LOCALES = ["en", "ja", "pt-BR", "zh-TW", "zh-CN"] as const;
 
 /** Locale used when the header asks for nothing this site serves. */
 const DEFAULT_LOCALE = "en";

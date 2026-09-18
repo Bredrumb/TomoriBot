@@ -1,0 +1,96 @@
+---
+title: "TomoriBot 是什么？"
+# Keyword-rich <title> for search results; replaces Starlight's default
+# "{title} | TomoriBot" for this page only. H1 and sidebar keep the plain title.
+head:
+  - tag: title
+    content: "TomoriBot | 开源的 Discord AI 代理与角色扮演 bot"
+  # JSON-LD structured data: tells search engines this page describes a software
+  # product, enabling rich results. Google requires `offers` (or aggregateRating)
+  # alongside `name` for SoftwareApplication rich-result eligibility.
+  - tag: script
+    attrs:
+      type: "application/ld+json"
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TomoriBot",
+        "url": "https://docs.tomoribot.app/",
+        "image": "https://docs.tomoribot.app/img/social-banner.png",
+        "description": "免费且开源的 Discord AI 代理与角色扮演系统，具备持久记忆、多个人格、媒体生成与多提供方 LLM 支持。",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Web",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "sameAs": [
+          "https://github.com/Bredrumb/TomoriBot",
+          "https://discord.gg/bjCfHm9QsB"
+        ]
+      }
+sidebar:
+  groupLabel: "介绍"
+  order: 1
+---
+
+import { LinkButton } from "@astrojs/starlight/components";
+import FeatureCard from "/src/components/FeatureCard.astro";
+
+**TomoriBot** 是一套免费且开源的 Discord AI 代理与角色扮演系统。这个项目想把个人 AI 伙伴与角色扮演角色直接带进 Discord 服务器，灵感来自 SillyTavern 与 Discord 已停运的 Clyde。简单说，她（或者*它*）是一套放进 Discord 的 AI 代理加角色扮演框架：
+
+![Tomori 公式](/img/docs/intro/00-tomori-formula.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>像是 Discord、SillyTavern 与 OpenClaw 三者凑成的邪门三位一体</small>
+
+读作 Tomo(友)-Ri(里)，大致是「朋友之家」的意思。Tomori 是你专属实用助理、可自定义伙伴，或者角色扮演对象的家，无论是在私信里，还是在你的 Discord 服务器里陪所有人。她也是为初学者设计的，所以刚接触 AI 代理的人也能跟着她一起学。
+
+你现在就可以邀请公开实例，或者自己部署一套来完全掌控你的数据（更多信息见[快速上手](/zh-CN/introduction/quickstart/)）：
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **邀请 TomoriBot**
+  </LinkButton>
+  <LinkButton href="/zh-CN/self-hosting/" variant="secondary">
+    **自部署 TomoriBot**
+  </LinkButton>
+</div>
+
+## TomoriBot 能做什么？
+
+
+<div class="feature-grid">
+  <FeatureCard title="多个人格" img="/img/docs/intro/01-multiple-personas.png" href="/en/features/chatting-personality/multiple-personas/">
+    在一个服务器里跑好几个自定义角色，每个都有自己的设置、记忆和头像。看它们互相配合（或者一起胡闹）！
+  </FeatureCard>
+  <FeatureCard title="持久记忆" img="/img/docs/intro/02-memory.png" href="/en/features/knowledge/memory/">
+    告诉她关于大家和你服务器的事实，让你的 Tomori 慢慢成长。她会跨对话记住这些内容，个人记忆则会跟着你在服务器之间走。
+  </FeatureCard>
+  <FeatureCard title="媒体生成" img="/img/docs/intro/03-media-generation.png" href="/en/features/capabilities/media-generation/">
+    直接在聊天里按提示词或参考素材生成、编辑图像、短视频和语音消息。
+  </FeatureCard>
+  <FeatureCard title="代理式工具" img="/img/docs/intro/04-agentic-tools.png" href="/en/features/capabilities/tools-and-extensions/">
+    TomoriBot 可以自己搜索网页、安排提醒、屏蔽用户、调用自定义 MCP 工具，还有更多。
+  </FeatureCard>
+  <FeatureCard title="完全本地部署" img="/img/docs/intro/05-fully-local-setup.png" href="/en/self-hosting/local-endpoints/">
+    用本地 LLM、ComfyUI、SearXNG、本地语音服务器和 MCP 搭一套完全属于你自己的私人部署。
+  </FeatureCard>
+  <FeatureCard title="服务器管理" img="/img/docs/intro/06-server-moderation.png" href="/en/features/setup-administration/server-moderation/">
+    加入兼顾成本与安全的管理控制：配额、频道与身份组白名单、思考日志，以及 BYOK 要求。
+  </FeatureCard>
+  <FeatureCard title="200+ 条指令" img="/img/docs/intro/07-command-reference.png" href="/en/features/command-reference/">
+    数百条原生 Discord 斜杠指令，让你深入自定义，从使用的提示词到给出的权限都涵盖。
+  </FeatureCard>
+  <FeatureCard title="SillyTavern 支持" img="/img/docs/intro/08-sillytavern-support.png" href="/en/features/integrations/sillytavern-support/">
+    导入 SillyTavern 的提示词预设集与角色卡，把现成的指令与角色直接带进 Discord。
+  </FeatureCard>
+</div>
+
+## 接下来看哪里
+
+- **想现在就用她？** 请看[快速上手](/zh-CN/introduction/quickstart/)，然后逛逛[功能](/en/features/)导览。
+- **想自己跑一套 TomoriBot？** 请前往[自部署](/zh-CN/self-hosting/)。
+- **想为代码做贡献？** 请看[架构](/en/architecture/)总览和[贡献](/en/contributing/)指南。
+- **想帮这个项目撑下去？** 到 [GitHub](https://github.com/Bredrumb/TomoriBot) 给她的仓库点个星，捐款到 Bredrumb 的 [Ko-Fi](https://ko-fi.com/bredrumb)，或者更好的是用这一页的链接把她分享给朋友！这些我们都很感谢。
