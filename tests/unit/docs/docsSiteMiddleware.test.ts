@@ -34,8 +34,18 @@ const HEADERS = [
 
 /** The middleware's routed list, read from source because it is not exported. */
 async function readRoutedLocales(): Promise<string[]> {
+  return readLocaleList("ROUTED_LOCALES");
+}
+
+/** The middleware's published list, which is the one matching resolves against. */
+async function readPublishedLocales(): Promise<string[]> {
+  return readLocaleList("PUBLISHED_LOCALES");
+}
+
+/** Reads one locale list literal out of the middleware source. */
+async function readLocaleList(name: string): Promise<string[]> {
   const source = await Bun.file(new URL("../../../apps/docs/functions/_middleware.ts", import.meta.url)).text();
-  const declaration = source.match(/const ROUTED_LOCALES[^=]*=\s*\[([^\]]*)\]/);
+  const declaration = source.match(new RegExp(`const ${name}[^=]*=\\s*\\[([^\\]]*)\\]`));
 
   expect(declaration).not.toBeNull();
   return [...(declaration?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1]);
@@ -55,16 +65,10 @@ describe("docs site root middleware", () => {
   });
 
   it("agrees with the shared locale matcher wherever the shared matcher picks a tree", () => {
-    // Scoped two ways, both of them the staging state rather than a rule disagreement.
-    //
-    // First, the shared matcher returns the default locale for any header it cannot serve, so a
-    // comparison is only meaningful where it picked a non-default locale. A header such as `es-ES`
-    // resolves to English in the shared table while `es-419` is unpublished, and the middleware
-    // routes the staged Spanish root; comparing those two would assert that staging does not exist.
-    //
-    // Second, a header the middleware answers with an unpublished locale is skipped, because the
-    // shared matcher is allowed to disagree there by design. `only ever answers with a routed locale`
-    // covers the value's validity.
+    // Scoped to the headers both matchers answer with a published locale, which is where a
+    // disagreement changes what a reader sees. Both sides resolve through their own published list,
+    // so anything the shared matcher leaves on the default locale stays out of the comparison: a
+    // header such as `es-ES` resolves to English in the shared table while `es-419` is unpublished.
     for (const header of HEADERS) {
       const shared = matchAcceptLanguage(header);
       if (shared === "en" || !PUBLISHED_DOCS_LOCALES.includes(shared)) continue;
@@ -74,6 +78,14 @@ describe("docs site root middleware", () => {
 
       expect(`${header} -> ${middleware}`).toBe(`${header} -> ${shared}`);
     }
+  });
+
+  it("keeps the middleware's published list in step with the shared table", async () => {
+    // The middleware resolves against its own copy of the published set, so a locale published here
+    // but not there is not a matcher bug: it never gets picked at all.
+    const published = await readPublishedLocales();
+
+    expect(published).toEqual([...PUBLISHED_DOCS_LOCALES]);
   });
 
   it("only ever answers with a routed locale", async () => {

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_DOCS_LOCALE_ID } from "../../../src/constants/docsLocales";
+import { DEFAULT_DOCS_LOCALE_ID, PUBLISHED_DOCS_LOCALES } from "../../../src/constants/docsLocales";
 
 const distRoot = fileURLToPath(new URL("../dist/", import.meta.url));
 const contentRoot = fileURLToPath(new URL("../src/content/docs/", import.meta.url));
@@ -37,15 +37,27 @@ function collectTextFiles(directory: string): string[] {
 /**
  * Locale roots whose page tree exists, which is the set of routes the build emits.
  *
- * The directory listing is sorted and the default locale is resolved by name rather than by taking
- * the first entry, because `readdirSync` order is filesystem-dependent: an indexed ext4 directory
- * returns hash order, so a translated locale could otherwise be mistaken for the default one.
+ * Discovery reads the directory, but the order comes from `PUBLISHED_DOCS_LOCALES` because that is
+ * the order `localesWithEntry` emits hreflang alternates in, and the pair check below compares the
+ * two sequences element by element. Sorting here instead would agree with the emitter only while
+ * `DOCS_LOCALES` happens to be declared alphabetically after the default locale: `es-419` is
+ * declared after `pt-BR` but sorts before `ja`, which made every translated page fail the pair check.
+ *
+ * The default locale is resolved by name rather than by taking the first entry because
+ * `readdirSync` order is filesystem-dependent: an indexed ext4 directory returns hash order, so a
+ * translated locale could otherwise be mistaken for the default one.
  */
 function publishedLocaleIds(): string[] {
-  const ids = readdirSync(contentRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
+  const present = new Set(
+    readdirSync(contentRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name),
+  );
+
+  const ids = PUBLISHED_DOCS_LOCALES.filter((locale) => present.has(locale)).map(String);
+  for (const name of [...present].sort()) {
+    if (!ids.includes(name)) ids.push(name);
+  }
 
   const index = ids.indexOf(DEFAULT_DOCS_LOCALE_ID);
   if (index > 0) ids.unshift(...ids.splice(index, 1));

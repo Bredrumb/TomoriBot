@@ -45,6 +45,20 @@ const JAPANESE_CATCH_UP_PHRASES = [
   "忘れんな",
   "忘れないでね",
 ];
+const ZH_TW_PHRASES = [
+  "記住",
+  "記住這",
+  "記住我",
+  "記下來",
+  "別忘了",
+  "不要忘記",
+  "請記住",
+  "幫我記住",
+  "幫我記",
+  "記在心裡",
+  "存進記憶",
+  "長期記憶",
+];
 const PT_BR_PHRASES = [
   "lembre",
   "não se esqueça",
@@ -71,6 +85,7 @@ describe("explicit long-term memory intent", () => {
           ...PREVIOUS_ENGLISH_PHRASES,
           ...PREVIOUS_JAPANESE_PHRASES,
           ...JAPANESE_CATCH_UP_PHRASES,
+          ...ZH_TW_PHRASES,
           ...PT_BR_PHRASES,
         ]),
       ].sort(),
@@ -82,6 +97,7 @@ describe("explicit long-term memory intent", () => {
       ...PREVIOUS_ENGLISH_PHRASES,
       ...PREVIOUS_JAPANESE_PHRASES,
       ...JAPANESE_CATCH_UP_PHRASES,
+      ...ZH_TW_PHRASES,
       ...PT_BR_PHRASES,
     ]) {
       expect(hasExplicitLongTermMemoryIntent(`ok ${phrase} this`)).toBe(true);

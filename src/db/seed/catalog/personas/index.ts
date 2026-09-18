@@ -3,22 +3,27 @@ import { persona as defaultEn } from "./default/en-US";
 import { persona as defaultJa } from "./default/ja";
 import { persona as defaultPtBr } from "./default/pt-BR";
 import { persona as defaultEs419 } from "./default/es-419";
+import { persona as defaultZhTw } from "./default/zh-TW";
 import { persona as brattyEn } from "./bratty/en-US";
 import { persona as brattyJa } from "./bratty/ja";
 import { persona as brattyPtBr } from "./bratty/pt-BR";
 import { persona as brattyEs419 } from "./bratty/es-419";
+import { persona as brattyZhTw } from "./bratty/zh-TW";
 import { persona as gloomyEn } from "./gloomy/en-US";
 import { persona as gloomyJa } from "./gloomy/ja";
 import { persona as gloomyPtBr } from "./gloomy/pt-BR";
 import { persona as gloomyEs419 } from "./gloomy/es-419";
+import { persona as gloomyZhTw } from "./gloomy/zh-TW";
 import { persona as shyEn } from "./shy/en-US";
 import { persona as shyJa } from "./shy/ja";
 import { persona as shyPtBr } from "./shy/pt-BR";
 import { persona as shyEs419 } from "./shy/es-419";
+import { persona as shyZhTw } from "./shy/zh-TW";
 import { persona as nerineEn } from "./loyal/en-US";
 import { persona as nerineJa } from "./loyal/ja";
 import { persona as nerinePtBr } from "./loyal/pt-BR";
 import { persona as nerineEs419 } from "./loyal/es-419";
+import { persona as nerineZhTw } from "./loyal/zh-TW";
 
 export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-kun", rows: [defaultEn] },
@@ -41,4 +46,9 @@ export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-san (Latin American Spanish)", rows: [gloomyEs419] },
   { comment: "Shy Tomori (Lilya) Latin American Spanish Version", rows: [shyEs419] },
   { comment: "Loyal Tomori (Latin American Spanish)", rows: [nerineEs419] },
+  { comment: "Tomori-kun (Traditional Chinese)", rows: [defaultZhTw] },
+  { comment: "Tomori-chan (Traditional Chinese)", rows: [brattyZhTw] },
+  { comment: "Tomori-san (Traditional Chinese)", rows: [gloomyZhTw] },
+  { comment: "Shy Tomori (Lilya) Traditional Chinese Version", rows: [shyZhTw] },
+  { comment: "Loyal Tomori (Traditional Chinese)", rows: [nerineZhTw] },
 ];

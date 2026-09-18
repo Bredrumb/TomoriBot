@@ -35,6 +35,17 @@ const ROUTED_LOCALES = [
   "ko",
 ] as const;
 
+/**
+ * The roots in `ROUTED_LOCALES` whose page tree has landed, mirroring `PUBLISHED_DOCS_LOCALES` in
+ * `src/constants/docsLocales.ts`.
+ *
+ * Matching resolves against this list rather than the routed one, so the site root only sends a
+ * reader to a locale the site actually has content for. A staged root is a route, but its 404 is not
+ * a better answer than the default locale's page. Keep the two lists in step: an empty tree behind a
+ * published locale is the only way they disagree without failing a test.
+ */
+const PUBLISHED_LOCALES = ["en", "ja", "pt-BR", "zh-TW"] as const;
+
 /** Locale used when the header asks for nothing this site serves. */
 const DEFAULT_LOCALE = "en";
 
@@ -73,13 +84,13 @@ export function resolveLocaleFromHeader(header: string | null | undefined): stri
     // A wildcard states no preference beyond "something I can read", so the default answers it.
     if (candidate.tag === "*") return DEFAULT_LOCALE;
 
-    const exact = ROUTED_LOCALES.find((locale) => locale.toLowerCase() === candidate.tag);
+    const exact = PUBLISHED_LOCALES.find((locale) => locale.toLowerCase() === candidate.tag);
     if (exact) return exact;
 
     const alias = LOCALE_ALIASES[candidate.tag] ?? LOCALE_ALIASES[candidate.tag.split("-")[0]];
-    if (alias && (ROUTED_LOCALES as readonly string[]).includes(alias)) return alias;
+    if (alias && (PUBLISHED_LOCALES as readonly string[]).includes(alias)) return alias;
     const base = candidate.tag.split("-")[0];
-    const baseMatches = ROUTED_LOCALES.filter((locale) => locale.split("-")[0].toLowerCase() === base);
+    const baseMatches = PUBLISHED_LOCALES.filter((locale) => locale.split("-")[0].toLowerCase() === base);
     if (baseMatches.length === 1) return baseMatches[0];
   }
 
