@@ -16,6 +16,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Equilibrada e relaxada, uma predefinição versátil e confiável para roleplay natural.",
           "es-419": "Equilibrado y relajado, preajuste confiable para roleplay natural.",
           "zh-TW": "均衡放鬆、穩定可靠的全方位預設集，適合自然的角色扮演。",
+          "zh-CN": "均衡放松、稳定可靠的全能预设集，适合自然的角色扮演。",
         },
         parameters: {
           order: [2, 3, 0, 4, 1],
@@ -49,6 +50,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Focada e precisa, temperatura menor com Typical Sampling para prosa firme e disciplinada.",
           "es-419": "Preciso y enfocado, con menor temperatura y Typical Sampling para prosa firme.",
           "zh-TW": "俐落專注，以較低溫度和 Typical Sampling 換取沉穩有紀律的文筆。",
+          "zh-CN": "利落专注，以较低温度和 Typical Sampling 换取沉稳有纪律的文笔。",
         },
         parameters: {
           order: [5, 0, 1, 3],
@@ -81,6 +83,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Suave e realista, mistura top-K e tail-free para narração natural e consistente.",
           "es-419": "Suave y estable, combina top-K y tail-free para una narración natural.",
           "zh-TW": "平順扎實，混合 top-K 與 tail-free，故事敘述一致而自然。",
+          "zh-CN": "平顺扎实，混合 top-K 与 tail-free，故事叙述一致而自然。",
         },
         parameters: {
           order: [0, 1, 2, 3],
@@ -112,6 +115,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Combate repetições, penalidade de frase agressiva mantém as respostas variadas.",
           "es-419": "Combate repeticiones con una penalización agresiva para respuestas variadas.",
           "zh-TW": "大膽對抗重複，極強烈的片語重複懲罰讓輸出保持新鮮多變。",
+          "zh-CN": "大胆对抗重复，极强烈的短语重复惩罚让输出保持新鲜多变。",
         },
         parameters: {
           order: [2, 3, 1, 0],
@@ -144,6 +148,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Amostragem Mirostat, experimental para respostas cósmicas e imprevisíveis.",
           "es-419": "Muestreo de entropía Mirostat para resultados cósmicos e impredecibles.",
           "zh-TW": "Mirostat 熵取樣，實驗性的熵取樣器，輸出難以預測、天馬行空。",
+          "zh-CN": "Mirostat 熵采样，实验性的熵采样器，输出难以预测、天马行空。",
         },
         parameters: {
           order: [8, 5, 0, 3],
@@ -176,6 +181,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Leve e limpa, respostas top-K com penalidade mínima de repetição de frase.",
           "es-419": "Ligero y limpio, con salidas top-K frescas y mínima penalización de repetición.",
           "zh-TW": "輕盈乾淨，以最低的片語重複懲罰換取更清新的 top-K 輸出。",
+          "zh-CN": "轻盈干净，以最低的短语重复惩罚换取更清新的 top-K 输出。",
         },
         parameters: {
           order: [0, 1, 2, 3],
@@ -208,6 +214,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Mirostat de alta energia, dinâmico e criativo (temp 1.5) com forte antirrepetição.",
           "es-419": "Mirostat enérgico y creativo (temp. 1.5) con fuerte control de repeticiones.",
           "zh-TW": "高能量的 Mirostat 寫手，溫度 1.5 下創意奔放，並具備強力反重複。",
+          "zh-CN": "高能量的 Mirostat 写手，温度 1.5 下创意奔放，并具备强力反重复。",
         },
         parameters: {
           order: [0, 8, 5, 3],
@@ -240,6 +247,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Mistura de amostradores top-K/P/A/Typical para rica variedade de narração.",
           "es-419": "Mezcla top-K/P/A/Typical para una gran variedad narrativa.",
           "zh-TW": "多取樣器混合，層層疊上 top-K、P、A 與 Typical，敘事變化豐富。",
+          "zh-CN": "多采样器混合，层层叠上 top-K、P、A 与 Typical，叙事变化丰富。",
         },
         parameters: {
           order: [0, 4, 1, 2, 5, 3],
@@ -274,6 +282,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Narrativa refinada, ajustada para qualidade de prosa (top-A e Typical Sampling).",
           "es-419": "Narrativa refinada, optimizada para prosa de calidad con top-A y Typical Sampling.",
           "zh-TW": "精煉的敘事，以 top-A 與 Typical Sampling 調校出優異的書面文筆。",
+          "zh-CN": "精炼的叙事，以 top-A 与 Typical Sampling 调校出优异的书面文笔。",
         },
         parameters: {
           order: [3, 4, 5, 0],
@@ -306,6 +315,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Caos máximo (temp 2.5) para textos extremamente experimentais e imprevisíveis.",
           "es-419": "Caos máximo, temperatura muy alta (2.5) para texto experimental e impredecible.",
           "zh-TW": "極度混亂，溫度 2.5 帶來最實驗、最難以預測的文字。",
+          "zh-CN": "极度混乱，温度 2.5 带来最实验、最难以预测的文字。",
         },
         parameters: {
           order: [3, 0, 5],
@@ -336,6 +346,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Calma e suave, top-A e Typical com guarda de frase agressiva para saídas tranquilas.",
           "es-419": "Tranquilo y suave, top-A y Typical con control agresivo de frases.",
           "zh-TW": "安靜柔和，以 top-A、Typical 與強烈的片語防護換取平靜的輸出。",
+          "zh-CN": "安静柔和，以 top-A、Typical 与强烈的短语防护换取平静的输出。",
         },
         parameters: {
           order: [5, 0, 4],
@@ -367,6 +378,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Afiada e precisa, temperatura baixa (0.895) para respostas determinísticas.",
           "es-419": "Agudo y preciso, temperatura muy baja (0.895) para respuestas deterministas.",
           "zh-TW": "銳利精準，極低溫（0.895）帶來高度確定、聚焦的回覆。",
+          "zh-CN": "锐利精准，极低温（0.895）带来高度确定、聚焦的回复。",
         },
         parameters: {
           order: [0, 5],
@@ -396,6 +408,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           ja: "デーモン駆動のミロスタット。高エントロピーの包括的マルチサンプラーでクリエイティブライティングに最適。",
           "es-419": "Mirostat impulsado por daemon, con alta entropía para escritura creativa.",
           "zh-TW": "由 Daemon 驅動的 Mirostat，高熵的完整多取樣器組合，適合創意寫作。",
+          "zh-CN": "由 Daemon 驱动的 Mirostat，高熵的完整多采样器组合，适合创意写作。",
         },
         parameters: {
           order: [8, 0, 5, 3, 2, 4],
@@ -431,6 +444,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Estilo romance, Shosetsu (小説) ajustado para narrativa estruturada e controle de repetição.",
           "es-419": "Estilo novela, Shosetsu (小説) para narrativa estructurada y control de repeticiones.",
           "zh-TW": "小說風格，Shosetsu（小説）調校出結構完整的敘事與強力重複控制。",
+          "zh-CN": "小说风格，Shosetsu（小説）调校出结构完整的叙事与强力重复控制。",
         },
         parameters: {
           order: [9, 10],
@@ -467,6 +481,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Vívida, cadeia complexa de amostradores com mirostat para prosa colorida e elaborada.",
           "es-419": "Vívido, con cadena compleja de muestreo y mirostat para prosa elaborada y colorida.",
           "zh-TW": "鮮活多彩，複雜的取樣器鏈搭配 Mirostat，文筆精緻絢麗。",
+          "zh-CN": "鲜活多彩，复杂的采样器链搭配 Mirostat，文笔精致绚丽。",
         },
         parameters: {
           order: [0, 5, 9, 10, 8, 4],
@@ -503,6 +518,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Clássica e equilibrada, tail-free padrão para uma narrativa coerente e fluida.",
           "es-419": "Clásico y equilibrado, tail-free estándar para narrativa coherente y fluida.",
           "zh-TW": "經典均衡，標準 tail-free 取樣，敘事連貫流暢。",
+          "zh-CN": "经典均衡，标准 tail-free 采样，叙事连贯流畅。",
         },
         parameters: {
           order: [9, 2],
@@ -539,6 +555,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Selvagem e expansiva, alto top-K (300) para resultados mais aventureiros.",
           "es-419": "Salvaje y amplio, top-K alto (300) para resultados variados y aventureros.",
           "zh-TW": "狂野奔放，高 top-K（300）帶來更多變化與冒險感的輸出。",
+          "zh-CN": "狂野奔放，高 top-K（300）带来更多变化与冒险感的输出。",
         },
         parameters: {
           order: [9, 10],
@@ -575,6 +592,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Excêntrica, altas penalidades de presença/frequência para máxima variedade.",
           "es-419": "Excéntrico e impredecible, con altas penalizaciones para máxima variedad.",
           "zh-TW": "古怪難料，高頻率與存在懲罰讓輸出變化最大化。",
+          "zh-CN": "古怪难料，高频率与存在惩罚让输出变化最大化。",
         },
         parameters: {
           order: [9, 2],
