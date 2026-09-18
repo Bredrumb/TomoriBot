@@ -40,7 +40,7 @@ como o prompt/contexto principal, nesta ordem:
 
 Linhas marcadas com *(Opcional)* não contribuem com nada (e não custam tokens) quando não há nada a informar, ex.: nenhum documento correspondeu, ou o servidor não possui emojis personalizados.
 
-As mensagens recentes são a parte maior e mais frágil — é uma janela que avança conforme as pessoas conversam. Tudo acima delas é reconstruído a partir de configurações salvas e é estável.
+As mensagens recentes são a parte maior e mais frágil; é uma janela que avança conforme as pessoas conversam. Tudo acima delas é reconstruído a partir de configurações salvas e é estável.
 
 `/tool prompt snapshot` exporta o pacote exato de uma persona para um arquivo. É a fonte da verdade para quais memórias estão ativas no momento, se algum documento correspondeu e quanto da conversa realmente coube.
 
@@ -57,7 +57,7 @@ Essa ordenação explica quase toda pergunta de "por que ela não lembra?":
 
 | O que aconteceu | Por quê |
 |---|---|
-| Ela esqueceu algo de hoje mais cedo | Passou do limite de mensagens. Estava apenas nas **Mensagens recentes** — se a Tomori não salvar como memória de longo prazo, será esquecido assim que sair da janela de mensagens. |
+| Ela esqueceu algo de hoje mais cedo | Passou do limite de mensagens. Estava apenas nas **Mensagens recentes**: se a Tomori não salvar como memória de longo prazo, será esquecido assim que sair da janela de mensagens. |
 | Ela esqueceu algo em outro canal | **Mensagens recentes** é por canal. Apenas **Memórias do servidor**, **Participantes da Conversa** e **Memória de curto prazo** cruzam canais. A memória de curto prazo resolve isso carregando mensagens recentes de diferentes canais, mas não despeja tudo. |
 | `/refresh` fez ela esquecer | Refresh corta as **Mensagens recentes** e limpa a **Memória de curto prazo** deste canal, mas não deve remover memórias de longo prazo. Exclua o embed de refresh para remover o corte. |
 | Ela esqueceu algo após um reinício | **Mensagens recentes** nunca sobrevive a reinícios |

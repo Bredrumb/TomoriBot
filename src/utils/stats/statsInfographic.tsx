@@ -477,7 +477,7 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
                   (no panel/border), each square the same size as the avatar and
                   staggered up-left: accent back → secondary-accent mid → avatar front.
                   Personal-only (it replaces PersonalHeroDecor here), so the Server card
-                  — which still uses the shared decor — is unaffected. */}
+                  (which still uses the shared decor) is unaffected. */}
               <div
                 style={{
                   display: "flex",
@@ -1177,7 +1177,7 @@ const SERVER_MODEL_TRACK_W = SERVER_LOWER_W - scaled(280);
 const SERVER_BAR_TEXT_PAD = scaled(24);
 const SERVER_BAR_TEXT_FONT_SIZE = scaled(27);
 
-// Fixed section heights — summed by getServerCardHeight so the content-aware
+// Fixed section heights, summed by getServerCardHeight so the content-aware
 // card height stays exact (satori clips/pads to the height we hand it).
 const SERVER_HEADER_H = scaled(112);
 const SERVER_BLOCK_TITLE_H = scaled(74);
@@ -1530,7 +1530,7 @@ export function renderServerCard(data: ServerCardData): VNode {
 
       {hasData ? (
         <>
-          {/* 2. Top Personas — horizontal bars (tokens | cost inside, avatar + name at tip). */}
+          {/* 2. Top Personas: horizontal bars (tokens | cost inside, avatar + name at tip). */}
           <ServerBlockTitle title={t.topPersonas} palette={palette} />
           {personas.length > 0 ? (
             personas.map((entry) => (
@@ -1554,7 +1554,7 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 3. Most Active Members — triggers inside, avatar + name at tip. */}
+          {/* 3. Most Active Members: triggers inside, avatar + name at tip. */}
           <ServerBlockTitle title={t.mostActiveMembers} palette={palette} />
           {members.length > 0 ? (
             members.map((entry) => (
@@ -1578,7 +1578,7 @@ export function renderServerCard(data: ServerCardData): VNode {
             <div style={{ display: "flex", color: palette.muted, fontSize: scaled(28) }}>{t.empty}</div>
           )}
 
-          {/* 4. Top Models — tokens | cost inside, model name at tip (no avatar). */}
+          {/* 4. Top Models: tokens | cost inside, model name at tip (no avatar). */}
           <ServerBlockTitle title={t.topModels} palette={palette} />
           {models.length > 0 ? (
             models.map((entry) => (

@@ -7,7 +7,7 @@ sidebar:
 > **Aviso de tradução**: Este documento foi traduzido para sua conveniência. A versão em inglês é a oficial e tem precedência.
 
 Os servidores [MCP](https://modelcontextprotocol.io/) estendem o TomoriBot com ferramentas externas. Servidores MCP online
-(HTTPS) funcionam em qualquer instância — veja
+(HTTPS) funcionam em qualquer instância: veja
 [Tools & Extensions](/pt-BR/features/capabilities/tools-and-extensions/#mcp-servers). Servidores MCP **locais** são
 diferentes:
 
@@ -27,7 +27,7 @@ npx -y <some-mcp-server> --port 3000
 ```
 
 O comando exato depende do servidor que você está executando. Anote a URL e o caminho de transporte que ele
-imprime — geralmente algo como `http://localhost:3000/sse`.
+imprime: geralmente algo como `http://localhost:3000/sse`.
 
 As próprias ferramentas do TomoriBot esperam que o **Node.js v20+** esteja disponível para as ferramentas do MCP no host.
 
@@ -40,7 +40,7 @@ para o seu servidor local e deixe o campo obrigatório **Server Type** em seu va
 http://localhost:3000/sse
 ```
 
-Deixe o campo **Auth Token** em branco — nenhum token de autenticação é necessário para servidores locais.
+Deixe o campo **Auth Token** em branco: nenhum token de autenticação é necessário para servidores locais.
 
 ## 3. Gerencie-o
 

@@ -5,7 +5,7 @@ sidebar:
 aiGenerated: true
 ---
 
-A TomoriBot pode ser configurada **especificamente para você** com os comandos `/personal` — configurações
+A TomoriBot pode ser configurada **especificamente para você** com os comandos `/personal`: configurações
 que acompanham você em todos os servidores que você compartilha com ela, independentemente da
 configuração de qualquer servidor.
 
@@ -88,23 +88,23 @@ pessoais se aplicam em todos os servidores em que você a usa.
 
 ## Outras Configurações Pessoais
 
-- `/personal config` — mudar como ela chama você.
-- `/personal config` — suas próprias tags de aparência (estilo booru), usadas quando uma
+- `/personal config`: mudar como ela chama você.
+- `/personal config`: suas próprias tags de aparência (estilo booru), usadas quando uma
   [geração de imagem](/pt-BR/features/capabilities/media-generation/image-generation/#tag-customization)
   referencia você. Envie uma caixa vazia para limpá-las.
-- `/personal config` — controlar sua visibilidade para ela, até **invisibilidade total** (optar por sair
+- `/personal config`: controlar sua visibilidade para ela, até **invisibilidade total** (optar por sair
   dos recursos de memória inteiramente).
-- `/personal config` — sua substituição pessoal para o
+- `/personal config`: sua substituição pessoal para o
   [Modo de Gatilho Deliberado](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
-- `/personal config` — optar pela compartilhamento de memória de curto prazo entre servidores;
+- `/personal config`: optar pela compartilhamento de memória de curto prazo entre servidores;
   `/personal memories` limpa sua STM.
-- `/personal config` — definir um prompt reutilizável para quando ela personifica você via
+- `/personal config`: definir um prompt reutilizável para quando ela personifica você via
   `/impersonate user`.
 
 ## Destaque Pessoal
 
 **Destaque Pessoal: escolha de personas por canal.** O Destaque permite que *você* restrinja quais personas
-pode acionar em um canal — e opcionalmente atribua uma para acionar automaticamente para suas próprias
+pode acionar em um canal; opcionalmente, atribua uma para acionar automaticamente para suas próprias
 mensagens lá. Ele é limitado a **você + um canal** e não afeta ninguém mais.
 
 **Configure um** com `/personal config`, escolhendo:
@@ -114,7 +114,7 @@ mensagens lá. Ele é limitado a **você + um canal** e não afeta ninguém mais
 - as personas que você quer no seu destaque.
 
 Após escolher as personas, você pode opcionalmente selecionar uma como sua **persona de auto-acionamento
-pessoal** — a respondedora padrão para suas mensagens naquele canal. Acionamentos diretos ainda
+pessoal**: a respondedora padrão para suas mensagens naquele canal. Acionamentos diretos ainda
 miram na persona que você chamou explicitamente. Pressione Finish para pular.
 
 **Regras importantes:**

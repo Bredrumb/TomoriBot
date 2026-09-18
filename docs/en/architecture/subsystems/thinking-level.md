@@ -15,9 +15,9 @@ Use this page to verify:
 
 `thinking_level` is a **provider-scoped saved preference** controlled by:
 
-- `/model parameters thinking_level:<value>` — for a server saved provider (you pick which
+- `/model parameters thinking_level:<value>`: for a server saved provider (you pick which
   saved provider via the interactive picker after running the command)
-- `/personal config` — for your personal saved provider
+- `/personal config`: for your personal saved provider
 
 Current values:
 
@@ -241,7 +241,7 @@ Tomori behavior for detected Ollama endpoints:
 
 #### Gemma 4 thinking on KoboldCPP
 
-Tomori's `thinking_level` has **no effect** on Gemma 4 thinking over a custom endpoint. Thinking activation is controlled entirely at the KoboldCPP launch level — not at the request level via the OpenAI-compatible API.
+Tomori's `thinking_level` has **no effect** on Gemma 4 thinking over a custom endpoint. Thinking activation is controlled entirely at the KoboldCPP launch level, not at the request level via the OpenAI-compatible API.
 
 **To enable Gemma 4 thinking in KoboldCPP:**
 
@@ -253,7 +253,7 @@ Tomori's `thinking_level` has **no effect** on Gemma 4 thinking over a custom en
 
 KoboldCPP v1.111.2+ automatically converts Gemma 4's `<|channel>thought…<channel|>` thinking tokens into the standard `reasoning_content` field for pure-text responses. Tomori's base adapter reads `reasoning_content` and routes it to the thought log channel automatically.
 
-When a tool call immediately follows the thinking block, KoboldCPP does not split the chunk and the raw tokens appear in `delta.content` instead. Tomori's `GemmaThinkingParser` (`src/providers/custom/customGemmaThinkingParser.ts`) handles this case — it strips the thinking block and routes it to thoughts before `GemmaToolCallParser` processes the tool call. Set `CUSTOM_GEMMA_THINKING_PARSER_ENABLED=false` to disable if a non-Gemma model unexpectedly produces similar token strings.
+When a tool call immediately follows the thinking block, KoboldCPP does not split the chunk and the raw tokens appear in `delta.content` instead. Tomori's `GemmaThinkingParser` (`src/providers/custom/customGemmaThinkingParser.ts`) handles this case: it strips the thinking block and routes it to thoughts before `GemmaToolCallParser` processes the tool call. Set `CUSTOM_GEMMA_THINKING_PARSER_ENABLED=false` to disable if a non-Gemma model unexpectedly produces similar token strings.
 
 **Thought log suppression:**
 
@@ -281,7 +281,7 @@ Tomori intentionally does **not** auto-send a generic request-side thinking cont
 
 Reason:
 
-- These backends expose thinking via startup flags, Jinja template variables, or GUI settings — not via a stable, universally-supported OpenAI-compatible request field.
+- These backends expose thinking via startup flags, Jinja template variables, or GUI settings, not via a stable, universally-supported OpenAI-compatible request field.
 - Injecting unrecognised fields into the request body can cause 400/422 errors on servers that validate strictly.
 
 So the current implementation is conservative: configure thinking at the server level, not from Tomori's `thinking_level` preference.

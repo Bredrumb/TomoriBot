@@ -2,7 +2,7 @@
 title: "02.2: Server Info"
 ---
 
-The "where am I" framing — server name and description.
+The "where am I" framing: server name and description.
 
 **File:** `src/utils/text/context/serverInfo.ts:6-51`
 
@@ -24,7 +24,7 @@ Subset of `BuildContextParams`:
 
 ## Output
 
-`Promise<StructuredContextItem>` — exactly one item. Tagged
+`Promise<StructuredContextItem>`: exactly one item. Tagged
 `KNOWLEDGE_SERVER_INFO`. Content shape:
 
 ```
@@ -42,7 +42,7 @@ Impersonation variant: replaces `{botName} is in` with `You are
 
 ## Side effects
 
-- **Mention conversion** — the assembled text passes through
+- **Mention conversion**: the assembled text passes through
   `convertMentions` (server descriptions can contain mentions/channel
   links).
 
@@ -56,13 +56,13 @@ After this stage runs:
 
 ## Extension points
 
-**Internal — fixed shape.** This contributor exists to give the LLM a
+**Internal: fixed shape.** This contributor exists to give the LLM a
 two-sentence "you are here" framing. A plugin wanting to add additional
 server-context kinds (e.g. "verified server," "NSFW server tier," "rules
 channel link") would either:
 
 - (a) Extend `serverDescription` upstream (via the user-facing description
-  the server admin sets) — no code change needed.
+  the server admin sets): no code change needed.
 - (b) Add a new contributor with a new tag, e.g. `KNOWLEDGE_SERVER_RULES`,
   registered separately. → plugin plan candidate.
 

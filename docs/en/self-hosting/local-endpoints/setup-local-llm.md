@@ -26,7 +26,7 @@ Install [Ollama](https://ollama.com). The examples below use Google's **Gemma 4*
 
 Local models run in your GPU's **VRAM** (the memory built into your graphics card, separate
 from your system RAM). Rule of thumb: a model needs at least its **download size** free in
-VRAM, plus ~1–2 GB of headroom for the conversation context. Pick the largest Gemma 4 that
+VRAM, plus ~1-2 GB of headroom for the conversation context. Pick the largest Gemma 4 that
 fits your card:
 
 | Your GPU VRAM | Best fit | Download (approx.) |
@@ -101,7 +101,7 @@ TomoriBot validates the connection when you save it. If it reports the endpoint 
 usual cause is a `localhost`/Docker mismatch or a missing/extra `/v1` (see
 [gotchas](#notes--gotchas)).
 
-Adding the model makes it the active `text` model automatically — start chatting to try it. If
+Adding the model makes it the active `text` model automatically. Start chatting to try it. If
 it isn't active for some reason, run `/config` > Models > Switch Models and select your newly registered model.
 
 Registering never changes any model other than `text`. If you ticked **Image Understanding**
@@ -177,7 +177,7 @@ single-file package you download and point the server at.
    soon after release. Prefer an **instruct/chat** variant (names ending in `-Instruct` or
    `-Chat`); base models don't hold a conversation.
 2. **Pick a quant that fits your VRAM.** A repo lists the same model at many quant levels, and a
-   file's size ≈ the VRAM it needs (plus ~1–2 GB for context, same rule as the
+   file's size ≈ the VRAM it needs (plus ~1-2 GB for context, same rule as the
    [sizing table](#which-size-should-i-pull) above). Download the single `.gguf` for your choice.
 3. **Load it.** Start KoboldCPP or `llama-server` with that file (see
    [Other servers](#other-servers)), then register the endpoint in Discord as usual.

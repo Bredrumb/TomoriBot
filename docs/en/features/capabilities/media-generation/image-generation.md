@@ -9,10 +9,10 @@ TomoriBot can generate images from a text prompt or by editing a reference image
 
 ## What She Can Do
 
-- **Text-to-image** — generate from a prompt.
-- **Image-to-image** — edit or restyle a whole reference image.
-- **Inpainting** — redraw a specific region while preserving the rest.
-- **Outpainting** — extend the canvas beyond the original frame.
+- **Text-to-image**: generate from a prompt.
+- **Image-to-image**: edit or restyle a whole reference image.
+- **Inpainting**: redraw a specific region while preserving the rest.
+- **Outpainting**: extend the canvas beyond the original frame.
 - **Customizable aspect ratios**.
 - **Reference images** can come from message attachments, stickers, emojis, or user/persona
   avatars. Point her at a message, or name a user/persona to pull in their avatar as a
@@ -35,12 +35,12 @@ users or personas.
 Every tag source above is editable, each at a different scope. All of these open a modal
 pre-filled with the current tags, so you edit in place:
 
-- **`/config` > Persona > Appearance** — the selected persona's **Physical Appearance** tags (how *she*
+- **`/config` > Persona > Appearance**: the selected persona's **Physical Appearance** tags (how *she*
   looks). Requires the Manage Server permission.
-- **`/personal config`** — *your own* appearance tags, applied when a generation
+- **`/personal config`**: *your own* appearance tags, applied when a generation
   references you. Follows you across every server (see
   [Personalization](/features/knowledge/personalization/)).
-- **Default positive and negative tags** on **`/config` > Models > Image Generation Defaults** —
+- **Default positive and negative tags** on **`/config` > Models > Image Generation Defaults**:
   the server-wide default tags added to (or steered away from) every generation. Negative
   tags only take effect where the backend supports negative prompts. Submitting the modal with
   an empty box resets that list to the built-in defaults.
@@ -48,7 +48,7 @@ pre-filled with the current tags, so you edit in place:
 ## Setup
 
 1. Configure an image model with `/config` > Models > Switch Models.
-2. Make sure image generation is allowed — it's gated by the `imagegen_enabled` capability
+2. Make sure image generation is allowed: it's gated by the `imagegen_enabled` capability
    (`/config` > Permissions).
 3. Ask her to generate, or run `/generate image`.
 

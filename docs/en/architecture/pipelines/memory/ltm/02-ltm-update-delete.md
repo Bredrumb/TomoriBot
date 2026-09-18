@@ -5,7 +5,7 @@ title: "LTM 02: Memory Update & Delete"
 LLM-initiated replacement or deletion of an existing persistent memory,
 identified by the `ID:N` shown in the LLM's context.
 
-**File:** `src/tools/functionCalls/updateLongTermMemoryTool.ts` — class
+**File:** `src/tools/functionCalls/updateLongTermMemoryTool.ts`: class
 `UpdateLongTermMemoryTool`, tool name `update_long_term_memory`
 
 ## Mission
@@ -18,24 +18,24 @@ new `memory_content` (or empty string to delete), and optionally a
 `UpdateLongTermMemoryTool.execute()` runs the following sequence:
 
 1. **Validate** parameters (integer ID > 0, content is a string, feature flag on).
-2. **Sanitize content** — `sanitizeUnknownTemplatePlaceholders()` strips
+2. **Sanitize content**: `sanitizeUnknownTemplatePlaceholders()` strips
    brace-wrapped non-template tokens. Empty string after sanitization = delete.
-3. **Resolve target user** (if `target_user` provided) — same `resolveUserTarget()`
+3. **Resolve target user** (if `target_user` provided): same `resolveUserTarget()`
    lookup as stage 01, but bridge users are rejected outright for personal
    updates (they only support server-wide memories).
-4. **Scope determination** — `target_user` present → personal path;
+4. **Scope determination**: `target_user` present → personal path;
    absent → server path.
-5. **Privacy / guild membership check** (personal path, update only) —
+5. **Privacy / guild membership check** (personal path, update only):
    `PrivacyLevel.PARTIAL/FULL` blocks the update. Target user must be in the
    guild or DM channel.
-6. **Find the memory** (personal delete/update) — loads the user's personal
+6. **Find the memory** (personal delete/update): loads the user's personal
    memories for this lineage and locates the entry matching `memory_id`.
-7. **DB write** — `serverMemoryRepository.updateByIdWithLineage()` /
+7. **DB write**: `serverMemoryRepository.updateByIdWithLineage()` /
    `personalMemoryRepository.updateByIdForUserAndLineage()` for updates;
    `serverMemoryRepository.removeByIdWithLineage()` /
    `personalMemoryRepository.removeByIdForUserAndLineage()` for deletes.
-8. **Notify** — send an update or delete embed to Discord.
-9. **Invalidate cache** — same paths as stage 01.
+8. **Notify**: send an update or delete embed to Discord.
+9. **Invalidate cache**: same paths as stage 01.
 
 ## Input
 
@@ -68,12 +68,12 @@ Context required: same as stage 01 (`tomoriState`, `channel`, `userId`).
 
 ## Side effects
 
-- **DB row updated or deleted** — the row matching `(memory_id, server_id,
+- **DB row updated or deleted**: the row matching `(memory_id, server_id,
   persona_lineage_id)` for server memories, or `(memory_id, user_id,
   persona_lineage_id)` for personal memories.
-- **Discord embed sent** — update embed (amber `MEMORY_UPDATE` color) or
+- **Discord embed sent**: update embed (amber `MEMORY_UPDATE` color) or
   delete embed (red `ERROR` color) sent to `context.channel`.
-- **Cache invalidated** — same as stage 01: `invalidateTomoriStateCache` or
+- **Cache invalidated**: same as stage 01: `invalidateTomoriStateCache` or
   `invalidateUserCache` immediately after DB success.
 
 ## Invariants
@@ -94,18 +94,18 @@ After a successful delete:
 
 | Condition | Path taken |
 |---|---|
-| `target_user` absent | Server memory path — update/delete from `server_memories` scoped to `(server_id, persona_lineage_id)` |
-| `target_user` present and resolved | Personal memory path — update/delete from `personal_memories` scoped to `(user_id, persona_lineage_id)` |
-| `target_user` is a bridge user | Error — bridge users only support server-wide memories |
-| `target_user` resolves to the bot | Error — personal memories about the bot are not supported |
+| `target_user` absent | Server memory path: update/delete from `server_memories` scoped to `(server_id, persona_lineage_id)` |
+| `target_user` present and resolved | Personal memory path: update/delete from `personal_memories` scoped to `(user_id, persona_lineage_id)` |
+| `target_user` is a bridge user | Error: bridge users only support server-wide memories |
+| `target_user` resolves to the bot | Error: personal memories about the bot are not supported |
 
 ## Extension points
 
 | Surface | Plugin-relevance |
 |---|---|
-| `serverMemoryRepository.updateByIdWithLineage()` / `removeByIdWithLineage()` | Internal — scope is fixed by `(server_id, persona_lineage_id)`; no plugin seam for custom scoping within this method. |
-| `personalMemoryRepository.updateByIdForUserAndLineage()` / `removeByIdForUserAndLineage()` | Internal — same as above for personal scope. |
-| Embed color (`ColorCode.MEMORY_UPDATE` vs `ColorCode.ERROR`) | Internal — color codes are defined in `src/utils/misc/logger.ts`; not a plugin seam. |
+| `serverMemoryRepository.updateByIdWithLineage()` / `removeByIdWithLineage()` | Internal: scope is fixed by `(server_id, persona_lineage_id)`; no plugin seam for custom scoping within this method. |
+| `personalMemoryRepository.updateByIdForUserAndLineage()` / `removeByIdForUserAndLineage()` | Internal: same as above for personal scope. |
+| Embed color (`ColorCode.MEMORY_UPDATE` vs `ColorCode.ERROR`) | Internal: color codes are defined in `src/utils/misc/logger.ts`; not a plugin seam. |
 
 ## Related docs
 

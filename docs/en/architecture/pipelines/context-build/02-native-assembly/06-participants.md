@@ -85,7 +85,7 @@ self-task assigned to the active persona, even when its creator is not a
 conversation participant. Close with channel name +
 current time-of-day (timezone-aware).
 
-The output is *one* context item — all participants live in a single
+The output is *one* context item; all participants live in a single
 `[System: The following users are having a conversation: ...]` block.
 
 ## Input
@@ -96,7 +96,7 @@ seeds, Matrix and synthetic identities, public persona profiles,
 reference-only rows and IDs, and aggregate diagnostics. The hydration facade additionally
 receives:
 
-- `participantSeeds: readonly ParticipantSeed[]` — collision-safe identities, inclusion
+- `participantSeeds: readonly ParticipantSeed[]`: collision-safe identities, inclusion
   reasons, purpose-aware aliases, and first-seen order from the prepared discovery plan
 - `triggererName`, `botName`, `personaLineageId`
 - `ActivePersonaScope` is derived at the hydration boundary from the active persona ID,
@@ -105,16 +105,16 @@ receives:
   `timezone_offset`)
 - `isDMChannel`, `isUserImpersonation`, `impersonatedUserId`,
   `impersonatedIdentityName`
-- `conversationCorpus` — for personal-memory tag filtering
+- `conversationCorpus`: for personal-memory tag filtering
 - `snapshot`, `convertMentions`
 
 ## Output
 
-`Promise<StructuredContextItem | null>` — `null` if the prepared discovery plan has no seeds,
+`Promise<StructuredContextItem | null>`: `null` if the prepared discovery plan has no seeds,
 otherwise one `user`-role item tagged `KNOWLEDGE_USERS_IN_CONVERSATION`.
 
 Also populates `conversationUsers: ConversationUserReference[]` on the
-context item — the provider-safe projection used by existing downstream mention resolution.
+context item; the provider-safe projection used by existing downstream mention resolution.
 It is derived from the hidden
 `ParticipantTargetIndex`; new participant-aware consumers use the index's typed keys and
 purpose-specific aliases directly.
@@ -162,7 +162,7 @@ filter independently of those profile-field decisions. Persona self-tasks are hy
 independently of human participant membership.
 
 - **DB / cache reads (per user)**:
-  - `userRepository.loadByDiscordId(userId)` — load or `null`
+  - `userRepository.loadByDiscordId(userId)`: load or `null`
   - If missing and the user is in the guild: `userRepository.register(...)`
     auto-registers them
   - `userRepository.isBlacklisted` (cached via `userCache`)
@@ -179,37 +179,37 @@ independently of human participant membership.
   - `client.users.fetch(userId)` fallback for users not in guild
   - `getUserPresenceDetails` for online status + activities (requires
     `GuildPresences` intent)
-- **Reference discovery (upstream)** — `contextReferences.ts` scans the complete
+- **Reference discovery (upstream)**: `contextReferences.ts` scans the complete
   sanitized fetched window. Persona triggers use normal trigger matching even
   when Deliberate Trigger Mode is active, but this affects context only and
   never schedules a response.
-- **User reference candidates (upstream)** — one repository read combines real
+- **User reference candidates (upstream)**: one repository read combines real
   Discord mentions, cached guild members, users with `message_sent` or
   `command_used` activity on this server, and eligible saved nicknames found in
   the history. Uncached database candidates are individually verified as
   current guild members; the pipeline never fetches the guild's entire member
   list.
-- **Candidate policy and membership (upstream)** — repository rows carry the evidence for
+- **Candidate policy and membership (upstream)**: repository rows carry the evidence for
   explicitly versioned eligibility policy v1. The pure policy runs before one deduplicated,
   targeted member lookup per eligible Discord ID. Cached members are used first; uncached
   members use `guild.members.fetch(id)`, and the no-argument full-list fetch is never called.
-- **Discovery diagnostics (upstream)** — the typed plan aggregates ineligible-state, bot,
+- **Discovery diagnostics (upstream)**: the typed plan aggregates ineligible-state, bot,
   non-member, ambiguous-alias, existing-participant, blocked-source, and missing-guild
   rejections. Production paths do not log candidate IDs, aliases, or message content.
-- **Preparation diagnostics are not logged** — the typed preparation and hydration
+- **Preparation diagnostics are not logged**: the typed preparation and hydration
   diagnostics stay in-process for tests and callers. No per-generation metric line is
   emitted, so participant preparation adds nothing to production log volume.
-- **Alias catalog construction** — saved nicknames, guild display names and nicknames,
+- **Alias catalog construction**: saved nicknames, guild display names and nicknames,
   global names, usernames, persona nicknames and triggers, Matrix display names, webhook
   display names, and impersonated identities use source-owned builders. Each alias records
   its owner, normalized value, purpose set, exposure, and priority.
-- **Matrix alias exposure** — a Matrix display name remains a lookup-only tool target and
+- **Matrix alias exposure**: a Matrix display name remains a lookup-only tool target and
   output-mention collision claimant. It is never rendered as a Discord ping handle, but a
   human participant cannot be offered the same ambiguous handle.
-- **Pure alias discovery** — eligibility and guild membership are resolved before the pure
+- **Pure alias discovery**: eligibility and guild membership are resolved before the pure
   matcher receives `ParticipantAlias[]`. Its diagnostics expose only aggregate accepted,
   ambiguous, and unmatched counts, never raw alias text.
-- **Final mention conversion** — assembled text passes through
+- **Final mention conversion**: assembled text passes through
   `convertMentions` after pure rendering.
 
 `ParticipantHydrationDependencies` is the fakeable I/O boundary used by focused tests.
@@ -245,7 +245,7 @@ After this stage runs:
   metadata for tool-side user resolution (`resolveUserTarget`). The conversation
   stage of that resolver matches input against the full alias set, but breaks ties by
   preferring a single candidate whose `displayLabel` (primary name) equals the
-  input over candidates that only matched a secondary alias — so one user's
+  input over candidates that only matched a secondary alias; so one user's
   server-nickname alias colliding with another user's actual name no longer
   forces a needless clarify round-trip.
 - When the conversation stage finds nothing, the resolver walks a guild ladder against

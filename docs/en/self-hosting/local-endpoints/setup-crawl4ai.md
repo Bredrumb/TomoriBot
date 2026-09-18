@@ -7,9 +7,9 @@ sidebar:
 
 The `fetch_url` tool uses the in-process `safe_http` engine by default. It can optionally try a browser-rendering sidecar in trusted development environments when you need rendered content for JS-heavy pages.
 
-Default engine order is `safe_http`. Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted. Outside production this is automatic — no configuration needed. In production it requires an explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` opt-in, which is not recommended.
+Default engine order is `safe_http`. Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted. Outside production this is automatic (no configuration needed). In production it requires an explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` opt-in, which is not recommended.
 
-Crawl4AI is a browser-rendered markdown sidecar. It runs a Playwright-based headless browser and extracts LLM-friendly markdown server-side using its own content filters — no post-processing needed on TomoriBot's side.
+Crawl4AI is a browser-rendered markdown sidecar. It runs a Playwright-based headless browser and extracts LLM-friendly markdown server-side using its own content filters (no post-processing needed on TomoriBot's side).
 
 Choose one Crawl4AI setup path:
 
@@ -112,11 +112,11 @@ Then start TomoriBot as normal. Restarting `bun run dev` resets the in-memory he
 
 ---
 
-## Cookie Injection (Authenticated Fetches — Optional)
+## Cookie Injection (Authenticated Fetches: Optional)
 
 Crawl4AI supports injecting browser-level cookies so the headless browser appears already logged in when fetching a page. This is useful for sites that require a session to view content (e.g. paywalled news, private forums, login-gated dashboards).
 
-The `safe_http` fallback does **not** support cookie injection — cookies only apply when Crawl4AI is active.
+The `safe_http` fallback does **not** support cookie injection. Cookies only apply when Crawl4AI is active.
 
 > **Limitation:** Cookie injection bypasses login walls but not bot fingerprinting. Sites with aggressive anti-bot detection (notably Twitter/X) detect headless Playwright via canvas/WebGL fingerprinting and serve empty pages even with valid session cookies. Cookie injection works well for sites that gate on authentication alone.
 
@@ -124,7 +124,7 @@ The `safe_http` fallback does **not** support cookie injection — cookies only 
 
 1. Open your browser and log in to the target site.
 2. Open DevTools (`F12`) → **Application** tab → **Storage** → **Cookies** → select the site's domain.
-3. Copy the `Value` of each required cookie (typically a session token — check the site's cookie names).
+3. Copy the `Value` of each required cookie (typically a session token; check the site's cookie names).
 
 ### Crawl4AI
 
@@ -134,7 +134,7 @@ Set `CRAWL4AI_COOKIES_JSON` in `.env` as a JSON array:
 CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":".example.com"}]
 ```
 
-When this is set, `fetch_url` automatically switches from the `/md` endpoint to `/crawl` with `browser_config.cookies` — `/md` does not support cookie injection.
+When this is set, `fetch_url` automatically switches from the `/md` endpoint to `/crawl` with `browser_config.cookies`. `/md` does not support cookie injection.
 
 ### Cookie object fields
 
@@ -145,7 +145,7 @@ When this is set, `fetch_url` automatically switches from the `/md` endpoint to 
 | `domain` | No | Domain scope (e.g. `.x.com`). Recommended for correctness. |
 | `path` | No | Path scope. Defaults to `/` if omitted. |
 
-> **Note:** Cookie values are sensitive — treat them like passwords. They grant full session access to your account. Do not commit `.env` to version control.
+> **Note:** Cookie values are sensitive, so treat them like passwords. They grant full session access to your account. Do not commit `.env` to version control.
 
 ---
 

@@ -23,7 +23,7 @@ with the first non-error result (or the last attempt's result if all fail).
 
 ## Output
 
-`GenerationTurnResult` — see `src/utils/chat/types.ts:244-250`:
+`GenerationTurnResult`: see `src/utils/chat/types.ts:244-250`:
 
 ```ts
 {
@@ -42,7 +42,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 
 **Per-attempt setup (`buildGenerationAttempts`, `createAttempt`):**
 
-- Resolves the primary `TomoriState` — applies personal-provider selection
+- Resolves the primary `TomoriState`: applies personal-provider selection
   (if BYOK), channel LLM override, and any `llmOverrideCodename` from the
   incoming.
 - Selects an API key from the rotation pool, falling back to the server's
@@ -63,7 +63,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 - When `config.model_randomizer_enabled` is `true` and the pool has ≥2 members,
   a random pool member is spliced to the front of the attempt list **per
   generation turn**; the remaining members keep their relative order as the
-  failover tail. This is a pure *reordering* — the original primary stays in the
+  failover tail. This is a pure *reordering*: the original primary stays in the
   chain and serves as failover if the random lead errors. No model is dropped
   and no model is attempted twice.
 - Because the fallback-used notice keys on `index > 0`, a randomized lead that
@@ -73,7 +73,7 @@ a non-error result *and* the loop falls through (rare; defensive).
   ...fallbacks]`), preserving the deterministic primary-first behavior.
 - The server toggle is `server_chat_configs.model_randomizer_enabled`, set via
   `/config` > Models > Fallbacks & Randomizer, which refuses to enable unless ≥1 fallback model is
-  configured — guaranteeing the pool always has ≥2 members.
+  configured, guaranteeing the pool always has ≥2 members.
 - `config.model_randomizer_enabled` is not always the server value. When a user has
   an **active personal Text route**, `applyPersonalProviderSelectionsToTomoriState`
   overlays that provider row's own `user_saved_provider_configs.model_randomizer_enabled`
@@ -106,7 +106,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 
 **Per-attempt execution (key rotation inner loop):**
 
-- Calls `runToolLoop(...)` — see [tool-loop pipeline](../../tool-loop/).
+- Calls `runToolLoop(...)`: see [tool-loop pipeline](../../tool-loop/).
 - On success: `recordKeySuccess(rotationKeyId)`, break out of the rotation
   loop.
 - On error: classifies the error (rate-limit vs api-error),
@@ -122,7 +122,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 - On non-error or last attempt: emits only final error results, calls
   `responseSink.finalize(result)`, and returns.
 - On thrown error: calls `responseSink.emitError(error)` and finalizes with
-  an `error` result — except under user impersonation, where `emitError`
+  an `error` result, except under user impersonation, where `emitError`
   rethrows by design and neither the `error` result nor `finalize` is reached.
   `responseSink.cleanup()` runs from a `finally` on every path, so per-turn
   resources are released even then.
@@ -136,26 +136,26 @@ a non-error result *and* the loop falls through (rare; defensive).
   when a stalled `streamToDiscord` promise is abandoned by the SDK-call-timeout
   race in the tool loop (that path returns `timeout` but never reports the
   messages it had already flushed).
-- Whenever the stage decides **not** to keep an invocation's result — a
-  key-rotation retry, or a model fallback after an `error`/`timeout` — it deletes
+- Whenever the stage decides **not** to keep an invocation's result (a
+  key-rotation retry, or a model fallback after an `error`/`timeout`), it deletes
   that invocation's already-committed messages. Deletion tries the persona webhook
   first (`webhook.deleteMessage`, no Manage Messages needed) and falls back to a
-  channel-level delete (`channel.messages.delete`) if that fails — e.g. the
-  webhook was recreated mid-stream — or for bot-native messages. It is
+  channel-level delete (`channel.messages.delete`) if that fails (e.g. the
+  webhook was recreated mid-stream) or for bot-native messages. It is
   best-effort: individual failures are logged and skipped. This prevents a
   timed-out primary's truncated partial output from lingering above the fallback
   model's complete response (two conflicting messages). The surviving/final
   attempt's messages are always kept. On total failure, the last attempt's output
   stays and the error embed is shown.
 - **Straggler safety:** on the SDK-call timeout the tool loop aborts the stalled
-  stream but the losing `streamToDiscord` promise is not cancelled — only its HTTP
+  stream but the losing `streamToDiscord` promise is not cancelled; only its HTTP
   request is. `streamOnce` therefore awaits that promise settling (bounded by
   `STREAM_ABANDONED_SETTLE_TIMEOUT_MS`) before returning `timeout`, so any Discord
   send that was already in flight is recorded in `deliveredMessageRefs` *before*
   the fallback path's cleanup runs and cannot leak past it.
 - **Scope:** only messages sent through `StreamUiUpdater.recordSuccessfulSend` are
-  tracked. Ancillary artifacts posted outside that path — the alter "Replying
-  to…" notice, warning/progress embeds — are not tracked and may persist after a
+  tracked. Ancillary artifacts posted outside that path (the alter "Replying
+  to…" notice, warning/progress embeds) are not tracked and may persist after a
   purge.
 
 **NovelAI subscription refresh:**
@@ -169,7 +169,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 After this stage runs:
 
 - `responseSink.finalize(result)` has been called exactly once on every path
-  that returns a result — that is, all of them except user impersonation, whose
+  that returns a result: that is, all of them except user impersonation, whose
   rethrowing error handler propagates instead of returning.
 - `responseSink.cleanup()` has been called exactly once, without exception.
   This is the invariant per-turn resource release relies on; `finalize` is not.
@@ -178,7 +178,7 @@ After this stage runs:
 - Rotation-key bookkeeping (`recordKeySuccess`/`recordKeyError`) reflects
   the outcome of the key that was actually used for each attempt.
 - No superseded attempt's partial output committed through the streaming send
-  path (`recordSuccessfulSend`) remains in the channel — those messages are
+  path (`recordSuccessfulSend`) remains in the channel: those messages are
   deleted, leaving only the surviving (or final) attempt's response. Artifacts
   sent outside that path (alter reply notice, warning embeds) are not tracked and
   are out of scope for this guarantee.
@@ -189,20 +189,20 @@ The stage is a coordinator over several plugin-relevant subsystems:
 
 | Subsystem | Helper | Plugin-relevance |
 |---|---|---|
-| Provider dispatch | `ProviderFactory.getProviderByName`, `getProviderForTomori` | The provider plugin contract is the seam — see [provider pipeline](../../provider/) |
+| Provider dispatch | `ProviderFactory.getProviderByName`, `getProviderForTomori` | The provider plugin contract is the seam: see [provider pipeline](../../provider/) |
 | Tool execution | `runToolLoop` | See [tool-loop pipeline](../../tool-loop/) |
-| Key rotation | `selectApiKey`, `recordKeySuccess`, `recordKeyError`, `hasAvailableRotationKey` | Internal — rotation-key schema is core, not plugin-relevant |
+| Key rotation | `selectApiKey`, `recordKeySuccess`, `recordKeyError`, `hasAvailableRotationKey` | Internal: rotation-key schema is core, not plugin-relevant |
 | Fallback chain | `createFallbackAttempt`, `applySavedProviderConfig` | The fallback-entry schema (`FallbackEntry` union: `model` or `custom_endpoint`) is the data-model seam |
 | Context truncation | `truncateDialogueHistory` | Per-provider token-limit table is the registration surface |
 | Personal-provider routing | `applyPersonalProviderSelectionsToTomoriState` | BYOK substitution; see [provider pipeline](../../provider/) |
 
-**The stage itself is internal** — its job is to orchestrate the
+**The stage itself is internal**: its job is to orchestrate the
 "attempt with fallback + key rotation" pattern. Plugins wanting to:
 
-- **Add a new provider** — register it via the provider plugin contract.
+- **Add a new provider**: register it via the provider plugin contract.
 - **Change attempt-list construction** (e.g. add a probe attempt before the
-  primary) — would extend `buildGenerationAttempts`. → plugin plan candidate.
-- **Intercept stream results** — wrap the sink (per-turn stage 02), not this
+  primary): would extend `buildGenerationAttempts`. → plugin plan candidate.
+- **Intercept stream results**: wrap the sink (per-turn stage 02), not this
   stage.
 
 ## Configuration

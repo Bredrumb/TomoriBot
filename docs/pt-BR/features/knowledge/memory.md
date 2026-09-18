@@ -47,7 +47,7 @@ Existem dois tipos de memória de longo prazo:
 próprio conjunto separado de memórias pessoais e do servidor, então personas diferentes significam que ela não consegue lembrar
 o que outra persona aprendeu. A única exceção é uma memória pessoal adicionada a partir da página Global
 em `/personal memories`, que então se aplica a todas as personas especificamente para você. Memórias
-do servidor não possuem essa opção — o conjunto de memórias do servidor de cada persona sempre permanece separado, mesmo
+do servidor não possuem essa opção; o conjunto de memórias do servidor de cada persona sempre permanece separado, mesmo
 dentro do mesmo servidor.
 
 Use `/memories` para navegar, adicionar, editar, remover ou mover memórias do servidor para a
@@ -221,11 +221,11 @@ Qualquer pessoa pode executar `/config` > Persona > Memories, `/personal config`
 Gerentes do workspace podem ajustar a memória de curto prazo em `/config` → **Behavior** → **Memory & STM**.
 Essas configurações se aplicam aos registros de STM ativos do workspace:
 
-- **Refresh cadence** controla quantos turnos do bot passam entre os empurrões de atualização. O intervalo permitido é 1–100.
+- **Refresh cadence** controla quantos turnos do bot passam entre os empurrões de atualização. O intervalo permitido é 1-100.
 - **Render mode** escolhe se os valores das categorias substituem os turnos recentes ou aparecem como um resumo bruto.
 - **Crude messages** controla quantas mensagens recentes são retidas, de 1 até o máximo do canal.
-- **Nudge depth** posiciona o empurrão de atualização a partir do final do contexto montado, de 0–20.
-- **Content depth** posiciona o conteúdo da STM a partir do final do contexto montado, de −1–20.
+- **Nudge depth** posiciona o empurrão de atualização a partir do final do contexto montado, de 0-20.
+- **Content depth** posiciona o conteúdo da STM a partir do final do contexto montado, de −1-20.
 
 **STM Categories** substitui o campo padrão Summary por até cinco campos rotulados. Insira cada campo como
 `Rótulo: Descrição`; deixar todos os campos em branco restaura a categoria padrão Summary. Salvar categorias
@@ -235,7 +235,7 @@ limpa as STM ativas de canais do servidor que são incompatíveis, e o painel in
 valores padrão efetivos, incluindo o empurrão que considera as categorias quando elas estão habilitadas.
 
 :::tip
-Esses comandos de STM são apenas para usuários avançados — é recomendado manter as configurações padrão, a menos que você queira permitir que ela se lembre de você entre servidores com `/personal config`
+Esses comandos de STM são apenas para usuários avançados; é recomendado manter as configurações padrão, a menos que você queira permitir que ela se lembre de você entre servidores com `/personal config`
 :::
 
 ---

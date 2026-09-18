@@ -8,20 +8,20 @@ sidebar:
 
 Streams an LLM response from a provider API to one or more Discord messages, handling all text processing, delivery timing, and stop signals between the provider's HTTP stream and Discord's message API.
 
-The pipeline is entered from [tool-loop stage 01 — `streamOnce`](../tool-loop/01-stream-once) via
+The pipeline is entered from [tool-loop stage 01: `streamOnce`](../tool-loop/01-stream-once) via
 `LLMProvider.streamToDiscord()`. That facade method constructs a `StreamAdapter` and a `StreamConfig`,
 then hands both to `StreamOrchestrator.streamToDiscord()`, which drives the remaining stages.
 
 ## Read order
 
-1. `README.md` — this file (pipeline overview and entry-point wiring)
-2. `01-context-assembly.md` — adapter translates `StructuredContextItem[]` into provider-native format
-3. `02-raw-chunk-generation.md` — HTTP stream opens; `RawStreamChunk` objects are yielded
-4. `03-chunk-normalization.md` — `processChunk` converts `RawStreamChunk` → `ProcessedChunk`
-5. `04-orchestrator-state-machine.md` — `executeStream` drives the for-await loop and routes chunk types
-6. `05-buffer-management.md` — `StreamBufferFlusher` accumulates text and flushes at boundaries
-7. `06-segment-normalization.md` — `StreamSegmentProcessor` cleans text and resolves Discord-specific concerns
-8. `07-discord-delivery.md` — `StreamMessageDelivery` + `StreamUiUpdater` send messages to Discord
+1. `README.md`: this file (pipeline overview and entry-point wiring)
+2. `01-context-assembly.md`: adapter translates `StructuredContextItem[]` into provider-native format
+3. `02-raw-chunk-generation.md`: HTTP stream opens; `RawStreamChunk` objects are yielded
+4. `03-chunk-normalization.md`: `processChunk` converts `RawStreamChunk` → `ProcessedChunk`
+5. `04-orchestrator-state-machine.md`: `executeStream` drives the for-await loop and routes chunk types
+6. `05-buffer-management.md`: `StreamBufferFlusher` accumulates text and flushes at boundaries
+7. `06-segment-normalization.md`: `StreamSegmentProcessor` cleans text and resolves Discord-specific concerns
+8. `07-discord-delivery.md`: `StreamMessageDelivery` + `StreamUiUpdater` send messages to Discord
 
 ## Stage flow
 
@@ -89,13 +89,13 @@ tool-loop pipeline ─► LLMProvider.streamToDiscord()
 
 ## Cross-references
 
-- **Caller:** [tool-loop pipeline — Stage 01 `streamOnce`](../tool-loop/01-stream-once) —
+- **Caller:** [tool-loop pipeline: Stage 01 `streamOnce`](../tool-loop/01-stream-once):
   the direct entry point for `LLMProvider.streamToDiscord()`
-- **Upstream caller:** [chat per-turn Stage 03 `runGenerationTurn`](../chat/06-per-turn/03-run-generation-turn) —
+- **Upstream caller:** [chat per-turn Stage 03 `runGenerationTurn`](../chat/06-per-turn/03-run-generation-turn):
   orchestrates the model + key fallback loop that calls the tool-loop
-- **Feeds into:** [tool-loop pipeline — Stage 04 `buildResult`](../tool-loop/04-build-result) —
+- **Feeds into:** [tool-loop pipeline: Stage 04 `buildResult`](../tool-loop/04-build-result):
   consumes the `StreamResult` this pipeline returns
-- **Memory write:** [tool-loop pipeline — Stage 04](../tool-loop/04-build-result) routes
+- **Memory write:** [tool-loop pipeline: Stage 04](../tool-loop/04-build-result) routes
   `StreamResult.accumulatedText` and `detailsContent` to short-term memory cache writes
 
 ## Pipeline-wide concerns
@@ -104,15 +104,15 @@ tool-loop pipeline ─► LLMProvider.streamToDiscord()
 
 `LLMProvider.streamToDiscord()` is defined on each provider class (e.g., `GoogleProvider`,
 `OpenrouterProvider`). The method constructs a provider-specific `StreamAdapter` but immediately
-delegates to the universal `StreamOrchestrator`. Stages 1–3 are therefore provider-owned (each
-adapter handles its own API format); stages 4–7 are orchestrator-owned and provider-agnostic.
+delegates to the universal `StreamOrchestrator`. Stages 1-3 are therefore provider-owned (each
+adapter handles its own API format); stages 4-7 are orchestrator-owned and provider-agnostic.
 
 ### Stop and interrupt signals
 
 The stop registry (`src/utils/discord/stream/stopRequests.ts`) is a per-channel map checked at
 every iteration of the stage 4 orchestrator loop. Two stop modes exist:
-- **User stop** (`status: "stopped_by_user"`) — `/kill` command; pending buffer is flushed before returning.
-- **Follow-up interrupt** (`status: "follow_up_interrupt"`) — a new user message arrived; buffer is
+- **User stop** (`status: "stopped_by_user"`): `/kill` command; pending buffer is flushed before returning.
+- **Follow-up interrupt** (`status: "follow_up_interrupt"`): a new user message arrived; buffer is
   discarded and the pipeline exits immediately to allow the chat pipeline to re-run.
 
 ### Delivery modes
@@ -122,8 +122,8 @@ Controlled by `HumanizerDegree` (from `TomoriState.config`):
 | Degree | Mode | Behavior |
 |---|---|---|
 | `NONE` (0) | Aggregated | Text is queued until a tool/final boundary, then sent in one batch |
-| `LOW`/`MEDIUM` (1–2) | Streaming | Each segment is sent as it flushes; typing simulation runs between messages |
-| `HEAVY` (3) | Streaming + humanize | Like degree 1–2 but `humanizeString()` applies additional noise |
+| `LOW`/`MEDIUM` (1-2) | Streaming | Each segment is sent as it flushes; typing simulation runs between messages |
+| `HEAVY` (3) | Streaming + humanize | Like degree 1-2 but `humanizeString()` applies additional noise |
 
 ### Persona and webhook routing
 

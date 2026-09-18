@@ -4,7 +4,7 @@ sidebar:
   order: 6
 ---
 
-Quando você faz `git pull` de um código novo e reinicia a TomoriBot, o bot executa automaticamente as migrações de esquema do banco de dados na inicialização. Isso é poderoso — significa que você não precisa gerenciar atualizações SQL manualmente — mas também significa que operações destrutivas podem afetar silenciosamente seus dados. Este guia mostra como se proteger antes de fazer um pull.
+Quando você faz `git pull` de um código novo e reinicia a TomoriBot, o bot executa automaticamente as migrações de esquema do banco de dados na inicialização. Isso é poderoso (significa que você não precisa gerenciar atualizações SQL manualmente) mas também significa que operações destrutivas podem afetar silenciosamente seus dados. Este guia mostra como se proteger antes de fazer um pull.
 
 ## Por que isso importa
 
@@ -14,10 +14,10 @@ O executor de migração da TomoriBot (em `src/db/migrationRunner.ts`) executa t
 
 Siga estas etapas ANTES de executar `git pull`:
 
-1. **Pare o bot** — desligue o processo da TomoriBot para que nenhuma conexão de banco de dados ativa interfira com o backup.
-2. **Faça backup do banco de dados** — use um dos dois métodos abaixo.
-3. **Anote o commit atual** — execute `git rev-parse HEAD` e salve a saída, caso seja necessário reverter.
-4. **Faça o pull e reinicie** — uma vez que o backup esteja seguro no disco, você estará seguro para fazer o pull e reiniciar.
+1. **Pare o bot**: desligue o processo da TomoriBot para que nenhuma conexão de banco de dados ativa interfira com o backup.
+2. **Faça backup do banco de dados**: use um dos dois métodos abaixo.
+3. **Anote o commit atual**: execute `git rev-parse HEAD` e salve a saída, caso seja necessário reverter.
+4. **Faça o pull e reinicie**: uma vez que o backup esteja seguro no disco, você estará seguro para fazer o pull e reiniciar.
 
 ### Pré-requisito: a extensão `pgvector`
 
@@ -37,15 +37,15 @@ psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 
 
 Se você restaurar sem ela:
 
-- O `restore-backup` do projeto (e qualquer execução de `psql -f` com `ON_ERROR_STOP=1`) **aborta precocemente** com `extension "vector" is not available` — nenhum dado é carregado. Instale o pgvector e tente novamente.
+- O `restore-backup` do projeto (e qualquer execução de `psql -f` com `ON_ERROR_STOP=1`) **aborta precocemente** com `extension "vector" is not available`: nenhum dado é carregado. Instale o pgvector e tente novamente.
 - Uma execução manual do `psql -f` que **ignora erros** (`ON_ERROR_STOP=0`) é pior: o `COPY public.document_chunks` que falhou dessincroniza o analisador de entrada do psql, que por sua vez analisa de forma incorreta as linhas de dados seguintes do `COPY` como SQL (uma cascata de `syntax error at or near …`). Isso descarta silenciosamente tabelas inteiras (observado: `documents` e `llms`), deixando um banco de dados parcialmente restaurado que parece intacto, mas perdeu linhas. Sempre restaure com `ON_ERROR_STOP=1` para que falhas apareçam imediatamente.
 
 ### Opção A: Usar o script de backup do projeto
 
 A TomoriBot inclui dois scripts de backup, cada um visando diferentes dados:
 
-- **`bun run backup`** — Dump completo do esquema do banco de dados + dados (personas, memórias, configurações, tudo)
-- **`bun run backup:personas`** — Predefinições de persona e memórias do servidor por persona apenas
+- **`bun run backup`**: Dump completo do esquema do banco de dados + dados (personas, memórias, configurações, tudo)
+- **`bun run backup:personas`**: Predefinições de persona e memórias do servidor por persona apenas
 
 Para uma migração segura, use o **backup completo**:
 
@@ -92,10 +92,10 @@ pg_dump \
 
 Isso salva um dump binário em formato personalizado (mais compacto que texto SQL). As variáveis de ambiente correspondem ao seu `.env`:
 
-- `POSTGRES_HOST` — padrão `localhost`
-- `POSTGRES_PORT` — padrão `5432`
-- `POSTGRES_USER` — seu usuário do BD
-- `POSTGRES_DB` — padrão `tomodb`
+- `POSTGRES_HOST`: padrão `localhost`
+- `POSTGRES_PORT`: padrão `5432`
+- `POSTGRES_USER`: seu usuário do BD
+- `POSTGRES_DB`: padrão `tomodb`
 
 Para restaurar:
 
@@ -118,9 +118,9 @@ Use-o quando:
 
 - Você estiver enviando uma migração que descarta uma coluna, descarta uma tabela, altera um tipo de coluna ou perde dados de outra forma (a política de migração destrutiva OD-R-6).
 - Você estiver enviando um commit de bundle de versão que combina várias migrações e deseja um único ponto de reversão.
-- Você não tiver certeza se uma migração na fila é segura — na dúvida, faça o checkpoint.
+- Você não tiver certeza se uma migração na fila é segura: na dúvida, faça o checkpoint.
 
-Pule isso em implantações de rotina não destrutivas (novas colunas, novos índices, dados adicionais de seed) — o snapshot tem um custo real e o caminho de rotina não precisa dele.
+Pule isso em implantações de rotina não destrutivas (novas colunas, novos índices, dados adicionais de seed): o snapshot tem um custo real e o caminho de rotina não precisa dele.
 
 Exemplo de mensagem de commit:
 
@@ -131,21 +131,21 @@ Drops the deprecated tomori_configs table after Phase 6 backfill.
 Snapshot is required because the migration is destructive.
 ```
 
-O token `(Checkpoint)` pode aparecer em qualquer lugar no assunto ou no corpo — a correspondência faz distinção de maiúsculas e minúsculas contra a mensagem do head commit. O disparo manual do fluxo de trabalho com o input de backup ativado é a mesma alavanca para os casos ad-hoc.
+O token `(Checkpoint)` pode aparecer em qualquer lugar no assunto ou no corpo: a correspondência faz distinção de maiúsculas e minúsculas contra a mensagem do head commit. O disparo manual do fluxo de trabalho com o input de backup ativado é a mesma alavanca para os casos ad-hoc.
 
 ## O que fazer se uma migração falhar no meio
 
 Se o bot travar ou congelar durante a migração:
 
-1. **Pare o bot imediatamente** — não deixe que ele tente as migrações às cegas de novo.
+1. **Pare o bot imediatamente**: não deixe que ele tente as migrações às cegas de novo.
 
-2. **Verifique os logs** — A TomoriBot registra no stdout/stderr por padrão (capturado pelo seu gerenciador de processos ou logs do Docker). Procure uma mensagem de erro indicando o nome da migração que falhou. Exemplo de saída:
+2. **Verifique os logs**: a TomoriBot registra no stdout/stderr por padrão (capturado pelo seu gerenciador de processos ou logs do Docker). Procure uma mensagem de erro indicando o nome da migração que falhou. Exemplo de saída:
 
    ```
    Migration failed: 042_drop_old_column, error: column "old_column" does not exist
    ```
 
-3. **Decida se deseja restaurar** — se o erro for irrecuperável (por exemplo, a migração tentou descartar uma coluna que não existe), restaure a partir de seu backup:
+3. **Decida se deseja restaurar**: se o erro for irrecuperável (por exemplo, a migração tentou descartar uma coluna que não existe), restaure a partir de seu backup:
 
    ```bash
    # Restauração Opção A
@@ -160,7 +160,7 @@ Se o bot travar ou congelar durante a migração:
      tomoribot-backup-20240115-143045.dump
    ```
 
-4. **Reverta o código** — reverta para o último commit funcionando:
+4. **Reverta o código**: reverta para o último commit funcionando:
 
    ```bash
    git reset --hard <previous-commit-hash>
@@ -172,7 +172,7 @@ Se o bot travar ou congelar durante a migração:
    git log --oneline | head -20
    ```
 
-5. **Relate o bug** — abra uma issue em [github.com/Bredrumb/TomoriBot/issues](https://github.com/Bredrumb/TomoriBot/issues) com:
+5. **Relate o bug**: abra uma issue em [github.com/Bredrumb/TomoriBot/issues](https://github.com/Bredrumb/TomoriBot/issues) com:
    - Nome do arquivo de migração com falha (dos logs)
    - Mensagem de erro completa
    - Hash do último commit com sucesso
@@ -182,9 +182,9 @@ Se o bot travar ou congelar durante a migração:
 
 De acordo com o design do projeto (OD-R-6), **migrações destrutivas não podem ser revertidas** pelo executor de migração. Exemplos:
 
-- `DROP COLUMN name_here` — linhas excluídas são perdidas para sempre; nenhum script SQL pode recuperá-las
-- `DROP TABLE old_table` — a tabela inteira é perdida
-- Estreitamento de tipo (por exemplo, `VARCHAR(255) → VARCHAR(100)`) — valores maiores que 100 caracteres são truncados
+- `DROP COLUMN name_here`: linhas excluídas são perdidas para sempre; nenhum script SQL pode recuperá-las
+- `DROP TABLE old_table`: a tabela inteira é perdida
+- Estreitamento de tipo (por exemplo, `VARCHAR(255) → VARCHAR(100)`): valores maiores que 100 caracteres são truncados
 
 Para essas operações, **a única recuperação é o seu backup**. Sempre faça backup antes do pull se você estiver em uma versão mais antiga e um novo refatoramento tiver sido lançado.
 
@@ -209,7 +209,7 @@ Um caso comum: alguém pede que você teste uma branch na sua instalação exist
 
 ### Revertendo manualmente uma migração de teste
 
-Se você testou uma branch contra o seu banco de dados **real** e deseja desfazer suas migrações em seguida, use o executor de rollback. Ao contrário do executor para frente, ele **nunca roda automaticamente** — o rollback é sempre um ato manual deliberado, já que os arquivos `.down.sql` tipicamente envolvem perda de dados.
+Se você testou uma branch contra o seu banco de dados **real** e deseja desfazer suas migrações em seguida, use o executor de rollback. Ao contrário do executor para frente, ele **nunca roda automaticamente**: o rollback é sempre um ato manual deliberado, já que os arquivos `.down.sql` tipicamente envolvem perda de dados.
 
 ```bash
 # Apenas visualização (dry run): mostrar o que seria revertido
@@ -225,9 +225,9 @@ O comando executa os arquivos `.down.sql` selecionados em ordem de versão **dec
 
 > **Execute-o enquanto ainda estiver na branch.** O rollback lê os arquivos `NNN_description.down.sql` do disco. Assim que você fizer `git checkout main`, esses arquivos não estarão mais presentes e a reversão não poderá mais ser executada. Faça o rollback primeiro e depois troque de branch.
 
-> **Ainda causa perda de dados.** Reverter `034` aqui executa o `DROP TABLE short_term_memories` — quaisquer dados criados durante o teste serão perdidos. Isso é o esperado para a limpeza de um teste, mas nunca execute `migrate:down` contra os dados que você deseja manter sem um backup.
+> **Ainda causa perda de dados.** Reverter `034` aqui executa o `DROP TABLE short_term_memories`: quaisquer dados criados durante o teste serão perdidos. Isso é o esperado para a limpeza de um teste, mas nunca execute `migrate:down` contra os dados que você deseja manter sem um backup.
 
 ## Veja também
 
 - [Documentação do esquema de banco de dados](/en/architecture/subsystems/database-schema/): aprenda sobre a estrutura atual do esquema
-- [Documentação do Bun](https://bun.sh) — conheça os fundamentos do runtime do Bun
+- [Documentação do Bun](https://bun.sh): conheça os fundamentos do runtime do Bun

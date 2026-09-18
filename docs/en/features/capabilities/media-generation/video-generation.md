@@ -9,10 +9,10 @@ Use `/generate video`, or just ask her.
 
 ## What She Can Do
 
-- **Text-to-video** — generate a short clip from a prompt.
-- **Image-to-video** — animate a reference image (the first image from a referenced message
+- **Text-to-video**: generate a short clip from a prompt.
+- **Image-to-video**: animate a reference image (the first image from a referenced message
   becomes the starting frame).
-- **Looping image-to-video** — when requested through chat, supported models can reuse the
+- **Looping image-to-video**: when requested through chat, supported models can reuse the
   starting image as the final frame.
 - **Customizable aspect ratios**.
 

@@ -11,7 +11,7 @@ the live context before the loop continues.
 
 Some tools respond with a `context_restart_*` typed payload instead of
 normal result data. This signals that the tool has produced enriched context
-that must be injected before the next provider call — rather than appending a
+that must be injected before the next provider call; rather than appending a
 tool-response history entry and continuing, the loop restarts with a richer
 context window.
 
@@ -19,15 +19,15 @@ context window.
 enrichment to `params.context.contextItems` and `params.context.streamingContext`,
 and returns `true` to tell `executeToolCall` to return `{kind: "restart"}`.
 
-This stage is called from within [stage 02 — `executeToolCall`](02-execute-tool-call.md)
+This stage is called from within [stage 02: `executeToolCall`](02-execute-tool-call.md)
 immediately after the registry dispatch. It only runs when `toolResult.success
 === true`.
 
 ## Input
 
-- `params: ToolLoopParams` — full loop context; `contextItems` and
+- `params: ToolLoopParams`: full loop context; `contextItems` and
   `streamingContext` are mutated in place.
-- `data: unknown` — the raw `toolResult.data` value from `ToolRegistry.executeTool`.
+- `data: unknown`: the raw `toolResult.data` value from `ToolRegistry.executeTool`.
   Expected shape when a restart is triggered:
   ```ts
   {
@@ -51,7 +51,7 @@ immediately after the registry dispatch. It only runs when `toolResult.success
 
 ## Output
 
-`boolean` — `true` if a restart was triggered and applied; `false` if `data`
+`boolean`: `true` if a restart was triggered and applied; `false` if `data`
 was not a restart signal (caller continues normally).
 
 ## Side effects
@@ -59,7 +59,7 @@ was not a restart signal (caller continues normally).
 All mutations apply only when `data.type` starts with `"context_restart_"`.
 
 **Message-metadata restart** (`type.includes("message_metadata")`):
-- Calls `annotateRecentMessageMetadataInContext` — annotates recent messages
+- Calls `annotateRecentMessageMetadataInContext`: annotates recent messages
   in `contextItems` with author/timestamp metadata and patches reply references.
   Logs annotated and patched counts. When a turn merged several consecutive
   same-author messages (`combinedMessageIds`), it emits one `ref_N` + timestamp
@@ -98,24 +98,24 @@ All mutations apply only when `data.type` starts with `"context_restart_"`.
 
 After this stage runs (when it returns `true`):
 
-- `contextItems` contains the enriched item at the end of the list — the
+- `contextItems` contains the enriched item at the end of the list: the
   next `streamOnce` call will include it in the provider's context.
 - The `context_restart_*` tool call is **not** appended to `functionHistory`.
   The provider will not see the tool's raw response; it sees only the
   enriched context that was injected.
 - `consecutiveToolErrors` in the outer loop is reset to `0` (restarts are
   treated as success).
-- The loop does `continue` — the iteration count advances but no history entry
+- The loop does `continue`; the iteration count advances but no history entry
   is pushed for this tool call.
 
 ## Extension points
 
 | Surface | Plugin-relevance |
 |---|---|
-| `context_restart_*` type namespace | The seam — a tool that needs to inject enriched context before the next generation returns a `context_restart_<suffix>` payload. Adding a new suffix requires a matching `type.includes(...)` check here and a new disable flag if re-fetch prevention is needed. → plugin plan candidate |
-| `enhanced_context_item` field | The enrichment contract — any `StructuredContextItem` can be injected; type determines how the provider interprets it |
+| `context_restart_*` type namespace | The seam: a tool that needs to inject enriched context before the next generation returns a `context_restart_<suffix>` payload. Adding a new suffix requires a matching `type.includes(...)` check here and a new disable flag if re-fetch prevention is needed. → plugin plan candidate |
+| `enhanced_context_item` field | The enrichment contract: any `StructuredContextItem` can be injected; type determines how the provider interprets it |
 | `pending_context_key` + `stashEnhancedContextItem()` | The same contract for bulk media; keeps multi-MB payloads out of the retained tool-execution history. Bounded by `ENHANCED_CONTEXT_STASH_TTL_MS` / `ENHANCED_CONTEXT_STASH_MAX_ENTRIES` |
-| Disable flags on `StreamingContext` | Internal — flags are consumed by the context-build pipeline; adding a new flag requires both the restart handler and the context-build stage that checks it |
+| Disable flags on `StreamingContext` | Internal: flags are consumed by the context-build pipeline; adding a new flag requires both the restart handler and the context-build stage that checks it |
 
 ## Related docs
 

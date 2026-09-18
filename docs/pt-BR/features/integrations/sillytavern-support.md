@@ -15,7 +15,7 @@ sidebar:
 
 A TomoriBot pode importar duas coisas do [SillyTavern](https://github.com/SillyTavern/SillyTavern)
 que você talvez já tenha: **predefinições do Prompt Manager** (como o prompt é organizado) e
-**cards de personagem** (o personagem em si). Este é um recurso de nicho para usuários do ST — se você nunca
+**cards de personagem** (o personagem em si). Este é um recurso de nicho para usuários do ST; se você nunca
 usou o SillyTavern, pode pular esta página.
 
 ## Importação de Cards de Personagem
@@ -38,7 +38,7 @@ o fluxo de conversão do SillyTavern. Você também pode enviar um card para `/p
 transformá-lo em uma persona nova.
 
 As importações passam por um esquema de validação antes de qualquer coisa ser salva (limites padrão: 5.000
-caracteres por string, 200 atributos, 100 diálogos de exemplo por lado, 100 palavras-gatilho —
+caracteres por string, 200 atributos, 100 diálogos de exemplo por lado, 100 palavras-gatilho;
 quem faz hospedagem própria pode ajustar as variáveis de ambiente `PRESET_MAX_*`). Leituras de arquivos são limitadas separadamente pelas
 variáveis `MAX_CHARX_*`, porque o tamanho comprimido de um arquivo não diz nada sobre o que ele expande.
 Para a conversão exata e o mapeamento de campos, veja a
@@ -78,7 +78,7 @@ Uma predefinição controla o *layout*, não toda fonte de texto. Estes continua
 
 ### Regra do Prompt de Sistema
 
-Enquanto uma predefinição está ativa, o prompt de sistema fallback integrado é removido — mas se *você* definiu
+Enquanto uma predefinição está ativa, o prompt de sistema fallback integrado é removido; mas se *você* definiu
 o seu próprio com `/config` > Engine > General, ele ainda é enviado.
 
 ### Notas de Compatibilidade
@@ -88,7 +88,7 @@ Surpresas comuns quando uma predefinição parece ser ignorada:
 - Importado ≠ enviado: nós desabilitados em `prompt_order` permanecem desligados até que você os habilite com
   `/config` > Plugins > SillyTavern Presets. Nós apenas com comentários e nós vazios nunca são enviados; marcadores desconhecidos são
   ignorados.
-- A ordem é literal — colocar `chatHistory` antes de `dialogueExamples` envia o chat ao vivo primeiro.
+- A ordem é literal: colocar `chatHistory` antes de `dialogueExamples` envia o chat ao vivo primeiro.
 - Injeções de pós-histórico/profundidade são mescladas nas entradas existentes do histórico de chat em vez de se tornarem
   mensagens independentes; múltiplos nós na mesma profundidade são agrupados.
 - Pós-processamento de regex, overrides de temperatura/top-p/modelo no lado da predefinição e predefinições em camadas

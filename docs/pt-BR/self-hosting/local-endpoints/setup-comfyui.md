@@ -32,7 +32,7 @@ são ambos modelos modernos e mais pesados que o SDXL:
 
 | Fluxo de trabalho incluso | Modelo base | VRAM prática | Notas |
 |---|---|---|---|
-| **Anima v1** (imagem) | Qwen-Image (~20B), fp8 | ~16 GB mínimo · 24 GB confortável | O codificador de texto e o VAE adicionam ~8–10 GB de sobrecarga. Abaixo de 16 GB, use uma build GGUF + `--lowvram`. |
+| **Anima v1** (imagem) | Qwen-Image (~20B), fp8 | ~16 GB mínimo · 24 GB confortável | O codificador de texto e o VAE adicionam ~8-10 GB de sobrecarga. Abaixo de 16 GB, use uma build GGUF + `--lowvram`. |
 | **WAN i2v loop** (vídeo) | Wan 2.2 14B, fp8 + 4-step LightX2V LoRAs | ~16 GB viável · 24 GB+ confortável | A opção mais pesada, espere **minutos por clipe**. Descarregue o codificador de texto UMT5 para a RAM (`t5_cpu`, necessita de 24 GB+ de RAM no sistema) em placas menores. |
 
 Ambos os checkpoints inclusos já estão **quantizados em fp8** para caber em placas de consumo. Se você tem menos 
@@ -59,7 +59,7 @@ escute na rede:
 python main.py --listen 0.0.0.0 --port 8188
 ```
 
-O `--listen 0.0.0.0` é importante se o TomoriBot rodar no Docker ou em uma máquina diferente — o 
+O `--listen 0.0.0.0` é importante se o TomoriBot rodar no Docker ou em uma máquina diferente, pois o 
 padrão se vincula apenas ao loopback. Confirme a acessibilidade **a partir da máquina onde o bot está rodando**:
 
 ```sh

@@ -4,14 +4,14 @@ sidebar:
   order: 1
 ---
 
-A TomoriBot não tem um modelo de IA embutido — você conecta um a partir de um provedor. Um **provedor** é um
+A TomoriBot não tem um modelo de IA embutido: você conecta um a partir de um provedor. Um **provedor** é um
 serviço de IA (Google Gemini, OpenRouter, NovelAI, um endpoint local, …), e um **modelo** é um
 modelo específico nesse provedor. Você precisa de pelo menos um provedor para usá-la.
 
 ## Chaves de API
 
 Adicione uma chave de provedor durante a configuração inicial com `/setup`, ou depois em `/providers` escolhendo
-**Add New Provider**. As chaves são **criptografadas em repouso** — ninguém, incluindo administradores do servidor, pode
+**Add New Provider**. As chaves são **criptografadas em repouso**: ninguém, incluindo administradores do servidor, pode
 lê-las de volta.
 
 `/setup` pergunta como as respostas devem chegar a um modelo antes de tudo, e a resposta decide o que ele
@@ -39,7 +39,7 @@ provedor para o passo a passo exato, ou use estes pontos de partida:
 | **NVIDIA NIM** | Texto hospedado, embeddings e imagem. | [NVIDIA Build](https://build.nvidia.com/) |
 | **Anthropic** | Modelos Claude via API (não Claude Code). | — |
 | **Z.ai** | Família GLM. ⚠️ ToS restringe uso a cenários de código/agente. | [Z.ai](https://z.ai/) |
-| **Vertex AI** | Google Cloud via ADC do `gcloud` — melhor para configurações locais/dev. | veja abaixo |
+| **Vertex AI** | Google Cloud via ADC do `gcloud`: melhor para configurações locais/dev. | veja abaixo |
 | **Vertex AI Express** | BYOK de chave de API do Google Cloud (Preview, subconjunto do Gemini). | [Express Mode](https://console.cloud.google.com/expressmode) |
 | **Custom** | Qualquer endpoint compatível com OpenAI (Ollama, vLLM, LiteLLM, …). | veja [Endpoints Personalizados](#endpoints-personalizados) |
 
@@ -62,7 +62,7 @@ padrão do catálogo, então um padrão aposentado não pode impedir que uma cre
 
 O Brave Search é separado do seu provedor de IA e apenas aprimora a pesquisa na web (adiciona pesquisa de imagem,
 vídeo e notícias). Configure-o com `/providers`. ⚠️ O Brave inclui $5/mês de
-crédito gratuito — defina um limite de uso de $5 no painel do Brave para evitar cobranças.
+crédito gratuito; defina um limite de uso de $5 no painel do Brave para evitar cobranças.
 
 ## Escolhendo Modelos
 
@@ -79,14 +79,14 @@ a interação do comando ser aberta.
 Após um provedor ser definido, use `/config` > Models > Switch Models para escolher as atribuições de capacidade compartilhadas.
 Os seis slots comuns selecionam entradas de modelo dos catálogos de provedores:
 
-- `/config` > Models > Switch Models — o modelo principal de chat
-- `/config` > Models > Switch Models — um modelo de visão (para ler imagens quando o modelo de chat não consegue)
-- `/config` > Models > Switch Models — embeddings para a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/#base-de-conhecimento-de-documentos-rag)
-- `/config` > Models > Switch Models — geração de imagem padrão (veja [Geração de Imagem](/pt-BR/features/capabilities/media-generation/image-generation/))
-- `/config` > Models > Switch Models — geração de imagem NovelAI
-- `/config` > Models > Switch Models — geração de vídeo
-- `/config` > Models > Switch Models — endpoint de texto-para-fala (TTS)
-- `/config` > Models > Switch Models — endpoint de fala-para-texto (STT)
+- `/config` > Models > Switch Models: o modelo principal de chat
+- `/config` > Models > Switch Models: um modelo de visão (para ler imagens quando o modelo de chat não consegue)
+- `/config` > Models > Switch Models: embeddings para a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/#base-de-conhecimento-de-documentos-rag)
+- `/config` > Models > Switch Models: geração de imagem padrão (veja [Geração de Imagem](/pt-BR/features/capabilities/media-generation/image-generation/))
+- `/config` > Models > Switch Models: geração de imagem NovelAI
+- `/config` > Models > Switch Models: geração de vídeo
+- `/config` > Models > Switch Models: endpoint de texto-para-fala (TTS)
+- `/config` > Models > Switch Models: endpoint de fala-para-texto (STT)
 
 As seis primeiras entradas escolhem registros do catálogo de modelos. Os slots de TTS e STT escolhem endpoints com escopo
 de workspace, então eles ativam o endpoint selecionado em vez de gravar uma coluna de modelo. Registre
@@ -98,11 +98,11 @@ Você também pode gerenciar as chaves de backup deste servidor para failover au
 
 ## Endpoints Personalizados
 
-Endpoints personalizados permitem que você registre serviços auto-hospedados ou com proxy — Ollama, LM Studio,
-LiteLLM, vLLM, ComfyUI, TTS/STT local — como **pacotes de provedores rotulados**.
+Endpoints personalizados permitem que você registre serviços auto-hospedados ou com proxy: Ollama, LM Studio,
+LiteLLM, vLLM, ComfyUI, TTS/STT local; como **pacotes de provedores rotulados**.
 
 - **Escopo do servidor:** abra `/providers` para registro e edição de endpoints do workspace.
-- **Escopo pessoal:** abra `/personal providers` para catálogos de modelos pessoais (apenas você — veja
+- **Escopo pessoal:** abra `/personal providers` para catálogos de modelos pessoais (apenas você; veja
   [Personalização](/pt-BR/features/knowledge/personalization/#seus-próprios-provedores)). Endpoints pessoais de fala
   não são selecionados em `/personal config`.
 
@@ -135,9 +135,9 @@ apenas modelos de texto; capacidades de imagem, vídeo, TTS e STT ainda são reg
 
 Para guias completos de execução dos servidores, veja:
 
-- [Configuração: LLM Local](/pt-BR/self-hosting/local-endpoints/setup-local-llm/) — Ollama, KoboldCPP, LM Studio, vLLM, LiteLLM.
-- [Configuração: ComfyUI](/pt-BR/self-hosting/local-endpoints/setup-comfyui/) — geração local de imagem/vídeo.
-- [Configuração: ChatMock](/pt-BR/self-hosting/local-endpoints/setup-chatmock/) — conta ChatGPT / Codex CLI.
+- [Configuração: LLM Local](/pt-BR/self-hosting/local-endpoints/setup-local-llm/): Ollama, KoboldCPP, LM Studio, vLLM, LiteLLM.
+- [Configuração: ComfyUI](/pt-BR/self-hosting/local-endpoints/setup-comfyui/): geração local de imagem/vídeo.
+- [Configuração: ChatMock](/pt-BR/self-hosting/local-endpoints/setup-chatmock/): conta ChatGPT / Codex CLI.
 
 ## Provedores Suportados
 

@@ -24,7 +24,7 @@ Flow:
 
 `loadCommandData()` is called from two places: the startup registration path (`clientReady/01_registercommands.ts`) and the lazy first-interaction path (`interactionCreate/handleCommands.ts`). It is memoized behind a single shared promise (`cachedCommandDataPromise`) so both callers await **one** evaluation.
 
-This guards against a startup race: if an interaction arrives while registration is still loading, a second concurrent `loadCommandData()` would independently `await import()` the same command modules. Because ES module evaluation interleaves across `await` points, the second loader could read an export binding (e.g. `configureSubcommand`) while the module was still in its Temporal Dead Zone, throwing `Cannot access 'configureSubcommand' before initialization` and silently skipping that command — leaving the bot "dead" for those commands until restart.
+This guards against a startup race: if an interaction arrives while registration is still loading, a second concurrent `loadCommandData()` would independently `await import()` the same command modules. Because ES module evaluation interleaves across `await` points, the second loader could read an export binding (e.g. `configureSubcommand`) while the module was still in its Temporal Dead Zone, throwing `Cannot access 'configureSubcommand' before initialization` and silently skipping that command, so leaving the bot "dead" for those commands until restart.
 
 The memoized promise is **not** cached when a load fails catastrophically (empty execution map) or rejects, so a later interaction can retry instead of locking in a broken state. `handleCommands.ts` likewise only commits its module-level maps when the load produced commands. New callers must use the exported `loadCommandData()`, never the private `loadCommandDataUncached()`.
 
@@ -34,7 +34,7 @@ The race above is only *possible* because a command module's static import graph
 
 Rule: **data-layer modules (repositories, caches) must not import high-level subsystems** (context building, tools, webhooks, providers). Import shared leaf constants directly from their owning leaf module, not from a barrel that also re-exports heavy code. Example: `ServerRepository.ts` imports `DEFAULT_SYSTEM_PROMPT` from `@/utils/text/context/templates` (a leaf), **not** from `@/utils/text/contextBuilder` (a barrel that also re-exports `buildContext` and its tool/webhook/provider graph). That single edge previously routed the entire runtime subsystem into the repositories barrel.
 
-Run `bunx madge --circular --extensions ts --ts-config tsconfig.json src` to audit cycles. Remaining cycles are expected to be either type-only (`import type`, erased at runtime), localized repository↔cache↔barrel cycles, or self-contained subsystem-internal cycles (Matrix bridge, chat pipeline) — none should route the repositories barrel into context/tool/webhook code.
+Run `bunx madge --circular --extensions ts --ts-config tsconfig.json src` to audit cycles. Remaining cycles are expected to be either type-only (`import type`, erased at runtime), localized repository↔cache↔barrel cycles, or self-contained subsystem-internal cycles (Matrix bridge, chat pipeline); none should route the repositories barrel into context/tool/webhook code.
 
 ## Discord UI Helper Layout
 
@@ -562,9 +562,9 @@ engine's range-selector bridge, which always renders the Components V2 selector.
 `selectorStyle: "legacy" | "componentsV2"` (default `"legacy"`). At `<=25` options both
 styles open a modal directly, so this only affects the paginated path:
 
-- `"legacy"` — numbered page-button embed on the interaction's reply (`1` `2` `3`, capped
+- `"legacy"`: numbered page-button embed on the interaction's reply (`1` `2` `3`, capped
   at 9 pages).
-- `"componentsV2"` — the shared Components V2 range selector (`1-25` / `26-50` ranges +
+- `"componentsV2"`: the shared Components V2 range selector (`1-25` / `26-50` ranges +
   Previous/Cancel/Next), byte-identical to the persona workflow's `>25` shell
   (`buildRangeSelectorPayload`). Its Cancel button returns `outcome: "cancelled"` (the
   legacy selector has no Cancel and never returns it); callers gating on
@@ -573,7 +573,7 @@ styles open a modal directly, so this only affects the paginated path:
 The V2 selector renders `IsComponentsV2` onto the interaction's reply, which Discord then
 forbids editing with legacy embeds. The selector marks the interaction, and the shared
 sinks (`replyInfoEmbed`/`replySummaryEmbed`/`replyPaginatedStatusPages`) detect the mark
-and emit a V2 notice container instead of embeds — so a later error/info reply to the same
+and emit a V2 notice container instead of embeds, so a later error/info reply to the same
 interaction cannot collide. Before opting a caller into `"componentsV2"`, confirm the
 interaction reaching the helper is unacknowledged (fresh-reply path) rather than a
 deferred/replied **legacy** message, since Discord cannot convert a legacy reply to V2 via
@@ -583,7 +583,7 @@ deferred/replied **legacy** message, since Discord cannot convert a legacy reply
 
 The **anchor message workflow** is the engine behind Patterns 4A and 4B. Its rule: one
 command invocation owns exactly **one** ephemeral message, edited in place through every
-stage — picker, `>25` range selector, modal, progress, and terminal result. Opening a modal
+stage: picker, `>25` range selector, modal, progress, and terminal result. Opening a modal
 is an acknowledgment, not a second message.
 
 This exists because Discord emits **no event when a user dismisses a modal**. A flow that
@@ -594,8 +594,8 @@ controls for an inert notice the instant the modal opens.
 
 Two specializations share the engine:
 
-- **Pattern 4A** (below) — the persona picker, via `runPersonaPickerWorkflow`.
-- **Pattern 4B** — one-shot picker → modal config commands, via
+- **Pattern 4A** (below): the persona picker, via `runPersonaPickerWorkflow`.
+- **Pattern 4B**: one-shot picker → modal config commands, via
   `beginAnchorPrivateWorkflow` plus the shared helpers in `anchorModelFlow.ts`.
 
 Non-persona callers import the engine from `src/utils/discord/ui/anchorWorkflow.ts`,
@@ -633,7 +633,7 @@ write their own outer picker loop. Picker outcomes remain discriminated as `sele
 (see the eligibility section) is a terminal state distinct from all others and is never
 retried.
 
-Classify collector expiry with `isCollectorTimeoutError(error)` from `interactionCore` —
+Classify collector expiry with `isCollectorTimeoutError(error)` from `interactionCore`,
 never with a bare `error === "time"` check. discord.js uses two rejection shapes for the
 same event: raw collectors reject with the end-reason string (`"time"` / `"idle"`), while
 `Message#awaitMessageComponent` and `awaitModalSubmit` reject with an
@@ -689,7 +689,7 @@ every filter the loader applies:
 | History documents | `serverMemoryRepository.loadHistoryDocuments` | `documents.persona_id` | `server_id` **and** `source_type = 'history'` |
 | Server memories | `serverMemoryRepository.loadServerMemoriesScoped` | `server_memories.persona_lineage_id` | `server_id`, plus optional `user_id` (permission-dependent) |
 | Personal memories | `personalMemoryRepository.loadForUserLineage` | `personal_memories.persona_lineage_id` | `user_id`; lineage `0` excluded so a global memory never marks a specific persona eligible |
-| Sprites | `personaSpriteRepository.listForPersona` | **not** `persona_id` | resolves preset pointers first — a pointer persona has zero `persona_sprites` rows yet still has sprites, so a bare `GROUP BY persona_id` is wrong; reproduce the numeric `sprite_id` narrowing |
+| Sprites | `personaSpriteRepository.listForPersona` | **not** `persona_id` | resolves preset pointers first: a pointer persona has zero `persona_sprites` rows yet still has sprites, so a bare `GROUP BY persona_id` is wrong; reproduce the numeric `sprite_id` narrowing |
 
 Two traps are worth stating explicitly:
 
@@ -1046,7 +1046,7 @@ Use for a config command shaped *pick a provider -> choose a value in a modal ->
 result*. The whole `/model *` family is built
 this way, plus `/config` > Models > Fallbacks & Randomizer.
 
-The command expresses only business intent — which model table to read, which column to
+The command expresses only business intent: which model table to read, which column to
 write, which terminal copy to show. All lifecycle branching lives in the shared helpers in
 `src/utils/discord/ui/anchorModelFlow.ts`:
 
@@ -1079,7 +1079,7 @@ Rules:
   `MIGRATED_ANCHOR_CALLERS`; the audit in
   `tests/unit/commands/anchorMigrationLockdown.test.ts` then fails the build if one of
   those primitives reappears in it.
-- Every terminal — success, validation failure, write failure, and the outer `catch` —
+- Every terminal (success, validation failure, write failure, and the outer `catch`)
   renders through `work.message.replace(...)` or the tracked `anchorMessage`, never
   `replyInfoEmbed`. Absence of the banned primitives is what transitively guarantees this.
 - `>25` options need no caller handling: `openAnchorModal` routes through the engine's
@@ -1088,7 +1088,7 @@ Rules:
   an interaction the controller owns, so the slash command cannot open it directly.
 
 **When the bridge does not fit.** The bridge slices exactly one select component and assumes
-every entry is a selectable option. `/config` > Models > Fallbacks & Randomizer violates both — five selects over one
+every entry is a selectable option. `/config` > Models > Fallbacks & Randomizer violates both: five selects over one
 shared option list, with one entry per page reserved for an explicit "None" choice. Such a
 command picks its range on the anchor message first via `acquireModalOptionRange(...)`
 (passing a `pageSize` below 25 to reserve entries), then hands `openAnchorModal` an
@@ -1180,13 +1180,13 @@ than an invocation-scoped modal collector, so a supported open modal can survive
 - `scheduled-task`: edit, remove
 - `conditioning`: manage, reward(headpat/hug/kiss/tickle), punish(spank/pinch/bite/squeeze)
 - `tool`: ping, status, refresh, compact, comment
-- `stats`: personal(scope toggle), persona(autocomplete), server — each takes an optional `timeframe` (default All-Time)
+- `stats`: personal(scope toggle), persona(autocomplete), server; each takes an optional `timeframe` (default All-Time)
 
-`/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an **optional** `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to **All-Time** when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`) — declared before `timeframe` because Discord rejects a required option after an optional one. The result is a **public, invoker-controlled tabbed dashboard** (`src/utils/stats/statsDashboard.ts`) built on **Components V2**: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (`STATS_DASHBOARD_TIMEOUT_MS`, default 5 min). The renderer uses a single **persistent** `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process. **Timeframe gating:** rewards/punishments and memories are all-time-only; daily telemetry, including generation totals, works for every timeframe. Span metrics (streaks, most-active hour/day) are hidden under the single-day `Today` view. `/stats persona` uses autocomplete to select from all guild personas, validating the ID and rendering the public dashboard directly via follow-up after an initial private deferral. Token and cost figures prefer provider-reported usage and fall back to character estimates when unavailable; they remain estimates because pricing can be incomplete or provider-dependent. Timeframe windows use the daily-bucket floor, so `Today` is the current UTC day, not a rolling 24h.
+`/stats` is a guild-only category that reads the `stat_counters` telemetry table (see [database-schema](database-schema)). Each subcommand (`personal`, `persona`, `server`) takes an **optional** `timeframe` choice (`Today` / `Last 7 Days` / `Last 30 Days` / `Last Year` / `All-Time`), defaulting to **All-Time** when omitted; `personal` adds a required `scope` choice (`This Server` / `All Servers`), declared before `timeframe` because Discord rejects a required option after an optional one. The result is a **public, invoker-controlled tabbed dashboard** (`src/utils/stats/statsDashboard.ts`) built on **Components V2**: each tab is a single container (H3 title, separator-divided stat sections, and the tab buttons living inside the card). A row of named tab buttons swaps which container is shown (a tabbed view, not item pagination). Only the invoker can operate the tabs; the buttons are stripped on collector timeout (`STATS_DASHBOARD_TIMEOUT_MS`, default 5 min). The renderer uses a single **persistent** `createMessageComponentCollector` (not a one-shot `awaitMessageComponent` loop) so rapid tab switching can't land in a no-collector gap, and wraps each `button.update` in try/catch so a stale/expired interaction (DiscordAPIError 10062) can never tear down the dashboard. Dashboard and infographic entry points drain the in-memory stat buffer before querying, so their snapshots include all successfully buffered work from the current process. **Timeframe gating:** rewards/punishments and memories are all-time-only; daily telemetry, including generation totals, works for every timeframe. Span metrics (streaks, most-active hour/day) are hidden under the single-day `Today` view. `/stats persona` uses autocomplete to select from all guild personas, validating the ID and rendering the public dashboard directly via follow-up after an initial private deferral. Token and cost figures prefer provider-reported usage and fall back to character estimates when unavailable; they remain estimates because pricing can be incomplete or provider-dependent. Timeframe windows use the daily-bucket floor, so `Today` is the current UTC day, not a rolling 24h.
 
 `/config` > Channels > Auto-Trigger is channel-scoped and uses one shared cycle across its configured channels. Threshold `0` enables always-reply in those channels. Positive values use either a fixed trigger (`min = max`) or a shared inclusive random range (`min-max`), rerolling after each successful auto-trigger. The cycle only advances on qualifying real user-like messages; TomoriBot and alter webhook self-messages do not advance or consume the auto-trigger counter. Removing a channel disables auto-trigger behavior for that channel. The page can also target a single channel and assign one persona to that room's auto-trigger fallback instead of always using the main persona.
 
-`/config` > Channels > Channel Overrides scopes a system prompt to one channel. It selects the channel, then opens a prefilled 4-part modal (up to 16000 chars, part 1 optional) plus a Radio Group for Prompt Mode (`Append` / `Replace`). `Append` injects the channel prompt as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt; `Replace` substitutes the channel prompt for the server system prompt's slot — persona prompt and persona attributes are never affected. Submitting with all prompt parts empty removes the channel's override. State lives in the standalone `channel_prompt_overrides` table (per-channel, never exported) and is resolved per request via `getCachedChannelPrompt`. The override surfaces in `/tool prompt snapshot` under the `Channel Prompt` header.
+`/config` > Channels > Channel Overrides scopes a system prompt to one channel. It selects the channel, then opens a prefilled 4-part modal (up to 16000 chars, part 1 optional) plus a Radio Group for Prompt Mode (`Append` / `Replace`). `Append` injects the channel prompt as a distinct `SYSTEM_CHANNEL_PROMPT` block after the server system prompt; `Replace` substitutes the channel prompt for the server system prompt's slot; persona prompt and persona attributes are never affected. Submitting with all prompt parts empty removes the channel's override. State lives in the standalone `channel_prompt_overrides` table (per-channel, never exported) and is resolved per request via `getCachedChannelPrompt`. The override surfaces in `/tool prompt snapshot` under the `Channel Prompt` header.
 
 `/config` > Persona > Sprites carries every sprite action for the selected persona. Add validates a
 sprite label, uploads an image, converts it to PNG, and upserts a `persona_sprites` row. Reusing a
@@ -1242,7 +1242,7 @@ the same implementation.
 
 `/generate image` Auto mode is a modal-driven, fire-and-forget scene snapshot flow. It plans against the current channel context with the active text provider, preparing its simplified-history participants through the same API as live chat, then renders with either the current provider's native image path or NovelAI's tag-based image tool when a NovelAI backend is available. Personal provider overlays apply before the hidden turn is built so personal text/image routing is respected.
 
-`/generate scene` is a modal-driven scripted text-scene command. V1 requires two different personas, optionally accepts a third, blocks duplicate selections, and only opens when the available persona set fits Discord's 25-option select limit. The `Rounds` field repeats the selected speaking order and is bounded by `GENERATE_SCENE_MAX_CYCLES` (default `10`; TomoriBot is BYOK so each generated turn bills the invoking user's own provider). Each generated turn receives a concise tail directive: additional instructions when provided, then "Begin your next reply as {persona}. Write only this character's next message." Scene turns keep tools enabled, suppress `/respond` continuation prompting, and use unique text-quota trigger keys so each generated turn is charged separately. Because every scene turn shares one trigger message, both reply-to-trigger mechanisms are suppressed for scene turns: the visual Discord reply (`replyToMessage` in `toolLoop.ts`) and the textual `buildQueuedReplyDirective` context directive (`contextPipeline.ts`) — otherwise every queued persona would render and be told to reply to the same unrelated message. The command-execution status embed (`commands.generate.scene.success_title`) is sent non-ephemerally so it is classified as a `scene_directive` system embed and re-read into context as `[System: ...]`. For scene turns after the first, `triggererName` (what `{{user}}` resolves to in `turnPlanner.ts`) is overridden to the previous speaker in `sceneTurn.sequence`, so each persona treats the prior persona as the entity it is responding to rather than the command invoker; turn 0 has no prior speaker and keeps the invoker.
+`/generate scene` is a modal-driven scripted text-scene command. V1 requires two different personas, optionally accepts a third, blocks duplicate selections, and only opens when the available persona set fits Discord's 25-option select limit. The `Rounds` field repeats the selected speaking order and is bounded by `GENERATE_SCENE_MAX_CYCLES` (default `10`; TomoriBot is BYOK so each generated turn bills the invoking user's own provider). Each generated turn receives a concise tail directive: additional instructions when provided, then "Begin your next reply as {persona}. Write only this character's next message." Scene turns keep tools enabled, suppress `/respond` continuation prompting, and use unique text-quota trigger keys so each generated turn is charged separately. Because every scene turn shares one trigger message, both reply-to-trigger mechanisms are suppressed for scene turns: the visual Discord reply (`replyToMessage` in `toolLoop.ts`) and the textual `buildQueuedReplyDirective` context directive (`contextPipeline.ts`); otherwise every queued persona would render and be told to reply to the same unrelated message. The command-execution status embed (`commands.generate.scene.success_title`) is sent non-ephemerally so it is classified as a `scene_directive` system embed and re-read into context as `[System: ...]`. For scene turns after the first, `triggererName` (what `{{user}}` resolves to in `turnPlanner.ts`) is overridden to the previous speaker in `sceneTurn.sequence`, so each persona treats the prior persona as the entity it is responding to rather than the command invoker; turn 0 has no prior speaker and keeps the invoker.
 
 `/generate video` is a modal-driven async generation command. It validates `videogen_enabled`, provider capability, API key, configured `video_model_id`, and server quota before polling the selected provider until the MP4 result is ready.
 
@@ -1250,7 +1250,7 @@ the same implementation.
 
 The command holds the same pre-modal line as the other `/generate` subcommands: it must acknowledge within three seconds without deferring, so `voice_sample` is validated on metadata only (MIME type and byte size) before the modal opens, and the download, duration check, and ffmpeg normalization happen after submission. It gates on `voice_message_enabled` and shares the trigger cooldown with message triggers, mirroring `/generate scene`. Because a voice message is sent under a persona's name and avatar, the command requires a guild text channel or thread, resolves a webhook rather than falling back to bot identity, and posts the transcript caption plus `setCachedVoiceTranscript` exactly as the tool path does. `audio_generated` is recorded once, on success only, with the same three backend keys as the tool.
 
-The randomizer on `/config` > Models > Fallbacks & Randomizer is a server-level toggle for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured on that same page, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` — see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn).
+The randomizer on `/config` > Models > Fallbacks & Randomizer is a server-level toggle for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured on that same page, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` (see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn)).
 
 The Compatibility section of `/config` > Engine > Experimental is a checkbox-group modal for experimental compatibility patches. V1 exposes `Verbatim Tool-Calling`, a default-off server flag stored in `server_capabilities_configs.verbatim_tool_calling_enabled`. It writes only changed columns through `ConfigRepository.updateCapabilitiesConfig` and invalidates TomoriState cache after a successful DB write.
 

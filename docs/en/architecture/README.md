@@ -110,8 +110,8 @@ chat pipeline
 - Built-ins: `src/tools/functionCalls/*` (`BaseTool` classes)
 - MCP servers: `src/tools/mcpServers/*` via `mcpManager`
 - REST tools: `src/tools/restAPIs/brave/*` (engine-internal, consumed by `webSearch/braveEngine.ts`)
-- Web-search dispatcher: `src/tools/webSearch/*` — single LLM-visible `web_search(query, category)` tool routes through a Brave → SearXNG → DuckDuckGo → IAsk engine chain
-- URL-fetch dispatcher: `src/tools/fetchUrl/*` — single LLM-visible `fetch_url(url, ...)` tool defaults to an in-process, per-redirect validated HTTP engine; Crawl4AI is an explicit trusted-development opt-in
+- Web-search dispatcher: `src/tools/webSearch/*`. Single LLM-visible `web_search(query, category)` tool routes through a Brave → SearXNG → DuckDuckGo → IAsk engine chain
+- URL-fetch dispatcher: `src/tools/fetchUrl/*`. Single LLM-visible `fetch_url(url, ...)` tool defaults to an in-process, per-redirect validated HTTP engine; Crawl4AI is an explicit trusted-development opt-in
 
 ### Data + Caching
 
@@ -119,7 +119,7 @@ chat pipeline
 - Optional RAG schema: `src/db/schema_rag.sql`
 - Repository boundary: `src/utils/db/repositories/*`
   - 23 Repository classes implement `IRepository<TExport>` with `toExportShape()` / `fromExportShape()`. Each owns one clear domain; SQL is inlined as private methods with no sibling SQL files.
-  - `src/utils/db/repositories/index.ts` re-exports repository instances and shared types only — no free-function shims. Callers import repository instances directly (e.g. `import { personaRepository } from "@/utils/db/repositories"`).
+  - `src/utils/db/repositories/index.ts` re-exports repository instances and shared types only: no free-function shims. Callers import repository instances directly (e.g. `import { personaRepository } from "@/utils/db/repositories"`).
   - The former public DB god-file entry points and all `*ReadSql.ts`/`*WriteSql.ts` sibling files have been removed.
 - Core caches in `src/utils/cache/*` (Tomori state, user, expression data, whitelist, short-term memory, model/capability caches)
 
@@ -152,5 +152,5 @@ Commands are loaded from folders under `src/commands/` (currently 25 top-level c
 
 ## Read Next
 
-- [entry-point.md](./entry-point) — startup and initialization flow
+- [entry-point.md](./entry-point): startup and initialization flow
 - Setting up locally for development: [`contributing/getting-started.md`](../contributing/getting-started)

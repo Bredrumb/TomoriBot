@@ -12,7 +12,7 @@ Drives the provider generator as a state machine, routing each `ProcessedChunk` 
 It owns the `for await` loop over the stage 02 generator and makes the per-chunk decisions that
 determine the shape of the final `StreamResult`. Three concerns are woven through the loop:
 
-1. **Stop / interrupt resolution** — the stop registry is checked both before processing each
+1. **Stop / interrupt resolution**: the stop registry is checked both before processing each
    chunk and again immediately after it is written out. A user stop (`/kill`) flushes the pending
    buffer and returns `{ status: "stopped_by_user" }`. A follow-up interrupt discards the buffer
    and returns `{ status: "follow_up_interrupt" }` so the chat pipeline can restart for the new
@@ -27,20 +27,20 @@ determine the shape of the final `StreamResult`. Three concerns are woven throug
    clear, so it outlives the stream and silently aborts the next turn. The skip list covers the send
    and flush limits for the same reason they are raised at all.
 
-2. **Chunk routing** — after stop checks, the `ProcessedChunk.type` determines the path:
+2. **Chunk routing**: after stop checks, the `ProcessedChunk.type` determines the path:
    - `"text"` → stage 05 (`StreamBufferFlusher.processTextChunk`)
    - `"function_call"` → flush the pending buffer → return `{ status: "function_call", data: functionCall }`
    - `"error"` → flush the pending buffer → display an error embed if not suppressed →
      return `{ status: "error", data: error }`
    - `"done"` → record `terminalDoneMetadata` (finish reason); continue the loop (generator will
      exhaust on the next `await`)
-   - **Token usage** — on *any* chunk (not just `"done"`), if `metadata.usage` is present it is
+   - **Token usage**: on *any* chunk (not just `"done"`), if `metadata.usage` is present it is
      normalized (`normalizeProviderUsage`) into `state.usage`, latest-wins. This captures providers
      that emit usage on a trailing empty-choices chunk (OpenAI `include_usage`) or that clobber the
      terminal `done` metadata (Anthropic `message_stop`). `state.usage` is drained into
      `StreamResult.usage` on the `function_call` and `completed` results.
 
-3. **Inactivity timeout** — a rolling `setTimeout` resets on every chunk (`resetInactivityTimer`).
+3. **Inactivity timeout**: a rolling `setTimeout` resets on every chunk (`resetInactivityTimer`).
    If no chunk arrives for `config.inactivityTimeoutMs`, `state.timedOut = true`. The loop detects
    this flag on the next iteration (or at generator exhaust) and returns `{ status: "timeout" }`.
 
@@ -54,15 +54,15 @@ so the tool-loop pipeline's retry logic can handle it.
 
 ## Input
 
-- `provider: StreamProvider` — the stage 02/03 adapter (generator + `processChunk`).
-- `config: StreamConfig` — timing and buffer size configuration.
-- `context: StreamContext` — full Discord and application state (channel, tomoriState, etc.).
+- `provider: StreamProvider`: the stage 02/03 adapter (generator + `processChunk`).
+- `config: StreamConfig`: timing and buffer size configuration.
+- `context: StreamContext`: full Discord and application state (channel, tomoriState, etc.).
 
 `StreamMetrics` and `StreamState` objects are created fresh at the start of `executeStream()`.
 
 ## Output
 
-`StreamResult` — defined at `src/types/provider/interfaces.ts:88`:
+`StreamResult`: defined at `src/types/provider/interfaces.ts:88`:
 
 ```ts
 interface StreamResult {
@@ -87,17 +87,17 @@ interface StreamResult {
 
 `usage` carries the provider's real `{ inputTokens, outputTokens }` for this segment when the
 provider reports it (OpenRouter, OpenAI-compatible, Anthropic, Gemini). The post-turn stat
-recorder (`recordUsageStats`) sums it across the turn's segments — each tool-loop request is
-billed separately, so the sum is billing-accurate — and falls back to the character estimate
+recorder (`recordUsageStats`) sums it across the turn's segments; each tool-loop request is
+billed separately, so the sum is billing-accurate, and falls back to the character estimate
 (`@/utils/text/tokenEstimate`) only when no segment surfaced usage.
 
 ## Side effects
 
-- **Inactivity timer** — a `setTimeout` is set on entry and cleared in `finally`. The timer runs
-  against `NodeJS.Timeout` — it is always cleared before the method returns.
-- **Stop-request mutation** — `clearStopRequest(channelId)` is called on exit paths that consumed
+- **Inactivity timer**: a `setTimeout` is set on entry and cleared in `finally`. The timer runs
+  against `NodeJS.Timeout`; it is always cleared before the method returns.
+- **Stop-request mutation**: `clearStopRequest(channelId)` is called on exit paths that consumed
   a stop. The stop registry is a shared module-level map in `stopRequests.ts`.
-- **Error embed** — when `chunk.type === "error"` and `!context.suppressUserErrors`, calls
+- **Error embed**: when `chunk.type === "error"` and `!context.suppressUserErrors`, calls
   `StreamErrorUi.handleProviderError()` which sends a Discord embed to the channel. The embed is
   composed centrally: a provider's localized headline (`createErrorDescription`) followed by the
   **raw provider detail** for every error type, extracted via `getProviderErrorDetail` and
@@ -105,14 +105,14 @@ billed separately, so the sum is billing-accurate — and falls back to the char
   hardcoded locale strings (e.g. OpenRouter) no longer hide the actual provider message; the detail
   is de-duped so a provider that already appended it is not echoed twice. Recognized `model_error`
   failures additionally get a dedicated "Model Configuration Error" title. This is the **sole**
-  embed send path for `ProviderError` types — the downstream response sink (`emitStreamResult` in
+  embed send path for `ProviderError` types: the downstream response sink (`emitStreamResult` in
   `responseEmitter.ts`) deliberately skips the generic fallback embed when `result.data` is a
   `ProviderError`, to avoid double-sending.
-- **Timeout embed** — when the inactivity timer fires and user errors are not suppressed, sends
+- **Timeout embed**: when the inactivity timer fires and user errors are not suppressed, sends
   a timeout embed via `sendStandardEmbed()`.
-- **Progress callback** — calls `context.onStreamProgress?.()` on each chunk to reset the
+- **Progress callback**: calls `context.onStreamProgress?.()` on each chunk to reset the
   rolling timeout in the stage 01 caller (`streamOnce` in the tool-loop pipeline).
-- **`currentTurnModelParts` accumulation** — stage 05 (`processTextChunk`) pushes text parts into
+- **`currentTurnModelParts` accumulation**: stage 05 (`processTextChunk`) pushes text parts into
   `context.currentTurnModelParts` as a side effect; the orchestrator does not do this directly.
 
 ## Invariants
@@ -132,11 +132,11 @@ After this stage:
 
 | Surface | Plugin-relevance |
 |---|---|
-| `StreamOrchestrator.streamToDiscord()` public method | The universal Discord streaming entry point — `src/types/stream/interfaces.ts:313`. All providers delegate here. Internal — the orchestrator is not designed to be replaced; new providers plug in via the `StreamProvider` adapter contract. |
+| `StreamOrchestrator.streamToDiscord()` public method | The universal Discord streaming entry point: `src/types/stream/interfaces.ts:313`. All providers delegate here. Internal: the orchestrator is not designed to be replaced; new providers plug in via the `StreamProvider` adapter contract. |
 | Stop registry (`requestStop`, `hasStopRequest`, `clearStopRequest`) | `src/utils/discord/stream/stopRequests.ts`. The stop registry is a shared per-channel state map. A plugin that wants to interrupt streaming (e.g., a moderation system) would call `StreamOrchestrator.requestStop(channelId, requesterId)`. → plugin plan candidate |
-| `context.onStreamProgress` callback | Set by the tool-loop pipeline (`streamOnce`) before calling `streamToDiscord`. The orchestrator calls it on each chunk. Internal — the callback is an operational heartbeat, not a plugin seam. |
+| `context.onStreamProgress` callback | Set by the tool-loop pipeline (`streamOnce`) before calling `streamToDiscord`. The orchestrator calls it on each chunk. Internal: the callback is an operational heartbeat, not a plugin seam. |
 | `StreamResult` status union | Consumed by the tool-loop pipeline's outer switch. Adding a new status requires changes in both the orchestrator and the tool-loop consumer. Internal until the tool-loop plugin contract is defined. |
-| `context.suppressUserErrors` | When `true`, error and timeout embeds are not sent to Discord (used during retries in `runGenerationTurn`). Internal — set by the chat pipeline's key-rotation loop. |
+| `context.suppressUserErrors` | When `true`, error and timeout embeds are not sent to Discord (used during retries in `runGenerationTurn`). Internal: set by the chat pipeline's key-rotation loop. |
 
 ## Configuration
 
@@ -151,5 +151,5 @@ After this stage:
 - Error embed rendering: `src/utils/discord/stream/errorUi.ts`
 - Empty-response detection: `wasEmptyStreamResponse` in `src/utils/discord/stream/thoughtLog.ts`
 - Stage 05 (text path from this stage): → [`05-buffer-management.md`](05-buffer-management.md)
-- Tool-loop consumer of `StreamResult`: → [tool-loop pipeline — Stage 01](../tool-loop/01-stream-once)
+- Tool-loop consumer of `StreamResult`: → [tool-loop pipeline: Stage 01](../tool-loop/01-stream-once)
 - `StreamResult` type: `src/types/provider/interfaces.ts:88`

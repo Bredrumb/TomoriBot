@@ -16,21 +16,21 @@ tool calls during the tool-loop. Two tools cover the full CRUD surface:
 
 ## Key design facts
 
-- **Feature-flagged** — both tools require `self_teaching_enabled = true` in
+- **Feature-flagged**: both tools require `self_teaching_enabled = true` in
   `TomoriState.config`. When disabled, the tool returns a user-reportable
   error without writing to the DB.
-- **Persona-lineage scoping** — all DB writes use `persona_lineage_id`, not
+- **Persona-lineage scoping**: all DB writes use `persona_lineage_id`, not
   `persona_id`, so memories are shared across all personas of the same
   character lineage (different server instances of the same persona still
   see each other's memories).
-- **Cache invalidation on success** — every successful write immediately
+- **Cache invalidation on success**: every successful write immediately
   invalidates the relevant TomoriState or user cache so the next
   context-build reads fresh DB state.
-- **Dual scope** — memories are either `server_wide` (stored in
+- **Dual scope**: memories are either `server_wide` (stored in
   `server_memories`, keyed by `server_id + persona_lineage_id`) or
   `target_user` (stored in `personal_memories`, keyed by
   `user_id + persona_lineage_id`).
-- **Template placeholders** — content must use `{user}` and `{bot}` tokens
+- **Template placeholders**: content must use `{user}` and `{bot}` tokens
   instead of hardcoded names. Both tools strip unknown brace-wrapped tokens
   (e.g. `{obonya}`) via `sanitizeUnknownTemplatePlaceholders()` before the
   DB write.

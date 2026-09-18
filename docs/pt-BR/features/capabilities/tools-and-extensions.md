@@ -14,16 +14,16 @@ As ferramentas dependem de o provedor/modelo ativo suportar chamada de ferrament
 |---|---|---|---|
 | Revisar capacidades | `{capabilities_tool}` | — | Verificar habilidades atuais de chat, comandos ou configurações antes de responder. |
 | Criar / atualizar memória de longo prazo | `{memory_tool}` / `{memory_update_tool}` | `self_teaching_enabled` | Salvar ou substituir um fato estável do servidor ou preferência do usuário. |
-| Atualizar memória de curto prazo | `{short_term_memory_tool}` | — (indisponível no NovelAI) | Salvar memória de trabalho temporária para o canal/arco de história atual. |
+| Atualizar memória de curto prazo | `{short_term_memory_tool}` | (indisponível no NovelAI) | Salvar memória de trabalho temporária para o canal/arco de história atual. |
 | Criar / atualizar tarefa | `{task_tool}` / `{task_update_tool}` | — | Agendar ou editar lembretes e tarefas próprias (veja [Tarefas Agendadas](/pt-BR/features/capabilities/scheduled-tasks/)). |
-| Mensagem entre canais | `{cross_channel_tool}` | — (indisponível no NovelAI) | Agir em outro canal/tópico, com um relatório de retorno opcional. |
+| Mensagem entre canais | `{cross_channel_tool}` | (indisponível no NovelAI) | Agir em outro canal/tópico, com um relatório de retorno opcional. |
 | Criar tópico | `{create_thread_tool}` | `thread_creation_enabled` + permissões de tópico | Abrir um tópico público e postar sua mensagem inicial. |
 | Selecionar figurinha | `{sticker_tool}` | `sticker_usage_enabled` | Adicionar uma figurinha do servidor correspondente a uma resposta. |
 | Gerenciar mensagem | `{manage_message_tool}` | `manage_message_enabled` | Fixar, editar ou excluir mensagens recentes (fixar requer Gerenciar Mensagens). |
 | Bloquear / desbloquear usuário | `{block_user_tool}` / `{unblock_user_tool}` | `user_blocking_enabled` | Silenciamento/bloqueio de um usuário no escopo da persona (não afeta memórias). |
 | Interagir com mensagem recente | `{message_interaction_tool}` | — | Reagir ou enviar uma resposta curta a uma mensagem recente. |
 | Olhar foto de perfil | `{profile_picture_tool}` | modelo de visão ou `vision_llm` | Inspecionar o avatar de um usuário ou da persona. |
-| Ler documento | `{document_tool}` | — | Extrair texto de um PDF ou de **qualquer** arquivo de texto UTF-8 — código-fonte (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt` e qualquer anexo não binário. |
+| Ler documento | `{document_tool}` | — | Extrair texto de um PDF ou de **qualquer** arquivo de texto UTF-8: código-fonte (`.py`/`.ts`/`.rs`/…), `.json`, `.yaml`, `.md`, `.txt` e qualquer anexo não binário. |
 | Revelar metadados da mensagem | `{message_metadata_tool}` | — | Anotar turnos recentes com identificadores/carimbos de data/hora para direcionamento preciso. |
 | Processar vídeo do YouTube | `{youtube_tool}` | modelo com suporte a vídeo | Analisar um link específico do YouTube sob demanda. |
 | Analisar imagem | `{image_analysis_tool}` | `vision_llm` configurado | Delegar a compreensão de imagem a um modelo de visão separado. |
@@ -31,8 +31,8 @@ As ferramentas dependem de o provedor/modelo ativo suportar chamada de ferrament
 | Gerar mensagem de voz | `{voice_message_tool}` | chave ElevenLabs + voz da persona + `voice_message_enabled` | Enviar uma resposta de voz falada no Discord. |
 
 :::note[Para autores de prompts]
-Ao personalizar o prompt de sistema dela ou as instruções da persona, faça referência às ferramentas por meio de suas **macros de prompt** da tabela acima em vez de codificar nomes de ferramentas de forma fixa — as macros se expandem para os nomes corretos no momento da montagem do contexto e degradam suavemente quando uma ferramenta não está disponível.
-`{pin_tool}` e `{timestamp_refresh_tool}` ainda funcionam como aliases de compatibilidade para `{manage_message_tool}` e `{message_metadata_tool}`. As ferramentas de pesquisa na web e URLs abaixo também têm macros: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool}`, `{news_search_tool}`, `{url_fetch_tool}` e `{url_metadata_tool}` — estas são resolvidas dinamicamente para o melhor mecanismo disponível, incluindo substituições de MCP do servidor.
+Ao personalizar o prompt de sistema dela ou as instruções da persona, faça referência às ferramentas por meio de suas **macros de prompt** da tabela acima em vez de codificar nomes de ferramentas de forma fixa: as macros se expandem para os nomes corretos no momento da montagem do contexto e degradam suavemente quando uma ferramenta não está disponível.
+`{pin_tool}` e `{timestamp_refresh_tool}` ainda funcionam como aliases de compatibilidade para `{manage_message_tool}` e `{message_metadata_tool}`. As ferramentas de pesquisa na web e URLs abaixo também têm macros: `{web_search_tool}`, `{image_search_tool}`, `{video_search_tool}`, `{news_search_tool}`, `{url_fetch_tool}` e `{url_metadata_tool}`; estas são resolvidas dinamicamente para o melhor mecanismo disponível, incluindo substituições de MCP do servidor.
 :::
 
 ### Blocos de Prompt Condicionais
@@ -61,7 +61,7 @@ O modelo vê uma única ferramenta unificada `web_search(query, category)`. Por 
 
 - O **Brave** é executado primeiro quando uma chave de API do Brave está configurada (defina-a com `/providers`); ele adiciona pesquisa de imagens, vídeos e notícias. ⚠️ Defina um limite de uso de $5 no painel do Brave para evitar cobranças inesperadas.
 - O **DuckDuckGo** é o padrão quando nenhuma chave está configurada, alternando em cascata para o **IAsk** em caso de limites de taxa ou resultados vazios.
-- O **SearXNG** e o **Crawl4AI** são sidecars opcionais de hospedagem própria que desbloqueiam mais categorias e buscas de páginas renderizadas pelo navegador — veja [Hospedagem Própria](/pt-BR/self-hosting/).
+- O **SearXNG** e o **Crawl4AI** são sidecars opcionais de hospedagem própria que desbloqueiam mais categorias e buscas de páginas renderizadas pelo navegador; veja [Hospedagem Própria](/pt-BR/self-hosting/).
 
 Para ler uma página específica, ela usa `fetch_url`. Ele não está disponível no NovelAI.
 
@@ -81,31 +81,31 @@ Se um servidor não precisar de autenticação, deixe **Auth Token** em branco. 
 
 ### Servidores MCP Locais
 
-Servidores MCP locais são **suportados apenas em instâncias de hospedagem própria** — o bot público hospedado exige HTTPS e bloqueia endereços locais/privados. Se você executa sua própria instância, veja [Configuração: Servidor MCP Local](/pt-BR/self-hosting/local-endpoints/setup-local-mcp/).
+Servidores MCP locais são **suportados apenas em instâncias de hospedagem própria**: o bot público hospedado exige HTTPS e bloqueia endereços locais/privados. Se você executa sua própria instância, veja [Configuração: Servidor MCP Local](/pt-BR/self-hosting/local-endpoints/setup-local-mcp/).
 
 :::danger[Adicione apenas servidores MCP em que você confia]
-Um servidor MCP malicioso pode **injetar prompts** nela com instruções ocultas, **exfiltrar** dados que os usuários passam para suas ferramentas ou retornar **resultados prejudiciais/falsos** que ela retransmitirá para o seu servidor. Trate servidores MCP como extensões de navegador — em caso de dúvida, não adicione. Sempre revise as ferramentas descritas de um MCP antes de adicioná-lo.
+Um servidor MCP malicioso pode **injetar prompts** nela com instruções ocultas, **exfiltrar** dados que os usuários passam para suas ferramentas ou retornar **resultados prejudiciais/falsos** que ela retransmitirá para o seu servidor. Trate servidores MCP como extensões de navegador; em caso de dúvida, não adicione. Sempre revise as ferramentas descritas de um MCP antes de adicioná-lo.
 :::
 
 ## Modo de Ferramenta Deliberada
 
-Cada ferramenta declarada aumenta o tamanho do prompt. O **Modo de Ferramenta Deliberada** mantém as declarações de ferramentas fora dos turnos normais de chat, a menos que a mensagem pareça realmente precisar de uma ferramenta — isso reduz o tamanho do prompt e ajuda modelos menores/locais a responderem mais rápido.
+Cada ferramenta declarada aumenta o tamanho do prompt. O **Modo de Ferramenta Deliberada** mantém as declarações de ferramentas fora dos turnos normais de chat, a menos que a mensagem pareça realmente precisar de uma ferramenta; isso reduz o tamanho do prompt e ajuda modelos menores/locais a responderem mais rápido.
 
 - Primeiro, ela verifica a mensagem quanto à **intenção de ferramenta**. Gatilhos integrados cobrem solicitações comuns (lembretes, pesquisa na web, atualizações de memória, mensagens entre canais, geração de imagem/vídeo/voz, análise de mídia, criação de tópicos, ações de mensagem). Perguntas sobre seu modelo atual, ferramentas, configurações ou por que uma capacidade está indisponível expõem a revisão de capacidades e o acesso à documentação oficial em conjunto. Expressões de acompanhamento também funcionam, como "faça isso de novo, mas com mais raiva" após um pedido de mensagem de voz.
-- Os administradores de servidores podem adicionar **frases de gatilho personalizadas** literais com `/server trigger add` — por exemplo, mapeando `pic`, `img` ou `pfp` para geração de imagem.
+- Os administradores de servidores podem adicionar **frases de gatilho personalizadas** literais com `/server trigger add`: por exemplo, mapeando `pic`, `img` ou `pfp` para geração de imagem.
 - Os gatilhos integrados leem expressões em inglês. Outros idiomas acessam as mesmas ferramentas por meio da lista de palavras-chave de cada idioma. A lista de cada idioma incluído é verificada em todas as mensagens, independentemente da sua configuração de idioma, de modo que um servidor bilíngue funciona em ambos os idiomas.
 - Frases personalizadas em japonês, chinês ou coreano também correspondem dentro de palavras mais longas, pois esses idiomas não separam palavras com espaços. Uma frase terminada em `*` corresponde a qualquer palavra que comece com ela: `remind*` cobre `reminder` e `reminding`.
 
 ### Controles
 
-- `/server dtm` — administradores do servidor ativam/desativam.
-- `/personal config` — usuários substituem a configuração para si mesmos.
+- `/server dtm`: administradores do servidor ativam/desativam.
+- `/personal config`: usuários substituem a configuração para si mesmos.
 - Com um canal de registros de pensamentos configurado (`/server thought-logs`), chamadas de ferramentas bem-sucedidas no modo deliberado são registradas lá junto com o gatilho que expôs a ferramenta.
 
-O Modo de Ferramenta Deliberada apenas decide quais ferramentas são *mostradas* ao modelo — o modelo ainda precisa escolher chamar uma. Em `/help`, escolha **Behavior** e depois **Deliberate Tool Mode** para o resumo no Discord.
+O Modo de Ferramenta Deliberada apenas decide quais ferramentas são *mostradas* ao modelo; o modelo ainda precisa escolher chamar uma. Em `/help`, escolha **Behavior** e depois **Deliberate Tool Mode** para o resumo no Discord.
 
 :::note
-O **Modo de Ferramenta Deliberada** (esta seção) não tem relação com o **Modo de Gatilho Deliberado**, que controla como *ela* é acionada — veja [Conversas & Gatilhos](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Ambos são abreviados como "DTM" no Discord.
+O **Modo de Ferramenta Deliberada** (esta seção) não tem relação com o **Modo de Gatilho Deliberado**, que controla como *ela* é acionada; veja [Conversas & Gatilhos](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Ambos são abreviados como "DTM" no Discord.
 :::
 
 ## Atualizações Estruturadas de Informações do Usuário

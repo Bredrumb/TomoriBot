@@ -19,6 +19,7 @@ Each guide below is self-contained with steps, notes, and a quality gate.
 | Add a new AI provider | [`adding-new-provider.md`](/contributing/adding-new-provider/) |
 | Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) |
 | Add a persona preset | [`adding-persona-preset.md`](/contributing/adding-persona-preset/) |
+| Add an environment variable | [`adding-env-variable.md`](/contributing/adding-env-variable/) |
 | Add or move docs pages | [`docs-authoring.md`](/contributing/docs-authoring/) |
 | Localize the docs site or READMEs | [`docs-site-localization.md`](/contributing/docs-site-localization/) |
 | Write or review code comments | [`comment-policy.md`](/contributing/comment-policy/) |
@@ -126,7 +127,8 @@ const VALUE = Number.parseInt(process.env.CONFIG_VAR || "10", 10);
 ```
 
 - Add required setup vars to `.env.example` and optional/tuning vars to `.env.optional.example`,
-  each with a clear comment.
+  each with a clear comment. See [`adding-env-variable.md`](./adding-env-variable) for the tier
+  system and placement conventions.
 
 ### Database and Migrations
 

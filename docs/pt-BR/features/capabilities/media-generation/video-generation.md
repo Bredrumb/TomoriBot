@@ -9,10 +9,10 @@ Use `/generate video`, ou simplesmente peça a ela.
 
 ## O Que Ela Pode Fazer
 
-- **Texto-para-vídeo** — gera um clipe curto a partir de um prompt.
-- **Imagem-para-vídeo** — anima uma imagem de referência (a primeira imagem de uma mensagem
+- **Texto-para-vídeo**: gera um clipe curto a partir de um prompt.
+- **Imagem-para-vídeo**: anima uma imagem de referência (a primeira imagem de uma mensagem
   referenciada se torna o quadro inicial).
-- **Imagem-para-vídeo em loop** — quando solicitado pelo chat, modelos compatíveis podem reutilizar a
+- **Imagem-para-vídeo em loop**: quando solicitado pelo chat, modelos compatíveis podem reutilizar a
   imagem inicial como o quadro final.
 - **Proporções de aspecto personalizáveis**.
 

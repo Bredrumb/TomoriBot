@@ -18,13 +18,13 @@ Se um comando é restrito e o canal não está marcado como NSFW, ele simplesmen
 
 ## O Que Está Restrito
 
-- **Configurações de conteúdo NSFW** — `/nsfw jailbreaks` ativa/desativa contornos para filtros de conteúdo
+- **Configurações de conteúdo NSFW**: `/nsfw jailbreaks` ativa/desativa contornos para filtros de conteúdo
   excessivamente rígidos *do lado do provedor* (a TomoriBot em si não adiciona restrições de segurança próprias). Veja
   [Ajuste de Comportamento](/pt-BR/features/chatting-personality/behavior-tweaking/#saída-sem-censura).
 
 A geração de imagem e vídeo é controlada separadamente pelo provedor configurado e pelas
 configurações de capacidade do servidor; elas não são restringidas pela categoria de comandos `/nsfw`.
 
-Conteúdo com restrição de idade é apenas para usuários adultos — use com responsabilidade e siga as
+Conteúdo com restrição de idade é apenas para usuários adultos; use com responsabilidade e siga as
 [Diretrizes da Comunidade](https://discord.com/guidelines) do Discord. Em `/help`, escolha **Behavior**, depois **Age-Restricted Commands**, para o mesmo
 guia no Discord.

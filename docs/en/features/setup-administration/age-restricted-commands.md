@@ -18,13 +18,13 @@ If a command is restricted and the channel isn't marked NSFW, it simply won't ap
 
 ## What's Gated
 
-- **NSFW content settings** — `/nsfw jailbreaks` toggles workarounds for overly strict
+- **NSFW content settings**: `/nsfw jailbreaks` toggles workarounds for overly strict
   *provider-side* content filters (TomoriBot itself adds no safety rails of its own). See
   [Behavior Tweaking](/features/chatting-personality/behavior-tweaking/#uncensored-output).
 
 Image and video generation are controlled separately by their configured provider and the
 server's capability settings; they are not gated by the `/nsfw` command category.
 
-Age-restricted content is for adult users only — use responsibly and follow Discord's
+Age-restricted content is for adult users only, so use responsibly and follow Discord's
 [Community Guidelines](https://discord.com/guidelines). In `/help`, choose **Behavior**, then **Age-Restricted Commands**, for the same
 walkthrough in Discord.

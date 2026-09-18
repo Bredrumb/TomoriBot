@@ -7,7 +7,7 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
 ## Steps
 
 1. Create a new folder under `src/db/seed/catalog/personas/<name>/` and add one locale file per language variant (e.g. `en-US.ts`, `ja.ts`). Export a single named `persona` constant of type `PersonaInput` from each file, then import and register it in `src/db/seed/catalog/personas/index.ts`. Required fields:
-   - `preset_lineage_id` — a stable identity anchor for this character. Reuse the same lineage ID
+   - `preset_lineage_id`: a stable identity anchor for this character. Reuse the same lineage ID
      across locale variants of the same character so they are treated as one canonical identity,
      and so applying the preset can stamp a consistent `persona_lineage_id` (memory scope) onto
      the persona.
@@ -19,7 +19,7 @@ This guide covers how to add a new official persona preset to TomoriBot's seed d
      are private. Pointer personas resolve these from the live preset row, and materialized
      copies store them in `persona_attributes.is_public`.
 
-2. Place an avatar image (PNG recommended) inside the persona folder (e.g. `src/db/seed/catalog/personas/<name>/avatar.png`). Set `avatarPath` in the locale file to the folder path without a filename — the runtime auto-discovers the first image alphabetically, so the filename does not need to match any preset name. The avatar seed (`seedPersonaAvatarsFromCatalog`) uploads this image **once** to the immutable `presets/` prefix and records `preset_avatar_shared_url` + `preset_avatar_hash`. Both delivery channels then **sync** when you edit the art: pointer **alters** live-resolve the shared URL (fan out on the next boot, no per-server upload), and each still-pointer **main** persona's Discord guild avatar is re-PATCHed by the background reconciler, gated on the content hash. Later `/server avatar` edits are deliberate customization and materialize the persona before changing or resetting its avatar.
+2. Place an avatar image (PNG recommended) inside the persona folder (e.g. `src/db/seed/catalog/personas/<name>/avatar.png`). Set `avatarPath` in the locale file to the folder path without a filename: the runtime auto-discovers the first image alphabetically, so the filename does not need to match any preset name. The avatar seed (`seedPersonaAvatarsFromCatalog`) uploads this image **once** to the immutable `presets/` prefix and records `preset_avatar_shared_url` + `preset_avatar_hash`. Both delivery channels then **sync** when you edit the art: pointer **alters** live-resolve the shared URL (fan out on the next boot, no per-server upload), and each still-pointer **main** persona's Discord guild avatar is re-PATCHed by the background reconciler, gated on the content hash. Later `/server avatar` edits are deliberate customization and materialize the persona before changing or resetting its avatar.
 
 3. (Optional) Give the preset an official **sprite set**. Add the sprite images under the persona folder (e.g. `src/db/seed/catalog/personas/<name>/sprites/mad.png`) and author a `sprites` array on the `PersonaInput`:
 
@@ -88,5 +88,5 @@ Then run a local seed against a dev database and verify the preset appears corre
 
 ## Related Docs
 
-- [`docs/en/architecture/subsystems/persona-presets.md`](../subsystems/persona-presets) — preset identity and pointer behavior
-- [`docs/en/architecture/pipelines/memory/`](../pipelines/memory/) — how persona conditioning flows into context
+- [`docs/en/architecture/subsystems/persona-presets.md`](../subsystems/persona-presets): preset identity and pointer behavior
+- [`docs/en/architecture/pipelines/memory/`](../pipelines/memory/): how persona conditioning flows into context

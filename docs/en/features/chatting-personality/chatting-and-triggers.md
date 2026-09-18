@@ -12,13 +12,13 @@ with Deliberate Trigger Mode.
 
 By default, she replies when you:
 
-- **Mention her** — `@TomoriBot`
+- **Mention her**: `@TomoriBot`
 - **Reply** to one of her messages (including a persona's webhook message)
-- **Use a trigger word** — any plain word you've registered, said anywhere in a message
-- **Use `/respond`** — manually prompt a reply
+- **Use a trigger word**: any plain word you've registered, said anywhere in a message
+- **Use `/respond`**: manually prompt a reply
 
 Trigger words are the most convenient path: once a word is registered, simply naming it
-activates her. In a DM, just say hi — no trigger needed.
+activates her. In a DM, just say hi (no trigger needed).
 
 ### Managing Trigger Words
 
@@ -45,21 +45,21 @@ Configure the channels from the Channel Rules page in `/config`.
 ## Situational Awareness
 
 Beyond the message text, she's handed a snapshot of the Discord context every time she
-replies — so she can talk about *where* and *when* the conversation is happening, not just
+replies, so she can talk about *where* and *when* the conversation is happening, not just
 what was said. This context includes:
 
-- **Where she is** — the current server's name and description (or that it's a Direct
+- **Where she is**: the current server's name and description (or that it's a Direct
   Message), and the current channel.
-- **The current time** — the server's local time and rough time of day, based on
+- **The current time**: the server's local time and rough time of day, based on
   `/config` > Engine > General, plus each person's own local time if they've set `/personal config`.
-- **Who's in the conversation** — participants' display names, how to mention them, any
+- **Who's in the conversation**: participants' display names, how to mention them, any
   physical-appearance tags, and their pending reminders.
-- **What someone's up to (presence)** — a user's Discord activity: what they're **playing**,
+- **What someone's up to (presence)**: a user's Discord activity: what they're **playing**,
   **streaming**, **listening to** (e.g. a Spotify track and artist), **watching**, or their
   custom status.
 
 Presence is privacy-gated: it's only shared for users at the **Minimal** privacy level (the
-default — see `/personal config`) and only when the bot has Discord's *Guild Presences*
+default: see `/personal config`) and only when the bot has Discord's *Guild Presences*
 intent enabled. Users who raise their privacy, or self-hosts running without that intent,
 simply won't have their activity surfaced to her.
 
@@ -67,11 +67,11 @@ simply won't have their activity surfaced to her.
 
 Auto-trigger lets her join the conversation without being named at all.
 
-- `/server autotrigger channels` — set the channels where she responds without a mention.
-- `/server autotrigger threshold` — set how many messages accumulate before she chimes in.
+- `/server autotrigger channels`: set the channels where she responds without a mention.
+- `/server autotrigger threshold`: set how many messages accumulate before she chimes in.
 - `/config` > Behavior > Trigger: add a probabilistic timer-based auto-trigger to a channel.
 - `/config` > Behavior > Trigger: remove an existing random trigger.
-- ~~`/natres` — humanlike timing for autonomous responses~~ to be implemented
+- ~~`/natres`: humanlike timing for autonomous responses~~ to be implemented
 
 Use this in a dedicated chat channel where you want her to feel like a participant rather
 than a summoned assistant.
@@ -94,16 +94,16 @@ This forces deliberate invocation instead of accidental activation.
 
 ### Server and Personal Control
 
-- `/server dtm` — server admins toggle the server-wide behavior.
-- `/personal config` — each user overrides it for themselves, with three modes:
-  - **off** — always allow plain trigger words
-  - **follow** — use the server setting
-  - **on** — always require deliberate invocation
+- `/server dtm`: server admins toggle the server-wide behavior.
+- `/personal config`: each user overrides it for themselves, with three modes:
+  - **off**: always allow plain trigger words
+  - **follow**: use the server setting
+  - **on**: always require deliberate invocation
 
 In `/help`, choose **Behavior**, then **Deliberate Trigger Mode**, for the same summary in Discord.
 
 :::note
-Don't confuse **Deliberate Trigger Mode** (this page — controls *how she's triggered*) with
+Don't confuse **Deliberate Trigger Mode** (this page, which controls *how she's triggered*) with
 **Deliberate Tool Mode**, which controls *which tools are exposed to the model* on a given
 turn. They share the "DTM" abbreviation but are unrelated. See
 [Tools & Extensions](/features/capabilities/tools-and-extensions/#deliberate-tool-mode).

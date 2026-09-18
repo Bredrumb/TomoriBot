@@ -7,15 +7,15 @@ sidebar:
 ---
 
 Step-by-step guides for contributing **code** to TomoriBot. These assume you have the
-repository cloned and the source open — they extend or modify the bot itself.
+repository cloned and the source open: they extend or modify the bot itself.
 
 Start with [`development-tasks.md`](./development-tasks) for the task index and coding
 conventions, then jump to the guide for your task.
 
 ## Local Setup
 
-- [`getting-started.md`](./getting-started) — set up TomoriBot locally with Bun + PostgreSQL for development
-- [`docs-authoring.md`](./docs-authoring) — docs routes, frontmatter, sidebar, cards, and asset conventions
+- [`getting-started.md`](./getting-started): set up TomoriBot locally with Bun + PostgreSQL for development
+- [`docs-authoring.md`](./docs-authoring): docs routes, frontmatter, sidebar, cards, and asset conventions
 
 ## Adding Things
 
@@ -26,9 +26,10 @@ conventions, then jump to the guide for your task.
 - [`adding-setup-module.md`](./adding-setup-module)
 - [`adding-db-column.md`](./adding-db-column)
 - [`adding-new-provider.md`](./adding-new-provider)
-- [`adding-locale/`](./adding-locale/) — Discord locale codes, UI strings, frozen protocol keys, seed descriptions, docs and README scope, and the per-locale gate sequence
-- [`docs-site-localization.md`](./docs-site-localization) — docs routes, locale config, hreflang, and translated READMEs
+- [`adding-locale/`](./adding-locale/): Discord locale codes, UI strings, frozen protocol keys, seed descriptions, docs and README scope, and the per-locale gate sequence
+- [`docs-site-localization.md`](./docs-site-localization): docs routes, locale config, hreflang, and translated READMEs
 - [`adding-persona-preset.md`](./adding-persona-preset)
+- [`adding-env-variable.md`](./adding-env-variable)
 
 ## Testing Your Changes
 
@@ -38,7 +39,7 @@ conventions, then jump to the guide for your task.
 
 ## Conventions and Policies
 
-- [`comment-policy.md`](./comment-policy) — durable comments and the advisory policy audit
-- [`panel-prose-and-layout.md`](./panel-prose-and-layout) — text width, markers, and structure inside a panel
-- [`raw-sql-boundary.md`](./raw-sql-boundary) — keeping raw SQL in the repository layer
-- [`dependency-security-policy.md`](./dependency-security-policy) — overrides, patches, and audit exceptions
+- [`comment-policy.md`](./comment-policy): durable comments and the advisory policy audit
+- [`panel-prose-and-layout.md`](./panel-prose-and-layout): text width, markers, and structure inside a panel
+- [`raw-sql-boundary.md`](./raw-sql-boundary): keeping raw SQL in the repository layer
+- [`dependency-security-policy.md`](./dependency-security-policy): overrides, patches, and audit exceptions

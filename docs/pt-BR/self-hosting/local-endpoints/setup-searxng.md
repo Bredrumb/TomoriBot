@@ -15,7 +15,7 @@ Use este caminho se você executar o TomoriBot com a pilha do Docker Compose do 
 ```sh
 docker compose --profile searxng up -d
 ```
-Isso inicia o serviço `searxng` junto com o TomoriBot — o bot o acessa em `http://searxng:8080/` automaticamente.
+Isso inicia o serviço `searxng` junto com o TomoriBot: o bot o acessa em `http://searxng:8080/` automaticamente.
 
 Se você executa o TomoriBot diretamente com `bun run dev`, use o caminho autônomo (standalone) abaixo.
 
@@ -63,13 +63,13 @@ Quando nenhum sidecar do SearXNG está configurado, o esquema `web_search` monta
 
 ## Ajuste de Resultados de Imagem
 
-Os resultados de imagem do SearXNG são validados com HEAD, opcionalmente compactados e postados como anexos do Discord — uma experiência do usuário (UX) idêntica às imagens do Brave. Se todos os URLs candidatos falharem na validação, o SearXNG retornará uma lista de texto de links de imagens em vez de uma falha grave (hard failure).
+Os resultados de imagem do SearXNG são validados com HEAD, opcionalmente compactados e postados como anexos do Discord: uma experiência do usuário (UX) idêntica às imagens do Brave. Se todos os URLs candidatos falharem na validação, o SearXNG retornará uma lista de texto de links de imagens em vez de uma falha grave (hard failure).
 
 | Variável | Padrão | Descrição |
 |---|---|---|
 | `SEARXNG_IMAGE_COUNT` | `3` (máx. 10) | Quantas imagens válidas são enviadas ao Discord. Substituído pelo argumento `count` do LLM. |
 | `SEARXNG_IMAGE_POOL` | `10` | Conjunto de URLs candidatos quando o LLM não especifica `count`. Quando `count` é especificado, o conjunto é `count × 3` (limitado a 30) para absorver falhas de proteção contra hotlink. |
-| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | Imagens abaixo desse tamanho são rejeitadas — filtra imagens de erro/placeholder. Compartilhado com a pesquisa de imagens do Brave. |
+| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | Imagens abaixo desse tamanho são rejeitadas: filtra imagens de erro/placeholder. Compartilhado com a pesquisa de imagens do Brave. |
 | `WEB_SEARCH_TIMEOUT_MS` | — | Tempo limite de solicitação por motor. |
 | `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | Por quanto tempo o resultado da verificação de integridade fica em cache antes de ser verificado novamente. |
 

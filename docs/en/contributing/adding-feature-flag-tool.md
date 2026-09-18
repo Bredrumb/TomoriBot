@@ -38,5 +38,5 @@ Then verify: toggle the config off → tool should not appear in the LLM's avail
 
 ## Related Docs
 
-- [`docs/guides/adding-builtin-tool.md`](/contributing/adding-builtin-tool/) — base tool creation steps
-- [`docs/en/architecture/pipelines/tool-loop/`](../pipelines/tool-loop/) — how feature flags are checked before tools are offered to the LLM
+- [`docs/guides/adding-builtin-tool.md`](/contributing/adding-builtin-tool/): base tool creation steps
+- [`docs/en/architecture/pipelines/tool-loop/`](../pipelines/tool-loop/): how feature flags are checked before tools are offered to the LLM

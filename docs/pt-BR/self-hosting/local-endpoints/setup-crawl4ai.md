@@ -9,9 +9,9 @@ sidebar:
 
 A ferramenta `fetch_url` usa o motor in-process `safe_http` por padrão. Ela pode opcionalmente tentar um sidecar de renderização de navegador em ambientes de desenvolvimento confiáveis quando você precisa de conteúdo renderizado para páginas pesadas em JS.
 
-A ordem padrão do motor é `safe_http`. Como o Crawl4AI segue redirecionamentos fora do cliente HTTP protegido do TomoriBot, ele só é admitido onde a busca em rede privada é permitida. Fora da produção isso é automático — nenhuma configuração é necessária. Na produção, requer um opt-in explícito `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`, o que não é recomendado.
+A ordem padrão do motor é `safe_http`. Como o Crawl4AI segue redirecionamentos fora do cliente HTTP protegido do TomoriBot, ele só é admitido onde a busca em rede privada é permitida. Fora da produção isso é automático: nenhuma configuração é necessária. Na produção, requer um opt-in explícito `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`, o que não é recomendado.
 
-O Crawl4AI é um sidecar de markdown renderizado por navegador. Ele executa um navegador headless baseado no Playwright e extrai markdown amigável para LLM no lado do servidor usando seus próprios filtros de conteúdo — não é necessário pós-processamento do lado do TomoriBot.
+O Crawl4AI é um sidecar de markdown renderizado por navegador. Ele executa um navegador headless baseado no Playwright e extrai markdown amigável para LLM no lado do servidor usando seus próprios filtros de conteúdo: não é necessário pós-processamento do lado do TomoriBot.
 
 Escolha um caminho de configuração do Crawl4AI:
 
@@ -114,11 +114,11 @@ Então inicie o TomoriBot normalmente. Reiniciar `bun run dev` redefine o cache 
 
 ---
 
-## Injeção de Cookies (Buscas Autenticadas — Opcional)
+## Injeção de Cookies (Buscas Autenticadas: Opcional)
 
 O Crawl4AI suporta a injeção de cookies a nível de navegador para que o navegador headless pareça já logado ao buscar uma página. Isso é útil para sites que exigem uma sessão para visualizar conteúdo (ex: notícias pagas, fóruns privados, painéis restritos por login).
 
-O fallback `safe_http` **não** suporta a injeção de cookies — os cookies só se aplicam quando o Crawl4AI está ativo.
+O fallback `safe_http` **não** suporta a injeção de cookies: os cookies só se aplicam quando o Crawl4AI está ativo.
 
 > **Limitação:** A injeção de cookies contorna paredes de login, mas não a impressão digital de bots (bot fingerprinting). Sites com detecção agressiva de bots (notavelmente Twitter/X) detectam o Playwright headless através de fingerprinting de canvas/WebGL e servem páginas vazias mesmo com cookies de sessão válidos. A injeção de cookies funciona bem para sites que bloqueiam apenas na autenticação.
 
@@ -126,7 +126,7 @@ O fallback `safe_http` **não** suporta a injeção de cookies — os cookies s�
 
 1. Abra seu navegador e faça login no site de destino.
 2. Abra o DevTools (`F12`) → guia **Application** → **Storage** → **Cookies** → selecione o domínio do site.
-3. Copie o `Value` de cada cookie necessário (tipicamente um token de sessão — verifique os nomes dos cookies do site).
+3. Copie o `Value` de cada cookie necessário (tipicamente um token de sessão: verifique os nomes dos cookies do site).
 
 ### Crawl4AI
 
@@ -136,7 +136,7 @@ Defina `CRAWL4AI_COOKIES_JSON` no `.env` como um array JSON:
 CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":".example.com"}]
 ```
 
-Quando isso é definido, `fetch_url` muda automaticamente do endpoint `/md` para `/crawl` com `browser_config.cookies` — `/md` não suporta injeção de cookies.
+Quando isso é definido, `fetch_url` muda automaticamente do endpoint `/md` para `/crawl` com `browser_config.cookies`: `/md` não suporta injeção de cookies.
 
 ### Campos do objeto de cookie
 
@@ -147,7 +147,7 @@ Quando isso é definido, `fetch_url` muda automaticamente do endpoint `/md` para
 | `domain` | Não | Escopo de domínio (ex: `.x.com`). Recomendado para correção. |
 | `path` | Não | Escopo de caminho. O padrão é `/` se omitido. |
 
-> **Nota:** Os valores dos cookies são sensíveis — trate-os como senhas. Eles concedem acesso de sessão total à sua conta. Não faça commit do `.env` no controle de versão.
+> **Nota:** Os valores dos cookies são sensíveis: trate-os como senhas. Eles concedem acesso de sessão total à sua conta. Não faça commit do `.env` no controle de versão.
 
 ---
 

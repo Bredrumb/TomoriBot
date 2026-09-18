@@ -10,7 +10,7 @@ Few-shot example dialogues to anchor the LLM's voice.
 
 Emit paired user/model context items from the persona's
 `sample_dialogues_in` and `sample_dialogues_out` arrays. These act as
-few-shot examples — the LLM sees `${user}: question` followed by
+few-shot examples: the LLM sees `${user}: question` followed by
 `${botName}: answer`, primes its persona voice. Skipped on impersonation
 (samples are persona-flavored output examples) and when arrays are empty
 or mismatched in length.
@@ -28,13 +28,13 @@ or mismatched in length.
 
 ## Output
 
-`Promise<StructuredContextItem[]>` — up to `2 × sample_dialogues_in.length`
+`Promise<StructuredContextItem[]>`: up to `2 × sample_dialogues_in.length`
 items (one user + one model per pair, or just model if the user side is
 `UNPAIRED_SAMPLE_DIALOGUE_SENTINEL`). Each tagged `DIALOGUE_SAMPLE`.
 
 ## Side effects
 
-- **Humanizer transform** — when `humanizer_degree >= HumanizerDegree.HEAVY`,
+- **Humanizer transform**: when `humanizer_degree >= HumanizerDegree.HEAVY`,
   both user and model sample text passes through `humanizeString` with
   `suppressPunctuationNoise: true`: casing tweaks and semicolon stripping still
   apply, but the randomized comma/emphasis noise (remove/flush/keep) that live
@@ -42,11 +42,11 @@ items (one user + one model per pair, or just model if the user side is
   own commas reach the LLM untouched as a real example of comma usage to
   imitate. (Before this noise existed, HEAVY stripped every comma from samples
   and history; they are now all kept.) Otherwise mirrors the dialogue-history transform (stage 11).
-- **Uncensor input transforms** — `applyUncensorInputTransforms` applies
+- **Uncensor input transforms**: `applyUncensorInputTransforms` applies
   unicode-space injection and/or sanitization based on
   `uncensorInputOptions`.
-- **Mention conversion** — every sample passes through `convertMentions`.
-- **Model sample prefix** — `${botName}: ${output}` prefix is prepended
+- **Mention conversion**: every sample passes through `convertMentions`.
+- **Model sample prefix**: `${botName}: ${output}` prefix is prepended
   to the model side so the LLM learns to emit the bot-name prefix in its
   responses.
 
@@ -76,10 +76,10 @@ After this stage runs:
 | Surface | Plugin-relevance |
 |---|---|
 | `UNPAIRED_SAMPLE_DIALOGUE_SENTINEL` | Defined in `src/types/preset/presetExport.ts`; coupled to SillyTavern preset import. |
-| Bot-name prefix on model samples | Hardcoded `${botName}: ` — a plugin adding "no-prefix mode" would extend here. → plugin plan candidate. |
+| Bot-name prefix on model samples | Hardcoded `${botName}: `: a plugin adding "no-prefix mode" would extend here. → plugin plan candidate. |
 | Humanizer + uncensor integration | Inherited from chat pipeline config; if a plugin adds new sample-transform passes (e.g. style transfer), it would extend the per-item transform sequence here. |
 
-**This is the simplest contributor in the pipeline** — it's a pure
+**This is the simplest contributor in the pipeline**: it's a pure
 formatter over two arrays. Most plugin-relevant work happens *upstream* in
 how `sample_dialogues_in/out` get populated (via persona editor, import,
 ST card conversion).

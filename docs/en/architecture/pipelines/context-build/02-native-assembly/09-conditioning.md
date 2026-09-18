@@ -2,7 +2,7 @@
 title: "02.9: Conditioning"
 ---
 
-Reward/punish reinforcement memory — what the bot has been thanked for and
+Reward/punish reinforcement memory: what the bot has been thanked for and
 what it has been corrected on.
 
 **File:** `src/utils/text/context/templates.ts:280-352`
@@ -12,15 +12,15 @@ what it has been corrected on.
 When reward and/or punish conditioning is enabled for the persona, load
 recent grouped conditioning entries from `conditioningMemoryRepository` and
 emit them as a `system`-role context item describing past
-behaviors — "do this again" vs. "avoid this." Each line names the action,
+behaviors: "do this again" vs. "avoid this." Each line names the action,
 the users who triggered the conditioning, the reason text, and a count
 suffix when repeated.
 
 ## Input
 
 - `client`, `guildId`
-- `serverId: number` — the internal server primary key (not the Discord ID)
-- `personaLineageId: number` — must be ≥ 0
+- `serverId: number`: the internal server primary key (not the Discord ID)
+- `personaLineageId: number`: must be ≥ 0
 - `botName`
 - `personalMemoriesEnabled` (passed to `convertMentions`)
 - `rewardEnabled: boolean`, `punishEnabled: boolean`
@@ -28,7 +28,7 @@ suffix when repeated.
 
 ## Output
 
-`Promise<StructuredContextItem | null>` — `null` if neither
+`Promise<StructuredContextItem | null>`: `null` if neither
 reward nor punish has any visible groups. Otherwise one `system`-role item
 tagged `KNOWLEDGE_SERVER_CONDITIONING`.
 
@@ -47,13 +47,13 @@ Here are past things {botName} did that got punished for. Avoid doing them again
 
 ## Side effects
 
-- **DB read (per type)** —
+- **DB read (per type)**
   `conditioningMemoryRepository.loadGroupsForPersona(serverId, personaLineageId, type)`
   for `"reward"` and/or `"punish"`.
-- **Past-participle resolution** — `getConditioningContextPastParticiple(type, actionKey)`
+- **Past-participle resolution**: `getConditioningContextPastParticiple(type, actionKey)`
   resolves the verb form ("thanked," "corrected," etc.) for each action
   kind.
-- **Mention conversion** — assembled text passes through `convertMentions`;
+- **Mention conversion**: assembled text passes through `convertMentions`;
   user mentions are rendered with display names.
 
 ## Invariants
@@ -84,7 +84,7 @@ After this stage runs:
 | Surface | Plugin-relevance |
 |---|---|
 | Action verb table (`getConditioningContextPastParticiple`) | Localized via the conditioning helper; a plugin adding a new action kind extends the verb map there. |
-| `conditioningMemoryRepository` | The repository is the seam — a plugin adding a new reinforcement-type (e.g. neutral observations) would extend it. |
+| `conditioningMemoryRepository` | The repository is the seam; a plugin adding a new reinforcement-type (e.g. neutral observations) would extend it. |
 | Grouping algorithm | Currently groups by `actionKey + userDiscIds` + optional `actionText`; the grouping logic lives in the repository, not this contributor. |
 | Section heading text | Hardcoded English here; localization would extend. → plugin plan candidate if locale-aware conditioning is needed. |
 

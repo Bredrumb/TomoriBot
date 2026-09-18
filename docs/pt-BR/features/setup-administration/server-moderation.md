@@ -4,8 +4,8 @@ sidebar:
   order: 2
 ---
 
-A TomoriBot dá aos administradores do servidor controles sobre como ela se comporta no seu servidor — quem pode usá-la,
-onde e quanto custa — através do painel `/config` e seus comandos relacionados. A maioria requer
+A TomoriBot dá aos administradores do servidor controles sobre como ela se comporta no seu servidor: quem pode usá-la,
+onde e quanto custa, através do painel `/config` e seus comandos relacionados. A maioria requer
 a permissão **Gerenciar Servidor**. Esta página cobre os destaques; todos os comandos estão na
 [Referência de Comandos](/pt-BR/features/command-reference/).
 
@@ -23,7 +23,7 @@ de dias configurável.
 
 `/moderation` **((Member Access))** apresenta isso como uma escolha de dois estados. **Allow Server Models** é o
 padrão; **Require Personal Providers** faz cada membro trazer seu **próprio** provedor pessoal para
-seus gatilhos — o servidor não paga nada em mensagens iniciadas pelo usuário. Gatilhos iniciados
+seus gatilhos; o servidor não paga nada em mensagens iniciadas pelo usuário. Gatilhos iniciados
 pelo servidor ainda usam o provedor do servidor. Este é o controle de custo mais forte: ele transfere o gasto com
 API inteiramente para os membros. Membros configuram o deles em
 [Personalização → Seus Próprios Provedores](/pt-BR/features/knowledge/personalization/#seus-próprios-provedores).
@@ -35,24 +35,24 @@ recorrer.
 
 ## Controle de Acesso: Listas de Permissões
 
-- `/moderation` → **Whitelist** → **Channels** — escolha os canais de ativação e substituições opcionais de tempo de recarga.
-- `/moderation` → **Whitelist** → **Personas** — limite em quais canais uma persona específica pode ser ativada.
-- `/moderation` → **Whitelist** → **Roles** — restrinja a ativação a cargos específicos.
-- `/config` > Engine > Trigger — defina o tempo de recarga global entre respostas.
+- `/moderation` → **Whitelist** → **Channels**: escolha os canais de ativação e substituições opcionais de tempo de recarga.
+- `/moderation` → **Whitelist** → **Personas**: limite em quais canais uma persona específica pode ser ativada.
+- `/moderation` → **Whitelist** → **Roles**: restrinja a ativação a cargos específicos.
+- `/config` > Engine > Trigger: defina o tempo de recarga global entre respostas.
 
 Canais na lista de permissões herdam o tempo de recarga global, a menos que você defina uma substituição específica por canal.
 
 ## Controles de Aprendizado & Privacidade
 
-- `/server memberpermissions` — controle quem pode ensinar coisas a ela.
-- `/server blacklist` — impeça que ela aprenda ou use memórias sobre usuários específicos.
-- `/config` > Channels > Channel Rules — marque canais onde a memória de curto prazo é isolada e os
+- `/server memberpermissions`: controle quem pode ensinar coisas a ela.
+- `/server blacklist`: impeça que ela aprenda ou use memórias sobre usuários específicos.
+- `/config` > Channels > Channel Rules: marque canais onde a memória de curto prazo é isolada e os
   registros de pensamento são suprimidos.
 
 ## Transparência: Registros de Pensamento
 
 `/server thought-logs` define um canal onde o raciocínio interno dela e chamadas de ferramentas bem-sucedidas
-são postados — útil para auditar o que ela está fazendo (incluindo qual gatilho expôs uma ferramenta no
+são postados; útil para auditar o que ela está fazendo (incluindo qual gatilho expôs uma ferramenta no
 [Modo de Ferramenta Deliberada](/pt-BR/features/capabilities/tools-and-extensions/#modo-de-ferramenta-deliberada)).
 
 ## Saudações de Boas-Vindas
@@ -65,6 +65,6 @@ botão **Clear Welcome** na mesma página para parar as saudações.
 ## Expressões
 
 `/expressions initialize` registra os emojis e figurinhas personalizados do seu servidor para que ela
-os use com precisão — recomendado logo após a configuração. Para saber o que ela faz com eles (uso natural de
+os use com precisão; recomendado logo após a configuração. Para saber o que ela faz com eles (uso natural de
 `:emoji:`, figurinhas, reações), veja
 [Expressões & Reações](/pt-BR/features/chatting-personality/chatting-and-triggers/#expressões--reações).

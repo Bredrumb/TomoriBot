@@ -147,7 +147,7 @@ Key conventions:
 ## Tip-item keys (`genai.tips.*`)
 
 User-facing hints ("Tips") are stored as **atomic, single-sentence** keys under `genai.tips.*`
-(defined in `providers.ts`, which exports the `genai` tree). Each key is one self-contained bullet —
+(defined in `providers.ts`, which exports the `genai` tree). Each key is one self-contained bullet;
 never a multi-hint paragraph:
 
 ```ts
@@ -174,7 +174,7 @@ When adding a tip:
 
 1. Add the atomic key under `genai.tips` in both `src/locales/en-US/providers.ts` and
    `src/locales/ja/providers.ts`.
-2. Reference it by dot-path from the calling `tipKeys` array — do not inline hint text in code.
+2. Reference it by dot-path from the calling `tipKeys` array; do not inline hint text in code.
 3. Run `bun run check-locales` for parity.
 
 ## User Language Preference
@@ -236,14 +236,14 @@ Discord silently truncates several text slots past their cap, so a separate stri
 (`bun run check-locale-lengths`, also run as a fatal step in `bun run vl`) source-traces each
 locale key to the Discord component it feeds and flags any value that overruns:
 
-- Command descriptions and choice names — ≤100 chars
-- Modal titles / input labels — ≤45 chars
-- Modal placeholders / Label descriptions — ≤100 chars
-- **Select / checkbox option `label` and `description`** — ≤100 chars (traced from
+- Command descriptions and choice names: ≤100 chars
+- Modal titles / input labels: ≤45 chars
+- Modal placeholders / Label descriptions: ≤100 chars
+- **Select / checkbox option `label` and `description`**: ≤100 chars (traced from
   `{ value, label: localizer(...), description: localizer(...) }` option literals)
 
 Both the `en-US` and `ja` values must fit. Shorten the reported string rather than relying on
-Discord's truncation — the cap is counted in characters (code points), matching Discord backend
+Discord's truncation: the cap is counted in characters (code points), matching Discord backend
 measurements, so compact Japanese text usually fits where English does not.
 
 ## Best Practices

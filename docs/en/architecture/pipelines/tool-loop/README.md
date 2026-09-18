@@ -14,11 +14,11 @@ hit, or a non-recoverable error occurs.
 
 ## Read order
 
-1. `README.md` — this file (coordinator lifecycle, env config, ASCII flow)
-2. `01-stream-once.md` — provider call with rolling SDK timeout
-3. `02-execute-tool-call.md` — deliberate-mode gate, registry dispatch, affordance
-4. `03-enhanced-context-restart.md` — context-enrichment restart signal
-5. `04-build-result.md` — `GenerationTurnResult` assembly
+1. `README.md`: this file (coordinator lifecycle, env config, ASCII flow)
+2. `01-stream-once.md`: provider call with rolling SDK timeout
+3. `02-execute-tool-call.md`: deliberate-mode gate, registry dispatch, affordance
+4. `03-enhanced-context-restart.md`: context-enrichment restart signal
+5. `04-build-result.md`: `GenerationTurnResult` assembly
 
 ## Stage flow
 
@@ -78,7 +78,7 @@ runToolLoop(ToolLoopParams)
 
 ## Cross-references
 
-- **Caller:** chat per-turn stage 03 — `runGenerationTurn` in
+- **Caller:** chat per-turn stage 03: `runGenerationTurn` in
   `src/utils/chat/generationTurn.ts` calls `runToolLoop` per model-fallback
   attempt. See
   [`docs/en/architecture/pipelines/chat/06-per-turn/03-run-generation-turn.md`](../chat/06-per-turn/03-run-generation-turn).
@@ -95,8 +95,8 @@ runToolLoop(ToolLoopParams)
 `/config` > Engine > Experimental can enable `verbatim_tool_calling_enabled` for Custom
 OpenAI-compatible endpoints that stream only assistant text. The fallback parser
 lives in `CustomStreamAdapter`, not in `toolLoop.ts`: it anchors on a known tool
-name and converts a bare, code-span, or fenced tool call — even one preceded by
-prose narration — into the same provider-agnostic `FunctionCall` shape as native
+name and converts a bare, code-span, or fenced tool call (even one preceded by
+prose narration) into the same provider-agnostic `FunctionCall` shape as native
 `delta.tool_calls`. From this pipeline's perspective, normal and
 verbatim tool calls both enter at `streamResult.status === "function_call"` and
 execute through `executeToolCall`, preserving deliberate-mode gating,
@@ -105,11 +105,11 @@ tool-timeout handling, enhanced-context restarts, and function history.
 **Fallback-chain gating.** The verbatim *nudge* (the in-context instruction to
 emit calls as a code span) and the verbatim *parser* must agree per attempt, or a
 fallback leaks the call as text. The nudge is injected only when
-`shouldInjectVerbatimToolCallingNudge` holds — `verbatim_tool_calling_enabled` **and**
+`shouldInjectVerbatimToolCallingNudge` holds: `verbatim_tool_calling_enabled` **and**
 the attempt's model has tools **and** its provider is `custom` (the only adapter
 with the parser). Because the nudge is baked into base context from the *primary*
 model, `generationTurn.prepareProviderContextItems` re-checks this per attempt and
-**strips** the nudge for any attempt that fails it — e.g. a fallback to a native
+**strips** the nudge for any attempt that fails it: e.g. a fallback to a native
 tool-calling provider (Google, OpenRouter) or a custom endpoint without tools.
 This keeps native fallbacks clean (they use `delta.tool_calls`) and avoids steering
 them into text-form calls their adapter cannot parse. Known limitation: if the
@@ -126,7 +126,7 @@ the growing conversation.
 | Variable | Type | Role |
 |---|---|---|
 | `streamResults` | `StreamResult[]` | Accumulated per-iteration stream results (included in final `GenerationTurnResult`) |
-| `functionHistory` | `ToolHistoryEntry[]` | Paired call/response records passed back to the provider on each subsequent iteration; each entry also carries `preToolCallTextParts` — the visible text that iteration streamed before its tool call — so the follow-up call knows the text was already sent and does not repeat it |
+| `functionHistory` | `ToolHistoryEntry[]` | Paired call/response records passed back to the provider on each subsequent iteration; each entry also carries `preToolCallTextParts`: the visible text that iteration streamed before its tool call, so the follow-up call knows the text was already sent and does not repeat it |
 | `accumulatedModelParts` | `Record<string, unknown>[]` | Provider-native model turn parts used for restarts/prefill; cleared after a normal tool history entry takes ownership of its pre-tool text |
 | `finalText` / `detailsText` | `string` | Last non-empty accumulated text and NovelAI scene-metadata suffix; updated on `completed` or `function_call` with pre-tool text |
 | `consecutiveToolErrors` | `number` | Reset on success or restart; abort when it reaches `MAX_CONSECUTIVE_TOOL_ERRORS` |
@@ -134,7 +134,7 @@ the growing conversation.
 | `selectedStickerToSend` | `Sticker \| null` | Latest sticker-tool selection; later sticker misses clear it, and only completed results carry it to post-turn delivery |
 | `thoughtLog` | `ThoughtLogPayload \| undefined` | Carried from whichever iteration last emitted one |
 
-### `shouldEndAfterPreToolText` — pre-tool-text exit policy
+### `shouldEndAfterPreToolText`: pre-tool-text exit policy
 
 When a successful tool follows already-visible text,
 `shouldEndAfterPreToolText` applies the original four-case policy:
@@ -166,4 +166,4 @@ embed and ends with the already-delivered text.
 | `MAX_CONSECUTIVE_TOOL_ERRORS` | `BOT_MAX_CONSECUTIVE_TOOL_ERRORS` env | `5` | Consecutive tool failures before `emitToolErrorLoop` + `buildResult("error")` |
 | `NAI_TOOL_FAILURE_RETRY_THRESHOLD` | `NAI_TOOL_FAILURE_RETRY_THRESHOLD` env | `3` | NovelAI failures after visible pre-tool text before the retry-exhausted embed ends the turn |
 | `STREAM_SDK_CALL_TIMEOUT_MS` | `STREAM_SDK_CALL_TIMEOUT_MS` env | `120000` | Per-call SDK inactivity timeout (rolling; see stage 01) |
-| `TOOL_EXECUTION_TIMEOUT_MS` | `TOOL_EXECUTION_TIMEOUT_MS` env | `300000` | Per-tool execution timeout; fresh per tool call — chains are unaffected (see stage 02) |
+| `TOOL_EXECUTION_TIMEOUT_MS` | `TOOL_EXECUTION_TIMEOUT_MS` env | `300000` | Per-tool execution timeout; fresh per tool call; chains are unaffected (see stage 02) |

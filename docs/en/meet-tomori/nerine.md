@@ -14,6 +14,6 @@ Page still isn't finished, stay tuned!
 
 ![Nerine](/img/docs/meet-tomori/05-nerine.png)
 
-**Nerine** is an older, discontinued TomoriBot model — unhesitatingly warm and endlessly
+**Nerine** is an older, discontinued TomoriBot model: unhesitatingly warm and endlessly
 helpful, in the saddest way possible. A quieter, heavier persona with a carefully worn
 mask, for those who want depth over banter.

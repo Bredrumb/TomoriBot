@@ -28,7 +28,7 @@ Instale o [Ollama](https://ollama.com). Os exemplos abaixo usam o **Gemma 4** do
 
 Modelos locais rodam na **VRAM** da sua GPU (a memória embutida na sua placa de vídeo, separada
 da memória RAM do sistema). Regra geral: um modelo precisa de pelo menos o seu **tamanho de download** livre na
-VRAM, mais ~1–2 GB de margem para o contexto da conversa. Escolha o maior Gemma 4 que
+VRAM, mais ~1-2 GB de margem para o contexto da conversa. Escolha o maior Gemma 4 que
 caiba na sua placa:
 
 | VRAM da sua GPU | Melhor escolha | Download (aprox.) |
@@ -103,7 +103,7 @@ O TomoriBot valida a conexão quando você a salva. Se ele relatar que o endpoin
 causa comum é uma incompatibilidade de `localhost`/Docker ou um `/v1` faltando/extra (veja
 [notas e pegadinhas](#notas-e-pegadinhas)).
 
-Adicionar o modelo o torna o modelo de `text` ativo automaticamente — comece a conversar para testá-lo. Se
+Adicionar o modelo o torna o modelo de `text` ativo automaticamente: comece a conversar para testá-lo. Se
 não estiver ativo por algum motivo, execute `/config` > Modelos > Alternar Modelos e selecione o modelo recém-registrado.
 
 O registro nunca altera nenhum modelo além do `text`. Se você marcou **Compreensão de Imagem**
@@ -179,7 +179,7 @@ pacote de arquivo único que você baixa e aponta para o servidor.
    logo após o lançamento. Prefira uma variante **instruct/chat** (nomes terminados em `-Instruct` ou
    `-Chat`); modelos base não mantêm uma conversa.
 2. **Escolha uma quantização que caiba na sua VRAM.** Um repositório lista o mesmo modelo em vários níveis de quantização, e o
-   tamanho de um arquivo ≈ a VRAM que ele precisa (mais ~1–2 GB para o contexto, mesma regra da
+   tamanho de um arquivo ≈ a VRAM que ele precisa (mais ~1-2 GB para o contexto, mesma regra da
    [tabela de dimensionamento](#qual-tamanho-devo-baixar) acima). Baixe o `.gguf` único para a sua escolha.
 3. **Carregue-o.** Inicie o KoboldCPP ou `llama-server` com esse arquivo (veja
    [Outros servidores](#outros-servidores)), e então registre o endpoint no Discord como de costume.

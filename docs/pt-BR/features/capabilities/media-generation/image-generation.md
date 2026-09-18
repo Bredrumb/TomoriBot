@@ -9,10 +9,10 @@ A TomoriBot pode gerar imagens a partir de um prompt de texto ou editando uma im
 
 ## O Que Ela Pode Fazer
 
-- **Texto-para-imagem** — gera a partir de um prompt.
-- **Imagem-para-imagem** — edita ou reestiliza uma imagem de referência inteira.
-- **Inpainting** — redesenha uma região específica preservando o restante.
-- **Outpainting** — estende a tela além do quadro original.
+- **Texto-para-imagem**: gera a partir de um prompt.
+- **Imagem-para-imagem**: edita ou reestiliza uma imagem de referência inteira.
+- **Inpainting**: redesenha uma região específica preservando o restante.
+- **Outpainting**: estende a tela além do quadro original.
 - **Proporções de aspecto personalizáveis**.
 - **Imagens de referência** podem vir de anexos de mensagem, figurinhas, emojis ou
   avatares de usuários/personas. Aponte-a para uma mensagem, ou nomeie um usuário/persona para
@@ -34,12 +34,12 @@ usuários ou personas referenciados.
 Cada fonte de tags acima é editável, cada uma em um escopo diferente. Todas abrem um modal
 pré-preenchido com as tags atuais, para que você edite no lugar:
 
-- **`/config` > Persona > Appearance** — as tags de **Aparência Física** da persona selecionada (como *ela*
+- **`/config` > Persona > Appearance**: as tags de **Aparência Física** da persona selecionada (como *ela*
   se parece). Requer a permissão Gerenciar Servidor.
-- **`/personal config`** — *suas próprias* tags de aparência, aplicadas quando uma geração
+- **`/personal config`**: *suas próprias* tags de aparência, aplicadas quando uma geração
   faz referência a você. Seguem você em todos os servidores (veja
   [Personalização](/pt-BR/features/knowledge/personalization/)).
-- **Tags positivas e negativas padrão** em **`/config` > Models > Image Generation Defaults** —
+- **Tags positivas e negativas padrão** em **`/config` > Models > Image Generation Defaults**:
   as tags padrão do servidor inteiro adicionadas (ou evitadas) em cada geração. Tags negativas
   só têm efeito quando o backend suporta prompts negativos. Enviar o modal com uma
   caixa vazia redefine essa lista para os padrões integrados.
@@ -47,7 +47,7 @@ pré-preenchido com as tags atuais, para que você edite no lugar:
 ## Configuração
 
 1. Configure um modelo de imagem com `/config` > Models > Switch Models.
-2. Certifique-se de que a geração de imagens está permitida — ela é controlada pela capacidade `imagegen_enabled`
+2. Certifique-se de que a geração de imagens está permitida, pois ela é controlada pela capacidade `imagegen_enabled`
    (`/config` > Permissions).
 3. Peça a ela para gerar, ou execute `/generate image`.
 

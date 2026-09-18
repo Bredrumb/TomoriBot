@@ -16,7 +16,7 @@ Esta página é o lado do usuário da bridge. Para os detalhes internos do appse
 3. Execute `/matrix link` no canal do Discord que você deseja conectar e cole o ID da
    sala.
 
-Depois que o bot aceitar o convite, ele publica um lembrete curto na sala Matrix — mas você
+Depois que o bot aceitar o convite, ele publica um lembrete curto na sala Matrix; mas você
 ainda finaliza a conexão a partir do Discord com `/matrix link`.
 
 ### Encontrando o ID da Sala
@@ -43,7 +43,7 @@ Na maioria dos clientes Matrix: **Configurações da Sala → Avançado → ID I
 
 - Se o bot não entrar automaticamente, convide a conta de bot Matrix manualmente e execute novamente
   `/matrix link`.
-- **A criptografia do Matrix não pode ser desativada depois** — uma sala criptografada precisa ser substituída por uma
+- **A criptografia do Matrix não pode ser desativada depois**: uma sala criptografada precisa ser substituída por uma
   nova sala não criptografada.
 - Se uma limitação não está listada acima, presuma que deve funcionar e reporte bugs no servidor de
   suporte (`/support discord`).

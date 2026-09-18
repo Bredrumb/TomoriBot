@@ -221,11 +221,11 @@ Anyone can run `/config` > Persona > Memories, `/personal config`, and `/persona
 Workspace managers can tune short-term memory from `/config` → **Behavior** → **Memory & STM**.
 These settings apply to the workspace's active STM records:
 
-- **Refresh cadence** controls how many bot turns pass between refresh nudges. The allowed range is 1–100.
+- **Refresh cadence** controls how many bot turns pass between refresh nudges. The allowed range is 1-100.
 - **Render mode** chooses whether category values supersede recent turns or appear as a crude summary.
 - **Crude messages** controls how many recent messages are retained, from 1 to the channel maximum.
-- **Nudge depth** places the refresh nudge from the end of the assembled context, from 0–20.
-- **Content depth** places STM content from the end of the assembled context, from −1–20.
+- **Nudge depth** places the refresh nudge from the end of the assembled context, from 0-20.
+- **Content depth** places STM content from the end of the assembled context, from −1-20.
 
 **STM Categories** replaces the default Summary field with up to five labeled fields. Enter each field as
 `Label: Description`; leaving every field blank restores the default Summary category. Saving categories

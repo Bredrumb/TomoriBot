@@ -14,6 +14,6 @@ Page still isn't finished, stay tuned!
 
 ![Rose](/img/docs/meet-tomori/01-rose.png)
 
-**Rose** is the default Tomori and the eldest sister — a helpful tomboy with authentic
+**Rose** is the default Tomori and the eldest sister: a helpful tomboy with authentic
 Discord chat energy who keeps replies short and punchy, roasts back when flamed, and gets
 subtly shy about compliments. She secretly loves cute things and cosplay.

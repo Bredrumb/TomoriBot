@@ -10,7 +10,7 @@ verbatim tool-calling workaround is enabled.
 ## Mission
 
 The verbatim tool-calling workaround (`/config` > Engine > Experimental) exists for
-endpoints that accept the native `tools` field but ignore it — typically
+endpoints that accept the native `tools` field but ignore it; typically
 local / custom OpenAI-compatible servers. In that mode the model never
 reliably "sees" the tool schemas, so the
 [`CustomStreamAdapter`](../../provider/03-chunk-normalization) parses tool
@@ -19,22 +19,22 @@ when the workaround is on, it serializes the exact tool set the provider
 would send and embeds it in the prompt body so the model can read the names
 and parameter schemas in-band.
 
-This is the *schema* half of the workaround. The *behavioral* half — the
-instruction on how to emit a verbatim call — is the
+This is the *schema* half of the workaround. The *behavioral* half (the
+instruction on how to emit a verbatim call) is the
 `VERBATIM_TOOL_CALLING_NUDGE` injected near the dialogue tail (stage 11,
 [`11-dialogue-history.md`](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)). Both are gated by the
 same predicate so they always switch on together.
 
 ## Input
 
-- `tomoriConfig` — provides `verbatim_tool_calling_enabled` (the toggle).
-- `tomoriState` — provides the active `llm` (provider, capabilities),
+- `tomoriConfig`: provides `verbatim_tool_calling_enabled` (the toggle).
+- `tomoriState`: provides the active `llm` (provider, capabilities),
   `server_id`, persona voice fields, and feature-flag config used to gate
   tool availability.
 
 ## Output
 
-`Promise<StructuredContextItem | null>` — `null` when the workaround is off,
+`Promise<StructuredContextItem | null>`: `null` when the workaround is off,
 the model is not tool-capable, state is missing, or no tools resolve.
 Otherwise one `user`-role item tagged
 `KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS`.
@@ -50,10 +50,10 @@ and by `<Provider>Provider.getTools`:
 
 1. Assemble a minimal `ToolStateForContext` from the live persona state
    (voice assignment, model capability flags, feature-flag config).
-2. `getAvailableToolsWithMCP(provider, state)` — registry returns the
+2. `getAvailableToolsWithMCP(provider, state)`: registry returns the
    feature-flag-gated built-in tools plus the allowed MCP function names.
 3. `new OpenAICompatibleToolAdapter(provider).getAllToolsInProviderFormat(
-   builtInTools, server_id, mcpFunctionNames)` — serializes full native
+   builtInTools, server_id, mcpFunctionNames)`: serializes full native
    schemas for built-in **+ global MCP + guild MCP** tools, exactly matching
    what lands in `config.tools`.
 
@@ -62,16 +62,16 @@ and by `<Provider>Provider.getTools`:
 After this stage runs:
 
 - Gated identically to the verbatim nudge via
-  `shouldInjectVerbatimToolCallingNudge(tomoriConfig, tomoriState)` —
+  `shouldInjectVerbatimToolCallingNudge(tomoriConfig, tomoriState)`
   requires `verbatim_tool_calling_enabled === true` **and**
   `tomoriState.llm.has_tools === true`.
 - Placed in the stable reference zone (right before RAG documents) so the
   schema block stays inside the prompt-cache-friendly prefix rather than
   churning next to live dialogue.
-- Tools are resolved *fresh* each turn (no caching here) — the same resolve
+- Tools are resolved *fresh* each turn (no caching here); the same resolve
   runs again later in the provider when it builds `config.tools`. Accepted
   cost for an opt-in workaround.
-- Errors are logged and return `null` — a failure never blocks the rest of
+- Errors are logged and return `null`; a failure never blocks the rest of
   the build.
 
 ## Configuration

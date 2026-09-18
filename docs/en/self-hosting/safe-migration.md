@@ -4,7 +4,7 @@ sidebar:
   order: 6
 ---
 
-When you `git pull` new code and restart TomoriBot, the bot automatically runs database schema migrations on boot. This is powerful — it means you don't have to manually manage SQL updates — but it also means destructive operations can silently affect your data. This guide shows you how to protect yourself before pulling.
+When you `git pull` new code and restart TomoriBot, the bot automatically runs database schema migrations on boot. This is powerful: it means you don't have to manually manage SQL updates, but it also means destructive operations can silently affect your data. This guide shows you how to protect yourself before pulling.
 
 ## Why this matters
 
@@ -14,10 +14,10 @@ TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapp
 
 Follow these steps BEFORE running `git pull`:
 
-1. **Stop the bot** — shut down the TomoriBot process so no active database connections interfere with the backup.
-2. **Back up the database** — use one of the two methods below.
-3. **Note the current commit** — run `git rev-parse HEAD` and save the output in case rollback is needed.
-4. **Pull and restart** — once the backup is safely on disk, you're safe to pull and restart.
+1. **Stop the bot**: shut down the TomoriBot process so no active database connections interfere with the backup.
+2. **Back up the database**: use one of the two methods below.
+3. **Note the current commit**: run `git rev-parse HEAD` and save the output in case rollback is needed.
+4. **Pull and restart**: once the backup is safely on disk, you're safe to pull and restart.
 
 ### Prerequisite: the `pgvector` extension
 
@@ -37,15 +37,15 @@ psql -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 
 
 If you restore without it:
 
-- The project's `restore-backup` (and any `psql -f` run with `ON_ERROR_STOP=1`) **aborts early** with `extension "vector" is not available` — no data is loaded. Install pgvector and retry.
+- The project's `restore-backup` (and any `psql -f` run with `ON_ERROR_STOP=1`) **aborts early** with `extension "vector" is not available`: no data is loaded. Install pgvector and retry.
 - A manual `psql -f` run that **ignores errors** (`ON_ERROR_STOP=0`) is worse: the failed `COPY public.document_chunks` desynchronizes psql's input parser, which then mis-parses the following `COPY` data rows as SQL (a `syntax error at or near …` cascade). This silently drops whole tables (observed: `documents` and `llms`), leaving a partially-restored database that looks intact but has lost rows. Always restore with `ON_ERROR_STOP=1` so failures surface immediately.
 
 ### Option A: Use the project's backup script
 
 TomoriBot includes two backup scripts, each targeting different data:
 
-- **`bun run backup`** — Full database schema + data dump (personas, memories, configs, everything)
-- **`bun run backup:personas`** — Persona presets and per-persona server memories only
+- **`bun run backup`**: Full database schema + data dump (personas, memories, configs, everything)
+- **`bun run backup:personas`**: Persona presets and per-persona server memories only
 
 For a safe migration, use the **full backup**:
 
@@ -92,10 +92,10 @@ pg_dump \
 
 This saves a custom-format binary dump (more compact than SQL text). The environment variables match your `.env`:
 
-- `POSTGRES_HOST` — default `localhost`
-- `POSTGRES_PORT` — default `5432`
-- `POSTGRES_USER` — your DB user
-- `POSTGRES_DB` — default `tomodb`
+- `POSTGRES_HOST`: default `localhost`
+- `POSTGRES_PORT`: default `5432`
+- `POSTGRES_USER`: your DB user
+- `POSTGRES_DB`: default `tomodb`
 
 To restore:
 
@@ -118,9 +118,9 @@ Use it when:
 
 - You're shipping a migration that drops a column, drops a table, alters a column type, or otherwise loses data (the OD-R-6 destructive-migration policy).
 - You're shipping a release-bundle commit that combines several migrations and want a single rollback point.
-- You're not sure whether a queued migration is safe — when in doubt, checkpoint.
+- You're not sure whether a queued migration is safe: when in doubt, checkpoint.
 
-Skip it for routine non-destructive deploys (new columns, new indexes, additive seed data) — the snapshot has a real cost and the routine path doesn't need it.
+Skip it for routine non-destructive deploys (new columns, new indexes, additive seed data): the snapshot has a real cost and the routine path doesn't need it.
 
 Example commit message:
 
@@ -131,21 +131,21 @@ Drops the deprecated tomori_configs table after Phase 6 backfill.
 Snapshot is required because the migration is destructive.
 ```
 
-The `(Checkpoint)` token can appear anywhere in the subject or body — it's matched case-sensitively against the head commit's message. Manual workflow dispatch with the workflow's backup input enabled is the same lever for ad-hoc cases.
+The `(Checkpoint)` token can appear anywhere in the subject or body: it's matched case-sensitively against the head commit's message. Manual workflow dispatch with the workflow's backup input enabled is the same lever for ad-hoc cases.
 
 ## What to do if a migration fails partway
 
 If the bot crashes or hangs during migration:
 
-1. **Stop the bot immediately** — do not let it retry migrations blindly.
+1. **Stop the bot immediately**: do not let it retry migrations blindly.
 
-2. **Check the logs** — TomoriBot logs to stdout/stderr by default (captured by your process manager or Docker logs). Look for an error message naming the migration that failed. Example output:
+2. **Check the logs**: TomoriBot logs to stdout/stderr by default (captured by your process manager or Docker logs). Look for an error message naming the migration that failed. Example output:
 
    ```
    Migration failed: 042_drop_old_column, error: column "old_column" does not exist
    ```
 
-3. **Decide whether to restore** — if the error is unrecoverable (e.g., the migration tried to drop a column that doesn't exist), restore from your backup:
+3. **Decide whether to restore**: if the error is unrecoverable (e.g., the migration tried to drop a column that doesn't exist), restore from your backup:
 
    ```bash
    # Option A restore
@@ -160,7 +160,7 @@ If the bot crashes or hangs during migration:
      tomoribot-backup-20240115-143045.dump
    ```
 
-4. **Roll back the code** — revert to the last working commit:
+4. **Roll back the code**: revert to the last working commit:
 
    ```bash
    git reset --hard <previous-commit-hash>
@@ -172,7 +172,7 @@ If the bot crashes or hangs during migration:
    git log --oneline | head -20
    ```
 
-5. **Report the bug** — file an issue at [github.com/Bredrumb/TomoriBot/issues](https://github.com/Bredrumb/TomoriBot/issues) with:
+5. **Report the bug**: file an issue at [github.com/Bredrumb/TomoriBot/issues](https://github.com/Bredrumb/TomoriBot/issues) with:
    - Failed migration filename (from logs)
    - Full error message
    - Last successful commit hash
@@ -182,9 +182,9 @@ If the bot crashes or hangs during migration:
 
 Per the project's design (OD-R-6), **destructive migrations cannot be rolled back** by the migration runner. Examples:
 
-- `DROP COLUMN name_here` — deleted rows are lost forever; no SQL script can recover them
-- `DROP TABLE old_table` — entire table is gone
-- Type narrowing (e.g., `VARCHAR(255) → VARCHAR(100)`) — values longer than 100 characters are truncated
+- `DROP COLUMN name_here`: deleted rows are lost forever; no SQL script can recover them
+- `DROP TABLE old_table`: entire table is gone
+- Type narrowing (e.g., `VARCHAR(255) → VARCHAR(100)`): values longer than 100 characters are truncated
 
 For these operations, **the only recovery is your backup**. Always back up before pulling if you're on an older version and a new refactor has shipped.
 
@@ -209,7 +209,7 @@ A common case: someone asks you to test a branch on your existing install, and y
 
 ### Manually rolling back a test migration
 
-If you tested a branch against your **real** database and want to undo its migrations afterward, use the rollback runner. Unlike the forward runner, it **never runs automatically** — rollback is always a deliberate manual act because `.down.sql` files are typically lossy.
+If you tested a branch against your **real** database and want to undo its migrations afterward, use the rollback runner. Unlike the forward runner, it **never runs automatically**: rollback is always a deliberate manual act because `.down.sql` files are typically lossy.
 
 ```bash
 # Preview only (dry run): show what would be rolled back
@@ -225,9 +225,9 @@ The command runs the selected `.down.sql` files in **descending** version order 
 
 > **Run it while still on the branch.** The rollback reads `NNN_description.down.sql` from disk. Once you `git checkout main`, those files are gone and the rollback can no longer execute. Roll back first, then switch branches.
 
-> **It is still lossy.** Rolling back `034` here runs `DROP TABLE short_term_memories` — any data created while testing is gone. That is expected for a test cleanup, but never run `migrate:down` against data you want to keep without a backup.
+> **It is still lossy.** Rolling back `034` here runs `DROP TABLE short_term_memories`, so any data created while testing is gone. That is expected for a test cleanup, but never run `migrate:down` against data you want to keep without a backup.
 
 ## See also
 
 - [Database schema documentation](../architecture/subsystems/database-schema): learn the current schema structure
-- [Bun documentation](https://bun.sh) — learn Bun runtime fundamentals
+- [Bun documentation](https://bun.sh): learn Bun runtime fundamentals

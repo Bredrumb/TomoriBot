@@ -41,9 +41,9 @@ cp .env.example .env
 
 Required:
 
-- `DISCORD_TOKEN` — your Discord bot token (enable the `GuildMembers`, `MessageContent`, and
+- `DISCORD_TOKEN`: your Discord bot token (enable the `GuildMembers`, `MessageContent`, and
   `GuildPresences` privileged intents).
-- `CRYPTO_SECRET` — a 32-character encryption key (used to encrypt stored API keys).
+- `CRYPTO_SECRET`: a 32-character encryption key (used to encrypt stored API keys).
 - PostgreSQL connection: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
@@ -103,7 +103,7 @@ sudo apt-get install -y postgresql-16-pgvector
 ```
 
 Then enable it once on your database. Connect with `psql` using the `POSTGRES_*` values from
-your `.env` — it prompts for `POSTGRES_PASSWORD`:
+your `.env`: it prompts for `POSTGRES_PASSWORD`:
 
 :::note[Windows]
 There is no prebuilt pgvector package for native Windows PostgreSQL. Installing it means
@@ -147,7 +147,7 @@ For a self-managed PostgreSQL, find your active config file:
 SHOW config_file;
 ```
 
-Enable the extension in `postgresql.conf` — append to `shared_preload_libraries` if it
+Enable the extension in `postgresql.conf`: append to `shared_preload_libraries` if it
 already lists other libraries:
 
 ```ini

@@ -5,7 +5,7 @@ sidebar:
 ---
 
 A TomoriBot rastreia o uso para que você possa ver quem fala com quem, quais personas e modelos são utilizados,
-e quais ferramentas disparam — e depois transforma tudo em um infográfico compartilhável.
+e quais ferramentas disparam; depois transforma tudo em um infográfico compartilhável.
 
 ## Painéis de Texto
 
@@ -15,9 +15,9 @@ Ferramentas & Comandos, Expressão, Pessoas Favoritas, Ranking):
 As abas de texto são painéis públicos duráveis controlados por quem as invocou. Elas ficam disponíveis
 até a mensagem ser removida, e outro usuário não pode operar os controles.
 
-- `/stats personal` — seu próprio uso.
-- `/stats persona` — uso de uma persona neste servidor.
-- `/stats server` — uso em todo o servidor.
+- `/stats personal`: seu próprio uso.
+- `/stats persona`: uso de uma persona neste servidor.
+- `/stats server`: uso em todo o servidor.
 
 A maioria suporta uma janela de **período de tempo**, e estatísticas pessoais podem ser limitadas a este servidor ou
 a todos os servidores.
@@ -33,9 +33,9 @@ cotas de nível gratuito, etc.).
 
 `/stats generate` renderiza um cartão de imagem elegante que você pode enviar no chat:
 
-- **Personal Wrapped** — sua atividade pessoal, no estilo Spotify Wrapped.
-- **Persona Affinity** — estatísticas de uma persona neste servidor.
-- **Server Leaderboard** — classificações gerais do servidor.
+- **Personal Wrapped**: sua atividade pessoal, no estilo Spotify Wrapped.
+- **Persona Affinity**: estatísticas de uma persona neste servidor.
+- **Server Leaderboard**: classificações gerais do servidor.
 
 Usuários totalmente privados (`/personal config`) não podem gerar cartões pessoais.
 

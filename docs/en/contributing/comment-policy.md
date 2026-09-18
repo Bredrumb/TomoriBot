@@ -202,7 +202,13 @@ bun run audit-comments
 `audit-comments` reports subjective narration candidates across the existing tree without
 failing. The deterministic rules, `prose-dash` included, fail regardless of audit mode; under
 `src/locales/` `prose-dash` reads string literals rather than comments, since the prose there is
-the shipped text. It runs as a non-blocking warning under the Documentation section of `bun run vl`,
+the shipped text.
+
+`prose-dash` also reads Markdown under `docs/`, where the authored text is the product. Every
+locale is translated from these pages, so a dash left here propagates into each new language.
+The scanner skips the places a dash is data rather than prose: fenced code blocks, inline code
+spans, URLs and link targets, CLI flags written outside a span, Discord's `-# ` subtext marker,
+and a lone dash marking an empty table cell. Prose elsewhere on such a line still reports. It runs as a non-blocking warning under the Documentation section of `bun run vl`,
 so contributors can see policy drift without needing to resolve heuristic findings as part
 of unrelated work. It remains separate from the normal test runner.
 

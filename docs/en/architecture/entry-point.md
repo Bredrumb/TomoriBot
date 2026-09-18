@@ -8,22 +8,22 @@ sidebar:
 
 ## Files
 
-- `src/index.ts` — orchestrator (calls init modules in order)
-- `src/init/backup.ts` — non-production automatic data backup gate
-- `src/init/healthServer.ts` — health HTTP server
-- `src/init/secrets.ts` — secrets loading + key manager init
-- `src/init/discord.ts` — Discord client construction + error handlers
-- `src/init/database.ts` — DB init, cooldown cleanup, pg_cron setup
-- `src/init/loaders.ts` — tool registry, localizer, caches, event handler
-- `src/init/bridges.ts` — Matrix bridge (optional)
-- `src/init/timers.ts` — health tracker, scheduled work, memory monitor, cache metrics, quota cleanup
-- `src/types/config.ts` — `AppConfig` interface + `resolveEnvironment()`
+- `src/index.ts`: orchestrator (calls init modules in order)
+- `src/init/backup.ts`: non-production automatic data backup gate
+- `src/init/healthServer.ts`: health HTTP server
+- `src/init/secrets.ts`: secrets loading + key manager init
+- `src/init/discord.ts`: Discord client construction + error handlers
+- `src/init/database.ts`: DB init, cooldown cleanup, pg_cron setup
+- `src/init/loaders.ts`: tool registry, localizer, caches, event handler
+- `src/init/bridges.ts`: Matrix bridge (optional)
+- `src/init/timers.ts`: health tracker, scheduled work, memory monitor, cache metrics, quota cleanup
+- `src/types/config.ts`: `AppConfig` interface + `resolveEnvironment()`
 
 ## Startup Sequence
 
 1. Load `.env` (`dotenv`); resolve `AppEnvironment`.
 2. In non-production: run the automatic data backup gate before secrets, Discord, or database initialization. It creates a full `backupData.ts`-compatible bundle when the latest data backup was made by another bot version or is older than `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (default 24). Only automatic bundles count toward `TOMORI_AUTO_BACKUP_MAX` retention (default 5); manual `bun run backup` bundles are never pruned by this gate.
-3. In production: bind health HTTP server on `$PORT` (default 8080) — returns 503 until Discord ready.
+3. In production: bind health HTTP server on `$PORT` (default 8080); returns 503 until Discord ready.
 4. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
 5. Construct Discord client with intents + sweepers; register process/client error handlers.
 6. Initialize database:
@@ -75,7 +75,7 @@ sidebar:
 
 ## Discord Client Configuration Notes
 
-- `GuildPresences` is a privileged intent resolved by `resolvePresenceIntentEnabled()` in `src/init/discord.ts`. Before the client is built, it probes `GET /applications/@me` and includes the intent only when Discord reports it as enabled (`ApplicationFlags.GatewayPresence` or `GatewayPresenceLimited`). This is self-resolving: the intent turns on automatically on the next restart once Discord approves it — no code or env change. If the probe fails (e.g. network error), it falls back to the legacy default: enabled outside production, disabled in production.
+- `GuildPresences` is a privileged intent resolved by `resolvePresenceIntentEnabled()` in `src/init/discord.ts`. Before the client is built, it probes `GET /applications/@me` and includes the intent only when Discord reports it as enabled (`ApplicationFlags.GatewayPresence` or `GatewayPresenceLimited`). This is self-resolving: the intent turns on automatically on the next restart once Discord approves it (no code or env change). If the probe fails (e.g. network error), it falls back to the legacy default: enabled outside production, disabled in production.
 - Consumers detect the intent at runtime via `client.options.intents.has(GatewayIntentBits.GuildPresences)` (see the participants context builder) and omit presence/status lines when it is absent, so toggling it needs no other code changes.
 - Sweeper configuration is enabled for message/user cache pressure control.
 - Gateway session lifecycle is logged at the rate-limit level for `shardReady`, `shardResume`, `shardDisconnect`, `shardReconnecting`, and `invalidated`, so a resumed session (which replays missed dispatches) is distinguishable from a fresh identify. `shardError` reports at error level once per shard per episode and at warn level for the repeats, because discord.js retries the handshake itself and one outage otherwise writes an identical `error_logs` row per attempt. The per-shard episode is cleared only on `shardReady` or `shardResume`: clearing it on a disconnect would re-arm error level for the next attempt of the same outage, which is exactly the repetition being absorbed.

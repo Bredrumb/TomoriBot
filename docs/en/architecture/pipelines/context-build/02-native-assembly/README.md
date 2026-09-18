@@ -6,14 +6,14 @@ sidebar:
 
 Fixed-order contributor pipeline. Each numbered file in this folder
 documents one contributor that appends to the shared `contextItems` list.
-Order is structural — it determines where each item appears in the LLM's
+Order is structural; it determines where each item appears in the LLM's
 prompt, and the LLM cares about that order.
 
 **File:** `src/utils/text/context/nativeBuilder.ts:27-320`
 
 ## Read order
 
-Walk the numbered files in sequence — they describe the prompt top-to-bottom
+Walk the numbered files in sequence; they describe the prompt top-to-bottom
 as the LLM will see it. The chat pipeline's
 [`buildChatTurnContext`](../../chat/06-per-turn/01-build-context) appends
 tail directives *after* this output, so the actual prompt the LLM sees is:
@@ -116,7 +116,7 @@ A grab-bag utility module split between two consumers:
   `getRenderedImageMessageIdsWithinWindow`,
   `isCountedRenderedImageAttachment`, `MEDIA_IMAGE_MESSAGE_LIMIT`,
   `pushDialogueHistoryContextItem`.
-- **Used by `participants.ts`** (stage 06): `getUserPresenceDetails` —
+- **Used by `participants.ts`** (stage 06): `getUserPresenceDetails` (
   formats Discord presence (online/idle/dnd, activities like Playing /
   Listening on Spotify / Watching / Competing) into a human-readable
   status string.
@@ -125,7 +125,7 @@ A grab-bag utility module split between two consumers:
 
 ## Extension points
 
-The native builder itself is **a fixed-order contributor sequence** — there
+The native builder itself is **a fixed-order contributor sequence**; there
 is no current registration mechanism for adding new contributors. The order
 matters (prompt at top, dialogue history at bottom) and changing it without
 the LLM noticing is unlikely.
@@ -139,7 +139,7 @@ form of either:
   emits its own context items and the runner appends them at the configured
   position.
 
-The individual contributors *do* have plugin-relevant seams — see each
+The individual contributors *do* have plugin-relevant seams; see each
 per-stage doc's "Extension points" section. Today's most plugin-relevant
 seams are the memory-type contributors (stages 03, 07, 09) and the
 asset-type contributors (stages 04, 05).

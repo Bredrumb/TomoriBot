@@ -33,7 +33,7 @@ Observações:
 - No **plano gratuito, apenas vozes pré-fabricadas funcionam**. Explore a
   [lista de vozes pré-fabricadas](https://elevenlabs-sdk.mintlify.app/voices/premade-voices).
 - Caracteres são contados quando ela gera e lê mensagens de voz; o nível gratuito tem
-  limites mensais — verifique seu painel do ElevenLabs.
+  limites mensais; verifique seu painel do ElevenLabs.
 - Respostas de voz são controladas por `voice_message_enabled` e exigem que a persona ativa tenha uma
   voz atribuída.
 - Persona > Voice no `/config` requer Gerenciar Servidor em uma guilda e permanece disponível para o dono em um workspace baseado em DM.
@@ -45,16 +45,16 @@ No `/help`, escolha **Features** e depois **Speech** para o mesmo passo a passo 
 Em uma instância de hospedagem própria, você pode executar um servidor local de clonagem de voz. O fluxo geral é:
 iniciar o servidor wrapper, registrar sua conexão e modelo com `/providers`, selecioná-lo com
 `/providers`, enviar uma amostra com `/config` em Models > TTS Parameters & Voices, e então atribuí-lo em
-Persona > Voice no `/config`. Qualquer formato de áudio é aceito (convertido automaticamente para WAV mono); clipes de 10–20
+Persona > Voice no `/config`. Qualquer formato de áudio é aceito (convertido automaticamente para WAV mono); clipes de 10-20
 segundos sem música de fundo funcionam melhor.
 
 Cada motor tem seu próprio guia de configuração:
 
-- [Chatterbox-Turbo/Nano](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/) — clonagem de voz rápida, apenas em inglês, com tags de evento suportadas como `[laugh]`.
-- [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/) — multilíngue (10 idiomas), além de um
+- [Chatterbox-Turbo/Nano](/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/): clonagem de voz rápida, apenas em inglês, com tags de evento suportadas como `[laugh]`.
+- [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/): multilíngue (10 idiomas), além de um
   modo VoiceDesign em linguagem natural.
-- [MOSS-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/moss/) — endpoint automático experimental para clonagem multilíngue ou design de voz em inglês/chinês.
-- [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/) — especializado em japonês, lê emojis
+- [MOSS-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/moss/): endpoint automático experimental para clonagem multilíngue ou design de voz em inglês/chinês.
+- [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/): especializado em japonês, lê emojis
   como pistas de emoção.
 
 Veja a [tabela comparativa de Texto-para-Fala](/pt-BR/self-hosting/local-endpoints/text-to-speech/) para a lista completa e orientações de hardware.
@@ -67,14 +67,14 @@ em segundo plano. Se as transcrições são **exibidas visivelmente** no chat é
 
 ### ElevenLabs (nuvem)
 
-Já coberto acima — adicionar o ElevenLabs a partir de `/providers` registra o endpoint de transcrição junto com o de
+Já coberto acima: adicionar o ElevenLabs a partir de `/providers` registra o endpoint de transcrição junto com o de
 fala. Use `/providers` para escolher entre endpoints de transcrição.
 
 ### Motores locais (hospedagem própria)
 
-- [WhisperX](/pt-BR/self-hosting/local-endpoints/speech-to-text/whisperx/) — o caminho local recomendado; ~100
+- [WhisperX](/pt-BR/self-hosting/local-endpoints/speech-to-text/whisperx/): o caminho local recomendado; ~100
   idiomas, acelerado por GPU, múltiplos tamanhos de modelo.
-- [KoboldCPP](/pt-BR/self-hosting/local-endpoints/speech-to-text/koboldcpp/) — funciona se sua build expõe um
+- [KoboldCPP](/pt-BR/self-hosting/local-endpoints/speech-to-text/koboldcpp/): funciona se sua build expõe um
   endpoint de transcrição compatível com OpenAI.
 - [whisper.cpp](/pt-BR/self-hosting/local-endpoints/speech-to-text/whispercpp/).
 

@@ -12,13 +12,13 @@ com o Modo de Gatilho Deliberado.
 
 Por padrão, ela responde quando você:
 
-- **Menciona ela** — `@TomoriBot`
+- **Menciona ela**: `@TomoriBot`
 - **Responde** a uma mensagem dela (incluindo uma mensagem de webhook de uma persona)
-- **Usa uma palavra-gatilho** — qualquer palavra simples que você registrou, dita em qualquer lugar de uma mensagem
-- **Usa `/respond`** — solicita uma resposta manualmente
+- **Usa uma palavra-gatilho**: qualquer palavra simples que você registrou, dita em qualquer lugar de uma mensagem
+- **Usa `/respond`**: solicita uma resposta manualmente
 
 Palavras-gatilho são o caminho mais conveniente: uma vez que uma palavra é registrada, basta
-mencioná-la para ativá-la. Em uma DM, é só dizer oi — nenhum gatilho é necessário.
+mencioná-la para ativá-la. Em uma DM, é só dizer oi; nenhum gatilho é necessário.
 
 ### Gerenciando Palavras-Gatilho
 
@@ -46,21 +46,21 @@ Configure os canais na página de Regras de Canal em `/config`.
 ## Consciência Situacional
 
 Além do texto da mensagem, ela recebe um panorama do contexto do Discord toda vez que
-responde — assim ela pode falar sobre *onde* e *quando* a conversa está acontecendo, não
+responde; assim ela pode falar sobre *onde* e *quando* a conversa está acontecendo, não
 apenas sobre o que foi dito. Esse contexto inclui:
 
-- **Onde ela está** — o nome e a descrição do servidor atual (ou que é uma Mensagem
+- **Onde ela está**: o nome e a descrição do servidor atual (ou que é uma Mensagem
   Direta), e o canal atual.
-- **A hora atual** — o horário local do servidor e a parte aproximada do dia, com base em
+- **A hora atual**: o horário local do servidor e a parte aproximada do dia, com base em
   `/config` > Engine > General, além do horário local de cada pessoa, se tiver configurado em `/personal config`.
-- **Quem está na conversa** — nomes de exibição dos participantes, como mencioná-los,
+- **Quem está na conversa**: nomes de exibição dos participantes, como mencioná-los,
   quaisquer tags de aparência física e seus lembretes pendentes.
-- **O que alguém está fazendo (presença)** — a atividade no Discord de um usuário: o que está **jogando**,
+- **O que alguém está fazendo (presença)**: a atividade no Discord de um usuário: o que está **jogando**,
   **transmitindo**, **ouvindo** (por exemplo, uma faixa e artista no Spotify), **assistindo** ou seu
   status personalizado.
 
 A presença é restringida por privacidade: só é compartilhada para usuários no nível de
-privacidade **Mínimo** (o padrão — veja `/personal config`) e somente quando o bot tem a intent
+privacidade **Mínimo** (o padrão; veja `/personal config`) e somente quando o bot tem a intent
 *Guild Presences* do Discord habilitada. Usuários que aumentam sua privacidade, ou instâncias
 de hospedagem própria executando sem essa intent, simplesmente não terão sua atividade
 revelada para ela.
@@ -69,11 +69,11 @@ revelada para ela.
 
 O gatilho automático permite que ela entre na conversa sem ser chamada.
 
-- `/server autotrigger channels` — defina os canais onde ela responde sem menção.
-- `/server autotrigger threshold` — defina quantas mensagens se acumulam antes de ela se manifestar.
+- `/server autotrigger channels`: defina os canais onde ela responde sem menção.
+- `/server autotrigger threshold`: defina quantas mensagens se acumulam antes de ela se manifestar.
 - `/config` > Behavior > Trigger: adicione um gatilho automático probabilístico baseado em temporizador a um canal.
 - `/config` > Behavior > Trigger: remova um gatilho aleatório existente.
-- ~~`/natres` — temporização humanizada para respostas autônomas~~ a ser implementado
+- ~~`/natres`: temporização humanizada para respostas autônomas~~ a ser implementado
 
 Use isso em um canal dedicado de bate-papo onde você quer que ela pareça uma participante em
 vez de uma assistente convocada.
@@ -96,16 +96,16 @@ Isso força uma invocação deliberada em vez de uma ativação acidental.
 
 ### Controle do Servidor e Pessoal
 
-- `/server dtm` — administradores do servidor ativam/desativam o comportamento em todo o servidor.
-- `/personal config` — cada usuário substitui a configuração para si, com três modos:
-  - **off** — sempre permitir palavras-gatilho simples
-  - **follow** — usar a configuração do servidor
-  - **on** — sempre exigir invocação deliberada
+- `/server dtm`: administradores do servidor ativam/desativam o comportamento em todo o servidor.
+- `/personal config`: cada usuário substitui a configuração para si, com três modos:
+  - **off**: sempre permitir palavras-gatilho simples
+  - **follow**: usar a configuração do servidor
+  - **on**: sempre exigir invocação deliberada
 
 Em `/help`, escolha **Behavior** e depois **Deliberate Trigger Mode** para o mesmo resumo no Discord.
 
 :::note
-Não confunda **Modo de Gatilho Deliberado** (esta página — controla *como ela é acionada*) com
+Não confunda **Modo de Gatilho Deliberado** (esta página, controla *como ela é acionada*) com
 **Modo de Ferramenta Deliberada**, que controla *quais ferramentas são expostas ao modelo* em um
 determinado turno. Eles compartilham a abreviação "DTM" mas não têm relação. Veja
 [Ferramentas & Extensões](/pt-BR/features/capabilities/tools-and-extensions/#modo-de-ferramenta-deliberada).

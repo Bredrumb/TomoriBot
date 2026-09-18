@@ -23,14 +23,14 @@ outer lock instead of deadlocking on it.
 ## Input
 
 - `RunnableChatAdmission` (from stage 02).
-- `callback: (LockedChatTurn, startTyping) => Promise<T>` — receives the locked
+- `callback: (LockedChatTurn, startTyping) => Promise<T>`: receives the locked
   turn and a function that starts the typing keepalive.
-- `options: { handleStopResponse, processQueuedMessage }` — the coordinator's
+- `options: { handleStopResponse, processQueuedMessage }`: the coordinator's
   re-entry callbacks for stop-response and queued messages.
 
 ## Output
 
-`Promise<T>` — the callback's return value, pass-through.
+`Promise<T>`: the callback's return value, pass-through.
 
 The callback receives `LockedChatTurn`:
 
@@ -69,17 +69,17 @@ The callback receives `LockedChatTurn`:
 **Lock release (always runs via `finally`):**
 
 - Clears `isLocked`, `lockedAt`, all active-turn state.
-- Aborts `activeTurnAbortController` and clears `activeStreamKill` — ensures no
+- Aborts `activeTurnAbortController` and clears `activeStreamKill`; ensures no
   stale kill handles survive across turns.
 - Stops the typing keepalive.
 - Checks `StreamOrchestrator.getAndClearStopContext(channelId)`. If present,
   schedules `handleStopResponse(originalStopMessage, client)` via
-  `setImmediate` — stop-response generation runs *after* lock release so the
+  `setImmediate`: stop-response generation runs *after* lock release so the
   stop response itself can acquire the lock.
 - Pops the next message from `messageQueue` (FIFO). If present, schedules
   `processQueuedMessage(next)` via `setImmediate`. The `QueuedMessage` shape
   mirrors the cross-cutting fields of `TomoriChatInput` that affect *what* the
-  bot will say on replay — including reminder context
+  bot will say on replay, including reminder context
   (`reminderRecipientID`, `reminderData`) and the streaming-context overrides
   (`disableCrossChannelMessage`, `disableRecentMessageReplyTool`,
   `disableReminderTool`). Any new input field that influences generation must
@@ -105,7 +105,7 @@ After this stage's `finally` block runs:
 - `lockEntry.isLocked === false` for the duration between turn-sequences.
 - The Discord typing keepalive timer is cleared (`typingKeepaliveTimer ===
   null`).
-- The queued-message replay is **scheduled via `setImmediate`**, not awaited —
+- The queued-message replay is **scheduled via `setImmediate`**, not awaited:
   the current invocation returns before the next message is processed, so the
   call stack stays shallow even under heavy queue pressure.
 - A pending stop-response (if any) was scheduled *before* the queue replay, so
@@ -116,11 +116,11 @@ After this stage's `finally` block runs:
 `forceKillChannelStream(channelId)` is the single entry point for hard-killing
 an active turn. It does both:
 
-1. **Abort the turn controller** (`activeTurnAbortController.abort()`) — if a
+1. **Abort the turn controller** (`activeTurnAbortController.abort()`): if a
    tool is executing, the `killPromise` in `executeToolCall`'s race fires
    immediately, returning `{kind: "abort", status: "stopped_by_user"}`. The
    channel lock releases as normal via the `finally` block of `runWithChannelLock`.
-2. **Fire the stream kill callback** (`activeStreamKill(...)`) — if the LLM is
+2. **Fire the stream kill callback** (`activeStreamKill(...)`): if the LLM is
    mid-stream, this simultaneously calls `abortController.abort()` (cancels the
    HTTP request) and rejects the `Promise.race` in `streamOnce`. Explicit stop
    requests return `{status: "stopped_by_user"}`; SDK/stale-lock timeouts still
@@ -128,7 +128,7 @@ an active turn. It does both:
 
 `/kill` in `src/commands/kill.ts` additionally calls
 `StreamOrchestrator.requestStop` before `forceKillChannelStream`, and
-`clearChannelProcessingQueue` to drain the message queue — so neither the
+`clearChannelProcessingQueue` to drain the message queue, so neither the
 current turn nor any queued messages continue processing.
 
 While that stop request is pending, locked-channel admission ignores new
@@ -147,7 +147,7 @@ created in `acquireChannelLockForTurn` and cleared on release.
 
 ## Extension points
 
-**Internal — concurrency primitive.** The lock, queue, and typing-keepalive
+**Internal: concurrency primitive.** The lock, queue, and typing-keepalive
 mechanics are tightly coupled to Discord rate limits, the stream orchestrator's
 stop/follow-up signaling, and the recursive `tomoriChat()` re-entry pattern.
 Replacing this stage from a plugin would risk breaking those guarantees.
@@ -157,9 +157,9 @@ Replacing this stage from a plugin would risk breaking those guarantees.
 | Helper | What a plugin might do | Plugin-relevance |
 |---|---|---|
 | `enqueueBusyChannelMessage`, `queuePersonaJobsAtFront`, `queueStopResponseAtFront` | Add a new "queue at front" entry type | → plugin plan candidate; today these are call-site-specific |
-| `queueFollowUpForLockedTurn` | Change follow-up interrupt eligibility rules | Internal — coupled to `MAX_FOLLOW_UP_INTERRUPTS`, the tool-call-chain flag, and the cross-persona trigger guard (see `hasExplicitCrossPersonaTrigger` in `triggerProcessor.ts`) |
-| `requestNaturalStopForLockedTurn` | Add a new "soft stop" signal type | Internal — coupled to `StreamOrchestrator.requestStop` semantics |
-| `clearQueuedSelfReplyWork` | Customize what gets cleared on natural stop | Internal — coupled to `isSelfTriggerMessage` and persona-job semantics |
+| `queueFollowUpForLockedTurn` | Change follow-up interrupt eligibility rules | Internal: coupled to `MAX_FOLLOW_UP_INTERRUPTS`, the tool-call-chain flag, and the cross-persona trigger guard (see `hasExplicitCrossPersonaTrigger` in `triggerProcessor.ts`) |
+| `requestNaturalStopForLockedTurn` | Add a new "soft stop" signal type | Internal: coupled to `StreamOrchestrator.requestStop` semantics |
+| `clearQueuedSelfReplyWork` | Customize what gets cleared on natural stop | Internal: coupled to `isSelfTriggerMessage` and persona-job semantics |
 
 The lock's *policy* (timeout, typing interval, max follow-ups) is configurable
 via env vars; behaviour customization should go through that channel rather

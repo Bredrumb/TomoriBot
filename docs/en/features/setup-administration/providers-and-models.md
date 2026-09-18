@@ -11,7 +11,7 @@ specific model on that provider. You need at least one provider to use her at al
 ## API Keys
 
 Add a provider key during first-time setup with `/setup`, or later from `/providers` by choosing
-**Add New Provider**. Keys are **encrypted at rest** — no one, including server admins, can read
+**Add New Provider**. Keys are **encrypted at rest**, so no one, including server admins, can read
 them back.
 
 `/setup` asks how replies should reach a model before anything else, and the answer decides what it
@@ -39,7 +39,7 @@ provider for the exact walkthrough, or use these starting points:
 | **NVIDIA NIM** | Hosted text, embeddings, and image. | [NVIDIA Build](https://build.nvidia.com/) |
 | **Anthropic** | Claude models via the API (not Claude Code). | — |
 | **Z.ai** | GLM family. ⚠️ ToS restricts usage to coding/agent scenarios. | [Z.ai](https://z.ai/) |
-| **Vertex AI** | Google Cloud via `gcloud` ADC — best for locally-run/dev setups. | see below |
+| **Vertex AI** | Google Cloud via `gcloud` ADC (best for locally-run/dev setups). | see below |
 | **Vertex AI Express** | Google Cloud API-key BYOK (Preview, Gemini subset). | [Express Mode](https://console.cloud.google.com/expressmode) |
 | **Custom** | Any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, …). | see [Custom Endpoints](#custom-endpoints) |
 
@@ -62,7 +62,7 @@ the catalog default, so a retired default cannot prevent a valid credential from
 
 Brave Search is separate from your AI provider and only enhances web search (adds image,
 video, and news search). Set it with `/providers`. ⚠️ Brave includes $5/month
-free credit — set a $5 usage limit in the Brave dashboard to avoid charges.
+free credit, so set a $5 usage limit in the Brave dashboard to avoid charges.
 
 ## Choosing Models
 
@@ -79,14 +79,14 @@ the command interaction opens.
 After a provider is set, use `/config` > Models > Switch Models to choose the shared capability assignments.
 The six ordinary slots select model entries from provider catalogs:
 
-- `/config` > Models > Switch Models — the main chat model
-- `/config` > Models > Switch Models — a vision model (for reading images when the chat model can't)
-- `/config` > Models > Switch Models — embeddings for the [document knowledge base](/features/knowledge/memory/#document-knowledge-base-rag)
-- `/config` > Models > Switch Models — standard image generation (see [Image Generation](/features/capabilities/media-generation/image-generation/))
-- `/config` > Models > Switch Models — NovelAI image generation
-- `/config` > Models > Switch Models — video generation
-- `/config` > Models > Switch Models — text-to-speech (TTS) endpoint
-- `/config` > Models > Switch Models — speech-to-text (STT) endpoint
+- `/config` > Models > Switch Models: the main chat model
+- `/config` > Models > Switch Models: a vision model (for reading images when the chat model can't)
+- `/config` > Models > Switch Models: embeddings for the [document knowledge base](/features/knowledge/memory/#document-knowledge-base-rag)
+- `/config` > Models > Switch Models: standard image generation (see [Image Generation](/features/capabilities/media-generation/image-generation/))
+- `/config` > Models > Switch Models: NovelAI image generation
+- `/config` > Models > Switch Models: video generation
+- `/config` > Models > Switch Models: text-to-speech (TTS) endpoint
+- `/config` > Models > Switch Models: speech-to-text (STT) endpoint
 
 The first six entries choose model catalog records. The TTS and STT slots choose workspace-scoped
 endpoints instead, so they activate the selected endpoint rather than writing a model column. Register
@@ -98,11 +98,11 @@ You can also manage this server's backup keys for automatic failover and load ba
 
 ## Custom Endpoints
 
-Custom endpoints let you register self-hosted or proxy-backed services — Ollama, LM Studio,
-LiteLLM, vLLM, ComfyUI, local TTS/STT — as **labeled provider bundles**.
+Custom endpoints let you register self-hosted or proxy-backed services (Ollama, LM Studio,
+LiteLLM, vLLM, ComfyUI, local TTS/STT) as **labeled provider bundles**.
 
 - **Server scope:** open `/providers` for workspace endpoint registration and editing.
-- **Personal scope:** open `/personal providers` for personal model catalogs (just you — see
+- **Personal scope:** open `/personal providers` for personal model catalogs (just you: see
   [Personalization](/features/knowledge/personalization/#your-own-providers)). Personal speech endpoints
   are not selected from `/personal config`.
 
@@ -135,9 +135,9 @@ text models only; image, video, TTS, and STT capabilities are still registered i
 
 For full walkthroughs of running the servers, see:
 
-- [Setup: Local LLM](/self-hosting/local-endpoints/setup-local-llm/) — Ollama, KoboldCPP, LM Studio, vLLM, LiteLLM.
-- [Setup: ComfyUI](/self-hosting/local-endpoints/setup-comfyui/) — local image/video generation.
-- [Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/) — ChatGPT account / Codex CLI.
+- [Setup: Local LLM](/self-hosting/local-endpoints/setup-local-llm/): Ollama, KoboldCPP, LM Studio, vLLM, LiteLLM.
+- [Setup: ComfyUI](/self-hosting/local-endpoints/setup-comfyui/): local image/video generation.
+- [Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/): ChatGPT account / Codex CLI.
 
 ## Supported Providers
 

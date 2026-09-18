@@ -596,7 +596,7 @@ When sent in a message, pingable mentions (@user, @role, etc) present in this co
 
 ### TomoriBot convention: container titles
 
-TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H3 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine) — do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H3 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine); do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
 
 Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/discord/ui/interactionCore.ts`. The old embed title maps to the H3 title, the old embed description maps to a Text Display, and the old embed footer maps to muted `-#` subtext after a separator. When the memory/task body is truncated, the Secondary "Expand" button is rendered as an Action Row inside the same container; the ephemeral full-content reveal remains a separate classic embed reply.
 
@@ -751,7 +751,7 @@ Implementation notes:
 - Attachments on Components V2 messages do not render unless they are referenced by a component.
 - Webhook sends and edits through discord.js must also pass `withComponents: true`.
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
-- Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds — the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
+- Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds; the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
 
 ### Persistent panels and bounded workflows
 

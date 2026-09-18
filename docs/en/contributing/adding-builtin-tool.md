@@ -11,16 +11,16 @@ This guide walks through adding a new built-in tool that the LLM can call during
 2. Export a class that extends `BaseTool`.
 
 3. Define the required members:
-   - `name` — tool identifier (must be unique across all registered tools)
-   - `description` — what the tool does (shown to the LLM in the context)
-   - `category` — grouping label for logging and UI
-   - `parameters` — JSON Schema describing tool arguments
-   - `execute()` — async method that runs the tool and returns a result string
+   - `name`: tool identifier (must be unique across all registered tools)
+   - `description`: what the tool does (shown to the LLM in the context)
+   - `category`: grouping label for logging and UI
+   - `parameters`: JSON Schema describing tool arguments
+   - `execute()`: async method that runs the tool and returns a result string
 
 4. Define optional members when needed:
-   - `requiresFeatureFlag` — gate the tool behind a server config toggle
-   - `requiresPermissions` — restrict to certain Discord permission levels
-   - `requiresFollowUp` — signal that the tool result needs a follow-up generation turn
+   - `requiresFeatureFlag`: gate the tool behind a server config toggle
+   - `requiresPermissions`: restrict to certain Discord permission levels
+   - `requiresFollowUp`: signal that the tool result needs a follow-up generation turn
 
 5. Forward `context.abortSignal` to every HTTP call the tool makes:
    - Pass `signal: context.abortSignal` to raw `fetch` calls.
@@ -29,7 +29,7 @@ This guide walks through adding a new built-in tool that the LLM can call during
 
    This gives `/kill` true HTTP-level cancellation. Without it, the underlying request keeps running even after the turn is stopped.
 
-6. The tool is auto-discovered by `toolInitializer.ts` at startup — no manual registration is needed.
+6. The tool is auto-discovered by `toolInitializer.ts` at startup, so no manual registration is needed.
 
 ## Notes on Feature-Gated Tools
 
@@ -47,5 +47,5 @@ Then test the tool by prompting the bot in a way that triggers it and checking t
 
 ## Related Docs
 
-- [`docs/en/architecture/pipelines/tool-loop/`](../pipelines/tool-loop/) — how tools are dispatched and results assembled
-- [`docs/guides/adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) — gating a tool behind a feature flag
+- [`docs/en/architecture/pipelines/tool-loop/`](../pipelines/tool-loop/): how tools are dispatched and results assembled
+- [`docs/guides/adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/): gating a tool behind a feature flag

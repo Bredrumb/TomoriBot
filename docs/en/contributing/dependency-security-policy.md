@@ -86,7 +86,7 @@ no CVE assigned, in which case the GHSA ID is the identifier to use. Confirm wit
 
 ## Active exceptions
 
-### `GHSA-mwp4-54f8-5fhr` — ip-address Address4 octal parsing (high)
+### `GHSA-mwp4-54f8-5fhr`: ip-address Address4 octal parsing (high)
 
 - **Path:** `matrix-appservice-bridge > ip-cidr > ip-address`
 - **Why it cannot be fixed:** ip-address v10 removed `bigInteger()`, which ip-cidr depends on at
@@ -99,7 +99,7 @@ no CVE assigned, in which case the GHSA ID is the identifier to use. Confirm wit
 - **Retire when:** ip-cidr ships a release supporting ip-address >= 10.3.1. Then drop the entry
   from `auditIgnores.ts`, `validation.yml`, and `.trivyignore`.
 
-### `CVE-2026-25128` — fast-xml-parser (Trivy only)
+### `CVE-2026-25128`: fast-xml-parser (Trivy only)
 
 Required by AWS SDK v3, where upgrading to v5 breaks functionality. Input comes from trusted AWS
 endpoints. Tracked alongside the `@aws-sdk/xml-builder` patch that pins a fixed version in the

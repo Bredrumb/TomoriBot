@@ -19,8 +19,8 @@ otherwise the disposition reported by stage 02). A `"queued"` return means the
 message was accepted into live channel work, not discarded. The coordinator
 leaves queue callbacks attached, and the replayed invocation reports the
 eventual generation outcome. Callers that schedule work
-externally — notably the reminder processor (`src/timers/reminderProcessor.ts`)
-— inspect this return value to decide whether to delete the source DB row,
+externally (notably the reminder processor (`src/timers/reminderProcessor.ts`)
+) inspect this return value to decide whether to delete the source DB row,
 treat it as in-flight (queued), or leave it for the next reconcile cycle
 (ignore/blocked/error). The Discord `messageCreate` handler discards the value.
 
@@ -44,7 +44,7 @@ retry budget across restarts.
 
 ## Output
 
-`Promise<void>` — terminal stage. No further pipeline activity for this message.
+`Promise<void>`: terminal stage. No further pipeline activity for this message.
 
 ## Side effects
 
@@ -60,12 +60,12 @@ After this stage runs:
   message. An accepted `"queued"` admission has already enqueued work and is
   replayed by the channel-lock stage.
 - The original `messageCreate` event has been fully consumed.
-- Channel state (locks, queues, self-reply chain) is **not** mutated here —
+- Channel state (locks, queues, self-reply chain) is **not** mutated here;
   stage 02 made any required mutations already.
 
 ## Extension points
 
-**Internal — log-only terminal handler.** This is the natural seam if the
+**Internal: log-only terminal handler.** This is the natural seam if the
 project ever needs to:
 
 - Emit metrics (`disposition_count{disposition="blocked", reason="rate_limit"}`)
@@ -75,5 +75,5 @@ project ever needs to:
   dispositions with structured metadata
 
 For now, the stage is intentionally minimal. Plugins should not hook here
-unless they're adding orthogonal telemetry — disposition decisions belong in
+unless they're adding orthogonal telemetry: disposition decisions belong in
 stage 02 (or its helpers), not after the fact.

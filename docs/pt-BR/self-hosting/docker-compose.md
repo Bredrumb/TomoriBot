@@ -6,7 +6,7 @@ sidebar:
 
 > **Aviso:** Esta tradução é fornecida para sua conveniência. A versão em inglês é a definitiva e prevalece.
 
-O Docker Compose compila e executa o TomoriBot **e também** o PostgreSQL como contêineres. Este é o terceiro caminho de instalação ao lado do [assistente de configuração](/pt-BR/self-hosting/setup-wizard/) e da [configuração manual](/pt-BR/self-hosting/manual-setup/) — escolha-o se você preferir rodar tudo no Docker em vez de instalar o Bun e o PostgreSQL no host. Ele **não** usa o assistente de configuração; a conexão com o banco de dados é configurada automaticamente para você.
+O Docker Compose compila e executa o TomoriBot **e também** o PostgreSQL como contêineres. Este é o terceiro caminho de instalação ao lado do [assistente de configuração](/pt-BR/self-hosting/setup-wizard/) e da [configuração manual](/pt-BR/self-hosting/manual-setup/): escolha-o se você preferir rodar tudo no Docker em vez de instalar o Bun e o PostgreSQL no host. Ele **não** usa o assistente de configuração; a conexão com o banco de dados é configurada automaticamente para você.
 
 :::caution[Scripts do host ainda precisam das ferramentas do host]
 Executar o bot e o banco de dados no Docker não conteineriza os scripts de manutenção.
@@ -38,10 +38,10 @@ Em seguida, defina no mínimo:
 | `CRYPTO_SECRET` | Uma chave de criptografia de 32 caracteres usada para criptografar as chaves de API armazenadas. |
 | `POSTGRES_PASSWORD` | A senha do banco de dados. Todos os outros valores `POSTGRES_*` são configurados automaticamente. |
 
-Diferente do assistente de configuração, o Compose não gerará a `CRYPTO_SECRET` para você — defina-a você mesmo (qualquer string de 32 caracteres). Valores opcionais de ajuste podem ser copiados de `.env.optional.example`.
+Diferente do assistente de configuração, o Compose não gerará a `CRYPTO_SECRET` para você: defina-a você mesmo (qualquer string de 32 caracteres). Valores opcionais de ajuste podem ser copiados de `.env.optional.example`.
 
 :::note[A conexão com o banco de dados é automática]
-O serviço PostgreSQL do Compose é executado em modo de desenvolvimento (sem SSL) na rede interna do Docker, e a imagem empacotada já possui o `pgvector` e o `pg_cron` configurados — de modo que a memória baseada em documentos/RAG e a limpeza agendada funcionam de fábrica. Não defina `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` ou `POSTGRES_DB` no Compose; eles são gerenciados para você.
+O serviço PostgreSQL do Compose é executado em modo de desenvolvimento (sem SSL) na rede interna do Docker, e a imagem empacotada já possui o `pgvector` e o `pg_cron` configurados, de modo que a memória baseada em documentos/RAG e a limpeza agendada funcionam de fábrica. Não defina `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER` ou `POSTGRES_DB` no Compose; eles são gerenciados para você.
 :::
 
 ## 3. Compilar e executar
@@ -51,7 +51,7 @@ docker compose build   # primeira vez, ou após alterações de código/dependê
 docker compose up      # bot + banco de dados
 ```
 
-Para inicializações posteriores, apenas `docker compose up` é suficiente, a menos que você tenha alterado código ou dependências. Quando o bot estiver online, execute `/setup` no Discord para adicionar a chave da API do seu provedor de IA — veja o [Início Rápido](/pt-BR/introduction/quickstart/) para a parte do Discord.
+Para inicializações posteriores, apenas `docker compose up` é suficiente, a menos que você tenha alterado código ou dependências. Quando o bot estiver online, execute `/setup` no Discord para adicionar a chave da API do seu provedor de IA: veja o [Início Rápido](/pt-BR/introduction/quickstart/) para a parte do Discord.
 
 ## 4. Sidecars opcionais (Perfis do Compose)
 

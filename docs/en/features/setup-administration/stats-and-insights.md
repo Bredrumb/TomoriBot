@@ -5,7 +5,7 @@ sidebar:
 ---
 
 TomoriBot tracks usage so you can see who talks to whom, which personas and models get used,
-and what tools fire — then turn it into a shareable infographic.
+and what tools fire (then turn it into a shareable infographic).
 
 ## Text Dashboards
 
@@ -15,9 +15,9 @@ Tools & Commands, Expression, Favorite People, Leaderboard):
 Text tabs are durable public dashboards controlled by the invoker. They remain available
 until the message is removed, and another user cannot operate the controls.
 
-- `/stats personal` — your own usage.
-- `/stats persona` — a persona's usage on this server.
-- `/stats server` — server-wide usage.
+- `/stats personal`: your own usage.
+- `/stats persona`: a persona's usage on this server.
+- `/stats server`: server-wide usage.
 
 Most support a **timeframe** window, and personal stats can be scoped to this server or
 across all servers.
@@ -33,9 +33,9 @@ free-tier quotas, etc.).
 
 `/stats generate` renders a polished image card you can drop into chat:
 
-- **Personal Wrapped** — your personal activity, Spotify-Wrapped style.
-- **Persona Affinity** — a persona's stats on this server.
-- **Server Leaderboard** — server-wide standings.
+- **Personal Wrapped**: your personal activity, Spotify-Wrapped style.
+- **Persona Affinity**: a persona's stats on this server.
+- **Server Leaderboard**: server-wide standings.
 
 Fully-private users (`/personal config`) can't generate personal cards.
 

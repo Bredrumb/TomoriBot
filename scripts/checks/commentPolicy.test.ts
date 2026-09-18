@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { inspectCommentPolicySource } from "./checkCommentPolicy";
+import { collectMarkdownDashFindings, inspectCommentPolicySource } from "./checkCommentPolicy";
 
 describe("comment policy", () => {
   it("finds authored prose dashes without matching strings or regexes", () => {
@@ -259,5 +259,39 @@ describe("comment policy", () => {
     const findings = inspectCommentPolicySource("/**\n *\n */\nexport function value(): void {}\n");
 
     expect(findings.map((finding) => finding.rule)).toEqual(["orphaned-comment"]);
+  });
+});
+
+describe("markdown prose dashes", () => {
+  const linesFlagged = (...lines: string[]): number[] =>
+    collectMarkdownDashFindings(lines.join("\n"), "docs/en/example.md").map((finding) => finding.line);
+
+  it("flags authored prose", () => {
+    expect(linesFlagged("The cache is lazy — nothing sweeps it.")).toEqual([1]);
+  });
+
+  it("skips fenced blocks, which hold output copied from another system", () => {
+    expect(linesFlagged("```bash", "tomori — help", "```", "Prose — here")).toEqual([4]);
+  });
+
+  it("skips inline code, links, and CLI flags, where a dash is part of the value", () => {
+    expect(
+      linesFlagged(
+        "Pass `--flag — value` verbatim.",
+        "Run pip install --no-build-isolation now.",
+        "See [the guide](https://example.com/a — b) first.",
+        "Read https://example.com/a—b for context.",
+      ),
+    ).toEqual([]);
+  });
+
+  it("skips Discord's subtext marker but not prose on the same line", () => {
+    expect(linesFlagged("-# Subtext only")).toEqual([]);
+    expect(linesFlagged("-# Subtext — with prose")).toEqual([1]);
+  });
+
+  it("skips a lone dash marking an empty table cell but not prose beside it", () => {
+    expect(linesFlagged("| Env var | `RUN_ENV` | — | production only |")).toEqual([]);
+    expect(linesFlagged("| Relay | Bidirectional — images and files |")).toEqual([1]);
   });
 });
