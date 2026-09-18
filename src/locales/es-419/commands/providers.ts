@@ -1,6 +1,6 @@
 export default {
   providers: {
-    description: `Agrega, consulta, edita y elimina credenciales de proveedores, puntos de conexión y catálogos de modelos.`,
+    description: `Agrega, edita y elimina credenciales, endpoints y catálogos de modelos de proveedores.`,
     title: `Proveedores del servidor`,
     personal_title: `Proveedores personales`,
     selector_guidance: `**Selecciona** o **agrega** un proveedor o punto de conexión\nusando el menú desplegable a continuación.`,

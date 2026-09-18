@@ -1,6 +1,6 @@
 export default {
   help: {
-    description: `Explora guías de configuración, funciones, proveedores, memoria, comportamiento, herramientas, multimedia y puentes.`,
+    description: `Guías de configuración, funciones, proveedores, memoria, comportamiento, herramientas y multimedia.`,
     dashboard: {
       categories: {
         setup: `Configuración`,

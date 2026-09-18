@@ -76,6 +76,10 @@
     {
       "path": "view",
       "reason": "ComfyUI HTTP API route in the self-hosting help page, not a Discord command."
+    },
+    {
+      "path": "xx",
+      "reason": "Locale-code placeholder for the docs site's Cloudflare `_redirects` root pair, not a Discord command."
     }
   ]
 }

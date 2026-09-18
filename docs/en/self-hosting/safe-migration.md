@@ -8,7 +8,7 @@ When you `git pull` new code and restart TomoriBot, the bot automatically runs d
 
 ## Why this matters
 
-TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are **forward-only**: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's [design policy (OD-R-6)](../../plans/refactor/shared/open-decisions), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
+TomoriBot's migration runner (in `src/db/migrationRunner.ts`) executes all unapplied migrations in version order. Migrations are **forward-only**: if something goes wrong, the runner does not auto-rollback. Most migrations are safe expansions (new columns, new tables), but per the project's internal design policy (OD-R-6), destructive operations such as `DROP COLUMN` or `DROP TABLE` are permitted. If a destructive migration runs without a backup, you lose data permanently. When in doubt, back up first.
 
 ## Pre-pull checklist
 
@@ -229,6 +229,5 @@ The command runs the selected `.down.sql` files in **descending** version order 
 
 ## See also
 
-- [Database schema documentation](../systems/database-schema) — learn the current schema structure
-- [Design Decision OD-R-6 (Down-migration shape)](../../plans/refactor/shared/open-decisions.md#od-r-6-down-migration-shape) — technical rationale for migration safety policy
+- [Database schema documentation](../architecture/subsystems/database-schema): learn the current schema structure
 - [Bun documentation](https://bun.sh) — learn Bun runtime fundamentals

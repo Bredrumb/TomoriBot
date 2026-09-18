@@ -35,7 +35,7 @@ then `en-US`. It returns `null` when nothing matches, and the caller renders no 
 than an empty string.
 
 A missing entry is a deliberate, supported state. The English description shows, and no user sees a
-key path or a blank. Author descriptions for the surfaces a user picks from (`/model`, `/provider`,
+key path or a blank. Author descriptions for the surfaces a user picks from (`/model`, `/providers`,
 NovelAI presets, system prompt presets) and let the rest fall back.
 
 ## The Three Shared Catalogs

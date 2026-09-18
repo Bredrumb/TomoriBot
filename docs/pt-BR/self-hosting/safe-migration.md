@@ -8,7 +8,7 @@ Quando você faz `git pull` de um código novo e reinicia a TomoriBot, o bot exe
 
 ## Por que isso importa
 
-O executor de migração da TomoriBot (em `src/db/migrationRunner.ts`) executa todas as migrações não aplicadas na ordem de versão. As migrações são **somente para frente**: se algo der errado, o executor não faz a reversão automática. A maioria das migrações são expansões seguras (novas colunas, novas tabelas), mas de acordo com a [política de design (OD-R-6)](../../plans/refactor/shared/open-decisions.md#od-r-6-down-migration-shape) do projeto, operações destrutivas, como `DROP COLUMN` ou `DROP TABLE`, são permitidas. Se uma migração destrutiva for executada sem um backup, você perde dados permanentemente. Em caso de dúvida, faça o backup primeiro.
+O executor de migração da TomoriBot (em `src/db/migrationRunner.ts`) executa todas as migrações não aplicadas na ordem de versão. As migrações são **somente para frente**: se algo der errado, o executor não faz a reversão automática. A maioria das migrações são expansões seguras (novas colunas, novas tabelas), mas de acordo com a política de design interna (OD-R-6) do projeto, operações destrutivas, como `DROP COLUMN` ou `DROP TABLE`, são permitidas. Se uma migração destrutiva for executada sem um backup, você perde dados permanentemente. Em caso de dúvida, faça o backup primeiro.
 
 ## Lista de verificação pré-pull
 
@@ -229,6 +229,5 @@ O comando executa os arquivos `.down.sql` selecionados em ordem de versão **dec
 
 ## Veja também
 
-- [Documentação do esquema de banco de dados](/en/systems/database-schema) — aprenda sobre a estrutura atual do esquema
-- [Decisão de Design OD-R-6 (Formato da down-migration)](../../plans/refactor/shared/open-decisions.md#od-r-6-down-migration-shape) — justificativa técnica para a política de segurança na migração
+- [Documentação do esquema de banco de dados](/en/architecture/subsystems/database-schema/): aprenda sobre a estrutura atual do esquema
 - [Documentação do Bun](https://bun.sh) — conheça os fundamentos do runtime do Bun

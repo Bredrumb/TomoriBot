@@ -16,7 +16,7 @@ export default {
       cleared_persona_description: `Se eliminó la imagen de referencia de personaje de NovelAI para **{persona_name}**.`,
     },
     usage: {
-      description: `Muestra el medidor de uso de generación Opus de NovelAI de este servidor (requiere Administrar Servidor).`,
+      description: `Medidor de uso de generación Opus de NovelAI del servidor (requiere Administrar servidor).`,
       title: `Uso de Generación Opus de NovelAI`,
       status_label: `Estado`,
       status_available: `Disponible`,
@@ -30,7 +30,7 @@ export default {
     generate: {
       description: `Genera imágenes y medios de NovelAI.`,
       image: {
-        description: `Genera una imagen de NovelAI usando etiquetas estilo imageboard y una referencia de personaje opcional.`,
+        description: `Genera una imagen de NovelAI con etiquetas estilo imageboard y referencia de personaje opcional.`,
         modal_title: `Generar Imagen de NovelAI`,
         prompt_label: `Etiquetas del Prompt`,
         prompt_modal_description: `Etiquetas estilo imageboard para la escena principal.`,

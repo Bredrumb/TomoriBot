@@ -70,6 +70,8 @@ interface CommandDescriptionViolation {
   value: string;
   length: number;
   locale: string;
+  /** Call sites or directories that register this description; absent for suffix-matched keys. */
+  files?: Set<string>;
 }
 
 /**
@@ -241,7 +243,7 @@ function _extractStringLengthViolations(
 /**
  * Loads all locale files and extracts available keys
  */
-async function loadAvailableKeys(): Promise<{
+export async function loadAvailableKeys(): Promise<{
   availableKeys: Set<string>;
   localeKeys: Map<string, Set<string>>;
 }> {
@@ -918,6 +920,144 @@ export async function checkMessageComponentUsageLengths(
           locale: localeName,
           files: new Set(usage.files),
         });
+      }
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Discord caps every command, subcommand, subcommand-group, and option description at 100
+ * characters, and `setDescriptionLocalizations` throws `Invalid string length` past it. That
+ * throw aborts the whole command module load instead of degrading, so one overlong translation
+ * silently unregisters the command for every locale.
+ */
+const REGISTERED_DESCRIPTION_MAX_LENGTH = 100;
+
+/**
+ * Collects the description keys `commandLoader` hands to Discord, mapped to the source that
+ * produces each one.
+ *
+ * Two origins, because the loader builds command metadata from two places. Command, subcommand,
+ * and option descriptions come from `setDescription(localizer("en-US", key))` call sites inside
+ * `src/commands/`. Category and subcommand-group descriptions have no call site at all: the
+ * loader derives them from the directory layout, so they are re-derived here the same way.
+ *
+ * The literal `"en-US"` is the discriminator. A builder's base description must be English
+ * whatever locale the caller is in, so embed prose in the same files passes the runtime `locale`
+ * variable instead and is correctly skipped; embed descriptions cap at 4096, not 100.
+ */
+export async function extractRegisteredDescriptionKeys(): Promise<Map<string, Set<string>>> {
+  const keys = new Map<string, Set<string>>();
+
+  const add = (key: string, source: string): void => {
+    let sources = keys.get(key);
+    if (!sources) {
+      sources = new Set();
+      keys.set(key, sources);
+    }
+    sources.add(source);
+  };
+
+  const commandsPath = join(process.cwd(), "src", "commands");
+
+  const glob = new Glob("**/*.ts");
+  for await (const file of glob.scan(commandsPath)) {
+    let content: string;
+    try {
+      content = await readFile(join(commandsPath, file), "utf-8");
+    } catch {
+      continue;
+    }
+
+    // Glob yields the host separator, and these strings are printed in gate output that a
+    // reader pastes back as a path, so normalize to the repo-relative POSIX form.
+    const source = `src/commands/${file.split(/[\/]/).join("/")}`;
+
+    const pattern = /\.setDescription\s*\(\s*localizer\s*\(\s*"en-US"\s*,\s*"([a-zA-Z0-9._-]+)"/g;
+    let match: RegExpExecArray | null = pattern.exec(content);
+    while (match !== null) {
+      add(match[1], source);
+      match = pattern.exec(content);
+    }
+  }
+
+  for (const entry of await readdir(commandsPath, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+
+    const categoryName = entry.name;
+    add(`commands.${categoryName}.description`, `src/commands/${categoryName}/`);
+
+    for (const child of await readdir(join(commandsPath, categoryName), { withFileTypes: true })) {
+      if (!child.isDirectory()) continue;
+      add(`commands.${categoryName}.${child.name}.description`, `src/commands/${categoryName}/${child.name}/`);
+    }
+  }
+
+  // `resolveRootDescriptionKey()` swaps /legal's root description for this one when the
+  // NovelAI-gated leaves are disabled, so it reaches Discord on a subset of deployments only.
+  add("commands.legal.license-only.description", "src/utils/discord/commandLoader.ts");
+
+  return keys;
+}
+
+/**
+ * The length rule for a single registered description, isolated from locale loading so the
+ * boundary values stay directly assertable.
+ *
+ * Empty is a violation rather than a skip: `setDescription("")` on the en-US base fails the same
+ * shapeshift assertion as an overlong string.
+ */
+export function findRegisteredDescriptionViolation(
+  key: string,
+  value: string,
+  locale: string,
+  files?: Set<string>,
+): CommandDescriptionViolation | null {
+  const length = getDiscordTextLength(value);
+  if (length > 0 && length <= REGISTERED_DESCRIPTION_MAX_LENGTH) return null;
+  return { key, value, length, locale, files };
+}
+
+/**
+ * Validates every traced registered description in every locale.
+ *
+ * A key absent from a locale is skipped: the loader omits that locale from the localizations map
+ * rather than throwing, and parity reporting already owns missing keys. An empty string is not
+ * skipped, because `setDescription("")` on the en-US base fails the same shapeshift assertion as
+ * an overlong one.
+ */
+export async function checkRegisteredDescriptionLengths(
+  registeredKeys: Map<string, Set<string>>,
+  localeKeys: Map<string, Set<string>>,
+): Promise<CommandDescriptionViolation[]> {
+  const violations: CommandDescriptionViolation[] = [];
+
+  for (const [localeName, keysInLocale] of localeKeys) {
+    let stringValues: Map<string, string>;
+    try {
+      const localeObject = await loadMergedLocale(localeName);
+      stringValues = extractStringValues(localeObject);
+    } catch (error) {
+      log.error(`Failed to load locale for registered description check: ${localeName}`, error);
+      continue;
+    }
+
+    const seen = new Set<string>();
+
+    for (const [key, sources] of registeredKeys) {
+      // Aliases are checked alongside the key itself rather than instead of it: the loader may
+      // resolve either, and both shapes are genuine command descriptions.
+      for (const candidate of [key, ...getLocalizationAliases(key)]) {
+        if (seen.has(candidate) || !keysInLocale.has(candidate)) continue;
+        seen.add(candidate);
+
+        const value = stringValues.get(candidate);
+        if (value === undefined) continue;
+
+        const violation = findRegisteredDescriptionViolation(candidate, value, localeName, new Set(sources));
+        if (violation) violations.push(violation);
       }
     }
   }
@@ -1659,7 +1799,11 @@ export async function analyzeLocalizationKeys(): Promise<AnalysisResult> {
   const parityIssues = checkLocaleParity(localeKeys);
   const modalTitleViolations = await checkModalTitleLengths(localeKeys);
   const modalDescriptionViolations = await checkModalDescriptionLengths(localeKeys);
-  const commandDescriptionViolations = await checkCommandDescriptionLengths(localeKeys);
+  const registeredDescriptionKeys = await extractRegisteredDescriptionKeys();
+  const commandDescriptionViolations = [
+    ...(await checkCommandDescriptionLengths(localeKeys)),
+    ...(await checkRegisteredDescriptionLengths(registeredDescriptionKeys, localeKeys)),
+  ];
   const modalUsages = await extractModalComponentUsages();
   const modalUsageViolations = await checkModalComponentUsageLengths(modalUsages, localeKeys);
   const messageUsages = await extractMessageComponentUsages();
@@ -1880,12 +2024,15 @@ function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }
   if (results.commandDescriptionViolations.length > 0) {
     console.log("\n📏 COMMAND DESCRIPTION LENGTH VIOLATIONS (Must be 1-100 characters for Discord):");
     console.log("-".repeat(60));
-    for (const { key, value, length, locale } of results.commandDescriptionViolations.sort((a, b) =>
+    for (const { key, value, length, locale, files } of results.commandDescriptionViolations.sort((a, b) =>
       a.key.localeCompare(b.key),
     )) {
       const status = length < 1 ? "Empty" : "Too long";
       console.log(`  ⚠️  ${key} [${locale}]`);
       console.log(`     ❌ ${status}: "${value}" (${length} characters)`);
+      if (files && files.size > 0) {
+        console.log(`     📁 Registered from: ${Array.from(files).slice(0, 2).join(", ")}${files.size > 2 ? "..." : ""}`);
+      }
     }
   }
 
@@ -1940,7 +2087,11 @@ async function runStrictLengthsOnly(verboseOutput: boolean): Promise<void> {
   const { localeKeys } = await loadAvailableKeys();
   const modalTitleViolations = await checkModalTitleLengths(localeKeys);
   const modalDescriptionViolations = await checkModalDescriptionLengths(localeKeys);
-  const commandDescriptionViolations = await checkCommandDescriptionLengths(localeKeys);
+  const registeredDescriptionKeys = await extractRegisteredDescriptionKeys();
+  const commandDescriptionViolations = [
+    ...(await checkCommandDescriptionLengths(localeKeys)),
+    ...(await checkRegisteredDescriptionLengths(registeredDescriptionKeys, localeKeys)),
+  ];
   const modalUsages = await extractModalComponentUsages();
   const modalUsageViolations = await checkModalComponentUsageLengths(modalUsages, localeKeys);
   const messageUsages = await extractMessageComponentUsages();
@@ -1955,7 +2106,7 @@ async function runStrictLengthsOnly(verboseOutput: boolean): Promise<void> {
 
   if (total === 0) {
     console.log(
-      `✅ Discord length limits OK (titles, descriptions, command descriptions, ${modalUsages.size} traced modal slots, ${messageUsages.size} traced message slots)`,
+      `✅ Discord length limits OK (titles, descriptions, ${registeredDescriptionKeys.size} registered command descriptions, ${modalUsages.size} traced modal slots, ${messageUsages.size} traced message slots)`,
     );
     return;
   }
