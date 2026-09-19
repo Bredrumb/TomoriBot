@@ -16,6 +16,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Equilibrada e relaxada, uma predefinição versátil e confiável para roleplay natural.",
           "es-419": "Equilibrado y relajado, preajuste confiable para roleplay natural.",
           "zh-TW": "均衡放鬆、穩定可靠的全方位預設集，適合自然的角色扮演。",
+          vi: "Cân bằng và thư thái, preset đa năng tin cậy cho nhập vai tự nhiên.",
         },
         parameters: {
           order: [2, 3, 0, 4, 1],
@@ -49,6 +50,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Focada e precisa, temperatura menor com Typical Sampling para prosa firme e disciplinada.",
           "es-419": "Preciso y enfocado, con menor temperatura y Typical Sampling para prosa firme.",
           "zh-TW": "俐落專注，以較低溫度和 Typical Sampling 換取沉穩有紀律的文筆。",
+          vi: "Sắc nét và tập trung, nhiệt độ thấp cùng Typical Sampling cho văn phong ổn định, kỷ luật.",
         },
         parameters: {
           order: [5, 0, 1, 3],
@@ -81,6 +83,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Suave e realista, mistura top-K e tail-free para narração natural e consistente.",
           "es-419": "Suave y estable, combina top-K y tail-free para una narración natural.",
           "zh-TW": "平順扎實，混合 top-K 與 tail-free，故事敘述一致而自然。",
+          vi: "Mượt mà và thực tế, kết hợp top-K và tail-free cho lời kể nhất quán, tự nhiên.",
         },
         parameters: {
           order: [0, 1, 2, 3],
@@ -112,6 +115,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Combate repetições, penalidade de frase agressiva mantém as respostas variadas.",
           "es-419": "Combate repeticiones con una penalización agresiva para respuestas variadas.",
           "zh-TW": "大膽對抗重複，極強烈的片語重複懲罰讓輸出保持新鮮多變。",
+          vi: "Chống lặp mạnh mẽ, phạt lặp cụm từ quyết liệt giúp kết quả luôn tươi mới và đa dạng.",
         },
         parameters: {
           order: [2, 3, 1, 0],
@@ -144,6 +148,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Amostragem Mirostat, experimental para respostas cósmicas e imprevisíveis.",
           "es-419": "Muestreo de entropía Mirostat para resultados cósmicos e impredecibles.",
           "zh-TW": "Mirostat 熵取樣，實驗性的熵取樣器，輸出難以預測、天馬行空。",
+          vi: "Lấy mẫu entropy mirostat, bộ lấy mẫu theo entropy cho kết quả biến hóa, kỳ ảo.",
         },
         parameters: {
           order: [8, 5, 0, 3],
@@ -176,6 +181,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Leve e limpa, respostas top-K com penalidade mínima de repetição de frase.",
           "es-419": "Ligero y limpio, con salidas top-K frescas y mínima penalización de repetición.",
           "zh-TW": "輕盈乾淨，以最低的片語重複懲罰換取更清新的 top-K 輸出。",
+          vi: "Nhẹ nhàng và trong trẻo, kết quả top-K tươi mới với phạt lặp cụm từ tối thiểu.",
         },
         parameters: {
           order: [0, 1, 2, 3],
@@ -208,6 +214,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Mirostat de alta energia, dinâmico e criativo (temp 1.5) com forte antirrepetição.",
           "es-419": "Mirostat enérgico y creativo (temp. 1.5) con fuerte control de repeticiones.",
           "zh-TW": "高能量的 Mirostat 寫手，溫度 1.5 下創意奔放，並具備強力反重複。",
+          vi: "Viết bằng mirostat giàu năng lượng, sáng tạo ở nhiệt độ 1.5 cùng khả năng chống lặp mạnh.",
         },
         parameters: {
           order: [0, 8, 5, 3],
@@ -240,6 +247,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Mistura de amostradores top-K/P/A/Typical para rica variedade de narração.",
           "es-419": "Mezcla top-K/P/A/Typical para una gran variedad narrativa.",
           "zh-TW": "多取樣器混合，層層疊上 top-K、P、A 與 Typical，敘事變化豐富。",
+          vi: "Phối hợp nhiều bộ lấy mẫu, xếp tầng top-K/P/A/Typical cho lời kể phong phú.",
         },
         parameters: {
           order: [0, 4, 1, 2, 5, 3],
@@ -274,6 +282,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Narrativa refinada, ajustada para qualidade de prosa (top-A e Typical Sampling).",
           "es-419": "Narrativa refinada, optimizada para prosa de calidad con top-A y Typical Sampling.",
           "zh-TW": "精煉的敘事，以 top-A 與 Typical Sampling 調校出優異的書面文筆。",
+          vi: "Lời văn trau chuốt, tinh chỉnh cho văn xuôi bằng top-A và Typical Sampling.",
         },
         parameters: {
           order: [3, 4, 5, 0],
@@ -306,6 +315,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Caos máximo (temp 2.5) para textos extremamente experimentais e imprevisíveis.",
           "es-419": "Caos máximo, temperatura muy alta (2.5) para texto experimental e impredecible.",
           "zh-TW": "極度混亂，溫度 2.5 帶來最實驗、最難以預測的文字。",
+          vi: "Hỗn loạn tối đa, nhiệt độ rất cao (2.5) cho văn bản giàu tính thử nghiệm và khó đoán.",
         },
         parameters: {
           order: [3, 0, 5],
@@ -336,6 +346,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Calma e suave, top-A e Typical com guarda de frase agressiva para saídas tranquilas.",
           "es-419": "Tranquilo y suave, top-A y Typical con control agresivo de frases.",
           "zh-TW": "安靜柔和，以 top-A、Typical 與強烈的片語防護換取平靜的輸出。",
+          vi: "Yên tĩnh và êm dịu, top-A và Typical cùng khả năng chặn lặp cụm từ cho kết quả êm ả.",
         },
         parameters: {
           order: [5, 0, 4],
@@ -367,6 +378,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Afiada e precisa, temperatura baixa (0.895) para respostas determinísticas.",
           "es-419": "Agudo y preciso, temperatura muy baja (0.895) para respuestas deterministas.",
           "zh-TW": "銳利精準，極低溫（0.895）帶來高度確定、聚焦的回覆。",
+          vi: "Sắc bén và chính xác, nhiệt độ rất thấp (0.895) cho phản hồi tập trung, tính xác định cao.",
         },
         parameters: {
           order: [0, 5],
@@ -396,6 +408,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           ja: "デーモン駆動のミロスタット。高エントロピーの包括的マルチサンプラーでクリエイティブライティングに最適。",
           "es-419": "Mirostat impulsado por daemon, con alta entropía para escritura creativa.",
           "zh-TW": "由 Daemon 驅動的 Mirostat，高熵的完整多取樣器組合，適合創意寫作。",
+          vi: "Mirostat điều khiển bởi daemon, lấy mẫu đa năng entropy cao cho viết sáng tạo.",
         },
         parameters: {
           order: [8, 0, 5, 3, 2, 4],
@@ -431,6 +444,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Estilo romance, Shosetsu (小説) ajustado para narrativa estruturada e controle de repetição.",
           "es-419": "Estilo novela, Shosetsu (小説) para narrativa estructurada y control de repeticiones.",
           "zh-TW": "小說風格，Shosetsu（小説）調校出結構完整的敘事與強力重複控制。",
+          vi: "Văn phong tiểu thuyết, Shosetsu (小説) tinh chỉnh cho tự sự có cấu trúc, kiểm soát lặp.",
         },
         parameters: {
           order: [9, 10],
@@ -467,6 +481,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Vívida, cadeia complexa de amostradores com mirostat para prosa colorida e elaborada.",
           "es-419": "Vívido, con cadena compleja de muestreo y mirostat para prosa elaborada y colorida.",
           "zh-TW": "鮮活多彩，複雜的取樣器鏈搭配 Mirostat，文筆精緻絢麗。",
+          vi: "Sống động và sắc sảo, chuỗi lấy mẫu phức tạp với mirostat cho văn phong trau chuốt, rực rỡ.",
         },
         parameters: {
           order: [0, 5, 9, 10, 8, 4],
@@ -503,6 +518,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Clássica e equilibrada, tail-free padrão para uma narrativa coerente e fluida.",
           "es-419": "Clásico y equilibrado, tail-free estándar para narrativa coherente y fluida.",
           "zh-TW": "經典均衡，標準 tail-free 取樣，敘事連貫流暢。",
+          vi: "Cổ điển và cân bằng, tail-free sampling chuẩn cho lời văn mạch lạc, trôi chảy.",
         },
         parameters: {
           order: [9, 2],
@@ -539,6 +555,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Selvagem e expansiva, alto top-K (300) para resultados mais aventureiros.",
           "es-419": "Salvaje y amplio, top-K alto (300) para resultados variados y aventureros.",
           "zh-TW": "狂野奔放，高 top-K（300）帶來更多變化與冒險感的輸出。",
+          vi: "Phóng khoáng và rộng mở, top-K cao (300) cho kết quả đa dạng và phiêu lưu hơn.",
         },
         parameters: {
           order: [9, 10],
@@ -575,6 +592,7 @@ export const naiPresetSections: CatalogSection<NaiPresetInput>[] = [
           "pt-BR": "Excêntrica, altas penalidades de presença/frequência para máxima variedade.",
           "es-419": "Excéntrico e impredecible, con altas penalizaciones para máxima variedad.",
           "zh-TW": "古怪難料，高頻率與存在懲罰讓輸出變化最大化。",
+          vi: "Biến ảo và khó đoán, phạt tần suất/hiện diện cao cho kết quả đa dạng tối đa.",
         },
         parameters: {
           order: [9, 2],

@@ -30,6 +30,11 @@ describe("official persona naming catalog", () => {
         suffixes: {},
         addressTerms: { masculine: "老哥", feminine: "老妹", neutral: "朋友" },
       },
+      "4:vi": {
+        prefixes: {},
+        suffixes: {},
+        addressTerms: { masculine: "bro", feminine: "chị", neutral: "anh em" },
+      },
       "50:en-US": {
         prefixes: { masculine: "Master", feminine: "Mistress", neutral: "Master" },
         suffixes: {},
@@ -51,21 +56,29 @@ describe("official persona naming catalog", () => {
         suffixes: {},
         addressTerms: {},
       },
+      "50:vi": {
+        prefixes: { masculine: "Cậu chủ", feminine: "Cô chủ", neutral: "Chủ nhân" },
+        suffixes: {},
+        addressTerms: {},
+      },
       "716:en-US": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:ja": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:pt-BR": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:es-419": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "716:zh-TW": { prefixes: {}, suffixes: {}, addressTerms: {} },
+      "716:vi": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "1770:en-US": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "1770:ja": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "1770:pt-BR": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "1770:es-419": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "1770:zh-TW": { prefixes: {}, suffixes: {}, addressTerms: {} },
+      "1770:vi": { prefixes: {}, suffixes: {}, addressTerms: {} },
       "3585:en-US": { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },
       "3585:ja": { prefixes: {}, suffixes: { neutral: "先輩" }, addressTerms: {} },
       "3585:pt-BR": { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },
       "3585:es-419": { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },
       "3585:zh-TW": { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },
+      "3585:vi": { prefixes: {}, suffixes: { neutral: "-senpai" }, addressTerms: {} },
     });
   });
 

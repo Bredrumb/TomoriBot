@@ -1,4 +1,4 @@
-## [English](../README.md) | [日本語](README_ja.md) | [Português (Brasil)](README_pt-BR.md) | 繁體中文
+## [English](../README.md) | [日本語](README_ja.md) | [Português (Brasil)](README_pt-BR.md) | [Español (Latinoamérica)](README_es-419.md) | 繁體中文 | [Tiếng Việt](README_vi.md)
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as

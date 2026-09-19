@@ -78,6 +78,15 @@ const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
     translatedBody:
       "Esta página é uma tradução por IA generativa da página em {english}. Consulte a página em inglês se algo não estiver claro.",
   },
+  "es-419": {
+    draftsTitle: "Aviso",
+    draftsBody:
+      "Esta página usa borradores temporales escritos y mantenidos por IA generativa. Consulta el código fuente si necesitas confirmar algún detalle.",
+    translatedTitle: "Sobre esta traducción",
+    englishLinkText: "inglés",
+    translatedBody:
+      "Esta página es una traducción por IA generativa de la página en {english}. Consulta la página en inglés si algo no queda claro.",
+  },
   "zh-TW": {
     draftsTitle: "免責聲明",
     draftsBody: "這一頁目前使用生成式 AI 撰寫與維護的臨時草稿。內容雖已確認正確，仍請對照原始碼再次查核。",
@@ -85,6 +94,15 @@ const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
     englishLinkText: "英文版",
     translatedBody:
       "這一頁是 {english}的生成式 AI 翻譯。翻譯僅為方便閱讀，內容以英文版為準，若有不清楚的地方請查看英文頁面。",
+  },
+  vi: {
+    draftsTitle: "Miễn trừ trách nhiệm",
+    draftsBody:
+      "Trang này sử dụng bản nháp tạm thời do AI tạo sinh viết và duy trì. Dù đã được xác minh tính chính xác, bạn vui lòng đối chiếu lại với mã nguồn.",
+    translatedTitle: "Về bản dịch này",
+    englishLinkText: "tiếng Anh",
+    translatedBody:
+      "Trang này là bản dịch bằng AI tạo sinh từ trang {english}. Hãy kiểm tra trang tiếng Anh nếu có điều gì chưa rõ.",
   },
 };
 
@@ -160,7 +178,7 @@ export const DOCS_LOCALES = [
     botLocaleCode: "vi",
     lang: "vi",
     label: "Tiếng Việt",
-    docsTree: false,
+    docsTree: true,
     descriptionMaxLength: 160,
   }),
   defineDocsLocale({

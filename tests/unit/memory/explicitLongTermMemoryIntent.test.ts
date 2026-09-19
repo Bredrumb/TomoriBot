@@ -90,6 +90,36 @@ const ES_419_PHRASES = [
   "anota que*",
   "para futuras conversaciones",
 ];
+const VI_PHRASES = [
+  "nhớ kỹ*",
+  "nho ky*",
+  "nhớ mãi*",
+  "nho mai*",
+  "nhớ chắc*",
+  "nho chac*",
+  "ghi nhớ kỹ*",
+  "ghi nho ky*",
+  "ghi nhớ mãi*",
+  "ghi nho mai*",
+  "khắc cốt*",
+  "khac cot*",
+  "đừng quên*",
+  "dung quen*",
+  "luôn nhớ*",
+  "luon nho*",
+  "lưu lâu dài*",
+  "luu lau dai*",
+  "lưu vĩnh viễn*",
+  "luu vinh vien*",
+  "lưu mãi*",
+  "luu mai*",
+  "từ nay về sau*",
+  "tu nay ve sau*",
+  "từ nay trở đi*",
+  "tu nay tro di*",
+  "từ giờ trở đi*",
+  "tu gio tro di*",
+];
 
 beforeAll(async () => {
   await initializeLocalizer();
@@ -106,6 +136,7 @@ describe("explicit long-term memory intent", () => {
           ...ZH_TW_PHRASES,
           ...PT_BR_PHRASES,
           ...ES_419_PHRASES,
+          ...VI_PHRASES,
         ]),
       ].sort(),
     );
@@ -119,6 +150,7 @@ describe("explicit long-term memory intent", () => {
       ...ZH_TW_PHRASES,
       ...PT_BR_PHRASES,
       ...ES_419_PHRASES,
+      ...VI_PHRASES,
     ]) {
       expect(hasExplicitLongTermMemoryIntent(`ok ${phrase} this`)).toBe(true);
     }

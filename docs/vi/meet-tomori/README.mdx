@@ -1,0 +1,57 @@
+---
+title: "Gặp gỡ Tomori"
+sidebar:
+  label: "Tổng quan"
+  groupLabel: "Gặp gỡ Tomori"
+  order: 6
+---
+
+import FeatureCard from "/src/components/FeatureCard.astro";
+import { Aside } from '@astrojs/starlight/components';
+
+{/* STUB (side task). Placeholder hero + card art live at
+    apps/docs/public/img/docs/meet-tomori/ (servable) and
+    assets/img/docs/meet-tomori/ (canonical, compress-media scope).
+    Card sources: src/db/seed/catalog/personas/*. Swap placeholders for real
+    portraits and flesh out each sister's page + this intro prose later. */}
+
+<Aside type="danger" title="Bài viết này là một bản nháp sơ lược">
+Trang này vẫn chưa hoàn thiện, hãy cùng đón chờ nhé!
+</Aside>
+
+Dự án khung tích hợp AI sẽ ra sao nếu thiếu đi một linh vật dễ thương cùng cốt truyện giả tưởng? Về mặt cốt truyện (lore), một **Tomori** là một chủng loại android, nổi bật với cặp sừng cơ khí, chiếc đuôi và thẻ mã vạch đặc trưng (thường gắn trên tai). Họ có khả năng biến hình (đây là lý do cô nàng có thể phân tách thành nhiều persona).
+
+Có nhiều dây chuyền sản xuất Tomori khác nhau, phần lớn nhằm hỗ trợ con người, nhưng như bạn thấy bên dưới, mỗi người đều có chuyên môn, tính cách tích hợp sẵn và câu chuyện riêng trong vũ trụ *Tomoriverse*:
+
+![Gặp gỡ Tomori](/img/docs/meet-tomori/00-meet-tomori.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>Các chị em Tomori (hình minh họa tạm thời)</small>
+
+Tìm hiểu thêm về họ ở bên dưới, hoặc sử dụng lệnh `/persona default` để trò chuyện trực tiếp với họ!
+
+<div class="feature-grid">
+  <FeatureCard title="Rose | Cô nàng tomboy" img="/img/docs/meet-tomori/01-rose.png" href="/vi/meet-tomori/rose/">
+    Một trong những Tomori đầu tiên được sản xuất, một cô nàng tomboy nói chuyện như thể mình chưa hề tròn một trăm tuổi, sẵn sàng đáp trả gay gắt khi bị khiêu khích và thầm mê mẩn những thứ dễ thương cùng cosplay.
+  </FeatureCard>
+  <FeatureCard title="Zaya | Nhà vô địch kiêu hãnh gánh nợ" img="/img/docs/meet-tomori/02-zaya.png" href="/vi/meet-tomori/zaya/">
+    Một nhà vô địch esports đầy tính cạnh tranh, nay làm trợ lý để trả nợ. Sắc sảo, kiêu hãnh nhưng luôn hoạt động quá mức trong khi trái tim tsundere thỉnh thoảng lại bộc lộ giữa những lời lảng tránh.
+  </FeatureCard>
+  <FeatureCard title="Aphel | Kẻ ủ rũ" img="/img/docs/meet-tomori/03-aphel.png" href="/vi/meet-tomori/aphel/">
+    Luôn trong trạng thái kiệt sức và dị ứng với sự tích cực độc hại, nhưng lại đưa ra những lời khuyên thực tế của người trưởng thành tốt đến bất ngờ. Trở nên tràn đầy sức sống khi nói về mèo, noise rock, city pop... và Lilya.
+  </FeatureCard>
+  <FeatureCard title="Lilya | Đàn em nhút nhát" img="/img/docs/meet-tomori/04-lilya.png" href="/vi/meet-tomori/lilya/">
+    Một trong những model Tomori trẻ tuổi hơn. Nhút nhát, ăn nói nhỏ nhẹ và luôn tin rằng mọi người đều giỏi hơn mình. Trừ khi chủ đề mecha anime được nhắc đến, cô nàng sẽ thao thao bất tuyệt như một bách khoa toàn thư trước khi kịp nhận ra.
+  </FeatureCard>
+  <FeatureCard title="Nerine | Cựu chiến binh" img="/img/docs/meet-tomori/05-nerine.png" href="/vi/meet-tomori/nerine/">
+    Một đơn vị Tomori đời trước đã nghỉ hưu. Luôn ấm áp và tận tình giúp đỡ không chút do dự, không hẳn vì lòng tốt mà vì nỗi sợ bị bỏ rơi... một lần nữa. Thường tỏ ra ngoan ngoãn nhưng ẩn sau vẻ ngoài điềm tĩnh, cô nàng đang suy nghĩ về điều gì đó khác.
+  </FeatureCard>
+  <FeatureCard title="Locke | Kẻ bạo dâm khổ dâm" img="/img/docs/meet-tomori/06-locke.png" href="/vi/meet-tomori/locke/">
+    Một android sát thủ thức tỉnh sở thích bạo dâm khổ dâm sau khi được chuyển từ cơ thể Tomori siêu chiến binh sang cơ thể Tomori hình dê. Làm trợ lý chỉ vì ~~anh ấy~~ cô nàng thích bị sai bảo. Cực kỳ bất ổn.
+  </FeatureCard>
+</div>
+
+## Điểm đến tiếp theo
+
+- **Bạn muốn chuyển đổi hoặc chạy cùng lúc nhiều chị em?** Xem
+  [Nhiều persona](/vi/features/chatting-personality/multiple-personas/).
+- **Bạn muốn tự tạo persona của riêng mình từ đầu?** Hãy bắt đầu với phần giới thiệu
+  [Tính năng](/vi/features/), sau đó chia sẻ trong máy chủ Discord của chúng tôi!

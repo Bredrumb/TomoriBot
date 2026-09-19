@@ -12,6 +12,7 @@ export const systemPromptSections: CatalogSection<SystemPromptInput>[] = [
           "pt-BR": "Instruções mais longas para um melhor roleplay.",
           "es-419": "Instrucciones más extensas para un mejor roleplay.",
           "zh-TW": "更詳細的指示，讓角色扮演更到位。",
+          vi: "Hướng dẫn dài hơn để nhập vai tốt hơn.",
         },
         promptText: `{bot} only knows what {bot} would know. {bot} experiences the world through their senses, their history, their blind spots.
 
