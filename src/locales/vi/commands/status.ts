@@ -196,7 +196,7 @@ export default {
     field_optional_api_keys_with_count: `Khóa API tùy chọn ({count})`,
     field_saved_provider_configs_with_count: `Cấu hình nhà cung cấp đã lưu ({count})`,
     field_server_custom_endpoints_with_count: `Endpoint tùy chỉnh ({count})`,
-    field_mcp_servers_with_count: `Máy chủ MCP ({count})`,
+    field_mcp_servers_with_count: `MCP server ({count})`,
     field_matrix_links_with_count: `Liên kết Matrix ({count})`,
     field_hidden_notice_embeds_with_count: `Embed thông báo ẩn ({count})`,
     field_st_preset_active: `Preset ST đang hoạt động`,
