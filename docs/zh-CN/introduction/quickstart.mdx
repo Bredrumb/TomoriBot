@@ -1,0 +1,84 @@
+---
+title: "怎么使用 TomoriBot？"
+# Keyword-rich <title> targeting "add AI bot to Discord server" queries;
+# replaces Starlight's default for this page only. H1 and sidebar keep the
+# plain title.
+head:
+  - tag: title
+    content: "TomoriBot | 把一个 AI bot 加进你的 Discord 服务器"
+# Hand-written search snippet; overrides the auto-derived description from
+# routeData.ts middleware.
+description: "自己部署一套实例，或者把已部署好的版本邀请进你的 Discord 服务器，接入 AI API 密钥，然后开始聊天。"
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside } from "@astrojs/starlight/components";
+
+这份指南带你从零走到和 TomoriBot 说上第一句话。最省事的路子是邀请现成的公开实例（见[隐私政策](/zh-CN/legal/privacy-policy/)）。如果你更想自己跑一套，直接跳到最下面的[自部署](#自部署)。
+
+## 使用托管 bot
+
+### 第 1 步：邀请她
+
+用下面的按钮邀请公开实例，然后选一个你想让她进的服务器。添加 bot 需要**管理服务器**权限。
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **邀请 TomoriBot**
+  </LinkButton>
+</div>
+
+你也可以直接私信她。设置步骤是一样的。
+
+### 第 2 步：弄一把 API 密钥
+
+TomoriBot 自己不带 AI 大脑，你需要通过 **API 密钥**接入一个**提供方**。她支持很多提供方，而开始用只需要其中一个。下面是她现在支持的一些提供方：
+
+- **Google Gemini**：通用型，有免费档位，所有功能都能跑。第一次设置推荐用这个。
+- **OpenRouter**：一把密钥就能用到最新的文本、视频、图像、嵌入模型。
+- **NovelAI**：订阅制，无审查图像、角色扮演和故事创作。
+- **DeepSeek**、**NVIDIA NIM**、**Anthropic**、**Vertex AI**、**Z.ai**，或者任何 OpenAI 兼容的**自定义**端点。
+
+在 Discord 里运行 `/help`，选**设置**，再选**第 1 步：获取 API 密钥**，挑一个提供方就能看到怎么拿它的 API 密钥；完整列表也可以看[提供方与模型](/en/features/setup-administration/providers-and-models/#api-keys)。
+
+<Aside type="caution">
+**绝不要把 API 密钥分享给任何人**。只通过 TomoriBot 的斜杠指令提交，它会安全地保存并加密。
+</Aside>
+
+### 第 3 步：运行设置
+
+运行 `/setup`。它会打开一个只有你能操作的私密清单面板。逐项填完，然后按**完成设置**：
+
+- **AI 提供方**：选**AI 提供方（推荐）**，挑一个提供方，把密钥粘进去。高级自部署用户可以改选**自定义端点（高级）**，在这里登记自己端点的连接和文本模型；服务器也可以跑在**用户 BYOK**模式下（只能在服务器里，不能私信），让每位成员用自己的提供方。
+- **初始设置**：挑一个初始人格、一种回复风格、一个时区，以及默认系统提示词。
+- **政策**（仅托管实例）：在一个弹窗里接受服务条款和隐私政策。
+
+你操作的过程中什么都不会保存：面板只是草稿，**完成设置**才会加密密钥、为服务器初始化她的配置，并让她准备好开口说话。**取消**会丢弃草稿，一直没动的面板也会自己过期。每个服务器保留自己独立的配置。
+
+**推荐：**之后再运行 `/expressions initialize`，这样她才能准确用上你服务器的自定义表情和贴纸。
+
+### 第 4 步：开始聊天
+
+只要**提到**她，或者**回复**她的一条消息就行：
+
+```text
+@TomoriBot yo, what's up?
+```
+
+从这里开始，你可以塑造她怎么被触发、怎么表现：
+- 用 `/persona` 给她一个人格：见[多个人格](/en/features/chatting-personality/multiple-personas/)。
+- 用 `/memories` 教导她：见[记忆](/en/features/knowledge/memory/)。
+- 探索其他自定义选项：见[指令参考](/en/features/command-reference/)或[功能](/en/features/)。
+
+在托管实例上，设置 TomoriBot 意味着你和你的服务器成员同意她的 `/legal terms-of-service` 和 `/legal privacy-policy` 提示；引导式设置会让你接受这两项。这两条指令，以及承载它们的「政策」步骤，都属于托管部署。自部署实例在每个环境都会注册 `/legal license`，而政策那两条只在 `RUN_ENV=production` 下注册。
+
+## 自部署
+
+想完全掌控你的数据、模型和 API 密钥？你可以在自己的硬件上跑一套 TomoriBot。推荐的路子是跟着引导式设置向导走。
+
+<div class="button-row">
+  <LinkButton href="/zh-CN/self-hosting/" variant="secondary">
+    **自部署 TomoriBot**
+  </LinkButton>
+</div>

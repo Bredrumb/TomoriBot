@@ -1,4 +1,4 @@
-## English | [日本語](.github/README_ja.md) | [Português (Brasil)](.github/README_pt-BR.md) | [Español (Latinoamérica)](.github/README_es-419.md) | [繁體中文](.github/README_zh-TW.md) | [Tiếng Việt](.github/README_vi.md)
+## English | [日本語](.github/README_ja.md) | [Português (Brasil)](.github/README_pt-BR.md) | [Español (Latinoamérica)](.github/README_es-419.md) | [繁體中文](.github/README_zh-TW.md) | [Tiếng Việt](.github/README_vi.md) | [简体中文](.github/README_zh-CN.md)
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as

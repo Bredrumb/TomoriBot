@@ -120,6 +120,7 @@ const VI_PHRASES = [
   "từ giờ trở đi*",
   "tu gio tro di*",
 ];
+const ZH_CN_PHRASES = ["记住", "记一下", "记下来", "记录下来", "记牢", "别忘", "存进记忆", "以后记得"];
 
 beforeAll(async () => {
   await initializeLocalizer();
@@ -137,6 +138,7 @@ describe("explicit long-term memory intent", () => {
           ...PT_BR_PHRASES,
           ...ES_419_PHRASES,
           ...VI_PHRASES,
+          ...ZH_CN_PHRASES,
         ]),
       ].sort(),
     );
@@ -151,6 +153,7 @@ describe("explicit long-term memory intent", () => {
       ...PT_BR_PHRASES,
       ...ES_419_PHRASES,
       ...VI_PHRASES,
+      ...ZH_CN_PHRASES,
     ]) {
       expect(hasExplicitLongTermMemoryIntent(`ok ${phrase} this`)).toBe(true);
     }

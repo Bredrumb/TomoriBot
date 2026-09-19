@@ -1,0 +1,20 @@
+---
+title: "功能"
+sidebar:
+  label: "总览"
+  groupLabel: "功能"
+  order: 3
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+除了聊天之外，TomoriBot 还能主动做什么：调用工具、生成媒体，以及把任务安排到以后执行。
+
+<CardGrid>
+  <LinkCard title="工具与扩展" href="/zh-CN/features/capabilities/tools-and-extensions/"
+    description="内置代理工具、网页搜索、MCP 服务器与明确工具模式。" />
+  <LinkCard title="定时任务" href="/zh-CN/features/capabilities/scheduled-tasks/"
+    description="一次性与重复提醒，以及自我任务（直接问她就行）。" />
+  <LinkCard title="媒体生成" href="/zh-CN/features/capabilities/media-generation/"
+    description="直接在聊天里生成图像、短视频和语音消息。" />
+</CardGrid>

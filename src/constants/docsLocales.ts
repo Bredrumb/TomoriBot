@@ -104,6 +104,14 @@ const LOCALE_NOTICES: Record<string, DocsLocaleNotices> = {
     translatedBody:
       "Trang này là bản dịch bằng AI tạo sinh từ trang {english}. Hãy kiểm tra trang tiếng Anh nếu có điều gì chưa rõ.",
   },
+  "zh-CN": {
+    draftsTitle: "免责声明",
+    draftsBody: "这一页目前使用生成式 AI 撰写与维护的临时草稿。内容虽已确认正确，仍请对照源代码再次查核。",
+    translatedTitle: "关于这份翻译",
+    englishLinkText: "英文版",
+    translatedBody:
+      "这一页是 {english}的生成式 AI 翻译。翻译仅为方便阅读，内容以英文版为准，若有不清楚的地方请查看英文页面。",
+  },
 };
 
 function defineDocsLocale(definition: DocsLocaleDefinition): DocsLocaleDefinition & { notices: DocsLocaleNotices } {
@@ -170,7 +178,7 @@ export const DOCS_LOCALES = [
     botLocaleCode: "zh-CN",
     lang: "zh-CN",
     label: "简体中文",
-    docsTree: false,
+    docsTree: true,
     descriptionMaxLength: 80,
   }),
   defineDocsLocale({

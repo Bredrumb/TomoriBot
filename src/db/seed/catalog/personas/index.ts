@@ -29,6 +29,11 @@ import { persona as brattyVi } from "./bratty/vi";
 import { persona as gloomyVi } from "./gloomy/vi";
 import { persona as shyVi } from "./shy/vi";
 import { persona as nerineVi } from "./loyal/vi";
+import { persona as defaultZhCn } from "./default/zh-CN";
+import { persona as brattyZhCn } from "./bratty/zh-CN";
+import { persona as gloomyZhCn } from "./gloomy/zh-CN";
+import { persona as shyZhCn } from "./shy/zh-CN";
+import { persona as nerineZhCn } from "./loyal/zh-CN";
 
 export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-kun", rows: [defaultEn] },
@@ -61,4 +66,9 @@ export const personaSections: CatalogSection<PersonaInput>[] = [
   { comment: "Tomori-san (Vietnamese)", rows: [gloomyVi] },
   { comment: "Shy Tomori (Lilya) Vietnamese Version", rows: [shyVi] },
   { comment: "Loyal Tomori (Vietnamese)", rows: [nerineVi] },
+  { comment: "Tomori-kun (Simplified Chinese)", rows: [defaultZhCn] },
+  { comment: "Tomori-chan (Simplified Chinese)", rows: [brattyZhCn] },
+  { comment: "Tomori-san (Simplified Chinese)", rows: [gloomyZhCn] },
+  { comment: "Shy Tomori (Lilya) Simplified Chinese Version", rows: [shyZhCn] },
+  { comment: "Loyal Tomori (Simplified Chinese)", rows: [nerineZhCn] },
 ];

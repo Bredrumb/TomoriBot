@@ -1,0 +1,22 @@
+---
+title: "设置与管理"
+sidebar:
+  label: "总览"
+  groupLabel: "设置与管理"
+  order: 4
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+给 TomoriBot 接上大脑，并把她放进服务器里运行：提供方、给管理员的成本与安全控制、成人内容的年龄门槛，以及用量洞察。
+
+<CardGrid>
+  <LinkCard title="提供方与模型" href="/zh-CN/features/setup-administration/providers-and-models/"
+    description="各提供方的 API 密钥、自定义端点，以及完整的支持提供方对照表。" />
+  <LinkCard title="服务器管理" href="/zh-CN/features/setup-administration/server-moderation/"
+    description="思考日志、配额、白名单与要求 BYOK 模式：给管理员的成本与安全控制。" />
+  <LinkCard title="年龄限制指令" href="/zh-CN/features/setup-administration/age-restricted-commands/"
+    description="藏在 Discord 年龄门槛后面的 /nsfw 指令分类：怎么开通，在哪里能用。" />
+  <LinkCard title="统计与洞察" href="/zh-CN/features/setup-administration/stats-and-insights/"
+    description="用量追踪与可分享的信息图卡片。" />
+</CardGrid>
