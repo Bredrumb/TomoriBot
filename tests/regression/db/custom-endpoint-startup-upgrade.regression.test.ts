@@ -6,7 +6,6 @@ import { DB_TESTS_AVAILABLE, executeTestSqlFile, setupTestDb, testSql } from "./
 
 const PROBE_SERVER = "_custom_endpoint_startup_upgrade_server";
 const PROBE_USER = "_custom_endpoint_startup_upgrade_user";
-const STARTUP_UPGRADE_TIMEOUT_MS = 15_000;
 
 describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
   let serverId: number;
@@ -39,14 +38,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
     await testSql`DELETE FROM users WHERE user_disc_id = ${PROBE_USER}`;
   });
 
-  it(
-    "replays a pre-068 database through initializeDatabase and can start again",
-    async () => {
-      for (const downPath of downPaths) {
-        await executeTestSqlFile(downPath);
-      }
+  it("replays a pre-068 database through initializeDatabase and can start again", async () => {
+    for (const downPath of downPaths) {
+      await executeTestSqlFile(downPath);
+    }
 
-      await testSql`
+    await testSql`
       DELETE FROM schema_migrations
       WHERE name IN (
         '068_custom_endpoint_connections',
@@ -56,7 +53,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
       )
     `;
 
-      const [legacyShape] = await testSql<[{ connection_table_exists: boolean; connection_column_exists: boolean }]>`
+    const [legacyShape] = await testSql<[{ connection_table_exists: boolean; connection_column_exists: boolean }]>`
       SELECT
         to_regclass('public.custom_endpoint_connections') IS NOT NULL AS connection_table_exists,
         EXISTS (
@@ -67,22 +64,22 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
             AND column_name = 'connection_id'
         ) AS connection_column_exists
     `;
-      expect(legacyShape.connection_table_exists).toBe(false);
-      expect(legacyShape.connection_column_exists).toBe(false);
+    expect(legacyShape.connection_table_exists).toBe(false);
+    expect(legacyShape.connection_column_exists).toBe(false);
 
-      const oldProviderKey = `custom:s${serverId}:startup-label`;
-      const [modelA] = await testSql<[{ llm_id: number }]>`
+    const oldProviderKey = `custom:s${serverId}:startup-label`;
+    const [modelA] = await testSql<[{ llm_id: number }]>`
       INSERT INTO llms (llm_provider, llm_codename, llm_description, is_free, is_scoped_registration)
       VALUES (${oldProviderKey}, 'legacy-startup-model-a', 'Legacy startup model A', false, true)
       RETURNING llm_id
     `;
-      const [modelB] = await testSql<[{ llm_id: number }]>`
+    const [modelB] = await testSql<[{ llm_id: number }]>`
       INSERT INTO llms (llm_provider, llm_codename, llm_description, is_free, is_scoped_registration)
       VALUES (${oldProviderKey}, 'legacy-startup-model-b', 'Legacy startup model B', false, true)
       RETURNING llm_id
     `;
 
-      await testSql`
+    await testSql`
       INSERT INTO custom_endpoints (
         server_id,
         user_id,
@@ -109,7 +106,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
         true
       )
     `;
-      await testSql`
+    await testSql`
       INSERT INTO custom_endpoints (
         server_id,
         user_id,
@@ -137,13 +134,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
       )
     `;
 
-      const encrypted = await encryptApiKey("legacy-startup-secret");
-      await testSql`
+    const encrypted = await encryptApiKey("legacy-startup-secret");
+    await testSql`
       INSERT INTO saved_provider_configs (server_id, provider, api_key, key_version, llm_id)
       VALUES (${serverId}, ${oldProviderKey}, ${encrypted.encrypted}, ${encrypted.version}, ${modelA.llm_id})
     `;
 
-      await testSql`
+    await testSql`
       INSERT INTO stat_counters (
         server_id,
         user_id,
@@ -165,16 +162,16 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
       )
     `;
 
-      await initializeDatabase({ client: testSql, includeRag: false, maxRetries: 1 });
+    await initializeDatabase({ client: testSql, includeRag: false, maxRetries: 1 });
 
-      const upgradedRows: Array<{
-        connection_id: number;
-        label: string;
-        endpoint_url: string;
-        requires_auth: boolean;
-        model_name: string;
-        model_ref_id: number;
-      }> = await testSql`
+    const upgradedRows: Array<{
+      connection_id: number;
+      label: string;
+      endpoint_url: string;
+      requires_auth: boolean;
+      model_name: string;
+      model_ref_id: number;
+    }> = await testSql`
       SELECT
         cec.connection_id,
         cec.label,
@@ -188,73 +185,73 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
         AND cec.capability = 'text'
       ORDER BY cec.endpoint_url
     `;
-      expect(upgradedRows).toHaveLength(2);
-      expect(upgradedRows.map((row) => row.endpoint_url)).toEqual([
-        "http://startup-one.invalid/v1",
-        "http://startup-two.invalid/v1",
-      ]);
-      expect(upgradedRows.map((row) => row.label).sort()).toEqual(["startup-label", "startup-label_2"]);
+    expect(upgradedRows).toHaveLength(2);
+    expect(upgradedRows.map((row) => row.endpoint_url)).toEqual([
+      "http://startup-one.invalid/v1",
+      "http://startup-two.invalid/v1",
+    ]);
+    expect(upgradedRows.map((row) => row.label).sort()).toEqual(["startup-label", "startup-label_2"]);
 
-      const modelAEndpoint = upgradedRows.find((row) => row.model_ref_id === modelA.llm_id);
-      const modelBEndpoint = upgradedRows.find((row) => row.model_ref_id === modelB.llm_id);
-      if (!modelAEndpoint || !modelBEndpoint) {
-        throw new Error("Startup migration did not retain both legacy model references");
-      }
-      expect(modelAEndpoint.model_name).toBe("startup-model-a");
-      expect(modelAEndpoint.requires_auth).toBe(true);
-      expect(modelBEndpoint.model_name).toBe("startup-model-b");
-      expect(modelBEndpoint.requires_auth).toBe(false);
+    const modelAEndpoint = upgradedRows.find((row) => row.model_ref_id === modelA.llm_id);
+    const modelBEndpoint = upgradedRows.find((row) => row.model_ref_id === modelB.llm_id);
+    if (!modelAEndpoint || !modelBEndpoint) {
+      throw new Error("Startup migration did not retain both legacy model references");
+    }
+    expect(modelAEndpoint.model_name).toBe("startup-model-a");
+    expect(modelAEndpoint.requires_auth).toBe(true);
+    expect(modelBEndpoint.model_name).toBe("startup-model-b");
+    expect(modelBEndpoint.requires_auth).toBe(false);
 
-      const [modelARow] = await testSql<[{ llm_provider: string; llm_codename: string }]>`
+    const [modelARow] = await testSql<[{ llm_provider: string; llm_codename: string }]>`
       SELECT llm_provider, llm_codename FROM llms WHERE llm_id = ${modelA.llm_id}
     `;
-      expect(modelARow.llm_provider).toBe(`custom:${modelAEndpoint.connection_id}`);
-      expect(modelARow.llm_codename).toBe("startup-model-a");
+    expect(modelARow.llm_provider).toBe(`custom:${modelAEndpoint.connection_id}`);
+    expect(modelARow.llm_codename).toBe("startup-model-a");
 
-      const [modelBRow] = await testSql<[{ llm_provider: string; llm_codename: string }]>`
+    const [modelBRow] = await testSql<[{ llm_provider: string; llm_codename: string }]>`
       SELECT llm_provider, llm_codename FROM llms WHERE llm_id = ${modelB.llm_id}
     `;
-      expect(modelBRow.llm_provider).toBe(`custom:${modelBEndpoint.connection_id}`);
-      expect(modelBRow.llm_codename).toBe("startup-model-b");
+    expect(modelBRow.llm_provider).toBe(`custom:${modelBEndpoint.connection_id}`);
+    expect(modelBRow.llm_codename).toBe("startup-model-b");
 
-      const [savedConfig] = await testSql<[{ provider: string; api_key: Buffer; key_version: number }]>`
+    const [savedConfig] = await testSql<[{ provider: string; api_key: Buffer; key_version: number }]>`
       SELECT provider, api_key, key_version
       FROM saved_provider_configs
       WHERE server_id = ${serverId}
         AND provider = ${`custom:${modelAEndpoint.connection_id}`}
     `;
-      expect(savedConfig.provider).toBe(`custom:${modelAEndpoint.connection_id}`);
-      expect(Buffer.compare(savedConfig.api_key, Buffer.from(encrypted.encrypted))).toBe(0);
-      expect(savedConfig.key_version).toBe(encrypted.version);
+    expect(savedConfig.provider).toBe(`custom:${modelAEndpoint.connection_id}`);
+    expect(Buffer.compare(savedConfig.api_key, Buffer.from(encrypted.encrypted))).toBe(0);
+    expect(savedConfig.key_version).toBe(encrypted.version);
 
-      const [oldConfigCount] = await testSql<[{ count: string }]>`
+    const [oldConfigCount] = await testSql<[{ count: string }]>`
       SELECT COUNT(*) AS count
       FROM saved_provider_configs
       WHERE server_id = ${serverId} AND provider = ${oldProviderKey}
     `;
-      expect(Number(oldConfigCount.count)).toBe(0);
+    expect(Number(oldConfigCount.count)).toBe(0);
 
-      const [telemetry] = await testSql<[{ metric_key: string; count: string }]>`
+    const [telemetry] = await testSql<[{ metric_key: string; count: string }]>`
       SELECT metric_key, count
       FROM stat_counters
       WHERE server_id = ${serverId} AND metric = 'model_used'
     `;
-      expect(telemetry.metric_key).toBe("startup-model-a");
-      expect(Number(telemetry.count)).toBe(11);
+    expect(telemetry.metric_key).toBe("startup-model-a");
+    expect(Number(telemetry.count)).toBe(11);
 
-      const indexes = await testSql<Array<{ indexdef: string }>>`
+    const indexes = await testSql<Array<{ indexdef: string }>>`
       SELECT indexdef
       FROM pg_indexes
       WHERE schemaname = 'public'
         AND indexname = 'idx_custom_endpoint_connections_server_unique'
     `;
-      expect(indexes).toHaveLength(1);
-      expect(indexes[0].indexdef).toContain("(server_id, label, capability)");
-      expect(indexes[0].indexdef).not.toContain("endpoint_url");
+    expect(indexes).toHaveLength(1);
+    expect(indexes[0].indexdef).toContain("(server_id, label, capability)");
+    expect(indexes[0].indexdef).not.toContain("endpoint_url");
 
-      await initializeDatabase({ client: testSql, includeRag: false, maxRetries: 1 });
+    await initializeDatabase({ client: testSql, includeRag: false, maxRetries: 1 });
 
-      const rerunRows = await testSql`
+    const rerunRows = await testSql`
       SELECT cec.label, cec.endpoint_url, cec.requires_auth, ce.model_name
       FROM custom_endpoints ce
       JOIN custom_endpoint_connections cec ON cec.connection_id = ce.connection_id
@@ -262,15 +259,13 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom endpoint startup upgrade", () => {
         AND cec.capability = 'text'
       ORDER BY cec.endpoint_url
     `;
-      expect(rerunRows).toEqual(
-        upgradedRows.map(({ label, endpoint_url, requires_auth, model_name }) => ({
-          label,
-          endpoint_url,
-          requires_auth,
-          model_name,
-        })),
-      );
-    },
-    STARTUP_UPGRADE_TIMEOUT_MS,
-  );
+    expect(rerunRows).toEqual(
+      upgradedRows.map(({ label, endpoint_url, requires_auth, model_name }) => ({
+        label,
+        endpoint_url,
+        requires_auth,
+        model_name,
+      })),
+    );
+  });
 });
