@@ -3,11 +3,9 @@ import { LOCALE_ALIASES } from "@/constants/locales";
 /**
  * Locale configuration for the docs site and for every docs destination the bot builds.
  *
- * This module is the single source of truth shared by three consumers, so it must stay
- * dependency-free: the bot runtime, `apps/docs/astro.config.mts`, and the Cloudflare Pages
- * Functions middleware that imported it into a worker bundle during deploy verification. An
- * import of any Node built-in or `@/` module other than the Discord locale registry would
- * break at least one of them.
+ * This module is the single source of truth shared by the bot runtime and the Astro docs build, so
+ * it must stay dependency-free. An import of any Node built-in or `@/` module other than the
+ * Discord locale registry would break at least one of them.
  *
  * Publishing rule: a locale appears in `DOCS_LOCALES` with `docsTree: true` only after its
  * translated page tree exists under `docs/<id>/`. Discord clients can report a locale the site
@@ -126,8 +124,8 @@ function defineDocsLocale(definition: DocsLocaleDefinition): DocsLocaleDefinitio
  * below re-exports it as Discord codes, so the docs language switcher, the repository README
  * row, and the bot's own `/personal language` picker all reorder together from this one edit.
  *
- * `docsTree: false` keeps a locale out of the published route set, out of the Accept-Language
- * match, and out of bot URLs, so a planned locale is safe to list here before its content exists.
+ * `docsTree: false` keeps a locale out of the published route set and out of bot URLs, so a planned
+ * locale is safe to list here before its content exists.
  * Flipping the flag is what publishes the locale, and the flip must land in the same change as
  * the page tree plus the entries listed in docs/en/contributing/adding-locale/.
  */
@@ -242,8 +240,8 @@ const DOCS_LOCALE_IDS: readonly DocsLocaleId[] = DOCS_LOCALES.map((locale) => lo
  * single alias decision covers runtime strings and docs destinations. Spanish is authored once in
  * neutral Latin American register, and an `es-ES` client must land on the same pages.
  *
- * Keys are lowercased because every lookup normalizes the caller's tag first: an `Accept-Language`
- * range arrives lowercased, and object property access would otherwise miss `es-ES` entirely.
+ * Keys are lowercased because every lookup normalizes the caller's tag first, and object property
+ * access would otherwise miss `es-ES` entirely.
  */
 export const DOCS_LOCALE_ALIASES: Readonly<Record<string, DocsLocaleId>> = Object.fromEntries(
   Object.entries(LOCALE_ALIASES)
@@ -268,8 +266,8 @@ export function getDocsLocaleConfig(id: string): DocsLocaleConfig | undefined {
 export const DEFAULT_DOCS_LOCALE_ID: DocsLocaleId = DEFAULT_DOCS_LOCALE;
 
 function publishedLocaleOf(id: string): DocsLocaleId | undefined {
-  // Compared case-insensitively because an `Accept-Language` range arrives lowercased while the
-  // table keeps each locale's canonical casing (`pt-BR`, `zh-TW`).
+  // Compared case-insensitively because callers can supply Discord locale codes in any casing while
+  // the table keeps each locale's canonical form (`pt-BR`, `zh-TW`).
   const normalized = id.toLowerCase();
   return PUBLISHED_DOCS_LOCALES.find((published) => published.toLowerCase() === normalized);
 }
@@ -413,47 +411,4 @@ export function buildLocalizedDocsPath(locale: string, path: string): string {
 export function buildDefaultLocaleDocsPageUrl(baseId: string): string {
   const slug = baseId.replace(/(^|\/)index$/, "").replace(/\/+$/, "");
   return `${DOCS_BASE_URL}/${DEFAULT_DOCS_LOCALE_ID}/${slug ? `${slug}/` : ""}`;
-}
-
-/**
- * Picks the docs locale a browser's `Accept-Language` header asks for.
- *
- * Quality values are honored and `q=0` rejects a language outright, because the previous
- * `startsWith("ja")` test treated `ja;q=0, en` as a Japanese request. Ranges match a published
- * locale by exact code, alias, or base language; the first acceptable match wins, and anything
- * unmatched falls back to the default locale.
- */
-export function matchAcceptLanguage(header: string | null | undefined): DocsLocaleId {
-  const candidates = (header ?? "")
-    .split(",")
-    .map((entry, index) => {
-      const [tag, ...parameters] = entry.trim().split(";");
-      const quality = parameters
-        .map((parameter) => parameter.trim().match(/^q=([\d.]+)$/)?.[1])
-        .find((value) => value !== undefined);
-      return { tag: tag.trim().toLowerCase(), index, quality: quality ? Number(quality) : 1 };
-    })
-    .filter((candidate) => candidate.tag.length > 0 && !Number.isNaN(candidate.quality))
-    .sort((left, right) => right.quality - left.quality || left.index - right.index);
-
-  for (const candidate of candidates) {
-    if (candidate.quality <= 0) continue;
-
-    // A wildcard states no preference beyond "something I can read", so the default locale answers it.
-    if (candidate.tag === "*") return DEFAULT_DOCS_LOCALE_ID;
-
-    const exact = publishedLocaleOf(candidate.tag);
-    if (exact) return exact;
-
-    // A range such as `pt` or `pt-PT` carries no locale of its own here, so it resolves through the
-    // same alias-then-base-language order as an explicit bot locale rather than silently missing.
-    const aliasTarget = aliasTargetOf(candidate.tag);
-    if (aliasTarget) return aliasTarget;
-
-    const base = candidate.tag.split("-")[0];
-    const baseMatches = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === base);
-    if (baseMatches.length === 1) return baseMatches[0];
-  }
-
-  return DEFAULT_DOCS_LOCALE_ID;
 }

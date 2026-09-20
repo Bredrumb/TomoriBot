@@ -21,7 +21,7 @@ structure, and a translated tree that invents keys is a bug rather than a transl
   <LinkCard title="Seed Catalog" href="/contributing/adding-locale/seed-catalog/"
     description="Locale-keyed descriptions, the fallback chain, and persona voice authoring." />
   <LinkCard title="Documentation" href="/contributing/adding-locale/documentation/"
-    description="Translated page scope, review notices, hreflang, and the site middleware." />
+    description="Translated page scope, review notices, hreflang, and the site landing page." />
   <LinkCard title="README And Repo" href="/contributing/adding-locale/readme-and-repo/"
     description="Translated READMEs, the language switcher, and localized link rules." />
   <LinkCard title="Verification" href="/contributing/adding-locale/verification/"
@@ -74,7 +74,7 @@ The remaining shared files are pre-staged so a translation lane does not have to
 | Shared file | Pre-staged for every target locale | What a locale lane still does |
 |---|---|---|
 | `src/constants/docsLocales.ts` | The locale row with its endonym and description budget | Add locale-owned draft and translation notices, then flip `docsTree` to `true` when the page tree lands |
-| `apps/docs/functions/_middleware.ts` | The routed locale list | Nothing |
+| `apps/docs/src/pages/index.astro` | Language links derived from the locale table | Nothing |
 | `apps/docs/public/_redirects` | The two-line locale root pair | Nothing |
 | `README.md` language switcher | The locale's endonym is staged as plain text | Replace that endonym with the locale README link once the file lands |
 | `src/db/seed/catalog/**` | One `i18n` map per entry | One dedicated lane owns all locale keys |

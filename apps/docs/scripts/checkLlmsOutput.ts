@@ -230,6 +230,21 @@ if (!/<meta[^>]+name="robots"[^>]+content="noindex"/i.test(wikiHtml)) {
   throw new Error("English wiki pages must include a noindex robots directive");
 }
 
+// External links naturally target the site root, so the build must preserve it as an indexable
+// document with its own canonical URL instead of recreating the former redirect page.
+const rootHtml = readRequired("index.html");
+if (/<meta[^>]+(?:name="robots"[^>]+content="noindex"|http-equiv="refresh")/i.test(rootHtml)) {
+  throw new Error("The documentation root must be an indexable page, not a noindex or refresh redirect");
+}
+if (!/<link[^>]+rel="canonical"[^>]+href="https:\/\/docs\.tomoribot\.app\/"/i.test(rootHtml)) {
+  throw new Error("The documentation root must carry a self-referencing canonical URL");
+}
+for (const locale of PUBLISHED_DOCS_LOCALES) {
+  if (!rootHtml.includes(`href="/${locale}/introduction/"`)) {
+    throw new Error(`The documentation root has no introduction link for published locale ${locale}`);
+  }
+}
+
 // `robots.txt` advertises the sitemap unconditionally, so a build that omits one publishes a dead
 // reference to every crawler. @astrojs/sitemap reports a rejected option as a warning and then skips
 // generation for the whole site, which leaves an exit code of 0 and no sitemap.

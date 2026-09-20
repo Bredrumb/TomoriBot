@@ -11,7 +11,6 @@ import {
   buildDefaultLocaleDocsPageUrl,
   buildLocalizedDocsPath,
   getDocsLocaleConfig,
-  matchAcceptLanguage,
   resolveDocsLocale,
 } from "@/constants/docsLocales";
 import { isDiscordLocaleCode } from "@/constants/locales";
@@ -61,11 +60,8 @@ describe("docs locale configuration", () => {
   });
 
   it("keys the alias map in the casing every lookup normalizes to", () => {
-    // The alias lookup lowercases the caller's tag, because an `Accept-Language` range arrives that
-    // way. A camel-cased key such as `es-ES` is therefore unreachable, and the alias silently
-    // degrades to the base-language branch, which picks a locale only while one is published for
-    // that base. This asserts the map's shape because the round trip cannot: `es-419` is not
-    // published yet, so both paths currently resolve to English and would hide the difference.
+    // The alias lookup lowercases the caller's tag. A camel-cased key such as `es-ES` would therefore
+    // be unreachable and silently degrade to the base-language branch.
     expect(DOCS_LOCALE_ALIASES["es-es"]).toBe("es-419");
     for (const key of Object.keys(DOCS_LOCALE_ALIASES)) {
       expect(key).toBe(key.toLowerCase());
@@ -95,7 +91,6 @@ describe("docs locale resolution", () => {
     // es-ES has no tree of its own and reuses es-419, so the alias only becomes a docs prefix
     // once es-419 is published; before that it stayed on English to avoid an unserved route.
     expect(resolveDocsLocale("es-ES")).toBe("es-419");
-    expect(matchAcceptLanguage("es-ES,es;q=0.9")).toBe("es-419");
   });
 
   it("falls back to English for an unsupported language", () => {
@@ -103,12 +98,10 @@ describe("docs locale resolution", () => {
   });
 
   it("accepts a locale tag in any case", () => {
-    // An `Accept-Language` range arrives lowercased while the table keeps canonical casing, so the
-    // two paths must agree on `JA` and on a region code such as `pt-br`.
+    // Discord and stored settings can supply a different casing while the table keeps canonical
+    // casing, so resolution must normalize both base and region tags.
     expect(resolveDocsLocale("JA")).toBe("ja");
     expect(resolveDocsLocale("ja-jp")).toBe("ja");
-    expect(matchAcceptLanguage("JA")).toBe("ja");
-    expect(matchAcceptLanguage("PT-BR")).toBe("pt-BR");
   });
 
   it("resolves a Chinese base language only while one Chinese tree is published", () => {
@@ -169,41 +162,5 @@ describe("docs URL building", () => {
     );
     expect(buildDefaultLocaleDocsPageUrl("features/index")).toBe(`${DOCS_BASE_URL}/en/features/`);
     expect(buildDefaultLocaleDocsPageUrl("index")).toBe(`${DOCS_BASE_URL}/en/`);
-  });
-});
-
-describe("Accept-Language matching", () => {
-  it("matches an exact published locale code", () => {
-    expect(matchAcceptLanguage("ja")).toBe("ja");
-    expect(matchAcceptLanguage("ja-JP,ja;q=0.9,en;q=0.8")).toBe("ja");
-  });
-
-  it("matches an exact region code without the base being published", () => {
-    expect(matchAcceptLanguage("ja-JP")).toBe("ja");
-  });
-
-  it("prefers the highest quality value over header order", () => {
-    expect(matchAcceptLanguage("en;q=0.4,ja;q=0.9")).toBe("ja");
-  });
-
-  it("treats a rejected language as unacceptable", () => {
-    expect(matchAcceptLanguage("ja;q=0,en")).toBe("en");
-  });
-
-  it("falls back to English for an unsupported language", () => {
-    expect(matchAcceptLanguage("de-DE,de;q=0.9")).toBe(DEFAULT_DOCS_LOCALE_ID);
-    expect(matchAcceptLanguage("")).toBe(DEFAULT_DOCS_LOCALE_ID);
-    expect(matchAcceptLanguage(null)).toBe(DEFAULT_DOCS_LOCALE_ID);
-  });
-
-  it("resolves a Chinese base language only while one Chinese tree is published", () => {
-    const chineseTrees = PUBLISHED_DOCS_LOCALES.filter((id) => id.split("-")[0].toLowerCase() === "zh");
-    const expected = chineseTrees.length === 1 ? chineseTrees[0] : DEFAULT_DOCS_LOCALE_ID;
-
-    expect(matchAcceptLanguage("zh")).toBe(expected);
-  });
-
-  it("answers a wildcard with the default locale", () => {
-    expect(matchAcceptLanguage("*")).toBe(DEFAULT_DOCS_LOCALE_ID);
   });
 });

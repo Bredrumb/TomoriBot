@@ -397,7 +397,6 @@ export default defineConfig({
   // Astro emits a static meta-refresh page for each key at build time.
   redirects: {
     ...localeRootRedirects,
-    "/": "/en/introduction/",
     "/architecture/entry-point/": "/en/architecture/entry-point/",
     "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
     "/architecture/integrations/discord/modal-input-components/": "/en/architecture/integrations/discord/modal-input-components/",
@@ -722,5 +721,4 @@ export default defineConfig({
     }),
   ],
 });
-
 

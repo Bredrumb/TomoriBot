@@ -84,18 +84,16 @@ makes the locale a real route. While it is `false`:
   configured for it.
 - The bot's docs links resolve to English instead of a prefix that does not exist.
 
-The flag governs content and link building. It does **not** govern request routing, because the
-middleware decides that from its own routed list, which already names every locale root in the shared
-table. So the site root can send a visitor whose `Accept-Language` matches a staged locale to that
-locale's root, where they get a 404 until `docsTree` flips. That is the intended staging state: the URL
-exists and answers honestly instead of silently serving English under a locale address.
+The flag governs content and link building. The site root derives its language links from the same
+table and includes only published trees, so a staged locale is not offered to readers before its
+content exists.
 
 The pre-staged shared surfaces a locale relies on:
 
 | File | Pre-staged state | Publish-time edit |
 |---|---|---|
 | `src/constants/docsLocales.ts` | The locale row and its endonym | Add the locale's `LOCALE_NOTICES` entry and set `docsTree: true` |
-| `apps/docs/functions/_middleware.ts` | The locale is in the routed list | None |
+| `apps/docs/src/pages/index.astro` | Language links derived from the locale table | None |
 | `apps/docs/public/_redirects` | The `/xx` and `/xx/` root pair | None |
 | `README.md` switcher | The locale's endonym as staged plain text | Replace it with the locale README link |
 | `src/locales/{code}/**` docs URLs | English-prefixed absolute URLs | Repoint to `/{locale}/` once the tree is published |
@@ -108,25 +106,18 @@ line is a 301 from the slashless form and the other is a 200 rewrite that serves
 introduction page at its own root. The Astro redirect map is generated from the locale table and needs
 no edit.
 
-## Locale Roots And The Middleware
+## Locale Roots And The Site Root
 
-`apps/docs/functions/_middleware.ts` redirects the site root to the best locale for the visitor's
-`Accept-Language` header. Matching honors quality values, treats `q=0` as a rejection, and matches an
-exact code, a registered alias, or an unambiguous base language.
+`apps/docs/src/pages/index.astro` is a static, indexable landing page. It reads `DOCS_LOCALES` at build
+time and links directly to the introduction page for every entry with `docsTree: true`. The docs build
+fails if a published locale is missing from that list.
 
-The middleware keeps its own copy of the routed locale list and the matching rules, because the Pages
-Functions bundler follows relative imports outside the published directory but does not apply the
-repo's `@/*` tsconfig alias, which the shared table needs. A test pins the routed list against
-`DOCS_LOCALES` and compares the two matchers on every header they can disagree on.
+The root page does not redirect based on `Accept-Language`. This gives the project a stable canonical
+brand URL and lets visitors choose among the published languages. Do not add `/` to the Astro redirect
+map or to `apps/docs/public/_redirects`.
 
-The routed list names every locale root the shared table registers, whether or not that locale's tree
-has landed, and that is why the site root can answer a staged locale with a 404. Registering the roots
-ahead of the content is what lets a translation lane work without editing the middleware. Because the
-routed list is wider than `PUBLISHED_DOCS_LOCALES`, the two resolvers legitimately diverge on a staged
-locale, and the test compares them only where the shared matcher picked a published tree.
-
-An `es-ES` browser reaches the `es-419` tree through `DOCS_LOCALE_ALIASES`, which is inverted from the
-bot's `LOCALE_ALIASES` so one alias decision covers runtime strings and docs destinations.
+`DOCS_LOCALE_ALIASES` still controls generated bot destinations. For example, the `es-ES` Discord
+locale reaches the `es-419` tree through the alias inverted from the bot's `LOCALE_ALIASES` registry.
 
 ## Legal Pages
 

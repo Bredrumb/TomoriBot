@@ -83,8 +83,8 @@ only in the unit lane:
   Both are exact on purpose, so they fail when a locale lands. Add the new locale's reviewed values
   instead of loosening the assertion.
 - **Docs publication.** `tests/unit/docs/docsLocaleConfig.test.ts` fails when a `docsTree` flag and
-  the directories under `docs/` disagree, and `tests/unit/docs/docsSiteMiddleware.test.ts` pins the
-  routed locale list to `DOCS_LOCALES`. Flipping `docsTree` is the change these tests expect, so they
+  the directories under `docs/` disagree. The docs build also fails when the root landing page does
+  not link to every published locale. Flipping `docsTree` is the change these checks expect, so they
   stay green only when the tree and the flag land together.
 
 ## The Gate No Script Replaces

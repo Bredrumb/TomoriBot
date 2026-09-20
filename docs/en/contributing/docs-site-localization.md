@@ -17,18 +17,13 @@ from it, so a locale is described once:
 | Consumer | Reads from the table |
 |---|---|
 | `apps/docs/astro.config.mts` | Starlight `locales`, sitemap i18n, sidebar label fallbacks, locale-root redirects, `llms.txt` exclusions |
+| `apps/docs/src/pages/index.astro` | The root landing page's published-language links |
 | `apps/docs/src/routeData.ts` | hreflang alternates, `noindex` on fallback routes, meta description budget |
 | `apps/docs/src/components/MarkdownContent.astro` | Which review notice a page shows, and its wording |
 | `src/utils/discord/docsLinks.ts`, `src/utils/misc/docsUrl.ts` | The locale prefix on every docs link the bot builds |
 
 The module is imported by the bot runtime and by the Astro build, so it must stay dependency-free: no
 Node built-ins, and no project module other than `src/constants/locales.ts`.
-
-`apps/docs/functions/_middleware.ts` cannot import it. The Pages Functions bundler follows relative paths
-outside the published directory, but it does not apply the repo's `@/*` tsconfig alias, and the shared table
-needs one for `@/constants/locales`. The middleware therefore keeps its own copy of the routed locale list
-and the `Accept-Language` matching rules, and a test pins that list against `DOCS_LOCALES` while comparing
-the two matchers. Edit both when either changes.
 
 ### The publish flag
 
@@ -39,11 +34,8 @@ A locale entry has a `docsTree` flag. While it is `false`:
 - Starlight does not register the locale, so no sidebar, sitemap, or alternate is emitted for it.
 - The bot's docs links resolve to English instead of a prefix that does not exist.
 
-The flag governs content and link building, not request routing. Routing comes from the middleware's own
-routed list, which already names every locale root in `DOCS_LOCALES`, so the site root can send a visitor
-whose `Accept-Language` matches a staged locale to that locale's root and answer with a 404 until the flag
-flips. That is the intended staging state rather than a bug: the URL exists and answers honestly instead of
-silently serving English under a locale address.
+The flag governs content and link building. The root landing page derives its language links from the same
+table and includes only entries whose trees are published, so a staged locale is not presented to readers.
 
 Setting it to `true` is the act of publishing. `tests/unit/docs/docsLocaleConfig.test.ts` fails if the flag
 and the `docs/` directory disagree, in either direction.
@@ -61,10 +53,9 @@ in `DOCS_LOCALES`, or derives from it.
 | `.github/README_{locale}.md` | The translated README, plus a switcher row pointing back at `../README.md`. |
 | `README.md` | The locale's switcher entry becomes a live link once its translated file exists. |
 
-`apps/docs/functions/_middleware.ts` and `apps/docs/public/_redirects` are already staged for every
-target locale in `DOCS_LOCALES`. Their entries name the locale root without claiming content exists, so
-`docsTree: true` plus the page tree is the whole publish step. `tests/unit/docs/docsSiteMiddleware.test.ts`
-fails if the middleware's routed list and `DOCS_LOCALES` disagree.
+`apps/docs/public/_redirects` is already staged for every target locale in `DOCS_LOCALES`. Its entries name
+the locale root without claiming content exists, so `docsTree: true` plus the page tree is the whole publish
+step. The root landing page updates automatically because it reads `DOCS_LOCALES` during the build.
 
 Pages that stay English-only are linked with an explicit English destination, per the scope rule below.
 `bun run check-locale-links` resolves each project-owned route in the linking file's own locale tree first and
@@ -138,19 +129,15 @@ locale only when its tree exists and otherwise returns English. Two consequences
 - Locale strings cannot call a builder, because they are static text. Their links are absolute, including
   the locale prefix, and the same test resolves each one against `docs/` to catch a route that moved.
 
-## Accept-Language at the Site Root
+## Site Root
 
-The site root has no content of its own, so `functions/_middleware.ts` redirects `/` to the best routed
-locale for the visitor's `Accept-Language` header. Matching is quality-aware: the highest `q` value wins,
-`q=0` rejects a language, and an exact code, registered alias, or unambiguous base language matches. It falls
-back to the default locale, including for an ambiguous base such as `zh` when both Chinese trees are
-published.
+The site root is an indexable product and language landing page in `apps/docs/src/pages/index.astro`. It
+links directly to the introduction in every published locale. It does not redirect from
+`Accept-Language`: visitors choose their language explicitly, and search engines can rank the canonical
+root URL for the TomoriBot brand.
 
-That routed list is the middleware's own copy and is already wider than the published set: it names every
-locale root in `DOCS_LOCALES`, so a staged locale can receive the site-root redirect before its content
-lands. A staged root answers with a 404 until `docsTree` flips, which is why registering roots early is safe.
-`tests/unit/docs/docsSiteMiddleware.test.ts` pins the list against `DOCS_LOCALES` and compares the two
-matchers on every header a published locale answers.
+The docs build checks that the root remains indexable, self-canonical, and linked to every published locale.
+Do not add `/` to the Astro redirect map or to `apps/docs/public/_redirects`.
 
 ## Machine-Readable Output
 
@@ -159,7 +146,8 @@ matchers on every header a published locale answers.
 the build if a non-default locale URL appears in any of them.
 
 That script also verifies hreflang against the built HTML: every fallback route must emit no alternate, and
-every translated pair must emit its full set plus `x-default`. `bun run build` in `apps/docs` runs both.
+every translated pair must emit its full set plus `x-default`. It checks that the site root stays indexable
+and links to every published locale as well. `bun run build` in `apps/docs` runs both.
 
 ## Verifying a Locale Addition
 
