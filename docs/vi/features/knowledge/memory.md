@@ -20,11 +20,13 @@ Hầu như mọi thứ bot có vẻ "biết" trong một cuộc trò chuyện ch
 
 Để xem chính xác những gì bot được cung cấp trong bất kỳ lượt tương tác nào, hãy xem [Bên trong prompt](/vi/features/knowledge/inside-the-prompt/).
 
-## Bộ nhớ dài hạn {#long-term-memory}
+## Bộ nhớ dài hạn
+<!-- anchor: long-term-memory -->
 
 Bộ nhớ dài hạn là thứ duy nhất bot lưu giữ vĩnh viễn. Chúng không bị ảnh hưởng bởi `/refresh`, bởi việc khởi động lại hay chuyển sang kênh khác.
 
-### Bộ nhớ cá nhân và bộ nhớ máy chủ {#personal-vs-server-memories}
+### Bộ nhớ cá nhân và bộ nhớ máy chủ
+<!-- anchor: personal-vs-server-memories -->
 
 Có hai loại bộ nhớ dài hạn:
 
@@ -60,7 +62,8 @@ Theo mặc định, bot lưu giữ tối đa **100 bộ nhớ cá nhân** và **
 
 Các giới hạn số lượng này được tính **theo từng persona**, không phải theo từng người dùng hay từng máy chủ. Mỗi persona giữ một tập hợp riêng, vì vậy một máy chủ chạy bốn persona sẽ có bốn định mức riêng biệt. Bộ nhớ cá nhân toàn cục của riêng bạn sẽ tính vào định mức cá nhân của từng persona.
 
-### Cơ sở tri thức tài liệu (RAG) {#document-knowledge-base-rag}
+### Cơ sở tri thức tài liệu (RAG)
+<!-- anchor: document-knowledge-base-rag -->
 
 Quản trị viên máy chủ có thể cung cấp tài liệu để bot tham khảo bằng RAG. Tài liệu được chia nhỏ và lưu dưới dạng các embedding có thể tìm kiếm; bot sẽ tự động truy xuất nội dung liên quan khi trả lời. Trong các máy chủ mới, việc quản lý tài liệu cũng được giới hạn cho các thành viên có quyền `Manage Server` theo mặc định; người quản lý có thể cấp quyền cho thành viên thông qua `/moderation` Quyền thành viên.
 
@@ -83,7 +86,8 @@ Prompt sẽ được hiển thị trước khi nhập để bạn có thể đi�
 
 Dữ liệu lịch sử nhập vào được lưu dưới dạng tài liệu, vì vậy `/memories` cũng thao tác được trên chúng.
 
-### Conditioning {#conditioning}
+### Conditioning
+<!-- anchor: conditioning -->
 
 Lệnh `/conditioning` là bộ nhớ theo từng persona, từng máy chủ giúp định hướng hành vi của persona theo thời gian. Đây là một gợi ý nhẹ nhàng hơn so với một thuộc tính hoàn chỉnh hay prompt hệ thống. Hãy sử dụng tính năng này để củng cố cách một nhân vật cụ thể nên hành xử trong một máy chủ cụ thể.
 
@@ -105,7 +109,8 @@ Nếu không có `reason`, lượt đếm vẫn được ghi lại nhưng không
 
 Phạm vi sẽ thu hẹp thông tin trước tiên: bộ nhớ máy chủ chỉ xuất hiện trong prompt thuộc máy chủ đó, bộ nhớ cá nhân chỉ xuất hiện khi người dùng đó hiện diện trong cuộc trò chuyện, và cả hai chỉ dành cho persona sở hữu chúng. Trong phạm vi đó, **mọi bộ nhớ đều được gửi kèm trong mỗi prompt** theo mặc định. Việc gắn thẻ giúp thu hẹp hơn nữa, để bộ nhớ chỉ kích hoạt theo từ khóa hoặc chỉ trong một kênh. Bật tính năng này bằng `/config` > Engine > Memory & STM.
 
-### Thẻ từ khóa {#keyword-tags}
+### Thẻ từ khóa
+<!-- anchor: keyword-tags -->
 
 - Bộ nhớ **không có** thẻ từ khóa luôn luôn hoạt động (mặc định).
 - Bộ nhớ **có** thẻ từ khóa chỉ kích hoạt khi từ khóa xuất hiện trong ngữ cảnh hiển thị.
@@ -119,7 +124,8 @@ Phạm vi sẽ thu hẹp thông tin trước tiên: bộ nhớ máy chủ chỉ 
 
 Trong `/help`, chọn **Memory**, rồi chọn **Memory Tagging**, để xem bản tóm tắt tương tự trong Discord.
 
-## Bộ nhớ ngắn hạn (STM) {#short-term-memory-stm}
+## Bộ nhớ ngắn hạn (STM)
+<!-- anchor: short-term-memory-stm -->
 
 TomoriBot có thể dễ dàng đọc các tin nhắn từ kênh hiện tại mà bot đang trò chuyện, nhưng STM cho phép bot thực hiện những điều sau mà không cần lưu thành bộ nhớ dài hạn thực sự:
 1. Củng cố tạm thời kịch bản/tình huống hiện tại của kênh trong ngữ cảnh

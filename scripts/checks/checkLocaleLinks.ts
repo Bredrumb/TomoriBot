@@ -12,6 +12,7 @@ const log = {
 };
 
 export const DOCS_HOST = "https://docs.tomoribot.app";
+const ANCHOR_COMMENT = /^\s*<!--\s*anchor:\s*([A-Za-z0-9_-]+)\s*-->\s*$/;
 
 export interface LinkFinding {
   sourceFile: string;
@@ -39,9 +40,6 @@ export function slugifyHeading(heading: string): string {
     .replace(/<[^>]+>/g, "") // html tags
     .trim();
 
-  // Strip {#custom-id} if present
-  clean = clean.replace(/\{#[^}]+\}/, "").trim();
-
   // Each space becomes its own hyphen and runs are not collapsed, because that is what
   // github-slugger does: dropping `&` from "Web & URLs" leaves two spaces, so the real anchor is
   // `web--urls`. Collapsing here reported every such heading as a broken fragment.
@@ -53,7 +51,7 @@ export function slugifyHeading(heading: string): string {
 
 /**
  * Extracts all valid anchors from a markdown document:
- * explicit `<a id="...">` or `<a name="...">`, custom `{#id}`, and slugified headings.
+ * explicit `<a id="...">` or `<a name="...">`, `anchor:` comments, and slugified headings.
  */
 export function extractDocAnchors(content: string): Set<string> {
   const anchors = new Set<string>();
@@ -64,14 +62,16 @@ export function extractDocAnchors(content: string): Set<string> {
   }
 
   // Heading lines: # Heading
-  for (const line of content.split("\n")) {
+  const lines = content.split("\n");
+  for (const [index, line] of lines.entries()) {
+    const anchor = ANCHOR_COMMENT.exec(line);
+    if (anchor && index > 0 && /^#{1,6}\s+.+$/.test(lines[index - 1])) {
+      anchors.add(anchor[1]);
+    }
+
     const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
     if (headingMatch) {
       const rawHeading = headingMatch[1];
-      const customId = rawHeading.match(/\{#([^}]+)\}/);
-      if (customId) {
-        anchors.add(customId[1]);
-      }
       const slug = slugifyHeading(rawHeading);
       if (slug) {
         anchors.add(slug);
@@ -368,7 +368,9 @@ export async function validateLocaleLinks(options?: {
             fragment: link.fragment,
             resolvedFile: resolved,
             type: "missing_fragment",
-            message: `Heading anchor "#${link.fragment}" is missing from ${missing.join(", ")}; add {#${link.fragment}} to the matching heading in each`,
+            message:
+              `Heading anchor "#${link.fragment}" is missing from ${missing.join(", ")}; ` +
+              `add <!-- anchor: ${link.fragment} --> directly after the matching heading in each locale`,
           });
           continue;
         }

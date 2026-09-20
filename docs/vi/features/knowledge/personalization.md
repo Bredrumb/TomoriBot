@@ -20,7 +20,8 @@ Người quản lý máy chủ có thể cấu hình mặc định cho persona b
 
 Lệnh `/personal config` chỉ lưu trữ độ lệch UTC dạng số từ -12 đến +14. Lệnh không lưu trữ hoặc suy luận vị trí địa lý hoặc múi giờ IANA.
 
-## Nhà cung cấp riêng của bạn {#your-own-providers}
+## Nhà cung cấp riêng của bạn
+<!-- anchor: your-own-providers -->
 
 Các nhà cung cấp cá nhân cho phép *các yêu cầu của chính bạn* sử dụng API key và model của *chính bạn* thay vì mặc định của máy chủ. Đây là hình thức tự mang theo API key (BYOK) ở cấp độ cá nhân.
 
@@ -56,7 +57,8 @@ Một máy chủ có thể yêu cầu nhà cung cấp do thành viên tự cung 
 - `/personal config`: chọn tham gia chia sẻ bộ nhớ ngắn hạn liên máy chủ; `/personal memories` sẽ xóa STM của bạn.
 - `/personal config`: đặt một prompt có thể tái sử dụng khi bot mạo danh bạn thông qua `/impersonate user`.
 
-## Spotlight cá nhân {#personal-spotlight}
+## Spotlight cá nhân
+<!-- anchor: personal-spotlight -->
 
 **Spotlight cá nhân: lựa chọn persona theo từng kênh.** Spotlight cho phép *bạn* thu hẹp danh sách persona mà bạn có thể kích hoạt trong một kênh, và tùy chọn chỉ định một persona tự động kích hoạt cho các tin nhắn của chính bạn tại đó. Tính năng này được giới hạn cho **bạn + một kênh** và không ảnh hưởng đến bất kỳ ai khác.
 

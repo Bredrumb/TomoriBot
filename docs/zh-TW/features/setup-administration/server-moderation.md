@@ -6,7 +6,8 @@ sidebar:
 
 TomoriBot 給伺服器管理員控制她在你伺服器裡的行為：誰可以使用她、在哪裡使用，以及她花費多少，這些都透過 `/config` 面板與相關指令。大多數需要 **管理伺服器** 權限。這一頁涵蓋重點；每個指令都收錄在[指令參考](/zh-TW/features/command-reference/)。
 
-## 成本控制：額度 {#cost-control-quotas}
+## 成本控制：額度
+<!-- anchor: cost-control-quotas -->
 
 生成要花錢（你的錢，或你成員的錢）。額度會限制每位使用者與整個伺服器的用量：
 
@@ -15,7 +16,8 @@ TomoriBot 給伺服器管理員控制她在你伺服器裡的行為：誰可以�
 
 把個人上限設為 `0` 表示無上限。伺服器共用額度池會依可設定的天數間隔重置。
 
-## 使用者 BYOK（自備金鑰） {#user-byok-bring-your-own-key}
+## 使用者 BYOK（自備金鑰）
+<!-- anchor: user-byok-bring-your-own-key -->
 
 `/moderation` 的**成員存取**以兩種狀態呈現這個選項。**允許使用伺服器模型**是預設值；**必須使用個人供應商**要求每位成員為自己的觸發自備個人供應商，伺服器不為使用者發起的訊息付任何費用。伺服器發起的觸發仍然使用伺服器的供應商。這是最強的成本控制：它把 API 支出完全轉移到成員身上。成員在[個人化 → 你自己的供應商](/zh-TW/features/knowledge/personalization/#your-own-providers)底下設定自己的供應商。
 

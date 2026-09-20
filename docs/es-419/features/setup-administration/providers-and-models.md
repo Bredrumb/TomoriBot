@@ -9,7 +9,8 @@ es un servicio de IA (Google Gemini, OpenRouter, NovelAI, un endpoint local, …
 **modelo** es un modelo específico de ese proveedor. Necesitas al menos un proveedor para
 usarla.
 
-## Claves de API {#api-keys}
+## Claves de API
+<!-- anchor: api-keys -->
 
 Añade una clave de proveedor durante la configuración inicial con `/setup`, o después desde
 `/providers` eligiendo **Añadir proveedor nuevo**. Las claves se **cifran en reposo**: nadie,
@@ -109,7 +110,8 @@ endpoint de TTS/STT.
 También puedes gestionar las claves de respaldo de este servidor para failover automático y
 balanceo de carga con `/providers`.
 
-## Endpoints personalizados {#custom-endpoints}
+## Endpoints personalizados
+<!-- anchor: custom-endpoints -->
 
 Los endpoints personalizados te permiten registrar servicios autoalojados o mediante proxy
 (Ollama, LM Studio, LiteLLM, vLLM, ComfyUI, TTS/STT local) como **paquetes de proveedor
@@ -160,7 +162,8 @@ Para recorridos completos sobre cómo ejecutar los servidores, consulta:
 - [Configuración: ComfyUI](/es-419/self-hosting/local-endpoints/setup-comfyui/): generación local de imágenes/video.
 - [Configuración: ChatMock](/es-419/self-hosting/local-endpoints/setup-chatmock/): cuenta de ChatGPT / Codex CLI.
 
-## Proveedores compatibles {#supported-providers}
+## Proveedores compatibles
+<!-- anchor: supported-providers -->
 
 Si no tienes el hardware para alojar tus propios modelos, TomoriBot admite una amplia gama de
 servicios. No todas las funciones están disponibles en todos los proveedores.

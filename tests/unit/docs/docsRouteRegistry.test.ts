@@ -15,6 +15,7 @@ const docsRoot = join(repoRoot, "docs");
 const defaultLocale = "en";
 
 const PAGE_EXTENSIONS = [".md", ".mdx"];
+const ANCHOR_COMMENT = /^\s*<!--\s*anchor:\s*([A-Za-z0-9_-]+)\s*-->\s*$/;
 
 /**
  * Resolves a docs route to its source file. A route that ends at a directory index has four
@@ -45,17 +46,18 @@ function collectAnchors(source: string): Set<string> {
   for (const match of source.matchAll(/<a\s+(?:[^>]*?\s+)?(?:id|name)=["']([^"']+)["']/gi)) {
     anchors.add(match[1]);
   }
-  for (const line of source.split("\n")) {
+  const lines = source.split("\n");
+  for (const [index, line] of lines.entries()) {
+    const anchor = ANCHOR_COMMENT.exec(line);
+    if (anchor && index > 0 && /^#{1,6}\s+.+$/.test(lines[index - 1])) anchors.add(anchor[1]);
+
     const heading = line.match(/^#{1,6}\s+(.+)$/);
     if (!heading) continue;
-    const explicitId = heading[1].match(/\{#([^}]+)\}/);
-    if (explicitId) anchors.add(explicitId[1]);
     anchors.add(
       heading[1]
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
         .replace(/[*_~`]/g, "")
         .replace(/<[^>]+>/g, "")
-        .replace(/\{#[^}]+\}/, "")
         .trim()
         .toLowerCase()
         .replace(/\s+/g, "-")

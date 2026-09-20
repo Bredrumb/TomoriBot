@@ -155,20 +155,21 @@ That makes the rule per locale, not per section:
   outside the reader-facing scope (`architecture/`, `contributing/`, `wiki/`) or because its
   translation has not landed yet. `/en/self-hosting/...` is the correct destination in a Japanese page
   for a page the Japanese tree does not have.
-- **Fragments are the English anchor in every tree.** A heading that anything links to carries a
-  `{#english-slug}` suffix in every locale, so one fragment resolves for every reader:
+- **Fragments are the English anchor in every tree.** A heading that anything links to carries an
+  `anchor:` comment in every locale, so one fragment resolves for every reader:
 
   ```md
-  ### 关键词标签 {#keyword-tags}
+  ### 关键词标签
+  <!-- anchor: keyword-tags -->
   ```
 
-  `apps/docs/src/remarkHeadingIds.ts` turns that suffix into the rendered heading id; Starlight has
-  no syntax of its own for it, and without the plugin the braces fold into the slug. The bot needs
-  this because `DOCS_ROUTES` in `src/constants/docsLocales.ts` stores one locale-less route per
-  destination and `buildDocsUrl` prefixes the reader's locale onto it, so a translated anchor would
-  leave every non-English reader at the top of the page. Use the slug the English heading already
-  generates, never a new invented one, and run `bun run check-locale-links`: it resolves that table's
-  fragments against every published tree and names the locales a heading is missing from.
+  `apps/docs/src/remarkHeadingIds.ts` removes that comment from the rendered page and assigns its
+  value as the heading id. The bot needs this because `DOCS_ROUTES` in
+  `src/constants/docsLocales.ts` stores one locale-less route per destination and `buildDocsUrl`
+  prefixes the reader's locale onto it, so a translated anchor would leave every non-English reader
+  at the top of the page. Use the slug the English heading already generates, never a new invented
+  one, and run `bun run check-locale-links`: it resolves that table's fragments against every
+  published tree and names the locales a heading is missing from.
 
 The `ja` tree is the worked example and shows both directions: 206 links point at `/ja/...`, and the
 handful that point at `/en/...` are pages the Japanese tree does not carry. A few unprefixed routes

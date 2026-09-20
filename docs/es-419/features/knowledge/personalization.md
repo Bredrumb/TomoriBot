@@ -43,7 +43,8 @@ Desactivarla detiene las actualizaciones automáticas por herramienta pero no de
 `/personal config` solo almacena un desfase UTC numérico de -12 a +14. No almacena ni infiere
 una ubicación geográfica o una zona horaria IANA.
 
-## Tus propios proveedores {#your-own-providers}
+## Tus propios proveedores
+<!-- anchor: your-own-providers -->
 
 Los proveedores personales permiten que *tus propias solicitudes* usen *tus propias* claves de
 API y modelos en lugar de los valores predeterminados del servidor. Esto es traer tu propia
@@ -108,7 +109,8 @@ uses.
 - `/personal config`: establece un prompt reutilizable para cuando te suplanta mediante
   `/impersonate user`.
 
-## Foco personal {#personal-spotlight}
+## Foco personal
+<!-- anchor: personal-spotlight -->
 
 **Foco personal: selección de persona por canal.** El foco personal te permite *a ti* limitar
 qué personas puedes activar en un canal, y opcionalmente asignar una para que se active

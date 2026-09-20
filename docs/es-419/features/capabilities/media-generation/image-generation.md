@@ -26,7 +26,8 @@ Al generar una imagen, usa el contexto de Apariencia física de tu persona, adem
 y negativas predeterminadas (cuando el backend admite prompts negativos). El resultado se entrega como una
 galería de medios de Discord con detalles de generación, incluidos los usuarios o personas de referencia.
 
-## Personalizar etiquetas {#tag-customization}
+## Personalizar etiquetas
+<!-- anchor: tag-customization -->
 
 Cada fuente de etiquetas anterior se puede editar y tiene un alcance distinto. Todas abren un modal
 rellenado con las etiquetas actuales para que las edites directamente:

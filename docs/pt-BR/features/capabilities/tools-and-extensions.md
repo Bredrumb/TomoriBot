@@ -6,7 +6,8 @@ sidebar:
 
 A TomoriBot é baseada em agentes: além de conversar, ela pode chamar **ferramentas** para pesquisar na web, ler documentos, gerar mídia, definir lembretes, agir em outros canais e muito mais. Ela decide quando usá-las com base na conversa. Esta página aborda as ferramentas integradas, como estendê-la com servidores MCP e como manter as declarações de ferramentas enxutas com o Modo de Ferramenta Deliberada.
 
-## Ferramentas Integradas {#built-in-tools}
+## Ferramentas Integradas
+<!-- anchor: built-in-tools -->
 
 As ferramentas dependem de o provedor/modelo ativo suportar chamada de ferramentas (tool calling), e muitas estão condicionadas a uma flag de recurso (uma opção em `/config` > Permissions), uma permissão do Discord, uma capacidade do modelo ou uma chave de API opcional.
 
@@ -53,7 +54,8 @@ Os nomes de capacidades suportados são `tool_use`, `self_teaching`, `personal_m
 
 As condições de ferramentas refletem o suporte do provedor/modelo, a configuração do servidor, os backends configurados, as substituições de MCP e a lista de permissões atual do Modo de Ferramenta Deliberada. Elas não contornam nem preveem verificações de permissão do Discord executadas quando uma ferramenta é acionada. Nomes de capacidade desconhecidos são avaliados como falsos e registrados em log; blocos malformados são omitidos. Mensagens brutas do chat, saídas do modelo e resultados de ferramentas nunca são tratados como modelos condicionais.
 
-## Pesquisa na Web & Leitura de URLs {#web-search--url-reading}
+## Pesquisa na Web & Leitura de URLs
+<!-- anchor: web-search--url-reading -->
 
 O modelo vê uma única ferramenta unificada `web_search(query, category)`. Por trás dela, um despachante encaminha cada chamada por uma cadeia de mecanismos e retorna o primeiro sucesso:
 
@@ -65,7 +67,8 @@ O modelo vê uma única ferramenta unificada `web_search(query, category)`. Por 
 
 Para ler uma página específica, ela usa `fetch_url`. Ele não está disponível no NovelAI.
 
-## Servidores MCP {#mcp-servers}
+## Servidores MCP
+<!-- anchor: mcp-servers -->
 
 Servidores [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) estendem as capacidades dela com ferramentas externas que você mesmo registra.
 
@@ -87,7 +90,8 @@ Servidores MCP locais são **suportados apenas em instâncias de hospedagem pró
 Um servidor MCP malicioso pode **injetar prompts** nela com instruções ocultas, **exfiltrar** dados que os usuários passam para suas ferramentas ou retornar **resultados prejudiciais/falsos** que ela retransmitirá para o seu servidor. Trate servidores MCP como extensões de navegador; em caso de dúvida, não adicione. Sempre revise as ferramentas descritas de um MCP antes de adicioná-lo.
 :::
 
-## Modo de Ferramenta Deliberada {#deliberate-tool-mode}
+## Modo de Ferramenta Deliberada
+<!-- anchor: deliberate-tool-mode -->
 
 Cada ferramenta declarada aumenta o tamanho do prompt. O **Modo de Ferramenta Deliberada** mantém as declarações de ferramentas fora dos turnos normais de chat, a menos que a mensagem pareça realmente precisar de uma ferramenta; isso reduz o tamanho do prompt e ajuda modelos menores/locais a responderem mais rápido.
 

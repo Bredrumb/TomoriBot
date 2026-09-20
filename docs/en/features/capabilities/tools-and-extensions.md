@@ -10,6 +10,7 @@ to use them based on the conversation. This page covers the built-in tools, how 
 her with MCP servers, and how to keep tool declarations lean with Deliberate Tool Mode.
 
 ## Built-In Tools
+<!-- anchor: built-in-tools -->
 
 Tools depend on the active provider/model supporting tool calling, and many are gated behind
 a feature flag (a `/config` > Permissions toggle), a Discord permission, a model capability, or
@@ -76,6 +77,7 @@ evaluate as false and are logged; malformed blocks are omitted. Raw chat message
 output, and tool results are never treated as conditional templates.
 
 ## Web Search & URL Reading
+<!-- anchor: web-search--url-reading -->
 
 The model sees a single unified `web_search(query, category)` tool. Behind it, a dispatcher
 routes each call through an engine chain and returns the first success:
@@ -92,6 +94,7 @@ routes each call through an engine chain and returns the first success:
 For reading a specific page, she uses `fetch_url`. It's unavailable on NovelAI.
 
 ## MCP Servers
+<!-- anchor: mcp-servers -->
 
 [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) servers extend her with
 external tools you register yourself.
@@ -129,6 +132,7 @@ an MCP's described tools before adding it.
 :::
 
 ## Deliberate Tool Mode
+<!-- anchor: deliberate-tool-mode -->
 
 Every declared tool adds to the prompt. **Deliberate Tool Mode** keeps tool declarations out
 of ordinary chat turns unless the message looks like it actually needs a tool; this reduces

@@ -10,6 +10,7 @@ the **Manage Server** permission. This page covers the highlights; every command
 [Command Reference](/features/command-reference/).
 
 ## Cost Control: Quotas
+<!-- anchor: cost-control-quotas -->
 
 Generation costs money (yours or your members'). Quotas cap usage per user and server-wide:
 
@@ -20,6 +21,7 @@ Set a per-user limit to `0` for unlimited. Server-wide pools reset on a configur
 interval.
 
 ## User BYOK (Bring Your Own Key)
+<!-- anchor: user-byok-bring-your-own-key -->
 
 `/moderation` **((Member Access))** carries this as a two-state choice. **Allow Server Models** is the
 default; **Require Personal Providers** makes each member bring their **own** personal provider for

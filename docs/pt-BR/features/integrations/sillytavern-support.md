@@ -44,7 +44,8 @@ variáveis `MAX_CHARX_*`, porque o tamanho comprimido de um arquivo não diz nad
 Para a conversão exata e o mapeamento de campos, veja a
 [arquitetura de suporte a cards](/en/architecture/integrations/sillytavern/card-support/).
 
-## Predefinições de Prompt {#prompt-presets}
+## Predefinições de Prompt
+<!-- anchor: prompt-presets -->
 
 Uma predefinição do Prompt Manager do SillyTavern controla o **layout** do prompt. Use `/config` > Plugins
 > SillyTavern Presets para importar predefinições, inspecionar nós habilitados, alternar entre predefinições ou retornar

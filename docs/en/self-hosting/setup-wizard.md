@@ -85,6 +85,7 @@ provider of its own cannot reply, unless it runs in User BYOK mode where each me
 provider answers instead, so this is the last step of every install path.
 
 ## The `/setup` command
+<!-- anchor: the-setup-command -->
 
 `/setup` opens an ephemeral checklist panel that only the person who ran it can operate. In a server
 it requires **Manage Server**; in a DM it is available to that person's own workspace. Every row on

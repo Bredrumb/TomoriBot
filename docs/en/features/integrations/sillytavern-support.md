@@ -45,6 +45,7 @@ to. For the exact conversion and field mapping, see the
 [card-support architecture](/architecture/integrations/sillytavern/card-support/).
 
 ## Prompt Presets
+<!-- anchor: prompt-presets -->
 
 A SillyTavern Prompt Manager preset controls the **layout** of the prompt. Use `/config` > Plugins
 > SillyTavern Presets to import presets, inspect enabled nodes, switch between presets, or return

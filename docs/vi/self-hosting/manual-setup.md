@@ -70,7 +70,8 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # xem tất cả các cờ
 ```
 
-## Tiện ích bổ sung tùy chọn (bản "Full Install" thủ công) {#optional-extras-the-manual-full-install}
+## Tiện ích bổ sung tùy chọn (bản "Full Install" thủ công)
+<!-- anchor: optional-extras-the-manual-full-install -->
 
 Phương thức **Full Install** của [trình hướng dẫn thiết lập](/vi/self-hosting/setup-wizard/) bổ sung bốn tiện ích nhẹ lên trên bản cài đặt cơ bản. Không có tiện ích nào là bắt buộc để chạy bot, nhưng mỗi tiện ích sẽ mở khóa một tính năng. Nếu cài đặt thủ công, bạn có thể thêm bất kỳ tiện ích nào bạn muốn:
 

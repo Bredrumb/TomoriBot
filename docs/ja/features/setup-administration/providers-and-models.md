@@ -6,7 +6,8 @@ sidebar:
 
 TomoriBotには組み込みのAIモデルはありません。プロバイダーから接続する必要があります。**プロバイダー**とはAIサービス（Google Gemini、OpenRouter、NovelAI、ローカルエンドポイントなど）のことであり、**モデル**はそのプロバイダー上の特定のモデルを指します。トモリを利用するには、少なくとも1つのプロバイダーが必要です。
 
-## APIキー {#api-keys}
+## APIキー
+<!-- anchor: api-keys -->
 
 初回のセットアップ時に`/setup`でプロバイダーのキーを追加するか、後から`/providers`で **新しいプロバイダーの追加**（Add New Provider）を選択して追加します。キーは**保存時に暗号化**されるため、サーバー管理者を含め、誰も読み取ることはできません。
 
@@ -68,7 +69,8 @@ Brave SearchはAIプロバイダーとは別であり、ウェブ検索を強化
 
 また、`/providers`を使用して、このサーバーの自動フェイルオーバーと負荷分散用のバックアップキーを管理することもできます。
 
-## カスタムエンドポイント {#custom-endpoints}
+## カスタムエンドポイント
+<!-- anchor: custom-endpoints -->
 
 カスタムエンドポイントを使用すると、セルフホストまたはプロキシベースのサービス（Ollama、LM Studio、LiteLLM、vLLM、ComfyUI、ローカルのTTS/STTなど）を**ラベル付きのプロバイダーバンドル**として登録できます。
 
@@ -89,7 +91,8 @@ API互換性は、サービスが実装するリクエストパスとペイロ�
 - [セットアップ：ComfyUI](/ja/self-hosting/local-endpoints/setup-comfyui/)：ローカルの画像・動画生成。
 - [セットアップ：ChatMock](/ja/self-hosting/local-endpoints/setup-chatmock/)：ChatGPTアカウント / Codex CLI。
 
-## サポートされているプロバイダー {#supported-providers}
+## サポートされているプロバイダー
+<!-- anchor: supported-providers -->
 
 モデルをホストするためのハードウェアがない場合でも、TomoriBotは幅広いサービスをサポートしています。すべての機能がすべてのプロバイダーで利用できるわけではありません。
 

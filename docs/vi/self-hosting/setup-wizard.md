@@ -67,7 +67,8 @@ bun run launch --searxng --crawl4ai  # bot + sidecar (xem bun run launch --help)
 
 Khi bot đã trực tuyến, hãy chạy `/setup` trong Discord để kết nối nhà cung cấp AI. Một không gian làm việc không có nhà cung cấp riêng sẽ không thể phản hồi, trừ khi chạy ở chế độ User BYOK nơi nhà cung cấp cá nhân của từng thành viên sẽ trả lời thay thế, vì vậy đây là bước cuối cùng của mọi phương thức cài đặt.
 
-## Lệnh `/setup` {#the-setup-command}
+## Lệnh `/setup`
+<!-- anchor: the-setup-command -->
 
 Lệnh `/setup` mở một bảng danh sách kiểm tra tạm thời mà chỉ người thực hiện lệnh mới có thể thao tác. Trong máy chủ, lệnh yêu cầu quyền **Manage Server**; trong tin nhắn riêng (DM), lệnh khả dụng cho không gian làm việc của chính người đó. Mỗi hàng trên bảng là một giá trị nháp: **Finish Setup** là nút điều khiển duy nhất ghi dữ liệu, vì vậy việc mở, chỉnh sửa, hủy hoặc khởi động lại sẽ không làm thay đổi bất kỳ hàng nào trong cơ sở dữ liệu.
 

@@ -9,7 +9,8 @@ onde e quanto custa, através do painel `/config` e seus comandos relacionados. 
 a permissão **Gerenciar Servidor**. Esta página cobre os destaques; todos os comandos estão na
 [Referência de Comandos](/pt-BR/features/command-reference/).
 
-## Controle de Custo: Cotas {#cost-control-quotas}
+## Controle de Custo: Cotas
+<!-- anchor: cost-control-quotas -->
 
 Gerar conteúdo custa dinheiro (seu ou dos seus membros). Cotas limitam o uso por usuário e em todo o servidor:
 
@@ -19,7 +20,8 @@ Gerar conteúdo custa dinheiro (seu ou dos seus membros). Cotas limitam o uso po
 Defina um limite por usuário como `0` para ilimitado. Pools do servidor são redefinidos em um intervalo
 de dias configurável.
 
-## BYOK de Usuário (Traga Sua Própria Chave) {#user-byok-bring-your-own-key}
+## BYOK de Usuário (Traga Sua Própria Chave)
+<!-- anchor: user-byok-bring-your-own-key -->
 
 `/moderation` **((Member Access))** apresenta isso como uma escolha de dois estados. **Allow Server Models** é o
 padrão; **Require Personal Providers** faz cada membro trazer seu **próprio** provedor pessoal para

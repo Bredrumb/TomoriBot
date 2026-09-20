@@ -10,6 +10,7 @@ and knowledge ([Memory](/features/knowledge/memory/)). This page is a curated se
 knobs; every command is in the [Command Reference](/features/command-reference/).
 
 ## Capabilities: What She's Allowed to Do
+<!-- anchor: capabilities-what-shes-allowed-to-do -->
 
 `/config` > Permissions toggles her features on and off: image generation, sticker usage, thread
 creation, message management, user blocking, self-teaching, voice messages, and more. Each
@@ -18,6 +19,7 @@ toggle is the feature flag that gates the matching tool (see
 can't do it, no matter what a user asks.
 
 ## Generation Tuning
+<!-- anchor: generation-tuning -->
 
 - `/config` > Models > Text Samplers & Parameters: sampling parameters (temperature, top-p, …): creativity/randomness.
   Higher temperature is more varied.
@@ -28,6 +30,7 @@ can't do it, no matter what a user asks.
   A useful lever: raise it for more conversational awareness, lower it to cut token cost.
 
 ## System Prompt
+<!-- anchor: system-prompt -->
 
 The system prompt sits above the persona and shapes overall behavior:
 
@@ -40,6 +43,7 @@ When a [SillyTavern preset](/features/integrations/sillytavern-support/) is acti
 system prompt is replaced, but a custom one you set here is still sent.
 
 ## Uncensored Output
+<!-- anchor: uncensored-output -->
 
 TomoriBot has **no content filter of its own**: she is not a moderation harness and adds no
 safety rails on top of the model. Whatever the underlying provider returns is what she says.

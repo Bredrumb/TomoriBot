@@ -10,7 +10,8 @@ comandos relacionados. La mayoría requiere el permiso **Administrar servidor**.
 cubre lo más destacado; cada comando está en la
 [Referencia de comandos](/en/features/command-reference/).
 
-## Control de costo: cuotas {#cost-control-quotas}
+## Control de costo: cuotas
+<!-- anchor: cost-control-quotas -->
 
 Generar contenido cuesta dinero (tuyo o de tus miembros). Las cuotas limitan el uso por usuario
 y a nivel de todo el servidor:
@@ -22,7 +23,8 @@ y a nivel de todo el servidor:
 Establece un límite por usuario en `0` para uso ilimitado. Los fondos comunes de todo el
 servidor se restablecen en un intervalo de días configurable.
 
-## BYOK de usuario (trae tu propia clave) {#user-byok-bring-your-own-key}
+## BYOK de usuario (trae tu propia clave)
+<!-- anchor: user-byok-bring-your-own-key -->
 
 `/moderation` **(Acceso de miembros)** lleva esto como una opción de dos estados. **Permitir
 modelos del servidor** es el predeterminado; **Requerir proveedores personales** hace que cada

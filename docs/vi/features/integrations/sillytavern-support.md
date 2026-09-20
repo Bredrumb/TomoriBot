@@ -25,7 +25,8 @@ Nếu tệp không có siêu dữ liệu TomoriBot nhưng là một thẻ ST v2/
 
 Dữ liệu nhập sẽ đi qua một bộ quy chuẩn xác thực trước khi được lưu lại (giới hạn mặc định: 5.000 ký tự mỗi chuỗi, 200 thuộc tính, 100 đoạn hội thoại mẫu mỗi bên, 100 từ kích hoạt; người self-hosting có thể tinh chỉnh các biến môi trường `PRESET_MAX_*`). Quá trình đọc tệp lưu trữ được giới hạn riêng bởi các biến môi trường `MAX_CHARX_*`, vì kích thước nén của tệp lưu trữ không thể hiện kích thước sau khi giải nén. Để biết chi tiết về ánh xạ trường và chuyển đổi chính xác, hãy xem [kiến trúc hỗ trợ thẻ nhân vật](/en/architecture/integrations/sillytavern/card-support/).
 
-## Preset prompt {#prompt-presets}
+## Preset prompt
+<!-- anchor: prompt-presets -->
 
 Một preset Prompt Manager của SillyTavern kiểm soát **bố cục** của prompt. Dùng `/config` > Plugins > SillyTavern Presets để nhập preset, kiểm tra các node đang bật, chuyển đổi giữa các preset hoặc quay lại bố cục thông thường.
 

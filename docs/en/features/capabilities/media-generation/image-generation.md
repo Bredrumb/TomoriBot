@@ -31,6 +31,7 @@ delivered as a Discord media gallery with generation-time details, including any
 users or personas.
 
 ## Tag Customization
+<!-- anchor: tag-customization -->
 
 Every tag source above is editable, each at a different scope. All of these open a modal
 pre-filled with the current tags, so you edit in place:

@@ -44,12 +44,14 @@ Esto hace posibles el roleplay grupal y los servidores con varios personajes. Pa
 
 Dos comandos hacen la mayor parte del trabajo de enseñarle cómo hablar y actuar:
 
-### Atributos {#attributes}
+### Atributos
+<!-- anchor: attributes -->
 
 `/config` > Persona > Identidad y personalidad añade rasgos de personalidad o características físicas, por
 ejemplo `amigable`, `cabello rojo` o `termina las oraciones con *Nya~*`. Elimínalos desde el mismo lugar.
 
-### Diálogos de ejemplo {#sample-dialogues}
+### Diálogos de ejemplo
+<!-- anchor: sample-dialogues -->
 
 `/config` > Persona > Identidad y personalidad le enseña *cómo habla* mediante ejemplos. Usa los marcadores
 `{user}` y `{bot}` para que los diálogos funcionen para todos y al compartir la persona:
@@ -77,7 +79,8 @@ Elimina ejemplos desde `/config` > Persona > Identidad y personalidad.
 
 También puedes establecer un prompt del sistema personalizado con `/config` > Motor > General para dar más forma al comportamiento. Consulta [Ajuste del comportamiento](/es-419/features/chatting-personality/behavior-tweaking/).
 
-## Sprites (avatares de emoción) {#sprites-emotion-avatars}
+## Sprites (avatares de emoción)
+<!-- anchor: sprites-emotion-avatars -->
 
 Los sprites son imágenes de avatar alternativas a las que una persona puede cambiar a mitad de la conversación
 para expresar una emoción o situación, como sus expresiones faciales. Cada sprite es una imagen con etiqueta

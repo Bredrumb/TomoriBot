@@ -41,12 +41,14 @@ TomoriBot 的人格落在**人格（persona）**里：她的名字、头像、�
 
 教她怎么说话、怎么行动，主要靠两条指令：
 
-### 属性 {#attributes}
+### 属性
+<!-- anchor: attributes -->
 
 `/config` > 人格 > 身份与性格 可以添加性格特质或外貌特征，例如 `friendly`、`red hair`，或者 `ends sentences with *Nya~*`。移除它们也在
 `/config` > 人格 > 身份与性格。
 
-### 示例对话 {#sample-dialogues}
+### 示例对话
+<!-- anchor: sample-dialogues -->
 
 `/config` > 人格 > 身份与性格 用示例教她*她是怎么说话的*。请使用 `{user}` 和 `{bot}` 占位符，这样对话对所有人都成立（分享人格时也一样）：
 
@@ -73,7 +75,8 @@ TomoriBot 的人格落在**人格（persona）**里：她的名字、头像、�
 
 你也可以用 `/config` > 行为 > 常规行为 设置自定义系统提示词，进一步塑造行为；见[行为调整](/zh-CN/features/chatting-personality/behavior-tweaking/)。
 
-## 立绘（表情头像） {#sprites-emotion-avatars}
+## 立绘（表情头像）
+<!-- anchor: sprites-emotion-avatars -->
 
 立绘是一个人格可以在对话中途切换的备用头像，用来表达某种情绪或处境（可以理解成她的表情）。每个立绘都是一张带标签的图片（例如 `happy`、`mad`、`embarrassed`），在合适的时机她会用它代替平时的头像。
 

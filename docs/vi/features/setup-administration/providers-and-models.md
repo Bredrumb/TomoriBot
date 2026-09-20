@@ -6,7 +6,8 @@ sidebar:
 
 TomoriBot không tích hợp sẵn model AI nào, bạn cần kết nối model từ một nhà cung cấp. Một **nhà cung cấp** là một dịch vụ AI (Google Gemini, OpenRouter, NovelAI, một endpoint cục bộ, …), và một **model** là một model cụ thể trên nhà cung cấp đó. Bạn cần ít nhất một nhà cung cấp để có thể sử dụng bot.
 
-## API key {#api-keys}
+## API key
+<!-- anchor: api-keys -->
 
 Thêm key của nhà cung cấp trong lần thiết lập đầu tiên bằng lệnh `/setup`, hoặc sau này từ `/providers` bằng cách chọn **Add New Provider**. Các key được **mã hóa khi lưu trữ**, vì vậy không ai, kể cả quản trị viên máy chủ, có thể đọc lại được.
 
@@ -68,7 +69,8 @@ Sáu mục đầu tiên chọn các bản ghi danh mục model. Các vị trí T
 
 Bạn cũng có thể quản lý các key dự phòng của máy chủ này để tự động chuyển đổi dự phòng và cân bằng tải bằng `/providers`.
 
-## Endpoint tùy chỉnh {#custom-endpoints}
+## Endpoint tùy chỉnh
+<!-- anchor: custom-endpoints -->
 
 Các endpoint tùy chỉnh cho phép bạn đăng ký các dịch vụ tự host hoặc thông qua proxy (Ollama, LM Studio, LiteLLM, vLLM, ComfyUI, TTS/STT cục bộ) dưới dạng **các gói nhà cung cấp có nhãn**.
 
@@ -89,7 +91,8 @@ Chế độ **Custom Endpoint (Advanced)** của `/setup` thực hiện hai bư�
 - [Thiết lập: ComfyUI](/vi/self-hosting/local-endpoints/setup-comfyui/): tạo hình ảnh/video cục bộ.
 - [Thiết lập: ChatMock](/vi/self-hosting/local-endpoints/setup-chatmock/): tài khoản ChatGPT / Codex CLI.
 
-## Các nhà cung cấp được hỗ trợ {#supported-providers}
+## Các nhà cung cấp được hỗ trợ
+<!-- anchor: supported-providers -->
 
 Nếu bạn không có phần cứng để tự host model của riêng mình, TomoriBot hỗ trợ nhiều loại dịch vụ. Không phải mọi tính năng đều có sẵn trên mọi nhà cung cấp.
 

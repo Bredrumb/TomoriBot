@@ -9,6 +9,7 @@ service (Google Gemini, OpenRouter, NovelAI, a local endpoint, …), and a **mod
 specific model on that provider. You need at least one provider to use her at all.
 
 ## API Keys
+<!-- anchor: api-keys -->
 
 Add a provider key during first-time setup with `/setup`, or later from `/providers` by choosing
 **Add New Provider**. Keys are **encrypted at rest**, so no one, including server admins, can read
@@ -97,6 +98,7 @@ You can also manage this server's backup keys for automatic failover and load ba
 `/providers`.
 
 ## Custom Endpoints
+<!-- anchor: custom-endpoints -->
 
 Custom endpoints let you register self-hosted or proxy-backed services (Ollama, LM Studio,
 LiteLLM, vLLM, ComfyUI, local TTS/STT) as **labeled provider bundles**.
@@ -140,6 +142,7 @@ For full walkthroughs of running the servers, see:
 - [Setup: ChatMock](/self-hosting/local-endpoints/setup-chatmock/): ChatGPT account / Codex CLI.
 
 ## Supported Providers
+<!-- anchor: supported-providers -->
 
 If you don't have the hardware to host your own models, TomoriBot supports a wide range of
 services. Not every feature is available on every provider.

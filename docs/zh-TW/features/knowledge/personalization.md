@@ -20,7 +20,8 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 
 `/personal config` 只儲存 -12 到 +14 的數值 UTC 位移。它不會儲存或推論地理位置或 IANA 時區。
 
-## 你自己的供應商 {#your-own-providers}
+## 你自己的供應商
+<!-- anchor: your-own-providers -->
 
 個人供應商讓*你自己的請求*使用*你自己的* API 金鑰與模型，而不是伺服器的預設值。這是個人層級的 BYOK（bring your own key，自備金鑰）。
 
@@ -56,7 +57,8 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 - `/personal config`：選擇加入跨伺服器的短期記憶共享；`/personal memories` 會清除你的 STM。
 - `/personal config`：設定一段可重複使用的提示詞，供她透過 `/impersonate user` 模擬你時使用。
 
-## 個人聚光燈 {#personal-spotlight}
+## 個人聚光燈
+<!-- anchor: personal-spotlight -->
 
 **個人聚光燈：各頻道的人格選擇。**聚光燈讓你*自己*縮小在某個頻道可以觸發哪些人格，並可選擇指派其中一個，讓你在該頻道的訊息自動觸發它。它的範圍是**你加上一個頻道**，不會影響其他人。
 

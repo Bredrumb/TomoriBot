@@ -75,7 +75,8 @@ bun run launch --searxng --crawl4ai  # bot 加边车服务（见 bun run launch 
 
 bot 上线后，在 Discord 里运行 `/setup` 来接入 AI 提供方。没有自己的提供方的工作区无法回复，除非它以用户 BYOK 模式运行，由每位成员的个人提供方代为回答，所以这是每条安装路径的最后一步。
 
-## `/setup` 指令 {#the-setup-command}
+## `/setup` 指令
+<!-- anchor: the-setup-command -->
 
 `/setup` 会打开一个只有执行者本人能操作的临时清单面板。在服务器里它需要 **管理服务器** 权限；在私信里它对该用户自己的工作区可用。面板上的每一行都是草稿值：只有 **完成设置** 会真正写入任何内容，所以打开、编辑、取消或重新开始都不会改动任何数据库行。
 

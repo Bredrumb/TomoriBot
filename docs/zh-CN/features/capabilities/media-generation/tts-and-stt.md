@@ -13,7 +13,8 @@ TomoriBot 能**说**（文本转语音）也能**听**（语音转文字）：
 下面有完整说明）。如果你更想在自己的硬件上跑语音，就用本地引擎，
 按自部署指南操作。
 
-## 文本转语音 {#text-to-speech}
+## 文本转语音
+<!-- anchor: text-to-speech -->
 
 ### ElevenLabs（云端，最省事）
 
@@ -59,7 +60,8 @@ TomoriBot 能**说**（文本转语音）也能**听**（语音转文字）：
 
 完整清单与硬件建议见[文本转语音对照表](/zh-CN/self-hosting/local-endpoints/text-to-speech/)。
 
-## 语音转文字 {#speech-to-text}
+## 语音转文字
+<!-- anchor: speech-to-text -->
 
 转写端点把用户的音频附件转成文字，作为后台的对话
 上下文。转写内容是否**公开发到聊天里**由

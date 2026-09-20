@@ -9,7 +9,8 @@ Hành vi của TomoriBot (**những gì bot được phép làm và cách bot t�
 và tri thức ([Bộ nhớ](/vi/features/knowledge/memory/)). Trang này là tập hợp các tùy chọn cấu hình
 giá trị cao; mọi lệnh đầy đủ đều có trong [Danh mục lệnh](/vi/features/command-reference/).
 
-## Tính năng: Những gì bot được phép làm {#capabilities-what-shes-allowed-to-do}
+## Tính năng: Những gì bot được phép làm
+<!-- anchor: capabilities-what-shes-allowed-to-do -->
 
 `/config` > Permissions cho phép bật và tắt các tính năng của bot: tạo hình ảnh, sử dụng sticker, tạo
 luồng, quản lý tin nhắn, chặn người dùng, tự học hỏi, tin nhắn thoại và nhiều hơn nữa. Mỗi nút bật tắt
@@ -17,7 +18,8 @@ là một cờ tính năng kiểm soát công cụ tương ứng (xem
 [Công cụ & tiện ích mở rộng](/vi/features/capabilities/tools-and-extensions/)). Khi bạn tắt một tính năng,
 bot chỉ đơn giản là không thể thực hiện nó, bất kể người dùng có yêu cầu gì.
 
-## Tinh chỉnh quá trình tạo phản hồi {#generation-tuning}
+## Tinh chỉnh quá trình tạo phản hồi
+<!-- anchor: generation-tuning -->
 
 - `/config` > Models > Text Samplers & Parameters: các tham số lấy mẫu (temperature, top-p, …): mức độ sáng tạo/ngẫu nhiên.
   Temperature cao hơn sẽ tạo ra phản hồi đa dạng hơn.
@@ -27,7 +29,8 @@ bot chỉ đơn giản là không thể thực hiện nó, bất kể người d
 - `/config` > Engine > General: số lượng tin nhắn gần đây mà bot lấy làm ngữ cảnh cho mỗi lần kích hoạt.
   Một công cụ hữu ích: tăng lên để bot hiểu rõ cuộc trò chuyện hơn, giảm xuống để tiết kiệm chi phí token.
 
-## Prompt hệ thống {#system-prompt}
+## Prompt hệ thống
+<!-- anchor: system-prompt -->
 
 Prompt hệ thống nằm trên persona và định hình hành vi tổng thể:
 
@@ -39,7 +42,8 @@ Prompt hệ thống nằm trên persona và định hình hành vi tổng thể:
 Khi một [preset SillyTavern](/vi/features/integrations/sillytavern-support/) đang hoạt động, prompt hệ thống dự phòng
 tích hợp sẵn sẽ được thay thế, nhưng prompt tùy chỉnh do bạn thiết lập tại đây vẫn sẽ được gửi đi.
 
-## Đầu ra không kiểm duyệt {#uncensored-output}
+## Đầu ra không kiểm duyệt
+<!-- anchor: uncensored-output -->
 
 TomoriBot **không có bộ lọc nội dung riêng**: bot không phải là một hệ thống kiểm duyệt và không bổ sung
 thêm rào chắn an toàn nào lên trên model. Bất cứ điều gì nhà cung cấp bên dưới trả về đều là những gì bot sẽ

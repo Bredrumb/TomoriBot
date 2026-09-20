@@ -20,11 +20,13 @@ TomoriBot 有一套持久記憶系統，讓她能跨對話記住事實。這一�
 
 想知道她在任何一輪對話中實際拿到什麼，請看[提示詞內部](/zh-TW/features/knowledge/inside-the-prompt/)。
 
-## 長期記憶 {#long-term-memory}
+## 長期記憶
+<!-- anchor: long-term-memory -->
 
 長期記憶是她唯一永久保留的東西。它們不受 `/refresh` 影響，也不受重新啟動或搬到其他頻道影響。
 
-### 個人記憶與伺服器記憶 {#personal-vs-server-memories}
+### 個人記憶與伺服器記憶
+<!-- anchor: personal-vs-server-memories -->
 
 長期記憶有兩種：
 
@@ -60,7 +62,8 @@ TomoriBot 有一套持久記憶系統，讓她能跨對話記住事實。這一�
 
 這些數量是**以人格為單位**，不是以使用者或伺服器為單位。每個人格都保有自己的額度，所以一個跑四個人格的伺服器就有四份獨立的額度。你自己的全域個人記憶會計入每個人格的個人額度。
 
-### 文件知識庫（RAG） {#document-knowledge-base-rag}
+### 文件知識庫（RAG）
+<!-- anchor: document-knowledge-base-rag -->
 
 伺服器管理員可以用 RAG 給她要參考的文件。文件會被切成片段，並存成可搜尋的嵌入；回答時她會自動取回相關內容。在新的伺服器裡，文件管理同樣預設只開放給擁有 `Manage Server` 的成員；管理員可以透過 `/moderation` 的「成員存取」開放給成員。
 
@@ -83,7 +86,8 @@ TomoriBot 有一套持久記憶系統，讓她能跨對話記住事實。這一�
 
 歷史匯入會存成文件，所以 `/memories` 也能對它們運作。
 
-### 制約 {#conditioning}
+### 制約
+<!-- anchor: conditioning -->
 
 `/conditioning` 是一種以人格為單位、以伺服器為單位的記憶，會隨時間引導人格的行為。它比完整的屬性設定或系統提示詞更輕量。用它來強化某個角色在某個伺服器中應該怎麼表現。
 
@@ -105,7 +109,8 @@ Here are past things Tomori did that got punished for. Avoid doing them again:
 
 範圍會比其他機制更早限縮一切：伺服器記憶只會進入它自己伺服器的提示詞，個人記憶只在那位使用者出現在對話中時才會進入，而兩者都只對擁有它們的人格生效。在這個範圍之內，**每一則記憶預設都會隨著每一次提示詞送出**。標籤會進一步限縮，讓某則記憶只在出現關鍵字時生效，或只在某個頻道生效。用 `/config` > 行為 > 進階記憶 開啟。
 
-### 關鍵字標籤 {#keyword-tags}
+### 關鍵字標籤
+<!-- anchor: keyword-tags -->
 
 - **沒有**關鍵字標籤的記憶一律有效（預設）。
 - **有**關鍵字標籤的記憶，只在關鍵字出現在可見脈絡中時才生效。
@@ -119,7 +124,8 @@ Here are past things Tomori did that got punished for. Avoid doing them again:
 
 在 `/help` 中選擇 **記憶**，然後選 **記憶標籤（進階）**，就能在 Discord 裡看到同樣的摘要。
 
-## 短期記憶（STM） {#short-term-memory-stm}
+## 短期記憶（STM）
+<!-- anchor: short-term-memory-stm -->
 
 TomoriBot 可以輕鬆讀取她正在對話的目前頻道訊息，但 STM 讓她能在不儲存實際長期記憶的情況下做到以下幾件事：
 1. 在脈絡中暫時強化頻道目前的場景與情境

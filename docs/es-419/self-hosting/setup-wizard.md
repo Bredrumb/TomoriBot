@@ -85,7 +85,8 @@ trabajo que no tiene su propio proveedor no puede responder, salvo que funcione 
 en el que el proveedor personal de cada miembro responde en su lugar, así que este es el último paso de
 cada ruta de instalación.
 
-## El comando `/setup` {#the-setup-command}
+## El comando `/setup`
+<!-- anchor: the-setup-command -->
 
 `/setup` abre un panel de lista de verificación efímero que solo puede operar la persona que lo ejecutó.
 En un servidor requiere **Administrar servidor**; en un mensaje directo está disponible para el espacio

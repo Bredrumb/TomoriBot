@@ -77,7 +77,8 @@ bun run launch --searxng --crawl4ai  # bot + sidecars (veja bun run launch --hel
 
 Quando o bot estiver online, execute `/setup` no Discord para conectar um provedor de IA. Um espaço de trabalho (workspace) que não contém um provedor próprio não pode responder, a menos que ele rode no modo BYOK de Usuário (User BYOK) onde o provedor pessoal de cada membro responde em seu lugar, então este é o último passo de todos os caminhos de instalação.
 
-## O comando `/setup` {#the-setup-command}
+## O comando `/setup`
+<!-- anchor: the-setup-command -->
 
 O `/setup` abre um painel de checklist efêmero que apenas a pessoa que o executou pode operar. Em um servidor
 isso exige **Gerenciar Servidor (Manage Server)**; em uma DM (Mensagem Direta) ele está disponível para o próprio espaço de trabalho da pessoa. Cada linha no

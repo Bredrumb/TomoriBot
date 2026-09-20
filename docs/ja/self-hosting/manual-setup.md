@@ -80,7 +80,8 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # すべてのフラグを表示
 ```
 
-## オプションの追加機能（手動での「フルインストール」） {#optional-extras-the-manual-full-install}
+## オプションの追加機能（手動での「フルインストール」）
+<!-- anchor: optional-extras-the-manual-full-install -->
 
 [セットアップウィザード](/ja/self-hosting/setup-wizard/)の**フルインストール**パスでは、基本インストールの上に4つの軽量な追加機能がレイヤー化されます。
 ボットの実行に必須のものはありませんが、それぞれが特定の機能をアンロックします。

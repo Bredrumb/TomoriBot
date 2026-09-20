@@ -9,6 +9,7 @@ triggered, how to chat hands-free with auto-trigger, and how to stop accidental 
 with Deliberate Trigger Mode.
 
 ## How to Trigger Her
+<!-- anchor: how-to-trigger-her -->
 
 By default, she replies when you:
 
@@ -21,11 +22,13 @@ Trigger words are the most convenient path: once a word is registered, simply na
 activates her. In a DM, just say hi (no trigger needed).
 
 ### Managing Trigger Words
+<!-- anchor: managing-trigger-words -->
 
 Server managers use `/config` > Persona > Triggers to add or remove a selected persona's trigger
 words. Ordinary members can inspect the page, but its mutation controls are disabled.
 
 ## Expressions & Reactions
+<!-- anchor: expressions--reactions -->
 
 Once she replies, she can use your server's custom emojis and stickers, and react to
 messages:
@@ -36,6 +39,7 @@ messages:
   uses them accurately.
 
 ## Roleplay Channels
+<!-- anchor: roleplay-channels -->
 
 Roleplay channels suppress custom emoji and sticker use in her responses. People can also use
 `/tool delete turn` there to remove her latest turn without Manage Server permission.
@@ -77,6 +81,7 @@ Use this in a dedicated chat channel where you want her to feel like a participa
 than a summoned assistant.
 
 ## Deliberate Trigger Mode
+<!-- anchor: deliberate-trigger-mode -->
 
 If people say a persona's name a lot in ordinary conversation, plain trigger words can fire
 her by accident. **Deliberate Trigger Mode (DTM)** fixes this by making plain trigger words

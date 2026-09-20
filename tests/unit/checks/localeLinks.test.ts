@@ -16,7 +16,7 @@ describe("locale documentation link and fragment validator", () => {
     expect(slugifyHeading("Deliberate Trigger Mode (DTM)")).toBe("deliberate-trigger-mode-dtm");
     expect(slugifyHeading("記憶の階層")).toBe("記憶の階層");
     expect(slugifyHeading("テキスト読み上げ（TTS）")).toBe("テキスト読み上げtts");
-    expect(slugifyHeading("Custom Heading {#my-custom-anchor}")).toBe("custom-heading");
+    expect(slugifyHeading("Custom Heading")).toBe("custom-heading");
   });
 
   it("extracts all anchor types from markdown content", () => {
@@ -31,7 +31,8 @@ Some intro text with [link](/somewhere).
 <a name="explicit-name-anchor"></a>
 ### Nested Section
 
-### Custom Heading {#custom-anchor-id}
+### Custom Heading
+<!-- anchor: custom-anchor-id -->
 
 ## 日本語の見出し
 `;

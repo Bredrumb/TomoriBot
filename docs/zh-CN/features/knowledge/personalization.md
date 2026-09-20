@@ -35,7 +35,8 @@ TomoriBot 可以用 `/personal` 系列指令针对**你个人**进行配置：�
 `/personal config` 只保存 -12 到 +14 的数字 UTC 偏移。它不保存
 也不推断地理位置或 IANA 时区。
 
-## 你自己的提供方 {#your-own-providers}
+## 你自己的提供方
+<!-- anchor: your-own-providers -->
 
 个人提供方让你*自己的请求*使用*你自己的* API 密钥和模型，而不是
 服务器的默认值。这就是个人层面的 BYOK（bring your own key，自备密钥）。
@@ -93,7 +94,8 @@ TomoriBot 可以用 `/personal` 系列指令针对**你个人**进行配置：�
 - `/personal config`：设置一段可复用的提示词，供她通过
   `/impersonate user` 扮演你时使用。
 
-## 个人聚光灯 {#personal-spotlight}
+## 个人聚光灯
+<!-- anchor: personal-spotlight -->
 
 **个人聚光灯：按频道指定人格。** 聚光灯让你在某个频道里收窄自己
 能触发哪些人格，并可选地为你在那里的消息指派一个人格做自动触发。它的范围是**你 + 一个频道**，不影响其他人。

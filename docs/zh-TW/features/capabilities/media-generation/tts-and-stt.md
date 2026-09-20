@@ -11,7 +11,8 @@ TomoriBot 可以**說話**（文字轉語音），也可以**聆聽**（語音�
 
 兩者都透過同一套端點系統運作。最快的方式是 **ElevenLabs**（雲端，下方有完整說明）。如果你比較想用自己的硬體跑語音，請使用本機引擎，並跟著自架指南操作。
 
-## 文字轉語音 {#text-to-speech}
+## 文字轉語音
+<!-- anchor: text-to-speech -->
 
 ### ElevenLabs（雲端，最簡單）
 
@@ -46,7 +47,8 @@ TomoriBot 可以**說話**（文字轉語音），也可以**聆聽**（語音�
 
 完整清單與硬體建議請看[文字轉語音比較表](/zh-TW/self-hosting/local-endpoints/text-to-speech/)。
 
-## 語音轉文字 {#speech-to-text}
+## 語音轉文字
+<!-- anchor: speech-to-text -->
 
 轉錄端點會把使用者的音訊附件轉成文字，作為背景對話脈絡。逐字稿是否**明確發布**在聊天中，則由 `/config` > 行為 > 通知行為 另外控制。
 

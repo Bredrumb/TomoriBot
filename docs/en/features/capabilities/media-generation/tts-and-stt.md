@@ -14,6 +14,7 @@ documented in full below). If you'd rather run voice on your own hardware, use a
 and follow the self-hosting guides.
 
 ## Text-to-Speech
+<!-- anchor: text-to-speech -->
 
 ### ElevenLabs (cloud, easiest)
 
@@ -60,6 +61,7 @@ Each engine has its own setup guide:
 See the [Text-to-Speech comparison table](/en/self-hosting/local-endpoints/text-to-speech/) for the full list and hardware guidance.
 
 ## Speech-to-Text
+<!-- anchor: speech-to-text -->
 
 Transcription endpoints turn user audio attachments into text for background conversation
 context. Whether transcripts are **visibly posted** in chat is controlled separately by

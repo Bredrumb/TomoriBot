@@ -9,20 +9,23 @@ El comportamiento de TomoriBot, **lo que puede hacer y cómo genera sus respuest
 y el conocimiento ([Memoria](/es-419/features/knowledge/memory/)). Esta página reúne los controles más importantes.
 Todos los comandos están en la [Referencia de comandos](/en/features/command-reference/).
 
-## Capacidades: lo que puede hacer {#capabilities-what-shes-allowed-to-do}
+## Capacidades: lo que puede hacer
+<!-- anchor: capabilities-what-shes-allowed-to-do -->
 
 `/config` > Permisos activa y desactiva sus funciones: generación de imágenes, uso de stickers, creación
 de hilos, administración de mensajes, bloqueo de usuarios, autoaprendizaje, mensajes de voz y más. Cada
 interruptor es la marca de función que habilita la herramienta correspondiente (consulta [Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/)).
 Desactiva algo y no podrá hacerlo, sin importar lo que le pida un usuario.
 
-## Ajuste de generación {#generation-tuning}
+## Ajuste de generación
+<!-- anchor: generation-tuning -->
 
 - `/config` > Modelos > Muestreadores y parámetros de texto: parámetros de muestreo (temperatura, top-p, …), creatividad y aleatoriedad. Una temperatura más alta produce mayor variedad.
 - `/config` > Motor > General: qué tan humanas se leen sus respuestas. La opción `scope` aplica el grado a todo el servidor (`Global`, el valor predeterminado) o a una sola persona (`Persona`). Es útil cuando una persona debe escribir de forma casual con grado 3 y otra como una novela. La opción "Heredar" de una persona elimina su excepción.
 - `/config` > Motor > General: cuántos mensajes recientes incorpora como contexto por activación. Súbelo para obtener más consciencia conversacional o bájalo para reducir el costo de tokens.
 
-## Prompt del sistema {#system-prompt}
+## Prompt del sistema
+<!-- anchor: system-prompt -->
 
 El prompt del sistema está por encima de la persona y determina el comportamiento general:
 
@@ -32,7 +35,8 @@ El prompt del sistema está por encima de la persona y determina el comportamien
 
 Cuando hay un [preajuste de SillyTavern](/es-419/features/integrations/sillytavern-support/) activo, el prompt del sistema de respaldo integrado se reemplaza, pero el personalizado que establezcas aquí se sigue enviando.
 
-## Salida sin censura {#uncensored-output}
+## Salida sin censura
+<!-- anchor: uncensored-output -->
 
 TomoriBot **no tiene un filtro de contenido propio**. No es un sistema de moderación ni añade barreras de
 seguridad sobre el modelo. Lo que devuelve el proveedor subyacente es lo que dice. Por eso `/nsfw jailbreaks`

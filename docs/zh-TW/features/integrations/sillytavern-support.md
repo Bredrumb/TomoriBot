@@ -29,7 +29,8 @@ TomoriBot 可以從 [SillyTavern](https://github.com/SillyTavern/SillyTavern) �
 
 匯入在儲存任何東西之前會先通過驗證結構描述（預設上限：每個字串 5,000 個字元、200 個屬性、每一側 100 組範例對話、100 個觸發詞；自架者可以調整 `PRESET_MAX_*` 環境變數）。壓縮檔讀取另外由 `MAX_CHARX_*` 環境變數限制，因為壓縮檔的壓縮後大小完全不代表它解開後有多大。確切的轉換與欄位對應請看[角色卡支援架構](/en/architecture/integrations/sillytavern/card-support/)。
 
-## 提示詞預設集 {#prompt-presets}
+## 提示詞預設集
+<!-- anchor: prompt-presets -->
 
 SillyTavern 的 Prompt Manager 預設集控制提示詞的**編排**。用 `/config` > 外掛 > SillyTavern 預設集 匯入預設集、檢視已啟用的節點、在預設集之間切換，或回到一般編排。
 

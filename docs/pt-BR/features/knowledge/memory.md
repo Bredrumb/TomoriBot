@@ -27,12 +27,14 @@ salvar nada definitivamente, mas ainda expira.
 Para ver exatamente o que é entregue a ela em qualquer turno, veja
 [Por Dentro do Prompt](/pt-BR/features/knowledge/inside-the-prompt/).
 
-## Memória de Longo Prazo {#long-term-memory}
+## Memória de Longo Prazo
+<!-- anchor: long-term-memory -->
 
 Memórias de longo prazo são a única coisa que ela mantém permanentemente. Elas não são afetadas por
 `/refresh`, por reinícios ou por mudança de canal.
 
-### Memórias Pessoais vs. do Servidor {#personal-vs-server-memories}
+### Memórias Pessoais vs. do Servidor
+<!-- anchor: personal-vs-server-memories -->
 
 Existem dois tipos de memória de longo prazo:
 
@@ -86,7 +88,8 @@ força:
 
 Administradores do servidor podem desativar o salvamento automático dela inteiramente com `/config` > Permissions.
 
-### Quantas Memórias {#how-many-memories}
+### Quantas Memórias
+<!-- anchor: how-many-memories -->
 
 Por padrão, ela armazena até **100 memórias pessoais** e **100 memórias do servidor**. Quem faz hospedagem própria pode alterar esses valores com as variáveis .env `MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES` e
 `MAX_MEMORY_LENGTH`. Aumentar o *comprimento* custa muito mais contexto do que aumentar a *quantidade*, então
@@ -97,7 +100,8 @@ então um servidor rodando quatro personas tem quatro cotas separadas. Suas pró
 globais contam contra a cota pessoal de cada persona.
 
 
-### Base de Conhecimento de Documentos (RAG) {#document-knowledge-base-rag}
+### Base de Conhecimento de Documentos (RAG)
+<!-- anchor: document-knowledge-base-rag -->
 
 Administradores do servidor podem fornecer a ela documentos para referência usando RAG. Os documentos são fragmentados e armazenados como embeddings pesquisáveis; ela automaticamente recupera
   conteúdo relevante ao responder. Em servidores novos, o gerenciamento de documentos também é restrito a membros com `Manage Server` por padrão; gerentes podem conceder acesso a membros através de `/moderation` Member Access.
@@ -127,7 +131,8 @@ O prompt é exibido antes da importação para que você possa ajustá-lo para o
 
 Importações de histórico são armazenadas como documentos, então `/memories` também funciona com elas.
 
-### Condicionamento {#conditioning}
+### Condicionamento
+<!-- anchor: conditioning -->
 
 `/conditioning` é uma memória por persona, por servidor, que direciona o comportamento de uma persona ao
 longo do tempo. Um empurrãozinho mais leve do que um atributo completo ou prompt de sistema. Use para reforçar
@@ -157,7 +162,8 @@ e ambas apenas para a persona que as possui. Dentro desse escopo, **toda memóri
 com todo prompt** por padrão. A marcação por tags restringe ainda mais, para que uma memória seja ativada apenas por
 uma palavra-chave ou apenas em um canal. Ative com `/config` > Engine > Memory & STM.
 
-### Tags de Palavra-chave {#keyword-tags}
+### Tags de Palavra-chave
+<!-- anchor: keyword-tags -->
 
 - Memórias **sem** tags de palavra-chave estão sempre ativas (o padrão).
 - Memórias **com** tags de palavra-chave só são ativadas quando a palavra-chave aparece no
@@ -173,7 +179,8 @@ uma palavra-chave ou apenas em um canal. Ative com `/config` > Engine > Memory &
 
 Em `/help`, escolha **Memory**, depois **Memory Tagging**, para o mesmo resumo no Discord.
 
-## Memória de Curto Prazo (STM) {#short-term-memory-stm}
+## Memória de Curto Prazo (STM)
+<!-- anchor: short-term-memory-stm -->
 
 A TomoriBot consegue ler facilmente as mensagens do canal atual em que está conversando, mas a STM permite que ela faça o seguinte sem salvar uma memória de longo prazo de fato:
 1. Reforçar temporariamente o cenário/situação atual do canal no contexto

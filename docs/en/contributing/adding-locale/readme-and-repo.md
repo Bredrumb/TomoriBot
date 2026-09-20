@@ -59,12 +59,12 @@ heading changes its anchor:
   generates.
 - If the target is an English-only fallback page, keep the English fragment, because that page's
   headings are still English.
-- Preserve explicitly authored IDs exactly. A heading with an `{#custom-id}` keeps that ID in every
-  language.
+- Preserve explicitly authored IDs exactly. An `<!-- anchor: custom-id -->` comment immediately
+  after a heading keeps that ID in every language.
 
 Verify fragments against the rendered target in the locale you are writing, not against the English
-page. `bun run check-locale-links` extracts anchors from explicit `<a id="...">` tags, `{#custom-id}`
-suffixes, and slugified headings, then fails on a fragment that resolves to nothing. It scans absolute
+page. `bun run check-locale-links` extracts anchors from explicit `<a id="...">` tags, `anchor:`
+comments, and slugified headings, then fails on a fragment that resolves to nothing. It scans absolute
 `docs.tomoribot.app` URLs, which covers locale strings and READMEs, and it resolves a project-owned
 route in the linking file's own locale tree first and then in the default tree, so a link to an
 untranslated English page passes while a link to a page that exists nowhere fails. It does not read

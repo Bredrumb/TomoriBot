@@ -29,7 +29,8 @@ Khi tạo hình ảnh, bot sử dụng ngữ cảnh Ngoại hình (Physical Appe
 và tiêu cực mặc định (nơi backend hỗ trợ prompt tiêu cực). Kết quả được gửi dưới dạng thư viện phương tiện Discord kèm chi
 tiết tại thời điểm tạo, bao gồm mọi người dùng hoặc persona được tham chiếu.
 
-## Tùy chỉnh thẻ tag {#tag-customization}
+## Tùy chỉnh thẻ tag
+<!-- anchor: tag-customization -->
 
 Mọi nguồn thẻ tag ở trên đều có thể chỉnh sửa, mỗi nguồn ở một phạm vi khác nhau. Tất cả các tùy chọn này đều mở một
 cửa sổ modal được điền sẵn các thẻ hiện tại, giúp bạn chỉnh sửa trực tiếp:

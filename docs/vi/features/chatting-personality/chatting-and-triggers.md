@@ -8,7 +8,8 @@ TomoriBot chỉ phản hồi khi có điều gì đó kích hoạt bot. Trang n�
 cách trò chuyện rảnh tay với tính năng tự động kích hoạt, và cách ngăn việc kích hoạt ngoài ý muốn với
 Chế độ kích hoạt có chủ đích.
 
-## Cách kích hoạt bot {#how-to-trigger-her}
+## Cách kích hoạt bot
+<!-- anchor: how-to-trigger-her -->
 
 Theo mặc định, bot sẽ trả lời khi bạn:
 
@@ -20,13 +21,15 @@ Theo mặc định, bot sẽ trả lời khi bạn:
 Từ kích hoạt là cách thuận tiện nhất: khi một từ đã được đăng ký, chỉ cần nhắc đến từ đó là bot sẽ được
 kích hoạt. Trong tin nhắn trực tiếp (DM), bạn chỉ cần nói xin chào (không cần từ kích hoạt).
 
-### Quản lý từ kích hoạt {#managing-trigger-words}
+### Quản lý từ kích hoạt
+<!-- anchor: managing-trigger-words -->
 
 Người quản lý máy chủ sử dụng `/config` > Persona > Triggers để thêm hoặc xóa các từ kích hoạt của
 persona đã chọn. Các thành viên thông thường có thể xem trang này, nhưng các nút điều khiển chỉnh sửa sẽ
 bị vô hiệu hóa.
 
-## Biểu cảm & cảm xúc phản hồi {#expressions--reactions}
+## Biểu cảm & cảm xúc phản hồi
+<!-- anchor: expressions--reactions -->
 
 Khi trả lời, bot có thể sử dụng các emoji tùy chỉnh và sticker của máy chủ bạn, đồng thời thả cảm xúc vào
 các tin nhắn:
@@ -35,7 +38,8 @@ các tin nhắn:
 - Sticker có thể đi kèm phản hồi; bot cũng có thể thêm cảm xúc emoji.
 - Chạy lệnh `/expressions initialize` để đăng ký các emoji và sticker của máy chủ bạn nhằm giúp bot sử dụng chúng chính xác.
 
-## Kênh nhập vai {#roleplay-channels}
+## Kênh nhập vai
+<!-- anchor: roleplay-channels -->
 
 Các kênh nhập vai sẽ ẩn việc sử dụng emoji tùy chỉnh và sticker trong câu trả lời của bot. Mọi người cũng
 có thể sử dụng `/tool delete turn` tại đó để xóa lượt phản hồi mới nhất của bot mà không cần quyền Manage Server.
@@ -75,7 +79,8 @@ Tính năng tự động kích hoạt cho phép bot tham gia cuộc trò chuyệ
 Hãy sử dụng tính năng này trong một kênh chat chuyên dụng, nơi bạn muốn bot mang lại cảm giác như một thành
 viên tham gia hơn là một trợ lý được triệu hồi.
 
-## Chế độ kích hoạt có chủ đích {#deliberate-trigger-mode}
+## Chế độ kích hoạt có chủ đích
+<!-- anchor: deliberate-trigger-mode -->
 
 Nếu mọi người thường xuyên nhắc đến tên persona trong cuộc trò chuyện thông thường, các từ kích hoạt dạng văn
 bản thuần có thể vô tình kích hoạt bot. **Chế độ kích hoạt có chủ đích (DTM)** giải quyết vấn đề này bằng cách

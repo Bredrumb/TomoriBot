@@ -75,7 +75,8 @@ bun run launch --searxng --crawl4ai  # bot 加 sidecar（請看 bun run launch -
 
 bot 上線之後，在 Discord 執行 `/setup` 來連接 AI 供應商。自己的工作區沒有自帶供應商就無法回覆，除非它以使用者 BYOK 模式運行，改由每位成員的個人供應商回答，所以這是每一條安裝路徑的最後一步。
 
-## `/setup` 指令 {#the-setup-command}
+## `/setup` 指令
+<!-- anchor: the-setup-command -->
 
 `/setup` 會開啟一個只有執行者本人能操作、只有自己看得到的檢查清單面板。在伺服器裡它需要
 **管理伺服器**權限；在私訊裡，那個人自己的工作區就能使用。面板上的每一列都是草稿值：

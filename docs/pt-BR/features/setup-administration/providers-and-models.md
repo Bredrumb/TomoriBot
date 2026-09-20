@@ -8,7 +8,8 @@ A TomoriBot não tem um modelo de IA embutido: você conecta um a partir de um p
 serviço de IA (Google Gemini, OpenRouter, NovelAI, um endpoint local, …), e um **modelo** é um
 modelo específico nesse provedor. Você precisa de pelo menos um provedor para usá-la.
 
-## Chaves de API {#api-keys}
+## Chaves de API
+<!-- anchor: api-keys -->
 
 Adicione uma chave de provedor durante a configuração inicial com `/setup`, ou depois em `/providers` escolhendo
 **Add New Provider**. As chaves são **criptografadas em repouso**: ninguém, incluindo administradores do servidor, pode
@@ -96,7 +97,8 @@ mantém seis slots pessoais de roteamento de modelo e não adiciona seletores pe
 Você também pode gerenciar as chaves de backup deste servidor para failover automático e balanceamento de carga com
 `/providers`.
 
-## Endpoints Personalizados {#custom-endpoints}
+## Endpoints Personalizados
+<!-- anchor: custom-endpoints -->
 
 Endpoints personalizados permitem que você registre serviços auto-hospedados ou com proxy: Ollama, LM Studio,
 LiteLLM, vLLM, ComfyUI, TTS/STT local; como **pacotes de provedores rotulados**.
@@ -139,7 +141,8 @@ Para guias completos de execução dos servidores, veja:
 - [Configuração: ComfyUI](/pt-BR/self-hosting/local-endpoints/setup-comfyui/): geração local de imagem/vídeo.
 - [Configuração: ChatMock](/pt-BR/self-hosting/local-endpoints/setup-chatmock/): conta ChatGPT / Codex CLI.
 
-## Provedores Suportados {#supported-providers}
+## Provedores Suportados
+<!-- anchor: supported-providers -->
 
 Se você não tem o hardware para hospedar seus próprios modelos, a TomoriBot suporta uma ampla gama de
 serviços. Nem todo recurso está disponível em todos os provedores.

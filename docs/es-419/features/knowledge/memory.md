@@ -28,12 +28,14 @@ entre canales sin comprometer nada, pero igual expira.
 Para ver exactamente qué se le entrega en un turno dado, consulta
 [Dentro del prompt](/es-419/features/knowledge/inside-the-prompt/).
 
-## Memoria a largo plazo {#long-term-memory}
+## Memoria a largo plazo
+<!-- anchor: long-term-memory -->
 
 Las memorias a largo plazo son lo único que conserva de forma permanente. No se ven afectadas
 por `/refresh`, por reinicios, ni por moverse a otro canal.
 
-### Memorias personales frente a memorias del servidor {#personal-vs-server-memories}
+### Memorias personales frente a memorias del servidor
+<!-- anchor: personal-vs-server-memories -->
 
 Hay dos tipos de memoria a largo plazo:
 
@@ -104,7 +106,8 @@ Estos conteos son **por persona**, no por usuario ni por servidor. Cada persona 
 propio conjunto, así que un servidor con cuatro personas activas tiene cuatro cupos separados.
 Tus propias memorias personales globales cuentan contra el cupo personal de cada persona.
 
-### Base de conocimiento de documentos (RAG) {#document-knowledge-base-rag}
+### Base de conocimiento de documentos (RAG)
+<!-- anchor: document-knowledge-base-rag -->
 
 Los administradores del servidor pueden darle documentos como referencia mediante RAG. Los
 documentos se fragmentan y se almacenan como incrustaciones (embeddings) que se pueden buscar;
@@ -144,7 +147,8 @@ El prompt se muestra antes de importar para que puedas ajustarlo según el canal
 Las importaciones de historial se almacenan como documentos, así que `/memories` también
 funciona con ellas.
 
-### Condicionamiento {#conditioning}
+### Condicionamiento
+<!-- anchor: conditioning -->
 
 `/conditioning` es una memoria por persona y por servidor que orienta el comportamiento de una
 persona con el tiempo. Un empujón más liviano que un atributo completo o un prompt del sistema.
@@ -175,7 +179,8 @@ se envía con cada prompt** por defecto. El etiquetado lo limita aún más, así
 activa solo con una palabra clave o solo en un canal. Actívalo con `/config` > Motor > Memoria y
 STM.
 
-### Etiquetas de palabra clave {#keyword-tags}
+### Etiquetas de palabra clave
+<!-- anchor: keyword-tags -->
 
 - Las memorias **sin** etiquetas de palabra clave están siempre activas (el valor
   predeterminado).
@@ -193,7 +198,8 @@ STM.
 En `/help`, elige **Memoria** y luego **Etiquetado de memoria**, para ver el mismo resumen en
 Discord.
 
-## Memoria a corto plazo (STM) {#short-term-memory-stm}
+## Memoria a corto plazo (STM)
+<!-- anchor: short-term-memory-stm -->
 
 TomoriBot puede leer fácilmente los mensajes del canal actual en el que está hablando, pero la
 STM le permite hacer lo siguiente sin guardar una memoria a largo plazo real:

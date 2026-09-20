@@ -20,11 +20,13 @@ TomoriBot 有一套持久记忆系统，所以她能跨对话记住事实。这�
 
 想看清她每一轮究竟拿到什么，见[提示词内部](/zh-CN/features/knowledge/inside-the-prompt/)。
 
-## 长期记忆 {#long-term-memory}
+## 长期记忆
+<!-- anchor: long-term-memory -->
 
 长期记忆是她唯一永久保留的东西。它们不受 `/refresh`、重启或换频道影响。
 
-### 个人记忆与服务器记忆 {#personal-vs-server-memories}
+### 个人记忆与服务器记忆
+<!-- anchor: personal-vs-server-memories -->
 
 长期记忆分两种：
 
@@ -67,7 +69,8 @@ TomoriBot 有一套持久记忆系统，所以她能跨对话记住事实。这�
 这些条数都是**按人格**算的，不是按用户或按服务器。每个人格保有自己的那一份，所以一个跑着四个人格的服务器就有四份独立额度。你自己的全局个人记忆会占用每个人格的个人额度。
 
 
-### 文档知识库（RAG） {#document-knowledge-base-rag}
+### 文档知识库（RAG）
+<!-- anchor: document-knowledge-base-rag -->
 
 服务器管理员可以用 RAG 给她文档作参考。文档会被切块并存储为可搜索的嵌入；她回答时会自动检索
   相关内容。在新服务器里，文档管理同样默认只限拥有 `Manage Server` 的成员；管理员可以通过 `/moderation` 的成员访问授予成员权限。
@@ -93,7 +96,8 @@ TomoriBot 有一套持久记忆系统，所以她能跨对话记住事实。这�
 
 历史导入会存成文档，所以 `/memories` 对它们同样适用。
 
-### 奖励与惩罚 {#conditioning}
+### 奖励与惩罚
+<!-- anchor: conditioning -->
 
 `/conditioning` 是一种按人格、按服务器的记忆，会随着时间塑造人格的行为。它比完整的属性或系统提示词更轻量。用它来强化某个特定角色在某个特定服务器里该怎么表现。
 
@@ -116,7 +120,8 @@ Here are past things Tomori did that got punished for. Avoid doing them again:
 
 范围先于其他一切收窄：服务器记忆只会到达它自己服务器的提示词，个人记忆只在那个用户在对话里可见时才会，而两者都只对拥有它们的那个人格生效。在这个范围内，**默认每条记忆都会随每次提示词发送**。标签会进一步收窄，让某条记忆只在某个关键词出现时、或只在某个频道里激活。用 `/config` > 行为 > 高级记忆 打开它。
 
-### 关键词标签 {#keyword-tags}
+### 关键词标签
+<!-- anchor: keyword-tags -->
 
 - **没有**关键词标签的记忆始终激活（默认）。
 - **有**关键词标签的记忆只在关键词出现在可见上下文里时激活。
@@ -130,7 +135,8 @@ Here are past things Tomori did that got punished for. Avoid doing them again:
 
 在 `/help` 里选择 **记忆**，再选 **记忆标签（高级）**，可以看到 Discord 里的同一份说明。
 
-## 短期记忆（STM） {#short-term-memory-stm}
+## 短期记忆（STM）
+<!-- anchor: short-term-memory-stm -->
 
 TomoriBot 能轻松读到她在说话的那个频道里的消息，但 STM 让她在不真正保存长期记忆的前提下做到下面这些：
 1. 在上下文里临时强化频道当前的场景与处境

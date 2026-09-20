@@ -55,12 +55,14 @@ architecture reference on [multi-persona behavior](/architecture/subsystems/mult
 Two commands do most of the work of teaching her how to talk and act:
 
 ### Attributes
+<!-- anchor: attributes -->
 
 `/config` > Persona > Identity & Personality adds personality traits or physical characteristics, for example
 `friendly`, `red hair`, or `ends sentences with *Nya~*`. Remove them with
 `/config` > Persona > Identity & Personality.
 
 ### Sample Dialogues
+<!-- anchor: sample-dialogues -->
 
 `/config` > Persona > Identity & Personality teaches her *how she speaks* by example. Use the `{user}` and
 `{bot}` placeholders so dialogues work for everyone (and when you share the persona):
@@ -90,6 +92,7 @@ You can also set a custom system prompt with `/config` > Engine > General to fur
 behavior; see [Behavior Tweaking](/features/chatting-personality/behavior-tweaking/).
 
 ## Sprites (Emotion Avatars)
+<!-- anchor: sprites-emotion-avatars -->
 
 Sprites are alternate avatar images a persona can switch to mid-conversation to express an
 emotion or situation (think of them as her facial expressions). Each sprite is a labeled

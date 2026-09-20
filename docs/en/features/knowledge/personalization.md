@@ -41,6 +41,7 @@ tool updates but does not disable `/personal config`.
 or infer a geographic location or IANA timezone.
 
 ## Your Own Providers
+<!-- anchor: your-own-providers -->
 
 Personal providers let *your own requests* use *your own* API keys and models instead of the
 server's defaults. This is bring-your-own-key (BYOK) at the individual level.
@@ -101,6 +102,7 @@ providers apply across every server you use her in.
   `/impersonate user`.
   
 ## Personal Spotlight
+<!-- anchor: personal-spotlight -->
 
 **Personal Spotlight: per-channel persona picks.** Spotlight lets *you* narrow which personas
 you can trigger in one channel, and optionally assign one to auto-trigger for your own

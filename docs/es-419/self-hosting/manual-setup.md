@@ -88,7 +88,8 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # ver todos los indicadores
 ```
 
-## Extras opcionales (la "instalación completa" manual) {#optional-extras-the-manual-full-install}
+## Extras opcionales (la "instalación completa" manual)
+<!-- anchor: optional-extras-the-manual-full-install -->
 
 La ruta **Instalación completa** del [asistente de instalación](/es-419/self-hosting/setup-wizard/) agrega
 cuatro extras livianos encima de la instalación base. Ninguno es necesario para ejecutar el bot, pero

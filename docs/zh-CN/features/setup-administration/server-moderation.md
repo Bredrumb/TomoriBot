@@ -8,7 +8,8 @@ TomoriBot 通过 `/config` 面板及其相关指令，把她在你服务器里�
 在哪里用、花费多少）。大多数需要**管理服务器**权限。这一页讲重点；全部指令见
 [指令参考](/zh-CN/features/command-reference/)。
 
-## 成本控制：配额 {#cost-control-quotas}
+## 成本控制：配额
+<!-- anchor: cost-control-quotas -->
 
 生成是要花钱的（你的钱，或者你成员的钱）。配额按用户和全服务器限制用量：
 
@@ -17,7 +18,8 @@ TomoriBot 通过 `/config` 面板及其相关指令，把她在你服务器里�
 
 把按用户上限设为 `0` 表示不限制。全服务器池按可配置的天数间隔重置。
 
-## 用户 BYOK（Bring Your Own Key） {#user-byok-bring-your-own-key}
+## 用户 BYOK（Bring Your Own Key）
+<!-- anchor: user-byok-bring-your-own-key -->
 
 `/moderation` 的 **((成员访问))** 把这一项做成二选一。**允许使用服务器模型** 是
 默认值；**必须使用个人提供方** 会让每位成员为自己的触发自备**自己的**

@@ -47,13 +47,15 @@ liệu tham khảo kiến trúc về [hành vi đa persona](/en/architecture/sub
 
 Hai lệnh thực hiện hầu hết công việc dạy bot cách nói chuyện và hành xử:
 
-### Thuộc tính {#attributes}
+### Thuộc tính
+<!-- anchor: attributes -->
 
 `/config` > Persona > Identity & Personality thêm các nét tính cách hoặc đặc điểm ngoại hình, ví dụ
 `thân thiện`, `tóc đỏ`, hoặc `kết thúc câu bằng *Nya~*`. Xóa chúng bằng
 `/config` > Persona > Identity & Personality.
 
-### Mẫu hội thoại {#sample-dialogues}
+### Mẫu hội thoại
+<!-- anchor: sample-dialogues -->
 
 `/config` > Persona > Identity & Personality dạy bot *cách nói chuyện* thông qua ví dụ. Sử dụng các
 trình giữ chỗ `{user}` và `{bot}` để các đoạn hội thoại hoạt động cho tất cả mọi người (và khi bạn
@@ -83,7 +85,8 @@ Xóa các ví dụ bằng `/config` > Persona > Identity & Personality.
 Bạn cũng có thể đặt một prompt hệ thống tùy chỉnh với `/config` > Engine > General để định hình thêm
 hành vi; xem [Tinh chỉnh hành vi](/vi/features/chatting-personality/behavior-tweaking/).
 
-## Sprite (Avatar cảm xúc) {#sprites-emotion-avatars}
+## Sprite (Avatar cảm xúc)
+<!-- anchor: sprites-emotion-avatars -->
 
 Sprite là các hình ảnh avatar thay thế mà một persona có thể chuyển đổi giữa cuộc trò chuyện để thể
 hiện một cảm xúc hoặc hoàn cảnh (hãy coi chúng như biểu cảm khuôn mặt của bot). Mỗi sprite là một hình

@@ -77,7 +77,8 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # 查看所有旗標
 ```
 
-## 選用額外項目（手動的「完整安裝」） {#optional-extras-the-manual-full-install}
+## 選用額外項目（手動的「完整安裝」）
+<!-- anchor: optional-extras-the-manual-full-install -->
 
 [設定精靈](/zh-TW/self-hosting/setup-wizard/)的**完整安裝**路徑會在基礎安裝之上疊加四個輕量的額外項目。它們都不是執行 bot 的必要條件，但每一項都會解鎖一個功能。如果你是手動安裝，想要哪一項就加哪一項：
 

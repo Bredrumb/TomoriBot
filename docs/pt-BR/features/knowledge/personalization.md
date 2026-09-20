@@ -41,7 +41,8 @@ por ferramenta, mas não desabilita `/personal config`.
 `/personal config` armazena apenas um deslocamento numérico UTC de -12 a +14. Não armazena
 nem infere uma localização geográfica ou timezone IANA.
 
-## Seus Próprios Provedores {#your-own-providers}
+## Seus Próprios Provedores
+<!-- anchor: your-own-providers -->
 
 Provedores pessoais permitem que *suas próprias solicitações* usem *suas próprias* chaves de API e modelos em vez dos
 padrões do servidor. Isso é BYOK (traga sua própria chave) no nível individual.
@@ -101,7 +102,8 @@ pessoais se aplicam em todos os servidores em que você a usa.
 - `/personal config`: definir um prompt reutilizável para quando ela personifica você via
   `/impersonate user`.
 
-## Destaque Pessoal {#personal-spotlight}
+## Destaque Pessoal
+<!-- anchor: personal-spotlight -->
 
 **Destaque Pessoal: escolha de personas por canal.** O Destaque permite que *você* restrinja quais personas
 pode acionar em um canal; opcionalmente, atribua uma para acionar automaticamente para suas próprias

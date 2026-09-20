@@ -6,7 +6,8 @@ sidebar:
 
 TomoriBot 沒有內建的 AI 模型，你要從供應商接一個進來。**供應商**是一項 AI 服務（Google Gemini、OpenRouter、NovelAI、本機端點等等），**模型**則是該供應商上的特定模型。你至少需要一個供應商才能真正使用她。
 
-## API 金鑰 {#api-keys}
+## API 金鑰
+<!-- anchor: api-keys -->
 
 在首次設定時用 `/setup` 加入供應商金鑰，或之後在 `/providers` 選擇 **+ 新增供應商**。金鑰會**加密儲存**：沒有人能讀回它們，包括伺服器管理員。
 
@@ -68,7 +69,8 @@ Brave Search 與你的 AI 供應商是分開的，只會強化網頁搜尋（加
 
 你也可以用 `/providers` 管理這個伺服器的備援金鑰，用於自動容錯與負載平衡。
 
-## 自訂端點 {#custom-endpoints}
+## 自訂端點
+<!-- anchor: custom-endpoints -->
 
 自訂端點讓你把自架或以代理為後端的服務（Ollama、LM Studio、LiteLLM、vLLM、ComfyUI、本機 TTS 與 STT）註冊成**有標籤的供應商組合**。
 
@@ -89,7 +91,8 @@ API 相容性決定了服務實作的請求路徑與內容，因此也決定了�
 - [設定：ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/)：本機圖片與影片生成。
 - [設定：ChatMock](/zh-TW/self-hosting/local-endpoints/setup-chatmock/)：ChatGPT 帳號與 Codex CLI。
 
-## 支援的供應商 {#supported-providers}
+## 支援的供應商
+<!-- anchor: supported-providers -->
 
 如果你沒有自架模型所需的硬體，TomoriBot 支援各式各樣的服務。不是每項功能都能在每個供應商上使用。
 
