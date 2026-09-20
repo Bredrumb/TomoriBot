@@ -1,6 +1,7 @@
 export default {
   setup: {
     description: `开始初始设置流程。配置 AI 提供方和人格。`,
+    language_description: `选择此次设置会话使用的语言。`,
     humanizer_option_none_label: `关闭`,
     humanizer_option_none_desc: `使用当前系统提示词，但把可见文字合并成一次回复。`,
     humanizer_option_light_label: `轻度`,

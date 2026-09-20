@@ -1,6 +1,7 @@
 export default {
   setup: {
     description: `Bắt đầu quá trình thiết lập ban đầu. Cấu hình nhà cung cấp AI và tính cách.`,
+    language_description: `Chọn ngôn ngữ cho phiên thiết lập này.`,
     humanizer_option_none_label: `Không dùng`,
     humanizer_option_none_desc: `Dùng system prompt hiện tại, nhưng đệm văn bản thành một phản hồi cho mỗi giai đoạn không công cụ.`,
     humanizer_option_light_label: `Nhẹ`,

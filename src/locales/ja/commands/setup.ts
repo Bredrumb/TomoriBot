@@ -1,6 +1,7 @@
 export default {
   setup: {
     description: `初期設定プロセスを開始します。AIプロバイダーとパーソナリティを設定します。`,
+    language_description: `このセットアップセッションで使う言語を選びます。`,
     humanizer_option_none_label: `なし`,
     humanizer_option_none_desc: `有効なシステムプロンプトを使い、表示テキストをツール呼び出しのない区間ごとに1つの返信へまとめます。`,
     humanizer_option_light_label: `軽`,

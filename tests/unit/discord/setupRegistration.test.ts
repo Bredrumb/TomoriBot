@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { PermissionsBitField, type ChatInputCommandInteraction } from "discord.js";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
 import { resolveCommandCooldown } from "@/events/interactionCreate/handleCommands";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { getLocaleEndonym, getSupportedLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { execute } from "@/commands/setup";
 import type { UserRow } from "@/types/db/schema";
 import { serverRepository } from "@/utils/db/repositories";
@@ -14,7 +14,11 @@ type RegistrationPayload = {
   description?: string;
   contexts?: number[];
   default_member_permissions?: string;
-  options?: Array<{ name: string }>;
+  options?: Array<{
+    name: string;
+    required?: boolean;
+    choices?: Array<{ name: string; value: string; name_localizations?: Record<string, string> }>;
+  }>;
 };
 
 describe("/setup registration", () => {
@@ -30,6 +34,11 @@ describe("/setup registration", () => {
 
     expect(setupCommand.contexts).toBeUndefined(); // DM-capable
     expect(setupCommand.default_member_permissions).toBe(String(PermissionsBitField.Flags.ManageGuild));
+    const languageOption = setupCommand.options?.find((option) => option.name === "language");
+    expect(languageOption?.required).toBe(true);
+    expect(languageOption?.choices?.map((choice) => choice.value)).toEqual(getSupportedLocales());
+    expect(languageOption?.choices?.map((choice) => choice.name)).toEqual(getSupportedLocales().map(getLocaleEndonym));
+    expect(languageOption?.choices?.every((choice) => choice.name_localizations === undefined)).toBe(true);
     expect(executionMap.get("setup")?.has(ROOT_COMMAND_EXECUTION_KEY)).toBe(true);
   });
 
@@ -74,7 +83,12 @@ describe("/setup execution authorization", () => {
    * `startSetupWizard`, which owns the permission check and the workspace-health guard. These
    * assertions therefore read the wizard's own surface, which is the deferred ephemeral reply.
    */
-  function makeCommandInteraction(options: { guildId: string | null; canManageGuild: boolean }): {
+  function makeCommandInteraction(options: {
+    guildId: string | null;
+    canManageGuild: boolean;
+    language?: string;
+    throwOnLanguageRead?: boolean;
+  }): {
     interaction: ChatInputCommandInteraction;
     replies: Array<{ content?: string }>;
     state: { deferred: boolean };
@@ -88,6 +102,12 @@ describe("/setup execution authorization", () => {
       user: { id: "user-1" },
       channel: { isDMBased: () => options.guildId === null },
       guild: options.guildId ? { id: options.guildId } : null,
+      options: {
+        getString: () => {
+          if (options.throwOnLanguageRead) throw new Error("Missing setup language option");
+          return options.language ?? "en-US";
+        },
+      },
       memberPermissions: {
         has: (perm: unknown) =>
           (perm === "ManageGuild" || perm === PermissionsBitField.Flags.ManageGuild) && options.canManageGuild,
@@ -119,6 +139,47 @@ describe("/setup execution authorization", () => {
     expect(repoSpy).not.toHaveBeenCalled();
     expect(state.deferred).toBe(true);
     expect(replies[0]?.content).toBe(localizer("en-US", "commands.setup.wizard.permission_denied"));
+
+    repoSpy.mockRestore();
+  });
+
+  it("uses the chosen language for a setup rejection", async () => {
+    const repoSpy = spyOn(serverRepository, "loadServerIdByDiscId").mockResolvedValue(null);
+    const { interaction, replies } = makeCommandInteraction({
+      guildId: "guild-1",
+      canManageGuild: false,
+      language: "ja",
+    });
+
+    await execute({} as unknown as import("discord.js").Client, interaction, {} as UserRow, "en-US");
+
+    expect(replies[0]?.content).toBe(localizer("ja", "commands.setup.wizard.permission_denied"));
+
+    repoSpy.mockRestore();
+  });
+
+  it("reports an option-read failure in the command locale", async () => {
+    const { interaction, replies } = makeCommandInteraction({
+      guildId: "guild-1",
+      canManageGuild: false,
+      throwOnLanguageRead: true,
+    });
+
+    await execute({} as unknown as import("discord.js").Client, interaction, {} as UserRow, "ja");
+
+    expect(replies[0]?.content).toBe(localizer("ja", "general.errors.unknown_error_description"));
+  });
+
+  it("edits a deferred reply when setup initialization fails", async () => {
+    const repoSpy = spyOn(serverRepository, "loadServerIdByDiscId").mockRejectedValue(
+      new Error("Database unavailable"),
+    );
+    const { interaction, replies, state } = makeCommandInteraction({ guildId: null, canManageGuild: false });
+
+    await execute({} as unknown as import("discord.js").Client, interaction, {} as UserRow, "en-US");
+
+    expect(state.deferred).toBe(true);
+    expect(replies[0]?.content).toBe(localizer("en-US", "general.errors.unknown_error_description"));
 
     repoSpy.mockRestore();
   });

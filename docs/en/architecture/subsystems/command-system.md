@@ -206,6 +206,11 @@ registers the `setup:v1` namespace and `src/utils/discord/ui/setupPanel.ts` buil
 from the same draft, so each control and every modal submission arrives as its own `interactionCreate`
 rather than through a collector.
 
+Its required `language` option selects the wizard language and the initial workspace locale. It does
+not change the invoker's saved language preference. On completion, it determines the default persona
+name, initial trigger words, and locale-filtered persona preset catalog, while `registration_locale`
+records the setup locale for analytics. The selected locale travels in every routed control ID.
+
 - The custom ID carries only the action, the locale, and an opaque nonce. The nonce resolves a bounded
   process-local draft (`setupDraftStore.ts`) bound to the actor, the workspace, and the guild-or-DM
   context, so the panel outlives the command invocation but not the process. `SETUP_DRAFT_MAX_ENTRIES`

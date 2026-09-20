@@ -1,6 +1,7 @@
 export default {
   setup: {
     description: `開始初始設定流程。設定 AI 供應商與人格。`,
+    language_description: `選擇這次設定工作階段使用的語言。`,
     humanizer_option_none_label: `無`,
     humanizer_option_none_desc: `使用你目前的系統提示詞，但會把可見文字緩衝成每個無工具階段一則回覆。`,
     humanizer_option_light_label: `輕度`,

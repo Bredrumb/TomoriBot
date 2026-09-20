@@ -1,6 +1,7 @@
 export default {
   setup: {
     description: `Inicia el proceso de configuración inicial. Configura el proveedor de IA y la personalidad.`,
+    language_description: `Elige el idioma para esta sesión de configuración.`,
     humanizer_option_none_label: `Ninguno`,
     humanizer_option_none_desc: `Usa tu prompt de sistema activo, pero agrupa el texto visible en una respuesta por fase sin herramientas.`,
     humanizer_option_light_label: `Ligero`,

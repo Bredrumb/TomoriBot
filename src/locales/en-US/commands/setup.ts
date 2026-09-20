@@ -1,6 +1,7 @@
 export default {
   setup: {
     description: `Start the initial setup process. Configure AI provider and personality.`,
+    language_description: `Choose the language for this setup session.`,
     humanizer_option_none_label: `None`,
     humanizer_option_none_desc: `Uses your active system prompt, but buffers visible text into one reply per tool-free phase.`,
     humanizer_option_light_label: `Light`,

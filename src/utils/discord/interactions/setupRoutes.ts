@@ -1135,10 +1135,7 @@ export interface SetupWizardDependencies {
   createNonce: () => string;
   isHostedPolicyEnvironment: () => boolean;
   storeSetupDraft: typeof storeSetupDraft;
-  /**
-   * Locale for the wizard's own surfaces, which the command resolves from the actor's stored
-   * language preference so setup reads like every other command.
-   */
+  /** Locale selected when the setup command starts the wizard. */
   locale?: string;
 }
 
