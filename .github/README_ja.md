@@ -1,4 +1,4 @@
-### [English](../README.md) | 日本語 | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md) | [Español (LATAM)](README_es-419.md) | [Português (Brasil)](README_pt-BR.md) | [Tiếng Việt](README_vi.md)
+### [English](../README.md) | 日本語 | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md) | [Español](README_es-419.md) | [Português (Brasil)](README_pt-BR.md) | [Tiếng Việt](README_vi.md)
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as
@@ -22,7 +22,7 @@
 Discord向けの自ホスト可能でカスタマイズ自在な個人AIアシスタント/ロールプレイシステム。記憶、複数ペルソナ、ツール呼び出し、マルチモーダル、API/ローカルモデルサポートを備えています。
 
 <p align="center">
-  <strong><a href="https://docs.tomoribot.app/en/">公式ウェブサイト</a></strong>
+  <strong><a href="https://tomoribot.app/">公式ウェブサイト</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">TomoriBotを招待</a></strong>
   &middot;
@@ -111,41 +111,11 @@ TomoriBotは長期記憶、マルチペルソナ動作、WebおよびMCPツー�
 
 ## 役立つリソース
 
-### [対応プロバイダーの完全なリスト](https://docs.tomoribot.app/ja/features/setup-administration/providers-and-models/#サポートされているプロバイダー)
-TomoriBotは、幅広いLLMプロバイダー、画像生成API、音声サービス、検索ツールを標準でサポートしています。
-
-### [ローカルモデルの実行方法](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/)
-
-TomoriBotはローカルLLM（KoboldCPP、LM Studio、vLLM経由など）、ComfyUIによるローカル画像/動画生成、ローカルTTS・STTエンドポイント、さらにローカルのSearXNGやブラウザWeb取得用のDockerサイドカーに対応しています。
-
-### [セキュリティと脅威モデル](https://docs.tomoribot.app/en/wiki/threat-models/)
-
-TomoriBotは暗号化とセキュリティのベストプラクティスを採用し、ローカル環境でもパブリックデプロイでも、データとAPIキーを完全に安全に保ちます。
-
-### [プロンプトカスタマイズ用ツールマクロ](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/)
-
-TomoriBotには多彩なビルトインツール（Web検索、記憶管理、画像生成、クロスチャンネルメッセージングなど）が備わっており、プロンプト内でマクロとして直接参照できます。以下はいくつかのおふざけな例です：
-
-#### 1. ウェルネスチェッカー
-```text
-数時間おきに、@Bredrumbの様子を必ず確認する。
-今の気分はどうか、最近コーディングの休憩を取れているかを尋ねる。
-{memory_tool}や{memory_update_tool}で彼の感情の状態を時系列で記録し、後で本人に報告する。
-```
-#### 2. 週刊 ~~時事~~ 百合ニュース
-```text
-毎週金曜日、{web_search_tool}を使ってその週の注目の百合漫画の章、アニメエピソード、コミュニティのファンアートをまとめる。
-まとめた内容を{voice_message_tool}で艶っぽいASMRボイスで発表する。
-```
-#### 3. 睡眠ポリス
-```text
-{message_metadata_tool}で誰かが午前2時を過ぎてもチャットしていることに気づいたら、{voice_message_tool}で不気味なほど穏やかなASMRの子守唄を送り、寝るように伝える。
-10分後もまだ話し続けていたら、{manage_message_tool}でその人のためを思ってメッセージを削除し、睡眠不足が彼らの問題の主な原因であることを念押しする。
-```
-### [公式TomoriBotロードマップ](https://github.com/users/Bredrumb/projects/1/views/1)
-
-TomoriBotの予定されている機能や既知の問題の最新情報を確認できます。
-
+- [対応プロバイダーの完全なリスト](https://docs.tomoribot.app/ja/features/setup-administration/providers-and-models/#サポートされているプロバイダー)
+- [ローカルモデルの実行方法](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/)
+- [セキュリティと脅威モデル](https://docs.tomoribot.app/en/wiki/threat-models/)
+- [公式TomoriBotロードマップ](https://github.com/users/Bredrumb/projects/1/views/1)
+- [プロンプトカスタマイズ用ツールマクロ](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/)
 
 <!-- GETTING STARTED -->
 ## セルフホスティング
@@ -307,7 +277,7 @@ TomoriBotへのコントリビュートは大歓迎です！プルリクエス�
 <!-- CONTACT -->
 ## 連絡先とリンク
 
-**公式ウェブサイト**: [https://docs.tomoribot.app](https://docs.tomoribot.app/en/)
+**公式ウェブサイト**: [https://tomoribot.app](https://tomoribot.app/)
 
 **プロジェクトリンク**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

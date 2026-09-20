@@ -82,8 +82,8 @@ returns the Discord-facing expansion. Keep the two uses distinct: an alias is a 
 lookup concept, never a directory.
 
 The docs site mirrors this through `DOCS_LOCALE_ALIASES`, which is inverted from the same registry so
-one alias decision covers runtime strings and docs destinations. The docs root presents explicit language
-links, so aliases affect generated bot links rather than request routing. See
+one alias decision covers runtime strings and docs destinations. The product landing page presents explicit
+language links, so aliases affect generated bot links rather than request routing. See
 [Documentation](/contributing/adding-locale/documentation/).
 
 ## What A New Locale Registers

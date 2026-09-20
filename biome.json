@@ -3,7 +3,15 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**/*", "!!**/node_modules", "!!**/dist", "!!**/tokenizers", "!!scripts", "!!apps/docs"]
+    "includes": [
+      "**/*",
+      "!!**/node_modules",
+      "!!**/dist",
+      "!!**/tokenizers",
+      "!!scripts",
+      "!!apps/docs",
+      "!!apps/landing"
+    ]
   },
   "formatter": {
     "enabled": true,

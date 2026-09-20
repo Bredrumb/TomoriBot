@@ -54,6 +54,13 @@
         "starlight-llms-txt": "0.11.0",
       },
     },
+    "apps/landing": {
+      "name": "tomoribot-landing",
+      "devDependencies": {
+        "@astrojs/sitemap": "^3.7.3",
+        "astro": "^7.2.8",
+      },
+    },
   },
   "patchedDependencies": {
     "@matrix-org/matrix-sdk-crypto-nodejs@0.4.0": "patches/@matrix-org%2Fmatrix-sdk-crypto-nodejs@0.4.0.patch",
@@ -2100,6 +2107,8 @@
     "token-types": ["token-types@6.1.2", "", { "dependencies": { "@borewit/text-codec": "^0.2.1", "@tokenizer/token": "^0.3.0", "ieee754": "^1.2.1" } }, "sha512-dRXchy+C0IgK8WPC6xvCHFRIWYUbqqdEIKPaKo/AcTUNzwLTK6AH7RjdLWsEZcAN/TBdtfUw3PYEgPr5VPr6ww=="],
 
     "tomoribot-docs": ["tomoribot-docs@workspace:apps/docs"],
+
+    "tomoribot-landing": ["tomoribot-landing@workspace:apps/landing"],
 
     "tough-cookie": ["tough-cookie@6.0.1", "", { "dependencies": { "tldts": "^7.0.5" } }, "sha512-LktZQb3IeoUWB9lqR5EWTHgW/VTITCXg4D21M+lvybRVdylLrRMnqaIONLVb5mav8vM19m44HIcGq4qASeu2Qw=="],
 

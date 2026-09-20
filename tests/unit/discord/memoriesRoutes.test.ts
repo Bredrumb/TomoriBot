@@ -107,6 +107,31 @@ function collectTextDisplays(value: unknown): string[] {
   return [...self, ...Object.values(record).flatMap(collectTextDisplays)];
 }
 
+describe("short-term memory panel", () => {
+  it("renders active entries together without component spacing", () => {
+    const payload = buildMemoriesPanelPayload({
+      locale: "en-US",
+      category: "stm",
+      selectedLineageId: 1770,
+      personas: [makePersona(10, 1770, "Main Persona")],
+      memories: [],
+      stmCount: 2,
+      stmEntries: [
+        { personaName: "Main Persona", channelId: "12345678901234567", lastUpdated: 1 },
+        { personaName: "Alternate Persona", channelId: "12345678901234568", lastUpdated: 2 },
+      ],
+      canManage: true,
+      readStatus: "fresh",
+      page: { kind: "main" },
+    });
+
+    const entryDisplay = collectTextDisplays(payload.components).find((content) => content.includes("Main Persona"));
+    expect(entryDisplay).toBe(
+      "> **Main Persona** - <#12345678901234567>\n> **Alternate Persona** - <#12345678901234568>",
+    );
+  });
+});
+
 describe("memories panel route catalog", () => {
   const WIRE_CONTRACT_V1: ReadonlyArray<readonly [string, MemoriesPanelRoute]> = [
     ["memories:v1:category:en-US:memories", { action: "category", locale: "en-US", category: "memories" }],

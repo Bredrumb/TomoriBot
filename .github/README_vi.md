@@ -1,4 +1,4 @@
-### [English](../README.md) | [日本語](README_ja.md) | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md) | [Español (LATAM)](README_es-419.md) | [Português (Brasil)](README_pt-BR.md) | Tiếng Việt
+### [English](../README.md) | [日本語](README_ja.md) | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md) | [Español](README_es-419.md) | [Português (Brasil)](README_pt-BR.md) | Tiếng Việt
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as
@@ -22,7 +22,7 @@
 Một trợ lý AI cá nhân và hệ thống nhập vai (role-playing) self-hosting có thể tùy chỉnh dành cho Discord với bộ nhớ, nhiều persona, gọi công cụ, đa phương thức cùng khả năng hỗ trợ API và model cục bộ.
 
 <p align="center">
-  <strong><a href="https://docs.tomoribot.app/vi/">Trang web chính thức</a></strong>
+  <strong><a href="https://tomoribot.app/">Trang web chính thức</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Mời TomoriBot</a></strong>
   &middot;
@@ -111,41 +111,11 @@ Sau khi thêm bot vào máy chủ của bạn bằng một trong hai cách trên
 
 ## Tài nguyên hữu ích
 
-### [Danh sách đầy đủ các nhà cung cấp được hỗ trợ](https://docs.tomoribot.app/vi/features/setup-administration/providers-and-models/#các-nhà-cung-cấp-được-hỗ-trợ)
-TomoriBot hỗ trợ sẵn một loạt các nhà cung cấp LLM, API tạo hình ảnh, dịch vụ giọng nói và công cụ tìm kiếm.
-
-### [Cách chạy các model cục bộ](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/)
-
-TomoriBot hỗ trợ các LLM cục bộ (thông qua KoboldCPP, LM Studio, vLLM,...), tạo hình ảnh/video cục bộ qua ComfyUI, các endpoint TTS và STT cục bộ, cũng như các sidecar Docker SearXNG và thu thập web bằng trình duyệt cục bộ.
-
-### [Bảo mật & mô hình mối đe dọa](https://docs.tomoribot.app/en/wiki/threat-models/)
-
-TomoriBot áp dụng mã hóa và các biện pháp bảo mật tốt nhất để giữ an toàn tuyệt đối cho dữ liệu và các API key, cho cả các cấu hình cục bộ cũng như những người sử dụng bản triển khai công khai.
-
-### [Macro công cụ để tùy chỉnh prompt](https://docs.tomoribot.app/vi/features/capabilities/tools-and-extensions/)
-
-TomoriBot đi kèm với nhiều công cụ tích hợp sẵn (chẳng hạn như tìm kiếm web, quản lý bộ nhớ, tạo hình ảnh, nhắn tin xuyên kênh và hơn thế nữa), bạn có thể tham chiếu trực tiếp đến chúng trong prompt của mình bằng các macro, dưới đây là một số ví dụ vui:
-
-#### 1. Wellness Checker
-```text
-Every few hours, do a mandatory wellness check on @Bredrumb. 
-Ask them how they feel right now and if they've taken a break from coding recently. 
-Track their emotional state over time with {memory_tool} and/or {memory_update_tool} to report back to them later.
-```
-#### 2. Weekly ~~Current Events~~ Yuri News 
-```text
-Every Friday, compile the week's notable yuri manga chapters, anime episodes, and community fanart drops using {web_search_tool}. 
-Present findings with {voice_message_tool} in a seductive ASMR voice.
-```
-#### 3. Sleep Police
-```text
-If you notice through {message_metadata_tool} that someone is chatting past 2 AM, use {voice_message_tool} to send them a threateningly calm ASMR lullaby telling them to go to bed. 
-If they keep talking 10 minutes later, use {manage_message_tool} to delete their message for their own good and remind them that sleep deprivation is a leading cause of their issues.
-```
-### [Lộ trình phát triển chính thức của TomoriBot](https://github.com/users/Bredrumb/projects/1/views/1) 
-
-Cập nhật thông tin về các tính năng đã lên kế hoạch của TomoriBot cũng như tất cả các vấn đề đã biết.
-
+- [Danh sách đầy đủ các nhà cung cấp được hỗ trợ](https://docs.tomoribot.app/vi/features/setup-administration/providers-and-models/#các-nhà-cung-cấp-được-hỗ-trợ)
+- [Cách chạy các model cục bộ](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/)
+- [Bảo mật & mô hình mối đe dọa](https://docs.tomoribot.app/en/wiki/threat-models/)
+- [Lộ trình phát triển chính thức của TomoriBot](https://github.com/users/Bredrumb/projects/1/views/1)
+- [Macro công cụ để tùy chỉnh prompt](https://docs.tomoribot.app/vi/features/capabilities/tools-and-extensions/)
 
 <!-- GETTING STARTED -->
 ## Self-Hosting
@@ -309,7 +279,7 @@ Bạn kiểm soát dữ liệu của chính mình và chịu trách nhiệm về
 <!-- CONTACT -->
 ## Liên hệ & liên kết
 
-**Trang web chính thức**: [https://docs.tomoribot.app](https://docs.tomoribot.app/vi/)
+**Trang web chính thức**: [https://tomoribot.app](https://tomoribot.app/)
 
 **Liên kết dự án**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 
