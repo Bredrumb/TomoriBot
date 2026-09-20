@@ -297,6 +297,19 @@ const docsLocales = Object.fromEntries(
 );
 
 /**
+ * Language tag for the sitemap's `xhtml:link` hreflang annotations.
+ *
+ * `@astrojs/sitemap` validates every value in its i18n map against `/^[a-zA-Z-]+$/`. A tag carrying
+ * a UN M.49 numeric region (`es-419`) fails that schema, and the integration then skips generating a
+ * sitemap for the entire site rather than for that one locale, while `robots.txt` still advertises
+ * one. Dropping the numeric region yields a valid, less specific tag; the page's own head keeps the
+ * exact tag, so only the sitemap annotation loses precision.
+ */
+function sitemapLanguageTag(lang: string): string {
+  return lang.replace(/-\d+$/, "");
+}
+
+/**
  * Locale roots each get a meta-refresh redirect to their own introduction page, matching the
  * Cloudflare 200-rewrites in `public/_redirects`. Unlisted roots are not routes at all: a locale
  * enters this map only once its page tree exists.
@@ -572,7 +585,7 @@ export default defineConfig({
     sitemap({
       i18n: {
         defaultLocale: DEFAULT_DOCS_LOCALE_ID,
-        locales: Object.fromEntries(sidebarLocales.map((locale) => [locale.id, locale.lang])),
+        locales: Object.fromEntries(sidebarLocales.map((locale) => [locale.id, sitemapLanguageTag(locale.lang)])),
       },
       filter: (page) => !isInternalOrFallbackPath(new URL(page).pathname),
     }),

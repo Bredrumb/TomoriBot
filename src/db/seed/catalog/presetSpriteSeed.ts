@@ -16,7 +16,7 @@ import {
   normalizePersonaSpriteInstructions,
   normalizePersonaSpriteKey,
 } from "@/utils/persona/sprites";
-import { buildPresetSpriteFilename, uploadPresetSpriteToStorage } from "@/utils/storage/avatarStorage";
+import { buildPresetSpriteRelativeKey, uploadPresetSpriteToStorage } from "@/utils/storage/avatarStorage";
 import { personaSections } from "./personas";
 import type { PersonaInput, PresetSpriteInput } from "./types";
 
@@ -32,6 +32,9 @@ const CONTENT_HASH_LENGTH = 12;
  */
 export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<void> {
   const personas = personaSections.flatMap((section) => section.rows);
+  // Every locale variant of a preset resolves to the same storage key, so without this an art
+  // change re-uploads identical bytes once per authored locale.
+  const uploadedThisRun = new Map<string, string>();
   for (const persona of personas) {
     // Only personas that explicitly author a sprites array participate. Omitting
     // the field entirely is a no-op; an empty array reconciles to "no sprites".
@@ -41,7 +44,7 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<void> 
 
     const seededKeys: string[] = [];
     for (const sprite of persona.sprites) {
-      const spriteKey = await seedOneSprite(client, persona, sprite);
+      const spriteKey = await seedOneSprite(client, persona, sprite, uploadedThisRun);
       if (spriteKey) {
         seededKeys.push(spriteKey);
       }
@@ -57,7 +60,12 @@ export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<void> 
  *
  * @returns The sprite's lookup key on success, or null when skipped
  */
-async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetSpriteInput): Promise<string | null> {
+async function seedOneSprite(
+  client: SQL,
+  persona: PersonaInput,
+  sprite: PresetSpriteInput,
+  uploadedThisRun: Map<string, string>,
+): Promise<string | null> {
   const displayName = normalizePersonaSpriteDisplayName(sprite.name);
   const spriteKey = normalizePersonaSpriteKey(sprite.name);
   if (!displayName || !spriteKey) {
@@ -78,10 +86,10 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
     return null;
   }
 
-  // Content-address the image. If the existing row already references this
-  //    exact content, skip the (network) upload and only refresh metadata.
+  // Compared against the whole relative key, not the filename: a row written under the retired
+  // per-language key ends with the same filename, so a suffix test would pin it to its old path.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
-  const expectedSuffix = buildPresetSpriteFilename(spriteKey, contentHash);
+  const expectedKey = buildPresetSpriteRelativeKey({ lineageId: persona.lineageId, spriteKey, contentHash });
 
   const [existing] = await client<Array<{ avatar_url: string }>>`
     SELECT avatar_url
@@ -94,21 +102,24 @@ async function seedOneSprite(client: SQL, persona: PersonaInput, sprite: PresetS
 
   const existingUrl = existing?.avatar_url ?? null;
   let avatarUrl: string;
-  if (existingUrl?.endsWith(expectedSuffix)) {
+  if (existingUrl?.endsWith(expectedKey)) {
     // Same content already uploaded, so skip the (network) upload, refresh metadata only.
     avatarUrl = existingUrl;
   } else {
-    const uploadedUrl = await uploadPresetSpriteToStorage({
-      lineageId: persona.lineageId,
-      language: persona.language,
-      spriteKey,
-      contentHash,
-      buffer: pngBuffer,
-    });
+    const alreadyUploaded = uploadedThisRun.get(expectedKey);
+    const uploadedUrl =
+      alreadyUploaded ??
+      (await uploadPresetSpriteToStorage({
+        lineageId: persona.lineageId,
+        spriteKey,
+        contentHash,
+        buffer: pngBuffer,
+      }));
     if (!uploadedUrl) {
       log.warn(`[Preset Sprites] Skipping ${persona.name}/${sprite.name}: image upload failed`);
       return null;
     }
+    uploadedThisRun.set(expectedKey, uploadedUrl);
     avatarUrl = uploadedUrl;
   }
 

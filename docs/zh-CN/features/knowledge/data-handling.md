@@ -8,7 +8,7 @@ TomoriBot 的构建目标之一就是对你的数据保持透明。她存下的�
 
 :::note
 这一页讲的是 Discord 内的按用户控制项。**自己部署一套实例？** 整个数据库的备份与还原属于主机侧操作；见
-[维护与备份](/en/self-hosting/maintenance/)。
+[维护与备份](/zh-CN/self-hosting/maintenance/)。
 :::
 
 ## 她存了什么

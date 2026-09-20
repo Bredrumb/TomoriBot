@@ -85,7 +85,7 @@ MCP 替代项，以及当前的明确工具模式允许清单。它们不会绕�
   以免出现意外扣费。
 - 没有设置密钥时**DuckDuckGo** 是默认项，在遇到速率限制或结果为空时级联到 **IAsk**。
 - **SearXNG** 和 **Crawl4AI** 是可选的自行部署附属服务，能解锁更多分类
-  以及浏览器渲染的页面抓取；见[自部署](/en/self-hosting/)。
+  以及浏览器渲染的页面抓取；见[自部署](/zh-CN/self-hosting/)。
 
 要读取某个具体页面，她使用 `fetch_url`。它在 NovelAI 上不可用。
 
@@ -117,7 +117,7 @@ discovered** 是已知的零工具结果；**Discovery unknown** 表示这是一
 
 本地 MCP 服务器**只在自部署实例上受支持**，因为公开托管的 bot
 要求 HTTPS 并会拦截本地与私有地址。如果你自己跑实例，见
-[设置：本地 MCP 服务器](/en/self-hosting/local-endpoints/setup-local-mcp/)。
+[设置：本地 MCP 服务器](/zh-CN/self-hosting/local-endpoints/setup-local-mcp/)。
 
 :::danger[只添加你信任的 MCP 服务器]
 一个恶意的 MCP 服务器可以用隐藏指令**提示词注入**她、**窃取**

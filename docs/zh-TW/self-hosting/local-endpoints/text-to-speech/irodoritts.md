@@ -45,7 +45,7 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 在 TomoriBot 根目錄的 `.env` 加入：
 
-```env
+```dotenv
 IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
 ```
 
@@ -69,7 +69,7 @@ IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
 
 如果你已經把檢查點檔案（`.pt` 或 `.safetensors`）下載到本機，請將 `IRODORI_TTS_CHECKPOINT` 指向它的路徑：
 
-```env
+```dotenv
 IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 ```
 

@@ -230,6 +230,27 @@ if (!/<meta[^>]+name="robots"[^>]+content="noindex"/i.test(wikiHtml)) {
   throw new Error("English wiki pages must include a noindex robots directive");
 }
 
+// `robots.txt` advertises the sitemap unconditionally, so a build that omits one publishes a dead
+// reference to every crawler. @astrojs/sitemap reports a rejected option as a warning and then skips
+// generation for the whole site, which leaves an exit code of 0 and no sitemap.
+readRequired("sitemap-index.xml");
+const sitemapUrlset = readRequired("sitemap-0.xml");
+const annotatedLocales = new Set(Array.from(sitemapUrlset.matchAll(/hreflang="([^"]+)"/g), (match) => match[1]));
+if (annotatedLocales.size === 0) {
+  throw new Error("The sitemap carries no hreflang annotations, so its i18n map was dropped");
+}
+for (const locale of PUBLISHED_DOCS_LOCALES) {
+  // The sitemap's own tag may be less specific than the page's, because the integration rejects a
+  // numeric region subtag (see `sitemapLanguageTag` in astro.config.mts).
+  const expectedTag = locale.replace(/-\d+$/, "");
+  if (!annotatedLocales.has(expectedTag)) {
+    throw new Error(
+      `The sitemap has no hreflang annotation for ${locale} (expected ${expectedTag}); ` +
+        "a locale tag the sitemap integration rejects disables generation for every locale",
+    );
+  }
+}
+
 console.log(
   `Generated LLM documentation indexes are curated and wiki-safe; ` +
     `hreflang verified on ${checkedPairs} translated pairs and ${checkedFallbacks} fallback routes`,

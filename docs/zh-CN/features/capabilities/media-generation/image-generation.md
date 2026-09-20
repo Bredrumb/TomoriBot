@@ -20,7 +20,7 @@ TomoriBot 可以根据文本提示词生成图像，也可以通过编辑参考�
 
 哪些编辑模式可用取决于后端。文生图和图生图
 在内置云端提供方（Google、Vertex、OpenRouter）上可用，而**局部重绘与
-扩图由本地 [ComfyUI](/en/self-hosting/local-endpoints/setup-comfyui/)
+扩图由本地 [ComfyUI](/zh-CN/self-hosting/local-endpoints/setup-comfyui/)
 自定义端点提供**，并受该端点声明的能力限制。后端做不到的东西
 会直接对她隐藏，所以她不会提供一个你的部署并不支持的模式。
 
@@ -59,4 +59,4 @@ Z.ai、NVIDIA NIM** 和 **NovelAI** 上使用（动漫风格；原生局部重�
 [提供方与模型](/zh-CN/features/setup-administration/providers-and-models/#支持的提供方)。
 
 想用你自己的硬件通过 ComfyUI 做**本地**图像生成，见
-[设置：ComfyUI](/en/self-hosting/local-endpoints/setup-comfyui/)。
+[设置：ComfyUI](/zh-CN/self-hosting/local-endpoints/setup-comfyui/)。

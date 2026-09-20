@@ -49,7 +49,7 @@ Ao iniciar o sidecar (diretamente com Python ou via `bun run launch --irodoritts
 
 Adicione ao seu `.env` na raiz do TomoriBot:
 
-```env
+```dotenv
 IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
 ```
 
@@ -73,7 +73,7 @@ IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
 
 Se você baixou um arquivo de checkpoint (`.pt` ou `.safetensors`) localmente, defina `IRODORI_TTS_CHECKPOINT` com seu caminho:
 
-```env
+```dotenv
 IRODORI_TTS_CHECKPOINT="/caminho/para/checkpoint_personalizado.pt"
 ```
 

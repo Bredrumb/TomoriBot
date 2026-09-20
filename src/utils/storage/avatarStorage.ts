@@ -360,16 +360,22 @@ export function buildPresetSpriteFilename(spriteKey: string, contentHash: string
   return `${safeKey}-${contentHash}.png`;
 }
 
-/** Build the storage-relative key/path for a shared preset sprite. */
-function buildPresetSpriteRelativeKey(options: {
+/**
+ * Build the storage-relative key/path for a shared preset sprite.
+ *
+ * The key carries no language segment: every locale variant of a preset declares the same
+ * `avatarPath` and the same sprite files, so all of them hash to identical bytes. Keying by language
+ * stored one copy per authored locale of an image that never varies. The per-language
+ * `preset_sprites` row stays, because `sprite_name` and `usage_instructions` genuinely are
+ * localized; only the image converges.
+ */
+export function buildPresetSpriteRelativeKey(options: {
   lineageId: number;
-  language: string;
   spriteKey: string;
   contentHash: string;
 }): string {
-  const safeLanguage = sanitizeAttachmentFilenamePart(options.language, { fallback: "lang", maxLength: 16 });
   const filename = buildPresetSpriteFilename(options.spriteKey, options.contentHash);
-  return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/${safeLanguage}/sprites/${filename}`;
+  return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/sprites/${filename}`;
 }
 
 /**
@@ -384,11 +390,15 @@ export function buildPresetAvatarFilename(contentHash: string): string {
   return `avatar-${contentHash}.png`;
 }
 
-/** Build the storage-relative key/path for a shared preset avatar. */
-function buildPresetAvatarRelativeKey(options: { lineageId: number; language: string; contentHash: string }): string {
-  const safeLanguage = sanitizeAttachmentFilenamePart(options.language, { fallback: "lang", maxLength: 16 });
+/**
+ * Build the storage-relative key/path for a shared preset avatar.
+ *
+ * Language-free for the same reason as {@link buildPresetSpriteRelativeKey}: the avatar art is
+ * identical across a preset's locale variants.
+ */
+export function buildPresetAvatarRelativeKey(options: { lineageId: number; contentHash: string }): string {
   const filename = buildPresetAvatarFilename(options.contentHash);
-  return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/${safeLanguage}/${filename}`;
+  return `${SHARED_PRESET_SEGMENT}/${options.lineageId}/${filename}`;
 }
 
 /**
@@ -481,13 +491,12 @@ async function uploadSharedPresetObject(relativeKey: string, buffer: Buffer, log
  */
 export async function uploadPresetSpriteToStorage(options: {
   lineageId: number;
-  language: string;
   spriteKey: string;
   contentHash: string;
   buffer: Buffer;
 }): Promise<string | null> {
   const relativeKey = buildPresetSpriteRelativeKey(options);
-  const logLabel = `preset sprite (lineage ${options.lineageId}/${options.language}/${options.spriteKey})`;
+  const logLabel = `preset sprite (lineage ${options.lineageId}/${options.spriteKey})`;
   return await uploadSharedPresetObject(relativeKey, options.buffer, logLabel);
 }
 
@@ -503,12 +512,11 @@ export async function uploadPresetSpriteToStorage(options: {
  */
 export async function uploadPresetAvatarToStorage(options: {
   lineageId: number;
-  language: string;
   contentHash: string;
   buffer: Buffer;
 }): Promise<string | null> {
   const relativeKey = buildPresetAvatarRelativeKey(options);
-  const logLabel = `preset avatar (lineage ${options.lineageId}/${options.language})`;
+  const logLabel = `preset avatar (lineage ${options.lineageId})`;
   return await uploadSharedPresetObject(relativeKey, options.buffer, logLabel);
 }
 
@@ -531,13 +539,13 @@ export function isSharedPresetAssetReference(reference?: string | null): boolean
     return true;
   }
 
-  // URL form: match the preset layout segment regardless of host/prefix. Both
-  // shared asset kinds live under presets/{lineage}/{language}/: sprites in a
-  // `sprites/` subfolder, avatars as a top-level `avatar-{hash}.png` file.
+  // URL form: match the preset layout regardless of host/prefix. Sprites live in a `sprites/`
+  // subfolder, avatars as a top-level `avatar-{hash}.png`. The optional middle segment keeps the
+  // retired per-language layout protected until every environment re-seeds.
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const pathName = new URL(trimmed).pathname.replace(/^\/+/, "");
-      return new RegExp(`(^|/)${SHARED_PRESET_SEGMENT}/[^/]+/[^/]+/(sprites/|avatar-)`).test(pathName);
+      return new RegExp(`(^|/)${SHARED_PRESET_SEGMENT}/[^/]+/([^/]+/)?(sprites/|avatar-)`).test(pathName);
     } catch {
       return false;
     }

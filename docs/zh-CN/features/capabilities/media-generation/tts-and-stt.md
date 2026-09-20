@@ -50,14 +50,14 @@ TomoriBot 能**说**（文本转语音）也能**听**（语音转文字）：
 
 每个引擎都有自己的设置指南：
 
-- [Chatterbox-Turbo/Nano](/en/self-hosting/local-endpoints/text-to-speech/chatterbox/)：快速、仅英语的语音克隆，支持 `[laugh]` 之类的情绪事件标签。
-- [Qwen3-TTS](/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/)：多语言（10 种语言），另有
+- [Chatterbox-Turbo/Nano](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/)：快速、仅英语的语音克隆，支持 `[laugh]` 之类的情绪事件标签。
+- [Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/)：多语言（10 种语言），另有
   自然语言的 VoiceDesign 模式。
-- [MOSS-TTS](/en/self-hosting/local-endpoints/text-to-speech/moss/)：试用性质的自动端点，用于多语言克隆或英语与中文的语音设计。
-- [IrodoriTTS](/en/self-hosting/local-endpoints/text-to-speech/irodoritts/)：专精日语，会把 emoji
+- [MOSS-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/moss/)：试用性质的自动端点，用于多语言克隆或英语与中文的语音设计。
+- [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/)：专精日语，会把 emoji
   读成情绪提示。
 
-完整清单与硬件建议见[文本转语音对照表](/en/self-hosting/local-endpoints/text-to-speech/)。
+完整清单与硬件建议见[文本转语音对照表](/zh-CN/self-hosting/local-endpoints/text-to-speech/)。
 
 ## 语音转文字
 
@@ -72,11 +72,11 @@ TomoriBot 能**说**（文本转语音）也能**听**（语音转文字）：
 
 ### 本地引擎（自部署）
 
-- [WhisperX](/en/self-hosting/local-endpoints/speech-to-text/whisperx/)：推荐的本地方案；约 100
+- [WhisperX](/zh-CN/self-hosting/local-endpoints/speech-to-text/whisperx/)：推荐的本地方案；约 100
   种语言、GPU 加速、多种模型尺寸。
-- [KoboldCPP](/en/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：如果你的构建暴露了
+- [KoboldCPP](/zh-CN/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：如果你的构建暴露了
   OpenAI 兼容的转写端点就能用。
-- [whisper.cpp](/en/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
+- [whisper.cpp](/zh-CN/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
 
-完整清单见[语音转文字](/en/self-hosting/local-endpoints/speech-to-text/)汇总页。想看
+完整清单见[语音转文字](/zh-CN/self-hosting/local-endpoints/speech-to-text/)汇总页。想看
 Discord 里的说明，运行 `/help`，然后选择 **功能** 和 **Transcription**。

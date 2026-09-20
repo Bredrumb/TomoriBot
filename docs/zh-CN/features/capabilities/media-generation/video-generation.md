@@ -36,7 +36,7 @@ TomoriBot 轮询提供方直到成片就绪，完成后发布出来。大片子
 [提供方与模型](/zh-CN/features/setup-administration/providers-and-models/#支持的提供方)。
 
 想通过 ComfyUI 做**本地**视频生成（例如 WAN 图生视频工作流），见
-[设置：ComfyUI](/en/self-hosting/local-endpoints/setup-comfyui/)。
+[设置：ComfyUI](/zh-CN/self-hosting/local-endpoints/setup-comfyui/)。
 
 关于内部的生成与轮询架构，见
 [视频生成](/en/architecture/subsystems/video-generation/)参考。
