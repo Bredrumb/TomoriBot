@@ -9,7 +9,7 @@ sidebar:
 
 | 区块 | 可选？ | 指令 | 它是什么 |
 |---|---|---|---|
-| [**系统提示词**](/zh-CN/features/chatting-personality/behavior-tweaking/#系统提示词) | | `/config` > 行为 > 常规行为 | 位于上下文最顶端的基础指令。 |
+| [**系统提示词**](/zh-CN/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > 行为 > 常规行为 | 位于上下文最顶端的基础指令。 |
 
 > **默认系统提示词文本**（仅在服务器没有设置系统提示词时使用）：
 >
@@ -23,18 +23,18 @@ sidebar:
 |---|---|---|---|
 | **频道提示词（追加）** | *(可选)* | `/config` > 频道 > 频道覆盖 | 因频道而异，紧接在系统提示词之后叠加。同一页的*替换*模式则会顶替上面那个系统提示词位置，而不是新增一个。 |
 | **人格提示词** | *(可选)* | `/config` > 人格 > 高级 | 专门为当前生效人格写的提示词，与系统提示词分开。|
-| [**人格属性**](/zh-CN/features/chatting-personality/multiple-personas/#属性) | | `/config` > 人格 > 身份与性格 | 当前生效人格的性格特质与说话方式。 |
+| [**人格属性**](/zh-CN/features/chatting-personality/multiple-personas/#attributes) | | `/config` > 人格 > 身份与性格 | 当前生效人格的性格特质与说话方式。 |
 | **服务器信息** | | *(无，来自 Discord)* | 服务器名称、简介，以及她所在的频道，直接从 Discord 拉取。 |
 | [**人格与用户屏蔽块**](/zh-CN/features/capabilities/tools-and-extensions/#内置工具) | *(可选)* | 用 `/moderation` 查看或清除；由 `/config` > 权限（屏蔽用户）控制 | 这个人格对特定用户持有的当前禁言与屏蔽限制。 |
-| [**服务器记忆**](/zh-CN/features/knowledge/memory/#个人记忆与服务器记忆) | | `/memories` | 为这个服务器保存的长期事实。 |
+| [**服务器记忆**](/zh-CN/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | 为这个服务器保存的长期事实。 |
 | [**服务器表情**](/zh-CN/features/chatting-personality/behavior-tweaking/#功能开关她被允许做什么) | *(可选)* | `/config` > 权限（表情使用）（仅开关），用 `/expressions initialize` 初始化 | 服务器里存在的自定义表情。|
 | [**服务器贴纸**](/zh-CN/features/chatting-personality/behavior-tweaking/#功能开关她被允许做什么) | *(可选)* | `/config` > 权限（贴纸使用）（仅开关），用 `/expressions initialize` 初始化 | 服务器里存在的自定义贴纸。 |
-| [**人格立绘**](/zh-CN/features/chatting-personality/multiple-personas/#立绘表情头像) | *(可选)* | `/config` > 人格 > 立绘 | 为该人格配置的具名表情立绘，如果它有任何立绘的话。 |
-| [**对话参与者**](/zh-CN/features/knowledge/memory/#个人记忆与服务器记忆) | *(可选)* | `/personal memories`（由 `/config` > 权限（个性化）控制） | 对话中的人、他们的昵称和提及句柄，以及为每个人保存的个人记忆。当这个人在上下文里拥有消息，或者他们的名字与别名被提及时加载。它还会在末尾附上当前频道和本地时间，使用 `/config` > 行为 > 常规行为。 |
-| [**短期记忆**](/zh-CN/features/knowledge/memory/#短期记忆stm) | | `/config` > 人格 > 记忆；用 `/memories` 清除条目；由 `/config` > 权限（短期记忆）控制 | 包含不同频道的摘要和近期消息 |
-| [**文档**](/zh-CN/features/knowledge/memory/#文档知识库rag) | *(可选)* | `/memories` | 用 RAG 从知识库里取出的相关分块。 |
-| [**奖励与惩罚**](/zh-CN/features/knowledge/memory/#奖励与惩罚) | *(可选)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`、`/punish <bite\|bonk\|pinch\|spank\|squeeze>`，通过 `/conditioning remove` 管理 | 为这个人格在这个服务器里累积的行为引导。 |
-| [**示例对话**](/zh-CN/features/chatting-personality/multiple-personas/#示例对话) | *(可选)* | `/config` > 人格 > 身份与性格 | 这个人格怎么说话的示例，如果配置了的话。 |
+| [**人格立绘**](/zh-CN/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(可选)* | `/config` > 人格 > 立绘 | 为该人格配置的具名表情立绘，如果它有任何立绘的话。 |
+| [**对话参与者**](/zh-CN/features/knowledge/memory/#personal-vs-server-memories) | *(可选)* | `/personal memories`（由 `/config` > 权限（个性化）控制） | 对话中的人、他们的昵称和提及句柄，以及为每个人保存的个人记忆。当这个人在上下文里拥有消息，或者他们的名字与别名被提及时加载。它还会在末尾附上当前频道和本地时间，使用 `/config` > 行为 > 常规行为。 |
+| [**短期记忆**](/zh-CN/features/knowledge/memory/#short-term-memory-stm) | | `/config` > 人格 > 记忆；用 `/memories` 清除条目；由 `/config` > 权限（短期记忆）控制 | 包含不同频道的摘要和近期消息 |
+| [**文档**](/zh-CN/features/knowledge/memory/#document-knowledge-base-rag) | *(可选)* | `/memories` | 用 RAG 从知识库里取出的相关分块。 |
+| [**奖励与惩罚**](/zh-CN/features/knowledge/memory/#conditioning) | *(可选)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`、`/punish <bite\|bonk\|pinch\|spank\|squeeze>`，通过 `/conditioning remove` 管理 | 为这个人格在这个服务器里累积的行为引导。 |
+| [**示例对话**](/zh-CN/features/chatting-personality/multiple-personas/#sample-dialogues) | *(可选)* | `/config` > 人格 > 身份与性格 | 这个人格怎么说话的示例，如果配置了的话。 |
 | [**近期消息**](/zh-CN/features/chatting-personality/behavior-tweaking/#生成调校) | | `/config` > 行为 > 常规行为 | 真实的对话内容，最多这么多条（默认 80）。你的上下文提醒和任何重逢提醒会按可配置的深度内联注入到这个区块里，而不是单独成为一个区块。 |
 
 标着 *(可选)* 的行在没有内容可说时不会贡献任何东西（也不花 token），例如没有匹配到文档，或者服务器没有自定义表情。
@@ -63,7 +63,7 @@ sidebar:
 | `/refresh` 之后她忘了 | 刷新会切断**近期消息**并清除这个频道的**短期记忆**，但不应该移除长期记忆。删掉那条刷新嵌入就能取消这次切断。 |
 | 重启之后她忘了某件事 | **近期消息**从不跨重启存活 |
 
-如果你希望某件事能在上述所有情况之后仍然保留，它就必须变成**长期记忆**。见[记忆](/zh-CN/features/knowledge/memory/#长期记忆)。
+如果你希望某件事能在上述所有情况之后仍然保留，它就必须变成**长期记忆**。见[记忆](/zh-CN/features/knowledge/memory/#long-term-memory)。
 
 ## 技巧与小窍门
 

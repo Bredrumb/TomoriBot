@@ -10,7 +10,7 @@ usarlas según la conversación. Esta página cubre las herramientas integradas,
 servidores MCP y cómo mantener ligeras las declaraciones de herramientas con el modo de
 herramientas deliberado.
 
-## Herramientas integradas
+## Herramientas integradas {#built-in-tools}
 
 Las herramientas dependen de que el proveedor y modelo activos admitan llamadas a herramientas, y
 muchas están controladas por una marca de función (un interruptor de `/config` > Permisos), un
@@ -80,7 +80,7 @@ desconocidos se evalúan como falsos y quedan registrados; los bloques mal forma
 mensajes de chat sin procesar, la salida del modelo y los resultados de herramientas nunca se
 tratan como plantillas condicionales.
 
-## Búsqueda web y lectura de URL
+## Búsqueda web y lectura de URL {#web-search--url-reading}
 
 El modelo ve una sola herramienta unificada `web_search(query, category)`. Detrás, un distribuidor
 dirige cada llamada por una cadena de motores y devuelve el primer éxito:
@@ -98,7 +98,7 @@ dirige cada llamada por una cadena de motores y devuelve el primer éxito:
 
 Para leer una página específica, usa `fetch_url`. No está disponible en NovelAI.
 
-## Servidores MCP
+## Servidores MCP {#mcp-servers}
 
 [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) la amplía con herramientas
 externas que registras tú mismo.
@@ -139,7 +139,7 @@ del navegador: si tienes dudas, no lo agregues. Revisa siempre las herramientas 
 MCP antes de añadirlo.
 :::
 
-## Modo de herramientas deliberado
+## Modo de herramientas deliberado {#deliberate-tool-mode}
 
 Cada herramienta declarada se añade al prompt. El **modo de herramientas deliberado** mantiene las
 declaraciones de herramientas fuera de los turnos de chat normales, salvo que el mensaje parezca
@@ -179,7 +179,7 @@ herramientas deliberado** para ver el resumen de Discord.
 :::note
 El **modo de herramientas deliberado** (esta sección) no está relacionado con el **modo de
 activación deliberada**, que controla cómo se activa *ella*; consulta
-[Chat y activadores](/es-419/features/chatting-personality/chatting-and-triggers/#modo-de-activación-deliberada).
+[Chat y activadores](/es-419/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
 Ambos se abrevian como "DTM" en Discord.
 :::
 

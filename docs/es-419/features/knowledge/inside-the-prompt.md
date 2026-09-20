@@ -10,7 +10,7 @@ configurado como el prompt/contexto principal, en este orden:
 
 | Bloque | ¿Opcional? | Comandos | Qué es |
 |---|---|---|---|
-| [**Prompt del sistema**](/es-419/features/chatting-personality/behavior-tweaking/#prompt-del-sistema) | | `/config` > Motor > General | Instrucciones básicas en la parte superior del contexto. |
+| [**Prompt del sistema**](/es-419/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > Motor > General | Instrucciones básicas en la parte superior del contexto. |
 
 > **Texto predeterminado del prompt del sistema** (se usa solo mientras no haya un prompt del sistema del servidor configurado):
 >
@@ -24,18 +24,18 @@ configurado como el prompt/contexto principal, en este orden:
 |---|---|---|---|
 | **Prompt de canal (agregar)** | *(Opcional)* | `/config` > Canales > Excepciones de canal | Varía por canal, se agrega justo después del prompt del sistema. El modo *reemplazar* de la misma página ocupa el lugar del prompt del sistema anterior en lugar de añadir uno nuevo. |
 | **Prompt de persona** | *(Opcional)* | `/config` > Persona > Avanzado | Un prompt escrito específicamente para la persona activa, separado del prompt del sistema. |
-| [**Atributos de la persona**](/es-419/features/chatting-personality/multiple-personas/#atributos) | | `/config` > Persona > Identidad y personalidad | Los rasgos de personalidad y patrones de habla de la persona activa. |
+| [**Atributos de la persona**](/es-419/features/chatting-personality/multiple-personas/#attributes) | | `/config` > Persona > Identidad y personalidad | Los rasgos de personalidad y patrones de habla de la persona activa. |
 | **Información del servidor** | | *(ninguno, viene de Discord)* | El nombre del servidor, su descripción y el canal en el que está, obtenidos directamente de Discord. |
 | [**Bloqueos persona-usuario**](/es-419/features/capabilities/tools-and-extensions/#herramientas-integradas) | *(Opcional)* | `/moderation` para revisar/limpiar; controlado por `/config` > Permisos (Bloqueo de usuarios) | Restricciones activas de silencio/bloqueo que esta persona mantiene contra usuarios específicos. |
-| [**Memorias del servidor**](/es-419/features/knowledge/memory/#memorias-personales-frente-a-memorias-del-servidor) | | `/memories` | Los datos a largo plazo guardados para este servidor. |
+| [**Memorias del servidor**](/es-419/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | Los datos a largo plazo guardados para este servidor. |
 | [**Emojis del servidor**](/es-419/features/chatting-personality/behavior-tweaking/#capacidades-lo-que-puede-hacer) | *(Opcional)* | `/config` > Permisos (Uso de emojis) (solo interruptor), inicializa con `/expressions initialize` | Los emojis personalizados presentes en el servidor. |
 | [**Stickers del servidor**](/es-419/features/chatting-personality/behavior-tweaking/#capacidades-lo-que-puede-hacer) | *(Opcional)* | `/config` > Permisos (Uso de stickers) (solo interruptor), inicializa con `/expressions initialize` | Los stickers personalizados presentes en el servidor. |
-| [**Sprites de la persona**](/es-419/features/chatting-personality/multiple-personas/#sprites-avatares-de-emoción) | *(Opcional)* | `/config` > Persona > Sprites | Sprites de expresión nombrados configurados para la persona, si tiene alguno. |
-| [**Participantes de la conversación**](/es-419/features/knowledge/memory/#memorias-personales-frente-a-memorias-del-servidor) | *(Opcional)* | `/personal memories` (controlado por `/config` > Permisos (Personalización)) | Las personas en la conversación, sus apodos y menciones, y las memorias personales guardadas sobre cada una. Se carga cuando la persona es dueña de un mensaje en el contexto, o si se menciona su nombre/alias. También incluye el canal actual y la hora local como pie de página, usando `/config` > Motor > General. |
-| [**Memoria a corto plazo**](/es-419/features/knowledge/memory/#memoria-a-corto-plazo-stm) | | `/config` > Persona > Memorias; `/memories` para borrar entradas; controlado por `/config` > Permisos (Memoria a corto plazo) | Contiene resúmenes y mensajes recientes de distintos canales |
-| [**Documentos**](/es-419/features/knowledge/memory/#base-de-conocimiento-de-documentos-rag) | *(Opcional)* | `/memories` | Fragmentos relevantes extraídos de la base de conocimiento mediante RAG. |
-| [**Condicionamiento**](/es-419/features/knowledge/memory/#condicionamiento) | *(Opcional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, gestionado mediante `/conditioning remove` | Incentivos de comportamiento acumulados para esta persona en este servidor. |
-| [**Diálogos de muestra**](/es-419/features/chatting-personality/multiple-personas/#diálogos-de-ejemplo) | *(Opcional)* | `/config` > Persona > Identidad y personalidad | Ejemplos de cómo habla esta persona, si hay alguno configurado. |
+| [**Sprites de la persona**](/es-419/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Opcional)* | `/config` > Persona > Sprites | Sprites de expresión nombrados configurados para la persona, si tiene alguno. |
+| [**Participantes de la conversación**](/es-419/features/knowledge/memory/#personal-vs-server-memories) | *(Opcional)* | `/personal memories` (controlado por `/config` > Permisos (Personalización)) | Las personas en la conversación, sus apodos y menciones, y las memorias personales guardadas sobre cada una. Se carga cuando la persona es dueña de un mensaje en el contexto, o si se menciona su nombre/alias. También incluye el canal actual y la hora local como pie de página, usando `/config` > Motor > General. |
+| [**Memoria a corto plazo**](/es-419/features/knowledge/memory/#short-term-memory-stm) | | `/config` > Persona > Memorias; `/memories` para borrar entradas; controlado por `/config` > Permisos (Memoria a corto plazo) | Contiene resúmenes y mensajes recientes de distintos canales |
+| [**Documentos**](/es-419/features/knowledge/memory/#document-knowledge-base-rag) | *(Opcional)* | `/memories` | Fragmentos relevantes extraídos de la base de conocimiento mediante RAG. |
+| [**Condicionamiento**](/es-419/features/knowledge/memory/#conditioning) | *(Opcional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, gestionado mediante `/conditioning remove` | Incentivos de comportamiento acumulados para esta persona en este servidor. |
+| [**Diálogos de muestra**](/es-419/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Opcional)* | `/config` > Persona > Identidad y personalidad | Ejemplos de cómo habla esta persona, si hay alguno configurado. |
 | [**Mensajes recientes**](/es-419/features/chatting-personality/behavior-tweaking/#ajuste-de-generación) | | `/config` > Motor > General | La conversación real, hasta esta cantidad de mensajes (80 por defecto). Tu nota de contexto y cualquier nota de reencuentro se inyectan en línea dentro de este bloque, en una profundidad configurable, en lugar de como un bloque separado propio. |
 
 Las filas marcadas como *(Opcional)* no aportan nada (y no cuestan tokens) cuando no hay nada que decir, por ejemplo, si no coincidió ningún documento, o el servidor no tiene emojis personalizados.
@@ -67,7 +67,7 @@ Este orden explica casi cualquier pregunta de "¿por qué no lo recuerda?":
 | Olvidó algo después de un reinicio | **Mensajes recientes** nunca sobrevive a los reinicios |
 
 Si quieres que algo sobreviva a todo lo anterior, tiene que convertirse en una **memoria a largo
-plazo**. Consulta [Memoria](/es-419/features/knowledge/memory/#memoria-a-largo-plazo).
+plazo**. Consulta [Memoria](/es-419/features/knowledge/memory/#long-term-memory).
 
 ## Consejos y trucos
 

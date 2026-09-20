@@ -104,7 +104,7 @@ export default {
       adjust_parameters_personal: `Usa \`/personal config\` y ajusta **Temperatura** o **Top P** para asegurar que solo se envíe uno.`,
       switch_model_provider: `Cambia a un modelo o proveedor diferente con \`/config\` > Modelos > Cambiar modelos o \`/providers\`.`,
       switch_model_provider_personal: `Cambia con \`/personal config\`, o actualiza el proveedor en \`/personal providers\`.`,
-      disable_personal_text_override: `Este error de solicitud fue de tu [proveedor personal](https://docs.tomoribot.app/es-419/features/knowledge/personalization/#tus-propios-proveedores). Actualízalo en \`/personal providers\` o selecciona un modelo funcional con \`/personal config\`.`,
+      disable_personal_text_override: `Este error de solicitud fue de tu [proveedor personal](https://docs.tomoribot.app/es-419/features/knowledge/personalization/#your-own-providers). Actualízalo en \`/personal providers\` o selecciona un modelo funcional con \`/personal config\`.`,
       support_server: `Visita el [Servidor de soporte oficial](https://discord.gg/bjCfHm9QsB) para obtener asistencia.`,
       shorten_message: `Intenta acortar tu mensaje y luego envíalo de nuevo.`,
       refresh_context: `Borra el contexto de la conversación con \`/refresh\`.`,
@@ -188,32 +188,32 @@ El modelo seleccionado requiere permitir datos para el entrenamiento del modelo 
     },
     self_teach: {
       server_memory_learned_title: `🧠 ¡{persona_nickname} aprendió algo nuevo!`,
-      server_memory_learned_description: `Se ha guardado una **[Memoria del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-largo-plazo)**:
+      server_memory_learned_description: `Se ha guardado una **[Memoria del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/#long-term-memory)**:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 ¡{persona_nickname} actualizó una memoria!`,
-      server_memory_updated_description: `Se ha actualizado una **[Memoria del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-largo-plazo)**:
+      server_memory_updated_description: `Se ha actualizado una **[Memoria del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/#long-term-memory)**:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ ¡{persona_nickname} eliminó una memoria!`,
-      server_memory_deleted_description: `Se ha eliminado una **[Memoria del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-largo-plazo)**:
+      server_memory_deleted_description: `Se ha eliminado una **[Memoria del servidor](https://docs.tomoribot.app/es-419/features/knowledge/memory/#long-term-memory)**:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 ¡{persona_nickname} aprendió algo nuevo sobre {user_nickname}!`,
-      personal_memory_learned_description: `Se ha guardado una **[Memoria personal](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-largo-plazo)** sobre {user_nickname}:
+      personal_memory_learned_description: `Se ha guardado una **[Memoria personal](https://docs.tomoribot.app/es-419/features/knowledge/memory/#long-term-memory)** sobre {user_nickname}:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 ¡{persona_nickname} actualizó una memoria sobre {user_nickname}!`,
-      personal_memory_updated_description: `Se ha actualizado una **[Memoria personal](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-largo-plazo)** sobre {user_nickname}:
+      personal_memory_updated_description: `Se ha actualizado una **[Memoria personal](https://docs.tomoribot.app/es-419/features/knowledge/memory/#long-term-memory)** sobre {user_nickname}:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ ¡{persona_nickname} eliminó una memoria sobre {user_nickname}!`,
-      personal_memory_deleted_description: `Se ha eliminado una **[Memoria personal](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-largo-plazo)** sobre {user_nickname}:
+      personal_memory_deleted_description: `Se ha eliminado una **[Memoria personal](https://docs.tomoribot.app/es-419/features/knowledge/memory/#long-term-memory)** sobre {user_nickname}:
 \`\`\`
 {memory_content}
 \`\`\``,

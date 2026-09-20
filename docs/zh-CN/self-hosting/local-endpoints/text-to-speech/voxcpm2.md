@@ -2,8 +2,6 @@
 title: "VoxCPM2"
 ---
 
-> **关于这份翻译：** 本页是英文版[VoxCPM2](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/voxcpm2/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 VoxCPM2 是 OpenBMB 的 2B 参数多语言语音合成模型。它支持 30 种语言、48 kHz 输出、自然语言形式的 Voice Design、参考音频语音克隆、可控克隆，以及借助参考文本的「终极克隆」。TomoriBot 通过 `servers/tts/voxcpm2/` 里的轻量封装程序来使用官方的 `voxcpm` Python 包。
 
 默认模型是官方的 `openbmb/VoxCPM2` BF16 检查点。OpenBMB 报告标准运行时大约需要 **8 GB 显存**，所以常规模型可以轻松放进 16 GB 的 NVIDIA GPU，默认不需要量化检查点。

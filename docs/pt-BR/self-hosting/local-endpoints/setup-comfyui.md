@@ -5,8 +5,6 @@ sidebar:
   order: 2
 ---
 
-> *Esta tradução é fornecida para conveniência e a versão em inglês é a que prevalece.*
-
 O TomoriBot pode gerar imagens e vídeos através da sua própria instância do 
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI). Ele controla o ComfyUI enviando 
 um **fluxo de trabalho em formato de API** com o seu prompt e tamanho substituídos, e então verifica 

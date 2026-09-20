@@ -1136,8 +1136,8 @@ export interface SetupWizardDependencies {
   isHostedPolicyEnvironment: () => boolean;
   storeSetupDraft: typeof storeSetupDraft;
   /**
-   * Locale for the wizard's own surfaces. The command resolves it from the guild first, so the
-   * stored locale, the persona's default name, and the copy the actor reads all agree.
+   * Locale for the wizard's own surfaces, which the command resolves from the actor's stored
+   * language preference so setup reads like every other command.
    */
   locale?: string;
 }

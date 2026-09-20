@@ -3,8 +3,6 @@ title: "Chatterbox TTS"
 aiGenerated: true
 ---
 
-> **Aviso:** Esta tradução é fornecida por conveniência e a versão em inglês é a oficial.
-
 Use `servers/tts/chatterbox/server.py` para clonagem de voz em inglês com suporte a tags de eventos. O caminho fast-model é definido por padrão como Chatterbox-Turbo (350M de parâmetros). O Chatterbox-Nano (110M de parâmetros) pode ser selecionado para implantações menores focadas em CPU. Este wrapper não carrega o Chatterbox Multilingual V3.
 
 ## Configuração

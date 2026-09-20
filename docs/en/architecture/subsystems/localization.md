@@ -181,8 +181,8 @@ When adding a tip:
 
 - User preference is stored in `users.language_pref`.
 - Registration writes the observed Discord locale to `language_pref` and `registration_locale` for a new user. A guild join uses the guild's preferred locale; a slash-command registration uses the interaction locale. Chat registration uses the invoker locale when available, otherwise the guild locale. Existing preferences are not reset on registration. `registration_locale` is analytics data and never controls routing.
-- Unsupported stored preferences remain intact. The localizer resolves them at read time, so a matching authored locale begins serving those users when its content ships without a database rewrite. `/personal config` > Profile > General lets a user change the preference explicitly.
-- Most interaction replies receive `locale`/`userData.language_pref` and should use that for response text.
+- Unsupported stored preferences remain intact. The localizer resolves them at read time, so a matching authored locale begins serving those users when its content ships without a database rewrite. `/personal config` > Profile > General lets a user change the preference explicitly, and `/personal language` opens that same picker on its own.
+- Interaction replies receive `locale`/`userData.language_pref` and should use that for response text. `/setup` used to override it with `interaction.guildLocale` so the wizard read in the server's language; it no longer does, because an admin reading the wizard in a language they did not choose is the more common case than a server whose admin does not speak its locale.
 
 ## Adding or Changing Locale Keys
 

@@ -230,7 +230,7 @@ TomoriBotはチャット履歴を保持しません。チャンネルで返信�
       custom_endpoint_cap_prefix_completion_desc: `途中で終わったassistantターンの続きを生成できます。`,
       provider_byok_guild_only: `ユーザーBYOKモードはサーバーでのみ利用できます。ダイレクトメッセージでは別のプロバイダーモードを選んでください。`,
       byok_modal_title: `ユーザーBYOKの確認`,
-      byok_modal_notice: `ユーザーBYOKを有効にすると、このサーバーのメンバーは返信に自分で保存したプロバイダーを使用します。このサーバーはフォールバックを提供しません。メンバーは {command} から自分のプロバイダーを設定できます。[ユーザーBYOKについて詳しく見る](https://docs.tomoribot.app/ja/features/setup-administration/server-moderation/#ユーザーbyok自分のキーを持ち込む)`,
+      byok_modal_notice: `ユーザーBYOKを有効にすると、このサーバーのメンバーは返信に自分で保存したプロバイダーを使用します。このサーバーはフォールバックを提供しません。メンバーは {command} から自分のプロバイダーを設定できます。[ユーザーBYOKについて詳しく見る](https://docs.tomoribot.app/ja/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)`,
       byok_confirm_label: `ユーザーBYOKを有効にする`,
       byok_confirm_yes: `はい、ユーザーBYOKを有効にします`,
       byok_confirm_no: `いいえ、以前の設定のままにします`,

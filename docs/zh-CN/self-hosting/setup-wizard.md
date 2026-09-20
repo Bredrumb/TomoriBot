@@ -5,8 +5,6 @@ sidebar:
   order: 1
 ---
 
-> **关于这份翻译：** 本页是英文版[安装向导](https://docs.tomoribot.app/en/self-hosting/setup-wizard/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 :::note
 想用 Docker Compose 的人请跳过这个向导，容器化安装路径见
 [Docker Compose](/zh-CN/self-hosting/docker-compose/)。
@@ -77,7 +75,7 @@ bun run launch --searxng --crawl4ai  # bot 加边车服务（见 bun run launch 
 
 bot 上线后，在 Discord 里运行 `/setup` 来接入 AI 提供方。没有自己的提供方的工作区无法回复，除非它以用户 BYOK 模式运行，由每位成员的个人提供方代为回答，所以这是每条安装路径的最后一步。
 
-## `/setup` 指令
+## `/setup` 指令 {#the-setup-command}
 
 `/setup` 会打开一个只有执行者本人能操作的临时清单面板。在服务器里它需要 **管理服务器** 权限；在私信里它对该用户自己的工作区可用。面板上的每一行都是草稿值：只有 **完成设置** 会真正写入任何内容，所以打开、编辑、取消或重新开始都不会改动任何数据库行。
 
@@ -94,7 +92,7 @@ bot 上线后，在 Discord 里运行 `/setup` 来接入 AI 提供方。没有�
 - **AI 提供方（推荐）**：从目录里挑一个提供方，粘贴它的 API 密钥。密钥会向该提供方校验，并加密进草稿；面板只显示已存有密钥，从不显示密钥本身。运行 `/help`，然后打开 **设置** > **获取 API 密钥** 查看逐个提供方的操作说明。
 - **自定义端点（高级）**：一个由两个按钮组成的子区域，用于自部署或代理端点。**配置连接** 收集 API 兼容类型、标签、URL，以及可选的认证令牌，并检查该端点是否有响应。**配置文本模型** 收集模型代号、它的上下文大小和它的能力声明，在连接校验通过之前一直处于禁用状态。再次保存连接会清空模型声明，因为这些声明取决于所选定的 API 兼容类型。这与 `/providers` 所做的注册完全相同，只是搬进了向导里，并且在 **完成设置** 之前不会创建任何数据行。
 - **用户 BYOK（高级）**（仅服务器，私信里从不提供）：工作区不保留自己的提供方，每条由成员触发的回复都改为解析出一个个人提供方。在弹窗里确认后，让成员用 `/personal providers` 注册自己的提供方。见
-  [服务器管理](/zh-CN/features/setup-administration/server-moderation/#用户-byokbring-your-own-key)。
+  [服务器管理](/zh-CN/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)。
 
 ### 初始设置
 

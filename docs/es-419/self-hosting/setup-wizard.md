@@ -85,7 +85,7 @@ trabajo que no tiene su propio proveedor no puede responder, salvo que funcione 
 en el que el proveedor personal de cada miembro responde en su lugar, así que este es el último paso de
 cada ruta de instalación.
 
-## El comando `/setup`
+## El comando `/setup` {#the-setup-command}
 
 `/setup` abre un panel de lista de verificación efímero que solo puede operar la persona que lo ejecutó.
 En un servidor requiere **Administrar servidor**; en un mensaje directo está disponible para el espacio
@@ -120,7 +120,7 @@ implementación que se ejecuta con `RUN_ENV=production` registra `/legal terms-o
   ningún proveedor propio y cada respuesta activada por un miembro resuelve en su lugar un proveedor
   personal. Confírmalo en el modal y luego haz que los miembros registren el suyo con
   `/personal providers`. Consulta
-  [Moderación del servidor](/es-419/features/setup-administration/server-moderation/#byok-de-usuario-trae-tu-propia-clave).
+  [Moderación del servidor](/es-419/features/setup-administration/server-moderation/#user-byok-bring-your-own-key).
 
 ### Configuración inicial
 

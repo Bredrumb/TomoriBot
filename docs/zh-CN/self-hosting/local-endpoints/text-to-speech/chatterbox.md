@@ -2,8 +2,6 @@
 title: "Chatterbox TTS"
 ---
 
-> **关于这份翻译：** 本页是英文版[Chatterbox TTS](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/chatterbox/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 用 `servers/tts/chatterbox/server.py` 做带事件标签的英语语音克隆。快速模型路径默认使用 Chatterbox-Turbo（350M 参数）。如果是更小、偏向 CPU 的部署，可以选用 Chatterbox-Nano（110M 参数）。这个封装程序不会加载 Chatterbox Multilingual V3。
 
 ## 安装

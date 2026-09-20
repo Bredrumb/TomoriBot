@@ -3,9 +3,6 @@ title: "Fish Audio S2 Pro"
 aiGenerated: true
 ---
 
-> [!NOTE]
-> Esta tradução é fornecida apenas para sua conveniência. O texto original em inglês é o documento oficial e prevalece em caso de divergência.
-
 O Fish Audio S2 Pro é um modelo de TTS 4B multilíngue focado em clonagem de voz de alta fidelidade e entrega expressiva. O TomoriBot o utiliza através do wrapper local em `servers/tts/fishs2/`.
 
 A configuração padrão do TomoriBot usa os pesos BF16 oficiais (`fishaudio/s2-pro`) para oferecer a maior fidelidade de síntese e evitar incompatibilidades de quantização. Para usuários com GPUs de consumo com memória limitada, uma quantização opcional apenas de pesos em INT8 (`Imagilux/fishaudio-s2-pro`) é suportada por meio de variáveis de ambiente.

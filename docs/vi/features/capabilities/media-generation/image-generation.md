@@ -29,7 +29,7 @@ Khi tạo hình ảnh, bot sử dụng ngữ cảnh Ngoại hình (Physical Appe
 và tiêu cực mặc định (nơi backend hỗ trợ prompt tiêu cực). Kết quả được gửi dưới dạng thư viện phương tiện Discord kèm chi
 tiết tại thời điểm tạo, bao gồm mọi người dùng hoặc persona được tham chiếu.
 
-## Tùy chỉnh thẻ tag
+## Tùy chỉnh thẻ tag {#tag-customization}
 
 Mọi nguồn thẻ tag ở trên đều có thể chỉnh sửa, mỗi nguồn ở một phạm vi khác nhau. Tất cả các tùy chọn này đều mở một
 cửa sổ modal được điền sẵn các thẻ hiện tại, giúp bạn chỉnh sửa trực tiếp:
@@ -57,7 +57,7 @@ Tính năng tạo hình ảnh nguyên bản khả dụng trên **Google, Vertex 
 Z.ai, NVIDIA NIM**, và **NovelAI** (phong cách anime; inpainting nguyên bản đã được xây dựng và sắp
 ra mắt, hiện đang tạm tắt trong khi hoàn thiện tính năng hòa trộn viền). Để xem bảng tương thích đầy
 đủ và cách thêm nhà cung cấp, hãy xem
-[Nhà cung cấp & model](/vi/features/setup-administration/providers-and-models/#nha-cung-cap-duoc-ho-tro).
+[Nhà cung cấp & model](/vi/features/setup-administration/providers-and-models/#supported-providers).
 
 Để tạo hình ảnh **cục bộ** bằng phần cứng của riêng bạn qua ComfyUI, hãy xem
 [Cài đặt: ComfyUI](/vi/self-hosting/local-endpoints/setup-comfyui/).

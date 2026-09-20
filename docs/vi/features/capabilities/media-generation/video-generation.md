@@ -33,7 +33,7 @@ lớn có thể mất một khoảng thời gian.
 ## Hỗ trợ nhà cung cấp
 
 Tính năng tạo video nguyên bản khả dụng trên **Google, OpenRouter**, và **Z.ai**. Xem bảng tương thích
-đầy đủ trong [Nhà cung cấp & model](/vi/features/setup-administration/providers-and-models/#nha-cung-cap-duoc-ho-tro).
+đầy đủ trong [Nhà cung cấp & model](/vi/features/setup-administration/providers-and-models/#supported-providers).
 
 Để tạo video **cục bộ** qua ComfyUI (ví dụ: quy trình WAN image-to-video), hãy xem
 [Cài đặt: ComfyUI](/vi/self-hosting/local-endpoints/setup-comfyui/).

@@ -232,7 +232,7 @@ TomoriBot 不会保存你的聊天记录。当它在
       custom_endpoint_cap_prefix_completion_desc: `支持延续一段未写完的助手回复。`,
       provider_byok_guild_only: `用户 BYOK 模式只能在服务器里使用。私信请选择其他提供方模式。`,
       byok_modal_title: `确认用户 BYOK`,
-      byok_modal_notice: `打开用户 BYOK 后，这个服务器里的人会用各自保存的提供方回复。这个服务器不提供备用。他们可以用 {command} 设置一个。[Learn more about User BYOK](https://docs.tomoribot.app/zh-CN/features/setup-administration/server-moderation/#用户-byokbring-your-own-key)`,
+      byok_modal_notice: `打开用户 BYOK 后，这个服务器里的人会用各自保存的提供方回复。这个服务器不提供备用。他们可以用 {command} 设置一个。[Learn more about User BYOK](https://docs.tomoribot.app/zh-CN/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)`,
       byok_confirm_label: `启用用户 BYOK`,
       byok_confirm_yes: `是，启用用户 BYOK`,
       byok_confirm_no: `不，保留原有配置`,

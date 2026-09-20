@@ -4,8 +4,6 @@ sidebar:
   order: 1
 ---
 
-> **关于这份翻译：** 本页是英文版[WhisperX 语音转写](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/whisperx/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 WhisperX 是推荐的、适合初学者的本地转写方案。
 
 ## 设置

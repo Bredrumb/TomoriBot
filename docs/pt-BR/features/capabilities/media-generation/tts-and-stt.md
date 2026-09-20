@@ -13,7 +13,7 @@ Ambos funcionam pelo mesmo sistema de endpoints. O caminho mais rápido é o **E
 documentado na íntegra abaixo). Se você preferir executar a voz em seu próprio hardware, use um motor local
 e siga os guias de hospedagem própria.
 
-## Texto-para-Fala
+## Texto-para-Fala {#text-to-speech}
 
 ### ElevenLabs (nuvem, mais fácil)
 
@@ -59,7 +59,7 @@ Cada motor tem seu próprio guia de configuração:
 
 Veja a [tabela comparativa de Texto-para-Fala](/pt-BR/self-hosting/local-endpoints/text-to-speech/) para a lista completa e orientações de hardware.
 
-## Fala-para-Texto
+## Fala-para-Texto {#speech-to-text}
 
 Endpoints de transcrição convertem anexos de áudio dos usuários em texto para contexto de conversa
 em segundo plano. Se as transcrições são **exibidas visivelmente** no chat é controlado separadamente por

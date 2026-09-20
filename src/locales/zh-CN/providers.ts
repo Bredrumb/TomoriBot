@@ -107,7 +107,7 @@ export default {
       adjust_parameters_personal: `在 \`/personal config\` 里调整 **Temperature** 或 **Top P**，确保只发送其中一个。`,
       switch_model_provider: `用 \`/config\` > 模型 > 切换模型 或者 \`/providers\` 换一个模型或提供方。`,
       switch_model_provider_personal: `用 \`/personal config\` 切换，或者在 \`/personal providers\` 里更新提供方。`,
-      disable_personal_text_override: `这个请求错误来自你的[个人提供方](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/#你自己的提供方)。请在 \`/personal providers\` 里更新它，或者用 \`/personal config\` 选一个能用的模型。`,
+      disable_personal_text_override: `这个请求错误来自你的[个人提供方](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/#your-own-providers)。请在 \`/personal providers\` 里更新它，或者用 \`/personal config\` 选一个能用的模型。`,
       // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
       support_server: `需要帮助请到[官方支持服务器](https://discord.gg/bjCfHm9QsB)。`,
       shorten_message: `试着把消息缩短，然后重新发送。`,
@@ -196,32 +196,32 @@ export default {
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname} 学到了新东西！`,
-      server_memory_learned_description: `已保存一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#长期记忆)**：
+      server_memory_learned_description: `已保存一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 {persona_nickname} 更新了一条记忆！`,
-      server_memory_updated_description: `已更新一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#长期记忆)**：
+      server_memory_updated_description: `已更新一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname} 删除了一条记忆！`,
-      server_memory_deleted_description: `已删除一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#长期记忆)**：
+      server_memory_deleted_description: `已删除一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname} 学到了关于 {user_nickname} 的新东西！`,
-      personal_memory_learned_description: `已保存一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#长期记忆)**：
+      personal_memory_learned_description: `已保存一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname} 更新了一条关于 {user_nickname} 的记忆！`,
-      personal_memory_updated_description: `已更新一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#长期记忆)**：
+      personal_memory_updated_description: `已更新一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname} 删除了一条关于 {user_nickname} 的记忆！`,
-      personal_memory_deleted_description: `已删除一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#长期记忆)**：
+      personal_memory_deleted_description: `已删除一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
 \`\`\`
 {memory_content}
 \`\`\``,

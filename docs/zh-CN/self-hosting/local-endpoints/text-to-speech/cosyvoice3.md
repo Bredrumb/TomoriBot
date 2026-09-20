@@ -2,8 +2,6 @@
 title: "CosyVoice 3"
 ---
 
-> **关于这份翻译：** 本页是英文版[CosyVoice 3](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 CosyVoice 3 是 Alibaba/QwenAudio 多语言 CosyVoice 语音合成项目的当前一代。TomoriBot 把官方运行时封装在 `servers/tts/cosyvoice3/` 里，并对外暴露与其他本地语音端点相同的 `POST /synthesize` 接口。
 
 TomoriBot 默认使用官方的 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 检查点。它是上游推荐的当前 CosyVoice 3 版本，使用正常的未量化模型，体积足够小，可以在 16 GB 的 NVIDIA GPU 上轻松运行，同时保留 CosyVoice 的低延迟设计。

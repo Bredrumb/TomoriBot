@@ -4,9 +4,6 @@ sidebar:
   order: 5
 ---
 
-> [!NOTE]
-> Esta tradução é fornecida por conveniência e a versão em inglês é a que prevalece.
-
 Se você quiser que o TomoriBot use sua conta do ChatGPT por meio de uma ponte local compatível com a OpenAI, você pode executar o [ChatMock](https://github.com/RayBytes/ChatMock) e apontar o provedor `custom` do TomoriBot para ele.
 
 ## O que o ChatMock faz

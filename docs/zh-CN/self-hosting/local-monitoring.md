@@ -4,8 +4,6 @@ sidebar:
   order: 7
 ---
 
-> **关于这份翻译：** 本页是英文版[本地 Grafana 监控](https://docs.tomoribot.app/en/self-hosting/local-monitoring/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 你可以用配套的 Docker Compose profile，通过 Grafana 面板监控你本地的 TomoriBot 实例。
 
 要在你的机器上同时启动 TomoriBot 和 Grafana：

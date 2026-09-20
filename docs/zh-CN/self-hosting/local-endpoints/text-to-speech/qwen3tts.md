@@ -2,8 +2,6 @@
 title: "Qwen3-TTS"
 ---
 
-> **关于这份翻译：** 本页是英文版[Qwen3-TTS](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/qwen3tts/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 用 `servers/tts/qwen3tts/server.py` 可同时运行 Qwen3-TTS 12Hz 1.7B 的两种模式，它是目前 TomoriBot 各项选择中体积较大但也最准确的语音合成。默认情况下它以自动模式启动，会根据每个请求的形态在 Base 语音克隆模型与 VoiceDesign 模型之间做出选择。
 
 ## 设置

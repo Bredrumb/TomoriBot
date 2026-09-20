@@ -35,10 +35,7 @@ export async function execute(
       return;
     }
 
-    // Guild locale wins where it exists, so the wizard's copy, the stored analytics locale, and the
-    // preset catalog all resolve against the language the guild actually reads.
-    const serverLocale = interaction.guildLocale ?? locale;
-    await startSetupWizard(interaction, { locale: serverLocale });
+    await startSetupWizard(interaction, { locale });
   } catch (error) {
     log.error("Error during setup process:", error);
     if (!interaction.replied && !interaction.deferred) {

@@ -4,8 +4,6 @@ sidebar:
   order: 2
 ---
 
-> **关于这份翻译：** 本页是英文版[whisper.cpp 语音转写](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/whispercpp/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 当 whisper.cpp 的 HTTP 服务器暴露 OpenAI 兼容的 `POST /v1/audio/transcriptions` 端点时，就可以使用它。
 
 ## 设置

@@ -198,7 +198,7 @@ Vui lòng chỉnh sửa tệp nhập để dùng tên khác, hoặc xóa persona
     default: {
       description: `Áp dụng cấu hình preset persona`,
       type_description: `Nhắm vào persona chính/mặc định hoặc tạo làm persona alter`,
-      type_choice_default: `Persona mặc định`,
+      type_choice_default: `Persona chính (thay thế persona hiện tại)`,
       type_choice_alter: `Persona alter`,
       no_permission_title: `🔴 Không có quyền`,
       no_permission_description: `Bạn cần có quyền **Quản lý máy chủ** để áp dụng preset persona.`,

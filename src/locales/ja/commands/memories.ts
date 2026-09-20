@@ -9,7 +9,7 @@ export default {
     unavailable: `サーバーの記憶を読み込めませんでした。再試行してください。`,
     stale_warning: `読み込みに失敗したため、保存済みデータが古い可能性があります。\n再読み込みが成功するまで書き込み操作は利用できません。`,
     retry: `再試行`,
-    memories_title: `[サーバーの記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#個人とサーバーの記憶)`,
+    memories_title: `[サーバーの記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#personal-vs-server-memories)`,
     memories_description: `これらの記憶は、このペルソナが有効な間
 このサーバー全体に適用されます。`,
     persona_default_name: `ペルソナ`,
@@ -81,7 +81,7 @@ export default {
 「サーバー管理」を持つメンバーは、全メンバーの記憶を
 表示・編集できます。`,
     no_personas: `このサーバーにはペルソナが設定されていません。`,
-    documents_title: `[ドキュメント](https://docs.tomoribot.app/ja/features/knowledge/memory/#ドキュメント知識ベースrag)`,
+    documents_title: `[ドキュメント](https://docs.tomoribot.app/ja/features/knowledge/memory/#document-knowledge-base-rag)`,
     documents_description: `このサーバーまたは単一のペルソナに紐づいた
 参照ドキュメントです。`,
     documents_teaching_disabled: `このサーバーではメンバーによるドキュメントアクセスが無効になっています。`,
@@ -179,7 +179,7 @@ export default {
     embedding_credentials_missing_detail: `続行する前に埋め込みプロバイダーを設定してください。`,
     embedding_model_missing_heading: `埋め込みモデルがありません`,
     embedding_model_missing_detail: `続行する前に埋め込みモデルを設定してください。`,
-    stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#短期記憶stm)`,
+    stm_title: `[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)`,
     stm_empty: `このサーバーには有効な短期記憶エントリがありません。`,
     stm_active_count: `有効な短期記憶エントリ {count} 件。`,
     stm_manager_only: `サーバーの短期記憶を表示するには

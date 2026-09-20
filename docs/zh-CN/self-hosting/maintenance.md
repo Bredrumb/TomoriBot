@@ -4,8 +4,6 @@ sidebar:
   order: 5
 ---
 
-> **关于这份翻译：** 本页是英文版[维护与备份](https://docs.tomoribot.app/en/self-hosting/maintenance/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 自部署实例的日常运营：维护脚本、如何更新，以及如何备份和还原你的数据库。这些都是主机端操作：你在命令行里运行它们，而不是在 Discord 里。Discord 内按用户进行的导出、导入与删除流程，见
 [数据处理](/zh-CN/features/knowledge/data-handling/)。
 

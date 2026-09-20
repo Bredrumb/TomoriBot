@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import sitemap from "@astrojs/sitemap";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { remarkHeadingIds } from "./src/remarkHeadingIds";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -387,6 +388,9 @@ const isInternalOrFallbackPath = (pathname: string): boolean =>
 
 export default defineConfig({
   site: "https://docs.tomoribot.app",
+  markdown: {
+    remarkPlugins: [remarkHeadingIds],
+  },
   // Redirects for the /features/ restructure: the flat pages were bucketed into
   // task-based sub-category folders, changing their slugs. Keep the old URLs
   // (shared links, search-engine index) working by forwarding to the new paths.

@@ -4,8 +4,6 @@ sidebar:
   order: 5
 ---
 
-> **关于这份翻译：** 本页是英文版[配置：通过 ChatMock 使用 Codex CLI](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-chatmock/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 如果你想让 TomoriBot 通过一个本地 OpenAI 兼容桥接层使用你的 ChatGPT 账户，可以运行 [ChatMock](https://github.com/RayBytes/ChatMock)，并让 TomoriBot 的 `custom` 提供方指向它。
 
 ## ChatMock 做什么

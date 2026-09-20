@@ -6,7 +6,7 @@ sidebar:
 
 TomoriBot 沒有內建的 AI 模型，你要從供應商接一個進來。**供應商**是一項 AI 服務（Google Gemini、OpenRouter、NovelAI、本機端點等等），**模型**則是該供應商上的特定模型。你至少需要一個供應商才能真正使用她。
 
-## API 金鑰
+## API 金鑰 {#api-keys}
 
 在首次設定時用 `/setup` 加入供應商金鑰，或之後在 `/providers` 選擇 **+ 新增供應商**。金鑰會**加密儲存**：沒有人能讀回它們，包括伺服器管理員。
 
@@ -49,7 +49,7 @@ Brave Search 與你的 AI 供應商是分開的，只會強化網頁搜尋（加
 
 ## 選擇模型
 
-`/providers` 管理伺服器憑證、模型目錄與端點註冊，而 `/config` > 模型 > 切換模型 則選擇這個伺服器每位成員共用的功能指派。兩者都需要所需的伺服器權限。個別成員用 `/personal providers` 管理自己的憑證與模型目錄，再於 `/personal config` 選擇個人模型。個人設定會跟著他們到每一個使用 TomoriBot 的伺服器。那一側請看[個人化](/zh-TW/features/knowledge/personalization/#你自己的供應商)。
+`/providers` 管理伺服器憑證、模型目錄與端點註冊，而 `/config` > 模型 > 切換模型 則選擇這個伺服器每位成員共用的功能指派。兩者都需要所需的伺服器權限。個別成員用 `/personal providers` 管理自己的憑證與模型目錄，再於 `/personal config` 選擇個人模型。個人設定會跟著他們到每一個使用 TomoriBot 的伺服器。那一側請看[個人化](/zh-TW/features/knowledge/personalization/#your-own-providers)。
 
 面板標題分別是 **伺服器供應商** 與 **個人供應商**，讓它們的歸屬在指令互動開啟之後仍然清楚。
 
@@ -57,7 +57,7 @@ Brave Search 與你的 AI 供應商是分開的，只會強化網頁搜尋（加
 
 - `/config` > 模型 > 切換模型：主要的聊天模型
 - `/config` > 模型 > 切換模型：視覺模型（當聊天模型無法讀圖時用來讀圖）
-- `/config` > 模型 > 切換模型：[文件知識庫](/zh-TW/features/knowledge/memory/#文件知識庫rag)用的嵌入
+- `/config` > 模型 > 切換模型：[文件知識庫](/zh-TW/features/knowledge/memory/#document-knowledge-base-rag)用的嵌入
 - `/config` > 模型 > 切換模型：標準圖片生成（請看[圖片生成](/zh-TW/features/capabilities/media-generation/image-generation/)）
 - `/config` > 模型 > 切換模型：NovelAI 圖片生成
 - `/config` > 模型 > 切換模型：影片生成
@@ -68,12 +68,12 @@ Brave Search 與你的 AI 供應商是分開的，只會強化網頁搜尋（加
 
 你也可以用 `/providers` 管理這個伺服器的備援金鑰，用於自動容錯與負載平衡。
 
-## 自訂端點
+## 自訂端點 {#custom-endpoints}
 
 自訂端點讓你把自架或以代理為後端的服務（Ollama、LM Studio、LiteLLM、vLLM、ComfyUI、本機 TTS 與 STT）註冊成**有標籤的供應商組合**。
 
 - **伺服器範圍：**開啟 `/providers` 進行工作區的端點註冊與編輯。
-- **個人範圍：**開啟 `/personal providers` 管理個人模型目錄（只有你，請看[個人化](/zh-TW/features/knowledge/personalization/#你自己的供應商)）。個人語音端點不是從 `/personal config` 選擇的。
+- **個人範圍：**開啟 `/personal providers` 管理個人模型目錄（只有你，請看[個人化](/zh-TW/features/knowledge/personalization/#your-own-providers)）。個人語音端點不是從 `/personal config` 選擇的。
 
 **標籤**是使用者看到的選單名稱，並在功能共用同一個端點 URL 時，把它們歸在同一個組合底下。它永遠不會被送到遠端端點。由不同 URL 提供的功能需要不同的標籤。選擇 **+ 新增自訂端點**，選好 API 相容性，然後儲存連線。儲存會準備該協定支援的功能，但不會註冊任何模型。接著選取新的端點，用它的模型下拉選單註冊確切的模型代號與功能。加入模型就會為該項功能啟用它。用同一個下拉選單附加更多模型，或編輯工作區新增的註冊資料。文字模型會在那份表單中宣告自己的能力，圖片模型則宣告自己支援哪些請求模式。
 
@@ -89,7 +89,7 @@ API 相容性決定了服務實作的請求路徑與內容，因此也決定了�
 - [設定：ComfyUI](/zh-TW/self-hosting/local-endpoints/setup-comfyui/)：本機圖片與影片生成。
 - [設定：ChatMock](/zh-TW/self-hosting/local-endpoints/setup-chatmock/)：ChatGPT 帳號與 Codex CLI。
 
-## 支援的供應商
+## 支援的供應商 {#supported-providers}
 
 如果你沒有自架模型所需的硬體，TomoriBot 支援各式各樣的服務。不是每項功能都能在每個供應商上使用。
 

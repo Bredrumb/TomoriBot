@@ -75,7 +75,7 @@ bun run launch --searxng --crawl4ai  # bot 加 sidecar（請看 bun run launch -
 
 bot 上線之後，在 Discord 執行 `/setup` 來連接 AI 供應商。自己的工作區沒有自帶供應商就無法回覆，除非它以使用者 BYOK 模式運行，改由每位成員的個人供應商回答，所以這是每一條安裝路徑的最後一步。
 
-## `/setup` 指令
+## `/setup` 指令 {#the-setup-command}
 
 `/setup` 會開啟一個只有執行者本人能操作、只有自己看得到的檢查清單面板。在伺服器裡它需要
 **管理伺服器**權限；在私訊裡，那個人自己的工作區就能使用。面板上的每一列都是草稿值：
@@ -103,7 +103,7 @@ bot 上線之後，在 Discord 執行 `/setup` 來連接 AI 供應商。自己�
   同一套註冊流程，只是改在精靈裡完成，而且在按下**完成設定**之前不會建立任何資料列。
 - **使用者 BYOK**（僅限伺服器，私訊永遠不適用）：工作區不自帶供應商，每一位成員觸發的回覆都改為
   解析個人供應商。在表單中確認之後，請成員用 `/personal providers` 註冊自己的供應商。請看
-  [伺服器管理](/zh-TW/features/setup-administration/server-moderation/#使用者-byok自備金鑰)。
+  [伺服器管理](/zh-TW/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)。
 
 ### 起始設定
 

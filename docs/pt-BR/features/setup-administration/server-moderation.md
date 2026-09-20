@@ -9,7 +9,7 @@ onde e quanto custa, através do painel `/config` e seus comandos relacionados. 
 a permissão **Gerenciar Servidor**. Esta página cobre os destaques; todos os comandos estão na
 [Referência de Comandos](/pt-BR/features/command-reference/).
 
-## Controle de Custo: Cotas
+## Controle de Custo: Cotas {#cost-control-quotas}
 
 Gerar conteúdo custa dinheiro (seu ou dos seus membros). Cotas limitam o uso por usuário e em todo o servidor:
 
@@ -19,14 +19,14 @@ Gerar conteúdo custa dinheiro (seu ou dos seus membros). Cotas limitam o uso po
 Defina um limite por usuário como `0` para ilimitado. Pools do servidor são redefinidos em um intervalo
 de dias configurável.
 
-## BYOK de Usuário (Traga Sua Própria Chave)
+## BYOK de Usuário (Traga Sua Própria Chave) {#user-byok-bring-your-own-key}
 
 `/moderation` **((Member Access))** apresenta isso como uma escolha de dois estados. **Allow Server Models** é o
 padrão; **Require Personal Providers** faz cada membro trazer seu **próprio** provedor pessoal para
 seus gatilhos; o servidor não paga nada em mensagens iniciadas pelo usuário. Gatilhos iniciados
 pelo servidor ainda usam o provedor do servidor. Este é o controle de custo mais forte: ele transfere o gasto com
 API inteiramente para os membros. Membros configuram o deles em
-[Personalização → Seus Próprios Provedores](/pt-BR/features/knowledge/personalization/#seus-próprios-provedores).
+[Personalização → Seus Próprios Provedores](/pt-BR/features/knowledge/personalization/#your-own-providers).
 
 Você também pode iniciar um servidor **sem** nenhum provedor de texto do lado do servidor escolhendo
 **User BYOK** durante o `/setup`. Essa opção é oferecida em servidores e não em DMs, e pede
@@ -53,7 +53,7 @@ Canais na lista de permissões herdam o tempo de recarga global, a menos que voc
 
 `/server thought-logs` define um canal onde o raciocínio interno dela e chamadas de ferramentas bem-sucedidas
 são postados; útil para auditar o que ela está fazendo (incluindo qual gatilho expôs uma ferramenta no
-[Modo de Ferramenta Deliberada](/pt-BR/features/capabilities/tools-and-extensions/#modo-de-ferramenta-deliberada)).
+[Modo de Ferramenta Deliberada](/pt-BR/features/capabilities/tools-and-extensions/#deliberate-tool-mode)).
 
 ## Saudações de Boas-Vindas
 

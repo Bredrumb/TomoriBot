@@ -198,7 +198,7 @@ export default {
     default: {
       description: `套用預設的人格設定`,
       type_description: `套用到主要／預設人格，或建立為 alter 人格`,
-      type_choice_default: `預設人格`,
+      type_choice_default: `主要人格（取代目前的人格）`,
       type_choice_alter: `alter 人格`,
       no_permission_title: `🔴 權限不足`,
       no_permission_description: `套用人格預設集需要 **管理伺服器** 權限。`,

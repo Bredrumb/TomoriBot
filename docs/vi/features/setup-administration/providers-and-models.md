@@ -6,7 +6,7 @@ sidebar:
 
 TomoriBot không tích hợp sẵn model AI nào, bạn cần kết nối model từ một nhà cung cấp. Một **nhà cung cấp** là một dịch vụ AI (Google Gemini, OpenRouter, NovelAI, một endpoint cục bộ, …), và một **model** là một model cụ thể trên nhà cung cấp đó. Bạn cần ít nhất một nhà cung cấp để có thể sử dụng bot.
 
-## API key
+## API key {#api-keys}
 
 Thêm key của nhà cung cấp trong lần thiết lập đầu tiên bằng lệnh `/setup`, hoặc sau này từ `/providers` bằng cách chọn **Add New Provider**. Các key được **mã hóa khi lưu trữ**, vì vậy không ai, kể cả quản trị viên máy chủ, có thể đọc lại được.
 
@@ -49,7 +49,7 @@ Brave Search tách biệt với nhà cung cấp AI của bạn và chỉ tăng c
 
 ## Chọn model
 
-Lệnh `/providers` quản lý thông tin xác thực của máy chủ, danh mục model và đăng ký endpoint, trong khi `/config` > Models > Switch Models chọn các chỉ định tính năng dùng chung mà mọi thành viên của máy chủ này sử dụng. Cả hai đều yêu cầu quyền cần thiết trong máy chủ. Các thành viên riêng lẻ quản lý thông tin xác thực và danh mục model của riêng mình bằng `/personal providers`, sau đó chọn model cá nhân trong `/personal config`. Cài đặt cá nhân đi theo họ trên mọi máy chủ mà họ sử dụng TomoriBot. Xem [Cá nhân hóa](/vi/features/knowledge/personalization/#nha-cung-cap-rieng-cua-ban) để biết thêm chi tiết.
+Lệnh `/providers` quản lý thông tin xác thực của máy chủ, danh mục model và đăng ký endpoint, trong khi `/config` > Models > Switch Models chọn các chỉ định tính năng dùng chung mà mọi thành viên của máy chủ này sử dụng. Cả hai đều yêu cầu quyền cần thiết trong máy chủ. Các thành viên riêng lẻ quản lý thông tin xác thực và danh mục model của riêng mình bằng `/personal providers`, sau đó chọn model cá nhân trong `/personal config`. Cài đặt cá nhân đi theo họ trên mọi máy chủ mà họ sử dụng TomoriBot. Xem [Cá nhân hóa](/vi/features/knowledge/personalization/#your-own-providers) để biết thêm chi tiết.
 
 Các bảng điều khiển có tiêu đề **Server Providers** và **Personal Providers** để quyền sở hữu của chúng vẫn hiển thị rõ ràng sau khi tương tác lệnh mở ra.
 
@@ -57,7 +57,7 @@ Sau khi thiết lập nhà cung cấp, hãy dùng `/config` > Models > Switch Mo
 
 - `/config` > Models > Switch Models: model trò chuyện chính
 - `/config` > Models > Switch Models: model thị giác (để đọc hình ảnh khi model trò chuyện không hỗ trợ)
-- `/config` > Models > Switch Models: embedding cho [cơ sở tri thức tài liệu](/vi/features/knowledge/memory/#co-so-tri-thuc-tai-lieu-rag)
+- `/config` > Models > Switch Models: embedding cho [cơ sở tri thức tài liệu](/vi/features/knowledge/memory/#document-knowledge-base-rag)
 - `/config` > Models > Switch Models: tạo ảnh tiêu chuẩn (xem [Tạo ảnh](/vi/features/capabilities/media-generation/image-generation/))
 - `/config` > Models > Switch Models: tạo ảnh NovelAI
 - `/config` > Models > Switch Models: tạo video
@@ -68,12 +68,12 @@ Sáu mục đầu tiên chọn các bản ghi danh mục model. Các vị trí T
 
 Bạn cũng có thể quản lý các key dự phòng của máy chủ này để tự động chuyển đổi dự phòng và cân bằng tải bằng `/providers`.
 
-## Endpoint tùy chỉnh
+## Endpoint tùy chỉnh {#custom-endpoints}
 
 Các endpoint tùy chỉnh cho phép bạn đăng ký các dịch vụ tự host hoặc thông qua proxy (Ollama, LM Studio, LiteLLM, vLLM, ComfyUI, TTS/STT cục bộ) dưới dạng **các gói nhà cung cấp có nhãn**.
 
 - **Phạm vi máy chủ:** mở `/providers` để đăng ký và chỉnh sửa endpoint của không gian làm việc.
-- **Phạm vi cá nhân:** mở `/personal providers` cho danh mục model cá nhân (chỉ riêng bạn: xem [Cá nhân hóa](/vi/features/knowledge/personalization/#nha-cung-cap-rieng-cua-ban)). Các endpoint giọng nói cá nhân không được chọn từ `/personal config`.
+- **Phạm vi cá nhân:** mở `/personal providers` cho danh mục model cá nhân (chỉ riêng bạn: xem [Cá nhân hóa](/vi/features/knowledge/personalization/#your-own-providers)). Các endpoint giọng nói cá nhân không được chọn từ `/personal config`.
 
 Một **nhãn (label)** là tên menu hiển thị cho người dùng và gom nhóm các tính năng dưới một gói khi chúng dùng chung một URL endpoint. Nhãn không bao giờ được gửi đến endpoint từ xa. Các tính năng được phân phối từ các URL khác nhau cần có các nhãn riêng biệt. Chọn **Add New Custom Endpoint**, chọn tính tương thích API và lưu kết nối. Việc lưu sẽ chuẩn bị các tính năng được giao thức đó hỗ trợ mà không cần đăng ký bất kỳ model nào. Sau đó chọn endpoint mới và sử dụng menu thả xuống model của endpoint để đăng ký chính xác mã model và tính năng. Việc thêm một model sẽ kích hoạt model đó cho tính năng tương ứng. Sử dụng cùng một menu thả xuống để đính kèm thêm model hoặc chỉnh sửa đăng ký do không gian làm việc thêm vào. Các model văn bản tự khai báo tính năng của mình trong biểu mẫu đó, và các model hình ảnh khai báo chế độ yêu cầu mà chúng hỗ trợ.
 
@@ -89,7 +89,7 @@ Chế độ **Custom Endpoint (Advanced)** của `/setup` thực hiện hai bư�
 - [Thiết lập: ComfyUI](/vi/self-hosting/local-endpoints/setup-comfyui/): tạo hình ảnh/video cục bộ.
 - [Thiết lập: ChatMock](/vi/self-hosting/local-endpoints/setup-chatmock/): tài khoản ChatGPT / Codex CLI.
 
-## Các nhà cung cấp được hỗ trợ
+## Các nhà cung cấp được hỗ trợ {#supported-providers}
 
 Nếu bạn không có phần cứng để tự host model của riêng mình, TomoriBot hỗ trợ nhiều loại dịch vụ. Không phải mọi tính năng đều có sẵn trên mọi nhà cung cấp.
 

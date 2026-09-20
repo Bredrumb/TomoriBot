@@ -61,7 +61,7 @@ Các tùy chỉnh bổ sung nằm trong `.env.optional.example`. Sao chép bất
 bun run dev
 ```
 
-Khi bạn thấy `TomoriBot up and running!`, hãy vào Discord và chạy `/setup` trong máy chủ của bạn để kết nối nhà cung cấp AI và khởi tạo bot. Lệnh này mở một bảng danh sách kiểm tra có hướng dẫn, và không có dữ liệu nào được ghi cho đến khi bạn nhấn **Finish Setup**; xem [Lệnh `/setup`](/vi/self-hosting/setup-wizard/#lenh-setup) để biết các bước thực hiện và [Bắt đầu nhanh](/vi/introduction/quickstart/) cho các thao tác trong Discord.
+Khi bạn thấy `TomoriBot up and running!`, hãy vào Discord và chạy `/setup` trong máy chủ của bạn để kết nối nhà cung cấp AI và khởi tạo bot. Lệnh này mở một bảng danh sách kiểm tra có hướng dẫn, và không có dữ liệu nào được ghi cho đến khi bạn nhấn **Finish Setup**; xem [Lệnh `/setup`](/vi/self-hosting/setup-wizard/#the-setup-command) để biết các bước thực hiện và [Bắt đầu nhanh](/vi/introduction/quickstart/) cho các thao tác trong Discord.
 
 Sử dụng `bun run launch` thay vì `bun run dev` nếu bạn muốn các sidecar tùy chọn (SearXNG, Crawl4AI, TTS/STT cục bộ) được khởi chạy cùng với bot:
 
@@ -70,7 +70,7 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # xem tất cả các cờ
 ```
 
-## Tiện ích bổ sung tùy chọn (bản "Full Install" thủ công)
+## Tiện ích bổ sung tùy chọn (bản "Full Install" thủ công) {#optional-extras-the-manual-full-install}
 
 Phương thức **Full Install** của [trình hướng dẫn thiết lập](/vi/self-hosting/setup-wizard/) bổ sung bốn tiện ích nhẹ lên trên bản cài đặt cơ bản. Không có tiện ích nào là bắt buộc để chạy bot, nhưng mỗi tiện ích sẽ mở khóa một tính năng. Nếu cài đặt thủ công, bạn có thể thêm bất kỳ tiện ích nào bạn muốn:
 

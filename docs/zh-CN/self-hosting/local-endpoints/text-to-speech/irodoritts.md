@@ -2,8 +2,6 @@
 title: "IrodoriTTS"
 ---
 
-> **关于这份翻译：** 本页是英文版[IrodoriTTS](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/irodoritts/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 Irodori-TTS v4.1 是一个以日语为主的语音合成模型，在同一个检查点里同时具备语音克隆与基于描述文本的 VoiceDesign。TomoriBot 通过 `servers/tts/irodoritts/` 里的本地 FastAPI 封装程序来运行它。
 
 默认模型是 `Aratako/Irodori-TTS-v4.1-Small`。兼容的 Hugging Face 检查点可以用 `IRODORI_TTS_MODEL_ID` 来选择，包括社区微调版本，例如 `phasefield-audio/Irodori-TTS-v4.1-Anime`。

@@ -15,8 +15,6 @@ sidebar:
   order: 3
 ---
 
-> Esta tradução é fornecida para sua conveniência. Em caso de conflito, a versão em inglês prevalece.
-
 <!-- STUB (Phase 1 structural). Phase 2 writes: requirements + module directory.
      Source for manual-setup.md: `git show HEAD:README.md` "Self-Hosting" section. -->
 

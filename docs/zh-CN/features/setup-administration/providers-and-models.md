@@ -8,7 +8,7 @@ TomoriBot 没有内置的 AI 模型，你需要从一个提供方接一个进来
 服务（Google Gemini、OpenRouter、NovelAI、本地端点……），而**模型**是该提供方上的一个
 具体模型。你至少需要一个提供方才能使用她。
 
-## API 密钥
+## API 密钥 {#api-keys}
 
 在首次设置时用 `/setup` 添加提供方密钥，或者之后用 `/providers` 选择
 **+ 添加新提供方**。密钥会在**静态存储时加密**，所以没有任何人，包括服务器管理员，能把它
@@ -71,7 +71,7 @@ Brave Search 与你的 AI 提供方是分开的，只用来增强网页搜索（
 个别成员用 `/personal providers` 管理自己的凭据
 和模型目录，然后在 `/personal config` 里选择个人模型。
 个人设置会跟着他们走过每个使用 TomoriBot 的服务器。那一边的说明见
-[个性化](/zh-CN/features/knowledge/personalization/#你自己的提供方)。
+[个性化](/zh-CN/features/knowledge/personalization/#your-own-providers)。
 
 两个面板分别命名为 **服务器提供方** 和 **个人提供方**，这样在指令交互打开之后，它们的归属关系仍然看得清。
 
@@ -80,7 +80,7 @@ Brave Search 与你的 AI 提供方是分开的，只用来增强网页搜索（
 
 - `/config` > 模型 > 切换模型：主聊天模型
 - `/config` > 模型 > 切换模型：视觉模型（在聊天模型读不了图像时用来读图）
-- `/config` > 模型 > 切换模型：用于[文档知识库](/zh-CN/features/knowledge/memory/#文档知识库rag)的嵌入
+- `/config` > 模型 > 切换模型：用于[文档知识库](/zh-CN/features/knowledge/memory/#document-knowledge-base-rag)的嵌入
 - `/config` > 模型 > 切换模型：标准图像生成（见[图像生成](/zh-CN/features/capabilities/media-generation/image-generation/)）
 - `/config` > 模型 > 切换模型：NovelAI 图像生成
 - `/config` > 模型 > 切换模型：视频生成
@@ -94,14 +94,14 @@ Brave Search 与你的 AI 提供方是分开的，只用来增强网页搜索（
 
 你也可以用 `/providers` 管理这个服务器的备用密钥，用于自动故障转移和负载均衡。
 
-## 自定义端点
+## 自定义端点 {#custom-endpoints}
 
 自定义端点让你把自行部署或经代理的服务（Ollama、LM Studio、
 LiteLLM、vLLM、ComfyUI、本地 TTS 与 STT）登记为**带标签的提供方组合**。
 
 - **服务器范围：** 打开 `/providers` 进行工作区端点的登记和编辑。
 - **个人范围：** 打开 `/personal providers` 管理个人模型目录（只属于你：见
-  [个性化](/zh-CN/features/knowledge/personalization/#你自己的提供方)）。个人语音端点
+  [个性化](/zh-CN/features/knowledge/personalization/#your-own-providers)）。个人语音端点
   不能从 `/personal config` 选择。
 
 **标签**是面向用户的菜单名称，当多项功能共用同一个端点 URL 时，它把它们归到一个组合下。
@@ -135,7 +135,7 @@ API 兼容性决定该服务实现的请求路径和载荷，所以它也决定�
 - [设置：ComfyUI](/zh-CN/self-hosting/local-endpoints/setup-comfyui/)：本地图像与视频生成。
 - [设置：ChatMock](/zh-CN/self-hosting/local-endpoints/setup-chatmock/)：ChatGPT 账号与 Codex CLI。
 
-## 支持的提供方
+## 支持的提供方 {#supported-providers}
 
 如果你没有自己托管模型的硬件，TomoriBot 支持多种
 服务。并不是每项功能在每个提供方上都可用。

@@ -232,7 +232,7 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
       custom_endpoint_cap_prefix_completion_desc: `支援接續寫到一半的助理對話輪。`,
       provider_byok_guild_only: `使用者 BYOK 模式只能在伺服器中使用。私人訊息請選擇其他供應商模式。`,
       byok_modal_title: `確認使用者 BYOK`,
-      byok_modal_notice: `啟用使用者 BYOK 後，這個伺服器的人會用自己的已儲存供應商來取得回覆。這個伺服器不會提供備援。他們可以用 {command} 設定。[深入了解使用者 BYOK](https://docs.tomoribot.app/zh-TW/features/setup-administration/server-moderation/#使用者-byok自備金鑰)`,
+      byok_modal_notice: `啟用使用者 BYOK 後，這個伺服器的人會用自己的已儲存供應商來取得回覆。這個伺服器不會提供備援。他們可以用 {command} 設定。[深入了解使用者 BYOK](https://docs.tomoribot.app/zh-TW/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)`,
       byok_confirm_label: `啟用使用者 BYOK`,
       byok_confirm_yes: `是，啟用使用者 BYOK`,
       byok_confirm_no: `否，保留先前的設定`,

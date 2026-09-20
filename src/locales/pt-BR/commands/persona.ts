@@ -198,7 +198,7 @@ Por favor, edite o arquivo de importação para usar um nome diferente, ou remov
     default: {
       description: `Aplicar uma predefinição de personalidade`,
       type_description: `Mirar na persona principal/padrão ou criar como alter`,
-      type_choice_default: `Persona Padrão`,
+      type_choice_default: `Persona Principal (substitui a persona atual)`,
       type_choice_alter: `Alter`,
       no_permission_title: `🔴 Permissão Negada`,
       no_permission_description: `Você precisa da permissão **Gerenciar Servidor** para aplicar predefinições de personalidade.`,

@@ -8,7 +8,7 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 
 ## 個人記憶
 
-她記得的關於你的事實會跟著你在各伺服器之間移動。管理它們（新增、移除、匯出）收錄在[記憶](/zh-TW/features/knowledge/memory/#個人記憶與伺服器記憶)頁面。
+她記得的關於你的事實會跟著你在各伺服器之間移動。管理它們（新增、移除、匯出）收錄在[記憶](/zh-TW/features/knowledge/memory/#personal-vs-server-memories)頁面。
 
 ## 個人檔案與人格感知稱呼
 
@@ -20,7 +20,7 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 
 `/personal config` 只儲存 -12 到 +14 的數值 UTC 位移。它不會儲存或推論地理位置或 IANA 時區。
 
-## 你自己的供應商
+## 你自己的供應商 {#your-own-providers}
 
 個人供應商讓*你自己的請求*使用*你自己的* API 金鑰與模型，而不是伺服器的預設值。這是個人層級的 BYOK（bring your own key，自備金鑰）。
 
@@ -39,12 +39,12 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 
 因為步驟 1 與 2 會把你切換到跨伺服器的覆寫，每當某項功能從伺服器預設改為個人設定時，TomoriBot 都會請你確認後才儲存。如果供應商本來就已經在回答你的請求，只是更換金鑰，則會跳過確認，因為路由並沒有改變。
 
-思考紀錄會把這些對話輪歸到你名下，你可以用 `/personal config` 調整。這會影響你在所有地方的所有請求，永遠不會動到這個伺服器的設定。你也可以用 `/personal providers` 註冊個人自訂端點，請看[自訂端點](/zh-TW/features/setup-administration/providers-and-models/#自訂端點)。
+思考紀錄會把這些對話輪歸到你名下，你可以用 `/personal config` 調整。這會影響你在所有地方的所有請求，永遠不會動到這個伺服器的設定。你也可以用 `/personal providers` 註冊個人自訂端點，請看[自訂端點](/zh-TW/features/setup-administration/providers-and-models/#custom-endpoints)。
 
 如果使用你的個人供應商時請求失敗，錯誤訊息中「你可以怎麼做」的提示會指出真正能解決問題的個人指令（`/personal providers`、`/personal config`），而不是伺服器管理員的指令。
 
 :::note[需要 BYOK 的伺服器]
-伺服器可以用「使用者 BYOK」模式要求成員自備供應商（[伺服器管理](/zh-TW/features/setup-administration/server-moderation/#使用者-byok自備金鑰)）。開啟後，你觸發的訊息必須先有個人供應商，她才能回答。個人供應商會套用到你使用她的每一個伺服器。
+伺服器可以用「使用者 BYOK」模式要求成員自備供應商（[伺服器管理](/zh-TW/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)）。開啟後，你觸發的訊息必須先有個人供應商，她才能回答。個人供應商會套用到你使用她的每一個伺服器。
 :::
 
 ## 其他個人設定
@@ -52,11 +52,11 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 - `/personal config`：改變她怎麼稱呼你。
 - `/personal config`：你自己的外觀標籤（booru 風格），當一次[圖片生成](/zh-TW/features/capabilities/media-generation/image-generation/#標籤自訂)以你為參考時會用到。送出空白的內容即可清除它們。
 - `/personal config`：控制你在她眼中的可見度，最高可以**完全隱形**（完全退出記憶功能）。
-- `/personal config`：你對[明確觸發模式](/zh-TW/features/chatting-personality/chatting-and-triggers/#明確觸發模式)的個人覆寫。
+- `/personal config`：你對[明確觸發模式](/zh-TW/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)的個人覆寫。
 - `/personal config`：選擇加入跨伺服器的短期記憶共享；`/personal memories` 會清除你的 STM。
 - `/personal config`：設定一段可重複使用的提示詞，供她透過 `/impersonate user` 模擬你時使用。
 
-## 個人聚光燈
+## 個人聚光燈 {#personal-spotlight}
 
 **個人聚光燈：各頻道的人格選擇。**聚光燈讓你*自己*縮小在某個頻道可以觸發哪些人格，並可選擇指派其中一個，讓你在該頻道的訊息自動觸發它。它的範圍是**你加上一個頻道**，不會影響其他人。
 

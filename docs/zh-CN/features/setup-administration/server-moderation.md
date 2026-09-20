@@ -8,7 +8,7 @@ TomoriBot 通过 `/config` 面板及其相关指令，把她在你服务器里�
 在哪里用、花费多少）。大多数需要**管理服务器**权限。这一页讲重点；全部指令见
 [指令参考](/zh-CN/features/command-reference/)。
 
-## 成本控制：配额
+## 成本控制：配额 {#cost-control-quotas}
 
 生成是要花钱的（你的钱，或者你成员的钱）。配额按用户和全服务器限制用量：
 
@@ -17,14 +17,14 @@ TomoriBot 通过 `/config` 面板及其相关指令，把她在你服务器里�
 
 把按用户上限设为 `0` 表示不限制。全服务器池按可配置的天数间隔重置。
 
-## 用户 BYOK（Bring Your Own Key）
+## 用户 BYOK（Bring Your Own Key） {#user-byok-bring-your-own-key}
 
 `/moderation` 的 **((成员访问))** 把这一项做成二选一。**允许使用服务器模型** 是
 默认值；**必须使用个人提供方** 会让每位成员为自己的触发自备**自己的**
 个人提供方，所以服务器不为用户发起的消息花一分钱。服务器发起的
 触发仍然使用服务器的提供方。这是最强的成本控制：它把 API
 开销完全转给成员。成员在
-[个性化 → 你自己的提供方](/zh-CN/features/knowledge/personalization/#你自己的提供方)里设置自己的提供方。
+[个性化 → 你自己的提供方](/zh-CN/features/knowledge/personalization/#your-own-providers)里设置自己的提供方。
 
 你也可以在 `/setup` 期间选择 **User BYOK**，让一个服务器完全不配
 服务器侧文本提供方。这个选项只在服务器里提供，不在私信里，而且完成提供方步骤之前会先请你
@@ -50,7 +50,7 @@ TomoriBot 通过 `/config` 面板及其相关指令，把她在你服务器里�
 
 `/server thought-logs` 设置一个频道，用来发布她的内部推理和成功的工具调用，
 便于审计她在做什么（包括在
-[明确工具模式](/zh-CN/features/capabilities/tools-and-extensions/#明确工具模式)下是哪条触发暴露了工具）。
+[明确工具模式](/zh-CN/features/capabilities/tools-and-extensions/#deliberate-tool-mode)下是哪条触发暴露了工具）。
 
 ## 欢迎消息
 

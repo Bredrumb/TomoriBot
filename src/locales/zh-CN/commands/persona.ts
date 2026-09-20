@@ -198,7 +198,7 @@ export default {
     default: {
       description: `应用一套人格预设集`,
       type_description: `应用到主人格／默认人格，或创建为副人格`,
-      type_choice_default: `默认人格`,
+      type_choice_default: `主人格（替换当前人格）`,
       type_choice_alter: `副人格`,
       no_permission_title: `🔴 权限不足`,
       no_permission_description: `应用人格预设集需要**管理服务器**权限。`,

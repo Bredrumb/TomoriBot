@@ -4,8 +4,6 @@ sidebar:
   order: 3
 ---
 
-> **关于这份翻译：** 本页是英文版[配置：SearXNG（边车服务）](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-searxng/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 `web_search` 工具会走一条引擎链：**Brave → SearXNG → DuckDuckGo → IAsk**。通过运行我们自己的 SearXNG 实例，我们避开了单引擎的速率限制和抓取失效，并解锁 SearXNG 独有的分类：`science`、`it`、`files` 和 `music`。
 
 SearXNG 的配置路径选一条：

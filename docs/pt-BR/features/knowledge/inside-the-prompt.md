@@ -27,14 +27,14 @@ como o prompt/contexto principal, nesta ordem:
 | [**Atributos da persona**](/pt-BR/features/chatting-personality/multiple-personas/#attributes) | | `/config` > Persona > Identity & Personality | Os traços de personalidade e padrões de fala da persona ativa. |
 | **Informações do servidor** | | *(nenhum, do Discord)* | O nome do servidor, descrição e o canal em que ela está, extraídos diretamente do Discord. |
 | [**Bloqueios persona-usuário**](/pt-BR/features/capabilities/tools-and-extensions/#ferramentas-integradas) | *(Opcional)* | `/moderation` para revisar/limpar; controlado por `/config` > Permissions (User Blocking) | Restrições ativas de silenciamento/bloqueio que esta persona mantém contra usuários específicos. |
-| [**Memórias do servidor**](/pt-BR/features/knowledge/memory/#memórias-pessoais-vs-do-servidor) | | `/memories` | Os fatos de longo prazo salvos para este servidor. |
+| [**Memórias do servidor**](/pt-BR/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | Os fatos de longo prazo salvos para este servidor. |
 | [**Emojis do servidor**](/pt-BR/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Opcional)* | `/config` > Permissions (Emoji Usage) (apenas alternância), inicialize com `/expressions initialize` | Os emojis personalizados presentes no servidor. |
 | [**Figurinhas do servidor**](/pt-BR/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Opcional)* | `/config` > Permissions (Sticker Usage) (apenas alternância), inicialize com `/expressions initialize` | As figurinhas personalizadas presentes no servidor. |
 | [**Sprites da persona**](/pt-BR/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Opcional)* | `/config` > Persona > Sprites | Sprites de expressão nomeados configurados para a persona, se houver. |
-| [**Participantes da Conversa**](/pt-BR/features/knowledge/memory/#memórias-pessoais-vs-do-servidor) | *(Opcional)* | `/personal memories` (controlado por `/config` > Permissions (Personalization)) | As pessoas na conversa, seus apelidos e handles de menção, e as memórias pessoais salvas sobre cada uma delas. Carregado quando a pessoa possui uma mensagem no contexto, ou se seu nome/alias é mencionado. Também traz o canal atual e a hora local como rodapé, usando `/config` > Engine > General. |
-| [**Memória de curto prazo**](/pt-BR/features/knowledge/memory/#memória-de-curto-prazo-stm) | | `/config` > Persona > Memories; `/memories` para limpar entradas; controlado por `/config` > Permissions (Short-Term Memory) | Contém resumos e mensagens recentes de diferentes canais |
-| [**Documentos**](/pt-BR/features/knowledge/memory/#base-de-conhecimento-de-documentos-rag) | *(Opcional)* | `/memories` | Fragmentos relevantes extraídos da base de conhecimento usando RAG. |
-| [**Condicionamento**](/pt-BR/features/knowledge/memory/#condicionamento) | *(Opcional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, gerenciado via `/conditioning remove` | Empurrões comportamentais acumulados para esta persona neste servidor. |
+| [**Participantes da Conversa**](/pt-BR/features/knowledge/memory/#personal-vs-server-memories) | *(Opcional)* | `/personal memories` (controlado por `/config` > Permissions (Personalization)) | As pessoas na conversa, seus apelidos e handles de menção, e as memórias pessoais salvas sobre cada uma delas. Carregado quando a pessoa possui uma mensagem no contexto, ou se seu nome/alias é mencionado. Também traz o canal atual e a hora local como rodapé, usando `/config` > Engine > General. |
+| [**Memória de curto prazo**](/pt-BR/features/knowledge/memory/#short-term-memory-stm) | | `/config` > Persona > Memories; `/memories` para limpar entradas; controlado por `/config` > Permissions (Short-Term Memory) | Contém resumos e mensagens recentes de diferentes canais |
+| [**Documentos**](/pt-BR/features/knowledge/memory/#document-knowledge-base-rag) | *(Opcional)* | `/memories` | Fragmentos relevantes extraídos da base de conhecimento usando RAG. |
+| [**Condicionamento**](/pt-BR/features/knowledge/memory/#conditioning) | *(Opcional)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, gerenciado via `/conditioning remove` | Empurrões comportamentais acumulados para esta persona neste servidor. |
 | [**Diálogos de exemplo**](/pt-BR/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Opcional)* | `/config` > Persona > Identity & Personality | Exemplos de como esta persona fala, se houver configurados. |
 | [**Mensagens recentes**](/pt-BR/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Engine > General | A conversa real, até essa quantidade de mensagens (padrão 80). Sua nota de contexto e qualquer nota de reencontro são injetadas inline dentro deste bloco, em uma profundidade configurável, em vez de um bloco separado. |
 
@@ -62,7 +62,7 @@ Essa ordenação explica quase toda pergunta de "por que ela não lembra?":
 | `/refresh` fez ela esquecer | Refresh corta as **Mensagens recentes** e limpa a **Memória de curto prazo** deste canal, mas não deve remover memórias de longo prazo. Exclua o embed de refresh para remover o corte. |
 | Ela esqueceu algo após um reinício | **Mensagens recentes** nunca sobrevive a reinícios |
 
-Se você quer que algo sobreviva a tudo isso, precisa se tornar uma **memória de longo prazo**. Veja [Memória](/pt-BR/features/knowledge/memory/#memória-de-longo-prazo).
+Se você quer que algo sobreviva a tudo isso, precisa se tornar uma **memória de longo prazo**. Veja [Memória](/pt-BR/features/knowledge/memory/#long-term-memory).
 
 ## Dicas e Truques
 

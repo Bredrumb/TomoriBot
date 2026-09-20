@@ -805,6 +805,10 @@ describe("personalConfigPanelCatalog", () => {
       { action: "language-submit", locale: "en-US", nonce: "nonce1234567" },
     ],
     [
+      "personal-config:v2:language-only-submit:en-US:nonce1234567",
+      { action: "language-only-submit", locale: "en-US", nonce: "nonce1234567" },
+    ],
+    [
       "personal-config:v2:timezone-submit:en-US:nonce1234567",
       { action: "timezone-submit", locale: "en-US", nonce: "nonce1234567" },
     ],
@@ -1239,6 +1243,7 @@ describe("personalConfigPanelCatalog", () => {
       case "spotlight-remove-cancel":
         return [{ action, locale }];
       case "language-submit":
+      case "language-only-submit":
       case "timezone-submit":
       case "naming-submit":
       case "about-submit":
@@ -1331,7 +1336,7 @@ describe("personalConfigPanelCatalog", () => {
 
   it("round-trips every action in the codec table", () => {
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(74);
+    expect(actions.length).toBe(75);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, false);
@@ -1367,7 +1372,7 @@ describe("personalConfigPanelCatalog", () => {
     // - page: "response-modes" (14 chars) is the longest PersonalConfigPage.
     // - mode: "follow" (6 chars) is the longest deliberate trigger/tool mode.
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(74);
+    expect(actions.length).toBe(75);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, true);
@@ -1403,15 +1408,15 @@ describe("personalConfigPanelCatalog", () => {
       handlerSources.flatMap((source) => [...source.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1])),
     );
 
-    expect(tableActions.size).toBe(74);
-    expect(handlerActions.size).toBe(74);
+    expect(tableActions.size).toBe(75);
+    expect(handlerActions.size).toBe(75);
     expect([...tableActions].filter((a) => !handlerActions.has(a))).toEqual([]);
     expect([...handlerActions].filter((a) => !tableActions.has(a))).toEqual([]);
   });
 
   it("fails closed when dropping or appending a segment for every action in the table", () => {
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(74);
+    expect(actions.length).toBe(75);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, false);
@@ -2896,6 +2901,54 @@ describe("Model assignment writes on modal submit", () => {
     const json = JSON.stringify(repaintedView);
     expect(json).not.toContain("model-act-confirm");
     expect(json).toContain("Text now routes to OpenRouter using Claude 3 Opus");
+  });
+
+  it("answers the standalone language submit with a reply instead of repainting a panel", async () => {
+    const calls: string[] = [];
+    let replied: { content?: string } | null = null;
+    let deferUpdateCalls = 0;
+
+    const { dependencies, telemetry } = makeDependencies(calls);
+    const route = createPersonalConfigInteractionRoute(dependencies);
+    const customId = buildPersonalConfigRouteId({
+      action: "language-only-submit",
+      locale: "en-US",
+      nonce: "nonce123456",
+    });
+
+    const interaction = {
+      id: "modal-lang-1",
+      isButton: () => false,
+      isStringSelectMenu: () => false,
+      isModalSubmit: () => true,
+      customId,
+      user: { id: "user-123", username: "tester", displayName: "Tester" },
+      guildId: "guild-123",
+      deferred: false,
+      replied: false,
+      deferUpdate: async () => {
+        deferUpdateCalls += 1;
+      },
+      reply: async (payload: { content?: string }) => {
+        replied = payload;
+      },
+      fields: { getTextInputValue: () => "" },
+    } as unknown as ModalSubmitInteraction;
+
+    const modalsModule = await import("@/utils/discord/ui/modals");
+    const takeSpy = spyOn(modalsModule, "takeRawModalSelectValue").mockReturnValue("ja");
+
+    await route.execute({} as Client, interaction, requireRoute(customId));
+
+    takeSpy.mockRestore();
+
+    expect(calls).toContain("setLanguage:ja");
+    expect(telemetry).toContain("personal-config.personal.language.set");
+    // A slash-command modal has no message, so deferring an update would fail outright and the
+    // repaint the panel route ends with would have nothing to edit.
+    expect(deferUpdateCalls).toBe(0);
+    expect(replied).not.toBeNull();
+    expect(replied?.content).toContain("日本語");
   });
 
   it("writes immediately without confirmation when capability is already an active override", async () => {
@@ -6949,15 +7002,16 @@ describe("Raw modal component types and their option bounds", () => {
     const options = (control?.options ?? []) as Array<{ value: string; label: string; default?: boolean }>;
 
     expect(control?.type).toBe(STRING_SELECT);
-    // The locale list follows directory enumeration, whose order the filesystem does not guarantee.
-    expect([...options].sort((left, right) => left.value.localeCompare(right.value))).toEqual([
+    // Asserted in order, not sorted: the picker follows LOCALE_DISPLAY_ORDER so it reads the same
+    // as the docs language switcher and the README row. Sorting here would hide a reshuffle.
+    expect(options).toEqual([
       { value: "en-US", label: "English", default: false },
-      { value: "es-419", label: "Español (Latinoamérica)", default: false },
       { value: "ja", label: "日本語", default: true },
+      { value: "zh-TW", label: "繁體中文", default: false },
+      { value: "zh-CN", label: "简体中文", default: false },
+      { value: "es-419", label: "Español (LATAM)", default: false },
       { value: "pt-BR", label: "Português (Brasil)", default: false },
       { value: "vi", label: "Tiếng Việt", default: false },
-      { value: "zh-CN", label: "简体中文", default: false },
-      { value: "zh-TW", label: "繁體中文", default: false },
     ]);
     assertBounds(modal, "language");
     expect(getRegisterableLocales().sort()).toEqual([

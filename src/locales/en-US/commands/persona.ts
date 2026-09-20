@@ -198,7 +198,7 @@ Please edit the import file to use a different name, or remove the existing pers
     default: {
       description: `Apply a preset personality configuration`,
       type_description: `Target main/default persona or create as alter persona`,
-      type_choice_default: `Default Persona`,
+      type_choice_default: `Main Persona (replaces current persona)`,
       type_choice_alter: `Alter Persona`,
       no_permission_title: `🔴 Permission Denied`,
       no_permission_description: `You need the **Manage Server** permission to apply personality presets.`,

@@ -29,7 +29,7 @@ e negativas padrão (onde o backend suporta prompts negativos). O resultado é
 entregue como uma galeria de mídia do Discord com detalhes do momento da geração, incluindo quaisquer
 usuários ou personas referenciados.
 
-## Personalização de Tags
+## Personalização de Tags {#tag-customization}
 
 Cada fonte de tags acima é editável, cada uma em um escopo diferente. Todas abrem um modal
 pré-preenchido com as tags atuais, para que você edite no lugar:

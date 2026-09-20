@@ -1,6 +1,9 @@
 export default {
   personal: {
     description: `Gerencie suas configurações pessoais`,
+    language: {
+      description: `Escolha o idioma em que a TomoriBot fala com você.`,
+    },
     providers: {
       description: `Gerencie suas credenciais de provedor pessoais, endpoints e catálogos de modelos.`,
     },
@@ -64,7 +67,7 @@ Esta ação não pode ser desfeita.
       persona_memory_count_one: `1 memória`,
       persona_memory_count_shared: `{count} memórias, compartilhadas entre {personas} personas`,
       persona_memory_count_one_shared: `1 memória, compartilhada entre {personas} personas`,
-      stm_title: `[Memória de Curto Prazo](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-curto-prazo-stm)`,
+      stm_title: `[Memória de Curto Prazo](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#short-term-memory-stm)`,
       stm_active_count: `Resumos ativos sobre você: \`{count}\``,
       stm_clear_button: `Limpar Minha Memória de Curto Prazo`,
       stm_crossserver_hint: `Configure se eu posso levar conversas recentes\nentre servidores através de \`/personal config\`.`,
@@ -221,7 +224,7 @@ Esta ação não pode ser desfeita.
       memories_manage_hint: `Use \`/personal memories\` para gerenciar minhas memórias sobre você`,
       stm_count_label: `Existem atualmente \`{count}\` STMs seus armazenados`,
       stm_clear_hint: `Use \`/personal memories\` para limpar o que eu me lembro atualmente.`,
-      crossserver_section_title: `[STM](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-curto-prazo-stm) Entre Servidores`,
+      crossserver_section_title: `[STM](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#short-term-memory-stm) Entre Servidores`,
       crossserver_stm_off: `Eu não posso lembrar de conversas recentes com você\nentre servidores porque o STM Entre Servidores está desativado.`,
       crossserver_stm_on: `Eu posso carregar a memória de conversas recentes com você\nentre servidores porque o STM Entre Servidores está ativado.`,
       crossserver_stm_footer: `\`/personal memories\` sempre persistem entre servidores, mas não STM`,

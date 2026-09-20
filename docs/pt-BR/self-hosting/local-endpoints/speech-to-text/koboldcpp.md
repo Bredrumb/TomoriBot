@@ -4,8 +4,6 @@ sidebar:
   order: 3
 ---
 
-> **Aviso:** Esta tradução é fornecida para conveniência. A versão original em inglês é a oficial e controla em caso de conflitos.
-
 O KoboldCPP possui suporte a STT baseado no Whisper, mas o formato do endpoint pode variar de acordo com a build. O adaptador da Fase 4 do TomoriBot espera um `POST /v1/audio/transcriptions` compatível com a OpenAI.
 
 ## Configuração

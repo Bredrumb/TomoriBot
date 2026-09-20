@@ -11,7 +11,7 @@ configuración de cualquier servidor.
 ## Memorias personales
 
 Los datos que recuerda sobre ti te siguen entre servidores. Gestionarlos (añadir, eliminar,
-exportar) se explica en la página de [Memoria](/es-419/features/knowledge/memory/#memorias-personales-frente-a-memorias-del-servidor).
+exportar) se explica en la página de [Memoria](/es-419/features/knowledge/memory/#personal-vs-server-memories).
 
 ## Perfil y nombres conscientes de la persona
 
@@ -43,7 +43,7 @@ Desactivarla detiene las actualizaciones automáticas por herramienta pero no de
 `/personal config` solo almacena un desfase UTC numérico de -12 a +14. No almacena ni infiere
 una ubicación geográfica o una zona horaria IANA.
 
-## Tus propios proveedores
+## Tus propios proveedores {#your-own-providers}
 
 Los proveedores personales permiten que *tus propias solicitudes* usen *tus propias* claves de
 API y modelos en lugar de los valores predeterminados del servidor. Esto es traer tu propia
@@ -79,7 +79,7 @@ Los registros de pensamiento atribuyen esos turnos a ti, y puedes ajustarlos con
 `/personal config`. Esto afecta a tus solicitudes en todas partes y nunca toca los ajustes de
 este servidor. También puedes registrar endpoints personalizados personales con
 `/personal providers`; consulta
-[Endpoints personalizados](/es-419/features/setup-administration/providers-and-models/#endpoints-personalizados).
+[Endpoints personalizados](/es-419/features/setup-administration/providers-and-models/#custom-endpoints).
 
 Si una solicitud falla mientras usas tu proveedor personal, los consejos de "Qué puedes hacer"
 del error nombran los comandos personales que realmente pueden arreglarlo (`/personal providers`,
@@ -87,7 +87,7 @@ del error nombran los comandos personales que realmente pueden arreglarlo (`/per
 
 :::note[Servidores con BYOK obligatorio]
 Un servidor puede exigir proveedores provistos por los miembros con el modo BYOK de usuario
-([Moderación del servidor](/es-419/features/setup-administration/server-moderation/#byok-de-usuario-trae-tu-propia-clave)).
+([Moderación del servidor](/es-419/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)).
 Cuando está activo, tus mensajes activados por usuario necesitan un proveedor personal antes de
 que pueda responder. Los proveedores personales se aplican en todos los servidores donde la
 uses.
@@ -102,13 +102,13 @@ uses.
 - `/personal config`: controla tu visibilidad ante ella, hasta llegar a la **invisibilidad
   total** (optar por no participar de las funciones de memoria por completo).
 - `/personal config`: tu ajuste personal para el
-  [Modo de activación deliberada](/es-419/features/chatting-personality/chatting-and-triggers/#modo-de-activación-deliberada).
+  [Modo de activación deliberada](/es-419/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
 - `/personal config`: activa el intercambio de memoria a corto plazo entre servidores;
   `/personal memories` borra tu STM.
 - `/personal config`: establece un prompt reutilizable para cuando te suplanta mediante
   `/impersonate user`.
 
-## Foco personal
+## Foco personal {#personal-spotlight}
 
 **Foco personal: selección de persona por canal.** El foco personal te permite *a ti* limitar
 qué personas puedes activar en un canal, y opcionalmente asignar una para que se active

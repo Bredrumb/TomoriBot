@@ -3,9 +3,6 @@ title: "IrodoriTTS"
 aiGenerated: true
 ---
 
-> [!NOTE]
-> Este documento foi traduzido para fins de conveniência. Em caso de divergências, a versão original em inglês prevalece.
-
 Irodori-TTS v4.1 é um modelo de TTS focado em japonês com clonagem de voz e VoiceDesign baseado em legendas em um único checkpoint. O TomoriBot o executa através de um wrapper local do FastAPI em `servers/tts/irodoritts/`.
 
 O modelo padrão é `Aratako/Irodori-TTS-v4.1-Small`. Checkpoints compatíveis do Hugging Face podem ser selecionados com `IRODORI_TTS_MODEL_ID`, incluindo ajustes finos (fine-tunes) da comunidade, como `phasefield-audio/Irodori-TTS-v4.1-Anime`.

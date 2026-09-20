@@ -6,7 +6,7 @@ sidebar:
 
 TomoriBot cung cấp cho quản trị viên máy chủ các biện pháp kiểm soát cách bot hoạt động trong máy chủ của bạn (ai có thể sử dụng bot, ở đâu và chi phí bao nhiêu) thông qua bảng điều khiển `/config` và các lệnh liên quan. Hầu hết các lệnh đều yêu cầu quyền **Manage Server**. Trang này trình bày các nội dung nổi bật; mọi lệnh đều có trong [Danh mục lệnh](/vi/features/command-reference/).
 
-## Kiểm soát chi phí: Hạn ngạch
+## Kiểm soát chi phí: Hạn ngạch {#cost-control-quotas}
 
 Việc tạo nội dung tốn chi phí (của bạn hoặc của thành viên). Hạn ngạch giới hạn mức sử dụng theo từng người dùng và trên toàn máy chủ:
 
@@ -15,9 +15,9 @@ Việc tạo nội dung tốn chi phí (của bạn hoặc của thành viên). 
 
 Đặt giới hạn theo người dùng thành `0` để không giới hạn. Quỹ toàn máy chủ sẽ được đặt lại theo khoảng thời gian ngày có thể cấu hình.
 
-## User BYOK (Bring Your Own Key)
+## User BYOK (Bring Your Own Key) {#user-byok-bring-your-own-key}
 
-Lệnh `/moderation` **((Member Access))** mang đến hai lựa chọn trạng thái. **Allow Server Models** là mặc định; **Require Personal Providers** yêu cầu mỗi thành viên phải tự mang theo nhà cung cấp cá nhân của **chính họ** cho các lần kích hoạt của họ, vì vậy máy chủ không phải trả bất kỳ chi phí nào cho các tin nhắn do người dùng khởi xướng. Các kích hoạt do máy chủ khởi xướng vẫn sử dụng nhà cung cấp của máy chủ. Đây là biện pháp kiểm soát chi phí mạnh nhất: chuyển toàn bộ chi tiêu API sang cho các thành viên. Thành viên tự thiết lập mục này trong [Cá nhân hóa → Nhà cung cấp riêng của bạn](/vi/features/knowledge/personalization/#nha-cung-cap-rieng-cua-ban).
+Lệnh `/moderation` **((Member Access))** mang đến hai lựa chọn trạng thái. **Allow Server Models** là mặc định; **Require Personal Providers** yêu cầu mỗi thành viên phải tự mang theo nhà cung cấp cá nhân của **chính họ** cho các lần kích hoạt của họ, vì vậy máy chủ không phải trả bất kỳ chi phí nào cho các tin nhắn do người dùng khởi xướng. Các kích hoạt do máy chủ khởi xướng vẫn sử dụng nhà cung cấp của máy chủ. Đây là biện pháp kiểm soát chi phí mạnh nhất: chuyển toàn bộ chi tiêu API sang cho các thành viên. Thành viên tự thiết lập mục này trong [Cá nhân hóa → Nhà cung cấp riêng của bạn](/vi/features/knowledge/personalization/#your-own-providers).
 
 Bạn cũng có thể khởi tạo một máy chủ **không có** bất kỳ nhà cung cấp văn bản nào phía máy chủ bằng cách chọn **User BYOK** trong quá trình chạy `/setup`. Tùy chọn này được cung cấp trong máy chủ thay vì trong DM, và sẽ yêu cầu xác nhận trước khi hoàn tất bước nhà cung cấp, vì không gian làm việc khi đó sẽ không có nhà cung cấp nào để dự phòng.
 

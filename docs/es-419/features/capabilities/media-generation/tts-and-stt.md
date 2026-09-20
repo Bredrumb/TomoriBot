@@ -12,7 +12,7 @@ TomoriBot puede **hablar** (texto a voz) y **escuchar** (voz a texto):
 Ambos funcionan mediante el mismo sistema de endpoints. La ruta más rápida es **ElevenLabs** (en la nube,
 documentada por completo abajo). Si prefieres ejecutar la voz en tu propio hardware, usa un motor local y sigue las guías de autoalojamiento.
 
-## Texto a voz
+## Texto a voz {#text-to-speech}
 
 ### ElevenLabs (en la nube, opción más sencilla)
 
@@ -51,7 +51,7 @@ Cada motor tiene su propia guía:
 
 Consulta la [tabla comparativa de texto a voz](/es-419/self-hosting/local-endpoints/text-to-speech/) para ver la lista completa y las recomendaciones de hardware.
 
-## Voz a texto
+## Voz a texto {#speech-to-text}
 
 Los endpoints de transcripción convierten archivos de audio adjuntos por usuarios en texto para el contexto
 de conversaciones en segundo plano. Que las transcripciones se **publiquen visiblemente** en el chat se

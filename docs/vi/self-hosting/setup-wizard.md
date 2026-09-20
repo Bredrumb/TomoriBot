@@ -56,7 +56,7 @@ Full Install sẽ chạy Base Install trước, sau đó thử cài đặt các 
 | Tokenizer asset | Tokenizer asset cục bộ để xử lý logit bias theo model. |
 
 Để cài đặt thủ công bất kỳ tiện ích nào trong số này, hãy xem
-[tiện ích bổ sung trong Cài đặt thủ công](/vi/self-hosting/manual-setup/#tien-ich-bo-sung-tuy-chon-ban-full-install-thu-cong).
+[tiện ích bổ sung trong Cài đặt thủ công](/vi/self-hosting/manual-setup/#optional-extras-the-manual-full-install).
 
 ## Sau khi thiết lập
 
@@ -67,7 +67,7 @@ bun run launch --searxng --crawl4ai  # bot + sidecar (xem bun run launch --help)
 
 Khi bot đã trực tuyến, hãy chạy `/setup` trong Discord để kết nối nhà cung cấp AI. Một không gian làm việc không có nhà cung cấp riêng sẽ không thể phản hồi, trừ khi chạy ở chế độ User BYOK nơi nhà cung cấp cá nhân của từng thành viên sẽ trả lời thay thế, vì vậy đây là bước cuối cùng của mọi phương thức cài đặt.
 
-## Lệnh `/setup`
+## Lệnh `/setup` {#the-setup-command}
 
 Lệnh `/setup` mở một bảng danh sách kiểm tra tạm thời mà chỉ người thực hiện lệnh mới có thể thao tác. Trong máy chủ, lệnh yêu cầu quyền **Manage Server**; trong tin nhắn riêng (DM), lệnh khả dụng cho không gian làm việc của chính người đó. Mỗi hàng trên bảng là một giá trị nháp: **Finish Setup** là nút điều khiển duy nhất ghi dữ liệu, vì vậy việc mở, chỉnh sửa, hủy hoặc khởi động lại sẽ không làm thay đổi bất kỳ hàng nào trong cơ sở dữ liệu.
 

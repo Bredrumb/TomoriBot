@@ -107,7 +107,7 @@ export default {
       adjust_parameters_personal: `Dùng \`/personal config\` và điều chỉnh **Temperature** hoặc **Top P** để đảm bảo chỉ có một thông số được gửi.`,
       switch_model_provider: `Chuyển sang model hoặc nhà cung cấp khác bằng \`/config\` > Models > Switch Models hoặc \`/providers\`.`,
       switch_model_provider_personal: `Chuyển đổi bằng \`/personal config\`, hoặc cập nhật nhà cung cấp trong \`/personal providers\`.`,
-      disable_personal_text_override: `Lỗi yêu cầu này bắt nguồn từ [nhà cung cấp cá nhân](https://docs.tomoribot.app/vi/features/knowledge/personalization/#nhà-cung-cấp-riêng-của-bạn) của bạn. Hãy cập nhật trong \`/personal providers\` hoặc chọn model đang hoạt động bằng \`/personal config\`.`,
+      disable_personal_text_override: `Lỗi yêu cầu này bắt nguồn từ [nhà cung cấp cá nhân](https://docs.tomoribot.app/vi/features/knowledge/personalization/#your-own-providers) của bạn. Hãy cập nhật trong \`/personal providers\` hoặc chọn model đang hoạt động bằng \`/personal config\`.`,
       // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
       support_server: `Ghé thăm [Máy chủ hỗ trợ chính thức](https://discord.gg/bjCfHm9QsB) để được trợ giúp.`,
       shorten_message: `Hãy thử rút ngắn tin nhắn của bạn rồi gửi lại.`,
@@ -196,32 +196,32 @@ Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện tr�
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname} đã học được điều mới!`,
-      server_memory_learned_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#bộ-nhớ-dài-hạn)** đã được lưu:
+      server_memory_learned_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** đã được lưu:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 {persona_nickname} đã cập nhật một bộ nhớ!`,
-      server_memory_updated_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#bộ-nhớ-dài-hạn)** đã được cập nhật:
+      server_memory_updated_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** đã được cập nhật:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname} đã xóa một bộ nhớ!`,
-      server_memory_deleted_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#bộ-nhớ-dài-hạn)** đã được xóa:
+      server_memory_deleted_description: `Một **[Bộ nhớ máy chủ](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** đã được xóa:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname} đã học được điều mới về {user_nickname}!`,
-      personal_memory_learned_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#bộ-nhớ-dài-hạn)** về {user_nickname} đã được lưu:
+      personal_memory_learned_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** về {user_nickname} đã được lưu:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname} đã cập nhật một bộ nhớ về {user_nickname}!`,
-      personal_memory_updated_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#bộ-nhớ-dài-hạn)** về {user_nickname} đã được cập nhật:
+      personal_memory_updated_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** về {user_nickname} đã được cập nhật:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname} đã xóa một bộ nhớ về {user_nickname}!`,
-      personal_memory_deleted_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#bộ-nhớ-dài-hạn)** về {user_nickname} đã được xóa:
+      personal_memory_deleted_description: `Một **[Bộ nhớ cá nhân](https://docs.tomoribot.app/vi/features/knowledge/memory/#long-term-memory)** về {user_nickname} đã được xóa:
 \`\`\`
 {memory_content}
 \`\`\``,

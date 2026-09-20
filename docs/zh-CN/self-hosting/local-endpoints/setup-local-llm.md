@@ -4,8 +4,6 @@ sidebar:
   order: 1
 ---
 
-> **关于这份翻译：** 本页是英文版[配置：本地 LLM](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-local-llm/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 TomoriBot 可以使用任何与 OpenAI 兼容的本地 LLM 服务器做文本生成与嵌入。
 本指南以 **Ollama** 为例走一遍流程，因为它最容易上手。
 

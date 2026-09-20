@@ -4,8 +4,6 @@ sidebar:
   order: 2
 ---
 
-> **关于这份翻译：** 本页是英文版[配置：ComfyUI](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-comfyui/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 TomoriBot 可以通过你自己的
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 实例生成图像和视频。它驱动 ComfyUI 的方式是提交一份**API 格式工作流**，其中替换进你的提示词与尺寸，然后轮询
 ComfyUI 的 `/history` 端点，直到输出就绪。

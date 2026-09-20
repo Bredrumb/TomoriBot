@@ -41,7 +41,7 @@ entorno `MAX_CHARX_*`, porque el tamaño comprimido de un archivo no dice nada s
 expande. Para el mapeo exacto de conversión y campos, consulta la
 [arquitectura de compatibilidad de tarjetas](/en/architecture/integrations/sillytavern/card-support/).
 
-## Preajustes de prompt
+## Preajustes de prompt {#prompt-presets}
 
 Un preajuste del Administrador de prompts de SillyTavern controla la **organización** del
 prompt. Usa `/config` > Plugins > Preajustes de SillyTavern para importar preajustes, inspeccionar

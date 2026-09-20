@@ -8,7 +8,7 @@ TomoriBotをトリガーするたびに、以下の内容が組み立てられ�
 
 | ブロック | 任意？ | コマンド | 内容 |
 |---|---|---|---|
-| [**システムプロンプト**](/ja/features/chatting-personality/behavior-tweaking/#システムプロンプト) | | `/config` > 動作 > 一般的な動作 | コンテキストの最上部にある基本的な指示。 |
+| [**システムプロンプト**](/ja/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > 動作 > 一般的な動作 | コンテキストの最上部にある基本的な指示。 |
 
 > **デフォルトのシステムプロンプトのテキスト**（サーバーのシステムプロンプトが未設定の場合のみ使用されます）：
 >
@@ -22,18 +22,18 @@ TomoriBotをトリガーするたびに、以下の内容が組み立てられ�
 |---|---|---|---|
 | **チャンネルプロンプト（追加）** | *(任意)* | `/config` > チャンネル > チャンネルの個別設定 | チャンネルごとに異なり、システムプロンプトの直後に挿入されます。同じページの*replace*モードは、新しいブロックを追加するのではなく、上のシステムプロンプトの枠を完全に置き換えます。 |
 | **ペルソナプロンプト** | *(任意)* | `/config` > ペルソナ > 高度な設定 | システムプロンプトとは別に、アクティブなペルソナ専用に書かれたプロンプト。 |
-| [**ペルソナの属性**](/ja/features/chatting-personality/multiple-personas/#属性) | | `/config` > ペルソナ > アイデンティティと性格 | アクティブなペルソナの性格特性と話し方のパターン。 |
+| [**ペルソナの属性**](/ja/features/chatting-personality/multiple-personas/#attributes) | | `/config` > ペルソナ > アイデンティティと性格 | アクティブなペルソナの性格特性と話し方のパターン。 |
 | **サーバー情報** | | *(なし、Discordから取得)* | サーバー名、説明、彼女がいるチャンネル。Discord自体から取得されます。 |
 | [**ペルソナ・ユーザーブロック**](/ja/features/capabilities/tools-and-extensions/#組み込みツール) | *(任意)* | 確認/クリアは `/moderation`。`/config` > 権限 (User Blocking) でゲートされています | このペルソナが特定のユーザーに対して保持している有効なミュート/ブロック制限。 |
-| [**サーバーの記憶**](/ja/features/knowledge/memory/#個人とサーバーの記憶) | | `/memories` | このサーバー用に保存された長期的な事実。 |
+| [**サーバーの記憶**](/ja/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | このサーバー用に保存された長期的な事実。 |
 | [**サーバーの絵文字**](/ja/features/chatting-personality/behavior-tweaking/#機能の有効化許可する操作) | *(任意)* | `/config` > 権限 (Emoji Usage) (切り替えのみ)、初期化は `/expressions initialize` | サーバーに存在するカスタム絵文字。 |
 | [**サーバーのスタンプ**](/ja/features/chatting-personality/behavior-tweaking/#機能の有効化許可する操作) | *(任意)* | `/config` > 権限 (Sticker Usage) (切り替えのみ)、初期化は `/expressions initialize` | サーバーに存在するカスタムスタンプ。 |
-| [**ペルソナスプライト**](/ja/features/chatting-personality/multiple-personas/#スプライト表情アバター) | *(任意)* | `/config` > ペルソナ > スプライト | ペルソナに設定された、名前付きの表情スプライト（設定されている場合）。 |
-| [**会話の参加者**](/ja/features/knowledge/memory/#個人とサーバーの記憶) | *(任意)* | `/personal memories` (`/config` > 権限 (Personalization) でゲートされています) | 会話に参加している人、そのニックネームとメンションハンドル、そして各人について保存された個人の記憶。その人がコンテキスト内にメッセージを持っている場合、またはその名前/エイリアスが言及された場合に読み込まれます。また、`/config` > 動作 > 一般的な動作 の設定を使用して、現在のチャンネルとローカル時刻をフッターとして追加します。 |
-| [**短期記憶**](/ja/features/knowledge/memory/#短期記憶stm) | | `/config` > ペルソナ > 記憶; エントリをクリアするには `/memories`; `/config` > 権限 (Short-Term Memory) でゲートされています | 異なるチャンネルの要約と直近のメッセージが含まれます。 |
-| [**ドキュメント**](/ja/features/knowledge/memory/#ドキュメント知識ベースrag) | *(任意)* | `/memories` | RAGを使用してナレッジベースから抽出された関連チャンク。 |
-| [**条件付け**](/ja/features/knowledge/memory/#条件付け) | *(任意)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, `/conditioning remove` を介して管理 | このサーバーのこのペルソナに対する蓄積された行動的後押し。 |
-| [**サンプル対話**](/ja/features/chatting-personality/multiple-personas/#サンプル会話) | *(任意)* | `/config` > ペルソナ > アイデンティティと性格 | 設定されている場合、このペルソナの話し方の例。 |
+| [**ペルソナスプライト**](/ja/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(任意)* | `/config` > ペルソナ > スプライト | ペルソナに設定された、名前付きの表情スプライト（設定されている場合）。 |
+| [**会話の参加者**](/ja/features/knowledge/memory/#personal-vs-server-memories) | *(任意)* | `/personal memories` (`/config` > 権限 (Personalization) でゲートされています) | 会話に参加している人、そのニックネームとメンションハンドル、そして各人について保存された個人の記憶。その人がコンテキスト内にメッセージを持っている場合、またはその名前/エイリアスが言及された場合に読み込まれます。また、`/config` > 動作 > 一般的な動作 の設定を使用して、現在のチャンネルとローカル時刻をフッターとして追加します。 |
+| [**短期記憶**](/ja/features/knowledge/memory/#short-term-memory-stm) | | `/config` > ペルソナ > 記憶; エントリをクリアするには `/memories`; `/config` > 権限 (Short-Term Memory) でゲートされています | 異なるチャンネルの要約と直近のメッセージが含まれます。 |
+| [**ドキュメント**](/ja/features/knowledge/memory/#document-knowledge-base-rag) | *(任意)* | `/memories` | RAGを使用してナレッジベースから抽出された関連チャンク。 |
+| [**条件付け**](/ja/features/knowledge/memory/#conditioning) | *(任意)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, `/conditioning remove` を介して管理 | このサーバーのこのペルソナに対する蓄積された行動的後押し。 |
+| [**サンプル対話**](/ja/features/chatting-personality/multiple-personas/#sample-dialogues) | *(任意)* | `/config` > ペルソナ > アイデンティティと性格 | 設定されている場合、このペルソナの話し方の例。 |
 | [**直近のメッセージ**](/ja/features/chatting-personality/behavior-tweaking/#生成の調整) | | `/config` > 動作 > 一般的な動作 | 実際の会話。最大でこの件数まで（デフォルト80件）。コンテキストノートや再会ノートは、別々のブロックとしてではなく、設定可能な深さでこのブロック内にインラインで挿入されます。 |
 
 *(任意)* とマークされた行は、一致するドキュメントがない場合やサーバーにカスタム絵文字がない場合など、言うべきことが何もないときは（トークンを消費せず）何も寄与しません。
@@ -59,7 +59,7 @@ TomoriBotがネイティブにサポートしているすべてのプロバイ�
 | `/refresh` したら彼女が忘れた | リフレッシュは**直近のメッセージ**を切り捨て、このチャンネルの**短期記憶**をクリアしますが、長期記憶は削除しないはずです。切り捨てを削除するには、リフレッシュの埋め込みを削除してください。 |
 | 再起動後に何かを忘れた | **直近のメッセージ**は再起動後には残りません。 |
 
-上記すべてを乗り越えて残したいものがある場合は、それを**長期記憶**にする必要があります。[記憶](/ja/features/knowledge/memory/#長期記憶)を参照してください。
+上記すべてを乗り越えて残したいものがある場合は、それを**長期記憶**にする必要があります。[記憶](/ja/features/knowledge/memory/#long-term-memory)を参照してください。
 
 ## ヒントとコツ
 

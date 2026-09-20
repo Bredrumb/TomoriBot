@@ -1,6 +1,9 @@
 export default {
   personal: {
     description: `Administra tus configuraciones personales`,
+    language: {
+      description: `Elige el idioma en el que TomoriBot te habla.`,
+    },
     providers: {
       description: `Administra tus credenciales de proveedor, endpoints y catálogos de modelos personales.`,
     },
@@ -64,7 +67,7 @@ Esta acción no se puede deshacer.
       persona_memory_count_one: `1 memoria`,
       persona_memory_count_shared: `{count} memorias, compartidas entre {personas} personas`,
       persona_memory_count_one_shared: `1 memoria, compartida entre {personas} personas`,
-      stm_title: `[Memoria a corto plazo (MCP)](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-corto-plazo-stm)`,
+      stm_title: `[Memoria a corto plazo (MCP)](https://docs.tomoribot.app/es-419/features/knowledge/memory/#short-term-memory-stm)`,
       stm_active_count: `Resúmenes activos sobre ti: \`{count}\``,
       stm_clear_button: `Borrar mi memoria a corto plazo`,
       stm_crossserver_hint: `Configura si puedo mantener conversaciones recientes\nentre servidores en \`/personal config\`.`,
@@ -221,7 +224,7 @@ Esta acción no se puede deshacer.
       memories_manage_hint: `Usa \`/personal memories\` para gestionar mis memorias sobre ti`,
       stm_count_label: `Actualmente hay \`{count}\` MCP tuyas en caché`,
       stm_clear_hint: `Usa \`/personal memories\` para borrar lo que recuerdo ahora.`,
-      crossserver_section_title: `[MCP](https://docs.tomoribot.app/es-419/features/knowledge/memory/#memoria-a-corto-plazo-stm) entre servidores`,
+      crossserver_section_title: `[MCP](https://docs.tomoribot.app/es-419/features/knowledge/memory/#short-term-memory-stm) entre servidores`,
       crossserver_stm_off: `No puedo recordar conversaciones recientes contigo\nentre servidores porque MCP entre servidores está desactivado.`,
       crossserver_stm_on: `Puedo mantener recuerdos de conversaciones contigo\nentre servidores porque MCP entre servidores está activado.`,
       crossserver_stm_footer: `\`/personal memories\` siempre persiste entre servidores, pero MCP no`,

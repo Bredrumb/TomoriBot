@@ -107,7 +107,7 @@ export default {
       adjust_parameters_personal: `\`/personal config\` を使用し、**Temperature** または **Top P** のどちらか一方のみが送信されるように調整してください。`,
       switch_model_provider: `\`/config\` > モデル > モデルの切り替え または \`/providers\` で別のモデルやプロバイダーに切り替えてください。`,
       switch_model_provider_personal: `\`/personal config\` で切り替えるか、\`/personal providers\` で **テキスト** をオフにするとこのサーバーのモデルを使用します。`,
-      disable_personal_text_override: `このリクエストエラーはあなたの[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#個人のプロバイダー)からのものです。代わりにこのサーバーの設定モデルを使いたい場合は、\`/personal providers\` で **テキスト** を無効にしてください。`,
+      disable_personal_text_override: `このリクエストエラーはあなたの[個人プロバイダー](https://docs.tomoribot.app/ja/features/knowledge/personalization/#your-own-providers)からのものです。代わりにこのサーバーの設定モデルを使いたい場合は、\`/personal providers\` で **テキスト** を無効にしてください。`,
       support_server: `[公式サポートサーバー](https://discord.gg/bjCfHm9QsB)でサポートを受けられます。`,
       shorten_message: `メッセージを短くしてから、もう一度送信してください。`,
       refresh_context: `\`/refresh\` で会話コンテキストをクリアしてください。`,
@@ -194,32 +194,32 @@ export default {
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname}が新しいことを学びました！`,
-      server_memory_learned_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を保存しました:
+      server_memory_learned_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を保存しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 {persona_nickname}が記憶を更新しました！`,
-      server_memory_updated_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を更新しました:
+      server_memory_updated_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を更新しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname}が記憶を削除しました！`,
-      server_memory_deleted_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を削除しました:
+      server_memory_deleted_description: `**[サーバー記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を削除しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname}が{user_nickname}さんについて新しいことを学びました！`,
-      personal_memory_learned_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を保存しました:
+      personal_memory_learned_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を保存しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname}が{user_nickname}さんについての記憶を更新しました！`,
-      personal_memory_updated_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を更新しました:
+      personal_memory_updated_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を更新しました:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname}が{user_nickname}さんについての記憶を削除しました！`,
-      personal_memory_deleted_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#長期記憶)**を削除しました:
+      personal_memory_deleted_description: `{user_nickname}さんに関する**[個人記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#long-term-memory)**を削除しました:
 \`\`\`
 {memory_content}
 \`\`\``,

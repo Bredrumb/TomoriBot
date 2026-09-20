@@ -6,7 +6,7 @@ sidebar:
 
 [MCP](https://modelcontextprotocol.io/) 伺服器用外部工具擴充 TomoriBot。線上
 （HTTPS）MCP 伺服器在任何執行個體都能用，請看
-[工具與擴充](/zh-TW/features/capabilities/tools-and-extensions/#mcp-伺服器)。**本機** MCP 伺服器則
+[工具與擴充](/zh-TW/features/capabilities/tools-and-extensions/#mcp-servers)。**本機** MCP 伺服器則
 不同：
 
 :::caution[僅限自架]
@@ -50,4 +50,4 @@ http://localhost:3000/sse
 :::
 
 線上 MCP 的流程與完整的安全理由，請看
-[工具與擴充 → MCP 伺服器](/zh-TW/features/capabilities/tools-and-extensions/#mcp-伺服器)。
+[工具與擴充 → MCP 伺服器](/zh-TW/features/capabilities/tools-and-extensions/#mcp-servers)。

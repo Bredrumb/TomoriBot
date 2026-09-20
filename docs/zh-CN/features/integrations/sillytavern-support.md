@@ -43,7 +43,7 @@ SillyTavern，这一页可以跳过。
 `MAX_CHARX_*` 环境变量限制，因为压缩包压缩后的大小并不能说明它展开后有多大。确切的转换与字段映射见
 [角色卡支持架构](/en/architecture/integrations/sillytavern/card-support/)。
 
-## 提示词预设集
+## 提示词预设集 {#prompt-presets}
 
 SillyTavern 的 Prompt Manager 预设集控制提示词的**排布**。用 `/config` > 插件
 > SillyTavern 预设集 来导入预设集、查看已启用的节点、在预设集之间切换，或者回到

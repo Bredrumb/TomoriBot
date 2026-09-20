@@ -2,8 +2,6 @@
 title: "Fish Audio S2 Pro"
 ---
 
-> **关于这份翻译：** 本页是英文版[Fish Audio S2 Pro](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/fishs2/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 Fish Audio S2 Pro 是一个多语言的 4B 语音合成模型，专注于高保真语音克隆与富有表现力的表达方式。TomoriBot 通过 `servers/tts/fishs2/` 里的本地封装程序来使用它。
 
 TomoriBot 的默认设置使用官方 BF16 权重（`fishaudio/s2-pro`），以提供最高的合成保真度并避免量化不兼容问题。对于显存受限的消费级 GPU 用户，可以通过环境变量覆盖来启用可选的 INT8 仅权重量化（`Imagilux/fishaudio-s2-pro`）。

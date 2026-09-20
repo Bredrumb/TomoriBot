@@ -9,7 +9,7 @@ TomoriBot 是代理式的：除了聊天，她还能调用**工具**去搜索网
 什么时候使用它们。这一页讲内置工具、如何用 MCP 服务器扩展
 她，以及如何用明确工具模式让工具声明保持精简。
 
-## 内置工具
+## 内置工具 {#built-in-tools}
 
 工具能否使用取决于当前生效的提供方与模型是否支持工具调用，而且很多工具还被
 功能开关（`/config` > 权限 里的开关）、Discord 权限、模型能力，或者
@@ -73,7 +73,7 @@ MCP 替代项，以及当前的明确工具模式允许清单。它们不会绕�
 判定为 false 并被记录下来；格式错误的区块会被省略。原始聊天消息、模型
 输出和工具结果永远不会被当作条件模板处理。
 
-## 网页搜索与 URL 读取
+## 网页搜索与 URL 读取 {#web-search--url-reading}
 
 模型看到的是一个统一的 `web_search(query, category)` 工具。在它背后，一个调度器
 把每次调用按引擎链依次路由，并返回第一个成功的结果：
@@ -89,7 +89,7 @@ MCP 替代项，以及当前的明确工具模式允许清单。它们不会绕�
 
 要读取某个具体页面，她使用 `fetch_url`。它在 NovelAI 上不可用。
 
-## MCP 服务器
+## MCP 服务器 {#mcp-servers}
 
 [MCP](https://modelcontextprotocol.io/)（Model Context Protocol）服务器能用你自己
 登记的外部工具扩展她。
@@ -126,7 +126,7 @@ discovered** 是已知的零工具结果；**Discovery unknown** 表示这是一
 一定要先看过这个 MCP 描述的工具。
 :::
 
-## 明确工具模式
+## 明确工具模式 {#deliberate-tool-mode}
 
 每一个声明的工具都会增加提示词长度。**明确工具模式**让工具声明在
 普通聊天轮次里不出现，除非消息看起来确实需要一个工具；这能减小
@@ -160,7 +160,7 @@ discovered** 是已知的零工具结果；**Discovery unknown** 表示这是一
 :::note
 **明确工具模式**（本节）与**明确触发模式**无关，后者
 控制*她*如何被触发；见
-[聊天与触发](/zh-CN/features/chatting-personality/chatting-and-triggers/#明确触发模式)。两者在 Discord 里
+[聊天与触发](/zh-CN/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)。两者在 Discord 里
 都缩写成「DTM」。
 :::
 

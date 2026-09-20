@@ -2,8 +2,6 @@
 title: "MOSS-TTS"
 ---
 
-> **关于这份翻译：** 本页是英文版[MOSS-TTS](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/moss/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 用 `servers/tts/moss/server.py` 可以通过同一个本地端点试用 MOSS 的语音克隆与文字描述的语音设计。自动模式会在 TomoriBot 发送 `ref_audio` 时选择克隆模型，在发送 `instruct` 时选择 MOSS-VoiceGenerator。它一次只加载一个模型。这是一个试用性质的边车服务，不是流式的 Discord 语音聊天集成。
 
 默认的克隆模型是 [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5)（4B），选它是因为它是 16 GB GPU 上比较实际的起点。[MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) 是 8B 的替代方案，但在 BF16 下通常需要超过 16 GB 的显存。语音设计使用 [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator)（约 1.7B）。自动模式会切换模型，而不是把两个模型都留在显存里，所以模式切换仍然会有一次 GPU 加载延迟。

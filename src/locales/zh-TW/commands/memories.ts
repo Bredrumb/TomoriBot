@@ -9,7 +9,7 @@ export default {
     unavailable: `無法載入伺服器記憶。請點「重試」再試一次。`,
     stale_warning: `因為讀取失敗，儲存的資料可能已經過期。\n在重新讀取成功之前，無法進行寫入操作。`,
     retry: `重試`,
-    memories_title: `[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#個人記憶與伺服器記憶)`,
+    memories_title: `[伺服器記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#personal-vs-server-memories)`,
     memories_description: `只要這個人格在這裡使用中，\n這些記憶就會在整個\n伺服器生效。`,
     persona_default_name: `人格`,
     persona_select_placeholder: `選擇一個人格來查看記憶...`,
@@ -83,7 +83,7 @@ export default {
 具備「管理伺服器」權限的成員可以看到並編輯
 每位成員的記憶。`,
     no_personas: `這個伺服器沒有設定任何人格。`,
-    documents_title: `[文件](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#文件知識庫rag)`,
+    documents_title: `[文件](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#document-knowledge-base-rag)`,
     documents_description: `附加到這個伺服器或
 單一人格的參考文件。`,
     documents_teaching_disabled: `這個伺服器已停用成員存取文件的功能。`,
@@ -188,7 +188,7 @@ export default {
     embedding_credentials_missing_detail: `請先設定嵌入供應商再繼續。`,
     embedding_model_missing_heading: `缺少嵌入模型`,
     embedding_model_missing_detail: `請先設定嵌入模型再繼續。`,
-    stm_title: `[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#短期記憶stm)`,
+    stm_title: `[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#short-term-memory-stm)`,
     stm_empty: `這個伺服器沒有使用中的短期記憶項目。`,
     stm_active_count: `有 {count} 則使用中的短期記憶。`,
     stm_manager_only: `你需要「管理伺服器」權限才能查看

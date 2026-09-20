@@ -4,8 +4,6 @@ sidebar:
   order: 6
 ---
 
-> **Aviso de tradução**: Este documento foi traduzido para sua conveniência. A versão em inglês é a oficial e tem precedência.
-
 Os servidores [MCP](https://modelcontextprotocol.io/) estendem o TomoriBot com ferramentas externas. Servidores MCP online
 (HTTPS) funcionam em qualquer instância: veja
 [Tools & Extensions](/pt-BR/features/capabilities/tools-and-extensions/#mcp-servers). Servidores MCP **locais** são

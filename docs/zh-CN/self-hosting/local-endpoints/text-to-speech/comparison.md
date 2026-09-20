@@ -4,8 +4,6 @@ sidebar:
   order: 1
 ---
 
-> **关于这份翻译：** 本页是英文版[TTS 引擎对比](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/comparison/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 TomoriBot 支持多种本地语音合成边车（sidecar），各自适合不同的语言、硬件配置与延迟要求。
 
 本页给出在同一套测试环境、使用同一份语音克隆参考的条件下录制的实测基准结果、合成耗时与音频对比片段。

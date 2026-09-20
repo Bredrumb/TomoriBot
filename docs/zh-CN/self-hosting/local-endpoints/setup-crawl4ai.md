@@ -5,8 +5,6 @@ sidebar:
 ---
 # 配置：Crawl4AI 边车服务
 
-> **关于这份翻译：** 本页是英文版[配置：Crawl4AI（边车服务）](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-crawl4ai/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 `fetch_url` 工具默认使用进程内的 `safe_http` 引擎。在可信的开发环境里，当你需要为依赖 JS 的页面获取渲染后的内容时，它可以改为尝试一个浏览器渲染的边车服务。
 
 默认的引擎顺序是 `safe_http`。由于 Crawl4AI 会在 TomoriBot 受保护的 HTTP 客户端之外跟随重定向，它只在允许抓取私有网络的地方才会被采用。在生产环境之外这是自动的（无需配置）。在生产环境里，它需要显式选择启用 `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`，而这并不推荐。

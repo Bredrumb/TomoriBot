@@ -8,7 +8,7 @@ A TomoriBot só responde quando algo a aciona. Esta página aborda as formas de 
 como conversar sem as mãos com o gatilho automático e como evitar acionamentos acidentais
 com o Modo de Gatilho Deliberado.
 
-## Como Acioná-la
+## Como Acioná-la {#how-to-trigger-her}
 
 Por padrão, ela responde quando você:
 
@@ -20,13 +20,13 @@ Por padrão, ela responde quando você:
 Palavras-gatilho são o caminho mais conveniente: uma vez que uma palavra é registrada, basta
 mencioná-la para ativá-la. Em uma DM, é só dizer oi; nenhum gatilho é necessário.
 
-### Gerenciando Palavras-Gatilho
+### Gerenciando Palavras-Gatilho {#managing-trigger-words}
 
 Administradores do servidor usam `/config` > Persona > Triggers para adicionar ou remover as
 palavras-gatilho de uma persona selecionada. Membros comuns podem visualizar a página, mas os
 controles de modificação ficam desativados.
 
-## Expressões & Reações
+## Expressões & Reações {#expressions--reactions}
 
 Depois que ela responde, ela pode usar os emojis e figurinhas personalizados do seu servidor e
 reagir a mensagens:
@@ -35,7 +35,7 @@ reagir a mensagens:
 - Figurinhas podem acompanhar respostas; ela também pode adicionar reações com emojis.
 - Execute `/expressions initialize` para registrar os emojis e figurinhas do seu servidor, para que ela os use com precisão.
 
-## Canais de Roleplay
+## Canais de Roleplay {#roleplay-channels}
 
 Canais de roleplay suprimem o uso de emojis personalizados e figurinhas nas respostas dela. Neles,
 as pessoas também podem usar `/tool delete turn` para excluir o turno mais recente dela sem a
@@ -78,7 +78,7 @@ O gatilho automático permite que ela entre na conversa sem ser chamada.
 Use isso em um canal dedicado de bate-papo onde você quer que ela pareça uma participante em
 vez de uma assistente convocada.
 
-## Modo de Gatilho Deliberado
+## Modo de Gatilho Deliberado {#deliberate-trigger-mode}
 
 Se as pessoas dizem o nome de uma persona com frequência em conversas normais, palavras-gatilho
 simples podem acioná-la por acidente. O **Modo de Gatilho Deliberado (DTM)** resolve isso
@@ -108,5 +108,5 @@ Em `/help`, escolha **Behavior** e depois **Deliberate Trigger Mode** para o mes
 Não confunda **Modo de Gatilho Deliberado** (esta página, controla *como ela é acionada*) com
 **Modo de Ferramenta Deliberada**, que controla *quais ferramentas são expostas ao modelo* em um
 determinado turno. Eles compartilham a abreviação "DTM" mas não têm relação. Veja
-[Ferramentas & Extensões](/pt-BR/features/capabilities/tools-and-extensions/#modo-de-ferramenta-deliberada).
+[Ferramentas & Extensões](/pt-BR/features/capabilities/tools-and-extensions/#deliberate-tool-mode).
 :::

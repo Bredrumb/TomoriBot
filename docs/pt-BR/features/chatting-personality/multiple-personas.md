@@ -53,13 +53,13 @@ referência de arquitetura sobre [comportamento multi-persona](/en/architecture/
 
 Dois comandos fazem a maior parte do trabalho de ensiná-la como falar e agir:
 
-### Atributos
+### Atributos {#attributes}
 
 `/config` > Persona > Identity & Personality adiciona traços de personalidade ou características físicas, por exemplo
 `amigável`, `cabelo vermelho` ou `termina frases com *Nya~*`. Remova-os com
 `/config` > Persona > Identity & Personality.
 
-### Diálogos de Exemplo
+### Diálogos de Exemplo {#sample-dialogues}
 
 `/config` > Persona > Identity & Personality ensina a ela *como ela fala* por meio de exemplos. Use os placeholders `{user}` e
 `{bot}` para que os diálogos funcionem para todos (e quando você compartilhar a persona):
@@ -88,7 +88,7 @@ Remova exemplos com `/config` > Persona > Identity & Personality.
 Você também pode definir um prompt de sistema personalizado com `/config` > Engine > General para moldar ainda
 mais o comportamento; veja [Ajuste de Comportamento](/pt-BR/features/chatting-personality/behavior-tweaking/).
 
-## Sprites (Avatares de Emoção)
+## Sprites (Avatares de Emoção) {#sprites-emotion-avatars}
 
 Sprites são imagens de avatar alternativas que uma persona pode usar durante a conversa para expressar
 uma emoção ou situação; pense neles como as expressões faciais dela. Cada sprite é uma imagem

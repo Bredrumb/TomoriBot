@@ -13,7 +13,7 @@ Cả hai đều hoạt động qua cùng một hệ thống endpoint. Con đư�
 hướng dẫn đầy đủ bên dưới). Nếu bạn muốn chạy giọng nói trên phần cứng của riêng mình, hãy sử dụng một engine
 cục bộ và làm theo các hướng dẫn self-hosting.
 
-## Text-to-Speech
+## Text-to-Speech {#text-to-speech}
 
 ### ElevenLabs (đám mây, dễ nhất)
 
@@ -60,7 +60,7 @@ Mỗi engine đều có hướng dẫn cài đặt riêng:
 
 Xem [bảng so sánh Text-to-Speech](/vi/self-hosting/local-endpoints/text-to-speech/) để biết danh sách đầy đủ và hướng dẫn phần cứng.
 
-## Speech-to-Text
+## Speech-to-Text {#speech-to-text}
 
 Các endpoint transcription chuyển tệp âm thanh đính kèm của người dùng thành văn bản cho ngữ cảnh cuộc trò chuyện
 nền. Việc bản chép lời có được **đăng công khai** trong đoạn chat hay không được điều khiển riêng bởi

@@ -3,8 +3,6 @@ title: "CosyVoice 3"
 aiGenerated: true
 ---
 
-> A tradução a seguir é fornecida apenas para sua conveniência. Em caso de divergência, a versão em inglês prevalece.
-
 O CosyVoice 3 é a atual geração do projeto de TTS (Text-to-Speech) multilíngue CosyVoice da Alibaba/QwenAudio. O TomoriBot encapsula o runtime oficial em `servers/tts/cosyvoice3/` e expõe a mesma interface `POST /synthesize` usada pelos outros endpoints de fala locais.
 
 O TomoriBot usa como padrão o checkpoint oficial **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`**. Este é o lançamento atual do CosyVoice 3 recomendado pelos criadores (upstream), usa o modelo não quantizado normal e é pequeno o suficiente para rodar confortavelmente em uma GPU NVIDIA de 16 GB, mantendo intacto o design de baixa latência do CosyVoice.

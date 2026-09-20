@@ -4,8 +4,6 @@ sidebar:
   order: 5
 ---
 
-> **Aviso:** Esta tradução é fornecida por conveniência e a versão em inglês prevalece.
-
 <!-- STUB (tarefa secundária). Fonte: src/db/seed/catalog/personas/loyal/en-US.ts.
      A arte real está no lugar; desenvolva o perfil mais tarde. -->
 

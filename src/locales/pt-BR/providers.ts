@@ -107,7 +107,7 @@ export default {
       adjust_parameters_personal: `Use \`/personal config\` e ajuste a **Temperatura** ou **Top P** para garantir que apenas um seja enviado.`,
       switch_model_provider: `Mude para um modelo ou provedor diferente com \`/config\` > Modelos > Trocar Modelos ou \`/providers\`.`,
       switch_model_provider_personal: `Mude com \`/personal config\` ou atualize o provedor em \`/personal providers\`.`,
-      disable_personal_text_override: `Este erro de solicitação veio do seu [provedor pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/#seus-próprios-provedores). Atualize-o em \`/personal providers\` ou selecione um modelo funcional com \`/personal config\`.`,
+      disable_personal_text_override: `Este erro de solicitação veio do seu [provedor pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/#your-own-providers). Atualize-o em \`/personal providers\` ou selecione um modelo funcional com \`/personal config\`.`,
       // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
       support_server: `Visite o [Servidor Oficial de Suporte](https://discord.gg/bjCfHm9QsB) para obter assistência.`,
       shorten_message: `Tente encurtar sua mensagem e, em seguida, envie-a novamente.`,
@@ -196,32 +196,32 @@ O modelo selecionado requer a permissão de dados para treinamento de modelo pag
     },
     self_teach: {
       server_memory_learned_title: `🧠 {persona_nickname} Aprendeu Algo Novo!`,
-      server_memory_learned_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-longo-prazo)** foi salva:
+      server_memory_learned_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** foi salva:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_updated_title: `📝 {persona_nickname} Atualizou uma Memória!`,
-      server_memory_updated_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-longo-prazo)** foi atualizada:
+      server_memory_updated_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** foi atualizada:
 \`\`\`
 {memory_content}
 \`\`\``,
       server_memory_deleted_title: `🗑️ {persona_nickname} Apagou uma Memória!`,
-      server_memory_deleted_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-longo-prazo)** foi apagada:
+      server_memory_deleted_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** foi apagada:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_learned_title: `💡 {persona_nickname} Aprendeu Algo Novo sobre {user_nickname}!`,
-      personal_memory_learned_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-longo-prazo)** sobre {user_nickname} foi salva:
+      personal_memory_learned_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** sobre {user_nickname} foi salva:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_updated_title: `📝 {persona_nickname} Atualizou uma Memória sobre {user_nickname}!`,
-      personal_memory_updated_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-longo-prazo)** sobre {user_nickname} foi atualizada:
+      personal_memory_updated_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** sobre {user_nickname} foi atualizada:
 \`\`\`
 {memory_content}
 \`\`\``,
       personal_memory_deleted_title: `🗑️ {persona_nickname} Apagou uma Memória sobre {user_nickname}!`,
-      personal_memory_deleted_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#memória-de-longo-prazo)** sobre {user_nickname} foi apagada:
+      personal_memory_deleted_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** sobre {user_nickname} foi apagada:
 \`\`\`
 {memory_content}
 \`\`\``,

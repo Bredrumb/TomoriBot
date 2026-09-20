@@ -94,6 +94,16 @@ in two places, because the Cloudflare middleware keeps its own copy of the rules
 3. Nothing else for registration. Command metadata localizations are emitted automatically from the
    keys the tree actually authors.
 
+Pickers list the locales in `LOCALE_DISPLAY_ORDER`, which `src/constants/docsLocales.ts` derives
+from the order of the `DOCS_LOCALES` rows themselves. Moving a row there reorders the docs language
+switcher, the README switcher row, and the bot's own picker together, so a new locale is placed by
+inserting its row where it should read rather than by editing three lists. Placement is a product
+decision, not an alphabetization.
+
+The same picker is reachable on its own as `/personal language`, which shows the Language modal with
+no panel behind it. Its submit carries the `language-only-submit` route because the panel's own
+submit ends by repainting a message a slash command has not created.
+
 The language picker in `/personal config` > Profile > General is a String Select with a 25-option
 ceiling (`checkDiscordLimits.ts` `MAX_SELECT_OPTIONS`). Ten authored locales fit comfortably. A
 twenty-sixth locale needs a paginated picker before it can be offered.

@@ -39,11 +39,11 @@ alter 人格讓多個角色共用同一個伺服器：
 
 有兩個指令負責教她怎麼說話、怎麼行動的大部分工作：
 
-### 屬性
+### 屬性 {#attributes}
 
 `/config` > 人格 > 身分與個性 可以加入人格特質或外貌特徵，例如 `friendly`、`red hair`，或 `ends sentences with *Nya~*`。用 `/config` > 人格 > 身分與個性 移除它們。
 
-### 範例對話
+### 範例對話 {#sample-dialogues}
 
 `/config` > 人格 > 身分與個性 用範例教她*她怎麼說話*。使用 `{user}` 與 `{bot}` 預留位置，對話才能對所有人都成立（分享人格時也是）：
 
@@ -70,7 +70,7 @@ alter 人格讓多個角色共用同一個伺服器：
 
 你也可以用 `/config` > 行為 > 一般行為 設定自訂系統提示詞，進一步塑造行為，請看[行為調整](/zh-TW/features/chatting-personality/behavior-tweaking/)。
 
-## 立繪（表情頭像）
+## 立繪（表情頭像） {#sprites-emotion-avatars}
 
 立繪是人格在對話中為了表達情緒或情境而切換的替代頭像圖片，可以把它們想成她的表情。每個立繪都是一張有標籤的圖片（例如 `happy`、`mad`、`embarrassed`），當情境合適時，她會用它取代平常的頭像。
 
@@ -89,7 +89,7 @@ alter 人格讓多個角色共用同一個伺服器：
 
 ## 各頻道的人格選擇
 
-想控制某個特定頻道裡由哪個人格回覆*你*，又不想更動整個伺服器的設定嗎？那就是個人聚光燈，請看[個人化](/zh-TW/features/knowledge/personalization/#個人聚光燈)。
+想控制某個特定頻道裡由哪個人格回覆*你*，又不想更動整個伺服器的設定嗎？那就是個人聚光燈，請看[個人化](/zh-TW/features/knowledge/personalization/#personal-spotlight)。
 
 ## 人格專屬的稱呼方式
 

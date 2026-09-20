@@ -8,7 +8,7 @@ Esta traducción se proporciona para tu comodidad. La versión en inglés es la 
 
 Los servidores [MCP](https://modelcontextprotocol.io/) amplían a TomoriBot con herramientas externas. Los servidores MCP en línea
 (HTTPS) funcionan en cualquier instancia (consulta
-[Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/#servidores-mcp)). Los servidores MCP **locales** son
+[Herramientas y extensiones](/es-419/features/capabilities/tools-and-extensions/#mcp-servers)). Los servidores MCP **locales** son
 diferentes:
 
 :::caution[Solo para autoalojamiento]
@@ -56,4 +56,4 @@ dañinos que TomoriBot retransmitirá. Revisa qué hace un servidor MCP antes de
 :::
 
 Para conocer el flujo de MCP en línea y la justificación de seguridad completa, consulta
-[Herramientas y extensiones → Servidores MCP](/es-419/features/capabilities/tools-and-extensions/#servidores-mcp).
+[Herramientas y extensiones → Servidores MCP](/es-419/features/capabilities/tools-and-extensions/#mcp-servers).

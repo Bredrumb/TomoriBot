@@ -5,8 +5,6 @@ sidebar:
   order: 2
 ---
 
-> **Aviso:** Esta tradução é fornecida para sua conveniência. A versão em inglês é a oficial e tem precedência.
-
 :::note
 Usuários que desejam usar o Docker Compose devem pular este assistente, veja
 [Docker Compose](/pt-BR/self-hosting/docker-compose/) para o caminho de instalação em contêiner.
@@ -83,7 +81,7 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # ver todas as flags
 ```
 
-## Extras opcionais (a "Instalação Completa" manual)
+## Extras opcionais (a "Instalação Completa" manual) {#optional-extras-the-manual-full-install}
 
 O caminho de **Instalação Completa** do [assistente de configuração](/pt-BR/self-hosting/setup-wizard/) sobrepõe quatro extras leves
 em cima da instalação base. Nenhum deles é necessário para executar o bot, mas cada um desbloqueia um recurso. Se

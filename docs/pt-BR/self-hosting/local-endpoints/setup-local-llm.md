@@ -5,8 +5,6 @@ sidebar:
   order: 1
 ---
 
-> **Aviso:** Esta tradução é fornecida apenas para conveniência. Em caso de divergência, a versão em inglês prevalece.
-
 O TomoriBot pode usar qualquer servidor de LLM local compatível com OpenAI para geração de texto e embeddings.
 Este guia mostra o processo usando **Ollama** como exemplo, pois é o mais fácil para começar.
 

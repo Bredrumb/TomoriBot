@@ -44,12 +44,12 @@ Esto hace posibles el roleplay grupal y los servidores con varios personajes. Pa
 
 Dos comandos hacen la mayor parte del trabajo de enseñarle cómo hablar y actuar:
 
-### Atributos
+### Atributos {#attributes}
 
 `/config` > Persona > Identidad y personalidad añade rasgos de personalidad o características físicas, por
 ejemplo `amigable`, `cabello rojo` o `termina las oraciones con *Nya~*`. Elimínalos desde el mismo lugar.
 
-### Diálogos de ejemplo
+### Diálogos de ejemplo {#sample-dialogues}
 
 `/config` > Persona > Identidad y personalidad le enseña *cómo habla* mediante ejemplos. Usa los marcadores
 `{user}` y `{bot}` para que los diálogos funcionen para todos y al compartir la persona:
@@ -77,7 +77,7 @@ Elimina ejemplos desde `/config` > Persona > Identidad y personalidad.
 
 También puedes establecer un prompt del sistema personalizado con `/config` > Motor > General para dar más forma al comportamiento. Consulta [Ajuste del comportamiento](/es-419/features/chatting-personality/behavior-tweaking/).
 
-## Sprites (avatares de emoción)
+## Sprites (avatares de emoción) {#sprites-emotion-avatars}
 
 Los sprites son imágenes de avatar alternativas a las que una persona puede cambiar a mitad de la conversación
 para expresar una emoción o situación, como sus expresiones faciales. Cada sprite es una imagen con etiqueta
@@ -103,7 +103,7 @@ personaje original. Los sprites que añadiste permanecen. Ejecuta `/persona defa
 ## Elección de persona por canal
 
 ¿Quieres controlar qué persona te responde en un canal específico sin cambiar la configuración de todo el servidor?
-Eso es el foco personal. Consulta [Personalización](/es-419/features/knowledge/personalization/#foco-personal).
+Eso es el foco personal. Consulta [Personalización](/es-419/features/knowledge/personalization/#personal-spotlight).
 
 ## Formas de dirigirse a las personas específicas de cada persona
 

@@ -7,7 +7,7 @@ sidebar:
 TomoriBot solo responde cuando algo la activa. Esta página explica las formas de activarla, cómo chatear
 sin manos con la activación automática y cómo evitar activaciones accidentales con el modo de activación deliberada.
 
-## Cómo activarla
+## Cómo activarla {#how-to-trigger-her}
 
 Por defecto, responde cuando tú:
 
@@ -19,13 +19,13 @@ Por defecto, responde cuando tú:
 Las palabras de activación son la forma más cómoda. Una vez registrada una palabra, basta con mencionarla
 para activarla. En un mensaje directo, solo salúdala. No necesitas un activador.
 
-### Administrar palabras de activación
+### Administrar palabras de activación {#managing-trigger-words}
 
 Los administradores del servidor usan `/config` > Persona > Activadores para añadir o eliminar palabras de
 activación de la persona seleccionada. Los miembros comunes pueden consultar la página, pero los controles
 de modificación están desactivados.
 
-## Expresiones y reacciones
+## Expresiones y reacciones {#expressions--reactions}
 
 Cuando responde, puede usar los emojis y stickers personalizados de tu servidor y reaccionar a mensajes:
 
@@ -33,7 +33,7 @@ Cuando responde, puede usar los emojis y stickers personalizados de tu servidor 
 - Los stickers pueden acompañar las respuestas. También puede añadir reacciones con emojis.
 - Ejecuta `/expressions initialize` para registrar los emojis y stickers de tu servidor y que los use con precisión.
 
-## Canales de roleplay
+## Canales de roleplay {#roleplay-channels}
 
 Los canales de roleplay suprimen el uso de emojis personalizados y stickers en sus respuestas. Allí las
 personas también pueden usar `/tool delete turn` para eliminar su último turno sin el permiso Administrar servidor.
@@ -67,7 +67,7 @@ La activación automática le permite unirse a la conversación sin que la menci
 
 Úsalo en un canal de chat dedicado donde quieras que se sienta como una participante y no como una asistente invocada.
 
-## Modo de activación deliberada
+## Modo de activación deliberada {#deliberate-trigger-mode}
 
 Si las personas dicen mucho el nombre de una persona en conversaciones normales, las palabras de activación
 simples pueden activarla por accidente. El **modo de activación deliberada (DTM)** lo evita al hacer que las

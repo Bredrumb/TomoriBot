@@ -198,7 +198,7 @@ export default {
     default: {
       description: `人格設定のペルソナを適用します`,
       type_description: `適用先タイプ（デフォルトまたはオルタ）`,
-      type_choice_default: `デフォルトペルソナ`,
+      type_choice_default: `メインペルソナ（現在の人格を置き換え）`,
       type_choice_alter: `オルタペルソナ`,
       no_permission_title: `🔴 権限がありません`,
       no_permission_description: `人格プリセットを適用するには**サーバー管理**権限が必要です。`,

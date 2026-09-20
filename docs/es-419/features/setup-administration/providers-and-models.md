@@ -9,7 +9,7 @@ es un servicio de IA (Google Gemini, OpenRouter, NovelAI, un endpoint local, …
 **modelo** es un modelo específico de ese proveedor. Necesitas al menos un proveedor para
 usarla.
 
-## Claves de API
+## Claves de API {#api-keys}
 
 Añade una clave de proveedor durante la configuración inicial con `/setup`, o después desde
 `/providers` eligiendo **Añadir proveedor nuevo**. Las claves se **cifran en reposo**: nadie,
@@ -80,7 +80,7 @@ servidor requerido. Los miembros individuales gestionan sus propias credenciales
 modelos con `/personal providers`, y luego seleccionan modelos personales en
 `/personal config`. Los ajustes personales los siguen en todos los servidores donde usan
 TomoriBot. Consulta
-[Personalización](/es-419/features/knowledge/personalization/#tus-propios-proveedores) para ese
+[Personalización](/es-419/features/knowledge/personalization/#your-own-providers) para ese
 lado.
 
 Los paneles se titulan **Proveedores del servidor** y **Proveedores personales** para que su
@@ -92,7 +92,7 @@ modelo de los catálogos de proveedor:
 
 - `/config` > Modelos > Cambiar modelos: el modelo de chat principal
 - `/config` > Modelos > Cambiar modelos: un modelo de visión (para leer imágenes cuando el modelo de chat no puede)
-- `/config` > Modelos > Cambiar modelos: incrustaciones para la [base de conocimiento de documentos](/es-419/features/knowledge/memory/#base-de-conocimiento-de-documentos-rag)
+- `/config` > Modelos > Cambiar modelos: incrustaciones para la [base de conocimiento de documentos](/es-419/features/knowledge/memory/#document-knowledge-base-rag)
 - `/config` > Modelos > Cambiar modelos: generación de imágenes estándar (consulta [Generación de imágenes](/es-419/features/capabilities/media-generation/image-generation/))
 - `/config` > Modelos > Cambiar modelos: generación de imágenes de NovelAI
 - `/config` > Modelos > Cambiar modelos: generación de video
@@ -109,7 +109,7 @@ endpoint de TTS/STT.
 También puedes gestionar las claves de respaldo de este servidor para failover automático y
 balanceo de carga con `/providers`.
 
-## Endpoints personalizados
+## Endpoints personalizados {#custom-endpoints}
 
 Los endpoints personalizados te permiten registrar servicios autoalojados o mediante proxy
 (Ollama, LM Studio, LiteLLM, vLLM, ComfyUI, TTS/STT local) como **paquetes de proveedor
@@ -119,7 +119,7 @@ etiquetados**.
   trabajo.
 - **Alcance personal:** abre `/personal providers` para catálogos de modelos personales (solo
   tú; consulta
-  [Personalización](/es-419/features/knowledge/personalization/#tus-propios-proveedores)). Los
+  [Personalización](/es-419/features/knowledge/personalization/#your-own-providers)). Los
   endpoints de voz personales no se seleccionan desde `/personal config`.
 
 Una **etiqueta** es el nombre de menú visible para el usuario y agrupa capacidades bajo un
@@ -160,7 +160,7 @@ Para recorridos completos sobre cómo ejecutar los servidores, consulta:
 - [Configuración: ComfyUI](/es-419/self-hosting/local-endpoints/setup-comfyui/): generación local de imágenes/video.
 - [Configuración: ChatMock](/es-419/self-hosting/local-endpoints/setup-chatmock/): cuenta de ChatGPT / Codex CLI.
 
-## Proveedores compatibles
+## Proveedores compatibles {#supported-providers}
 
 Si no tienes el hardware para alojar tus propios modelos, TomoriBot admite una amplia gama de
 servicios. No todas las funciones están disponibles en todos los proveedores.

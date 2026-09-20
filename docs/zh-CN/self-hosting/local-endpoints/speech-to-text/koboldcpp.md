@@ -4,8 +4,6 @@ sidebar:
   order: 3
 ---
 
-> **关于这份翻译：** 本页是英文版[KoboldCPP 语音转写](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/koboldcpp/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 KoboldCPP 有基于 Whisper 的语音识别支持，但端点形态会因构建而异。TomoriBot 的 Phase 4 适配器期望 OpenAI 兼容的 `POST /v1/audio/transcriptions`。
 
 ## 设置

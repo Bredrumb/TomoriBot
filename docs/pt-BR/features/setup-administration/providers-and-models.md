@@ -8,7 +8,7 @@ A TomoriBot não tem um modelo de IA embutido: você conecta um a partir de um p
 serviço de IA (Google Gemini, OpenRouter, NovelAI, um endpoint local, …), e um **modelo** é um
 modelo específico nesse provedor. Você precisa de pelo menos um provedor para usá-la.
 
-## Chaves de API
+## Chaves de API {#api-keys}
 
 Adicione uma chave de provedor durante a configuração inicial com `/setup`, ou depois em `/providers` escolhendo
 **Add New Provider**. As chaves são **criptografadas em repouso**: ninguém, incluindo administradores do servidor, pode
@@ -71,7 +71,7 @@ crédito gratuito; defina um limite de uso de $5 no painel do Brave para evitar 
 servidor usam. Ambos precisam da permissão de servidor necessária. Membros individuais gerenciam suas próprias credenciais
 e catálogos de modelos com `/personal providers`, e selecionam modelos pessoais em `/personal config`.
 Configurações pessoais os acompanham em todos os servidores onde usam a TomoriBot. Veja
-[Personalização](/pt-BR/features/knowledge/personalization/#seus-próprios-provedores) para esse lado.
+[Personalização](/pt-BR/features/knowledge/personalization/#your-own-providers) para esse lado.
 
 Os painéis são intitulados **Server Providers** e **Personal Providers** para que sua propriedade permaneça visível após
 a interação do comando ser aberta.
@@ -81,7 +81,7 @@ Os seis slots comuns selecionam entradas de modelo dos catálogos de provedores:
 
 - `/config` > Models > Switch Models: o modelo principal de chat
 - `/config` > Models > Switch Models: um modelo de visão (para ler imagens quando o modelo de chat não consegue)
-- `/config` > Models > Switch Models: embeddings para a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/#base-de-conhecimento-de-documentos-rag)
+- `/config` > Models > Switch Models: embeddings para a [base de conhecimento de documentos](/pt-BR/features/knowledge/memory/#document-knowledge-base-rag)
 - `/config` > Models > Switch Models: geração de imagem padrão (veja [Geração de Imagem](/pt-BR/features/capabilities/media-generation/image-generation/))
 - `/config` > Models > Switch Models: geração de imagem NovelAI
 - `/config` > Models > Switch Models: geração de vídeo
@@ -96,14 +96,14 @@ mantém seis slots pessoais de roteamento de modelo e não adiciona seletores pe
 Você também pode gerenciar as chaves de backup deste servidor para failover automático e balanceamento de carga com
 `/providers`.
 
-## Endpoints Personalizados
+## Endpoints Personalizados {#custom-endpoints}
 
 Endpoints personalizados permitem que você registre serviços auto-hospedados ou com proxy: Ollama, LM Studio,
 LiteLLM, vLLM, ComfyUI, TTS/STT local; como **pacotes de provedores rotulados**.
 
 - **Escopo do servidor:** abra `/providers` para registro e edição de endpoints do workspace.
 - **Escopo pessoal:** abra `/personal providers` para catálogos de modelos pessoais (apenas você; veja
-  [Personalização](/pt-BR/features/knowledge/personalization/#seus-próprios-provedores)). Endpoints pessoais de fala
+  [Personalização](/pt-BR/features/knowledge/personalization/#your-own-providers)). Endpoints pessoais de fala
   não são selecionados em `/personal config`.
 
 Um **rótulo** é o nome exibido no menu e agrupa capacidades sob um pacote quando compartilham
@@ -139,7 +139,7 @@ Para guias completos de execução dos servidores, veja:
 - [Configuração: ComfyUI](/pt-BR/self-hosting/local-endpoints/setup-comfyui/): geração local de imagem/vídeo.
 - [Configuração: ChatMock](/pt-BR/self-hosting/local-endpoints/setup-chatmock/): conta ChatGPT / Codex CLI.
 
-## Provedores Suportados
+## Provedores Suportados {#supported-providers}
 
 Se você não tem o hardware para hospedar seus próprios modelos, a TomoriBot suporta uma ampla gama de
 serviços. Nem todo recurso está disponível em todos os provedores.

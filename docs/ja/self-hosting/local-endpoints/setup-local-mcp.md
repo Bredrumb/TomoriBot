@@ -4,7 +4,7 @@ sidebar:
   order: 6
 ---
 
-[MCP](https://modelcontextprotocol.io/)サーバーは、外部ツールでTomoriBotを拡張します。オンライン（HTTPS）MCPサーバーはどのインスタンスでも機能します：[ツールと拡張機能](/ja/features/capabilities/tools-and-extensions/#mcpサーバー)を参照してください。**ローカル**MCPサーバーは異なります。
+[MCP](https://modelcontextprotocol.io/)サーバーは、外部ツールでTomoriBotを拡張します。オンライン（HTTPS）MCPサーバーはどのインスタンスでも機能します：[ツールと拡張機能](/ja/features/capabilities/tools-and-extensions/#mcp-servers)を参照してください。**ローカル**MCPサーバーは異なります。
 
 :::caution[セルフホスト専用]
 ローカルMCPサーバーは**セルフホストインスタンスでのみサポートされています**。公開ホストされているボットはHTTPSを必要とし、セキュリティのためにローカル/プライベートアドレスをブロックするため、`localhost`やLAN上のサーバーには到達できません。
@@ -42,4 +42,4 @@ http://localhost:3000/sse
 自分で実行するローカルサーバーであっても、そのコードが信頼できない場合は誤動作する可能性があります。悪意のあるMCPサーバーは、モデルにプロンプトインジェクションを行ったり、ツールに渡されたデータを流出させたり、TomoriBotが中継する有害な結果を返したりする可能性があります。配線する前に、MCPサーバーが何を行うかを確認してください。
 :::
 
-オンラインMCPのフローと完全なセキュリティの根拠については、[ツールと拡張機能 → MCPサーバー](/ja/features/capabilities/tools-and-extensions/#mcpサーバー)を参照してください。
+オンラインMCPのフローと完全なセキュリティの根拠については、[ツールと拡張機能 → MCPサーバー](/ja/features/capabilities/tools-and-extensions/#mcp-servers)を参照してください。

@@ -83,7 +83,7 @@ bun run launch --searxng --crawl4ai  # ボットとサイドカー（bun run lau
 各メンバーの個人プロバイダーが代わりに応答するユーザーBYOKモードで動かす場合は例外です。
 そのため、これはどのインストールパスでも最後の手順になります。
 
-## `/setup` コマンド
+## `/setup` コマンド {#the-setup-command}
 
 `/setup` は、それを実行した本人だけが操作できる一時的なチェックリストパネルを開きます。
 サーバー内では**サーバー管理**権限が必要で、DMではその本人のワークスペースで利用できます。
@@ -120,7 +120,7 @@ bun run launch --searxng --crawl4ai  # ボットとサイドカー（bun run lau
 - **ユーザーBYOK**（サーバーのみ、DMでは不可）: ワークスペースは自身のプロバイダーを一切持たず、
   メンバーが発言した際の返信はすべて代わりに個人プロバイダーで解決されます。
   モーダルで確認したうえで、メンバーに `/personal providers` で自分のプロバイダーを登録してもらってください。
-  [サーバーモデレーション](/ja/features/setup-administration/server-moderation/#ユーザーbyok自分のキーを持ち込む)を参照してください。
+  [サーバーモデレーション](/ja/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)を参照してください。
 
 ### 初期設定
 

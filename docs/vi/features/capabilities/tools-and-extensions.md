@@ -10,7 +10,7 @@ khác và nhiều hơn nữa. Bot tự quyết định thời điểm sử dụn
 Trang này trình bày các công cụ tích hợp sẵn, cách mở rộng năng lực của bot với máy chủ MCP, và
 cách giữ cho các khai báo công cụ gọn gàng với Chế độ công cụ có chủ đích.
 
-## Công cụ tích hợp sẵn
+## Công cụ tích hợp sẵn {#built-in-tools}
 
 Các công cụ phụ thuộc vào việc nhà cung cấp/model đang hoạt động có hỗ trợ gọi công cụ (tool calling)
 hay không, và nhiều công cụ được kiểm soát bởi một cờ tính năng (nút bật/tắt trong `/config` > Permissions),
@@ -76,7 +76,7 @@ bỏ qua hay dự đoán trước các bước kiểm tra quyền Discord đư�
 năng không xác định sẽ được đánh giá là sai và được ghi log; các khối sai cú pháp sẽ bị bỏ qua. Tin nhắn
 chat thô, đầu ra của model và kết quả công cụ không bao giờ được coi là mẫu có điều kiện.
 
-## Tìm kiếm web & đọc URL
+## Tìm kiếm web & đọc URL {#web-search--url-reading}
 
 Model nhìn thấy một công cụ hợp nhất duy nhất là `web_search(query, category)`. Phía sau nó, một bộ điều
 phối sẽ định tuyến mỗi lệnh gọi qua chuỗi engine và trả về kết quả thành công đầu tiên:
@@ -93,7 +93,7 @@ phối sẽ định tuyến mỗi lệnh gọi qua chuỗi engine và trả về
 
 Để đọc một trang cụ thể, bot sử dụng `fetch_url`. Tính năng này không khả dụng trên NovelAI.
 
-## Máy chủ MCP
+## Máy chủ MCP {#mcp-servers}
 
 Máy chủ [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) mở rộng khả năng của bot với
 các công cụ bên ngoài do bạn tự đăng ký.
@@ -130,7 +130,7 @@ máy chủ của bạn. Hãy đối xử với các máy chủ MCP như tiện �
 Luôn xem lại các công cụ được mô tả của một MCP trước khi thêm nó.
 :::
 
-## Chế độ công cụ có chủ đích
+## Chế độ công cụ có chủ đích {#deliberate-tool-mode}
 
 Mỗi công cụ được khai báo đều làm tăng kích thước prompt. **Chế độ công cụ có chủ đích** (Deliberate Tool Mode)
 giữ cho các khai báo công cụ không xuất hiện trong các lượt chat thông thường trừ khi tin nhắn có vẻ thực sự
@@ -165,7 +165,7 @@ xem tóm tắt trên Discord.
 :::note
 **Chế độ công cụ có chủ đích** (mục này) không liên quan đến **Chế độ kích hoạt có chủ đích**, vốn kiểm soát
 cách *bot* được kích hoạt; xem
-[Trò chuyện & từ kích hoạt](/vi/features/chatting-personality/chatting-and-triggers/#che-do-kich-hoat-co-chu-dich).
+[Trò chuyện & từ kích hoạt](/vi/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
 Cả hai đều được viết tắt là "DTM" trong Discord.
 :::
 

@@ -11,7 +11,7 @@ sidebar:
 
 Tất cả các lệnh slash hiện được TomoriBot đăng ký, được tạo từ cùng trình xây dựng lệnh và mô tả ngôn ngữ tiếng Anh dùng để đăng ký trên Discord.
 
-Các nhóm lệnh cấp cao nhất: **39**. Các lệnh slash có thể thực thi: **80**.
+Các nhóm lệnh cấp cao nhất: **39**. Các lệnh slash có thể thực thi: **81**.
 
 ## `/comment`
 
@@ -226,6 +226,7 @@ Quản lý các cài đặt cá nhân của bạn
 | Lệnh | Tóm tắt |
 |---|---|
 | `/personal config` | Quản lý các tùy chọn cá nhân, quyền riêng tư, model và hồ sơ của bạn. |
+| `/personal language` | Chọn ngôn ngữ TomoriBot dùng để nói chuyện với bạn. |
 | `/personal memories` | Quản lý bộ nhớ dài hạn cá nhân và ngữ cảnh trò chuyện ngắn hạn của bạn. |
 | `/personal nuke` | Xóa mọi thứ TomoriBot lưu trữ về bạn, trên mọi máy chủ. |
 | `/personal providers` | Quản lý thông tin xác thực nhà cung cấp, endpoint và danh mục model cá nhân của bạn. |

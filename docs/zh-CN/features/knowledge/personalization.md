@@ -9,7 +9,7 @@ TomoriBot 可以用 `/personal` 系列指令针对**你个人**进行配置：�
 ## 个人记忆
 
 她记住的关于你的事实会跟着你在服务器之间走。管理它们（添加、移除、导出）
-见[记忆](/zh-CN/features/knowledge/memory/#个人记忆与服务器记忆)页面。
+见[记忆](/zh-CN/features/knowledge/memory/#personal-vs-server-memories)页面。
 
 ## 资料与人格感知称呼
 
@@ -35,7 +35,7 @@ TomoriBot 可以用 `/personal` 系列指令针对**你个人**进行配置：�
 `/personal config` 只保存 -12 到 +14 的数字 UTC 偏移。它不保存
 也不推断地理位置或 IANA 时区。
 
-## 你自己的提供方
+## 你自己的提供方 {#your-own-providers}
 
 个人提供方让你*自己的请求*使用*你自己的* API 密钥和模型，而不是
 服务器的默认值。这就是个人层面的 BYOK（bring your own key，自备密钥）。
@@ -65,7 +65,7 @@ TomoriBot 可以用 `/personal` 系列指令针对**你个人**进行配置：�
 思考日志会把这些轮次归到你名下，你可以用 `/personal config` 调整它们。
 这会影响你在所有地方的请求，并且绝不触碰这个服务器的设置。你也可以
 用 `/personal providers` 登记个人自定义端点；见
-[自定义端点](/zh-CN/features/setup-administration/providers-and-models/#自定义端点)。
+[自定义端点](/zh-CN/features/setup-administration/providers-and-models/#custom-endpoints)。
 
 如果在使用你的个人提供方时请求失败，错误里的「你可以做什么」提示会点名
 真正能修好它的个人指令（`/personal providers`、`/personal config`），
@@ -73,7 +73,7 @@ TomoriBot 可以用 `/personal` 系列指令针对**你个人**进行配置：�
 
 :::note[要求 BYOK 的服务器]
 服务器可以通过 User BYOK 模式要求成员自备提供方
-（[服务器管理](/zh-CN/features/setup-administration/server-moderation/#用户-byokbring-your-own-key)）。开启之后，
+（[服务器管理](/zh-CN/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)）。开启之后，
 你触发的消息需要先有个人提供方，她才能回答。个人
 提供方在你使用她的每一个服务器里都生效。
 :::
@@ -87,13 +87,13 @@ TomoriBot 可以用 `/personal` 系列指令针对**你个人**进行配置：�
 - `/personal config`：控制她对你的可见程度，最高可以**完全不可见**（彻底退出
   记忆功能）。
 - `/personal config`：你对
-  [明确触发模式](/zh-CN/features/chatting-personality/chatting-and-triggers/#明确触发模式)的个人覆盖。
+  [明确触发模式](/zh-CN/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)的个人覆盖。
 - `/personal config`：选择加入跨服务器短期记忆共享；
   `/personal memories` 会清空你的 STM。
 - `/personal config`：设置一段可复用的提示词，供她通过
   `/impersonate user` 扮演你时使用。
 
-## 个人聚光灯
+## 个人聚光灯 {#personal-spotlight}
 
 **个人聚光灯：按频道指定人格。** 聚光灯让你在某个频道里收窄自己
 能触发哪些人格，并可选地为你在那里的消息指派一个人格做自动触发。它的范围是**你 + 一个频道**，不影响其他人。

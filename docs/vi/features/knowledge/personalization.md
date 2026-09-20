@@ -8,7 +8,7 @@ TomoriBot có thể được cấu hình **dành riêng cho bạn** bằng các 
 
 ## Bộ nhớ cá nhân
 
-Các dữ kiện bot nhớ về bạn sẽ đi theo bạn giữa các máy chủ. Việc quản lý chúng (thêm, xóa, xuất) được trình bày trên trang [Bộ nhớ](/vi/features/knowledge/memory/#bo-nho-ca-nhan-va-bo-nho-may-chu).
+Các dữ kiện bot nhớ về bạn sẽ đi theo bạn giữa các máy chủ. Việc quản lý chúng (thêm, xóa, xuất) được trình bày trên trang [Bộ nhớ](/vi/features/knowledge/memory/#personal-vs-server-memories).
 
 ## Hồ sơ và tên theo persona
 
@@ -20,7 +20,7 @@ Người quản lý máy chủ có thể cấu hình mặc định cho persona b
 
 Lệnh `/personal config` chỉ lưu trữ độ lệch UTC dạng số từ -12 đến +14. Lệnh không lưu trữ hoặc suy luận vị trí địa lý hoặc múi giờ IANA.
 
-## Nhà cung cấp riêng của bạn
+## Nhà cung cấp riêng của bạn {#your-own-providers}
 
 Các nhà cung cấp cá nhân cho phép *các yêu cầu của chính bạn* sử dụng API key và model của *chính bạn* thay vì mặc định của máy chủ. Đây là hình thức tự mang theo API key (BYOK) ở cấp độ cá nhân.
 
@@ -39,7 +39,7 @@ Việc chọn một model bằng `/personal config` sẽ kích hoạt tính năn
 
 Vì các bước 1 và 2 chuyển bạn sang chế độ tùy chỉnh ưu tiên liên máy chủ, TomoriBot sẽ yêu cầu bạn xác nhận trước khi lưu bất cứ khi nào một tính năng chuyển từ mặc định của máy chủ sang tùy chỉnh cá nhân. Việc đổi key trên một nhà cung cấp đang phản hồi các yêu cầu của bạn sẽ bỏ qua bước xác nhận này, vì định tuyến không thay đổi.
 
-Nhật ký suy nghĩ sẽ ghi nhận các lượt tương tác đó cho bạn, và bạn có thể tinh chỉnh chúng bằng `/personal config`. Điều này ảnh hưởng đến các yêu cầu của bạn ở mọi nơi và không bao giờ chạm vào cài đặt của máy chủ này. Bạn cũng có thể đăng ký các endpoint tùy chỉnh cá nhân bằng `/personal providers`; xem [Endpoint tùy chỉnh](/vi/features/setup-administration/providers-and-models/#endpoint-tuy-chinh).
+Nhật ký suy nghĩ sẽ ghi nhận các lượt tương tác đó cho bạn, và bạn có thể tinh chỉnh chúng bằng `/personal config`. Điều này ảnh hưởng đến các yêu cầu của bạn ở mọi nơi và không bao giờ chạm vào cài đặt của máy chủ này. Bạn cũng có thể đăng ký các endpoint tùy chỉnh cá nhân bằng `/personal providers`; xem [Endpoint tùy chỉnh](/vi/features/setup-administration/providers-and-models/#custom-endpoints).
 
 Nếu một yêu cầu không thành công trong khi sử dụng nhà cung cấp cá nhân của bạn, mẹo "Những gì bạn có thể làm" trong thông báo lỗi sẽ nêu tên các lệnh cá nhân thực sự có thể khắc phục được (`/personal providers`, `/personal config`) thay vì các lệnh dành cho người quản lý máy chủ.
 
@@ -56,7 +56,7 @@ Một máy chủ có thể yêu cầu nhà cung cấp do thành viên tự cung 
 - `/personal config`: chọn tham gia chia sẻ bộ nhớ ngắn hạn liên máy chủ; `/personal memories` sẽ xóa STM của bạn.
 - `/personal config`: đặt một prompt có thể tái sử dụng khi bot mạo danh bạn thông qua `/impersonate user`.
 
-## Spotlight cá nhân
+## Spotlight cá nhân {#personal-spotlight}
 
 **Spotlight cá nhân: lựa chọn persona theo từng kênh.** Spotlight cho phép *bạn* thu hẹp danh sách persona mà bạn có thể kích hoạt trong một kênh, và tùy chọn chỉ định một persona tự động kích hoạt cho các tin nhắn của chính bạn tại đó. Tính năng này được giới hạn cho **bạn + một kênh** và không ảnh hưởng đến bất kỳ ai khác.
 

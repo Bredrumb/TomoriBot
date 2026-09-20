@@ -4,8 +4,6 @@ sidebar:
   order: 6
 ---
 
-> **关于这份翻译：** 本页是英文版[配置：本地 MCP 服务器](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-local-mcp/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 [MCP](https://modelcontextprotocol.io/) 服务器用外部工具扩展 TomoriBot。在线
 （HTTPS）的 MCP 服务器在任何实例上都能用；见
 [工具与扩展](/zh-CN/features/capabilities/tools-and-extensions/#本地-mcp-服务器)。**本地** MCP 服务器则
@@ -48,4 +46,4 @@ http://localhost:3000/sse
 :::
 
 在线 MCP 的流程和完整的安全理由，见
-[工具与扩展 → MCP 服务器](/zh-CN/features/capabilities/tools-and-extensions/#mcp-服务器)。
+[工具与扩展 → MCP 服务器](/zh-CN/features/capabilities/tools-and-extensions/#mcp-servers)。

@@ -1,6 +1,6 @@
 export default {
   general: {
-    language_name: `Español (Latinoamérica)`,
+    language_name: `Español (LATAM)`,
     yes: `Sí`,
     confirm: `Confirmar`,
     none: `Ninguno`,

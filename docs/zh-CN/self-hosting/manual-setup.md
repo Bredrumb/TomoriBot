@@ -4,8 +4,6 @@ sidebar:
   order: 2
 ---
 
-> **关于这份翻译：** 本页是英文版[手动安装](https://docs.tomoribot.app/en/self-hosting/manual-setup/)的翻译，仅为方便阅读而提供，内容以英文版为准。若本页与英文版有任何不一致，一律以英文版为准。
-
 :::note
 想用 Docker Compose 的人请跳过这个向导，容器化安装路径见
 [Docker Compose](/zh-CN/self-hosting/docker-compose/)。
@@ -80,7 +78,7 @@ bun run launch --searxng --crawl4ai
 bun run launch --help        # 查看所有参数
 ```
 
-## 可选附加项（手动版的「完整安装」）
+## 可选附加项（手动版的「完整安装」） {#optional-extras-the-manual-full-install}
 
 [安装向导](/zh-CN/self-hosting/setup-wizard/)的 **完整安装** 路径会在基础安装之上叠加四个轻量附加项。它们都不是运行 bot 的必需项，但每一项都会解锁一个功能。如果你是手动安装，想加哪个就加哪个：
 

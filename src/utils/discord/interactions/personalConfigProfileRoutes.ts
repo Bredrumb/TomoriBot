@@ -42,15 +42,17 @@ export async function handlePersonalConfigProfileWrites(context: PersonalConfigP
         });
       }
       const langLabel = getLocaleEndonym(language);
+      // The panel repaints in the language just written, not the one its route id was built with,
+      // so the confirmation and every control the redraw emits already read in the new language.
       await repaint(interaction, {
-        locale: route.locale,
+        locale: language,
         scope: context.scope,
         category: "profile",
         page: "general",
         panelReceipt: {
           tone: "success",
-          heading: localizer(route.locale, "commands.personal.config.language_updated_heading"),
-          detail: localizer(route.locale, "commands.personal.config.language_updated_detail", {
+          heading: localizer(language, "commands.personal.config.language_updated_heading"),
+          detail: localizer(language, "commands.personal.config.language_updated_detail", {
             language: escapeDiscordMarkdown(langLabel),
           }),
         },

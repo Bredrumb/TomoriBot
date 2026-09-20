@@ -9,7 +9,7 @@ O comportamento da TomoriBot (**o que ela tem permissão para fazer e como ela g
 e do conhecimento ([Memória](/pt-BR/features/knowledge/memory/)). Esta página é um conjunto selecionado das configurações de
 alto valor; cada comando está na [Referência de Comandos](/pt-BR/features/command-reference/).
 
-## Capacidades: O Que Ela Tem Permissão para Fazer
+## Capacidades: O Que Ela Tem Permissão para Fazer {#capabilities-what-shes-allowed-to-do}
 
 `/config` > Permissions ativa e desativa os recursos dela: geração de imagem, uso de figurinhas, criação
 de tópicos, gerenciamento de mensagens, bloqueio de usuários, autoensino, mensagens de voz e mais. Cada
@@ -17,7 +17,7 @@ toggle é a flag de recurso que condiciona a ferramenta correspondente (veja
 [Ferramentas & Extensões](/pt-BR/features/capabilities/tools-and-extensions/)). Desative algo e ela simplesmente
 não pode fazê-lo, não importa o que um usuário peça.
 
-## Ajuste de Geração
+## Ajuste de Geração {#generation-tuning}
 
 - `/config` > Models > Text Samplers & Parameters: parâmetros de amostragem (temperature, top-p, …): criatividade/aleatoriedade.
   Uma temperature mais alta gera resultados mais variados.
@@ -27,7 +27,7 @@ não pode fazê-lo, não importa o que um usuário peça.
 - `/config` > Engine > General: quantas mensagens recentes ela puxa como contexto a cada acionamento.
   Uma alavanca útil: aumente para mais consciência conversacional, diminua para cortar custo de tokens.
 
-## Prompt de Sistema
+## Prompt de Sistema {#system-prompt}
 
 O prompt de sistema fica acima da persona e molda o comportamento geral:
 
@@ -39,7 +39,7 @@ O prompt de sistema fica acima da persona e molda o comportamento geral:
 Quando uma [predefinição do SillyTavern](/pt-BR/features/integrations/sillytavern-support/) está ativa, o prompt de sistema
 padrão integrado é substituído; mas um personalizado que você definiu aqui ainda é enviado.
 
-## Saída Sem Censura
+## Saída Sem Censura {#uncensored-output}
 
 A TomoriBot **não tem filtro de conteúdo próprio**: ela não é um sistema de moderação e não adiciona
 proteções por cima do modelo. O que quer que o provedor subjacente retorne é o que ela diz.

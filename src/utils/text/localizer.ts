@@ -1,6 +1,7 @@
 import path from "node:path";
 import { readdir } from "node:fs/promises";
 import { Glob } from "bun";
+import { LOCALE_DISPLAY_ORDER } from "@/constants/docsLocales";
 import { isDiscordLocaleCode, LOCALE_ALIASES, type LocaleCode } from "@/constants/locales";
 import type { LocaleObject, Locales, LocaleValue, LocalizerVariables } from "../../types/discord/global";
 import { log } from "../misc/logger";
@@ -250,9 +251,11 @@ export const localizer = (locale: string, key: string, variables: LocalizerVaria
 };
 
 /**
- * Get the list of currently supported/loaded locale codes.
- * This is dynamically determined from the locale files loaded during initialization.
- * @returns Array of supported locale codes (e.g., ['en-US', 'ja'])
+ * Authored locale codes, in the order every language picker presents them.
+ *
+ * The set comes from the locale directories loaded at startup, but the order comes from
+ * `LOCALE_DISPLAY_ORDER` rather than from `readdir`: an indexed directory returns hash order, so
+ * the picker would otherwise reshuffle between hosts and never agree with the docs switcher.
  */
 export function getSupportedLocales(): string[] {
   if (!isInitialized) {
@@ -260,7 +263,9 @@ export function getSupportedLocales(): string[] {
     return [];
   }
 
-  return Object.keys(locales);
+  const loaded = Object.keys(locales);
+  const ordered = LOCALE_DISPLAY_ORDER.filter((code) => loaded.includes(code));
+  return [...ordered, ...loaded.filter((code) => !ordered.includes(code)).sort()];
 }
 
 /** Discord-facing keys include aliases only while their authored source is loaded. */

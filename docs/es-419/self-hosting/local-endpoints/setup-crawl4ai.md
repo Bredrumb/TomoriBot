@@ -5,8 +5,6 @@ sidebar:
 ---
 # Configuración: Crawl4AI Sidecar
 
-> Esta traducción se proporciona para tu comodidad. La versión en inglés es la autoritativa.
-
 La herramienta `fetch_url` utiliza el motor `safe_http` en el proceso por defecto. Opcionalmente, puede intentar usar un sidecar de renderizado de navegador en entornos de desarrollo de confianza cuando necesites contenido renderizado para páginas con mucho JavaScript.
 
 El orden predeterminado de los motores es `safe_http`. Debido a que Crawl4AI sigue redirecciones fuera del cliente HTTP protegido de TomoriBot, solo se admite donde se permite la recuperación desde redes privadas. Fuera de producción esto es automático (no requiere configuración). En producción requiere una habilitación explícita con `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`, lo cual no se recomienda.

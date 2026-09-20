@@ -118,6 +118,19 @@ function defineDocsLocale(definition: DocsLocaleDefinition): DocsLocaleDefinitio
   return { ...definition, notices: LOCALE_NOTICES[definition.id] ?? LOCALE_NOTICES.en };
 }
 
+/**
+ * Every locale the project knows about, in the one display order each picker uses.
+ *
+ * The order is the product decision, not an alphabetization: English first, then the locales
+ * grouped the way a reader scanning the switcher expects to find them. `LOCALE_DISPLAY_ORDER`
+ * below re-exports it as Discord codes, so the docs language switcher, the repository README
+ * row, and the bot's own `/personal language` picker all reorder together from this one edit.
+ *
+ * `docsTree: false` keeps a locale out of the published route set, out of the Accept-Language
+ * match, and out of bot URLs, so a planned locale is safe to list here before its content exists.
+ * Flipping the flag is what publishes the locale, and the flip must land in the same change as
+ * the page tree plus the entries listed in docs/en/contributing/adding-locale/.
+ */
 export const DOCS_LOCALES = [
   defineDocsLocale({
     id: "en",
@@ -137,34 +150,6 @@ export const DOCS_LOCALES = [
     docsTree: true,
     descriptionMaxLength: 80,
   }),
-  // Planned target locales. `docsTree: false` keeps the locale out of the published route set, out
-  // of the Accept-Language match, and out of bot URLs, so adding the row here is safe before its
-  // content exists. Flipping the flag is what publishes the locale, and the flip must land in the
-  // same change as the page tree plus the entries listed in docs/en/contributing/adding-locale/.
-  defineDocsLocale({
-    id: "pt-BR",
-    botLocaleCode: "pt-BR",
-    lang: "pt-BR",
-    label: "Português (Brasil)",
-    docsTree: true,
-    descriptionMaxLength: 160,
-  }),
-  defineDocsLocale({
-    id: "es-419",
-    botLocaleCode: "es-419",
-    lang: "es-419",
-    label: "Español (Latinoamérica)",
-    docsTree: true,
-    descriptionMaxLength: 160,
-  }),
-  defineDocsLocale({
-    id: "fr",
-    botLocaleCode: "fr",
-    lang: "fr",
-    label: "Français",
-    docsTree: false,
-    descriptionMaxLength: 160,
-  }),
   defineDocsLocale({
     id: "zh-TW",
     botLocaleCode: "zh-TW",
@@ -182,11 +167,35 @@ export const DOCS_LOCALES = [
     descriptionMaxLength: 80,
   }),
   defineDocsLocale({
+    id: "es-419",
+    botLocaleCode: "es-419",
+    lang: "es-419",
+    label: "Español (LATAM)",
+    docsTree: true,
+    descriptionMaxLength: 160,
+  }),
+  defineDocsLocale({
+    id: "pt-BR",
+    botLocaleCode: "pt-BR",
+    lang: "pt-BR",
+    label: "Português (Brasil)",
+    docsTree: true,
+    descriptionMaxLength: 160,
+  }),
+  defineDocsLocale({
     id: "vi",
     botLocaleCode: "vi",
     lang: "vi",
     label: "Tiếng Việt",
     docsTree: true,
+    descriptionMaxLength: 160,
+  }),
+  defineDocsLocale({
+    id: "fr",
+    botLocaleCode: "fr",
+    lang: "fr",
+    label: "Français",
+    docsTree: false,
     descriptionMaxLength: 160,
   }),
   defineDocsLocale({
@@ -206,6 +215,14 @@ export const DOCS_LOCALES = [
     descriptionMaxLength: 80,
   }),
 ] as const;
+
+/**
+ * Display order for every language picker, keyed by Discord locale code.
+ *
+ * Exported as codes rather than docs ids because the bot's picker, its locale registry, and the
+ * Discord localization maps all speak Discord codes, and `en` is the only id that differs.
+ */
+export const LOCALE_DISPLAY_ORDER: readonly string[] = DOCS_LOCALES.map((locale) => locale.botLocaleCode);
 
 export type DocsLocaleId = (typeof DOCS_LOCALES)[number]["id"];
 

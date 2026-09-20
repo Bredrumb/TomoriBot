@@ -42,11 +42,13 @@ export function slugifyHeading(heading: string): string {
   // Strip {#custom-id} if present
   clean = clean.replace(/\{#[^}]+\}/, "").trim();
 
+  // Each space becomes its own hyphen and runs are not collapsed, because that is what
+  // github-slugger does: dropping `&` from "Web & URLs" leaves two spaces, so the real anchor is
+  // `web--urls`. Collapsing here reported every such heading as a broken fragment.
   return clean
     .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^\p{L}\p{N}\p{M}\-_]/gu, "")
-    .replace(/-+/g, "-");
+    .replace(/\s/g, "-")
+    .replace(/[^\p{L}\p{N}\p{M}\-_]/gu, "");
 }
 
 /**
@@ -162,21 +164,37 @@ export function extractProjectDocLinks(
   sourceFile: string,
 ): Array<{ sourceFile: string; url: string; pathname: string; fragment?: string }> {
   const links: Array<{ sourceFile: string; url: string; pathname: string; fragment?: string }> = [];
-  const regex = /https:\/\/docs\.tomoribot\.app([^\s)\]"`'>,]*)/g;
-
-  for (const match of content.matchAll(regex)) {
-    let rawPath = match[1];
-
+  const push = (rawPath: string) => {
     // Strip trailing punctuation often adjacent to URLs in prose (e.g. ".", ")", "...")
-    rawPath = rawPath.replace(/[.,;:]+$/, "");
-
-    const [pathname, fragment] = rawPath.split("#");
+    const trimmed = rawPath.replace(/[.,;:]+$/, "");
+    const [pathname, fragment] = trimmed.split("#");
     links.push({
       sourceFile,
-      url: `${DOCS_HOST}${rawPath}`,
+      url: `${DOCS_HOST}${trimmed}`,
       pathname: pathname || "/",
       fragment: fragment || undefined,
     });
+  };
+
+  for (const match of content.matchAll(/https:\/\/docs\.tomoribot\.app([^\s)\]"`'>,]*)/g)) {
+    push(match[1]);
+  }
+
+  // Root-relative markdown links. Only a path whose first segment is a published locale root is
+  // ours: every other `](/...)` belongs to some other site or to a static asset the docs build
+  // owns, and matching those would report noise the author cannot act on.
+  for (const match of content.matchAll(/\]\((\/[^)\s]*)\)/g)) {
+    const [first] = match[1].replace(/^\//, "").split("/");
+    if ((PUBLISHED_DOCS_LOCALES as readonly string[]).includes(first)) push(match[1]);
+  }
+
+  // The route table stores bare, locale-less routes as string literals rather than links, so it
+  // needs its own pattern. Scoped to that file because a bare quoted path anywhere else is far
+  // more likely to be a filesystem path than a docs route.
+  if (sourceFile.replaceAll("\\", "/").endsWith("src/constants/docsLocales.ts")) {
+    for (const match of content.matchAll(/"(\/[A-Za-z0-9\-_/]*\/#?[A-Za-z0-9\-_#]*)"/g)) {
+      push(match[1]);
+    }
   }
 
   return links;
@@ -236,6 +254,14 @@ export async function validateLocaleLinks(options?: {
         filesToScan.push(join("src", "locales", file));
       }
     }
+  }
+
+  // The bot's own docs destinations. `DOCS_ROUTES` is locale-less, so a fragment there has to
+  // exist in every published tree, not just the English one: `buildDocsUrl` prefixes the reader's
+  // locale onto it, and an anchor that only English carries lands every other locale at page top.
+  const routeTable = join("src", "constants", "docsLocales.ts");
+  if (!options?.locale && existsSync(join(root, routeTable))) {
+    filesToScan.push(routeTable);
   }
 
   // Docs
@@ -324,6 +350,28 @@ export async function validateLocaleLinks(options?: {
       }
 
       if (resolved === "ROOT" || resolved === "STATIC_ASSET") {
+        validLinksCount++;
+        continue;
+      }
+
+      if (link.fragment && relPath.replaceAll("\\", "/") === "src/constants/docsLocales.ts") {
+        const missing = PUBLISHED_DOCS_LOCALES.filter((published) => {
+          const localeFile = resolveDocPath(link.pathname, docFiles, publicFiles, published);
+          if (!localeFile || localeFile === "ROOT" || localeFile === "STATIC_ASSET") return false;
+          return !extractDocAnchors(docContents.get(localeFile) ?? "").has(link.fragment as string);
+        });
+        if (missing.length > 0) {
+          findings.push({
+            sourceFile: link.sourceFile,
+            url: link.url,
+            pathname: link.pathname,
+            fragment: link.fragment,
+            resolvedFile: resolved,
+            type: "missing_fragment",
+            message: `Heading anchor "#${link.fragment}" is missing from ${missing.join(", ")}; add {#${link.fragment}} to the matching heading in each`,
+          });
+          continue;
+        }
         validLinksCount++;
         continue;
       }

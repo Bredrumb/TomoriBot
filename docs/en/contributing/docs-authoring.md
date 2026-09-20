@@ -166,6 +166,12 @@ Always link between docs pages with **root-absolute** URLs (leading `/`, trailin
 e.g. `[Manual Setup](/self-hosting/manual-setup/)` or with an anchor
 `[…](/self-hosting/manual-setup/#optional-extras-the-manual-full-install)`.
 
+A heading that is a link target should carry an explicit id: `## Keyword Tags {#keyword-tags}`.
+`apps/docs/src/remarkHeadingIds.ts` renders that suffix as the heading's id, which pins the anchor
+against a later rewording and lets every translated tree answer the same English fragment. Only the
+English slug belongs in the braces. `bun run check-locale-links` resolves every internal link and
+fragment, including the bot's own `DOCS_ROUTES` table against each published locale.
+
 Do **not** use relative `./sibling` links from a normal (non-index) page. Pages deploy in
 directory format (`/self-hosting/manual-setup/`), and the build does not rewrite relative
 links, so `./setup-wizard` from that page resolves to

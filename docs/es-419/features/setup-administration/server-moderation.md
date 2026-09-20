@@ -10,7 +10,7 @@ comandos relacionados. La mayoría requiere el permiso **Administrar servidor**.
 cubre lo más destacado; cada comando está en la
 [Referencia de comandos](/en/features/command-reference/).
 
-## Control de costo: cuotas
+## Control de costo: cuotas {#cost-control-quotas}
 
 Generar contenido cuesta dinero (tuyo o de tus miembros). Las cuotas limitan el uso por usuario
 y a nivel de todo el servidor:
@@ -22,7 +22,7 @@ y a nivel de todo el servidor:
 Establece un límite por usuario en `0` para uso ilimitado. Los fondos comunes de todo el
 servidor se restablecen en un intervalo de días configurable.
 
-## BYOK de usuario (trae tu propia clave)
+## BYOK de usuario (trae tu propia clave) {#user-byok-bring-your-own-key}
 
 `/moderation` **(Acceso de miembros)** lleva esto como una opción de dos estados. **Permitir
 modelos del servidor** es el predeterminado; **Requerir proveedores personales** hace que cada
@@ -30,7 +30,7 @@ miembro traiga su **propio** proveedor personal para sus activaciones: el servid
 por los mensajes iniciados por el usuario. Las activaciones iniciadas por el servidor siguen
 usando el proveedor del servidor. Este es el control de costo más fuerte: traslada por completo
 el gasto de API a los miembros. Los miembros configuran el suyo en
-[Personalización → Tus propios proveedores](/es-419/features/knowledge/personalization/#tus-propios-proveedores).
+[Personalización → Tus propios proveedores](/es-419/features/knowledge/personalization/#your-own-providers).
 
 También puedes arrancar un servidor sin **ningún** proveedor de texto del lado del servidor
 eligiendo **BYOK de usuario** durante `/setup`. Se ofrece en servidores en lugar de en mensajes
@@ -61,7 +61,7 @@ anulación específica del canal.
 `/server thought-logs` establece un canal donde se publican su razonamiento interno y las
 llamadas a herramientas exitosas; útil para auditar qué está haciendo (incluido qué activador
 expuso una herramienta en el
-[Modo de herramientas deliberado](/es-419/features/capabilities/tools-and-extensions/#modo-de-herramientas-deliberado)).
+[Modo de herramientas deliberado](/es-419/features/capabilities/tools-and-extensions/#deliberate-tool-mode)).
 
 ## Saludos de bienvenida
 

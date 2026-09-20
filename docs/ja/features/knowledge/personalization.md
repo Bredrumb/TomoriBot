@@ -8,7 +8,7 @@ TomoriBotは、`/personal`コマンドを使用して**あなた専用**に設�
 
 ## 個人の記憶
 
-彼女が覚えているあなたに関する事実は、サーバー間で追従します。これらの管理（追加、削除、エクスポート）については、[記憶](/ja/features/knowledge/memory/#個人とサーバーの記憶)のページで説明されています。
+彼女が覚えているあなたに関する事実は、サーバー間で追従します。これらの管理（追加、削除、エクスポート）については、[記憶](/ja/features/knowledge/memory/#personal-vs-server-memories)のページで説明されています。
 
 ## プロフィールとペルソナ別の呼び名
 
@@ -20,7 +20,7 @@ TomoriBotは、`/personal`コマンドを使用して**あなた専用**に設�
 
 `/personal config` は -12 から +14 までの数値のUTCオフセットのみを保存します。地理的な場所やIANAタイムゾーンを保存または推測することはありません。
 
-## 個人のプロバイダー
+## 個人のプロバイダー {#your-own-providers}
 
 個人のプロバイダーを使用すると、サーバーのデフォルトではなく、*あなた自身のリクエスト*に対して*あなた自身*のAPIキーとモデルを使用できます。これは個人レベルでのBring-Your-Own-Key（BYOK）です。
 
@@ -39,12 +39,12 @@ TomoriBotは、`/personal`コマンドを使用して**あなた専用**に設�
 
 ステップ1と2はサーバーをまたいだ上書きに切り替わるため、機能がサーバーのデフォルトから個人のものに移行する際は、保存前に確認を求められます。すでにあなたのリクエストに応答しているプロバイダーのキーをローテーションする場合は、ルーティングが変更されないため、その確認はスキップされます。
 
-思考ログはそれらのターンをあなたに帰属させ、`/personal config` で調整できます。これはあらゆる場所でのあなたのリクエストに影響し、現在のサーバーの設定には決して触れません。また、`/personal providers` で個人のカスタムエンドポイントを登録することもできます。[カスタムエンドポイント](/ja/features/setup-administration/providers-and-models/#カスタムエンドポイント)を参照してください。
+思考ログはそれらのターンをあなたに帰属させ、`/personal config` で調整できます。これはあらゆる場所でのあなたのリクエストに影響し、現在のサーバーの設定には決して触れません。また、`/personal providers` で個人のカスタムエンドポイントを登録することもできます。[カスタムエンドポイント](/ja/features/setup-administration/providers-and-models/#custom-endpoints)を参照してください。
 
 個人のプロバイダーを使用中にリクエストが失敗した場合、エラーの「できること（What you can do）」ヒントには、サーバー管理者向けのものではなく、実際に修正できる個人向けコマンド（`/personal providers`、`/personal config`）が表示されます。
 
 :::note[BYOK必須サーバー]
-サーバーはUser BYOKモード（[サーバーモデレーション](/ja/features/setup-administration/server-moderation/#ユーザーbyok自分のキーを持ち込む)）を使用して、メンバー提供のプロバイダーを必須にすることができます。これがオンの場合、あなたがトリガーしたメッセージに彼女が応答するには個人のプロバイダーが必要です。個人のプロバイダーは、彼女を使用するすべてのサーバーに適用されます。
+サーバーはUser BYOKモード（[サーバーモデレーション](/ja/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)）を使用して、メンバー提供のプロバイダーを必須にすることができます。これがオンの場合、あなたがトリガーしたメッセージに彼女が応答するには個人のプロバイダーが必要です。個人のプロバイダーは、彼女を使用するすべてのサーバーに適用されます。
 :::
 
 ## その他の個人設定
@@ -52,11 +52,11 @@ TomoriBotは、`/personal`コマンドを使用して**あなた専用**に設�
 - `/personal config`：彼女からの呼ばれ方を変更します。
 - `/personal config`：ご自身の外見タグ（booruスタイル）。[画像生成](/ja/features/capabilities/media-generation/image-generation/#タグのカスタマイズ)であなたが参照された場合に使用されます。空欄で送信するとクリアされます。
 - `/personal config`：彼女に対するあなたの可視性を制御します。**完全な不可視**（記憶機能を完全にオプトアウト）まで設定可能です。
-- `/personal config`：[明示的トリガーモード](/ja/features/chatting-personality/chatting-and-triggers/#明示的トリガーモード)の個人設定です。
+- `/personal config`：[明示的トリガーモード](/ja/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)の個人設定です。
 - `/personal config`：サーバー間の短期記憶の共有をオプトインします。`/personal memories` でSTMを消去します。
 - `/personal config`：彼女が `/impersonate user` であなたを模倣する際の再利用可能なプロンプトを設定します。
   
-## パーソナルスポットライト
+## パーソナルスポットライト {#personal-spotlight}
 
 **パーソナルスポットライト：チャンネル別のペルソナ選択。** スポットライトを使用すると、あるチャンネルでトリガーできるペルソナを*あなただけ*絞り込むことができ、任意でそのチャンネルでのご自身のメッセージに対するオートトリガーペルソナを割り当てることもできます。これは**あなた＋1つのチャンネル**にスコープされており、他の人には影響しません。
 

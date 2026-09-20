@@ -198,7 +198,7 @@ Por favor, edita el archivo de importación para usar un nombre diferente o elim
     default: {
       description: `Aplica una configuración de personalidad preajustada`,
       type_description: `Aplicar a la persona principal/predeterminada o crear como alter`,
-      type_choice_default: `Persona predeterminada`,
+      type_choice_default: `Persona principal (reemplaza a la actual)`,
       type_choice_alter: `Alter`,
       no_permission_title: `🔴 Permiso denegado`,
       no_permission_description: `Necesitas el permiso de **Gestionar servidor** para aplicar preajustes de personalidad.`,
