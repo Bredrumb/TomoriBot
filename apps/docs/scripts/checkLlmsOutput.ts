@@ -230,19 +230,15 @@ if (!/<meta[^>]+name="robots"[^>]+content="noindex"/i.test(wikiHtml)) {
   throw new Error("English wiki pages must include a noindex robots directive");
 }
 
-// External links naturally target the site root, so the build must preserve it as an indexable
-// document with its own canonical URL instead of recreating the former redirect page.
+// The product site owns language discovery, so the docs root must send readers to the default locale.
+// Cloudflare uses `_redirects`; Astro's generated page preserves the behavior on other static hosts.
 const rootHtml = readRequired("index.html");
-if (/<meta[^>]+(?:name="robots"[^>]+content="noindex"|http-equiv="refresh")/i.test(rootHtml)) {
-  throw new Error("The documentation root must be an indexable page, not a noindex or refresh redirect");
+if (!/<meta[^>]+http-equiv="refresh"[^>]+url=\/en\/introduction\//i.test(rootHtml)) {
+  throw new Error("The documentation root must redirect to the default-locale introduction");
 }
-if (!/<link[^>]+rel="canonical"[^>]+href="https:\/\/docs\.tomoribot\.app\/"/i.test(rootHtml)) {
-  throw new Error("The documentation root must carry a self-referencing canonical URL");
-}
-for (const locale of PUBLISHED_DOCS_LOCALES) {
-  if (!rootHtml.includes(`href="/${locale}/introduction/"`)) {
-    throw new Error(`The documentation root has no introduction link for published locale ${locale}`);
-  }
+const redirectRules = readRequired("_redirects");
+if (!/^\/ \/en\/introduction\/ 301$/m.test(redirectRules)) {
+  throw new Error("The Cloudflare redirect file must permanently redirect the docs root to English");
 }
 
 // `robots.txt` advertises the sitemap unconditionally, so a build that omits one publishes a dead

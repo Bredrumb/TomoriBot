@@ -10,6 +10,25 @@ usarlas según la conversación. Esta página cubre las herramientas integradas,
 servidores MCP y cómo mantener ligeras las declaraciones de herramientas con el modo de
 herramientas deliberado.
 
+Aquí tienes algunos ejemplos graciosos:
+
+- **1. Verificador de bienestar**
+  ```text
+  Cada pocas horas, realiza un chequeo de bienestar obligatorio a @Bredrumb.
+  Pregúntale cómo se siente ahora mismo y si se ha tomado un descanso de la programación recientemente.
+  Rastrea su estado emocional a lo largo del tiempo con {memory_tool} y/o {memory_update_tool} para informarle más tarde.
+  ```
+- **2. Noticias semanales de manga yuri**
+  ```text
+  Todos los viernes, recopila los capítulos de manga yuri destacados de la semana, los episodios de anime y las entregas de fanart de la comunidad utilizando {web_search_tool}.
+  Presenta los hallazgos con {voice_message_tool} en una voz ASMR seductora.
+  ```
+- **3. Policía del sueño**
+  ```text
+  Si notas a través de {message_metadata_tool} que alguien está chateando después de las 2 AM, usa {voice_message_tool} para enviarle una canción de cuna ASMR amenazadoramente calmada diciéndole que se vaya a dormir.
+  Si siguen hablando 10 minutos después, usa {manage_message_tool} para eliminar su mensaje por su propio bien y recuérdales que la privación del sueño es una causa principal de sus problemas.
+  ```
+
 ## Herramientas integradas
 <!-- anchor: built-in-tools -->
 

@@ -93,7 +93,7 @@ The pre-staged shared surfaces a locale relies on:
 | File | Pre-staged state | Publish-time edit |
 |---|---|---|
 | `src/constants/docsLocales.ts` | The locale row and its endonym | Add the locale's `LOCALE_NOTICES` entry and set `docsTree: true` |
-| `apps/docs/src/pages/index.astro` | Language links derived from the locale table | None |
+| `apps/landing/src/pages/index.astro` | Product-site language links derived from the locale table | None |
 | `apps/docs/public/_redirects` | The `/xx` and `/xx/` root pair | None |
 | `README.md` switcher | The locale's endonym as staged plain text | Replace it with the locale README link |
 | `src/locales/{code}/**` docs URLs | English-prefixed absolute URLs | Repoint to `/{locale}/` once the tree is published |
@@ -106,15 +106,15 @@ line is a 301 from the slashless form and the other is a 200 rewrite that serves
 introduction page at its own root. The Astro redirect map is generated from the locale table and needs
 no edit.
 
-## Locale Roots And The Site Root
+## Locale Roots And The Site Roots
 
-`apps/docs/src/pages/index.astro` is a static, indexable landing page. It reads `DOCS_LOCALES` at build
-time and links directly to the introduction page for every entry with `docsTree: true`. The docs build
-fails if a published locale is missing from that list.
+`apps/landing/src/pages/index.astro` is the static, indexable product landing page for `tomoribot.app`. It
+reads `DOCS_LOCALES` at build time and links directly to the introduction page for every entry with
+`docsTree: true`.
 
-The root page does not redirect based on `Accept-Language`. This gives the project a stable canonical
-brand URL and lets visitors choose among the published languages. Do not add `/` to the Astro redirect
-map or to `apps/docs/public/_redirects`.
+`docs.tomoribot.app/` redirects permanently to `/en/introduction/`. The product site owns language
+discovery, and Starlight's language selector remains available throughout the documentation. The redirect
+must stay aligned between `apps/docs/astro.config.mts` and `apps/docs/public/_redirects`.
 
 `DOCS_LOCALE_ALIASES` still controls generated bot destinations. For example, the `es-ES` Discord
 locale reaches the `es-419` tree through the alias inverted from the bot's `LOCALE_ALIASES` registry.

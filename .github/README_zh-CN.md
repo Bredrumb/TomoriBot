@@ -1,4 +1,4 @@
-### [English](../README.md) | [日本語](README_ja.md) | [繁體中文](README_zh-TW.md) | 简体中文 | [Español (LATAM)](README_es-419.md) | [Português (Brasil)](README_pt-BR.md) | [Tiếng Việt](README_vi.md)
+### [English](../README.md) | [日本語](README_ja.md) | [繁體中文](README_zh-TW.md) | 简体中文 | [Español](README_es-419.md) | [Português (Brasil)](README_pt-BR.md) | [Tiếng Việt](README_vi.md)
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as
@@ -22,7 +22,7 @@
 一套可自部署、可自由定制的 Discord 个人 AI 助理与角色扮演系统，具备记忆、多个人格、工具调用、多模态，并支持 API 与本地模型。
 
 <p align="center">
-  <strong><a href="https://docs.tomoribot.app/zh-CN/">官方网站</a></strong>
+  <strong><a href="https://tomoribot.app/">官方网站</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">邀请 TomoriBot</a></strong>
   &middot;
@@ -111,41 +111,11 @@ TomoriBot 支持长期记忆、多人格行为、Web 与 MCP 工具、聊天内�
 
 ## 实用资源
 
-### [支持的提供方完整列表](https://docs.tomoribot.app/zh-CN/features/setup-administration/providers-and-models/#支持的提供方)
-TomoriBot 开箱支持多种 LLM 提供方、图像生成 API、语音服务和搜索工具。
-
-### [如何运行本地模型](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/)
-
-TomoriBot 支持本地 LLM（通过 KoboldCPP、LM Studio、vLLM 等）、通过 ComfyUI 做本地图像与视频生成、本地 TTS 和 STT 端点，以及本地 SearXNG 和负责网页抓取的浏览器 Docker 侧车。
-
-### [安全与威胁模型](https://docs.tomoribot.app/en/wiki/threat-models/)
-
-TomoriBot 采用加密与安全最佳实践，无论本地部署还是使用公开版，都能让数据和 API 密钥保持安全。
-
-### [用于定制提示词的工具宏](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/)
-
-TomoriBot 内置了各种工具（例如网页搜索、记忆管理、图像生成、跨频道发消息等等），你可以在提示词里用宏直接引用它们，下面是几个搞怪的例子：
-
-#### 1. 健康检查员
-```text
-每隔几个小时，对 @Bredrumb 做一次强制的健康检查。
-问问对方现在感觉如何，最近有没有从写代码里抽空休息。
-用 {memory_tool} 和/或 {memory_update_tool} 记录对方的情绪变化，之后再向本人汇报。
-```
-#### 2. 每周 ~~时事~~ 百合新闻
-```text
-每周五，用 {web_search_tool} 汇总这一周值得关注的百合漫画章节、动画集数和社群同人图。
-用 {voice_message_tool} 以撩人的 ASMR 嗓音播报汇总结果。
-```
-#### 3. 睡眠警察
-```text
-如果你通过 {message_metadata_tool} 发现有谁凌晨 2 点之后还在聊天，就用 {voice_message_tool} 给对方发一段平静得吓人的 ASMR 摇篮曲，叫对方去睡觉。
-如果 10 分钟后还在说话，就用 {manage_message_tool} 为对方好而删掉那条消息，并提醒对方睡眠不足正是其问题的首要原因。
-```
-### [TomoriBot 官方路线图](https://github.com/users/Bredrumb/projects/1/views/1) 
-
-关注 TomoriBot 的计划功能以及所有已知问题。
-
+- [支持的提供方完整列表](https://docs.tomoribot.app/zh-CN/features/setup-administration/providers-and-models/#支持的提供方)
+- [如何运行本地模型](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/)
+- [安全与威胁模型](https://docs.tomoribot.app/en/wiki/threat-models/)
+- [TomoriBot 官方路线图](https://github.com/users/Bredrumb/projects/1/views/1)
+- [用于定制提示词的工具宏](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/)
 
 <!-- GETTING STARTED -->
 ## 自部署
@@ -309,7 +279,7 @@ bun run update
 <!-- CONTACT -->
 ## 联系与链接
 
-**官方网站**：[https://docs.tomoribot.app](https://docs.tomoribot.app/zh-CN/)
+**官方网站**：[https://tomoribot.app](https://tomoribot.app/)
 
 **项目链接**：[https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

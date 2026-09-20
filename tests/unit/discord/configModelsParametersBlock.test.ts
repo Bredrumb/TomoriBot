@@ -248,7 +248,7 @@ describe("configModelsPanel parameters block", () => {
     expect(presetSelect?.options.some((option) => option.value === CONFIG_NAI_PRESET_NEXT_VALUE)).toBe(true);
   });
 
-  it("keeps the preset block visible but disabled with the compatibility explanation", () => {
+  it("omits the preset block when the selected provider is not NovelAI", () => {
     const components = buildConfigModelsBody({
       locale: "en-US",
       page: "parameters",
@@ -272,10 +272,13 @@ describe("configModelsPanel parameters block", () => {
           component.type === ComponentType.TextDisplay &&
           component.content.includes(localizer("en-US", "commands.config.panel.nai_preset.not_novelai_description")),
       ),
-    ).toBe(true);
-    const disabledSelect = flat.find(
-      (component): component is StringSelectMenuComponentData => component.type === ComponentType.StringSelect,
-    );
-    expect(disabledSelect?.disabled).toBe(true);
+    ).toBe(false);
+    expect(
+      flat.some(
+        (component) =>
+          component.type === ComponentType.StringSelect &&
+          component.options.some((option) => option.value === "__nai-preset-disabled__"),
+      ),
+    ).toBe(false);
   });
 });

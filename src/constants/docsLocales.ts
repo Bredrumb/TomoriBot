@@ -168,7 +168,7 @@ export const DOCS_LOCALES = [
     id: "es-419",
     botLocaleCode: "es-419",
     lang: "es-419",
-    label: "Español (LATAM)",
+    label: "Español",
     docsTree: true,
     descriptionMaxLength: 160,
   }),

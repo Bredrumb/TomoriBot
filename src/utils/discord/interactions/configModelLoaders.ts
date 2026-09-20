@@ -248,7 +248,7 @@ export async function loadConfigParametersView(
     null;
 
   let naiPresetView: ConfigParametersView["naiPresetView"];
-  if (workspaceKind === "guild") {
+  if (workspaceKind === "guild" && selected?.provider.toLowerCase() === "novelai") {
     const target = resolveNaiPresetTarget(state);
     const presets: NaiPresetRow[] = target ? await configRepository.loadNaiPresets(target) : [];
     naiPresetView = {

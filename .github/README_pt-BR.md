@@ -1,4 +1,4 @@
-### [English](../README.md) | [日本語](README_ja.md) | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md) | [Español (LATAM)](README_es-419.md) | Português (Brasil) | [Tiếng Việt](README_vi.md)
+### [English](../README.md) | [日本語](README_ja.md) | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md) | [Español](README_es-419.md) | Português (Brasil) | [Tiếng Việt](README_vi.md)
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as
@@ -22,7 +22,7 @@
 Um assistente de IA pessoal e sistema de RPG (role-playing) para Discord com hospedagem própria e personalizável. Possui memória, múltiplas personas, uso de ferramentas, multimodalidade e suporte a APIs/modelos locais.
 
 <p align="center">
-  <strong><a href="https://docs.tomoribot.app/pt-BR/">Site Oficial</a></strong>
+  <strong><a href="https://tomoribot.app/">Site Oficial</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Convidar TomoriBot</a></strong>
   &middot;
@@ -111,41 +111,11 @@ Após adicioná-la ao seu servidor por qualquer um dos métodos acima, execute o
 
 ## Recursos Úteis
 
-### [Lista Completa de Provedores Suportados](https://docs.tomoribot.app/pt-BR/features/setup-administration/providers-and-models/#provedores-suportados)
-A TomoriBot suporta prontamente uma ampla variedade de provedores de LLM, APIs de geração de imagens, serviços de voz e ferramentas de pesquisa.
-
-### [Como Rodar Modelos Locais](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/)
-
-A TomoriBot suporta LLMs locais (via KoboldCPP, LM Studio, vLLM, etc.), geração de imagens/vídeos locais via ComfyUI, endpoints TTS e STT locais, bem como SearXNG local e sidecars Docker de busca web no navegador.
-
-### [Segurança & Modelos de Ameaça](https://docs.tomoribot.app/en/wiki/threat-models/)
-
-A TomoriBot emprega criptografia e as melhores práticas de segurança para manter os dados e as chaves de API completamente seguros, tanto em configurações locais quanto para aqueles que usam o deploy público.
-
-### [Macros de Ferramenta para Personalização de Prompt](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/)
-
-A TomoriBot vem com uma variedade de ferramentas nativas (como pesquisa web, gerenciamento de memória, geração de imagens, mensagens entre canais e mais), às quais você pode se referir diretamente em seus prompts com macros, aqui estão alguns exemplos divertidos:
-
-#### 1. Verificador de Bem-Estar
-```text
-A cada poucas horas, faça uma verificação obrigatória de bem-estar em @Bredrumb. 
-Pergunte como ele se sente no momento e se ele fez alguma pausa na codificação recentemente. 
-Acompanhe o estado emocional dele ao longo do tempo com {memory_tool} e/or {memory_update_tool} para reportar a ele mais tarde.
-```
-#### 2. Notícias Semanais de ~~Eventos Atuais~~ Yuri 
-```text
-Toda sexta-feira, compile os capítulos notáveis de mangá yuri da semana, episódios de anime e lançamentos de fanart da comunidade usando {web_search_tool}. 
-Apresente os resultados com {voice_message_tool} usando uma voz ASMR sedutora.
-```
-#### 3. Polícia do Sono
-```text
-Se você notar através da {message_metadata_tool} que alguém está no bate-papo depois das 2h da manhã, use {voice_message_tool} para enviar uma canção de ninar ASMR ameaçadoramente calma mandando-os ir para a cama. 
-Se eles continuarem conversando 10 minutos depois, use {manage_message_tool} para excluir a mensagem deles para o próprio bem e lembrá-los de que a privação do sono é a principal causa de seus problemas.
-```
-### [Roteiro (Roadmap) Oficial da TomoriBot](https://github.com/users/Bredrumb/projects/1/views/1) 
-
-Fique por dentro dos recursos planejados para a TomoriBot, bem como de todos os problemas conhecidos.
-
+- [Lista Completa de Provedores Suportados](https://docs.tomoribot.app/pt-BR/features/setup-administration/providers-and-models/#provedores-suportados)
+- [Como Rodar Modelos Locais](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/)
+- [Segurança & Modelos de Ameaça](https://docs.tomoribot.app/en/wiki/threat-models/)
+- [Roteiro (Roadmap) Oficial da TomoriBot](https://github.com/users/Bredrumb/projects/1/views/1)
+- [Macros de Ferramenta para Personalização de Prompt](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/)
 
 <!-- GETTING STARTED -->
 ## Hospedagem Própria
@@ -309,7 +279,7 @@ Você controla seus próprios dados e é responsável pela conformidade da sua i
 <!-- CONTACT -->
 ## Contato & Links
 
-**Site Oficial**: [https://docs.tomoribot.app](https://docs.tomoribot.app/pt-BR/)
+**Site Oficial**: [https://tomoribot.app](https://tomoribot.app/)
 
 **Link do Projeto**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

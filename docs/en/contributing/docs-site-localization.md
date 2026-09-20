@@ -17,7 +17,7 @@ from it, so a locale is described once:
 | Consumer | Reads from the table |
 |---|---|
 | `apps/docs/astro.config.mts` | Starlight `locales`, sitemap i18n, sidebar label fallbacks, locale-root redirects, `llms.txt` exclusions |
-| `apps/docs/src/pages/index.astro` | The root landing page's published-language links |
+| `apps/landing/src/pages/index.astro` | The product landing page and its published-language links |
 | `apps/docs/src/routeData.ts` | hreflang alternates, `noindex` on fallback routes, meta description budget |
 | `apps/docs/src/components/MarkdownContent.astro` | Which review notice a page shows, and its wording |
 | `src/utils/discord/docsLinks.ts`, `src/utils/misc/docsUrl.ts` | The locale prefix on every docs link the bot builds |
@@ -129,15 +129,22 @@ locale only when its tree exists and otherwise returns English. Two consequences
 - Locale strings cannot call a builder, because they are static text. Their links are absolute, including
   the locale prefix, and the same test resolves each one against `docs/` to catch a route that moved.
 
-## Site Root
+## Site Roots
 
-The site root is an indexable product and language landing page in `apps/docs/src/pages/index.astro`. It
-links directly to the introduction in every published locale. It does not redirect from
-`Accept-Language`: visitors choose their language explicitly, and search engines can rank the canonical
-root URL for the TomoriBot brand.
+`tomoribot.app` is the indexable product landing page in `apps/landing/src/pages/index.astro`. It reads
+`DOCS_LOCALES` and links directly to the introduction in every published locale. It does not redirect from
+`Accept-Language`: visitors choose their language explicitly, while search engines always receive stable
+locale URLs.
 
-The docs build checks that the root remains indexable, self-canonical, and linked to every published locale.
-Do not add `/` to the Astro redirect map or to `apps/docs/public/_redirects`.
+`docs.tomoribot.app/` redirects permanently to `/en/introduction/`. The language selector in Starlight
+remains available after arrival, and the product landing page provides direct links to every locale. Keep
+the root redirect aligned between the Astro redirect map and `apps/docs/public/_redirects`; the docs build
+checks both forms.
+
+The two hosts are separate Cloudflare Pages projects. The product project uses `apps/landing` as its root,
+`bun run build` as its build command, and `dist` as its output directory. The documentation project keeps
+using `apps/docs`. Do not attach the apex hostname to the docs project: serving the same build from both
+hosts would create duplicate documentation URLs.
 
 ## Machine-Readable Output
 
@@ -146,8 +153,9 @@ Do not add `/` to the Astro redirect map or to `apps/docs/public/_redirects`.
 the build if a non-default locale URL appears in any of them.
 
 That script also verifies hreflang against the built HTML: every fallback route must emit no alternate, and
-every translated pair must emit its full set plus `x-default`. It checks that the site root stays indexable
-and links to every published locale as well. `bun run build` in `apps/docs` runs both.
+every translated pair must emit its full set plus `x-default`. It checks that the docs root redirects to the
+default-locale introduction in both generated HTML and Cloudflare's redirect rules. `bun run build` in
+`apps/docs` runs both.
 
 ## Verifying a Locale Addition
 

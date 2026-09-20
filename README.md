@@ -1,4 +1,4 @@
-### English | [日本語](.github/README_ja.md) | [繁體中文](.github/README_zh-TW.md) | [简体中文](.github/README_zh-CN.md) | [Español (LATAM)](.github/README_es-419.md) | [Português (Brasil)](.github/README_pt-BR.md) | [Tiếng Việt](.github/README_vi.md)
+### English | [日本語](.github/README_ja.md) | [繁體中文](.github/README_zh-TW.md) | [简体中文](.github/README_zh-CN.md) | [Español](.github/README_es-419.md) | [Português (Brasil)](.github/README_pt-BR.md) | [Tiếng Việt](.github/README_vi.md)
 
 <!-- Language switcher slots for the language-expansion target locales.
      Each entry joins the switcher row above when its translated README lands as
@@ -22,7 +22,7 @@
 A self-hosted and customizable personal AI assistant/role-playing system for Discord with memory, multiple personas, tool calling, multimodality, and API/local model support.
 
 <p align="center">
-  <strong><a href="https://docs.tomoribot.app/">Official Website</a></strong>
+  <strong><a href="https://tomoribot.app/">Official Website</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Invite TomoriBot</a></strong>
   &middot;
@@ -112,41 +112,11 @@ After adding her to your server through either method above, run the `/setup` co
 
 ## Useful Resources
 
-### [Full List of Supported Providers](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/#supported-providers)
-TomoriBot supports a wide range of LLM providers, image generation APIs, voice services, and search tools out of the box.
-
-### [How to run Local Models](https://docs.tomoribot.app/en/self-hosting/local-endpoints/)
-
-TomoriBot supports local LLMs (via KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch Docker sidecars.
-
-### [Security & Threat Models](https://docs.tomoribot.app/en/wiki/threat-models/)
-
-TomoriBot employs encryption and security best practices to keep data and API keys completely safe, both for local setups as well as for those using the public deploy.
-
-### [Tool Macros for Prompt Customization](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/)
-
-TomoriBot comes with a variety of built-in tools (such as web search, memory management, image generation, cross-channel messaging, and more), which you can directly refer to in your prompts with macros, here are some silly examples:
-
-#### 1. Wellness Checker
-```text
-Every few hours, do a mandatory wellness check on @Bredrumb. 
-Ask them how they feel right now and if they've taken a break from coding recently. 
-Track their emotional state over time with {memory_tool} and/or {memory_update_tool} to report back to them later.
-```
-#### 2. Weekly ~~Current Events~~ Yuri News 
-```text
-Every Friday, compile the week's notable yuri manga chapters, anime episodes, and community fanart drops using {web_search_tool}. 
-Present findings with {voice_message_tool} in a seductive ASMR voice.
-```
-#### 3. Sleep Police
-```text
-If you notice through {message_metadata_tool} that someone is chatting past 2 AM, use {voice_message_tool} to send them a threateningly calm ASMR lullaby telling them to go to bed. 
-If they keep talking 10 minutes later, use {manage_message_tool} to delete their message for their own good and remind them that sleep deprivation is a leading cause of their issues.
-```
-### [Official TomoriBot Roadmap](https://github.com/users/Bredrumb/projects/1/views/1) 
-
-Stay in the loop for TomoriBot's planned features as well as all known issues.
-
+- [Full List of Supported Providers](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/#supported-providers)
+- [How to run Local Models](https://docs.tomoribot.app/en/self-hosting/local-endpoints/)
+- [Security & Threat Models](https://docs.tomoribot.app/en/wiki/threat-models/)
+- [Official TomoriBot Roadmap](https://github.com/users/Bredrumb/projects/1/views/1)
+- [Tool Macros for Prompt Customization](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/)
 
 <!-- GETTING STARTED -->
 ## Self-Hosting
@@ -310,7 +280,7 @@ You control your own data and are responsible for your deployment's compliance u
 <!-- CONTACT -->
 ## Contact & Links
 
-**Official Website**: [https://docs.tomoribot.app](https://docs.tomoribot.app/)
+**Official Website**: [https://tomoribot.app](https://tomoribot.app/)
 
 **Project Link**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

@@ -9,6 +9,25 @@ documents, generate media, set reminders, act in other channels, and more. She d
 to use them based on the conversation. This page covers the built-in tools, how to extend
 her with MCP servers, and how to keep tool declarations lean with Deliberate Tool Mode.
 
+Here are some silly examples:
+
+- **1. Wellness Checker**
+  ```text
+  Every few hours, do a mandatory wellness check on @Bredrumb.
+  Ask them how they feel right now and if they've taken a break from coding recently.
+  Track their emotional state over time with {memory_tool} and/or {memory_update_tool} to report back to them later.
+  ```
+- **2. Weekly ~~Current Events~~ Yuri News**
+  ```text
+  Every Friday, compile the week's notable yuri manga chapters, anime episodes, and community fanart drops using {web_search_tool}.
+  Present findings with {voice_message_tool} in a seductive ASMR voice.
+  ```
+- **3. Sleep Police**
+  ```text
+  If you notice through {message_metadata_tool} that someone is chatting past 2 AM, use {voice_message_tool} to send them a threateningly calm ASMR lullaby telling them to go to bed.
+  If they keep talking 10 minutes later, use {manage_message_tool} to delete their message for their own good and remind them that sleep deprivation is a leading cause of their issues.
+  ```
+
 ## Built-In Tools
 <!-- anchor: built-in-tools -->
 

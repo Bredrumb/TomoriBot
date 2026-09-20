@@ -6,6 +6,25 @@ sidebar:
 
 A TomoriBot é baseada em agentes: além de conversar, ela pode chamar **ferramentas** para pesquisar na web, ler documentos, gerar mídia, definir lembretes, agir em outros canais e muito mais. Ela decide quando usá-las com base na conversa. Esta página aborda as ferramentas integradas, como estendê-la com servidores MCP e como manter as declarações de ferramentas enxutas com o Modo de Ferramenta Deliberada.
 
+Aqui estão alguns exemplos divertidos:
+
+- **1. Verificador de Bem-Estar**
+  ```text
+  A cada poucas horas, faça uma verificação obrigatória de bem-estar em @Bredrumb.
+  Pergunte como ele se sente no momento e se ele fez alguma pausa na codificação recentemente.
+  Acompanhe o estado emocional dele ao longo do tempo com {memory_tool} e/or {memory_update_tool} para reportar a ele mais tarde.
+  ```
+- **2. Notícias Semanais de ~~Eventos Atuais~~ Yuri**
+  ```text
+  Toda sexta-feira, compile os capítulos notáveis de mangá yuri da semana, episódios de anime e lançamentos de fanart da comunidade usando {web_search_tool}.
+  Apresente os resultados com {voice_message_tool} usando uma voz ASMR sedutora.
+  ```
+- **3. Polícia do Sono**
+  ```text
+  Se você notar através da {message_metadata_tool} que alguém está no bate-papo depois das 2h da manhã, use {voice_message_tool} para enviar uma canção de ninar ASMR ameaçadoramente calma mandando-os ir para a cama.
+  Se eles continuarem conversando 10 minutos depois, use {manage_message_tool} para excluir a mensagem deles para o próprio bem e lembrá-los de que a privação do sono é a principal causa de seus problemas.
+  ```
+
 ## Ferramentas Integradas
 <!-- anchor: built-in-tools -->
 

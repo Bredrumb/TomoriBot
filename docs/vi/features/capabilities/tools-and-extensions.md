@@ -10,6 +10,25 @@ khác và nhiều hơn nữa. Bot tự quyết định thời điểm sử dụn
 Trang này trình bày các công cụ tích hợp sẵn, cách mở rộng năng lực của bot với máy chủ MCP, và
 cách giữ cho các khai báo công cụ gọn gàng với Chế độ công cụ có chủ đích.
 
+Dưới đây là một số ví dụ vui:
+
+- **1. Kiểm tra sức khỏe**
+  ```text
+  Cứ vài giờ một lần, hãy bắt buộc kiểm tra sức khỏe của @Bredrumb.
+  Hỏi xem hiện giờ họ cảm thấy thế nào và gần đây họ có nghỉ giải lao khỏi việc lập trình không.
+  Theo dõi trạng thái cảm xúc của họ theo thời gian bằng {memory_tool} và/hoặc {memory_update_tool} để báo lại cho họ sau.
+  ```
+- **2. Bản tin ~~thời sự~~ Yuri hằng tuần**
+  ```text
+  Mỗi thứ Sáu, hãy tổng hợp các chương manga yuri, tập anime và các bản fan art nổi bật của cộng đồng trong tuần bằng {web_search_tool}.
+  Trình bày kết quả bằng {voice_message_tool} với giọng ASMR quyến rũ.
+  ```
+- **3. Cảnh sát giấc ngủ**
+  ```text
+  Nếu bạn nhận thấy qua {message_metadata_tool} rằng ai đó đang nhắn tin quá 2 giờ sáng, hãy dùng {voice_message_tool} gửi cho họ một bài ru ngủ ASMR bình tĩnh đến đáng sợ, bảo họ đi ngủ đi.
+  Nếu 10 phút sau họ vẫn nói chuyện, hãy dùng {manage_message_tool} xóa tin nhắn của họ vì lợi ích của chính họ và nhắc rằng thiếu ngủ là nguyên nhân hàng đầu gây ra các vấn đề của họ.
+  ```
+
 ## Công cụ tích hợp sẵn
 <!-- anchor: built-in-tools -->
 

@@ -1371,10 +1371,17 @@ ${localizer(locale, "commands.memories.documents_description")}`,
             type: ComponentType.TextDisplay,
             content: `> ${localizer(locale, "commands.memories.stm_active_count", { count })}`,
           },
-          ...(input.stmEntries ?? []).slice(0, MAX_STM_OPTIONS_PER_GROUP).map((entry) => ({
-            type: ComponentType.TextDisplay as const,
-            content: `> **${entry.personaName}** - <#${entry.channelId}>`,
-          })),
+          ...(input.stmEntries?.length
+            ? [
+                {
+                  type: ComponentType.TextDisplay as const,
+                  content: input.stmEntries
+                    .slice(0, MAX_STM_OPTIONS_PER_GROUP)
+                    .map((entry) => `> **${entry.personaName}** - <#${entry.channelId}>`)
+                    .join("\n"),
+                },
+              ]
+            : []),
         );
         if (count > MAX_STM_MANAGEABLE_ENTRIES) {
           components.push({

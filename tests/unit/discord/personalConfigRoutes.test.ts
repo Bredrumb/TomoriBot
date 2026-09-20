@@ -7009,7 +7009,7 @@ describe("Raw modal component types and their option bounds", () => {
       { value: "ja", label: "日本語", default: true },
       { value: "zh-TW", label: "繁體中文", default: false },
       { value: "zh-CN", label: "简体中文", default: false },
-      { value: "es-419", label: "Español (LATAM)", default: false },
+      { value: "es-419", label: "Español (Latinoamérica)", default: false },
       { value: "pt-BR", label: "Português (Brasil)", default: false },
       { value: "vi", label: "Tiếng Việt", default: false },
     ]);

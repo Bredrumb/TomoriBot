@@ -741,7 +741,7 @@ ${localizer(locale, "commands.config.panel.logit_bias_description")}
     });
   }
 
-  if (view.naiPresetView) {
+  if (view.selectedProvider?.toLowerCase() === "novelai" && view.naiPresetView) {
     const remainingTextLength = measureComponentTextLength(components);
     const displayBudget = Math.max(
       0,

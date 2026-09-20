@@ -396,6 +396,7 @@ export default defineConfig({
   // (shared links, search-engine index) working by forwarding to the new paths.
   // Astro emits a static meta-refresh page for each key at build time.
   redirects: {
+    "/": "/en/introduction/",
     ...localeRootRedirects,
     "/architecture/entry-point/": "/en/architecture/entry-point/",
     "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
@@ -721,4 +722,3 @@ export default defineConfig({
     }),
   ],
 });
-
