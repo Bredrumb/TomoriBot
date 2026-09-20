@@ -93,7 +93,7 @@ The pre-staged shared surfaces a locale relies on:
 | File | Pre-staged state | Publish-time edit |
 |---|---|---|
 | `src/constants/docsLocales.ts` | The locale row and its endonym | Add the locale's `LOCALE_NOTICES` entry and set `docsTree: true` |
-| `apps/landing/src/pages/index.astro` | Product-site language links derived from the locale table | None |
+| `apps/landing/src/pages/index.astro`, `apps/landing/src/landingCopy.ts` | Product-site routes and language links derived from the locale table | Add translated landing-page copy and metadata. |
 | `apps/docs/public/_redirects` | The `/xx` and `/xx/` root pair | None |
 | `README.md` switcher | The locale's endonym as staged plain text | Replace it with the locale README link |
 | `src/locales/{code}/**` docs URLs | English-prefixed absolute URLs | Repoint to `/{locale}/` once the tree is published |
@@ -108,9 +108,10 @@ no edit.
 
 ## Locale Roots And The Site Roots
 
-`apps/landing/src/pages/index.astro` is the static, indexable product landing page for `tomoribot.app`. It
-reads `DOCS_LOCALES` at build time and links directly to the introduction page for every entry with
-`docsTree: true`.
+`apps/landing/src/pages/index.astro` generates the static, indexable English product landing page for
+`tomoribot.app` and one page at `/{locale}/` for every entry with `docsTree: true`. Add the localized page
+copy and metadata in `apps/landing/src/landingCopy.ts` before publishing a locale. Each product page links
+to the matching localized documentation introduction.
 
 `docs.tomoribot.app/` redirects permanently to `/en/introduction/`. The product site owns language
 discovery, and Starlight's language selector remains available throughout the documentation. The redirect

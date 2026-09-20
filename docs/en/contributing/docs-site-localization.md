@@ -17,7 +17,7 @@ from it, so a locale is described once:
 | Consumer | Reads from the table |
 |---|---|
 | `apps/docs/astro.config.mts` | Starlight `locales`, sitemap i18n, sidebar label fallbacks, locale-root redirects, `llms.txt` exclusions |
-| `apps/landing/src/pages/index.astro` | The product landing page and its published-language links |
+| `apps/landing/src/pages/index.astro`, `apps/landing/src/landingCopy.ts` | The product landing pages, their localized copy, metadata, and language links |
 | `apps/docs/src/routeData.ts` | hreflang alternates, `noindex` on fallback routes, meta description budget |
 | `apps/docs/src/components/MarkdownContent.astro` | Which review notice a page shows, and its wording |
 | `src/utils/discord/docsLinks.ts`, `src/utils/misc/docsUrl.ts` | The locale prefix on every docs link the bot builds |
@@ -34,8 +34,8 @@ A locale entry has a `docsTree` flag. While it is `false`:
 - Starlight does not register the locale, so no sidebar, sitemap, or alternate is emitted for it.
 - The bot's docs links resolve to English instead of a prefix that does not exist.
 
-The flag governs content and link building. The root landing page derives its language links from the same
-table and includes only entries whose trees are published, so a staged locale is not presented to readers.
+The flag governs content and link building. The product landing pages derive their language links from the
+same table and include only entries whose trees are published, so a staged locale is not presented to readers.
 
 Setting it to `true` is the act of publishing. `tests/unit/docs/docsLocaleConfig.test.ts` fails if the flag
 and the `docs/` directory disagree, in either direction.
@@ -55,7 +55,8 @@ in `DOCS_LOCALES`, or derives from it.
 
 `apps/docs/public/_redirects` is already staged for every target locale in `DOCS_LOCALES`. Its entries name
 the locale root without claiming content exists, so `docsTree: true` plus the page tree is the whole publish
-step. The root landing page updates automatically because it reads `DOCS_LOCALES` during the build.
+step. Add the locale's landing-page copy before publishing it so its generated product route has translated
+content and metadata.
 
 Pages that stay English-only are linked with an explicit English destination, per the scope rule below.
 `bun run check-locale-links` resolves each project-owned route in the linking file's own locale tree first and
@@ -131,20 +132,24 @@ locale only when its tree exists and otherwise returns English. Two consequences
 
 ## Site Roots
 
-`tomoribot.app` is the indexable product landing page in `apps/landing/src/pages/index.astro`. It reads
-`DOCS_LOCALES` and links directly to the introduction in every published locale. It does not redirect from
-`Accept-Language`: visitors choose their language explicitly, while search engines always receive stable
-locale URLs.
+`tomoribot.app` has an indexable English product landing page at `/` and an indexable page for every
+published locale at `/{locale}/`. `apps/landing/src/pages/index.astro` reads `DOCS_LOCALES` to generate the
+language routes, while `apps/landing/src/landingCopy.ts` owns the translated page copy and metadata. Every
+landing page has its own canonical URL and reciprocal `hreflang` alternates. The selector moves between the
+corresponding landing pages, and each page links to its matching localized documentation introduction.
+
+The product site does not redirect from `Accept-Language`: visitors choose their language explicitly, while
+search engines always receive stable locale URLs.
 
 `docs.tomoribot.app/` redirects permanently to `/en/introduction/`. The language selector in Starlight
 remains available after arrival, and the product landing page provides direct links to every locale. Keep
 the root redirect aligned between the Astro redirect map and `apps/docs/public/_redirects`; the docs build
 checks both forms.
 
-The two hosts are separate Cloudflare Pages projects. The product project uses `apps/landing` as its root,
-`bun run build` as its build command, and `dist` as its output directory. The documentation project keeps
-using `apps/docs`. Do not attach the apex hostname to the docs project: serving the same build from both
-hosts would create duplicate documentation URLs.
+The two hosts are separate Cloudflare Pages projects. The product project builds from the repository root
+with `bun install && cd apps/landing && bun run build` and publishes `apps/landing/dist`. The documentation
+project uses the matching repository-root pattern with `apps/docs`. Do not attach the apex hostname to the
+docs project: serving the same build from both hosts would create duplicate documentation URLs.
 
 ## Machine-Readable Output
 
