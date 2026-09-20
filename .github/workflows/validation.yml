@@ -1,4 +1,4 @@
-﻿# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
 name: Validate
 
@@ -74,7 +74,7 @@ jobs:
         # the PR author can fix. The deploy workflows' security-dependencies job runs
         # the same audit as a hard, release-blocking gate.
         continue-on-error: true
-        run: bun audit --audit-level=high --ignore=GHSA-mwp4-54f8-5fhr
+        run: bun audit --audit-level=high
 
       - name: Audit inline SQL outside repositories
         run: bun run scripts/checks/audit_sql.ts

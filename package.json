@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.8.0.02a",
+  "version": "0.8.0.05a",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",
@@ -142,6 +142,7 @@
     "postcss-selector-parser": "^6.1.3",
     "esbuild": ">=0.28.1",
     "request": "npm:@cypress/request@^3.0.0",
+    "ip-address": ">=10.4.0",
     "ws": ">=8.20.1"
   },
   "patchedDependencies": {

@@ -23,10 +23,7 @@ export const DELIBERATE_TOOL_PACK_KEYS = {
 
 export const EXPLICIT_MEMORY_PACK_KEY = "tools.intent_packs.explicit_memory";
 
-export const ALL_INTENT_PACK_KEYS: readonly string[] = [
-  ...Object.values(DELIBERATE_TOOL_PACK_KEYS),
-  EXPLICIT_MEMORY_PACK_KEY,
-];
+const ALL_INTENT_PACK_KEYS: readonly string[] = [...Object.values(DELIBERATE_TOOL_PACK_KEYS), EXPLICIT_MEMORY_PACK_KEY];
 
 // A trailing "*" is the only pack syntax. Everything else a regex would interpret is rejected so a
 // translator cannot author an entry (such as the "^" custom-trigger wildcard) that matches everything.

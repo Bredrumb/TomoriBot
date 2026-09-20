@@ -86,19 +86,6 @@ no CVE assigned, in which case the GHSA ID is the identifier to use. Confirm wit
 
 ## Active exceptions
 
-### `GHSA-mwp4-54f8-5fhr`: ip-address Address4 octal parsing (high)
-
-- **Path:** `matrix-appservice-bridge > ip-cidr > ip-address`
-- **Why it cannot be fixed:** ip-address v10 removed `bigInteger()`, which ip-cidr depends on at
-  20+ call sites for its range arithmetic. No ip-cidr release runs on a patched ip-address:
-  v3 requires `^7.1.0` and v4 requires `^9.0.5`, and every version at or below 10.3.0 is
-  vulnerable. Forcing v10 makes `new IPCIDR(...)` throw at construction.
-- **Why the risk is low:** ip-cidr is used only by the bridge's `ProvisioningApi`, which
-  `bridge.js` never imports and TomoriBot never constructs. TomoriBot uses `Bridge` and
-  `AppServiceRegistration` only.
-- **Retire when:** ip-cidr ships a release supporting ip-address >= 10.3.1. Then drop the entry
-  from `auditIgnores.ts`, `validation.yml`, and `.trivyignore`.
-
 ### `CVE-2026-25128`: fast-xml-parser (Trivy only)
 
 Required by AWS SDK v3, where upgrading to v5 breaks functionality. Input comes from trusted AWS

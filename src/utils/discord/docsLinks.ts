@@ -2,7 +2,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type MessageActionRowComp
 import { DOCS_BASE_URL, DOCS_ROUTES, buildLocalizedDocsPath } from "@/constants/docsLocales";
 import { localizer } from "@/utils/text/localizer";
 
-export { DOCS_BASE_URL, DOCS_ROUTES as DOCS_PATHS };
+export { DOCS_ROUTES as DOCS_PATHS };
 export type { DocsRoute as DocsPath } from "@/constants/docsLocales";
 
 export const SUPPORT_SERVER_URL = "https://discord.gg/bjCfHm9QsB";

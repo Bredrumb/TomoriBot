@@ -71,7 +71,7 @@ export const PROTOCOL_KEYS: ProtocolEntry[] = [
   })),
 ];
 
-export const EMBED_PROTOCOL_TOKEN = "[tomori:v1:";
+const EMBED_PROTOCOL_TOKEN = "[tomori:v1:";
 const TOKEN_PATTERN = /\[tomori:v1:([a-z_]+)\]/;
 const targetKinds = new Set<ProtocolKind>([
   "memory_learning",
