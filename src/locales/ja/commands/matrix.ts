@@ -1,5 +1,6 @@
 export default {
   matrix: {
+    description: `Discordチャンネルを双方向リレーでMatrixルームにリンクします。`,
     link: {
       description: `DiscordチャンネルをMatrixルームに双方向リレーでリンクします`,
       channel_description: `リンクするDiscordチャンネル`,

@@ -21,15 +21,15 @@ detected or a stop request arrives.
 
 Three flush paths exist beyond the main `processTextChunk` loop:
 
-- **`flushFinalBuffer()`** — called by the stage 04 orchestrator after the generator exhausts.
+- **`flushFinalBuffer()`**: called by the stage 04 orchestrator after the generator exhausts.
   Sends any remaining `state.buffer` content, releases held orphan punctuation, drains unterminated
   think/details blocks to their respective stores, and triggers the aggregated-mode batch send.
 
-- **`flushPendingBuffer()`** — called when a `function_call` chunk or a stop request arrives mid-
+- **`flushPendingBuffer()`**: called when a `function_call` chunk or a stop request arrives mid-
   stream. Sends the buffer *up to* a clean clause boundary (trailing incomplete clause trimmed when
   called with `trimTrailingIncompleteClause: true`), then releases the aggregated-mode buffer.
 
-- **Overflow flush** — when `state.buffer` grows beyond `FLUSH_BUFFER_SIZE_REGULAR` without
+- **Overflow flush**: when `state.buffer` grows beyond `FLUSH_BUFFER_SIZE_REGULAR` without
   hitting a sentence boundary, a safe word-break index is found via `findRegularOverflowFlushIndex`
   and the buffer is flushed in segments until it is back under the limit.
 
@@ -40,14 +40,14 @@ recognizes a table when its header, separator, and body rows arrive together, an
 fails to parse is delivered as raw pipe-delimited text instead of a rendered PNG. Two mechanisms in
 this stage protect that:
 
-- **Overflow snapping** — table rows end in newlines, so every sentence/whitespace heuristic in
+- **Overflow snapping**: table rows end in newlines, so every sentence/whitespace heuristic in
   `findRegularOverflowFlushIndex` treats a row boundary as a safe break. Each candidate index is run
   through `findMarkdownTableBlockAt` and, when it lands strictly inside a table, moved back to the
-  table's start (preferred — the whole table stays together for the next flush) or forward past its
+  table's start (preferred: the whole table stays together for the next flush) or forward past its
   end. When neither is possible the function returns `0`, and `processTextChunk` breaks out of the
   overflow loop to hold the buffer for the final flush.
 
-- **Marker repair scoping** — `autoCloseIncompleteMarkers` counts unbalanced inline markers over
+- **Marker repair scoping**: `autoCloseIncompleteMarkers` counts unbalanced inline markers over
   *prose only* and lands the closers at the end of the last prose segment, ahead of that segment's
   trailing whitespace. Because EOF never terminates a table block, every response ending in a table
   reaches the final flush with `hasSemanticMarkers === true`; appending a closer at the buffer's end
@@ -99,14 +99,14 @@ last few tokens of the previous chunk in the next delivery.
 
 ## Input
 
-- `textContent: string` — raw text content from the `ProcessedChunk`.
-- `config: StreamConfig` — provides `flushBufferSize`, `flushBufferSizeCodeBlock`, and timing.
-- `context: StreamContext` — channel ID (stop checks), `currentTurnModelParts` (accumulation),
+- `textContent: string`: raw text content from the `ProcessedChunk`.
+- `config: StreamConfig`: provides `flushBufferSize`, `flushBufferSizeCodeBlock`, and timing.
+- `context: StreamContext`: channel ID (stop checks), `currentTurnModelParts` (accumulation),
   `suppressTextOutput` flag.
-- `textConfig: TextProcessingConfig` — humanizer degree and delivery mode (aggregated vs. streaming).
-- `typingConfig: TypingSimulationConfig` — typing speed parameters forwarded to stage 06.
-- `state: StreamState` — the mutable per-stream state object (buffer, block flags, counters).
-- `metrics: StreamMetrics` — `totalCharacters` is incremented here.
+- `textConfig: TextProcessingConfig`: humanizer degree and delivery mode (aggregated vs. streaming).
+- `typingConfig: TypingSimulationConfig`: typing speed parameters forwarded to stage 06.
+- `state: StreamState`: the mutable per-stream state object (buffer, block flags, counters).
+- `metrics: StreamMetrics`: `totalCharacters` is incremented here.
 
 ## Output
 
@@ -115,18 +115,18 @@ No return value. All output is produced as side effects on `state` and via calls
 
 ## Side effects
 
-- **`state.buffer`** — mutated: text appended, segments flushed (string truncated).
-- **`state.isInsideCodeBlock`** / **`state.isInsideThinkBlock`** / **`state.isInsideDetailsBlock`** —
+- **`state.buffer`**: mutated: text appended, segments flushed (string truncated).
+- **`state.isInsideCodeBlock`** / **`state.isInsideThinkBlock`** / **`state.isInsideDetailsBlock`**:
   toggled when block boundaries are detected.
-- **`state.thinkBlockBuffer`** / **`state.detailsBlockBuffer`** — accumulated while inside their
+- **`state.thinkBlockBuffer`** / **`state.detailsBlockBuffer`**: accumulated while inside their
   respective blocks; drained when the block closes.
-- **`state.thoughtRawSegments`** / **`state.detailsSegments`** — appended to when a think/details
+- **`state.thoughtRawSegments`** / **`state.detailsSegments`**: appended to when a think/details
   block closes or when `flushFinalBuffer()` captures an unclosed block.
-- **`context.currentTurnModelParts`** — non-empty, non-whitespace text is pushed as
+- **`context.currentTurnModelParts`**: non-empty, non-whitespace text is pushed as
   `{ text: content }` parts so the provider adapter can replay accumulated output when
   constructing function-interaction history.
-- **`metrics.totalCharacters`** — incremented by the length of the deduplicated chunk.
-- **`state.hasSemanticMarkers`** — set when `state.buffer` contains an open semantic marker;
+- **`metrics.totalCharacters`**: incremented by the length of the deduplicated chunk.
+- **`state.hasSemanticMarkers`**: set when `state.buffer` contains an open semantic marker;
   cleared on buffer flush or `autoCloseStreamBufferMarkers()` in the final flush.
 
 ## Invariants
@@ -151,11 +151,11 @@ After `flushFinalBuffer()`:
 
 | Surface | Plugin-relevance |
 |---|---|
-| `processStreamBufferContent()` (in `bufferManager.ts`) | Internal — boundary detection (sentence, code block, newline) is tightly coupled to Discord message formatting constraints. The `flushBufferSize` configuration (`StreamConfig`) is the operational surface. |
-| `drainThinkBlocksFromBuffer()` / `drainDetailsBlocksFromBuffer()` | Internal — semantic block capture routes are tightly coupled to the think/details tag conventions used by TomoriBot's prompts. |
-| `findRegularOverflowFlushIndex()` | Internal — overflow flush breakpoint logic; coupled to Discord's 2000-character message limit. Returns `0` when every candidate breakpoint would split a Markdown table, which callers must treat as "hold the buffer". |
-| `findMarkdownTableBlockAt()` (in `utils/text/markdownTable.ts`) | Internal — reports the table block enclosing an offset so flush logic can avoid splitting it. A plugin adding another atomic block type would need equivalent protection here. |
-| Chunk deduplication (`STREAM_CHUNK_DEDUP_MIN_CHARS`, `STREAM_CHUNK_DEDUP_TAIL_CHARS`) | `src/utils/discord/stream/constants.ts`. Internal — a workaround for overlapping chunk delivery; no plugin-relevant seam. |
+| `processStreamBufferContent()` (in `bufferManager.ts`) | Internal: boundary detection (sentence, code block, newline) is tightly coupled to Discord message formatting constraints. The `flushBufferSize` configuration (`StreamConfig`) is the operational surface. |
+| `drainThinkBlocksFromBuffer()` / `drainDetailsBlocksFromBuffer()` | Internal: semantic block capture routes are tightly coupled to the think/details tag conventions used by TomoriBot's prompts. |
+| `findRegularOverflowFlushIndex()` | Internal: overflow flush breakpoint logic; coupled to Discord's 2000-character message limit. Returns `0` when every candidate breakpoint would split a Markdown table, which callers must treat as "hold the buffer". |
+| `findMarkdownTableBlockAt()` (in `utils/text/markdownTable.ts`) | Internal: reports the table block enclosing an offset so flush logic can avoid splitting it. A plugin adding another atomic block type would need equivalent protection here. |
+| Chunk deduplication (`STREAM_CHUNK_DEDUP_MIN_CHARS`, `STREAM_CHUNK_DEDUP_TAIL_CHARS`) | `src/utils/discord/stream/constants.ts`. Internal: a workaround for overlapping chunk delivery; no plugin-relevant seam. |
 
 ## Configuration
 

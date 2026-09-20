@@ -12,20 +12,20 @@ This guide walks through the full process of creating a new slash command in Tom
    - or `src/commands/{category}/{group}/{subcommand}.ts` for sub-group commands
 
 2. Export the required entry points:
-   - `configureCommand(command)` for root commands, or `configureSubcommand(subcommand)` for category commands — registers the command metadata (name, description, options)
-   - `execute(client, interaction, userData, locale)` — the runtime handler
+   - `configureCommand(command)` for root commands, or `configureSubcommand(subcommand)` for category commands: registers the command metadata (name, description, options)
+   - `execute(client, interaction, userData, locale)`: the runtime handler
 
 3. Use `localizer("en-US", ...)` for command description and options so the loader can auto-register locale strings.
 
 4. Add locale keys to both locales. Command keys live in `src/locales/{locale}/commands/{category}.ts`. Other key types live in the matching top-level file (`general.ts`, `tools.ts`, etc.) under `src/locales/{locale}/`.
    - Option descriptions: `{option_name}_description`
    - Choice labels: `{choice_value}_option`
-   - Do NOT use `{option_name}_option` for option descriptions — it silently fails auto-localization.
+   - Do NOT use `{option_name}_option` for option descriptions: it silently fails auto-localization.
 
 5. Respect the 3-second interaction timing rule:
    - Fast commands can call `reply()` immediately.
    - Async/heavy commands must call `deferReply()` before any await.
-   - Modal and pagination helpers must NOT be pre-deferred — they handle acknowledgement internally.
+   - Modal and pagination helpers must NOT be pre-deferred: they handle acknowledgement internally.
    - For full timing patterns and representative command groups, see [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system).
 
 6. The command auto-registers on next startup unless it exports
@@ -99,5 +99,5 @@ Current commands that define or inspire the v2 design direction:
 
 ## Related Docs
 
-- [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system) — interaction timing rules, pagination helpers, modal patterns
-- [`docs/en/architecture/subsystems/localization.md`](../subsystems/localization) — key naming conventions, `localizer()` API
+- [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system): interaction timing rules, pagination helpers, modal patterns
+- [`docs/en/architecture/subsystems/localization.md`](../subsystems/localization): key naming conventions, `localizer()` API

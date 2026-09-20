@@ -1,5 +1,6 @@
-﻿export default {
+export default {
   tool: {
+    description: `会話のコンテキスト、プロンプト、診断のためのユーティリティアクション。`,
     estimate: {
       description: `利用量と費用の見積もり`,
       cost: {
@@ -82,6 +83,7 @@
       },
     },
     prompt: {
+      description: `TomoriBotがモデルに送信するプロンプトを検査します。`,
       snapshot: {
         description: `デバッグ用に、ペルソナのLLMプロンプトをファイルに出力します。`,
         format_description: `スナップショットファイルの出力形式。`,
@@ -96,7 +98,7 @@
         persona_select_placeholder: `ペルソナを選択...`,
         dm_title: `プロンプトスナップショット`,
         dm_description: `ペルソナ **{persona_name}** のプロンプトスナップショットです（形式: {format}）。`,
-        dm_txt_headers_note: `ご注意：TXTファイル内の \`=== タイトル (/コマンド) ===\` および \`== サブタイトル ==\` のヘッダーは、各セクションを制御する設定コマンドを示すための注釈です。LLMに実際に送信されるプロンプトの一部では**ありません**。`,
+        dm_txt_headers_note: `ご注意：TXTファイル内の \`=== タイトル (/コマンド) ===\` および \`== サブタイトル ==\` のヘッダーは、各セクションを制御する設定コマンドを示すための注釈です。LLMに実際に送信されるプロンプトの一部では**ありません**。「Untagged」は、再配置されたか、カスタムst-presetの一部であることを意味します。`,
         dm_hint_try_json: `生の機械可読フォーマットが必要ですか？コマンドを再実行する際に \`format: JSON\` を指定してください。`,
         dm_hint_try_text: `より人間に読みやすい形式が必要ですか？コマンドを再実行する際に \`format: Text\` を指定してください。`,
         dm_tools_txt_note: `ツール定義はTXT形式からは省略されています。含めるには \`format: JSON\` と \`fetch_tools: true\` を指定して再実行してください。`,
@@ -116,7 +118,6 @@
     },
 
     visualize: {
-      description: `このチャンネルの直近コンテキストから素早くシーン画像を生成します。`,
       missing_permissions_title: `権限がありません`,
       missing_permissions_description: `このチャンネルでシーン画像を生成するには、チャンネルの閲覧、メッセージ履歴の読み取り、メッセージ送信、ファイル添付の権限が必要です。`,
       cooldown_active: `このサーバーの管理者がクールダウンを設定しています。\`/generate image\` の「今のシーンを描く」モードを再度使用するまで、あと **{seconds}** 秒お待ちください。このクールダウンはメッセージトリガーや他の手動コマンドと共有されています。`,

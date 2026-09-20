@@ -4,9 +4,12 @@ sidebar:
   order: 5
 ---
 
-セルフホストインスタンスの日常的な運用として、メンテナンススクリプト、更新方法、データベースのバックアップと復元方法について説明します。これらはホスト側の操作であり、Discordからではなくシェルから実行します。Discord内でのユーザーごとのエクスポート/インポート/削除フローについては、代わりに[データの取り扱い](/ja/features/knowledge/data-handling/)を参照してください。
+セルフホストインスタンスの日常的な運用として、メンテナンススクリプト、更新方法、データベースのバックアップと復元方法について説明します。
+これらはホスト側の操作であり、Discordからではなくシェルから実行します。
+Discord内でのユーザーごとのエクスポート/インポート/削除フローについては、代わりに[データの取り扱い](/ja/features/knowledge/data-handling/)を参照してください。
 
-新しいバージョンを `git pull` しようとしている場合は、まず[安全な移行](/ja/self-hosting/safe-migration/)をお読みください。起動時の移行ランナーがスキーマに変更を加える*前*にバックアップを取る方法について説明しています。
+新しいバージョンを `git pull` しようとしている場合は、まず[安全な移行](/ja/self-hosting/safe-migration/)をお読みください。
+起動時の移行ランナーがスキーマに変更を加える*前*にバックアップを取る方法について説明しています。
 
 ## メンテナンススクリプト
 
@@ -31,7 +34,10 @@ sidebar:
 bun run update
 ```
 
-これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。バックアップバンドルは `backups/` に書き込まれ、データベースダンプと `.env` の両方が含まれます。更新前のバックアップをスキップするには `--skip-backup` を追加します。手動でのフォールバック手順は以下の通りです。
+これにより、`bun run backup` が実行され、続いて `git pull --rebase --autostash`、そして `bun install --frozen-lockfile` が実行されます。
+バックアップバンドルは `backups/` に書き込まれ、データベースダンプと `.env` の両方が含まれます。
+更新前のバックアップをスキップするには `--skip-backup` を追加します。
+手動でのフォールバック手順は以下の通りです。
 
 ```sh
 bun run backup
@@ -39,11 +45,15 @@ git pull --rebase --autostash
 bun install --frozen-lockfile
 ```
 
-`dist/` から実行していますか？その場合は `bun run update --build` を使用してください。Docker Composeを実行していますか？その場合は `bun run update --docker` を使用してください。
+`dist/` から実行していますか？
+その場合は `bun run update --build` を使用してください。
+Docker Composeを実行していますか？
+その場合は `bun run update --docker` を使用してください。
 
 ## バックアップと復元
 
-`bun run backup` は、PostgreSQLデータベース全体と `.env` を含むタイムスタンプ付きのバンドルを `backups/`（または `.env` でオーバーライドされている場合は `TOMORI_BACKUP_DIR`）に作成します。最新のバンドルを復元するには以下を実行します。
+`bun run backup` は、PostgreSQLデータベース全体と `.env` を含むタイムスタンプ付きのバンドルを `backups/`（または `.env` でオーバーライドされている場合は `TOMORI_BACKUP_DIR`）に作成します。
+最新のバンドルを復元するには以下を実行します。
 
 ```sh
 bun run restore-backup --latest
@@ -55,13 +65,18 @@ bun run restore-backup --latest
 bun run restore-backup --from backups/backup_2024-01-15_14-30-45
 ```
 
-`bun run backup:personas` はより絞り込まれたエクスポートであり、すべてのサーバーにまたがるペルソナのプリセットとペルソナごとのサーバーメモリーのみが対象です。これは `/persona import` 経由で手動で再インポートする**必要があり**、`restore-backup` と一緒には**使用できません**（プライマリキーの競合を引き起こすため）。
+`bun run backup:personas` はより絞り込まれたエクスポートであり、すべてのサーバーにまたがるペルソナのプリセットとペルソナごとのサーバーメモリーのみが対象です。
+これは `/persona import` 経由で手動で再インポートする**必要があり**、`restore-backup` と一緒には**使用できません**（プライマリキーの競合を引き起こすため）。
 
-また、TomoriBotは本番環境以外では**自動スタートアップバックアップ**を取得します。完全な復元には、ターゲットデータベースに `pgvector` 拡張機能が存在している必要があります。両方の詳細については、[安全な移行](/ja/self-hosting/safe-migration/)で説明しています。ツールを直接操作したい場合の、手動での `pg_dump` / `pg_restore` 手順も併せて記載しています。
+また、TomoriBotは本番環境以外では**自動スタートアップバックアップ**を取得します。
+完全な復元には、ターゲットデータベースに `pgvector` 拡張機能が存在している必要があります。
+両方の詳細については、[安全な移行](/ja/self-hosting/safe-migration/)で説明しています。
+ツールを直接操作したい場合の、手動での `pg_dump` / `pg_restore` 手順も併せて記載しています。
 
 ## Docker Composeのバックアップ
 
-Docker Composeは、アプリコンテナ内での自動スタートアップバックアップをサポートしています。Composeがホストの `backups/` ディレクトリをコンテナにマウントしているため、バンドルはそこに書き込まれます。
+Docker Composeは、アプリコンテナ内での自動スタートアップバックアップをサポートしています。
+Composeがホストの `backups/` ディレクトリをコンテナにマウントしているため、バンドルはそこに書き込まれます。
 
 手動でのDockerバックアップを行うには、以下を実行します。
 
@@ -79,7 +94,8 @@ docker compose run --rm tomoribot bun run restore-backup --latest
 docker compose up -d
 ```
 
-`bun run backup`、`bun run update`、`bun run nuke-db` などのホスト側のスクリプトは、Docker経由では自動的に実行されません。代わりにComposeデータベースに対してホストスクリプトを実行するには、BunとPostgreSQLクライアントツールがインストールされたホスト上で実行し、以下のように設定します。
+`bun run backup`、`bun run update`、`bun run nuke-db` などのホスト側のスクリプトは、Docker経由では自動的に実行されません。
+代わりにComposeデータベースに対してホストスクリプトを実行するには、BunとPostgreSQLクライアントツールがインストールされたホスト上で実行し、以下のように設定します。
 
 ```dotenv
 POSTGRES_HOST=localhost
@@ -91,7 +107,10 @@ POSTGRES_DB=tomodb
 
 ## クリーンインストール
 
-`bun run nuke-db` はすべてのテーブルを削除します。その後ボットを起動すると、スキーマ、シード、および移行が最初から再初期化されます。ロールバック可能なまっさらな状態にしたい場合に、新しい `bun run backup` と組み合わせて使用してください。現在のバックアップなしで実行することは絶対に避けてください。
+`bun run nuke-db` はすべてのテーブルを削除します。
+その後ボットを起動すると、スキーマ、シード、および移行が最初から再初期化されます。
+ロールバック可能なまっさらな状態にしたい場合に、新しい `bun run backup` と組み合わせて使用してください。
+現在のバックアップなしで実行することは絶対に避けてください。
 
 ## 関連項目
 

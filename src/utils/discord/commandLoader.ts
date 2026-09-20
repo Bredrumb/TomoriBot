@@ -17,7 +17,7 @@ import {
 } from "discord.js";
 import type { AutocompleteInteraction, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
-import { localizer, getSupportedLocales } from "../text/localizer";
+import { getRegisterableLocales, hasLocaleKey, localizer, resolveSupportedLocale } from "@/utils/text/localizer";
 
 export const ROOT_COMMAND_EXECUTION_KEY = "__root__";
 type RootCommandBuilder = SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
@@ -187,15 +187,17 @@ function getCommandLocalizationAliases(key: string): string[] {
 
 function localizeWithAliases(locale: string, key: string): string {
   const candidateKeys = [key, ...getCommandLocalizationAliases(key)];
+  const authoredLocale = resolveSupportedLocale(locale);
 
   for (const candidateKey of candidateKeys) {
-    const localizedValue = localizer(locale, candidateKey);
-    if (localizedValue && localizedValue !== candidateKey) {
+    if (hasLocaleKey(authoredLocale, candidateKey)) {
+      const localizedValue = localizer(locale, candidateKey);
+      if (!localizedValue || localizedValue === candidateKey) continue;
       return localizedValue;
     }
   }
 
-  return localizer(locale, key);
+  return key;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -325,12 +327,6 @@ function applyCommandLocalizations(
               let localizedChoice: string | null = null;
 
               for (const localizationKey of choiceLocalizationKeys) {
-                const candidate = localizer(locale, localizationKey);
-                if (candidate && candidate !== localizationKey) {
-                  localizedChoice = candidate;
-                  break;
-                }
-
                 const aliasedCandidate = localizeWithAliases(locale, localizationKey);
                 if (aliasedCandidate && aliasedCandidate !== localizationKey) {
                   localizedChoice = aliasedCandidate;
@@ -518,7 +514,7 @@ async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
 
   try {
     // Get available locales for auto-localization (exclude en-US as it's the base locale)
-    const availableLocales = getSupportedLocales().filter((locale) => locale !== "en-US");
+    const availableLocales = getRegisterableLocales().filter((locale) => locale !== "en-US");
     const commandsPath = path.join(process.cwd(), "src", "commands");
     const categoryDirs = await getCommandDirectories(commandsPath);
 

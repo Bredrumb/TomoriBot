@@ -12,7 +12,7 @@ import type { SQL } from "bun";
 import { resolveAvatarPath } from "@/utils/image/avatarHelper";
 import { convertToPNG } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
-import { buildPresetAvatarFilename, uploadPresetAvatarToStorage } from "@/utils/storage/avatarStorage";
+import { buildPresetAvatarRelativeKey, uploadPresetAvatarToStorage } from "@/utils/storage/avatarStorage";
 import { personaSections } from "./personas";
 import type { PersonaInput } from "./types";
 
@@ -29,8 +29,11 @@ const CONTENT_HASH_LENGTH = 12;
  */
 export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> {
   const personas = personaSections.flatMap((section) => section.rows);
+  // Every locale variant of a preset resolves to the same storage key, so without this an art
+  // change re-uploads identical bytes once per authored locale.
+  const uploadedThisRun = new Map<string, string>();
   for (const persona of personas) {
-    await seedOneAvatar(client, persona);
+    await seedOneAvatar(client, persona, uploadedThisRun);
   }
 }
 
@@ -39,7 +42,7 @@ export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> 
  * when its content changed (content-addressed filename), and stamps the shared
  * URL + hash onto the preset row.
  */
-async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> {
+async function seedOneAvatar(client: SQL, persona: PersonaInput, uploadedThisRun: Map<string, string>): Promise<void> {
   // Read + normalize the persona's avatar image to PNG. `avatarPath` is the
   //    persona's catalog directory; resolveAvatarPath picks the first image in it.
   let pngBuffer: Buffer;
@@ -51,10 +54,10 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> 
     return;
   }
 
-  // Content-address the image. If the preset already references this exact
-  //    content (same filename suffix), skip the (network) upload entirely.
+  // Compared against the whole relative key, not the filename: a row written under the retired
+  // per-language key ends with the same filename, so a suffix test would pin it to its old path.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
-  const expectedSuffix = buildPresetAvatarFilename(contentHash);
+  const expectedKey = buildPresetAvatarRelativeKey({ lineageId: persona.lineageId, contentHash });
 
   const [existing] = await client<Array<{ preset_avatar_shared_url: string | null }>>`
     SELECT preset_avatar_shared_url
@@ -66,20 +69,23 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput): Promise<void> 
 
   const existingUrl = existing?.preset_avatar_shared_url ?? null;
   let sharedUrl: string;
-  if (existingUrl?.endsWith(expectedSuffix)) {
+  if (existingUrl?.endsWith(expectedKey)) {
     // Same content already uploaded, so skip the (network) upload, refresh metadata only.
     sharedUrl = existingUrl;
   } else {
-    const uploadedUrl = await uploadPresetAvatarToStorage({
-      lineageId: persona.lineageId,
-      language: persona.language,
-      contentHash,
-      buffer: pngBuffer,
-    });
+    const alreadyUploaded = uploadedThisRun.get(expectedKey);
+    const uploadedUrl =
+      alreadyUploaded ??
+      (await uploadPresetAvatarToStorage({
+        lineageId: persona.lineageId,
+        contentHash,
+        buffer: pngBuffer,
+      }));
     if (!uploadedUrl) {
       log.warn(`[Preset Avatars] Skipping ${persona.name}: avatar upload failed`);
       return;
     }
+    uploadedThisRun.set(expectedKey, uploadedUrl);
     sharedUrl = uploadedUrl;
   }
 

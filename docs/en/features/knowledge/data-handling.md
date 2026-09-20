@@ -10,7 +10,7 @@ see `/legal privacy-policy` and `/legal terms-of-service`.
 
 :::note
 This page covers the in-Discord, per-user controls. **Self-hosting your own instance?**
-Whole-database backups and restores are a host-side operation — see
+Whole-database backups and restores are a host-side operation; see
 [Maintenance & Backups](/self-hosting/maintenance/).
 :::
 
@@ -41,21 +41,21 @@ privacy policies. Never share sensitive personal information with any AI.
 
 Everything exportable is sent to your DMs as a JSON file:
 
-- `/export config` — server configuration values (no API keys, credentials, or provider settings).
-- `/export personal config` — your personal settings (profile, privacy, appearance, response modes).
-- `/export memories` — server memories, scoped to the main persona, one selected persona, or every persona separately.
-- `/export personal memories` — your personal memories, scoped globally, to one persona, or to every persona separately.
-- `/persona export` — full persona definitions.
+- `/export config`: server configuration values (no API keys, credentials, or provider settings).
+- `/export personal config`: your personal settings (profile, privacy, appearance, response modes).
+- `/export memories`: server memories, scoped to the main persona, one selected persona, or every persona separately.
+- `/export personal memories`: your personal memories, scoped globally, to one persona, or to every persona separately.
+- `/persona export`: full persona definitions.
 
 ## Import Your Data
 
 Attach a previously exported file to restore it:
 
-- `/import config` — server configuration; requires **Manage Server**. Choose which detected sections to apply.
-- `/import personal config` — your personal settings. Choose which detected sections to apply.
-- `/import memories` — server memories; requires **Manage Server**. Merge or replace, and map each source persona if the file has more than one.
-- `/import personal memories` — your personal memories. Merge or replace, and map each source persona if the file has more than one.
-- `/persona import` — restore a persona. It also accepts PNG and JSON SillyTavern cards and
+- `/import config`: server configuration; requires **Manage Server**. Choose which detected sections to apply.
+- `/import personal config`: your personal settings. Choose which detected sections to apply.
+- `/import memories`: server memories; requires **Manage Server**. Merge or replace, and map each source persona if the file has more than one.
+- `/import personal memories`: your personal memories. Merge or replace, and map each source persona if the file has more than one.
+- `/persona import`: restore a persona. It also accepts PNG and JSON SillyTavern cards and
   `.charx` Character Card V3 archives, which import the character text only (see
   [SillyTavern Support](/features/integrations/sillytavern-support/)).
 
@@ -78,8 +78,8 @@ These permanently remove or reset data - **they cannot be undone**:
 
 ## Opting Out
 
-- `/personal config` — control your visibility to her, up to full invisibility (opt out of
+- `/personal config`: control your visibility to her, up to full invisibility (opt out of
   memory features entirely).
-- `/config` > Permissions — server admins can turn off self-learning and other features.
+- `/config` > Permissions: server admins can turn off self-learning and other features.
 
 See [Memory](/features/knowledge/memory/) for how memories work day to day.

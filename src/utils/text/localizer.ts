@@ -1,8 +1,12 @@
 import path from "node:path";
 import { readdir } from "node:fs/promises";
 import { Glob } from "bun";
+import { LOCALE_DISPLAY_ORDER } from "@/constants/docsLocales";
+import { isDiscordLocaleCode, LOCALE_ALIASES, type LocaleCode } from "@/constants/locales";
 import type { LocaleObject, Locales, LocaleValue, LocalizerVariables } from "../../types/discord/global";
 import { log } from "../misc/logger";
+import { initializeEmbedProtocol } from "@/utils/discord/embedProtocol";
+import { initializeIntentPacks } from "@/utils/text/localeIntentPacks";
 
 const locales: Locales = {};
 let isInitialized = false; // Track initialization state
@@ -49,6 +53,10 @@ export async function initializeLocalizer(): Promise<void> {
       if (!entry.isDirectory()) continue;
 
       const locale = entry.name; // e.g., "en-US", "ja"
+      if (!isDiscordLocaleCode(locale) || Object.hasOwn(LOCALE_ALIASES, locale)) {
+        log.error(`Skipping unsupported or aliased locale directory: ${locale}`);
+        continue;
+      }
       const localeDir = path.join(localesDir, locale);
       const merged: Record<string, unknown> = {};
 
@@ -82,6 +90,13 @@ export async function initializeLocalizer(): Promise<void> {
     if (Object.keys(locales).length > 0) {
       log.success(`Successfully loaded locales: [${Object.keys(locales).join(", ")}]`);
       isInitialized = true;
+      try {
+        initializeEmbedProtocol();
+        initializeIntentPacks();
+      } catch (error) {
+        isInitialized = false;
+        throw error;
+      }
     } else {
       log.warn("No locale files were loaded. Check the src/locales directory.");
       throw new Error("No locale files were loaded");
@@ -103,6 +118,10 @@ function processLocaleStrings(obj: unknown): LocaleValue {
     return dedent(obj);
   }
 
+  if (Array.isArray(obj)) {
+    return obj.map((value) => (typeof value === "string" ? dedent(value) : String(value)));
+  }
+
   if (typeof obj === "object" && obj !== null) {
     const result: LocaleObject = {};
 
@@ -117,6 +136,44 @@ function processLocaleStrings(obj: unknown): LocaleValue {
 }
 
 const FALLBACK_LOCALE = "en-US";
+
+/** Resolve a row description from its locale-keyed descriptions JSONB map. */
+export function resolveDescription(
+  descriptions: Record<string, string> | null | undefined,
+  locale: string,
+): string | null {
+  if (descriptions) {
+    const base = locale.split("-")[0];
+    for (const key of [locale, base]) {
+      const value = descriptions[key];
+      if (typeof value === "string" && value.length > 0) return value;
+    }
+    const matching = Object.entries(descriptions).find(
+      ([key, value]) => key.split("-")[0] === base && typeof value === "string" && value.length > 0,
+    );
+    if (matching) return matching[1];
+    const english = descriptions[FALLBACK_LOCALE];
+    if (typeof english === "string" && english.length > 0) return english;
+  }
+  return null;
+}
+const DEFAULT_BASE_TRIGGER_WORDS = ["tomori", "tomo"];
+
+/** Exact and alias matches win; a base language matches only when it is unambiguous. */
+function resolveAuthoredLocale(locale: string): LocaleCode | null {
+  if (isDiscordLocaleCode(locale) && locales[locale]) return locale;
+
+  const alias = LOCALE_ALIASES[locale as keyof typeof LOCALE_ALIASES];
+  if (alias && locales[alias]) return alias;
+
+  const base = locale.split("-")[0];
+  const matches = Object.keys(locales).filter((code) => code.split("-")[0] === base);
+  return matches.length === 1 ? (matches[0] as LocaleCode) : null;
+}
+
+export function resolveSupportedLocale(locale: string): LocaleCode {
+  return resolveAuthoredLocale(locale) ?? FALLBACK_LOCALE;
+}
 
 /** One `locale:key` per process, so a hot path cannot turn a single gap into a log flood. */
 const warnedFallbackKeys = new Set<string>();
@@ -144,7 +201,8 @@ function lookupLocaleString(locale: string, key: string): string | undefined {
 /**
  * Get a localized string for a specific key.
  *
- * Resolution order is the requested locale, then `en-US`, then the key itself. The per-key
+ * Resolution order is the authored locale selected by exact, alias, or unambiguous base-language
+ * match, then `en-US`, then the key itself. The per-key
  * `en-US` retry is what lets an incomplete locale degrade to English instead of showing users
  * a raw dot-notation path; a key absent from both locales still echoes back, which several
  * callers rely on to detect an unknown key.
@@ -159,7 +217,7 @@ export const localizer = (locale: string, key: string, variables: LocalizerVaria
     return key;
   }
 
-  const usedLocale = locales[locale] ? locale : FALLBACK_LOCALE;
+  const usedLocale = resolveSupportedLocale(locale);
 
   if (!locales[usedLocale]) {
     log.warn(`Locale '${usedLocale}' not loaded. Returning key: ${key}`);
@@ -193,9 +251,11 @@ export const localizer = (locale: string, key: string, variables: LocalizerVaria
 };
 
 /**
- * Get the list of currently supported/loaded locale codes.
- * This is dynamically determined from the locale files loaded during initialization.
- * @returns Array of supported locale codes (e.g., ['en-US', 'ja'])
+ * Authored locale codes, in the order every language picker presents them.
+ *
+ * The set comes from the locale directories loaded at startup, but the order comes from
+ * `LOCALE_DISPLAY_ORDER` rather than from `readdir`: an indexed directory returns hash order, so
+ * the picker would otherwise reshuffle between hosts and never agree with the docs switcher.
  */
 export function getSupportedLocales(): string[] {
   if (!isInitialized) {
@@ -203,7 +263,24 @@ export function getSupportedLocales(): string[] {
     return [];
   }
 
-  return Object.keys(locales);
+  const loaded = Object.keys(locales);
+  const ordered = LOCALE_DISPLAY_ORDER.filter((code) => loaded.includes(code));
+  return [...ordered, ...loaded.filter((code) => !ordered.includes(code)).sort()];
+}
+
+/** Discord-facing keys include aliases only while their authored source is loaded. */
+export function getRegisterableLocales(): LocaleCode[] {
+  const registerable = getSupportedLocales() as LocaleCode[];
+  for (const [alias, source] of Object.entries(LOCALE_ALIASES)) {
+    if (registerable.includes(source)) registerable.push(alias as LocaleCode);
+  }
+  return registerable;
+}
+
+/** Each authored locale supplies its own language name for the personal language picker. */
+export function getLocaleEndonym(locale: string): string {
+  const authored = resolveAuthoredLocale(locale);
+  return (authored && lookupLocaleString(authored, "general.language_name")) || locale;
 }
 
 /**
@@ -228,7 +305,7 @@ export function getLocaleSubKeys(locale: string, path: string): string[] {
 
   // Return only keys whose values are objects (sub-namespaces), not leaf strings
   return Object.entries(obj as Record<string, unknown>)
-    .filter(([, v]) => typeof v === "object" && v !== null)
+    .filter(([, v]) => typeof v === "object" && v !== null && !Array.isArray(v))
     .map(([k]) => k);
 }
 
@@ -249,8 +326,26 @@ export function hasLocaleKey(locale: string, key: string): boolean {
 }
 
 /**
+ * A string-list leaf from exactly one authored locale, with no `en-US` fallback. Intent packs take
+ * the union across locales, so substituting English for a missing list would silently duplicate it.
+ */
+export function getLocaleStringList(locale: string, key: string): string[] | undefined {
+  if (!isInitialized) return undefined;
+
+  let value: unknown = locales[locale];
+  for (const segment of key.split(".")) {
+    if (typeof value !== "object" || value === null || Array.isArray(value) || !Object.hasOwn(value, segment)) {
+      return undefined;
+    }
+    value = (value as Record<string, unknown>)[segment];
+  }
+
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? [...value] : undefined;
+}
+
+/**
  * Uses the localization system to fetch the appropriate bot name based on the server's locale.
- * Falls back to environment variables and hardcoded defaults if locale keys are not found.
+ * Falls back to the generic environment default when no locale key is available.
  * @param locale - The locale code (e.g., 'en-US', 'ja')
  * @returns The default bot name for the specified locale
  */
@@ -261,55 +356,44 @@ export function getDefaultBotName(locale: string): string {
     return localizedName;
   }
 
-  // Fallback to environment variables with hardcoded defaults
-  // This ensures backward compatibility with existing environment variable configuration
-  if (locale === "ja") {
-    return process.env.DEFAULT_BOTNAME_JP || "ともり";
-  }
-
   return process.env.DEFAULT_BOTNAME || "Tomori";
 }
 
 /**
  * Uses the localization system to fetch locale-appropriate trigger words.
- * Falls back to environment variables and hardcoded defaults if locale keys are not found.
+ * Uses the English locale's list when the requested locale has no list.
  * @param locale - The locale code (e.g., 'en-US', 'ja')
  * @returns Array of base trigger words for the specified locale
  */
 export function getBaseTriggerWords(locale: string): string[] {
   if (!isInitialized) {
     log.warn("Localization system not initialized when requesting base trigger words");
-    // Fallback to environment variable or hardcoded defaults
-    return (
-      process.env.BASE_TRIGGER_WORDS?.split(",").map((word) => word.trim()) || ["tomori", "tomo", "トモリ", "ともり"]
-    );
+    return [...DEFAULT_BASE_TRIGGER_WORDS];
   }
 
-  const fallbackLocale = "en-US";
-  const usedLocale = locales[locale] ? locale : fallbackLocale;
+  const readWords = (code: string): string[] | null => {
+    const general = locales[code]?.general;
+    if (!general || typeof general !== "object" || Array.isArray(general)) return null;
+    const defaults = general.defaults;
+    if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) return null;
+    const words = defaults.base_trigger_words;
+    return Array.isArray(words) && words.every((word) => typeof word === "string") ? [...words] : null;
+  };
 
-  const localeData = locales[usedLocale];
-  if (
-    localeData &&
-    typeof localeData === "object" &&
-    "general" in localeData &&
-    typeof localeData.general === "object" &&
-    localeData.general !== null &&
-    "defaults" in localeData.general &&
-    typeof localeData.general.defaults === "object" &&
-    localeData.general.defaults !== null &&
-    "base_trigger_words" in localeData.general.defaults
-  ) {
-    const triggerWords = (localeData.general.defaults as Record<string, unknown>).base_trigger_words;
+  return readWords(resolveSupportedLocale(locale)) ?? readWords(FALLBACK_LOCALE) ?? [...DEFAULT_BASE_TRIGGER_WORDS];
+}
 
-    if (Array.isArray(triggerWords) && triggerWords.every((word) => typeof word === "string")) {
-      return triggerWords as string[];
-    }
-  }
+/** Groups an integer the way the resolved authored locale does, matching the sentence around it. */
+export function formatLocaleInteger(value: number, locale: string): string {
+  return Math.round(value).toLocaleString(resolveSupportedLocale(locale));
+}
 
-  // Fallback to environment variables with hardcoded defaults
-  // This ensures backward compatibility with existing environment variable configuration
-  return (
-    process.env.BASE_TRIGGER_WORDS?.split(",").map((word) => word.trim()) || ["tomori", "tomo", "トモリ", "ともり"]
-  );
+/**
+ * Base trigger words from every authored locale, deduplicated. Trigger-word reservation uses the
+ * union because a server's members can address the bot in any language the bot ships, and an alter
+ * must never claim the bot's localized name.
+ */
+export function getAllBaseTriggerWords(localeCodes: readonly string[] = getSupportedLocales()): string[] {
+  const codes = localeCodes.length > 0 ? localeCodes : [FALLBACK_LOCALE];
+  return [...new Set(codes.flatMap((code) => getBaseTriggerWords(code)))];
 }

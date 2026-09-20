@@ -1135,10 +1135,7 @@ export interface SetupWizardDependencies {
   createNonce: () => string;
   isHostedPolicyEnvironment: () => boolean;
   storeSetupDraft: typeof storeSetupDraft;
-  /**
-   * Locale for the wizard's own surfaces. The command resolves it from the guild first, so the
-   * stored locale, the persona's default name, and the copy the actor reads all agree.
-   */
+  /** Locale selected when the setup command starts the wizard. */
   locale?: string;
 }
 

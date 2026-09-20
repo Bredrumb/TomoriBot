@@ -28,11 +28,13 @@ To see exactly what she is handed on any given turn, see
 [Inside The Prompt](/features/knowledge/inside-the-prompt/).
 
 ## Long-Term Memory
+<!-- anchor: long-term-memory -->
 
 Long-term memories are the only thing she keeps permanently. They are not affected by
 `/refresh`, by restarts, or by moving to another channel.
 
 ### Personal vs. Server Memories
+<!-- anchor: personal-vs-server-memories -->
 
 There are two kinds of long-term memory:
 
@@ -87,6 +89,7 @@ force:
 Server admins can turn her self-saving off entirely with `/config` > Permissions.
 
 ### How Many Memories 
+<!-- anchor: how-many-memories -->
 
 By default she holds up to **100 personal memories** and **100 server memories**. Self-hosters can change these with .env variables `MAX_PERSONAL_MEMORIES`, `MAX_SERVER_MEMORIES`, and
 `MAX_MEMORY_LENGTH`. Raising the *length* costs far more context than raising the *count*, so
@@ -98,6 +101,7 @@ memories count against every persona's personal allowance.
 
 
 ### Document Knowledge Base (RAG)
+<!-- anchor: document-knowledge-base-rag -->
 
 Server admins can give her documents to reference using RAG. Documents are chunked and stored as searchable embeddings; she automatically retrieves
   relevant content when answering. In new servers, document management is similarly restricted to members with `Manage Server` by default; managers can grant member access through `/moderation` Member Access.
@@ -128,6 +132,7 @@ The prompt is shown before import so you can adjust it for the channel or scene.
 History imports are stored as documents, so `/memories` works on them too.
 
 ### Conditioning
+<!-- anchor: conditioning -->
 
 `/conditioning` is a per-persona, per-server memory that steers a persona's behavior over
 time. A lighter-weight nudge than a full attribute or system prompt. Use it to reinforce
@@ -158,6 +163,7 @@ with every prompt** by default. Tagging narrows it further, so a memory activate
 a keyword or only in one channel. Turn it on with `/config` > Engine > Memory & STM.
 
 ### Keyword Tags
+<!-- anchor: keyword-tags -->
 
 - Memories **without** keyword tags are always active (the default).
 - Memories **with** keyword tags only activate when the keyword appears in the visible
@@ -174,6 +180,7 @@ a keyword or only in one channel. Turn it on with `/config` > Engine > Memory & 
 In `/help`, choose **Memory**, then **Memory Tagging**, for the same summary in Discord.
 
 ## Short-Term Memory (STM)
+<!-- anchor: short-term-memory-stm -->
 
 TomoriBot can easily read messages from the current channel she's talking in, but STM allows her to do the following without saving an actual long-term memory:
 1. Temporarily reinforce the current scenario/situation of the channel in context
@@ -221,11 +228,11 @@ Anyone can run `/config` > Persona > Memories, `/personal config`, and `/persona
 Workspace managers can tune short-term memory from `/config` → **Behavior** → **Memory & STM**.
 These settings apply to the workspace's active STM records:
 
-- **Refresh cadence** controls how many bot turns pass between refresh nudges. The allowed range is 1–100.
+- **Refresh cadence** controls how many bot turns pass between refresh nudges. The allowed range is 1-100.
 - **Render mode** chooses whether category values supersede recent turns or appear as a crude summary.
 - **Crude messages** controls how many recent messages are retained, from 1 to the channel maximum.
-- **Nudge depth** places the refresh nudge from the end of the assembled context, from 0–20.
-- **Content depth** places STM content from the end of the assembled context, from −1–20.
+- **Nudge depth** places the refresh nudge from the end of the assembled context, from 0-20.
+- **Content depth** places STM content from the end of the assembled context, from −1-20.
 
 **STM Categories** replaces the default Summary field with up to five labeled fields. Enter each field as
 `Label: Description`; leaving every field blank restores the default Summary category. Saving categories

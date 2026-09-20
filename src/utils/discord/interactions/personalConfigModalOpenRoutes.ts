@@ -1,4 +1,4 @@
-import { MessageFlags, type StringSelectMenuInteraction } from "discord.js";
+import { MessageFlags, type ModalSubmitInteraction, type StringSelectMenuInteraction } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
 import { loadFallbackSelectionOptions } from "@/utils/discord/interactions/personalConfigLoaders";
 import {
@@ -15,7 +15,10 @@ import {
   decodeProviderParam,
   decodeProviderRangeValue,
 } from "@/utils/discord/personalConfigPanelCatalog";
-import { localizer } from "@/utils/text/localizer";
+import { buildPersonalConfigModalFieldId } from "@/utils/discord/ui/personalConfigModals";
+import { takeRawModalSelectValue } from "@/utils/discord/ui/modals";
+import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { loadUserSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
@@ -29,6 +32,54 @@ export async function handlePersonalConfigModalOpen(
   context: PersonalConfigPreDeferContext,
 ): Promise<"handled" | "fall-through"> {
   const { interaction, route, dependencies } = context;
+
+  // Answered here rather than with the panel writes because the modal `/personal language` shows
+  // has no message behind it: the shared handler would defer an update Discord has nowhere to
+  // apply, and the panel repaint it ends with would fail for the same reason.
+  if (route.action === "language-only-submit") {
+    const modal = interaction as ModalSubmitInteraction;
+    const scope = await dependencies.resolveScope(interaction, true);
+    if (!scope) {
+      await interaction.reply({
+        content: localizer(route.locale, "commands.personal.config.unavailable"),
+        flags: MessageFlags.Ephemeral,
+      });
+      return "handled";
+    }
+
+    const fieldId = buildPersonalConfigModalFieldId("language", route.nonce);
+    const language = takeRawModalSelectValue(modal.id, fieldId) || "en-US";
+    const result = await dependencies.operations.setLanguage({
+      userId: scope.userId,
+      userDiscId: scope.userDiscId,
+      language,
+    });
+
+    if (result.status !== "success") {
+      await interaction.reply({
+        content: localizer(route.locale, "commands.personal.config.write_failed_detail"),
+        flags: MessageFlags.Ephemeral,
+      });
+      return "handled";
+    }
+
+    if (scope.internalServerId) {
+      dependencies.recordAction({
+        action: "personal-config.personal.language.set",
+        serverId: scope.internalServerId,
+        userDiscId: interaction.user.id,
+      });
+    }
+
+    // The receipt reads in the language just written, which is also the confirmation that it took.
+    await interaction.reply({
+      content: localizer(language, "commands.personal.config.language_updated_detail", {
+        language: escapeDiscordMarkdown(getLocaleEndonym(language)),
+      }),
+      flags: MessageFlags.Ephemeral,
+    });
+    return "handled";
+  }
 
   // Modal openings handle their own interaction response (they must not defer beforehand)
   if (route.action === "language-open") {
@@ -422,6 +473,7 @@ export async function handlePersonalConfigModalOpen(
         cachedScope.userId,
         provider,
         route.capability,
+        route.locale,
       );
 
       if (availableModels.length === 0) {
@@ -532,6 +584,7 @@ export async function handlePersonalConfigModalOpen(
       cachedScope.userId,
       route.provider,
       route.capability,
+      route.locale,
     );
     const start = route.start;
     if (

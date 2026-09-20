@@ -4,6 +4,7 @@
 import learn from "./commands/learn";
 import choices from "./commands/choices";
 import stPreset from "./commands/st-preset";
+import stPresets from "./commands/st-presets";
 import tool from "./commands/tool";
 import status from "./commands/status";
 import data from "./commands/data";
@@ -46,15 +47,29 @@ import shared from "./commands/shared";
 import nuke from "./commands/nuke";
 import setup from "./commands/setup";
 import compact from "./commands/compact";
+import moderation from "./commands/moderation";
+import quota from "./commands/quota";
 import providers from "./commands/providers";
+import memories from "./commands/memories";
 import reset from "./commands/reset";
+import transfer from "./commands/transfer";
+import exportCommands from "./commands/export";
+import importCommands from "./commands/import";
 
 export default {
   commands: {
+    ...reset,
+    ...transfer,
+    ...exportCommands,
+    ...importCommands,
+    ...memories,
     ...providers,
+    ...quota,
+    ...moderation,
     ...learn,
     ...choices,
     ...stPreset,
+    ...stPresets,
     ...tool,
     ...status,
     ...data,
@@ -97,6 +112,5 @@ export default {
     ...nuke,
     ...setup,
     ...compact,
-    ...reset,
   },
 };

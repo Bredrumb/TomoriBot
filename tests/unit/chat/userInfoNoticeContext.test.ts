@@ -73,6 +73,27 @@ describe("update_user_info notice visibility", () => {
     expect(content).toContain("Master Bau");
   });
 
+  it("keeps Japanese Components V2 tool notices visible to the chat reader", () => {
+    const title = localizer("ja", "tools.user_info_update.success_title", { target_user: "Juno" });
+    const components = buildNoticeContainer({
+      locale: "ja",
+      titleKey: "tools.user_info_update.success_title",
+      titleVars: { target_user: "Juno" },
+      description: "Updated a profile field.",
+    });
+    const result = processEmbedsFromMessage({
+      embeds: [],
+      components,
+      content: "",
+      imageAttachments: [],
+      isTomoriAuthoredMessage: true,
+      selfDebugEnabled: false,
+      tomoriNickname: "Sparrow",
+    });
+    expect(result.processedSystemEmbed).toBe(true);
+    expect(result.content).toContain(title);
+  });
+
   it("separates the footer from the body with a real divider component", () => {
     const components = buildNoticeContainer({
       locale: "en-US",

@@ -1544,7 +1544,7 @@ describe("Channels Rules", () => {
     expect(serialized).toContain("Manage Blocked Channels");
     expect(serialized).not.toContain("Add Private Channels");
     expect(serialized).toContain(
-      "https://docs.tomoribot.app/features/chatting-personality/chatting-and-triggers/#roleplay-channels",
+      "https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#roleplay-channels",
     );
 
     const routes: ConfigPanelRoute[] = [

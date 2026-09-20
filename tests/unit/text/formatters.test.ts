@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { humanizeString } from "@/utils/text/processors/formatters";
 
 describe("humanizeString", () => {
@@ -164,5 +164,82 @@ describe("humanizeString", () => {
       const segments = humanizeString(input, { suppressPunctuationNoise: true });
       expect(segments).toEqual([input]);
     }
+  });
+});
+
+// With the default probabilities, 0.1 removes a comma and flushes emphasis, 0.5 flushes a comma
+// and keeps emphasis, and 0.9 keeps both.
+const ROLL_REMOVE_COMMA_FLUSH_EMPHASIS = 0.1;
+const ROLL_FLUSH_COMMA_KEEP_EMPHASIS = 0.5;
+
+describe("humanizeString script parity", () => {
+  afterEach(() => {
+    mock.restore();
+  });
+
+  function rollAlways(value: number): void {
+    spyOn(Math, "random").mockReturnValue(value);
+  }
+
+  it("lowercases every cased script, keeps acronyms, and leaves uncased scripts alone", () => {
+    const suppress = { suppressPunctuationNoise: true };
+    expect(humanizeString("Hello, HOW are You", suppress)).toEqual(["hello, HOW are you"]);
+    expect(humanizeString("Ça va ? Привет, КАК ДЕЛА. Γεια ΣΟΥ", suppress)).toEqual([
+      "ça va ? привет, КАК ДЕЛА. γεια ΣΟΥ",
+    ]);
+    expect(humanizeString("こんにちは、世界。안녕하세요", suppress)).toEqual(["こんにちは、世界。안녕하세요"]);
+  });
+
+  it("protects sender prefixes and inline code in every script", () => {
+    const suppress = { suppressPunctuationNoise: true };
+    expect(humanizeString("(Sparrow): Hello", suppress)).toEqual(["(Sparrow): hello"]);
+    expect(humanizeString("Жуно: Привет", suppress)).toEqual(["Жуно: привет"]);
+    expect(humanizeString("ともり: やあ", suppress)).toEqual(["ともり: やあ"]);
+    rollAlways(ROLL_FLUSH_COMMA_KEEP_EMPHASIS);
+    expect(humanizeString('Скажи `печать("Привет, мир")` сейчас')).toEqual(['скажи `печать("Привет, мир")` сейчас']);
+  });
+
+  it("rolls full-width and halfwidth ideographic commas like 、", () => {
+    rollAlways(ROLL_REMOVE_COMMA_FLUSH_EMPHASIS);
+    expect(humanizeString("你好，世界､再见、朋友")).toEqual(["你好世界再见朋友"]);
+    mock.restore();
+    rollAlways(ROLL_FLUSH_COMMA_KEEP_EMPHASIS);
+    expect(humanizeString("你好，世界")).toEqual(["你好", "世界"]);
+  });
+
+  it("strips the full-width semicolon like the ASCII one", () => {
+    expect(humanizeString("等等；真的", { suppressPunctuationNoise: true })).toEqual(["等等真的"]);
+  });
+
+  it("flushes emphasis the same way in Chinese, English, Spanish, and French", () => {
+    rollAlways(ROLL_REMOVE_COMMA_FLUSH_EMPHASIS);
+    expect(humanizeString("真的吗？好的！再见")).toEqual(["真的吗？", "好的！", "再见"]);
+    expect(humanizeString("really? ok! bye")).toEqual(["really?", "ok!", "bye"]);
+    expect(humanizeString("¡Hola! ¿Qué tal?")).toEqual(["¡hola!", "¿qué tal?"]);
+    expect(humanizeString("Bonjour ! Ça va ?")).toEqual(["bonjour !", "ça va ?"]);
+  });
+
+  it("never flushes inside any paired quotation", () => {
+    rollAlways(ROLL_FLUSH_COMMA_KEEP_EMPHASIS);
+    for (const [open, close] of [
+      ["«", "»"],
+      ["‹", "›"],
+      ["“", "”"],
+      ["「", "」"],
+      ["『", "』"],
+      ["｢", "｣"],
+      ["〈", "〉"],
+      ["《", "》"],
+    ]) {
+      expect(humanizeString(`il dit ${open}oui, non${close} ok`)).toHaveLength(1);
+    }
+    expect(humanizeString("Il a dit «Bonjour, monde» et il est parti.")).toHaveLength(1);
+    expect(humanizeString("그는 〈안녕, 세계〉라고 말했다.")).toHaveLength(1);
+    expect(humanizeString("Oui, «Bonjour, monde»")).toEqual(["oui", "«bonjour, monde»"]);
+  });
+
+  it("does not treat a typographic apostrophe as a quotation", () => {
+    rollAlways(ROLL_FLUSH_COMMA_KEEP_EMPHASIS);
+    expect(humanizeString("don’t, ok")).toEqual(["don’t", "ok"]);
   });
 });

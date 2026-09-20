@@ -1,0 +1,82 @@
+---
+title: "本地与自部署端点"
+sidebar:
+  label: "总览"
+  groupLabel: "本地与自部署端点"
+  order: 4
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+完全可以把一套 TomoriBot 实例的所有环节都跑在本地，从文本生成到 MCP 工具都是如此。下面每个
+端点要么与 OpenAI 兼容，要么是一个很小的参考封装程序，通过
+`/providers` 指令注册，并加密存储在数据库里（不需要 `.env`）。
+挑一个你要配置的功能：
+
+## 文本与嵌入
+
+<CardGrid>
+  <LinkCard title="本地 LLM" href="/zh-CN/self-hosting/local-endpoints/setup-local-llm/"
+    description="任何与 OpenAI 兼容的服务器，例如 Ollama、KoboldCPP、LM Studio、vLLM 或 LiteLLM，用于文本生成与嵌入。" />
+  <LinkCard title="通过 ChatMock 使用 Codex CLI" href="/zh-CN/self-hosting/local-endpoints/setup-chatmock/"
+    description="一个本地 OpenAI 兼容桥接层，让 TomoriBot 可以使用 Codex CLI 的模型。" />
+</CardGrid>
+
+## 图像与视频
+
+<CardGrid>
+  <LinkCard title="ComfyUI" href="/zh-CN/self-hosting/local-endpoints/setup-comfyui/"
+    description="用你自己的 ComfyUI 实例和 API 格式工作流生成图像与短视频。" />
+</CardGrid>
+
+## 语音
+
+<CardGrid>
+  <LinkCard title="语音合成" href="/zh-CN/self-hosting/local-endpoints/text-to-speech/"
+    description="本地 TTS 引擎（Chatterbox、Qwen3-TTS、IrodoriTTS、Fish S2 Pro、VoxCPM2、CosyVoice 3），用于原生 Discord 语音消息、语音克隆和 VoiceDesign。" />
+  <LinkCard title="语音识别" href="/zh-CN/self-hosting/local-endpoints/speech-to-text/"
+    description="用 WhisperX、whisper.cpp 或 KoboldCPP 在本地转写音频附件。" />
+</CardGrid>
+
+## 网页搜索与抓取
+
+<CardGrid>
+  <LinkCard title="SearXNG" href="/zh-CN/self-hosting/local-endpoints/setup-searxng/"
+    description="尊重隐私的元搜索代理，作为本地 web_search 工具，避开公共速率限制。" />
+  <LinkCard title="Crawl4AI" href="/zh-CN/self-hosting/local-endpoints/setup-crawl4ai/"
+    description="为依赖 JS 的网站做浏览器渲染的 Markdown 提取，为 fetch_url 工具提供支持。" />
+</CardGrid>
+
+## 自定义工具
+
+<CardGrid>
+  <LinkCard title="本地 MCP 服务器" href="/zh-CN/self-hosting/local-endpoints/setup-local-mcp/"
+    description="运行一个本地 MCP 服务器，用你自己的工具扩展 TomoriBot（仅限自部署实例）。" />
+</CardGrid>
+
+## 用 `bun run launch` 启动边车服务
+
+不用手动逐个启动边车服务，改用 `bun run launch`：它会启动你要求的边车服务，等它们就绪，然后自动以 watch 模式启动 bot：
+
+```sh
+# 只启动 bot，与 bun run dev 完全相同
+bun run launch
+
+# 带上 SearXNG 与 Crawl4AI 这两个 Docker 边车服务
+bun run launch --searxng --crawl4ai
+
+# 带上本地 TTS 服务器（必须先建好 venv，见下面的语音合成指南）
+bun run launch --qwen3tts
+bun run launch --fishs2
+bun run launch --voxcpm2
+bun run launch --cosyvoice3
+
+# 查看所有可用参数
+bun run launch --help
+```
+
+可用参数：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--whisperx`
+
+Docker 边车服务（`--searxng`、`--crawl4ai`）在首次运行时创建，之后复用。Python 的 TTS 与 STT 边车服务需要事先建好各自的 venv；详见[语音合成](/zh-CN/self-hosting/local-endpoints/text-to-speech/)和[语音识别](/zh-CN/self-hosting/local-endpoints/speech-to-text/)下的各篇配置指南。
+
+**Ctrl+C** 会停掉 bot 和所有 Python 边车进程。Docker 容器会被有意留在运行状态，用完请用 `docker stop searxng` / `docker stop crawl4ai` 手动停掉它们。

@@ -1,0 +1,236 @@
+export default {
+  genai: {
+    generic_error_title: `生成出错`,
+    generic_error_description: `{error_message}`,
+    error_stream_timeout_title: `连接超时`,
+    error_stream_timeout_description: `如果一直这样，可能是你选的 AI 提供方临时出了问题。请稍后再试，或者用 \`/refresh\` 刷新上下文历史。`,
+    empty_response_title: `空回复`,
+    empty_response_description: `AI 给了我一个空回复，如果一直这样请用 \`/refresh\`。`,
+    max_iterations_title: `思考循环`,
+    max_iterations_streaming_description: `我陷进了思考循环，没能完成这次请求，如果一直这样请用 \`/refresh\`。`,
+    still_working_title: `还在处理……`,
+    still_working_description: `这次任务比平常多花了几步。觉得我卡住了就用 \`/kill\`。`,
+    nai_tool_retry_exhausted_title: `工具出错`,
+    nai_tool_retry_exhausted_description: `有个工具连续失败了好几次，没能完成这次请求。请再试一次，如果一直这样请用 \`/refresh\`。`,
+    tool_error_loop_title: `工具错误循环`,
+    tool_error_loop_description: `我反复遇到工具错误，没能完成这次请求。试着换个说法，如果一直这样请用 \`/refresh\`。`,
+    fallback_used_title: `已使用备用模型`,
+    fallback_used_description: `这次用的是 \`{success_model}\`，而不是 {chain}`,
+    fallback_used_details_description: `备用槽位 {slot} 用 \`{success_model}\` 给出了回复，此前有这几次失败：
+{failure_list}`,
+    fallback_used_failure_line: `{index}. {model} 报错：{error_detail}`,
+    fallback_used_details_button: `已用备用模型`,
+    fallback_used_hide_footer: `用 \`/config\` > 行为 > 提示 隐藏它，并把细节转到思考日志`,
+    markdown_table: {
+      show_button: `显示 Markdown`,
+      source_expired: `那张表格的 Markdown 已经不在缓存里了，所以我没办法再显示源码。`,
+      source_attached: `这张表格太长，没法直接显示，所以用文件发给你：`,
+    },
+    no_response_title: `没有回复`,
+    no_response_description: `我没有回复，可能是 AI 给了空回复或者超时了。`,
+    thought_log: {
+      title: `思考日志`,
+      description: `来源：{source_line}`,
+      personal_attribution: `由 {user_mention} 的个人 {provider} 配置生成。`,
+      personal_attribution_title: `个人提供方署名`,
+      summary_field: `思考摘要`,
+      raw_field: `原始思考`,
+      fetched_content_field: `抓取的内容`,
+      footer: `提供方：{provider} | 模型：{model}`,
+      footer_with_generation_time: `提供方：{provider} | 模型：{model} | 生成用时：{generation_time}`,
+      provider_with_serving: `{provider}（经由 {serving_provider}）`,
+    },
+    message_interaction: {
+      reply_context_author: `正在回复 {user}`,
+      reply_context_description: `{message_url}`,
+      reply_context_footer: `正在回复 {user} • {message_url}`,
+    },
+    text_quota_exceeded_title: `🔴 文本配额已用完`,
+    text_quota_exceeded_description: `你已经用完文本生成配额。{reset_info}`,
+    text_user_quota_exceeded_description: `你已经用完今天的文本生成配额。{reset_info}`,
+    text_serverwide_quota_exceeded_description: `这个服务器在本周期的文本生成配额已经用完。{reset_info}`,
+    text_quota_resets_in_hours: `配额会在 {hours} 小时后重置。`,
+    text_quota_resets_in_days: `配额会在 {days} 天后重置。`,
+    text_quota_exceeded_footer: `这项配额由这个服务器的管理员通过 \`/moderation\` 设置。`,
+    stream: {
+      response_stopped_title: `回复被中断`,
+      response_stopped_description: `回复因为下面的原因被中断：{reason}。请确认发送的内容没有大到 AI 提供方处理不了。运行 \`/refresh\` 可以清空对话内容。`,
+      streaming_failed_description: `尝试流式输出回复时出了问题。`,
+      provider_error_interaction: `流式回复被拦截或中断。原因：{reason}。`,
+      api_error_title: `🔴 提供方 API 出错`,
+      privacy_error_title: `🔴 提供方隐私设置`,
+      model_error_title: `🔴 模型配置出错`,
+      model_error_description: `所选的模型被提供方拒绝了。请检查配置的模型名，换成该提供方支持的模型 ID。`,
+      rate_limit_title: `🟡 提供方触发速率限制`,
+      rate_limit_title_all_rotation_keys: `🟡 提供方触发速率限制（所有轮换密钥）`,
+      content_blocked_title: `🔴️ 提供方内容过滤`,
+      timeout_title: `🟡️ 提供方请求超时`,
+      provider_overloaded_title: `🔴 提供方过载`,
+      provider_overloaded_description: `提供方目前过载或暂时不可用`,
+      context_length_title: `🔴 消息对这个模型来说太长`,
+      credit_limit_title: `🔴 提供方额度不足`,
+      balance_exhausted_title: `🔴 提供方账户余额用尽`,
+      flush_limit_title: `🟡️ 已达回复长度上限`,
+      flush_limit_description: `这条回复已经达到最大消息长度上限，所以被中断了。如果需要，你可以用 \`/respond\` 手动继续生成。`,
+      inactivity_timeout_title: `🟡️ 回复超时`,
+      inactivity_timeout_description: `AI 提供方停止响应，连接超时了。提供方过载或出问题时都可能这样。请再试一次。`,
+    },
+    // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
+    // modal. Each key is one bullet; callers compose conditional items instead of maintaining
+    // whole-paragraph tip strings. Text displays render markdown and hyperlinks.
+    tips: {
+      title: `💡 你可以这样做`,
+      button: `你可以这样做`,
+      wait_and_retry: `请等几分钟再试。`,
+      api_key_rotation: `如果这个服务器有多把密钥，到 \`/providers\` 里选中这个提供方，就能管理它的轮换密钥池。`,
+      model_fallback: `用 \`/config\` > 模型 > 备用模型与模型随机 添加备用模型，容错会更好。`,
+      model_fallback_personal: `用 \`/personal config\` 添加备用模型，容错会更好。`,
+      openrouter_free_models: `到 [OpenRouter 免费模型列表](https://openrouter.ai/models?max_price=0&output_modalities=text)里挑选更多免费模型，用 \`/providers\` 注册。`,
+      openrouter_free_models_personal: `到 [OpenRouter 免费模型列表](https://openrouter.ai/models?max_price=0&output_modalities=text)里挑选更多免费模型，用 \`/personal providers\` 注册。`,
+      openrouter_models: `到 [OpenRouter 模型列表](https://openrouter.ai/models)里浏览模型，用 \`/providers\` 注册，再用 \`/config\` > 模型 > 切换模型 切换。`,
+      openrouter_models_personal: `到 [OpenRouter 模型列表](https://openrouter.ai/models)里浏览模型，用 \`/personal providers\` 注册，再用 \`/personal config\` 切换。`,
+      choose_supported_model: `用 \`/config\` > 模型 > 切换模型 或者你的自定义端点设置，选择一个受支持的模型 ID。`,
+      choose_supported_model_personal: `用 \`/personal config\` 或者你的自定义端点设置，选择一个受支持的模型 ID。`,
+      verify_api_key: `请再核对一次这个服务器的 API 密钥，然后重试。`,
+      verify_api_key_personal: `用 \`/personal providers\` 再核对一次你的个人 API 密钥，然后重试。`,
+      google_credential_type: `这看起来像 OAuth 或服务账号令牌。\`google\` 提供方需要来自 [Google AI Studio](https://aistudio.google.com/apikey) 的普通 API 密钥；Google Cloud 凭据请改用 \`vertex\` 提供方。`,
+      openrouter_privacy_settings: `到 [OpenRouter 隐私设置](https://openrouter.ai/settings/privacy)调整你的「Data Policy」，允许这个模型，或者换一个模型。`,
+      openrouter_fund_account: `往你的 OpenRouter 账户充值至少 10 美元额度，才能解锁每天 1000 次免费模型请求。`,
+      reduce_context_length: `试着缩短你的消息，或者用 \`/refresh\` 清空上下文。`,
+      reduce_output_tokens: `用 \`/config\` > 模型 > 文本采样器与参数 调低 **最大输出词元数**，给聊天记录让出空间。`,
+      reduce_output_tokens_personal: `用 \`/personal config\` 调低 **最大输出词元数**，给聊天记录让出空间。`,
+      openrouter_add_credits: `到 [OpenRouter 额度](https://openrouter.ai/settings/credits)充值，或者用 \`/config\` > 模型 > 文本采样器与参数 调低 **最大输出词元数**。`,
+      openrouter_add_credits_personal: `到 [OpenRouter 额度](https://openrouter.ai/settings/credits)充值，或者用 \`/personal config\` 调低 **最大输出词元数**。`,
+      top_up_provider_balance: `你的 API 密钥有效，但它背后的账户余额用尽了。请到提供方那里充值，然后重试。缩短消息或调低回复长度在这里都没用。`,
+      deepseek_top_up: `到 [DeepSeek 充值页面](https://platform.deepseek.com/top_up)充值。`,
+      adjust_parameters: `到 \`/config\` > 模型 > 文本采样器与参数，调整 **Temperature** 或 **Top P**，确保只发送其中一个。`,
+      adjust_parameters_personal: `在 \`/personal config\` 里调整 **Temperature** 或 **Top P**，确保只发送其中一个。`,
+      switch_model_provider: `用 \`/config\` > 模型 > 切换模型 或者 \`/providers\` 换一个模型或提供方。`,
+      switch_model_provider_personal: `用 \`/personal config\` 切换，或者在 \`/personal providers\` 里更新提供方。`,
+      disable_personal_text_override: `这个请求错误来自你的[个人提供方](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/#your-own-providers)。请在 \`/personal providers\` 里更新它，或者用 \`/personal config\` 选一个能用的模型。`,
+      // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
+      support_server: `需要帮助请到[官方支持服务器](https://discord.gg/bjCfHm9QsB)。`,
+      shorten_message: `试着把消息缩短，然后重新发送。`,
+      refresh_context: `用 \`/refresh\` 清空对话上下文。`,
+      provider_overloaded_wait: `提供方目前负载很高。请稍后再试，或者换一个提供方。`,
+      nsfw_jailbreaks: `打开 \`/nsfw jailbreaks\` 有助于避开这个过滤器。`,
+      review_messages: `检查一下最近的消息，或者用 \`/refresh\` 清空它们。`,
+      review_memories: `检查你的记忆和配置（\`/export personal memories\`、\`/export memories\`、\`/export config\`）。`,
+      blacklist_member: `用 \`/moderation\` 把有问题的成员加入屏蔽名单。`,
+    },
+    google: {
+      "400_default_message": `你的请求格式有问题`,
+      "400_billing_default_message": `这项服务需要先开通结算`,
+      "401_default_message": `你的 Google 凭据被拒绝了。请确认你用的是来自 Google AI Studio 的 API 密钥`,
+      "403_default_message": `你的 API 密钥没有所需权限。请确认你用的是自己合法获得的 Google AI Studio API 密钥`,
+      "404_default_message": `找不到所引用的资源`,
+      "429_default_message": `你发送请求太快、太多了`,
+      "503_default_message": `这个 AI 模型目前过载`,
+      "504_default_message": `你的请求处理时间太长`,
+      content_blocked_default_message: `你的内容被安全过滤器拦截了`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    vertexexpress: {
+      "403_predict_permission_message": `这把密钥没法调用 Vertex AI Express 模型。请改用 Express 模式的密钥，或者改用独立的 \`vertex\` 提供方来跑完整的 Google Cloud 项目。`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    novelai: {
+      "400_default_message": `请求格式或参数无效。请确认你输入了正确的 API 密钥。`,
+      "400_trial_message": `你的试用账号生成时需要 recaptcha 验证。API 访问需要付费的 NovelAI 订阅。请到 https://novelai.net/ 升级账号`,
+      "401_default_message": `你的 NovelAI API 密钥无效或已过期`,
+      "402_default_message": `你的 Anlas 点数不够`,
+      "429_default_message": `你发送的请求太多了，请放慢一点`,
+      "503_default_message": `NovelAI 服务器目前过载`,
+      "504_default_message": `你的请求处理时间太长`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    openrouter: {
+      "404_privacy_policy_error": `**隐私政策限制**
+所选模型要求允许把数据用于付费模型训练，但你 OpenRouter 账户的隐私设置目前不允许。`,
+      "400_default_message": `发给 OpenRouter 的请求无效`,
+      "401_default_message": `你的 OpenRouter API 密钥无效或已过期`,
+      "402_default_message": `你的 OpenRouter 账户额度不足`,
+      "403_default_message": `访问被拒绝：请检查你的 OpenRouter 账户设置`,
+      "408_default_message": `OpenRouter 请求超时`,
+      "429_default_message": `OpenRouter 触发速率限制，请稍后再重试`,
+      "429_free_models_message": `OpenRouter 对免费模型的速率限制已经触发。`,
+      "500_default_message": `OpenRouter 遇到了内部服务器错误`,
+      "502_default_message": `上游 AI 提供方暂时不可用`,
+      "503_default_message": `上游 AI 模型目前过载`,
+      "504_default_message": `上游模型请求超时`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    anthropic: {
+      "400_default_message": `发给 Anthropic API 的请求无效。`,
+      "401_default_message": `你的 Anthropic API 密钥无效。请到 console.anthropic.com 检查你的密钥`,
+      "403_default_message": `你的 Anthropic API 密钥没有执行这个操作的权限。`,
+      "404_default_message": `找不到所请求的 Anthropic 模型。`,
+      "429_default_message": `Anthropic 触发速率限制。请稍等片刻再试。`,
+      "500_default_message": `Anthropic 返回了内部服务器错误。`,
+      "503_default_message": `Anthropic 目前不可用或过载。`,
+      temperature_top_p_conflict_message: `Anthropic 拒绝了这个请求，因为同时发送了 Temperature 和 Top-P。`,
+      unknown_default_message: `与 Anthropic 通信时发生了意料之外的错误。`,
+    },
+    custom: {
+      "402_default_message": `你在这个端点上的账户余额不足`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    deepseek: {
+      "402_default_message": `你的 DeepSeek 账户余额不足`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    zai: {
+      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
+      "429_balance_default_message": `你的 Z.ai 账户余额不足`,
+      "429_plan_access_default_message": `你的 Z.ai 订阅方案不包含这个模型`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    nvidia: {
+      "404_default_message": `找不到所请求的 NVIDIA NIM 模型。它可能已经被 NVIDIA 弃用。`,
+      "500_default_message": `为这个模型提供服务的 NVIDIA 后端失败了。这通常是暂时性的，请稍后再试。下面的细节是 NVIDIA 自己的报告，具有权威性：如果里面点名了某个请求参数，请调整那项设置，不要靠猜。`,
+      // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
+      // parameter. Asserting this cause on every 500 previously sent users to change settings the
+      // failing payload never carried.
+      "500_parameter_default_message": `NVIDIA 拒绝了这个模型的一个或多个请求参数。如果细节里点名了 \`min_p\` 之类不受支持的采样器参数，请到 \`/config\` > 模型 > 文本采样器与参数 把它们设成 \`0\` 来关闭。如果细节里点名了 \`logit_bias\`，请到 \`/config\` > 模型 > 文本采样器与参数 清空已保存的条目。`,
+      unknown_default_message: `发生了意料之外的错误`,
+    },
+    self_teach: {
+      server_memory_learned_title: `🧠 {persona_nickname} 学到了新东西！`,
+      server_memory_learned_description: `已保存一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_updated_title: `📝 {persona_nickname} 更新了一条记忆！`,
+      server_memory_updated_description: `已更新一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_deleted_title: `🗑️ {persona_nickname} 删除了一条记忆！`,
+      server_memory_deleted_description: `已删除一则 **[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_learned_title: `💡 {persona_nickname} 学到了关于 {user_nickname} 的新东西！`,
+      personal_memory_learned_description: `已保存一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_updated_title: `📝 {persona_nickname} 更新了一条关于 {user_nickname} 的记忆！`,
+      personal_memory_updated_description: `已更新一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_deleted_title: `🗑️ {persona_nickname} 删除了一条关于 {user_nickname} 的记忆！`,
+      personal_memory_deleted_description: `已删除一则关于 {user_nickname} 的 **[个人记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#long-term-memory)**：
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_footer: `服务器管理员可以用 \`/memories\` 管理这条记忆。`,
+      personal_memory_footer_manage: `你可以用 \`/personal memories\` 管理你的个人记忆。`,
+      personal_memory_footer_personalization_disabled: `这条记忆已经保存，但这个服务器目前关闭了个性化功能，所以它在这里不会立刻生效。用 \`/export personal memories\` 可以查看它。你可以在 \`/personal config\` 里选择退出。`,
+      personal_memory_footer_user_blacklisted: `这条记忆已经保存，但相关用户目前被这个服务器挡在个性化功能之外，所以它在这里不会立刻生效。用 \`/export personal memories\` 可以查看它。你可以在 \`/personal config\` 里选择退出。`,
+      expand_memory_button: `查看完整记忆`,
+      expand_memory_title: `完整记忆内容`,
+    },
+  },
+};

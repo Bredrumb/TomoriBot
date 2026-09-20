@@ -7,7 +7,14 @@ export const systemPromptSections: CatalogSection<SystemPromptInput>[] = [
       {
         name: "Bredrumb's Prompt",
         desc: "Longer instructions for better roleplay.",
-        jaDescription: "文脈・記憶・ツールを活かした、キャラクター重視の会話",
+        i18n: {
+          ja: "ロールプレイを向上させるための詳細な指示。",
+          "pt-BR": "Instruções mais longas para um melhor roleplay.",
+          "es-419": "Instrucciones más extensas para un mejor roleplay.",
+          "zh-TW": "更詳細的指示，讓角色扮演更到位。",
+          vi: "Hướng dẫn dài hơn để nhập vai tốt hơn.",
+          "zh-CN": "更详细的指示，让角色扮演更到位。",
+        },
         promptText: `{bot} only knows what {bot} would know. {bot} experiences the world through their senses, their history, their blind spots.
 
 ## Read the context

@@ -10,7 +10,7 @@ The gatekeeper. Decides if/how a message becomes a generation turn.
 
 Decide whether this message turns into a generation pass and, if so, eagerly
 load the early state (persona list, main `TomoriState`) downstream stages need
-to start one. Returns a discriminated `ChatAdmission` — runnable or one of four
+to start one. Returns a discriminated `ChatAdmission`: runnable or one of four
 non-runnable dispositions.
 
 ## Input
@@ -19,9 +19,9 @@ non-runnable dispositions.
 
 ## Output
 
-`ChatAdmission` — discriminated union (`src/utils/chat/types.ts:93-126`):
+`ChatAdmission`: discriminated union (`src/utils/chat/types.ts:93-126`):
 
-- **`RunnableChatAdmission { disposition: "run", ...gathered state }`** —
+- **`RunnableChatAdmission { disposition: "run", ...gathered state }`**: 
   proceed to stage 04. Eagerly populated fields:
   - `serverDiscId`, `userDiscId`, `cooldownUserDiscId`
   - `isDMChannel`, `guild`
@@ -30,14 +30,14 @@ non-runnable dispositions.
   guild it is `guild.id`; in a DM it is the synthetic per-user server, resolved
   from `DMChannel.recipientId`. See "DM server-key resolution" below.
   - `tomoriState`, `allPersonas` (main persona + sibling personas)
-- **`NonRunnableChatAdmission { disposition, reason, error? }`** — terminate
+- **`NonRunnableChatAdmission { disposition, reason, error? }`**: terminate
   at stage 03. Disposition variants:
-  - `"ignore"` — bot/webhook/self-reply suppression, easter eggs, audio failure
-  - `"queued"` — channel busy; the queue policy in `admissionQueue` decided
+  - `"ignore"`: bot/webhook/self-reply suppression, easter eggs, audio failure
+  - `"queued"`: channel busy; the queue policy in `admissionQueue` decided
     enqueue rather than reject
-  - `"blocked"` — privacy, permissions, rate limit, unsupported channel,
+  - `"blocked"`: privacy, permissions, rate limit, unsupported channel,
     bot-reply-block, full-privacy user
-  - `"error"` — unexpected failure (rare)
+  - `"error"`: unexpected failure (rare)
 
 An accepted same-user conversational follow-up and a message queued behind a
 busy channel both use `"queued"`. Manual slash-command work, including user
@@ -46,25 +46,25 @@ the command payload remains intact.
 
 ## Side effects
 
-- **Voice transcription** — if the message has audio attachments, transcribes
+- **Voice transcription**: if the message has audio attachments, transcribes
   them and either posts a transcript-as-webhook (chat mode) or caches the
   transcript text (legacy mode); message content is mutated in-place via
   `applyEffectiveMessageContent` to inject the transcript inline so downstream
   stages see the spoken text.
-- **Self-reply chain bookkeeping** — `updateSelfReplyChainState` and
+- **Self-reply chain bookkeeping**: `updateSelfReplyChainState` and
   `setSelfReplyChainOriginUser` updated based on message authorship and
   manual-trigger flag.
-- **`$whoami` easter egg** — sends an info embed to the channel and returns
+- **`$whoami` easter egg**: sends an info embed to the channel and returns
   `ignore` when content === `"$whoami"`.
-- **Audio transcription failure embed** — sends a user-visible warn embed when
+- **Audio transcription failure embed**: sends a user-visible warn embed when
   STT fails with an attributable reason, the message has no text content, and
   the turn is allowed to surface user errors. Passive guild messages stay
   quiet.
-- **Suppression cleanup** — clears `selfReplySuppressionUntil` entries that
+- **Suppression cleanup**: clears `selfReplySuppressionUntil` entries that
   have expired.
-- **Text-quota state cleanup** — `cleanupTextQuotaTriggerStates()` prunes stale
+- **Text-quota state cleanup**: `cleanupTextQuotaTriggerStates()` prunes stale
   entries.
-- **Persona-job mutation** — if the message is a likely-self message and not
+- **Persona-job mutation**: if the message is a likely-self message and not
   manually triggered, sets `incoming.isPersonaJob = true` so downstream stages
   can distinguish persona-driven self-replies from user messages.
 
@@ -144,11 +144,11 @@ Extensibility lives in the helpers it calls:
 | Helper | File | What it does | Plugin-relevance |
 |---|---|---|---|
 | `isMatrixRelayMessage`, `isRealUserLikeMessage` | `triggerProcessor.ts` | Trigger-source classification | A new bridge plugin would extend trigger detection here |
-| `transcribeMessageAudioAttachment` | `audioAttachmentTranscription.ts` | STT dispatch | STT providers register via `customEndpointService` — existing mechanism, not chat-specific |
+| `transcribeMessageAudioAttachment` | `audioAttachmentTranscription.ts` | STT dispatch | STT providers register via `customEndpointService`: existing mechanism, not chat-specific |
 | `evaluateAdmissionQueueAndTriggerGate` | `admissionQueue.ts` | Channel-busy + trigger gate decision tree; includes cross-persona and manual-command guards that bypass follow-up replacement when the incoming message explicitly targets a different persona or represents command-owned work | → plugin plan candidate if plugins want to add admission policies |
-| `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal — tightly coupled to cascade-trigger limit semantics |
+| `getSelfReplyChainOriginUser`, `updateSelfReplyChainState` | `selfReplyState.ts` | Self-reply chain memory | Internal: tightly coupled to cascade-trigger limit semantics |
 
-**The stage itself is internal** — there is no current seam for "replace
+**The stage itself is internal**: there is no current seam for "replace
 `evaluateChatAdmission`." A future plugin-extension for early admission veto
 would likely take the form of a pre-admission hook (`beforeAdmission(incoming)
 → Disposition | null`) running before the fixed checks, not a wholesale

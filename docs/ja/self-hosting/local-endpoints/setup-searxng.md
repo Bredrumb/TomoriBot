@@ -67,10 +67,10 @@ SearXNGの画像結果はHEAD検証され、オプションで圧縮され、Dis
 
 | 変数 | デフォルト | 説明 |
 |---|---|---|
-| `SEARXNG_IMAGE_COUNT` | `3` (最大10) | Discordに送信される有効な画像の数。LLMの`count`引数によってオーバーライドされます。 |
+| `SEARXNG_IMAGE_COUNT` | `3`（最大10） | Discordに送信される有効な画像の数。LLMの`count`引数によってオーバーライドされます。 |
 | `SEARXNG_IMAGE_POOL` | `10` | LLMが`count`を指定しない場合の候補URLプール。`count`が指定された場合、プールは`count × 3`（最大30に制限）になり、直リンク保護による失敗を吸収します。 |
-| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | このサイズ未満の画像は拒否されます：プレースホルダー/エラー画像をフィルタリングします。Brave画像検索と共有されます。 |
-| `WEB_SEARCH_TIMEOUT_MS` | — | エンジンごとのリクエストタイムアウト。 |
+| `IMAGE_MIN_SIZE_BYTES` | `5120`（5 KB） | このサイズ未満の画像は拒否されます：プレースホルダー/エラー画像をフィルタリングします。Brave画像検索と共有されます。 |
+| `WEB_SEARCH_TIMEOUT_MS` | なし | エンジンごとのリクエストタイムアウト。 |
 | `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | ヘルスプローブ結果が再チェックされる前にキャッシュされる時間。 |
 
-*(すべての調整可能な項目については `.env.optional.example` を参照してください。)*
+*（すべての調整可能な項目については`.env.optional.example`を参照してください。）*

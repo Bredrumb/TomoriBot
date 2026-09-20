@@ -18,6 +18,7 @@
       "ignoreFiles": ["src/db/seed/catalog/personas/prideful/en-US.ts"]
     },
     "apps/docs": {
+      "ignoreDependencies": ["@docs-locales", "@astrojs/markdown-remark"],
       "entry": ["src/components/FeatureCard.astro", "src/routeData.ts"],
       "project": ["src/**/*.{astro,mdx,ts}"]
     }

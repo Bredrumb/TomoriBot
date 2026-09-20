@@ -118,7 +118,6 @@ I have built-in features to help reduce costs from abusers or spammers in your s
     },
 
     visualize: {
-      description: `Generate a quick scene image from the ongoing channel context.`,
       missing_permissions_title: `Missing Permissions`,
       missing_permissions_description: `I need permission to view this channel, read message history, send messages, and attach files before I can generate a scene image here.`,
       cooldown_active: `This server's managers have configured a cooldown. Please wait **{seconds}** seconds before using \`/generate image\` in **Draw what's happening now** mode again. This cooldown is shared with message triggers and other manual commands.`,

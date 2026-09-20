@@ -2,10 +2,6 @@ export default {
   novelai: {
     description: `Configure NovelAI text and image generation for this server.`,
     "character-reference": {
-      description: `Upload or clear a NovelAI character reference image for yourself or a persona.`,
-      target_description: `Choose whether to update your own profile or a server persona.`,
-      image_description: `Reference image to store. Leave empty to clear the current image.`,
-      persona_select_title: `Select Persona`,
       invalid_image_title: `Invalid Image`,
       invalid_image_description: `Please upload an image attachment for the character reference.`,
       download_failed_title: `Download Failed`,
@@ -73,59 +69,6 @@ export default {
         error_description: `NovelAI could not generate the image.
 \`\`\`
 {error}
-\`\`\``,
-      },
-    },
-    image: {
-      description: `Manage server-wide NovelAI image generation model and parameter overrides.`,
-      parameters: {
-        description: `Override NovelAI image generation sampler and quality settings for this server.`,
-        modal_title: `NovelAI Image Generation Parameters`,
-        sampler_label: `Sampler`,
-        sampler_description: `Choose a sampler to change it. Leave it unselected to keep the current value.`,
-        sampler_placeholder_current: `Current override: {sampler}`,
-        sampler_placeholder_default: `No override set`,
-        option_default_suffix: ` (Default)`,
-        sampler_option_k_euler_ancestral: `Euler Ancestral`,
-        sampler_option_k_euler: `Euler`,
-        sampler_option_k_dpmpp_2s_ancestral: `DPM++ 2S Ancestral`,
-        sampler_option_k_dpmpp_2m_sde: `DPM++ 2M SDE`,
-        sampler_option_k_dpmpp_2m: `DPM++ 2M`,
-        sampler_option_k_dpmpp_sde: `DPM++ SDE`,
-        steps_label: `Steps`,
-        steps_description: `Integer from 1 to 50. Leave empty to use the default.`,
-        steps_placeholder: `e.g. 23`,
-        scale_label: `Prompt Guidance`,
-        scale_description: `Float from 0.0 to 10.0. Leave empty to use the default.`,
-        scale_placeholder: `e.g. 5`,
-        noise_schedule_label: `Noise Schedule`,
-        noise_schedule_description: `Choose a noise schedule to change it. Leave it unselected to keep the current value.`,
-        noise_schedule_placeholder_current: `Current override: {noise_schedule}`,
-        noise_schedule_placeholder_default: `No override set`,
-        noise_schedule_option_karras: `Karras`,
-        noise_schedule_option_exponential: `Exponential`,
-        noise_schedule_option_polyexponential: `Polyexponential`,
-        cfg_rescale_label: `Prompt Guidance Rescale`,
-        cfg_rescale_description: `Float from 0.0 to 1.0. Leave empty to use the default.`,
-        cfg_rescale_placeholder: `e.g. 0.0`,
-        invalid_sampler_title: `Invalid Sampler`,
-        invalid_sampler_description: `Sampler must be one of: {options}.`,
-        invalid_steps_title: `Invalid Steps`,
-        invalid_steps_description: `Steps must be a whole number between {min} and {max}.`,
-        invalid_scale_title: `Invalid Prompt Guidance`,
-        invalid_scale_description: `Prompt Guidance must be a number between {min} and {max}.`,
-        invalid_noise_schedule_title: `Invalid Noise Schedule`,
-        invalid_noise_schedule_description: `Noise schedule must be one of: {options}.`,
-        invalid_cfg_rescale_title: `Invalid Prompt Guidance Rescale`,
-        invalid_cfg_rescale_description: `Prompt Guidance Rescale must be a number between {min} and {max}.`,
-        success_title: `Image Generation Parameters Updated`,
-        success_description: `Effective NovelAI image generation parameters for this server:
-\`\`\`
-Sampler: {sampler}
-Steps: {steps}
-Prompt Guidance: {scale}
-Noise schedule: {noise_schedule}
-Prompt Guidance Rescale: {cfg_rescale}
 \`\`\``,
       },
     },

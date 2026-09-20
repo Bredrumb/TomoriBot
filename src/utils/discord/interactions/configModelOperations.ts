@@ -45,6 +45,7 @@ import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
+import { resolveDescription } from "@/utils/text/localizer";
 import {
   buildFallbackModelPersistence,
   getFallbackModelRefKey,
@@ -136,6 +137,7 @@ export async function loadConfigModelChoices(
   serverId: number,
   capability: ConfigCatalogModelCapability,
   provider: string,
+  locale = "en-US",
 ): Promise<ConfigModelChoice[]> {
   const owner = { kind: "server", ownerId: serverId } as const;
   switch (capability) {
@@ -145,7 +147,11 @@ export async function loadConfigModelChoices(
       const eligible = capability === "vision" ? models.filter((model) => model.sees_images) : models;
       return eligible
         .filter((model): model is LlmRow & { llm_id: number } => model.llm_id !== undefined)
-        .map((model) => ({ id: model.llm_id, name: model.llm_codename, description: model.llm_description ?? null }));
+        .map((model) => ({
+          id: model.llm_id,
+          name: model.llm_codename,
+          description: resolveDescription(model.descriptions, locale),
+        }));
     }
     case "embedding": {
       const models = (await llmModelRepo.loadAvailableEmbeddingModels(provider, false, owner)) ?? [];
@@ -157,7 +163,7 @@ export async function loadConfigModelChoices(
         .map((model) => ({
           id: model.embedding_model_id,
           name: model.codename,
-          description: model.model_description ?? null,
+          description: resolveDescription(model.descriptions, locale),
         }));
     }
     case "image":
@@ -171,7 +177,7 @@ export async function loadConfigModelChoices(
         .map((model) => ({
           id: model.diffusion_model_id,
           name: model.codename,
-          description: model.model_description ?? null,
+          description: resolveDescription(model.descriptions, locale),
         }));
     }
     case "video": {
@@ -184,7 +190,7 @@ export async function loadConfigModelChoices(
         .map((model) => ({
           id: model.video_model_id,
           name: model.codename,
-          description: model.model_description ?? null,
+          description: resolveDescription(model.descriptions, locale),
         }));
     }
   }

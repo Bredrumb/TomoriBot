@@ -5,7 +5,7 @@ sidebar:
 ---
 
 [MCP](https://modelcontextprotocol.io/) servers extend TomoriBot with external tools. Online
-(HTTPS) MCP servers work on any instance — see
+(HTTPS) MCP servers work on any instance; see
 [Tools & Extensions](/features/capabilities/tools-and-extensions/#mcp-servers). **Local** MCP servers are
 different:
 
@@ -25,7 +25,7 @@ npx -y <some-mcp-server> --port 3000
 ```
 
 The exact command depends on the server you're running. Note the URL and transport path it
-prints — commonly something like `http://localhost:3000/sse`.
+prints (commonly something like `http://localhost:3000/sse`).
 
 TomoriBot's own tooling expects **Node.js v20+** to be available for MCP tooling on the host.
 
@@ -38,7 +38,7 @@ at your local server, and leave the required **Server Type** on its default **Ge
 http://localhost:3000/sse
 ```
 
-Leave the **Auth Token** field blank — no auth token is needed for local servers.
+Leave the **Auth Token** field blank: no auth token is needed for local servers.
 
 ## 3. Manage it
 

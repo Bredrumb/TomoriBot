@@ -40,13 +40,7 @@ export const AUDITED_LOCALES = ["en-US", "ja"] as const;
  */
 export const KNOWN_UNGUARDED = new Set([
   "commands.persona.image-tags.success_description",
-  "commands.personal.image-tags.success_description",
-  "commands.config.image-tags.default-positive.success_description",
-  "commands.config.image-tags.default-positive.cleared_description",
-  "commands.config.image-tags.default-negative.success_description",
-  "commands.config.image-tags.default-negative.cleared_description",
   "commands.novelai.generate.image.error_description",
-  "commands.novelai.image.parameters.success_description",
 ]);
 
 export const TEXT_PREVIEW_REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");

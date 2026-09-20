@@ -119,13 +119,18 @@ export async function execute(
     // Build select options: persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder: ReminderSelectionRow, index: number) => {
       const personaName = reminder.persona_nickname ?? state.persona_nickname;
-      const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      const formattedTime = formatTimeWithOffset(
+        new Date(reminder.reminder_time),
+        timezoneOffset,
+        {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+        locale,
+      );
       const channelName =
         interaction.guild?.channels.cache.get(reminder.channel_disc_id)?.name ?? reminder.channel_disc_id;
       const repeatText =

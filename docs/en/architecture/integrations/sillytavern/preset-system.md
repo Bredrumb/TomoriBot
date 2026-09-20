@@ -8,11 +8,11 @@ title: "SillyTavern Preset System"
 
 SillyTavern presets are JSON files that define:
 
-1. **Prompt node ordering** — where character info, instructions, chat history, etc. appear in the final prompt
-2. **Custom prompt injection** — additional instructions, output format rules, task descriptions inserted at specific positions
-3. **Depth-based insertion** — placing prompts relative to the end of chat history
-4. **Template macros** — variables like `{{setvar::X::Y}}` / `{{getvar::X}}` for dynamic content
-5. **Per-node enable/disable** — users toggle individual prompt nodes on or off
+1. **Prompt node ordering**: where character info, instructions, chat history, etc. appear in the final prompt
+2. **Custom prompt injection**: additional instructions, output format rules, task descriptions inserted at specific positions
+3. **Depth-based insertion**: placing prompts relative to the end of chat history
+4. **Template macros**: variables like `{{setvar::X::Y}}` / `{{getvar::X}}` for dynamic content
+5. **Per-node enable/disable**: users toggle individual prompt nodes on or off
 
 This is distinct from [SillyTavern Card Import](/architecture/integrations/sillytavern/card-support/), which imports character data (description, personality, sample dialogues). Presets control *how the prompt is structured*, not *what character data exists*.
 
@@ -21,15 +21,15 @@ This is distinct from [SillyTavern Card Import](/architecture/integrations/silly
 1. User imports an ST preset JSON via `/config` > Plugins > SillyTavern Presets
 2. The preset becomes active for that server
 3. On every LLM call, the context builder detects the active preset and rearranges blocks accordingly
-4. The `/sysprompt` and personality settings still apply — the preset controls *where* they appear, not *whether* they exist
+4. The `/sysprompt` and personality settings still apply; the preset controls *where* they appear, not *whether* they exist
 5. If no preset is active, the system uses the native fixed context assembly (see [Context Assembly](../ai/context-assembly))
 6. Removing or deactivating the preset reverts to native assembly instantly
 
 ## Current Status
 
-- **Phase 1: Import & Visualization** — implemented
-- **Phase 2: Template Engine** — implemented
-- **Phase 3: Context Assembly Override** — implemented
+- **Phase 1: Import & Visualization**: implemented
+- **Phase 2: Template Engine**: implemented
+- **Phase 3: Context Assembly Override**: implemented
 - **Phase 4: Management UI**, implemented as the `/config` > Plugins > SillyTavern Presets page.
 
 ## Commands
@@ -57,20 +57,20 @@ The template engine resolves ST-specific macros in preset node content at contex
 
 ### Two-Pass Variable Resolution
 
-**Pass 1 — Collect vars**: Walk all enabled non-marker nodes in `node_order`, applying variable declarations into a shared `Map<string, string>`.
+**Pass 1: Collect vars**: Walk all enabled non-marker nodes in `node_order`, applying variable declarations into a shared `Map<string, string>`.
 
 - `{{setvar::key::value}}` replaces the current value for the key
 - `{{addvar::key::value}}` appends to the current value for the key
 
-**Pass 2 — Resolve everything**: For each enabled non-marker node:
+**Pass 2: Resolve everything**: For each enabled non-marker node:
 1. Strip `{{// comment }}` blocks
 2. Remove `{{setvar::...}}` / `{{addvar::...}}` declarations (already collected)
 3. Replace `{{getvar::key}}` from the variable map
 4. Expand content macros (`{{personality}}`, `{{description}}`, `{{scenario}}`, `{{mesExamples}}`, `{{lastChatMessage}}`)
-5. Evaluate `{{random: A, B, C}}` / `{{random::A::B::C}}` — pick a random item
-6. Evaluate `{{roll: XdY}}` — sum X random [1..Y]
-7. Process `{{trim}}` — trim whitespace; if empty, mark node as disabled
-8. Detect HTML content — set `hasHtmlWarning` flag
+5. Evaluate `{{random: A, B, C}}` / `{{random::A::B::C}}`: pick a random item
+6. Evaluate `{{roll: XdY}}`: sum X random [1..Y]
+7. Process `{{trim}}`: trim whitespace; if empty, mark node as disabled
+8. Detect HTML content: set `hasHtmlWarning` flag
 
 After preset rearrangement, `buildContext()` also performs a final random-choice pass over assembled text parts and tail directives. This catches ST preset variants that use single braces, such as `{random::apple::banana}`, and ensures `/tool prompt snapshot` shows the same rolled text the provider receives.
 
@@ -109,7 +109,7 @@ The engine tracks which content macros were expanded with real (non-empty) data 
 
 ### Compatibility Patches
 
-Some presets use additional placeholder conventions that fall outside the official ST macro spec — often because they rely on ST's regex post-processing pipeline (which TomoriBot does not implement) to substitute these tokens. We resolve them directly instead.
+Some presets use additional placeholder conventions that fall outside the official ST macro spec: often because they rely on ST's regex post-processing pipeline (which TomoriBot does not implement) to substitute these tokens. We resolve them directly instead.
 
 All compatibility patches are in one location in `stPresetEngine.ts` for easy auditing.
 
@@ -163,7 +163,7 @@ To understand what the preset system does, here's a concrete before/after compar
 ```
 
 Key observations:
-- The `/sysprompt` content still appears — it's just at the `main` marker position instead of always being first
+- The `/sysprompt` content still appears: it's just at the `main` marker position instead of always being first
 - Custom nodes (marked with ★) are new content from the preset, inserted between native blocks
 - TomoriBot-only blocks (server info, emojis, etc.) have no ST marker, so they're auto-flushed at anchor points
 - `{{setvar}}`/`{{getvar}}` are resolved at build time, not stored in the prompt
@@ -210,7 +210,7 @@ When the preset walker encounters a marker node, it pulls items from the corresp
 | `worldInfoBefore` | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG documents | Retrieved document context / uploaded docs |
 | `worldInfoAfter` | `KNOWLEDGE_SERVER_DOCUMENTS` | RAG documents | Retrieved document context / uploaded docs |
 
-**Special case: `main`** — The `main` marker pulls the first `SYSTEM_HUMANIZER_RULES` item (the system prompt) and then the `SYSTEM_CHANNEL_PROMPT` item if present, keeping a per-channel append prompt directly after the system prompt. In `replace` mode there is no separate channel block — the channel prompt has already taken over the `SYSTEM_HUMANIZER_RULES` content upstream. The persona prompt is carried by `SYSTEM_PERSONA_PROMPT` and pulled by `charDescription`.
+**Special case: `main`**: The `main` marker pulls the first `SYSTEM_HUMANIZER_RULES` item (the system prompt) and then the `SYSTEM_CHANNEL_PROMPT` item if present, keeping a per-channel append prompt directly after the system prompt. In `replace` mode there is no separate channel block; the channel prompt has already taken over the `SYSTEM_HUMANIZER_RULES` content upstream. The persona prompt is carried by `SYSTEM_PERSONA_PROMPT` and pulled by `charDescription`.
 
 These marker-controlled blocks are usually **moved, not removed**. The real suppressions are narrow:
 - The built-in fallback system prompt is removed only when a preset is active and the user has not set `/config` > Engine > General
@@ -230,7 +230,7 @@ If the preset doesn't include these anchor markers, remaining blocks are appende
 
 ### Depth Injection (Critical Design)
 
-Nodes with `injection_position: 1` are depth-injected — they target a specific position counting from the end of the conversation history.
+Nodes with `injection_position: 1` are depth-injected: they target a specific position counting from the end of the conversation history.
 
 **Key constraint:** Depth-injected content is **merged into existing dialogue history items**, not inserted as new standalone messages. This prevents role-alternation violations that would break providers with strict role ordering (Gemini, Anthropic).
 
@@ -264,7 +264,7 @@ Write the next response.
 <output_format>]
 ```
 
-This batching is transparent — the LLM sees the same instructions, just without repeated `[System: ` prefixes.
+This batching is transparent: the LLM sees the same instructions, just without repeated `[System: ` prefixes.
 
 ### Role Mapping
 
@@ -365,8 +365,8 @@ Unrecognized markers are logged as warnings and skipped.
 
 ST presets have a `prompt_order` array with entries for two scopes:
 
-- **`character_id: 100000`** — System prompt order (well-known markers only)
-- **`character_id: 100001`** — User prompt order (custom nodes + markers, preferred when present)
+- **`character_id: 100000`**: System prompt order (well-known markers only)
+- **`character_id: 100001`**: User prompt order (custom nodes + markers, preferred when present)
 
 Each entry has `{ identifier, enabled }`. The array order defines the rendering sequence.
 TomoriBot prefers the `100001` entry and falls back to `100000` only if `100001` is missing.
@@ -385,7 +385,7 @@ This section documents what our implementation supports versus what native Silly
 | `{{description}}` | Supported | Maps to persona prompt |
 | `{{mesExamples}}` | Supported | Maps to sample dialogues |
 | `{{lastChatMessage}}` | Supported | Most recent user message |
-| `{{scenario}}` | Supported (empty) | Always resolves to `""` — no TomoriBot equivalent |
+| `{{scenario}}` | Supported (empty) | Always resolves to `""`: no TomoriBot equivalent |
 | `{{setvar::key::value}}` | Supported | Replaces the variable value |
 | `{{addvar::key::value}}` | Supported | Appends to the variable value in node order |
 | `{{getvar::key}}` | Supported | Unknown keys resolve to `""` |

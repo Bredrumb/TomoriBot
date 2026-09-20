@@ -1,6 +1,4 @@
-import { Locale } from "discord.js";
-
-const discordLocaleCodes: ReadonlySet<string> = new Set(Object.values(Locale));
+import { isDiscordLocaleCode } from "@/constants/locales";
 
 /**
  * Shared primitives for Discord panel route parsing and interaction tokens.
@@ -8,7 +6,7 @@ const discordLocaleCodes: ReadonlySet<string> = new Set(Object.values(Locale));
  * implementations to avoid duplicated parsing logic and token generation.
  */
 export function parseLocale(value: string | undefined): string | null {
-  return value && discordLocaleCodes.has(value) ? value : null;
+  return value && isDiscordLocaleCode(value) ? value : null;
 }
 
 export function createNonce(): string {

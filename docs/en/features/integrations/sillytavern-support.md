@@ -15,7 +15,7 @@ sidebar:
 
 TomoriBot can import two things from [SillyTavern](https://github.com/SillyTavern/SillyTavern)
 that you may already have: **Prompt Manager presets** (how the prompt is laid out) and
-**character cards** (the character itself). This is a niche feature for ST users — if you've
+**character cards** (the character itself). This is a niche feature for ST users, so if you've
 never used SillyTavern, you can skip this page.
 
 ## Character Card Import
@@ -38,13 +38,14 @@ it through the SillyTavern conversion flow. You can also feed a card to `/person
 transform it into a fresh persona.
 
 Imports pass through a validation schema before anything is saved (default caps: 5,000
-characters per string, 200 attributes, 100 sample dialogues per side, 100 trigger words —
+characters per string, 200 attributes, 100 sample dialogues per side, 100 trigger words;
 self-hosters can tune the `PRESET_MAX_*` env vars). Archive reads are separately bounded by the
 `MAX_CHARX_*` env vars, because an archive's compressed size says nothing about what it expands
 to. For the exact conversion and field mapping, see the
 [card-support architecture](/architecture/integrations/sillytavern/card-support/).
 
 ## Prompt Presets
+<!-- anchor: prompt-presets -->
 
 A SillyTavern Prompt Manager preset controls the **layout** of the prompt. Use `/config` > Plugins
 > SillyTavern Presets to import presets, inspect enabled nodes, switch between presets, or return
@@ -78,7 +79,7 @@ A preset owns the *layout*, not every source of text. These still exist alongsid
 
 ### System Prompt Rule
 
-While a preset is active, the built-in fallback system prompt is removed — but if *you* set
+While a preset is active, the built-in fallback system prompt is removed, but if *you* set
 your own with `/config` > Engine > General, it's still sent.
 
 ### Compatibility Notes
@@ -88,7 +89,7 @@ Common surprises when a preset seems ignored:
 - Imported ≠ sent: nodes disabled in `prompt_order` stay off until you enable them with
   `/config` > Plugins > SillyTavern Presets. Comment-only and empty nodes are never sent; unknown markers are
   skipped.
-- Order is literal — placing `chatHistory` before `dialogueExamples` sends live chat first.
+- Order is literal: placing `chatHistory` before `dialogueExamples` sends live chat first.
 - Post-history/depth injections merge into existing chat-history entries rather than becoming
   standalone messages; multiple nodes at the same depth are batched.
 - Regex post-processing, preset-side temperature/top-p/model overrides, and layered presets

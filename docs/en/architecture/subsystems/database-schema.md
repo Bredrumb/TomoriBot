@@ -59,7 +59,7 @@ lookup; it does not make a query compatible with columns removed by a migration.
 ### SQL convention
 
 SQL stays in its owning repository module, either in `private` class methods or focused module-level
-functions. Separate `*ReadSql.ts` / `*WriteSql.ts` sibling files are forbidden —
+functions. Separate `*ReadSql.ts` / `*WriteSql.ts` sibling files are forbidden;
 `checkRefactorIntegrity.ts` will flag any surviving SQL sibling at gate time. If inlining SQL pushes a
 Repository file past ~1,000 lines, that signals the domain is too broad: **split the Repository itself**
 (e.g. `LlmRepository` → `LlmModelRepository` + `LlmProviderRepository` + `LlmOverrideRepository`) rather
@@ -74,39 +74,39 @@ than externalising SQL. Size is the signal; the split must follow a coherent dom
 - `persona_configs`
 - `users`
 
-### Server config normalization (Phase 6 Step #14 — complete)
+### Server config normalization (Phase 6 Step #14; complete)
 
 `tomori_configs` was split across 14 command-aligned tables and dropped (migration `008_drop_tomori_configs.sql`):
 
-- `server_chat_configs` — `/config` > Engine > General (humanizer and message fetch limit), model parameters, `cascade_limit`, `match_limit`, `context_note`, `context_note_depth`
-- `server_notice_embeds_configs` — `/config` > Engine > Notices
-- `server_member_permissions_configs` — `/moderation` Member Access; `/config` > Permissions also writes `self_teaching_enabled` and `personal_memories_enabled`
-- `server_channel_scope_configs` — `/config` > Channels > Channel Rules (roleplay, private, and cross-channel blocklist sets), thought-log channel
-- `server_welcome_configs` — `/config` > Channels > Logs & Welcome
-- `server_trigger_behavior_configs` — `/config` > Engine > Trigger (always-reply and deliberate trigger mode), cooldown settings (`ServerScheduleRepository`)
-- `server_auto_trigger_configs` — `/config` > Channels > Auto-Trigger channels + threshold (`ServerScheduleRepository`)
-- `server_capabilities_configs` — `/config` > Permissions feature and tool toggles, plus the Compatibility workarounds on `/config` > Engine > Experimental
-- `server_novelai_imagegen_configs` — `/novelai` image parameters, `/config` > Models > Image Generation Defaults defaults, `nai_diffusion_model_id`
-- `server_nsfw_configs` — `/nsfw` jailbreak toggles
-- `server_speech_configs` — `/config` Models > TTS Parameters & Voices Chatterbox parameters, `chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, `chatterbox_exaggeration`
-- `server_byok_configs` — `/moderation` ((Member Access)) server model access
-- `server_memory_configs` — `/config` > Engine > Memory & STM settings (`ServerMemoryRepository`)
-- `server_model_configs` — active model-selection FKs (`llm_id`, `embedding_model_id`, `diffusion_model_id`, `video_model_id`, `vision_llm_id`) plus runtime credential/thinking mirrors and Phase 3 inline custom endpoint fields that remain on the active assembled server config
+- `server_chat_configs`: `/config` > Engine > General (humanizer and message fetch limit), model parameters, `cascade_limit`, `match_limit`, `context_note`, `context_note_depth`
+- `server_notice_embeds_configs`: `/config` > Engine > Notices
+- `server_member_permissions_configs`: `/moderation` Member Access; `/config` > Permissions also writes `self_teaching_enabled` and `personal_memories_enabled`
+- `server_channel_scope_configs`: `/config` > Channels > Channel Rules (roleplay, private, and cross-channel blocklist sets), thought-log channel
+- `server_welcome_configs`: `/config` > Channels > Logs & Welcome
+- `server_trigger_behavior_configs`: `/config` > Engine > Trigger (always-reply and deliberate trigger mode), cooldown settings (`ServerScheduleRepository`)
+- `server_auto_trigger_configs`: `/config` > Channels > Auto-Trigger channels + threshold (`ServerScheduleRepository`)
+- `server_capabilities_configs`: `/config` > Permissions feature and tool toggles, plus the Compatibility workarounds on `/config` > Engine > Experimental
+- `server_novelai_imagegen_configs`: `/novelai` image parameters, `/config` > Models > Image Generation Defaults defaults, `nai_diffusion_model_id`
+- `server_nsfw_configs`: `/nsfw` jailbreak toggles
+- `server_speech_configs`: `/config` Models > TTS Parameters & Voices Chatterbox parameters, `chatterbox_turbo_enabled`, `chatterbox_cfg_weight`, `chatterbox_exaggeration`
+- `server_byok_configs`: `/moderation` ((Member Access)) server model access
+- `server_memory_configs`: `/config` > Engine > Memory & STM settings (`ServerMemoryRepository`)
+- `server_model_configs`: active model-selection FKs (`llm_id`, `embedding_model_id`, `diffusion_model_id`, `video_model_id`, `vision_llm_id`) plus runtime credential/thinking mirrors and Phase 3 inline custom endpoint fields that remain on the active assembled server config
 
-### Persona config normalization (Phase 6 Step #14 — complete)
+### Persona config normalization (Phase 6 Step #14; complete)
 
 `personas` persona-specific config columns were extracted to 4 tables. Migration `045_backfill_persona_split_configs.sql` backfills these tables from the old `personas` mirrors with mirror values winning drift, and migration `046_drop_persona_mirror_columns.sql` drops the 13 mirror columns after runtime reads cut over:
 
-- `persona_context_note_configs` — per-persona context note + depth
-- `persona_voice_configs` — `speech_voice_*` (`elevenlabs_voice_*` dropped by migration 010, Phase 6 Step #14.2)
-- `persona_imagegen_configs` — `physical_appearance_tags`, `nai_char_ref_url`
-- `persona_textgen_configs` — NovelAI ATTG author/title/tags/genre/stars
+- `persona_context_note_configs`: per-persona context note + depth
+- `persona_voice_configs`: `speech_voice_*` (`elevenlabs_voice_*` dropped by migration 010, Phase 6 Step #14.2)
+- `persona_imagegen_configs`: `physical_appearance_tags`, `nai_char_ref_url`
+- `persona_textgen_configs`: NovelAI ATTG author/title/tags/genre/stars
 
-### User personalization normalization (Phase 6 Step #14 — complete through column drop)
+### User personalization normalization (Phase 6 Step #14; complete through column drop)
 
 `users` personalization columns live in one split table:
 
-- `user_personalization_configs` — `shortterm_cache_crossserver_opt_in`, `physical_appearance_tags`, `nai_char_ref_url`, `impersonation_prompt`, `personal_dtm`
+- `user_personalization_configs`: `shortterm_cache_crossserver_opt_in`, `physical_appearance_tags`, `nai_char_ref_url`, `impersonation_prompt`, `personal_dtm`
 
 ### Model registries
 
@@ -152,8 +152,8 @@ than externalising SQL. Size is the signal; the split must follow a coherent dom
 - `error_logs`
 - `opt_api_keys`
 - `api_key_rotation` (config/credentials only)
-- `api_key_rotation_runtime_state` (telemetry: usage, errors, cooldown — excluded from export)
-- `persona_autoch_runtime_state` (autochat counters per persona — excluded from export)
+- `api_key_rotation_runtime_state` (telemetry: usage, errors, cooldown; excluded from export)
+- `persona_autoch_runtime_state` (autochat counters per persona; excluded from export)
 - `saved_provider_configs`
 - `user_saved_provider_configs`
 - `custom_endpoint_connections`
@@ -337,8 +337,8 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
   deletes the owner's snapshot and scoped registration rows; the server path also deletes that provider's
   rotation pool. Shared catalog rows remain available to other scopes.
 - `llms.input_price_per_million` and `llms.output_price_per_million` hold each model's official USD-per-million-token price (uncached standard rate), seeded from the typed catalog (`src/db/seed/catalog/models.ts`). Both are **nullable**: NovelAI / NVIDIA-free / `custom` / Gemma / `:free` rows are non-metered, and `gemini-3.5-pro` / `gemini-3-flash` stay NULL until Google publishes a rate. `/tool estimate cost` resolves price through `resolveModelPricing`:
-  - **First-party providers** (google/vertex/vertexexpress/anthropic/deepseek/zai/zaicoding) are **DB-only** — the column is the sole source of truth. The old `HELP_COST_*` env constants and the Anthropic codename-sniffing tier guess were removed; a row with no price now reports **"pricing unavailable"** rather than billing a coarse fallback.
-  - **OpenRouter** is priced **live-first** from the OpenRouter API cache (`getOpenRouterPricing`), which auto-updates with OpenRouter's rates. A catalog price on an OpenRouter row is only a **cache-miss fallback** — used solely when the live cache has no entry for that model.
+  - **First-party providers** (google/vertex/vertexexpress/anthropic/deepseek/zai/zaicoding) are **DB-only**: the column is the sole source of truth. The old `HELP_COST_*` env constants and the Anthropic codename-sniffing tier guess were removed; a row with no price now reports **"pricing unavailable"** rather than billing a coarse fallback.
+  - **OpenRouter** is priced **live-first** from the OpenRouter API cache (`getOpenRouterPricing`), which auto-updates with OpenRouter's rates. A catalog price on an OpenRouter row is only a **cache-miss fallback**: used solely when the live cache has no entry for that model.
   - OpenRouter rows are nonetheless kept **populated** in the DB, by two paths: `syncOpenrouterCatalogPricing` (`src/init/loaders.ts`) mirrors every live rate onto the matching `llm_provider = 'openrouter'` row at startup, and `upsertScopedLlm` writes the rate when a scoped model is registered. This exists for the **stat cost surfaces**, which compute cost entirely in SQL (`StatRepository.getEstimatedCost` / `getPersonaTokenCostBreakdown` / `getModelCostBreakdown` join `llms`) and therefore cannot reach an in-memory cache: without the mirror, every OpenRouter token reports as **$0.00** in `/stats`, including the headline estimated-cost figure. The mirror updates only rows whose stored rate actually differs, and a re-registration that resolves no live rate `COALESCE`s rather than nulling an existing price. Pricing **authority** is unchanged: request-time math still reads the live cache first.
   - `bun run check-seed-catalogs` enforces that every active, billable first-party row carries both prices (`collectMeteredPriceViolations` in `modelSeed.ts`), excluding deprecated / Gemma / `isFree` / pricing-pending rows.
 
@@ -352,7 +352,7 @@ Encrypted columns are stored as `BYTEA` with key version tracking:
 - A `custom:<connection_id>` provider skips that join. Its stable connection ID already restricts the model to its owning server or user, so a second registration row would duplicate scope state and could make existing endpoint models disappear.
 - OpenRouter registrations are validated against its capability-specific catalogs. Manager-added models are identified as custom registrations in the provider panel, regardless of how their identifiers were resolved.
 - A deprecated catalog row can be promoted to a scoped registration. The scoped upsert clears deprecation, moves the row out of the global branch, and leaves it visible only through matching owner registrations.
-- The per-boot catalog seed promotes a scoped row back to a globally curated row when the incoming catalog entry is live. Each capability upsert allows the update when `EXCLUDED.is_deprecated = false`; deprecated seed entries still cannot overwrite a scoped registration. Existing registration rows become harmless once the backing row is global.
+- `llms`, `image_diffusion_models`, `video_generation_models`, `embedding_models`, `system_prompt_presets`, and `nai_presets` each have a nullable `descriptions JSONB` map keyed by Discord locale code. Migration 081 backfilled the English and Japanese entries from the legacy columns, and migration 082 dropped the old `ja_description` and `ja_preset_desc` columns. Seed catalogs supply the English source as `desc` and optional translations as `i18n`; every boot upserts the JSONB map. User-facing reads resolve exact locale, base language, a matching regional variant, then `en-US` from the JSONB map. System prompt bodies remain English-only. Adding a description translation is a typed catalog edit and needs no new migration.
 
 ### Logit bias snapshot storage
 
@@ -383,13 +383,13 @@ Two runtime-state tables hold high-frequency telemetry that does not belong in i
 | `api_key_rotation_runtime_state` | `api_key_rotation(rotation_key_id)` | `usage_count`, `error_count`, cooldown timestamps | migration 014 |
 | `persona_autoch_runtime_state` | `personas(persona_id)` | `autoch_counter`, `autoch_next_target` | migration 015 |
 
-**`persona_autoch_runtime_state`** — FK column is `persona_id` (same pattern as `server_auto_trigger_persona_overrides`). Mutated on every message processed by the autochat tick via UPSERT (`ConfigRepository.incrementTomoriCounter`). ON DELETE CASCADE ensures runtime cleanup is atomic with persona deletion. New personas auto-initialize on first UPSERT; the state is also loaded during `PersonaRepository.loadTomoriState` and batch-loaded by `loadAllPersonasForServer`. `TomoriState.autoch_counter` and `TomoriState.autoch_next_target` are sourced from this table, not from `personas`.
+**`persona_autoch_runtime_state`**: FK column is `persona_id` (same pattern as `server_auto_trigger_persona_overrides`). Mutated on every message processed by the autochat tick via UPSERT (`ConfigRepository.incrementTomoriCounter`). ON DELETE CASCADE ensures runtime cleanup is atomic with persona deletion. New personas auto-initialize on first UPSERT; the state is also loaded during `PersonaRepository.loadTomoriState` and batch-loaded by `loadAllPersonasForServer`. `TomoriState.autoch_counter` and `TomoriState.autoch_next_target` are sourced from this table, not from `personas`.
 
 ### Stat tracking (usage telemetry, migration 035)
 
 `stat_counters` is high-frequency usage telemetry and shares the runtime-state class: it cascades on its FKs and is **excluded from export** (same drift-checker exemption list as the `*_runtime_state` tables, even though its name omits the `_runtime_state` suffix because it is a per-day counter table, not a single-row state row). Owned by `StatRepository`. See `plans/stat-tracking.md` for the full design.
 
-It is a **long/narrow, pre-aggregated counter table** — one row per `(server_id, user_id, persona_lineage_id, metric, metric_key, bucket)`, incremented by additive UPSERT, never an event log. A day of N events for one tuple is one row with `count = N`.
+It is a **long/narrow, pre-aggregated counter table**: one row per `(server_id, user_id, persona_lineage_id, metric, metric_key, bucket)`, incremented by additive UPSERT, never an event log. A day of N events for one tuple is one row with `count = N`.
 
 | Column | Notes |
 |---|---|
@@ -397,24 +397,24 @@ It is a **long/narrow, pre-aggregated counter table** — one row per `(server_i
 | `persona_lineage_id` | `BIGINT NOT NULL DEFAULT 0`. Cross-server persona anchor (mirrors `personal_memories` / `conditioning_history`). `0` sentinel = persona-agnostic metric. |
 | `metric` / `metric_key` | Metric name + sub-key (command name, model id, hour, impersonated Discord user ID, or `''`). Catalog: `src/constants/statMetrics.ts`. |
 | `bucket` | Plain `DATE` (daily grain). Weeks/months/all-time compose via `SUM`; a future downsampling job needs no schema change. |
-| `count` | `BIGINT` generic accumulator — events add 1, token metrics add the token delta. |
+| `count` | `BIGINT` generic accumulator: events add 1, token metrics add the token delta. |
 
 Key behaviors:
 
-- **Buffered writes.** `StatRepository.recordStat(...)` accumulates deltas in an in-memory `Map` keyed by the PK tuple; `flush()` drains a snapshot as one multi-row additive UPSERT (`count = count + EXCLUDED.count`). Interval, size-cap, dashboard/card, and shutdown callers share one in-flight promise, so shutdown waits for an active transaction and then drains entries recorded while it ran. Flush triggers: interval (`STAT_FLUSH_INTERVAL_MS`), size cap (`STAT_FLUSH_MAX_BUFFER`), explicit dashboard/card reads, and graceful shutdown (`statRepository.shutdown()` from the SIGINT/SIGTERM handler). A hard crash loses only the unflushed buffer — accepted tradeoff for aggregate telemetry. Kill switch: `STAT_TRACKING_ENABLED`.
+- **Buffered writes.** `StatRepository.recordStat(...)` accumulates deltas in an in-memory `Map` keyed by the PK tuple; `flush()` drains a snapshot as one multi-row additive UPSERT (`count = count + EXCLUDED.count`). Interval, size-cap, dashboard/card, and shutdown callers share one in-flight promise, so shutdown waits for an active transaction and then drains entries recorded while it ran. Flush triggers: interval (`STAT_FLUSH_INTERVAL_MS`), size cap (`STAT_FLUSH_MAX_BUFFER`), explicit dashboard/card reads, and graceful shutdown (`statRepository.shutdown()` from the SIGINT/SIGTERM handler). A hard crash loses only the unflushed buffer (accepted tradeoff for aggregate telemetry). Kill switch: `STAT_TRACKING_ENABLED`.
 - **No mutating-column indexes.** Secondary indexes cover only the stable dimension columns; `count` / `last_at` are never indexed so hot counter rows keep Postgres HOT updates. "Top N" is sorted at read time.
 - **Reads** (`getFavoritePersona`, `getTopCommands` / `getUnusedCommands`, `getModelBreakdown`, `getEstimatedCost`, `getActivityHistogram`, `getStreak`, `getGenerationTotals`) are windowed by `bucket >= from` + `SUM` and hit the DB directly (no read cache in Phase 1). `getGenerationTotals` sums the canonical `text_generated` / `image_generated` / `video_generated` metrics (image/video summed across their per-model `metric_key`); quota tables remain enforcement-only. `audio_generated` is recorded (keyed by TTS backend) but not yet surfaced by `getGenerationTotals`. `getConditioningTotals` is the sole read-existing wrapper and aggregates `conditioning_history`.
 - **Never-used commands need a dimension table.** `command_used` only gains a row once a command is invoked, so unused commands are *absent* from `stat_counters` and no query over it alone can list them. The `command_catalog` table (below) supplies the full command universe to `LEFT JOIN` against.
-- **Instrumented chokepoints:** `command_used` (command dispatch), `message_sent` / `active_hour` / `model_used` / `tokens_in` / `tokens_out` / `emoji_used` / `sprite_shown` / `text_generated` / `user_impersonation_triggered` (post-turn effects), `tool_used` (single tool-dispatch chokepoint; per-tool breakdown via `metric_key`), `image_generated` / `video_generated` (successful generation paths, keyed by model codename for a per-model breakdown; totals still sum over keys), and `audio_generated` (successful voice-message paths, keyed by TTS backend — `elevenlabs` / `tts-clone` / `tts-voice-design`; `tool_used` still counts the `generate_voice_message` call). `user_impersonation_triggered` is written once per completed impersonation turn: `user_id` is the triggering actor, `persona_lineage_id` is the answering Tomori persona, and `metric_key` is the impersonated Discord user ID. It is retained for future reads but is not currently surfaced by `/stats` or `/stats generate`. `tokens_in` / `tokens_out` prefer **real provider usage** when surfaced: the orchestrator normalizes each provider's reported usage (`normalizeProviderUsage`) onto `StreamResult.usage`, and `recordUsageStats` sums it across the turn's stream segments (one per tool-loop request, each billed separately). Real usage flows for OpenRouter, OpenAI-compatible (DeepSeek/Z.AI/NVIDIA/Custom), Anthropic, and Gemini (Google/Vertex/VertexExpress). When no segment reports usage (e.g. NovelAI), tokens fall back to the **character estimate** (the Track-A fallback shared with `/tool estimate cost` via `@/utils/text/tokenEstimate` — input from the built context, output from the response text; over-counts dense languages, rough only). Either path uses the identical metric shape, so cost reads are unchanged. Expression metrics are **delivery-gated** (they count what Discord accepted, not what the model produced): `emoji_used` counts resolved `<:name:id>` tags scanned from each stream segment's `StreamResult.accumulatedText`, which is appended only after a successful send, *not* from `personaResponses[].text`, whose appended `[Scene Metadata]` block (drained out of `<details>`) never reaches the channel; `sprite_shown` is surfaced from the stream via `StreamResult.spritesShown` (the stream layer has no internal user id, so attribution happens post-turn). `sticker_used` is emitted on confirmed delivery in `postTurnEffects.recordStickerDelivery`, keyed by the canonical resolved sticker name (per-sticker breakdown; the `tool_used` row at tool dispatch still counts the *call*, so a selected-but-undelivered sticker shows there and nowhere else). `provider_error` is written by `BaseStreamAdapter.onProviderError` (the single seam every terminal provider failure funnels through), keyed `{provider}:{code}` and persona-agnostic; paired with `model_used` it makes a per-model success rate computable, which is the signal that catches a default model failing 100% of the time without waiting for a bug report. It is **operational telemetry only**: nothing behavioral may read it, so no persona, routing, or model-selection decision takes a failure rate as input. Failures with no resolved server or triggerer (DMs, scheduler-driven flows) record nothing rather than inventing a sentinel row. `panel_action` is emitted by interactive panel routes (`configMcpRoutes`, `stPresetsRoutes`, `providersRoutes`, `moderationRoutes`) via `recordPanelActionStat` upon successful domain operations, keyed by closed action names matching `<surface>.<scope>.<resource>.<verb>` (defined in `src/constants/panelActions.ts`) and persona-agnostic (lineage 0). It captures operator configuration activity across server and personal scopes without widening `command_used` or requiring synthetic command rows. **It counts completed work, not clicks:** a modal open, a confirmation page, a cancel, a page or range change, a retry, a permission denial, a failed write, and a submit whose operation returns `unchanged` all record nothing, so the emit condition reads the operation's success discriminator rather than the receipt tone (several panels deliberately render `unchanged` as a user-facing success). It is DM-capable, resolving the same workspace the panel resolved (`guildId ?? user.id`), which needs no schema change because a DM-backed workspace already has a real `servers` row. Like `provider_error`, it is operational telemetry and has no behavioral readers. Still reserved (no dedicated emit): the split-out `web_search` / `memory_taught` / `reminder_set` metrics, currently captured under `tool_used` by name.
+- **Instrumented chokepoints:** `command_used` (command dispatch), `message_sent` / `active_hour` / `model_used` / `tokens_in` / `tokens_out` / `emoji_used` / `sprite_shown` / `text_generated` / `user_impersonation_triggered` (post-turn effects), `tool_used` (single tool-dispatch chokepoint; per-tool breakdown via `metric_key`), `image_generated` / `video_generated` (successful generation paths, keyed by model codename for a per-model breakdown; totals still sum over keys), and `audio_generated` (successful voice-message paths, keyed by TTS backend: `elevenlabs` / `tts-clone` / `tts-voice-design`; `tool_used` still counts the `generate_voice_message` call). `user_impersonation_triggered` is written once per completed impersonation turn: `user_id` is the triggering actor, `persona_lineage_id` is the answering Tomori persona, and `metric_key` is the impersonated Discord user ID. It is retained for future reads but is not currently surfaced by `/stats` or `/stats generate`. `tokens_in` / `tokens_out` prefer **real provider usage** when surfaced: the orchestrator normalizes each provider's reported usage (`normalizeProviderUsage`) onto `StreamResult.usage`, and `recordUsageStats` sums it across the turn's stream segments (one per tool-loop request, each billed separately). Real usage flows for OpenRouter, OpenAI-compatible (DeepSeek/Z.AI/NVIDIA/Custom), Anthropic, and Gemini (Google/Vertex/VertexExpress). When no segment reports usage (e.g. NovelAI), tokens fall back to the **character estimate** (the Track-A fallback shared with `/tool estimate cost` via `@/utils/text/tokenEstimate`: input from the built context, output from the response text; over-counts dense languages, rough only). Either path uses the identical metric shape, so cost reads are unchanged. Expression metrics are **delivery-gated** (they count what Discord accepted, not what the model produced): `emoji_used` counts resolved `<:name:id>` tags scanned from each stream segment's `StreamResult.accumulatedText`, which is appended only after a successful send, *not* from `personaResponses[].text`, whose appended `[Scene Metadata]` block (drained out of `<details>`) never reaches the channel; `sprite_shown` is surfaced from the stream via `StreamResult.spritesShown` (the stream layer has no internal user id, so attribution happens post-turn). `sticker_used` is emitted on confirmed delivery in `postTurnEffects.recordStickerDelivery`, keyed by the canonical resolved sticker name (per-sticker breakdown; the `tool_used` row at tool dispatch still counts the *call*, so a selected-but-undelivered sticker shows there and nowhere else). `provider_error` is written by `BaseStreamAdapter.onProviderError` (the single seam every terminal provider failure funnels through), keyed `{provider}:{code}` and persona-agnostic; paired with `model_used` it makes a per-model success rate computable, which is the signal that catches a default model failing 100% of the time without waiting for a bug report. It is **operational telemetry only**: nothing behavioral may read it, so no persona, routing, or model-selection decision takes a failure rate as input. Failures with no resolved server or triggerer (DMs, scheduler-driven flows) record nothing rather than inventing a sentinel row. `panel_action` is emitted by interactive panel routes (`configMcpRoutes`, `stPresetsRoutes`, `providersRoutes`, `moderationRoutes`) via `recordPanelActionStat` upon successful domain operations, keyed by closed action names matching `<surface>.<scope>.<resource>.<verb>` (defined in `src/constants/panelActions.ts`) and persona-agnostic (lineage 0). It captures operator configuration activity across server and personal scopes without widening `command_used` or requiring synthetic command rows. **It counts completed work, not clicks:** a modal open, a confirmation page, a cancel, a page or range change, a retry, a permission denial, a failed write, and a submit whose operation returns `unchanged` all record nothing, so the emit condition reads the operation's success discriminator rather than the receipt tone (several panels deliberately render `unchanged` as a user-facing success). It is DM-capable, resolving the same workspace the panel resolved (`guildId ?? user.id`), which needs no schema change because a DM-backed workspace already has a real `servers` row. Like `provider_error`, it is operational telemetry and has no behavioral readers. Still reserved (no dedicated emit): the split-out `web_search` / `memory_taught` / `reminder_set` metrics, currently captured under `tool_used` by name.
 - **`presence_seen` is behavioral, not telemetry.** It is a two-phase write owned by `@/utils/chat/reunionPresence`: the direct triggerer's scope and one-shot claim are resolved at context build (`resolveReunionNote`), then a successful response is committed post-turn (`recordReunionPresence`). It is the only metric recorded in DMs because it answers "when did this persona last interact with this person", which drives reunion notes (see [dialogue history](/architecture/pipelines/context-build/02-native-assembly/11-dialogue-history/)). The write bypasses the telemetry buffer so another channel immediately observes it. Failed, empty, passive-bystander, and claim-suppressed turns do not consume a reunion. No `/stats` read surfaces `presence_seen`.
 
 ### Command catalog (command dimension table, migration 049)
 
-`command_catalog` is the **dimension table** that materializes the full universe of registered commands so telemetry consumers can report *never-used* commands. It exists because `stat_counters` is a fact table: a command with zero uses has no `command_used` row, so a leaderboard built from `stat_counters` alone silently omits it. Global (no `server_id`) — the command set is the same everywhere the bot runs.
+`command_catalog` is the **dimension table** that materializes the full universe of registered commands so telemetry consumers can report *never-used* commands. It exists because `stat_counters` is a fact table: a command with zero uses has no `command_used` row, so a leaderboard built from `stat_counters` alone silently omits it. Global (no `server_id`): the command set is the same everywhere the bot runs.
 
 | Column | Notes |
 |---|---|
-| `command_name` | `TEXT PRIMARY KEY`. The **space-joined full path** — identical to `stat_counters.metric_key` for `command_used` (e.g. `update`, `config humanizer`, `server welcome-channel set`), so the two tables `LEFT JOIN` with no remapping. |
+| `command_name` | `TEXT PRIMARY KEY`. The **space-joined full path** (identical to `stat_counters.metric_key` for `command_used`, e.g. `update`, `config humanizer`, `server welcome-channel set`), so the two tables `LEFT JOIN` with no remapping. |
 | `category` | Top-level command/category name (first path segment). |
 | `first_seen_at` / `last_synced_at` | Insert time (preserved across syncs) and last reconciliation time. |
 
@@ -490,10 +490,10 @@ conflict** and both can land silently.
 
 This is contained by two independent layers:
 
-1. **Detection** — the uniqueness check in `bun run check-migrations` (above) fails
+1. **Detection**: the uniqueness check in `bun run check-migrations` (above) fails
    for whichever PR merges second, whose fix is a one-line rename to the next free
    number.
-2. **Deterministic apply order** — see below. Even if a duplicate ever slips
+2. **Deterministic apply order**: see below. Even if a duplicate ever slips
    through, the runner applies the pair in a stable, environment-independent order.
 
 ### Apply ordering
@@ -515,7 +515,7 @@ pending.sort((a, b) => {
 - Both the upgrade path (`runMigrations()`) and the fresh-install marker path
   (`markAllMigrationsApplied()`) call `getPendingMigrations()`, so a same-numbered
   pair is recorded/applied in the **same** sequence on a clean install and an
-  upgraded one — no fresh-vs-upgraded divergence.
+  upgraded one: no fresh-vs-upgraded divergence.
 - This guarantees *stability*, not dependency correctness: an alphabetically-later
   migration must not depend on the schema changes of an alphabetically-earlier
   sibling that shares its number. Same-number siblings must be mutually
@@ -533,7 +533,7 @@ bun run scripts/db/migrate.ts
 
 - Every migration ships with either a paired `.down.sql` that reverses the change in one transaction, or a documented "if this fails, here's how to recover" runbook in the migration's PR description.
 - For destructive migrations (`DROP COLUMN`, `DROP TABLE`): require a soak period of at least one release where the column/table is unused but still present, so rollback is a code revert rather than a data restore.
-- Forward-only migrations on shared tables are not acceptable — they turn every deployment into a one-way door.
+- Forward-only migrations on shared tables are not acceptable; they turn every deployment into a one-way door.
 
 ### When to use migrations vs. seed catalogs
 
@@ -558,7 +558,7 @@ The persona upsert keys on the stable `(preset_lineage_id, preset_language)` pai
 `persona_preset_name`. `persona_preset_name` is a mutable, human-facing catalog label, so it
 is a normal updated column: renaming a preset is a one-line edit to the catalog `name` field
 that resolves to the existing lineage/language row and updates the label in place on the next
-boot — no rename bridge or migration required. (Keying on the name would instead orphan the
+boot: no rename bridge or migration required. (Keying on the name would instead orphan the
 old row, create a duplicate, and collide with `idx_persona_presets_lineage_language_unique`,
 aborting the whole batch INSERT.)
 

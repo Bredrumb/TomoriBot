@@ -6,6 +6,7 @@ import { getOrFetchOpenRouterVideoModelCapabilities } from "@/utils/cache/openro
 import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
+import { resolveDescription } from "@/utils/text/localizer";
 
 export type OpenRouterModelRegistryScope =
   | {
@@ -55,7 +56,7 @@ function buildRegisteredEntryFromLlm(llm: LlmRow): RegisteredOpenRouterModelEntr
   return {
     capability: "text",
     codename: llm.llm_codename,
-    description: llm.llm_description ?? llm.ja_description ?? llm.llm_codename,
+    description: resolveDescription(llm.descriptions, "en-US") ?? llm.llm_codename,
     modelId: llm.llm_id,
   };
 }
@@ -68,7 +69,7 @@ function buildRegisteredEntryFromEmbeddingModel(model: EmbeddingModelRow): Regis
   return {
     capability: "embedding",
     codename: model.codename,
-    description: model.model_description ?? model.ja_description ?? model.codename,
+    description: resolveDescription(model.descriptions, "en-US") ?? model.codename,
     modelId: model.embedding_model_id,
   };
 }
@@ -81,7 +82,7 @@ function buildRegisteredEntryFromDiffusionModel(model: DiffusionModelRow): Regis
   return {
     capability: "image",
     codename: model.codename,
-    description: model.model_description ?? model.ja_description ?? model.codename,
+    description: resolveDescription(model.descriptions, "en-US") ?? model.codename,
     modelId: model.diffusion_model_id,
   };
 }
@@ -94,7 +95,7 @@ function buildRegisteredEntryFromVideoModel(model: VideoGenerationModelRow): Reg
   return {
     capability: "video",
     codename: model.codename,
-    description: model.model_description ?? model.ja_description ?? model.codename,
+    description: resolveDescription(model.descriptions, "en-US") ?? model.codename,
     modelId: model.video_model_id,
   };
 }

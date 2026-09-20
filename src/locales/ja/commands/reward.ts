@@ -3,6 +3,7 @@ export default {
     description: `私へのご褒美インタラクション。`,
     headpat: {
       description: `ヘッドパットして応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしてご褒美をくれるの？`,
       embed_title: `🫳 ヘッドパット・タイム！`,
       embed_description: `{user}は現在{bot}をなでています。`,
@@ -11,6 +12,7 @@ export default {
     },
     hug: {
       description: `ハグして応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしてご褒美をくれるの？`,
       embed_title: `🤗 ハグ・タイム！`,
       embed_description: `{user}は{bot}をぎゅっと抱きしめています。`,
@@ -19,6 +21,7 @@ export default {
     },
     kiss: {
       description: `キスして応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしてご褒美をくれるの？`,
       embed_title: `💋 キス・タイム！`,
       embed_description: `{user}は{bot}にキスしました。`,
@@ -27,6 +30,7 @@ export default {
     },
     tickle: {
       description: `くすぐって応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしてご褒美をくれるの？`,
       embed_title: `🤭 くすぐり・タイム！`,
       embed_description: `{user}は{bot}をくすぐっています。`,
@@ -35,6 +39,7 @@ export default {
     },
     feed: {
       description: `美味しいものを食べさせて応答をトリガーします。`,
+      persona_description: `対象のペルソナを選択してください。`,
       reason_description: `どうしてご褒美をくれるの？`,
       food_description: `何を食べさせますか？`,
       embed_title: `🍴 スナック・タイム！`,

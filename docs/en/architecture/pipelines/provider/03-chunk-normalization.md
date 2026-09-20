@@ -4,8 +4,8 @@ title: "03: Chunk Normalization"
 
 Converts a provider-native `RawStreamChunk` into the uniform `ProcessedChunk` shape the orchestrator routes.
 
-**Contract:** `BaseStreamAdapter.processChunk` — `src/types/stream/interfaces.ts:247`
-**Canonical implementation:** `GoogleStreamAdapter.processChunk` — `src/providers/google/googleStreamAdapter.ts:649-760`
+**Contract:** `BaseStreamAdapter.processChunk`: `src/types/stream/interfaces.ts:247`
+**Canonical implementation:** `GoogleStreamAdapter.processChunk`: `src/providers/google/googleStreamAdapter.ts:649-760`
 
 ## Mission
 
@@ -26,7 +26,7 @@ interface ProcessedChunk {
 
 The method also handles three additional responsibilities:
 
-- **Error normalisation** — raw SDK errors (HTTP status codes, provider-specific error objects)
+- **Error normalisation**: raw SDK errors (HTTP status codes, provider-specific error objects)
   are converted to the shared `ProviderError` shape via `handleProviderError()`. This includes
   classifying the error type (`api_error`, `rate_limit`, `content_blocked`, `timeout`,
   `provider_overloaded`, `model_error`) and setting `retryable` so the stage 04 orchestrator and
@@ -35,25 +35,25 @@ The method also handles three additional responsibilities:
   model-availability failures such as "unsupported model" or "model not found"; the stream UI
   surfaces the provider's raw supported-model details instead of hiding them behind a generic 400.
 
-- **Thought log extraction** — for providers that emit reasoning fields, thought summaries, or
+- **Thought log extraction**: for providers that emit reasoning fields, thought summaries, or
   thought signatures (for example Google/Gemini `part.thought`, `thoughtSummary`, and
   `thoughtSignature` fields), these are extracted into `ThoughtLogEntry[]` on the returned chunk
   so the orchestrator can accumulate them into `state.thoughtSummarySegments` /
   `state.thoughtRawSegments` independently of visible text. For OpenRouter, the upstream serving
   backend (the chunk-level `provider` field, e.g. `minimax-cn`) is also carried on
   `ProcessedChunk.servingProvider`, recorded into `state.servingProvider` (first non-empty wins), and
-  rendered in the thought-log footer as `Provider: openrouter via <backend>` — so a backend that
+  rendered in the thought-log footer as `Provider: openrouter via <backend>`; a backend that
   bleeds reasoning into content can be identified and pinned/avoided.
 
-- **Leaked reasoning-tag guardrails** — the clean path is the provider (or OpenRouter) returning
+- **Leaked reasoning-tag guardrails**: the clean path is the provider (or OpenRouter) returning
   reasoning in a dedicated field. When a backend instead leaks reasoning into `delta.content`,
   OpenAI-compatible adapters (`openrouter`, `openaiCompatible`) run two worst-case guards over the
-  text delta: `ThinkBlockContentStripper` (reroutes `<think>…</think>` blocks — including stray
-  closers split across chunks — into `delta.reasoning`) and `ReasoningContentSpillGuard` (catches a
-  *tagless* reasoning tail glued to the first visible delta — e.g. `must do.Hello!`). The spill guard
+  text delta: `ThinkBlockContentStripper` (reroutes `<think>…</think>` blocks, including stray
+  closers split across chunks, into `delta.reasoning`) and `ReasoningContentSpillGuard` (catches a
+  *tagless* reasoning tail glued to the first visible delta: e.g., `must do.Hello!`). The spill guard
   only fires on the first visible content after reasoning, when that content starts lowercase and a
   sentence boundary is **glued** (no following whitespace). It strips when EITHER the text after the
-  boundary looks like an answer start (uppercase / caseless letter, emoji, or quote/bracket — catches
+  boundary looks like an answer start (uppercase / caseless letter, emoji, or quote/bracket: catches
   `wait.Actually`) OR the fragment before the boundary is a multi-word clause (catches a casual
   lowercase reply glued onto a reasoning tail, e.g. `g it out.hey master 👋`, where capitalization is
   blind because the real reply is also lowercase). A *spaced* boundary is treated as the model's own
@@ -72,17 +72,17 @@ The method also handles three additional responsibilities:
   strings (`stopStrings.ts`) are matched literally by the provider, so namespaced close tags must be
   added per model rule explicitly rather than via the shared pattern.
 
-- **Custom verbatim tool-call fallback** — when
+- **Custom verbatim tool-call fallback**: when
   `server_capabilities_configs.verbatim_tool_calling_enabled` is true, the active Custom text model
   has tools, and the request includes OpenAI-compatible tool schemas, `CustomStreamAdapter` runs
   `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It scans
-  the stream for an anchor `<knownToolName>(` — only names from the exposed tool set trigger — then
+  the stream for an anchor `<knownToolName>(`, only names from the exposed tool set trigger, then
   accumulates from that name until the parentheses balance (quote-aware, so a `)` inside a JSON string
   does not close early) and parses the `name(...)` body. The call may be **bare** or wrapped in an
   inline code span / fenced block, and **prose before it is allowed** (chat models narrate before they
   act): leading narration is emitted as normal text and the call is recovered after it, e.g.
   `` Fine. `generate_image({"prompt":"a cat","mode":"txt2img"})` `` or the same call with no backticks.
-  The parse step is the false-positive guard — a tool name merely *mentioned* in prose
+  The parse step is the false-positive guard: a tool name merely *mentioned* in prose
   (`generate_image (it makes art)`) fails JSON/arity validation and is released as text. Successful
   parses are emitted as `type: "function_call"` before the literal text reaches Discord; rejected or
   incomplete text is released normally. Because the stream adapter drops `visibleText` whenever a
@@ -109,11 +109,11 @@ The method also handles three additional responsibilities:
 
 ## Input
 
-`chunk: RawStreamChunk` — the provider-native envelope yielded by stage 02.
+`chunk: RawStreamChunk`: the provider-native envelope yielded by stage 02.
 
 ## Output
 
-`ProcessedChunk` — one of four variants:
+`ProcessedChunk`: one of four variants:
 
 | `type` | Carries | Orchestrator action |
 |---|---|---|
@@ -127,7 +127,7 @@ reasoning content in-band.
 
 ## Side effects
 
-- None. `processChunk` is a pure transformation — it does not mutate `StreamState`, call Discord
+- None. `processChunk` is a pure transformation; it does not mutate `StreamState`, call Discord
   APIs, or trigger any timer. All side effects are owned by the orchestrator and downstream stages.
 
 ## Invariants

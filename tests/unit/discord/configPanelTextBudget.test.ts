@@ -78,7 +78,7 @@ function makeNaiPresetCatalog(count: number, runLength: number, oversized: boole
       model_target: "kayra",
       is_default: index === 0,
       preset_desc: description,
-      ja_preset_desc: description,
+      descriptions: { "en-US": description, ja: description },
       parameters: {},
     } as NaiPresetRow;
   });

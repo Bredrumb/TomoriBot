@@ -5,7 +5,8 @@ import { buildPersonalConfigModalFieldId } from "@/utils/discord/ui/personalConf
 import { takeRawModalFileUpload, takeRawModalSelectValue } from "@/utils/discord/ui/modals";
 import { MAX_TAG_LENGTH, MAX_TAGS } from "@/utils/image/tagHelpers";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
-import { localizer } from "@/utils/text/localizer";
+import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
 import {
   noChangesReceipt,
   repaint,
@@ -40,20 +41,19 @@ export async function handlePersonalConfigProfileWrites(context: PersonalConfigP
           userDiscId: interaction.user.id,
         });
       }
-      const langLabel =
-        language === "ja"
-          ? localizer(route.locale, "commands.personal.config.language_ja")
-          : localizer(route.locale, "commands.personal.config.language_en");
+      const langLabel = getLocaleEndonym(language);
+      // The panel repaints in the language just written, not the one its route id was built with,
+      // so the confirmation and every control the redraw emits already read in the new language.
       await repaint(interaction, {
-        locale: route.locale,
+        locale: language,
         scope: context.scope,
         category: "profile",
         page: "general",
         panelReceipt: {
           tone: "success",
-          heading: localizer(route.locale, "commands.personal.config.language_updated_heading"),
-          detail: localizer(route.locale, "commands.personal.config.language_updated_detail", {
-            language: langLabel,
+          heading: localizer(language, "commands.personal.config.language_updated_heading"),
+          detail: localizer(language, "commands.personal.config.language_updated_detail", {
+            language: escapeDiscordMarkdown(langLabel),
           }),
         },
         dependencies,

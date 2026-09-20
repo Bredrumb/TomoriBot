@@ -1,0 +1,92 @@
+---
+title: "¿Qué es TomoriBot?"
+head:
+  - tag: title
+    content: "TomoriBot | Agente de IA y bot de rol de código abierto para Discord"
+  - tag: script
+    attrs:
+      type: "application/ld+json"
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TomoriBot",
+        "url": "https://docs.tomoribot.app/",
+        "image": "https://docs.tomoribot.app/img/social-banner.png",
+        "description": "Sistema de agente de IA y rol gratuito y de código abierto para Discord, con memoria persistente, múltiples personas, generación multimedia y compatibilidad con varios proveedores de LLM.",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Web",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "sameAs": [
+          "https://github.com/Bredrumb/TomoriBot",
+          "https://discord.gg/bjCfHm9QsB"
+        ]
+      }
+aiGenerated: true
+sidebar:
+  groupLabel: "Introducción"
+  order: 1
+---
+
+import { LinkButton } from "@astrojs/starlight/components";
+import FeatureCard from "/src/components/FeatureCard.astro";
+
+**TomoriBot** es un agente de IA y sistema de rol gratuito y de código abierto para Discord. El proyecto busca llevar compañeros de IA personales y personajes de rol directamente a los servidores de Discord, inspirado en SillyTavern y en Clyde, el asistente descontinuado de Discord. En pocas palabras, es un armazón de agentes y rol para IA dentro de Discord:
+
+![Fórmula de Tomori](/img/docs/intro/00-tomori-formula.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>Como una trinidad impía de Discord, SillyTavern y OpenClaw</small>
+
+Leído como Tomo(友)-Ri(里), que significa aproximadamente «Hogar de amigos», Tomori es el hogar de tus propios asistentes prácticos, compañeros personalizables o parejas de rol, ya sea en mensajes directos o para todos en tu servidor de Discord. También está pensada para principiantes, así que quienes son nuevos en los agentes de IA pueden aprender con ella.
+
+Puedes invitar ahora a la instancia pública o autoalojar la tuya para tener control total sobre tus datos (más información en [Inicio rápido](/es-419/introduction/quickstart/)):
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **Invitar a TomoriBot**
+  </LinkButton>
+  <LinkButton href="/es-419/self-hosting/" variant="secondary">
+    **Autoalojar TomoriBot**
+  </LinkButton>
+</div>
+
+## ¿Qué puede hacer TomoriBot?
+
+
+<div class="feature-grid">
+  <FeatureCard title="Múltiples personas" img="/img/docs/intro/01-multiple-personas.png" href="/es-419/features/chatting-personality/multiple-personas/">
+    Ejecuta varios personajes personalizados en un servidor, cada uno con sus propios ajustes, memorias y avatares. ¡Míralos coordinarse (o hacer travesuras) entre sí!
+  </FeatureCard>
+  <FeatureCard title="Memoria persistente" img="/img/docs/intro/02-memory.png" href="/es-419/features/knowledge/memory/">
+    Ayuda a Tomori a crecer enseñándole datos sobre las personas y tu servidor. Recuerda entre conversaciones, y las memorias personales te siguen entre servidores.
+  </FeatureCard>
+  <FeatureCard title="Generación multimedia" img="/img/docs/intro/03-media-generation.png" href="/es-419/features/capabilities/media-generation/">
+    Genera o edita imágenes, videos cortos y mensajes de voz directamente en el chat a partir de un prompt o mediante una referencia.
+  </FeatureCard>
+  <FeatureCard title="Herramientas de agente" img="/img/docs/intro/04-agentic-tools.png" href="/es-419/features/capabilities/tools-and-extensions/">
+    TomoriBot puede buscar en la web de forma autónoma, programar recordatorios, bloquear usuarios, usar herramientas MCP personalizadas y mucho más.
+  </FeatureCard>
+  <FeatureCard title="Configuración completamente local" img="/img/docs/intro/05-fully-local-setup.png" href="/es-419/self-hosting/local-endpoints/">
+    Crea tu propia configuración privada con LLM locales, ComfyUI, SearXNG, servidores de voz locales y MCP.
+  </FeatureCard>
+  <FeatureCard title="Moderación del servidor" img="/img/docs/intro/06-server-moderation.png" href="/es-419/features/setup-administration/server-moderation/">
+    Añade controles administrativos para costos y seguridad: cuotas, listas permitidas de canales y roles, registros de pensamiento y requisitos BYOK.
+  </FeatureCard>
+  <FeatureCard title="Más de 200 comandos" img="/img/docs/intro/07-command-reference.png" href="/en/features/command-reference/">
+    Cientos de comandos de barra nativos de Discord para una personalización más profunda, desde los prompts usados hasta los permisos concedidos.
+  </FeatureCard>
+  <FeatureCard title="Compatibilidad con SillyTavern" img="/img/docs/intro/08-sillytavern-support.png" href="/es-419/features/integrations/sillytavern-support/">
+    Importa preajustes de prompts y tarjetas de personajes de SillyTavern para llevar tus instrucciones y personajes existentes directamente a Discord.
+  </FeatureCard>
+</div>
+
+## Adónde ir después
+
+- **¿Quieres usarla ahora?** Consulta [Inicio rápido](/es-419/introduction/quickstart/) y luego explora el recorrido de [Funciones](/es-419/features/).
+- **¿Quieres ejecutar tu propia instancia de TomoriBot?** Ve a [Autoalojamiento](/es-419/self-hosting/).
+- **¿Quieres contribuir al código?** Consulta la vista general de [Arquitectura](/en/architecture/) y las guías de [Contribución](/en/contributing/).
+- **¿Quieres ayudar a mantener el proyecto?** Dale una estrella a su repositorio en [GitHub](https://github.com/Bredrumb/TomoriBot), dona al [Ko-Fi](https://ko-fi.com/bredrumb) de Bredrumb o, mejor aún, compártela con tus amistades usando el enlace de esta página. Todo esto se agradece mucho.

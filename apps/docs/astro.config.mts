@@ -2,9 +2,18 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import sitemap from "@astrojs/sitemap";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { remarkHeadingIds } from "./src/remarkHeadingIds";
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  DEFAULT_DOCS_LOCALE_ID,
+  DOCS_LOCALES,
+  PUBLISHED_DOCS_LOCALES,
+  getDocsLocaleConfig,
+  normalizePageId,
+  pageIdToRoute,
+} from "../../src/constants/docsLocales";
 
 // Starlight's autogenerate resolves pages by stripping the hardcoded
 // "src/content/docs/" prefix from each entry's filePath (relative to project
@@ -19,15 +28,24 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const junctionPath = resolve(__dirname, "src/content/docs");
 const docsTarget = resolve(__dirname, "../../docs");
-const enDocsTarget = resolve(docsTarget, "en");
+const defaultLocaleTarget = resolve(docsTarget, DEFAULT_DOCS_LOCALE_ID);
 
 if (!existsSync(junctionPath)) {
   mkdirSync(resolve(__dirname, "src/content"), { recursive: true });
   symlinkSync(docsTarget, junctionPath, "junction");
 }
 
+/**
+ * Locale trees the sidebar reads labels from. A locale whose page tree does not exist yet has no
+ * files to read and no sidebar entries of its own, so it is deliberately absent here even though
+ * `DOCS_LOCALES` lists it as a planned target.
+ */
+const sidebarLocales = DOCS_LOCALES.filter((locale) => locale.docsTree);
+/** Locales other than the default, which are the ones needing fallback sidebar labels. */
+const translatedLocales = sidebarLocales.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID);
+
 // Sidebar source of truth:
-// - Top-level groups are discovered from docs/*/README.md.
+// - Top-level groups are discovered from the default locale's docs/*/README.md.
 // - Page links use each Markdown file's `title`.
 // - Folder groups use `sidebar.groupLabel` from that folder's README when present.
 // - Ordering uses `sidebar.order` only where filename order is not enough.
@@ -51,42 +69,56 @@ const segmentLabelOverrides = {
 };
 
 function buildSidebarSection(directory) {
-  const dirPath = resolve(enDocsTarget, directory);
+  const dirPath = resolve(defaultLocaleTarget, directory);
   const readmePath = getReadmePath(dirPath);
   const readmeData = readmePath ? readFrontmatter(readmePath) : {};
-  const jaLabel = getJaGroupLabel(dirPath, directory);
 
   return {
     label: getGroupLabel(readmeData, directory),
     collapsed: true,
     items: buildDirectoryItems(dirPath, directory).map((node) => node.item),
-    ...(jaLabel ? { translations: { ja: jaLabel } } : {}),
+    ...buildSidebarTranslations(dirPath),
   };
 }
 
-// Japanese sidebar labels: when a translated counterpart exists under docs/ja/,
-// attach its title as a `translations.ja` entry so Starlight shows Japanese
-// labels while browsing /ja/ pages. Pages without a translation keep the
-// English label (and Starlight's locale fallback serves the English content).
-function readJaCounterpartData(filePath) {
-  const jaPath = join(docsTarget, "ja", relative(enDocsTarget, filePath));
-  return existsSync(jaPath) ? readFrontmatter(jaPath) : undefined;
+/**
+ * Starlight's `translations` map is keyed by each locale's `lang`, so this has to emit one entry per
+ * published locale rather than the single hardcoded pair it replaced.
+ *
+ * A directory with no counterpart README keeps the default locale's label. Starlight already serves
+ * the default locale's content at that URL, so an invented label would name a translation that does
+ * not exist while the English wording stays honest about what the reader is looking at.
+ */
+function buildSidebarTranslations(dirPath) {
+  const translations = {};
+
+  for (const locale of translatedLocales) {
+    const localizedDir = join(docsTarget, locale.id, relative(defaultLocaleTarget, dirPath));
+    const localizedReadme = getReadmePath(localizedDir);
+    if (!localizedReadme) continue;
+
+    const data = readFrontmatter(localizedReadme);
+    const label = data.sidebar?.groupLabel ?? data.groupLabel ?? data.title;
+    if (label) translations[locale.lang] = label;
+  }
+
+  return Object.keys(translations).length > 0 ? { translations } : {};
 }
 
-// Fallback Japanese labels for sidebar groups whose content is untranslated
-// (no docs/ja/ README to pull a label from). Keeps the /ja/ sidebar uniformly
-// Japanese at the top level even while those sections serve English fallback
-// pages.
-const jaGroupLabelFallbacks = {
-  architecture: "アーキテクチャ",
-  contributing: "コントリビュート",
-};
+/** Same rule as a group label, applied to a single page's sidebar entry. */
+function buildPageTranslations(filePath) {
+  const translations = {};
 
-function getJaGroupLabel(dirPath, dirName) {
-  const jaReadmePath = getReadmePath(join(docsTarget, "ja", relative(enDocsTarget, dirPath)));
-  if (!jaReadmePath) return dirName ? jaGroupLabelFallbacks[dirName.toLowerCase()] : undefined;
-  const jaData = readFrontmatter(jaReadmePath);
-  return jaData.sidebar?.groupLabel ?? jaData.groupLabel ?? jaData.title;
+  for (const locale of translatedLocales) {
+    const localizedPath = join(docsTarget, locale.id, relative(defaultLocaleTarget, filePath));
+    if (!existsSync(localizedPath)) continue;
+
+    const data = readFrontmatter(localizedPath);
+    const label = data.sidebar?.label ?? data.title;
+    if (label) translations[locale.lang] = label;
+  }
+
+  return Object.keys(translations).length > 0 ? { translations } : {};
 }
 
 function buildDirectoryItems(dirPath, slugPrefix) {
@@ -115,14 +147,12 @@ function buildGroupNode(dirPath, dirName, slugPrefix) {
   const children = buildDirectoryItems(dirPath, slugPrefix);
   const childOrder = Math.min(...children.map((child) => child.order), maxOrder);
 
-  const jaLabel = getJaGroupLabel(dirPath);
-
   return {
     item: {
       label: getGroupLabel(readmeData, dirName),
       collapsed: true,
       items: children.map((child) => child.item),
-      ...(jaLabel ? { translations: { ja: jaLabel } } : {}),
+      ...buildSidebarTranslations(dirPath),
     },
     order: readmeData.sidebar?.order ?? childOrder,
     sortKey: slugPrefix,
@@ -132,14 +162,12 @@ function buildGroupNode(dirPath, dirName, slugPrefix) {
 
 function buildPageNode(filePath, slug) {
   const data = readFrontmatter(filePath);
-  const jaData = readJaCounterpartData(filePath);
-  const jaLabel = jaData?.sidebar?.label ?? jaData?.title;
 
   return {
     item: {
       label: data.sidebar?.label ?? data.title ?? prettySegmentLabel(basename(slug)),
       link: `/${slug}/`,
-      ...(jaLabel ? { translations: { ja: jaLabel } } : {}),
+      ...buildPageTranslations(filePath),
     },
     order: data.sidebar?.order ?? maxOrder,
     sortKey: slug,
@@ -238,10 +266,10 @@ function stripMarkdownExtension(fileName) {
 }
 
 function buildTopLevelSidebar() {
-  return readdirSync(enDocsTarget, { withFileTypes: true })
+  return readdirSync(defaultLocaleTarget, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .flatMap((entry) => {
-      const dirPath = resolve(enDocsTarget, entry.name);
+      const dirPath = resolve(defaultLocaleTarget, entry.name);
       const readmePath = getReadmePath(dirPath);
       if (!readmePath) return [];
 
@@ -262,23 +290,113 @@ function buildTopLevelSidebar() {
 
 const sidebar = buildTopLevelSidebar();
 
-// Shared with the sitemap integration below. Registering our own sitemap makes Starlight skip its
-// own, so the hreflang i18n block must be derived here from this same object or the two drift.
-const docsLocales = {
-  en: { label: "English", lang: "en" },
-  ja: { label: "日本語", lang: "ja" },
-} as const;
+// Starlight locale options and the sitemap i18n map both derive from the shared locale table, so
+// adding a locale cannot leave one of them behind. Registering our own sitemap makes Starlight skip
+// its own, which is why the i18n map has to be supplied here rather than read from Starlight.
+const docsLocales = Object.fromEntries(
+  sidebarLocales.map((locale) => [locale.id, { label: locale.label, lang: locale.lang }]),
+);
+
+/**
+ * Language tag for the sitemap's `xhtml:link` hreflang annotations.
+ *
+ * `@astrojs/sitemap` validates every value in its i18n map against `/^[a-zA-Z-]+$/`. A tag carrying
+ * a UN M.49 numeric region (`es-419`) fails that schema, and the integration then skips generating a
+ * sitemap for the entire site rather than for that one locale, while `robots.txt` still advertises
+ * one. Dropping the numeric region yields a valid, less specific tag; the page's own head keeps the
+ * exact tag, so only the sitemap annotation loses precision.
+ */
+function sitemapLanguageTag(lang: string): string {
+  return lang.replace(/-\d+$/, "");
+}
+
+/**
+ * Locale roots each get a meta-refresh redirect to their own introduction page, matching the
+ * Cloudflare 200-rewrites in `public/_redirects`. Unlisted roots are not routes at all: a locale
+ * enters this map only once its page tree exists.
+ */
+const localeRootRedirects = Object.fromEntries(
+  sidebarLocales.map((locale) => [`/${locale.id}/`, `/${locale.id}/introduction/`]),
+);
+
+/**
+ * Machine-readable documentation stays English-only, so every non-default locale tree is excluded
+ * by pattern rather than by name. A locale added to the shared table is covered here without an
+ * edit, which is what keeps a new translation out of the agent-facing text sets.
+ */
+const nonDefaultLocalePatterns = (suffix: string) =>
+  DOCS_LOCALES.filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID).map((locale) => `${locale.id}${suffix}`);
+
+/**
+ * Sitemap filter for URLs that must not be advertised: internal wiki pages and every locale route
+ * that only serves the default locale's content. A `noindex` URL left in the sitemap makes Search
+ * Console report "Submitted URL marked 'noindex'", so a fallback has to stay out while the real
+ * translations under the same locale root stay in.
+ */
+const fallbackRoutePattern = buildFallbackRoutePattern();
+
+function buildFallbackRoutePattern() {
+  const fallbacks: string[] = [];
+
+  // Counterpart ids are collected once per locale, compared as normalized page ids rather than raw
+  // paths. A translation authored as `index.md` where the default locale uses `README.mdx` is the
+  // same page, and a path comparison would wrongly drop it from the sitemap as a fallback.
+  const localePageIds = new Map(
+    sidebarLocales
+      .filter((locale) => locale.id !== DEFAULT_DOCS_LOCALE_ID)
+      .map((locale) => [locale.id, collectPageIds(resolve(docsTarget, locale.id))]),
+  );
+
+  // Walked from the default locale's tree because a fallback exists only in the build output: the
+  // route is generated for every default-locale page that a locale has no file for, so a locale
+  // tree by itself cannot list them.
+  for (const [pageId, route] of collectPageIds(defaultLocaleTarget)) {
+    for (const [localeId, pageIds] of localePageIds) {
+      if (pageIds.has(pageId)) continue;
+      fallbacks.push(`^/${localeId}/${route ? `${route}/` : ""}$`);
+    }
+  }
+
+  // An empty alternation matches everything, so a site with no fallbacks gets a pattern that cannot.
+  return new RegExp(fallbacks.length > 0 ? fallbacks.join("|") : "(?!)");
+}
+
+/** Normalized page ids and their routes for one locale tree. */
+function collectPageIds(localeRoot: string): Map<string, string> {
+  const pages = new Map<string, string>();
+
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(absolutePath);
+        continue;
+      }
+      if (!isMarkdownFile(entry.name)) continue;
+
+      const pageId = normalizePageId(relative(localeRoot, absolutePath));
+      pages.set(pageId, pageIdToRoute(pageId));
+    }
+  };
+
+  walk(localeRoot);
+  return pages;
+}
+
+const isInternalOrFallbackPath = (pathname: string): boolean =>
+  /\/wiki(\/|$)/.test(pathname) || fallbackRoutePattern.test(pathname);
 
 export default defineConfig({
   site: "https://docs.tomoribot.app",
+  markdown: {
+    remarkPlugins: [remarkHeadingIds],
+  },
   // Redirects for the /features/ restructure: the flat pages were bucketed into
   // task-based sub-category folders, changing their slugs. Keep the old URLs
   // (shared links, search-engine index) working by forwarding to the new paths.
   // Astro emits a static meta-refresh page for each key at build time.
   redirects: {
-    "/": "/en/introduction/",
-    "/en/": "/en/introduction/",
-    "/ja/": "/ja/introduction/",
+    ...localeRootRedirects,
     "/architecture/entry-point/": "/en/architecture/entry-point/",
     "/architecture/integrations/discord/message-components-v2/": "/en/architecture/integrations/discord/message-components-v2/",
     "/architecture/integrations/discord/modal-input-components/": "/en/architecture/integrations/discord/modal-input-components/",
@@ -347,7 +465,15 @@ export default defineConfig({
     "/contributing/adding-db-column/": "/en/contributing/adding-db-column/",
     "/contributing/adding-event-handler/": "/en/contributing/adding-event-handler/",
     "/contributing/adding-feature-flag-tool/": "/en/contributing/adding-feature-flag-tool/",
-    "/contributing/adding-locale/": "/en/contributing/adding-locale/",
+    // A locale-prefixed key here would shadow the guide's own index page: Astro resolves the
+    // redirect map before the content collection, so `/en/contributing/adding-locale/` would serve a
+    // meta-refresh to itself instead of the overview.
+    "/contributing/adding-locale/locale-codes/": "/en/contributing/adding-locale/locale-codes/",
+    "/contributing/adding-locale/ui-strings/": "/en/contributing/adding-locale/ui-strings/",
+    "/contributing/adding-locale/seed-catalog/": "/en/contributing/adding-locale/seed-catalog/",
+    "/contributing/adding-locale/documentation/": "/en/contributing/adding-locale/documentation/",
+    "/contributing/adding-locale/readme-and-repo/": "/en/contributing/adding-locale/readme-and-repo/",
+    "/contributing/adding-locale/verification/": "/en/contributing/adding-locale/verification/",
     "/contributing/adding-new-provider/": "/en/contributing/adding-new-provider/",
     "/contributing/adding-participant-extension/": "/en/contributing/adding-participant-extension/",
     "/contributing/adding-persona-preset/": "/en/contributing/adding-persona-preset/",
@@ -438,33 +564,40 @@ export default defineConfig({
   // `resolve.preserveSymlinks` would fix this too but breaks Bun's `.bun/` symlink store.
   vite: {
     resolve: {
-      // Exact-match regex (not a string prefix) so ONLY the bare specifier is rewritten —
-      // Starlight resolves its own `@astrojs/starlight/components/Banner.astro` subpaths
-      // internally and must not be touched.
       alias: [
+        // Exact-match regex (not a string prefix) so ONLY the bare specifier is rewritten —
+        // Starlight resolves its own `@astrojs/starlight/components/Banner.astro` subpaths
+        // internally and must not be touched.
         {
           find: /^@astrojs\/starlight\/components$/,
           replacement: resolve(__dirname, "node_modules/@astrojs/starlight/components.ts"),
+        },
+        // The shared docs locale table lives in the bot's source tree because the bot needs it at
+        // runtime, so it sits outside this project root and needs an explicit resolution for both
+        // `.astro` components and config modules.
+        {
+          find: /^@docs-locales$/,
+          replacement: resolve(__dirname, "../../src/constants/docsLocales.ts"),
         },
       ],
     },
   },
   integrations: [
     // Before starlight so it detects this one and skips adding its own. A `noindex` URL left in the
-    // sitemap makes Search Console report "Submitted URL marked 'noindex'", hence the wiki filter.
+    // sitemap makes Search Console report "Submitted URL marked 'noindex'", hence the route filter.
     sitemap({
       i18n: {
-        defaultLocale: "en",
-        locales: Object.fromEntries(Object.entries(docsLocales).map(([locale, { lang }]) => [locale, lang])),
+        defaultLocale: DEFAULT_DOCS_LOCALE_ID,
+        locales: Object.fromEntries(sidebarLocales.map((locale) => [locale.id, sitemapLanguageTag(locale.lang)])),
       },
-      filter: (page) => !/\/wiki(\/|$)/.test(new URL(page).pathname),
+      filter: (page) => !isInternalOrFallbackPath(new URL(page).pathname),
     }),
     starlight({
       title: "TomoriBot",
-      // i18n: `en` handles /en/ pages, and Starlight handles root redirection automatically.
-      // Japanese pages live under docs/ja/ mirroring the English tree; untranslated pages fall back to English
-      // content served at the /ja/ URL with a translation notice.
-      defaultLocale: "en",
+      // Every locale is registered here, including the default one, because Starlight derives both
+      // the route set and the hreflang locale list from this map. `routeData.ts` then removes the
+      // alternates for routes that serve another locale's content.
+      defaultLocale: DEFAULT_DOCS_LOCALE_ID,
       locales: docsLocales,
       // Fallback meta description for pages without one (see routeMiddleware
       // below, which auto-derives per-page descriptions from page content).
@@ -472,10 +605,21 @@ export default defineConfig({
         "Documentation for TomoriBot, a self-hostable AI Discord bot with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
       plugins: [
         starlightLlmsTxt({
+          // The agent-facing sets stay English: `starlight-llms-txt` selects the default locale's
+          // entries only, and `scripts/checkLlmsOutput.ts` fails the build if that ever changes.
           details:
             "AI agents should begin with the [Introduction](https://docs.tomoribot.app/en/introduction/) and [Features](https://docs.tomoribot.app/en/features/) indexes. For a specific question, fetch the smallest relevant page instead of a combined documentation set; common starting points are [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/), [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/), [Inside the Prompt](https://docs.tomoribot.app/en/features/knowledge/inside-the-prompt/), and [Providers & Models](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/). Current runtime capability reports and assembled context override general documentation. Contributor, architecture, self-hosting, and other public pages remain available for deeper investigation. Internal wiki pages are intentionally omitted from every machine-readable documentation set.",
-          exclude: ["ja/**", "en/wiki", "en/wiki/**", "en/architecture/**", "en/contributing/**", "en/self-hosting/**", "en/meet-tomori/**", "en/legal/**"],
-          excludeFull: ["en/wiki", "en/wiki/**", "ja/wiki", "ja/wiki/**"],
+          exclude: [
+            ...nonDefaultLocalePatterns("/**"),
+            "en/wiki",
+            "en/wiki/**",
+            "en/architecture/**",
+            "en/contributing/**",
+            "en/self-hosting/**",
+            "en/meet-tomori/**",
+            "en/legal/**",
+          ],
+          excludeFull: ["en/wiki", "en/wiki/**", ...nonDefaultLocalePatterns("/wiki"), ...nonDefaultLocalePatterns("/wiki/**")],
           promote: ["en/introduction/**", "en/features/**"],
           demote: ["en/architecture/**", "en/contributing/**"],
           customSets: [
@@ -577,5 +721,4 @@ export default defineConfig({
     }),
   ],
 });
-
 

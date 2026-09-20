@@ -81,7 +81,7 @@ describe("buildTextPreview", () => {
   it("marks confirmation previews that genuinely overflow", () => {
     const preview = buildTextPreview("y".repeat(4120), CONFIRMATION_PREVIEW_BUDGET);
     expect(preview.shownChars).toBe(CONFIRMATION_PREVIEW_BUDGET);
-    expect(textPreviewFooterVars(preview)).toEqual({ shown: "200", total: "4,120" });
+    expect(textPreviewFooterVars(preview, "en-US")).toEqual({ shown: "200", total: "4,120" });
   });
 
   it("never produces a lone surrogate when cutting astral-plane text", () => {
@@ -156,6 +156,6 @@ describe("textPreviewFooter helpers", () => {
   it("returns the shared truncation footer with separated counts", () => {
     const preview = buildTextPreview("x".repeat(7412));
     expect(textPreviewFooterKey(preview)).toBe("general.text_preview.truncated_footer");
-    expect(textPreviewFooterVars(preview)).toEqual({ shown: "3,000", total: "7,412" });
+    expect(textPreviewFooterVars(preview, "en-US")).toEqual({ shown: "3,000", total: "7,412" });
   });
 });

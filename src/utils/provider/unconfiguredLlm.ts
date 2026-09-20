@@ -22,7 +22,7 @@ const UNCONFIGURED_LLM: LlmRow = {
   strict_role_alternation: false,
   supports_prefix_completion: false,
   llm_description: null,
-  ja_description: null,
+  descriptions: null,
 };
 
 export function getUnconfiguredLlm(): LlmRow {

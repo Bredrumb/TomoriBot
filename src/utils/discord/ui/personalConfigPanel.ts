@@ -54,7 +54,7 @@ import {
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
-import { localizer } from "@/utils/text/localizer";
+import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 
 /** Discord rejects a String Select carrying more than 25 options. */
@@ -817,10 +817,7 @@ export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRender
     components.push(...renderPanelView(input, input.view));
   } else if (category === "profile") {
     if (page === "general") {
-      const languageLabel =
-        user.language_pref === "ja"
-          ? localizer(locale, "commands.personal.config.language_ja")
-          : localizer(locale, "commands.personal.config.language_en");
+      const languageLabel = escapeDiscordMarkdown(getLocaleEndonym(user.language_pref));
       const timezoneLabel =
         user.timezone_offset !== null && user.timezone_offset !== undefined
           ? formatUTCOffset(user.timezone_offset)

@@ -29,10 +29,10 @@ The setup scripts create `servers/tts/irodoritts/.venv`, so `bun run launch --ir
 
 Available backends are:
 
-- `cu128` — NVIDIA CUDA 12.8 on Windows/Linux
-- `cpu` — CPU-only, or macOS CPU/MPS through PyPI
-- `rocm` — AMD ROCm on Linux/WSL
-- `xpu` — Intel XPU on Windows/Linux
+- `cu128`: NVIDIA CUDA 12.8 on Windows/Linux
+- `cpu`: CPU-only, or macOS CPU/MPS through PyPI
+- `rocm`: AMD ROCm on Linux/WSL
+- `xpu`: Intel XPU on Windows/Linux
 
 The default endpoint URL is `http://127.0.0.1:8013`.
 
@@ -46,7 +46,7 @@ When starting the sidecar (directly with Python or via `bun run launch --irodori
 
 Add to your `.env` in the TomoriBot root:
 
-```env
+```dotenv
 IRODORI_TTS_MODEL_ID="phasefield-audio/Irodori-TTS-v4.1-Anime"
 ```
 
@@ -70,7 +70,7 @@ IRODORI_TTS_MODEL_ID=phasefield-audio/Irodori-TTS-v4.1-Anime \
 
 If you have downloaded a checkpoint file (`.pt` or `.safetensors`) locally, set `IRODORI_TTS_CHECKPOINT` to its path:
 
-```env
+```dotenv
 IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 ```
 

@@ -16,11 +16,6 @@ export default {
       partial_success_description: `Analyzed {successful} of {total} expressions. {failed} expression(s) couldn't be processed after several attempts and were skipped. Check the bot logs, or try \`/expressions initialize\` again later.`,
       no_matches_title: `No Matches Found`,
       no_matches_description: `The AI analyzed the expressions but could not match any results to the database. This may be due to a processing error.`,
-      llm_error_title: `AI Analysis Failed`,
-      llm_error_description: `The AI model encountered an error while analyzing expressions. Please try again later.`,
-      validation_error_title: `Invalid AI Response`,
-      validation_error_description: `The AI returned an invalid response format. This may be a model issue.`,
-      progress_analyzing: `Analyzing {total} images...`,
       progress_analyzing_batch: `Analyzing batch {batch_number}: {batch_size} expression(s). {processed} of {grand_total} done, {remaining} remaining...`,
     },
     edit: {

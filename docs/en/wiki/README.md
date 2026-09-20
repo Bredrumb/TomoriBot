@@ -10,8 +10,9 @@ sidebar:
 
 Internal reference notes, reachable only via links from other pages.
 
-- [`refactor-record`](./refactor-record) — historical plugin-architecture-prerequisite refactor record
-- [`threat-models`](./threat-models) — security threat models
+- [`production-tuning`](./production-tuning): deep operational tuning, container sizing, and incident recovery
+- [`refactor-record`](./refactor-record): historical plugin-architecture-prerequisite refactor record
+- [`threat-models`](./threat-models): security threat models
 
 Cloud deployment pages live under `cloud/<provider>/` on the `release` branch and are absent from
 `main`. They name real production resources on purpose, because substituting placeholders in a

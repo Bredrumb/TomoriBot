@@ -150,7 +150,7 @@ function makeNaiPreset(name: string, target: "kayra" | "erato" = "kayra"): NaiPr
     model_target: target,
     is_default: false,
     preset_desc: `Description for ${name}`,
-    ja_preset_desc: `Translated description for ${name}`,
+    descriptions: { "en-US": `Description for ${name}`, ja: `Translated description for ${name}` },
     parameters: {},
   };
 }

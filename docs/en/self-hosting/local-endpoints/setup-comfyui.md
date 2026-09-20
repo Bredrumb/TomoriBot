@@ -30,7 +30,7 @@ both modern, heavier-than-SDXL models:
 
 | Bundled workflow | Base model | Practical VRAM | Notes |
 |---|---|---|---|
-| **Anima v1** (image) | Qwen-Image (~20B), fp8 | ~16 GB floor · 24 GB comfortable | Text encoder + VAE add ~8–10 GB of overhead. Below 16 GB, use a GGUF build + `--lowvram`. |
+| **Anima v1** (image) | Qwen-Image (~20B), fp8 | ~16 GB floor · 24 GB comfortable | Text encoder + VAE add ~8-10 GB of overhead. Below 16 GB, use a GGUF build + `--lowvram`. |
 | **WAN i2v loop** (video) | Wan 2.2 14B, fp8 + 4-step LightX2V LoRAs | ~16 GB workable · 24 GB+ comfortable | Heaviest option expect **minutes per clip**. Offload the UMT5 text encoder to RAM (`t5_cpu`, needs 24 GB+ system RAM) on smaller cards. |
 
 Both bundled checkpoints are already **fp8-quantized** to fit consumer cards. If you have less
@@ -58,7 +58,7 @@ listens on the network:
 python main.py --listen 0.0.0.0 --port 8188
 ```
 
-`--listen 0.0.0.0` matters if TomoriBot runs in Docker or on a different machine — the
+`--listen 0.0.0.0` matters if TomoriBot runs in Docker or on a different machine: the
 default binds to loopback only. Confirm reachability **from the machine the bot runs on**:
 
 ```sh

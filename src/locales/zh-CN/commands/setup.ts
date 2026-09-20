@@ -1,0 +1,243 @@
+export default {
+  setup: {
+    description: `开始初始设置流程。配置 AI 提供方和人格。`,
+    language_description: `选择此次设置会话使用的语言。`,
+    humanizer_option_none_label: `关闭`,
+    humanizer_option_none_desc: `使用当前系统提示词，但把可见文字合并成一次回复。`,
+    humanizer_option_light_label: `轻度`,
+    humanizer_option_light_desc: `使用当前系统提示词，逐条立即发送消息。不模拟打字。`,
+    humanizer_option_default_label: `默认`,
+    humanizer_option_default_desc: `轻度功能加打字提示，以及消息之间的随机思考停顿。`,
+    humanizer_option_heavy_label: `重度`,
+    humanizer_option_heavy_desc: `默认功能加按句拆分，以及随意风格（小写、减少标点）。`,
+    next_steps_title: `建议的后续步骤`,
+    learn_more_title: `了解更多`,
+    heads_up_title: `几点需要注意`,
+    novelai_expressions_warning_field: `表情与贴纸已关闭`,
+    novelai_expressions_warning_value: `表情和贴纸已自动关闭，好让 NovelAI
+的上下文保持精简稳定。你可以随时用 \`/config\` >
+权限重新打开。`,
+    zai_tos_warning_field: `Z.ai 服务条款`,
+    zai_tos_warning_value: `Z.ai 的服务条款已更新，现在只允许
+编码和智能体用途。把 Z.ai 用于普通聊天
+风险自负，而且可能违反他们的条款。`,
+    byok_bootstrap_field: `用户 BYOK`,
+    byok_bootstrap_value: `设置过程中已打开。成员现在需要自己的个人提供方才能触发回复。之后可以用 {toggle_command} 关闭，成员设置流程见 {help_personal_provider}（功能 > 个人提供方）。`,
+    dm_context_explanation_title: `关于私信`,
+    dm_context_explanation: `我仍然会把这条私信当作一个「服务器」。
+也就是说所有「服务器」功能在这里都一样能
+用，只是这里是私下在我们之间用！把这条
+私信想成和我一对一的服务器，所以它的
+服务器记忆只属于这里。`,
+    already_setup_title: `已经设置好了`,
+    already_setup_summary_description: `这个服务器已经配置过了。以下是当前的文本提供方状态，以及最快的修改方式。`,
+    current_provider_field: `当前文本提供方`,
+    current_byok_field: `用户 BYOK`,
+    current_byok_enabled_value: `已打开。成员需要个人提供方才能触发回复。用 {toggle_command} 切换。`,
+    current_byok_disabled_value: `已关闭。没有启用个人提供方时，用户触发的消息可以使用服务器提供方。用 {toggle_command} 切换。`,
+    already_setup_next_steps_field: `后续步骤`,
+    already_setup_next_steps_value: `用 {provider_add_command} 再保存一个服务器提供方，用 {model_text_command} 切换当前文本模型，用 {byok_toggle_command} 切换 BYOK 模式，或用 {help_personal_provider}（功能 > 个人提供方）查看成员的个人提供方流程。`,
+    broken_state_title: `配置已损坏`,
+    broken_state_description: `这个服务器有人格，但配置不完整。服务器配置或 AI 模型引用缺失或已被删除。
+
+请试一下 {model_text_command} 指定一个可用模型，或用 {provider_add_command} 注册新的提供方。`,
+    already_setup_description: `我已经为这个服务器设置好了。要修改我的配置，请使用 \`/config\`、\`/persona\` 和 \`/memories\` 等其他指令。
+
+				如果你想更换我的提供方，请用 \`/providers\` 注册并启用新的默认文本提供方。`,
+    wizard: {
+      title: `设置 TomoriBot`,
+      intro: `完成下面每一项，然后结束设置。`,
+      intro_ready: `需要的东西都准备好了。检查一遍，然后结束设置。`,
+      progress: `进度：{done} / {total} 已完成`,
+      policies_name: `政策`,
+      policies_description: `查看并接受服务条款和隐私政策。`,
+      policies_pending: `还没有查看。`,
+      policies_completed: `政策已查看并接受。`,
+      policies_button_start: `查看并接受政策`,
+      policies_button_edit: `查看政策`,
+      policies_modal_title: `政策`,
+      policies_modal_context: `结束设置前请先查看 TomoriBot 的政策。
+
+TomoriBot 不会保存你的聊天记录。当它在
+频道里回复时，会读取该频道最近的消息作为
+上下文，并发送给这个服务器的 AI 提供方。
+提供方和自定义端点有各自的条款和隐私
+做法，请另外查看。`,
+      policies_modal_acceptance: `继续即表示你确认已阅读并接受 TomoriBot 的[服务条款]({terms_url})和[隐私政策]({privacy_url})。成员随时可以用 \`/legal\` 查看这两份文件，但只有你能告诉他们这里有 AI 在回复，以及它会读什么。`,
+      policies_modal_choice_label: `三项都确认后才能继续`,
+      policies_choice_terms: `我接受 TomoriBot 的服务条款`,
+      policies_choice_privacy: `我已阅读 TomoriBot 的隐私政策`,
+      policies_choice_members: `我会告诉成员 TomoriBot 是会读取最近消息来回复的 AI`,
+      policies_required: `三项都确认后才能继续。`,
+      policies_denied: `政策接受不属于这次设置的范围。`,
+      provider_name: `AI 提供方`,
+      provider_description: `选择回复时如何访问 AI 模型。`,
+      provider_pending: `还没有选择提供方。`,
+      provider_hint: `需要 API 密钥？打开 {help}，然后选 设置 > 第 1 步。`,
+      provider_catalog_encrypted: `API 密钥已加密。`,
+      provider_byok_summary: `已启用用户 BYOK 模式。`,
+      provider_custom_pending: `端点配置还没完成。`,
+      provider_custom_summary: `{label}\n模型：{model}`,
+      provider_select_placeholder: `选择提供方接入方式...`,
+      provider_option_catalog: `AI 提供方（推荐）`,
+      provider_option_custom: `自定义端点（高级）`,
+      provider_option_byok: `用户 BYOK（高级）`,
+      settings_name: `初始设置`,
+      settings_description: `选择初始人格和回复行为。`,
+      settings_pending: `还没有配置。`,
+      settings_button_start: `设置初始选项`,
+      settings_button_edit: `编辑初始选项`,
+      settings_modal_title: `初始设置`,
+      settings_persona_label: `人格`,
+      settings_persona_description: `选择我在设置完成后使用的人格。`,
+      settings_persona_placeholder: `选择一个人格预设集...`,
+      settings_humanizer_label: `回复自然度等级`,
+      settings_humanizer_description: `我的回复要多像真人？这是按规则决定的，不由 AI 判断，所以不会增加延迟或词元消耗。`,
+      settings_humanizer_placeholder: `选择一种回复风格...`,
+      settings_timezone_label: `时区偏移`,
+      settings_timezone_description: `用于提醒和时间感知。留空则使用 UTC。`,
+      settings_timezone_placeholder: `例如 8、-5、0`,
+      settings_system_prompt_label: `默认系统提示词`,
+      settings_system_prompt_description: `选择回复的基础指令。`,
+      settings_system_prompt_placeholder: `选择一个默认系统提示词...`,
+      settings_built_in_prompt: `内置默认（推荐）`,
+      settings_built_in_prompt_description: `回复简短，主动使用记忆和工具。`,
+      settings_built_in_prompt_summary: `内置默认`,
+      settings_prompt_unknown: `不在提示词目录里`,
+      settings_persona_unknown: `不在人格目录里`,
+      settings_catalog_unavailable: `现在无法检查`,
+      settings_persona_stale: `那个预设集已经不可用了。请另选一个。`,
+      settings_timezone_invalid: `时区必须是一个小时数，例如 8、-5 或 0。`,
+      settings_timezone_out_of_range: `时区必须在 -12 到 14 小时之间。`,
+      settings_unavailable: `预设集目录不可用时，无法编辑初始选项。`,
+      settings_summary_persona: `人格：{persona}`,
+      settings_summary_reply_style: `回复风格：{style}`,
+      settings_summary_timezone: `时区：{tz}`,
+      settings_summary_system_prompt: `系统提示词：{prompt}`,
+      finish_label: `完成设置`,
+      cancel_label: `取消`,
+      cancelled_title: `设置已取消`,
+      cancelled_description: `设置已取消。输入的凭据都已删除。`,
+      session_ended_title: `设置会话已结束`,
+      session_ended_description: `这次设置会话已经不可用了。请运行 /setup 重新开始。`,
+      commit_failed_title: `设置没有完成`,
+      commit_failed_description: `没有保存任何内容。请运行 /setup 重新开始。`,
+      change_failed_title: `设置改动没有保存`,
+      commit_in_progress: `这次设置已经在保存了。请稍等一下。`,
+      commit_in_progress_title: `正在保存设置`,
+      receipt_footer_avatar_skipped_dm: `私信里无法更新头像，
+所以跳过了预设集头像。`,
+      receipt_footer_avatar_failed: `无法在这个服务器里更新预设集头像。
+你可以之后再设置一次。`,
+      receipt_title: `设置完成！`,
+      receipt_desc: `我已经以 \`{persona}\` 的身份为这个服务器设置好了！`,
+      receipt_desc_with_model: `我已经为这个服务器设置好了！我会以 \`{persona}\` 的
+身份，用 \`{model_name}\` 模型（\`{provider}\` 的默认值）回复。`,
+      receipt_desc_custom_endpoint: `我已经为这个服务器设置好了！我会以
+\`{persona}\` 的身份，用 \`{endpoint}\` 上的
+\`{model_name}\` 回复。`,
+      receipt_desc_byok: `我已经以用户 BYOK 模式为这个服务器设置好了，
+身份是 \`{persona}\`！在关闭 BYOK 之前，每位成员
+都用自己的提供方回复。`,
+      receipt_desc_dm: `我已经以 \`{persona}\` 的身份为我们的私信设置好了！`,
+      receipt_desc_dm_with_model: `我已经以 \`{persona}\` 的身份为我们的私信设置好了！
+我会用 \`{provider}\` 的 \`{model_name}\` 模型回复。`,
+      receipt_desc_custom_endpoint_dm: `我已经为我们的私信设置好了！我会以
+\`{persona}\` 的身份，用 \`{endpoint}\` 上的
+\`{model_name}\` 回复。`,
+      receipt_desc_byok_dm: `我已经以用户 BYOK 模式为我们的私信设置好了，
+身份是 \`{persona}\`！在关闭 BYOK 之前，你的每条
+消息都用自己的提供方。`,
+      receipt_next_steps: `- **在聊天里提到我**就能开始对话！
+- 用 \`/persona\` 改我的名字、外观和人格。
+- 用 \`/config\` 调整我的行为和能力。
+- 用 \`/memories\` 教我关于你和这个服务器的事。
+- 用 \`/expressions initialize\` 让我使用这个
+  服务器的表情和贴纸。`,
+      receipt_next_steps_dm: `- **直接在这里给我发消息**就能开始对话！
+- 用 \`/persona\` 改我的名字、外观和人格。
+- 用 \`/config\` 调整我的行为和能力。
+- 用 \`/memories\` 教我关于你的事。`,
+      receipt_learn_more: `阅读[官方 Wiki](https://docs.tomoribot.app/zh-CN/features/)，或打开 {help}
+（然后选功能），了解更多我能做的事。
+- [多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/) = 外观、声音和触发设置
+- [聊天与触发](https://docs.tomoribot.app/zh-CN/features/chatting-personality/chatting-and-triggers/) = 我何时以及如何加入
+- [记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/) = 人物、事实和上下文
+- [个性化](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/) = 你希望被如何对待
+- [媒体生成](https://docs.tomoribot.app/zh-CN/features/capabilities/media-generation/) = 图像、视频和语音
+- [工具与扩展](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/) = 网络搜索和自定义工具`,
+      permission_denied: `你需要有管理服务器权限才能进行设置。`,
+      env_mismatch: `环境配置已变更。请重新开始设置。`,
+      forbidden: `这次设置会话属于其他用户或频道。`,
+      finish_incomplete: `请先完成所有要求，再结束设置。`,
+      provider_validation_failed_title: `API 密钥没有保存`,
+      provider_validation_failed: `提供方拒绝了这个 API 密钥，或无法验证它。没有保存任何内容。`,
+      provider_invalid: `不支持那个提供方。请重新打开菜单并选择当前可用的选项。`,
+      catalog_modal_title: `提供方 API 密钥`,
+      catalog_provider_label: `提供方`,
+      catalog_provider_description: `选择你拥有其 API 密钥的 AI 提供方。`,
+      catalog_api_key_label: `API 密钥`,
+      catalog_api_key_description: `会经过验证并加密。设置完成前，密钥不会存到任何地方。`,
+      catalog_api_key_help: `不知道如何获取 API 密钥？打开 {help}，然后选 设置 > 第 1 步。`,
+      catalog_api_key_placeholder: `不要把这个密钥分享给任何人`,
+      custom_endpoint_hint: `适合自己运行或信任自己端点的高级用户。`,
+      custom_endpoint_connection_pending: `连接：还没配置`,
+      custom_endpoint_connection_configured: `连接：{label}`,
+      custom_endpoint_model_pending: `文本模型：还没配置`,
+      custom_endpoint_model_configured: `文本模型：{model}`,
+      custom_endpoint_button_connection_start: `配置连接`,
+      custom_endpoint_button_connection_edit: `编辑连接`,
+      custom_endpoint_button_model_start: `配置文本模型`,
+      custom_endpoint_button_model_edit: `编辑文本模型`,
+      custom_endpoint_failed_title: `自定义端点没有保存`,
+      custom_endpoint_unreachable: `无法连接那个端点。请检查 URL 和凭据，然后重试。`,
+      custom_endpoint_unreachable_detail: `端点没有按那种 API 协议响应。没有保存任何内容。详情：{reason}`,
+      custom_endpoint_api_style_invalid: `不支持那种 API 风格。请重新打开菜单并选择一种文本风格。`,
+      custom_endpoint_model_invalid: `那个文本模型配置无效。请重新打开表单再试。`,
+      custom_endpoint_connection_modal_title: `端点连接`,
+      custom_endpoint_api_style_label: `API 风格`,
+      custom_endpoint_api_style_description: `为你的文本端点选择 API 协议。`,
+      custom_endpoint_style_openai: `OpenAI 兼容`,
+      custom_endpoint_style_openai_desc: `标准 OpenAI 兼容 API 协议。`,
+      custom_endpoint_style_ollama: `Ollama`,
+      custom_endpoint_style_ollama_desc: `原生 Ollama API 协议。`,
+      custom_endpoint_label_label: `端点标签`,
+      custom_endpoint_label_description: `用来识别这个端点的易读名称。`,
+      custom_endpoint_label_placeholder: `例如 My Local LLM`,
+      custom_endpoint_url_label: `端点 URL`,
+      custom_endpoint_url_description: `端点可访问的基础 URL。`,
+      custom_endpoint_url_placeholder: `https://api.example.com/v1 或 http://localhost:11434`,
+      custom_endpoint_auth_token_label: `认证令牌`,
+      custom_endpoint_auth_token_description: `可选的 Bearer 令牌或 API 密钥，用于认证。`,
+      custom_endpoint_auth_token_placeholder: `不需要认证就留空`,
+      custom_endpoint_model_modal_title: `文本模型`,
+      custom_endpoint_model_code_label: `模型代号`,
+      custom_endpoint_model_code_description: `你的端点能识别的模型标识符。`,
+      custom_endpoint_model_code_placeholder: `例如 llama3、gpt-4o、mistral`,
+      custom_endpoint_num_ctx_label: `上下文大小`,
+      custom_endpoint_num_ctx_description: `可选的上下文窗口词元数（最少 512）。留空则用端点默认值。`,
+      custom_endpoint_num_ctx_placeholder: `例如 4096、8192、32768，或留空`,
+      custom_endpoint_capabilities_label: `能力`,
+      custom_endpoint_capabilities_description: `勾选这个模型支持的功能。`,
+      custom_endpoint_cap_tools: `工具调用`,
+      custom_endpoint_cap_tools_desc: `能接收并回应工具调用请求。`,
+      custom_endpoint_cap_vision: `视觉`,
+      custom_endpoint_cap_vision_desc: `能分析消息里附带的图像。`,
+      custom_endpoint_cap_structured_output: `结构化输出`,
+      custom_endpoint_cap_structured_output_desc: `支持受约束的 JSON 架构输出。`,
+      custom_endpoint_cap_json: `JSON 模式`,
+      custom_endpoint_cap_json_desc: `保证输出是有效的 JSON。`,
+      custom_endpoint_cap_strict_role_alternation: `严格角色交替`,
+      custom_endpoint_cap_strict_role_alternation_desc: `强制用户与助手轮次交替出现。`,
+      custom_endpoint_cap_prefix_completion: `前缀补全`,
+      custom_endpoint_cap_prefix_completion_desc: `支持延续一段未写完的助手回复。`,
+      provider_byok_guild_only: `用户 BYOK 模式只能在服务器里使用。私信请选择其他提供方模式。`,
+      byok_modal_title: `确认用户 BYOK`,
+      byok_modal_notice: `打开用户 BYOK 后，这个服务器里的人会用各自保存的提供方回复。这个服务器不提供备用。他们可以用 {command} 设置一个。[Learn more about User BYOK](https://docs.tomoribot.app/zh-CN/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)`,
+      byok_confirm_label: `启用用户 BYOK`,
+      byok_confirm_yes: `是，启用用户 BYOK`,
+      byok_confirm_no: `不，保留原有配置`,
+      byok_choice_invalid: `那个选择无效。请重新打开菜单并选择一个选项。`,
+    },
+  },
+};

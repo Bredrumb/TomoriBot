@@ -2,10 +2,10 @@
 title: "LTM 01: Memory Creation"
 ---
 
-LLM-initiated creation of a new persistent memory — server-wide or
-user-specific — written to the database.
+LLM-initiated creation of a new persistent memory (server-wide or
+user-specific) written to the database.
 
-**File:** `src/tools/functionCalls/memoryTool.ts` — class `MemoryTool`,
+**File:** `src/tools/functionCalls/memoryTool.ts`: class `MemoryTool`,
 tool name `create_long_term_memory`
 
 ## Mission
@@ -18,23 +18,23 @@ string and a `memory_scope` of either `server_wide` or `target_user`.
 
 1. **Validate** parameters (content non-empty, scope valid, feature flag on,
    critical state present).
-2. **Resolve target user** (scope `target_user` only) — `resolveUserTarget()`
+2. **Resolve target user** (scope `target_user` only): `resolveUserTarget()`
    looks up the provided display name in the conversation/guild, disambiguating
    multiple matches and handling bridge-user and bot-self fallbacks. Persona-scoped
    nicknames and affixed labels ("Master Sparrow") resolve too; see
    `docs/en/architecture/pipelines/context-build/02-native-assembly/06-participants.md`
    for the stage ladder.
-3. **Sanitize content** — `sanitizeUnknownTemplatePlaceholders()` strips
+3. **Sanitize content**: `sanitizeUnknownTemplatePlaceholders()` strips
    brace-wrapped tokens that don't match `{user}` or `{bot}` (e.g. the LLM
    writing `{obonya}` instead of the correct template token).
-4. **Guard lineage** — blocks if `persona_lineage_id === 0` (reserved; signals
+4. **Guard lineage**: blocks if `persona_lineage_id === 0` (reserved; signals
    an un-run schema migration).
-5. **Check limits** — `serverMemoryRepository.checkServerMemoryLimit()` or
+5. **Check limits**: `serverMemoryRepository.checkServerMemoryLimit()` or
    `personalMemoryRepository.checkPersonalMemoryLimit()` before writing.
-6. **DB write** — `serverMemoryRepository.add(...)` or
+6. **DB write**: `serverMemoryRepository.add(...)` or
    `personalMemoryRepository.add(...)`.
-7. **Notify** — send a success embed to Discord (`sendStandardEmbed`).
-8. **Invalidate cache** — `invalidateTomoriStateCache(serverId)` or
+7. **Notify**: send a success embed to Discord (`sendStandardEmbed`).
+8. **Invalidate cache**: `invalidateTomoriStateCache(serverId)` or
    `invalidateUserCache(userId)`.
 
 ## Input
@@ -49,11 +49,11 @@ Tool arguments (from LLM):
 
 Context required:
 
-- `context.tomoriState` — `server_id`, `persona_id`, `persona_lineage_id`,
+- `context.tomoriState`: `server_id`, `persona_id`, `persona_lineage_id`,
   `config.self_teaching_enabled`, `config.personal_memories_enabled`.
-- `context.userId` / `context.message.author.id` — triggering user for audit
+- `context.userId` / `context.message.author.id`: triggering user for audit
   and `{user}` resolution.
-- `context.channel` — for `serverId` extraction and embed delivery.
+- `context.channel`: for `serverId` extraction and embed delivery.
 
 ## Output
 
@@ -72,14 +72,14 @@ Context required:
 
 ## Side effects
 
-- **DB row inserted** — one row in `server_memories` (server-wide) or
+- **DB row inserted**: one row in `server_memories` (server-wide) or
   `personal_memories` (target-user).
-- **Discord embed sent** — success notification in `context.channel`;
+- **Discord embed sent**: success notification in `context.channel`;
   routed through webhook if in alter-persona mode.
 - **Cache invalidated:**
   - Server-wide: `invalidateTomoriStateCache(serverId)`
   - Personal: `invalidateUserCache(resolvedTargetUserId)`
-- **Log entry** — `log.success(...)` on success with memory ID and content.
+- **Log entry**: `log.success(...)` on success with memory ID and content.
 
 ## Invariants
 
@@ -88,7 +88,7 @@ After a successful write:
 - The new memory row exists in the DB, scoped to
   `(server_id, persona_lineage_id)` for server memories or
   `(user_id, persona_lineage_id)` for personal memories.
-- The TomoriState or user cache for the affected scope has been invalidated —
+- The TomoriState or user cache for the affected scope has been invalidated:
   the next context-build will load from DB.
 - `data.memory_id` in the `ToolResult` matches the `server_memory_id` or
   `personal_memory_id` of the inserted row.
@@ -106,9 +106,9 @@ After a successful write:
 | Surface | Plugin-relevance |
 |---|---|
 | `serverMemoryRepository.add()` / `personalMemoryRepository.add()` | **A plugin adding a new memory scope (e.g., channel-specific LTM) would add a repository method and a matching `memory_scope` enum value here.** → plugin plan candidate |
-| `resolveUserTarget()` | `src/utils/discord/targetResolver.ts`. Internal — user resolution is a guild-lookup utility; no plugin seam. |
-| Memory limit checks (`checkServerMemoryLimit`, `checkPersonalMemoryLimit`) | Internal — limits are DB-column configured, not plugin-controlled. |
-| `convertMentions()` | `src/utils/text/contextBuilder.ts`. Internal — token replacement (`{user}` / `{bot}`) for embed display only; does not affect the stored content. |
+| `resolveUserTarget()` | `src/utils/discord/targetResolver.ts`. Internal: user resolution is a guild-lookup utility; no plugin seam. |
+| Memory limit checks (`checkServerMemoryLimit`, `checkPersonalMemoryLimit`) | Internal: limits are DB-column configured, not plugin-controlled. |
+| `convertMentions()` | `src/utils/text/contextBuilder.ts`. Internal: token replacement (`{user}` / `{bot}`) for embed display only; does not affect the stored content. |
 
 ## Configuration
 

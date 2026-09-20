@@ -27,7 +27,7 @@ import {
 import type { RawModalPayload } from "@/utils/discord/ui/configModals";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { selectablePersonas, SELECT_OPTION_LIMIT } from "@/utils/discord/ui/configChannelModals";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 import { promptPartDescription, promptPartLabel } from "@/utils/discord/ui/modalPromptPartLabels";
 
@@ -681,7 +681,7 @@ export function buildBehaviorPresetModal(
         presets.map((preset) => ({
           label: preset.system_prompt_preset_name,
           value: preset.system_prompt_preset_name,
-          description: preset.system_prompt_preset_desc,
+          description: resolveDescription(preset.descriptions, locale) ?? "",
         })),
       ),
     ],

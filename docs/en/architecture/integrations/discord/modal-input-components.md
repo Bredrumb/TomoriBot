@@ -20,7 +20,7 @@ Discord introduced new interactive input components for modals beyond the origin
 ### Key Differences from Message Components
 
 - **Label wrapper required for structured inputs**: Radio Group, Checkbox Group, Checkbox, User Select, Role Select, and Channel Select must be placed inside a Label component (type 18), _not_ an Action Row. Text Inputs can use the older Action Row layout; TomoriBot's raw modal path wraps them in Labels so the same form can carry descriptions and structured inputs.
-- **Modal-only**: These components are only available in modals — they cannot be used in message payloads.
+- **Modal-only**: These components are only available in modals; they cannot be used in message payloads.
 - **Submit data structure**: The interaction response nests the input component inside the Label's `component` field, not in an `ActionRow.components` array.
 
 ---
@@ -484,7 +484,7 @@ Use this decision guide when choosing between modal input types.
 Many TomoriBot modals include yes/no, enable/disable, or true/false string selects. These should be migrated to:
 
 - **Optional boolean** → **Checkbox**: Unchecked submits as `false`, checked as `true`. The user can leave it unchecked and still submit.
-- **Required boolean** → **Checkbox Group with 1 option**: Set `required: true` and provide a single option. This forces the user to explicitly check it before submitting — acting as a required confirmation or acknowledgment.
+- **Required boolean** → **Checkbox Group with 1 option**: Set `required: true` and provide a single option. This forces the user to explicitly check it before submitting; acting as a required confirmation or acknowledgment.
 
 ```json
 // Required boolean workaround: Checkbox Group with 1 option
@@ -529,7 +529,7 @@ Is the input free-form text?
 ### Anchor workflow modal bridge
 
 Inside a anchor message workflow, do not call `promptWithPaginatedModal()` or
-`promptWithRawModal()` directly — they would open the modal outside the anchor message
+`promptWithRawModal()` directly because they would open the modal outside the anchor message
 and strand its controls. Open the modal from the workflow instead. After a persona is
 selected that means the selection phase from `runPersonaPickerWorkflow(...)`:
 
@@ -566,8 +566,8 @@ range button opens the sliced modal, and a submitted phase reports `optionOffset
 page-local indexes when the option values themselves are not stable IDs.
 
 The bridge slices **exactly one** select component and treats every entry as a selectable
-option. A modal that breaks either assumption — several selects sharing one option list, or
-a reserved entry such as an explicit "None" that must appear on every page — cannot use it.
+option. A modal that breaks either assumption (several selects sharing one option list, or
+a reserved entry such as an explicit "None" that must appear on every page) cannot use it.
 Those pick a range up front with `acquireModalOptionRange(...)`, passing a `pageSize` below
 25 to leave room for the reserved entries, and then open a modal whose list is already
 sliced to 25 or fewer.
@@ -644,7 +644,7 @@ editor wrote rather than as the label the panel shows.
 
 A full survey of all modals in the codebase, categorized by migration eligibility.
 
-### Strong Candidates — Radio Group
+### Strong Candidates: Radio Group
 
 These modals use a String Select with a small, fixed, mutually exclusive option set that is unlikely to grow beyond 10:
 
@@ -653,11 +653,11 @@ These modals use a String Select with a small, fixed, mutually exclusive option 
 | `/config` > Engine > General       | `config/humanizer.ts`        | `humanizer_select`     | String Select | 4-5 (none/light/moderate/heavy; + inherit with `scope: Persona`) | Fixed set of mutually exclusive degrees             |
 | `/setup`           | `utils/discord/ui/setupPanel.ts` | `humanizer_{nonce}`    | String Select | 4 (none/light/default/heavy)              | Same fixed humanizer degree set as above; shipped inside the Starting Settings modal's `type: 18` Label |
 | `/personal config`       | `utils/discord/ui/personalConfigPanel.ts` | `privacy_select`       | String Select | 3 (minimal/partial/full)                  | Fixed set of 3 mutually exclusive levels            |
-| `/generate image`         | `generate/image.ts`          | `aspect_ratio_select`  | String Select | 10 (1:1, 2:3, 3:2, 3:4, 4:3, etc.)      | Fixed set of 10 aspect ratios — at the limit        |
+| `/generate image`         | `generate/image.ts`          | `aspect_ratio_select`  | String Select | 10 (1:1, 2:3, 3:2, 3:4, 4:3, etc.)      | Fixed set of 10 aspect ratios (at the limit)        |
 | `/config` > Plugins > MCP Servers Add form | `discord/ui/mcpsPanel.ts` | `server-type_{nonce}` | Radio Group | 3 (General Purpose/Web Search/URL Fetcher) | Already migrated: required routed field with General Purpose selected by default |
 | `/compact`           | `compact.ts`                 | `summary_type`         | String Select | 2 (conversation/roleplay)                 | Fixed binary mode selection                         |
 
-### Strong Candidates — Checkbox / Checkbox Group (Boolean Selects)
+### Strong Candidates: Checkbox / Checkbox Group (Boolean Selects)
 
 These modals currently use a 2-option String Select (yes/no, true/false, enable/disable) that should become a Checkbox or Checkbox Group depending on whether the answer is required:
 
@@ -670,11 +670,11 @@ These modals currently use a 2-option String Select (yes/no, true/false, enable/
 | `/respond`                 | `respond.ts`                   | `use_reasoning`        | Yes / No                 | No       | **Checkbox** (optional toggle)                 |
 | `/persona export`          | `persona/export.ts`            | `export_json_select`   | False / True             | No       | **Checkbox** (optional toggle)                 |
 
-> **Note on `/config provider switch`:** This modal has _two_ migration candidates — the save-current-config toggle becomes a **Checkbox** (default checked, since users almost always want to save). The provider select itself is dynamic (loaded from DB via `loadUniqueProviders()`), so it stays as a String Select.
+> **Note on `/config provider switch`:** This modal has _two_ migration candidates: the save-current-config toggle becomes a **Checkbox** (default checked, since users almost always want to save). The provider select itself is dynamic (loaded from DB via `loadUniqueProviders()`), so it stays as a String Select.
 
-> **Note on `/compact`:** This modal has _three_ migration candidates — `summary_type` becomes a Radio Group, while `refresh_context` and `analyze_images` both become required Checkbox Groups.
+> **Note on `/compact`:** This modal has _three_ migration candidates: `summary_type` becomes a Radio Group, while `refresh_context` and `analyze_images` both become required Checkbox Groups.
 
-### Strong Candidates — Checkbox Group Bulk Management
+### Strong Candidates: Checkbox Group Bulk Management
 
 These commands still remove one dynamic item at a time, but the data shape is a good fit for the unchecked-means-remove pattern:
 
@@ -685,7 +685,7 @@ These commands still remove one dynamic item at a time, but the data shape is a 
 | `/config` > Persona > Identity & Personality | `persona/sample-dialogue/remove.ts` | Persona picker + single paginated select | Dialogue cleanup is often batch-oriented and already has index-safe removal | Good fit for index-valued checkbox groups                              |
 | `/persona remove`          | `persona/remove.ts`                | Single paginated select | Alter persona cleanup could be batch-managed                             | Should pair the bulk UI with stronger destructive-action messaging     |
 
-### Not Candidates — Keep String Select
+### Not Candidates: Keep String Select
 
 These modals have dynamic or large option sets that exceed Radio Group/Checkbox Group limits:
 
@@ -707,7 +707,7 @@ These modals have dynamic or large option sets that exceed Radio Group/Checkbox 
 | `/scheduled-task remove`      | `scheduled-task/remove.ts`   | Dynamic reminder list                                     |
 | `/config` > Channels > Logs & Welcome    | `server/welcome-channel/set.ts`  | Channel option + dynamic persona list                     |
 
-### Not Candidates — Keep Text Input
+### Not Candidates: Keep Text Input
 
 These modals collect free-form text and have no structured option set:
 

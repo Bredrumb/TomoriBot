@@ -19,7 +19,13 @@ import {
 import { safeModalLocalizer, safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { formatStoredParameterValue } from "@/utils/discord/ui/personalConfigParameterControls";
 import { formatImageTagsForModalValue, TAGS_MODAL_MAX_LENGTH } from "@/utils/image/tagHelpers";
-import { localizer } from "@/utils/text/localizer";
+import {
+  getLocaleEndonym,
+  getRegisterableLocales,
+  getSupportedLocales,
+  localizer,
+  resolveSupportedLocale,
+} from "@/utils/text/localizer";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import {
   getActivePersonalProviderForCapability,
@@ -32,34 +38,40 @@ export function buildPersonalConfigModalFieldId(field: string, nonce: string): s
   return `${field}_${nonce}`;
 }
 
+/**
+ * @param standalone `/personal language` shows this modal with no panel behind it, so its submit
+ * routes to the action that answers with a receipt instead of repainting a message.
+ */
 export function buildLanguageModal(
   locale: string,
   nonce: string,
   currentLanguage: string,
+  standalone = false,
 ): { custom_id: string; title: string; components: RawDiscordComponent[] } {
+  const selectedLanguage = getRegisterableLocales().some((code) => code === currentLanguage)
+    ? resolveSupportedLocale(currentLanguage)
+    : null;
+
   return {
-    custom_id: buildPersonalConfigRouteId({ action: "language-submit", locale, nonce }),
+    custom_id: buildPersonalConfigRouteId({
+      action: standalone ? "language-only-submit" : "language-submit",
+      locale,
+      nonce,
+    }),
     title: safeSelectOptionText(localizer(locale, "commands.personal.config.language_modal_title"), 45),
     components: [
       {
         type: 18,
         label: safeSelectOptionText(localizer(locale, "commands.personal.config.language_select_label"), 45),
         component: {
-          type: 21,
+          type: 3,
           custom_id: buildPersonalConfigModalFieldId("language", nonce),
           required: true,
-          options: [
-            {
-              value: "en-US",
-              label: safeSelectOptionText(localizer(locale, "commands.personal.config.language_en"), 100),
-              default: currentLanguage === "en-US",
-            },
-            {
-              value: "ja",
-              label: safeSelectOptionText(localizer(locale, "commands.personal.config.language_ja"), 100),
-              default: currentLanguage === "ja",
-            },
-          ],
+          options: getSupportedLocales().map((code) => ({
+            value: code,
+            label: safeSelectOptionText(getLocaleEndonym(code), 100),
+            default: selectedLanguage === code,
+          })),
         },
       },
     ],

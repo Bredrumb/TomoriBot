@@ -1,14 +1,28 @@
 import { MessageFlags } from "discord.js";
 import type { ChatInputCommandInteraction, Client, SlashCommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { localizer } from "@/utils/text/localizer";
+import { getLocaleEndonym, getSupportedLocales, localizer } from "@/utils/text/localizer";
 import { log } from "@/utils/misc/logger";
 import { startSetupWizard } from "@/utils/discord/interactions/setupRoutes";
 
 export const managerOnly = true;
 
 export const configureCommand = (command: SlashCommandBuilder) =>
-  command.setName("setup").setDescription(localizer("en-US", "commands.setup.description"));
+  command
+    .setName("setup")
+    .setDescription(localizer("en-US", "commands.setup.description"))
+    .addStringOption((option) =>
+      option
+        .setName("language")
+        .setDescription(localizer("en-US", "commands.setup.language_description"))
+        .setRequired(true)
+        .addChoices(
+          ...getSupportedLocales().map((language) => ({
+            name: getLocaleEndonym(language),
+            value: language,
+          })),
+        ),
+    );
 
 /**
  * Starts the guided setup wizard.
@@ -20,36 +34,44 @@ export const configureCommand = (command: SlashCommandBuilder) =>
 export async function execute(
   _client: Client,
   interaction: ChatInputCommandInteraction,
-  userData: UserRow,
+  _userData: UserRow,
   locale: string,
 ): Promise<void> {
+  let language = locale;
+
   try {
+    const selectedLanguage = interaction.options.getString("language", true);
+    if (!getSupportedLocales().includes(selectedLanguage)) {
+      throw new Error(`Unsupported setup language: ${selectedLanguage}`);
+    }
+    language = selectedLanguage;
     const isDMChannel = interaction.channel?.isDMBased() ?? false;
     const serverId = isDMChannel ? interaction.user.id : interaction.guild?.id;
 
     if (!serverId) {
       await interaction.reply({
-        content: localizer(userData.language_pref, "general.errors.critical_error_description"),
+        content: localizer(language, "general.errors.critical_error_description"),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
-    // Guild locale wins where it exists, so the wizard's copy, the stored analytics locale, and the
-    // preset catalog all resolve against the language the guild actually reads.
-    const serverLocale = interaction.guildLocale ?? locale;
-    await startSetupWizard(interaction, { locale: serverLocale });
+    await startSetupWizard(interaction, { locale: language });
   } catch (error) {
     log.error("Error during setup process:", error);
-    if (!interaction.replied && !interaction.deferred) {
-      try {
+    try {
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply({
+          content: localizer(language, "general.errors.unknown_error_description"),
+        });
+      } else if (!interaction.replied) {
         await interaction.reply({
-          content: localizer(userData.language_pref, "general.errors.unknown_error_description"),
+          content: localizer(language, "general.errors.unknown_error_description"),
           flags: MessageFlags.Ephemeral,
         });
-      } catch (replyError) {
-        log.error("Failed to send setup error reply:", replyError);
       }
+    } catch (replyError) {
+      log.error("Failed to send setup error reply:", replyError);
     }
   }
 }

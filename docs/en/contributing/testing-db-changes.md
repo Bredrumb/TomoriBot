@@ -23,7 +23,7 @@ No manual database creation is required. `bun run test` detects a local Postgres
 4. Discovers every `tests/**/*.test.ts` file, groups them into **lanes** (see below), and runs the lanes concurrently with `TEST_DB_READY=1` and `POSTGRES_DB=<name>` injected into each child environment.
 5. Drops the database on clean exit, `SIGINT` (Ctrl+C), or `SIGTERM`.
 
-If no Postgres credentials are found or the connection probe fails, the files still run — DB regression tests skip gracefully and unit tests still pass.
+If no Postgres credentials are found or the connection probe fails, the files still run: DB regression tests skip gracefully and unit tests still pass.
 
 ### How files are grouped into lanes
 
@@ -35,20 +35,20 @@ A **batch** is one `bun test` process covering one or more files. A **lane** is 
 | `unit-isolated` | `tests/unit/` files that call `mock.module()` | one batch per file |
 | `db` | everything under `tests/regression/` | one batch for all non-mock files, plus one batch per mock-using file |
 
-**Why mock users are isolated.** Bun applies `mock.module()` process-wide and does not restore it between files. A test that stubs a shared module (e.g. the `@/utils/db/repositories` barrel) corrupts every file loaded *later in the same process*, producing ordering-dependent `X is not a function` / `Export named X not found` failures that shift between suites as the file set changes. That hazard is confined to a single process, so the rule required is "no two mock-using files share a process" — not "no two files ever share a process". Mock users are detected by inspecting each file's source for `mock.module`, so a newly-added one isolates itself automatically rather than silently corrupting its neighbours.
+**Why mock users are isolated.** Bun applies `mock.module()` process-wide and does not restore it between files. A test that stubs a shared module (e.g. the `@/utils/db/repositories` barrel) corrupts every file loaded *later in the same process*, producing ordering-dependent `X is not a function` / `Export named X not found` failures that shift between suites as the file set changes. That hazard is confined to a single process, so the rule required is "no two mock-using files share a process", but not "no two files ever share a process". Mock users are detected by inspecting each file's source for `mock.module`, so a newly-added one isolates itself automatically rather than silently corrupting its neighbours.
 
 **Why regression files stay in one lane.** The DB regression suites share a single disposable database with fixed-id fixtures, so running them concurrently with each other would collide on the same rows. They are safe to overlap with the unit lanes, which touch no database. Input order is preserved within every lane, so batching never reorders fixture interactions relative to a sequential run.
 
-**Why the bootstrap is memoized.** `setupTestDb()` in `tests/regression/db/setup/testDb.ts` runs `initializeDatabase()`, which replays the schema, migrations and seed catalogs — roughly two seconds. Because one process now covers every regression file, the bootstrap is memoized for the lifetime of that process rather than repeating once per `beforeAll`.
+**Why the bootstrap is memoized.** `setupTestDb()` in `tests/regression/db/setup/testDb.ts` runs `initializeDatabase()`, which replays the schema, migrations and seed catalogs (roughly two seconds). Because one process now covers every regression file, the bootstrap is memoized for the lifetime of that process rather than repeating once per `beforeAll`.
 
 Output is buffered per lane and replayed in a fixed order (`unit`, `unit-isolated`, `db`) once every lane settles, because interleaved output from concurrent processes is unreadable.
 
 ### Rules when adding a test
 
-Batching is fast because files share processes, which costs two guarantees the old one-process-per-file runner gave for free. Both are enforced by `tests/unit/checks/testIsolationHygiene.test.ts`, so breaking one fails `bun run vl` with the offending file named — you do not need to remember them:
+Batching is fast because files share processes, which costs two guarantees the old one-process-per-file runner gave for free. Both are enforced by `tests/unit/checks/testIsolationHygiene.test.ts`, so breaking one fails `bun run vl` with the offending file named, so you do not need to remember them:
 
 1. **Database-touching tests go under `tests/regression/`, never `tests/unit/`.** The unit lanes run concurrently with the DB lane, so a unit-lane test reaching the fixture database would race it on the same fixed-id rows.
-2. **Restore any process-wide state you mutate, in `afterEach` or `afterAll`.** `setSystemTime()`, `globalThis.x = …` and `process.env.X = …` all persist for the life of the process, so leaving one set changes behaviour for every other file in the batch — and the failure appears in *that* file, not yours.
+2. **Restore any process-wide state you mutate, in `afterEach` or `afterAll`.** `setSystemTime()`, `globalThis.x = …` and `process.env.X = …` all persist for the life of the process, so leaving one set changes behaviour for every other file in the batch, and the failure appears in *that* file, not yours.
 
 Files that call `mock.module()` are exempt from rule 2: they already get a private process, so nothing they mutate can escape it.
 
@@ -145,15 +145,15 @@ Each test file has at least one `it.skip("[REGRESSION PROBE] ...")` block. To co
 
 1. Un-skip the probe test in the file you're modifying.
 2. Introduce the described regression (e.g., add `WHERE 1=0` to the SELECT under test).
-3. Run the file — the probe test must fail.
-4. Revert the regression and re-run — the probe test must pass again.
+3. Run the file: the probe test must fail.
+4. Revert the regression and re-run: the probe test must pass again.
 5. Re-skip the probe test before committing.
 
 ## Rehearsing migrations against a production snapshot
 
 The regression harness above runs against a *fresh* schema. Before shipping a release branch with many migrations, also rehearse them against a copy of **real production data** to catch issues that only surface against existing rows (orphaned references, backfill edge cases, data-pattern assumptions).
 
-1. Restore a production snapshot into a scratch database. The target Postgres **must have `pgvector` available** — see the [pgvector prerequisite in the Safe Migration guide](safe-migration.md#prerequisite-the-pgvector-extension). Restore with `ON_ERROR_STOP=1` so any failure surfaces instead of silently dropping tables.
+1. Restore a production snapshot into a scratch database. The target Postgres **must have `pgvector` available**: see the [pgvector prerequisite in the Safe Migration guide](safe-migration.md#prerequisite-the-pgvector-extension). Restore with `ON_ERROR_STOP=1` so any failure surfaces instead of silently dropping tables.
 2. Point `POSTGRES_DB` at that scratch database and run the rehearsal:
 
    ```bash
@@ -166,7 +166,7 @@ The regression harness above runs against a *fresh* schema. Before shipping a re
 
 ## CI integration
 
-CI sets `POSTGRES_PASSWORD` and `POSTGRES_HOST` in the job environment. `bun run test` detects the credentials, provisions a fresh disposable database per run, and drops it after tests complete — no static `tomodb_test` database or manual CI setup is required.
+CI sets `POSTGRES_PASSWORD` and `POSTGRES_HOST` in the job environment. `bun run test` detects the credentials, provisions a fresh disposable database per run, and drops it after tests complete: no static `tomodb_test` database or manual CI setup is required.
 
 See `.github/workflows/validation.yml` for the current service container and env configuration.
 
@@ -174,4 +174,4 @@ See `.github/workflows/validation.yml` for the current service container and env
 
 - The wrapper only creates/drops databases on local hosts (`localhost`, `127.0.0.1`, `::1`, `postgres`, `tomoribot-db`, `host.docker.internal`). Set `TOMORI_TESTS_ALLOW_NONLOCAL_DB=true` to override for a disposable remote instance.
 - `RUN_ENV=production` causes the wrapper to abort immediately.
-- If Postgres is unreachable (connection probe times out in 5 s), the wrapper falls back to skip mode — tests run without DB, 89 DB tests skip.
+- If Postgres is unreachable (connection probe times out in 5 s), the wrapper falls back to skip mode: tests run without DB, 89 DB tests skip.

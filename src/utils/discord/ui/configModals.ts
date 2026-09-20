@@ -23,7 +23,7 @@ import { PERSONA_SPRITE_LIMITS } from "@/utils/persona/sprites";
 import { splitPromptIntoModalParts } from "@/utils/text/modalPromptParts";
 import { promptPartDescription, promptPartLabel } from "@/utils/discord/ui/modalPromptPartLabels";
 import { resolvePrefillPrompt } from "@/utils/text/personaPrompt";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import { createHumanizerOptions, HUMANIZER_INHERIT_VALUE } from "@/utils/discord/humanizerOptions";
@@ -405,7 +405,7 @@ export function buildPersonaTextOverrideModelModal(
           options: models.map((model) => ({
             label: safeSelectOptionText(model.llm_codename, 100),
             value: model.llm_codename,
-            description: model.llm_description ? safeSelectOptionText(model.llm_description, 100) : undefined,
+            description: safeSelectOptionText(resolveDescription(model.descriptions, locale) ?? "", 100),
             default: model.llm_id === currentModelId,
           })),
         },

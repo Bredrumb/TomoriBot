@@ -956,13 +956,14 @@ class LlmModelRepository {
           is_default, is_reasoning, is_deprecated, is_free, has_tools,
           sees_images, sees_videos, sees_youtube, is_uncensored,
           supports_structoutput, strict_role_alternation, supports_prefix_completion,
-          llm_description, ja_description,
+          llm_description, descriptions,
           input_price_per_million, output_price_per_million
         ) VALUES (
           ${provider}, ${modelCodename}, true, false, false, false, false, false,
           ${caps.hasTools}, ${caps.seesImages}, ${caps.seesVideos}, ${caps.seesYoutube},
           false, ${caps.supportsStructuredOutput}, ${caps.strictRoleAlternation ?? false},
-          ${caps.supportsPrefixCompletion ?? false}, ${modelCodename}, ${modelCodename},
+          ${caps.supportsPrefixCompletion ?? false}, ${modelCodename},
+          ${{ "en-US": modelCodename }},
           ${inputPrice}, ${outputPrice}
         )
         ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
@@ -976,7 +977,7 @@ class LlmModelRepository {
           strict_role_alternation = EXCLUDED.strict_role_alternation,
           supports_prefix_completion = EXCLUDED.supports_prefix_completion,
           llm_description         = EXCLUDED.llm_description,
-          ja_description          = EXCLUDED.ja_description,
+          descriptions            = COALESCE(llms.descriptions, EXCLUDED.descriptions),
           -- COALESCE, not EXCLUDED: a re-registration during an OpenRouter outage resolves no
           -- price, and overwriting a known rate with null would zero out historical cost rows.
           input_price_per_million  = COALESCE(EXCLUDED.input_price_per_million, llms.input_price_per_million),
@@ -1061,16 +1062,16 @@ class LlmModelRepository {
       const rows = await sql`
         INSERT INTO embedding_models (
           provider, codename, model_family, is_scoped_registration,
-          model_description, ja_description, is_default, is_deprecated
+          model_description, descriptions, is_default, is_deprecated
         ) VALUES (
           ${provider}, ${modelCodename}, ${modelFamily}, true,
-          ${modelCodename}, ${modelCodename}, false, false
+          ${modelCodename}, ${{ "en-US": modelCodename }}, false, false
         )
         ON CONFLICT (provider, codename) DO UPDATE SET
           model_family            = EXCLUDED.model_family,
           is_scoped_registration  = true,
           model_description       = EXCLUDED.model_description,
-          ja_description          = EXCLUDED.ja_description,
+          descriptions            = COALESCE(embedding_models.descriptions, EXCLUDED.descriptions),
           is_default              = false,
           is_deprecated           = false,
           updated_at              = CURRENT_TIMESTAMP
@@ -1100,18 +1101,18 @@ class LlmModelRepository {
       const rows = await sql`
         INSERT INTO image_diffusion_models (
           provider, codename, is_scoped_registration,
-          model_description, ja_description, is_default, is_deprecated, is_free, is_uncensored,
+          model_description, descriptions, is_default, is_deprecated, is_free, is_uncensored,
           supports_txt2img, supports_img2img, supports_inpaint, supports_negative_prompt
         ) VALUES (
           ${provider}, ${modelCodename}, true,
-          ${modelCodename}, ${modelCodename}, false, false, false, false,
+          ${modelCodename}, ${{ "en-US": modelCodename }}, false, false, false, false,
           ${declared?.txt2img ?? null}, ${declared?.img2img ?? null},
           ${declared?.inpaint ?? null}, ${declared?.negative_prompt ?? null}
         )
         ON CONFLICT (provider, codename) DO UPDATE SET
           is_scoped_registration  = true,
           model_description       = EXCLUDED.model_description,
-          ja_description          = EXCLUDED.ja_description,
+          descriptions            = COALESCE(image_diffusion_models.descriptions, EXCLUDED.descriptions),
           is_default              = false,
           is_deprecated           = false,
           is_free                 = EXCLUDED.is_free,
@@ -1146,15 +1147,15 @@ class LlmModelRepository {
       const rows = await sql`
         INSERT INTO video_generation_models (
           provider, codename, is_scoped_registration,
-          model_description, ja_description, is_default, is_deprecated, is_free
+          model_description, descriptions, is_default, is_deprecated, is_free
         ) VALUES (
           ${provider}, ${modelCodename}, true,
-          ${modelCodename}, ${modelCodename}, false, false, false
+          ${modelCodename}, ${{ "en-US": modelCodename }}, false, false, false
         )
         ON CONFLICT (provider, codename) DO UPDATE SET
           is_scoped_registration  = true,
           model_description       = EXCLUDED.model_description,
-          ja_description          = EXCLUDED.ja_description,
+          descriptions            = COALESCE(video_generation_models.descriptions, EXCLUDED.descriptions),
           is_default              = false,
           is_deprecated           = false,
           is_free                 = EXCLUDED.is_free,
@@ -1186,12 +1187,12 @@ class LlmModelRepository {
           llm_provider, llm_codename, has_tools, sees_images, sees_videos,
           sees_youtube, supports_structoutput, strict_role_alternation, supports_prefix_completion,
           is_smartest, is_default, is_reasoning, is_deprecated, is_free, is_uncensored,
-          llm_description, ja_description
+          llm_description, descriptions
         ) VALUES (
           ${params.provider}, ${params.codename}, ${params.hasTools}, ${params.seesImages}, ${params.seesVideos},
           false, ${params.supportsStructOutput}, ${params.strictRoleAlternation}, ${params.supportsPrefixCompletion},
           false, true, false, false, false, false,
-          ${params.displayName}, ${params.displayName}
+          ${params.displayName}, ${{ "en-US": params.displayName }}
         )
         ON CONFLICT (llm_provider, llm_codename) DO UPDATE SET
           has_tools = EXCLUDED.has_tools,
@@ -1201,7 +1202,7 @@ class LlmModelRepository {
           strict_role_alternation = EXCLUDED.strict_role_alternation,
           supports_prefix_completion = EXCLUDED.supports_prefix_completion,
           llm_description = EXCLUDED.llm_description,
-          ja_description = EXCLUDED.ja_description,
+          descriptions = jsonb_set(COALESCE(llms.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
           updated_at = CURRENT_TIMESTAMP
         RETURNING llm_id
       `;
@@ -1239,16 +1240,16 @@ class LlmModelRepository {
       const rows = await sql`
         INSERT INTO embedding_models (
           provider, codename, model_family, model_description,
-          ja_description, is_default, is_deprecated
+          descriptions, is_default, is_deprecated
         ) VALUES (
           ${params.provider}, ${params.codename}, ${params.provider},
-          ${params.displayName}, ${params.displayName}, true, false
+          ${params.displayName}, ${{ "en-US": params.displayName }}, true, false
         )
         ON CONFLICT (provider, codename) DO UPDATE SET
           provider = EXCLUDED.provider,
           model_family = EXCLUDED.model_family,
           model_description = EXCLUDED.model_description,
-          ja_description = EXCLUDED.ja_description,
+          descriptions = jsonb_set(COALESCE(embedding_models.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
           is_default = EXCLUDED.is_default,
           is_deprecated = EXCLUDED.is_deprecated,
           updated_at = CURRENT_TIMESTAMP
@@ -1270,16 +1271,17 @@ class LlmModelRepository {
     try {
       const rows = await sql`
         INSERT INTO image_diffusion_models (
-          provider, codename, model_description, ja_description,
+          provider, codename, model_description, descriptions,
           is_default, is_deprecated, is_free, is_uncensored
         ) VALUES (
-          ${params.provider}, ${params.codename}, ${params.displayName}, ${params.displayName},
+          ${params.provider}, ${params.codename}, ${params.displayName},
+          ${{ "en-US": params.displayName }},
           true, false, true, true
         )
         ON CONFLICT (provider, codename) DO UPDATE SET
           provider = EXCLUDED.provider,
           model_description = EXCLUDED.model_description,
-          ja_description = EXCLUDED.ja_description,
+          descriptions = jsonb_set(COALESCE(image_diffusion_models.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
           is_default = EXCLUDED.is_default,
           is_deprecated = EXCLUDED.is_deprecated,
           is_free = EXCLUDED.is_free,
@@ -1303,16 +1305,17 @@ class LlmModelRepository {
     try {
       const rows = await sql`
         INSERT INTO video_generation_models (
-          provider, codename, model_description, ja_description,
+          provider, codename, model_description, descriptions,
           is_default, is_deprecated, is_free
         ) VALUES (
-          ${params.provider}, ${params.codename}, ${params.displayName}, ${params.displayName},
+          ${params.provider}, ${params.codename}, ${params.displayName},
+          ${{ "en-US": params.displayName }},
           true, false, true
         )
         ON CONFLICT (provider, codename) DO UPDATE SET
           provider = EXCLUDED.provider,
           model_description = EXCLUDED.model_description,
-          ja_description = EXCLUDED.ja_description,
+          descriptions = jsonb_set(COALESCE(video_generation_models.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
           is_default = EXCLUDED.is_default,
           is_deprecated = EXCLUDED.is_deprecated,
           is_free = EXCLUDED.is_free,
@@ -1652,7 +1655,7 @@ class LlmModelRepository {
             strict_role_alternation = ${params.strictRoleAlternation},
             supports_prefix_completion = ${params.supportsPrefixCompletion},
             llm_description = ${params.displayName},
-            ja_description = ${params.displayName},
+            descriptions = jsonb_set(COALESCE(descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
             updated_at = CURRENT_TIMESTAMP
           WHERE llm_id = ${params.modelRefId}
         `;
@@ -1662,7 +1665,7 @@ class LlmModelRepository {
           UPDATE embedding_models SET
             codename = ${params.codename},
             model_description = ${params.displayName},
-            ja_description = ${params.displayName},
+            descriptions = jsonb_set(COALESCE(descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
             updated_at = CURRENT_TIMESTAMP
           WHERE embedding_model_id = ${params.modelRefId}
         `;
@@ -1672,7 +1675,7 @@ class LlmModelRepository {
           UPDATE image_diffusion_models SET
             codename = ${params.codename},
             model_description = ${params.displayName},
-            ja_description = ${params.displayName},
+            descriptions = jsonb_set(COALESCE(descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
             updated_at = CURRENT_TIMESTAMP
           WHERE diffusion_model_id = ${params.modelRefId}
         `;
@@ -1682,7 +1685,7 @@ class LlmModelRepository {
           UPDATE video_generation_models SET
             codename = ${params.codename},
             model_description = ${params.displayName},
-            ja_description = ${params.displayName},
+            descriptions = jsonb_set(COALESCE(descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
             updated_at = CURRENT_TIMESTAMP
           WHERE video_model_id = ${params.modelRefId}
         `;

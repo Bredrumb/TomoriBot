@@ -105,7 +105,7 @@ import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortT
 import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import {
@@ -1701,7 +1701,7 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
             options: input.view.models.slice(start, start + pageSize).map((model) => ({
               label: safeSelectOptionText(model.llm_codename, 100),
               value: model.llm_codename,
-              description: model.llm_description ? safeSelectOptionText(model.llm_description, 100) : undefined,
+              description: safeSelectOptionText(resolveDescription(model.descriptions, locale) ?? "", 100),
               default: model.llm_id === persona.persona_llm?.llm_id,
             })),
             disabled: writesDisabled || textState === "disabled",
@@ -3269,7 +3269,7 @@ ${localizer(locale, "commands.config.panel.plugins_nsfw_jailbreaks_description",
     },
     {
       type: ComponentType.TextDisplay,
-      content: `[${localizer(locale, "commands.config.panel.plugins_nsfw_jailbreaks_docs_label")}](${buildDocsUrl(DOCS_PATHS.AGE_RESTRICTED_COMMANDS)})`,
+      content: `[${localizer(locale, "commands.config.panel.plugins_nsfw_jailbreaks_docs_label")}](${buildDocsUrl(locale, DOCS_PATHS.AGE_RESTRICTED_COMMANDS)})`,
     },
   ];
 }
@@ -3669,7 +3669,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
 
   const privateTitle = localizer(locale, "commands.config.panel.channels_rules_private_title");
   const privateDesc = localizer(locale, "commands.config.panel.channels_rules_private_description");
-  const roleplayTitle = `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(DOCS_PATHS.ROLEPLAY_CHANNELS)})`;
+  const roleplayTitle = `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(locale, DOCS_PATHS.ROLEPLAY_CHANNELS)})`;
   const roleplayDesc = localizer(locale, "commands.config.panel.channels_rules_roleplay_description");
   const blocklistTitle = localizer(locale, "commands.config.panel.channels_rules_blocklist_title");
   const blocklistDesc = localizer(locale, "commands.config.panel.channels_rules_blocklist_description");
@@ -3769,7 +3769,7 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
       : []),
     ...buildChannelRulesCollectionSection({
       locale,
-      title: `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(DOCS_PATHS.ROLEPLAY_CHANNELS)})`,
+      title: `[${localizer(locale, "commands.config.panel.channels_rules_roleplay_title")}](${buildDocsUrl(locale, DOCS_PATHS.ROLEPLAY_CHANNELS)})`,
       description: localizer(locale, "commands.config.panel.channels_rules_roleplay_description"),
       members: view.roleplayChannels.map((channel) => `<#${channel.id}>`),
       budget: rulesPerSectionBudget,

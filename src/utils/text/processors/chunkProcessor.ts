@@ -169,15 +169,38 @@ export function findQuotedString(text: string, startIndex = 0): { start: number;
   return null;
 }
 
-export function findJapaneseQuotedString(
+/**
+ * Distinct open/close quotation pairs whose contents must never be split. The straight `"` is
+ * handled by {@link findQuotedString} because it opens and closes with one character. `'` and
+ * `‘ ’` are excluded: they double as apostrophes ("don’t"), so treating them as openers would
+ * protect arbitrary stretches of prose.
+ */
+export const PAIRED_QUOTE_MARKS: ReadonlyArray<readonly [string, string]> = [
+  ["「", "」"],
+  ["『", "』"],
+  ["｢", "｣"],
+  ["«", "»"],
+  ["‹", "›"],
+  ["“", "”"],
+  ["〈", "〉"],
+  ["《", "》"],
+];
+
+/** Finds the earliest closed span of any {@link PAIRED_QUOTE_MARKS} pair at or after `startIndex`. */
+export function findPairedQuotedString(
   text: string,
   startIndex = 0,
 ): { start: number; end: number; content: string } | null {
-  const openIndex = text.indexOf("「", startIndex);
-  if (openIndex === -1) return null;
-  const closeIndex = text.indexOf("」", openIndex + 1);
-  if (closeIndex === -1) return null;
-  return { start: openIndex, end: closeIndex + 1, content: text.substring(openIndex, closeIndex + 1) };
+  let earliest: { start: number; end: number; content: string } | null = null;
+  for (const [open, close] of PAIRED_QUOTE_MARKS) {
+    const openIndex = text.indexOf(open, startIndex);
+    if (openIndex === -1 || (earliest && openIndex >= earliest.start)) continue;
+    const closeIndex = text.indexOf(close, openIndex + open.length);
+    if (closeIndex === -1) continue;
+    const end = closeIndex + close.length;
+    earliest = { start: openIndex, end, content: text.substring(openIndex, end) };
+  }
+  return earliest;
 }
 
 export function findMarkdownBold(
@@ -434,8 +457,16 @@ function findBreakPoint(text: string, maxLength: number): number {
   for (let i = maxLength; i >= preferredBreakZone; i--) {
     if (text[i] === " ") return i + 1;
   }
-  return maxLength;
+  // Unspaced scripts offer no space to break on, so their sentence and clause marks stand in.
+  for (let i = maxLength - 1; i >= preferredBreakZone; i--) {
+    if (FULL_WIDTH_BREAK_MARKS.test(text[i])) return i + 1;
+  }
+  // A cut between a surrogate pair would send half of one character in each message.
+  const nextCode = text.charCodeAt(maxLength);
+  return nextCode >= 0xdc00 && nextCode <= 0xdfff ? maxLength - 1 : maxLength;
 }
+
+const FULL_WIDTH_BREAK_MARKS = /[。！？、，．｡､]/;
 
 function splitCodeBlock(codeBlock: string, chunkLength: number): string[] {
   const chunks: string[] = [];
@@ -489,7 +520,7 @@ function addTextSegment(text: string, currentChunk: string, chunks: string[], ch
 
 /**
  * Creates a regex pattern for splitting sentences while preserving common abbreviations.
- * Splits on periods and Japanese periods (。) but avoids splitting on common abbreviations,
+ * Splits on periods and full-width periods (。．｡) but avoids splitting on common abbreviations,
  * numbered lists, and other period-containing patterns.
  */
 export function createSentenceSplitRegex(): RegExp {
@@ -503,6 +534,7 @@ export function createSentenceSplitRegex(): RegExp {
   const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
   const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
   const alsoKnownAs = ["a\\.k\\.a", "aka"];
+  const otherTargetLanguages = ["sra", "srta", "sres", "dra", "mme", "mlle", "т\\.е", "т\\.д", "т\\.п", "ул"];
 
   const allAbbreviations = [
     ...titles,
@@ -515,14 +547,17 @@ export function createSentenceSplitRegex(): RegExp {
     ...months,
     ...days,
     ...alsoKnownAs,
+    ...otherTargetLanguages,
   ];
 
-  const abbreviationsPattern = `\\b(?:${allAbbreviations.join("|")})`;
+  // An ASCII \b sees no boundary before a Cyrillic or accented letter, so it would never let a
+  // non-English abbreviation match.
+  const abbreviationsPattern = `(?<![\\p{L}\\p{N}_])(?:${allAbbreviations.join("|")})`;
   const acronymPattern = "(?:[A-Z]\\.[A-Z]\\.(?:[A-Z]\\.)*)";
   const negativeLookbehind = `(?<!(?:${abbreviationsPattern}|\\d|${acronymPattern}|\\.))`;
-  const sentenceEnd = "(?:\\.(?=\\s|\\n|$)|。)";
+  const sentenceEnd = "(?:\\.(?=\\s|\\n|$)|[。．｡])";
 
-  return new RegExp(`${negativeLookbehind}${sentenceEnd}`, "i");
+  return new RegExp(`${negativeLookbehind}${sentenceEnd}`, "iu");
 }
 
 /**
@@ -543,7 +578,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     | "url"
     | "quoted"
     | "parenthesized"
-    | "japanese_quoted"
+    | "paired_quoted"
     | "markdown_bold"
     | "markdown_italic"
     | "markdown_strikethrough"
@@ -633,11 +668,11 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     while (searchIndex < textContent.length) {
       const quotedString = findQuotedString(textContent, searchIndex);
       const balancedParens = findBalancedParentheses(textContent, searchIndex);
-      const japaneseQuoted = findJapaneseQuotedString(textContent, searchIndex);
+      const pairedQuoted = findPairedQuotedString(textContent, searchIndex);
       const candidates = [
         quotedString ? { ...quotedString, type: "quoted" as const } : null,
         balancedParens ? { ...balancedParens, type: "parenthesized" as const } : null,
-        japaneseQuoted ? { ...japaneseQuoted, type: "japanese_quoted" as const } : null,
+        pairedQuoted ? { ...pairedQuoted, type: "paired_quoted" as const } : null,
         findMarkdownBold(textContent, searchIndex),
         findMarkdownItalic(textContent, searchIndex),
         findMarkdownStrikethrough(textContent, searchIndex),
@@ -734,7 +769,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
     const isSemanticBlock =
       currentBlock.type === "quoted" ||
       currentBlock.type === "parenthesized" ||
-      currentBlock.type === "japanese_quoted" ||
+      currentBlock.type === "paired_quoted" ||
       currentBlock.type === "markdown_bold" ||
       currentBlock.type === "markdown_italic" ||
       currentBlock.type === "markdown_strikethrough" ||
@@ -875,7 +910,7 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
               if (!sentence) continue;
 
               let processedSentence = sentence;
-              if ((sentence.endsWith(".") || sentence.endsWith("。")) && !sentence.endsWith("...")) {
+              if (/[.。．｡]$/.test(sentence) && !sentence.endsWith("...")) {
                 processedSentence = sentence.slice(0, -1).trim();
               }
               if (!processedSentence) continue;

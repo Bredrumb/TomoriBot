@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.8.0.02a",
+  "version": "0.8.0.05a",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",
@@ -23,11 +23,16 @@
     "backup": "bun run scripts/devtools/backupData.ts --backup",
     "restore-backup": "bun run scripts/devtools/backupData.ts --restore",
     "backup:personas": "bun run scripts/devtools/backupPersonas.ts",
+    "prune-legacy-preset-assets": "bun run scripts/devtools/pruneLegacyPresetAssets.ts",
     "lint": "biome check --fix",
     "lint:ci": "biome check",
     "check": "bunx tsc --noEmit",
     "check-locales": "bun run scripts/checks/checkLocalizationKeys.ts",
     "check-locale-lengths": "bun run scripts/checks/checkLocalizationKeys.ts --strict-lengths",
+    "check-locale-placeholders": "bun run scripts/checks/checkLocalePlaceholders.ts",
+    "check-locale-markers": "bun run scripts/checks/checkLocaleMarkers.ts",
+    "check-locale-links": "bun run scripts/checks/checkLocaleLinks.ts",
+    "check-intent-packs": "bun run scripts/checks/checkIntentPackSmoke.ts",
     "generate-command-reference": "bun run scripts/devtools/generateCommandReference.ts",
     "check-command-reference": "bun run scripts/checks/checkCommandReference.ts",
     "check-command-mentions": "bun run scripts/checks/checkCommandMentions.ts",
@@ -137,6 +142,7 @@
     "postcss-selector-parser": "^6.1.3",
     "esbuild": ">=0.28.1",
     "request": "npm:@cypress/request@^3.0.0",
+    "ip-address": ">=10.4.0",
     "ws": ">=8.20.1"
   },
   "patchedDependencies": {

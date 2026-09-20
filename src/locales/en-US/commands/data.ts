@@ -1,17 +1,8 @@
 export default {
   data: {
     export: {
-      type_choice_persona_personal_memories: `Personal Memories of Persona`,
-      type_choice_persona_server_memories: `Server Memories of Persona`,
       type_choice_personal_settings: `Personal Settings`,
       type_choice_server_config: `Server Config`,
-      type_choice_global_personal_memories: `Global Personal Memories`,
-      persona_modal_title: `Select Persona`,
-      persona_select_label: `Persona`,
-      persona_select_description: `Choose which persona to export memory data from.`,
-      persona_select_placeholder: `Select a persona...`,
-      main_persona_description: `Main Persona`,
-      alter_persona_description: `Alter Persona`,
       success_title: `🟢 Export Successful`,
       success_description: `Your {type} data has been sent to your DMs!`,
       failed_title: `🔴 Export Failed`,
@@ -30,20 +21,6 @@ export default {
       error_export_failed: `Failed to export data`,
     },
     import: {
-      persona_modal_title: `Select Persona`,
-      persona_select_label: `Persona`,
-      persona_select_description: `Choose which persona this import should target.`,
-      persona_select_placeholder: `Select a persona...`,
-      main_persona_description: `Main Persona`,
-      alter_persona_description: `Alter Persona`,
-      success_title: `🟢 Import Successful`,
-      success_description: `Successfully imported {type} data!
-Memories imported: {memories_count}
- Config fields updated: {config_count}`,
-      failed_title: `🔴 Import Failed`,
-      failed_description: `Failed to import your data. Please check the file and try again.`,
-      cancelled_title: `🔴 Import Cancelled`,
-      cancelled_description: `The import has been cancelled. No data was changed.`,
       invalid_file_title: `🔴 Invalid Import File`,
       invalid_file_description: `The import file format is invalid or incompatible.`,
       no_permission_title: `🔴 Permission Denied`,
@@ -66,14 +43,6 @@ Memories imported: {memories_count}
       error_unknown_type: `Unknown import type: {type}.`,
     },
     delete: {
-      confirmation_required_title: `Confirmation Required`,
-      confirmation_required_description: `You must confirm deletion by selecting the confirmation option.`,
-      success_personal_settings_title: `🟢 Personal Settings Reset`,
-      success_personal_settings_description: `Your personal settings have been reset to defaults.`,
-      success_server_config_title: `🟢 Server Config Reset`,
-      success_server_config_description: `Server configuration has been reset to defaults.`,
-      no_data_title: `🟡️ No Data Found`,
-      no_data_description: `You don't have any personal data stored in the database.`,
       no_server_data_title: `🟡 No Server Data Found`,
       no_server_data_description: `This server doesn't have any data stored in the database. Please run \`/setup\` first.`,
       no_permission_title: `🔴 Permission Denied`,

@@ -85,17 +85,13 @@ export class StreamErrorUi {
       return;
     }
 
-    await sendStandardEmbed(
-      context.channel,
-      "guild" in context.channel ? context.channel.guild.preferredLocale : "en-US",
-      {
-        titleKey: "genai.generic_error_title",
-        descriptionKey: "genai.generic_error_description",
-        descriptionVars: { error_message: error.message },
-        color: ColorCode.ERROR,
-        tipKeys: ["genai.tips.refresh_context"],
-      },
-    ).catch((e) => log.warn("Stream: Failed to send generic error embed to channel", e));
+    await sendStandardEmbed(context.channel, context.locale, {
+      titleKey: "genai.generic_error_title",
+      descriptionKey: "genai.generic_error_description",
+      descriptionVars: { error_message: error.message },
+      color: ColorCode.ERROR,
+      tipKeys: ["genai.tips.refresh_context"],
+    }).catch((e) => log.warn("Stream: Failed to send generic error embed to channel", e));
   }
 
   /**

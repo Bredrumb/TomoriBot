@@ -215,14 +215,14 @@ const SYSTEM_PROMPT_ROWS = [
     system_prompt_preset_id: 1,
     system_prompt_preset_name: "Tomori Default",
     system_prompt_preset_desc: "The standard reply style.",
-    ja_description: "標準の返信スタイル。",
+    descriptions: { "en-US": "The standard reply style.", ja: "標準の返信スタイル。" },
     preset_prompt_text: "You are Tomori.",
   },
   {
     system_prompt_preset_id: 2,
     system_prompt_preset_name: "Concise",
     system_prompt_preset_desc: "Shorter replies.",
-    ja_description: null,
+    descriptions: { "en-US": "Shorter replies." },
     preset_prompt_text: "Reply briefly.",
   },
 ] as unknown as SystemPromptPresetRow[];
@@ -2667,7 +2667,7 @@ describe("setupWizardRoutes", () => {
       system_prompt_preset_id: index + 1,
       system_prompt_preset_name: `Preset ${index + 1}`,
       system_prompt_preset_desc: "A reply style.",
-      ja_description: null,
+      descriptions: { "en-US": "A reply style." },
       preset_prompt_text: "Prompt text.",
     })) as unknown as SystemPromptPresetRow[];
 

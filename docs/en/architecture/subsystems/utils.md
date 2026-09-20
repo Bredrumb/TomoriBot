@@ -51,7 +51,7 @@ This is a current map of shared utility modules under `src/utils/`.
 - `interactionHelper.ts`: compatibility barrel for grouped UI helpers in `utils/discord/ui/`; new code imports the owned UI module directly
 - `streamOrchestrator.ts`: public stream orchestration entry point backed by responsibility modules in `utils/discord/stream/`
 - `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`; new code imports the owned webhook module directly
-- `embedHelper.ts`: shared embed builders and senders (`createStandardEmbed`, `createSummaryEmbed`, `createTipText`, `sendStandardEmbed`) — see [Tip modals](#tip-modals) below
+- `embedHelper.ts`: shared embed builders and senders (`createStandardEmbed`, `createSummaryEmbed`, `createTipText`, `sendStandardEmbed`); see [Tip modals](#tip-modals) below
 - `textDisplayModal.ts`: reusable read-only text modal, trigger button, and collector wiring
 - `resolveSendableChannel.ts`: cache-first, REST-fallback channel resolution for send paths, plus `isChannelGoneError` for the deleted-channel and lost-access cases
 - `historyFetcher.ts`, `historyFormatter.ts`
@@ -102,7 +102,7 @@ the **What You Can Do** button below an error (e.g. in `stream/errorUi.ts` and `
   attaching a tip button entirely.
 - **The Official Support Server link is automatic**: `genai.tips.support_server` (exported as
   `SUPPORT_SERVER_TIP_KEY`) is appended as the last bullet of every rendered tip modal. Callers must
-  not list it in `tipKeys` — it is filtered out if they do, so it can never be duplicated or
+  not list it in `tipKeys`; it is filtered out if they do, so it can never be duplicated or
   reordered. It is appended *after* the empty check, so a tip modal with no caller-supplied items
   still returns `null` rather than degrading into a support-link-only embed.
 - The button is disabled after `TIP_BUTTON_TIMEOUT_MS` (default 24 hours). The generic

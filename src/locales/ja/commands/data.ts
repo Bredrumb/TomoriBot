@@ -1,17 +1,8 @@
 export default {
   data: {
     export: {
-      type_choice_persona_personal_memories: `ペルソナの個人メモリ`,
-      type_choice_persona_server_memories: `ペルソナのサーバーメモリ`,
       type_choice_personal_settings: `個人設定`,
       type_choice_server_config: `サーバー設定`,
-      type_choice_global_personal_memories: `グローバル個人メモリ`,
-      persona_modal_title: `ペルソナを選択`,
-      persona_select_label: `ペルソナ`,
-      persona_select_description: `記憶データをエクスポートする対象ペルソナを選択してください。`,
-      persona_select_placeholder: `ペルソナを選択...`,
-      main_persona_description: `メインペルソナ`,
-      alter_persona_description: `オルタペルソナ`,
       success_title: `🟢 エクスポート成功`,
       success_description: `{type}データがDMに送信されました！`,
       failed_title: `🔴 エクスポート失敗`,
@@ -30,20 +21,6 @@ export default {
       error_export_failed: `データのエクスポートに失敗しました`,
     },
     import: {
-      persona_modal_title: `ペルソナを選択`,
-      persona_select_label: `ペルソナ`,
-      persona_select_description: `このインポートを適用するペルソナを選択してください。`,
-      persona_select_placeholder: `ペルソナを選択...`,
-      main_persona_description: `メインペルソナ`,
-      alter_persona_description: `オルタペルソナ`,
-      success_title: `🟢 インポート成功`,
-      success_description: `{type}データを正常にインポートしました！
-インポートされたメモリ: {memories_count}
- 更新された設定フィールド: {config_count}`,
-      failed_title: `🔴 インポート失敗`,
-      failed_description: `データのインポートに失敗しました。ファイルを確認してもう一度お試しください。`,
-      cancelled_title: `🔴 インポートがキャンセルされました`,
-      cancelled_description: `インポートがキャンセルされました。データは変更されていません。`,
       invalid_file_title: `🔴 無効なインポートファイル`,
       invalid_file_description: `インポートファイルの形式が無効または互換性がありません。`,
       no_permission_title: `🔴 権限がありません`,
@@ -66,14 +43,6 @@ export default {
       error_unknown_type: `不明なインポートタイプ: {type}`,
     },
     delete: {
-      confirmation_required_title: `確認が必要です`,
-      confirmation_required_description: `削除を確認するには確認オプションを選択する必要があります。`,
-      success_personal_settings_title: `🟢 個人設定をリセットしました`,
-      success_personal_settings_description: `個人設定をデフォルトに戻しました。`,
-      success_server_config_title: `🟢 サーバー設定をリセットしました`,
-      success_server_config_description: `サーバー設定をデフォルトに戻しました。`,
-      no_data_title: `🟡️ データが見つかりません`,
-      no_data_description: `データベースに個人データが保存されていません。`,
       no_server_data_title: `🟡️ サーバーデータが見つかりません`,
       no_server_data_description: `このサーバーにはデータが保存されていません。まず \`/setup\` を実行してください。`,
       no_permission_title: `🔴 権限がありません`,

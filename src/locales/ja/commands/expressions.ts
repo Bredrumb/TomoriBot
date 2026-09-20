@@ -1,25 +1,21 @@
 export default {
   expressions: {
+    description: `このサーバーのカスタム絵文字やスタンプをいつ使うか、TomoriBotに教えます。`,
     initialize: {
       description: `AIビジョンを使用してすべてのカスタム絵文字とスタンプを分析・分類します`,
       overwrite_description: `既存の表現データを削除して新しくやり直す`,
       success_title: `絵文字とスタンプを初期化しました`,
       success_description: `{emoji_count}個の絵文字と{sticker_count}個のスタンプ（合計{total}個）を分析・分類しました。`,
       model_incompatible_title: `互換性のないモデル`,
-      model_incompatible_description: `現在のモデル（{model_name}）は{missing_capability}をサポートしていません。\`/config\` > Models > Switch Modelsを使用して、画像ビジョンと構造化出力の両方をサポートするモデルに切り替えてください。`,
+      model_incompatible_description: `現在のモデル（{model_name}）は{missing_capability}をサポートしていません。\`/config\` > モデル > モデルの切り替えを使用して、画像ビジョンと構造化出力の両方をサポートするモデルに切り替えてください。`,
       vision_fallback_title: `互換性のあるモデルがありません`,
-      vision_fallback_description: `チャットモデル（**{chat_model}**）もビジョンモデル（**{vision_model}**）も、絵文字初期化に必要な機能を満たしていません。画像ビジョンと構造化出力の両方をサポートするモデルが必要です。\`/config\` > Models > Switch Modelsまたは\`/config\` > Models > Switch Modelsで切り替えてください。`,
+      vision_fallback_description: `チャットモデル（**{chat_model}**）もビジョンモデル（**{vision_model}**）も、絵文字初期化に必要な機能を満たしていません。画像ビジョンと構造化出力の両方をサポートするモデルが必要です。\`/config\` > モデル > モデルの切り替えまたは\`/config\` > モデル > モデルの切り替えで切り替えてください。`,
       already_initialized_title: `初期化するものがありません`,
       already_initialized_description: `すべての絵文字とスタンプはすでに分析・分類されています。`,
       partial_success_title: `部分的に成功`,
       partial_success_description: `{total}個の絵文字/スタンプのうち{successful}個を分析しました。{failed}個は数回試行しても処理できなかったためスキップされました。ボットのログを確認するか、後ほど \`/expressions initialize\` を再実行してください。`,
       no_matches_title: `一致するものが見つかりません`,
       no_matches_description: `AIは絵文字/スタンプを分析しましたが、データベースと一致する結果が見つかりませんでした。処理エラーの可能性があります。`,
-      llm_error_title: `AI分析に失敗しました`,
-      llm_error_description: `AIモデルが絵文字/スタンプの分析中にエラーに遭遇しました。後でもう一度お試しください。`,
-      validation_error_title: `無効なAI応答`,
-      validation_error_description: `AIが無効な応答形式を返しました。これはモデルの問題である可能性があります。`,
-      progress_analyzing: `{total}枚の画像を分析中...`,
       progress_analyzing_batch: `バッチ{batch_number}を分析中：{batch_size}個の絵文字/スタンプ。{grand_total}個中{processed}個完了、残り{remaining}個...`,
     },
     edit: {

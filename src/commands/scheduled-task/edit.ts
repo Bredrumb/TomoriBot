@@ -165,13 +165,18 @@ function formatReminderDetails(
   target_user: string;
   target_channel: string;
 } {
-  const reminderTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const reminderTime = formatTimeWithOffset(
+    new Date(reminder.reminder_time),
+    timezoneOffset,
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+    locale,
+  );
   const repetitionInterval =
     typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
       ? `${reminder.repetition_interval_hours}`
@@ -312,13 +317,18 @@ export async function execute(
     // Build select options: persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder, index) => {
       const personaName = reminder.persona_nickname ?? state.persona_nickname;
-      const formattedTime = formatTimeWithOffset(new Date(reminder.reminder_time), timezoneOffset, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      const formattedTime = formatTimeWithOffset(
+        new Date(reminder.reminder_time),
+        timezoneOffset,
+        {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+        locale,
+      );
       const repeatText =
         typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
           ? localizer(locale, "commands.scheduled-task.edit.select_repeat_text", {
@@ -545,13 +555,18 @@ export async function execute(
 
     const updatedDetails = {
       reminder_purpose: formatReminderPreview(editedPurpose, 240),
-      reminder_time: `${formatTimeWithOffset(editedReminderTime, timezoneOffset, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })} (${formatUTCOffset(timezoneOffset)})`,
+      reminder_time: `${formatTimeWithOffset(
+        editedReminderTime,
+        timezoneOffset,
+        {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+        locale,
+      )} (${formatUTCOffset(timezoneOffset)})`,
       repetition_interval_hours: editedIntervalHours.toString(),
       reminder_type: editedReminderForInvoker
         ? localizer(locale, "commands.scheduled-task.edit.type_reminder")

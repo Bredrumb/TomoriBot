@@ -3,7 +3,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
 import { isVerboseOutput } from "./lib/gateOutput";
 
-const DEFAULT_PATHS = ["src", "scripts", "tests", "apps"];
+const DEFAULT_PATHS = ["src", "scripts", "tests", "apps", "docs"];
 const DEFAULT_EXCEPTIONS_PATH = "scripts/checks/comment-policy-exceptions.json";
 const POLICY_DOC_PATH = "docs/en/contributing/comment-policy.md";
 const DASH_PATTERN = /—|–| -- /;
@@ -186,9 +186,25 @@ export async function checkCommentPolicy(
   const findings: CommentPolicyFinding[] = [];
   const usedExceptionKeys = new Set<string>();
 
+  const applyExceptions = (candidates: CommentPolicyFinding[]): CommentPolicyFinding[] =>
+    candidates.filter((finding) => {
+      const exception = exceptions.find((entry) => exceptionKey(entry) === findingKey(finding));
+      if (!exception) return true;
+      usedExceptionKeys.add(exceptionKey(exception));
+      return false;
+    });
+
   for (const absolutePath of files) {
     const file = normalizePath(relative(repoRoot, absolutePath));
     const source = await Bun.file(absolutePath).text();
+
+    if (isMarkdownPath(absolutePath)) {
+      for (const finding of applyExceptions(collectMarkdownDashFindings(source, file))) {
+        findings.push(finding);
+      }
+      continue;
+    }
+
     assertParseable(source, file);
     const fileFindings = [
       ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
@@ -197,14 +213,7 @@ export async function checkCommentPolicy(
       ...collectLocaleStringFindings(source, file),
     ];
 
-    for (const finding of fileFindings) {
-      const exception = exceptions.find(
-        (entry) => exceptionKey(entry) === findingKey(finding),
-      );
-      if (exception) {
-        usedExceptionKeys.add(exceptionKey(exception));
-        continue;
-      }
+    for (const finding of applyExceptions(fileFindings)) {
       findings.push(finding);
     }
   }
@@ -390,6 +399,75 @@ function collectLocaleStringFindings(source: string, file: string): CommentPolic
     severity: "error" as const,
     text,
   }));
+}
+
+/**
+ * Strips the spans of a Markdown line whose dashes are data rather than prose, so only authored
+ * sentences reach the dash rule.
+ *
+ * Each span is blanked in place rather than removed, which keeps every surviving dash at its
+ * original column for reporting.
+ */
+function blankMarkdownDataSpans(line: string): string {
+  let masked = line;
+
+  const blank = (pattern: RegExp): void => {
+    masked = masked.replace(pattern, (match) => " ".repeat(match.length));
+  };
+
+  // Inline code spans hold quoted output, flags, and identifiers copied from another system.
+  blank(/`[^`]*`/g);
+  // Bare and Markdown-target URLs, where a dash is part of the address.
+  blank(/<https?:\/\/[^>]*>/g);
+  blank(/\]\([^)]*\)/g);
+  blank(/https?:\/\/\S+/g);
+  // CLI flags such as `--no-build-isolation` written outside a code span.
+  blank(/(?:^|\s)--[A-Za-z0-9][\w-]*/g);
+  // Discord's subtext marker, which is syntax at the head of a rendered line.
+  blank(/^\s*-#\s/g);
+  // A dash alone in a table cell marks "not applicable". It is a typographic convention with no
+  // two halves to relate, so the rule has nothing to name; prose in the same cell still reports.
+  blank(/(?<=\|)\s*[—–]\s*(?=\|)/g);
+
+  return masked;
+}
+
+/**
+ * Applies the prose dash rule to Markdown under `docs/`.
+ *
+ * `CLAUDE.md` names `docs/` in the same breath as comments and locale strings, and translated
+ * locales are written from these pages, so an unswept dash here propagates into every language
+ * the next translator produces.
+ */
+export function collectMarkdownDashFindings(source: string, file: string): CommentPolicyFinding[] {
+  const findings: CommentPolicyFinding[] = [];
+  let fenceMarker: string | null = null;
+
+  source.split(/\r?\n/).forEach((raw, index) => {
+    const fence = raw.match(/^\s*(```+|~~~+)/);
+    if (fence) {
+      if (fenceMarker === null) {
+        fenceMarker = fence[1][0];
+      } else if (fence[1][0] === fenceMarker) {
+        fenceMarker = null;
+      }
+      return;
+    }
+    if (fenceMarker !== null) return;
+
+    if (!DASH_PATTERN.test(blankMarkdownDataSpans(raw))) return;
+
+    findings.push({
+      file,
+      line: index + 1,
+      message: "Replace prose dashes in docs with punctuation that states the relationship.",
+      rule: "prose-dash" as const,
+      severity: "error" as const,
+      text: raw.trim(),
+    });
+  });
+
+  return findings;
 }
 
 function inspectCommentLine(
@@ -813,19 +891,19 @@ async function discoverTypeScriptFiles(
     const inputStat = await stat(absoluteInput).catch(() => undefined);
 
     if (inputStat?.isFile()) {
-      if (isTypeScriptPath(absoluteInput)) {
+      if (isScannablePath(absoluteInput)) {
         discovered.add(resolve(absoluteInput));
       }
       continue;
     }
     if (inputStat?.isDirectory()) {
-      const glob = new Bun.Glob("**/*.ts");
+      const glob = new Bun.Glob("**/*.{ts,tsx,md,mdx}");
       for await (const path of glob.scan({
         absolute: true,
         cwd: absoluteInput,
         onlyFiles: true,
       })) {
-        if (isTypeScriptPath(path) && !isExcludedPath(path)) {
+        if (isScannablePath(path) && !isExcludedPath(path)) {
           discovered.add(resolve(path));
         }
       }
@@ -838,7 +916,7 @@ async function discoverTypeScriptFiles(
       cwd: repoRoot,
       onlyFiles: true,
     })) {
-      if (isTypeScriptPath(path) && !isExcludedPath(path)) {
+      if (isScannablePath(path) && !isExcludedPath(path)) {
         discovered.add(resolve(path));
       }
     }
@@ -848,6 +926,14 @@ async function discoverTypeScriptFiles(
 
 function isTypeScriptPath(path: string): boolean {
   return /\.tsx?$/i.test(path) && !/\.d\.ts$/i.test(path);
+}
+
+function isMarkdownPath(path: string): boolean {
+  return /\.mdx?$/i.test(path);
+}
+
+function isScannablePath(path: string): boolean {
+  return isTypeScriptPath(path) || isMarkdownPath(path);
 }
 
 function isExcludedPath(path: string): boolean {

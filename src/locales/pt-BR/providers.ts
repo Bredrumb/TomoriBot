@@ -1,0 +1,236 @@
+export default {
+  genai: {
+    generic_error_title: `Erro de Geração`,
+    generic_error_description: `{error_message}`,
+    error_stream_timeout_title: `Tempo Limite de Conexão`,
+    error_stream_timeout_description: `Se isso continuar acontecendo, pode haver um problema temporário com o provedor de IA escolhido. Por favor, tente novamente mais tarde ou use \`/refresh\` para atualizar o histórico de contexto.`,
+    empty_response_title: `Resposta Vazia`,
+    empty_response_description: `Recebi uma resposta vazia da IA, use \`/refresh\` se este problema persistir.`,
+    max_iterations_title: `Ciclo de Pensamento`,
+    max_iterations_streaming_description: `Fiquei presa em um ciclo de pensamento e não consegui concluir a solicitação, use \`/refresh\` se este problema persistir.`,
+    still_working_title: `Ainda Trabalhando...`,
+    still_working_description: `Esta tarefa está levando mais etapas do que o normal. Use \`/kill\` se você achar que estou travada.`,
+    nai_tool_retry_exhausted_title: `Erro de Ferramenta`,
+    nai_tool_retry_exhausted_description: `Uma ferramenta falhou várias vezes e não conseguiu concluir a solicitação. Por favor, tente novamente ou use \`/refresh\` se este problema persistir.`,
+    tool_error_loop_title: `Ciclo de Erros de Ferramenta`,
+    tool_error_loop_description: `Continuei encontrando erros de ferramenta e não consegui concluir a solicitação. Tente reformular ou use \`/refresh\` se este problema persistir.`,
+    fallback_used_title: `Modelo Secundário Usado`,
+    fallback_used_description: `\`{success_model}\` foi usado em vez de {chain}`,
+    fallback_used_details_description: `O espaço secundário {slot} respondeu com \`{success_model}\` após estas falhas anteriores:
+{failure_list}`,
+    fallback_used_failure_line: `{index}. {model} falhou com {error_detail}`,
+    fallback_used_details_button: `Secundário Usado`,
+    fallback_used_hide_footer: `Oculte isso e redirecione detalhes para os registros de pensamento em \`/config\` > Comportamento > Avisos`,
+    markdown_table: {
+      show_button: `Mostrar Markdown`,
+      source_expired: `O markdown dessa tabela não está mais em cache, então não posso mais mostrar a fonte.`,
+      source_attached: `Esta tabela é muito longa para ser exibida na linha, então aqui está ela como um arquivo:`,
+    },
+    no_response_title: `Sem Resposta`,
+    no_response_description: `Não respondi - isso pode ser devido a uma resposta vazia ou tempo limite da IA.`,
+    thought_log: {
+      title: `Registro de Pensamento`,
+      description: `Fonte: {source_line}`,
+      personal_attribution: `Gerado através da configuração de {provider} pessoal de {user_mention}.`,
+      personal_attribution_title: `Atribuição de Provedor Pessoal`,
+      summary_field: `Resumo do Pensamento`,
+      raw_field: `Pensamentos Brutos`,
+      fetched_content_field: `Conteúdo Obtido`,
+      footer: `Provedor: {provider} | Modelo: {model}`,
+      footer_with_generation_time: `Provedor: {provider} | Modelo: {model} | Tempo de geração: {generation_time}`,
+      provider_with_serving: `{provider} via {serving_provider}`,
+    },
+    message_interaction: {
+      reply_context_author: `Respondendo a {user}`,
+      reply_context_description: `{message_url}`,
+      reply_context_footer: `Respondendo a {user} • {message_url}`,
+    },
+    text_quota_exceeded_title: `🔴 Cota de Texto Excedida`,
+    text_quota_exceeded_description: `Você atingiu sua cota de geração de texto. {reset_info}`,
+    text_user_quota_exceeded_description: `Você atingiu sua cota diária de geração de texto. {reset_info}`,
+    text_serverwide_quota_exceeded_description: `Este servidor atingiu sua cota de geração de texto para este período. {reset_info}`,
+    text_quota_resets_in_hours: `A cota reinicia em {hours} hora(s).`,
+    text_quota_resets_in_days: `A cota reinicia em {days} dia(s).`,
+    text_quota_exceeded_footer: `Esta cota é configurada pelos administradores deste servidor via \`/moderation\`.`,
+    stream: {
+      response_stopped_title: `Resposta Interrompida`,
+      response_stopped_description: `A resposta foi interrompida pelo seguinte motivo: {reason}. Certifique-se de que o conteúdo enviado não seja muito grande para o provedor de IA processar. Execute \`/refresh\` para limpar o conteúdo da conversa.`,
+      streaming_failed_description: `Um problema ao tentar transmitir a resposta.`,
+      provider_error_interaction: `A resposta da transmissão foi bloqueada/interrompida. Motivo: {reason}.`,
+      api_error_title: `🔴 Erro da API do Provedor`,
+      privacy_error_title: `🔴 Configurações de Privacidade do Provedor`,
+      model_error_title: `🔴 Erro de Configuração do Modelo`,
+      model_error_description: `O modelo selecionado foi rejeitado pelo provedor. Verifique o nome do modelo configurado e mude para um dos IDs de modelo suportados pelo provedor.`,
+      rate_limit_title: `🟡 Limite de Taxa do Provedor Excedido`,
+      rate_limit_title_all_rotation_keys: `🟡 Limite de Taxa do Provedor Excedido (Todas as Chaves de Rotação)`,
+      content_blocked_title: `🔴️ Filtro de Conteúdo do Provedor`,
+      timeout_title: `🟡️ Tempo Limite de Solicitação do Provedor`,
+      provider_overloaded_title: `🔴 Provedor Sobrecarregado`,
+      provider_overloaded_description: `O provedor está atualmente sobrecarregado ou temporariamente indisponível`,
+      context_length_title: `🔴 Mensagem Muito Longa para Este Modelo`,
+      credit_limit_title: `🔴 Créditos do Provedor Insuficientes`,
+      balance_exhausted_title: `🔴 Conta do Provedor Sem Saldo`,
+      flush_limit_title: `🟡️ Limite de Comprimento da Resposta Atingido`,
+      flush_limit_description: `Esta resposta atingiu o limite máximo de comprimento de mensagem e foi interrompida. Você pode usar \`/respond\` para continuar manualmente a resposta, se necessário.`,
+      inactivity_timeout_title: `🟡️ Tempo Limite da Resposta Esgotado`,
+      inactivity_timeout_description: `O provedor de IA parou de responder e o tempo limite da conexão se esgotou. Isso pode acontecer quando o provedor está sobrecarregado ou com problemas. Por favor, tente novamente.`,
+    },
+    // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
+    // modal. Each key is one bullet; callers compose conditional items instead of maintaining
+    // whole-paragraph tip strings. Text displays render markdown and hyperlinks.
+    tips: {
+      title: `💡 O que você pode fazer`,
+      button: `O Que Você Pode Fazer`,
+      wait_and_retry: `Por favor, espere alguns minutos antes de tentar novamente.`,
+      api_key_rotation: `Se este servidor tiver várias chaves, selecione o provedor em \`/providers\` para gerenciar seu grupo de rotação.`,
+      model_fallback: `Adicione modelos de backup com \`/config\` > Modelos > Secundários e Randomizador para melhor resiliência.`,
+      model_fallback_personal: `Adicione modelos de backup com \`/personal config\` para melhor resiliência.`,
+      openrouter_free_models: `Registre mais modelos gratuitos da [lista de modelos gratuitos do OpenRouter](https://openrouter.ai/models?max_price=0&output_modalities=text) com \`/providers\`.`,
+      openrouter_free_models_personal: `Registre mais modelos gratuitos da [lista de modelos gratuitos do OpenRouter](https://openrouter.ai/models?max_price=0&output_modalities=text) com \`/personal providers\`.`,
+      openrouter_models: `Navegue pela [lista de modelos do OpenRouter](https://openrouter.ai/models), registre um modelo com \`/providers\`, e depois mude com \`/config\` > Modelos > Trocar Modelos.`,
+      openrouter_models_personal: `Navegue pela [lista de modelos do OpenRouter](https://openrouter.ai/models), registre um modelo com \`/personal providers\`, e depois mude com \`/personal config\`.`,
+      choose_supported_model: `Escolha um ID de modelo suportado com \`/config\` > Modelos > Trocar Modelos ou nas configurações do seu endpoint personalizado.`,
+      choose_supported_model_personal: `Escolha um ID de modelo suportado com \`/personal config\` ou nas configurações do seu endpoint personalizado.`,
+      verify_api_key: `Verifique novamente a chave de API deste servidor e tente novamente.`,
+      verify_api_key_personal: `Verifique novamente sua chave de API pessoal com \`/personal providers\` e tente novamente.`,
+      google_credential_type: `Isso parece ser um token de conta de serviço ou OAuth. O provedor \`google\` precisa de uma chave de API simples do [Google AI Studio](https://aistudio.google.com/apikey); use o provedor \`vertex\` para credenciais do Google Cloud.`,
+      openrouter_privacy_settings: `Ajuste suas configurações de "Política de Dados" em [Configurações de Privacidade do OpenRouter](https://openrouter.ai/settings/privacy) para permitir este modelo ou escolha um modelo diferente.`,
+      openrouter_fund_account: `Adicione pelo menos 10 créditos à sua conta do OpenRouter para desbloquear 1000 solicitações de modelo gratuitas por dia.`,
+      reduce_context_length: `Tente reduzir o comprimento da sua mensagem ou limpar o contexto com \`/refresh\`.`,
+      reduce_output_tokens: `Diminua o limite de comprimento de resposta em \`/config\` > Modelos > Samplers e Parâmetros (tokens de saída) para liberar espaço para o histórico do chat.`,
+      reduce_output_tokens_personal: `Diminua o limite de comprimento de resposta em \`/personal config\` (tokens de saída) para liberar espaço para o histórico do chat.`,
+      openrouter_add_credits: `Adicione créditos em [Créditos do OpenRouter](https://openrouter.ai/settings/credits) ou diminua o comprimento da resposta em \`/config\` > Modelos > Samplers e Parâmetros (tokens de saída).`,
+      openrouter_add_credits_personal: `Adicione créditos em [Créditos do OpenRouter](https://openrouter.ai/settings/credits) ou diminua o comprimento da resposta em \`/personal config\` (tokens de saída).`,
+      top_up_provider_balance: `Sua chave de API é válida, mas a conta por trás dela ficou sem saldo. Adicione saldo com seu provedor e tente novamente. Encurtar a mensagem ou diminuir o comprimento da resposta não ajudará aqui.`,
+      deepseek_top_up: `Adicione fundos na [página de recarga do DeepSeek](https://platform.deepseek.com/top_up).`,
+      adjust_parameters: `Use \`/config\` > Modelos > Samplers e Parâmetros e ajuste a **Temperatura** ou **Top P** para garantir que apenas um seja enviado.`,
+      adjust_parameters_personal: `Use \`/personal config\` e ajuste a **Temperatura** ou **Top P** para garantir que apenas um seja enviado.`,
+      switch_model_provider: `Mude para um modelo ou provedor diferente com \`/config\` > Modelos > Trocar Modelos ou \`/providers\`.`,
+      switch_model_provider_personal: `Mude com \`/personal config\` ou atualize o provedor em \`/personal providers\`.`,
+      disable_personal_text_override: `Este erro de solicitação veio do seu [provedor pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/#your-own-providers). Atualize-o em \`/personal providers\` ou selecione um modelo funcional com \`/personal config\`.`,
+      // Auto-appended to every non-empty tip modal by createTipText(); never list it in a caller's tipKeys.
+      support_server: `Visite o [Servidor Oficial de Suporte](https://discord.gg/bjCfHm9QsB) para obter assistência.`,
+      shorten_message: `Tente encurtar sua mensagem e, em seguida, envie-a novamente.`,
+      refresh_context: `Limpe o contexto da conversa com \`/refresh\`.`,
+      provider_overloaded_wait: `O provedor está sob carga pesada no momento. Tente novamente em breve ou troque de provedor.`,
+      nsfw_jailbreaks: `Ative os \`/nsfw jailbreaks\` para ajudar a evitar este filtro.`,
+      review_messages: `Revise as mensagens recentes ou limpe-as com \`/refresh\`.`,
+      review_memories: `Verifique suas memórias e configurações (\`/export personal memories\`, \`/export memories\`, \`/export config\`).`,
+      blacklist_member: `Coloque um membro problemático na lista negra com \`/moderation\`.`,
+    },
+    google: {
+      "400_default_message": `Houve um erro no formato da sua solicitação`,
+      "400_billing_default_message": `O faturamento é necessário para este serviço`,
+      "401_default_message": `Suas credenciais do Google foram rejeitadas. Certifique-se de estar usando uma chave de API do Google AI Studio`,
+      "403_default_message": `Sua chave de API não tem as permissões necessárias. Por favor, certifique-se de estar usando sua própria chave de API obtida legalmente no Google AI Studio`,
+      "404_default_message": `Um recurso referenciado não pôde ser encontrado`,
+      "429_default_message": `Você enviou muitas solicitações rapidamente`,
+      "503_default_message": `O modelo de IA está atualmente sobrecarregado`,
+      "504_default_message": `Sua solicitação demorou muito para ser processada`,
+      content_blocked_default_message: `Seu conteúdo foi bloqueado pelos filtros de segurança`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    vertexexpress: {
+      "403_predict_permission_message": `Esta chave não pode chamar modelos do Vertex AI Express. Use uma chave do modo Express, ou use o provedor \`vertex\` separado para projetos completos do Google Cloud.`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    novelai: {
+      "400_default_message": `Formato ou parâmetros de solicitação inválidos. Por favor, certifique-se de ter inserido a chave de API correta.`,
+      "400_trial_message": `Sua conta de teste requer verificação do recaptcha para gerações. O acesso à API requer uma assinatura paga do NovelAI. Por favor, atualize sua conta em https://novelai.net/`,
+      "401_default_message": `Sua chave de API do NovelAI é inválida ou expirou`,
+      "402_default_message": `Você não tem créditos Anlas suficientes`,
+      "429_default_message": `Você está enviando solicitações demais, por favor, vá mais devagar`,
+      "503_default_message": `Os servidores do NovelAI estão atualmente sobrecarregados`,
+      "504_default_message": `Sua solicitação demorou muito para ser processada`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    openrouter: {
+      "404_privacy_policy_error": `**Restrição da Política de Privacidade**
+O modelo selecionado requer a permissão de dados para treinamento de modelo pago, mas as configurações de privacidade da sua conta do OpenRouter atualmente bloqueiam isso.`,
+      "400_default_message": `Solicitação inválida enviada ao OpenRouter`,
+      "401_default_message": `Sua chave de API do OpenRouter é inválida ou expirou`,
+      "402_default_message": `Sua conta do OpenRouter não tem créditos suficientes`,
+      "403_default_message": `Acesso negado: verifique as configurações da sua conta do OpenRouter`,
+      "408_default_message": `O tempo limite da solicitação do OpenRouter se esgotou`,
+      "429_default_message": `O limite de taxa do OpenRouter foi excedido, por favor, espere antes de tentar novamente`,
+      "429_free_models_message": `Limite de taxa do OpenRouter excedido para modelos gratuitos.`,
+      "500_default_message": `O OpenRouter encontrou um erro interno no servidor`,
+      "502_default_message": `O provedor de IA upstream está temporariamente indisponível`,
+      "503_default_message": `O modelo de IA upstream está atualmente sobrecarregado`,
+      "504_default_message": `O tempo limite da solicitação do modelo upstream se esgotou`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    anthropic: {
+      "400_default_message": `Solicitação inválida para a API da Anthropic.`,
+      "401_default_message": `Sua chave de API da Anthropic é inválida. Por favor, verifique sua chave em console.anthropic.com`,
+      "403_default_message": `Sua chave de API da Anthropic não tem permissão para esta operação.`,
+      "404_default_message": `O modelo da Anthropic solicitado não pôde ser encontrado.`,
+      "429_default_message": `Limite de taxa da Anthropic excedido. Por favor, espere um momento e tente novamente.`,
+      "500_default_message": `A Anthropic retornou um erro interno no servidor.`,
+      "503_default_message": `A Anthropic está atualmente indisponível ou sobrecarregada.`,
+      temperature_top_p_conflict_message: `A Anthropic rejeitou esta solicitação porque a Temperatura e o Top-P foram enviados.`,
+      unknown_default_message: `Ocorreu um erro inesperado ao se comunicar com a Anthropic.`,
+    },
+    custom: {
+      "402_default_message": `Sua conta com este endpoint tem saldo insuficiente`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    deepseek: {
+      "402_default_message": `Sua conta do DeepSeek tem saldo insuficiente`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    zai: {
+      // Z.ai reports billing denial as 429; the formatter re-codes it so it does not read as a rate limit.
+      "429_balance_default_message": `Sua conta do Z.ai tem saldo insuficiente`,
+      "429_plan_access_default_message": `Seu plano de assinatura do Z.ai não inclui acesso a este modelo`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    nvidia: {
+      "404_default_message": `O modelo NVIDIA NIM solicitado não pôde ser encontrado. Ele pode ter sido descontinuado pela NVIDIA.`,
+      "500_default_message": `O backend da NVIDIA servindo este modelo falhou. Isso geralmente é temporário, então tente novamente em um momento. Os detalhes abaixo são do próprio relatório da NVIDIA e são oficiais: se eles nomearem um parâmetro de solicitação, ajuste essa configuração em vez de adivinhar.`,
+      // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request
+      // parameter. Asserting this cause on every 500 previously sent users to change settings the
+      // failing payload never carried.
+      "500_parameter_default_message": `A NVIDIA rejeitou um ou mais parâmetros de solicitação para este modelo. Se os detalhes nomearem parâmetros de sampler não suportados, como \`min_p\`, defina-os como \`0\` com \`/config\` > Modelos > Samplers e Parâmetros para desativá-los. Se os detalhes nomearem \`logit_bias\`, limpe as entradas salvas com \`/config\` > Modelos > Samplers e Parâmetros.`,
+      unknown_default_message: `Ocorreu um erro inesperado`,
+    },
+    self_teach: {
+      server_memory_learned_title: `🧠 {persona_nickname} Aprendeu Algo Novo!`,
+      server_memory_learned_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** foi salva:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_updated_title: `📝 {persona_nickname} Atualizou uma Memória!`,
+      server_memory_updated_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** foi atualizada:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_deleted_title: `🗑️ {persona_nickname} Apagou uma Memória!`,
+      server_memory_deleted_description: `Uma **[Memória do Servidor](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** foi apagada:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_learned_title: `💡 {persona_nickname} Aprendeu Algo Novo sobre {user_nickname}!`,
+      personal_memory_learned_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** sobre {user_nickname} foi salva:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_updated_title: `📝 {persona_nickname} Atualizou uma Memória sobre {user_nickname}!`,
+      personal_memory_updated_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** sobre {user_nickname} foi atualizada:
+\`\`\`
+{memory_content}
+\`\`\``,
+      personal_memory_deleted_title: `🗑️ {persona_nickname} Apagou uma Memória sobre {user_nickname}!`,
+      personal_memory_deleted_description: `Uma **[Memória Pessoal](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/#long-term-memory)** sobre {user_nickname} foi apagada:
+\`\`\`
+{memory_content}
+\`\`\``,
+      server_memory_footer: `Os administradores do servidor podem gerenciar essa memória usando \`/memories\`.`,
+      personal_memory_footer_manage: `Você pode gerenciar suas memórias pessoais usando \`/personal memories\`.`,
+      personal_memory_footer_personalization_disabled: `Esta memória foi salva, mas os recursos de personalização estão desativados no momento neste servidor, portanto, não terá efeito imediato aqui. Use \`/export personal memories\` para visualizá-la. Você pode desativar as memórias com \`/personal config\`.`,
+      personal_memory_footer_user_blacklisted: `Esta memória foi salva, mas o usuário em questão está atualmente na lista negra dos recursos de personalização neste servidor, portanto, não terá efeito imediato aqui. Use \`/export personal memories\` para visualizá-la. Você pode desativar as memórias com \`/personal config\`.`,
+      expand_memory_button: `Mostrar a Memória Completa`,
+      expand_memory_title: `Conteúdo Completo da Memória`,
+    },
+  },
+};

@@ -14,29 +14,29 @@ Construct the `GenerationTurnResult` returned by `runToolLoop` to its caller
 response text, packages the persona response objects, and resolves which
 identity owns the thought log for display purposes.
 
-This function is called from every exit point in the outer loop — both
+This function is called from every exit point in the outer loop: both
 terminal-status exits (completed, error, timeout, etc.) and the post-tool
 `endTurn`/`shouldEndAfterPreToolText` exits.
 
 ## Input
 
-- `status: GenerationTurnResult["status"]` — the final loop status.
-- `context: ChatTurnContext` — provides persona identity and impersonation flags.
-- `streamResults: StreamResult[]` — all stream results accumulated across
+- `status: GenerationTurnResult["status"]`: the final loop status.
+- `context: ChatTurnContext`: provides persona identity and impersonation flags.
+- `streamResults: StreamResult[]`: all stream results accumulated across
   iterations (included verbatim in the result).
-- `responseText: string` — the final accumulated response text (empty string
+- `responseText: string`: the final accumulated response text (empty string
   when no text was produced).
-- `detailsText: string` — accumulated NovelAI scene-metadata content from
+- `detailsText: string`: accumulated NovelAI scene-metadata content from
   `streamResult.detailsContent` fields across tool-call iterations.
-- `thoughtLog: GenerationTurnResult["thoughtLog"] | undefined` — the last
+- `thoughtLog: GenerationTurnResult["thoughtLog"] | undefined`: the last
   thought log payload emitted by any iteration, or `undefined`.
-- `selectedSticker?: Sticker` — the latest successful sticker selection. The
+- `selectedSticker?: Sticker`: the latest successful sticker selection. The
   loop supplies it only on completed exits; timeout/error/stop paths and the
   max-iterations exit omit it.
 
 ## Output
 
-`GenerationTurnResult` — defined in `src/utils/chat/types.ts`:
+`GenerationTurnResult`: defined in `src/utils/chat/types.ts`:
 
 ```ts
 {
@@ -49,7 +49,7 @@ terminal-status exits (completed, error, timeout, etc.) and the post-tool
 }
 ```
 
-### `mergeDetails` — scene-metadata suffix
+### `mergeDetails`: scene-metadata suffix
 
 `detailsText` is produced by NovelAI when the model returns structured scene
 metadata alongside its response. `mergeDetails` appends it as:
@@ -86,7 +86,7 @@ When the merged text is empty (e.g. status `"error"` with no pre-error text),
 `personaResponses` is an empty array. Post-turn effects and the caller
 distinguish empty `personaResponses` from the `"skipped"` status.
 
-### `resolveThoughtLogOwner` — identity resolution
+### `resolveThoughtLogOwner`: identity resolution
 
 Maps the turn context to the thought-log owner shape:
 
@@ -100,7 +100,7 @@ Maps the turn context to the thought-log owner shape:
 
 ## Side effects
 
-None — this function is pure assembly; it reads state but does not write to
+None: this function is pure assembly; it reads state but does not write to
 Discord, the database, the cache, or any external system.
 
 ## Invariants
@@ -119,9 +119,9 @@ After this stage runs:
 
 | Surface | Plugin-relevance |
 |---|---|
-| `ChatPersonaResponse` / `selectedSticker` result shape | Internal — the shape is consumed by `responseSink.finalize` and post-turn effects; changing it requires updating both consumers |
-| `resolveThoughtLogOwner` identity types | Internal — `"user_impersonation"`, `"persona"`, `"default"` map to distinct display behaviors in the stream orchestrator |
-| `mergeDetails` scene-metadata format | Internal — the `[Scene Metadata]` block format is NovelAI-specific; no plugin surface |
+| `ChatPersonaResponse` / `selectedSticker` result shape | Internal: the shape is consumed by `responseSink.finalize` and post-turn effects; changing it requires updating both consumers |
+| `resolveThoughtLogOwner` identity types | Internal: `"user_impersonation"`, `"persona"`, `"default"` map to distinct display behaviors in the stream orchestrator |
+| `mergeDetails` scene-metadata format | Internal: the `[Scene Metadata]` block format is NovelAI-specific; no plugin surface |
 
 ## Related docs
 

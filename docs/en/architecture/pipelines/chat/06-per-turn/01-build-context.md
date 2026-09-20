@@ -13,8 +13,8 @@ Build the `ChatTurnContext` closure carried through the rest of the per-turn
 loop. Fetch and simplify recent message history, hydrate per-message
 annotations (reply/reaction/forward/media/embed), load emoji/sticker assets,
 delegate to the **context-build pipeline** for the LLM-shaped prompt
-assembly, then append tail directives. Returns the full `ChatTurnContext` —
-the closure that stages 02–04 read and mutate.
+assembly, then append tail directives. Returns the full `ChatTurnContext`:
+the closure that stages 02-04 read and mutate.
 
 This stage is the **thin chat-side wrapper** around a much larger inner
 pipeline. The heavy lifting (mentions, memories, RAG, persona prompt,
@@ -36,30 +36,30 @@ chat context still builds.
 
 ## Output
 
-`ChatTurnContext` — the per-turn closure. See `src/utils/chat/types.ts:173-212`.
+`ChatTurnContext`: the per-turn closure. See `src/utils/chat/types.ts:173-212`.
 
 Key fields populated here:
 
-- `contextItems: StructuredContextItem[]` — the LLM-shaped prompt, including
+- `contextItems: StructuredContextItem[]`: the LLM-shaped prompt, including
   tail directives.
-- `simplifiedMessages: SimplifiedMessageForContext[]` — the message-history
+- `simplifiedMessages: SimplifiedMessageForContext[]`: the message-history
   digest used both for the LLM and for post-turn memory capture.
-- `streamingContext: StreamingContext` — per-turn flags consumed by the
+- `streamingContext: StreamingContext`: per-turn flags consumed by the
   stream orchestrator and tool layer.
-- `messageIdMap: MessageIdMap` — translation table between Discord message
+- `messageIdMap: MessageIdMap`: translation table between Discord message
   IDs and LLM-visible compact IDs (used for reply targeting).
-- `emojiStrings`, `loadedEmojis`, `loadedStickers` — persona assets.
+- `emojiStrings`, `loadedEmojis`, `loadedStickers`: persona assets.
 - Carried trigger metadata (`triggererName`, channel name/description, etc.).
 
 ## Side effects
 
-- **Message-history fetch** — `channel.messages.fetch({ limit })` retrieves up
+- **Message-history fetch**: `channel.messages.fetch({ limit })` retrieves up
   to `message_fetch_limit` recent messages from Discord.
-- **Voice-transcript pre-hydration** — for historical audio messages not in
+- **Voice-transcript pre-hydration**: for historical audio messages not in
   chat mode, runs STT synchronously *before* the simplify loop so cache
   lookups inside `simplifyMessage` are non-async. Writes results to the
   voice-transcript cache.
-- **Consecutive same-author merge** — after simplifying each message, the loop
+- **Consecutive same-author merge**: after simplifying each message, the loop
   collapses it into the previous entry when (1) the effective `authorId`
   matches, (2) the debug (`$:`)/normal kind matches (a debug message never
   merges with a normal one even though they share an authorId), and (3)
@@ -67,39 +67,39 @@ Key fields populated here:
   media IDs stay unambiguous). Merged entries record `combinedMessageIds`,
   `individualContents`, and `combinedCreatedAts` so `reveal_message_metadata`
   can still surface one `ref_N` + timestamp per original message.
-- **Persona-asset cache load** — `loadEmojiStickerCache(...)` may hit Discord
+- **Persona-asset cache load**: `loadEmojiStickerCache(...)` may hit Discord
   if the cache is cold.
-- **Reply-target fetch** — `channel.messages.fetch(referenceMessageId)` if
+- **Reply-target fetch**: `channel.messages.fetch(referenceMessageId)` if
   the message references one that's not in cache.
-- **Reset/compact-refresh detection** — scans message embeds for `"reset"` or
+- **Reset/compact-refresh detection**: scans message embeds for `"reset"` or
   `"compact_refresh"` markers and slices history at the marker.
-- **Reminder injection** — if the incoming carries `reminderData`, injects a
+- **Reminder injection**: if the incoming carries `reminderData`, injects a
   synthetic `[System: …]` message into `simplifiedMessages` so the LLM sees
   the reminder context.
-- **Media descriptor capture** — this stage no longer decides whether the
+- **Media descriptor capture**: this stage no longer decides whether the
   answering model can see images or videos. `buildContext` records
   capability-neutral `mediaDescriptors` on dialogue items, plus budget-only
   notices such as rendered-image-limit skips. The per-attempt generation stage
   resolves those descriptors against the routed attempt model, including
   personal-provider routing, OpenRouter live capability overrides, and fallback
   attempts.
-- **Impersonation identity resolution** — if `isUserImpersonation`, fetches
+- **Impersonation identity resolution**: if `isUserImpersonation`, fetches
   the impersonated user's nickname/avatar via `resolveImpersonatedIdentity`.
-- **Participant preparation** — after privacy/block filtering and message simplification,
+- **Participant preparation**: after privacy/block filtering and message simplification,
   `prepareParticipantContext()` scans the entire visible fetched window for persona triggers
   and eligible Discord user aliases/mentions, then composes visible authors, active identity,
   references, historical personas, co-responders, webhooks, and Matrix identities into one
   ordered typed result. That result is the required and only participant input to
   `buildContext()`; transport maps and raw participant ID lists do not cross the builder
   boundary. This context-only discovery never changes response planning.
-- **Locked-turn discovery reuse** — all persona turns sharing a `LockedChatTurn` share a
+- **Locked-turn discovery reuse**: all persona turns sharing a `LockedChatTurn` share a
   request scope keyed by an exact snapshot of the sanitized discovery inputs. Equivalent
   inputs reuse candidate and membership discovery, including concurrent in-flight work;
   changed privacy-filtered history receives a separate entry. Every call recomposes active
   identity and public-profile exposure, and the participant stage rehydrates member data,
   privacy, blacklist, lineage memories, persona-filtered reminders, and persona self-tasks
   for the current active persona. The scope is request-local and weakly held.
-- **Bounded diagnostics** — preparation emits candidate, inclusion, rejection, cache,
+- **Bounded diagnostics**: preparation emits candidate, inclusion, rejection, cache,
   duration, and external-call counts without IDs, aliases, or message text.
 
 ## Invariants
@@ -126,7 +126,7 @@ After this stage runs:
 - A failed STM maintenance preflight does not abort context construction; it
   fails closed and leaves the normal deliberate-tool gate in effect.
 - `streamingContext.replyNoticeState` is initialized to
-  `{ attempted: false, sent: false }` whenever `incoming.isFromQueue` is true —
+  `{ attempted: false, sent: false }` whenever `incoming.isFromQueue` is true;
   for **any** persona, not only alters. This is the only place where
   `replyNoticeState` is set; without it the "Replying to…" embed in stage 07 is
   suppressed (the presence of the object is the enable-switch, not its field
@@ -136,7 +136,7 @@ After this stage runs:
   webhook whenever a sprite renders, and webhooks cannot use Discord's native
   reply. Whether a sprite will fire is unknown until delivery, so the object is
   allocated up front and stage 07 gates the actual send on real webhook
-  delivery — making it an inert no-op for queued turns that reply natively.
+  delivery; making it an inert no-op for queued turns that reply natively.
 
 ## Extension points
 
@@ -144,7 +144,7 @@ This stage is **a coordinator over many extension-relevant helpers**:
 
 | Helper | File | Plugin-relevance |
 |---|---|---|
-| `buildContext` | `utils/text/contextBuilder.ts` | The context-build pipeline's public API — the main extension surface for memories, RAG, persona prompt assembly |
+| `buildContext` | `utils/text/contextBuilder.ts` | The context-build pipeline's public API: the main extension surface for memories, RAG, persona prompt assembly |
 | `simplifyMessage` + sub-helpers (`withReplyContext`, `withReactionContext`, `buildForwardContext`) | this file | Per-message annotation pipeline; new annotation types hook here |
 | `processEmbedsFromMessage` | `contextEmbeds.ts` | Embed classification + content extraction; new embed type plugins hook here |
 | `extractNoticeTextFromComponents` | `discord/componentNoticeReader.ts` | Reconstructs `{title, description, footer}` from a Components V2 container so CV2 notices classify like embeds |
@@ -176,7 +176,7 @@ arrive over **two different transports**, and both must be read:
 | Components V2 | `message.components` → `Container` → `TextDisplay.content` | `extractNoticeTextFromComponents` |
 
 A Components V2 message has an **empty `message.embeds` array and empty
-`message.content`** — Discord rejects mixing `embeds` with the
+`message.content`**: Discord rejects mixing `embeds` with the
 `IsComponentsV2` flag. Any consumer that reads only `message.embeds` is
 therefore completely blind to a CV2 notice: the message contributes no text and
 no media, so `simplifyMessage` drops it from history entirely. When that

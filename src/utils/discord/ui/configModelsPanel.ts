@@ -59,7 +59,7 @@ import {
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { formatStopStringForDisplay } from "@/utils/provider/stopStringConfig";
 import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { buildConfigVoicesBody, type ConfigVoicesView } from "@/utils/discord/ui/configVoicesPanel";
 export type { ConfigVoicesView };
 
@@ -482,7 +482,6 @@ function buildNaiPresetBlock(
   writesDisabled: boolean,
   displayBudget: number,
 ): ComponentInContainerData[] {
-  const isJapanese = locale.toLowerCase().startsWith("ja");
   const explanationKey =
     view.compatibility === "not-novelai"
       ? "not_novelai"
@@ -519,7 +518,7 @@ function buildNaiPresetBlock(
       ? view.presets.slice(pageStart, pageStart + CONFIG_NAI_PRESET_PAGE_SIZE).map((preset, offset) => ({
           label: safeSelectOptionText(preset.preset_name, 100),
           value: String(pageStart + offset),
-          description: safeSelectOptionText(isJapanese ? preset.ja_preset_desc : preset.preset_desc, 100),
+          description: safeSelectOptionText(resolveDescription(preset.descriptions, locale) ?? "", 100),
           default: preset.preset_name === view.activePresetName,
         }))
       : [

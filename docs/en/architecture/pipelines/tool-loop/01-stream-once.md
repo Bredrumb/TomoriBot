@@ -11,23 +11,23 @@ One provider generation pass, wrapped with a rolling AbortController SDK timeout
 Call `provider.streamToDiscord(...)` with the current accumulated context and
 tool history, and race the result against a configurable SDK timeout. The
 timeout is *rolling*: it resets on every `onStreamProgress` heartbeat, so a
-long but active stream is not killed — only a truly stalled one is. Returns a
+long but active stream is not killed; only a truly stalled one is. Returns a
 `StreamResult` describing how the generation ended.
 
 ## Input
 
-- `params: ToolLoopParams` — full loop context (provider, config, `ChatTurnContext`).
-- `accumulatedModelParts: Array<Record<string, unknown>>` — provider-native model
+- `params: ToolLoopParams`: full loop context (provider, config, `ChatTurnContext`).
+- `accumulatedModelParts: Array<Record<string, unknown>>`: provider-native model
   turn parts accumulated across prior iterations of the tool loop. Empty on the
   first iteration; grows as each tool call appends its model response. Passed by
   reference and read (not written) inside `streamOnce`.
-- `functionHistory: ToolHistoryEntry[]` — paired call/response records from prior
+- `functionHistory: ToolHistoryEntry[]`: paired call/response records from prior
   tool dispatches. Passed to the provider so it can continue the multi-turn tool
   conversation. Empty on the first call.
 
 ## Output
 
-`Promise<StreamResult>` — defined in `src/types/provider/interfaces.ts`. The
+`Promise<StreamResult>`: defined in `src/types/provider/interfaces.ts`. The
 `status` field drives the outer loop's switch:
 
 | `status` | Meaning |
@@ -52,7 +52,7 @@ long but active stream is not killed — only a truly stalled one is. Returns a
 - **Registers `killStream` on the channel lock entry** via
   `setChannelStreamKill(channelId, killStream)`. `killStream` is a unified
   callback that both calls `abortController.abort()` *and* rejects the
-  `Promise.race` — ensuring the HTTP request is cancelled and the race unblocks
+  `Promise.race`: ensuring the HTTP request is cancelled and the race unblocks
   simultaneously. This is what `/kill` triggers via `forceKillChannelStream`.
 - **Clears the timeout and the kill registration** (`clearTimeout`,
   `setChannelStreamKill(channelId, null)`) in the `finally` block regardless of
@@ -68,24 +68,24 @@ long but active stream is not killed — only a truly stalled one is. Returns a
 
 After this stage runs:
 
-- `params.context.streamingContext.onStreamProgress` is `undefined` — the
+- `params.context.streamingContext.onStreamProgress` is `undefined`: the
   heartbeat reference is always cleaned up.
-- The channel lock's `activeStreamKill` is `null` — the kill callback is
+- The channel lock's `activeStreamKill` is `null`: the kill callback is
   always deregistered in `finally`.
 - If the result status is `"timeout"`, it originated from the SDK-call
   timeout race (error message prefix `"SDK_CALL_TIMEOUT:"`), not from a
   provider-specific timeout mechanism.
 - Errors that are not SDK timeouts are re-thrown to the caller
-  (`runToolLoop`), which does not catch them — they propagate to
+  (`runToolLoop`), which does not catch them; they propagate to
   `runGenerationTurn`'s outer `catch`.
 
 ## Extension points
 
 | Surface | Plugin-relevance |
 |---|---|
-| `provider.streamToDiscord(...)` call | The provider contract is the seam — see [provider pipeline](../provider/) |
-| `STREAM_SDK_CALL_TIMEOUT_MS` / rolling `onStreamProgress` | Internal — timeout behavior is an operational concern, not plugin-relevant |
-| `params.context.streamingContext.abortSignal` | Internal — consumed by provider adapters only |
+| `provider.streamToDiscord(...)` call | The provider contract is the seam: see [provider pipeline](../provider/) |
+| `STREAM_SDK_CALL_TIMEOUT_MS` / rolling `onStreamProgress` | Internal: timeout behavior is an operational concern, not plugin-relevant |
+| `params.context.streamingContext.abortSignal` | Internal: consumed by provider adapters only |
 
 ## Configuration
 

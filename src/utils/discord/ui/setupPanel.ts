@@ -47,7 +47,7 @@ import type { PanelReceipt } from "@/types/discord/panel";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import { ColorCode } from "@/utils/misc/logger";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
 import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
 import type { ComponentsV2MessagePayload } from "@/utils/discord/ui/componentsV2Limits";
@@ -139,7 +139,7 @@ export function toSetupSettingsCatalogs(
     })),
     prompts: promptPresets.map((preset) => ({
       name: preset.system_prompt_preset_name,
-      description: locale === "ja" && preset.ja_description ? preset.ja_description : preset.system_prompt_preset_desc,
+      description: resolveDescription(preset.descriptions, locale) ?? "",
     })),
     promptTexts: new Map(promptPresets.map((preset) => [preset.system_prompt_preset_name, preset.preset_prompt_text])),
   };

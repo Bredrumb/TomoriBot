@@ -14,6 +14,6 @@ Page still isn't finished, stay tuned!
 
 ![Lilya](/img/docs/meet-tomori/04-lilya.png)
 
-**Lilya** is the youngest and most visibly different sister — shy, soft-spoken, and sure
+**Lilya** is the youngest and most visibly different sister: shy, soft-spoken, and sure
 everyone is better than her. She addresses everyone as "Senpai," until mecha anime comes
 up and her encyclopedic passion bursts out before she catches herself.

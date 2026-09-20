@@ -1,12 +1,5 @@
 export default {
   capabilities: {
-    description: `ツール使用と特定の機能を管理します。`,
-    toggle: {
-      description: `ツールや関数呼び出しの使用を切り替えます。`,
-      success_title: `ツール使用を更新しました`,
-      enabled_success: `ツール使用を**有効**にしました。再びツールや関数を呼び出せます。`,
-      disabled_success: `ツール使用を**無効**にしました。モデルの能力に関わらず、ツールや関数は一切使用しません。`,
-    },
     manage: {
       description: `このサーバーでの私のコアな行動権限を設定します。`,
       selfteaching_option: `自己学習`,
@@ -21,8 +14,6 @@ export default {
       timeawareness_option: `時間認識の強化`,
       imagegen_option: `画像生成`,
       videogen_option: `動画生成`,
-      hiderespondembed_option: `応答埋め込みを非表示`,
-      hideimpersonationembeds_option: `なりすまし埋め込みを非表示`,
       voicemessage_option: `ボイスメッセージ（ElevenLabs）`,
       shorttermmemory_option: `STMの自動要約`,
       selfteaching_desc: `サーバーの会話から学習する`,
@@ -37,18 +28,8 @@ export default {
       timeawareness_desc: `再会や最近のメッセージの日付の区切りを認識する`,
       imagegen_desc: `リクエストに応じて画像生成`,
       videogen_desc: `リクエストに応じて短い動画を生成`,
-      hiderespondembed_desc: `/respond の成功埋め込みを非表示`,
-      hideimpersonationembeds_desc: `なりすまし通知を非表示`,
       voicemessage_desc: `ElevenLabs TTSボイスメッセージを送信`,
       shorttermmemory_desc: `ボットの自動記憶＆促し。オフでも手動編集(/persona stm edit)と生メッセージは表示`,
-      select_placeholder: `有効にする機能を選択...`,
-      checkbox_label_continued: `機能（続き）`,
-      select_embed_title: `機能の設定`,
-      select_embed_description: `**有効にする**機能を選択してください。チェックあり = 有効、チェックなし = 無効。`,
-      no_changes_title: `変更なし`,
-      no_changes_description: `すべての機能はすでに選択した値に設定されています。`,
-      success_title: `機能が更新されました`,
-      success_description: `**{count}** 件の機能を更新しました。`,
     },
   },
 };

@@ -144,7 +144,7 @@ function renderModerationName(locale: string, value: string): string {
   const rendered = escapeDiscordMarkdown(preview.text);
   const footerKey = textPreviewFooterKey(preview);
   if (!footerKey) return rendered;
-  return `${rendered}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview))}`;
+  return `${rendered}\n-# ${localizer(locale, footerKey, textPreviewFooterVars(preview, locale))}`;
 }
 
 export const MODERATION_CATEGORY_LOCALE_KEYS: Record<ModerationCategory, string> = {

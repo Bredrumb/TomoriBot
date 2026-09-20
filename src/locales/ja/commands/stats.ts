@@ -9,9 +9,12 @@ export default {
     },
     persona: {
       description: `このサーバーでのペルソナの使用統計を表示します。`,
+      persona_description: `統計を表示するペルソナ。`,
       timeframe_description: `集計する期間。`,
       no_personas_title: `ペルソナがありません`,
       no_personas_description: `このサーバーには統計を表示できるペルソナがまだありません。`,
+      not_found_title: `ペルソナが見つかりません`,
+      not_found_description: `選択されたペルソナはこのサーバーで見つかりませんでした。`,
       chosen_title: `{name}が選択されました`,
     },
     server: {
@@ -20,8 +23,8 @@ export default {
     },
 
     empty: `（なし）`,
-    footer: `トークン数はプロバイダーの実使用量（報告時）、コストは定価ベースの概算です。生成数とごほうび／おしおきは累計です。`,
-    unknown_persona: `ペルソナ #{id}`,
+    footer: `トークン数はプロバイダーの実使用量（報告時）、コストは定価ベースの概算です。`,
+    unknown_persona: `不明なペルソナ #{id}`,
     days: `{count}日`,
     local_suffix: `現地時間`,
     weekday_names: `日曜日,月曜日,火曜日,水曜日,木曜日,金曜日,土曜日`,
@@ -110,11 +113,9 @@ export default {
     },
 
     // ストリークブロックで使う「日」単位（数字なし）。
-    days_unit: `日`,
 
     // インフォグラフィックカード専用ラベル（テキストダッシュボードでは使用しない）。
     infographic: {
-      personal_title: `活動まとめ`,
       no_data: `まだ統計がありません`,
       server_title: `サーバーランキング`,
       server_subtitle: `{personas} 人のペルソナが {members} 人のメンバーをサポート`,
@@ -135,12 +136,7 @@ export default {
       persona_affinity_footer: `ペルソナ親和度（{timeframe}）`,
       personal_total_tokens: `トークン合計`,
       favorite_model: `お気に入りのモデル`,
-      weekly_activity: `週間アクティビティ`,
-      hourly_activity: `時間帯別アクティビティ`,
       top_personas: `人気のペルソナ`,
-      top_humans: `トップユーザー`,
-      top_model: `トップモデル`,
-      top_persona_emojis: `ペルソナの人気絵文字`,
       most_active_members: `アクティブなメンバー`,
       top_models: `トップモデル`,
       model_tokens_cost: `{count}トークン | {cost}`,

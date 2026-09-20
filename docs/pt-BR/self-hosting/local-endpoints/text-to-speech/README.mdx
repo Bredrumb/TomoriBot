@@ -1,0 +1,63 @@
+---
+title: "Text-to-Speech (Motores Locais)"
+aiGenerated: true
+sidebar:
+  label: "Visão Geral"
+  groupLabel: "Text-to-Speech"
+  order: 7
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+O TomoriBot trata a fala como uma capacidade de endpoint personalizado. Motores locais são executados fora do bot como servidores HTTP e implementam `POST /synthesize`; motores de clone recebem texto mais a amostra de áudio de referência configurada, enquanto motores com capacidade de VoiceDesign também podem receber instruções em linguagem natural.
+
+## Motores Disponíveis
+
+<CardGrid>
+  <LinkCard title="Chatterbox TTS" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/chatterbox/"
+    description="Clonagem de voz em inglês com tags de evento. Turbo é o padrão; Nano e Standard são variantes opcionais." />
+  <LinkCard title="Qwen3-TTS" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
+    description="TTS local multilíngue com modos de clone e VoiceDesign." />
+  <LinkCard title="MOSS-TTS" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="Endpoint automático de teste: clonagem de voz multilíngue de 4B ou design de voz descrito por texto em inglês/chinês." />
+  <LinkCard title="IrodoriTTS" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/"
+    description="Clonagem de voz focada em japonês e VoiceDesign com marcação de emoji Unicode para controle de emoção." />
+  <LinkCard title="Fish Audio S2 Pro" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="Clonagem de voz multilíngue de alta qualidade com controles finos de expressão entre colchetes. Por padrão, usa os pesos BF16 oficiais, com um checkpoint INT8 opcional para GPUs menores." />
+  <LinkCard title="VoxCPM2" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="TTS em 30 idiomas com Voice Design, clonagem de áudio de referência, Ultimate Cloning assistida por transcrição e controle de entrega em linguagem natural." />
+  <LinkCard title="CosyVoice 3" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="Clonagem zero-shot multilíngue de 0.5B e interlinguística com instruções de entrega em linguagem natural." />
+  <LinkCard title="Comparação de Motores TTS" href="/pt-BR/self-hosting/local-endpoints/text-to-speech/comparison/"
+    description="Tempos de síntese empíricos, players de amostras de áudio e comparações de velocidade entre os 7 motores." />
+</CardGrid>
+
+## Fluxo de Configuração
+
+1. Escolha um motor nos cartões acima e configure seu wrapper a partir de `servers/tts/`.
+2. Em `/providers`, escolha **Add New Custom Endpoint** e use a Compatibilidade de API `tts-clone`.
+3. Selecione o endpoint salvo e use seu menu suspenso de modelo para adicionar seu modelo de Speech, Voice Source Mode e Script Markup.
+4. Abra `/config` > Models > Switch Models e selecione o modelo de Speech registrado.
+
+## Fluxo de Voz de Persona
+
+Para motores de clone, adicione e atribua uma amostra de voz por persona:
+
+1. Prepare um clipe limpo de 10-20 segundos com um locutor e sem música de fundo.
+2. Abra `/config` em Models > TTS Parameters & Voices e faça o upload da amostra. Qualquer formato de áudio é aceito; o TomoriBot o converte para WAV mono.
+3. Forneça uma transcrição correspondente quando o motor se beneficiar disso. O Fish S2 Pro encaminha a transcrição de referência armazenada para a solicitação de clonagem, e o VoxCPM2 a usa para uma Ultimate Cloning de maior fidelidade.
+4. Abra `/config` em Persona > Voice, depois escolha a persona e a amostra de voz.
+
+Para Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS ou VoxCPM2 VoiceDesign, pule a amostra de áudio e use Persona > Voice em `/config` para salvar uma descrição de voz em linguagem natural para a persona. O CosyVoice 3 usa o modo Clone com uma amostra de referência e aceita orientações de entrega pontuais através de `voice_instructions`.
+
+Os usuários do ElevenLabs devem escolher **Add New Provider** e **ElevenLabs** em `/providers`; isso registra os endpoints de fala e transcrição juntos.
+
+O TomoriBot remove a sintaxe de emoji personalizado do Discord, como `:pepega:` ou `<:pepega:123456789012345678>`, dos scripts de voz gerados antes da síntese. Emojis Unicode também são removidos a menos que o endpoint de fala use marcação de emoji, o que é destinado ao IrodoriTTS. As tags entre colchetes são preservadas para endpoints como Chatterbox Turbo e Fish S2 Pro quando o seu Script Markup está definido para **Bracket Tags**.
+
+O VoxCPM2 usa **Plain** Script Markup. Seus controles de Voice Design e estilo de fala trafegam pelo campo `instruct` do TomoriBot, e o wrapper do VoxCPM2 os converte para a sintaxe de controle em linguagem natural nativa do modelo, entre parênteses.
+
+O CosyVoice 3 também usa **Plain** Script Markup. Ele mapeia referências apoiadas por transcrição para clonagem zero-shot, referências sem transcrição para clonagem interlinguística, e `voice_instructions` para seu caminho condicionado por instrução. Tags entre colchetes inline são removidas porque as instruções do CosyVoice se aplicam a todo o enunciado.
+
+## Comparação de Motores
+
+Para benchmarks empíricos de latência lado a lado, reprodução de amostras de áudio e uma matriz detalhada de recursos comparando todos os sidecars suportados, consulte **[Comparação de Motores TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/comparison/)**.

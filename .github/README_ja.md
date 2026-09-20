@@ -1,7 +1,14 @@
-## [English](../README.md) | 日本語
+### [English](../README.md) | 日本語 | [繁體中文](README_zh-TW.md) | [简体中文](README_zh-CN.md) | [Español (LATAM)](README_es-419.md) | [Português (Brasil)](README_pt-BR.md) | [Tiếng Việt](README_vi.md)
+
+<!-- Language switcher slots for the language-expansion target locales.
+     Each entry joins the switcher row above when its translated README lands as
+     .github/README_<code>.md. Entries stay unlinked until then so the repository front page never
+     carries a broken link. Labels are the endonyms from src/constants/docsLocales.ts.
+     Planned: fr Français | ru Русский | ko 한국어
+     See docs/en/contributing/adding-locale/readme-and-repo.md. -->
 
 > [!NOTE]
-> このREADMEは簡単な概要です。完全で最新のドキュメント（セットアップガイド、機能の解説、プロバイダー情報など）については **[docs.tomoribot.app](https://docs.tomoribot.app/ja/)** をご覧ください。
+> このREADMEは簡単な概要です。完全で最新のドキュメント（セットアップガイド、機能の解説、プロバイダー情報など）については **[docs.tomoribot.app](https://docs.tomoribot.app/en/)** をご覧ください。
 
 <br />
 <div align="center">
@@ -12,10 +19,10 @@
 
 <h3 align="center">TomoriBot</h3>
 
-Discord向けの自ホスト可能でカスタマイズ自在な個人AIアシスタント/ロールプレイシステム。メモリー、複数ペルソナ、ツール呼び出し、マルチモーダル、API/ローカルモデルサポートを備えています。
+Discord向けの自ホスト可能でカスタマイズ自在な個人AIアシスタント/ロールプレイシステム。記憶、複数ペルソナ、ツール呼び出し、マルチモーダル、API/ローカルモデルサポートを備えています。
 
 <p align="center">
-  <strong><a href="https://docs.tomoribot.app/ja/">公式ウェブサイト</a></strong>
+  <strong><a href="https://docs.tomoribot.app/en/">公式ウェブサイト</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">TomoriBotを招待</a></strong>
   &middot;
@@ -55,7 +62,7 @@ Discord向けの自ホスト可能でカスタマイズ自在な個人AIアシ�
 
 TomoriBotは、SillyTavernとDiscordの廃止されたClydeにインスパイアされた、無料でオープンソースの自ホスト型個人AIアシスタント兼ロールプレイシステムです。DMでは自分専用の、Discordサーバーでは全員のための、実用的なアシスタント、カスタマイズ可能なコンパニオン、ロールプレイの相手として使えます。
 
-TomoriBotは長期メモリー、マルチペルソナ動作、WebおよびMCPツール、チャット内でのメディア生成、200以上のDiscordスラッシュコマンド、そしてカスタムプロキシや自前モデルの自ホストを含む複数のプロバイダーをサポートし、テキスト生成から動画生成まで幅広く対応します。
+TomoriBotは長期記憶、マルチペルソナ動作、WebおよびMCPツール、チャット内でのメディア生成、200以上のDiscordスラッシュコマンド、そしてカスタムプロキシや自前モデルの自ホストを含む複数のプロバイダーをサポートし、テキスト生成から動画生成まで幅広く対応します。
 
 ### はじめに
 
@@ -68,7 +75,7 @@ TomoriBotは長期メモリー、マルチペルソナ動作、WebおよびMCP�
 
 ![Screenshots 1](../assets/img/scs/1.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/">エージェント型AI駆動の会話</a></h3>
-<p align="center">TomoriBotはチャットするだけにとどまらない多彩なツールを備えています。Web検索、繰り返しタスク/リマインダーの設定、サーバーの絵文字/スタンプの活用、そしてチャンネルやサーバーをまたいでコンテキストを記憶できるRAGやSTMなどのメモリー機能が使えます。</p>
+<p align="center">TomoriBotはチャットするだけにとどまらない多彩なツールを備えています。Web検索、繰り返しタスク/リマインダーの設定、サーバーの絵文字/スタンプの活用、そしてチャンネルやサーバーをまたいでコンテキストを記憶できるRAGやSTMなどの記憶機能が使えます。</p>
 
 <br />
 
@@ -81,14 +88,14 @@ TomoriBotは長期メモリー、マルチペルソナ動作、WebおよびMCP�
 
 ![Screenshots 3](../assets/img/scs/3.png)
 <h3 align="center"><a href="https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/">マルチペルソナサポート</a></h3>
-<p align="center">TomoriBotのサーバー内でのパーソナリティ、行動、アバターは簡単に変更・作成でき、ペルソナとして他のユーザーへエクスポートすることもできます（共有可能なAIキャラクターカードのようなもの）。<code>/persona generate</code>でお気に入りのSillyTavernカードをインポート・変換することも可能です。1つのサーバーに無制限のペルソナを持たせることができ、それぞれが独自のメモリーとアジェンダを持ちます。さらに、複数のペルソナを連携させてサーバー内で協働させる（あるいはただじゃれ合わせる）こともできます。</p>
+<p align="center">TomoriBotのサーバー内でのパーソナリティ、行動、アバターは簡単に変更・作成でき、ペルソナとして他のユーザーへエクスポートすることもできます（共有可能なAIキャラクターカードのようなもの）。<code>/persona generate</code>でお気に入りのSillyTavernカードをインポート・変換することも可能です。1つのサーバーに無制限のペルソナを持たせることができ、それぞれが独自の記憶とアジェンダを持ちます。さらに、複数のペルソナを連携させてサーバー内で協働させる（あるいはただじゃれ合わせる）こともできます。</p>
 
 <br />
 
 
 ![Screenshots 4](../assets/img/scs/4.png)
-<h3 align="center"><a href="https://docs.tomoribot.app/ja/features/command-reference/">200以上のネイティブ設定コマンド</a></h3>
-<p align="center">すべてDiscordのネイティブなスラッシュコマンドとインタラクティブUIで管理できます。ペルソナやプロンプトの完全な管理、モデルパラメータの調整、MCPツールサーバーの設定、権限の調整、メモリーの設定、サーバーメンバーのレート制限など、さらに多くのことが可能です。TomoriBotに、彼女ができることやスラッシュコマンドを直接尋ねることもできます。現在、さらに簡単な管理のためにWebダッシュボードを開発中です。</p>
+<h3 align="center"><a href="https://docs.tomoribot.app/en/features/command-reference/">200以上のネイティブ設定コマンド</a></h3>
+<p align="center">すべてDiscordのネイティブなスラッシュコマンドとインタラクティブUIで管理できます。ペルソナやプロンプトの完全な管理、モデルパラメータの調整、MCPツールサーバーの設定、権限の調整、記憶の設定、サーバーメンバーのレート制限など、さらに多くのことが可能です。TomoriBotに、彼女ができることやスラッシュコマンドを直接尋ねることもできます。現在、さらに簡単な管理のためにWebダッシュボードを開発中です。</p>
 
 <br />
 
@@ -111,13 +118,13 @@ TomoriBotは、幅広いLLMプロバイダー、画像生成API、音声サー�
 
 TomoriBotはローカルLLM（KoboldCPP、LM Studio、vLLM経由など）、ComfyUIによるローカル画像/動画生成、ローカルTTS・STTエンドポイント、さらにローカルのSearXNGやブラウザWeb取得用のDockerサイドカーに対応しています。
 
-### [セキュリティと脅威モデル](https://docs.tomoribot.app/ja/wiki/threat-models/)
+### [セキュリティと脅威モデル](https://docs.tomoribot.app/en/wiki/threat-models/)
 
 TomoriBotは暗号化とセキュリティのベストプラクティスを採用し、ローカル環境でもパブリックデプロイでも、データとAPIキーを完全に安全に保ちます。
 
 ### [プロンプトカスタマイズ用ツールマクロ](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/)
 
-TomoriBotには多彩なビルトインツール（Web検索、メモリー管理、画像生成、クロスチャンネルメッセージングなど）が備わっており、プロンプト内でマクロとして直接参照できます。以下はいくつかのおふざけな例です：
+TomoriBotには多彩なビルトインツール（Web検索、記憶管理、画像生成、クロスチャンネルメッセージングなど）が備わっており、プロンプト内でマクロとして直接参照できます。以下はいくつかのおふざけな例です：
 
 #### 1. ウェルネスチェッカー
 ```text
@@ -253,7 +260,7 @@ bun run update
 | `--skip-backup` | 更新前のバックアップをスキップします（非推奨） |
 | `--yes` | 開始前の確認プロンプトをスキップします |
 
-すべてのホスト側スクリプトの詳細については、**[メンテナンスドキュメント](https://docs.tomoribot.app/ja/features/command-reference/)**の全文を参照してください。
+すべてのホスト側スクリプトの詳細については、**[メンテナンスドキュメント](https://docs.tomoribot.app/en/features/command-reference/)**の全文を参照してください。
 
 <!-- AFTER SETUP -->
 ### 招待・セットアップ後
@@ -262,11 +269,11 @@ bun run update
 
 - `/setup` - サーバーの初期ボットセットアップ
 - `/config` - TomoriBotを調整するための複数の方法
-- `/personal memories` - 個人メモリーの追加/削除
-- `/memories` / `/memories` - サーバー全体のメモリーの追加/削除
-- `/moderation` - TomoriBotの権限の追加/削除
+- `/personal memories` - 個人の記憶の管理
+- `/memories` - サーバーの記憶、ドキュメント、および短期記憶の管理
+- `/moderation` - メンバーのアクセス、ユーザーブラックリスト、チャンネル、ペルソナ、およびロールの制限の管理
 
-すべてのスラッシュコマンドについては、**[コマンドリファレンス](https://docs.tomoribot.app/ja/features/command-reference/)**の全文を参照してください。
+すべてのスラッシュコマンドについては、**[コマンドリファレンス](https://docs.tomoribot.app/en/features/command-reference/)**の全文を参照してください。
 
 #### チャットでのやり取り
 
@@ -282,7 +289,7 @@ bun run update
 
 TomoriBotへのコントリビュートは大歓迎です！プルリクエストを作成する前に、以下のリソースをご確認ください：
 
-- **[コントリビュートドキュメント](https://docs.tomoribot.app/ja/contributing/)**: スラッシュコマンド、ツール、イベントハンドラ、新しいAIプロバイダー、およびロケールの追加に関する包括的なステップバイステップガイド。
+- **[コントリビュートドキュメント](https://docs.tomoribot.app/en/contributing/)**: スラッシュコマンド、ツール、イベントハンドラ、新しいAIプロバイダー、およびロケールの追加に関する包括的なステップバイステップガイド。
 - **[コントリビュートガイドライン](CONTRIBUTING.md)**: ブランチ運用、品質ゲートのチェック、そして事前相談なしで歓迎されるコントリビュートの範囲がまとめられたリポジトリルール。
 
 <!-- LEGAL -->
@@ -300,7 +307,7 @@ TomoriBotへのコントリビュートは大歓迎です！プルリクエス�
 <!-- CONTACT -->
 ## 連絡先とリンク
 
-**公式ウェブサイト**: [https://docs.tomoribot.app](https://docs.tomoribot.app/ja/)
+**公式ウェブサイト**: [https://docs.tomoribot.app](https://docs.tomoribot.app/en/)
 
 **プロジェクトリンク**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

@@ -1,12 +1,5 @@
 export default {
   capabilities: {
-    description: `Manage tool use and specific features.`,
-    toggle: {
-      description: `Toggle whether I can use tools and function calls.`,
-      success_title: `Tool Use Updated`,
-      enabled_success: `Tool use is now **enabled**. I can call tools and functions again.`,
-      disabled_success: `Tool use is now **disabled**. I will not use any tools or functions regardless of model capability.`,
-    },
     manage: {
       description: `Configure which specific tools I can use on this server.`,
       selfteaching_option: `Self-Teaching`,
@@ -21,8 +14,6 @@ export default {
       timeawareness_option: `Better Time Awareness`,
       imagegen_option: `Image Generation`,
       videogen_option: `Video Generation`,
-      hiderespondembed_option: `Hide Response Embeds`,
-      hideimpersonationembeds_option: `Hide Impersonation Embeds`,
       voicemessage_option: `Voice Messages`,
       shorttermmemory_option: `Automatic STM Summarization`,
       selfteaching_desc: `Learn from server conversations`,
@@ -37,18 +28,8 @@ export default {
       timeawareness_desc: `Notice reunions and calendar-day gaps in recent messages`,
       imagegen_desc: `Generate images on request`,
       videogen_desc: `Generate short videos on request`,
-      hiderespondembed_desc: `Hide /respond success embed`,
-      hideimpersonationembeds_desc: `Hide persona impersonation notices`,
       voicemessage_desc: `Send ElevenLabs TTS voice messages`,
       shorttermmemory_desc: `Bot's auto-memory + nudges. When off, manual /persona stm edit & crude msgs still show`,
-      select_placeholder: `Select capabilities to enable...`,
-      checkbox_label_continued: `Capabilities (Continued)`,
-      select_embed_title: `Configure Capabilities`,
-      select_embed_description: `Select which capabilities to enable. Checked = active, unchecked = disabled.`,
-      no_changes_title: `No Changes Made`,
-      no_changes_description: `All capabilities are already at the selected values.`,
-      success_title: `Capabilities Updated`,
-      success_description: `Updated **{count}** capability(s).`,
     },
   },
 };

@@ -27,8 +27,6 @@ export default {
       model_incompatible_description: `The current model does not support structured output, which is required for history extraction. Please switch to a compatible model using \`/config\` > Models > Switch Models.`,
       no_embedding_model_title: `No Embedding Model Set`,
       no_embedding_model_description: `An embedding model is not configured. Please set one using \`/config\` > Models > Switch Models.`,
-      no_api_key_title: `No API Key Set`,
-      no_api_key_description: `Saved embedding provider credentials are required to extract and embed history. Please use \`/providers\`.`,
       invalid_start_id_title: `Invalid Start Message ID`,
       invalid_start_id_description: `Could not find a message with ID \`{start_message_id}\` in this channel. Verify the ID is correct and from this channel (right-click a message → Copy Message ID).`,
       invalid_end_id_title: `Invalid End Message ID`,
@@ -53,7 +51,6 @@ export default {
       server_chunk_limit_description: `This scope ({scope}) would exceed the chunk limit of {max_chunks}. Remove some documents first.`,
       progress_fetching: `Fetching channel messages...`,
       progress_extracting: `Extracting knowledge from {message_count} messages (window {current}/{total})...`,
-      progress_embedding: `Generating embeddings for {fact_count} facts...`,
       success_title: `History Extracted`,
       success_description: `Extracted **{fact_count}** facts from **{message_count}** messages and stored as **{name}** ({chunk_count} chunks) for {scope}.`,
       success_automatic_description: `Extracted **{fact_count}** facts from **{message_count}** messages.

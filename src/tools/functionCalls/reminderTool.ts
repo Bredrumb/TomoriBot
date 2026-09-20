@@ -6,7 +6,7 @@
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
-import { formatTimeRemaining } from "@/utils/text/processors/formatters";
+import { formatLocalizedDuration, formatTimeRemaining } from "@/utils/text/processors/formatters";
 import {
   parseTimeWithOffset,
   formatUTCOffset,
@@ -518,7 +518,9 @@ export class ReminderTool extends BaseTool {
         );
 
         const timeRemainingMs = finalReminderTime.getTime() - Date.now();
+        // The tool result feeds model context, which stays English; only the embed follows the locale.
         const timeRemainingStr = formatTimeRemaining(timeRemainingMs);
+        const localizedTimeRemaining = formatLocalizedDuration(timeRemainingMs, context.locale);
 
         // Format the reminder time in the server's configured timezone
         const timeFormatOptions: Intl.DateTimeFormatOptions = {
@@ -528,7 +530,12 @@ export class ReminderTool extends BaseTool {
           hour: "2-digit",
           minute: "2-digit",
         };
-        const formattedReminderTime = formatTimeWithOffset(finalReminderTime, timezoneOffset, timeFormatOptions);
+        const formattedReminderTime = formatTimeWithOffset(
+          finalReminderTime,
+          timezoneOffset,
+          timeFormatOptions,
+          context.locale,
+        );
 
         const useRecurringTaskEmbed = isSelfReminder && repetitionIntervalHours !== null;
         const useOneTimeTaskEmbed = isSelfReminder && repetitionIntervalHours === null;
@@ -541,7 +548,12 @@ export class ReminderTool extends BaseTool {
             ? localizer(context.locale, "reminders.dual_time_display", {
                 server_time: formattedReminderTime,
                 server_offset: formatUTCOffset(timezoneOffset),
-                user_time: formatTimeWithOffset(finalReminderTime, targetPersonalOffset, timeFormatOptions),
+                user_time: formatTimeWithOffset(
+                  finalReminderTime,
+                  targetPersonalOffset,
+                  timeFormatOptions,
+                  context.locale,
+                ),
                 user_offset: formatUTCOffset(targetPersonalOffset),
                 user_nickname: actualNicknameInDB,
               })
@@ -588,11 +600,11 @@ export class ReminderTool extends BaseTool {
                   : "reminders.reminder_set_footer",
             footerVars: repetitionIntervalHours
               ? {
-                  time_remaining: timeRemainingStr,
+                  time_remaining: localizedTimeRemaining,
                   repetition_interval_hours: repetitionIntervalHours,
                 }
               : {
-                  time_remaining: timeRemainingStr,
+                  time_remaining: localizedTimeRemaining,
                 },
           },
           reminderPurpose,

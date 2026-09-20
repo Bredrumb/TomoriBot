@@ -156,11 +156,11 @@ over a per-file budget (default 1 MiB, set via `MEDIA_SIZE_LIMIT_BYTES`). It sca
 Discord) and `assets/img/**`.
 
 `bun run compress-media` fixes offenders automatically: it re-encodes losslessly
-(max deflate, metadata stripped — color stays Δ0) and only downscales a file when
+(max deflate, metadata stripped, so color stays Δ0) and only downscales a file when
 lossless alone cannot reach the budget, capping the long edge at `MEDIA_MAX_DIMENSION`
 (default 768px). Use `--dry-run` to preview, or pass a path substring to target one file.
 Note: these PNGs are already near-optimally compressed, so lossless rarely fits 1 MiB on
-its own — downscaling (invisible at Discord's <=128px avatar render size) is the trade.
+its own: downscaling (invisible at Discord's <=128px avatar render size) is the trade.
 
 `compress-media` also normalizes release cards under `.github/release/**` (not gate-scoped)
 to WebP q`RELEASE_CARD_WEBP_QUALITY` (default 90) at full resolution, rewriting sibling

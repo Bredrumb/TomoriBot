@@ -16,7 +16,7 @@ This page is the user's side of the bridge. For the appservice internals, see th
 3. Run `/matrix link` in the Discord channel you want to bridge, and paste the room
    ID.
 
-After the bot accepts the invite, it posts a short reminder in the Matrix room — but you
+After the bot accepts the invite, it posts a short reminder in the Matrix room, but you
 still finish the link from Discord with `/matrix link`.
 
 ### Finding the Room ID
@@ -43,7 +43,7 @@ In most Matrix clients: **Room Settings → Advanced → Internal Room ID**. It 
 
 - If the bot doesn't auto-join, invite the Matrix bot account manually and rerun
   `/matrix link`.
-- **Matrix encryption can't be disabled later** — an encrypted room must be replaced with a
+- **Matrix encryption can't be disabled later**: an encrypted room must be replaced with a
   fresh unencrypted one.
 - If a limitation isn't listed above, assume it should work and report bugs in the support
   server (`/support discord`).

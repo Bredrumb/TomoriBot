@@ -7,7 +7,7 @@ Application code (commands, events, tools, context builders, caches) must call a
 method instead of writing `sql\`…\`` directly. This keeps queries, their validation, and their
 cache invalidation in one place, and keeps the rest of the codebase decoupled from the schema.
 
-This rule is enforced automatically — see [Enforcement](#enforcement) below.
+This rule is enforced automatically: see [Enforcement](#enforcement) below.
 
 ## What counts as a violation
 
@@ -35,7 +35,7 @@ It deliberately does **not** flag:
 - SQL written inside `//` line comments or `/* … */` block comments
 - Plain strings that merely contain SQL text (only tagged templates count)
 - Identifiers that merely end in `sql`/`tx` (e.g. `mysql\``, `someSql\``)
-- `sql.transaction(…)` / `sql.begin(…)` orchestration itself (only the query literals inside count) —
+- `sql.transaction(…)` / `sql.begin(…)` orchestration itself (only the query literals inside count),
   so a util may open a transaction and hand `tx` to a repository method without tripping the gate
 
 ## Moving a query into a repository
@@ -45,7 +45,7 @@ It deliberately does **not** flag:
    are singletons exported from `src/utils/db/repositories/index.ts`.
 
 2. Add a method that holds the query. Reads return typed rows; writes own their cache invalidation
-   (invalidate **after** a successful write, in the same code path — never before, never on failure):
+   (invalidate **after** a successful write, in the same code path: never before, never on failure):
 
    ```ts
    // src/utils/db/repositories/UserRepository.ts
@@ -64,18 +64,18 @@ It deliberately does **not** flag:
    const user = await userRepository.setSomething(userId, value);
    ```
 
-4. Before inventing a new method, check whether one already exists — duplicated reference-count and
+4. Before inventing a new method, check whether one already exists: duplicated reference-count and
    lookup queries are a common source of accidental violations.
 
 ## Exemptions
 
 Two allow-lists in `scripts/checks/lib/sqlAudit.ts` let SQL live outside `repositories/`:
 
-- **`IGNORE_PATHS`** — paths skipped entirely. These are the legitimate homes of raw SQL plumbing:
+- **`IGNORE_PATHS`**: paths skipped entirely. These are the legitimate homes of raw SQL plumbing:
   the repository layer itself, the DB client, migrations, the migration runner, DB init, and
   `src/types/` (which may embed SQL only in doc comments / string types). You should rarely touch this.
 
-- **`EXEMPT_PATHS`** — individual files allowed to keep raw SQL, each paired with a justification.
+- **`EXEMPT_PATHS`**: individual files allowed to keep raw SQL, each paired with a justification.
   Hits on these are reported as `EXEMPTIONS` rather than violations. Current entries are observability/
   status helpers, security primitives (crypto/key rotation), the logger, and the RAG service facade.
 
@@ -95,10 +95,10 @@ export const EXEMPT_PATHS = new Map<string, string>([
 
 The detector is shared by the CLI gate and a unit test, so they can never disagree:
 
-- **`scripts/checks/lib/sqlAudit.ts`** — the scanner (single source of truth).
-- **`bun run audit-sql`** — prints `WRITES` / `READS` / `EXEMPTIONS` and **exits non-zero** when any
+- **`scripts/checks/lib/sqlAudit.ts`**: the scanner (single source of truth).
+- **`bun run audit-sql`**: prints `WRITES` / `READS` / `EXEMPTIONS` and **exits non-zero** when any
   violation exists.
-- **`tests/unit/db/rawSqlBoundary.test.ts`** — a unit test asserting zero violations on the real tree,
+- **`tests/unit/db/rawSqlBoundary.test.ts`**: a unit test asserting zero violations on the real tree,
   plus synthetic tests proving the detector has no false positives (comments/strings) or false
   negatives (real literals).
 
@@ -116,7 +116,7 @@ bun run vl          # full validation suite (includes both of the above)
 
 ## Related Docs
 
-- [`docs/en/architecture/subsystems/database-schema.md`](../subsystems/database-schema) — schema reference and column index
-- [`docs/en/architecture/subsystems/caching.md`](../subsystems/caching) — cache map and invalidation APIs
-- [`contributor-guides/adding-db-column.md`](/contributing/adding-db-column/) — adding a column and wiring repository usage
-- [`contributor-guides/testing-db-changes.md`](/contributing/testing-db-changes/) — running the DB test harness
+- [`docs/en/architecture/subsystems/database-schema.md`](../subsystems/database-schema): schema reference and column index
+- [`docs/en/architecture/subsystems/caching.md`](../subsystems/caching): cache map and invalidation APIs
+- [`contributor-guides/adding-db-column.md`](/contributing/adding-db-column/): adding a column and wiring repository usage
+- [`contributor-guides/testing-db-changes.md`](/contributing/testing-db-changes/): running the DB test harness

@@ -37,7 +37,7 @@ import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { loadSavedProvidersForCapability } from "@/utils/provider/savedProviderConfig";
-import { localizer } from "@/utils/text/localizer";
+import { localizer, resolveDescription } from "@/utils/text/localizer";
 
 export type ConfigEndpointModelCapability = "tts" | "stt";
 export type ConfigEndpointServiceCapability = Extract<CustomEndpointCapability, "speech" | "transcription">;
@@ -386,7 +386,11 @@ export async function loadConfigFallbacksView(
  * A custom label resolves through connection-scoped endpoint rows rather than the model catalog, so
  * each saved fallback keeps pointing at the exact endpoint it was chosen from.
  */
-export async function loadConfigFallbackOptions(state: TomoriState, provider: string): Promise<ConfigFallbackOption[]> {
+export async function loadConfigFallbackOptions(
+  state: TomoriState,
+  provider: string,
+  locale = "en-US",
+): Promise<ConfigFallbackOption[]> {
   if (isCustomProvider(provider)) {
     const parsed = parseCustomProvider(provider);
     if (!parsed) return [];
@@ -412,7 +416,7 @@ export async function loadConfigFallbackOptions(state: TomoriState, provider: st
     .map((model) => ({
       value: model.llm_codename,
       label: model.llm_codename,
-      description: model.llm_description ?? undefined,
+      description: resolveDescription(model.descriptions, locale) ?? undefined,
     }));
 }
 

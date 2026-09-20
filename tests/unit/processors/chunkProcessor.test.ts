@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
+import { HumanizerDegree } from "@/types/db/schema";
+import { chunkMessage, createSentenceSplitRegex } from "@/utils/text/processors/chunkProcessor";
 
 // The regex is a negative-lookbehind split: it matches sentence-ending periods
 // that do NOT follow abbreviations, numbers, or acronyms. Tests verify both
@@ -126,5 +127,36 @@ describe("createSentenceSplitRegex", () => {
       const parts = "for e.g. this case".split(regex).filter((s) => s !== undefined);
       expect(parts.join("")).toBe("for e.g. this case");
     });
+  });
+
+  describe("full-width periods and other target-language abbreviations", () => {
+    it("splits at full-width and halfwidth ideographic periods", () => {
+      expect("你好．世界".split(getRegex()).filter((s) => s?.trim())).toEqual(["你好", "世界"]);
+      expect("ｺﾝﾆﾁﾊ｡ｾｶｲ".split(getRegex()).filter((s) => s?.trim())).toEqual(["ｺﾝﾆﾁﾊ", "ｾｶｲ"]);
+    });
+
+    it("does not split after Spanish, Portuguese, French, or Russian abbreviations", () => {
+      for (const text of ["La Sra. García llegó", "Chegou a Dra. Lima", "Bonjour Mme. Dupont", "Это т.е. пример"]) {
+        expect(text.split(getRegex()).join("")).toBe(text);
+      }
+    });
+  });
+});
+
+describe("chunkMessage hard breaks", () => {
+  it("breaks unspaced text after a full-width mark before resorting to a hard cut", () => {
+    const text = `${"字".repeat(18)}、${"字".repeat(11)}`;
+    const chunks = chunkMessage(text, HumanizerDegree.NONE, 20);
+    expect(chunks[0]).toBe(`${"字".repeat(18)}、`);
+    expect(chunks.join("")).toBe(text);
+  });
+
+  it("never cuts between the two halves of a surrogate pair", () => {
+    const text = `a${"😀".repeat(15)}`;
+    const chunks = chunkMessage(text, HumanizerDegree.NONE, 20);
+    expect(chunks.join("")).toBe(text);
+    for (const chunk of chunks) {
+      expect(chunk).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+    }
   });
 });

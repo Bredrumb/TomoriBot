@@ -196,7 +196,7 @@ async function main(): Promise<void> {
   log.info(`Loaded ${slices.length} leaf slice files`);
 
   // For each unused key, find the matching slice(s) and delete the sub-path.
-  //    A key like "commands.tool.visualize.description" maps to sub-path "tool.visualize.description"
+  //    A key like "commands.tool.prompt.snapshot.description" maps to sub-path "tool.prompt.snapshot.description"
   //    in the slice whose keyPrefix is "commands".
   //    A key like "general.defaults.bot_name" maps to sub-path "general.defaults.bot_name"
   //    in the top-level slice with keyPrefix "".

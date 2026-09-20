@@ -43,7 +43,7 @@ import { userNamingRepository } from "@/utils/db/repositories/UserNamingReposito
 import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
-import { getBaseTriggerWords } from "@/utils/text/localizer";
+import { getAllBaseTriggerWords, getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
@@ -3146,10 +3146,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
    * @param personas - Assembled persona states for one server.
    */
   private applyTriggerWordOwnership(personas: TomoriState[]): void {
-    // Seed the claimed set with base trigger words for both shipped locales so
-    //    the main persona implicitly owns the bot's name in any language.
+    // Seeding from every authored locale lets the main persona own the bot's name in any language.
     const claimedTriggerKeys = new Set<string>();
-    for (const baseWord of [...getBaseTriggerWords("en-US"), ...getBaseTriggerWords("ja")]) {
+    for (const baseWord of getAllBaseTriggerWords()) {
       const normalizedBaseWord = normalizeTriggerWord(baseWord);
       if (normalizedBaseWord.length > 0) {
         claimedTriggerKeys.add(normalizedBaseWord);

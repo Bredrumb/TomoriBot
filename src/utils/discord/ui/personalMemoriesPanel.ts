@@ -60,13 +60,13 @@ function renderMemoryBlock(locale: string, content: string, availableBudget: num
     return ["```markdown", initialPreview.text, "```"].join("\n");
   }
   const footerKey = textPreviewFooterKey(initialPreview);
-  const footerVars = textPreviewFooterVars(initialPreview);
+  const footerVars = textPreviewFooterVars(initialPreview, locale);
   const initialFooter = footerKey ? `\n-# ${localizer(locale, footerKey, footerVars)}` : "";
   const footerReserve = getDiscordTextLength(initialFooter);
   const refinedBudget = Math.max(0, availableBudget - fenceOverhead - footerReserve);
   const preview = buildTextPreview(content, refinedBudget);
   const finalFooterKey = textPreviewFooterKey(preview);
-  const finalFooterVars = textPreviewFooterVars(preview);
+  const finalFooterVars = textPreviewFooterVars(preview, locale);
   const finalFooter = finalFooterKey ? `\n-# ${localizer(locale, finalFooterKey, finalFooterVars)}` : "";
   return ["```markdown", preview.text, "```"].join("\n") + finalFooter;
 }

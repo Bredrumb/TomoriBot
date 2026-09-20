@@ -2,7 +2,7 @@
 title: "Multiple Personas"
 # Keyword-rich <title> targeting "AI companion Discord" queries; replaces
 # Starlight's default "{title} | TomoriBot" for this page only. H1 and sidebar
-# keep the plain title. The homepage title bets on "AI agent" + "roleplay" —
+# keep the plain title. The homepage title bets on "AI agent" + "roleplay";
 # this page carries the "companion" keyword instead.
 head:
   - tag: title
@@ -16,20 +16,20 @@ sidebar:
 
 TomoriBot's personality lives in a **persona**: her name, avatar, traits, speaking style, and
 behavior. You can run several personas at once, each a distinct character with its own
-triggers and webhook avatar. This page is about *how she behaves* — for *what she knows*
+triggers and webhook avatar. This page is about *how she behaves*; for *what she knows*
 (facts and memories), see [Memory](/features/knowledge/memory/).
 
 ## Creating a Persona
 
-- `/persona create` — build a custom personality from scratch.
-- `/persona generate` — have the AI generate a personality from a description and an image.
+- `/persona create`: build a custom personality from scratch.
+- `/persona generate`: have the AI generate a personality from a description and an image.
   Requires a provider that supports structured output. You can also upload an existing
   TomoriBot preset or a SillyTavern card here to transform an existing character (see
   [SillyTavern Support](/features/integrations/sillytavern-support/)).
-- `/persona default` — switch to one of the built-in default personalities as a foundation.
-- `/persona export` / `/persona import` — share or back up a persona as a file. Import
+- `/persona default`: switch to one of the built-in default personalities as a foundation.
+- `/persona export` / `/persona import`: share or back up a persona as a file. Import
   supports bringing a persona in as an **alter** with its own triggers and webhook avatar.
-- `/persona remove` — remove an alter persona.
+- `/persona remove`: remove an alter persona.
 
 A good starting workflow: pick a default or generate one, then refine it with attributes
 and sample dialogues below.
@@ -38,7 +38,7 @@ and sample dialogues below.
 
 Alter personas let multiple characters coexist in one server:
 
-- Each alter has its own personality, trigger words, and **webhook avatar** — so different
+- Each alter has its own personality, trigger words, and **webhook avatar**, so different
   characters appear with different names and pictures in the same channel.
 - Multiple alters can respond to a single message, up to the `/config` > Engine > Trigger
   limit.
@@ -55,18 +55,20 @@ architecture reference on [multi-persona behavior](/architecture/subsystems/mult
 Two commands do most of the work of teaching her how to talk and act:
 
 ### Attributes
+<!-- anchor: attributes -->
 
 `/config` > Persona > Identity & Personality adds personality traits or physical characteristics, for example
 `friendly`, `red hair`, or `ends sentences with *Nya~*`. Remove them with
 `/config` > Persona > Identity & Personality.
 
 ### Sample Dialogues
+<!-- anchor: sample-dialogues -->
 
 `/config` > Persona > Identity & Personality teaches her *how she speaks* by example. Use the `{user}` and
 `{bot}` placeholders so dialogues work for everyone (and when you share the persona):
 
-- `{user}` — replaced with the actual user's name/nickname
-- `{bot}` — replaced with her current name
+- `{user}`: replaced with the actual user's name/nickname
+- `{bot}`: replaced with her current name
 
 ```text
 {user}: What's your favorite hobby?
@@ -87,12 +89,13 @@ Remove examples with `/config` > Persona > Identity & Personality.
 - `/config` > Persona > Identity & Personality: set her profile picture for this server.
 
 You can also set a custom system prompt with `/config` > Engine > General to further shape
-behavior — see [Behavior Tweaking](/features/chatting-personality/behavior-tweaking/).
+behavior; see [Behavior Tweaking](/features/chatting-personality/behavior-tweaking/).
 
 ## Sprites (Emotion Avatars)
+<!-- anchor: sprites-emotion-avatars -->
 
 Sprites are alternate avatar images a persona can switch to mid-conversation to express an
-emotion or situation — think of them as her facial expressions. Each sprite is a labeled
+emotion or situation (think of them as her facial expressions). Each sprite is a labeled
 image (for example `happy`, `mad`, `embarrassed`) that she displays in place of her normal
 avatar when it fits the moment.
 
@@ -103,14 +106,14 @@ delivered with the matching sprite image. If no sprite fits, she replies normall
 Manage a persona's sprites on `/config` > Persona > Sprites (adding and removing
 require the **Manage Server** permission):
 
-- `/config` > Persona > Sprites — add or replace a sprite: pick the persona, give it a **label**,
+- `/config` > Persona > Sprites: add or replace a sprite: pick the persona, give it a **label**,
   upload the **image** (PNG, JPG, or GIF), and optionally add **usage instructions** telling
   her when to use it. Reusing a label replaces that sprite. Each persona has a maximum sprite
   count.
-- `/config` > Persona > Sprites — change an existing sprite's name, image, instructions, or
+- `/config` > Persona > Sprites: change an existing sprite's name, image, instructions, or
   identity toggle.
-- `/config` > Persona > Sprites — delete sprites from a persona.
-- Export and import on `/config` > Persona > Sprites — back up or share a persona's whole
+- `/config` > Persona > Sprites: delete sprites from a persona.
+- Export and import on `/config` > Persona > Sprites: back up or share a persona's whole
   sprite set as a file.
 
 The **identity** toggle decorates the message name as `Label (Persona)` in Discord, which is
@@ -123,7 +126,7 @@ default sprites back.
 ## Per-Channel Persona Picks
 
 Want to control which persona answers *you* in a specific channel without changing the
-server-wide setup? That's Personal Spotlight — see
+server-wide setup? That's Personal Spotlight; see
 [Personalization](/features/knowledge/personalization/#personal-spotlight).
 
 ## Persona-specific ways of addressing people

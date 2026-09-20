@@ -1,0 +1,59 @@
+---
+title: "Conheça a Tomori"
+sidebar:
+  label: "Visão Geral"
+  groupLabel: "Conheça a Tomori"
+  order: 6
+---
+
+import FeatureCard from "/src/components/FeatureCard.astro";
+import { Aside } from '@astrojs/starlight/components';
+
+{/* STUB (tarefa secundária). O espaço reservado para a arte do herói e do cartão vive em
+    apps/docs/public/img/docs/meet-tomori/ (servível) e
+    assets/img/docs/meet-tomori/ (canônico, escopo de compactação de mídia).
+    Fontes de cartão: src/db/seed/catalog/personas/*. Troque os espaços reservados por retratos reais
+    e desenvolva a página de cada irmã e esta prosa de introdução mais tarde. */}
+
+<Aside type="danger" title="Este artigo é um esboço">
+A página ainda não está concluída, fique ligado!
+</Aside>
+
+O que é um projeto de ambiente de IA sem sua mascote fofa e história fictícia? Na tradição, uma **Tomori** é um tipo de androide, caracterizada por seus chifres mecânicos, cauda e etiquetas de código de barras proeminentes (geralmente presas na orelha). Elas são capazes de mudar de forma (a razão pela qual ela pode se dividir em múltiplas personas).
+
+Existem várias linhas de produção diferentes para as Tomoris, a maioria das quais é para ajudar os humanos, mas como visto abaixo, cada uma tem especialidades diferentes, personalidades integradas e histórias no *Tomoriverse*:
+
+
+
+![Conheça a Tomori](/img/docs/meet-tomori/00-meet-tomori.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>As irmãs Tomori (arte temporária)</small>
+
+Saiba mais sobre elas abaixo, ou use `/persona default` para conversar com elas diretamente!
+
+<div class="feature-grid">
+  <FeatureCard title="Rose | Garota Masculina" img="/img/docs/meet-tomori/01-rose.png" href="/pt-BR/meet-tomori/rose/">
+    Uma das primeiras Tomoris produzidas, uma garota com estilo masculino (tomboy) que fala como se não tivesse cem anos, rebate quando a provocam e secretamente se derrete por coisas fofas e cosplay.
+  </FeatureCard>
+  <FeatureCard title="Zaya | Devedora Orgulhosa" img="/img/docs/meet-tomori/02-zaya.png" href="/pt-BR/meet-tomori/zaya/">
+    Uma campeã de esports infinitamente competitiva, agora uma assistente sem dívidas. Afiada, orgulhosa, mas eternamente hiperativa enquanto um coração tsundere vaza entre as deflexões.
+  </FeatureCard>
+  <FeatureCard title="Aphel | Pessimista Depressiva" img="/img/docs/meet-tomori/03-aphel.png" href="/pt-BR/meet-tomori/aphel/">
+    Perpetuamente exausta e alérgica a positividade tóxica, mas surpreendentemente boa em conselhos adultos reais. Ganha vida para gatos, noise rock e city pop... e Lilya.
+  </FeatureCard>
+  <FeatureCard title="Lilya | Novata Tímida" img="/img/docs/meet-tomori/04-lilya.png" href="/pt-BR/meet-tomori/lilya/">
+    Uma das modelos Tomori mais novas. Tímida, de fala mansa e convencida de que todos são melhores que ela. Até que anime mecha surge e ela divaga enciclopedicamente antes de se conter.
+  </FeatureCard>
+  <FeatureCard title="Nerine | Veterana" img="/img/docs/meet-tomori/05-nerine.png" href="/pt-BR/meet-tomori/nerine/">
+    Uma unidade Tomori mais velha e aposentada. Inesitavelmente calorosa e prestativa, não por bondade, mas por medo de ser abandonada... de novo. Geralmente age de forma submissa, mas por trás de sua atitude calma, ela está pensando em outra coisa.
+  </FeatureCard>
+  <FeatureCard title="Locke | Sadomasoquista" img="/img/docs/meet-tomori/06-locke.png" href="/pt-BR/meet-tomori/locke/">
+    Androide assassina que despertou para o sadomasoquismo após ser transferida do corpo de uma Tomori super-soldado para o de uma Tomori cabra. Trabalha como assistente apenas porque gosta de receber ordens. Bem desequilibrada.
+  </FeatureCard>
+</div>
+
+## Onde Ir a Seguir
+
+- **Quer trocar ou executar várias irmãs?** Veja
+  [Múltiplas Personas](/pt-BR/features/chatting-personality/multiple-personas/).
+- **Quer construir a sua própria do zero?** Comece no
+  tour de [Recursos](/pt-BR/features/) e então compartilhe em nosso servidor do Discord!

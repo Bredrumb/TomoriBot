@@ -2,7 +2,7 @@
 title: "02.1: Prompt Items"
 ---
 
-The top of the context list — the LLM's identity framing.
+The top of the context list: the LLM's identity framing.
 
 **File:** `src/utils/text/context/templates.ts:94-197`
 
@@ -18,12 +18,12 @@ data belongs to stage 06 participants, not this prompt-item stage.
 ### Per-channel prompt override (`/config` > Channels > Channel Overrides)
 
 When `channelPromptOverride` is set for the active channel, it modifies only the
-system-prompt slot — persona prompt and attributes are never affected:
+system-prompt slot: persona prompt and attributes are never affected:
 
-- **`append`** — the server system prompt (or `DEFAULT_SYSTEM_PROMPT`) stays in
+- **`append`**: the server system prompt (or `DEFAULT_SYSTEM_PROMPT`) stays in
   the `SYSTEM_HUMANIZER_RULES` block, and the channel prompt is emitted as a
   distinct `SYSTEM_CHANNEL_PROMPT` block immediately after it.
-- **`replace`** — the channel prompt's text takes over the `SYSTEM_HUMANIZER_RULES`
+- **`replace`**: the channel prompt's text takes over the `SYSTEM_HUMANIZER_RULES`
   block content (no separate channel block is emitted).
 
 The override is resolved at each call site (`contextPipeline.ts`, `cost.ts`,
@@ -34,20 +34,20 @@ stays directly after the system prompt.
 
 ## Input
 
-Subset of `BuildContextParams` plus carried state — see signature in
+Subset of `BuildContextParams` plus carried state: see signature in
 `templates.ts:94-108`. Notable fields:
 
 - `botName`, `tomoriAttributes`, `personaPrompt`
 - `tomoriConfig.system_prompt`, `tomoriConfig.personal_memories_enabled`
-- `channelPromptOverride` — `{ prompt, mode }` for the active channel, or null
+- `channelPromptOverride`: `{ prompt, mode }` for the active channel, or null
 - `isUserImpersonation`, `impersonatedIdentityName`, `impersonatedUserPrompt`
-- `suppressDefaultSystemPrompt` — set by the routing wrapper when a preset
+- `suppressDefaultSystemPrompt`: set by the routing wrapper when a preset
   is active and `system_prompt` is empty (preset fully controls the prompt)
 - `toolPromptMacroResolver`, `convertMentions` (shared helpers)
 
 ## Output
 
-`Promise<StructuredContextItem[]>` — up to four items:
+`Promise<StructuredContextItem[]>`: up to four items:
 
 | Condition | Item | Metadata tag |
 |---|---|---|
@@ -62,11 +62,11 @@ All emitted items are `role: "system"`.
 
 ## Side effects
 
-- **Conditional and tool-macro expansion** — every emitted text passes through
+- **Conditional and tool-macro expansion**: every emitted text passes through
   `toolPromptMacroResolver.expand(...)`. It first removes inactive
   `{{if capability:...}}` / `{{if tool:...}}` branches, then resolves
   `{short_term_memory_tool}` and related names. Text that becomes blank emits no item.
-- **Mention conversion** — every emitted text passes through
+- **Mention conversion**: every emitted text passes through
   `convertMentions(...)` for `<@id>` / `<#id>` / `{bot}` / `{user}`
   resolution. The `triggererName` argument is hardcoded to `"User"` here
   (the prompt items are persona-facing, not user-facing).
@@ -78,18 +78,18 @@ After this stage runs:
 - For non-impersonation turns with a non-empty `system_prompt` or attributes,
   at least one item is emitted.
 - For impersonation turns, *only* the impersonated-user prompt is emitted
-  (no persona prompt, no attributes, no humanizer fallback) — keeping the
+  (no persona prompt, no attributes, no humanizer fallback), keeping the
   prompt strictly about the impersonated identity.
 - When `suppressDefaultSystemPrompt` is true and `system_prompt` is empty,
-  no humanizer item is emitted — the preset's reassembly is expected to
+  no humanizer item is emitted: the preset's reassembly is expected to
   provide the system framing.
 
 ## Extension points
 
 | Surface | Plugin-relevance |
 |---|---|
-| `DEFAULT_SYSTEM_PROMPT` constant | Internal — exported from `templates.ts` for callers that need to know what the fallback is, but not user-configurable directly. The `system_prompt` config column is the user-facing surface. |
-| Tag emission (`SYSTEM_HUMANIZER_RULES`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY`) | The tag scheme is the seam — preset reassembly relies on these tags to slot items into preset blocks. A plugin adding a new prompt-item kind would add a new `ContextItemTag` and document its slot ordering. |
+| `DEFAULT_SYSTEM_PROMPT` constant | Internal exported from `templates.ts` for callers that need to know what the fallback is, but not user-configurable directly. The `system_prompt` config column is the user-facing surface. |
+| Tag emission (`SYSTEM_HUMANIZER_RULES`, `SYSTEM_PERSONA_PROMPT`, `SYSTEM_PERSONALITY`) | The tag scheme is the seam: preset reassembly relies on these tags to slot items into preset blocks. A plugin adding a new prompt-item kind would add a new `ContextItemTag` and document its slot ordering. |
 | Impersonation prompt handling | Tightly coupled to chat pipeline's impersonation flow. A plugin adding a new "alternate identity" mode would extend here + chat pipeline stage 02. |
 
 ## Configuration

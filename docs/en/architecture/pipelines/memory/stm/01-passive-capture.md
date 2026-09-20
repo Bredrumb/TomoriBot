@@ -6,8 +6,8 @@ Captures the completed conversation turn into the in-process short-term
 memory cache immediately after generation finishes.
 
 **Files:**
-- `writeShortTermMemory` (module-private) — `src/utils/chat/postTurnEffects.ts:129-181`
-- `storeShortTermMemory` — `src/utils/cache/shortTermMemoryCache.ts:317-378`
+- `writeShortTermMemory` (module-private): `src/utils/chat/postTurnEffects.ts:129-181`
+- `storeShortTermMemory`: `src/utils/cache/shortTermMemoryCache.ts:317-378`
 
 ## Mission
 
@@ -25,38 +25,38 @@ personas with distinct IDs each maintain their own conversational continuity.
 
 `storeShortTermMemory` writes two entries per call:
 
-1. **User-scoped key** (`shortterm:user:userId:channelId[:personaId]`) —
+1. **User-scoped key** (`shortterm:user:userId:channelId[:personaId]`):
    enables the STM reader to scope retrieval to a specific user's history
    across all channels.
-2. **Server-scoped key** (`shortterm:server:serverId:channelId[:personaId]`)
-   — enables the STM reader to retrieve server-shared history visible to all
+2. **Server-scoped key** (`shortterm:server:serverId:channelId[:personaId]`):
+   enables the STM reader to retrieve server-shared history visible to all
    users in the same channel. Skipped for DM sessions (`serverId === "DM"`).
 
 Any existing `summary` field from a prior `update_short_term_memory` call is
-preserved — `storeShortTermMemory` carries forward `existing?.summary` when
+preserved: `storeShortTermMemory` carries forward `existing?.summary` when
 constructing the new entry.
 
 ## Input
 
-- `context: ChatTurnContext` — provides `simplifiedMessages`, `userDiscId`,
+- `context: ChatTurnContext`: provides `simplifiedMessages`, `userDiscId`,
   `channel.id`, `serverDiscId`, `serverName`, `channelName`, `isDMChannel`,
   and `turn.requestSnapshot.triggererPrivacyLevel`.
-- `result: GenerationTurnResult` — provides `personaResponses[]` (each entry
+- `result: GenerationTurnResult`: provides `personaResponses[]` (each entry
   has `text`, `personaId`, `personaLineageId`, `personaName`).
 
 ## Output
 
-`Promise<void>` — no return value. The cache is updated as a side effect.
+`Promise<void>`: no return value. The cache is updated as a side effect.
 
 ## Side effects
 
-- **STM cache entries written** — two `Map` entries (user + server) per unique
+- **STM cache entries written**: two `Map` entries (user + server) per unique
   persona ID in `result.personaResponses`. In DM sessions, one entry only
   (user-scoped).
-- **Durable scope rows ensured** — user and server identity rows are created if
+- **Durable scope rows ensured**: user and server identity rows are created if
   absent so later summary/category writes have durable targets. Crude messages
   themselves remain cache-only.
-- **`stats.stores`** — incremented once per `storeMemoryEntry` call (internal
+- **`stats.stores`**: incremented once per `storeMemoryEntry` call (internal
   to the cache module).
 
 ## Invariants
@@ -85,8 +85,8 @@ After this stage runs for a non-empty, non-stop generation result:
 
 | Surface | Plugin-relevance |
 |---|---|
-| `storeShortTermMemory()` | **A plugin extending channel-memory tagging or cross-server STM scoping would extend here.** The function signature accepts `personaId` and `personaLineageId` for scoping — new scope dimensions (e.g., thread lineage) would be added as additional parameters. → plugin plan candidate |
-| TTL constants (`SHORT_TERM_MEMORY_TTL_HOURS`, `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL`) | Env-var configurable. Not a plugin seam — operational tuning only. |
+| `storeShortTermMemory()` | **A plugin extending channel-memory tagging or cross-server STM scoping would extend here.** The function signature accepts `personaId` and `personaLineageId` for scoping; new scope dimensions (e.g., thread lineage) would be added as additional parameters. → plugin plan candidate |
+| TTL constants (`SHORT_TERM_MEMORY_TTL_HOURS`, `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL`) | Env-var configurable. Not a plugin seam: operational tuning only. |
 | Message storage cap (`messages.slice(-MAX_MESSAGES_PER_CHANNEL)`) | Internal; `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` is the env-var control surface. |
 
 ## Configuration

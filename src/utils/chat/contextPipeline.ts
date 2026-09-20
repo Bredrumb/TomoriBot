@@ -24,6 +24,7 @@ import {
   getFollowUpToolIntentResult,
   getRecentToolAffordanceNames,
   getRecentTriggeredToolIntentResult,
+  matchesLocaleDeliberateToolPack,
   resolveDeliberateToolContextTurns,
   resolveDeliberateToolMode,
 } from "@/utils/tools/deliberateToolMode";
@@ -33,7 +34,7 @@ import { getCachedChannelPrompt } from "@/utils/cache/channelPromptCache";
 import { getCachedChannelContextNote } from "@/utils/cache/channelContextNoteCache";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { stripBridgePrefix, extractBridgeUserId, isMatrixBridgeWebhookUsername, isBridgeUserId } from "@/utils/bridges";
-import { checkTargetEmbedTitle } from "@/utils/discord/embedClassifier";
+import { checkTargetEmbed } from "@/utils/discord/embedClassifier";
 import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
@@ -326,7 +327,10 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // generate_voice_message, and create_task is suppressed during reminder
   // execution (we don't want the bot to schedule a nested reminder).
   if (reminderData && (reminderRecipientID || reminderData.self_reminder)) {
-    if (/\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose)) {
+    if (
+      /\b(voice|audio|speech|say\s+(?:it|this)\s+out\s+loud|spoken)\b/i.test(reminderData.reminder_purpose) ||
+      matchesLocaleDeliberateToolPack("voice", reminderData.reminder_purpose)
+    ) {
       deliberateToolAllowedNames.push("generate_voice_message");
       deliberateToolTriggerMatches.push({
         toolName: "generate_voice_message",
@@ -619,7 +623,7 @@ async function buildSimplifiedHistory(
   let resetType: "reset" | "compact_refresh" | null = null;
   for (let i = messages.length - 1; i >= 0; i--) {
     for (const embed of messages[i].embeds) {
-      const embedCheck = checkTargetEmbedTitle(embed.title);
+      const embedCheck = checkTargetEmbed(embed);
       if (embedCheck.isTarget && (embedCheck.type === "reset" || embedCheck.type === "compact_refresh")) {
         resetIndex = i;
         resetType = embedCheck.type === "compact_refresh" ? "compact_refresh" : "reset";

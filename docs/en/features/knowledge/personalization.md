@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBot can be configured for **you specifically** with the `/personal` commands — settings
+TomoriBot can be configured for **you specifically** with the `/personal` commands: settings
 that follow you across every server you share with her, independent of any server's
 configuration.
 
@@ -41,6 +41,7 @@ tool updates but does not disable `/personal config`.
 or infer a geographic location or IANA timezone.
 
 ## Your Own Providers
+<!-- anchor: your-own-providers -->
 
 Personal providers let *your own requests* use *your own* API keys and models instead of the
 server's defaults. This is bring-your-own-key (BYOK) at the individual level.
@@ -87,23 +88,24 @@ providers apply across every server you use her in.
 
 ## Other Personal Settings
 
-- `/personal config` — change what she calls you.
-- `/personal config` — your own appearance tags (booru-style), used when an
+- `/personal config`: change what she calls you.
+- `/personal config`: your own appearance tags (booru-style), used when an
   [image generation](/features/capabilities/media-generation/image-generation/#tag-customization)
   references you. Submit an empty box to clear them.
-- `/personal config` — control your visibility to her, up to **full invisibility** (opt out
+- `/personal config`: control your visibility to her, up to **full invisibility** (opt out
   of memory features entirely).
-- `/personal config` — your personal override for
+- `/personal config`: your personal override for
   [Deliberate Trigger Mode](/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
-- `/personal config` — opt into cross-server short-term memory sharing;
+- `/personal config`: opt into cross-server short-term memory sharing;
   `/personal memories` wipes your STM.
-- `/personal config` — set a reusable prompt for when she impersonates you via
+- `/personal config`: set a reusable prompt for when she impersonates you via
   `/impersonate user`.
   
 ## Personal Spotlight
+<!-- anchor: personal-spotlight -->
 
 **Personal Spotlight: per-channel persona picks.** Spotlight lets *you* narrow which personas
-you can trigger in one channel — and optionally assign one to auto-trigger for your own
+you can trigger in one channel, and optionally assign one to auto-trigger for your own
 messages there. It's scoped to **you + one channel** and doesn't affect anyone else.
 
 **Set one up** with `/personal config`, choosing:
@@ -113,7 +115,7 @@ messages there. It's scoped to **you + one channel** and doesn't affect anyone e
 - the personas you want in your spotlight.
 
 After choosing personas, you can optionally pick one as your **personal auto-trigger
-persona** — the fallback responder for your messages in that channel. Direct triggers still
+persona**: the fallback responder for your messages in that channel. Direct triggers still
 target whichever persona you explicitly call. Press Finish to skip.
 
 **Important rules:**

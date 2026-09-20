@@ -6,8 +6,8 @@ sidebar:
   order: 200
 ---
 
-Assembles the LLM-visible prompt — every system message, every memory, every
-sample dialogue, every historical message — into a `StructuredContextItem[]`
+Assembles the LLM-visible prompt; every system message, every memory, every
+sample dialogue, every historical message; into a `StructuredContextItem[]`
 list ready for a provider.
 
 **Entry point:** `src/utils/text/contextBuilder.ts` (5-line barrel) →
@@ -93,7 +93,7 @@ type BuildContextResult = {
 Tail directives are *collected* by the contributors (e.g. participants emits
 the impersonation directive, short-term memory may emit the same-channel
 memory directive) and surfaced via the return shape, not appended to
-`contextItems` directly — the chat pipeline's per-turn stage 01 owns the
+`contextItems` directly; the chat pipeline's per-turn stage 01 owns the
 final tail-directive ordering.
 
 Dialogue media is resolved after this pipeline for live chat. The dialogue
@@ -110,17 +110,17 @@ This pipeline is the densest plugin-relevant surface in TomoriBot. Each
 contributor is an architectural seam for a category the eventual plugin plan
 will engage with:
 
-- **Knowledge contributors** (memories, RAG documents, conditioning) — the
+- **Knowledge contributors** (memories, RAG documents, conditioning); the
   "memory types" plugin category.
-- **Asset contributors** (emojis, stickers) — the "server asset" plugin
+- **Asset contributors** (emojis, stickers); the "server asset" plugin
   category.
-- **Participant contributors** — typed sources compose Discord, persona, Matrix, webhook,
+- **Participant contributors**: typed sources compose Discord, persona, Matrix, webhook,
   and reference identities behind `prepareParticipantContext()`. Integrations register a
   narrow `ParticipantSource` or `ParticipantProfileEnricher`; `buildContext()` receives one
   required prepared result rather than transport-specific maps.
-- **Dialogue contributors** (sample dialogues, dialogue history) — currently
+- **Dialogue contributors** (sample dialogues, dialogue history); currently
   fixed; future plugins for "few-shot template providers" would extend here.
 
 Each per-stage doc names its extension point. The pipeline-as-a-whole does
-not (yet) expose a "register a new contributor" mechanism — that's
+not (yet) expose a "register a new contributor" mechanism; that's
 explicitly a plugin-plan candidate to define.
