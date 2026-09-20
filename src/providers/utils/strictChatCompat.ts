@@ -1,20 +1,16 @@
 import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
 
-// Shared "strict chat-completion" message normalizations.
-//
-// Several provider APIs require message shapes that others merely tolerate. Historically each
-// adapter hardwired its own copy of these rules, which left custom-endpoint proxies (which inherit
-// the OpenAI-compatible builder) unable to front strict backends such as Claude. This module
-// centralizes the three normalizations behind one tested seam:
+// Shared "strict chat-completion" message normalizations: message shapes some provider APIs
+// require and others merely tolerate. Three normalizations live behind this one tested seam, so a
+// custom-endpoint proxy can front strict backends such as Claude.
 //
 //   A. Prefix-completion: vendor "continue this assistant turn" extension (`prefix: true`).
 //   B. Role alternation: merge consecutive same-role turns + guarantee a leading `user` turn.
 //   C. Media relocation: assistant turns cannot carry media; peel it into a synthetic `user`
-//                           turn. This one is ALWAYS-ON (universal across OpenAI/Anthropic/Gemini
-//                           shaped APIs) and is never gated by a toggle.
+//      turn. This one is ALWAYS-ON (universal across OpenAI/Anthropic/Gemini shaped APIs) and is
+//      never gated by a toggle.
 //
-// A and B are exposed as per-endpoint toggles (`supports_prefix_completion`,
-// `strict_role_alternation`); C is unconditional.
+// A and B are exposed as per-endpoint toggles, C is unconditional.
 
 /**
  * Minimal message shape shared by the OpenAI-compatible and Anthropic message arrays: a `role`

@@ -200,9 +200,10 @@ bun run audit-comments
 ```
 
 `audit-comments` reports subjective narration candidates across the existing tree without
-failing. The deterministic rules, `prose-dash` included, fail regardless of audit mode; under
-`src/locales/` `prose-dash` reads string literals rather than comments, since the prose there is
-the shipped text.
+failing. It prints every finding with its file, line, and rule, because a count is not something a
+reviewer can act on; the `--verbose` flag is part of the script for that reason. The deterministic
+rules, `prose-dash` included, fail regardless of audit mode; under `src/locales/` `prose-dash`
+reads string literals rather than comments, since the prose there is the shipped text.
 
 `prose-dash` also reads Markdown under `docs/`, where the authored text is the product. Every
 locale is translated from these pages, so a dash left here propagates into each new language.
@@ -220,6 +221,62 @@ editing criteria beside the report. Its focused self-test is also manual:
 ```bash
 bun test ./scripts/checks/commentPolicy.test.ts
 ```
+
+## Block signals
+
+Two rules read runs of consecutive standalone `//` comments and report only under `--audit`.
+Both are warnings, so neither one changes the exit code, and neither can be silenced through the
+exception file: a judgment warning belongs on the line a reviewer is reading, not on a whole
+file.
+
+| Rule | Reports | Calibrated limit | Override |
+|---|---|---|---|
+| `duplicate-comment` | One warning per group of blocks that say the same thing, naming every location | 12 words and 60 characters per block | `COMMENT_AUDIT_DUPLICATE_MIN_WORDS`, `COMMENT_AUDIT_DUPLICATE_MIN_CHARS` |
+| `long-comment-block` | One block whose rendered line count is past the limit | 11 lines, non-test files | `COMMENT_AUDIT_LONG_BLOCK_LINES` |
+
+Those variables exist for recalibration, not for routine use: they are read only by the audit
+command line and never by the running bot, since a value that lives in an operator's environment
+would make two contributors see two different reports. Their defaults and units are listed here and
+in the Tier 7 comment audit block of `.env.optional.example`. A value that is not a whole positive
+number, including `12words` or `2.5`, falls back to the default above rather than being partially
+parsed, so a typo cannot quietly become a threshold nobody chose.
+
+`duplicate-comment` compares blocks after normalizing comment markers, whitespace, and case, so a
+copy re-wrapped at a different column or indented differently still matches: where a comment was
+wrapped follows the surrounding indent rather than what it says. Two shapes report: the same
+rationale in more than one file, where a comment was copied instead of the code being shared, and
+the same rationale more than once in one file, where the extraction is the obvious fix. Two guards
+keep the rest out of the report. The word and character floor lets short fallback notes repeat
+freely, since a note such as a missing-value fallback is meant to appear at each site that needs
+it. A locale tree also counts as one identity, so an English comment carried into every translated
+tree is one authored sentence rather than one repetition per language; a second copy inside the
+same locale tree still reports, because that one has no source text to blame. Suppression comments
+(`biome-ignore` and its equivalents) are skipped for the same reason, since each one is a separate
+lint decision rather than shared rationale.
+
+`long-comment-block` excludes JSDoc, because a long ordered procedure can be an exported contract
+and the JSDoc rules above already answer for that text. It also excludes `tests/`, where a comment
+explains the fixture it sits in and no function name can carry that. Length is a proxy, not a
+verdict: a pricing table or a documented resolution order can legitimately run long, so the finding
+asks for the constraint to survive while the narrative moves into the code, a helper, or the commit
+message.
+
+Both rules were calibrated against the repository as a whole rather than chosen for looks. The
+sweep that set the limits reported 52 `duplicate-comment` groups across 121 blocks and 8
+`long-comment-block` findings; raising the duplicate floor to 15 words drops it to 38 groups and 88
+blocks, and relaxing the length limit to 8 lines raises that rule to 26. Those numbers are the
+reason for the limits: they are the largest candidate sets a maintainer can read in one sitting and
+still trust. A comment-to-code ratio was measured during calibration and rejected, because a
+definition that separated narrative from legitimate explanation did not emerge.
+
+The seven long blocks that were narrative have since been trimmed, so the length rule now reports
+one standing finding: the pricing source table in `src/db/seed/catalog/models.ts`, where the length
+is the data. Read it, confirm that, and move on. The duplicate groups are the remaining queue, and
+clearing it means extracting the shared code path most of them sit on, not deleting the copies.
+
+The limits are not policy, and a corpus that grows differently may need different ones. When the
+report stops being readable, re-measure it rather than deleting rationale to make the counter
+smaller.
 
 ## Exceptions
 

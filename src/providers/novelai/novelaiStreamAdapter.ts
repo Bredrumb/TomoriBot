@@ -418,19 +418,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         parameters.max_length = clampedMaxLength;
       }
     } else {
-      // Dynamic max_length safety cap for Kayra/Erato.
-      //
-      // contextTruncator runs earlier using 4 chars/token. Kayra tokenizes at
-      // ~3.0-3.5 chars/token, so the assembled prompt may still overshoot the
-      // tier's token ceiling. We re-estimate here and:
-      //   - Clamp max_length when input fits but input+output would exceed the limit.
-      //   - Log a warning when the input alone already exceeds the limit (can't fix
-      //     with output clamping; the subscription cache should prevent this via
-      //     accurate contextTruncator budgeting, but this is a last-resort guard).
-      //
-      // Prefer the subscription-derived limit threaded in from tomoriChat.ts; fall back
-      // to the NAI_KAYRA_CONTEXT_LIMIT env var so the guard fires even when no cached
-      // value is present (e.g. key set but bot restarted before first message).
+      // Dynamic max_length safety cap for Kayra/Erato. contextTruncator budgets at 4 chars/token,
+      // but Kayra tokenizes at roughly 3.0-3.5, so the assembled prompt can still overshoot the
+      // tier ceiling. Re-estimating here clamps max_length when the output would overflow, and
+      // warns when the input alone already does, which output clamping cannot fix. The
+      // subscription-derived limit threaded in from tomoriChat.ts is preferred; the env var is the
+      // fallback for a restart before the first message, when no cached limit exists.
       const effectiveKayraLimit = (config as NovelaiStreamConfig).kayraContextLimit ?? NAI_KAYRA_CONTEXT_LIMIT;
       const estimatedInputTokens = Math.ceil(prompt.length / NAI_KAYRA_CHARS_PER_TOKEN);
       const maxAllowedOutput = effectiveKayraLimit - estimatedInputTokens;
@@ -769,18 +762,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
       this.generationBuffer = "";
     } else {
-      // Detect speaker transitions: the model is generating another character's turn.
-      // Both Kayra and GLM 4.6 need this: Kayra has no API stop sequences, and GLM
-      // doesn't emit <|user|> tokens in completions mode (it just starts "Username: ...")
-      //
-      // Three stop conditions checked in order:
-      // Dinkus (\n***): Kayra uses *** as a scene break between narrative zones.
-      //    When the model generates \n*** it considers its turn complete. Only triggered
-      //    after \n so ****-style censored words at response start are not clipped.
-      // Generic colon-form (\nName:): any speaker label with a colon.
-      // Known-name no-colon (\nName<space>): story-format turns where the model
-      //    writes "Name text" instead of "Name: text". Only fires for known speakers
-      //    from this.knownSpeakers to avoid false positives on mid-sentence proper nouns.
+      // Detect speaker transitions: the model has started another character's turn. Kayra has no
+      // API stop sequences, and GLM 4.6 does not emit <|user|> in completions mode, so both are
+      // caught from the text. Three conditions, checked in order: a dinkus scene break, only
+      // matched after a newline so a censored word at the response start survives; a generic
+      // `\nName:` label; and a `\nName ` turn, restricted to known speakers so mid-sentence proper
+      // nouns do not trip it.
       const markdownCodeRanges = findMarkdownCodeRanges(this.generationBuffer);
       let speakerMatch =
         this.findFirstMarkdownSafeMatch(

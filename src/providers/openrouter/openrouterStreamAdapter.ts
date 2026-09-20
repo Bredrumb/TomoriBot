@@ -494,17 +494,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         skippedUnsupportedParams.push("temperature");
       }
 
-      // OpenRouter follows OpenAI's snake_case for max_tokens.
-      // Apply a context-window safety cap so long conversations don't crowd out
-      // the output budget.
-      //   rawSafeOutputBudget = floor((contextLength - estimatedInputTokens) * OPENROUTER_OUTPUT_SAFETY_FACTOR)
-      // Input is estimated from message text fields (chars / 4). Inline base64
-      // image payloads are intentionally excluded from this estimate.
-      // To keep replies usable in tight windows, we also apply a best-effort
-      // minimum output floor (OPENROUTER_MIN_OUTPUT_TOKENS) when the remaining
-      // context can still fit that floor.
-      // If maxOutputTokens is undefined (unknown model), we skip max_tokens entirely
-      // and let OpenRouter use the model's natural limit.
+      // OpenRouter follows OpenAI's snake_case for max_tokens. The context-window cap keeps a long
+      // conversation from crowding out the output budget, and excludes inline base64 images from
+      // the chars/4 input estimate. A best-effort floor keeps replies usable in a tight window when
+      // the context can still fit it. Undefined maxOutputTokens means an unknown model, so
+      // max_tokens is skipped and OpenRouter applies its own limit.
       let effectiveMaxOutputTokens = config.maxOutputTokens;
       if (effectiveMaxOutputTokens !== undefined && config.model && isOpenRouterCapabilityCacheReady()) {
         const tokenLimits = getOpenRouterTokenLimits(config.model);
