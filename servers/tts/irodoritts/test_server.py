@@ -27,6 +27,15 @@ class SplitTextForSpeechTests(unittest.TestCase):
       [first + second],
     )
 
+  def test_newline_is_a_chunk_boundary(self) -> None:
+    first = ("え" * 40) + "\n"
+    second = ("お" * 40) + "。"
+
+    self.assertEqual(
+      split_text_for_speech(first + second, min_chars=30),
+      [first.strip(), second],
+    )
+
   def test_inline_emoji_is_preserved(self) -> None:
     first = "👂" + ("さ" * 40) + "。"
     second = "😊" + ("し" * 40) + "。"
