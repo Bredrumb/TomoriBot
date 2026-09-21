@@ -85,7 +85,7 @@ MAX_REF_SECONDS_RAW = os.getenv("IRODORI_MAX_REF_SECONDS")
 MAX_REF_SECONDS = float(MAX_REF_SECONDS_RAW) if MAX_REF_SECONDS_RAW else None
 
 MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "1000"))
-CHUNK_BOUNDARIES = frozenset("。、，,．.!！?？\\n\\r")
+CHUNK_BOUNDARIES = frozenset("。、，,．.!！?？\n\r")
 CHUNKING_ENABLED = os.getenv("IRODORI_CHUNKING_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 CHUNK_MIN_CHARS = max(1, int(os.getenv("IRODORI_CHUNK_MIN_CHARS", "80")))
 
