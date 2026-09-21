@@ -42,9 +42,35 @@ class SplitTextForSpeechTests(unittest.TestCase):
     text = ("あ" * 20) + "。。。"
     self.assertEqual(split_text_for_speech(text, min_chars=10), [text])
 
+  def test_sentence_final_symbols_stay_with_previous_chunk(self) -> None:
+    for suffix in ("♪", "♡", "😊", "……", "〜"):
+      with self.subTest(suffix=suffix):
+        first = ("あ" * 20) + "。" + suffix
+        second = ("い" * 20) + "次です。"
+        self.assertEqual(
+          split_text_for_speech(first + second, min_chars=10),
+          [first, second],
+        )
+
+  def test_emoji_variation_sequence_stays_with_previous_chunk(self) -> None:
+    first = ("あ" * 20) + "。❤️"
+    second = ("い" * 20) + "次です。"
+    self.assertEqual(
+      split_text_for_speech(first + second, min_chars=10),
+      [first, second],
+    )
+
   def test_short_tail_is_merged_into_previous_chunk(self) -> None:
     first = ("あ" * 82) + "。"
     tail = "そうです。"
+    self.assertEqual(
+      split_text_for_speech(first + tail, min_chars=80),
+      [first + tail],
+    )
+
+  def test_symbol_only_tail_is_kept_with_previous_chunk(self) -> None:
+    first = ("あ" * 82) + "。"
+    tail = "😊"
     self.assertEqual(
       split_text_for_speech(first + tail, min_chars=80),
       [first + tail],
@@ -82,8 +108,10 @@ class SplitTextForSpeechTests(unittest.TestCase):
       [first, second],
     )
 
-  def test_punctuation_only_input_produces_no_chunks(self) -> None:
-    self.assertEqual(split_text_for_speech("。。。！？", min_chars=1), [])
+  def test_symbol_only_input_is_preserved(self) -> None:
+    for text in ("😊", "♪♡", "。。。！？", "……"):
+      with self.subTest(text=text):
+        self.assertEqual(split_text_for_speech(text, min_chars=1), [text])
 
 
 if __name__ == "__main__":
