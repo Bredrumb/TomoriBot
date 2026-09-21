@@ -23,6 +23,8 @@ type Probe = {
   choiceLocalizations: Record<string, string>;
   invalidFolderLogged: boolean;
   aliasFolderLogged: boolean;
+  startupInstanceValue: string;
+  commandLoaderInstanceBeforeLoad: string;
 };
 
 let workspace: string;
@@ -66,14 +68,27 @@ describe("locale foundation", () => {
       join(workspace, "src", "commands", "probe.ts"),
       'export const configureCommand = (command) => command.setName("probe").setDescription("English probe").addStringOption((option) => option.setName("mode").setDescription("Mode").addChoices({ name: "One", value: "one" })); export async function execute() {}\n',
     );
+    await writeFile(
+      join(workspace, "startup-localizer.ts"),
+      [
+        `import { initializeLocalizer, localizer } from ${JSON.stringify(LOCALIZER_URL)};`,
+        "await initializeLocalizer();",
+        'postMessage(localizer("en-US", "commands.probe.description"));',
+      ].join("\n"),
+    );
 
     const script = join(workspace, "probe.ts");
     await writeFile(
       script,
       [
-        `import { initializeLocalizer, getSupportedLocales, getRegisterableLocales, localizer, getLocaleEndonym, getBaseTriggerWords } from ${JSON.stringify(LOCALIZER_URL)};`,
+        `import { getSupportedLocales, getRegisterableLocales, localizer, getLocaleEndonym, getBaseTriggerWords } from ${JSON.stringify(LOCALIZER_URL)};`,
         `import { loadCommandData } from ${JSON.stringify(COMMAND_LOADER_URL)};`,
-        "await initializeLocalizer();",
+        "const startupInstanceValue = await new Promise((resolve, reject) => {",
+        '  const worker = new Worker(new URL("./startup-localizer.ts", import.meta.url).href);',
+        "  worker.onmessage = (event) => { worker.terminate(); resolve(event.data); };",
+        '  worker.onerror = (event) => reject(event.error ?? new Error(event.message ?? "Startup localizer worker failed"));',
+        "});",
+        'const commandLoaderInstanceBeforeLoad = localizer("en-US", "commands.probe.description");',
         "const { registrationData } = await loadCommandData();",
         'const command = registrationData.find((entry) => entry.name === "probe");',
         'const option = command.options.find((entry) => entry.name === "mode");',
@@ -91,6 +106,8 @@ describe("locale foundation", () => {
         "  rootLocalizations: command.description_localizations,",
         "  optionLocalizations: option.description_localizations,",
         "  choiceLocalizations: option.choices[0].name_localizations,",
+        "  startupInstanceValue,",
+        "  commandLoaderInstanceBeforeLoad,",
         "})}`);",
       ].join("\n"),
     );
@@ -139,5 +156,11 @@ describe("locale foundation", () => {
     expect(probe.rootLocalizations.ja).toBeUndefined();
     expect(probe.optionLocalizations.ja).toBeUndefined();
     expect(probe.choiceLocalizations.ja).toBeUndefined();
+  });
+
+  it("initializes the command loader's localizer when startup used a separate module identity", () => {
+    expect(probe.startupInstanceValue).toBe("English probe");
+    expect(probe.commandLoaderInstanceBeforeLoad).toBe("commands.probe.description");
+    expect(probe.rootLocalizations["es-419"]).toBe("Prueba");
   });
 });

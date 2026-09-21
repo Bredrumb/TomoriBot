@@ -7,7 +7,8 @@ export default {
     not_setup: `TomoriBot chưa được thiết lập trên máy chủ này. Hãy chạy /setup trước.`,
     guild_only: `Bảng quản trị chỉ khả dụng trong máy chủ.`,
     unavailable: `Không thể tải cài đặt quản trị. Hãy thử lại.`,
-    stale_warning: `Dữ liệu đã lưu có thể đã cũ do đọc dữ liệu thất bại.\nKhông thể ghi dữ liệu cho đến khi đọc lại thành công.`,
+    stale_warning:
+      "Dữ liệu đã lưu có thể đã cũ do đọc dữ liệu thất bại. Không thể ghi dữ liệu cho đến khi đọc lại thành công.",
     retry: `Thử lại`,
 
     // Category buttons
@@ -54,7 +55,7 @@ export default {
     personalization_blacklist_section: `Blacklist cá nhân hóa`,
     personalization_blacklist_description: `Mình không tải bộ nhớ cá nhân hoặc tên đã lưu của thành viên này:`,
     persona_blocks_section: `Chặn người dùng theo persona`,
-    persona_blocks_description: `Các thành viên sau đây bị giới hạn tương tác\nvới persona cụ thể:`,
+    persona_blocks_description: "Các thành viên sau đây bị giới hạn tương tác với persona cụ thể:",
     personalization_blacklist_empty: `Không có thành viên nào bị blacklist khỏi cá nhân hóa.`,
     persona_blocks_empty: `Không có chặn người dùng theo persona nào đang hoạt động.`,
     add_blacklist: `+ Thêm vào blacklist`,
@@ -79,8 +80,10 @@ export default {
     user_blacklist_remove_title: `Xóa thành viên khỏi blacklist`,
     user_blacklist_bulk_remove_title: `Xóa các mục blacklist`,
     user_blacklist_remove_success_detail: `Đã xóa {count} mục khỏi blacklist.`,
-    user_blacklist_remove_personalization_description: `Xóa {user} khỏi blacklist cá nhân hóa?\nMình sẽ tiếp tục tải bộ nhớ cá nhân và tên đã lưu\ncho thành viên này.`,
-    user_blacklist_remove_persona_block_description: `Xóa giới hạn tương tác của {user} đối với\n**{persona}** ({type})? Thành viên này sẽ có thể\ntương tác lại với persona này.`,
+    user_blacklist_remove_personalization_description:
+      "Xóa {user} khỏi blacklist cá nhân hóa? Mình sẽ tiếp tục tải bộ nhớ cá nhân và tên đã lưu cho thành viên này.",
+    user_blacklist_remove_persona_block_description:
+      "Xóa giới hạn tương tác của {user} đối với **{persona}** ({type})? Thành viên này sẽ có thể tương tác lại với persona này.",
     user_blacklist_remove_success: `Đã xóa mục khỏi blacklist`,
     user_blacklist_remove_personalization_success_detail: `Đã xóa {user_name} khỏi blacklist cá nhân hóa.`,
     user_blacklist_remove_persona_block_success_detail: `Đã xóa giới hạn của {user_name} đối với **{persona_name}**.`,
@@ -101,7 +104,8 @@ export default {
     // Whitelist: Channels
     whitelist_channels_count: `Kênh trong whitelist \`({count})\``,
     whitelist_channels_description: `Mình chỉ có thể được kích hoạt trong các kênh sau:`,
-    whitelist_channels_empty: `Không có kênh nào trong whitelist.\nBot có thể phản hồi trong mọi kênh có quyền truy cập.`,
+    whitelist_channels_empty:
+      "Không có kênh nào trong whitelist. Bot có thể phản hồi trong mọi kênh có quyền truy cập.",
     cooldown_inherited: `Kế thừa cooldown toàn cục của máy chủ`,
     cooldown_custom: `Cooldown: {type}, {length} giây`,
     cooldown_instant: `Cooldown: {type}, Tức thì`,
@@ -127,7 +131,8 @@ export default {
     whitelist_channel_add_invalid_length: `Thời lượng cooldown phải là một số nguyên từ 0 đến 86400 giây.`,
     whitelist_channel_remove_title: `Xóa kênh khỏi whitelist`,
     whitelist_channel_bulk_remove_title: `Xóa các kênh`,
-    whitelist_channel_remove_description: `Xóa {channel} khỏi whitelist? Nếu không còn\nkênh nào trong whitelist, mình có thể phản hồi\ntrong mọi kênh có quyền truy cập.`,
+    whitelist_channel_remove_description:
+      "Xóa {channel} khỏi whitelist? Nếu không còn kênh nào trong whitelist, mình có thể phản hồi trong mọi kênh có quyền truy cập.",
     whitelist_channel_remove_success: `Đã xóa kênh khỏi whitelist`,
     whitelist_channel_remove_success_detail: `Đã xóa #{channel_name} khỏi whitelist.`,
     whitelist_channel_remove_batch_success_detail: `Đã xóa {count} kênh khỏi whitelist.`,
@@ -139,7 +144,8 @@ export default {
     // Whitelist: Persona Channels
     whitelist_persona_channels_count: `Persona \`({count})\``,
     whitelist_persona_channels_description: `Các persona sau chỉ có thể phản hồi trong các kênh được liệt kê:`,
-    whitelist_persona_channels_empty: `Chưa cấu hình giới hạn kênh cho persona.\nCác persona có thể phản hồi trong mọi kênh được phép.`,
+    whitelist_persona_channels_empty:
+      "Chưa cấu hình giới hạn kênh cho persona. Các persona có thể phản hồi trong mọi kênh được phép.",
     persona_channels_restriction: `**{persona}** bị giới hạn trong: {channels}`,
     add_persona: `+ Thêm persona`,
     remove_persona: `- Xóa persona`,
@@ -193,7 +199,7 @@ export default {
 
     // Quotas
     quotas_title: `Hạn ngạch tạo nội dung`,
-    quotas_description: `Cấu hình giới hạn hàng ngày theo người dùng và\nhạn ngạch chung toàn máy chủ khi tạo bằng AI.`,
+    quotas_description: "Cấu hình giới hạn hàng ngày theo người dùng và hạn ngạch chung toàn máy chủ khi tạo bằng AI.",
     quotas_image_generation: `Tạo hình ảnh`,
     quotas_text_generation: `Tạo văn bản`,
     quotas_video_generation: `Tạo video`,

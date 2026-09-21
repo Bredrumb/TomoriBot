@@ -7,7 +7,8 @@ export default {
     not_setup: `このサーバーにはまだTomoriBotがセットアップされていません。まず /setup を実行してください。`,
     guild_only: `モデレーションパネルはサーバー内でのみ利用できます。`,
     unavailable: `モデレーション設定を読み込めませんでした。再試行してください。`,
-    stale_warning: `読み込みに失敗したため、保存済みデータが古い可能性があります。\n再読み込みが成功するまで書き込み操作は利用できません。`,
+    stale_warning:
+      "読み込みに失敗したため、保存済みデータが古い可能性があります。 再読み込みが成功するまで書き込み操作は利用できません。",
     retry: `再試行`,
 
     // カテゴリボタン
@@ -54,7 +55,7 @@ export default {
     personalization_blacklist_section: `パーソナライズブラックリスト`,
     personalization_blacklist_description: `以下のメンバーには個人の記憶や保存された名前を読み込みません：`,
     persona_blocks_section: `ペルソナのユーザーブロック`,
-    persona_blocks_description: `以下のメンバーにはペルソナ固有の\n対話制限があります：`,
+    persona_blocks_description: "以下のメンバーにはペルソナ固有の 対話制限があります：",
     personalization_blacklist_empty: `パーソナライズからブラックリスト登録されたメンバーはいません。`,
     persona_blocks_empty: `有効なペルソナのユーザーブロックはありません。`,
     add_blacklist: `+ ブラックリストに追加`,
@@ -79,8 +80,10 @@ export default {
     user_blacklist_remove_title: `ブラックリスト登録メンバーを削除`,
     user_blacklist_bulk_remove_title: `ブラックリストの項目を削除`,
     user_blacklist_remove_success_detail: `{count} 件のブラックリスト項目を削除しました。`,
-    user_blacklist_remove_personalization_description: `{user} をパーソナライズブラックリストから削除しますか？\n以後、このメンバーの個人の記憶や保存された名前の\n読み込みを再開します。`,
-    user_blacklist_remove_persona_block_description: `{user} の **{persona}**（{type}）に対する対話制限を\n削除しますか？このメンバーは再びこのペルソナと\n対話できるようになります。`,
+    user_blacklist_remove_personalization_description:
+      "{user} をパーソナライズブラックリストから削除しますか？ 以後、このメンバーの個人の記憶や保存された名前の 読み込みを再開します。",
+    user_blacklist_remove_persona_block_description:
+      "{user} の **{persona}**（{type}）に対する対話制限を 削除しますか？このメンバーは再びこのペルソナと 対話できるようになります。",
     user_blacklist_remove_success: `ブラックリスト項目を削除しました`,
     user_blacklist_remove_personalization_success_detail: `{user_name} をパーソナライズブラックリストから削除しました。`,
     user_blacklist_remove_persona_block_success_detail: `{user_name} の **{persona_name}** に対する制限を削除しました。`,
@@ -101,7 +104,8 @@ export default {
     // ホワイトリスト：チャンネル
     whitelist_channels_count: `ホワイトリスト登録チャンネル \`({count})\``,
     whitelist_channels_description: `以下のチャンネルでのみトリガーされます：`,
-    whitelist_channels_empty: `ホワイトリスト登録されたチャンネルはありません。\nボットはアクセス可能なすべてのチャンネルで応答できます。`,
+    whitelist_channels_empty:
+      "ホワイトリスト登録されたチャンネルはありません。 ボットはアクセス可能なすべてのチャンネルで応答できます。",
     cooldown_inherited: `サーバー全体のクールダウンを継承`,
     cooldown_custom: `クールダウン: {type}、{length}秒`,
     cooldown_instant: `クールダウン: {type}、即時`,
@@ -127,7 +131,8 @@ export default {
     whitelist_channel_add_invalid_length: `クールダウンの長さは0〜86400秒の整数にしてください。`,
     whitelist_channel_remove_title: `ホワイトリスト登録チャンネルを削除`,
     whitelist_channel_bulk_remove_title: `チャンネルを削除`,
-    whitelist_channel_remove_description: `{channel} をホワイトリストから削除しますか？チャンネルが\n1つも残らない場合、ボットはアクセス可能なすべての\nチャンネルで応答できるようになります。`,
+    whitelist_channel_remove_description:
+      "{channel} をホワイトリストから削除しますか？チャンネルが 1つも残らない場合、ボットはアクセス可能なすべての チャンネルで応答できるようになります。",
     whitelist_channel_remove_success: `チャンネルをホワイトリストから削除しました`,
     whitelist_channel_remove_success_detail: `#{channel_name} をホワイトリストから削除しました。`,
     whitelist_channel_remove_batch_success_detail: `{count} 件のチャンネルをホワイトリストから削除しました。`,
@@ -139,7 +144,8 @@ export default {
     // ホワイトリスト：ペルソナのチャンネル
     whitelist_persona_channels_count: `ペルソナ \`({count})\``,
     whitelist_persona_channels_description: `以下のペルソナは登録されたチャンネルでのみ応答できます：`,
-    whitelist_persona_channels_empty: `ペルソナのチャンネル制限は設定されていません。\nペルソナは許可されたすべてのチャンネルで応答できます。`,
+    whitelist_persona_channels_empty:
+      "ペルソナのチャンネル制限は設定されていません。 ペルソナは許可されたすべてのチャンネルで応答できます。",
     persona_channels_restriction: `**{persona}** の制限先: {channels}`,
     add_persona: `+ ペルソナを追加`,
     remove_persona: `- ペルソナを削除`,
@@ -193,7 +199,7 @@ export default {
 
     // クォータ
     quotas_title: `生成クォータ`,
-    quotas_description: `AI生成の1日あたりユーザー上限と、サーバー全体で\n共有するプールのクォータを設定します。`,
+    quotas_description: "AI生成の1日あたりユーザー上限と、サーバー全体で 共有するプールのクォータを設定します。",
     quotas_image_generation: `画像生成`,
     quotas_text_generation: `テキスト生成`,
     quotas_video_generation: `動画生成`,

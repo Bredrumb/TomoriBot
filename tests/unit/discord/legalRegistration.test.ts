@@ -3,6 +3,7 @@ import type { Client, Guild } from "discord.js";
 import { loadCommandData, type CommandExecutionMap, resetCommandDataCache } from "@/utils/discord/commandLoader";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { buildHelpDashboardPayload } from "@/utils/discord/ui/helpDashboard";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import * as realHostedPolicy from "@/utils/misc/hostedPolicy";
 import * as realEmbedHelper from "@/utils/discord/embedHelper";
 import * as realServerRepositoryModule from "@/utils/db/repositories/ServerRepository";
@@ -193,7 +194,7 @@ describe("hosted policy notices", () => {
 
     setHostedEnvironment(true);
     const hostedPayload = JSON.stringify(buildHelpDashboardPayload("en-US", "setup", "personal-profile"));
-    expect(hostedPayload).toContain(setupAgreement);
+    expect(hostedPayload).toContain(JSON.stringify(formatPanelProse(`-# ${setupAgreement}`)).slice(1, -1));
 
     setHostedEnvironment(false);
     const selfHostedPayload = JSON.stringify(buildHelpDashboardPayload("en-US", "setup", "personal-profile"));

@@ -70,13 +70,12 @@ passed gate.
 Passing every localization gate does not make `bun run test` pass, because several locale checks live
 only in the unit lane:
 
-- **Panel line width.** `tests/unit/discord/panelProseWidth.test.ts` holds every authored panel line
-  to 65 characters, or 40 beside a thumbnail. `check-locale-lengths` measures Discord's hard caps, not
-  this layout budget, so a translation that runs longer than English passes one and fails the other.
-  The static scan measures the bare string; the payload walks run once per authored locale and
-  measure the rendered line, including a `-# ` or `> ` marker and the thumbnail budget. Shorten the
-  wording. Add a line break only where the builder applies the marker per line (`withLinePrefix`),
-  because a string rendered as `` `-# ${text}` `` loses the subtext style after its first line.
+- **Panel runtime formatting.** `tests/unit/discord/panelProseRuntime.test.ts` builds localized panel
+  payloads and verifies that the shared container boundary already formatted every `TextDisplay`.
+  Write natural prose and reserve newlines for paragraphs, lists, quote rows, and other semantic
+  structure. Thumbnail context and repeated `-# ` or `> ` markers are inferred from the component
+  tree. `check-locale-lengths` still enforces Discord's hard component limits, which runtime visual
+  wrapping does not replace.
 - **Fixtures that list the authored locales.** The personal language picker test asserts every
   endonym in `tests/unit/discord/personalConfigRoutes.test.ts`, and
   `tests/unit/db/personaNamingCatalog.test.ts` asserts each persona's `namingConfig` per language.

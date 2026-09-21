@@ -49,6 +49,7 @@ import {
   type PersonalConfigModelDisplayInfo,
   type PersonalConfigRoutingRow,
 } from "@/utils/discord/ui/personalConfigPanel";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import type { ThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { ModelParameterOptions } from "@/utils/discord/modelParametersConfigMapping";
 import type { PersonalConfigManagedCapability } from "@/utils/discord/personalConfigPanelCatalog";
@@ -4449,6 +4450,8 @@ describe("personalConfigOperations Advanced operations", () => {
   });
 
   it("setSpotlight calls userRepository.replacePersonalSpotlight", async () => {
+    const personalSpotlightCache = await import("@/utils/cache/personalSpotlightCache");
+    const getCachedSpy = spyOn(personalSpotlightCache, "getCachedPersonalSpotlightStatus").mockResolvedValue(null);
     const spotSpy = spyOn(userRepository, "replacePersonalSpotlight").mockImplementation(async () => {});
     const result = await personalConfigOperations.setSpotlight({
       serverId: 42,
@@ -4461,6 +4464,7 @@ describe("personalConfigOperations Advanced operations", () => {
     });
     expect(result).toEqual({ status: "success" });
     expect(spotSpy).toHaveBeenCalledWith(42, 1, "ch-100", [1, 2], 1, null);
+    getCachedSpy.mockRestore();
     spotSpy.mockRestore();
   });
 
@@ -4950,7 +4954,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(dtmHeadingDisplay.content).toContain(
               "**[Deliberate Trigger Mode](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)**",
             );
-            expect(dtmHeadingDisplay.content).toContain("Controls when I reply without being\naddressed directly.");
+            expect(dtmHeadingDisplay.content.replaceAll("\n", " ")).toContain(
+              "Controls when I reply without being addressed directly.",
+            );
             expect(dtmHeadingDisplay.content).not.toContain(">");
 
             const dtmEffectDisplay = container.components[dtmRowIndex + 1] as TextDisplayComponentData;
@@ -5007,8 +5013,8 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(toolHeadingDisplay.content).toContain(
               "**[Deliberate Tool Mode](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/#deliberate-tool-mode)** (EXPERIMENTAL)",
             );
-            expect(toolHeadingDisplay.content).toContain(
-              "Controls whether tools are offered for\nevery message or only when relevant.",
+            expect(toolHeadingDisplay.content.replaceAll("\n", " ")).toContain(
+              "Controls whether tools are offered for every message or only when relevant.",
             );
             expect(toolHeadingDisplay.content).not.toContain(">");
 
@@ -8080,7 +8086,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         const payloadJson = JSON.stringify(payload);
         // Precondition explained in prose
-        expect(payloadJson).toContain("-# Model Randomizer requires at least one configured fallback model.");
+        expect(payloadJson).toContain(
+          JSON.stringify(
+            formatPanelProse("-# Model Randomizer requires at least one configured fallback model."),
+          ).slice(1, -1),
+        );
         // Effective behavior quote is Off
         expect(payloadJson).toContain("> I try the primary model first");
       });
@@ -8144,7 +8154,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const payloadJson = JSON.stringify(payload);
         expect(payloadJson).toContain("> I try the primary model first");
         expect(payloadJson).not.toContain("> I pick a random model from my primary and fallbacks first");
-        expect(payloadJson).toContain("-# Model Randomizer requires at least one configured fallback model.");
+        expect(payloadJson).toContain(
+          JSON.stringify(
+            formatPanelProse("-# Model Randomizer requires at least one configured fallback model."),
+          ).slice(1, -1),
+        );
       });
     });
 

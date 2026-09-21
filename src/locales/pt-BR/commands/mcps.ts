@@ -5,11 +5,13 @@ export default {
     empty_guild: `Este servidor ainda não tem MCPs.`,
     empty_dm: `Este espaço de trabalho de DM ainda não tem MCPs.`,
     unavailable: `Os registros de MCP não puderam ser carregados. Tente novamente.`,
-    stale_warning: `Os dados salvos podem estar desatualizados: a leitura falhou.\nAs ações de gravação ficam indisponíveis até uma nova leitura.`,
+    stale_warning:
+      "Os dados salvos podem estar desatualizados: a leitura falhou. As ações de gravação ficam indisponíveis até uma nova leitura.",
     read_unavailable: `Os registros atuais de MCP não puderam ser carregados com segurança.`,
     retry: `Tentar Novamente`,
     add: `+ Adicionar MCP`,
-    trust_warning: `Adicione apenas servidores MCP em que você confia.\nUm servidor malicioso pode coletar entradas de ferramentas,\nretornar resultados falsos ou prejudiciais,\nou tentar injeção de prompt.`,
+    trust_warning:
+      "Adicione apenas servidores MCP em que você confia. Um servidor malicioso pode coletar entradas de ferramentas, retornar resultados falsos ou prejudiciais, ou tentar injeção de prompt.",
     type_general: `Propósito Geral`,
     type_general_description: `Nenhuma ferramenta embutida será desativada`,
     type_web_search: `Pesquisa na Web`,
@@ -27,7 +29,8 @@ export default {
     disable: `Desativar`,
     remove: `Remover`,
     remove_title: `Remover Servidor MCP`,
-    remove_description: `Remover **{name}** e seu registro de\nendpoint/autenticação salvo? Qualquer conexão em pool será\ndesconectada. Readicionar o servidor é o caminho de recuperação.`,
+    remove_description:
+      "Remover **{name}** e seu registro de endpoint/autenticação salvo? Qualquer conexão em pool será desconectada. Readicionar o servidor é o caminho de recuperação.",
     remove_confirm: `Remover Servidor MCP`,
     cancel: `Cancelar`,
     add_modal_title: `Adicionar Servidor MCP`,

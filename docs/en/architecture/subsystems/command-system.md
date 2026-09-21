@@ -115,9 +115,10 @@ round trip in front of every failure repaint. The sink resolves lazily through
 caller that only wants to deliver a panel, and tests can deliver without a live pool.
 
 The receipt travels beside the payload rather than inside it. Embedding a marker in the rendered
-content would spend the payload's Discord text budget and could push a receipt line past the panel
-prose width limit; passing it as an option keeps the outgoing payload byte-for-byte what the caller
-built.
+content would spend the payload's Discord text budget and could make the combined panel invalid.
+Passing it as an option keeps observability metadata out of user-facing content. The shared panel
+container then formats both the main payload and receipt `TextDisplay` content from component-tree
+context before final Components V2 validation.
 
 **A receipt that knows its action carries the join key.** Successes live in `stat_counters` as
 `panel_action`, keyed `<surface>.<scope>.<resource>.<verb>`. `reason` does not share that key space,
@@ -386,15 +387,11 @@ Discord requires interaction acknowledgement within ~3 seconds.
 
 ### Measuring the window
 
-`beginPanelInteraction` acknowledges through `acknowledgePanelInteraction`, which emits a
-`panel_ack` metric per routed config panel carrying `route`, `ack_latency_ms`, and `over_deadline`.
-The latency is measured from Discord's `interaction.createdTimestamp`, not from the start of the
-handler, because the two causes of an expired window have opposite fixes: an interaction that
-arrives late (a gateway backlog, a resumed session replaying a dispatch, a stalled REST callback)
-has already spent part of its window before the bot sees it, while a slow handler spends it inside
-the route. Only the second shows up as local elapsed time, so a handler-side measurement cannot
-distinguish them. `over_deadline` counts the occurrences that lost the race; a `10062 Unknown
-interaction` from the ack itself is the same event seen from the other side.
+`beginPanelInteraction` acknowledges through `acknowledgePanelInteraction`. Normal acknowledgements
+do not emit a log entry. An acknowledgement that consumes at least 1.5 seconds emits a rate-limited
+warning with its route, measured latency, and Discord's deadline. The latency is measured from
+Discord's `interaction.createdTimestamp`, so it includes time spent before the handler receives the
+interaction.
 
 ### 3-Second Rule
 

@@ -14,23 +14,16 @@ export default {
     learn_more_title: `Más información`,
     heads_up_title: `Algunas cosas a tener en cuenta`,
     novelai_expressions_warning_field: `Expresiones desactivadas`,
-    novelai_expressions_warning_value: `El uso de emojis y stickers se desactivó
-automáticamente para mantener el contexto de NovelAI
-ligero y estable. Puedes reactivarlos cuando quieras
-con \`/config\` > Permisos.`,
+    novelai_expressions_warning_value:
+      "El uso de emojis y stickers se desactivó automáticamente para mantener el contexto de NovelAI ligero y estable. Puedes reactivarlos cuando quieras con `/config` > Permisos.",
     zai_tos_warning_field: `Términos de servicio de Z.ai`,
-    zai_tos_warning_value: `Los términos de servicio de Z.ai se actualizaron
-para permitir únicamente casos de uso de código o agentes.
-Usar Z.ai para chat general corre por tu cuenta y podría
-violar sus términos.`,
+    zai_tos_warning_value:
+      "Los términos de servicio de Z.ai se actualizaron para permitir únicamente casos de uso de código o agentes. Usar Z.ai para chat general corre por tu cuenta y podría violar sus términos.",
     byok_bootstrap_field: `BYOK de usuario`,
     byok_bootstrap_value: `Activado durante la configuración. Ahora los miembros necesitan proveedores personales para los mensajes activados por usuario. Usa {toggle_command} para desactivar esto después, y {help_personal_provider} (luego Funciones > Proveedores personales) para el flujo de configuración de miembros.`,
     dm_context_explanation_title: `Sobre los mensajes directos`,
-    dm_context_explanation: `Seguiré refiriéndome a este mensaje directo como un "servidor".
-Es decir, todas las funciones de "servidor" funcionan igual,
-solo que de forma privada aquí entre nosotros. Piensa en este
-mensaje directo como un servidor uno a uno conmigo, por lo que
-sus memorias de servidor son mis memorias únicamente aquí.`,
+    dm_context_explanation:
+      'Seguiré refiriéndome a este mensaje directo como un "servidor". Es decir, todas las funciones de "servidor" funcionan igual, solo que de forma privada aquí entre nosotros. Piensa en este mensaje directo como un servidor uno a uno conmigo, por lo que sus memorias de servidor son mis memorias únicamente aquí.',
     already_setup_title: `Ya está configurado`,
     already_setup_summary_description: `Este servidor ya está configurado. Aquí está el estado actual del proveedor de texto y la forma más rápida de cambiarlo.`,
     current_provider_field: `Proveedor de texto actual`,
@@ -48,24 +41,18 @@ Prueba con {model_text_command} para asignar un modelo funcional, o con {provide
 				Si deseas cambiar mi proveedor, usa \`/providers\` para registrar y activar un nuevo proveedor de texto predeterminado.`,
     wizard: {
       title: `Configurar TomoriBot`,
-      intro: `Completa cada elemento a continuación y luego\nfinaliza la configuración.`,
-      intro_ready: `Todo lo necesario está listo. Revísalo y luego\nfinaliza la configuración.`,
+      intro: "Completa cada elemento a continuación y luego finaliza la configuración.",
+      intro_ready: "Todo lo necesario está listo. Revísalo y luego finaliza la configuración.",
       progress: `Progreso: {done} de {total} completado`,
       policies_name: `Políticas`,
-      policies_description: `Revisa y acepta los Términos de servicio y la\nPolítica de privacidad.`,
+      policies_description: "Revisa y acepta los Términos de servicio y la Política de privacidad.",
       policies_pending: `Aún no revisado.`,
       policies_completed: `Políticas revisadas y aceptadas.`,
       policies_button_start: `Revisar y aceptar políticas`,
       policies_button_edit: `Revisar políticas`,
       policies_modal_title: `Políticas`,
-      policies_modal_context: `Por favor revisa las políticas de TomoriBot\nantes de finalizar la configuración.
-
-TomoriBot no guarda tu historial de chat. Cuando responde
-en un canal, lee los mensajes recientes de ese canal para
-tener contexto y los envía al proveedor de IA de este servidor.
-Los proveedores y puntos de conexión personalizados tienen sus
-propios términos y prácticas de privacidad, así que revísalos
-por separado.`,
+      policies_modal_context:
+        "Por favor revisa las políticas de TomoriBot antes de finalizar la configuración.\n\nTomoriBot no guarda tu historial de chat. Cuando responde en un canal, lee los mensajes recientes de ese canal para tener contexto y los envía al proveedor de IA de este servidor. Los proveedores y puntos de conexión personalizados tienen sus propios términos y prácticas de privacidad, así que revísalos por separado.",
       policies_modal_acceptance: `Al continuar confirmas que has leído y aceptas los [Términos de servicio]({terms_url}) y la [Política de privacidad]({privacy_url}) de TomoriBot. Los miembros pueden leer ambos en cualquier momento con \`/legal\`, pero solo tú puedes decirles que una IA ahora responde aquí y qué lee para hacerlo.`,
       policies_modal_choice_label: `Confirma las tres para continuar`,
       policies_choice_terms: `Acepto los Términos de servicio de TomoriBot`,
@@ -76,7 +63,7 @@ por separado.`,
       provider_name: `Proveedor de IA`,
       provider_description: `Elige cómo accederán las respuestas a un modelo de IA.`,
       provider_pending: `Ningún proveedor seleccionado.`,
-      provider_hint: `¿Necesitas una clave de API? Abre {help},\nluego Configuración > Paso 1.`,
+      provider_hint: "¿Necesitas una clave de API? Abre {help}, luego Configuración > Paso 1.",
       provider_catalog_encrypted: `La clave de API está cifrada.`,
       provider_byok_summary: `Modo BYOK de usuario activado.`,
       provider_custom_pending: `Configuración del punto de conexión pendiente.`,
@@ -128,37 +115,33 @@ por separado.`,
       change_failed_title: `Cambio de configuración no guardado`,
       commit_in_progress: `Esta configuración ya se está guardando. Dale un momento.`,
       commit_in_progress_title: `Guardando la configuración`,
-      receipt_footer_avatar_skipped_dm: `Las actualizaciones de avatar no están disponibles en
-mensajes directos, así que se omitió el avatar del preajuste.`,
-      receipt_footer_avatar_failed: `El avatar del preajuste no se pudo actualizar en este
-servidor. Puedes configurarlo de nuevo más tarde.`,
+      receipt_footer_avatar_skipped_dm:
+        "Las actualizaciones de avatar no están disponibles en mensajes directos, así que se omitió el avatar del preajuste.",
+      receipt_footer_avatar_failed:
+        "El avatar del preajuste no se pudo actualizar en este servidor. Puedes configurarlo de nuevo más tarde.",
       receipt_title: `¡Configuración completa!`,
-      receipt_desc: `¡Ya estoy completamente configurado para este\nservidor como \`{persona}\`!`,
-      receipt_desc_with_model: `¡Ya estoy completamente configurado para este\nservidor! Responderé con el modelo \`{model_name}\`\n(predeterminado de \`{provider}\`) como \`{persona}\`.`,
-      receipt_desc_custom_endpoint: `¡Ya estoy completamente configurado para este\nservidor! Usaré tu conexión \`{endpoint}\` para\nresponder con \`{model_name}\` como \`{persona}\`.`,
-      receipt_desc_byok: `¡Ya estoy completamente configurado para este\nservidor en modo BYOK de usuario como \`{persona}\`!\nCada miembro responde con su propio proveedor\nhasta que se desactive BYOK.`,
-      receipt_desc_dm: `¡Ya estoy completamente configurado para nuestro\nDM como \`{persona}\`!`,
-      receipt_desc_dm_with_model: `¡Ya estoy completamente configurado para nuestro\nDM como \`{persona}\`!\nResponderé con el modelo \`{model_name}\` mediante \`{provider}\`.`,
-      receipt_desc_custom_endpoint_dm: `¡Ya estoy completamente configurado para nuestro\nDM! Usaré tu conexión \`{endpoint}\` para responder\ncon \`{model_name}\` como \`{persona}\`.`,
-      receipt_desc_byok_dm: `¡Ya estoy completamente configurado para nuestro\nDM en modo BYOK de usuario como \`{persona}\`!\nCada mensaje usa tu propio proveedor hasta\nque se desactive BYOK.`,
-      receipt_next_steps: `- **Mencióname en el chat** para empezar a hablar.
-- Usa \`/persona\` para cambiar mi nombre, apariencia y personalidad.
-- Usa \`/config\` para ajustar cómo actúo y qué puedo hacer.
-- Usa \`/memories\` para enseñarme cosas sobre ti y este servidor.
-- Usa \`/expressions initialize\` para dejarme usar los
-  emojis y stickers de este servidor.`,
+      receipt_desc: "¡Ya estoy completamente configurado para este servidor como `{persona}`!",
+      receipt_desc_with_model:
+        "¡Ya estoy completamente configurado para este servidor! Responderé con el modelo `{model_name}` (predeterminado de `{provider}`) como `{persona}`.",
+      receipt_desc_custom_endpoint:
+        "¡Ya estoy completamente configurado para este servidor! Usaré tu conexión `{endpoint}` para responder con `{model_name}` como `{persona}`.",
+      receipt_desc_byok:
+        "¡Ya estoy completamente configurado para este servidor en modo BYOK de usuario como `{persona}`! Cada miembro responde con su propio proveedor hasta que se desactive BYOK.",
+      receipt_desc_dm: "¡Ya estoy completamente configurado para nuestro DM como `{persona}`!",
+      receipt_desc_dm_with_model:
+        "¡Ya estoy completamente configurado para nuestro DM como `{persona}`! Responderé con el modelo `{model_name}` mediante `{provider}`.",
+      receipt_desc_custom_endpoint_dm:
+        "¡Ya estoy completamente configurado para nuestro DM! Usaré tu conexión `{endpoint}` para responder con `{model_name}` como `{persona}`.",
+      receipt_desc_byok_dm:
+        "¡Ya estoy completamente configurado para nuestro DM en modo BYOK de usuario como `{persona}`! Cada mensaje usa tu propio proveedor hasta que se desactive BYOK.",
+      receipt_next_steps:
+        "- **Mencióname en el chat** para empezar a hablar.\n- Usa `/persona` para cambiar mi nombre, apariencia y personalidad.\n- Usa `/config` para ajustar cómo actúo y qué puedo hacer.\n- Usa `/memories` para enseñarme cosas sobre ti y este servidor.\n- Usa `/expressions initialize` para dejarme usar los emojis y stickers de este servidor.",
       receipt_next_steps_dm: `- **Solo escríbeme aquí** para empezar a hablar.
 - Usa \`/persona\` para cambiar mi nombre, apariencia y personalidad.
 - Usa \`/config\` para ajustar cómo actúo y qué puedo hacer.
 - Usa \`/memories\` para enseñarme cosas sobre ti.`,
-      receipt_learn_more: `Lee la [Wiki oficial](https://docs.tomoribot.app/es-419/features/) o abre {help}
-(luego Funciones) para saber más sobre lo que puedo hacer.
-- [Personas múltiples](https://docs.tomoribot.app/es-419/features/chatting-personality/multiple-personas/) = aspectos, voces y disparadores
-- [Chat y disparadores](https://docs.tomoribot.app/es-419/features/chatting-personality/chatting-and-triggers/) = cuándo y cómo participo
-- [Memoria](https://docs.tomoribot.app/es-419/features/knowledge/memory/) = personas, datos y contexto
-- [Personalización](https://docs.tomoribot.app/es-419/features/knowledge/personalization/) = cómo prefieres que te traten
-- [Generación de medios](https://docs.tomoribot.app/es-419/features/capabilities/media-generation/) = imágenes, video y voz
-- [Herramientas y extensiones](https://docs.tomoribot.app/es-419/features/capabilities/tools-and-extensions/) = búsqueda web y herramientas personalizadas`,
+      receipt_learn_more:
+        "Lee la [Wiki oficial](https://docs.tomoribot.app/es-419/features/) o abre {help} (luego Funciones) para saber más sobre lo que puedo hacer.\n- [Personas múltiples](https://docs.tomoribot.app/es-419/features/chatting-personality/multiple-personas/) = aspectos, voces y disparadores\n- [Chat y disparadores](https://docs.tomoribot.app/es-419/features/chatting-personality/chatting-and-triggers/) = cuándo y cómo participo\n- [Memoria](https://docs.tomoribot.app/es-419/features/knowledge/memory/) = personas, datos y contexto\n- [Personalización](https://docs.tomoribot.app/es-419/features/knowledge/personalization/) = cómo prefieres que te traten\n- [Generación de medios](https://docs.tomoribot.app/es-419/features/capabilities/media-generation/) = imágenes, video y voz\n- [Herramientas y extensiones](https://docs.tomoribot.app/es-419/features/capabilities/tools-and-extensions/) = búsqueda web y herramientas personalizadas",
       permission_denied: `Debes tener el permiso Administrar servidor para configurar.`,
       env_mismatch: `La configuración del entorno cambió. Por favor reinicia la configuración.`,
       forbidden: `Esta sesión de configuración pertenece a otro usuario o canal.`,
@@ -171,9 +154,9 @@ servidor. Puedes configurarlo de nuevo más tarde.`,
       catalog_provider_description: `Elige el proveedor de IA cuya clave de API tienes.`,
       catalog_api_key_label: `Clave de API`,
       catalog_api_key_description: `Validada y cifrada. La clave no se almacena en ningún lugar hasta que finalice la configuración.`,
-      catalog_api_key_help: `¿No sabes cómo obtener una clave de API? Abre\n{help}, luego Configuración > Paso 1.`,
+      catalog_api_key_help: "¿No sabes cómo obtener una clave de API? Abre {help}, luego Configuración > Paso 1.",
       catalog_api_key_placeholder: `No compartas esta clave con nadie`,
-      custom_endpoint_hint: `Para usuarios avanzados que administran o\nconfían en su propio punto de conexión.`,
+      custom_endpoint_hint: "Para usuarios avanzados que administran o confían en su propio punto de conexión.",
       custom_endpoint_connection_pending: `Conexión: no configurada`,
       custom_endpoint_connection_configured: `Conexión: {label}`,
       custom_endpoint_model_pending: `Modelo de texto: no configurado`,

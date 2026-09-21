@@ -151,7 +151,7 @@ describe("providers panel rendering", () => {
     expect(serialized).toContain("**Select** or **add** a provider or endpoint");
     expect(serialized).toContain("+ Add New Provider");
     expect(serialized).toContain("+ Add New Custom Endpoint");
-    expect(serialized).toContain("`/config` > Models");
+    expect(serialized.replaceAll("\\n-# ", " ")).toContain("`/config` > Models");
     expect((select?.options as unknown[])?.length).toBe(2);
   });
 

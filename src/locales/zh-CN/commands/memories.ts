@@ -7,10 +7,10 @@ export default {
     category_stm: `短期`,
     outdated_panel: `这个记忆面板已经过期。请重新运行 /memories。`,
     unavailable: `无法加载服务器记忆。请点「重试」再试一次。`,
-    stale_warning: `因为读取失败，保存的数据可能已经过期。\n在重新读取成功之前，无法进行写入操作。`,
+    stale_warning: "因为读取失败，保存的数据可能已经过期。 在重新读取成功之前，无法进行写入操作。",
     retry: `重试`,
     memories_title: `[服务器记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#personal-vs-server-memories)`,
-    memories_description: `只要这个人格在这里使用中，\n这些记忆就会在\n整个服务器生效。`,
+    memories_description: "只要这个人格在这里使用中， 这些记忆就会在 整个服务器生效。",
     persona_default_name: `人格`,
     persona_select_placeholder: `选择一个人格来查看记忆...`,
     persona_memory_count: `{count} 条记忆`,
@@ -34,10 +34,7 @@ export default {
     remove_button: `移除记忆`,
     remove_title: `移除服务器记忆`,
     remove_confirm: `确认移除`,
-    remove_confirm_description: `确定要移除这条服务器记忆吗？
-这个操作无法撤销。
-
-{memory}`,
+    remove_confirm_description: "确定要移除这条服务器记忆吗？ 这个操作无法撤销。\n\n{memory}",
     cancel: `取消`,
     added_heading: `已新增服务器记忆`,
     added_detail: `已保存服务器记忆：「{memory}」`,
@@ -48,15 +45,13 @@ export default {
     no_changes_heading: `没有变更`,
     no_changes_detail: `提交的内容和已保存的内容一样。`,
     changed_state_heading: `状态已变更`,
-    changed_state_detail: `指定的记忆已不存在，
-或已在别处被修改。`,
+    changed_state_detail: "指定的记忆已不存在， 或已在别处被修改。",
     write_failed_heading: `操作失败`,
     write_failed_detail: `无法保存这条服务器记忆。请再试一次。`,
     content_too_long_heading: `记忆太长`,
     content_too_long_detail: `服务器记忆不能超过 {max} 个字符。`,
     limit_reached_heading: `已达记忆上限`,
-    limit_reached_detail: `这个人格已经达到允许的
-服务器记忆上限（{max}）。`,
+    limit_reached_detail: "这个人格已经达到允许的 服务器记忆上限（{max}）。",
     empty_content_heading: `需要记忆内容`,
     empty_content_detail: `提交前请先输入记忆内容。`,
     batch_added_heading: `已新增服务器记忆`,
@@ -64,28 +59,23 @@ export default {
     batch_file_invalid_heading: `文件无法读取`,
     batch_file_invalid_detail: `这个上传文件不是可读取的编号行 .txt 文件。`,
     batch_file_too_large_heading: `文件太大`,
-    batch_file_too_large_detail: `这个 .txt 文件太大，无法读取。
-请拆分后再试。`,
+    batch_file_too_large_detail: "这个 .txt 文件太大，无法读取。 请拆分后再试。",
     batch_all_duplicates_heading: `没有新内容`,
     batch_all_duplicates_detail: `这个文件里的每条记忆都已经保存过了。`,
     batch_limit_reached_heading: `空间不足`,
-    batch_limit_reached_detail: `这个文件有 {requested} 条新记忆，
-但 {max} 条的上限只剩 {available} 条。`,
+    batch_limit_reached_detail: "这个文件有 {requested} 条新记忆， 但 {max} 条的上限只剩 {available} 条。",
     blacklisted_error_heading: `用户已被列入黑名单`,
-    blacklisted_error_detail: `你在服务器已被列入黑名单，
-无法教导服务器记忆。`,
+    blacklisted_error_detail: "你在服务器已被列入黑名单， 无法教导服务器记忆。",
     teaching_disabled_error_heading: `教导已关闭`,
     teaching_disabled_error_detail: `这个服务器已关闭成员教导记忆。`,
     empty_memory_label: `（空白记忆）`,
     no_memories: `这个人格还没有教导过任何服务器记忆。`,
     no_owned_memories: `你还没有教导这个人格任何内容。`,
-    owner_scope_notice: `你目前只会看到自己在这个服务器教导的记忆。
-有管理服务器权限的成员可以看到并编辑
-每位成员的记忆。`,
+    owner_scope_notice:
+      "你目前只会看到自己在这个服务器教导的记忆。 有管理服务器权限的成员可以看到并编辑 每位成员的记忆。",
     no_personas: `这个服务器没有配置任何人格。`,
     documents_title: `[文档](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#document-knowledge-base-rag)`,
-    documents_description: `附到这个服务器或
-单一人格的参考文档。`,
+    documents_description: "附到这个服务器或 单一人格的参考文档。",
     documents_teaching_disabled: `这个服务器已关闭成员访问文档。`,
     document_scope_persona: `单一人格`,
     document_scope_serverwide: `整个服务器`,
@@ -105,18 +95,14 @@ export default {
     next: `下一个 →`,
     document_remove_button: `移除文档`,
     document_remove_title: `移除文档`,
-    document_remove_description: `要移除「{name}」和所有已保存的分块吗？
-这个操作无法撤销。`,
+    document_remove_description: "要移除「{name}」和所有已保存的分块吗？ 这个操作无法撤销。",
     history_remove_title: `移除聊天记录`,
-    history_remove_description: `要移除记录文档「{name}」吗？
-这个操作无法撤销。`,
+    history_remove_description: "要移除记录文档「{name}」吗？ 这个操作无法撤销。",
     document_chunk_edit_button: `编辑分块`,
     document_chunk_remove_button: `移除分块`,
     document_chunk_remove_title: `移除文档分块`,
-    document_chunk_remove_description: `要从文档中移除这个分块吗？
-这个操作无法撤销。`,
-    document_chunk_remove_last_description: `这是最后一个分块。移除它也会
-移除整份文档。这个操作无法撤销。`,
+    document_chunk_remove_description: "要从文档中移除这个分块吗？ 这个操作无法撤销。",
+    document_chunk_remove_last_description: "这是最后一个分块。移除它也会 移除整份文档。这个操作无法撤销。",
     document_add_modal_title: `新增服务器文档`,
     document_name_label: `文档名称`,
     document_file_label: `文档文件`,
@@ -127,10 +113,7 @@ export default {
     document_chunk_content_label: `分块内容`,
     vectorize_button: `向量化`,
     vectorize_title: `将记忆移为文档`,
-    vectorize_impact: `这条记忆将不再是记忆，而是变成一份文档。
-它的内容会移到「文档」分类。
-
-{memory}`,
+    vectorize_impact: "这条记忆将不再是记忆，而是变成一份文档。 它的内容会移到「文档」分类。\n\n{memory}",
     vectorize_confirm: `继续`,
     vectorize_modal_title: `向量化服务器记忆`,
     vectorize_content_label: `文档内容`,
@@ -147,17 +130,13 @@ export default {
     document_removed_with_last_chunk_heading: `文档已移除`,
     document_removed_with_last_chunk_detail: `最后一个分块和它的文档都已移除。`,
     vectorized_heading: `记忆已移为文档`,
-    vectorized_detail: `已创建「{name}」，共 {chunks} 个分块，
-并移除原本的记忆。`,
+    vectorized_detail: "已创建「{name}」，共 {chunks} 个分块， 并移除原本的记忆。",
     vectorize_working_heading: `正在向量化`,
-    vectorize_working_detail: `这可能需要一点时间：记忆正在
-嵌入，之后才会变成文档。`,
+    vectorize_working_detail: "这可能需要一点时间：记忆正在 嵌入，之后才会变成文档。",
     document_working_heading: `正在上传`,
-    document_working_detail: `这可能需要一点时间，取决于
-要嵌入的文档大小。`,
+    document_working_detail: "这可能需要一点时间，取决于 要嵌入的文档大小。",
     vectorize_partial_failure_heading: `文档已创建，记忆仍保留`,
-    vectorize_partial_failure_detail: `已创建「{name}」，但无法移除
-原本的记忆。请手动移除。`,
+    vectorize_partial_failure_detail: "已创建「{name}」，但无法移除 原本的记忆。请手动移除。",
     document_rag_disabled_heading: `文档不可用`,
     document_rag_disabled_detail: `这个部署无法使用文档存储。`,
     document_memory_critical_heading: `服务器忙碌中`,
@@ -191,8 +170,7 @@ export default {
     stm_title: `[短期记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/#short-term-memory-stm)`,
     stm_empty: `这个服务器没有使用中的短期记忆条目。`,
     stm_active_count: `有 {count} 条使用中的短期记忆。`,
-    stm_manager_only: `你需要管理服务器权限才能查看
-这个服务器的短期记忆。`,
+    stm_manager_only: "你需要管理服务器权限才能查看 这个服务器的短期记忆。",
     stm_unscoped: `无范围`,
     stm_manage_button: `清除短期记忆`,
     stm_too_many: `目前有 {count} 条使用中的条目。管理工具最多支持 {max} 条。`,
@@ -201,8 +179,7 @@ export default {
     stm_checkbox_label_continued: `更多要保留的条目`,
     stm_checkbox_description: `取消勾选应该清除的条目。`,
     stm_changed_state_heading: `短期记忆已变更`,
-    stm_changed_state_detail: `弹窗打开期间，使用中的条目已变更。
-没有清除任何内容。请重新打开管理工具。`,
+    stm_changed_state_detail: "弹窗打开期间，使用中的条目已变更。 没有清除任何内容。请重新打开管理工具。",
     stm_cleared_heading: `短期记忆已清除`,
     stm_cleared_detail: `已清除 {count} 条短期记忆。`,
   },

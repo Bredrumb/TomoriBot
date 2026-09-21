@@ -8,8 +8,25 @@ import { log } from "../misc/logger";
 import { initializeEmbedProtocol } from "@/utils/discord/embedProtocol";
 import { initializeIntentPacks } from "@/utils/text/localeIntentPacks";
 
-const locales: Locales = {};
-let isInitialized = false; // Track initialization state
+interface LocalizerRuntimeState {
+  locales: Locales;
+  isInitialized: boolean;
+  initializationPromise: Promise<void> | null;
+  warnedFallbackKeys: Set<string>;
+}
+
+const LOCALIZER_RUNTIME_STATE = Symbol.for("tomoribot-localizer-runtime-state");
+const localizerState =
+  (Reflect.get(globalThis, LOCALIZER_RUNTIME_STATE) as LocalizerRuntimeState | undefined) ??
+  ({
+    locales: {},
+    isInitialized: false,
+    initializationPromise: null,
+    warnedFallbackKeys: new Set<string>(),
+  } satisfies LocalizerRuntimeState);
+Reflect.set(globalThis, LOCALIZER_RUNTIME_STATE, localizerState);
+
+const locales = localizerState.locales;
 
 /**
  * Removes common indentation from multi-line strings.
@@ -40,11 +57,18 @@ function dedent(str: string): string {
  * This must be called and awaited before using the localizer.
  * @returns A promise that resolves when all locale files are loaded
  */
-export async function initializeLocalizer(): Promise<void> {
-  if (isInitialized) {
-    return;
-  }
+export function initializeLocalizer(): Promise<void> {
+  if (localizerState.isInitialized) return Promise.resolve();
+  if (localizerState.initializationPromise) return localizerState.initializationPromise;
 
+  localizerState.initializationPromise = initializeLocalizerUncached().catch((error) => {
+    localizerState.initializationPromise = null;
+    throw error;
+  });
+  return localizerState.initializationPromise;
+}
+
+async function initializeLocalizerUncached(): Promise<void> {
   try {
     const localesDir = path.resolve("src", "locales");
     const entries = await readdir(localesDir, { withFileTypes: true });
@@ -89,12 +113,12 @@ export async function initializeLocalizer(): Promise<void> {
 
     if (Object.keys(locales).length > 0) {
       log.success(`Successfully loaded locales: [${Object.keys(locales).join(", ")}]`);
-      isInitialized = true;
+      localizerState.isInitialized = true;
       try {
         initializeEmbedProtocol();
         initializeIntentPacks();
       } catch (error) {
-        isInitialized = false;
+        localizerState.isInitialized = false;
         throw error;
       }
     } else {
@@ -176,7 +200,7 @@ export function resolveSupportedLocale(locale: string): LocaleCode {
 }
 
 /** One `locale:key` per process, so a hot path cannot turn a single gap into a log flood. */
-const warnedFallbackKeys = new Set<string>();
+const warnedFallbackKeys = localizerState.warnedFallbackKeys;
 
 /**
  * Walks the loaded tree for `locale` only. Returns `undefined` for an absent path or for a
@@ -212,7 +236,7 @@ function lookupLocaleString(locale: string, key: string): string | undefined {
  * @param variables - Key-value pairs to replace placeholders in the localized string.
  */
 export const localizer = (locale: string, key: string, variables: LocalizerVariables = {}): string => {
-  if (!isInitialized) {
+  if (!localizerState.isInitialized) {
     log.warn(`Localization system not initialized when requesting key: ${key}`);
     return key;
   }
@@ -258,7 +282,7 @@ export const localizer = (locale: string, key: string, variables: LocalizerVaria
  * the picker would otherwise reshuffle between hosts and never agree with the docs switcher.
  */
 export function getSupportedLocales(): string[] {
-  if (!isInitialized) {
+  if (!localizerState.isInitialized) {
     log.warn("Localization system not initialized when requesting supported locales");
     return [];
   }
@@ -290,7 +314,7 @@ export function getLocaleEndonym(locale: string): string {
  * @param path - Dot-notation path to the parent object (e.g., 'commands.reward')
  */
 export function getLocaleSubKeys(locale: string, path: string): string[] {
-  if (!isInitialized || !locales[locale]) return [];
+  if (!localizerState.isInitialized || !locales[locale]) return [];
 
   const keys = path.split(".");
   let obj: unknown = locales[locale];
@@ -320,7 +344,7 @@ export function getLocaleSubKeys(locale: string, path: string): string[] {
  * @param key - Dot-notation path to a leaf string (e.g., 'commands.reward.hug.embed_title')
  */
 export function hasLocaleKey(locale: string, key: string): boolean {
-  if (!isInitialized) return false;
+  if (!localizerState.isInitialized) return false;
 
   return lookupLocaleString(locale, key) !== undefined;
 }
@@ -330,7 +354,7 @@ export function hasLocaleKey(locale: string, key: string): boolean {
  * the union across locales, so substituting English for a missing list would silently duplicate it.
  */
 export function getLocaleStringList(locale: string, key: string): string[] | undefined {
-  if (!isInitialized) return undefined;
+  if (!localizerState.isInitialized) return undefined;
 
   let value: unknown = locales[locale];
   for (const segment of key.split(".")) {
@@ -366,7 +390,7 @@ export function getDefaultBotName(locale: string): string {
  * @returns Array of base trigger words for the specified locale
  */
 export function getBaseTriggerWords(locale: string): string[] {
-  if (!isInitialized) {
+  if (!localizerState.isInitialized) {
     log.warn("Localization system not initialized when requesting base trigger words");
     return [...DEFAULT_BASE_TRIGGER_WORDS];
   }

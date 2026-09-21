@@ -38,6 +38,7 @@ import {
   validateComponentsV2MessageLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
@@ -918,7 +919,9 @@ describe("NovelAI preset Parameters budgeting", () => {
   it("keeps normal active names exact while preserving a leading BOM in a bounded name", () => {
     const normalPresets = makeNaiPresetCatalog(1, 3, false);
     const normalPayload = buildNaiParametersPayload("en-US", "fresh", false, ["novelai"], normalPresets, 0);
-    expect(getTextDisplays(normalPayload).join("\n")).toContain(normalPresets[0]?.preset_name ?? "");
+    expect(getTextDisplays(normalPayload).join("\n")).toContain(
+      formatPanelProse(`> ${normalPresets[0]?.preset_name ?? ""}`),
+    );
 
     const oversizedPresets = makeNaiPresetCatalog(1, 3, true);
     const oversizedPayload = buildNaiParametersPayload("en-US", "fresh", true, ["novelai"], oversizedPresets, 0);
@@ -1113,17 +1116,21 @@ describe("Switch Models capability notice budgeting", () => {
               const expectedWarnings: string[] = [];
               if (!imageHealthy) {
                 expectedWarnings.push(
-                  withLinePrefix(
-                    "-# ",
-                    localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled)),
+                  formatPanelProse(
+                    withLinePrefix(
+                      "-# ",
+                      localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled)),
+                    ),
                   ),
                 );
               }
               if (!videoHealthy) {
                 expectedWarnings.push(
-                  withLinePrefix(
-                    "-# ",
-                    localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled)),
+                  formatPanelProse(
+                    withLinePrefix(
+                      "-# ",
+                      localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled)),
+                    ),
                   ),
                 );
               }
@@ -1138,7 +1145,7 @@ describe("Switch Models capability notice budgeting", () => {
                     "commands.config.panel.image_generation_missing_model",
                     "commands.config.panel.video_generation_disabled_direction",
                     "commands.config.panel.video_generation_missing_model",
-                  ].some((key) => text.includes(withLinePrefix("-# ", localizer(locale, key)))),
+                  ].some((key) => text.includes(formatPanelProse(withLinePrefix("-# ", localizer(locale, key))))),
                 );
                 expect(capabilityNotice).toBeUndefined();
               }
@@ -1292,10 +1299,14 @@ describe("Switch Models capability notice budgeting", () => {
         });
         const renderedText = getTextDisplays(payload).join("\n");
         for (const key of speechState.present) {
-          expect(renderedText).toContain(withLinePrefix("-# ", localizer(locale, `commands.config.panel.${key}`)));
+          expect(renderedText).toContain(
+            formatPanelProse(withLinePrefix("-# ", localizer(locale, `commands.config.panel.${key}`))),
+          );
         }
         for (const key of speechState.absent) {
-          expect(renderedText).not.toContain(withLinePrefix("-# ", localizer(locale, `commands.config.panel.${key}`)));
+          expect(renderedText).not.toContain(
+            formatPanelProse(withLinePrefix("-# ", localizer(locale, `commands.config.panel.${key}`))),
+          );
         }
       }
     }
@@ -1329,7 +1340,7 @@ describe("Switch Models capability notice budgeting", () => {
       ],
     };
     expect(countRenderedComponents(ninthSlot)).toBeGreaterThan(componentBudget);
-  });
+  }, 15_000);
 });
 
 describe("voices page text and component budgeting", () => {

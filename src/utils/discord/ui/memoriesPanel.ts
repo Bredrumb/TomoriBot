@@ -33,11 +33,8 @@ import {
   buildStateControlRow,
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
-import {
-  DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-  DISCORD_TEXT_INPUT_MAX,
-  measureComponentTextLength,
-} from "@/utils/discord/ui/componentsV2Limits";
+import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX, DISCORD_TEXT_INPUT_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
@@ -512,7 +509,11 @@ function buildPayload(components: ComponentInContainerData[], receipt?: PanelRec
 
 function measureReceiptTextLength(receipt?: PanelReceipt): number {
   if (!receipt) return 0;
-  return measureComponentTextLength(buildPanelReceiptContainer(receipt));
+  return measureFormattedPanelTextLength(buildPanelReceiptContainer(receipt));
+}
+
+function measurePanelTextLength(content: string): number {
+  return measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content });
 }
 
 function buildRetryRow(
@@ -600,7 +601,9 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
       });
       const titleText = `### ${localizer(locale, "commands.memories.remove_title")}\n${descriptionTemplate}`;
       const fixedTextLength =
-        measureReceiptTextLength(receipt) + measureComponentTextLength(components) + getDiscordTextLength(titleText);
+        measureReceiptTextLength(receipt) +
+        measureFormattedPanelTextLength(components) +
+        measurePanelTextLength(titleText);
       const availableBudget = Math.max(0, DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength);
 
       components.push(
@@ -653,7 +656,9 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
       const impactTemplate = localizer(locale, "commands.memories.vectorize_impact", { memory: "" });
       const titleText = `### ${localizer(locale, "commands.memories.vectorize_title")}\n${impactTemplate}`;
       const fixedTextLength =
-        measureReceiptTextLength(receipt) + measureComponentTextLength(components) + getDiscordTextLength(titleText);
+        measureReceiptTextLength(receipt) +
+        measureFormattedPanelTextLength(components) +
+        measurePanelTextLength(titleText);
       const availableBudget = Math.max(0, DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength);
 
       components.push(
@@ -867,7 +872,7 @@ export function buildMemoriesPanelPayload(input: MemoriesPanelRenderInput): Memo
       }
 
       if (selectedMemory) {
-        const fixedTextLength = measureReceiptTextLength(receipt) + measureComponentTextLength(components);
+        const fixedTextLength = measureReceiptTextLength(receipt) + measureFormattedPanelTextLength(components);
         const availableBudget = Math.max(0, DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength);
 
         components.push({
@@ -1046,8 +1051,7 @@ ${localizer(locale, "commands.memories.documents_description")}`,
     }
 
     // The thumbnail belongs to the persona scope only: serverwide documents have no persona whose
-    // face could stand for them. Only the heading shares the Section, so the rest of the page keeps
-    // the 65-character budget rather than the 40 that applies beside a Thumbnail.
+    // face could stand for them. Only the heading belongs in the narrower Section layout.
     components.push(
       buildOptionalThumbnailSection(
         documentsHeading,
@@ -1209,9 +1213,9 @@ ${localizer(locale, "commands.memories.documents_description")}`,
           : [];
       const fixedTextLength =
         measureReceiptTextLength(receipt) +
-        measureComponentTextLength(components) +
-        getDiscordTextLength(titleContent) +
-        measureComponentTextLength(removePromptComponent);
+        measureFormattedPanelTextLength(components) +
+        measurePanelTextLength(titleContent) +
+        measureFormattedPanelTextLength(removePromptComponent);
       const availableBudget = Math.max(0, DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength);
 
       components.push({

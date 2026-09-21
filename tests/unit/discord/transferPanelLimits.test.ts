@@ -21,6 +21,7 @@ import {
 } from "@/utils/discord/ui/transferPanel";
 import { validateComponentsV2MessageLimits, validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { ColorCode } from "@/utils/misc/logger";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
@@ -56,6 +57,13 @@ function textDisplays(value: unknown): string[] {
     }
   });
   return contents;
+}
+
+function normalizePanelProse(value: string): string {
+  return value
+    .replace(/\r?\n(?:> |-# )?/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 function buttonIds(value: unknown): string[] {
@@ -215,7 +223,7 @@ describe("transfer panel Components V2 limits", () => {
       const exclusionText = textDisplays(exclusionPayload).join("\n");
       for (const [field, exclusion] of Object.entries(V2_CONFIG_EXCLUSIONS)) {
         expect(exclusionText).toContain(field);
-        expect(exclusionText).toContain(exclusion.reason);
+        expect(normalizePanelProse(exclusionText)).toContain(normalizePanelProse(exclusion.reason));
       }
 
       for (const locale of RUNTIME_LOCALES) {
@@ -310,12 +318,11 @@ describe("transfer panel Components V2 limits", () => {
         }),
       )[0];
       if (droppedContent === undefined) throw new Error(`Preview payload for ${kind} carries no TextDisplay`);
-      const droppedLines = droppedContent.split("\n");
       for (const field of ["nai_preset_name", "nai_char_ref_url"] as const) {
         expect({
           kind,
           field,
-          quoted: droppedLines.includes(`> ${field}: ${V2_CONFIG_EXCLUSIONS[field].reason}`),
+          quoted: droppedContent.includes(formatPanelProse(`> ${field}: ${V2_CONFIG_EXCLUSIONS[field].reason}`)),
         }).toEqual({ kind, field, quoted: true });
       }
     }

@@ -354,164 +354,110 @@ export default {
       description: `如何開始使用我與我的功能`,
       get_api_key: {
         title: `取得 API 金鑰`,
-        description: `API 金鑰讓我能使用 AI 供應商的模型。
-我生成的所有內容都會記在那組金鑰上，所以請把它
-當成密碼一樣保管。
-完成設定需要一組金鑰：
-> **1.** 從下方挑一個供應商，開啟它的說明。
-> **2.** 複製它給你的金鑰。**絕對不要分享**給任何人，
-> 也不要貼到頻道裡：只能貼進 {setup}
-> 為你開啟的欄位。
-> **3.** 執行 {setup}，並在我要求時貼上金鑰。`,
-        picker_footer: `-# 第二份清單是選用的：Brave Search 增加網頁
--# 結果，ElevenLabs 增加託管語音。兩者各自開啟
--# 自己的說明，而且都不是完成設定所必需。
--# 如果你的端點不在清單上，先略過金鑰，改讀
--# 同一頁的 **自訂端點（進階）**。`,
+        description:
+          "API 金鑰讓我能使用 AI 供應商的模型。 我生成的所有內容都會記在那組金鑰上，所以請把它 當成密碼一樣保管。 完成設定需要一組金鑰：\n> **1.** 從下方挑一個供應商，開啟它的說明。\n> **2.** 複製它給你的金鑰。**絕對不要分享**給任何人，也不要貼到頻道裡：只能貼進 {setup} 為你開啟的欄位。\n> **3.** 執行 {setup}，並在我要求時貼上金鑰。",
+        picker_footer:
+          "-# 第二份清單是選用的：Brave Search 增加網頁 結果，ElevenLabs 增加託管語音。兩者各自開啟 自己的說明，而且都不是完成設定所必需。 如果你的端點不在清單上，先略過金鑰，改讀 同一頁的 **自訂端點（進階）**。",
       },
       change_trigger_behavior: {
         title: `調整觸發行為`,
-        description: `預設情況下，你喊我的名字、@標註我，或回覆我
-時，我就會回應。你可以放寬、收窄，或
-按頻道關閉這個行為。
-
-**我可以在哪裡說話**
-你可以讓我只在白名單頻道回覆。
-在 {moderationWhitelist} 加入這些頻道。
-> 不在清單上的頻道會保持安靜。
-
-**主動開口**
-{configAutoTrigger} 讓我每隔幾則訊息，或隨機
-自動送出一則訊息。
-
-**只接受標註觸發**
-明確觸發模式會阻止我因為單純喊名字就回應，
-改成等待 @標註。請在 {configBehaviorTrigger}
-開啟。`,
+        description:
+          "預設情況下，你喊我的名字、@標註我，或回覆我 時，我就會回應。你可以放寬、收窄，或 按頻道關閉這個行為。\n\n**我可以在哪裡說話**\n你可以讓我只在白名單頻道回覆。 在 {moderationWhitelist} 加入這些頻道。\n> 不在清單上的頻道會保持安靜。\n\n**主動開口**\n{configAutoTrigger} 讓我每隔幾則訊息，或隨機 自動送出一則訊息。\n\n**只接受標註觸發**\n明確觸發模式會阻止我因為單純喊名字就回應， 改成等待 @標註。請在 {configBehaviorTrigger} 開啟。",
       },
       create_first_persona: {
         title: `建立你的人格`,
-        description: `*人格* 就是換了名字、頭像、個性等等的我，
-但功能完全相同！你可以編輯現有的那一個，
-也可以建立新的。
-
-**修改現有的人格**
-{configPersonaGeneral} 設定我的名字、個性，以及我
-怎麼稱呼別人。{configPersonaAppearance} 設定我的頭像。
-
-**用一句話寫出新的人格**
-{personaGenerate} 能用簡短描述生成完整的人格。
-{personaCreate} 則給你空白範本。
-
-**從別的地方帶一個進來**
-{personaImport} 接受從 botbooru 或 chub 等角色卡
-網站下載的角色卡。`,
-        footer: `你可以同時擁有多個人格。請看功能底下的
--# **多個人格**。`,
+        description:
+          "*人格* 就是換了名字、頭像、個性等等的我， 但功能完全相同！你可以編輯現有的那一個， 也可以建立新的。\n\n**修改現有的人格**\n{configPersonaGeneral} 設定我的名字、個性，以及我 怎麼稱呼別人。{configPersonaAppearance} 設定我的頭像。\n\n**用一句話寫出新的人格**\n{personaGenerate} 能用簡短描述生成完整的人格。 {personaCreate} 則給你空白範本。\n\n**從別的地方帶一個進來**\n{personaImport} 接受從 botbooru 或 chub 等角色卡 網站下載的角色卡。",
+        footer: "你可以同時擁有多個人格。請看功能底下的 **多個人格**。",
       },
       explore_features: {
         title: `探索我的功能！`,
-        description: `設定完成。既然我能說話了，以下是我現在能做的事。
-- **使用這個伺服器的表情符號與貼圖**，執行
-  {expressionsInitialize} 之後即可。
-- **歡迎新成員**，在 {configWelcome} 設定。
-- **記住與提醒**：直接叫我提醒你，或
-  告訴我值得留下的事。
-- **搜尋網頁**並使用其他工具，在
-  {configTools} 開啟。
-- **製作圖片、影片與語音**，用 {generateImage}、
-  {generateVideo} 與 {generateVoice}。
-
-我的開關大多在 {config}，但不是全部。`,
-        footer: `**Brave Search** 會為我原本的搜尋再加上網頁
--# 結果。它需要自己的金鑰，而設定底下的
--# **取得 API 金鑰** 會從選用服務清單開啟它的
--# 說明。文件網站是這個面板的完整版本，
--# 裡頭詳細說明了每一項設定。`,
+        description:
+          "設定完成。既然我能說話了，以下是我現在能做的事。\n- **使用這個伺服器的表情符號與貼圖**，執行 {expressionsInitialize} 之後即可。\n- **歡迎新成員**，在 {configWelcome} 設定。\n- **記住與提醒**：直接叫我提醒你，或 告訴我值得留下的事。\n- **搜尋網頁**並使用其他工具，在 {configTools} 開啟。\n- **製作圖片、影片與語音**，用 {generateImage}、 {generateVideo} 與 {generateVoice}。\n\n我的開關大多在 {config}，但不是全部。",
+        footer:
+          "**Brave Search** 會為我原本的搜尋再加上網頁 結果。它需要自己的金鑰，而設定底下的 **取得 API 金鑰** 會從選用服務清單開啟它的 說明。文件網站是這個面板的完整版本， 裡頭詳細說明了每一項設定。",
       },
     },
     personal_profile: {
       title: `個人資料`,
-      description: `屬於你、並跟著你到每個我在的伺服器\n的設定。`,
+      description: "屬於你、並跟著你到每個我在的伺服器 的設定。",
       nickname_pronouns: {
         title: `你的稱呼與代稱`,
-        description: `告訴我怎麼稱呼你，我會在所有地方使用。\n\n在 {personalProfile} 設定。\n> 稱呼：我不用你的 Discord 名稱，改用這個稱呼你\n> 前綴與後綴：敬稱或稱謂，例如 \`-san\`\n> 代稱：\`she/her\`、\`they/them\`、\`any\`，或你的名字\n\n欄位留空的話，我會改用你目前的 Discord\n名稱，以及人格自己的稱呼習慣。`,
-        footer: `單一人格可以改用不同方式稱呼你。請在\n-# 個人資料 > 人格專屬偏好設定。`,
+        description:
+          "告訴我怎麼稱呼你，我會在所有地方使用。\n\n在 {personalProfile} 設定。\n> 稱呼：我不用你的 Discord 名稱，改用這個稱呼你\n> 前綴與後綴：敬稱或稱謂，例如 `-san`\n> 代稱：`she/her`、`they/them`、`any`，或你的名字\n\n欄位留空的話，我會改用你目前的 Discord 名稱，以及人格自己的稱呼習慣。",
+        footer: "單一人格可以改用不同方式稱呼你。請在 個人資料 > 人格專屬偏好設定。",
       },
       personal_memories: {
         title: `個人記憶`,
-        description: `我特別記得關於你的事，在每個伺服器都適用。\n\n**直接告訴我就好**\n在聊天中說出來，我會自己記下來。發生時\n會出現一則確認訊息。\n\n**或手動管理**\n{personalMemories} 會列出我持有的所有相關內容，\n並讓你編輯或刪除任何一則。\n\n**決定我能用多少**\n{personalPrivacy} 設定你的隱私等級，從完整\n個人化到完全不個人化。`,
-        footer: `這些與這個伺服器的共享記憶是分開的，\n-# 這裡的任何人可以看到並編輯後者。`,
+        description:
+          "我特別記得關於你的事，在每個伺服器都適用。\n\n**直接告訴我就好**\n在聊天中說出來，我會自己記下來。發生時 會出現一則確認訊息。\n\n**或手動管理**\n{personalMemories} 會列出我持有的所有相關內容， 並讓你編輯或刪除任何一則。\n\n**決定我能用多少**\n{personalPrivacy} 設定你的隱私等級，從完整 個人化到完全不個人化。",
+        footer: "這些與這個伺服器的共享記憶是分開的， 這裡的任何人可以看到並編輯後者。",
       },
       personal_providers: {
         title: `個人供應商（進階）`,
-        description: `在你與我對話的所有地方，改用你自己的 API 金鑰與\n你自己的模型回答，而不是伺服器使用的設定。\n\n**儲存供應商**\n{personalProviders} 會保存你的金鑰，並立刻啟用你的\n個人文字模型。\n\n**挑選不同模型**\n{personalModels} 可切換模型，取樣器與\n備援模型就在同一個分類底下。\n> 你的個人設定只影響你觸發的回覆。\n> 伺服器裡其他人不會被切換過去。\n\n有些伺服器要求這樣做。如果伺服器開啟了使用者\nBYOK，除非你在這裡儲存供應商，否則我無法回答你。`,
+        description:
+          "在你與我對話的所有地方，改用你自己的 API 金鑰與 你自己的模型回答，而不是伺服器使用的設定。\n\n**儲存供應商**\n{personalProviders} 會保存你的金鑰，並立刻啟用你的 個人文字模型。\n\n**挑選不同模型**\n{personalModels} 可切換模型，取樣器與 備援模型就在同一個分類底下。\n> 你的個人設定只影響你觸發的回覆。\n> 伺服器裡其他人不會被切換過去。\n\n有些伺服器要求這樣做。如果伺服器開啟了使用者 BYOK，除非你在這裡儲存供應商，否則我無法回答你。",
       },
     },
     custom_endpoints: {
       title: `自訂端點（進階）`,
-      description: `把我指向你自己架設或信任的端點：Ollama、LM Studio、\nLiteLLM、KoboldCPP、ComfyUI，或自架的語音伺服器。\n> {providers} 為整個伺服器註冊一個。\n> {personalProviders} 只為你一個人註冊。`,
+      description:
+        "把我指向你自己架設或信任的端點：Ollama、LM Studio、 LiteLLM、KoboldCPP、ComfyUI，或自架的語音伺服器。\n> {providers} 為整個伺服器註冊一個。\n> {personalProviders} 只為你一個人註冊。",
       text_models: {
         title: `文字模型`,
-        description: `選擇 **新增自訂端點**，然後給它一個標籤、一個\n基準 URL，以及它的 API 風格。需要驗證權杖的話\n也一併加入。\n\n選取剛儲存的標籤，選擇 **+ 新增文字模型**，\n輸入端點要求的完整模型代號。加入模型即會啟用它。\n> 請誠實宣告圖片輸入、工具使用與結構化輸出。\n> 我決定要送你什麼時，會信任這些標記。\n\n切換過去請用 {configSwitchModels}。`,
-        footer: `完整的 API 風格與相容性參考在\n-# 文件網站。`,
+        description:
+          "選擇 **新增自訂端點**，然後給它一個標籤、一個 基準 URL，以及它的 API 風格。需要驗證權杖的話 也一併加入。\n\n選取剛儲存的標籤，選擇 **+ 新增文字模型**， 輸入端點要求的完整模型代號。加入模型即會啟用它。\n> 請誠實宣告圖片輸入、工具使用與結構化輸出。\n> 我決定要送你什麼時，會信任這些標記。\n\n切換過去請用 {configSwitchModels}。",
+        footer: "完整的 API 風格與相容性參考在 文件網站。",
       },
       comfyui: {
         title: `ComfyUI（用於影片與圖片）`,
-        description: `先在 ComfyUI 裡建好並測試工作流，再用
-**Save (API Format)** 匯出。
-
-把提示詞預留位置放在提示詞該在的地方，其他
-預留位置放在你想注入尺寸、長度或模型代號的
-位置。
-
-用 API 相容性 \`ComfyUI\` 註冊端點（例如
-\`http://127.0.0.1:8188\`），然後加入圖片或影片
-模型，並上傳匯出的 JSON。
-> 工作流必須以真正的儲存節點結尾。只有預覽的
-> 節點會讓我沒有檔案可下載。`,
-        footer: `現成的工作流隨 GitHub 儲存庫提供，\n-# 完整的預留位置清單在文件網站。`,
+        description:
+          "先在 ComfyUI 裡建好並測試工作流，再用 **Save (API Format)** 匯出。\n\n把提示詞預留位置放在提示詞該在的地方，其他 預留位置放在你想注入尺寸、長度或模型代號的 位置。\n\n用 API 相容性 `ComfyUI` 註冊端點（例如 `http://127.0.0.1:8188`），然後加入圖片或影片 模型，並上傳匯出的 JSON。\n> 工作流必須以真正的儲存節點結尾。只有預覽的 節點會讓我沒有檔案可下載。",
+        footer: "現成的工作流隨 GitHub 儲存庫提供， 完整的預留位置清單在文件網站。",
       },
       text_to_speech: {
         title: `文字轉語音（用於語音）`,
-        description: `用同樣的方式註冊語音端點，然後給每個人格\n一個聲音。\n\n託管服務與自架伺服器都可以，包括\nChatterbox-Turbo、Qwen3-TTS、IrodoriTTS 與 ElevenLabs。\n註冊端點後，再為它加入語音模型。\n> 在 {configPersonaVoice} 指派語音。\n> 在 {configVoices} 調整語速與預設值。`,
-        footer: `你傳給我的語音訊息會透過同一份端點清單\n-# 轉錄，設定方式相同。託管的語音方面，\n-# ElevenLabs 在設定底下的 **取得 API 金鑰** 有\n-# 自己的說明，列在選用服務之中。`,
+        description:
+          "用同樣的方式註冊語音端點，然後給每個人格 一個聲音。\n\n託管服務與自架伺服器都可以，包括 Chatterbox-Turbo、Qwen3-TTS、IrodoriTTS 與 ElevenLabs。 註冊端點後，再為它加入語音模型。\n> 在 {configPersonaVoice} 指派語音。\n> 在 {configVoices} 調整語速與預設值。",
+        footer:
+          "你傳給我的語音訊息會透過同一份端點清單 轉錄，設定方式相同。託管的語音方面， ElevenLabs 在設定底下的 **取得 API 金鑰** 有 自己的說明，列在選用服務之中。",
       },
     },
     multiple_personas: {
       title: `多個人格`,
-      description: `同一個伺服器可以有多個人格，各自有\n自己的名字、記憶與目標！`,
+      description: "同一個伺服器可以有多個人格，各自有 自己的名字、記憶與目標！",
       mains_alters_title: `主要人格與 alter`,
-      mains_alters_body: `主要人格是在伺服器中代表我的人格。alter 是我能\n用來發言的第二個身分，訊息本身會顯示它自己的\n名字與頭像。`,
+      mains_alters_body:
+        "主要人格是在伺服器中代表我的人格。alter 是我能 用來發言的第二個身分，訊息本身會顯示它自己的 名字與頭像。",
       bringing_in_title: `帶入人格`,
-      bringing_in_body: `{personaImport} 以檔案形式接收角色卡：\n> \`.png\` 角色卡，來自 TomoriBot 或 SillyTavern\n> \`.json\` 角色卡，來自 TomoriBot 或 SillyTavern\n> \`.charx\` 壓縮檔，Character Card V3\n\n只會讀取角色的文字。目前會略過內含的立繪、\n音訊與影片，請自行在\n{configPersonaAppearance} 與 {configPersonaSprites} 設定。`,
+      bringing_in_body:
+        "{personaImport} 以檔案形式接收角色卡：\n> `.png` 角色卡，來自 TomoriBot 或 SillyTavern\n> `.json` 角色卡，來自 TomoriBot 或 SillyTavern\n> `.charx` 壓縮檔，Character Card V3\n\n只會讀取角色的文字。目前會略過內含的立繪、 音訊與影片，請自行在 {configPersonaAppearance} 與 {configPersonaSprites} 設定。",
       where_to_find_title: `去哪裡找角色卡`,
-      where_to_find_body: `用 {personaGenerate} 或 {personaCreate} 自己做一張，或\n找一張現成的。\n\nbotbooru 與 chub 等角色卡網站上有數千張\n角色卡。那些是別人的網站，而且為別的 bot 寫的\n角色卡不一定能順利轉換。`,
+      where_to_find_body:
+        "用 {personaGenerate} 或 {personaCreate} 自己做一張，或 找一張現成的。\n\nbotbooru 與 chub 等角色卡網站上有數千張 角色卡。那些是別人的網站，而且為別的 bot 寫的 角色卡不一定能順利轉換。",
       talking_title: `讓它們互相對話`,
-      talking_body: `在 {configPersonaTriggers} 為每個人格設定自己的觸發詞\n與頻道，它們就會在同一段對話中\n並肩回覆。`,
+      talking_body: "在 {configPersonaTriggers} 為每個人格設定自己的觸發詞 與頻道，它們就會在同一段對話中 並肩回覆。",
       footer: `用 {personaExport} 分享你自己的人格。`,
     },
     media_generation: {
       title: `媒體生成`,
-      description: `我可以生成圖片、影片與語音，可以用指令要求，\n也可以因為你在對話中請我這麼做。\n> 每一項都會計入伺服器的額度。請看管理底下的\n> **額度**。`,
+      description:
+        "我可以生成圖片、影片與語音，可以用指令要求， 也可以因為你在對話中請我這麼做。\n> 每一項都會計入伺服器的額度。請看管理底下的 **額度**。",
       image_generation: {
         title: `圖片生成`,
-        description: `{generateImage} 會開啟提示詞欄位。你可以自己寫提示詞，或\n選擇 **Draw what's happening now**，由我來畫出\n當下場景。\n> 最多可附上三張參考圖來引導結果。\n> 在同一個欄位挑選長寬比。\n\n任何在這裡儲存、且標示支援圖片的供應商或端點\n都能畫圖，{providers} 會顯示你有哪些。不能用\n參考圖的供應商會說明這點，並依文字作畫。`,
+        description:
+          "{generateImage} 會開啟提示詞欄位。你可以自己寫提示詞，或 選擇 **Draw what's happening now**，由我來畫出 當下場景。\n> 最多可附上三張參考圖來引導結果。\n> 在同一個欄位挑選長寬比。\n\n任何在這裡儲存、且標示支援圖片的供應商或端點 都能畫圖，{providers} 會顯示你有哪些。不能用 參考圖的供應商會說明這點，並依文字作畫。",
         footer: `預設值在 {configImageDefaults}。`,
       },
       video_generation: {
         title: `影片生成`,
-        description: `{generateVideo} 需要一段提示詞，並可選擇用頻道中\n已有的圖片作為起始幀。\n\n任何標示支援影片的供應商或端點都能生成，\n包括 ComfyUI 影片工作流。{providers} 會顯示\n你有哪些。\n> 影片在任何地方都又慢又貴。請預期需要等待。`,
+        description:
+          "{generateVideo} 需要一段提示詞，並可選擇用頻道中 已有的圖片作為起始幀。\n\n任何標示支援影片的供應商或端點都能生成， 包括 ComfyUI 影片工作流。{providers} 會顯示 你有哪些。\n> 影片在任何地方都又慢又貴。請預期需要等待。",
       },
       speech_generation: {
         title: `語音生成`,
-        description: `{generateVoice} 會用目前人格的聲音把文字變成
-語音訊息。
-
-必須先註冊語音端點，託管或自架皆可：請看
-設定底下的 **自訂端點（進階）**。
-> 每個人格都可以有不同聲音。聲音來自
-> {configPersonaVoice}。`,
+        description:
+          "{generateVoice} 會用目前人格的聲音把文字變成 語音訊息。\n\n必須先註冊語音端點，託管或自架皆可：請看 設定底下的 **自訂端點（進階）**。\n> 每個人格都可以有不同聲音。聲音來自 {configPersonaVoice}。",
       },
     },
     tons_of_tweakability: {
@@ -519,137 +465,144 @@ export default {
       description: `把你和我調成你和伺服器成員喜歡的樣子`,
       behavior_tuning: {
         title: `行為調整`,
-        description: `我怎麼寫、怎麼想，以及被允許做什麼。\n> **模型**：{configSwitchModels} 挑選實際回答的\n> 模型，以及它的參數\n> **擬人化**：{configBehaviorGeneral} 控制我的\n> 表達有多像人，從正式到非常口語。\n> **系統指令**：同樣在 {configBehaviorGeneral}，\n> 用來下達適用於每一則回覆的指示。\n> **工具**：{configTools} 決定我可以動用哪些\n> 功能，例如網頁搜尋或圖片生成。`,
-        footer: `取樣器層級的選項（temperature 之類）在\n-# {configParameters}，用來調整隨機性等。`,
+        description:
+          "我怎麼寫、怎麼想，以及被允許做什麼。\n> **模型**：{configSwitchModels} 挑選實際回答的 模型，以及它的參數\n> **擬人化**：{configBehaviorGeneral} 控制我的 表達有多像人，從正式到非常口語。\n> **系統指令**：同樣在 {configBehaviorGeneral}， 用來下達適用於每一則回覆的指示。\n> **工具**：{configTools} 決定我可以動用哪些 功能，例如網頁搜尋或圖片生成。",
+        footer: "取樣器層級的選項（temperature 之類）在 {configParameters}，用來調整隨機性等。",
       },
       server_wide_settings: {
         title: `伺服器層級設定`,
-        description: `這個伺服器裡所有人都適用的界線。僅限
-管理員。
-> **我在哪裡說話**：白名單頻道、每個人格的
-> 頻道限制與冷卻，全部在 {moderation}。
-> **我何時主動說話**：{configAutoTrigger}。
-> **誰可以觸發我**：白名單身分組，同樣在
-> {moderation}。
-> **我的紀錄去哪裡**：{configWelcome} 設定紀錄與
-> 歡迎頻道。`,
-        footer: `頻道層級的覆寫可以讓單一頻道有自己的\n-# 模型或規則。請看 {configChannelOverrides}。`,
+        description:
+          "這個伺服器裡所有人都適用的界線。僅限 管理員。\n> **我在哪裡說話**：白名單頻道、每個人格的 頻道限制與冷卻，全部在 {moderation}。\n> **我何時主動說話**：{configAutoTrigger}。\n> **誰可以觸發我**：白名單身分組，同樣在 {moderation}。\n> **我的紀錄去哪裡**：{configWelcome} 設定紀錄與 歡迎頻道。",
+        footer: "頻道層級的覆寫可以讓單一頻道有自己的 模型或規則。請看 {configChannelOverrides}。",
       },
       personal_settings: {
         title: `個人設定`,
-        description: `你自己的偏好，會在你觸發的回覆中默默覆寫\n伺服器的設定。\n> **我認為你是誰**：稱呼、代稱與隱私，\n> 在 {personalProfile}。\n> **誰來回答你**：你自己的供應商與模型，在\n> {personalProviders}。\n> **我怎麼對待你**：回應模式與個人\n> 焦點，在 {personalConfig}。\n\n這裡的每一項都會跟著你到不同伺服器。`,
-        footer: `個人焦點讓某個人格把你當成它的\n-# 重點對象，設定在 {personalSpotlight}。`,
+        description:
+          "你自己的偏好，會在你觸發的回覆中默默覆寫 伺服器的設定。\n> **我認為你是誰**：稱呼、代稱與隱私， 在 {personalProfile}。\n> **誰來回答你**：你自己的供應商與模型，在 {personalProviders}。\n> **我怎麼對待你**：回應模式與個人 焦點，在 {personalConfig}。\n\n這裡的每一項都會跟著你到不同伺服器。",
+        footer: "個人焦點讓某個人格把你當成它的 重點對象，設定在 {personalSpotlight}。",
       },
     },
     memory_catalog: {
       title: `記憶`,
-      description: `我保留兩種記憶：長久的事實，以及對當下\n這段對話的隨手筆記。`,
+      description: "我保留兩種記憶：長久的事實，以及對當下 這段對話的隨手筆記。",
       long_term_memory: {
         title: `長期記憶`,
-        description: `我永久保留的事實，屬於這個伺服器或屬於你。\n\n**教導我**\n在聊天中說出來，或在 {memories} 為伺服器\n手動加入，你自己的部分則用 {personalMemories}。\n\n**讓我忘記**\n同樣這兩道指令會列出每一則內容，並可刪除\n其中任何一則。\n\n**給我文件**\n{memories} 也接受上傳的檔案。需要時我會讀回\n相關段落，而不是一次讀完整份，這是透過\n檢索增強生成（RAG）做到的。\n> 伺服器記憶這裡所有人都看得到。個人記憶\n> 只在你參與對話時才會出現。`,
+        description:
+          "我永久保留的事實，屬於這個伺服器或屬於你。\n\n**教導我**\n在聊天中說出來，或在 {memories} 為伺服器 手動加入，你自己的部分則用 {personalMemories}。\n\n**讓我忘記**\n同樣這兩道指令會列出每一則內容，並可刪除 其中任何一則。\n\n**給我文件**\n{memories} 也接受上傳的檔案。需要時我會讀回 相關段落，而不是一次讀完整份，這是透過 檢索增強生成（RAG）做到的。\n> 伺服器記憶這裡所有人都看得到。個人記憶 只在你參與對話時才會出現。",
       },
       short_term_memory: {
         title: `短期記憶`,
-        description: `我對這個頻道當下對話的隨手筆記，\n依頻道分開保存。\n\n我會隨著對話進行摘要目前發生的事，讓長\n討論串保持連貫，而不必重送每一則訊息。\n> **更新頻率**：我多常更新那份筆記。\n> **呈現模式**：摘要要取代近期\n> 訊息，還是與它們並列。\n> **分類**：最多五個有標籤的欄位，例如\n> \`Goals\` 或 \`Inventory\`，取代單一自由格式的筆記。\n\n管理員在 {configAdvancedMemory} 調整這一切，\n{memories} 則可以清除使用中的筆記。`,
-        footer: `請我永久記住某件事，它就會變成\n-# 長期記憶。`,
+        description:
+          "我對這個頻道當下對話的隨手筆記， 依頻道分開保存。\n\n我會隨著對話進行摘要目前發生的事，讓長 討論串保持連貫，而不必重送每一則訊息。\n> **更新頻率**：我多常更新那份筆記。\n> **呈現模式**：摘要要取代近期 訊息，還是與它們並列。\n> **分類**：最多五個有標籤的欄位，例如 `Goals` 或 `Inventory`，取代單一自由格式的筆記。\n\n管理員在 {configAdvancedMemory} 調整這一切， {memories} 則可以清除使用中的筆記。",
+        footer: "請我永久記住某件事，它就會變成 長期記憶。",
       },
       rewards_punishments: {
         title: `獎勵與懲罰`,
-        description: `我確實會注意到並記住的有趣指令。對我\n好一點，或者不要，我會照著反應。\n> 用 {reward} 摸頭、擁抱、親吻、搔癢或餵食。\n> 用 {punish} 敲頭、咬、捏、打屁股或緊抱。`,
+        description:
+          "我確實會注意到並記住的有趣指令。對我 好一點，或者不要，我會照著反應。\n> 用 {reward} 摸頭、擁抱、親吻、搔癢或餵食。\n> 用 {punish} 敲頭、咬、捏、打屁股或緊抱。",
         footer: `同時有多個人格時，請選擇你指的是哪一個。`,
       },
       memory_tagging: {
         title: `記憶標籤（進階）`,
-        description: `預設情況下，範圍內的每則記憶都會隨每則訊息送出。\n標籤可以把範圍縮小。\n> **關鍵字標籤**：有標籤的記憶只在它的關鍵字\n> 出現在對話中時才會醒來。沒有標籤的記憶\n> 則永遠有效。\n> **頻道標籤**：\`#channel\` 標籤會把記憶限制在該\n> 頻道，並可與關鍵字標籤合併使用。\n\n在 {configAdvancedMemory} 同時開啟兩者，再用\n{toolPromptSnapshot} 查看目前實際有哪些記憶\n生效。`,
-        footer: `上傳的文件與擷取的歷史紀錄也可以帶有\n-# 頻道標籤。`,
+        description:
+          "預設情況下，範圍內的每則記憶都會隨每則訊息送出。 標籤可以把範圍縮小。\n> **關鍵字標籤**：有標籤的記憶只在它的關鍵字 出現在對話中時才會醒來。沒有標籤的記憶 則永遠有效。\n> **頻道標籤**：`#channel` 標籤會把記憶限制在該 頻道，並可與關鍵字標籤合併使用。\n\n在 {configAdvancedMemory} 同時開啟兩者，再用 {toolPromptSnapshot} 查看目前實際有哪些記憶 生效。",
+        footer: "上傳的文件與擷取的歷史紀錄也可以帶有 頻道標籤。",
       },
     },
     scheduled_tasks: {
       title: `排程任務`,
       description: `我可以依排定的時間回應，單次或重複都可以。`,
       making_title: `建立排程`,
-      making_body: `直接開口就好。「提醒我 14:30 伸展一下」或「每天早上\n發布站立會議的問題」這樣就夠了，我會設定好\n並確認細節。`,
+      making_body:
+        "直接開口就好。「提醒我 14:30 伸展一下」或「每天早上 發布站立會議的問題」這樣就夠了，我會設定好 並確認細節。",
       changing_title: `修改或取消排程`,
-      changing_body: `{scheduledTaskEdit} 會開啟任何現有任務：它的內容、\n下次觸發時間、重複間隔，以及是否標註你。\n{scheduledTaskRemove} 則刪除任務。`,
+      changing_body:
+        "{scheduledTaskEdit} 會開啟任何現有任務：它的內容、 下次觸發時間、重複間隔，以及是否標註你。 {scheduledTaskRemove} 則刪除任務。",
       who_title: `誰可以動誰的排程`,
-      who_body: `你永遠可以編輯自己的。伺服器管理員可以編輯\n任何人的，因為任務會發到共用頻道。\n> 時間採用設定時選定的時區，所以相信早上六點的\n> 鬧鐘之前，請先確認那個設定。`,
+      who_body:
+        "你永遠可以編輯自己的。伺服器管理員可以編輯 任何人的，因為任務會發到共用頻道。\n> 時間採用設定時選定的時區，所以相信早上六點的 鬧鐘之前，請先確認那個設定。",
     },
     server_moderation: {
       title: `伺服器管理`,
-      description: `關於誰可以在這裡使用我，以及在哪些地方。全都\n需要管理伺服器權限，並位於 {moderation}。\n> **成員存取**：誰可以觸發我，以及他們可以\n> 使用哪些模型。\n> **白名單**：我可以在哪些頻道、身分組與\n> 人格中回應。\n> **額度**：這個伺服器允許多少生成量。\n> **使用者黑名單**：我必須忽略的個別成員。`,
+      description:
+        "關於誰可以在這裡使用我，以及在哪些地方。全都 需要管理伺服器權限，並位於 {moderation}。\n> **成員存取**：誰可以觸發我，以及他們可以 使用哪些模型。\n> **白名單**：我可以在哪些頻道、身分組與 人格中回應。\n> **額度**：這個伺服器允許多少生成量。\n> **使用者黑名單**：我必須忽略的個別成員。",
       blacklisting: {
         title: `黑名單`,
-        description: `被列入黑名單的成員完全無法觸發我，在任何\n頻道、用任何人格都一樣。\n\n在 {moderationBlacklist} 加入。同一頁會列出所有\n目前的項目並可移除，一次一個或批次處理。\n> 黑名單處理的是存取權，不是刪除。關於\n> 該成員的記憶會保留，直到有人移除它們。`,
-        footer: `想讓整個頻道安靜，而不是針對某個人，請把\n-# 該頻道從白名單移除。`,
+        description:
+          "被列入黑名單的成員完全無法觸發我，在任何 頻道、用任何人格都一樣。\n\n在 {moderationBlacklist} 加入。同一頁會列出所有 目前的項目並可移除，一次一個或批次處理。\n> 黑名單處理的是存取權，不是刪除。關於 該成員的記憶會保留，直到有人移除它們。",
+        footer: "想讓整個頻道安靜，而不是針對某個人，請把 該頻道從白名單移除。",
       },
     },
     quotas: {
       title: `額度`,
-      description: `額度限制這裡能生成多少內容，以免有人\n不小心花掉一整個月的額度。`,
+      description: "額度限制這裡能生成多少內容，以免有人 不小心花掉一整個月的額度。",
       spent_title: `額度怎麼計算`,
-      spent_body: `共有三個獨立的池子：文字、圖片與影片。每個\n池子都計算兩次，一次算成員個人，一次算整個\n伺服器，先耗盡的那個就會中止請求。\n> 被拒絕的請求會告訴你是哪個池子用完，以及\n> 何時恢復。`,
+      spent_body:
+        "共有三個獨立的池子：文字、圖片與影片。每個 池子都計算兩次，一次算成員個人，一次算整個 伺服器，先耗盡的那個就會中止請求。\n> 被拒絕的請求會告訴你是哪個池子用完，以及 何時恢復。",
       limits_title: `設定上限`,
-      limits_body: `{moderationQuotas} 設定每個池子的每日額度。\n不想設限的池子就讓它維持無上限。`,
+      limits_body: "{moderationQuotas} 設定每個池子的每日額度。 不想設限的池子就讓它維持無上限。",
       starting_over_title: `重新開始計算`,
-      starting_over_body: `{quotaResetUser} 清除某位成員的當日用量，\n{quotaResetGlobal} 清除伺服器整體的池子。兩者都需要\n管理伺服器權限。`,
-      footer: `池子每天會自行重置。手動重置是給\n-# 不該等待的人使用。`,
+      starting_over_body:
+        "{quotaResetUser} 清除某位成員的當日用量， {quotaResetGlobal} 清除伺服器整體的池子。兩者都需要 管理伺服器權限。",
+      footer: "池子每天會自行重置。手動重置是給 不該等待的人使用。",
     },
     age_restricted_commands: {
       title: `年齡限制指令`,
       description: `僅限成人。開啟任何功能前請先閱讀這一節。`,
       filter_title: `我預設不過濾`,
-      filter_body: `我出廠時沒有任何自己的內容過濾，因為過濾\n在擋下內容的同時，也會同樣破壞一般回覆的品質。\n這裡什麼合適由伺服器管理員決定，不是\n我決定。\n> 你的 AI 供應商仍會在它那一端執行自己的規則，\n> 而且無論這裡怎麼設定，它都可以拒絕請求。`,
+      filter_body:
+        "我出廠時沒有任何自己的內容過濾，因為過濾 在擋下內容的同時，也會同樣破壞一般回覆的品質。 這裡什麼合適由伺服器管理員決定，不是 我決定。\n> 你的 AI 供應商仍會在它那一端執行自己的規則， 而且無論這裡怎麼設定，它都可以拒絕請求。",
       gated_title: `明確的成人功能有額外關卡`,
-      gated_body: `任何明確屬於成人的內容都在 {nsfw} 後面，且只在
-Discord 本身標記為年齡限制的頻道中運作。
-
-{nsfwJailbreaks} 選擇這個伺服器要啟用哪些提示詞
-策略。在管理員開啟之前，每一個都是關閉的。
-> 這些策略會改變我的提示方式。它們可以讓我
-> 少拒絕一些，但也可能造成非預期的行為。`,
-      footer: `啟用這些功能，代表伺服器管理員確認該\n-# 頻道僅限成人，並為此負責。`,
+      gated_body:
+        "任何明確屬於成人的內容都在 {nsfw} 後面，且只在 Discord 本身標記為年齡限制的頻道中運作。\n\n{nsfwJailbreaks} 選擇這個伺服器要啟用哪些提示詞 策略。在管理員開啟之前，每一個都是關閉的。\n> 這些策略會改變我的提示方式。它們可以讓我 少拒絕一些，但也可能造成非預期的行為。",
+      footer: "啟用這些功能，代表伺服器管理員確認該 頻道僅限成人，並為此負責。",
     },
     user_byok: {
       title: `使用者 BYOK（進階）`,
-      description: `BYOK 意思是自備金鑰：每位成員用自己的供應商\n為自己的回覆付費。`,
+      description: "BYOK 意思是自備金鑰：每位成員用自己的供應商 為自己的回覆付費。",
       changes_title: `它改變了什麼`,
-      changes_body: `開啟 BYOK 後，成員的訊息只有在該成員已儲存\n個人供應商時才會被回答。伺服器自己的\n供應商不會成為他們的備援。\n> 在 {moderationMemberAccess} 開啟，或在 {setup}\n> 過程中選擇。`,
+      changes_body:
+        "開啟 BYOK 後，成員的訊息只有在該成員已儲存 個人供應商時才會被回答。伺服器自己的 供應商不會成為他們的備援。\n> 在 {moderationMemberAccess} 開啟，或在 {setup} 過程中選擇。",
       suits_title: `適合誰`,
-      suits_body: `適合大型或公開的伺服器，因為共用一組 API 金鑰\n會被耗盡。小型伺服器通常更適合共用一個供應商。`,
+      suits_body: "適合大型或公開的伺服器，因為共用一組 API 金鑰 會被耗盡。小型伺服器通常更適合共用一個供應商。",
       members_title: `成員需要做什麼`,
-      members_body: `在 {personalProviders} 儲存金鑰。請引導他們看設定\n底下的 **個人供應商（進階）** 以取得完整說明。`,
-      footer: `僅限伺服器。私訊沒有成員可以自備\n-# 金鑰，所以那裡不提供這個選項。`,
+      members_body: "在 {personalProviders} 儲存金鑰。請引導他們看設定 底下的 **個人供應商（進階）** 以取得完整說明。",
+      footer: "僅限伺服器。私訊沒有成員可以自備 金鑰，所以那裡不提供這個選項。",
     },
     sillytavern_presets: {
       title: `SillyTavern 預設集`,
-      description: `匯入 SillyTavern 提示詞預設集，我就會照那個\n預設集的方式組出我的提示詞。`,
+      description: "匯入 SillyTavern 提示詞預設集，我就會照那個 預設集的方式組出我的提示詞。",
       importing_title: `匯入預設集`,
-      importing_body: `{configStPresets} 接收匯出的預設集 JSON，之後\n你可以啟用、停用或移除它。`,
+      importing_body: "{configStPresets} 接收匯出的預設集 JSON，之後 你可以啟用、停用或移除它。",
       controls_title: `它控制什麼`,
-      controls_body: `預設集會接管提示詞的排序，以及對話周圍的\n指令區塊。\n> 啟用的預設集會覆寫來自\n> {configBehaviorGeneral} 的系統提示詞，以及來自\n> {configPersonaAdvanced} 的人格提示詞。`,
+      controls_body:
+        "預設集會接管提示詞的排序，以及對話周圍的 指令區塊。\n> 啟用的預設集會覆寫來自 {configBehaviorGeneral} 的系統提示詞，以及來自 {configPersonaAdvanced} 的人格提示詞。",
       still_applies_title: `哪些仍然適用`,
-      still_applies_body: `人格屬性、範例對話、記憶與工具仍然會\n送出。預設集決定的是排列方式，不是內容。`,
-      footer: `把預設集關掉就會回到我自己的提示詞配置，\n-# 不會遺失任何內容。`,
+      still_applies_body: "人格屬性、範例對話、記憶與工具仍然會 送出。預設集決定的是排列方式，不是內容。",
+      footer: "把預設集關掉就會回到我自己的提示詞配置， 不會遺失任何內容。",
     },
     mcp_servers: {
       title: `MCP 伺服器`,
-      description: `MCP 是把工具交給 AI 的標準做法。連接一個\n伺服器，它的工具就會成為我真正能做的事。`,
+      description: "MCP 是把工具交給 AI 的標準做法。連接一個 伺服器，它的工具就會成為我真正能做的事。",
       hosted_title: `託管伺服器`,
-      hosted_body: `{configMcp} 接收一個 URL 與選用的驗證權杖。那個\n伺服器公開的任何工具都會出現在我的工具清單中。`,
+      hosted_body: "{configMcp} 接收一個 URL 與選用的驗證權杖。那個 伺服器公開的任何工具都會出現在我的工具清單中。",
       local_title: `本機伺服器`,
-      local_body: `跑在你自己機器上的伺服器只要連得到，運作方式\n完全相同。文件網站有完整說明。`,
+      local_body: "跑在你自己機器上的伺服器只要連得到，運作方式 完全相同。文件網站有完整說明。",
       before_title: `連接之前`,
-      before_body: `> MCP 伺服器的工具會以你給它的權限執行，\n> 而我在看起來相關時就會使用它們。請連接\n> 你信任的伺服器，並先讀清楚它們的工具在做什麼。`,
+      before_body:
+        "> MCP 伺服器的工具會以你給它的權限執行， 而我在看起來相關時就會使用它們。請連接 你信任的伺服器，並先讀清楚它們的工具在做什麼。",
       footer: `你可以隨時在 {configTools} 關閉個別工具。`,
     },
     matrix_bridge: {
       title: `Matrix`,
-      description: `我可以同時待在 Matrix 房間與 Discord 頻道，\n在兩者之間傳遞對話。`,
+      description: "我可以同時待在 Matrix 房間與 Discord 頻道， 在兩者之間傳遞對話。",
       linking_title: `連結房間`,
-      linking_body: `{matrixLink} 會把目前的頻道連接到 Matrix 房間\nID，格式類似 \`!abcdef:matrix.org\`。請先邀請\n{matrixBotUser} 加入該房間。`,
+      linking_body:
+        "{matrixLink} 會把目前的頻道連接到 Matrix 房間 ID，格式類似 `!abcdef:matrix.org`。請先邀請 {matrixBotUser} 加入該房間。",
       reads_title: `我怎麼讀取`,
-      reads_body: `來自兩邊的訊息會以同一段對話到達我這裡，而\n我會在兩邊回覆。\n> 附件、編輯與表情回應不一定都能完整\n> 傳遞。文字才是最可靠的。`,
-      footer: `沒有連結成功嗎？請先確認邀請已被接受，\n-# 再檢查其他部分。`,
+      reads_body:
+        "來自兩邊的訊息會以同一段對話到達我這裡，而 我會在兩邊回覆。\n> 附件、編輯與表情回應不一定都能完整 傳遞。文字才是最可靠的。",
+      footer: "沒有連結成功嗎？請先確認邀請已被接受， 再檢查其他部分。",
     },
   },
 };

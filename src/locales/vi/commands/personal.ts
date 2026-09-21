@@ -34,9 +34,8 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       global_title: `Bộ nhớ cá nhân toàn cục`,
       global_description: `Các bộ nhớ này đi theo bạn qua mọi máy chủ và persona.`,
       persona_title: `Bộ nhớ cá nhân theo persona`,
-      persona_description: `Các bộ nhớ này chỉ áp dụng khi
-persona này đang nói chuyện trong cuộc
-đối thoại mà bạn tham gia.`,
+      persona_description:
+        "Các bộ nhớ này chỉ áp dụng khi persona này đang nói chuyện trong cuộc đối thoại mà bạn tham gia.",
       selector_guidance: `Chọn hoặc thêm một bộ nhớ cá nhân bên dưới:`,
       no_memories: `Chưa có bộ nhớ nào được lưu.`,
       empty_memory_label: `(Bộ nhớ trống)`,
@@ -47,16 +46,13 @@ persona này đang nói chuyện trong cuộc
       remove_button: `Xóa bộ nhớ`,
       remove_title: `Xóa bộ nhớ cá nhân`,
       remove_confirm: `Xác nhận xóa`,
-      remove_confirm_description: `Bạn có chắc chắn muốn xóa bộ nhớ cá nhân này không?
-Thao tác này không thể hoàn tác.
-
-{memory}`,
+      remove_confirm_description:
+        "Bạn có chắc chắn muốn xóa bộ nhớ cá nhân này không? Thao tác này không thể hoàn tác.\n\n{memory}",
       cancel: `Hủy`,
       retry: `Thử lại`,
       stale_warning: `Bảng điều khiển này có thể đã cũ. Nhấn Thử lại để làm mới.`,
       unavailable: `Bộ nhớ cá nhân hiện không khả dụng.`,
-      privacy_full_warning: `Mức quyền riêng tư của bạn đang đặt là Đầy đủ.
-Tính năng thêm và sửa bộ nhớ đã bị tắt.`,
+      privacy_full_warning: "Mức quyền riêng tư của bạn đang đặt là Đầy đủ. Tính năng thêm và sửa bộ nhớ đã bị tắt.",
       privacy_blocked_error_heading: `Mức quyền riêng tư chặn thao tác này`,
       privacy_blocked_error_detail: `Bạn không thể thêm hoặc sửa bộ nhớ cá nhân khi mức quyền riêng tư được đặt là Đầy đủ.`,
       channel_access: `Quyền truy cập kênh: {channels}`,
@@ -71,8 +67,7 @@ Tính năng thêm và sửa bộ nhớ đã bị tắt.`,
       stm_title: `[Bộ nhớ ngắn hạn](https://docs.tomoribot.app/vi/features/knowledge/memory/#short-term-memory-stm)`,
       stm_active_count: `Tóm tắt đang hoạt động về bạn: \`{count}\``,
       stm_clear_button: `Xóa bộ nhớ ngắn hạn của bạn`,
-      stm_crossserver_hint: `Cấu hình cho phép mình mang hội thoại gần đây
-qua các máy chủ bằng \`/personal config\`.`,
+      stm_crossserver_hint: "Cấu hình cho phép mình mang hội thoại gần đây qua các máy chủ bằng `/personal config`.",
       stm_cleared_heading: `Đã xóa bộ nhớ ngắn hạn`,
       stm_cleared_detail: `Bộ nhớ ngắn hạn dành riêng cho bạn đã được xóa trên tất cả các kênh.`,
       add_modal_title: `Thêm bộ nhớ cá nhân`,
@@ -156,8 +151,7 @@ qua các máy chủ bằng \`/personal config\`.`,
       page_spotlight: `Spotlight cá nhân`,
       page_select_placeholder: `Chọn một trang...`,
       preferences_title: `Tùy chọn`,
-      preferences_description: `Cách bạn muốn mình hiển thị thông tin,
-và cách mình xưng hô với bạn`,
+      preferences_description: "Cách bạn muốn mình hiển thị thông tin, và cách mình xưng hô với bạn",
       interface_section: `Giao diện`,
       interface_description: `Cách mình trò chuyện với bạn và múi giờ của bạn`,
       language_label: `Ngôn ngữ`,
@@ -183,13 +177,12 @@ và cách mình xưng hô với bạn`,
       style_neutral: `Trung tính`,
       style_masculine: `Nam tính`,
       style_feminine: `Nữ tính`,
-      teach_persona_hint: `Nếu muốn dạy persona này hiểu thêm về bạn,
-hãy dùng \`/personal memories\` hoặc trò chuyện thêm!`,
+      teach_persona_hint:
+        "Nếu muốn dạy persona này hiểu thêm về bạn, hãy dùng `/personal memories` hoặc trò chuyện thêm!",
       edit_about_button: `Sửa phần về bạn`,
       persona_naming_title: `Cách gọi tên theo persona`,
-      persona_naming_description: `Tùy chỉnh cách persona xưng hô với bạn.
-Trường trống kế thừa từ hồ sơ toàn cục
-hoặc mặc định của persona.`,
+      persona_naming_description:
+        "Tùy chỉnh cách persona xưng hô với bạn. Trường trống kế thừa từ hồ sơ toàn cục hoặc mặc định của persona.",
       persona_select_placeholder: `Chọn một persona...`,
       persona_default_name: `Persona`,
       persona_main_description: `Persona chính`,
@@ -199,8 +192,7 @@ hoặc mặc định của persona.`,
       no_personas: `Không có persona nào khả dụng trên máy chủ này.`,
       edit_persona_naming_button: `Sửa cách gọi tên persona`,
       appearance_title: `Ngoại hình`,
-      appearance_description: `Thẻ ngoại hình có thể định hướng việc tạo ảnh
-liên quan đến bạn.`,
+      appearance_description: "Thẻ ngoại hình có thể định hướng việc tạo ảnh liên quan đến bạn.",
       tags_label: `Thẻ`,
       edit_appearance_button: `Sửa thẻ ngoại hình`,
       character_reference_modal_title: `Tham chiếu nhân vật NovelAI`,
@@ -211,8 +203,7 @@ liên quan đến bạn.`,
       upload_character_reference_button: `Tải lên ảnh tham chiếu`,
       clear_character_reference_button: `Xóa ảnh tham chiếu`,
       privacy_title: `Quyền riêng tư`,
-      privacy_description: `Chọn mức độ hiển thị tin nhắn và dữ liệu cá nhân
-của bạn đối với mình trên các máy chủ.`,
+      privacy_description: "Chọn mức độ hiển thị tin nhắn và dữ liệu cá nhân của bạn đối với mình trên các máy chủ.",
       privacy_level_label: `Mức độ`,
       privacy_level_minimal: `Không`,
       privacy_level_partial: `Một phần`,
@@ -233,15 +224,13 @@ của bạn đối với mình trên các máy chủ.`,
       stm_count_label: `Hiện đang lưu tạm \`{count}\` STM về bạn`,
       stm_clear_hint: `Dùng \`/personal memories\` để xóa những gì mình đang nhớ.`,
       crossserver_section_title: `[STM](https://docs.tomoribot.app/vi/features/knowledge/memory/#short-term-memory-stm) liên máy chủ`,
-      crossserver_stm_off: `Mình không thể nhớ hội thoại gần đây với bạn
-qua các máy chủ vì STM liên máy chủ đang tắt.`,
-      crossserver_stm_on: `Mình có thể lưu bộ nhớ hội thoại gần đây với bạn
-qua các máy chủ vì STM liên máy chủ đang bật.`,
+      crossserver_stm_off: "Mình không thể nhớ hội thoại gần đây với bạn qua các máy chủ vì STM liên máy chủ đang tắt.",
+      crossserver_stm_on:
+        "Mình có thể lưu bộ nhớ hội thoại gần đây với bạn qua các máy chủ vì STM liên máy chủ đang bật.",
       crossserver_stm_footer: `\`/personal memories\` luôn lưu qua các máy chủ, nhưng STM thì không`,
       models_title: `Định tuyến model cá nhân`,
-      models_description: `Tùy chỉnh cá nhân đi theo bạn qua các máy chủ.
-Tính năng đặt Mặc định máy chủ sẽ dùng model
-của máy chủ hiện tại.`,
+      models_description:
+        "Tùy chỉnh cá nhân đi theo bạn qua các máy chủ. Tính năng đặt Mặc định máy chủ sẽ dùng model của máy chủ hiện tại.",
       speech_workspace_scope_direction: `TTS/STT toàn máy chủ: \`/config\` > Models > Switch Models.`,
       routing_text: `Văn bản`,
       routing_vision: `Thị giác`,
@@ -323,11 +312,10 @@ của máy chủ hiện tại.`,
       parameters_updated_detail: `Đã cập nhật tham số bộ lấy mẫu cho {provider}.`,
       invalid_parameters_heading: `Giá trị tham số không hợp lệ`,
       invalid_parameters_detail: `Một hoặc nhiều giá trị tham số không hợp lệ hoặc vượt quá giới hạn cho phép.`,
-      no_text_providers: `Không tìm thấy nhà cung cấp văn bản cá nhân nào.
-Hãy thêm bằng \`/personal providers\`.`,
+      no_text_providers: "Không tìm thấy nhà cung cấp văn bản cá nhân nào. Hãy thêm bằng `/personal providers`.",
       fallbacks_title: `Model dự phòng văn bản cá nhân`,
-      fallbacks_description: `Model dự phòng được thử theo thứ tự khi model văn bản
-chính cá nhân không thể hoàn thành yêu cầu.`,
+      fallbacks_description:
+        "Model dự phòng được thử theo thứ tự khi model văn bản chính cá nhân không thể hoàn thành yêu cầu.",
       fallbacks_select_prompt: `Chọn nhà cung cấp để thêm hoặc sửa model dự phòng:`,
       fallbacks_provider_select_placeholder: `Chọn nhà cung cấp cho model`,
       fallbacks_modal_title: `Sửa model dự phòng`,
@@ -336,10 +324,8 @@ chính cá nhân không thể hoàn thành yêu cầu.`,
       fallback_none_option: `Không có (xóa vị trí này)`,
       fallback_none_desc: `Để trống vị trí dự phòng này.`,
       randomizer_section_title: `Bộ ngẫu nhiên hóa model`,
-      randomizer_section_desc: `Khi bật, mỗi phản hồi sẽ chọn ngẫu nhiên một model
-từ nhóm gồm model văn bản chính và các model
-dự phòng. Nếu model được chọn thất bại,
-máy sẽ chọn ngẫu nhiên lại.`,
+      randomizer_section_desc:
+        "Khi bật, mỗi phản hồi sẽ chọn ngẫu nhiên một model từ nhóm gồm model văn bản chính và các model dự phòng. Nếu model được chọn thất bại, máy sẽ chọn ngẫu nhiên lại.",
       randomizer_effect_off: `Mình thử model chính trước`,
       randomizer_effect_on: `Mình chọn ngẫu nhiên từ model chính và dự phòng trước`,
       fallbacks_updated_heading: `Đã cập nhật model dự phòng cá nhân`,
@@ -352,18 +338,16 @@ máy sẽ chọn ngẫu nhiên lại.`,
       randomizer_enabled_detail: `Bộ ngẫu nhiên hóa model hiện đã được bật cho {provider}.`,
       randomizer_disabled_heading: `Đã tắt bộ ngẫu nhiên hóa`,
       randomizer_disabled_detail: `Bộ ngẫu nhiên hóa model hiện đã bị tắt cho {provider}.`,
-      no_text_providers_fallbacks: `Không tìm thấy nhà cung cấp văn bản cá nhân nào.
-Hãy thêm bằng \`/personal providers\`.`,
+      no_text_providers_fallbacks:
+        "Không tìm thấy nhà cung cấp văn bản cá nhân nào. Hãy thêm bằng `/personal providers`.",
       response_modes_title: `Chế độ phản hồi cá nhân`,
       dtm_section_title: `Chế độ kích hoạt có chủ đích`,
-      dtm_description: `Kiểm soát thời điểm mình phản hồi
-khi không được gọi trực tiếp.`,
+      dtm_description: "Kiểm soát thời điểm mình phản hồi khi không được gọi trực tiếp.",
       dtm_effect_dm: `Chế độ kích hoạt có chủ đích không áp dụng trong tin nhắn trực tiếp`,
       dtm_effect_active: `Chỉ @mention, trả lời hoặc /respond mới gọi được mình`,
       dtm_effect_inactive: `Bạn có thể gọi mình bằng cách gọi tên mình`,
       tool_mode_section_title: `Chế độ công cụ có chủ đích`,
-      tool_mode_description: `Kiểm soát việc cung cấp công cụ cho mọi
-tin nhắn hay chỉ khi liên quan.`,
+      tool_mode_description: "Kiểm soát việc cung cấp công cụ cho mọi tin nhắn hay chỉ khi liên quan.",
       tool_mode_effect_active: `Công cụ của mình chỉ được cung cấp khi cuộc trò chuyện yêu cầu`,
       tool_mode_effect_inactive: `Mọi công cụ của mình luôn sẵn sàng`,
       mode_off: `Tắt`,
@@ -374,8 +358,8 @@ tin nhắn hay chỉ khi liên quan.`,
       tool_mode_updated_heading: `Đã cập nhật chế độ công cụ`,
       tool_mode_updated_detail: `Tùy chọn chế độ công cụ có chủ đích của bạn đã được đặt thành {mode}.`,
       impersonation_title: `Prompt mạo danh`,
-      impersonation_description: `Prompt toàn tài khoản này định hướng các lệnh
-\`/impersonate user\` nhắm vào bạn sau này.`,
+      impersonation_description:
+        "Prompt toàn tài khoản này định hướng các lệnh `/impersonate user` nhắm vào bạn sau này.",
       impersonation_no_prompt: `(Chưa đặt prompt)`,
       impersonation_edit_button: `Sửa prompt`,
       impersonation_clear_button: `Xóa prompt`,
@@ -385,9 +369,8 @@ tin nhắn hay chỉ khi liên quan.`,
 Dùng Xóa prompt để gỡ bỏ.`,
       impersonation_modal_placeholder: `Viết tự nhiên, ngắn gọn, viết thường nhiều, trêu chọc bạn bè một chút...`,
       impersonation_clear_confirm_title: `Xác nhận xóa prompt mạo danh`,
-      impersonation_clear_confirm_desc: `Bạn có chắc muốn xóa prompt mạo danh người dùng?
-Thao tác này sẽ xóa prompt tùy chỉnh được dùng
-khi ai đó mạo danh bạn.`,
+      impersonation_clear_confirm_desc:
+        "Bạn có chắc muốn xóa prompt mạo danh người dùng? Thao tác này sẽ xóa prompt tùy chỉnh được dùng khi ai đó mạo danh bạn.",
       impersonation_updated_heading: `Đã cập nhật prompt mạo danh`,
       impersonation_updated_detail: `Prompt mạo danh người dùng của bạn đã được cập nhật.`,
       impersonation_cleared_heading: `Đã xóa prompt mạo danh`,
@@ -395,8 +378,7 @@ khi ai đó mạo danh bạn.`,
       impersonation_blank_refusal_heading: `Yêu cầu có prompt`,
       impersonation_blank_refusal_detail: `Vui lòng nhập văn bản prompt trước khi gửi. Dùng Xóa prompt để gỡ bỏ prompt hiện có.`,
       spotlight_title: `Spotlight cá nhân`,
-      spotlight_description: `Spotlight giới hạn các persona có thể phản hồi bạn
-trong các kênh đã chọn.`,
+      spotlight_description: "Spotlight giới hạn các persona có thể phản hồi bạn trong các kênh đã chọn.",
       spotlight_none_active: `Không có spotlight cá nhân nào đang hoạt động trên máy chủ này.`,
       spotlight_duration_permanent: `Vĩnh viễn`,
       spotlight_duration_until: `Đến {expires_at}`,
@@ -418,14 +400,13 @@ trong các kênh đã chọn.`,
       spotlight_personas_range_placeholder: `Chọn một nhóm persona...`,
       spotlight_personas_range_option: `Persona {start}-{end}`,
       spotlight_review_title: `Xem lại spotlight cá nhân`,
-      spotlight_review_prompt: `Chọn lưu ngay hoặc chọn một persona tự động
-kích hoạt cho spotlight này.`,
+      spotlight_review_prompt: "Chọn lưu ngay hoặc chọn một persona tự động kích hoạt cho spotlight này.",
       spotlight_save_button: `Lưu spotlight`,
       spotlight_auto_button: `Chọn persona tự động kích hoạt`,
       spotlight_auto_modal_title: `Chọn persona tự động kích hoạt`,
       spotlight_auto_select_label: `Persona tự động kích hoạt`,
-      spotlight_auto_select_desc: `Chọn persona spotlight sẽ tự động kích hoạt
-cho mỗi tin nhắn của bạn trong kênh này.`,
+      spotlight_auto_select_desc:
+        "Chọn persona spotlight sẽ tự động kích hoạt cho mỗi tin nhắn của bạn trong kênh này.",
       spotlight_auto_range_placeholder: `Chọn nhóm tự động kích hoạt...`,
       spotlight_auto_range_option: `Persona {start}-{end}`,
       spotlight_saved_heading: `Đã lưu spotlight cá nhân`,

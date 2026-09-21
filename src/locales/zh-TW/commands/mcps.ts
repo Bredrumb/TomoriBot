@@ -5,13 +5,12 @@ export default {
     empty_guild: `這個伺服器還沒有任何 MCP。`,
     empty_dm: `這個私訊工作區還沒有任何 MCP。`,
     unavailable: `無法載入 MCP 註冊資料。請點「重試」再試一次。`,
-    stale_warning: `因為讀取失敗，儲存的資料可能已經過期。\n在重新讀取成功之前，無法進行寫入操作。`,
+    stale_warning: "因為讀取失敗，儲存的資料可能已經過期。 在重新讀取成功之前，無法進行寫入操作。",
     read_unavailable: `無法安全載入目前的 MCP 註冊資料。`,
     retry: `重試`,
     add: `+ 新增 MCP`,
-    trust_warning: `只新增你信任的 MCP 伺服器。惡意伺服器可能會
-收集工具輸入、回傳錯誤或有害的結果，或
-嘗試提示詞注入。`,
+    trust_warning:
+      "只新增你信任的 MCP 伺服器。惡意伺服器可能會 收集工具輸入、回傳錯誤或有害的結果，或 嘗試提示詞注入。",
     type_general: `一般用途`,
     type_general_description: `不會停用任何內建工具`,
     type_web_search: `網頁搜尋`,
@@ -29,9 +28,8 @@ export default {
     disable: `停用`,
     remove: `移除`,
     remove_title: `移除 MCP 伺服器`,
-    remove_description: `要移除 **{name}** 與其儲存的端點／驗證
-註冊資料嗎？任何連線池中的連線都會
-中斷。重新新增伺服器是唯一的復原方式。`,
+    remove_description:
+      "要移除 **{name}** 與其儲存的端點／驗證 註冊資料嗎？任何連線池中的連線都會 中斷。重新新增伺服器是唯一的復原方式。",
     remove_confirm: `移除 MCP 伺服器`,
     cancel: `取消`,
     add_modal_title: `新增 MCP 伺服器`,

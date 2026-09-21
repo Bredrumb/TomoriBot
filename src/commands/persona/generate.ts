@@ -7,7 +7,6 @@ import type {
   ChatInputCommandInteraction,
   Client,
   ComponentInContainerData,
-  ContainerComponentData,
   InteractionEditReplyOptions,
   ModalSubmitInteraction,
   SlashCommandSubcommandBuilder,
@@ -19,6 +18,7 @@ import { localizer } from "../../utils/text/localizer";
 import { log, ColorCode } from "../../utils/misc/logger";
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import { buildPersonaResultContainer, type PersonaResultContainerOptions } from "@/utils/discord/ui/statusComponents";
+import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import { attachImportNowCollector, importNowButton } from "@/utils/persona/importNowButton";
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
 import type { UserRow } from "../../types/db/schema";
@@ -180,13 +180,7 @@ function buildGenerateStatusComponents(options: {
     );
   }
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveComponentsV2AccentColor(options.color),
-    components,
-  };
-
-  return [container];
+  return [buildPanelContainer(components, resolveComponentsV2AccentColor(options.color))];
 }
 
 function buildGenerateResultPayload(

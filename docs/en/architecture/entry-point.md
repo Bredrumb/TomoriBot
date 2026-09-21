@@ -40,8 +40,9 @@ sidebar:
      - Because `schema.sql` is applied *before* the migration runner, a legacy untracked production database (still carrying `tomori_configs`, never seen by the runner) reaches the historical "expand + backfill" migrations with the split tables already in their final post-migration shape. The data-mover backfills that copy out of the god table (`002`, `003`, `004`, `007`) therefore detect whether the destination still has the pre-`021` image-tag columns (`nai_style_tags`/`nai_tags`/`nai_char_tags`) or the post-`021` ones (`image_default_positive_tags`/`physical_appearance_tags`) and write the matching column set. Without this guard the backfill fails with `column "nai_style_tags" of relation "server_novelai_imagegen_configs" does not exist` (42703). Migration `021` reconciles the rename afterwards, so no tag data is lost.
 7. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
 8. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
-9. Initialize tool registry (`initializeTools`).
-10. Initialize localization (`initializeLocalizer`).
+9. Initialize localization (`initializeLocalizer`). Its runtime state is shared across duplicate
+   module identities so watch-mode and dynamically imported graphs observe the same loaded trees.
+10. Initialize tool registry (`initializeTools`).
 11. Initialize model caches:
     - LLM cache (`initializeLLMCache`)
     - OpenRouter text catalog (`initializeOpenRouterCapabilityCache`)

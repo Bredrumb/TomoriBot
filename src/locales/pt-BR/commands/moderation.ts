@@ -7,7 +7,7 @@ export default {
     not_setup: `TomoriBot ainda não foi configurado neste servidor. Rode /setup.`,
     guild_only: `O painel de moderação está disponível apenas em um servidor.`,
     unavailable: `As configurações não puderam ser carregadas. Tente novamente.`,
-    stale_warning: `Os dados salvos podem estar desatualizados.\nAções de escrita estão indisponíveis até a leitura.`,
+    stale_warning: "Os dados salvos podem estar desatualizados. Ações de escrita estão indisponíveis até a leitura.",
     retry: `Tentar Novamente`,
 
     // Category buttons
@@ -54,7 +54,7 @@ export default {
     personalization_blacklist_section: `Lista Negra de Personalização`,
     personalization_blacklist_description: `Não carrego memórias pessoais ou nomes para estes membros:`,
     persona_blocks_section: `Bloqueios de Usuário de Persona`,
-    persona_blocks_description: `Os membros abaixo têm restrições de\ninteração específicas de persona:`,
+    persona_blocks_description: "Os membros abaixo têm restrições de interação específicas de persona:",
     personalization_blacklist_empty: `Nenhum membro na lista negra de personalização.`,
     persona_blocks_empty: `Nenhum bloqueio de usuário de persona ativo.`,
     add_blacklist: `+ Adicionar à Lista Negra`,
@@ -79,8 +79,10 @@ export default {
     user_blacklist_remove_title: `Remover Membro da Lista Negra`,
     user_blacklist_bulk_remove_title: `Remover Entradas da Lista Negra`,
     user_blacklist_remove_success_detail: `Removeu {count} entradas da lista negra.`,
-    user_blacklist_remove_personalization_description: `Remover {user} da lista negra de personalização?\nVoltarei a carregar memórias pessoais e nomes\npara este membro.`,
-    user_blacklist_remove_persona_block_description: `Remover restrição de {user} na\n**{persona}** ({type})? O membro poderá\ninteragir com esta persona novamente.`,
+    user_blacklist_remove_personalization_description:
+      "Remover {user} da lista negra de personalização? Voltarei a carregar memórias pessoais e nomes para este membro.",
+    user_blacklist_remove_persona_block_description:
+      "Remover restrição de {user} na **{persona}** ({type})? O membro poderá interagir com esta persona novamente.",
     user_blacklist_remove_success: `Entrada da lista negra removida`,
     user_blacklist_remove_personalization_success_detail: `{user_name} removido da lista negra de personalização.`,
     user_blacklist_remove_persona_block_success_detail: `Restrição de {user_name} em **{persona_name}** removida.`,
@@ -101,7 +103,7 @@ export default {
     // Whitelist: Channels
     whitelist_channels_count: `Canais na Lista Branca \`({count})\``,
     whitelist_channels_description: `Só posso ser ativada nos seguintes canais:`,
-    whitelist_channels_empty: `Nenhum canal na lista branca.\nO bot pode responder em qualquer canal acessível.`,
+    whitelist_channels_empty: "Nenhum canal na lista branca. O bot pode responder em qualquer canal acessível.",
     cooldown_inherited: `Tempo de recarga global do servidor herdado`,
     cooldown_custom: `Recarga: {type}, {length}s`,
     cooldown_instant: `Recarga: {type}, Instantâneo`,
@@ -127,7 +129,8 @@ export default {
     whitelist_channel_add_invalid_length: `A duração da recarga deve ser entre 0 e 86400 segundos.`,
     whitelist_channel_remove_title: `Remover Canal da Lista Branca`,
     whitelist_channel_bulk_remove_title: `Remover Canais`,
-    whitelist_channel_remove_description: `Remover {channel} da lista branca? Se não restarem\ncanais na lista branca, poderei responder\nem qualquer canal.`,
+    whitelist_channel_remove_description:
+      "Remover {channel} da lista branca? Se não restarem canais na lista branca, poderei responder em qualquer canal.",
     whitelist_channel_remove_success: `Canal removido da lista branca`,
     whitelist_channel_remove_success_detail: `#{channel_name} removido da lista branca.`,
     whitelist_channel_remove_batch_success_detail: `Removeu {count} canais da lista branca.`,
@@ -139,7 +142,8 @@ export default {
     // Whitelist: Persona Channels
     whitelist_persona_channels_count: `Personas \`({count})\``,
     whitelist_persona_channels_description: `As personas abaixo só respondem em seus canais listados:`,
-    whitelist_persona_channels_empty: `Nenhuma restrição de canal de persona definida.\nPersonas podem responder em todos canais permitidos.`,
+    whitelist_persona_channels_empty:
+      "Nenhuma restrição de canal de persona definida. Personas podem responder em todos canais permitidos.",
     persona_channels_restriction: `**{persona}** restrita a: {channels}`,
     add_persona: `+ Adicionar Persona`,
     remove_persona: `- Remover Persona`,
@@ -193,7 +197,7 @@ export default {
 
     // Quotas
     quotas_title: `Cotas de Geração`,
-    quotas_description: `Configure limites diários por usuário e cotas\nglobais do servidor para geração por IA.`,
+    quotas_description: "Configure limites diários por usuário e cotas globais do servidor para geração por IA.",
     quotas_image_generation: `Geração de Imagem`,
     quotas_text_generation: `Geração de Texto`,
     quotas_video_generation: `Geração de Vídeo`,

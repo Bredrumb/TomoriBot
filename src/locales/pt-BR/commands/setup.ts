@@ -14,21 +14,16 @@ export default {
     learn_more_title: `Saiba Mais`,
     heads_up_title: `Alguns Pontos a Observar`,
     novelai_expressions_warning_field: `Expressões Desativadas`,
-    novelai_expressions_warning_value: `O uso de emojis e figurinhas foi automaticamente
-desativado para manter o contexto do NovelAI enxuto e estável.
-Você pode reativá-los depois em \`/config\` > Permissions.`,
+    novelai_expressions_warning_value:
+      "O uso de emojis e figurinhas foi automaticamente desativado para manter o contexto do NovelAI enxuto e estável. Você pode reativá-los depois em `/config` > Permissions.",
     zai_tos_warning_field: `Termos de Serviço do Z.ai`,
-    zai_tos_warning_value: `Os ToS do Z.ai foram atualizados para permitir apenas
-casos de uso de código/agente. Usar Z.ai para chat geral é por
-sua conta e risco e pode violar os termos deles.`,
+    zai_tos_warning_value:
+      "Os ToS do Z.ai foram atualizados para permitir apenas casos de uso de código/agente. Usar Z.ai para chat geral é por sua conta e risco e pode violar os termos deles.",
     byok_bootstrap_field: `BYOK de Usuário`,
     byok_bootstrap_value: `Ativado durante a configuração. Os membros agora precisam de provedores pessoais para mensagens de usuário. Use {toggle_command} para desativar, e {help_personal_provider} (Features > Personal Providers) para membros.`,
     dm_context_explanation_title: `Sobre as Mensagens Diretas`,
-    dm_context_explanation: `Eu ainda me referirei a esta Mensagem Direta como 'servidor'.
-Significando que todos os recursos de 'servidor' funcionam da
-mesma forma, mas de forma privada aqui entre nós! Pense nesta
-Mensagem Direta como um servidor 1-a-1 comigo, logo suas
-memórias do servidor são minhas memórias apenas aqui.`,
+    dm_context_explanation:
+      "Eu ainda me referirei a esta Mensagem Direta como 'servidor'. Significando que todos os recursos de 'servidor' funcionam da mesma forma, mas de forma privada aqui entre nós! Pense nesta Mensagem Direta como um servidor 1-a-1 comigo, logo suas memórias do servidor são minhas memórias apenas aqui.",
     already_setup_title: `Já Configurado`,
     already_setup_summary_description: `Este servidor já está configurado. Aqui está o estado atual do provedor de texto e a forma mais rápida de alterá-lo.`,
     current_provider_field: `Provedor de Texto Atual`,
@@ -56,13 +51,8 @@ Tente {model_text_command} para atribuir um modelo funcional, ou {provider_add_c
       policies_button_start: `Revisar e Aceitar Políticas`,
       policies_button_edit: `Revisar Políticas`,
       policies_modal_title: `Políticas`,
-      policies_modal_context: `Por favor, revise as políticas do TomoriBot antes de concluir.
-
-O TomoriBot não guarda o seu histórico de chat. Quando ele
-responde num canal, ele lê as mensagens recentes daquele canal
-como contexto e as envia ao provedor de IA do servidor.
-Provedores e endpoints personalizados têm seus próprios termos e
-práticas de privacidade, portanto, revise-os separadamente.`,
+      policies_modal_context:
+        "Por favor, revise as políticas do TomoriBot antes de concluir.\n\nO TomoriBot não guarda o seu histórico de chat. Quando ele responde num canal, ele lê as mensagens recentes daquele canal como contexto e as envia ao provedor de IA do servidor. Provedores e endpoints personalizados têm seus próprios termos e práticas de privacidade, portanto, revise-os separadamente.",
       policies_modal_acceptance: `Ao continuar, você confirma que leu e aceita os [Termos de Serviço]({terms_url}) e a [Política de Privacidade]({privacy_url}) do TomoriBot. Os membros podem ler ambos a qualquer momento usando \`/legal\`, mas só você pode informá-los que uma IA agora responde aqui e o que ela lê para fazer isso.`,
       policies_modal_choice_label: `Confirme os três para continuar`,
       policies_choice_terms: `Aceito os Termos de Serviço do TomoriBot`,
@@ -125,47 +115,33 @@ práticas de privacidade, portanto, revise-os separadamente.`,
       change_failed_title: `Alteração Não Salva`,
       commit_in_progress: `Esta configuração já está sendo salva. Aguarde um momento.`,
       commit_in_progress_title: `Configuração Sendo Salva`,
-      receipt_footer_avatar_skipped_dm: `Atualizações de avatar não estão disponíveis em Mensagens
-Diretas, então o avatar predefinido foi ignorado.`,
-      receipt_footer_avatar_failed: `O avatar predefinido não pôde ser atualizado neste
-servidor. Você pode defini-lo novamente depois.`,
+      receipt_footer_avatar_skipped_dm:
+        "Atualizações de avatar não estão disponíveis em Mensagens Diretas, então o avatar predefinido foi ignorado.",
+      receipt_footer_avatar_failed:
+        "O avatar predefinido não pôde ser atualizado neste servidor. Você pode defini-lo novamente depois.",
       receipt_title: `Configuração Concluída!`,
       receipt_desc: `Estou toda configurada para este servidor como \`{persona}\`!`,
-      receipt_desc_with_model: `Estou toda configurada para este servidor! Eu vou responder com
-o modelo \`{model_name}\` (padrão do \`{provider}\`) como \`{persona}\`.`,
-      receipt_desc_custom_endpoint: `Estou toda configurada para este servidor! Vou responder com
-\`{model_name}\` através do seu
-endpoint \`{endpoint}\` como \`{persona}\`.`,
-      receipt_desc_byok: `Estou toda configurada para este servidor no modo BYOK de
-Usuário como \`{persona}\`! Cada membro usa seu próprio provedor
-até que o BYOK seja desligado.`,
+      receipt_desc_with_model:
+        "Estou toda configurada para este servidor! Eu vou responder com o modelo `{model_name}` (padrão do `{provider}`) como `{persona}`.",
+      receipt_desc_custom_endpoint:
+        "Estou toda configurada para este servidor! Vou responder com `{model_name}` através do seu endpoint `{endpoint}` como `{persona}`.",
+      receipt_desc_byok:
+        "Estou toda configurada para este servidor no modo BYOK de Usuário como `{persona}`! Cada membro usa seu próprio provedor até que o BYOK seja desligado.",
       receipt_desc_dm: `Estou toda configurada para nossa DM como \`{persona}\`!`,
-      receipt_desc_dm_with_model: `Estou toda configurada para nossa DM como \`{persona}\`!
-Vou responder com o modelo \`{model_name}\` via \`{provider}\`.`,
-      receipt_desc_custom_endpoint_dm: `Estou toda configurada para nossa DM! Vou responder com
-\`{model_name}\` através do seu
-endpoint \`{endpoint}\` como \`{persona}\`.`,
-      receipt_desc_byok_dm: `Estou toda configurada para nossa DM no modo BYOK de Usuário
-como \`{persona}\`! Cada mensagem usa o seu próprio provedor
-até que o BYOK seja desligado.`,
-      receipt_next_steps: `- **Mencione-me no chat** para começarmos a conversar!
-- Use \`/persona\` para mudar meu nome, visual e personalidade.
-- Use \`/config\` para ajustar como eu ajo e o que posso fazer.
-- Use \`/memories\` para me ensinar sobre você e este servidor.
-- Use \`/expressions initialize\` para me deixar usar
-  os emojis e figurinhas deste servidor.`,
+      receipt_desc_dm_with_model:
+        "Estou toda configurada para nossa DM como `{persona}`! Vou responder com o modelo `{model_name}` via `{provider}`.",
+      receipt_desc_custom_endpoint_dm:
+        "Estou toda configurada para nossa DM! Vou responder com `{model_name}` através do seu endpoint `{endpoint}` como `{persona}`.",
+      receipt_desc_byok_dm:
+        "Estou toda configurada para nossa DM no modo BYOK de Usuário como `{persona}`! Cada mensagem usa o seu próprio provedor até que o BYOK seja desligado.",
+      receipt_next_steps:
+        "- **Mencione-me no chat** para começarmos a conversar!\n- Use `/persona` para mudar meu nome, visual e personalidade.\n- Use `/config` para ajustar como eu ajo e o que posso fazer.\n- Use `/memories` para me ensinar sobre você e este servidor.\n- Use `/expressions initialize` para me deixar usar os emojis e figurinhas deste servidor.",
       receipt_next_steps_dm: `- **Apenas me mande uma mensagem** para conversarmos!
 - Use \`/persona\` para mudar meu nome, visual e personalidade.
 - Use \`/config\` para ajustar como eu ajo e o que posso fazer.
 - Use \`/memories\` para me ensinar sobre você.`,
-      receipt_learn_more: `Leia a [Wiki Oficial](https://docs.tomoribot.app/pt-BR/features/) ou abra {help}
-(então Features) para mais do que posso fazer.
-- [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/) = visuais, vozes e gatilhos
-- [Chat & Gatilhos](https://docs.tomoribot.app/pt-BR/features/chatting-personality/chatting-and-triggers/) = quando e como eu participo
-- [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/) = pessoas, fatos e contexto
-- [Personalização](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/) = como você gosta de ser tratado
-- [Geração de Mídia](https://docs.tomoribot.app/pt-BR/features/capabilities/media-generation/) = imagens, vídeo e voz
-- [Ferramentas e Extensões](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/) = pesquisa na web e mais`,
+      receipt_learn_more:
+        "Leia a [Wiki Oficial](https://docs.tomoribot.app/pt-BR/features/) ou abra {help} (então Features) para mais do que posso fazer.\n- [Múltiplas Personas](https://docs.tomoribot.app/pt-BR/features/chatting-personality/multiple-personas/) = visuais, vozes e gatilhos\n- [Chat & Gatilhos](https://docs.tomoribot.app/pt-BR/features/chatting-personality/chatting-and-triggers/) = quando e como eu participo\n- [Memória](https://docs.tomoribot.app/pt-BR/features/knowledge/memory/) = pessoas, fatos e contexto\n- [Personalização](https://docs.tomoribot.app/pt-BR/features/knowledge/personalization/) = como você gosta de ser tratado\n- [Geração de Mídia](https://docs.tomoribot.app/pt-BR/features/capabilities/media-generation/) = imagens, vídeo e voz\n- [Ferramentas e Extensões](https://docs.tomoribot.app/pt-BR/features/capabilities/tools-and-extensions/) = pesquisa na web e mais",
       permission_denied: `Você precisa da permissão Gerenciar Servidor para configurar.`,
       env_mismatch: `A configuração do ambiente mudou. Por favor, reinicie a configuração.`,
       forbidden: `Esta sessão de configuração pertence a outro usuário ou canal.`,

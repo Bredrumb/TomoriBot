@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
@@ -72,8 +74,15 @@ mock.module("@/utils/provider/speechEndpointResolver", () => ({
 }));
 mock.module("@/utils/provider/customEndpointService", () => ({ resolveCustomEndpointForProvider: async () => null }));
 mock.module("@/utils/metrics/dbStats", () => ({ loadVideoModelById: async () => null }));
-const RUNTIME_LOCALES = ["en-US", "ja"] as const;
+const localesDir = join(process.cwd(), "src", "locales");
+const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
 const COMPONENT_BUDGET = 36;
+
+function normalizeSerializedPanelProse(value: string): string {
+  return value.replace(/(?:\\r)?\\n(?:-# |> )?/gu, "").replace(/\s+/gu, "");
+}
 
 function countComponents(component: unknown): number {
   if (Array.isArray(component)) return component.reduce((total, item) => total + countComponents(item), 0);
@@ -235,7 +244,9 @@ describe("actual status page builders", () => {
             }
             if (page.footerKey) {
               const expectedFooter = localizer(locale, page.footerKey, page.footerVars);
-              expect(serialized).toContain(expectedFooter);
+              expect(normalizeSerializedPanelProse(serialized)).toContain(
+                normalizeSerializedPanelProse(expectedFooter),
+              );
             }
           }
         }

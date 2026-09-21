@@ -52,10 +52,8 @@ import {
   buildProviderParameterBlock,
   formatStoredParameterValue,
 } from "@/utils/discord/ui/personalConfigParameterControls";
-import {
-  DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-  measureComponentTextLength,
-} from "@/utils/discord/ui/componentsV2Limits";
+import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { formatStopStringForDisplay } from "@/utils/provider/stopStringConfig";
 import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
@@ -742,7 +740,7 @@ ${localizer(locale, "commands.config.panel.logit_bias_description")}
   }
 
   if (view.selectedProvider?.toLowerCase() === "novelai" && view.naiPresetView) {
-    const remainingTextLength = measureComponentTextLength(components);
+    const remainingTextLength = measureFormattedPanelTextLength(components);
     const displayBudget = Math.max(
       0,
       DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - remainingTextLength - CONFIG_NAI_PRESET_DISPLAY_HEADROOM,

@@ -9,7 +9,8 @@ export default {
     read_unavailable: `現在のMCP登録を安全に読み込めませんでした。`,
     retry: `再試行`,
     add: `+ MCPを追加`,
-    trust_warning: `信頼できるMCPサーバーのみ追加してください。\n悪意のあるサーバーはツール入力を収集したり、\n虚偽・有害な結果やプロンプトインジェクションを\n返したりする可能性があります。`,
+    trust_warning:
+      "信頼できるMCPサーバーのみ追加してください。 悪意のあるサーバーはツール入力を収集したり、 虚偽・有害な結果やプロンプトインジェクションを 返したりする可能性があります。",
     type_general: `汎用`,
     type_general_description: `内蔵ツールは無効化されません`,
     type_web_search: `ウェブ検索`,

@@ -1554,8 +1554,8 @@ describe("moderationPanel UI rendering", () => {
       const retryRowComp = inner[inner.length - 3];
 
       expect(lastComp.type).toBe(ComponentType.TextDisplay);
-      expect(lastComp.content).toBe(
-        "-# Saved data may be out of date because the read failed.\n-# Write actions are unavailable until a fresh read succeeds.",
+      expect(lastComp.content?.replaceAll("\n-# ", " ")).toBe(
+        "-# Saved data may be out of date because the read failed. Write actions are unavailable until a fresh read succeeds.",
       );
 
       expect(bottomSeparatorComp.type).toBe(ComponentType.Separator);
