@@ -128,7 +128,7 @@ The implementation starts from the chunking approach used by the [official Irodo
 
 Chunking considers Japanese and English punctuation, commas, and line breaks after the configured minimum length. If a long passage contains no eligible punctuation after that threshold, it can still remain a single synthesis request.
 
-For caption-only VoiceDesign, the first chunk's generated Irodori seed is reused for the remaining chunks to reduce speaker drift between seams. Reference-audio mode continues to apply the same reference clip to each chunk.
+For caption-only VoiceDesign, the first chunk's generated Irodori seed is reused for the remaining chunks to reduce random variation between seams. Reusing a seed does not guarantee identical timbre across independently synthesized chunks. Reference-audio mode continues to apply the same reference clip to each chunk.
 
 Long inputs require multiple sequential inference passes and can take substantially longer on slower hardware. TomoriBot's default TTS client timeout is 240 seconds. You can disable chunking with `IRODORI_CHUNKING_ENABLED=false` or tune the approximate split threshold with `IRODORI_CHUNK_MIN_CHARS`.
 
@@ -171,6 +171,6 @@ The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Caption / VoiceDesign guidance scale |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Reference-speaker guidance scale |
 | `IRODORI_MAX_REF_SECONDS` | checkpoint default | Optional cap on reference audio duration |
-| `IRODORI_CHUNKING_ENABLED` | `true` | Split long text at sentence boundaries and concatenate the generated chunks |
-| `IRODORI_CHUNK_MIN_CHARS` | `80` | Approximate minimum non-whitespace characters before a sentence boundary starts a new chunk |
+| `IRODORI_CHUNKING_ENABLED` | `true` | Split long text at eligible punctuation boundaries and concatenate the generated chunks |
+| `IRODORI_CHUNK_MIN_CHARS` | `80` | Approximate minimum non-whitespace characters before an eligible punctuation boundary starts a new chunk |
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Per-request text length cap |
