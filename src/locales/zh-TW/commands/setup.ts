@@ -14,22 +14,16 @@ export default {
     learn_more_title: `深入了解`,
     heads_up_title: `幾件需要注意的事`,
     novelai_expressions_warning_field: `表情符號已停用`,
-    novelai_expressions_warning_value: `表情符號與貼圖的使用已自動停用，
-以保持 NovelAI 的脈絡精簡穩定。你隨時可以
-用 \`/config\` > 權限重新啟用。`,
+    novelai_expressions_warning_value:
+      "表情符號與貼圖的使用已自動停用， 以保持 NovelAI 的脈絡精簡穩定。你隨時可以 用 `/config` > 權限重新啟用。",
     zai_tos_warning_field: `Z.ai 服務條款`,
-    zai_tos_warning_value: `Z.ai 的服務條款已更新，只允許
-程式開發與代理用途。用 Z.ai 進行一般聊天
-需自行承擔風險，且可能違反他們的條款。`,
+    zai_tos_warning_value:
+      "Z.ai 的服務條款已更新，只允許 程式開發與代理用途。用 Z.ai 進行一般聊天 需自行承擔風險，且可能違反他們的條款。",
     byok_bootstrap_field: `使用者 BYOK`,
-    byok_bootstrap_value: `已在設定過程中啟用。成員現在需要個人供應商，才能使用使用者觸發的訊息。之後可以用 {toggle_command}
-停用，成員設定流程請看 {help_personal_provider}（然後選功能 > 個人供應商）。`,
+    byok_bootstrap_value: `已在設定過程中啟用。成員現在需要個人供應商，才能使用使用者觸發的訊息。之後可以用 {toggle_command} 停用，成員設定流程請看 {help_personal_provider}（然後選功能 > 個人供應商）。`,
     dm_context_explanation_title: `關於私訊`,
-    dm_context_explanation: `我還是會把這個私訊稱作「伺服器」。
-意思是所有「伺服器」功能在這裡的運作方式都一樣，
-只是這裡只有我們兩個，而且是私下進行！把這個
-私訊想成跟我一對一的伺服器，因此它的伺服器記憶
-只限這裡，也就是我在這裡的記憶。`,
+    dm_context_explanation:
+      "我還是會把這個私訊稱作「伺服器」。 意思是所有「伺服器」功能在這裡的運作方式都一樣， 只是這裡只有我們兩個，而且是私下進行！把這個 私訊想成跟我一對一的伺服器，因此它的伺服器記憶 只限這裡，也就是我在這裡的記憶。",
     already_setup_title: `已完成設定`,
     already_setup_summary_description: `這個伺服器已經設定完成。以下是目前的文字供應商狀態，以及最快的變更方式。`,
     current_provider_field: `目前的文字供應商`,
@@ -57,12 +51,8 @@ export default {
       policies_button_start: `閱讀並接受政策`,
       policies_button_edit: `重新閱讀政策`,
       policies_modal_title: `政策`,
-      policies_modal_context: `結束設定前，請先閱讀 TomoriBot 的政策。
-
-TomoriBot 不會保留你的聊天紀錄。它在頻道中
-回答時，會讀取該頻道最近的訊息做為脈絡，並傳送給
-這個伺服器的 AI 供應商。供應商與自訂端點各有自己的
-條款與隱私做法，請另外閱讀那些內容。`,
+      policies_modal_context:
+        "結束設定前，請先閱讀 TomoriBot 的政策。\n\nTomoriBot 不會保留你的聊天紀錄。它在頻道中 回答時，會讀取該頻道最近的訊息做為脈絡，並傳送給 這個伺服器的 AI 供應商。供應商與自訂端點各有自己的 條款與隱私做法，請另外閱讀那些內容。",
       policies_modal_acceptance: `繼續即表示你確認已閱讀並接受 TomoriBot 的 [服務條款]({terms_url}) 與 [隱私權政策]({privacy_url})。成員隨時可以用 \`/legal\` 閱讀這兩份文件，但只有你能告訴他們這裡現在有 AI 在回覆，以及它會讀取哪些訊息來回覆。`,
       policies_modal_choice_label: `三項都確認才能繼續`,
       policies_choice_terms: `我接受 TomoriBot 的服務條款`,
@@ -125,47 +115,31 @@ TomoriBot 不會保留你的聊天紀錄。它在頻道中
       change_failed_title: `設定變更未儲存`,
       commit_in_progress: `這個設定正在儲存中，請稍等一下。`,
       commit_in_progress_title: `設定正在儲存`,
-      receipt_footer_avatar_skipped_dm: `私訊中無法更新頭像，
-因此已略過預設集的頭像。`,
-      receipt_footer_avatar_failed: `無法在這個伺服器更新預設集的
-頭像。你之後可以再設定一次。`,
+      receipt_footer_avatar_skipped_dm: "私訊中無法更新頭像， 因此已略過預設集的頭像。",
+      receipt_footer_avatar_failed: "無法在這個伺服器更新預設集的 頭像。你之後可以再設定一次。",
       receipt_title: `設定完成！`,
       receipt_desc: `我已經以 \`{persona}\` 的身分為這個伺服器設定完成了！`,
-      receipt_desc_with_model: `我已經為這個伺服器設定完成了！我會以
-\`{persona}\` 的身分，用 \`{model_name}\` 模型（\`{provider}\` 的預設）回答。`,
-      receipt_desc_custom_endpoint: `我已經為這個伺服器設定完成了！我會以
-\`{persona}\` 的身分，透過你的 \`{endpoint}\` 端點
-用 \`{model_name}\` 回答。`,
-      receipt_desc_byok: `我已經以使用者 BYOK 模式為這個伺服器設定完成，
-身分是 \`{persona}\`！在 BYOK 關閉之前，每位成員都會
-用自己的供應商回答。`,
+      receipt_desc_with_model:
+        "我已經為這個伺服器設定完成了！我會以 `{persona}` 的身分，用 `{model_name}` 模型（`{provider}` 的預設）回答。",
+      receipt_desc_custom_endpoint:
+        "我已經為這個伺服器設定完成了！我會以 `{persona}` 的身分，透過你的 `{endpoint}` 端點 用 `{model_name}` 回答。",
+      receipt_desc_byok:
+        "我已經以使用者 BYOK 模式為這個伺服器設定完成， 身分是 `{persona}`！在 BYOK 關閉之前，每位成員都會 用自己的供應商回答。",
       receipt_desc_dm: `我已經以 \`{persona}\` 的身分為我們的私訊設定完成了！`,
-      receipt_desc_dm_with_model: `我已經以 \`{persona}\` 的身分為我們的私訊設定完成了！
-我會用 \`{provider}\` 的 \`{model_name}\` 模型回答。`,
-      receipt_desc_custom_endpoint_dm: `我已經為我們的私訊設定完成了！我會以
-\`{persona}\` 的身分，透過你的 \`{endpoint}\` 端點
-用 \`{model_name}\` 回答。`,
-      receipt_desc_byok_dm: `我已經以使用者 BYOK 模式為我們的私訊設定完成，
-身分是 \`{persona}\`！在 BYOK 關閉之前，你的每則訊息
-都會使用你自己的供應商。`,
-      receipt_next_steps: `- 在聊天中**標註我**就能開始對話！
-- 用 \`/persona\` 變更我的名字、外觀與個性。
-- 用 \`/config\` 調整我的行為與我能做的事。
-- 用 \`/memories\` 教我有關你與這個伺服器的事。
-- 用 \`/expressions initialize\` 讓我使用這個
-  伺服器的表情符號與貼圖。`,
+      receipt_desc_dm_with_model:
+        "我已經以 `{persona}` 的身分為我們的私訊設定完成了！ 我會用 `{provider}` 的 `{model_name}` 模型回答。",
+      receipt_desc_custom_endpoint_dm:
+        "我已經為我們的私訊設定完成了！我會以 `{persona}` 的身分，透過你的 `{endpoint}` 端點 用 `{model_name}` 回答。",
+      receipt_desc_byok_dm:
+        "我已經以使用者 BYOK 模式為我們的私訊設定完成， 身分是 `{persona}`！在 BYOK 關閉之前，你的每則訊息 都會使用你自己的供應商。",
+      receipt_next_steps:
+        "- 在聊天中**標註我**就能開始對話！\n- 用 `/persona` 變更我的名字、外觀與個性。\n- 用 `/config` 調整我的行為與我能做的事。\n- 用 `/memories` 教我有關你與這個伺服器的事。\n- 用 `/expressions initialize` 讓我使用這個 伺服器的表情符號與貼圖。",
       receipt_next_steps_dm: `- **直接在這裡傳訊息給我**就能開始對話！
 - 用 \`/persona\` 變更我的名字、外觀與個性。
 - 用 \`/config\` 調整我的行為與我能做的事。
 - 用 \`/memories\` 教我有關你的事。`,
-      receipt_learn_more: `閱讀[官方 Wiki](https://docs.tomoribot.app/zh-TW/features/)，或開啟 {help}
-（然後選功能），了解我還能做什麼。
-- [多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞
-- [聊天與觸發](https://docs.tomoribot.app/zh-TW/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話
-- [記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/) = 人物、事實與脈絡
-- [個人化](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/) = 你希望被怎麼對待
-- [媒體生成](https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/) = 圖片、影片與語音
-- [工具與擴充](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/) = 網頁搜尋與自訂工具`,
+      receipt_learn_more:
+        "閱讀[官方 Wiki](https://docs.tomoribot.app/zh-TW/features/)，或開啟 {help} （然後選功能），了解我還能做什麼。\n- [多個人格](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/) = 外觀、聲音與觸發詞\n- [聊天與觸發](https://docs.tomoribot.app/zh-TW/features/chatting-personality/chatting-and-triggers/) = 我何時、如何加入對話\n- [記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/) = 人物、事實與脈絡\n- [個人化](https://docs.tomoribot.app/zh-TW/features/knowledge/personalization/) = 你希望被怎麼對待\n- [媒體生成](https://docs.tomoribot.app/zh-TW/features/capabilities/media-generation/) = 圖片、影片與語音\n- [工具與擴充](https://docs.tomoribot.app/zh-TW/features/capabilities/tools-and-extensions/) = 網頁搜尋與自訂工具",
       permission_denied: `你需要「管理伺服器」權限才能進行設定。`,
       env_mismatch: `環境設定已變更。請重新開始設定。`,
       forbidden: `這個設定工作階段屬於其他使用者或頻道。`,

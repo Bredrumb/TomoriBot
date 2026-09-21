@@ -6,8 +6,9 @@ export default {
     permission_denied: `Necesitas el permiso \`Administrar servidor\` para usar este panel de moderación.`,
     not_setup: `TomoriBot aún no está configurado en este servidor. Ejecuta /setup primero.`,
     guild_only: `El panel de moderación solo está disponible en un servidor.`,
-    unavailable: `No se pudieron cargar los ajustes de moderación.\nReintenta para volver a intentarlo.`,
-    stale_warning: `Los datos guardados pueden estar desactualizados porque la lectura falló.\nLas acciones de escritura no estarán disponibles hasta que una lectura reciente tenga éxito.`,
+    unavailable: "No se pudieron cargar los ajustes de moderación. Reintenta para volver a intentarlo.",
+    stale_warning:
+      "Los datos guardados pueden estar desactualizados porque la lectura falló. Las acciones de escritura no estarán disponibles hasta que una lectura reciente tenga éxito.",
     retry: `Reintentar`,
 
     // Botones de categoría
@@ -52,9 +53,9 @@ export default {
     // Lista negra de usuarios
     user_blacklist_count: `Miembros en lista negra \`({count})\``,
     personalization_blacklist_section: `Lista negra de personalización`,
-    personalization_blacklist_description: `No cargo memorias personales ni nombres\nguardados para estos miembros:`,
+    personalization_blacklist_description: "No cargo memorias personales ni nombres guardados para estos miembros:",
     persona_blocks_section: `Bloqueos de usuario por persona`,
-    persona_blocks_description: `Los siguientes miembros tienen restricciones de\ninteracción específicas de persona:`,
+    persona_blocks_description: "Los siguientes miembros tienen restricciones de interacción específicas de persona:",
     personalization_blacklist_empty: `Ningún miembro en lista negra de personalización.`,
     persona_blocks_empty: `No hay bloqueos activos de usuario por persona.`,
     add_blacklist: `+ Agregar a lista negra`,
@@ -79,8 +80,10 @@ export default {
     user_blacklist_remove_title: `Quitar miembro de la lista negra`,
     user_blacklist_bulk_remove_title: `Quitar entradas de la lista negra`,
     user_blacklist_remove_success_detail: `Se quitaron {count} entradas de la lista negra.`,
-    user_blacklist_remove_personalization_description: `¿Quitar a {user} de la lista negra de personalización?\nVolveré a cargar las memorias personales y los nombres\nguardados de este miembro.`,
-    user_blacklist_remove_persona_block_description: `¿Quitar la restricción de interacción de {user} en\n**{persona}** ({type})? El miembro podrá volver\na interactuar con esta persona.`,
+    user_blacklist_remove_personalization_description:
+      "¿Quitar a {user} de la lista negra de personalización? Volveré a cargar las memorias personales y los nombres guardados de este miembro.",
+    user_blacklist_remove_persona_block_description:
+      "¿Quitar la restricción de interacción de {user} en **{persona}** ({type})? El miembro podrá volver a interactuar con esta persona.",
     user_blacklist_remove_success: `Entrada de lista negra eliminada`,
     user_blacklist_remove_personalization_success_detail: `Se quitó a {user_name} de la lista negra de personalización.`,
     user_blacklist_remove_persona_block_success_detail: `Se eliminó la restricción de {user_name} en **{persona_name}**.`,
@@ -101,7 +104,7 @@ export default {
     // Lista blanca: canales
     whitelist_channels_count: `Canales en lista blanca \`({count})\``,
     whitelist_channels_description: `Solo puedo activarme en los siguientes canales:`,
-    whitelist_channels_empty: `No hay canales en la lista blanca.\nEl bot puede responder en cualquier canal accesible.`,
+    whitelist_channels_empty: "No hay canales en la lista blanca. El bot puede responder en cualquier canal accesible.",
     cooldown_inherited: `Enfriamiento global del servidor heredado`,
     cooldown_custom: `Enfriamiento: {type}, {length}s`,
     cooldown_instant: `Enfriamiento: {type}, Instantáneo`,
@@ -127,7 +130,8 @@ export default {
     whitelist_channel_add_invalid_length: `La duración del enfriamiento debe ser un número entero entre 0 y 86400 segundos.`,
     whitelist_channel_remove_title: `Quitar canal de la lista blanca`,
     whitelist_channel_bulk_remove_title: `Quitar canales`,
-    whitelist_channel_remove_description: `¿Quitar {channel} de la lista blanca? Si no queda\nningún canal en la lista blanca, podré responder\nen cualquier canal accesible.`,
+    whitelist_channel_remove_description:
+      "¿Quitar {channel} de la lista blanca? Si no queda ningún canal en la lista blanca, podré responder en cualquier canal accesible.",
     whitelist_channel_remove_success: `Canal quitado de la lista blanca`,
     whitelist_channel_remove_success_detail: `Se quitó #{channel_name} de la lista blanca.`,
     whitelist_channel_remove_batch_success_detail: `Se quitaron {count} canales de la lista blanca.`,
@@ -138,8 +142,9 @@ export default {
 
     // Lista blanca: canales por persona
     whitelist_persona_channels_count: `Personas \`({count})\``,
-    whitelist_persona_channels_description: `Las siguientes personas solo pueden responder en\nsus canales listados:`,
-    whitelist_persona_channels_empty: `No hay restricciones de canal por persona configuradas.\nLas personas pueden responder en todos los canales permitidos.`,
+    whitelist_persona_channels_description: "Las siguientes personas solo pueden responder en sus canales listados:",
+    whitelist_persona_channels_empty:
+      "No hay restricciones de canal por persona configuradas. Las personas pueden responder en todos los canales permitidos.",
     persona_channels_restriction: `**{persona}** restringida a: {channels}`,
     add_persona: `+ Agregar persona`,
     remove_persona: `- Quitar persona`,
@@ -158,7 +163,7 @@ export default {
     // Lista blanca: roles
     whitelist_roles_count: `Roles en lista blanca \`({count})\``,
     whitelist_roles_description: `Solo los siguientes roles pueden activarme:`,
-    whitelist_roles_empty: `No hay roles en la lista blanca. Cualquier\nmiembro puede activar al bot.`,
+    whitelist_roles_empty: "No hay roles en la lista blanca. Cualquier miembro puede activar al bot.",
     add_role: `+ Agregar rol`,
     remove_role: `- Quitar rol`,
     whitelist_role_add_title: `Agregar rol a la lista blanca`,
@@ -193,7 +198,8 @@ export default {
 
     // Cuotas
     quotas_title: `Cuotas de generación`,
-    quotas_description: `Configura los límites diarios por usuario y las cuotas\ncompartidas de todo el servidor para la generación con IA.`,
+    quotas_description:
+      "Configura los límites diarios por usuario y las cuotas compartidas de todo el servidor para la generación con IA.",
     quotas_image_generation: `Generación de imágenes`,
     quotas_text_generation: `Generación de texto`,
     quotas_video_generation: `Generación de video`,

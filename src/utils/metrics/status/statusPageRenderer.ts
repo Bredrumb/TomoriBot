@@ -5,7 +5,6 @@ import {
   type ButtonComponentData,
   type ChatInputCommandInteraction,
   type ComponentInContainerData,
-  type ContainerComponentData,
   type SelectMenuComponentOptionData,
   type StringSelectMenuComponentData,
   type TopLevelComponentData,
@@ -21,7 +20,7 @@ import {
   type StatusCategory,
 } from "@/utils/discord/statusDashboardCatalog";
 import { validateAndFallbackPanelPayload } from "@/utils/discord/ui/interactionCore";
-import { buildCategoryButtonRow, buildPaginationRow } from "@/utils/discord/ui/panel";
+import { buildCategoryButtonRow, buildPaginationRow, buildPanelContainer } from "@/utils/discord/ui/panel";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
@@ -151,11 +150,7 @@ export function buildDashboardPagePayload(input: StatusPageRendererInput): {
         ? Number.parseInt(page.color.replace("#", ""), 16)
         : Number.parseInt(ColorCode.INFO.replace("#", ""), 16);
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor,
-    components,
-  };
+  const container = buildPanelContainer(components, accentColor);
 
   return validateAndFallbackPanelPayload(
     {

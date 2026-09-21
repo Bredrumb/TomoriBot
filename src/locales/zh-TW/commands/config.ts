@@ -16,8 +16,8 @@ export default {
       persona_select_placeholder: `選擇一個人格...`,
       persona_main: `主要人格`,
       persona_alter: `alter`,
-      persona_create_hint: `用 \`/persona create\`、\`/persona generate\`、
-\`/persona default\` 或 \`/persona import\` 新增一個人。`,
+      persona_create_hint:
+        "用 `/persona create`、`/persona generate`、 `/persona default` 或 `/persona import` 新增一個人。",
       page_persona_general: `身分與個性`,
       page_persona_triggers: `觸發`,
       page_persona_memories: `記憶`,
@@ -68,8 +68,7 @@ export default {
       channels_destinations_title: `紀錄與歡迎`,
       channels_destinations_description: `選擇紀錄與歡迎訊息的傳送位置。`,
       channels_logs_title: `紀錄`,
-      channels_logs_description: `推理、工具活動、歸屬與診斷資訊
-都會送到這裡。`,
+      channels_logs_description: "推理、工具活動、歸屬與診斷資訊 都會送到這裡。",
       channels_welcome_title: `歡迎訊息`,
       channels_welcome_description: `用選定的人格與提示詞在這裡問候新成員。`,
       channels_destination_label: `目的地`,
@@ -154,19 +153,17 @@ export default {
       channels_rules_title: `頻道規則`,
       channels_rules_description: `設定特殊頻道群組如何影響脈絡與工具。`,
       channels_rules_private_title: `私人頻道`,
-      channels_rules_private_description: `這些頻道的 STM 會與其他頻道隔離，
-思考紀錄也不會顯示。`,
+      channels_rules_private_description: "這些頻道的 STM 會與其他頻道隔離， 思考紀錄也不會顯示。",
       channels_rules_private_manage_button: `管理私人頻道`,
       channels_rules_roleplay_title: `角色扮演頻道`,
-      channels_rules_roleplay_description: `回覆會抑制表情符號與貼圖。成員也可以使用
-/tool delete turn。`,
+      channels_rules_roleplay_description: "回覆會抑制表情符號與貼圖。成員也可以使用 /tool delete turn。",
       channels_rules_roleplay_manage_button: `管理角色扮演頻道`,
       channels_rules_blocklist_title: `跨頻道黑名單`,
       channels_rules_blocklist_description: `跨頻道工具不能造訪這些頻道。`,
       channels_rules_blocklist_manage_button: `管理封鎖頻道`,
       channels_rules_memory_privacy_title: `記憶隱私`,
-      channels_rules_memory_privacy_description: `控制私人頻道的[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#short-term-memory-stm)
-是否可能出現在其他地方。`,
+      channels_rules_memory_privacy_description:
+        "控制私人頻道的[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#short-term-memory-stm) 是否可能出現在其他地方。",
       channels_rules_private_modal_title: `管理私人頻道`,
       channels_rules_private_group_label: `私人頻道`,
       channels_rules_private_group_label_continued: `私人頻道（續）`,
@@ -259,14 +256,12 @@ export default {
       permissions_capabilities_group_label_continued: `要啟用的功能（續）`,
       permissions_capabilities_group_description: `勾選我可以使用的每一項功能。取消勾選即可停用。`,
       permissions_privacy_title: `記憶隱私`,
-      permissions_privacy_description: `控制私人頻道的[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#short-term-memory-stm)
-是否可以跨越界線。`,
+      permissions_privacy_description:
+        "控制私人頻道的[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#short-term-memory-stm) 是否可以跨越界線。",
       permissions_privacy_bypass_title: `私人頻道繞行`,
       permissions_privacy_bypass_description: `控制私人頻道的 STM 是否可能出現在其他地方。`,
-      permissions_privacy_on: `私人頻道的短期記憶可以出現在
-頻道之外。`,
-      permissions_privacy_off: `私人頻道的短期記憶會保持隔離在
-原本的頻道。`,
+      permissions_privacy_on: "私人頻道的短期記憶可以出現在 頻道之外。",
+      permissions_privacy_off: "私人頻道的短期記憶會保持隔離在 原本的頻道。",
       permissions_privacy_direction: `用 /memories 查看或清除使用中的 STM。`,
       plugins_available_tools_title: `可用工具`,
       plugins_available_tools_description: `選擇我可以在這個伺服器使用哪些工具與功能。`,
@@ -289,10 +284,8 @@ export default {
       plugins_manage_group_description: `勾選我可以使用的每個項目。取消勾選即可停用。`,
       plugins_manage_button: `管理`,
       plugins_nsfw_jailbreaks_title: `NSFW 內容`,
-      plugins_nsfw_jailbreaks_description: `選用的 NSFW 內容設定位於 {command}。
-Discord 只允許在標記為 NSFW 的頻道使用 {command}。
-請只在選定供應商允許的方式下使用。
-這項功能僅供已達法定年齡的使用者使用。`,
+      plugins_nsfw_jailbreaks_description:
+        "選用的 NSFW 內容設定位於 {command}。 Discord 只允許在標記為 NSFW 的頻道使用 {command}。 請只在選定供應商允許的方式下使用。 這項功能僅供已達法定年齡的使用者使用。",
       plugins_nsfw_jailbreaks_docs_label: `閱讀年齡限制指令指南`,
       behavior_general_title: `一般行為`,
       behavior_general_description: `調整伺服器預設的回覆脈絡。`,
@@ -301,13 +294,11 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       behavior_experimental_title: `實驗性行為`,
       behavior_experimental_description: `這些控制項可能大幅改變回覆行為。`,
       deliberate_tool_mode_title: `明確工具模式`,
-      deliberate_tool_mode_description: `控制每則訊息都提供工具，還是只在
-相關時提供。`,
+      deliberate_tool_mode_description: "控制每則訊息都提供工具，還是只在 相關時提供。",
       deliberate_tool_mode_on: `我的所有工具永遠可用。`,
       deliberate_tool_mode_off: `只在對話需要時才提供我的工具。`,
       tool_context_title: `工具脈絡`,
-      tool_context_description: `控制成功的工具會保留多少則後續頻道
-對話輪。`,
+      tool_context_description: "控制成功的工具會保留多少則後續頻道 對話輪。",
       tool_context_label: `後續頻道對話輪`,
       tool_context_value: `成功的工具會保留 {count} 個對話輪。`,
       tool_context_zero: `成功的工具不會保留到後續對話輪。`,
@@ -357,13 +348,11 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       send_limit_invalid_detail: `傳送上限必須是 {min} 到 {max} 之間的整數。`,
       edit_send_limit_button: `編輯傳送上限`,
       self_debug_title: `自我除錯脈絡`,
-      self_debug_description: `控制我是否能在聊天中看到自己的錯誤與
-診斷訊息。`,
+      self_debug_description: "控制我是否能在聊天中看到自己的錯誤與 診斷訊息。",
       self_debug_on: `我可以看到自己的錯誤與診斷訊息。`,
       self_debug_off: `我看不到自己的錯誤與診斷訊息。`,
       compatibility_title: `相容性`,
-      compatibility_description: `因應供應商特殊行為的處理方式。每一行說明了
-目前生效的行為。`,
+      compatibility_description: "因應供應商特殊行為的處理方式。每一行說明了 目前生效的行為。",
       custom_provider_limitation: `只影響 Custom 供應商的文字端點。`,
       edit_workarounds_button: `編輯相容性調整`,
       behavior_notices_title: `通知`,
@@ -372,18 +361,15 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       notice_embeds_description: `選擇大家能看到哪些生成回覆的通知。`,
       visible_notices_label: `顯示的通知`,
       hidden_notices_label: `隱藏的通知`,
-      disabled_notices_log_hint: `所有已停用的通知嵌入會改為張貼在紀錄
-頻道。`,
+      disabled_notices_log_hint: "所有已停用的通知嵌入會改為張貼在紀錄 頻道。",
       edit_notice_visibility_button: `編輯通知顯示`,
       speech_transcripts_title: `語音逐字稿`,
-      speech_transcripts_description: `控制大家在語音回覆之後是否能看到
-逐字稿。`,
+      speech_transcripts_description: "控制大家在語音回覆之後是否能看到 逐字稿。",
       speech_transcripts_on: `我目前會張貼語音逐字稿。`,
       speech_transcripts_off: `我目前不會張貼語音逐字稿。`,
       speech_provider_direction: `語音與轉錄端點位於供應商底下。`,
       behavior_memory_title: `進階記憶`,
-      behavior_memory_description: `調整伺服器記憶的標籤與摘要方式。
-僅供進階使用者使用。`,
+      behavior_memory_description: "調整伺服器記憶的標籤與摘要方式。 僅供進階使用者使用。",
       memory_direction: `想知道我實際記得什麼，請改用 /memories。`,
       memory_tagging_title: `記憶標籤`,
       memory_tagging_description: `控制記憶標籤是否限制記憶生效的時機。`,
@@ -429,8 +415,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       system_prompt_title: `[系統提示詞](https://docs.tomoribot.app/zh-TW/features/chatting-personality/behavior-tweaking/#system-prompt)`,
       system_prompt_description: `所有人物都遵循的指示。`,
       global_context_note_description: `放在最後一則訊息附近的系統提醒。`,
-      global_response_style_description: `選擇回覆要多像真人，以及會讀取多少
-歷史紀錄。`,
+      global_response_style_description: "選擇回覆要多像真人，以及會讀取多少 歷史紀錄。",
       humanizer_label: `擬人化`,
       message_fetch_limit_label: `訊息讀取上限`,
       server_timezone_title: `伺服器時區`,
@@ -475,8 +460,8 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       random_trigger_page_option: `觸發 {first}-{last}`,
       random_trigger_more: `還有 {count} 組觸發在後面的頁面。`,
       random_trigger_remove_mode_title: `移除隨機觸發`,
-      random_trigger_remove_mode_description: `選擇要開啟哪一批排程來移除。
-排程一開始為勾選狀態；取消勾選要移除的項目。`,
+      random_trigger_remove_mode_description:
+        "選擇要開啟哪一批排程來移除。 排程一開始為勾選狀態；取消勾選要移除的項目。",
       cooldown_length_label: `時間長度，以秒為單位`,
       system_prompt_empty_detail: `系統提示詞不能留空。`,
       system_prompt_updated_heading: `系統提示詞已更新`,
@@ -538,11 +523,9 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       cancel_button: `取消`,
       outdated_panel: `這個面板已經過期。請重新執行 {command}。`,
       general_title: `人格詳細資料`,
-      general_description: `管理這個人格的身分，以及
-與人聊天的方式`,
+      general_description: "管理這個人格的身分，以及 與人聊天的方式",
       triggers_page_title: `人格觸發`,
-      triggers_page_description: `管理讓這個人格加入對話的
-字詞。`,
+      triggers_page_description: "管理讓這個人格加入對話的 字詞。",
       memories_title: `人格記憶`,
       memories_description: `查看這個人格的知識與對話狀態。`,
       advanced_title: `進階人格設定`,
@@ -564,11 +547,9 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       upload_reference_button: `上傳參考圖`,
       clear_reference_button: `清除參考圖`,
       character_reference_clear_title: `要清除角色參考嗎？`,
-      character_reference_clear_description: `這會清除 {persona} 的 NovelAI
-角色參考。`,
+      character_reference_clear_description: "這會清除 {persona} 的 NovelAI 角色參考。",
       persona_prompt_title: `人格提示詞`,
-      persona_prompt_description: `直接附加在系統提示詞之後，做為屬性的
-舊版替代方案`,
+      persona_prompt_description: "直接附加在系統提示詞之後，做為屬性的 舊版替代方案",
       set_prompt_button: `設定提示詞`,
       remove_prompt_button: `移除提示詞`,
       context_note_title: `脈絡備註`,
@@ -576,15 +557,13 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       context_note_depth: `深度：{depth}`,
       edit_context_note_button: `編輯脈絡備註`,
       response_style_title: `回覆風格`,
-      response_style_description: `為這個人格覆寫伺服器的擬人化程度。
-以規則為基礎，因此不會增加延遲或費用。`,
+      response_style_description: "為這個人格覆寫伺服器的擬人化程度。 以規則為基礎，因此不會增加延遲或費用。",
       persona_override_label: `人格覆寫`,
       server_default_label: `伺服器預設`,
       response_style_placeholder: `選擇一個回覆風格...`,
       edit_humanizer_button: `編輯擬人化`,
       text_override_title: `文字模型覆寫`,
-      text_override_description: `這個人格會改用下列文字模型，而不是
-伺服器預設。`,
+      text_override_description: "這個人格會改用下列文字模型，而不是 伺服器預設。",
       change_override_button: `變更覆寫`,
       clear_override_button: `清除覆寫`,
       text_override_provider_placeholder: `選擇已儲存的供應商...`,
@@ -592,14 +571,12 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       previous_page: `上一頁`,
       next_page: `下一頁`,
       sprites_title: `[人格立繪](https://docs.tomoribot.app/zh-TW/features/chatting-personality/multiple-personas/#sprites-emotion-avatars)`,
-      sprites_description: `管理與這個人格相關的
-表情。`,
+      sprites_description: "管理與這個人格相關的 表情。",
       sprites_none: `這個人格還沒有儲存任何立繪。`,
       sprite_select_prompt: `選擇一個立繪來查看或編輯，或新增一個：`,
       sprite_select_placeholder: `選擇或新增立繪...`,
       selected_sprite_title: `選定的立繪`,
-      selected_sprite_description: `這個表情使用下方的名稱、
-用途備註與圖片。`,
+      selected_sprite_description: "這個表情使用下方的名稱、 用途備註與圖片。",
       sprite_name_label: `名稱`,
       sprite_usage_label: `用途`,
       sprite_identity_label: `身分`,
@@ -616,8 +593,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       sprite_edit_modal_title: `編輯立繪`,
       sprite_import_modal_title: `匯入立繪`,
       sprite_remove_title: `要移除此立繪嗎？`,
-      sprite_remove_description: `這會永久移除立繪 {sprite} 與
-它儲存的圖片。`,
+      sprite_remove_description: "這會永久移除立繪 {sprite} 與 它儲存的圖片。",
       sprite_added_heading: `立繪已新增`,
       sprite_added_detail: `已將 {sprite} 新增到 {persona}。`,
       sprite_replaced_heading: `立繪已取代`,
@@ -664,8 +640,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       open_personal_memories_button: `開啟個人記憶`,
       long_term_footer: `記憶內容在它原本的記憶面板中編輯。`,
       stm_title: `**[短期記憶](https://docs.tomoribot.app/zh-TW/features/knowledge/memory/#short-term-memory-stm)**`,
-      stm_description: `這個人格在頻道之間帶著走的近期
-對話脈絡。`,
+      stm_description: "這個人格在頻道之間帶著走的近期 對話脈絡。",
       stm_active_channel: `使用中的頻道：{channel}`,
       stm_no_channel: `沒有可用的頻道脈絡。`,
       stm_empty: `這個頻道沒有儲存短期記憶。`,
@@ -711,10 +686,8 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       add_trigger_button: `新增觸發詞`,
       remove_trigger_button: `移除觸發詞`,
       naming_title: `稱呼習慣`,
-      naming_description_masculine: `控制這個人格如何稱呼
-認同為男性的人。`,
-      naming_description_feminine: `控制這個人格如何稱呼
-認同為女性的人。`,
+      naming_description_masculine: "控制這個人格如何稱呼 認同為男性的人。",
+      naming_description_feminine: "控制這個人格如何稱呼 認同為女性的人。",
       naming_description_neutral: `控制這個人格預設如何稱呼別人。`,
       naming_style_placeholder: `選擇一種稱呼風格...`,
       naming_none: `無`,
@@ -726,8 +699,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       style_neutral: `中性`,
       edit_naming_button: `編輯稱呼習慣`,
       promote_confirm_title: `要升為主要人格嗎？`,
-      promote_confirm_description: `{persona} 會成為主要人格，
-{main} 則成為 alter。`,
+      promote_confirm_description: "{persona} 會成為主要人格， {main} 則成為 alter。",
       avatar_modal_title: `變更人格頭像`,
       avatar_input_label: `頭像圖片`,
       avatar_input_description: `PNG、JPG 或 GIF。留空即可移除目前的頭像。`,
@@ -786,7 +758,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       avatar_success_heading: `頭像已更新`,
       avatar_success_detail: `已更新 {name} 的頭像。`,
       avatar_cleared_detail: `已移除 {name} 的頭像。`,
-      avatar_preset_sprites_removed_detail: `已移除 {count} 個會不相符的預設立繪。\n執行 \`/persona default\` 即可還原。`,
+      avatar_preset_sprites_removed_detail: "已移除 {count} 個會不相符的預設立繪。 執行 `/persona default` 即可還原。",
       avatar_busy_heading: `目前忙碌中`,
       avatar_busy_detail: `記憶資源吃緊。請稍後再試。`,
       avatar_quota_heading: `已達頭像上限`,
@@ -881,11 +853,9 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       capability_video: `影片`,
       capability_tts: `文字轉語音`,
       capability_stt: `語音轉文字`,
-      image_generation_disabled_direction: `圖片生成已停用。
-請在權限 > bot 功能底下啟用。`,
+      image_generation_disabled_direction: "圖片生成已停用。 請在權限 > bot 功能底下啟用。",
       image_generation_missing_model: `圖片生成沒有設定可用的模型。`,
-      video_generation_disabled_direction: `影片生成已停用。
-請在權限 > bot 功能底下啟用。`,
+      video_generation_disabled_direction: "影片生成已停用。 請在權限 > bot 功能底下啟用。",
       video_generation_missing_model: `影片生成沒有設定可用的模型。`,
       no_endpoints_option: `沒有已註冊的端點`,
       endpoint_activated_heading: `端點已啟用`,
@@ -893,8 +863,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       endpoint_already_active_detail: `**{endpoint}** 已經是使用中端點。未做任何變更。`,
       endpoint_source_changed_direction: `**{endpoint}** 現在是使用中端點。語音來源已變更，需要的話請重新指派語音。`,
       speech_capability_enabled_direction: `語音訊息已啟用。`,
-      speech_capability_disabled_direction: `語音訊息已停用。
-請在權限 > bot 功能底下啟用。`,
+      speech_capability_disabled_direction: "語音訊息已停用。 請在權限 > bot 功能底下啟用。",
       speech_capability_missing_endpoint: `語音訊息已啟用，但沒有設定使用中的語音端點。`,
       providers_endpoint_registration_hint: `請在 /providers 註冊語音或轉錄端點。`,
       manage_providers_hint: `使用 \`/providers\` 加入更多模型選擇。`,
@@ -903,8 +872,8 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       model_provider_more_option: `更多{capability}供應商（第 {page} 頁，共 {total} 頁）`,
       model_provider_page_placeholder: `{capability}：選擇一頁 {provider} 模型`,
       model_provider_paged_heading: `選擇模型頁面`,
-      model_provider_paged_detail: `{provider} 在這項功能有 {count} 個模型，超過一頁
-能容納的數量。請用上方的選單挑選頁面。`,
+      model_provider_paged_detail:
+        "{provider} 在這項功能有 {count} 個模型，超過一頁 能容納的數量。請用上方的選單挑選頁面。",
       model_modal_title: `選擇{capability}模型`,
       model_modal_select_label: `模型`,
       model_modal_select_description: `從 {provider} 選擇模型。`,
@@ -921,8 +890,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       model_moved_heading: `模型已搬移`,
       model_moved_detail: `那個項目已搬到 OpenRouter 模型登錄。請註冊你要的代號，再從這裡挑選。`,
       text_overrides_title: `文字模型覆寫`,
-      text_overrides_description: `這些文字指派會在更小的範圍內取代
-伺服器預設。`,
+      text_overrides_description: "這些文字指派會在更小的範圍內取代 伺服器預設。",
       channel_overrides_label: `頻道覆寫`,
       channel_overrides_hint: `在頻道底下編輯頻道覆寫。`,
       persona_overrides_label: `人格覆寫`,
@@ -1033,8 +1001,7 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
       fallback_conflict_heading: `已經是主要模型`,
       fallback_conflict_detail: `{model} 已經是主要模型，所以不能再做為備援。`,
       randomizer_title: `模型隨機化`,
-      randomizer_description: `啟用後，每次回覆都會從主要加上備援的
-模型池隨機選擇。失敗時會繼續嘗試池中的其他模型。`,
+      randomizer_description: "啟用後，每次回覆都會從主要加上備援的 模型池隨機選擇。失敗時會繼續嘗試池中的其他模型。",
       randomizer_state_on: `我會從模型池隨機選擇`,
       randomizer_state_off: `我會先嘗試主要模型`,
       randomizer_requires_fallback: `啟用這項功能至少需要一個備援模型。`,
@@ -1229,17 +1196,14 @@ Discord 只允許在標記為 NSFW 的頻道使用 {command}。
           success_description: `Chatterbox 快速模型：**{turbo}**
 CFG 權重：**{cfg_weight}**
 誇張程度：**{exaggeration}**`,
-          turbo_notice: `快速模型已啟用，因此 CFG 權重與誇張程度
-會儲存但不會生效。支援的事件標籤會保留；
-不支援的括號描述則會移除。`,
-          standard_notice: `快速模型已停用，因此 CFG 權重與誇張程度
-會生效。像 \`[laugh]\` 或 \`[whisper]\` 的括號描述
-會在生成語音前移除。`,
+          turbo_notice:
+            "快速模型已啟用，因此 CFG 權重與誇張程度 會儲存但不會生效。支援的事件標籤會保留； 不支援的括號描述則會移除。",
+          standard_notice:
+            "快速模型已停用，因此 CFG 權重與誇張程度 會生效。像 `[laugh]` 或 `[whisper]` 的括號描述 會在生成語音前移除。",
         },
         page: {
           title: `語音複製與語音庫`,
-          description: `管理用於語音生成的 Chatterbox 參數與
-參考語音樣本。`,
+          description: "管理用於語音生成的 Chatterbox 參數與 參考語音樣本。",
           parameters_title: `Chatterbox 參數`,
           parameters_turbo_label: `Chatterbox 快速模型`,
           parameters_cfg_label: `CFG 權重`,

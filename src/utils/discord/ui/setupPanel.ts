@@ -42,7 +42,6 @@ import {
   getProviderDisplayName,
 } from "@/utils/provider/providerInfoRegistry";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
-import { truncateDiscordText } from "@/utils/text/discordTextLimits";
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
 import { ColorCode } from "@/utils/misc/logger";
@@ -161,28 +160,6 @@ export function isSetupStartingSettingsResolvable(
   return catalogs.prompts.some((prompt) => prompt.name === systemPrompt.presetName);
 }
 
-/**
- * Longest stored name a wizard summary repeats before it is shortened for display.
- *
- * The template around the name is the widest part of the line, and `> System prompt: ` spends 17 of
- * the 65-character panel budget, so a name longer than this pushes the quote row past the column the
- * container is drawn at. Shortening here is display-only: the draft keeps the full value, and every
- * editor reopens pre-filled with it.
- */
-const SETUP_SUMMARY_VALUE_MAX = 40;
-
-/**
- * Shortens a stored value this panel only names, so a composed line stays inside the column.
- *
- * Endpoint labels, custom model codes, and catalog preset names are stored at lengths that would push
- * a quote row past the 65-character panel budget, and a Components V2 container draws a longer run of
- * unbroken text wider than the column it sits in. Truncation here is display-only: the stored value is
- * untouched, it stays editable in the editors that own it, and every editor reopens carrying it.
- */
-function truncatePanelValue(value: string, maxLength: number): string {
-  return truncateDiscordText(value, maxLength);
-}
-
 function resolveProviderSummary(draft: SetupDraftRecord, locale: string): string {
   const access = draft.providerAccess;
   if (!access) {
@@ -202,8 +179,8 @@ function resolveProviderSummary(draft: SetupDraftRecord, locale: string): string
     return withLinePrefix(
       "> ",
       localizer(locale, "commands.setup.wizard.provider_custom_summary", {
-        label: truncatePanelValue(access.connection.label, SETUP_SUMMARY_VALUE_MAX),
-        model: truncatePanelValue(access.textModel.modelCode, SETUP_SUMMARY_VALUE_MAX),
+        label: access.connection.label,
+        model: access.textModel.modelCode,
       }),
     );
   }
@@ -254,7 +231,7 @@ function resolveSettingsSummary(
 
   return [
     localizer(locale, "commands.setup.wizard.settings_summary_persona", {
-      persona: truncatePanelValue(personaName, SETUP_SUMMARY_VALUE_MAX),
+      persona: personaName,
     }),
     localizer(locale, "commands.setup.wizard.settings_summary_reply_style", {
       style: resolveHumanizerLabel(settings.humanizer, locale),
@@ -263,7 +240,7 @@ function resolveSettingsSummary(
       tz: formatTimezoneOffsetDisplay(settings.timezoneOffset),
     }),
     localizer(locale, "commands.setup.wizard.settings_summary_system_prompt", {
-      prompt: truncatePanelValue(promptName, SETUP_SUMMARY_VALUE_MAX),
+      prompt: promptName,
     }),
   ]
     .map((row) => `> ${row}`)
@@ -387,12 +364,12 @@ export function buildSetupWizardPayload(
     const access = draft.providerAccess;
     const connectionLine = access.connection
       ? localizer(locale, "commands.setup.wizard.custom_endpoint_connection_configured", {
-          label: truncatePanelValue(access.connection.label, SETUP_SUMMARY_VALUE_MAX),
+          label: access.connection.label,
         })
       : localizer(locale, "commands.setup.wizard.custom_endpoint_connection_pending");
     const modelLine = access.textModel
       ? localizer(locale, "commands.setup.wizard.custom_endpoint_model_configured", {
-          model: truncatePanelValue(access.textModel.modelCode, SETUP_SUMMARY_VALUE_MAX),
+          model: access.textModel.modelCode,
         })
       : localizer(locale, "commands.setup.wizard.custom_endpoint_model_pending");
 
@@ -656,10 +633,10 @@ export function buildSetupSuccessPayload(
   components.push({
     type: ComponentType.TextDisplay,
     content: localizer(locale, resolveReceiptDescriptionKey(input), {
-      model_name: truncatePanelValue(input.modelName ?? "", 30),
-      provider: truncatePanelValue(input.providerLabel, 28),
-      endpoint: truncatePanelValue(input.providerLabel, 28),
-      persona: truncatePanelValue(input.personaName, 25),
+      model_name: input.modelName ?? "",
+      provider: input.providerLabel,
+      endpoint: input.providerLabel,
+      persona: input.personaName,
     }),
   });
 

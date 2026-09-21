@@ -115,9 +115,10 @@ round trip in front of every failure repaint. The sink resolves lazily through
 caller that only wants to deliver a panel, and tests can deliver without a live pool.
 
 The receipt travels beside the payload rather than inside it. Embedding a marker in the rendered
-content would spend the payload's Discord text budget and could push a receipt line past the panel
-prose width limit; passing it as an option keeps the outgoing payload byte-for-byte what the caller
-built.
+content would spend the payload's Discord text budget and could make the combined panel invalid.
+Passing it as an option keeps observability metadata out of user-facing content. The shared panel
+container then formats both the main payload and receipt `TextDisplay` content from component-tree
+context before final Components V2 validation.
 
 **A receipt that knows its action carries the join key.** Successes live in `stat_counters` as
 `panel_action`, keyed `<surface>.<scope>.<resource>.<verb>`. `reason` does not share that key space,

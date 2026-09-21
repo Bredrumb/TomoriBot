@@ -3,8 +3,7 @@ export default {
     description: `プロバイダーの認証情報、エンドポイント、モデルカタログの追加・表示・編集・削除を行います。`,
     title: `サーバープロバイダー`,
     personal_title: `個人プロバイダー`,
-    selector_guidance: `下のドロップダウンでプロバイダーやエンドポイントを
-**選択**または**追加**してください。`,
+    selector_guidance: "下のドロップダウンでプロバイダーやエンドポイントを **選択**または**追加**してください。",
     select_placeholder: `プロバイダー、エンドポイント、または操作を選択...`,
     select_add_provider: `+ 新しいプロバイダーを追加`,
     select_add_provider_description: `対応プロバイダーの認証情報を保存します`,
@@ -14,11 +13,11 @@ export default {
     entry_kind_endpoint: `カスタムエンドポイント`,
     entry_kind_brave: `任意の検索プロバイダー`,
     empty_heading: `保存済みプロバイダーがありません`,
-    empty_description: `上の追加操作から、プロバイダーまたはカスタム
-エンドポイントを接続してください。`,
+    empty_description: "上の追加操作から、プロバイダーまたはカスタム エンドポイントを接続してください。",
     retry: `再試行`,
     unavailable: `プロバイダーデータを読み込めませんでした。再試行してください。`,
-    stale_warning: `読み込みに失敗したため、保存済みデータが古い可能性があります。\n再読み込みが成功するまで操作は利用できません。`,
+    stale_warning:
+      "読み込みに失敗したため、保存済みデータが古い可能性があります。 再読み込みが成功するまで操作は利用できません。",
     outdated_panel: `このプロバイダーパネルは古くなっています。{command} をもう一度実行してください。`,
     not_setup: `このワークスペースはまだセットアップされていません。まず /setup を実行してください。`,
     capability_models_explanation: `このプロバイダーでは以下のモデルを利用できます：`,
@@ -38,7 +37,7 @@ export default {
     marker_personal_fallback: `個人設定のフォールバック`,
     marker_provider_fallback: `プロバイダーのフォールバック`,
     marker_custom_registration: `カスタム登録`,
-    brave_description: `Brave SearchはWeb検索と画像検索の結果を提供します。\n生成モデルは登録しません。`,
+    brave_description: "Brave SearchはWeb検索と画像検索の結果を提供します。 生成モデルは登録しません。",
     brave_configured: `APIキー設定済み`,
     edit_provider: `プロバイダーを編集`,
     edit_endpoint: `エンドポイントを編集`,

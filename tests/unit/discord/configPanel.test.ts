@@ -1153,9 +1153,9 @@ describe("config Persona General collections", () => {
 
     expect(
       components.some((component) =>
-        component.content?.includes(
-          "**Feminine**\nControls how this persona addresses people\nwho identify as feminine.",
-        ),
+        component.content
+          ?.replace(/\s+/gu, " ")
+          .includes("**Feminine** Controls how this persona addresses people who identify as feminine."),
       ),
     ).toBe(true);
     expect(components.some((component) => component.content?.includes("> Prefix: `Miss`"))).toBe(true);

@@ -8,60 +8,28 @@ differently from an embed, so several habits that are harmless elsewhere are def
 
 Every rule below has a failure it prevents. Where a gate enforces one, the gate is named.
 
-## Line width
+## Runtime wrapping
 
-**Keep every authored line at or under 65 rendered characters, and break longer prose with
-`\n` yourself.**
+**Write natural localized prose and use newlines only for semantic structure.** Paragraphs,
+lists, quote rows, and stored-content boundaries belong in the source. Soft line breaks added only
+to shape the panel do not.
 
-A Components V2 container sizes itself to its widest line. One long paragraph therefore
-stretches the whole panel wider than the select menus under it, and the page stops reading as
-a single column. Discord does wrap, but only at the width it chose, which is not the width of
-the controls.
+Every panel must pass its component tree through `buildPanelContainer()` in
+`src/utils/discord/ui/panel.ts`. That shared boundary formats every descendant `TextDisplay` before
+Discord's hard limits are validated. It measures visible Markdown content, preserves complete
+tokens and grapheme clusters, and never truncates prose to satisfy the visual policy.
 
-Break at a clause boundary rather than at exactly 65 characters:
+The component tree selects its own layout profile. A `TextDisplay` nested in a `Section` with a
+`Thumbnail` accessory uses the narrower profile automatically. Moving the same text into or out of
+that section requires no width argument, locale edit, or test allowlist. Measured widths remain an
+internal policy in `panelProse.ts` because Discord exposes no panel viewport or text-width field.
 
-```ts
-// Renders as one over-wide block.
-fallbacks_description: `Fallbacks are tried in order when your personal primary text model cannot complete a request.`,
+Links, inline code, emphasis, strikethrough, escaped Markdown, custom emoji, and URLs remain intact
+while wrapping. A single token wider than the policy stays whole on its own line. Fenced blocks are
+verbatim regions: the formatter preserves their bytes, including their existing line endings. Use
+a fenced `markdown` block for stored user content as described below.
 
-// Matches the width of the selects beneath it.
-fallbacks_description: `Fallbacks are tried in order when your personal primary\ntext model cannot complete a request.`,
-```
-
-**Beside a thumbnail the budget is 40, not 65.** A `Thumbnail` accessory takes its width from
-the same row as the text in its Section, so prose next to one wraps sooner and pushes the
-container back out past the selects. Roughly a third of the row is gone, so a heading and its
-description sharing a Section with an avatar wrap at 40:
-
-```ts
-// 65 is fine in the body, but this Section also carries an avatar.
-persona_description: `These memories apply only when this persona is talking\nin a conversation you're participating in.`,
-
-// Fits beside the thumbnail.
-persona_description: `These memories apply only when this\npersona is talking in a conversation\nyou're participating in.`,
-```
-
-**Gate:** `tests/unit/discord/panelProseWidth.test.ts` collects every locale key rendered into
-a `TextDisplay` body across all panel builders and fails on any authored line over the budget.
-
-The two budgets are checked differently, because which budget applies is a runtime fact. The
-65 rule is a static scan of every panel builder. The 40 rule needs a **built payload**, walked
-to find each `TextDisplay` that sits in a Section carrying a `Thumbnail`. A panel builder that
-mentions `ComponentType.Thumbnail` must therefore appear in that test's coverage set and have a
-payload walked there; adding a thumbnail without one fails the build rather than silently
-falling back to the wider budget.
-
-Both numbers are measured, not specified. Components V2 exposes no width, margin, or padding
-field on any component: the only sizing fields in the whole specification sit on media items and
-files, and Discord marks each of them "ignored and provided by the API as part of the response".
-Content is therefore the only input to layout, which is why authored line breaks are the fix
-rather than a workaround for a setting somebody forgot. If the client's rendering changes, retune
-the constants in the gate and re-run it: the failures name every string to rewrap.
-
-Width is measured **as rendered**, not as stored: a link's URL and the markers around bold,
-italic, strikethrough, and inline code occupy no width on screen and are stripped before
-counting. Runtime content is out of scope for the width gate, because its length is not an
-authoring decision.
+Visual wrapping and Discord limits are separate concerns:
 
 Runtime content is still bounded, but by a different mechanism depending on where it lands, and
 the two are not interchangeable:
@@ -80,16 +48,15 @@ body actually competes for.
 
 ## Per-line markers
 
-**`-#` and `>` apply to one line each.** A multi-line string behind a single leading marker
-renders only its first line styled, and the rest falls back to body text. Use
-`withLinePrefix` from `src/utils/discord/ui/panel.ts`:
+**`-#` and `>` apply to one line each.** Add the marker once to the semantic source line. The
+runtime formatter repeats it on every visual continuation line:
 
 ```ts
-content: withLinePrefix("-# ", localizer(locale, "commands.providers.stale_warning")),
+content: `-# ${localizer(locale, "commands.providers.stale_warning")}`,
 ```
 
-This interacts directly with the width rule: wrapping a string that sits behind a marker is
-what exposes the bug, so the two rules are always applied together.
+Keep `withLinePrefix` for content that already contains several semantic rows and needs a marker on
+each one before wrapping. Do not use it to manufacture layout-only line breaks.
 
 ## Structure
 

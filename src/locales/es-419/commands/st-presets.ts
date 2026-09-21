@@ -8,7 +8,8 @@ export default {
     select_add: `+ Agregar nuevo preajuste`,
     select_add_description: `Importa un nuevo preajuste JSON de SillyTavern`,
     none_heading: `Sin preajuste activo`,
-    none_disabled_explanation: `Los preajustes de finalización de chat están\ndesactivados. Elige uno arriba para activarlo.`,
+    none_disabled_explanation:
+      "Los preajustes de finalización de chat están desactivados. Elige uno arriba para activarlo.",
     currently_active: `Preajuste activo actualmente`,
     currently_active_with_nodes: `Este preajuste está seleccionado y activado con {enabled} de {total} nodos`,
     toggle_nodes: `Alternar nodos`,
@@ -17,10 +18,12 @@ export default {
     delete_preset: `Eliminar preajuste`,
     delete_title: `Eliminar preajuste`,
     delete_confirm: `Eliminar preajuste`,
-    delete_description: `¿Eliminar **{name}**? Esto eliminará permanentemente este\npreajuste y su configuración de nodos.`,
+    delete_description:
+      "¿Eliminar **{name}**? Esto eliminará permanentemente este preajuste y su configuración de nodos.",
     cancel: `Cancelar`,
     retry: `Reintentar`,
-    stale_warning: `Los datos guardados pueden estar desactualizados porque la lectura falló.\nLas acciones de escritura no están disponibles hasta que una lectura reciente sea exitosa.`,
+    stale_warning:
+      "Los datos guardados pueden estar desactualizados porque la lectura falló. Las acciones de escritura no están disponibles hasta que una lectura reciente sea exitosa.",
     unavailable: `No se pudieron cargar los preajustes. Reintenta.`,
     not_setup: `Este servidor aún no está configurado. Ejecuta /setup primero.`,
     add_modal_title: `Agregar nuevo preajuste`,

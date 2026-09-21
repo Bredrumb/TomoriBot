@@ -20,11 +20,8 @@ export default {
     byok_bootstrap_field: `ユーザーBYOK`,
     byok_bootstrap_value: `セットアップ中に有効化されました。今後、ユーザー発言に対する応答ではメンバーごとの個人プロバイダーが必要です。後で無効にするには {toggle_command} を使い、メンバー向けの設定手順は {help_personal_provider}（「機能」>「個人プロバイダー」）を確認してください。`,
     dm_context_explanation_title: `ダイレクトメッセージについて`,
-    dm_context_explanation: `このダイレクトメッセージでも「サーバー」として参照します。
-つまり、すべての「サーバー」機能が同じように動作しますが、
-私たちだけのプライベートな空間です！このダイレクトメッセージを
-私との1対1サーバーと考えてください。「サーバーメモリー」は
-ここでのみの私の記憶です。`,
+    dm_context_explanation:
+      "このダイレクトメッセージでも「サーバー」として参照します。 つまり、すべての「サーバー」機能が同じように動作しますが、 私たちだけのプライベートな空間です！このダイレクトメッセージを 私との1対1サーバーと考えてください。「サーバーメモリー」は ここでのみの私の記憶です。",
     already_setup_title: `既に設定済みです`,
     already_setup_summary_description: `このサーバーは既に設定されています。現在のテキストプロバイダー状態と、すぐに変更するための手順を表示します。`,
     current_provider_field: `現在のテキストプロバイダー`,
@@ -52,13 +49,8 @@ export default {
       policies_button_start: `ポリシーを確認して同意する`,
       policies_button_edit: `ポリシーを確認する`,
       policies_modal_title: `ポリシー`,
-      policies_modal_context: `セットアップを終了する前に、TomoriBotのポリシーをご確認ください。
-
-TomoriBotはチャット履歴を保持しません。チャンネルで返信する際は、
-そのチャンネルの直近のメッセージを読み取り、
-このサーバーのAIプロバイダーへ送信します。プロバイダーやカスタム
-エンドポイントにはそれぞれ独自の利用規約とプライバシー方針があるため、
-別途ご確認ください。`,
+      policies_modal_context:
+        "セットアップを終了する前に、TomoriBotのポリシーをご確認ください。\n\nTomoriBotはチャット履歴を保持しません。チャンネルで返信する際は、 そのチャンネルの直近のメッセージを読み取り、 このサーバーのAIプロバイダーへ送信します。プロバイダーやカスタム エンドポイントにはそれぞれ独自の利用規約とプライバシー方針があるため、 別途ご確認ください。",
       policies_modal_acceptance: `続行することで、TomoriBotの[利用規約]({terms_url})と[プライバシーポリシー]({privacy_url})を読み、同意したものとみなされます。メンバーはいつでも \`/legal\` で両方を確認できますが、AIがここで返信を始めること、そしてそのために何を読み取るかをメンバーに伝えられるのはあなただけです。`,
       policies_modal_choice_label: `3項目すべてに同意して続行`,
       policies_choice_terms: `TomoriBotの利用規約に同意します`,
@@ -121,49 +113,33 @@ TomoriBotはチャット履歴を保持しません。チャンネルで返信�
       change_failed_title: `セットアップの変更は保存されませんでした`,
       commit_in_progress: `このセットアップは現在保存処理中です。少しお待ちください。`,
       commit_in_progress_title: `セットアップを保存しています`,
-      receipt_footer_avatar_skipped_dm: `ダイレクトメッセージではアバターを更新できないため、
-プリセットのアバター設定はスキップされました。`,
-      receipt_footer_avatar_failed: `このサーバーではプリセットのアバターを更新できませんでした。
-後でもう一度設定できます。`,
+      receipt_footer_avatar_skipped_dm:
+        "ダイレクトメッセージではアバターを更新できないため、 プリセットのアバター設定はスキップされました。",
+      receipt_footer_avatar_failed:
+        "このサーバーではプリセットのアバターを更新できませんでした。 後でもう一度設定できます。",
       receipt_title: `設定完了！`,
       receipt_desc: `このサーバーの \`{persona}\` としてセットアップが完了しました！`,
-      receipt_desc_with_model: `このサーバーのセットアップが完了しました！\`{persona}\` として、
-\`{model_name}\` モデル（\`{provider}\` のデフォルト）で返信します。`,
-      receipt_desc_custom_endpoint: `このサーバーのセットアップが完了しました！
-\`{endpoint}\` エンドポイントを通じて
-\`{model_name}\` を使い、
-\`{persona}\` として返信します。`,
-      receipt_desc_byok: `このサーバーのセットアップがユーザーBYOKモードで
-\`{persona}\` として完了しました！BYOKがオフになるまで、
-各メンバーは自分自身のプロバイダーで応答を受け取ります。`,
+      receipt_desc_with_model:
+        "このサーバーのセットアップが完了しました！`{persona}` として、 `{model_name}` モデル（`{provider}` のデフォルト）で返信します。",
+      receipt_desc_custom_endpoint:
+        "このサーバーのセットアップが完了しました！ `{endpoint}` エンドポイントを通じて `{model_name}` を使い、 `{persona}` として返信します。",
+      receipt_desc_byok:
+        "このサーバーのセットアップがユーザーBYOKモードで `{persona}` として完了しました！BYOKがオフになるまで、 各メンバーは自分自身のプロバイダーで応答を受け取ります。",
       receipt_desc_dm: `このDMの \`{persona}\` としてセットアップが完了しました！`,
-      receipt_desc_dm_with_model: `このDMの \`{persona}\` としてセットアップが完了しました！
-\`{provider}\` を通じて \`{model_name}\` モデルで返信します。`,
-      receipt_desc_custom_endpoint_dm: `このDMのセットアップが完了しました！
-\`{endpoint}\` エンドポイントを通じて
-\`{model_name}\` を使い、
-\`{persona}\` として返信します。`,
-      receipt_desc_byok_dm: `このDMのセットアップがユーザーBYOKモードで
-\`{persona}\` として完了しました！BYOKがオフになるまで、
-あなたのメッセージにはすべてあなた自身のプロバイダーが使われます。`,
-      receipt_next_steps: `- **チャットで私にメンションする**と会話が始まります！
-- \`/persona\` で私の名前・見た目・性格を変更できます。
-- \`/config\` で私の振る舞いやできることを調整できます。
-- \`/memories\` であなたやこのサーバーについて教えてください。
-- \`/expressions initialize\` でこのサーバーの
-  絵文字とスタンプを使えるようにします。`,
+      receipt_desc_dm_with_model:
+        "このDMの `{persona}` としてセットアップが完了しました！ `{provider}` を通じて `{model_name}` モデルで返信します。",
+      receipt_desc_custom_endpoint_dm:
+        "このDMのセットアップが完了しました！ `{endpoint}` エンドポイントを通じて `{model_name}` を使い、 `{persona}` として返信します。",
+      receipt_desc_byok_dm:
+        "このDMのセットアップがユーザーBYOKモードで `{persona}` として完了しました！BYOKがオフになるまで、 あなたのメッセージにはすべてあなた自身のプロバイダーが使われます。",
+      receipt_next_steps:
+        "- **チャットで私にメンションする**と会話が始まります！\n- `/persona` で私の名前・見た目・性格を変更できます。\n- `/config` で私の振る舞いやできることを調整できます。\n- `/memories` であなたやこのサーバーについて教えてください。\n- `/expressions initialize` でこのサーバーの 絵文字とスタンプを使えるようにします。",
       receipt_next_steps_dm: `- **ここに直接メッセージを送るだけ**で会話が始まります！
 - \`/persona\` で私の名前・見た目・性格を変更できます。
 - \`/config\` で私の振る舞いやできることを調整できます。
 - \`/memories\` であなたについて教えてください。`,
-      receipt_learn_more: `詳しくは[公式Wiki](https://docs.tomoribot.app/ja/features/)を読むか、{help}
-（「機能」）を開いてください。
-- [複数ペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/) = 見た目、声、トリガー
-- [チャットとトリガー](https://docs.tomoribot.app/ja/features/chatting-personality/chatting-and-triggers/) = いつどのように会話に参加するか
-- [記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/) = 人物、事実、文脈
-- [パーソナライズ](https://docs.tomoribot.app/ja/features/knowledge/personalization/) = あなたへの接し方の好み
-- [メディア生成](https://docs.tomoribot.app/ja/features/capabilities/media-generation/) = 画像、動画、音声
-- [ツールと拡張機能](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/) = Web検索とカスタムツール`,
+      receipt_learn_more:
+        "詳しくは[公式Wiki](https://docs.tomoribot.app/ja/features/)を読むか、{help} （「機能」）を開いてください。\n- [複数ペルソナ](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/) = 見た目、声、トリガー\n- [チャットとトリガー](https://docs.tomoribot.app/ja/features/chatting-personality/chatting-and-triggers/) = いつどのように会話に参加するか\n- [記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/) = 人物、事実、文脈\n- [パーソナライズ](https://docs.tomoribot.app/ja/features/knowledge/personalization/) = あなたへの接し方の好み\n- [メディア生成](https://docs.tomoribot.app/ja/features/capabilities/media-generation/) = 画像、動画、音声\n- [ツールと拡張機能](https://docs.tomoribot.app/ja/features/capabilities/tools-and-extensions/) = Web検索とカスタムツール",
       permission_denied: `セットアップを行うには「サーバー管理」権限が必要です。`,
       env_mismatch: `環境設定が変更されました。セットアップをやり直してください。`,
       forbidden: `このセットアップセッションは別のユーザーまたはチャンネルのものです。`,

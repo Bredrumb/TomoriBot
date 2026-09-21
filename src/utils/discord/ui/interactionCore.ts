@@ -16,7 +16,6 @@ import type {
   ChannelSelectMenuInteraction,
   ChatInputCommandInteraction,
   ComponentInContainerData,
-  ContainerComponentData,
   Message,
   MessageActionRowComponentBuilder,
   ModalSubmitInteraction,
@@ -1267,10 +1266,8 @@ function buildV2StatusComponents(
   secondaryDescriptionKey?: string,
   secondaryDescriptionVars?: Record<string, string | number | boolean>,
 ): TopLevelComponentData[] {
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(color),
-    components: [
+  const container = buildPanelContainer(
+    [
       {
         type: ComponentType.TextDisplay,
         content: formatContainerTitle(localizer(locale, titleKey)),
@@ -1288,7 +1285,8 @@ function buildV2StatusComponents(
           ]
         : []),
     ],
-  };
+    resolveAccentColor(color),
+  );
 
   return [container];
 }
@@ -1323,10 +1321,8 @@ function buildV2ConfirmationComponents(
     ],
   };
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(color),
-    components: [
+  const container = buildPanelContainer(
+    [
       {
         type: ComponentType.TextDisplay,
         content: formatContainerTitle(title),
@@ -1337,7 +1333,8 @@ function buildV2ConfirmationComponents(
       },
       actionRow,
     ],
-  };
+    resolveAccentColor(color),
+  );
 
   return [container];
 }
@@ -1432,11 +1429,7 @@ export function buildNoticeContainer(options: NoticeContainerOptions): TopLevelC
     } satisfies ActionRowData<ButtonComponentData>);
   }
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(options.color),
-    components,
-  };
+  const container = buildPanelContainer(components, resolveAccentColor(options.color));
 
   return [container];
 }
@@ -1548,11 +1541,7 @@ export function buildRangeSelectorPayload(
     components: navigation,
   } satisfies ActionRowData<ButtonComponentData>);
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: Number.parseInt(ColorCode.INFO.replace("#", ""), 16),
-    components,
-  };
+  const container = buildPanelContainer(components, Number.parseInt(ColorCode.INFO.replace("#", ""), 16));
   return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
@@ -1748,11 +1737,7 @@ export function buildPersonaResultContainer(options: PersonaResultContainerOptio
     });
   }
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(options.color),
-    components,
-  };
+  const container = buildPanelContainer(components, resolveAccentColor(options.color));
 
   return [container];
 }
@@ -1883,8 +1868,7 @@ export interface GuardedPanelDeliveryOptions {
    * The receipt this payload repaints with, when it carries one.
    *
    * Threaded through delivery rather than read back off the payload so the failure signal cannot
-   * cost the payload any of its Discord text budget, and cannot widen a rendered receipt past the
-   * panel prose line limit.
+   * cost the payload any of its Discord text budget or interfere with runtime panel formatting.
    */
   receipt?: PanelReceipt;
 }
@@ -2387,11 +2371,7 @@ function buildPersonaPageComponents(
   };
   containerComponents.push(navRow);
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: resolveAccentColor(options.color),
-    components: containerComponents,
-  };
+  const container = buildPanelContainer(containerComponents, resolveAccentColor(options.color));
 
   return [container];
 }

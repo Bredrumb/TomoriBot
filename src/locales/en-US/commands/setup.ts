@@ -14,21 +14,16 @@ export default {
     learn_more_title: `Learn More`,
     heads_up_title: `A Few Things to Note`,
     novelai_expressions_warning_field: `Expressions Disabled`,
-    novelai_expressions_warning_value: `Emoji and sticker usage have been automatically
-disabled to keep NovelAI's context lean and stable. You can
-re-enable them anytime with \`/config\` > Permissions.`,
+    novelai_expressions_warning_value:
+      "Emoji and sticker usage have been automatically disabled to keep NovelAI's context lean and stable. You can re-enable them anytime with `/config` > Permissions.",
     zai_tos_warning_field: `Z.ai Terms of Service`,
-    zai_tos_warning_value: `Z.ai's ToS have been updated to only permit
-coding/agent use cases. Using Z.ai for general chat is at
-your own risk and may violate their terms.`,
+    zai_tos_warning_value:
+      "Z.ai's ToS have been updated to only permit coding/agent use cases. Using Z.ai for general chat is at your own risk and may violate their terms.",
     byok_bootstrap_field: `User BYOK`,
     byok_bootstrap_value: `Enabled during setup. Members now need personal providers for user-triggered messages. Use {toggle_command} to disable this later, and {help_personal_provider} (then Features > Personal Providers) for the member setup flow.`,
     dm_context_explanation_title: `About Direct Messages`,
-    dm_context_explanation: `I will still refer to this Direct Message as a "server".
-Meaning all "server" features work the same way, just
-privately here between us! Think of this Direct Message as
-a 1-on-1 server with me, therefore its server memories are
-my memories within here only.`,
+    dm_context_explanation:
+      'I will still refer to this Direct Message as a "server". Meaning all "server" features work the same way, just privately here between us! Think of this Direct Message as a 1-on-1 server with me, therefore its server memories are my memories within here only.',
     already_setup_title: `Already Set Up`,
     already_setup_summary_description: `This server is already configured. Here is the current text-provider state and the quickest way to change it.`,
     current_provider_field: `Current Text Provider`,
@@ -56,13 +51,8 @@ Try {model_text_command} to assign a working model, or {provider_add_command} to
       policies_button_start: `Review & Accept Policies`,
       policies_button_edit: `Review Policies`,
       policies_modal_title: `Policies`,
-      policies_modal_context: `Please review TomoriBot's policies before finishing setup.
-
-TomoriBot does not keep your chat history. When it answers
-in a channel, it reads that channel's recent messages for
-context and sends them to this server's AI provider.
-Providers and custom endpoints have their own terms and
-privacy practices, so please review those separately.`,
+      policies_modal_context:
+        "Please review TomoriBot's policies before finishing setup.\n\nTomoriBot does not keep your chat history. When it answers in a channel, it reads that channel's recent messages for context and sends them to this server's AI provider. Providers and custom endpoints have their own terms and privacy practices, so please review those separately.",
       policies_modal_acceptance: `By continuing you confirm that you have read and accept TomoriBot's [Terms of Service]({terms_url}) and [Privacy Policy]({privacy_url}). Members can read both anytime with \`/legal\`, but only you can tell them an AI is now replying here and what it reads to do so.`,
       policies_modal_choice_label: `Confirm all three to continue`,
       policies_choice_terms: `I accept TomoriBot's Terms of Service`,
@@ -125,47 +115,33 @@ privacy practices, so please review those separately.`,
       change_failed_title: `Setup Change Not Saved`,
       commit_in_progress: `This setup is already being saved. Give it a moment.`,
       commit_in_progress_title: `Setup Is Being Saved`,
-      receipt_footer_avatar_skipped_dm: `Avatar updates are not available in Direct
-Messages, so the preset avatar was skipped.`,
-      receipt_footer_avatar_failed: `The preset avatar could not be updated in this
-server. You can set it again later.`,
+      receipt_footer_avatar_skipped_dm:
+        "Avatar updates are not available in Direct Messages, so the preset avatar was skipped.",
+      receipt_footer_avatar_failed:
+        "The preset avatar could not be updated in this server. You can set it again later.",
       receipt_title: `Setup Complete!`,
       receipt_desc: `I'm all set up for this server as \`{persona}\`!`,
-      receipt_desc_with_model: `I'm all set up for this server! I'll answer with
-the \`{model_name}\` model (\`{provider}\`'s default) as \`{persona}\`.`,
-      receipt_desc_custom_endpoint: `I'm all set up for this server! I'll answer with
-\`{model_name}\` through your
-\`{endpoint}\` endpoint as \`{persona}\`.`,
-      receipt_desc_byok: `I'm all set up for this server in User BYOK mode
-as \`{persona}\`! Each member answers with their own provider
-until BYOK is turned off.`,
+      receipt_desc_with_model:
+        "I'm all set up for this server! I'll answer with the `{model_name}` model (`{provider}`'s default) as `{persona}`.",
+      receipt_desc_custom_endpoint:
+        "I'm all set up for this server! I'll answer with `{model_name}` through your `{endpoint}` endpoint as `{persona}`.",
+      receipt_desc_byok:
+        "I'm all set up for this server in User BYOK mode as `{persona}`! Each member answers with their own provider until BYOK is turned off.",
       receipt_desc_dm: `I'm all set up for our DM as \`{persona}\`!`,
-      receipt_desc_dm_with_model: `I'm all set up for our DM as \`{persona}\`!
-I'll answer with the \`{model_name}\` model through \`{provider}\`.`,
-      receipt_desc_custom_endpoint_dm: `I'm all set up for our DM! I'll answer with
-\`{model_name}\` through your
-\`{endpoint}\` endpoint as \`{persona}\`.`,
-      receipt_desc_byok_dm: `I'm all set up for our DM in User BYOK mode
-as \`{persona}\`! Each of your messages uses your own provider
-until BYOK is turned off.`,
-      receipt_next_steps: `- **Mention me in chat** to start talking!
-- Use \`/persona\` to change my name, look, and personality.
-- Use \`/config\` to adjust how I act and what I can do.
-- Use \`/memories\` to teach me things about you and this server.
-- Use \`/expressions initialize\` to let me use this
-  server's emoji and stickers.`,
+      receipt_desc_dm_with_model:
+        "I'm all set up for our DM as `{persona}`! I'll answer with the `{model_name}` model through `{provider}`.",
+      receipt_desc_custom_endpoint_dm:
+        "I'm all set up for our DM! I'll answer with `{model_name}` through your `{endpoint}` endpoint as `{persona}`.",
+      receipt_desc_byok_dm:
+        "I'm all set up for our DM in User BYOK mode as `{persona}`! Each of your messages uses your own provider until BYOK is turned off.",
+      receipt_next_steps:
+        "- **Mention me in chat** to start talking!\n- Use `/persona` to change my name, look, and personality.\n- Use `/config` to adjust how I act and what I can do.\n- Use `/memories` to teach me things about you and this server.\n- Use `/expressions initialize` to let me use this server's emoji and stickers.",
       receipt_next_steps_dm: `- **Just message me here** to start talking!
 - Use \`/persona\` to change my name, look, and personality.
 - Use \`/config\` to adjust how I act and what I can do.
 - Use \`/memories\` to teach me things about you.`,
-      receipt_learn_more: `Read the [Official Wiki](https://docs.tomoribot.app/en/features/) or open {help}
-(then Features) for more on what I can do.
-- [Multiple Personas](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/) = looks, voices, and triggers
-- [Chatting & Triggers](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/) = when and how I join in
-- [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/) = people, facts, and context
-- [Personalization](https://docs.tomoribot.app/en/features/knowledge/personalization/) = how you like to be treated
-- [Media Generation](https://docs.tomoribot.app/en/features/capabilities/media-generation/) = images, video, and voice
-- [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/) = web search and custom tools`,
+      receipt_learn_more:
+        "Read the [Official Wiki](https://docs.tomoribot.app/en/features/) or open {help} (then Features) for more on what I can do.\n- [Multiple Personas](https://docs.tomoribot.app/en/features/chatting-personality/multiple-personas/) = looks, voices, and triggers\n- [Chatting & Triggers](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/) = when and how I join in\n- [Memory](https://docs.tomoribot.app/en/features/knowledge/memory/) = people, facts, and context\n- [Personalization](https://docs.tomoribot.app/en/features/knowledge/personalization/) = how you like to be treated\n- [Media Generation](https://docs.tomoribot.app/en/features/capabilities/media-generation/) = images, video, and voice\n- [Tools & Extensions](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/) = web search and custom tools",
       permission_denied: `You must have the Manage Server permission to set up.`,
       env_mismatch: `Environment configuration changed. Please restart setup.`,
       forbidden: `This setup session belongs to another user or channel.`,

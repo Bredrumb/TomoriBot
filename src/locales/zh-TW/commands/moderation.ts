@@ -7,7 +7,7 @@ export default {
     not_setup: `TomoriBot 還沒在這個伺服器完成設定。請先執行 /setup。`,
     guild_only: `管理面板只能在伺服器中使用。`,
     unavailable: `無法載入管理設定。請按重試再試一次。`,
-    stale_warning: `讀取失敗，儲存的資料可能不是最新的。\n在新的讀取成功之前，無法執行寫入操作。`,
+    stale_warning: "讀取失敗，儲存的資料可能不是最新的。 在新的讀取成功之前，無法執行寫入操作。",
     retry: `重試`,
 
     // Category buttons
@@ -54,7 +54,7 @@ export default {
     personalization_blacklist_section: `個人化黑名單`,
     personalization_blacklist_description: `我不會為這些成員載入個人記憶或儲存的稱呼：`,
     persona_blocks_section: `人格使用者封鎖`,
-    persona_blocks_description: `下列成員受到特定人格的\n互動限制：`,
+    persona_blocks_description: "下列成員受到特定人格的 互動限制：",
     personalization_blacklist_empty: `沒有成員被列入個人化黑名單。`,
     persona_blocks_empty: `目前沒有生效的人格使用者封鎖。`,
     add_blacklist: `+ 新增黑名單`,
@@ -79,8 +79,10 @@ export default {
     user_blacklist_remove_title: `移除黑名單成員`,
     user_blacklist_bulk_remove_title: `移除黑名單項目`,
     user_blacklist_remove_success_detail: `已移除 {count} 個黑名單項目。`,
-    user_blacklist_remove_personalization_description: `要將 {user} 從個人化黑名單移除嗎？\n我會恢復為這位成員載入個人記憶與\n儲存的稱呼。`,
-    user_blacklist_remove_persona_block_description: `要移除 {user} 對 **{persona}**（{type}）的\n互動限制嗎？這位成員將可以再次與\n這個人格互動。`,
+    user_blacklist_remove_personalization_description:
+      "要將 {user} 從個人化黑名單移除嗎？ 我會恢復為這位成員載入個人記憶與 儲存的稱呼。",
+    user_blacklist_remove_persona_block_description:
+      "要移除 {user} 對 **{persona}**（{type}）的 互動限制嗎？這位成員將可以再次與 這個人格互動。",
     user_blacklist_remove_success: `黑名單項目已移除`,
     user_blacklist_remove_personalization_success_detail: `已將 {user_name} 從個人化黑名單移除。`,
     user_blacklist_remove_persona_block_success_detail: `已移除 {user_name} 在 **{persona_name}** 上的限制。`,
@@ -101,7 +103,7 @@ export default {
     // Whitelist: Channels
     whitelist_channels_count: `白名單頻道 \`({count})\``,
     whitelist_channels_description: `我只能由下列頻道觸發：`,
-    whitelist_channels_empty: `沒有白名單頻道。\nbot 可以在任何有權限的頻道回應。`,
+    whitelist_channels_empty: "沒有白名單頻道。 bot 可以在任何有權限的頻道回應。",
     cooldown_inherited: `沿用伺服器全域冷卻`,
     cooldown_custom: `冷卻：{type}，{length} 秒`,
     cooldown_instant: `冷卻：{type}，立即`,
@@ -127,7 +129,8 @@ export default {
     whitelist_channel_add_invalid_length: `冷卻長度必須是 0 到 86400 秒之間的整數。`,
     whitelist_channel_remove_title: `移除白名單頻道`,
     whitelist_channel_bulk_remove_title: `移除頻道`,
-    whitelist_channel_remove_description: `要將 {channel} 從白名單移除嗎？如果沒有\n其他白名單頻道，我可以在任何有權限的\n頻道回應。`,
+    whitelist_channel_remove_description:
+      "要將 {channel} 從白名單移除嗎？如果沒有 其他白名單頻道，我可以在任何有權限的 頻道回應。",
     whitelist_channel_remove_success: `頻道已從白名單移除`,
     whitelist_channel_remove_success_detail: `已將 #{channel_name} 從白名單移除。`,
     whitelist_channel_remove_batch_success_detail: `已將 {count} 個頻道從白名單移除。`,
@@ -139,7 +142,7 @@ export default {
     // Whitelist: Persona Channels
     whitelist_persona_channels_count: `人格 \`({count})\``,
     whitelist_persona_channels_description: `下列人格只能在各自列出的頻道回應：`,
-    whitelist_persona_channels_empty: `沒有設定任何人格頻道限制。\n人格可以在所有允許的頻道回應。`,
+    whitelist_persona_channels_empty: "沒有設定任何人格頻道限制。 人格可以在所有允許的頻道回應。",
     persona_channels_restriction: `**{persona}** 限制於：{channels}`,
     add_persona: `+ 新增人格`,
     remove_persona: `- 移除人格`,
@@ -193,7 +196,7 @@ export default {
 
     // Quotas
     quotas_title: `生成額度`,
-    quotas_description: `設定 AI 生成的每日個人上限，以及伺服器\n共用的額度池。`,
+    quotas_description: "設定 AI 生成的每日個人上限，以及伺服器 共用的額度池。",
     quotas_image_generation: `圖片生成`,
     quotas_text_generation: `文字生成`,
     quotas_video_generation: `影片生成`,
