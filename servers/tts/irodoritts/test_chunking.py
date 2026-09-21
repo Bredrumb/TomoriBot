@@ -8,6 +8,31 @@ class SplitTextForSpeechTests(unittest.TestCase):
     text = "短い文章です。"
     self.assertEqual(split_text_for_speech(text, min_chars=80), [text])
 
+  def test_comma_waits_for_soft_fallback_threshold(self) -> None:
+    before = ("あ" * 80) + "、"
+    sentence_end = ("い" * 20) + "。"
+    tail = ("う" * 40) + "。"
+    self.assertEqual(
+      split_text_for_speech(before + sentence_end + tail, min_chars=80),
+      [before + sentence_end, tail],
+    )
+
+  def test_comma_splits_after_soft_fallback_threshold(self) -> None:
+    first = ("あ" * 120) + "、"
+    second = ("い" * 80) + "。"
+    self.assertEqual(
+      split_text_for_speech(first + second, min_chars=80),
+      [first, second],
+    )
+
+  def test_ellipsis_is_a_strong_boundary(self) -> None:
+    first = ("あ" * 80) + "……"
+    second = ("い" * 80) + "。"
+    self.assertEqual(
+      split_text_for_speech(first + second, min_chars=80),
+      [first, second],
+    )
+
   def test_closing_quote_stays_with_previous_chunk(self) -> None:
     first = "「" + ("あ" * 20) + "。」"
     second = ("い" * 20) + "次の文です。"
