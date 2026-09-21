@@ -257,9 +257,9 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
 
   // Model randomizer: when enabled, splice a random pool member to the front so a different model
-  //    leads each turn. The remainder keeps its relative order as the failover tail. This is a pure
-  //    reordering , so every model (including the original primary) stays in the chain, so failover
-  //    semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
+  // leads each turn. The remainder keeps its relative order as the failover tail, and because the
+  // reorder is a splice rather than a replacement, every model stays in the chain, so failover
+  // semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
   if (primaryState.config.model_randomizer_enabled && pool.length > 1) {
     const leadIdx = Math.floor(Math.random() * pool.length);
     pool.unshift(...pool.splice(leadIdx, 1));

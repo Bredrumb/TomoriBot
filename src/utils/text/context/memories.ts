@@ -167,9 +167,8 @@ export async function buildServerMemoryContextItem(params: {
       }
 
       // Content tags: if corpus filtering is active and the memory has content tags,
-      // at least one must appear in the corpus. Memories with no content tags are
-      // unfiltered by keyword (per the Memory Tagging help page: "memories without keyword
-      // tags will always be active").
+      // at least one must appear in the corpus. A memory with no content tags is
+      // unfiltered by keyword, so it always stays active.
       if (params.conversationCorpus != null && contentTags.length > 0) {
         return contentTags.some((tag) => params.conversationCorpus?.includes(tag.toLowerCase()));
       }
@@ -522,10 +521,8 @@ export async function buildShortTermMemoryContext(params: {
         });
       }
 
-      // Unified nudge (cadence-gated): covers BOTH the create case (no STM yet)
-      //     and the update case (refresh existing STM). It is NOT pushed into
-      //     memoryItems; it is returned separately so the caller can inject it at the
-      //     configured dialogue depth (highest-signal tail position by default).
+      // The nudge is NOT pushed into memoryItems; it is returned separately so the caller can
+      // inject it at the configured dialogue depth (highest-signal tail position by default).
       if (isStmToolAvailable && isNudgeDue) {
         let rawHintText: string;
         let rawHintFallback: string;

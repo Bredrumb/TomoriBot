@@ -214,10 +214,9 @@ export function filterDuplicateCustomEmojis(generatedText: string, contextItems:
 
   const filtered = filterCustomEmojis(generatedText, emojisToRemove);
 
-  // If filtering collapses output to punctuation only (e.g. ", that's all!" → ","),
-  // keep the original text to avoid sending a lone punctuation character.
-  // NOTE: An empty result is intentionally allowed, so it means the segment was purely
-  // duplicate emojis, and the orchestrator's empty-segment guard will drop it cleanly.
+  // If filtering collapses output to punctuation only, keep the original text rather than
+  // sending a lone punctuation character. An empty result is allowed instead: the segment was
+  // purely duplicate emojis, and the orchestrator's empty-segment guard drops it cleanly.
   const compactFiltered = filtered.replace(/\s+/g, "");
   if (compactFiltered.length > 0 && /^[.,!?;:。！？、，]+$/.test(compactFiltered)) {
     log.info("[Unique Emoji] Skipping duplicate filter because result became punctuation-only");

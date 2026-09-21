@@ -56,8 +56,8 @@ const PUNCTUATION_OR_SYMBOL_START = /^[\p{P}\p{S}]/u;
 
 // Punctuation that closes the prefix into its own word instead of binding it to what
 // follows, so an abbreviation or interjection keeps its space: "Ms. Sparrow", "Yo! Sparrow".
-// Everything else punctuation-ended still joins directly, which is what "@sparrow",
-// "O'Sparrow", and "super-Sparrow" need.
+// Everything else punctuation-ended still joins directly, which "@sparrow" and
+// "super-Sparrow" rely on to keep their single-token styling.
 const PREFIX_TERMINAL_PUNCTUATION_END = /[.,;:!?]$/u;
 
 function formatPrefix(prefix: string, nickname: string): string {
@@ -89,11 +89,10 @@ export function formatUserName(nickname: string, prefix = "", suffix = ""): stri
   const normalizedNickname = nickname.trim();
   const assembled = formatSuffix(formatPrefix(prefix, normalizedNickname), suffix);
 
-  // The leading token (prefix if present, else the nickname) always supplies
-  // the assembled name's first character. Only capitalize it when that token
-  // is entirely lowercase, so a casually-typed prefix like "dad" reads as
-  // "Dad Sparrow" while deliberate styling ("@sparrow", "マスター", "xXx...")
-  // is left untouched.
+  // The leading token (prefix if present, else the nickname) always supplies the assembled
+  // name's first character. Capitalize it only when that token is entirely lowercase, so a
+  // casually-typed prefix like "dad" reads as "Dad Sparrow" while deliberate styling such as
+  // "@sparrow" or a script-script nickname is left untouched.
   const leadingToken = prefix.trim() || normalizedNickname;
   return leadingToken === leadingToken.toLowerCase() ? capitalizeLeadingChar(assembled) : assembled;
 }

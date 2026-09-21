@@ -239,8 +239,8 @@ async function emitGenerationError(context: ChatTurnContext, error: unknown): Pr
   ).catch((embedError: unknown) => {
     // Reporting a failure must not itself fail. The two causes worth naming are a channel the
     // send cannot reach (deleted, or the bot lost access), where the retry this would trigger
-    // reports the same failure again and turns one error into a burst, and the same refusal the
-    // original send already reported.
+    // reports the same failure again and turns one error into a burst, and the same refusal
+    // the original send already reported.
     log.warn(`Failed to send the generation error embed for message ${context.message.id}`, embedError);
   });
 }

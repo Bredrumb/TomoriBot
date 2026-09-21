@@ -496,9 +496,8 @@ export async function reassembleWithPreset(
     }
   }
 
-  // ── Step 6: Process depth-injection nodes ──
-  // These merge INTO existing dialogue history items rather than creating new messages.
-  // Same-depth injections are batched into a single [System: ...] block to reduce
+  // Depth-injection nodes merge INTO existing dialogue history items rather than creating new
+  // messages. Same-depth injections are batched into a single [System: ...] block to reduce
   // token waste and match SillyTavern's contiguous injection behavior.
   const resolvedInjections: Array<{
     depth: number;
