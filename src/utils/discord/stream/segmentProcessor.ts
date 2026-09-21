@@ -125,14 +125,14 @@ export class StreamSegmentProcessor {
           : await resolveCopiedRenderModifierTarget(renderModifierMatch.modifier, context, sourceDisplayName);
 
       if (renderTarget) {
-        // Non-identity sprites all share the clean persona username, so Discord, so
-        // which groups consecutive webhook messages by webhook + username and
-        // ignores the per-message avatar, so would render back-to-back sprites under
-        // the first sprite's avatar. When a sprite change would collide with the
-        // previous message's clean name, fall back to the decorated
-        // "Persona (sprite)" name for that one message so Discord treats it as a
-        // distinct author and renders its avatar. Identity sprites already use a
-        // distinct decorated name, so they are excluded.
+        // Non-identity sprites all share the clean persona username, and Discord groups
+        // consecutive webhook messages by webhook + username while ignoring the
+        // per-message avatar, so back-to-back sprites would render under the first
+        // sprite's avatar. When a sprite change would collide with the previous
+        // message's clean name, fall back to the decorated "Persona (sprite)" name for
+        // that one message so Discord treats it as a distinct author and renders its
+        // avatar. Identity sprites already use a distinct decorated name, so they are
+        // excluded.
         const identity =
           renderTarget.spriteRecord && !renderTarget.isIdentitySprite
             ? this.resolveSpriteGroupBreakIdentity(

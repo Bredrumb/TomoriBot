@@ -49,8 +49,8 @@ registerHeapSnapshotHandler();
 initMediaProcessing();
 
 // Probe Discord for Presence Intent approval (or honor an explicit override) before
-// building the client, so we request the privileged intent only when it is actually
-// enabled, so self-resolving the moment Discord grants approval, with no failed
+// building the client, so the privileged intent is requested only when it is actually
+// enabled. Approval is then picked up the moment Discord grants it, with no failed
 // gateway handshake and no manual env change.
 const includePresences = await resolvePresenceIntentEnabled(environment);
 const client = createDiscordClient(includePresences);
