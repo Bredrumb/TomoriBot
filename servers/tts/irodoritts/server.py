@@ -172,7 +172,13 @@ def _audio_as_channels_first(audio: torch.Tensor) -> torch.Tensor:
   raise RuntimeError(f"Expected audio shape (samples,) or (channels, samples), got {tuple(audio.shape)}")
 
 
-async def synthesize_text_chunks(*, text: str, caption: str, ref_path: str | None, client_request: Request | None = None) -> tuple[torch.Tensor, int]:
+async def synthesize_text_chunks(
+  *,
+  text: str,
+  caption: str,
+  ref_path: str | None,
+  client_request: Request | None = None,
+) -> tuple[torch.Tensor, int]:
   from irodori_tts.inference_runtime import SamplingRequest
 
   chunks = split_text_for_speech(text, min_chars=CHUNK_MIN_CHARS) if CHUNKING_ENABLED else [text]
@@ -201,7 +207,10 @@ async def synthesize_text_chunks(*, text: str, caption: str, ref_path: str | Non
   pinned_seed: int | None = base_request.seed
   for index, chunk in enumerate(chunks, start=1):
     if client_request is not None and await client_request.is_disconnected():
-      raise HTTPException(status_code=499, detail="Client disconnected before synthesis completed.")
+      raise HTTPException(
+        status_code=499,
+        detail="Client disconnected before synthesis completed.",
+      )
     if len(chunks) > 1:
       print(f"[Irodori-TTS] Synthesizing chunk {index}/{len(chunks)} ({len(chunk)} chars)")
     chunk_request = replace(base_request, text=chunk, seed=pinned_seed)
@@ -299,7 +308,12 @@ async def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
     from irodori_tts.inference_runtime import save_wav
 
     try:
-      audio, sample_rate = await synthesize_text_chunks(text=text, caption=caption, ref_path=ref_path, client_request=request)
+      audio, sample_rate = await synthesize_text_chunks(
+        text=text,
+        caption=caption,
+        ref_path=ref_path,
+        client_request=request,
+      )
     except ValueError as exc:
       raise HTTPException(status_code=400, detail=str(exc)) from exc
 
