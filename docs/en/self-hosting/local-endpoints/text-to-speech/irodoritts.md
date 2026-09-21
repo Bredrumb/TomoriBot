@@ -120,6 +120,14 @@ TomoriBot sends this prompt as `instruct`; the Irodori wrapper maps it to the v4
 
 TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `script_markup: emoji`, Unicode emojis are preserved for Irodori's text conditioning.
 
+## Long voice messages
+
+Irodori checkpoints are intended to synthesize individual utterances rather than arbitrarily long passages in one inference call. TomoriBot therefore follows the upstream Irodori server's long-text behavior: chunking is enabled by default, splits at Japanese or English sentence punctuation after roughly 80 non-whitespace characters, synthesizes every chunk with the same reference voice and caption conditioning, then concatenates the audio into one WAV response.
+
+This prevents long `/generate voice-message` scripts and model-generated voice replies from ending around a single-utterance duration horizon while still producing one Discord voice message.
+
+Set `IRODORI_CHUNKING_ENABLED=false` to restore single-pass synthesis. `IRODORI_CHUNK_MIN_CHARS` controls the approximate minimum chunk size. Chunking only splits at sentence boundaries, so an unusually long passage with no punctuation can still remain a single chunk.
+
 ## Faster inference with Sway Sampling
 
 The default remains Irodori's higher-quality 40-step linear sampling. For lower latency, try Sway Sampling with fewer steps:
@@ -159,4 +167,6 @@ The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Caption / VoiceDesign guidance scale |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Reference-speaker guidance scale |
 | `IRODORI_MAX_REF_SECONDS` | checkpoint default | Optional cap on reference audio duration |
+| `IRODORI_CHUNKING_ENABLED` | `true` | Split long text at sentence boundaries and concatenate the generated chunks |
+| `IRODORI_CHUNK_MIN_CHARS` | `80` | Approximate minimum non-whitespace characters before a sentence boundary starts a new chunk |
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Per-request text length cap |
