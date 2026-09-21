@@ -4,6 +4,7 @@ import base64
 import os
 import tempfile
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Optional
 
@@ -84,6 +85,9 @@ MAX_REF_SECONDS_RAW = os.getenv("IRODORI_MAX_REF_SECONDS")
 MAX_REF_SECONDS = float(MAX_REF_SECONDS_RAW) if MAX_REF_SECONDS_RAW else None
 
 MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "1000"))
+CHUNK_BOUNDARIES = frozenset("。、，,．.!！?？\\n\\r")
+CHUNKING_ENABLED = os.getenv("IRODORI_CHUNKING_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+CHUNK_MIN_CHARS = max(1, int(os.getenv("IRODORI_CHUNK_MIN_CHARS", "80")))
 
 runtime = None
 resolved_checkpoint: str | None = None
@@ -129,6 +133,78 @@ def resolve_checkpoint() -> str:
     return str(path)
 
   return download_hf_checkpoint(MODEL_ID)
+
+
+def split_text_for_speech(text: str, *, min_chars: int) -> list[str]:
+  """Split long speech at sentence boundaries after roughly min_chars non-space characters."""
+  chunks: list[str] = []
+  current: list[str] = []
+  current_chars = 0
+
+  for char in text:
+    current.append(char)
+    if not char.isspace():
+      current_chars += 1
+    if char not in CHUNK_BOUNDARIES or current_chars < min_chars:
+      continue
+
+    chunk = "".join(current).strip()
+    if chunk:
+      chunks.append(chunk)
+    current = []
+    current_chars = 0
+
+  tail = "".join(current).strip()
+  if tail:
+    chunks.append(tail)
+  return chunks or [text]
+
+
+def _audio_as_channels_first(audio: torch.Tensor) -> torch.Tensor:
+  if audio.ndim == 1:
+    return audio.unsqueeze(0)
+  if audio.ndim == 2:
+    return audio
+  raise ValueError(f"Expected audio shape (samples,) or (channels, samples), got {tuple(audio.shape)}")
+
+
+def synthesize_text_chunks(*, text: str, caption: str, ref_path: str | None) -> tuple[torch.Tensor, int]:
+  from irodori_tts.inference_runtime import SamplingRequest
+
+  chunks = split_text_for_speech(text, min_chars=CHUNK_MIN_CHARS) if CHUNKING_ENABLED else [text]
+  if len(chunks) > 1:
+    print(f"[Irodori-TTS] Long-text chunking: {len(chunks)} chunks (min_chars={CHUNK_MIN_CHARS})")
+
+  base_request = SamplingRequest(
+    text=text,
+    caption=caption or None,
+    ref_wav=ref_path,
+    no_ref=ref_path is None,
+    num_candidates=1,
+    num_steps=NUM_STEPS,
+    t_schedule_mode=T_SCHEDULE_MODE,
+    sway_coeff=SWAY_COEFF,
+    cfg_scale_text=CFG_SCALE_TEXT,
+    cfg_scale_caption=CFG_SCALE_CAPTION,
+    cfg_scale_speaker=CFG_SCALE_SPEAKER,
+    max_ref_seconds=MAX_REF_SECONDS,
+  )
+
+  results = []
+  for index, chunk in enumerate(chunks, start=1):
+    if len(chunks) > 1:
+      print(f"[Irodori-TTS] Synthesizing chunk {index}/{len(chunks)} ({len(chunk)} chars)")
+    results.append(runtime.synthesize(replace(base_request, text=chunk), log_fn=None))
+
+  sample_rate = int(results[0].sample_rate)
+  if any(int(result.sample_rate) != sample_rate for result in results):
+    raise ValueError("Chunk sample rates did not match.")
+
+  if len(results) == 1:
+    return results[0].audio, sample_rate
+
+  audio = torch.cat([_audio_as_channels_first(result.audio) for result in results], dim=-1)
+  return audio, sample_rate
 
 
 def load_model() -> None:
@@ -180,6 +256,8 @@ def health() -> dict[str, str | int | float | bool | None]:
     "t_schedule_mode": T_SCHEDULE_MODE,
     "sway_coeff": SWAY_COEFF,
     "compile_model": COMPILE_MODEL,
+    "chunking_enabled": CHUNKING_ENABLED,
+    "chunk_min_chars": CHUNK_MIN_CHARS,
     "supports_voice_design": True,
   }
 
@@ -204,30 +282,14 @@ def synthesize(payload: SynthesizeRequest) -> Response:
     ref_path = decode_ref_audio(ref_audio, temp_dir) if ref_audio else None
     output_path = Path(temp_dir) / "output.wav"
 
-    from irodori_tts.inference_runtime import SamplingRequest, save_wav
+    from irodori_tts.inference_runtime import save_wav
 
     try:
-      result = runtime.synthesize(
-        SamplingRequest(
-          text=text,
-          caption=caption or None,
-          ref_wav=ref_path,
-          no_ref=ref_path is None,
-          num_candidates=1,
-          num_steps=NUM_STEPS,
-          t_schedule_mode=T_SCHEDULE_MODE,
-          sway_coeff=SWAY_COEFF,
-          cfg_scale_text=CFG_SCALE_TEXT,
-          cfg_scale_caption=CFG_SCALE_CAPTION,
-          cfg_scale_speaker=CFG_SCALE_SPEAKER,
-          max_ref_seconds=MAX_REF_SECONDS,
-        ),
-        log_fn=None,
-      )
+      audio, sample_rate = synthesize_text_chunks(text=text, caption=caption, ref_path=ref_path)
     except ValueError as exc:
       raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    save_wav(output_path, result.audio, int(result.sample_rate))
+    save_wav(output_path, audio, sample_rate)
     return Response(content=output_path.read_bytes(), media_type="audio/wav")
 
 
