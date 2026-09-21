@@ -125,6 +125,9 @@ jobs:
             echo "Localization warnings found, but no critical missing keys. Continuing..."
           fi
 
+      - name: Run Irodori chunking tests
+        run: python3 -m unittest discover -s servers/tts/irodoritts -p "test_chunking.py"
+
       - name: Run lifecycle validation
         run: bun run db:lifecycle
 
