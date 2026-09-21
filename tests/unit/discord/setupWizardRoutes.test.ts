@@ -59,6 +59,7 @@ import {
   buildSetupWizardPayload,
   getSetupCatalogProviderChoices,
 } from "@/utils/discord/ui/setupPanel";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
 import { configRepository, llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
 import type { SystemPromptPresetRow, TomoriPresetRow } from "@/types/db/schema";
@@ -75,6 +76,10 @@ import * as avatarHelper from "@/utils/image/avatarHelper";
 import * as emojiLazySync from "@/utils/cache/emojiLazySync";
 import * as stickerLazySync from "@/utils/cache/stickerLazySync";
 import * as panelActionMetrics from "@/utils/stats/panelActionMetrics";
+
+function serializedPanelProse(markdown: string): string {
+  return JSON.stringify(formatPanelProse(markdown)).slice(1, -1);
+}
 
 function makeDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraftRecord {
   return {
@@ -773,7 +778,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.byok_choice_invalid"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.byok_choice_invalid")}`),
+      );
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
       expect(check.status).toBe("ok");
@@ -854,7 +861,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_byok_guild_only"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_byok_guild_only")}`),
+      );
 
       const check = readSetupDraft(nonce, "actor-1", "actor-1", "dm");
       expect(check.status).toBe("ok");
@@ -1023,7 +1032,9 @@ describe("setupWizardRoutes", () => {
         components: Array<{ accentColor?: number; components?: Array<{ content?: string }> }>;
       };
       const payloadString = JSON.stringify(payload);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_validation_failed"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_validation_failed")}`),
+      );
       expect(payloadString).not.toContain(fakeKey);
       expect(payload.components).toHaveLength(2);
       expect(payload.components[1]?.accentColor).toBe(0xed4245);
@@ -1067,7 +1078,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_validation_failed"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_validation_failed")}`),
+      );
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
       expect(check.status).toBe("ok");
@@ -1128,7 +1141,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_invalid"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_invalid")}`),
+      );
       expect(encryptSpy).not.toHaveBeenCalled();
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
@@ -1582,7 +1597,9 @@ describe("setupWizardRoutes", () => {
         components: Array<{ accentColor?: number; components?: Array<{ content?: string }> }>;
       };
       const payloadString = JSON.stringify(payload);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.custom_endpoint_unreachable"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.custom_endpoint_unreachable")}`),
+      );
       expect(payloadString).not.toContain(secretReason);
       expect(payloadString).not.toContain("192.168.1.100");
       expect(payload.components).toHaveLength(2);
@@ -1741,7 +1758,9 @@ describe("setupWizardRoutes", () => {
         components: Array<{ accentColor?: number; components?: Array<{ content?: string }> }>;
       };
       const payloadString = JSON.stringify(payload);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.custom_endpoint_model_invalid"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.custom_endpoint_model_invalid")}`),
+      );
       expect(payload.components).toHaveLength(2);
       expect(payload.components[1]?.accentColor).toBe(0xed4245);
       expect(payload.components[1]?.components?.[0]?.content).toContain(
@@ -2649,7 +2668,7 @@ describe("setupWizardRoutes", () => {
       expect(modalSpy).not.toHaveBeenCalled();
       expect(interaction.updateCalls.length).toBe(1);
       expect(JSON.stringify(interaction.updateCalls[0])).toContain(
-        localizer("en-US", "commands.setup.wizard.settings_unavailable"),
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.settings_unavailable")}`),
       );
     } finally {
       modalSpy.mockRestore();
@@ -2683,7 +2702,7 @@ describe("setupWizardRoutes", () => {
       expect(modalSpy).not.toHaveBeenCalled();
       expect(interaction.updateCalls.length).toBe(1);
       expect(JSON.stringify(interaction.updateCalls[0])).toContain(
-        localizer("en-US", "commands.setup.wizard.settings_unavailable"),
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.settings_unavailable")}`),
       );
     } finally {
       modalSpy.mockRestore();

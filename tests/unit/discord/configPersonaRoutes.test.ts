@@ -3768,6 +3768,7 @@ describe("config Persona Advanced routes", () => {
         },
       },
     });
+    noWriteHarness.dependencies.loadSavedTextProviders = async () => [{ provider: "openrouter" }];
     noWriteHarness.dependencies.loadPersonaTextModels = async () => [movedModel];
     const interaction = makeInteraction({
       customId: buildConfigRouteId({

@@ -7,8 +7,8 @@ const PANEL_PROSE_LAYOUT_POLICY = {
     besideThumbnail: 40,
   },
   japanese: {
-    body: 50,
-    besideThumbnail: 30,
+    body: 30,
+    besideThumbnail: 20,
   },
 } as const;
 

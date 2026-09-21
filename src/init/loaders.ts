@@ -61,6 +61,9 @@ export async function initLoaders(client: Client): Promise<void> {
   const { initializeRawModalInterception } = await import("@/utils/discord/ui/modals");
   initializeRawModalInterception(client);
 
+  log.section("Initializing Locales...");
+  await initializeLocalizer();
+
   log.section("Initializing Tool Registry...");
   try {
     const { initializeTools } = await import("@/tools/toolInitializer");
@@ -70,9 +73,6 @@ export async function initLoaders(client: Client): Promise<void> {
     log.error("Failed to initialize tool registry", error as Error);
     process.exit(1);
   }
-
-  log.section("Initializing Locales...");
-  await initializeLocalizer();
 
   log.section("Initializing LLM Configuration Cache...");
   try {

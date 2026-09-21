@@ -30,7 +30,9 @@ localizer(locale, "commands.config.setup.description")
 ## Important Behaviors
 
 - `initializeLocalizer()` must complete before lookups. Concurrent callers share one initialization
-  promise, and a failed attempt clears that promise so a later call can retry.
+  promise, and a failed attempt clears that promise so a later call can retry. The state lives on
+  `globalThis` under a registered symbol so duplicate module identities in one Bun process cannot
+  disagree about whether locales are ready.
 - `loadCommandData()` awaits localization itself before importing or caching command modules. This
   keeps command metadata valid even when Bun gives startup and a dynamically imported command graph
   separate module instances.

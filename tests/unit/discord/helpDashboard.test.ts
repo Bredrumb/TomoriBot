@@ -20,6 +20,7 @@ import {
   buildProviderGuideModal,
   resolveHelpSelection,
 } from "@/utils/discord/ui/helpDashboard";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => {
@@ -215,7 +216,9 @@ describe("help dashboard", () => {
           expect(container.components[0]?.type, key).toBe(ComponentType.ActionRow);
           expect(container.components[1]?.type, key).toBe(ComponentType.Separator);
           expect(findRowIndex(container, "help:v2:page:"), key).toBe(2);
-          expect(displays[0], key).toBe(localizer("en-US", page.descriptionKey, page.variables?.("en-US")));
+          expect(displays[0], key).toBe(
+            formatPanelProse(localizer("en-US", page.descriptionKey, page.variables?.("en-US"))),
+          );
           expect(
             displays.some((content) => content.startsWith("## ")),
             key,
@@ -475,7 +478,7 @@ describe("help provider picker", () => {
       ?.variants?.find((v) => v.id === "get-api-key");
     if (!variant) throw new Error("Missing get-api-key variant");
     const expectedFooter = localizer("en-US", variant.providerPickerFooterKey ?? "", variant.variables?.("en-US"));
-    expect(footerContent).toBe(expectedFooter);
+    expect(footerContent).toBe(formatPanelProse(expectedFooter));
   });
 
   it("resolves every command mention and breadcrumb in the new subsections", () => {

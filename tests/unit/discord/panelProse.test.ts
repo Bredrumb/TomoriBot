@@ -150,12 +150,12 @@ describe("panel prose formatter", () => {
     const japanese = formatPanelProse("かな ".repeat(25).trimEnd());
     const chinese = formatPanelProse("中文 ".repeat(25).trimEnd());
 
-    expect(japanese.split("\n").every((line) => measurePanelProseWidth(line) <= 50)).toBe(true);
-    expect(chinese.split("\n").some((line) => measurePanelProseWidth(line) > 50)).toBe(true);
+    expect(japanese.split("\n").every((line) => measurePanelProseWidth(line) <= 30)).toBe(true);
+    expect(chinese.split("\n").some((line) => measurePanelProseWidth(line) > 30)).toBe(true);
     expect(chinese.split("\n").every((line) => measurePanelProseWidth(line) <= 65)).toBe(true);
 
     const narrowJapanese = formatPanelProse("かな ".repeat(20).trimEnd(), true);
-    expect(narrowJapanese.split("\n").every((line) => measurePanelProseWidth(line) <= 30)).toBe(true);
+    expect(narrowJapanese.split("\n").every((line) => measurePanelProseWidth(line) <= 20)).toBe(true);
   });
 
   it("leaves an oversized unbreakable token intact", () => {
