@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import tempfile
@@ -10,7 +11,7 @@ from typing import Optional
 
 import torch
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -171,7 +172,7 @@ def _audio_as_channels_first(audio: torch.Tensor) -> torch.Tensor:
   raise RuntimeError(f"Expected audio shape (samples,) or (channels, samples), got {tuple(audio.shape)}")
 
 
-def synthesize_text_chunks(*, text: str, caption: str, ref_path: str | None) -> tuple[torch.Tensor, int]:
+async def synthesize_text_chunks(*, text: str, caption: str, ref_path: str | None, client_request: Request | None = None) -> tuple[torch.Tensor, int]:
   from irodori_tts.inference_runtime import SamplingRequest
 
   chunks = split_text_for_speech(text, min_chars=CHUNK_MIN_CHARS) if CHUNKING_ENABLED else [text]
@@ -199,10 +200,12 @@ def synthesize_text_chunks(*, text: str, caption: str, ref_path: str | None) -> 
   results = []
   pinned_seed: int | None = base_request.seed
   for index, chunk in enumerate(chunks, start=1):
+    if client_request is not None and await client_request.is_disconnected():
+      raise HTTPException(status_code=499, detail="Client disconnected before synthesis completed.")
     if len(chunks) > 1:
       print(f"[Irodori-TTS] Synthesizing chunk {index}/{len(chunks)} ({len(chunk)} chars)")
     chunk_request = replace(base_request, text=chunk, seed=pinned_seed)
-    result = runtime.synthesize(chunk_request, log_fn=None)
+    result = await asyncio.to_thread(runtime.synthesize, chunk_request, log_fn=None)
     results.append(result)
     if pinned_seed is None:
       pinned_seed = int(result.used_seed)
@@ -274,7 +277,7 @@ def health() -> dict[str, str | int | float | bool | None]:
 
 
 @app.post("/synthesize")
-def synthesize(payload: SynthesizeRequest) -> Response:
+async def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
   if runtime is None:
     raise HTTPException(status_code=503, detail="Model is still loading.")
 
@@ -296,7 +299,7 @@ def synthesize(payload: SynthesizeRequest) -> Response:
     from irodori_tts.inference_runtime import save_wav
 
     try:
-      audio, sample_rate = synthesize_text_chunks(text=text, caption=caption, ref_path=ref_path)
+      audio, sample_rate = await synthesize_text_chunks(text=text, caption=caption, ref_path=ref_path, client_request=request)
     except ValueError as exc:
       raise HTTPException(status_code=400, detail=str(exc)) from exc
 
