@@ -241,7 +241,7 @@ const structuredData = JSON.stringify({
         <nav class="language-grid" aria-label={copy.documentationLanguages}>
           {
             docsLocales.map((language) => (
-              <a href={landingUrl(language.id)} lang={language.lang}>
+              <a href={`https://docs.tomoribot.app/${language.id}/introduction/`} lang={language.lang}>
                 <span class="language-label"><img src={language.flag} alt="" width="24" height="16" />{language.label}</span>
                 <small>{language.id}</small>
               </a>

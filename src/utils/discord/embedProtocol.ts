@@ -1,4 +1,4 @@
-import type { Embed, EmbedBuilder } from "discord.js";
+import type { Embed } from "discord.js";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { getLocaleSubKeys, getSupportedLocales, hasLocaleKey, localizer } from "@/utils/text/localizer";
 
@@ -71,7 +71,8 @@ export const PROTOCOL_KEYS: ProtocolEntry[] = [
   })),
 ];
 
-const EMBED_PROTOCOL_TOKEN = "[tomori:v1:";
+// The bot no longer writes this footer token because it rendered as visible text. Embeds already
+// posted with it still carry it, so the reader keeps honoring it.
 const TOKEN_PATTERN = /\[tomori:v1:([a-z_]+)\]/;
 const targetKinds = new Set<ProtocolKind>([
   "memory_learning",
@@ -186,21 +187,6 @@ export function classifyProtocolEmbed(embed: Pick<Embed, "title" | "footer">): P
 
 export function isTargetProtocolKind(kind: ProtocolKind | null): kind is TargetEmbedType {
   return kind !== null && targetKinds.has(kind);
-}
-
-export function stampProtocolEmbed(embed: EmbedBuilder, kind: ProtocolKind, footerText?: string): EmbedBuilder {
-  const token = `${EMBED_PROTOCOL_TOKEN}${kind}]`;
-  const existingText = footerText ?? embed.data.footer?.text;
-  const iconURL = embed.data.footer?.icon_url;
-  return embed.setFooter({
-    text: existingText ? `${existingText} · ${token}` : token,
-    ...(iconURL ? { iconURL } : {}),
-  });
-}
-
-export function getProtocolKindForKey(key: string): ProtocolKind | null {
-  const entry = PROTOCOL_KEYS.find((item) => item.key === key);
-  return entry?.kind ?? null;
 }
 
 export function matchesProtocolTemplateKey(key: string, text: string): boolean {

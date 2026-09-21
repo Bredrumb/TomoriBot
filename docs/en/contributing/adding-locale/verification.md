@@ -102,7 +102,8 @@ recover from an ambiguous title, and startup is the only place the ambiguity is 
 
 **A protocol key's translation is frozen after that locale's first release.**
 
-Editing a released protocol value orphans every marker embed already posted in that locale's servers.
+Editing a released protocol value orphans every embed already posted with the old title in that
+locale's servers, because classification rests on the rendered title alone.
 `sliceMessagesAtResetMarker` reports no marker rather than an error, so the user's `/reset` or
 `/refresh` quietly stops applying with no log line and no failing test.
 

@@ -49,14 +49,14 @@ localizer(locale, "commands.config.setup.description")
   across authored locales; target-title templates also need literal text around a placeholder.
   Reply-context field templates are matched only against their own embed fields, not against titles.
   Each released locale's protocol-key values are immutable because
-  Discord already stores unmarked historical embeds using those values.
+  Discord already stores embeds that are classified by those values.
 
-New bot-produced protocol embeds carry a `[tomori:v1:<kind>]` footer token. The classifier reads the
-token first, then uses the precomputed localized title lookup for older messages. Reset markers drop
-the marker message from history; compact-refresh markers keep their summary message as the new
-conversation opener. The Matrix relay serializes footer text along with title and description, so
-the token remains in its plain-text copy. A Matrix `/refresh` also writes the token on its Discord
-embed. Components V2 notices have no embeds and continue to use their reconstructed title text.
+Protocol embeds are classified by their rendered title through the precomputed localized lookup, and
+reply-context embeds by their localized author template. The bot does not write a footer token,
+because Discord renders footer text as visible content. A `[tomori:v1:<kind>]` footer left on an
+older embed is still read and takes precedence over the title. Reset markers drop the marker message
+from history; compact-refresh markers keep their summary message as the new conversation opener.
+Components V2 notices have no embeds and use their reconstructed title text.
 
 ## Key Resolution and the `en-US` Fallback
 
