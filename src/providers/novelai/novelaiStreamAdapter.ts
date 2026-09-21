@@ -423,7 +423,8 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // tier ceiling. Re-estimating here clamps max_length when the output would overflow, and
       // warns when the input alone already does, which output clamping cannot fix. The
       // subscription-derived limit threaded in from tomoriChat.ts is preferred; the env var is the
-      // fallback for a restart before the first message, when no cached limit exists.
+      // fallback only for a restart before the first message caches the subscription limit, so the
+      // env-derived value must stay the conservative one.
       const effectiveKayraLimit = (config as NovelaiStreamConfig).kayraContextLimit ?? NAI_KAYRA_CONTEXT_LIMIT;
       const estimatedInputTokens = Math.ceil(prompt.length / NAI_KAYRA_CHARS_PER_TOKEN);
       const maxAllowedOutput = effectiveKayraLimit - estimatedInputTokens;
@@ -446,15 +447,13 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Collect unique user speaker names from DIALOGUE_HISTORY items.
-    // These are stored in this.knownSpeakers so processVisibleText() can use them
-    // to detect turn boundaries even when the model omits the colon (story format).
-    // DIALOGUE_HISTORY is the only tag guaranteeing the "AuthorName: message" prefix.
-    // NOTE: logit_bias_exp is intentionally NOT used here despite use_string=true,
-    // logit_bias_exp[].sequence is interpreted as Kayra token IDs, not UTF-8 bytes.
-    // Passing byte values as token IDs produces garbage special tokens at generation
-    // start (e.g. <|reserved5|>, <|maskend|>). Turn stopping is handled entirely by
-    // the speaker-detection regex in processVisibleText() instead.
+    // Collect unique user speaker names from DIALOGUE_HISTORY items, which is the only
+    // tag guaranteeing the "AuthorName: message" prefix. These feed this.knownSpeakers
+    // so processVisibleText() can detect turn boundaries even when the model omits the
+    // colon (story format). Speaker stopping is text-based only: logit_bias_exp looks
+    // like the natural tool because it takes sequences, but its sequence entries are
+    // Kayra token IDs rather than UTF-8 bytes, so passing text there produces garbage
+    // special tokens at generation start (for example <|reserved5|>, <|maskend|>).
     this.speakerStopPatternEnabled = context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false;
     if (!isGlm && this.speakerStopPatternEnabled) {
       const speakerSet = new Set<string>();
@@ -1321,10 +1320,9 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     // Normalize to ASCII before parsing to ensure the regex matches.
     let normalizedInner = this.normalizeXmlBrackets(inner);
 
-    // Fix truncated closing tags because the stream frequently cuts off right before
-    // the final ">" of the last </arg_value> or </arg_key> tag.
-    // e.g., "</arg_value" (missing ">") → "</arg_value>"
-    // The >? makes this idempotent: already-complete tags are left unchanged.
+    // Truncated closing tags are the common case: the stream frequently cuts off right
+    // before the final ">" of the last </arg_value> or </arg_key>. The >? keeps the
+    // substitution idempotent, so an already-complete tag is left unchanged.
     normalizedInner = normalizedInner
       .replace(/<\/arg_value>?\s*$/, "</arg_value>")
       .replace(/<\/arg_key>?\s*$/, "</arg_key>");
@@ -1616,9 +1614,9 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     }
 
     // Levenshtein distance: catch severely garbled names like "ave_wuery" → "query".
-    //    Accept if edit distance is ≤60% of the longer name's length. High tolerance is safe
-    //    because the param namespace is small (typically 3-8 params per tool), so false
-    //    positives are unlikely. Also requires the best match to be clearly better than runner-up.
+    //    The wide tolerance is safe only because the param namespace is small (typically
+    //    3-8 params per tool), so a false positive needs a near-tie that the
+    //    runner-up check below rejects.
     let bestLevMatch = "";
     let bestLevDistance = Number.POSITIVE_INFINITY;
     let secondBestDistance = Number.POSITIVE_INFINITY;

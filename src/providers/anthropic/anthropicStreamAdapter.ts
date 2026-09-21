@@ -172,10 +172,9 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
 
     const anthropicConfig = config as AnthropicStreamConfig;
 
-    // Assemble context into Anthropic message format.
-    //    Strict role alternation is resolved from the active llms column (D4 column-is-truth);
+    // Strict role alternation is resolved from the active llms column (D4 column-is-truth);
     //    providerRequiresAlternation("anthropic") is the request-time safety net that keeps it
-    //    ON even if a row were mis-seeded.
+    //    ON even if a row were mis-seeded, so a mis-seeded row can never emit an invalid body.
     const enforceAlternation =
       providerRequiresAlternation("anthropic") || (context.tomoriState.llm?.strict_role_alternation ?? false);
     const { systemPrompt, messages } = await this.assembleAnthropicContext(
@@ -973,10 +972,10 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
     }
 
-    // Enforce strict user/assistant alternation by merging consecutive same-role messages and
-    //    prepending a leading user turn when needed. Delegated to the shared strict-chat helpers
-    //    so behavior is identical to the previous private implementation. Gated by the resolved
-    //    flag (always ON for anthropic via the safety net, so this is byte-identical).
+    // Merging consecutive same-role messages and prepending a leading user turn is delegated
+    //    to the shared strict-chat helpers, so a fix there reaches every adapter that needs
+    //    it. The resolved flag gates the merge and is always ON for anthropic via the safety
+    //    net, so this stays byte-identical to the inline implementation it replaced.
     const mergedMessages = enforceAlternation ? this.enforceStrictAlternation(messages) : messages;
 
     log.info(`AnthropicStreamAdapter: Assembled ${mergedMessages.length} messages (after alternation merge)`);

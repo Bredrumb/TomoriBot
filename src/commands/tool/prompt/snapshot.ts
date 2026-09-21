@@ -1244,10 +1244,10 @@ async function buildJsonSnapshot(
     // flatten `contextItems` into a plain `{model, messages: [{role, content}]}` shape.
     // Role remap: `model` → `assistant` to match OpenAI conventions.
 
-    // Consolidate all system items into a single leading entry
-    //    OpenAI-compatible APIs only accept one `role: "system"` message,
-    //    so we flatten multiple system blocks (personality, rules, knowledge, etc.)
-    //    by joining their text parts with "\n\n" into one entry.
+    // OpenAI-compatible APIs accept only one leading `role: "system"` message, so the
+    //    system blocks (personality, rules, knowledge) are flattened into a single entry
+    //    by joining their text parts. A second system message would be rejected or, worse,
+    //    silently dropped by the endpoint.
     const systemTextChunks: string[] = [];
     const nonSystemItems: StructuredContextItem[] = [];
     for (const item of contextItems) {
@@ -1298,10 +1298,10 @@ async function buildJsonSnapshot(
     requestData = { model: modelName, messages: messagesList };
   }
 
-  // Merge per-provider sampling/request config into the top level.
-  //    For Google/Vertex we nest under existing keys (`generation_config`, `safety_settings`, etc.)
-  //    so the shape continues to match what the adapter would send. For Anthropic and
-  //    OpenAI-compat we just spread onto the root object.
+  // requestConfig is already provider-shaped: Google/Vertex nest samplers under
+  //    `generation_config`, `safety_settings`, and friends, while Anthropic and
+  //    OpenAI-compatible providers use root-level keys. Copying at the top level keeps
+  //    that shape and cannot overwrite a key the adapter already set.
   for (const [key, value] of Object.entries(requestConfig)) {
     if (!(key in requestData)) requestData[key] = value;
   }

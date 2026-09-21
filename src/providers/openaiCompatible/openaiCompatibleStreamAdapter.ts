@@ -107,10 +107,9 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
     this.accumulatedReasoningContent = "";
     this.pendingThinkBlockThoughtText = "";
     this.reasoningContentSpillGuard.reset();
-    // Build a persona-label matcher used as a fallback `</think>` closer.
-    //    Matches the persona name at start-of-string or after a newline, followed by ":" or "："
-    //    (half/full-width colon). Required at a line boundary to keep false positives low because
-    //    mid-sentence mentions like "as Nerine would" won't trigger.
+    // Fallback `</think>` closer. Requiring a line boundary keeps false positives out,
+    //    because a mid-sentence mention of the persona ("as Nerine would") never closes
+    //    the think block, while a real speaker label starts its own line.
     const personaName = context.tomoriState.persona_nickname?.trim();
     const personaSpeakerLabelRegex = personaName
       ? new RegExp(`(?:^|\\n)\\s*${escapeRegExp(personaName)}\\s*[:：]`, "i")

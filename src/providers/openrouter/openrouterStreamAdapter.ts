@@ -548,10 +548,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         }
       }
 
-      // Only include tools if defined and has items.
-      // Keep the request payload aligned with the effective capability decision:
-      // some OpenRouter model entries are missing `tools` in supported_parameters
-      // even though the capability cache treats them as tool-capable.
+      // Keep the payload aligned with the effective capability decision: some OpenRouter
+      // model entries are missing `tools` in supported_parameters even though the
+      // capability cache treats them as tool-capable, so the cache is the second gate.
       if (config.tools && config.tools.length > 0) {
         const capabilityAllowsTools =
           config.model !== "other-model" ? (getOpenRouterCapabilities(config.model)?.hasTools ?? false) : false;
@@ -1702,10 +1701,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       log.info(`OpenRouter usage: ${normalizedUsage.totalTokens ?? "unknown"} total tokens`);
     }
 
-    // Handle finish reasons FIRST (before delta processing)
-    // This ensures that when a chunk has BOTH finishReason and delta (common in OpenRouter),
-    // we prioritize the finishReason to return the correct chunk type
-    // OpenRouter normalizes finishReason to: tool_calls, stop, length, content_filter, error
+    // Finish reasons are handled before delta processing. OpenRouter commonly sends both
+    // in one chunk, and the finish reason is what selects the returned chunk type, so
+    // reading the delta first would return text for a turn that is actually ending. The
+    // values OpenRouter normalizes to: tool_calls, stop, length, content_filter, error.
     if (finishReason === "tool_calls") {
       // Handle finishReason "tool_calls" (model wants to use a tool)
       // This signals the end of tool call streaming - parse accumulated data
@@ -1910,13 +1909,10 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       };
     }
 
-    // Now handle delta fields for chunks that don't have a finishReason yet
-    // Accumulate tool/function calls from delta (streaming tool calls arrive incrementally)
-    // In OpenAI/OpenRouter streaming format, tool calls come in multiple chunks:
-    // - First chunk: { index: 0, id: "call_123", type: "function", function: { name: "search" } }
-    // - Later chunks: { index: 0, function: { arguments: '{"query' } }
-    // - More chunks: { index: 0, function: { arguments: '":"test"}' } }
-    // We need to accumulate all chunks before parsing the complete JSON arguments
+    // Accumulate tool/function calls from delta. In OpenAI/OpenRouter streaming format the
+    // call arrives incrementally: a first chunk carries the id and function name, later
+    // chunks each carry an argument fragment, so the complete JSON arguments only exist
+    // once every chunk has been accumulated.
     if (deltaToolCalls && deltaToolCalls.length > 0) {
       for (const deltaToolCall of deltaToolCalls) {
         const index = deltaToolCall.index ?? 0;

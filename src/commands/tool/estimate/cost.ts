@@ -55,10 +55,10 @@ import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from 
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { llmSections } from "@/db/seed/catalog/models";
 
-// Char-per-token ratios and the primitive estimators (charsToTokensText/Json,
-// estimateContextItemsTokens) now live in @/utils/text/tokenEstimate so this command
-// and the post-turn stat recorder share one source of truth. The higher-level,
-// cost-specific helpers below still live here.
+// Char-per-token ratios and the primitive estimators live in @/utils/text/tokenEstimate
+// so this command and the post-turn stat recorder share one source of truth. The
+// higher-level, cost-specific helpers below stay here because only this command
+// needs them.
 
 /**
  * Rough per-message overhead for chat-format wrappers (role markers, separators, etc.).
@@ -85,11 +85,9 @@ const EST_OUTPUT_SHORT = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_SHORT,
 const EST_OUTPUT_TYPICAL = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_TYPICAL, 220, 1);
 const EST_OUTPUT_LONG = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_LONG, 500, 1);
 
-// Per-model prices now live on the `llms` catalog rows (input_price_per_million /
-// output_price_per_million), resolved at runtime by resolveModelPricing(). The old
-// HELP_COST_*_PRICE_PER_MILLION env constants and the Anthropic codename-sniffing tier
-// guess have been removed: a first-party model with no catalog price now reports "pricing
-// unavailable" rather than billing against a coarse provider-wide fallback.
+// First-party pricing is read from the `llms` catalog columns, so a model with no
+// catalog price reports "pricing unavailable" instead of billing against a
+// provider-wide guess. See resolveModelPricing() below for the precedence order.
 
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
@@ -803,9 +801,9 @@ async function buildRuntimeParityContext(
       hasLocalMedia && (imageAttachments.length > 0 || videoAttachments.length > 0) ? [message.id] : undefined;
 
     // Merge consecutive same-author messages, mirroring the real context path
-    // (buildSimplifiedHistory): collapse only when both sides are pure text if
-    // either side carries media, keep separate turns so per-message media IDs stay
-    // unambiguous.
+    // (buildSimplifiedHistory): collapsing here is only correct while both sides are
+    // pure text, because a merged turn would leave the two messages' media
+    // indistinguishable.
     const previousMessage = simplifiedMessages[simplifiedMessages.length - 1];
     const currentHasMedia =
       imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
@@ -1187,10 +1185,10 @@ async function measureOpenRouterInputTokens(
     throw new Error("OpenRouter model pricing unavailable for other-model");
   }
 
-  // OpenRouter pricing is authoritative from the live API cache and auto-updates with OpenRouter's
-  // rates, so it wins here. The catalog row's price is only a cache-miss safety net: if the live cache
-  // has no entry for this model, fall back to the DB price (seeded, or mirrored from the live rates at
-  // startup by syncOpenrouterCatalogPricing) before giving up.
+  // The live OpenRouter cache wins because it tracks OpenRouter's rate changes; the DB price
+  // is only the fallback, seeded from the catalog or mirrored from the live rates at startup
+  // by syncOpenrouterCatalogPricing. Do not invert this order: a stale catalog row would
+  // silently under- or over-report the cost users see.
   const livePricing = getOpenRouterPricing(providerConfig.model);
   const pricing = livePricing
     ? { input: livePricing.promptPricePerMillion, output: livePricing.completionPricePerMillion }

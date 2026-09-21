@@ -52,10 +52,10 @@ const VIDEO_CONTEXT_MAX_INLINE_MB = Math.max(
   Number.parseInt(process.env.VIDEO_CONTEXT_MAX_INLINE_MB ?? "20", 10) || 20,
 );
 
-// Anchored on a word boundary because every Gemini method name embeds "rate" (the streaming method
-// is named "StreamGenerateContent"), and Google echoes the called method back in ErrorInfo metadata.
-// A bare `includes("rate")` therefore matched every error payload and filed unmapped status codes
-// such as 401 as rate limits.
+// The word boundary is load-bearing: every Gemini method name embeds "rate" (the streaming
+// method is "StreamGenerateContent") and Google echoes the called method back in ErrorInfo
+// metadata, so a bare `includes("rate")` matched every error payload and filed unmapped
+// status codes such as 401 as rate limits.
 const GOOGLE_RATE_LIMIT_MESSAGE_PATTERN = /\brate[-\s]?limit|\bquota/i;
 
 /**
