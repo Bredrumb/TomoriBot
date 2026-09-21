@@ -2,10 +2,17 @@ import { ComponentType, type ComponentInContainerData } from "discord.js";
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 
 const PANEL_PROSE_LAYOUT_POLICY = {
-  body: 65,
-  besideThumbnail: 40,
+  default: {
+    body: 65,
+    besideThumbnail: 40,
+  },
+  japanese: {
+    body: 50,
+    besideThumbnail: 30,
+  },
 } as const;
 
+const JAPANESE_SCRIPT_PATTERN = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
@@ -286,7 +293,10 @@ export function measurePanelProseWidth(markdown: string): number {
  * could corrupt a URL, inline-code span, custom emoji, or grapheme cluster.
  */
 export function formatPanelProse(markdown: string, besideThumbnail = false): string {
-  const width = besideThumbnail ? PANEL_PROSE_LAYOUT_POLICY.besideThumbnail : PANEL_PROSE_LAYOUT_POLICY.body;
+  const profile = JAPANESE_SCRIPT_PATTERN.test(markdown)
+    ? PANEL_PROSE_LAYOUT_POLICY.japanese
+    : PANEL_PROSE_LAYOUT_POLICY.default;
+  const width = besideThumbnail ? profile.besideThumbnail : profile.body;
   const parts = markdown.split(/(\r?\n)/u);
   const fallbackNewline = markdown.includes("\r\n") ? "\r\n" : "\n";
   const output: string[] = [];

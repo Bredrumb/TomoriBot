@@ -23,6 +23,8 @@ The component tree selects its own layout profile. A `TextDisplay` nested in a `
 `Thumbnail` accessory uses the narrower profile automatically. Moving the same text into or out of
 that section requires no width argument, locale edit, or test allowlist. Measured widths remain an
 internal policy in `panelProse.ts` because Discord exposes no panel viewport or text-width field.
+Text containing hiragana or katakana selects a narrower Japanese profile automatically. Han-only
+Chinese text keeps the default profile.
 
 Links, inline code, emphasis, strikethrough, escaped Markdown, custom emoji, and URLs remain intact
 while wrapping. A single token wider than the policy stays whole on its own line. Fenced blocks are
