@@ -17,7 +17,13 @@ import {
 } from "discord.js";
 import type { AutocompleteInteraction, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
-import { getRegisterableLocales, hasLocaleKey, localizer, resolveSupportedLocale } from "@/utils/text/localizer";
+import {
+  getRegisterableLocales,
+  hasLocaleKey,
+  initializeLocalizer,
+  localizer,
+  resolveSupportedLocale,
+} from "@/utils/text/localizer";
 
 export const ROOT_COMMAND_EXECUTION_KEY = "__root__";
 type RootCommandBuilder = SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
@@ -505,6 +511,10 @@ export function getCommandCatalogEntries(executionMap: CommandExecutionMap): Com
 }
 
 async function loadCommandDataUncached(): Promise<LoadCommandDataResult> {
+  // Command descriptions are cached for the process lifetime, so a cold loader must establish its
+  // own localization prerequisite instead of relying on startup import order or module identity.
+  await initializeLocalizer();
+
   const executionMap: CommandExecutionMap = new Map();
   const autocompleteMap: CommandAutocompleteMap = new Map();
   const cooldownMap: CommandCooldownMap = new Map();

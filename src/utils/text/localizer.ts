@@ -9,7 +9,8 @@ import { initializeEmbedProtocol } from "@/utils/discord/embedProtocol";
 import { initializeIntentPacks } from "@/utils/text/localeIntentPacks";
 
 const locales: Locales = {};
-let isInitialized = false; // Track initialization state
+let isInitialized = false;
+let initializationPromise: Promise<void> | null = null;
 
 /**
  * Removes common indentation from multi-line strings.
@@ -40,11 +41,18 @@ function dedent(str: string): string {
  * This must be called and awaited before using the localizer.
  * @returns A promise that resolves when all locale files are loaded
  */
-export async function initializeLocalizer(): Promise<void> {
-  if (isInitialized) {
-    return;
-  }
+export function initializeLocalizer(): Promise<void> {
+  if (isInitialized) return Promise.resolve();
+  if (initializationPromise) return initializationPromise;
 
+  initializationPromise = initializeLocalizerUncached().catch((error) => {
+    initializationPromise = null;
+    throw error;
+  });
+  return initializationPromise;
+}
+
+async function initializeLocalizerUncached(): Promise<void> {
   try {
     const localesDir = path.resolve("src", "locales");
     const entries = await readdir(localesDir, { withFileTypes: true });

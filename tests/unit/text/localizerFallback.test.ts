@@ -17,6 +17,8 @@ type Probe = {
   hasKeyInPartialLocale: boolean;
   hasKeyInFallbackLocale: boolean;
   hasKeyInUnloadedLocale: boolean;
+  rejectedBeforeLocales: boolean;
+  successfulLoadCount: number;
   warnedAboutFallback: boolean;
 };
 
@@ -44,8 +46,13 @@ describe("localizer per-key en-US fallback", () => {
     await writeFile(
       script,
       [
+        'import { rename } from "node:fs/promises";',
         `import { initializeLocalizer, localizer, hasLocaleKey } from ${JSON.stringify(pathToFileURL(LOCALIZER_PATH).href)};`,
-        "await initializeLocalizer();",
+        'await rename("src/locales", "src/locales-pending");',
+        "let rejectedBeforeLocales = false;",
+        "try { await initializeLocalizer(); } catch { rejectedBeforeLocales = true; }",
+        'await rename("src/locales-pending", "src/locales");',
+        "await Promise.all([initializeLocalizer(), initializeLocalizer()]);",
         "console.log(`__PROBE__${JSON.stringify({",
         '  hit: localizer("ja", "probe.shared"),',
         '  fallback: localizer("ja", "probe.english_only", { name: "Sparrow" }),',
@@ -53,6 +60,7 @@ describe("localizer per-key en-US fallback", () => {
         '  hasKeyInPartialLocale: hasLocaleKey("ja", "probe.english_only"),',
         '  hasKeyInFallbackLocale: hasLocaleKey("en-US", "probe.english_only"),',
         '  hasKeyInUnloadedLocale: hasLocaleKey("zz", "probe.shared"),',
+        "  rejectedBeforeLocales,",
         "})}`);",
       ].join("\n"),
     );
@@ -69,7 +77,8 @@ describe("localizer per-key en-US fallback", () => {
     if (!marker) throw new Error(`Localizer probe produced no result:\n${output}`);
 
     probe = {
-      ...(JSON.parse(marker.split("\n")[0]) as Omit<Probe, "warnedAboutFallback">),
+      ...(JSON.parse(marker.split("\n")[0]) as Omit<Probe, "successfulLoadCount" | "warnedAboutFallback">),
+      successfulLoadCount: output.match(/Successfully loaded locales/g)?.length ?? 0,
       warnedAboutFallback: output.includes("is missing key 'probe.english_only'"),
     };
   });
@@ -80,6 +89,11 @@ describe("localizer per-key en-US fallback", () => {
 
   it("returns the requested locale's own string when the key is present", () => {
     expect(probe.hit).toBe("Partial shared");
+  });
+
+  it("retries after rejection and shares one load between concurrent callers", () => {
+    expect(probe.rejectedBeforeLocales).toBe(true);
+    expect(probe.successfulLoadCount).toBe(1);
   });
 
   it("returns the en-US string, interpolated, when the key is missing from the requested locale", () => {

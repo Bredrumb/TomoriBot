@@ -29,7 +29,11 @@ localizer(locale, "commands.config.setup.description")
 
 ## Important Behaviors
 
-- `initializeLocalizer()` must run during startup before lookups.
+- `initializeLocalizer()` must complete before lookups. Concurrent callers share one initialization
+  promise, and a failed attempt clears that promise so a later call can retry.
+- `loadCommandData()` awaits localization itself before importing or caching command modules. This
+  keeps command metadata valid even when Bun gives startup and a dynamically imported command graph
+  separate module instances.
 - Locale lookup tries an exact authored code, then an alias, then an unambiguous base-language match, then `en-US`. For example, `es-ES` uses the authored `es-419` tree once that tree exists; unsupported codes use English.
 - Missing key falls back to `en-US` for that key alone (see below).
 - Panel route IDs accept Discord locale codes even when no translation is loaded. This keeps
