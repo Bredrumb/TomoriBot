@@ -94,6 +94,10 @@ let exactTitles = new Map<string, Match>();
 let templates: Match[] = [];
 let prefixes: Match[] = [];
 
+// Most locales author the reply-context description as a bare `{message_url}`. A template that is
+// only a placeholder compiles to `^.+?$`, which would classify any embed with a description as one.
+const PLACEHOLDER_PATTERNS = new Map([["message_url", "https?://\\S+"]]);
+
 function placeholderSignature(value: string): string {
   return [...value.matchAll(/\{([a-zA-Z0-9_]+)\}/g)]
     .map((match) => match[1])
@@ -139,7 +143,9 @@ export function buildProtocolLookup(
       if (entry.match === "prefix") {
         if (value) prefixMatches.push({ ...match, prefix: true });
       } else if (entry.match === "template") {
-        match.pattern = new RegExp(`^${escapeRegExp(value).replace(/\\\{[^}]+\\\}/g, ".+?")}$`);
+        match.pattern = new RegExp(
+          `^${escapeRegExp(value).replace(/\\\{([a-zA-Z0-9_]+)\\\}/g, (_, name: string) => PLACEHOLDER_PATTERNS.get(name) ?? ".+?")}$`,
+        );
         dynamic.push(match);
       } else {
         exact.set(value, match);

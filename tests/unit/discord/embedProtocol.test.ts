@@ -162,6 +162,19 @@ describe("embed protocol", () => {
     expect(findReplyContextTargetInMessage(message(marked))).toEqual({ channelId: "2", messageId: "3" });
   });
 
+  it("reads description-only reply-context embeds but not prose that quotes a message link", () => {
+    const url = "https://discord.com/channels/1/2/3";
+    const missed = getSupportedLocales().filter((locale) => {
+      const description = localizer(locale, "genai.message_interaction.reply_context_description", {
+        message_url: url,
+      });
+      return findReplyContextTargetInMessage(message(new EmbedBuilder().setDescription(description))) === null;
+    });
+    expect(missed).toEqual([]);
+    const prose = new EmbedBuilder().setDescription(`Quoted from ${url} earlier`);
+    expect(findReplyContextTargetInMessage(message(prose))).toBeNull();
+  });
+
   it("classifies reminder delivery-failure notices as diagnostics in every authored locale", () => {
     for (const locale of ["en-US", "ja"]) {
       for (const titleKey of ["reminders.reminder_triggered_title", "reminders.task_triggered_title"]) {

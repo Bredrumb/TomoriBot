@@ -48,6 +48,8 @@ localizer(locale, "commands.config.setup.description")
   between distinct protocol keys. Template keys must retain the same placeholder names and counts
   across authored locales; target-title templates also need literal text around a placeholder.
   Reply-context field templates are matched only against their own embed fields, not against titles.
+  A `{message_url}` placeholder matches a single URL token rather than any text, so a locale that
+  authors the description as the bare placeholder does not accept arbitrary prose.
   Each released locale's protocol-key values are immutable because
   Discord already stores embeds that are classified by those values.
 
