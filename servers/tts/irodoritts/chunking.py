@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import unicodedata
+
 BOUNDARY_CHARS = frozenset("。、，,．.!！?？\n\r")
 CLOSING_CHARS = frozenset("」』】）》〉〕］〗〙〛）)]}”’\"'")
-_TRUE_WORD_CHARS = str.isalnum
+TRAILING_ORNAMENT_CHARS = frozenset("…〜～")
 
 
 def _is_decimal_dot(text: str, index: int) -> bool:
@@ -20,18 +22,28 @@ def _is_boundary(text: str, index: int) -> bool:
   return not _is_decimal_dot(text, index)
 
 
+def _is_trailing_ornament(char: str) -> bool:
+  if char in TRAILING_ORNAMENT_CHARS:
+    return True
+  return unicodedata.category(char) in {"So", "Sk"}
+
+
 def _consume_boundary_suffix(text: str, index: int) -> int:
+  consuming_ornament = False
   while index < len(text):
     char = text[index]
     if char in CLOSING_CHARS or char in BOUNDARY_CHARS:
       index += 1
       continue
+    if _is_trailing_ornament(char):
+      consuming_ornament = True
+      index += 1
+      continue
+    if consuming_ornament and unicodedata.category(char) in {"Mn", "Me", "Cf"}:
+      index += 1
+      continue
     break
   return index
-
-
-def _has_word_char(text: str) -> bool:
-  return any(_TRUE_WORD_CHARS(char) for char in text)
 
 
 def _nonspace_length(text: str) -> int:
@@ -42,9 +54,9 @@ def split_text_for_speech(text: str, *, min_chars: int) -> list[str]:
   """Split speech text at safe punctuation boundaries.
 
   Boundaries only become eligible after min_chars non-whitespace characters.
-  Trailing terminators and closing quotes/brackets stay with the chunk they close,
-  decimal points next to digits do not split, punctuation-only pieces are ignored,
-  and a very short final tail is merged back into the previous chunk.
+  Trailing terminators, closing quotes/brackets, and decorative symbols stay
+  with the chunk they close. Decimal points next to digits do not split, and
+  a very short final tail is merged back into the previous chunk.
   """
   if min_chars <= 0:
     raise ValueError("min_chars must be greater than 0.")
@@ -72,9 +84,9 @@ def split_text_for_speech(text: str, *, min_chars: int) -> list[str]:
   if start < len(text):
     raw_chunks.append(text[start:])
 
-  chunks = [raw for raw in raw_chunks if _has_word_char(raw)]
+  chunks = [raw for raw in raw_chunks if raw.strip()]
   if not chunks:
-    return []
+    return [text] if text else []
 
   tail_merge_threshold = max(1, min_chars // 2)
   if len(chunks) > 1 and _nonspace_length(chunks[-1]) < tail_merge_threshold:
