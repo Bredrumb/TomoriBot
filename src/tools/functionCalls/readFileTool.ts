@@ -200,11 +200,10 @@ export class ReadFileTool extends BaseTool {
         };
       }
 
-      // Success: build the result with document content in `data`
-      // NOTE: In the streaming pipeline (tomoriChat.ts), only `toolResult.data` is
-      // serialized into the functionResponse the LLM sees. `toolResult.message` is
-      // used by provider adapter convertResult() but NOT the main streaming path.
-      // So the document text MUST go in `data` (matching Brave search's `data.results` pattern).
+      // In the streaming pipeline (tomoriChat.ts), only `toolResult.data` is serialized into
+      // the functionResponse the LLM sees; `toolResult.message` is used by provider adapter
+      // convertResult() but not the main streaming path. The document text must therefore go
+      // in `data`, matching Brave search's `data.results` pattern.
       const truncationNote = result.truncated
         ? ` (truncated from ${result.originalLength?.toLocaleString()} to ${result.text?.length.toLocaleString()} characters)`
         : "";

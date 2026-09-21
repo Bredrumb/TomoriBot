@@ -1423,11 +1423,9 @@ export class GenerateImageTool extends BaseTool {
         });
       }
 
-      // Note: We intentionally DO NOT include imageMetadata for generated images
-      // because Discord CDN URLs are protected and cannot be fetched by external
-      // servers (like OpenRouter). The model doesn't need to see its own generated
-      // output - it just needs confirmation that the generation succeeded.
-      // The text message includes the Discord message ID for reference.
+      // Generated images omit imageMetadata: Discord CDN URLs are protected and cannot be
+      // fetched by external servers such as OpenRouter. The model needs only confirmation
+      // that generation succeeded, and the text message carries the Discord message ID.
 
       let successMessage = `Successfully generated and sent image to Discord (message ID: ${sentMessage.id}). The image has been created based on your prompt${
         referenceImagesUsed ? " and the reference image(s)" : ""
