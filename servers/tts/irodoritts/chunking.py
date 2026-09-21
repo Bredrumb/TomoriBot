@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import math
 import unicodedata
 
-BOUNDARY_CHARS = frozenset("。、，,．.!！?？\n\r")
+STRONG_BOUNDARY_CHARS = frozenset("。．.!！?？…\n\r")
+SOFT_BOUNDARY_CHARS = frozenset("、，,")
+BOUNDARY_CHARS = STRONG_BOUNDARY_CHARS | SOFT_BOUNDARY_CHARS
 CLOSING_CHARS = frozenset("」』】）》〉〕］〗〙〛）)]}”’\"'")
-TRAILING_ORNAMENT_CHARS = frozenset("…〜～")
+TRAILING_ORNAMENT_CHARS = frozenset("〜～")
+SOFT_BOUNDARY_FACTOR = 1.5
 
 
 def _is_decimal_dot(text: str, index: int) -> bool:
@@ -15,11 +19,13 @@ def _is_decimal_dot(text: str, index: int) -> bool:
   return previous.isdigit() or following.isdigit()
 
 
-def _is_boundary(text: str, index: int) -> bool:
+def _boundary_strength(text: str, index: int) -> str | None:
   char = text[index]
   if char not in BOUNDARY_CHARS:
-    return False
-  return not _is_decimal_dot(text, index)
+    return None
+  if _is_decimal_dot(text, index):
+    return None
+  return "strong" if char in STRONG_BOUNDARY_CHARS else "soft"
 
 
 def _is_trailing_ornament(char: str) -> bool:
@@ -51,16 +57,18 @@ def _nonspace_length(text: str) -> int:
 
 
 def split_text_for_speech(text: str, *, min_chars: int) -> list[str]:
-  """Split speech text at safe punctuation boundaries.
+  """Split speech text while preferring natural sentence endings.
 
-  Boundaries only become eligible after min_chars non-whitespace characters.
-  Trailing terminators, closing quotes/brackets, and decorative symbols stay
-  with the chunk they close. Decimal points next to digits do not split, and
-  a very short final tail is merged back into the previous chunk.
+  Strong boundaries become eligible after min_chars non-whitespace characters.
+  Commas are fallback boundaries only after a longer 1.5x threshold. Trailing
+  terminators, closing quotes/brackets, and decorative symbols stay with the
+  chunk they close. Decimal points next to digits do not split, and a very
+  short final tail is merged back into the previous chunk.
   """
   if min_chars <= 0:
     raise ValueError("min_chars must be greater than 0.")
 
+  soft_boundary_chars = max(min_chars + 1, math.ceil(min_chars * SOFT_BOUNDARY_FACTOR))
   raw_chunks: list[str] = []
   start = 0
   current_chars = 0
@@ -71,7 +79,13 @@ def split_text_for_speech(text: str, *, min_chars: int) -> list[str]:
     if not char.isspace():
       current_chars += 1
 
-    if current_chars >= min_chars and _is_boundary(text, index):
+    strength = _boundary_strength(text, index)
+    should_split = (
+      strength == "strong" and current_chars >= min_chars
+    ) or (
+      strength == "soft" and current_chars >= soft_boundary_chars
+    )
+    if should_split:
       cut = _consume_boundary_suffix(text, index + 1)
       raw_chunks.append(text[start:cut])
       start = cut
