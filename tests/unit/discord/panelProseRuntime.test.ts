@@ -36,11 +36,15 @@ interface UnformattedTextDisplay {
   where: string;
 }
 
+/**
+ * Scanned paths come back with forward slashes, matching how the exclusion keys are written. An
+ * OS-native separator would let the shared-boundary gate report its own exclusions as bypasses.
+ */
 function sourceFiles(root: string): string[] {
   return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
     const path = join(root, entry.name);
     if (entry.isDirectory()) return sourceFiles(path);
-    return entry.isFile() && entry.name.endsWith(".ts") ? [path] : [];
+    return entry.isFile() && entry.name.endsWith(".ts") ? [path.replaceAll("\\", "/")] : [];
   });
 }
 
