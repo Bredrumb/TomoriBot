@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction, Client } from "discord.js";
+import type { ChatInputCommandInteraction, Client, InteractionEditReplyOptions } from "discord.js";
 import type { GlobalRoutableInteraction, ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import {
   CONFIG_ROUTE_NAMESPACE,
@@ -10,6 +10,8 @@ import { isConfigRouteAuthorized, resolveConfigActor } from "@/utils/discord/int
 import {
   repaint,
   deniedReceipt,
+  missingScopeMessageKey,
+  outdatedConfigPanelPayload,
   terminalPayload,
   type ConfigRouteDependencies,
   type ConfigScope,
@@ -69,29 +71,54 @@ async function resolveConfigScope(
   return dependencies.resolveScope(interaction, false);
 }
 
+type StFallbackResolution =
+  | { status: "resolved"; scope: StPresetsScope }
+  | { status: "missing-scope" }
+  | { status: "missing-persona" };
+
+/**
+ * Resolves the workspace a fallback repaint needs. The two failures are reported apart because a
+ * workspace that resolved without a persona is a panel that fell behind, while an unresolved scope
+ * is a setup question.
+ */
 async function resolveFallbackStScope(
   interaction: GlobalRoutableInteraction,
   dependencies: ConfigRouteDependencies,
   readStatus: "stale" | "unavailable",
-): Promise<StPresetsScope | null> {
+): Promise<StFallbackResolution> {
   const configScope = await resolveConfigScope(interaction, dependencies);
-  const state = configScope?.personas[0];
-  if (!configScope || !state) return null;
+  if (!configScope) return { status: "missing-scope" };
+  const state = configScope.personas[0];
+  if (!state) return { status: "missing-persona" };
   const data = await stPresetOperations.loadStPresetScopeData(configScope.serverDiscId);
   return {
-    discordId: configScope.serverDiscId,
-    kind: configScope.guildId ? "guild" : "dm",
-    state,
-    data: data
-      ? { ...data, readStatus }
-      : {
-          scopeDiscId: configScope.serverDiscId,
-          serverId: state.server_id,
-          readStatus,
-          presets: [],
-          activePresetId: null,
-        },
+    status: "resolved",
+    scope: {
+      discordId: configScope.serverDiscId,
+      kind: configScope.guildId ? "guild" : "dm",
+      state,
+      data: data
+        ? { ...data, readStatus }
+        : {
+            scopeDiscId: configScope.serverDiscId,
+            serverId: state.server_id,
+            readStatus,
+            presets: [],
+            activePresetId: null,
+          },
+    },
   };
+}
+
+function stFallbackRejectionPayload(
+  locale: string,
+  interaction: GlobalRoutableInteraction,
+  dependencies: ConfigRouteDependencies,
+  failure: Exclude<StFallbackResolution["status"], "resolved">,
+): InteractionEditReplyOptions {
+  return failure === "missing-persona"
+    ? outdatedConfigPanelPayload(locale)
+    : terminalPayload(locale, missingScopeMessageKey(interaction, dependencies));
 }
 
 async function repaintConfigStPresets(
@@ -105,7 +132,7 @@ async function repaintConfigStPresets(
 ): Promise<void> {
   const configScope = await resolveConfigScope(interaction, dependencies);
   if (!configScope) {
-    await interaction.editReply(terminalPayload(locale, "commands.config.panel.unavailable"));
+    await interaction.editReply(terminalPayload(locale, missingScopeMessageKey(interaction, dependencies)));
     return;
   }
 
@@ -200,11 +227,12 @@ export async function handleConfigStPresetsRoute(
     repaint: (target, locale, scope, page, receipt, rangeIndex) =>
       repaintConfigStPresets(target, locale, scope, page, receipt, rangeIndex, dependencies),
     onDenied: async (target, localeRoute) => {
-      const scope = await resolveFallbackStScope(target, dependencies, "stale");
-      if (!scope) {
-        await target.editReply(terminalPayload(localeRoute.locale, "commands.config.panel.unavailable"));
+      const resolution = await resolveFallbackStScope(target, dependencies, "stale");
+      if (resolution.status !== "resolved") {
+        await target.editReply(stFallbackRejectionPayload(localeRoute.locale, target, dependencies, resolution.status));
         return;
       }
+      const scope = resolution.scope;
       await repaintConfigStPresets(
         target,
         localeRoute.locale,
@@ -216,15 +244,15 @@ export async function handleConfigStPresetsRoute(
       );
     },
     onMissing: async (target, localeRoute) => {
-      const scope = await resolveFallbackStScope(target, dependencies, "unavailable");
-      if (!scope) {
-        await target.editReply(terminalPayload(localeRoute.locale, "commands.config.panel.unavailable"));
+      const resolution = await resolveFallbackStScope(target, dependencies, "unavailable");
+      if (resolution.status !== "resolved") {
+        await target.editReply(stFallbackRejectionPayload(localeRoute.locale, target, dependencies, resolution.status));
         return;
       }
       await repaintConfigStPresets(
         target,
         localeRoute.locale,
-        scope,
+        resolution.scope,
         { kind: "none" },
         undefined,
         undefined,

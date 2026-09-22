@@ -1,17 +1,8 @@
-import {
-  MessageFlags,
-  type InteractionEditReplyOptions,
-  type ModalSubmitInteraction,
-  type StringSelectMenuInteraction,
-} from "discord.js";
+import { MessageFlags, type ModalSubmitInteraction, type StringSelectMenuInteraction } from "discord.js";
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { ConfigPanelRoute } from "@/utils/discord/configPanelCatalog";
 import { CONFIG_MCP_PANEL_ROUTE_ADAPTER } from "@/utils/discord/configPanelCatalog";
-import {
-  deliverGuardedPanel,
-  performPanelAction,
-  validateAndFallbackPanelPayload,
-} from "@/utils/discord/interactions/panelController";
+import { deliverGuardedPanel, performPanelAction } from "@/utils/discord/interactions/panelController";
 import {
   isConfigRouteAuthorized,
   resolveConfigActor,
@@ -19,13 +10,14 @@ import {
 } from "@/utils/discord/interactions/configPermissionPolicy";
 import {
   deniedReceipt,
+  missingScopeMessageKey,
+  outdatedConfigPanelPayload,
   repaint,
   type ConfigRouteDependencies,
   type ConfigScope,
 } from "@/utils/discord/interactions/configRouteContext";
 import type { GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import { buildAddMcpModal, buildMcpsAddModalFieldId, type McpsPanelPage } from "@/utils/discord/ui/mcpsPanel";
-import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { formatMcpToolNamesForDiscord } from "@/utils/mcp/mcpToolSnapshot";
 import { localizer } from "@/utils/text/localizer";
@@ -45,23 +37,6 @@ const MCP_ACTIONS = new Set<ConfigPanelRoute["action"]>([
 ]);
 
 const MCP_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>(["mcp-add-open", "mcp-add-type"]);
-
-function terminalPayload(locale: string, key: string): InteractionEditReplyOptions {
-  return validateAndFallbackPanelPayload(
-    {
-      components: [
-        buildPanelContainer([
-          {
-            type: 10,
-            content: localizer(locale, key),
-          },
-        ]),
-      ],
-      flags: MessageFlags.IsComponentsV2,
-    },
-    locale,
-  );
-}
 
 function receipt(locale: string, key: string, variables?: Record<string, string | number>): PanelReceipt {
   return {
@@ -156,7 +131,7 @@ export async function handleConfigMcpModalOpen(
     const scope = await dependencies.resolveScope(interaction, false);
     if (!scope) {
       await interaction.reply({
-        content: localizer(route.locale, "commands.config.panel.unavailable"),
+        content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
         flags: MessageFlags.Ephemeral,
       });
       return true;
@@ -237,7 +212,9 @@ export async function handleConfigMcpRoutes(
     const serverType = dependencies.takeSelectValue(modal.id, buildMcpsAddModalFieldId("server-type", route.nonce));
     const state = scope.personas[0];
     if (!state) {
-      await interaction.editReply(terminalPayload(route.locale, "commands.config.panel.unavailable"));
+      // The scope resolved, so this workspace is configured: a persona it no longer carries means
+      // the panel has fallen behind, never that the admin should run /setup.
+      await interaction.editReply(outdatedConfigPanelPayload(route.locale));
       return true;
     }
     const action = await performPanelAction(

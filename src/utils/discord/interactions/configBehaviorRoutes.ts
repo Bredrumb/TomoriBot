@@ -14,6 +14,8 @@ import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/inter
 import {
   repaint,
   staleReceipt,
+  missingScopeMessageKey,
+  outdatedConfigPanelMessage,
   type ConfigBehaviorGeneralView,
   type ConfigBehaviorTriggerView,
   type ConfigRepaintOptions,
@@ -323,10 +325,17 @@ export async function handleConfigBehaviorModalOpen(
     return true;
   }
   const scope = await dependencies.resolveScope(interaction, false);
-  const state = scope ? stateFromScope(scope) : null;
-  if (!scope || !state) {
+  if (!scope) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
+      flags: MessageFlags.Ephemeral,
+    });
+    return true;
+  }
+  const state = stateFromScope(scope);
+  if (!state) {
+    await interaction.reply({
+      content: outdatedConfigPanelMessage(route.locale),
       flags: MessageFlags.Ephemeral,
     });
     return true;
@@ -893,10 +902,17 @@ export async function handleConfigBehaviorD10ModalOpen(
     return true;
   }
   const scope = await dependencies.resolveScope(interaction, false);
-  const state = scope?.personas[0];
-  if (!scope || !state) {
+  if (!scope) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
+      flags: MessageFlags.Ephemeral,
+    });
+    return true;
+  }
+  const state = scope.personas[0];
+  if (!state) {
+    await interaction.reply({
+      content: outdatedConfigPanelMessage(route.locale),
       flags: MessageFlags.Ephemeral,
     });
     return true;

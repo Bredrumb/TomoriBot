@@ -10,7 +10,7 @@ import type { PersonaSpriteRow, TomoriState } from "@/types/db/schema";
 import type { PanelReceipt, PanelReceiptTone } from "@/types/discord/panel";
 import type { AddressingStyle } from "@/types/personaNaming";
 import { isToolNoticeKey } from "@/constants/toolNotices";
-import { getCachedAllPersonas, getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
+import { getCachedAllPersonas, getCachedTomoriState, getLastDbError } from "@/utils/cache/tomoriStateCache";
 import { getGuildMcpConfigReadResult } from "@/utils/cache/guildMcpConfigCache";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import {
@@ -138,6 +138,8 @@ import {
 } from "@/utils/discord/channelChecklistManager";
 import {
   deniedReceipt,
+  missingScopeMessageKey,
+  outdatedConfigPanelMessage,
   repaint,
   resolveSelectedPersona,
   staleReceipt,
@@ -479,6 +481,7 @@ const defaultDependencies: ConfigRouteDependencies = {
       return null;
     }
   },
+  getLastDbError: (serverDiscId) => getLastDbError(serverDiscId),
   getPersonaAvatarData: resolvePersonaPanelAvatar,
   getPersonaAvatarReferenceData: resolvePersonaPanelAvatarReference,
   getPersonaCharacterReferenceData: resolvePersonaPanelCharacterReference,
@@ -769,7 +772,7 @@ async function handleModalOpen(
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -779,7 +782,7 @@ async function handleModalOpen(
   const persona = findExactPersona(scope.personas, personaId);
   if (!persona?.persona_id) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: outdatedConfigPanelMessage(route.locale),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1002,7 +1005,7 @@ async function handleCollectionAddSelection(
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1017,7 +1020,7 @@ async function handleCollectionAddSelection(
   const persona = findExactPersona(scope.personas, personaLocation(route).personaId);
   if (!persona?.persona_id) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: outdatedConfigPanelMessage(route.locale),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1047,10 +1050,18 @@ async function handleSpriteAddSelection(
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
-  const persona = scope ? findExactPersona(scope.personas, personaLocation(route).personaId) : null;
+  if (!scope) {
+    await interaction.reply({
+      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const persona = findExactPersona(scope.personas, personaLocation(route).personaId);
   if (!persona?.persona_id) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: outdatedConfigPanelMessage(route.locale),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -1185,10 +1196,18 @@ async function handleTextOverrideModelModalOpen(
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
-  const persona = scope ? findExactPersona(scope.personas, route.personaId) : null;
-  if (!scope || !persona?.persona_id) {
+  if (!scope) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const persona = findExactPersona(scope.personas, route.personaId);
+  if (!persona?.persona_id) {
+    await interaction.reply({
+      content: outdatedConfigPanelMessage(route.locale),
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -2990,7 +3009,9 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
         onDenied: async () => {
           const fallbackScope = await dependencies.resolveScope(interaction, false);
           if (!fallbackScope) {
-            await interaction.editReply(terminalPayload(route.locale, "commands.config.panel.unavailable"));
+            await interaction.editReply(
+              terminalPayload(route.locale, missingScopeMessageKey(interaction, dependencies)),
+            );
             return;
           }
           if (MCP_ACTION_BY_ROUTE[route.action]) {
@@ -3019,7 +3040,8 @@ export function createConfigInteractionRoute(overrides: Partial<ConfigRouteDepen
           });
         },
         load: () => dependencies.resolveScope(interaction, route.action === "retry" || route.action === "refresh"),
-        onMissing: () => interaction.editReply(terminalPayload(route.locale, "commands.config.panel.unavailable")),
+        onMissing: () =>
+          interaction.editReply(terminalPayload(route.locale, missingScopeMessageKey(interaction, dependencies))),
       });
       if (!scope) return;
 
@@ -3390,7 +3412,7 @@ export async function executeConfigCommand(
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await interaction.editReply(terminalPayload(locale, "commands.config.panel.unavailable"));
+    await interaction.editReply(terminalPayload(locale, missingScopeMessageKey(interaction, dependencies)));
     return;
   }
 

@@ -612,6 +612,8 @@ Persistent and categorized control panels follow a standardized four-tier text h
 Persistent categorized control panels place a real divider separator (`{ type: ComponentType.Separator, divider: true, spacing: 1 }`) immediately after the top category-button action row and before the selected page title or body to clearly separate navigation controls from content. When a read fails and cached state is displayed, stale-read warnings appear as the bottommost footer element, preceded by a separate real divider separator and formatted as subdued subtext (`-# ...`).
 The startup grace marker used to disambiguate an empty workspace read is not a failed-read signal when panel data loaded successfully. Only a recorded database failure or an unavailable panel repository read disables write actions. Stale panels keep writes disabled but expose an enabled Retry action that forces a state refresh; the warning remains the bottommost footer.
 
+A workspace scope that never resolves has no panel to render, so the interaction answers in one line instead. That reply separates the two causes rather than reporting one generic failure: an empty workspace read prompts the admin to run `/setup`, while a recorded read failure, including the startup grace window where an empty read is not yet trustworthy, reports the transient fault and asks for a retry. A scope that did resolve never produces setup copy, so a route whose named persona has left the workspace reports a stale panel and the command to re-run, and a write that cannot attribute itself to a persona on a configured workspace is never answered with setup guidance.
+
 ---
 
 ## Thumbnail

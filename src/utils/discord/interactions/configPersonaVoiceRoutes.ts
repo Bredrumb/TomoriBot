@@ -8,6 +8,7 @@ import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/inter
 import {
   repaint,
   staleReceipt,
+  missingScopeMessageKey,
   type ConfigRouteDependencies,
   type ConfigScope,
 } from "@/utils/discord/interactions/configRouteContext";
@@ -274,9 +275,13 @@ export async function handleConfigPersonaVoiceModalOpen(
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
+  if (!scope) {
+    await rejectModalRoute(interaction, route.locale, missingScopeMessageKey(interaction, dependencies));
+    return true;
+  }
   const personaId = "personaId" in route ? route.personaId : null;
-  const persona = scope && typeof personaId === "number" ? exactPersona(scope, personaId) : null;
-  if (!scope || !persona) {
+  const persona = typeof personaId === "number" ? exactPersona(scope, personaId) : null;
+  if (!persona) {
     await rejectModalRoute(interaction, route.locale, "commands.config.panel.stale_detail");
     return true;
   }

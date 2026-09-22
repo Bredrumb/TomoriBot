@@ -58,6 +58,7 @@ function makeInteraction(
   kind: "button" | "modal",
   manager: boolean,
   id = "interaction-1",
+  edits: unknown[] = [],
 ): Record<string, unknown> {
   return {
     id,
@@ -69,10 +70,31 @@ function makeInteraction(
     isStringSelectMenu: () => false,
     isModalSubmit: () => kind === "modal",
     deferUpdate: async () => {},
-    editReply: async () => {},
+    editReply: async (payload: unknown) => {
+      edits.push(payload);
+    },
     reply: async () => {},
     fields: { getTextInputValue: () => "" },
   };
+}
+
+async function dispatchRetry(route: ReturnType<typeof createConfigInteractionRoute>, edits: unknown[]): Promise<void> {
+  const retryRoute = { action: "retry" as const, locale: "en-US" };
+  await route.execute(
+    {} as Client,
+    makeInteraction(
+      CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.buildRouteId(retryRoute),
+      "button",
+      true,
+      "interaction-retry",
+      edits,
+    ) as never,
+    {
+      namespace: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.namespace,
+      version: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.version,
+      segments: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.buildRouteSegments(retryRoute),
+    },
+  );
 }
 
 describe("Config-hosted ST preset node routes", () => {
@@ -175,5 +197,33 @@ describe("Config-hosted ST preset node routes", () => {
       loadNodes.mockRestore();
       loadScopeData.mockRestore();
     }
+  });
+
+  it("reports a stale panel, never a setup gap, when the fallback scope has no persona", async () => {
+    const edits: unknown[] = [];
+    const route = createConfigInteractionRoute({
+      resolveScope: async () => ({ ...makeScope(), personas: [] }),
+      getLastDbError: () => null,
+      recordAction: () => {},
+    });
+
+    await dispatchRetry(route, edits);
+
+    const rendered = JSON.stringify(edits);
+    expect(rendered).toContain("This panel is out of date.");
+    expect(rendered).not.toContain("/setup");
+  });
+
+  it("reports the setup gap when the fallback scope never resolves", async () => {
+    const edits: unknown[] = [];
+    const route = createConfigInteractionRoute({
+      resolveScope: async () => null,
+      getLastDbError: () => null,
+      recordAction: () => {},
+    });
+
+    await dispatchRetry(route, edits);
+
+    expect(JSON.stringify(edits)).toContain("Run /setup first.");
   });
 });

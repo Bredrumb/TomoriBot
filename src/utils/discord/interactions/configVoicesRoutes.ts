@@ -6,6 +6,7 @@ import { isConfigRouteAuthorized, type ConfigActor } from "@/utils/discord/inter
 import {
   repaint,
   staleReceipt,
+  missingScopeMessageKey,
   type ConfigRouteDependencies,
   type ConfigScope,
 } from "@/utils/discord/interactions/configRouteContext";
@@ -338,7 +339,7 @@ export async function handleConfigVoicesModalOpen(
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
     await interaction.reply({
-      content: localizer(route.locale, "commands.config.panel.unavailable"),
+      content: localizer(route.locale, missingScopeMessageKey(interaction, dependencies)),
       flags: MessageFlags.Ephemeral,
     });
     return true;
