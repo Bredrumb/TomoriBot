@@ -178,4 +178,21 @@ describe("locale drift: real repository history", () => {
     },
     REPO_TIMEOUT_MS,
   );
+
+  it(
+    "reads locale discovery from committed HEAD even when the index stages a deletion",
+    async () => {
+      const japanesePath = "src/locales/ja/general.ts";
+      git(["rm", "-q", japanesePath], sourceRepo);
+
+      try {
+        const report = await findDriftedTranslations("ja", sourceRepo);
+        expect(report.scannedLocales).toEqual(["ja"]);
+        expect(report.entries.map((entry) => entry.key)).toEqual(["general.moved"]);
+      } finally {
+        git(["reset", "--hard", "HEAD"], sourceRepo);
+      }
+    },
+    REPO_TIMEOUT_MS,
+  );
 });

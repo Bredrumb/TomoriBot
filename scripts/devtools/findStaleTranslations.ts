@@ -305,8 +305,24 @@ async function resolveTargetLocales(targetLocale?: string, repoRoot = process.cw
  * which is what a shallow clone produces.
  */
 export async function findDriftedTranslations(targetLocale?: string, repoRoot = process.cwd()): Promise<DriftReport> {
-  const locales = await resolveTargetLocales(targetLocale, repoRoot);
   const source = createGitDriftSource(repoRoot);
+  const authoredLocales = source.listTranslationLocales();
+  let locales: LocaleCode[];
+
+  if (targetLocale) {
+    if (!isDiscordLocaleCode(targetLocale)) {
+      throw new Error(`Invalid Discord locale code: ${targetLocale}`);
+    }
+    if (targetLocale === "en-US") {
+      throw new Error(`"en-US" is the English source and cannot be scanned as a translation target.`);
+    }
+    if (!authoredLocales.includes(targetLocale)) {
+      throw new Error(`Locale "${targetLocale}" does not exist in committed HEAD under src/locales/`);
+    }
+    locales = [targetLocale];
+  } else {
+    locales = authoredLocales.filter((locale): locale is LocaleCode => isDiscordLocaleCode(locale));
+  }
 
   // A shallow checkout cannot answer this question, and it fails in the worst possible direction.
   // `git blame` attributes every line to the grafted root, whose English file is the newest one the
@@ -388,7 +404,7 @@ export function filterUnfollowedReport(report: StalenessReport, locale?: string)
     translationLocales: report.translationLocales.filter((candidate) => candidate === locale),
     added: filterEntries(report.added),
     changed: filterEntries(report.changed),
-    removed: [],
+    removed: report.removed,
     localeEditCounts: new Map([...report.localeEditCounts].filter(([candidate]) => candidate === locale || candidate === "en-US")),
   };
 }

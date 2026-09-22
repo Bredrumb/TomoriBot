@@ -19,7 +19,7 @@ bun run check-locale-placeholders --locale=<code>  # {placeholder} parity agains
 bun run check-locale-lengths                       # Discord 45/100 code-point caps
 bun run check-locale-markers                       # protocol keys, templates, collisions
 bun run check-locale-links --locale=<code>         # project routes and heading fragments
-bun run find-stale-translations --locale=<code>    # translation review queue
+bun run find-stale-translations --locale=<code>    # review queue; default includes history-backed drift detection
 bun run check-intent-packs --locale=<code> --requests=<file.json>  # natural requests reach tools
 # Add --export to write the review list to scripts/maintenance/stale-translations.json.
 # Add --reason=drifted for historical source drift, or --reason=unfollowed --base=origin/main for branch follow-up.
@@ -93,9 +93,10 @@ Every input describes the same revision. The scan reads values and blame from `H
 uncommitted edit to a locale file is ignored rather than half-applied, and the report never mixes a
 committed translation with working-tree provenance.
 
-The scan reads history, so a shallow clone cannot answer it, and it fails in the direction that
-matters: blame attributes every line to the grafted root, whose English file is the newest the clone
-holds, so the comparison would find nothing and read as clean. That case exits 2 with the fetch
+The default reason set includes `drifted`, so the ordinary command also needs complete Git history.
+A shallow clone cannot answer that scan, and it fails in the direction that matters: blame attributes
+every line to the grafted root, whose English file is the newest the clone holds, so the comparison
+would find nothing and read as clean. That case exits 2 with the fetch
 command that unblocks it rather than printing a clean report. The reason subset also passes through
 `--export`, where each drifted entry carries the superseded English alongside the current value.
 

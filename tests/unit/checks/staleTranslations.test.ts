@@ -130,7 +130,7 @@ describe("staleTranslations expected script detection", () => {
           missing: [],
         },
       ],
-      removed: [],
+      removed: [{ key: "general.removed_key", before: "Removed English" }],
       localeEditCounts: new Map(),
       conflicts: new Set(),
     };
@@ -156,7 +156,9 @@ describe("staleTranslations expected script detection", () => {
       },
     ]);
     expect(unfollowedEntries(report, "ja")).toHaveLength(1);
-    expect(filterUnfollowedReport(report, "ja").changed).toEqual([]);
-    expect(filterUnfollowedReport(report, "ja").added[0]?.missing).toHaveLength(1);
+    const japaneseReport = filterUnfollowedReport(report, "ja");
+    expect(japaneseReport.changed).toEqual([]);
+    expect(japaneseReport.added[0]?.missing).toHaveLength(1);
+    expect(japaneseReport.removed).toEqual(report.removed);
   });
 });

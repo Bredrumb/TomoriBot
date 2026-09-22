@@ -126,8 +126,8 @@ export interface StalenessReport {
   baseRevision: string;
   headRevision: string;
   /**
-   * True when the head side came from the working tree rather than `HEAD`, because the caller asked
-   * with `--worktree` or because uncommitted locale edits exist.
+   * True when locale files in the working tree differ from `HEAD`. Whether those edits are included
+   * in the comparison depends on the caller's `source` option.
    */
   includesUncommittedEdits: boolean;
   /** Locale paths whose working tree content differs from `HEAD`, whether or not they were read. */
@@ -742,8 +742,8 @@ export function renderStalenessReport(report: StalenessReport, options: { verbos
   if (report.includesUncommittedEdits) {
     // Without this line the reader would take an uncommitted local edit for committed branch state.
     lines.push(
-      `Head includes uncommitted locale edits (${report.uncommittedLocalePaths.length} path(s) ` +
-        `differ from HEAD); commit them for a report that matches the branch exactly.`,
+      `Working tree contains uncommitted locale edits (${report.uncommittedLocalePaths.length} path(s) ` +
+        `differ from HEAD). The committed report still reads HEAD unless --worktree was requested.`,
     );
   }
 
@@ -876,16 +876,21 @@ async function assertGitCheckout(git: GitRunner, repoRoot: string): Promise<void
   }
 }
 
+function fetchTargetForBase(base: string): string {
+  return base.startsWith("origin/") ? base.slice("origin/".length) : base;
+}
+
 async function assertUsableBase(git: GitRunner, repoRoot: string, base: string): Promise<void> {
   try {
     await git(["rev-parse", "--verify", "--quiet", `${base}^{commit}`], repoRoot);
   } catch {
     const shallow = await isShallowCheckout(git, repoRoot);
+    const fetchTarget = fetchTargetForBase(base);
     throw new MissingBaseRefError(
       shallow
         ? `Base ref "${base}" is not present in this checkout. A shallow clone has no history to ` +
-          `compare, so fetch it (\`git fetch origin ${base} --depth=100\`) or run \`git fetch --unshallow\`.`
-        : `Base ref "${base}" is not present in this checkout. Fetch it (\`git fetch origin ${base}\`) ` +
+          `compare, so fetch it (\`git fetch origin ${fetchTarget} --depth=100\`) or run \`git fetch --unshallow\`.`
+        : `Base ref "${base}" is not present in this checkout. Fetch it (\`git fetch origin ${fetchTarget}\`) ` +
           `or pass a ref this clone holds.`,
     );
   }

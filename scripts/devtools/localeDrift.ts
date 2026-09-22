@@ -188,7 +188,7 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
 
   return {
     listLocaleFiles(locale: string): string[] {
-      return runGit(["ls-files", `${LOCALES_ROOT}/${locale}`], cwd)
+      return runGit(["ls-tree", "-r", "--name-only", "HEAD", "--", `${LOCALES_ROOT}/${locale}`], cwd)
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line.endsWith(".ts"));
@@ -198,7 +198,9 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
       const locales = new Set<string>();
       const pattern = new RegExp(`^${LOCALES_ROOT}/([^/]+)/`);
 
-      for (const line of runGit(["ls-files", `${LOCALES_ROOT}/`], cwd).split("\n")) {
+      for (const line of runGit(["ls-tree", "-r", "--name-only", "HEAD", "--", `${LOCALES_ROOT}/`], cwd).split(
+        "\n",
+      )) {
         const match = pattern.exec(line.trim());
         if (match && match[1] !== DEFAULT_LOCALE) locales.add(match[1]);
       }
