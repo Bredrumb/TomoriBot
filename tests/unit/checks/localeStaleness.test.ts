@@ -561,7 +561,9 @@ describe("checkLocaleStaleness head source", () => {
     expect(report.added).toEqual([]);
     expect(report.changed).toEqual([]);
     expect(report.includesUncommittedEdits).toBe(true);
-    expect(renderStalenessReport(report, { verboseOutput: false })).toContain("Working tree contains uncommitted locale edits");
+    expect(renderStalenessReport(report, { verboseOutput: false })).toContain(
+      "Working tree contains uncommitted locale edits",
+    );
   });
 
   it("includes an untracked locale file under --worktree and discloses it", async () => {
@@ -574,7 +576,9 @@ describe("checkLocaleStaleness head source", () => {
     const committed = await reportFor(repo, base);
     expect(committed.added).toEqual([]);
     expect(committed.uncommittedLocalePaths).toContain("src/locales/en-US/features.ts");
-    expect(renderStalenessReport(committed, { verboseOutput: false })).toContain("Working tree contains uncommitted locale edits");
+    expect(renderStalenessReport(committed, { verboseOutput: false })).toContain(
+      "Working tree contains uncommitted locale edits",
+    );
 
     const worktree = await reportFor(repo, base, "worktree");
     expect(worktree.added.map((entry) => entry.key)).toEqual(["general.draft_key"]);
