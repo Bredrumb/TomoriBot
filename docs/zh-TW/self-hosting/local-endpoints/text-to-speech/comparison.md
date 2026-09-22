@@ -72,11 +72,11 @@ TomoriBot 支援多種本機文字轉語音 sidecar，各自適合不同的語�
 
 TomoriBot 目前所有 sidecar 都回傳完整的 WAV 給 bot。「串流路徑」指的是上游模型或另外的服務後端具備串流能力，**不**代表 Discord 語音通話串流已經實作。大小是模型參數，**不是** VRAM 或下載大小，而 16 GB 那一欄是設定指引，不是實測峰值。速度欄描述每個引擎預期的取捨；上面的實測時間來自同一台 Windows 機器，並不能用來在 Linux 上排名這些引擎。
 
-「參考片段」欄列出的是各引擎自家文件對複製參考音訊的建議或強制規定。那是上游的指引，不是在本頁測得的結果，也和 TomoriBot 的上傳上限無關。
+「參考片段」欄列出的是各引擎在文件中記載、或在執行時套用的參考音訊長度，因此混雜了已發布的指引與從上游程式碼讀出的限制。大多數引擎不會拒絕請求，而是靜默裁切到自己的視窗，所以這一欄說的是引擎讀取的長度，而不只是引擎接受的長度。這是上游行為，不是在本頁測得的結果，也和 TomoriBot 的上傳上限無關。
 
 | 引擎 | 模型大小；16 GB GPU | 語言 | 參考片段 | 語音來源與控制 | 速度與串流路徑 | 適合用來 |
 |---|---|---|---|---|---|---|
-| [Chatterbox](/zh-TW/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 350M Turbo（預設）、110M Nano 或 500M Standard；可以，Nano 能用 CPU | 英文 | 10 秒；更長的音訊會被截斷為 10 秒（decoder）與 6 秒（encoder） | 參考語音複製、支援的事件標籤；標準模型提供 CFG 與誇張度 | 主打快速與小體積；包裝回傳完整 WAV | 小型的英文複製設定或 CPU 實驗 |
+| [Chatterbox](/zh-TW/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 350M Turbo（預設）、110M Nano 或 500M Standard；可以，Nano 能用 CPU | 英文 | 10 秒；更長的內容一旦超出提示的 10 秒窗就會被靜默忽略 | 參考語音複製、支援的事件標籤；標準模型提供 CFG 與誇張度 | 主打快速與小體積；包裝回傳完整 WAV | 小型的英文複製設定或 CPU 實驗 |
 | [Qwen3-TTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 每種模式 1.7B；可以，模型會切換 | 10 種，含英文與日文 | 3 秒起；沒有文件記載的上限 | 複製或以文字描述的 VoiceDesign | 重視品質；上游可串流，包裝會緩衝 | 通用多語言複製與日文 VoiceDesign |
 | [MOSS-TTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/moss/) | 4B 複製加上約 1.7B 設計，會切換；16 GB 是試用目標，未經驗證；8B 旗艦大概不行 | 複製：31 種，含日文；設計：英文與中文 | 上游未記載；執行時也沒有上限 | 複製或以文字描述的 VoiceGenerator；複製語言標籤 | 實驗性；本機複製有上游串流後端，包裝會緩衝 | 比較 MOSS 複製品質，或英中文語音設計 |
 | [IrodoriTTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 目前 v4.1 Small 約 0.8B；在一次本機執行中觀察到約 3 到 4 GB VRAM | 僅日文 | 約 30 秒；會依檢查點的 120 秒上限裁切 | 複製或 VoiceDesign；表情符號風格提示 | 取樣步數在品質與速度之間取捨；包裝會緩衝 | 小體積的日文語音與表情符號驅動的語氣 |

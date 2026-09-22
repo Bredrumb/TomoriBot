@@ -76,11 +76,18 @@ Usa `/providers` para el registro del endpoint y la configuración del modelo. L
 
 ## Configuración de una voz de la persona
 
-1. Prepara un clip de voz limpio de 10-20 segundos con un solo orador y sin música de fondo.
+1. Prepara un clip de voz limpio de 10 segundos con un solo orador y sin música de fondo.
 2. Abre `/config` bajo Modelos > Parámetros y voces TTS y sube el clip.
 3. Abre `/config` bajo Persona > Voz, luego elige la persona y la muestra de voz.
 
-Un clip más largo no aporta nada a Chatterbox. Su runtime trunca la referencia a los primeros 10 segundos para la condición del decodificador y a los primeros 6 segundos para la condición del codificador ([`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)), así que un clip de más de unos 10 segundos se sube, se almacena y luego se ignora en parte. El embedding del hablante se sigue calculando a partir del clip completo.
+Un clip más largo no aporta nada a Chatterbox, y tampoco se rechaza. Su runtime trunca la referencia antes del condicionamiento, así que el audio más allá de la ventana se sube, se almacena y luego se ignora ([`tts_turbo.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts_turbo.py), [`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)):
+
+- El prompt acústico corresponde a los primeros 10 segundos en todas las variantes.
+- El contexto de tokens de voz corresponde a los primeros 15 segundos en Turbo y Nano, y a 6 segundos en Standard.
+
+Esas ventanas son constantes del runtime upstream, y no una guía publicada: el README del repositorio no indica ninguna duración del clip de referencia, y su nombre de archivo de ejemplo es solo `your_10s_ref_clip.wav`. La única duración que el runtime realmente aplica es un mínimo, que exige que el prompt dure más de 5 segundos.
+
+Diez segundos es, por lo tanto, el objetivo práctico. Esa duración llena el prompt acústico, que es donde se definen el timbre y la dicción, y un clip de entre 10 y 15 segundos añade contexto de tokens de voz solo en Turbo y Nano. El embedding del hablante se sigue calculando a partir del clip completo, así que alargarlo no cambia la identidad del hablante, solo cuánto del prompt se descarta sin leerse.
 
 Turbo y Nano pueden usar etiquetas de eventos entre corchetes como `[laugh]` y `[sigh]` cuando el interruptor del modelo rápido está activado.
 
