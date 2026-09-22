@@ -44,10 +44,9 @@ const CREDIT_AFFORDABILITY_ERROR_PATTERNS: RegExp[] = [
 ];
 
 // The account has no spendable balance at all, so no request of any size can succeed.
-// Distinct from the affordability ceiling above: there, a smaller max_tokens still fits
-// the remaining credit. Example (DeepSeek 402): "Insufficient Balance". Matching these
-// against the affordability patterns would hand the user a `reduce_output_tokens` tip
-// that cannot possibly work.
+// Separate from the affordability ceiling above, where a smaller max_tokens still fits the
+// remaining credit. Matching these against the affordability patterns would hand the user a
+// `reduce_output_tokens` tip that cannot possibly work.
 const ACCOUNT_BALANCE_EXHAUSTED_PATTERNS: RegExp[] = [
   /\binsufficient\s+balance\b/i,
   /\bbalance\s+is\s+insufficient\b/i,

@@ -66,6 +66,36 @@ import type {
   WhitelistRolesReadResult,
 } from "@/utils/db/repositories/WhitelistRepository";
 
+export type ModerationWriteFailureOperation =
+  | "removeUserFromBlacklist"
+  | "removePersonaUserBlock"
+  | "removeUserBlacklistBatch"
+  | "upsertWhitelistChannel"
+  | "removeWhitelistChannel"
+  | "addWhitelistRole"
+  | "removeWhitelistRole"
+  | "replacePersonaChannelWhitelist";
+
+/**
+ * Records why a moderation write failed.
+ *
+ * The route reports only that the write failed, so the cause has to be recorded here or it is
+ * discarded. The level is error on purpose: the production level filters warn out, and a warning
+ * here would erase the only copy of the cause.
+ *
+ * @param metadata - Identifiers for the row the failed write targeted
+ */
+function logModerationWriteFailure(
+  operation: ModerationWriteFailureOperation,
+  error: unknown,
+  metadata: Record<string, string | number>,
+): void {
+  log.error(`Moderation ${operation} failed`, error as Error, {
+    errorType: "ModerationWriteFailed",
+    metadata: { operation, ...metadata },
+  });
+}
+
 export interface QuotaConfigState {
   daily_user_quota: number;
   serverwide_quota: number;
@@ -688,11 +718,9 @@ export async function removeUserFromBlacklist(
       targetUserId: input.targetUserId,
     };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation removeUserFromBlacklist failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "removeUserFromBlacklist", serverId: input.serverId, targetUserId: input.targetUserId },
+    logModerationWriteFailure("removeUserFromBlacklist", error, {
+      serverId: input.serverId,
+      targetUserId: input.targetUserId,
     });
     return {
       status: "failure",
@@ -747,11 +775,9 @@ export async function removePersonaUserBlock(
       targetUserId: input.targetUserId,
     };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation removePersonaUserBlock failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "removePersonaUserBlock", serverId: input.serverId, targetUserId: input.targetUserId },
+    logModerationWriteFailure("removePersonaUserBlock", error, {
+      serverId: input.serverId,
+      targetUserId: input.targetUserId,
     });
     return {
       status: "failure",
@@ -818,12 +844,7 @@ export async function removeUserBlacklistBatch(
       removedPersonaBlocks,
     };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation removeUserBlacklistBatch failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "removeUserBlacklistBatch", serverId: input.serverId },
-    });
+    logModerationWriteFailure("removeUserBlacklistBatch", error, { serverId: input.serverId });
     return {
       status: "failure",
       removedPersonalizationCount: 0,
@@ -959,11 +980,9 @@ export async function upsertWhitelistChannel(
       isUpdate: Boolean(existingEntry),
     };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation upsertWhitelistChannel failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "upsertWhitelistChannel", serverId: input.serverId, channelId: input.channelId },
+    logModerationWriteFailure("upsertWhitelistChannel", error, {
+      serverId: input.serverId,
+      channelId: input.channelId,
     });
     return {
       status: "failure",
@@ -1011,11 +1030,9 @@ export async function removeWhitelistChannel(
       channelId: input.channelId,
     };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation removeWhitelistChannel failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "removeWhitelistChannel", serverId: input.serverId, channelId: input.channelId },
+    logModerationWriteFailure("removeWhitelistChannel", error, {
+      serverId: input.serverId,
+      channelId: input.channelId,
     });
     return {
       status: "failure",
@@ -1062,12 +1079,7 @@ export async function addWhitelistRole(
     deps.invalidateCache(input.guildId);
     return { status: "success", roleId: input.roleId };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation addWhitelistRole failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "addWhitelistRole", serverId: input.serverId, roleId: input.roleId },
-    });
+    logModerationWriteFailure("addWhitelistRole", error, { serverId: input.serverId, roleId: input.roleId });
     return { status: "failure", roleId: input.roleId };
   }
 }
@@ -1098,12 +1110,7 @@ export async function removeWhitelistRole(
     deps.invalidateCache(input.guildId);
     return { status: "success", roleId: input.roleId };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation removeWhitelistRole failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "removeWhitelistRole", serverId: input.serverId, roleId: input.roleId },
-    });
+    logModerationWriteFailure("removeWhitelistRole", error, { serverId: input.serverId, roleId: input.roleId });
     return { status: "failure", roleId: input.roleId };
   }
 }
@@ -1153,11 +1160,9 @@ export async function replacePersonaChannelWhitelist(
     deps.invalidateCache(input.guildId);
     return { status: "success", channelIds: normalizedChannelIds };
   } catch (error) {
-    // The route reports only that the write failed, so the cause has to be recorded here or it
-    // is discarded. Downgrading this to warn would hide it: the production level filters warn out.
-    log.error("Moderation replacePersonaChannelWhitelist failed", error as Error, {
-      errorType: "ModerationWriteFailed",
-      metadata: { operation: "replacePersonaChannelWhitelist", serverId: input.serverId, personaId: input.personaId },
+    logModerationWriteFailure("replacePersonaChannelWhitelist", error, {
+      serverId: input.serverId,
+      personaId: input.personaId,
     });
     return { status: "failure" };
   }

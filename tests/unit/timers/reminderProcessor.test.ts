@@ -379,7 +379,7 @@ describe("ReminderProcessor delivery retry cap", () => {
       footerText?.startsWith("reminders.triggered_footer_recurring_retained") ||
         footerText?.includes("original cadence"),
     ).toBeTrue();
-    expect(footerText).toContain("[tomori:v1:diagnostic]");
+    expect(footerText).not.toContain("[tomori:v1:");
   });
 
   it("does not mention a user when a self-task falls back", async () => {

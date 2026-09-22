@@ -264,12 +264,6 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
 1. Dùng \`/config\` > Models > Switch Models để đặt model thị giác riêng, HOẶC
 2. Dùng \`/config\` > Models > Switch Models để đổi sang model có khả năng thị giác, HOẶC
 3. Gỡ bỏ hình ảnh và tạo lại mà không dùng ảnh`,
-      vision_model_provider_unsupported_title: `🔴 Nhà cung cấp model thị giác không hỗ trợ`,
-      vision_model_provider_unsupported_description: `Model thị giác (**{vision_model_name}**) thuộc nhà cung cấp **{vision_provider}**, nơi không hỗ trợ tạo preset persona.
-
-**Các bước tiếp theo:**
-1. Dùng \`/config\` > Models > Switch Models để đặt model thị giác từ nhà cung cấp được hỗ trợ (Google, OpenRouter, DeepSeek, Z.ai, Custom, NVIDIA NIM), HOẶC
-2. Dùng \`/config\` > Models > Switch Models để đổi model chính sang model hỗ trợ cả thị giác lẫn tạo preset`,
       web_search_tools_required_title: `🔴 Tìm kiếm web không khả dụng`,
       web_search_tools_required_description: `Bạn đã chọn tìm kiếm web, nhưng model hiện tại (**{model_name}**) không hỗ trợ **TOOLS**.
 
@@ -278,6 +272,8 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
 2. Tạo lại mà không dùng tìm kiếm web (chọn "Không" khi được hỏi)`,
       api_key_decrypt_failed_title: `🔴 Lỗi khóa API`,
       api_key_decrypt_failed_description: `Không thể giải mã thông tin nhà cung cấp đang hoạt động. Hãy cấu hình lại bằng \`/providers\`.`,
+      vision_credentials_unavailable_title: `🔴 Không dùng được thông tin xác thực của model thị giác`,
+      vision_credentials_unavailable_description: `Model thị giác của bạn (**{vision_model_name}**) chạy trên nhà cung cấp **{vision_provider}**, nhưng không thể dùng khóa API đã lưu của nó để mô tả hình ảnh. Hãy cấu hình lại thông tin xác thực của nhà cung cấp đó bằng \`/providers\`, hoặc kiểm tra \`/config\` > Models.`,
       invalid_image_title: `🔴 Ảnh không hợp lệ`,
       invalid_image_description: `Vui lòng tải lên một tệp hình ảnh hợp lệ (PNG, JPG, JPEG, v.v.).`,
       error_file_too_large: `Ảnh avatar phải có dung lượng từ {max_size}MB trở xuống.`,
@@ -287,10 +283,19 @@ Dùng \`/config\` > Models > Switch Models để chuyển sang model hỗ trợ 
       processing_description: `Có thể mất 1-2 phút. Vui lòng chờ mình tạo nhân vật...
 
 Kết quả đôi khi bất ngờ. Bạn có thể tạo lại nếu cần.`,
+      captioning_title: `Đang mô tả ảnh đại diện...`,
+      captioning_description: `Model chính của bạn không xem được hình ảnh, nên tôi nhờ model thị giác (**{model_name}**) mô tả ảnh đại diện bạn đã tải lên trước. Sau đó model chính sẽ viết tính cách dựa trên mô tả đó. Quá trình này có thể mất 1-2 phút.`,
       generation_failed_title: `🔴 Tạo thất bại`,
       generation_failed_description: `Không thể tạo persona: {error}
 
 Vui lòng thử lại với dữ liệu khác hoặc kiểm tra khóa API.`,
+      vision_caption_failed_title: `🔴 Không mô tả được ảnh đại diện`,
+      vision_caption_failed_description: `Model thị giác của bạn (**{vision_model_name}** trên {vision_provider}) không thể mô tả ảnh đại diện đã tải lên.
+
+**Bước tiếp theo:**
+1. Kiểm tra khóa API của nhà cung cấp đó bằng \`/providers\`, HOẶC
+2. Gỡ ảnh rồi tạo lại, HOẶC
+3. Đặt một model thị giác khác trong \`/config\` > Models`,
       validation_failed_title: `🔴 Xác thực thất bại`,
       validation_failed_description: `Dữ liệu persona được tạo không vượt qua xác thực. Vui lòng thử lại.`,
       image_processing_failed_title: `🔴 Xử lý ảnh thất bại`,
@@ -312,7 +317,7 @@ Hoặc nhấn nút Nhập`,
       success_next_steps_description_dm: `1. Tải xuống tệp PNG đính kèm
 2. Dùng \`/persona import\` với tệp PNG
 3. Chạy \`/refresh\` để áp dụng persona mới của mình`,
-      success_next_steps_footer: `Sau đó bạn có thể chỉnh sửa thêm về mình bằng các lệnh \`/persona\`.`,
+      success_next_steps_footer: `Sau đó bạn có thể tùy chỉnh thêm cho mình trong \`/config\`.`,
       avatar_update_skipped_dm: `Lưu ý: cập nhật avatar và biệt danh không khả dụng khi nhập trong tin nhắn trực tiếp.`,
     },
     create: {
@@ -363,7 +368,7 @@ Hoặc nhấn nút Nhập`,
       success_next_steps_description: `1. Tải xuống tệp PNG đính kèm ở bên phải
 2. Dùng \`/persona import\` với tệp PNG
 Hoặc nhấn nút Nhập`,
-      success_next_steps_footer: `Sau đó bạn có thể chỉnh sửa thêm về mình bằng các lệnh \`/persona\`.`,
+      success_next_steps_footer: `Sau đó bạn có thể tùy chỉnh thêm cho mình trong \`/config\`.`,
       avatar_update_skipped_dm: `Xin lưu ý rằng tính năng cập nhật avatar và biệt danh không khả dụng trong tin nhắn trực tiếp.`,
     },
   },

@@ -47,6 +47,7 @@ import {
 } from "@/utils/discord/ui/panel";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { buildModelRoutingControl, buildProviderPageEntries } from "@/utils/discord/ui/modelRoutingControls";
+import { buildProviderSelectWindow } from "@/utils/discord/ui/providerSelectWindow";
 import {
   buildProviderParameterBlock,
   formatStoredParameterValue,
@@ -757,16 +758,6 @@ export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRender
         }),
       },
       {
-        id: "models",
-        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.models),
-        customId: buildPersonalConfigRouteId({
-          action: "category",
-          locale,
-          category: "models",
-          page: DEFAULT_PAGE_FOR_CATEGORY.models,
-        }),
-      },
-      {
         id: "advanced",
         label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.advanced),
         customId: buildPersonalConfigRouteId({
@@ -774,6 +765,16 @@ export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRender
           locale,
           category: "advanced",
           page: DEFAULT_PAGE_FOR_CATEGORY.advanced,
+        }),
+      },
+      {
+        id: "models",
+        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.models),
+        customId: buildPersonalConfigRouteId({
+          action: "category",
+          locale,
+          category: "models",
+          page: DEFAULT_PAGE_FOR_CATEGORY.models,
         }),
       },
     ],
@@ -1212,41 +1213,28 @@ ${localizer(locale, "commands.personal.config.models_description")}`,
         // Defaulting to the expansion's own offset keeps a freshly expanded provider on screen; a
         // caller-supplied start means the reader paged deliberately and outranks it.
         const providerStart = isSelectedCapability ? (input.providerStart ?? expandedStartIndex) : 0;
-        const overflows = entries.length > PERSONAL_PROVIDER_DIRECT_LIMIT;
-        const windowSize = overflows ? PERSONAL_PROVIDER_DIRECT_LIMIT - 1 : PERSONAL_PROVIDER_DIRECT_LIMIT;
-        const rangeCount = Math.max(1, Math.ceil(entries.length / windowSize));
-        const rangeIndex = Math.min(Math.max(0, Math.floor(providerStart / windowSize)), rangeCount - 1);
-        const slicedEntries = entries.slice(rangeIndex * windowSize, rangeIndex * windowSize + windowSize);
-
-        const providerEntries = [...slicedEntries];
-        if (rangeCount > 1) {
-          // Wrapping past the last window is what keeps every entry reachable from any window without a
-          // second control: advancing repeatedly always returns to the first.
-          const nextRangeIndex = (rangeIndex + 1) % rangeCount;
-          providerEntries.push({
-            value: encodeProviderRangeValue(nextRangeIndex * windowSize, expandedProvider),
-            label: localizer(locale, "commands.config.panel.model_provider_more_option", {
-              capability: localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]),
-              page: nextRangeIndex + 1,
-              total: rangeCount,
-            }),
-          });
-        }
+        const capabilityLabel = localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]);
+        const routingWindow = buildProviderSelectWindow({
+          entries,
+          entryStart: providerStart,
+          directLimit: PERSONAL_PROVIDER_DIRECT_LIMIT,
+          expandedProvider,
+          expandedPageCount,
+          locale,
+          capabilityLabel,
+          pagePlaceholderKey: "commands.personal.config.provider_page_placeholder",
+          encodeAdvanceValue: encodeProviderRangeValue,
+        });
+        const providerEntries = routingWindow.advanceEntry
+          ? [...routingWindow.visibleEntries, routingWindow.advanceEntry]
+          : routingWindow.visibleEntries;
 
         components.push(
           buildModelRoutingControl({
-            capabilityLabel: localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]),
+            capabilityLabel,
             activeModelName: row?.activeModelName ?? null,
             activeProvider: row?.storedProvider ?? null,
-            // While expanded the active model is the least useful thing the placeholder could say:
-            // the reader has already chosen a provider and is looking for its pages.
-            placeholderOverride:
-              expandedPageCount > 0 && expandedProvider
-                ? localizer(locale, "commands.personal.config.provider_page_placeholder", {
-                    capability: localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]),
-                    provider: getProviderDisplayName(expandedProvider),
-                  })
-                : undefined,
+            placeholderOverride: routingWindow.placeholderOverride,
             providerEntries,
             customId: buildPersonalConfigRouteId({
               action: "model-provider-select",

@@ -49,8 +49,8 @@ registerHeapSnapshotHandler();
 initMediaProcessing();
 
 // Probe Discord for Presence Intent approval (or honor an explicit override) before
-// building the client, so we request the privileged intent only when it is actually
-// enabled, so self-resolving the moment Discord grants approval, with no failed
+// building the client, so the privileged intent is requested only when it is actually
+// enabled. Approval is then picked up the moment Discord grants it, with no failed
 // gateway handshake and no manual env change.
 const includePresences = await resolvePresenceIntentEnabled(environment);
 const client = createDiscordClient(includePresences);
@@ -63,19 +63,16 @@ await initBridges(client);
 
 initTimers(client);
 
-// Login, so triggers clientReady which starts all deferred timers.
+// Login triggers clientReady, which starts the deferred timers.
 //
-// Retrying this in-process is not available: `Client#login` awaits `client.destroy()` on failure,
-// which sets `ws.destroyed` permanently (discord.js only clears it in the WebSocket manager's
-// constructor), drops `client.token`, and never restarts the cache sweepers. A second `login()`
-// therefore leaves `isReady()` false forever, which the health endpoint reports as 503 and the
-// container runtime reads as a dead process. Rebuilding the client instead is not an option
-// either: the Matrix bridge closes over the instance it was handed. So a failed connect exits and
-// the restart policy retries with a fresh process, which is the only path that yields a client
-// that can actually report ready.
+// A failure here has to exit rather than retry: `Client#login` awaits `client.destroy()`, which
+// leaves `ws.destroyed` set (discord.js clears it only in the WebSocket manager constructor),
+// drops `client.token`, and stops the cache sweepers. A second `login()` in the same process
+// never reports ready, which the health endpoint reads as 503 and the runtime reads as a dead
+// container. A rebuilt client is not an option either, because the Matrix bridge closes over the
+// instance it was handed. The restart policy is the only path that yields a usable client.
 //
-// A transient gateway failure is still distinguished from a misconfiguration, because the two
-// need different operator responses and the runtime backoff cannot tell them apart.
+// Exiting also keeps a transient gateway failure distinguishable from a misconfiguration.
 try {
   await client.login(process.env.DISCORD_TOKEN);
 } catch (error) {

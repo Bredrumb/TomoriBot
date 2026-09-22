@@ -5,8 +5,8 @@ export default {
       disable: `無効化`,
     },
     panel: {
-      avatar_preset_sprites_removed_detail: `新しいアバターと合わないデフォルトのスプライト（{count}件）を削除しました。
-/persona defaultで元に戻せます。`,
+      avatar_preset_sprites_removed_detail:
+        "新しいアバターと合わないデフォルトのスプライト（{count}件）を削除しました。 /persona defaultで元に戻せます。",
       channels_welcome_range_placeholder: `ようこそ設定：ペルソナのページを選択`,
       channels_auto_trigger_range_placeholder: `自動トリガー設定：ペルソナのページを選択`,
       random_trigger_add_persona_range_placeholder: `ランダムトリガー追加：ペルソナのページを選択`,
@@ -42,35 +42,30 @@ export default {
       model_provider_more_option: `{capability}のプロバイダーをもっと見る（{total}ページ中{page}ページ目）`,
       model_provider_page_placeholder: `{capability}：{provider}のモデルのページを選択`,
       model_provider_paged_heading: `モデルのページを選択`,
-      model_provider_paged_detail: `{provider}にはこの機能向けのモデルが{count}件あり、1ページに
-収まりません。上のセレクターでページを選んでください。`,
+      model_provider_paged_detail:
+        "{provider}にはこの機能向けのモデルが{count}件あり、1ページに 収まりません。上のセレクターでページを選んでください。",
       model_modal_title: `{capability}モデルを選択`,
       model_modal_select_label: `モデル`,
       model_modal_select_description: `{provider}のモデルから選んでください。`,
       fallback_provider_page_placeholder: `{provider}のモデルのページを選択...`,
       page_behavior_memory: `高度な記憶`,
       behavior_memory_title: `高度な記憶`,
-      behavior_memory_description: `サーバーの記憶のタグ付けと要約を調整します。
-上級者向けです。`,
-      disabled_notices_log_hint: `無効な通知埋め込みは、代わりにログチャンネルへ
-投稿されます。`,
+      behavior_memory_description: "サーバーの記憶のタグ付けと要約を調整します。 上級者向けです。",
+      disabled_notices_log_hint: "無効な通知埋め込みは、代わりにログチャンネルへ 投稿されます。",
       character_reference_uploaded: `アップロードして保存済み`,
       character_reference_upload_description: `参照用として使用できるキャラクターシートをアップロードします。`,
       appearance_title: `外見`,
       appearance_description: `画像生成に使用される視覚的な詳細を設定します。`,
       triggers_page_title: `ペルソナのトリガー`,
-      triggers_page_description: `このペルソナを会話に呼び込む単語を
-管理します。`,
+      triggers_page_description: "このペルソナを会話に呼び込む単語を 管理します。",
       sprite_select_prompt: `スプライトを選択して確認または編集するか、新しく追加してください：`,
       sprite_select_placeholder: `スプライトを選択または追加...`,
       sprite_add_option: `＋ スプライトを追加`,
       name_label: `名前`,
-      persona_create_hint: `新しいペルソナは \`/persona create\`、\`/persona generate\`、
-\`/persona default\` または \`/persona import\` で追加できます。`,
-      naming_description_masculine: `男性として認識する人への
-呼び方を設定します。`,
-      naming_description_feminine: `女性として認識する人への
-呼び方を設定します。`,
+      persona_create_hint:
+        "新しいペルソナは `/persona create`、`/persona generate`、 `/persona default` または `/persona import` で追加できます。",
+      naming_description_masculine: "男性として認識する人への 呼び方を設定します。",
+      naming_description_feminine: "女性として認識する人への 呼び方を設定します。",
       naming_description_neutral: `このペルソナが通常使う呼び方を設定します。`,
       style_masculine: `男性`,
       style_feminine: `女性`,
@@ -176,7 +171,7 @@ export default {
           format_error_title: `未対応の音声形式です`,
           format_error_description: `WAV、MP3、OGG、OPUS、FLAC、M4A、AAC の音声ファイルをアップロードしてください。`,
           size_error_title: `音声ファイルが大きすぎます`,
-          size_error_description: `音声サンプルは {limit_mb} MB 以下にしてください。`,
+          size_error_description: `音声サンプルは {limit_mb} MB 以下にしてください。今回の失敗は長さが原因ではありません。非圧縮のWAVは1分あたり約10 MBを使用するため、長さの上限に近いクリップでもサイズが大きすぎることがあります。FLAC、MP3、OGGでエクスポートすれば、同じ容量にはるかに多くの音声を収められます。`,
           duration_error_title: `音声クリップが長すぎます`,
           duration_error_description: `音声サンプルは {limit_secs} 秒以下にしてください。`,
           normalization_error_title: `音声変換に失敗しました`,
@@ -220,12 +215,10 @@ export default {
           success_description: `Chatterbox高速モデル: **{turbo}**
 CFG weight: **{cfg_weight}**
 Exaggeration: **{exaggeration}**`,
-          turbo_notice: `高速モデルが有効なため、CFG weightとExaggerationは
-保存されますが無視されます。対応済みイベントタグは保持され、
-未対応の角括弧記述は削除されます。`,
-          standard_notice: `高速モデルが無効なため、CFG weightとExaggerationが有効です。
-\`[laugh]\`や\`[whisper]\`などの角括弧記述は
-音声生成前に削除されます。`,
+          turbo_notice:
+            "高速モデルが有効なため、CFG weightとExaggerationは 保存されますが無視されます。対応済みイベントタグは保持され、 未対応の角括弧記述は削除されます。",
+          standard_notice:
+            "高速モデルが無効なため、CFG weightとExaggerationが有効です。 `[laugh]`や`[whisper]`などの角括弧記述は 音声生成前に削除されます。",
           modal_title: `Chatterboxパラメーターの編集`,
           cfg_weight_label: `CFGウェイト`,
           exaggeration_label: `誇張`,
@@ -238,8 +231,7 @@ Exaggeration: **{exaggeration}**`,
         },
         page: {
           title: `音声クローン＆ライブラリ`,
-          description: `音声生成のためのChatterboxパラメータと
-参照音声サンプルを管理します。`,
+          description: "音声生成のためのChatterboxパラメータと 参照音声サンプルを管理します。",
           parameters_title: `Chatterboxパラメータ`,
           parameters_turbo_label: `Chatterbox高速モデル`,
           parameters_cfg_label: `CFG weight`,
@@ -314,8 +306,7 @@ Exaggeration: **{exaggeration}**`,
       page_plugins_nsfw_jailbreaks: `NSFWコンテンツ`,
       channels_destinations_description: `ログとようこそメッセージの送信先を選択します。`,
       channels_logs_title: `ログ`,
-      channels_logs_description: `推論、ツールのアクティビティ、帰属、および診断情報が
-ここに送信されます。`,
+      channels_logs_description: "推論、ツールのアクティビティ、帰属、および診断情報が ここに送信されます。",
       channels_welcome_title: `ようこそメッセージ`,
       channels_welcome_description: `選択したペルソナとプロンプトを使用して、新メンバーにここで挨拶します。`,
       channels_destination_label: `送信先`,
@@ -396,19 +387,19 @@ Exaggeration: **{exaggeration}**`,
       channels_rules_title: `チャンネルルール`,
       channels_rules_description: `特別なチャンネルグループがコンテキストやツールに与える影響を設定します。`,
       channels_rules_private_title: `プライベートチャンネル`,
-      channels_rules_private_description: `これらのチャンネルの短期記憶は他のチャンネルから分離され、
-思考ログは表示されません。`,
+      channels_rules_private_description:
+        "これらのチャンネルの短期記憶は他のチャンネルから分離され、 思考ログは表示されません。",
       channels_rules_private_manage_button: `プライベートチャンネルを管理`,
       channels_rules_roleplay_title: `ロールプレイチャンネル`,
-      channels_rules_roleplay_description: `応答で絵文字とスタンプを抑制します。メンバーは/tool delete turn
-を使用することもできます。`,
+      channels_rules_roleplay_description:
+        "応答で絵文字とスタンプを抑制します。メンバーは/tool delete turn を使用することもできます。",
       channels_rules_roleplay_manage_button: `ロールプレイチャンネルを管理`,
       channels_rules_blocklist_title: `クロスチャンネルブロックリスト`,
       channels_rules_blocklist_description: `クロスチャンネルツールはこれらのチャンネルにアクセスできません。`,
       channels_rules_blocklist_manage_button: `ブロックされたチャンネルを管理`,
       channels_rules_memory_privacy_title: `記憶のプライバシー`,
-      channels_rules_memory_privacy_description: `プライベートチャンネルの[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)が
-他の場所に表示されるかを制御します。`,
+      channels_rules_memory_privacy_description:
+        "プライベートチャンネルの[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)が 他の場所に表示されるかを制御します。",
       channels_rules_private_modal_title: `プライベートチャンネルを管理`,
       channels_rules_private_group_label: `プライベートチャンネル`,
       channels_rules_private_group_label_continued: `プライベートチャンネル（続き）`,
@@ -493,14 +484,12 @@ Exaggeration: **{exaggeration}**`,
       permissions_capabilities_group_label_continued: `有効にする機能（続き）`,
       permissions_capabilities_group_description: `私が使用できる機能をそれぞれチェックします。無効にするにはチェックを外します。`,
       permissions_privacy_title: `記憶のプライバシー`,
-      permissions_privacy_description: `プライベートチャンネルの[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)が境界を
-越えられるかを制御します。`,
+      permissions_privacy_description:
+        "プライベートチャンネルの[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)が境界を 越えられるかを制御します。",
       permissions_privacy_bypass_title: `プライベートチャンネルのバイパス`,
       permissions_privacy_bypass_description: `プライベートチャンネルの短期記憶が他の場所に表示されるかを制御します。`,
-      permissions_privacy_on: `プライベートチャンネルの短期記憶は、そのチャンネルの
-外に表示される可能性があります。`,
-      permissions_privacy_off: `プライベートチャンネルの短期記憶は、そのチャンネル内に
-分離されたままになります。`,
+      permissions_privacy_on: "プライベートチャンネルの短期記憶は、そのチャンネルの 外に表示される可能性があります。",
+      permissions_privacy_off: "プライベートチャンネルの短期記憶は、そのチャンネル内に 分離されたままになります。",
       permissions_privacy_direction: `/memories を使用してアクティブな短期記憶を確認またはクリアします。`,
       plugins_available_tools_title: `利用可能なツール`,
       plugins_available_tools_description: `このサーバーで私が使用できるツールや機能を選択します。`,
@@ -523,10 +512,8 @@ Exaggeration: **{exaggeration}**`,
       plugins_manage_group_description: `私が使用できる項目をそれぞれチェックします。無効にするにはチェックを外します。`,
       plugins_manage_button: `管理`,
       plugins_nsfw_jailbreaks_title: `NSFWコンテンツ`,
-      plugins_nsfw_jailbreaks_description: `オプションのNSFWコンテンツ設定は{command}の下にあります。
-DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可します。
-選択したプロバイダーが許可している方法でのみ使用してください。
-この機能は法定年齢に達しているユーザーのみを対象としています。`,
+      plugins_nsfw_jailbreaks_description:
+        "オプションのNSFWコンテンツ設定は{command}の下にあります。 DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可します。 選択したプロバイダーが許可している方法でのみ使用してください。 この機能は法定年齢に達しているユーザーのみを対象としています。",
       plugins_nsfw_jailbreaks_docs_label: `年齢制限のあるコマンドガイドを読む`,
       behavior_general_title: `一般的な動作`,
       behavior_general_description: `サーバーのデフォルトの応答コンテキストを調整します。`,
@@ -535,13 +522,12 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       behavior_experimental_title: `実験的な動作`,
       behavior_experimental_description: `これらのコントロールは、応答の動作を大幅に変更する可能性があります。`,
       deliberate_tool_mode_title: `デリベレイトツールモード`,
-      deliberate_tool_mode_description: `ツールをすべてのメッセージで提供するか、
-関連がある場合のみ提供するかを制御します。`,
+      deliberate_tool_mode_description:
+        "ツールをすべてのメッセージで提供するか、 関連がある場合のみ提供するかを制御します。",
       deliberate_tool_mode_on: `すべてのツールが常に利用可能です。`,
       deliberate_tool_mode_off: `会話で必要な場合にのみ、ツールが提供されます。`,
       tool_context_title: `ツールのコンテキスト`,
-      tool_context_description: `成功したツールを後続のチャンネルのターンで
-どれだけ利用可能にしておくかを制御します。`,
+      tool_context_description: "成功したツールを後続のチャンネルのターンで どれだけ利用可能にしておくかを制御します。",
       tool_context_label: `後続のチャンネルのターン`,
       tool_context_value: `成功したツールは{count}ターンの間、利用可能です。`,
       tool_context_zero: `成功したツールは後続のターンのために保持されません。`,
@@ -591,13 +577,11 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       send_limit_invalid_detail: `送信制限は{min}から{max}までの整数である必要があります。`,
       edit_send_limit_button: `送信制限を編集`,
       self_debug_title: `セルフデバッグのコンテキスト`,
-      self_debug_description: `チャット上で自身のエラーや診断メッセージを確認できるか
-どうかを制御します。`,
+      self_debug_description: "チャット上で自身のエラーや診断メッセージを確認できるか どうかを制御します。",
       self_debug_on: `自身のエラーや診断メッセージを確認できます。`,
       self_debug_off: `自身のエラーや診断メッセージを確認できません。`,
       compatibility_title: `互換性`,
-      compatibility_description: `プロバイダーの癖に対する回避策です。各行は現在有効な
-動作を示しています。`,
+      compatibility_description: "プロバイダーの癖に対する回避策です。各行は現在有効な 動作を示しています。",
       custom_provider_limitation: `カスタムプロバイダーのテキストエンドポイントにのみ影響します。`,
       edit_workarounds_button: `回避策を編集`,
       behavior_notices_title: `通知`,
@@ -608,8 +592,7 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       hidden_notices_label: `非表示の通知`,
       edit_notice_visibility_button: `通知の可視性を編集`,
       speech_transcripts_title: `音声の文字起こし`,
-      speech_transcripts_description: `音声の返信後に、他の人が文字起こしを見ることができるか
-どうかを制御します。`,
+      speech_transcripts_description: "音声の返信後に、他の人が文字起こしを見ることができるか どうかを制御します。",
       speech_transcripts_on: `現在、音声の文字起こしを投稿しています。`,
       speech_transcripts_off: `現在、音声の文字起こしを投稿していません。`,
       speech_provider_direction: `音声および文字起こしのエンドポイントはプロバイダー下にあります。`,
@@ -658,8 +641,8 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       system_prompt_title: `[システムプロンプト](https://docs.tomoribot.app/ja/features/chatting-personality/behavior-tweaking/#system-prompt)`,
       system_prompt_description: `すべてのペルソナが従う指示です。`,
       global_context_note_description: `最後のメッセージの近くに配置されるシステムナッジです。`,
-      global_response_style_description: `人間のようなどのように感じられるか、また履歴を
-どれだけ読み込むかを選択します。`,
+      global_response_style_description:
+        "人間のようなどのように感じられるか、また履歴を どれだけ読み込むかを選択します。",
       humanizer_label: `ヒューマナイザー`,
       message_fetch_limit_label: `メッセージ取得上限`,
       server_timezone_title: `サーバーのタイムゾーン`,
@@ -703,8 +686,8 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       random_trigger_page_option: `トリガー {first}-{last}`,
       random_trigger_more: `さらに {count} 個のトリガーが次のページ以降にあります。`,
       random_trigger_remove_mode_title: `ランダムトリガーを削除`,
-      random_trigger_remove_mode_description: `削除するために開くスケジュールのバッチを選択します。
-スケジュールは最初はチェックされています。削除するもののチェックを外してください。`,
+      random_trigger_remove_mode_description:
+        "削除するために開くスケジュールのバッチを選択します。 スケジュールは最初はチェックされています。削除するもののチェックを外してください。",
       cooldown_length_label: `時間（秒）`,
       system_prompt_empty_detail: `システムプロンプトを空にすることはできません。`,
       system_prompt_updated_heading: `システムプロンプトを更新しました`,
@@ -760,21 +743,20 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       random_trigger_removed_detail: `{count} 個のランダムトリガーを削除しました。`,
       page_pending: `このページはまだ利用できません。`,
       page_read_only: `これらを変更するにはサーバー管理権限が必要です。`,
-      unavailable: `現在、設定は利用できません。`,
+      unavailable: `設定を読み込めませんでした。再試行してください。`,
+      not_setup: `このワークスペースはまだセットアップされていません。まず /setup を実行してください。`,
       no_personas: `ここではまだペルソナが設定されていません。`,
       retry: `再試行`,
       cancel_button: `キャンセル`,
       outdated_panel: `このパネルは古くなっています。再度 {command} を実行してください。`,
       general_title: `ペルソナの詳細`,
-      general_description: `このペルソナのアイデンティティと
-人々とのチャット方法を管理します。`,
+      general_description: "このペルソナのアイデンティティと 人々とのチャット方法を管理します。",
       memories_title: `ペルソナの記憶`,
       memories_description: `このペルソナの知識と会話のステータスを確認します。`,
       advanced_title: `高度なペルソナ設定`,
       advanced_description: `このペルソナのプロンプトとコンテキストノートを制御します。`,
       overrides_title: `ペルソナの個人設定`,
-      overrides_description: `このペルソナのレスポンススタイルとテキストモデルの
-オーバーライドを設定します。`,
+      overrides_description: "このペルソナのレスポンススタイルとテキストモデルの オーバーライドを設定します。",
       none_label: `なし`,
       image_tags_title: `画像タグ`,
       image_tags_description: `このペルソナの画像生成に役立ちます。`,
@@ -786,11 +768,9 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       upload_reference_button: `リファレンスをアップロード`,
       clear_reference_button: `リファレンスをクリア`,
       character_reference_clear_title: `キャラクターリファレンスをクリアしますか？`,
-      character_reference_clear_description: `{persona} のNovelAIキャラクターリファレンスを
-クリアします。`,
+      character_reference_clear_description: "{persona} のNovelAIキャラクターリファレンスを クリアします。",
       persona_prompt_title: `ペルソナプロンプト`,
-      persona_prompt_description: `システムプロンプトの直後に追加され、Attributesの
-従来の代替として機能します。`,
+      persona_prompt_description: "システムプロンプトの直後に追加され、Attributesの 従来の代替として機能します。",
       set_prompt_button: `プロンプトを設定`,
       remove_prompt_button: `プロンプトを削除`,
       context_note_title: `コンテキストノート`,
@@ -798,15 +778,14 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       context_note_depth: `深度：{depth}`,
       edit_context_note_button: `コンテキストノートを編集`,
       response_style_title: `レスポンススタイル`,
-      response_style_description: `このペルソナのサーバーのヒューマナイザーレベルを上書きします。
-ルールベースであるため、レイテンシやコストは増加しません。`,
+      response_style_description:
+        "このペルソナのサーバーのヒューマナイザーレベルを上書きします。 ルールベースであるため、レイテンシやコストは増加しません。",
       persona_override_label: `ペルソナの個人設定`,
       server_default_label: `サーバーデフォルト`,
       response_style_placeholder: `レスポンススタイルを選択...`,
       edit_humanizer_button: `ヒューマナイザーを編集`,
       text_override_title: `テキストモデルのオーバーライド`,
-      text_override_description: `このペルソナは、サーバーデフォルトの代わりに
-以下のテキストモデルを使用します。`,
+      text_override_description: "このペルソナは、サーバーデフォルトの代わりに 以下のテキストモデルを使用します。",
       change_override_button: `オーバーライドを変更`,
       clear_override_button: `オーバーライドをクリア`,
       text_override_provider_placeholder: `保存されたプロバイダーを選択...`,
@@ -814,12 +793,10 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       previous_page: `前へ`,
       next_page: `次へ`,
       sprites_title: `[ペルソナスプライト](https://docs.tomoribot.app/ja/features/chatting-personality/multiple-personas/#sprites-emotion-avatars)`,
-      sprites_description: `このペルソナに関連付けられた表情を
-管理します。`,
+      sprites_description: "このペルソナに関連付けられた表情を 管理します。",
       sprites_none: `このペルソナにはまだスプライトが保存されていません。`,
       selected_sprite_title: `選択されたスプライト`,
-      selected_sprite_description: `この表情は、以下の名前、
-使用上の注意、および画像を使用します。`,
+      selected_sprite_description: "この表情は、以下の名前、 使用上の注意、および画像を使用します。",
       sprite_name_label: `名前`,
       sprite_usage_label: `使用方法`,
       sprite_identity_label: `アイデンティティ`,
@@ -835,8 +812,7 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       sprite_edit_modal_title: `スプライトを編集`,
       sprite_import_modal_title: `スプライトをインポート`,
       sprite_remove_title: `このスプライトを削除しますか？`,
-      sprite_remove_description: `これにより、スプライト{sprite}と
-その保存画像は永久に削除されます。`,
+      sprite_remove_description: "これにより、スプライト{sprite}と その保存画像は永久に削除されます。",
       sprite_added_heading: `スプライトが追加されました`,
       sprite_added_detail: `{persona}に{sprite}を追加しました。`,
       sprite_replaced_heading: `スプライトが置換されました`,
@@ -883,8 +859,7 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       open_personal_memories_button: `個人の記憶を開く`,
       long_term_footer: `記憶の内容は、そのメインの記憶パネルで編集されます。`,
       stm_title: `**[短期記憶](https://docs.tomoribot.app/ja/features/knowledge/memory/#short-term-memory-stm)**`,
-      stm_description: `このペルソナがチャンネル間で引き継ぐ
-最近の会話のコンテキストです。`,
+      stm_description: "このペルソナがチャンネル間で引き継ぐ 最近の会話のコンテキストです。",
       stm_active_channel: `アクティブなチャンネル：{channel}`,
       stm_no_channel: `利用できるチャンネルのコンテキストはありません。`,
       stm_empty: `このチャンネルの短期記憶は保存されていません。`,
@@ -930,8 +905,7 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       naming_term_label: `呼び名`,
       edit_naming_button: `呼び方の習慣を編集`,
       promote_confirm_title: `メインに昇格しますか？`,
-      promote_confirm_description: `{persona}がメインペルソナになり、
-{main}がオルタペルソナになります。`,
+      promote_confirm_description: "{persona}がメインペルソナになり、 {main}がオルタペルソナになります。",
       avatar_modal_title: `ペルソナのアバターを変更`,
       avatar_input_label: `アバター画像`,
       avatar_input_description: `PNG、JPG、またはGIFです。空のままにすると現在のアバターを削除します。`,
@@ -1080,11 +1054,9 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       capability_video: `動画`,
       capability_tts: `音声合成`,
       capability_stt: `音声認識`,
-      image_generation_disabled_direction: `画像生成は無効になっています。
-権限 ＞ Botの機能 で有効にしてください。`,
+      image_generation_disabled_direction: "画像生成は無効になっています。 権限 ＞ Botの機能 で有効にしてください。",
       image_generation_missing_model: `画像生成に使用できるモデルが設定されていません。`,
-      video_generation_disabled_direction: `動画生成は無効になっています。
-権限 ＞ Botの機能 で有効にしてください。`,
+      video_generation_disabled_direction: "動画生成は無効になっています。 権限 ＞ Botの機能 で有効にしてください。",
       video_generation_missing_model: `動画生成に使用できるモデルが設定されていません。`,
       no_endpoints_option: `登録されたエンドポイントはありません`,
       endpoint_activated_heading: `エンドポイントを有効化しました`,
@@ -1092,8 +1064,8 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       endpoint_already_active_detail: `**{endpoint}**は既に有効です。何も変更されていません。`,
       endpoint_source_changed_direction: `**{endpoint}**が有効になりました。音声ソースが変更されたため、必要に応じて音声を再割り当てしてください。`,
       speech_capability_enabled_direction: `音声メッセージは有効になっています。`,
-      speech_capability_disabled_direction: `音声メッセージは無効になっています。
-権限 ＞ Botの機能 で有効にしてください。`,
+      speech_capability_disabled_direction:
+        "音声メッセージは無効になっています。 権限 ＞ Botの機能 で有効にしてください。",
       speech_capability_missing_endpoint: `音声メッセージは有効ですが、アクティブな音声エンドポイントが設定されていません。`,
       providers_endpoint_registration_hint: `/providers で音声または文字起こしのエンドポイントを登録してください。`,
       manage_providers_hint: `モデルの選択肢を増やすには、 \`/providers\` を使用してください。`,
@@ -1108,8 +1080,7 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       model_moved_heading: `モデルが移動しました`,
       model_moved_detail: `そのエントリーはOpenRouterのモデルレジストリに移動しました。希望するコードネームを登録してから、ここで選択してください。`,
       text_overrides_title: `テキストモデルのオーバーライド`,
-      text_overrides_description: `これらのテキストの割り当ては、より狭いスコープで
-サーバーデフォルトを置き換えます。`,
+      text_overrides_description: "これらのテキストの割り当ては、より狭いスコープで サーバーデフォルトを置き換えます。",
       channel_overrides_label: `チャンネルのオーバーライド`,
       channel_overrides_hint: `チャンネルのオーバーライドは「チャンネル」で編集してください。`,
       persona_overrides_label: `ペルソナのオーバーライド`,
@@ -1218,8 +1189,8 @@ DiscordはNSFWマークの付いたチャンネルでのみ{command}を許可し
       fallback_conflict_heading: `すでにプライマリです`,
       fallback_conflict_detail: `{model}はすでにプライマリモデルであるため、フォールバックとして設定することはできません。`,
       randomizer_title: `モデルランダマイザー`,
-      randomizer_description: `有効にすると、各返信はプライマリとフォールバックのプールから
-ランダムにモデルを選択します。失敗時はそのプール内で続行されます。`,
+      randomizer_description:
+        "有効にすると、各返信はプライマリとフォールバックのプールから ランダムにモデルを選択します。失敗時はそのプール内で続行されます。",
       randomizer_state_on: `モデルプールからランダムに選択します`,
       randomizer_state_off: `まずプライマリモデルを試します`,
       randomizer_requires_fallback: `これを有効にするには、少なくとも1つのフォールバックモデルが必要です。`,

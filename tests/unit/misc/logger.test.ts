@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildLogStreams, LOG_REDACTION_PATHS, sanitizeLogPayload } from "@/utils/misc/logger";
+import { buildLogStreams, LOG_REDACTION_PATHS, log, sanitizeLogPayload } from "@/utils/misc/logger";
 import pino from "pino";
 
 /**
@@ -127,5 +127,16 @@ describe("buildLogStreams", () => {
   test("strings under the cap are only redacted, never truncated", () => {
     const value = `short ${"z".repeat(1000)}`;
     expect(sanitizeLogPayload(value)).toBe(value);
+  });
+
+  test("the custom level methods are registered on the live logger", () => {
+    // `log` exposes success, section, metric, and rateLimit through one typed cast over the pino
+    // instance. A name pino was never given would throw instead of logging, so calling each one is
+    // the regression guard for that boundary. Output routing is covered by buildLogStreams above.
+    expect(() => log.section("section probe")).not.toThrow();
+    expect(() => log.success("success probe")).not.toThrow();
+    expect(() => log.metric("metric_probe", { value: 7 })).not.toThrow();
+    expect(() => log.rateLimit("rate limit probe", { bucket: "messages" })).not.toThrow();
+    expect(() => log.rateLimit("rate limit probe without metadata")).not.toThrow();
   });
 });

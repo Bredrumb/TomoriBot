@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { ComponentType } from "discord.js";
 import { PrivacyLevel, type TomoriState, type UserRow, type UserSavedProviderConfigRow } from "@/types/db/schema";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
@@ -17,84 +18,38 @@ import {
   type SetupSettingsCatalogs,
 } from "@/utils/discord/ui/setupPanel";
 import { SETUP_DRAFT_SCHEMA_VERSION, type SetupDraftRecord } from "@/types/discord/setupWizard";
-import { getSupportedLocales, hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
+import { getSupportedLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 await initializeLocalizer();
 
-/**
- * Rendered walks run per locale because a translation, not the English source, is what usually
- * overflows a thumbnail row or a `-# ` marker line, and the static scan measures neither.
- */
+/** Rendered walks run per locale because wrapping depends on the interpolated translation. */
 const AUTHORED_LOCALES = getSupportedLocales();
 
-const PANEL_UI_DIR = "src/utils/discord/ui";
-
-/**
- * Panel body prose wraps at the container width, and a line longer than this stretches the
- * container wider than the select menus beneath it, so the page stops looking like one column.
- * Authored strings therefore carry their own line breaks rather than relying on the client.
- *
- * Both budgets are measured, not specified. Components V2 exposes no width, margin, or padding
- * field on any component, so content is the only input to layout and these numbers come from
- * reading real panels. If Discord retunes its renderer they go stale silently: change the
- * constant and re-run, and the failures name every string that needs rewrapping.
- */
-const MAX_PANEL_PROSE_LINE = 65;
-
-/**
- * Budget for a `TextDisplay` sharing a Section with a Thumbnail accessory.
- *
- * The thumbnail takes its width from the same row, so prose beside it wraps sooner and pushes the
- * container back out past the selects. Roughly a third of the row is gone, hence the tighter cap.
- */
-const MAX_PANEL_PROSE_LINE_BESIDE_THUMBNAIL = 40;
-
-/**
- * Panel builders that render a Thumbnail, each of which needs a payload walked below.
- *
- * The static scan cannot tell which keys land beside a thumbnail: the wrapping is conditional and
- * the heading is built as a variable first. Listing the files here is what makes that gap fail
- * loudly, because a panel that grows a thumbnail without render coverage breaks this test.
- */
-const THUMBNAIL_PANELS_WITH_RENDER_COVERAGE = new Set([
-  "configPanel.ts",
-  "configVoicePanel.ts",
-  "memoriesPanel.ts",
-  "personalConfigPanel.ts",
-  "personalMemoriesPanel.ts",
+const PANEL_CONTAINER_SOURCE_EXCLUSIONS = new Set([
+  "src/utils/discord/ui/componentsV2Limits.ts",
+  "src/utils/discord/ui/panel.ts",
 ]);
 
-/**
- * Width as Discord draws it, not as the string is stored.
- *
- * A link's URL, and the markers around bold, italic, strikethrough, and inline code, all occupy
- * no width once rendered. Measuring them would push authors to break lines that already fit, and
- * would make a documentation link impossible to add to a heading.
- */
-function renderedWidth(line: string): number {
-  return line
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replaceAll("**", "")
-    .replaceAll("__", "")
-    .replaceAll("~~", "")
-    .replaceAll("`", "").length;
-}
-
-interface ProseWidthViolation {
+interface UnformattedTextDisplay {
+  content: string;
   where: string;
-  width: number;
-  budget: number;
-  line: string;
 }
 
 /**
- * Walks a built payload and measures every `TextDisplay` against the budget for where it sits.
- *
- * Rendering rather than reading source is the only way to know a heading ended up inside a
- * Section with a Thumbnail accessory, because that wrapping is a runtime decision.
+ * Scanned paths come back with forward slashes, matching how the exclusion keys are written. An
+ * OS-native separator would let the shared-boundary gate report its own exclusions as bypasses.
  */
-export function collectProseWidthViolations(node: unknown, besideThumbnail = false): ProseWidthViolation[] {
-  if (Array.isArray(node)) return node.flatMap((child) => collectProseWidthViolations(child, besideThumbnail));
+function sourceFiles(root: string): string[] {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return entry.isFile() && entry.name.endsWith(".ts") ? [path.replaceAll("\\", "/")] : [];
+  });
+}
+
+function collectUnformattedTextDisplays(node: unknown, besideThumbnail = false): UnformattedTextDisplay[] {
+  if (Array.isArray(node)) return node.flatMap((child) => collectUnformattedTextDisplays(child, besideThumbnail));
   if (typeof node !== "object" || node === null) return [];
 
   const record = node as Record<string, unknown>;
@@ -103,104 +58,24 @@ export function collectProseWidthViolations(node: unknown, besideThumbnail = fal
     besideThumbnail || (record.type === ComponentType.Section && accessory?.type === ComponentType.Thumbnail);
 
   if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-    const budget = inThumbnailSection ? MAX_PANEL_PROSE_LINE_BESIDE_THUMBNAIL : MAX_PANEL_PROSE_LINE;
-    return record.content
-      .split("\n")
-      .map((line) => ({ line, width: renderedWidth(line) }))
-      .filter(({ width }) => width > budget)
-      .map(({ line, width }) => ({
-        where: inThumbnailSection ? "beside thumbnail" : "panel body",
-        width,
-        budget,
-        line,
-      }));
+    return formatPanelProse(record.content, inThumbnailSection) === record.content
+      ? []
+      : [{ content: record.content, where: inThumbnailSection ? "beside thumbnail" : "panel body" }];
   }
 
-  return Object.values(record).flatMap((child) => collectProseWidthViolations(child, inThumbnailSection));
+  return Object.values(record).flatMap((child) => collectUnformattedTextDisplays(child, inThumbnailSection));
 }
 
-/**
- * Locale keys rendered into a `TextDisplay` body, per panel file.
- *
- * Only Components V2 `TextDisplay` content is collected. Raw modal text displays, field labels,
- * and descriptions are laid out by Discord inside the modal and never widen the panel container,
- * so they are out of scope even though the same files build them.
- */
-function collectTextDisplayKeys(): Map<string, string[]> {
-  const byFile = new Map<string, string[]>();
+describe("panel prose runtime formatting", () => {
+  it("keeps direct Container construction inside the shared panel boundary", () => {
+    const bypasses = sourceFiles("src")
+      .filter((path) => !PANEL_CONTAINER_SOURCE_EXCLUSIONS.has(path))
+      .filter((path) => readFileSync(path, "utf8").includes("type: ComponentType.Container"));
 
-  for (const file of readdirSync(PANEL_UI_DIR).filter((name) => name.endsWith("Panel.ts"))) {
-    const source = readFileSync(`${PANEL_UI_DIR}/${file}`, "utf8");
-    const keys = new Set<string>();
-
-    for (const block of source.matchAll(/content:\s*`([\s\S]*?)`,?\n/g)) {
-      for (const call of block[1].matchAll(/localizer\(\s*[A-Za-z0-9_.]+\s*,\s*"([a-z0-9_.-]+)"/g)) {
-        keys.add(call[1]);
-      }
-    }
-    for (const direct of source.matchAll(
-      /type:\s*ComponentType\.TextDisplay\s*,\s*content:\s*localizer\(\s*[A-Za-z0-9_.]+\s*,\s*"([a-z0-9_.-]+)"/g,
-    )) {
-      keys.add(direct[1]);
-    }
-
-    if (keys.size > 0) byFile.set(file, [...keys].sort());
-  }
-
-  return byFile;
-}
-
-describe("panel prose width", () => {
-  const keysByFile = collectTextDisplayKeys();
-
-  it("finds TextDisplay keys in every panel builder", () => {
-    // Guards the extraction itself: a regex that silently matches nothing would make every
-    // width assertion below vacuous.
-    expect(keysByFile.size).toBeGreaterThanOrEqual(6);
-    for (const [file, keys] of keysByFile) {
-      expect(keys.length, `${file} yielded no TextDisplay locale keys`).toBeGreaterThan(0);
-    }
+    expect(bypasses).toEqual([]);
   });
 
-  it("keeps every authored panel line at or under 65 characters across all authored locales", () => {
-    const violations: string[] = [];
-
-    for (const locale of getSupportedLocales()) {
-      for (const [file, keys] of keysByFile) {
-        for (const key of keys) {
-          if (!hasLocaleKey(locale, key)) continue;
-          const text = localizer(locale, key);
-          // A key that resolves to itself is composed at runtime or missing; the composed-key
-          // tests own that case and an unresolved key has no authored width to measure.
-          if (text === key) continue;
-
-          for (const line of text.split("\n")) {
-            const width = renderedWidth(line);
-            if (width > MAX_PANEL_PROSE_LINE) {
-              violations.push(`[${locale}] ${file} ${key} (${width}): ${line.slice(0, 72)}`);
-            }
-          }
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
-  });
-
-  it("covers every panel that renders a Thumbnail with a payload walk", () => {
-    const thumbnailPanels = readdirSync(PANEL_UI_DIR)
-      .filter((name) => name.endsWith("Panel.ts"))
-      .filter((name) => {
-        const source = readFileSync(`${PANEL_UI_DIR}/${name}`, "utf8");
-        return source.includes("ComponentType.Thumbnail") || source.includes("buildOptionalThumbnailSection");
-      });
-
-    // Fails closed: a panel that grows a thumbnail must gain a walk below, because the static
-    // scan above would keep measuring its heading against the wider body budget.
-    expect(thumbnailPanels.sort()).toEqual([...THUMBNAIL_PANELS_WITH_RENDER_COVERAGE].sort());
-  });
-
-  it.each(AUTHORED_LOCALES)("holds persona-scoped memories to 40 characters beside its avatar [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats persona-scoped memories automatically beside its avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -223,11 +98,11 @@ describe("panel prose width", () => {
         page: { kind: "main" },
       });
 
-    expect(collectProseWidthViolations(build("https://cdn.example.invalid/55.png"))).toEqual([]);
-    expect(collectProseWidthViolations(build(null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build("https://cdn.example.invalid/55.png"))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(null))).toEqual([]);
   });
 
-  it.each(AUTHORED_LOCALES)("holds persona naming to 40 characters beside its avatar [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats persona naming automatically beside its avatar [%s]", (locale) => {
     const user = {
       user_id: 1,
       user_disc_id: "user-123",
@@ -258,11 +133,11 @@ describe("panel prose width", () => {
         readStatus: "fresh",
       });
 
-    expect(collectProseWidthViolations(build("https://cdn.example.invalid/55.png"))).toEqual([]);
-    expect(collectProseWidthViolations(build(null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build("https://cdn.example.invalid/55.png"))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(null))).toEqual([]);
   });
 
-  it.each(AUTHORED_LOCALES)("holds workspace persona memories to 40 characters beside its avatar [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats workspace persona memories automatically beside its avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -284,8 +159,8 @@ describe("panel prose width", () => {
         page: { kind: "main" },
       });
 
-    expect(collectProseWidthViolations(build("https://cdn.example.invalid/55.png"))).toEqual([]);
-    expect(collectProseWidthViolations(build(null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build("https://cdn.example.invalid/55.png"))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(null))).toEqual([]);
   });
 
   /**
@@ -294,7 +169,7 @@ describe("panel prose width", () => {
    * coverage check above still passed, because the Memories page already puts this builder in the
    * covered set.
    */
-  it.each(AUTHORED_LOCALES)("holds workspace documents to 40 characters beside its persona avatar [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats workspace documents automatically beside its persona avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -320,26 +195,24 @@ describe("panel prose width", () => {
         page: { kind: "documents" },
       });
 
-    expect(collectProseWidthViolations(build(55, "https://cdn.example.invalid/55.png"))).toEqual([]);
-    expect(collectProseWidthViolations(build(0, null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(55, "https://cdn.example.invalid/55.png"))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(0, null))).toEqual([]);
   });
 
   /**
    * The Models parameter summary composes each quote row at runtime from a label key and a stored
-   * value, so the static scan above measures the bare label and never the rendered line. This walk
-   * is the only thing holding those composed rows to the body budget, and it keeps covering them
-   * when the summary moves into a shared builder that the `*Panel.ts` scan cannot see.
+   * value. Walking the built payload covers those composed rows even when the summary moves into a
+   * child builder that the panel-boundary source check cannot see.
    *
    * The sampler columns are Postgres `real`, so `Math.fround` reproduces what the driver returns
    * rather than what someone typed. These are the values whose readback is widest inside each
    * column's own bounds: 0.01 returns as 0.009999999776482582 and -0.03 as -0.029999999329447746,
-   * which put the Generation row at 78 characters if the values reach the panel unformatted. The
-   * two integer columns carry their widest in-range values instead, since they cannot pick up the
-   * artifact.
+   * which produce the widest Generation row. The two integer columns carry their widest in-range
+   * values instead, since they cannot pick up the artifact.
    */
   it.each(
     AUTHORED_LOCALES,
-  )("holds the Models parameter summary to 65 characters in every provider state [%s]", (locale) => {
+  )("formats the Models parameter summary through the runtime boundary in every provider state [%s]", (locale) => {
     const user = {
       user_id: 1,
       user_disc_id: "user-123",
@@ -384,16 +257,16 @@ describe("panel prose width", () => {
 
     // Zero, one, and several saved providers are three different renderings of this page, and the
     // longest provider display name is the one that can push a summary row over the budget.
-    expect(collectProseWidthViolations(build([]))).toEqual([]);
-    expect(collectProseWidthViolations(build(["vertexexpress"]))).toEqual([]);
-    expect(collectProseWidthViolations(build(["vertexexpress", "openrouter", "novelai"]))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build([]))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(["vertexexpress"]))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(["vertexexpress", "openrouter", "novelai"]))).toEqual([]);
   });
   /**
    * `/config` filters its own body by actor, so a member and a DM owner render different pages
    * behind the same thumbnail Section. Each is walked because a heading only one of them reaches
    * would otherwise never be measured.
    */
-  it.each(AUTHORED_LOCALES)("holds /config Persona General to 40 characters beside its avatar [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats /config Persona General automatically beside its avatar [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -428,10 +301,10 @@ describe("panel prose width", () => {
     const guildMember: ConfigActor = { workspaceKind: "guild", isManager: false };
     const dmOwner: ConfigActor = { workspaceKind: "dm", isManager: true };
 
-    expect(collectProseWidthViolations(build(guildManager, 55, "https://cdn.example.invalid/55.png"))).toEqual([]);
-    expect(collectProseWidthViolations(build(guildManager, 56, null))).toEqual([]);
-    expect(collectProseWidthViolations(build(guildMember, 55, null))).toEqual([]);
-    expect(collectProseWidthViolations(build(dmOwner, 55, null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(guildManager, 55, "https://cdn.example.invalid/55.png"))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(guildManager, 56, null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(guildMember, 55, null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(dmOwner, 55, null))).toEqual([]);
   });
 
   /**
@@ -439,7 +312,7 @@ describe("panel prose width", () => {
    * a Thumbnail, and the loop below renders it with no sprites at all. The widest legal sprite name
    * and usage note are the inputs that decide whether those lines fit, so they are walked here.
    */
-  it.each(AUTHORED_LOCALES)("holds /config Persona Sprites to 40 characters beside its sprite image [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats /config Persona Sprites automatically beside its sprite image [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -477,13 +350,13 @@ describe("panel prose width", () => {
     const guildMember: ConfigActor = { workspaceKind: "guild", isManager: false };
     const dmOwner: ConfigActor = { workspaceKind: "dm", isManager: true };
 
-    expect(collectProseWidthViolations(build(guildManager, "https://cdn.example.invalid/55.png"))).toEqual([]);
-    expect(collectProseWidthViolations(build(guildManager, null))).toEqual([]);
-    expect(collectProseWidthViolations(build(guildMember, null))).toEqual([]);
-    expect(collectProseWidthViolations(build(dmOwner, null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(guildManager, "https://cdn.example.invalid/55.png"))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(guildManager, null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(guildMember, null))).toEqual([]);
+    expect(collectUnformattedTextDisplays(build(dmOwner, null))).toEqual([]);
   });
 
-  it.each(AUTHORED_LOCALES)("holds every /config page placeholder and confirmation to 65 characters [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats every /config page placeholder and confirmation at runtime [%s]", (locale) => {
     const personas = [
       {
         persona_id: 55,
@@ -504,7 +377,7 @@ describe("panel prose width", () => {
     ];
     const actor: ConfigActor = { workspaceKind: "guild", isManager: true };
     // Collected rather than asserted per page, so a translation pass sees every overflowing page at once.
-    const pageViolations: Array<ProseWidthViolation & { page: string }> = [];
+    const pageViolations: Array<UnformattedTextDisplay & { page: string }> = [];
 
     for (const [category, pages] of Object.entries(CONFIG_PAGES_BY_CATEGORY)) {
       for (const page of pages) {
@@ -517,7 +390,7 @@ describe("panel prose width", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
         });
-        for (const violation of collectProseWidthViolations(payload)) {
+        for (const violation of collectUnformattedTextDisplays(payload)) {
           pageViolations.push({ page: `${category}/${page}`, ...violation });
         }
       }
@@ -534,19 +407,19 @@ describe("panel prose width", () => {
       readStatus: "fresh",
       view: { kind: "promote-confirm", personaId: 56, nonce: "nonce1234567" },
     });
-    expect(collectProseWidthViolations(confirm)).toEqual([]);
+    expect(collectUnformattedTextDisplays(confirm)).toEqual([]);
   });
 
   /**
    * The setup receipt is the terminal panel of `/setup`, and most of its prose is composed at
    * runtime from a locale key plus a stored name, so the static scan above measures the template
    * rather than the rendered line. The completion explanation names a model and an endpoint, both of
-   * which reach their documented maximum before truncation, and the DM explanation is a paragraph
-   * that has to carry its own line breaks to stay inside the column.
+   * which reach their documented maximum, and the DM explanation is long enough to exercise
+   * runtime wrapping.
    */
   it.each(
     AUTHORED_LOCALES,
-  )("holds the setup receipt to 65 characters for every provider mode and context [%s]", (locale) => {
+  )("formats the setup receipt at runtime for every provider mode and context [%s]", (locale) => {
     const maxEndpointLabel = "e".repeat(40);
     const maxModelCode = "m".repeat(200);
 
@@ -604,7 +477,7 @@ describe("panel prose width", () => {
     ];
 
     for (const payload of cases) {
-      expect(collectProseWidthViolations(payload)).toEqual([]);
+      expect(collectUnformattedTextDisplays(payload)).toEqual([]);
     }
   });
 
@@ -613,9 +486,9 @@ describe("panel prose width", () => {
    * is composed from a stored draft value rather than from a locale template. The static scan above
    * only sees what sits inside a `content:` literal, so it measures none of these rows: the endpoint
    * label, the custom model code, and the two catalog preset names each reach the longest value their
-   * own editor accepts, and are truncated for display before they land here.
+   * own editor accepts.
    */
-  it.each(AUTHORED_LOCALES)("holds the setup wizard anchor to 65 characters for every draft state [%s]", (locale) => {
+  it.each(AUTHORED_LOCALES)("formats the setup wizard anchor at runtime for every draft state [%s]", (locale) => {
     const maxEndpointLabel = "e".repeat(40);
     const maxModelCode = "m".repeat(200);
     const maxProviderId = "g".repeat(40);
@@ -709,8 +582,8 @@ describe("panel prose width", () => {
     ];
 
     const violations = cases.flatMap(([label, payload]) =>
-      collectProseWidthViolations(payload).map(
-        (violation) => `${label}: ${violation.width} > ${violation.budget}: ${violation.line}`,
+      collectUnformattedTextDisplays(payload).map(
+        (violation) => `${label}: ${violation.where}: ${violation.content.slice(0, 120)}`,
       ),
     );
     expect(violations).toEqual([]);

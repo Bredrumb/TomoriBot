@@ -126,10 +126,16 @@ Em seguida, abra `/config` > Models > Switch Models e ative o endpoint de fala d
 
 Para a clonagem zero-shot normal:
 
-1. Prepare uma amostra limpa de 10 a 20 segundos com um locutor e pouco ou nenhum ruído de fundo.
+1. Prepare uma amostra limpa de 3 a 30 segundos com um locutor e pouco ou nenhum ruído de fundo.
 2. Abra `/config` em Models > TTS Parameters & Voices e envie a amostra.
-3. Insira a transcrição correspondente quando possível. O CosyVoice 3 usa isso para o caminho zero-shot com suporte de transcrição.
+3. Insira a transcrição correspondente quando possível. O CosyVoice 3 usa isso para o caminho zero-shot com suporte de transcrição, e ela é tokenizada como prefixo de prompt, então deve descrever o áudio que é realmente usado: os primeiros 30 segundos do clipe.
 4. Abra `/config` em Persona > Voice e atribua essa amostra à persona.
+
+O tokenizador de fala do CosyVoice trabalha com uma janela de prompt de 30 segundos, e o upstream a impõe ao falhar: a própria interface web do upstream orienta manter o áudio de prompt abaixo de 30 segundos, e o tokenizador afirma esse limite em vez de encurtar o áudio em si. O sidecar corta, então um clipe mais longo é cortado nos primeiros 30 segundos e a síntese continua. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` define essa janela, e o corte é registrado no console do sidecar.
+
+O corte lê o clipe no próprio lugar, o que significa que o embedding de locutor é obtido dos mesmos 30 segundos iniciais usados como tokens de fala do prompt. É esse par que o CosyVoice usa como condicionamento, então uma referência longa não perde nada que o motor teria usado. O efeito prático é que apenas os 30 segundos iniciais de um upload longo condicionam a voz, enquanto o restante é enviado e armazenado sem ser usado.
+
+Manter a amostra atribuída entre 10 e 20 segundos permanece dentro da janela com folga, o que também mantém a transcrição armazenada alinhada com o áudio que o modelo lê.
 
 A clonagem cross-lingual é suportada. O locutor de referência pode falar um idioma diferente do texto gerado. Se uma transcrição de referência não estiver disponível, o wrapper usa o caminho cross-lingual dedicado do CosyVoice 3.
 
@@ -155,7 +161,7 @@ Para uma entrega expressiva, insira uma direção de entrega global no modal ou 
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Comprimento máximo do texto de síntese |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Habilitar o gerador de streaming interno do CosyVoice |
 | `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Tamanho máximo decodificado do áudio de referência |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Duração máxima do áudio de referência |
+| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Janela de prompt do tokenizador de fala; uma referência mais longa é cortada nos primeiros N segundos |
 | `COSYVOICE3_BEARER_TOKEN` | não definido | Token bearer opcional para `/synthesize` |
 | `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Permitir bind não-loopback; analise a exposição remota e use um token bearer |
 | `COSYVOICE3_SPEED` | `1.0` | Multiplicador numérico global de velocidade passado para inferência upstream |

@@ -13,6 +13,7 @@ import {
   isSetupDraftComplete,
   isSetupDraftProviderAccessComplete,
   type SetupDraftRecord,
+  type SetupDraftStartingSettings,
 } from "@/types/discord/setupWizard";
 import { setupCustomEndpointCapabilitySchema } from "@/types/db/schema";
 import {
@@ -59,6 +60,7 @@ import {
   buildSetupWizardPayload,
   getSetupCatalogProviderChoices,
 } from "@/utils/discord/ui/setupPanel";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
 import { configRepository, llmModelRepo, personaRepository, serverRepository } from "@/utils/db/repositories";
 import type { SystemPromptPresetRow, TomoriPresetRow } from "@/types/db/schema";
@@ -75,6 +77,10 @@ import * as avatarHelper from "@/utils/image/avatarHelper";
 import * as emojiLazySync from "@/utils/cache/emojiLazySync";
 import * as stickerLazySync from "@/utils/cache/stickerLazySync";
 import * as panelActionMetrics from "@/utils/stats/panelActionMetrics";
+
+function serializedPanelProse(markdown: string): string {
+  return JSON.stringify(formatPanelProse(markdown)).slice(1, -1);
+}
 
 function makeDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraftRecord {
   return {
@@ -256,6 +262,42 @@ function makeSettingsDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraf
     },
     ...overrides,
   });
+}
+
+/**
+ * Repaints the dashboard for one drifted catalog and asserts the step re-pends with the other
+ * stored values intact.
+ *
+ * The step re-pends while the removed row reads as unavailable and every other stored value
+ * keeps resolving, so which catalog drifted is visible in the panel itself.
+ */
+async function expectRependAfterCatalogDrift(input: {
+  nonce: string;
+  removedField: string;
+  summaryKey: string;
+  summaryVariable: string;
+  stored: SetupDraftStartingSettings;
+}): Promise<void> {
+  const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce: input.nonce });
+  const interaction = makeMockInteraction({ customId, kind: "button" });
+
+  await dispatchGlobalInteraction({} as Client, interaction);
+
+  expect(interaction.updateCalls.length).toBe(1);
+  const repainted = JSON.stringify(interaction.updateCalls[0]);
+  expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
+  expect(repainted).toContain(
+    `> ${localizer("en-US", input.summaryKey, {
+      [input.summaryVariable]: localizer("en-US", `commands.setup.wizard.settings_${input.removedField}_unknown`),
+    })}`,
+  );
+
+  // A removed row re-pends the step without discarding the actor's other stored values.
+  const check = readSetupDraft(input.nonce, "actor-1", "guild-1", "guild");
+  expect(check.status).toBe("ok");
+  if (check.status === "ok") {
+    expect(check.draft.startingSettings).toEqual(input.stored);
+  }
 }
 
 describe("setupWizardRoutes", () => {
@@ -773,7 +815,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.byok_choice_invalid"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.byok_choice_invalid")}`),
+      );
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
       expect(check.status).toBe("ok");
@@ -854,7 +898,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_byok_guild_only"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_byok_guild_only")}`),
+      );
 
       const check = readSetupDraft(nonce, "actor-1", "actor-1", "dm");
       expect(check.status).toBe("ok");
@@ -1023,7 +1069,9 @@ describe("setupWizardRoutes", () => {
         components: Array<{ accentColor?: number; components?: Array<{ content?: string }> }>;
       };
       const payloadString = JSON.stringify(payload);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_validation_failed"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_validation_failed")}`),
+      );
       expect(payloadString).not.toContain(fakeKey);
       expect(payload.components).toHaveLength(2);
       expect(payload.components[1]?.accentColor).toBe(0xed4245);
@@ -1067,7 +1115,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_validation_failed"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_validation_failed")}`),
+      );
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
       expect(check.status).toBe("ok");
@@ -1128,7 +1178,9 @@ describe("setupWizardRoutes", () => {
 
       expect(interaction.editReplyCalls.length).toBe(1);
       const payloadString = JSON.stringify(interaction.editReplyCalls[0]);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.provider_invalid"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.provider_invalid")}`),
+      );
       expect(encryptSpy).not.toHaveBeenCalled();
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
@@ -1582,7 +1634,9 @@ describe("setupWizardRoutes", () => {
         components: Array<{ accentColor?: number; components?: Array<{ content?: string }> }>;
       };
       const payloadString = JSON.stringify(payload);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.custom_endpoint_unreachable"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.custom_endpoint_unreachable")}`),
+      );
       expect(payloadString).not.toContain(secretReason);
       expect(payloadString).not.toContain("192.168.1.100");
       expect(payload.components).toHaveLength(2);
@@ -1741,7 +1795,9 @@ describe("setupWizardRoutes", () => {
         components: Array<{ accentColor?: number; components?: Array<{ content?: string }> }>;
       };
       const payloadString = JSON.stringify(payload);
-      expect(payloadString).toContain(localizer("en-US", "commands.setup.wizard.custom_endpoint_model_invalid"));
+      expect(payloadString).toContain(
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.custom_endpoint_model_invalid")}`),
+      );
       expect(payload.components).toHaveLength(2);
       expect(payload.components[1]?.accentColor).toBe(0xed4245);
       expect(payload.components[1]?.components?.[0]?.content).toContain(
@@ -2551,29 +2607,14 @@ describe("setupWizardRoutes", () => {
       const personaRows = await configRepository.loadPresetRowsByLocale("en-US");
       expect(personaRows?.map((row) => row.persona_preset_id)).toEqual([3585]);
 
-      const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
-      const interaction = makeMockInteraction({ customId, kind: "button" });
-
-      await dispatchGlobalInteraction({} as Client, interaction);
-
+      await expectRependAfterCatalogDrift({
+        nonce,
+        removedField,
+        summaryKey,
+        summaryVariable,
+        stored,
+      });
       expect(personaSpy).toHaveBeenCalledTimes(2);
-      expect(interaction.updateCalls.length).toBe(1);
-      const repainted = JSON.stringify(interaction.updateCalls[0]);
-      // The step re-pends while the removed row reads as unavailable and every other stored value
-      // keeps resolving, so which catalog drifted is visible in the panel itself.
-      expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
-      expect(repainted).toContain(
-        `> ${localizer("en-US", summaryKey, {
-          [summaryVariable]: localizer("en-US", `commands.setup.wizard.settings_${removedField}_unknown`),
-        })}`,
-      );
-
-      // A removed row re-pends the step without discarding the actor's other stored values.
-      const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
-      expect(check.status).toBe("ok");
-      if (check.status === "ok") {
-        expect(check.draft.startingSettings).toEqual(stored);
-      }
     } finally {
       personaSpy.mockRestore();
       promptSpy.mockRestore();
@@ -2605,28 +2646,14 @@ describe("setupWizardRoutes", () => {
       const promptRows = await configRepository.loadSystemPromptPresets();
       expect(promptRows?.map((row) => row.system_prompt_preset_name)).toEqual(["Concise"]);
 
-      const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
-      const interaction = makeMockInteraction({ customId, kind: "button" });
-
-      await dispatchGlobalInteraction({} as Client, interaction);
-
+      await expectRependAfterCatalogDrift({
+        nonce,
+        removedField,
+        summaryKey,
+        summaryVariable,
+        stored,
+      });
       expect(promptSpy).toHaveBeenCalledTimes(2);
-      expect(interaction.updateCalls.length).toBe(1);
-      const repainted = JSON.stringify(interaction.updateCalls[0]);
-      // The step re-pends while the removed row reads as unavailable and every other stored value
-      // keeps resolving, so which catalog drifted is visible in the panel itself.
-      expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
-      expect(repainted).toContain(
-        `> ${localizer("en-US", summaryKey, {
-          [summaryVariable]: localizer("en-US", `commands.setup.wizard.settings_${removedField}_unknown`),
-        })}`,
-      );
-
-      const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
-      expect(check.status).toBe("ok");
-      if (check.status === "ok") {
-        expect(check.draft.startingSettings).toEqual(stored);
-      }
     } finally {
       personaSpy.mockRestore();
       promptSpy.mockRestore();
@@ -2649,7 +2676,7 @@ describe("setupWizardRoutes", () => {
       expect(modalSpy).not.toHaveBeenCalled();
       expect(interaction.updateCalls.length).toBe(1);
       expect(JSON.stringify(interaction.updateCalls[0])).toContain(
-        localizer("en-US", "commands.setup.wizard.settings_unavailable"),
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.settings_unavailable")}`),
       );
     } finally {
       modalSpy.mockRestore();
@@ -2683,7 +2710,7 @@ describe("setupWizardRoutes", () => {
       expect(modalSpy).not.toHaveBeenCalled();
       expect(interaction.updateCalls.length).toBe(1);
       expect(JSON.stringify(interaction.updateCalls[0])).toContain(
-        localizer("en-US", "commands.setup.wizard.settings_unavailable"),
+        serializedPanelProse(`> ${localizer("en-US", "commands.setup.wizard.settings_unavailable")}`),
       );
     } finally {
       modalSpy.mockRestore();

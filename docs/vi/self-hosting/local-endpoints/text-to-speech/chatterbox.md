@@ -76,9 +76,18 @@ Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau 
 
 ## Thiết lập giọng nói persona
 
-1. Chuẩn bị một đoạn âm thanh giọng nói rõ ràng dài 10-20 giây với một người nói và không có nhạc nền.
+1. Chuẩn bị một đoạn âm thanh giọng nói rõ ràng dài 10 giây với một người nói và không có nhạc nền.
 2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải đoạn âm thanh lên.
 3. Mở `/config` trong phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
+
+Đoạn âm thanh dài hơn không mang lại thêm giá trị nào cho Chatterbox, và cũng không bị từ chối. Runtime của nó cắt đoạn tham chiếu trước khi điều kiện hóa, nên phần âm thanh vượt quá cửa sổ vẫn được tải lên, lưu trữ, rồi sau đó bị bỏ qua ([`tts_turbo.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts_turbo.py), [`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)):
+
+- Prompt âm học là 10 giây đầu tiên trên mọi biến thể.
+- Ngữ cảnh token giọng nói là 15 giây đầu tiên trên Turbo và Nano, và 6 giây trên Standard.
+
+Những cửa sổ này là hằng số trong runtime của thượng nguồn chứ không phải hướng dẫn được công bố: README của kho lưu trữ không nêu độ dài đoạn tham chiếu, và tên tệp ví dụ chỉ là `your_10s_ref_clip.wav`. Độ dài duy nhất mà runtime thực sự áp đặt là mức tối thiểu, yêu cầu prompt dài hơn 5 giây.
+
+Vì vậy, mười giây là mục tiêu thực tế. Độ dài này lấp đầy prompt âm học, nơi quyết định âm sắc và cách truyền đạt, và một đoạn từ 10 đến 15 giây chỉ bổ sung ngữ cảnh token giọng nói trên Turbo và Nano. Embedding của người nói vẫn được tính từ toàn bộ đoạn âm thanh, nên kéo dài hơn không làm thay đổi danh tính người nói, mà chỉ thay đổi lượng prompt bị bỏ đi mà không được đọc.
 
 Turbo và Nano có thể sử dụng các thẻ sự kiện trong ngoặc vuông như `[laugh]` và `[sigh]` khi nút bật tắt model nhanh được bật.
 

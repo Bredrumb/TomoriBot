@@ -77,9 +77,18 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 
 ## 設定人格語音
 
-1. 準備一段乾淨、10 到 20 秒、只有一位說話者且沒有背景音樂的語音片段。
+1. 準備一段乾淨、10 秒、只有一位說話者且沒有背景音樂的語音片段。
 2. 開啟 `/config`，在模型 > TTS 參數與語音 底下上傳該片段。
 3. 開啟 `/config`，在人格 > 語音 底下選擇人格與語音樣本。
+
+較長的片段對 Chatterbox 沒有幫助，但也不會被拒絕。它的執行階段會在做條件設定之前截斷參考音訊，所以超出這個窗的音訊會被上傳、儲存，然後被忽略（[`tts_turbo.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts_turbo.py)、[`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)）：
+
+- 聲學提示在所有變體上都是最前面的 10 秒。
+- 語音 token 上下文在 Turbo 與 Nano 上是前 15 秒，在 Standard 上是前 6 秒。
+
+這些窗是上游執行階段中的常數，而不是對外公布的指引：儲存庫的 README 沒有提供參考片段的長度，範例檔名也只有 `your_10s_ref_clip.wav`。執行階段真正強制的長度只有下限，也就是要求提示長於 5 秒。
+
+因此，10 秒是實際的目標。這個長度會填滿聲學提示，音色與語氣就是在這裡決定的，而介於 10 到 15 秒的片段只會在 Turbo 與 Nano 上增加語音 token 上下文。說話者嵌入仍會從整段片段計算，所以拉長不會改變說話者身分，只會改變有多少提示在未被讀取的情況下被丟棄。
 
 當快速模型開關啟用時，Turbo 與 Nano 可以使用 `[laugh]` 與 `[sigh]` 這類方括號事件標籤。
 

@@ -24,6 +24,11 @@ import {
 } from "./braveSearchService";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import {
+  buildImageSearchDeliveryMessage,
+  buildImageSearchTextFallback,
+  IMAGE_MIN_SIZE_BYTES,
+} from "@/tools/restAPIs/imageSearchResults";
 
 const BRAVE_IMAGE_DISCORD_LIMIT_MB = Math.max(
   1,
@@ -37,9 +42,6 @@ const BRAVE_IMAGE_DOWNLOAD_MAX_MB = Math.max(
   BRAVE_IMAGE_DISCORD_LIMIT_MB,
   Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
 );
-// Minimum image size in bytes, so rejects tiny placeholders/error images that Discord
-// renders as raw file attachments rather than inline media (default 5 KB).
-const BRAVE_IMAGE_MIN_SIZE_BYTES = Math.max(1, Number.parseInt(process.env.IMAGE_MIN_SIZE_BYTES ?? "5120", 10) || 5120);
 
 /**
  * Extract server ID from tool context
@@ -358,7 +360,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
             const contentLength = response.headers.get("content-length");
             const discordLimit = BRAVE_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
 
-            if (contentLength && parseInt(contentLength, 10) < BRAVE_IMAGE_MIN_SIZE_BYTES) {
+            if (contentLength && parseInt(contentLength, 10) < IMAGE_MIN_SIZE_BYTES) {
               return { url: imageUrl, valid: false, reason: "too_small" };
             }
 
@@ -572,14 +574,17 @@ export async function brave_image_search(args: Record<string, unknown>, context?
           log.success(`Sent ${attachments.length} validated image attachments to Discord`);
           const sentAttachments = Array.from(sentMessage.attachments.values());
 
-          // Return simplified response to LLM - no URLs or image data to prevent duplicate processing
           const queryTerm = args.query || "images";
-          let completionMessage = `Found and sent ${attachments.length} ${queryTerm} images directly to Discord (message ID: ${sentMessage.id}). The images are now displayed for the user.`;
-
-          if (failedUrls.length > 0) {
-            completionMessage += ` (Note: ${failedUrls.length} image URLs were inaccessible and were filtered out.)`;
-          }
-
+          const completionMessage = buildImageSearchDeliveryMessage({
+            query: queryTerm,
+            sentCount: attachments.length,
+            messageId: sentMessage.id,
+            providerPhrase: "",
+            note:
+              failedUrls.length > 0
+                ? `(Note: ${failedUrls.length} image URLs were inaccessible and were filtered out.)`
+                : undefined,
+          });
           const imageMetadata = {
             imageUrls: sentAttachments.map((att, index) => ({
               url: att.url,
@@ -615,20 +620,12 @@ export async function brave_image_search(args: Record<string, unknown>, context?
           );
         }
       } else {
-        // Soft degradation: engine succeeded but no URLs passed validation (hotlink
-        // protection, timeouts, too-small placeholders). Return success with a text
-        // listing so the dispatcher doesn't fall through to "category unavailable".
         const queryTerm = args.query || "images";
-        const formattedFallback = formatBraveSearchResults(result.data, "image");
-        return createToolResult(
-          true,
-          `Found ${queryTerm} images via Brave but none were directly accessible. Showing result links instead.`,
-          {
-            results: formattedFallback,
-            imagesFiltered: failedUrls.length,
-            status: "text_fallback",
-          },
-        );
+        return buildImageSearchTextFallback({
+          message: `Found ${queryTerm} images via Brave but none were directly accessible. Showing result links instead.`,
+          formattedResults: formatBraveSearchResults(result.data, "image"),
+          filteredCount: failedUrls.length,
+        });
       }
     }
 

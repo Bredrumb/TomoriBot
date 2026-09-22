@@ -78,9 +78,18 @@ Use `/providers` for endpoint registration and model setup. Then open `/config` 
 
 ## Set Up a Persona Voice
 
-1. Prepare a clean 10-20 second voice clip with one speaker and no background music.
+1. Prepare a clean 10-second voice clip with one speaker and no background music.
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
+
+A longer clip adds nothing for Chatterbox, and it is not refused either. Its runtime truncates the reference before conditioning, so audio past the window is uploaded, stored, and then ignored ([`tts_turbo.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts_turbo.py), [`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)):
+
+- The acoustic prompt is the first 10 seconds on every variant.
+- The speech-token context is the first 15 seconds on Turbo and Nano, and 6 seconds on Standard.
+
+Those windows are constants in the upstream runtime rather than published guidance: the repository README gives no reference-clip length, and its example filename is only `your_10s_ref_clip.wav`. The one length the runtime actually enforces is a minimum, asserting that the prompt is longer than 5 seconds.
+
+Ten seconds is therefore the practical target. It fills the acoustic prompt, which is where timbre and delivery are set, and a clip between 10 and 15 seconds adds speech-token context on Turbo and Nano only. The speaker embedding is still computed from the whole clip, so going longer does not change the speaker identity, only how much of the prompt is discarded unread.
 
 Turbo and Nano can use bracket event tags such as `[laugh]` and `[sigh]` when the fast-model toggle is enabled.
 

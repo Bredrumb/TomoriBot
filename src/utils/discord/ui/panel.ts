@@ -11,6 +11,7 @@ import {
 } from "discord.js";
 import type { PanelReceipt } from "@/types/discord/panel";
 import { buildInteractionRouteId } from "@/utils/discord/interactions/routeRegistry";
+import { formatPanelComponentTree } from "@/utils/discord/ui/panelProse";
 import { localizer } from "@/utils/text/localizer";
 
 const PANEL_ACCENT_BY_TONE = {
@@ -29,9 +30,8 @@ export interface PaginationRouteSegments {
 /**
  * Applies a Discord line marker to every line of `text`.
  *
- * `-#` and `>` are per-line markers, so a wrapped string behind a single leading marker renders
- * only its first line styled. Panel prose carries its own line breaks to keep the container as
- * narrow as the selects, which makes multi-line the normal case rather than the exception.
+ * The runtime formatter repeats markers on visual continuation lines. This helper remains useful
+ * when callers assemble several semantic rows before the component tree reaches that boundary.
  */
 export function withLinePrefix(prefix: string, text: string): string {
   return text
@@ -48,7 +48,7 @@ export function buildPanelContainer(
   return {
     type: ComponentType.Container,
     accentColor,
-    components,
+    components: formatPanelComponentTree(components),
   };
 }
 
@@ -66,16 +66,15 @@ export function buildOptionalThumbnailSection(
 }
 
 export function buildPanelReceiptContainer(receipt: PanelReceipt): ContainerComponentData<ComponentInContainerData> {
-  return {
-    type: ComponentType.Container,
-    accentColor: PANEL_ACCENT_BY_TONE[receipt.tone],
-    components: [
+  return buildPanelContainer(
+    [
       {
         type: ComponentType.TextDisplay,
         content: `### ${receipt.heading}\n> ${receipt.detail}${receipt.metadata ? `\n-# ${receipt.metadata}` : ""}`,
       },
     ],
-  };
+    receipt.tone,
+  );
 }
 
 export function buildCategoryButtonRow<TCategory extends string>(

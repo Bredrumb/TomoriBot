@@ -10,6 +10,7 @@ import {
   parseRenderModifierWebhookName,
   resolveRenderModifierSourcePersona,
 } from "@/utils/discord/renderModifierParser";
+import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 
 function persona(nickname: string, id = 1): TomoriState {
   return {
@@ -135,6 +136,17 @@ describe("render modifier parser", () => {
 
     expect(result?.persona.persona_id).toBe(123);
     expect(result?.displayName).toBe("Ren (Tomori)");
+  });
+
+  it("uses the decorated webhook label without a sprite lookup", async () => {
+    const personaByNickname = new Map([["ren", persona("Ren", 123)]]);
+
+    const result = await resolveWebhookPersonaAuthor("message-1", "Obonya (Ren)", personaByNickname);
+
+    expect(result).toEqual({
+      persona: persona("Ren", 123),
+      displayName: "Ren (Obonya)",
+    });
   });
 
   it("allows active render-modifier speaker labels through the speaker guard", () => {

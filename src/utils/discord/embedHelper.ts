@@ -21,7 +21,6 @@ import { sendWebhookMessageWithIdentity } from "./webhookManager";
 import { attachTextDisplayModalCollector, buildTextDisplayModalButton } from "./textDisplayModal";
 import type { StandardEmbedOptions, SummaryEmbedOptions, TranslationEmbedOptions } from "../../types/discord/embed";
 import { TRANSLATOR_COLORS, TranslationProvider } from "../../types/discord/embed";
-import { getProtocolKindForKey, stampProtocolEmbed } from "./embedProtocol";
 
 type Provider = keyof typeof TRANSLATOR_COLORS;
 
@@ -124,11 +123,6 @@ export function createStandardEmbed(locale: string, options: StandardEmbedOption
     embed.setFooter({
       text: localizer(locale, footerKey, footerVars),
     });
-  }
-
-  const protocolKind = getProtocolKindForKey(titleKey);
-  if (protocolKind) {
-    stampProtocolEmbed(embed, protocolKind, footerKey ? localizer(locale, footerKey, footerVars) : undefined);
   }
 
   if (thumbnailUrl) {

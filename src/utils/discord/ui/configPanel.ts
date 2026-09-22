@@ -111,9 +111,9 @@ import { buildSlugMap } from "@/utils/text/slugifyLabel";
 import {
   DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
   getDiscordTextLength,
-  measureComponentTextLength,
   truncateDiscordText,
 } from "@/utils/discord/ui/componentsV2Limits";
+import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { FENCE_GUARD, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/text/contextBuilder";
 import { formatUTCOffset } from "@/utils/text/timezoneHelper";
@@ -305,12 +305,16 @@ function buildVoiceSampleFiles(view: ConfigVoicesView | undefined): AttachmentBu
 
 function measureReceiptTextLength(receipt?: PanelReceipt): number {
   if (!receipt) return 0;
-  return measureComponentTextLength(buildPanelReceiptContainer(receipt));
+  return measureFormattedPanelTextLength(buildPanelReceiptContainer(receipt));
+}
+
+function measurePanelTextLength(content: string): number {
+  return measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content });
 }
 
 function measurePersonaCreateHintLength(locale: string): number {
   const content = withLinePrefix("-# ", localizer(locale, "commands.config.panel.persona_create_hint"));
-  return 2 + getDiscordTextLength(content);
+  return 2 + measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content });
 }
 
 function getBasePageTextAllowance(input: ConfigPanelRenderInput, isPersonaPage = false): number {
@@ -604,31 +608,38 @@ function renderBoundedChannelRows(
   }
 
   const fullContent = withLinePrefix("> ", rows.join("\n"));
-  if (getDiscordTextLength(fullContent) <= budget) {
+  if (measurePanelTextLength(fullContent) <= budget) {
     return fullContent;
   }
 
   const total = rows.length;
-  for (let shown = total - 1; shown >= 0; shown--) {
+  const candidateFor = (shown: number): string => {
     const notice = localizer(locale, "commands.config.panel.channels_collection_hidden", {
       shown: String(shown),
       total: String(total),
       hidden: String(total - shown),
     });
     const candidateLines = shown > 0 ? [...rows.slice(0, shown), notice] : [notice];
-    const candidate = withLinePrefix("> ", candidateLines.join("\n"));
-    if (getDiscordTextLength(candidate) <= budget) {
-      return candidate;
+    return withLinePrefix("> ", candidateLines.join("\n"));
+  };
+
+  let lower = 0;
+  let upper = total - 1;
+  let best = "";
+  while (lower <= upper) {
+    const shown = Math.floor((lower + upper) / 2);
+    const candidate = candidateFor(shown);
+    if (measurePanelTextLength(candidate) <= budget) {
+      best = candidate;
+      lower = shown + 1;
+    } else {
+      upper = shown - 1;
     }
   }
+  if (best) return best;
 
-  const notice = localizer(locale, "commands.config.panel.channels_collection_hidden", {
-    shown: "0",
-    total: String(total),
-    hidden: String(total),
-  });
-  const fallback = withLinePrefix("> ", notice);
-  return getDiscordTextLength(fallback) <= budget ? fallback : "";
+  const fallback = candidateFor(0);
+  return measurePanelTextLength(fallback) <= budget ? fallback : "";
 }
 
 function collectionRangeIndex(
@@ -696,13 +707,13 @@ ${localizer(locale, "commands.config.panel.dialogues_description")}`;
     input.selectedDialogueIndex >= 0 &&
     input.selectedDialogueIndex < pairCount;
 
-  let fixed = measureComponentTextLength(headingComp);
-  fixed += getDiscordTextLength(attrTitleDesc);
-  if (attrDisabled) fixed += getDiscordTextLength(attrDisabled);
+  let fixed = measureFormattedPanelTextLength(headingComp);
+  fixed += measurePanelTextLength(attrTitleDesc);
+  if (attrDisabled) fixed += measurePanelTextLength(attrDisabled);
   if (hasSelectedAttr) fixed += 1;
 
-  fixed += getDiscordTextLength(dlgTitleDesc);
-  if (dlgDisabled) fixed += getDiscordTextLength(dlgDisabled);
+  fixed += measurePanelTextLength(dlgTitleDesc);
+  if (dlgDisabled) fixed += measurePanelTextLength(dlgDisabled);
   if (hasSelectedDlg) fixed += 1;
 
   return fixed;
@@ -1292,9 +1303,9 @@ ${localizer(locale, "commands.config.panel.character_reference_description")}
 ${localizer(locale, "commands.config.panel.image_tags_description")}
 `;
     const baseAllowance = getBasePageTextAllowance(input, true);
-    let fixedTextLength = measureComponentTextLength(components[0]) + getDiscordTextLength(imageTagsHeader);
+    let fixedTextLength = measureFormattedPanelTextLength(components[0]) + measurePanelTextLength(imageTagsHeader);
     if (characterRefTextDisplay) {
-      fixedTextLength += measureComponentTextLength(characterRefTextDisplay);
+      fixedTextLength += measureFormattedPanelTextLength(characterRefTextDisplay);
     }
     const tagsBudget = Math.max(0, baseAllowance - fixedTextLength);
     const renderedTags =
@@ -1419,10 +1430,7 @@ ${localizer(locale, "commands.config.panel.advanced_description")}`,
   const noneContent = renderFencedCollectionContent(localizer(locale, "commands.config.panel.none_label"));
   const attgHeader =
     attgState !== "omitted"
-      ? `**${localizer(locale, "commands.config.panel.attg.modal_title")}**\n${safeSelectOptionText(
-          localizer(locale, "commands.config.panel.attg.description"),
-          65,
-        )}`
+      ? `**${localizer(locale, "commands.config.panel.attg.modal_title")}**\n${localizer(locale, "commands.config.panel.attg.description")}`
       : "";
   const attgStars =
     attgState !== "omitted"
@@ -1432,13 +1440,13 @@ ${localizer(locale, "commands.config.panel.advanced_description")}`,
             : String(persona.nai_attg_stars)
         }`
       : "";
-  let fixedTextLength = measureComponentTextLength(components[0]);
+  let fixedTextLength = measureFormattedPanelTextLength(components[0]);
   if (promptState !== "omitted") {
-    fixedTextLength += getDiscordTextLength(promptHeader);
+    fixedTextLength += measurePanelTextLength(promptHeader);
     if (!hasPromptContent) fixedTextLength += getDiscordTextLength(noneContent);
   }
   if (contextState !== "omitted") {
-    fixedTextLength += getDiscordTextLength(contextHeader);
+    fixedTextLength += measurePanelTextLength(contextHeader);
     if (!hasContextContent) fixedTextLength += getDiscordTextLength(noneContent);
   }
   if (attgState !== "omitted") {
@@ -1448,7 +1456,7 @@ ${localizer(locale, "commands.config.panel.advanced_description")}`,
       if (!value) attgFixedParts.push(noneContent);
     }
     attgFixedParts.push(attgStars);
-    fixedTextLength += getDiscordTextLength(attgFixedParts.join("\n"));
+    fixedTextLength += measurePanelTextLength(attgFixedParts.join("\n"));
   }
   const advancedDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
   const dynamicValueCount =
@@ -1767,16 +1775,8 @@ ${localizer(locale, "commands.config.panel.text_override_description")}
   return components;
 }
 
-/**
- * Beside a Thumbnail the panel body wraps at 40 characters, which a stored sprite name (up to 64)
- * or usage note can exceed on its own. Each detail line therefore clamps its value to what is left
- * after its label. `tests/unit/discord/panelProseWidth.test.ts` owns the budget itself.
- */
-const SPRITE_DETAIL_LINE_BUDGET = 40;
-
 function spriteDetailLine(label: string, value: string): string {
-  const prefix = `> ${label}: `;
-  return `${prefix}${safeSelectOptionText(value, Math.max(4, SPRITE_DETAIL_LINE_BUDGET - prefix.length))}`;
+  return `> ${label}: ${value}`;
 }
 
 function spriteRangeIndex(
@@ -2163,9 +2163,9 @@ ${conditioningLines.join("\n")}`,
   }
 
   const baseAllowance = getBasePageTextAllowance(input, true);
-  let fixedTextLength = measureComponentTextLength(components) + getDiscordTextLength(stmHeader);
-  if (conditioningTextDisplay) fixedTextLength += measureComponentTextLength(conditioningTextDisplay);
-  if (conditioningFooterDisplay) fixedTextLength += measureComponentTextLength(conditioningFooterDisplay);
+  let fixedTextLength = measureFormattedPanelTextLength(components) + measurePanelTextLength(stmHeader);
+  if (conditioningTextDisplay) fixedTextLength += measureFormattedPanelTextLength(conditioningTextDisplay);
+  if (conditioningFooterDisplay) fixedTextLength += measureFormattedPanelTextLength(conditioningFooterDisplay);
   const personaMemoryStmBudget = Math.max(0, baseAllowance - fixedTextLength);
 
   const stmContent =
@@ -2330,13 +2330,13 @@ function buildBehaviorGeneralBody(input: ConfigPanelRenderInput): ComponentInCon
 
   const baseAllowance = getBasePageTextAllowance(input, false);
   let fixedTextLength =
-    measureComponentTextLength(components[0]) +
-    getDiscordTextLength(promptHeader) +
-    getDiscordTextLength(contextHeader) +
+    measureFormattedPanelTextLength(components[0]) +
+    measurePanelTextLength(promptHeader) +
+    measurePanelTextLength(contextHeader) +
     (contextNote ? 0 : getDiscordTextLength(noneContent)) +
-    measureComponentTextLength(responseStyleTextDisplay);
+    measureFormattedPanelTextLength(responseStyleTextDisplay);
   if (timezoneTextDisplay) {
-    fixedTextLength += measureComponentTextLength(timezoneTextDisplay);
+    fixedTextLength += measureFormattedPanelTextLength(timezoneTextDisplay);
   }
   const generalDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
   const generalPerValueBudget = contextNote ? Math.floor(generalDynamicAllowance / 2) : generalDynamicAllowance;
@@ -2996,9 +2996,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
     view.stmCategories.length > 1 ||
     (view.stmCategories.length === 1 && view.stmCategories[0]?.label.toLowerCase() !== "summary");
   const categoryLines = view.stmCategories.length
-    ? view.stmCategories
-        .map((category) => `> ${safeSelectOptionText(`${category.label}: ${category.description}`, 62)}`)
-        .join("\n")
+    ? view.stmCategories.map((category) => `> ${category.label}: ${category.description}`).join("\n")
     : `> ${localizer(locale, "commands.choices.none")}`;
   components.push(
     {
@@ -3066,7 +3064,7 @@ function buildBehaviorMemoryBody(input: ConfigPanelRenderInput): ComponentInCont
     "commands.config.panel.stm_prompt_description",
   )}\n`;
   const baseAllowance = getBasePageTextAllowance(input, false);
-  const fixedTextLength = measureComponentTextLength(components) + getDiscordTextLength(stmPromptHeader) + 1;
+  const fixedTextLength = measureFormattedPanelTextLength(components) + measurePanelTextLength(stmPromptHeader) + 1;
   const memoryDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
   const memoryPerValueBudget = Math.floor(memoryDynamicAllowance / 2);
 
@@ -3410,8 +3408,8 @@ ${localizer(locale, "commands.config.panel.channels_welcome_prompt_value_label")
 `;
   const baseAllowance = getBasePageTextAllowance(input, false);
   const fixedTextLength =
-    measureComponentTextLength([components[0], logTextDisplay]) +
-    getDiscordTextLength(welcomeHeader) +
+    measureFormattedPanelTextLength([components[0], logTextDisplay]) +
+    measurePanelTextLength(welcomeHeader) +
     (view.welcomePrompt ? 0 : getDiscordTextLength(renderFencedCollectionContent(none)));
   const destinationsBudget = Math.max(0, baseAllowance - fixedTextLength);
 
@@ -3538,10 +3536,33 @@ ${localizer(locale, "commands.config.panel.channels_auto_trigger_enabled_descrip
 ${localizer(locale, "commands.config.panel.channels_auto_trigger_threshold_description")}
 > ${localizer(locale, "commands.config.panel.channels_auto_trigger_threshold_value_label")}: ${threshold}`,
   };
+  const personaRangeEntry = buildPersonaRangeEntry({
+    locale,
+    personas: input.personas,
+    pageSize: AUTO_TRIGGER_PERSONA_PAGE_SIZE,
+    siblingsFirst: true,
+    siblingButtons: [
+      {
+        type: ComponentType.Button,
+        style: ButtonStyle.Secondary,
+        customId: buildConfigRouteId({ action: "channels-autoch-manage-open", locale, start: rangeIndex }),
+        label: localizer(locale, "commands.config.panel.channels_auto_trigger_manage_button"),
+        disabled: actionDisabled || input.channelsView.availableTextChannels.length === 0,
+      },
+    ],
+    // Auto-Trigger assigns a persona per channel, so no single stored value can be marked here.
+    selectedPersonaId: null,
+    disabled: actionDisabled || input.channelsView.availableTextChannels.length === 0,
+    buttonCustomId: buildConfigRouteId({ action: "channels-autoch-configure-open", locale }),
+    buttonLabelKey: "commands.config.panel.channels_auto_trigger_configure_button",
+    selectCustomId: buildConfigRouteId({ action: "channels-autoch-range-select", locale }),
+    selectPlaceholderKey: "commands.config.panel.channels_auto_trigger_range_placeholder",
+  });
 
   const baseAllowance = getBasePageTextAllowance(input, false);
   const fixedTextLength =
-    measureComponentTextLength([components[0], thresholdTextDisplay]) + getDiscordTextLength(enabledHeader);
+    measureFormattedPanelTextLength([components[0], ...personaRangeEntry, thresholdTextDisplay]) +
+    measurePanelTextLength(enabledHeader);
   const autoTriggerBudget = Math.max(0, baseAllowance - fixedTextLength);
 
   components.push(
@@ -3549,28 +3570,7 @@ ${localizer(locale, "commands.config.panel.channels_auto_trigger_threshold_descr
       type: ComponentType.TextDisplay,
       content: `${enabledHeader}${renderBoundedChannelRows(locale, enabledRows, autoTriggerBudget, localizer(locale, "commands.config.panel.channels_auto_trigger_none"))}`,
     },
-    ...buildPersonaRangeEntry({
-      locale,
-      personas: input.personas,
-      pageSize: AUTO_TRIGGER_PERSONA_PAGE_SIZE,
-      siblingsFirst: true,
-      siblingButtons: [
-        {
-          type: ComponentType.Button,
-          style: ButtonStyle.Secondary,
-          customId: buildConfigRouteId({ action: "channels-autoch-manage-open", locale, start: rangeIndex }),
-          label: localizer(locale, "commands.config.panel.channels_auto_trigger_manage_button"),
-          disabled: actionDisabled || input.channelsView.availableTextChannels.length === 0,
-        },
-      ],
-      // Auto-Trigger assigns a persona per channel, so no single stored value can be marked here.
-      selectedPersonaId: null,
-      disabled: actionDisabled || input.channelsView.availableTextChannels.length === 0,
-      buttonCustomId: buildConfigRouteId({ action: "channels-autoch-configure-open", locale }),
-      buttonLabelKey: "commands.config.panel.channels_auto_trigger_configure_button",
-      selectCustomId: buildConfigRouteId({ action: "channels-autoch-range-select", locale }),
-      selectPlaceholderKey: "commands.config.panel.channels_auto_trigger_range_placeholder",
-    }),
+    ...personaRangeEntry,
     {
       type: ComponentType.TextDisplay,
       content: `**${localizer(locale, "commands.config.panel.channels_auto_trigger_threshold_title")}**
@@ -3679,11 +3679,11 @@ ${localizer(locale, "commands.config.panel.channels_rules_description")}`,
 
   const baseAllowance = getBasePageTextAllowance(input, false);
   const fixedTextLength =
-    measureComponentTextLength(components[0]) +
-    getDiscordTextLength(`**${privateTitle}**\n${privateDesc}\n`) +
-    (privacyView ? getDiscordTextLength(`**${privacyTitle}**\n${privacyDesc}\n`) : 0) +
-    getDiscordTextLength(`**${roleplayTitle}**\n${roleplayDesc}\n`) +
-    getDiscordTextLength(`**${blocklistTitle}**\n${blocklistDesc}\n`);
+    measureFormattedPanelTextLength(components[0]) +
+    measurePanelTextLength(`**${privateTitle}**\n${privateDesc}\n`) +
+    (privacyView ? measurePanelTextLength(`**${privacyTitle}**\n${privacyDesc}\n`) : 0) +
+    measurePanelTextLength(`**${roleplayTitle}**\n${roleplayDesc}\n`) +
+    measurePanelTextLength(`**${blocklistTitle}**\n${blocklistDesc}\n`);
   const rulesAvailable = Math.max(0, baseAllowance - fixedTextLength);
   const rulesPerSectionBudget = Math.floor(rulesAvailable / 3);
 
@@ -3915,18 +3915,18 @@ ${localizer(locale, "commands.config.panel.channels_overrides_text_model_descrip
   const noneContent = renderFencedCollectionContent(none);
 
   const baseAllowance = getBasePageTextAllowance(input, false);
-  let fixedTextLength = measureComponentTextLength(components);
-  fixedTextLength += getDiscordTextLength(promptTitleDesc);
+  let fixedTextLength = measureFormattedPanelTextLength(components);
+  fixedTextLength += measurePanelTextLength(promptTitleDesc);
   if (selectedChannel) {
-    fixedTextLength += getDiscordTextLength(promptModeLine);
+    fixedTextLength += measurePanelTextLength(promptModeLine);
     if (!hasPromptContent) fixedTextLength += getDiscordTextLength(noneContent);
 
-    fixedTextLength += getDiscordTextLength(contextTitleDesc);
-    fixedTextLength += getDiscordTextLength(contextDepthLine);
+    fixedTextLength += measurePanelTextLength(contextTitleDesc);
+    fixedTextLength += measurePanelTextLength(contextDepthLine);
     if (!hasContextContent) fixedTextLength += getDiscordTextLength(noneContent);
 
-    fixedTextLength += getDiscordTextLength(textModelTitleDesc);
-    fixedTextLength += getDiscordTextLength(textModelValues);
+    fixedTextLength += measurePanelTextLength(textModelTitleDesc);
+    fixedTextLength += measurePanelTextLength(textModelValues);
   }
   const overridesDynamicAllowance = Math.max(0, baseAllowance - fixedTextLength);
   const overridesPerValueBudget =

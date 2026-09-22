@@ -61,6 +61,8 @@ Use this for personas that should imitate a reference clip:
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
+Qwen3-TTS advertises rapid cloning from as little as 3 seconds of reference audio, and its runtime neither documents nor enforces a reference-duration cap. Clip length is therefore a quality trade-off you control rather than a limit the server checks.
+
 ### VoiceDesign
 
 Use this for personas that should use a written voice description instead of a sample:

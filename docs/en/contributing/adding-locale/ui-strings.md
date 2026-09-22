@@ -62,12 +62,11 @@ the embed. `PROTOCOL_KEYS` in `src/utils/discord/embedProtocol.ts` names every k
 compared rather than merely displayed.
 
 **A protocol key's translation is frozen after that locale's first release.** Correct it before
-release; never after. Rewriting a released value orphans every marker embed already sitting in that
-locale's Discord servers, and the failure is silent: `sliceMessagesAtResetMarker` reports no marker
-rather than an error, so a user's `/refresh` quietly stops applying and no log or test fails.
-
-The freeze is not only about the marker token. Historical embeds written before the token existed are
-recognized by their rendered title alone, so the released title has to keep matching.
+release; never after. The bot writes no footer token on new embeds, so classification rests on the
+rendered title alone. Rewriting a released value orphans every embed already posted with the old
+title in that locale's Discord servers, including the reset and compact-refresh embeds that history
+slicing depends on. The failure is silent: `sliceMessagesAtResetMarker` reports no marker rather
+than an error, so a user's `/refresh` quietly stops applying and no log or test fails.
 
 Rules to work by:
 

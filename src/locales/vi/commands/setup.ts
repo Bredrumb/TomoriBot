@@ -14,21 +14,16 @@ export default {
     learn_more_title: `Tìm hiểu thêm`,
     heads_up_title: `Một số lưu ý quan trọng`,
     novelai_expressions_warning_field: `Biểu cảm đã tắt`,
-    novelai_expressions_warning_value: `Emoji và sticker đã được tự động tắt để giữ ngữ cảnh
-NovelAI gọn gàng và ổn định. Bạn có thể bật lại
-bất kỳ lúc nào qua \`/config\` > Permissions.`,
+    novelai_expressions_warning_value:
+      "Emoji và sticker đã được tự động tắt để giữ ngữ cảnh NovelAI gọn gàng và ổn định. Bạn có thể bật lại bất kỳ lúc nào qua `/config` > Permissions.",
     zai_tos_warning_field: `Điều khoản dịch vụ Z.ai`,
-    zai_tos_warning_value: `Điều khoản của Z.ai chỉ cho phép tác vụ lập trình/agent.
-Dùng Z.ai để trò chuyện thông thường có thể vi phạm
-điều khoản và bạn phải tự chịu rủi ro.`,
+    zai_tos_warning_value:
+      "Điều khoản của Z.ai chỉ cho phép tác vụ lập trình/agent. Dùng Z.ai để trò chuyện thông thường có thể vi phạm điều khoản và bạn phải tự chịu rủi ro.",
     byok_bootstrap_field: `BYOK người dùng`,
     byok_bootstrap_value: `Đã bật khi thiết lập. Thành viên cần nhà cung cấp cá nhân cho tin nhắn do người dùng kích hoạt. Dùng {toggle_command} để tắt sau, và {help_personal_provider} (rồi Tính năng > Nhà cung cấp cá nhân) để xem quy trình thiết lập cho thành viên.`,
     dm_context_explanation_title: `Về tin nhắn trực tiếp`,
-    dm_context_explanation: `Mình vẫn sẽ gọi tin nhắn trực tiếp này là "máy chủ".
-Nghĩa là mọi tính năng "máy chủ" hoạt động như cũ,
-chỉ là riêng tư giữa chúng ta! Hãy coi đây như một
-máy chủ 1-1 với mình, nên các bộ nhớ máy chủ của nó
-chỉ là bộ nhớ của mình trong cuộc trò chuyện này.`,
+    dm_context_explanation:
+      'Mình vẫn sẽ gọi tin nhắn trực tiếp này là "máy chủ". Nghĩa là mọi tính năng "máy chủ" hoạt động như cũ, chỉ là riêng tư giữa chúng ta! Hãy coi đây như một máy chủ 1-1 với mình, nên các bộ nhớ máy chủ của nó chỉ là bộ nhớ của mình trong cuộc trò chuyện này.',
     already_setup_title: `Đã thiết lập xong`,
     already_setup_summary_description: `Máy chủ này đã được cấu hình. Dưới đây là trạng thái nhà cung cấp văn bản hiện tại và cách nhanh nhất để thay đổi.`,
     current_provider_field: `Nhà cung cấp văn bản hiện tại`,
@@ -56,13 +51,8 @@ Hãy thử {model_text_command} để chỉ định model đang hoạt động, 
       policies_button_start: `Xem & chấp nhận chính sách`,
       policies_button_edit: `Xem lại chính sách`,
       policies_modal_title: `Chính sách`,
-      policies_modal_context: `Vui lòng xem chính sách của TomoriBot trước khi hoàn tất.
-
-TomoriBot không lưu lịch sử chat. Khi trả lời trong kênh,
-bot đọc tin nhắn gần đây để lấy ngữ cảnh rồi gửi tới
-nhà cung cấp AI của máy chủ này. Các nhà cung cấp và
-endpoint tùy chỉnh có điều khoản và chính sách riêng,
-vui lòng xem xét riêng từng dịch vụ.`,
+      policies_modal_context:
+        "Vui lòng xem chính sách của TomoriBot trước khi hoàn tất.\n\nTomoriBot không lưu lịch sử chat. Khi trả lời trong kênh, bot đọc tin nhắn gần đây để lấy ngữ cảnh rồi gửi tới nhà cung cấp AI của máy chủ này. Các nhà cung cấp và endpoint tùy chỉnh có điều khoản và chính sách riêng, vui lòng xem xét riêng từng dịch vụ.",
       policies_modal_acceptance: `Bằng cách tiếp tục, bạn xác nhận đã đọc và chấp nhận [Điều khoản dịch vụ]({terms_url}) cùng [Chính sách quyền riêng tư]({privacy_url}) của TomoriBot. Thành viên có thể đọc lại bất cứ lúc nào qua \`/legal\`, nhưng chỉ bạn mới có thể thông báo cho họ biết rằng AI đang trả lời tại đây và AI đọc những gì để làm vậy.`,
       policies_modal_choice_label: `Xác nhận cả ba để tiếp tục`,
       policies_choice_terms: `Chấp nhận Điều khoản dịch vụ của TomoriBot`,
@@ -125,47 +115,33 @@ vui lòng xem xét riêng từng dịch vụ.`,
       change_failed_title: `Chưa lưu thay đổi thiết lập`,
       commit_in_progress: `Thiết lập này đang được lưu. Vui lòng đợi trong giây lát.`,
       commit_in_progress_title: `Đang lưu thiết lập`,
-      receipt_footer_avatar_skipped_dm: `Không thể cập nhật avatar trong tin nhắn trực tiếp,
-nên đã bỏ qua avatar của preset.`,
-      receipt_footer_avatar_failed: `Không thể cập nhật avatar của preset trên máy chủ
-này. Bạn có thể cài đặt lại sau.`,
+      receipt_footer_avatar_skipped_dm:
+        "Không thể cập nhật avatar trong tin nhắn trực tiếp, nên đã bỏ qua avatar của preset.",
+      receipt_footer_avatar_failed:
+        "Không thể cập nhật avatar của preset trên máy chủ này. Bạn có thể cài đặt lại sau.",
       receipt_title: `Thiết lập hoàn tất!`,
       receipt_desc: `Mình đã sẵn sàng cho máy chủ này với vai \`{persona}\`!`,
-      receipt_desc_with_model: `Mình đã sẵn sàng cho máy chủ này! Mình sẽ trả lời
-bằng \`{model_name}\` (mặc định \`{provider}\`) trong vai \`{persona}\`.`,
-      receipt_desc_custom_endpoint: `Mình đã sẵn sàng! Mình sẽ trả lời trên máy chủ này
-bằng \`{model_name}\` qua endpoint
-\`{endpoint}\` của bạn trong vai \`{persona}\`.`,
-      receipt_desc_byok: `Mình đã sẵn sàng cho máy chủ ở chế độ BYOK người dùng
-với vai \`{persona}\`! Mỗi thành viên dùng nhà cung cấp riêng
-cho đến khi tắt BYOK.`,
+      receipt_desc_with_model:
+        "Mình đã sẵn sàng cho máy chủ này! Mình sẽ trả lời bằng `{model_name}` (mặc định `{provider}`) trong vai `{persona}`.",
+      receipt_desc_custom_endpoint:
+        "Mình đã sẵn sàng! Mình sẽ trả lời trên máy chủ này bằng `{model_name}` qua endpoint `{endpoint}` của bạn trong vai `{persona}`.",
+      receipt_desc_byok:
+        "Mình đã sẵn sàng cho máy chủ ở chế độ BYOK người dùng với vai `{persona}`! Mỗi thành viên dùng nhà cung cấp riêng cho đến khi tắt BYOK.",
       receipt_desc_dm: `Mình đã sẵn sàng cho cuộc trò chuyện riêng với vai \`{persona}\`!`,
-      receipt_desc_dm_with_model: `Mình đã sẵn sàng cho tin nhắn riêng với vai \`{persona}\`!
-Mình sẽ trả lời bằng model \`{model_name}\` qua \`{provider}\`.`,
-      receipt_desc_custom_endpoint_dm: `Mình đã sẵn sàng cho tin nhắn riêng! Mình sẽ trả lời bằng
-\`{model_name}\` qua endpoint
-\`{endpoint}\` của bạn trong vai \`{persona}\`.`,
-      receipt_desc_byok_dm: `Mình đã sẵn sàng cho tin nhắn riêng ở chế độ BYOK
-người dùng với vai \`{persona}\`! Mỗi tin nhắn dùng nhà cung cấp
-của bạn cho đến khi tắt BYOK.`,
-      receipt_next_steps: `- **Tag mình trong chat** để bắt đầu trò chuyện!
-- Dùng \`/persona\` để đổi tên, ngoại hình và tính cách.
-- Dùng \`/config\` để chỉnh cách mình hành xử và tác vụ.
-- Dùng \`/memories\` để dạy mình về bạn và máy chủ này.
-- Dùng \`/expressions initialize\` để cho phép mình dùng
-  emoji và sticker của máy chủ này.`,
+      receipt_desc_dm_with_model:
+        "Mình đã sẵn sàng cho tin nhắn riêng với vai `{persona}`! Mình sẽ trả lời bằng model `{model_name}` qua `{provider}`.",
+      receipt_desc_custom_endpoint_dm:
+        "Mình đã sẵn sàng cho tin nhắn riêng! Mình sẽ trả lời bằng `{model_name}` qua endpoint `{endpoint}` của bạn trong vai `{persona}`.",
+      receipt_desc_byok_dm:
+        "Mình đã sẵn sàng cho tin nhắn riêng ở chế độ BYOK người dùng với vai `{persona}`! Mỗi tin nhắn dùng nhà cung cấp của bạn cho đến khi tắt BYOK.",
+      receipt_next_steps:
+        "- **Tag mình trong chat** để bắt đầu trò chuyện!\n- Dùng `/persona` để đổi tên, ngoại hình và tính cách.\n- Dùng `/config` để chỉnh cách mình hành xử và tác vụ.\n- Dùng `/memories` để dạy mình về bạn và máy chủ này.\n- Dùng `/expressions initialize` để cho phép mình dùng emoji và sticker của máy chủ này.",
       receipt_next_steps_dm: `- **Nhắn tin trực tiếp tại đây** để bắt đầu trò chuyện!
 - Dùng \`/persona\` để đổi tên, ngoại hình và tính cách.
 - Dùng \`/config\` để chỉnh cách mình hành xử và tác vụ.
 - Dùng \`/memories\` để dạy mình những điều về bạn.`,
-      receipt_learn_more: `Đọc [Wiki chính thức](https://docs.tomoribot.app/vi/features/) hoặc mở {help}
-(sau đó chọn Tính năng) để tìm hiểu thêm.
-- [Nhiều persona](https://docs.tomoribot.app/vi/features/chatting-personality/multiple-personas/) = ngoại hình, giọng nói và từ kích hoạt
-- [Trò chuyện & Kích hoạt](https://docs.tomoribot.app/vi/features/chatting-personality/chatting-and-triggers/) = thời điểm và cách mình tham gia
-- [Bộ nhớ](https://docs.tomoribot.app/vi/features/knowledge/memory/) = con người, thông tin và ngữ cảnh
-- [Cá nhân hóa](https://docs.tomoribot.app/vi/features/knowledge/personalization/) = cách bạn muốn được xưng hô
-- [Tạo đa phương tiện](https://docs.tomoribot.app/vi/features/capabilities/media-generation/) = hình ảnh, video và giọng nói
-- [Công cụ & Tiện ích mở rộng](https://docs.tomoribot.app/vi/features/capabilities/tools-and-extensions/) = tìm kiếm web và công cụ riêng`,
+      receipt_learn_more:
+        "Đọc [Wiki chính thức](https://docs.tomoribot.app/vi/features/) hoặc mở {help} (sau đó chọn Tính năng) để tìm hiểu thêm.\n- [Nhiều persona](https://docs.tomoribot.app/vi/features/chatting-personality/multiple-personas/) = ngoại hình, giọng nói và từ kích hoạt\n- [Trò chuyện & Kích hoạt](https://docs.tomoribot.app/vi/features/chatting-personality/chatting-and-triggers/) = thời điểm và cách mình tham gia\n- [Bộ nhớ](https://docs.tomoribot.app/vi/features/knowledge/memory/) = con người, thông tin và ngữ cảnh\n- [Cá nhân hóa](https://docs.tomoribot.app/vi/features/knowledge/personalization/) = cách bạn muốn được xưng hô\n- [Tạo đa phương tiện](https://docs.tomoribot.app/vi/features/capabilities/media-generation/) = hình ảnh, video và giọng nói\n- [Công cụ & Tiện ích mở rộng](https://docs.tomoribot.app/vi/features/capabilities/tools-and-extensions/) = tìm kiếm web và công cụ riêng",
       permission_denied: `Bạn cần có quyền Quản lý Máy chủ để thiết lập.`,
       env_mismatch: `Cấu hình môi trường đã thay đổi. Vui lòng khởi động lại thiết lập.`,
       forbidden: `Phiên thiết lập này thuộc về người dùng hoặc kênh khác.`,

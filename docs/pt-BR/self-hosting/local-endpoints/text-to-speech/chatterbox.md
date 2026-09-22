@@ -78,9 +78,18 @@ Use `/providers` para registro do endpoint e configuração do modelo. Em seguid
 
 ## Configurar uma Voz de Persona
 
-1. Prepare um clipe de voz limpo de 10-20 segundos com um falante e sem música de fundo.
+1. Prepare um clipe de voz limpo de 10 segundos com um falante e sem música de fundo.
 2. Abra `/config` em Models > TTS Parameters & Voices e envie o clipe.
 3. Abra `/config` em Persona > Voice, e então escolha a persona e a amostra de voz.
+
+Um clipe mais longo não acrescenta nada ao Chatterbox, e também não é recusado. O runtime dele trunca a referência antes do condicionamento, então o áudio além da janela é enviado, armazenado e depois ignorado ([`tts_turbo.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts_turbo.py), [`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)):
+
+- O prompt acústico corresponde aos primeiros 10 segundos em todas as variantes.
+- O contexto de tokens de fala corresponde aos primeiros 15 segundos no Turbo e no Nano, e a 6 segundos no Standard.
+
+Essas janelas são constantes do runtime upstream, e não orientação publicada: o README do repositório não informa nenhum comprimento de clipe de referência, e o nome do arquivo de exemplo é apenas `your_10s_ref_clip.wav`. O único comprimento que o runtime realmente impõe é um mínimo, exigindo que o prompt tenha mais de 5 segundos.
+
+Dez segundos é, portanto, a meta prática. Essa duração preenche o prompt acústico, que é onde o timbre e a entrega são definidos, e um clipe entre 10 e 15 segundos adiciona contexto de tokens de fala apenas no Turbo e no Nano. O embedding do falante ainda é calculado a partir do clipe inteiro, então ir além não muda a identidade do falante, apenas quanto do prompt é descartado sem ser lido.
 
 O Turbo e o Nano podem usar tags de eventos entre colchetes como `[laugh]` e `[sigh]` quando a alternância de fast-model está ativada.
 

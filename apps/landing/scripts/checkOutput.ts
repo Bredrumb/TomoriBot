@@ -30,6 +30,12 @@ for (const locale of publishedLocales) {
   if (!html.includes(`href="${docsUrl}"`)) {
     throw new Error(`The ${locale.id} landing page has no localized introduction link`);
   }
+  for (const documentationLocale of publishedLocales) {
+    const documentationUrl = `https://docs.tomoribot.app/${documentationLocale.id}/introduction/`;
+    if (!html.includes(`href="${documentationUrl}"`)) {
+      throw new Error(`The ${locale.id} landing page has no ${documentationLocale.id} documentation link`);
+    }
+  }
   for (const alternateLocale of publishedLocales) {
     const alternateUrl = landingUrl(alternateLocale.id);
     if (!html.includes(`hreflang="${alternateLocale.lang}" href="${alternateUrl}"`)) {

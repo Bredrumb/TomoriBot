@@ -29,7 +29,13 @@ localizer(locale, "commands.config.setup.description")
 
 ## Important Behaviors
 
-- `initializeLocalizer()` must run during startup before lookups.
+- `initializeLocalizer()` must complete before lookups. Concurrent callers share one initialization
+  promise, and a failed attempt clears that promise so a later call can retry. The state lives on
+  `globalThis` under a registered symbol so duplicate module identities in one Bun process cannot
+  disagree about whether locales are ready.
+- `loadCommandData()` awaits localization itself before importing or caching command modules. This
+  keeps command metadata valid even when Bun gives startup and a dynamically imported command graph
+  separate module instances.
 - Locale lookup tries an exact authored code, then an alias, then an unambiguous base-language match, then `en-US`. For example, `es-ES` uses the authored `es-419` tree once that tree exists; unsupported codes use English.
 - Missing key falls back to `en-US` for that key alone (see below).
 - Panel route IDs accept Discord locale codes even when no translation is loaded. This keeps
@@ -42,15 +48,17 @@ localizer(locale, "commands.config.setup.description")
   between distinct protocol keys. Template keys must retain the same placeholder names and counts
   across authored locales; target-title templates also need literal text around a placeholder.
   Reply-context field templates are matched only against their own embed fields, not against titles.
+  A `{message_url}` placeholder matches a single URL token rather than any text, so a locale that
+  authors the description as the bare placeholder does not accept arbitrary prose.
   Each released locale's protocol-key values are immutable because
-  Discord already stores unmarked historical embeds using those values.
+  Discord already stores embeds that are classified by those values.
 
-New bot-produced protocol embeds carry a `[tomori:v1:<kind>]` footer token. The classifier reads the
-token first, then uses the precomputed localized title lookup for older messages. Reset markers drop
-the marker message from history; compact-refresh markers keep their summary message as the new
-conversation opener. The Matrix relay serializes footer text along with title and description, so
-the token remains in its plain-text copy. A Matrix `/refresh` also writes the token on its Discord
-embed. Components V2 notices have no embeds and continue to use their reconstructed title text.
+Protocol embeds are classified by their rendered title through the precomputed localized lookup, and
+reply-context embeds by their localized author template. The bot does not write a footer token,
+because Discord renders footer text as visible content. A `[tomori:v1:<kind>]` footer left on an
+older embed is still read and takes precedence over the title. Reset markers drop the marker message
+from history; compact-refresh markers keep their summary message as the new conversation opener.
+Components V2 notices have no embeds and use their reconstructed title text.
 
 ## Key Resolution and the `en-US` Fallback
 
@@ -69,6 +77,15 @@ instead of showing users a raw `commands.foo.bar_description` path. The `warn` f
 
 `check-locales` treats missing translations as an advisory exit 2 while the Japanese catch-up is
 pending. A source key missing from every locale remains a blocking error.
+
+`bun run find-stale-translations --reason=unfollowed --base=origin/main` is the branch-scoped advisory
+for the review question parity reporting cannot answer: which `en-US` keys this branch changed while
+another locale stayed as it was. It parses the `en-US` tree at the merge base and committed `HEAD`,
+reports added, materially changed, and removed keys separately, and names the locales that did not
+follow. Whitespace-only reformatting is not a material change, and a key one locale defines twice with
+different values is skipped rather than guessed at. It exits zero on findings by design, so it cannot
+become an all-locale merge gate or change the fallback chain above. Missing history, which a shallow
+clone produces, is reported as an unusable base ref rather than as a branch that added every key.
 
 `bun run list-unused-locales` reports keys without a known runtime consumer. Its scanner includes
 TypeScript and TSX literals, template-built key namespaces, command metadata generated from the live

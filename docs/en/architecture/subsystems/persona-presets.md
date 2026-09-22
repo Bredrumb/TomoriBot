@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Persona Presets"
 ---
 
@@ -58,6 +58,16 @@ Sprites (unlike avatars) **do** fan out to pointer personas. A sprite image is f
 `preset_sprites` holds the official sprite set keyed by `(preset_lineage_id, preset_language, sprite_key)`. Each image is uploaded **once** to the immutable shared `presets/{lineage}/sprites/{key}-{hash}.png` storage prefix (content-addressed filename), so N servers cost one stored copy. The key carries no language segment: every locale variant of a preset declares the same `avatarPath` and the same sprite files, so keying by language stored one identical copy per authored locale. The per-language row stays, because `sprite_name` and `usage_instructions` genuinely are localized; only the image converges. The catalog authors sprites via the optional `PersonaInput.sprites` array (image files live under the persona's `avatarPath` directory); `seedPersonaSpritesFromCatalog()` uploads each once (idempotent: same content → same filename → skipped) and reconciles removed sprites. See [adding-persona-preset](../../contributing/adding-persona-preset).
 
 Resolution is centralized in `PersonaSpriteRepository.listForPersona()`: for a pointer persona it returns the shared `preset_sprites` set (shaped as `PersonaSpriteRow`); for a materialized persona it returns the persona's own `persona_sprites` rows. Every downstream consumer (prompt context builder, render-modifier resolver, `/config` > Persona > Sprites) reads through that one method, so they are pointer-agnostic. Editing the catalog sprite set fans out to all still-pointer personas on the next boot.
+
+That reconcile is deliberately conservative, because these rows are the only record of a usable shared image URL and pointer personas resolve them live:
+
+- It deletes only keys the catalog no longer declares, and scopes the delete to every key the catalog *does* declare, **including sprites whose upload failed this run**. A failed upload is therefore never mistaken for a removed sprite.
+- A preset variant that seeds **none** of its declared sprites preserves its stored rows and warns instead of reconciling, because a mass upload failure is indistinguishable from a catalog that dropped every key, and the rows are the only surviving reference to images that stay in storage.
+- A preset that declares an empty `sprites` array preserves its rows and warns, because an empty declaration carries no key to scope a delete to, so its rows cannot be told apart from a wider removal. Omitting the `sprites` field keeps a preset out of the reconcile, which is how a preset opts out.
+- A sprite name that normalizes to no key at all (only invisible or control characters) contributes nothing to the protected set, because an unnormalized value can never match a stored `sprite_key`.
+- The seed returns counts (`presets`, `declarations`, `seeded`, `failed`, `removed`) and startup prints them. `declarations` counts each preset variant's own set, so the same art appears once per authored locale, and `presets` counts variants rather than lineages. A boot that seeds nothing has to be distinguishable from a healthy one in the log, because otherwise the two look identical.
+
+Because a seed short-circuits on a stored reference that already ends with the expected key, the cheap metadata-refresh path only applies while rows exist. With the rows gone the seeder must upload on every boot, so repopulating them also requires a working storage write path.
 
 The shared `presets/` images are **immutable and never deleted** by per-persona paths: `deletePersonaAvatarFromStorage` refuses any reference under that prefix (`isSharedPresetAssetReference`), so one server replacing/removing a sprite, or re-running `/persona default`, can never delete art other servers rely on. The guard covers both shared asset layouts: sprites (`presets/{lineage}/sprites/...`) and avatars (`presets/{lineage}/avatar-{hash}.png`), and it still matches the retired per-language layout that stored rows keep until an environment re-seeds.
 
@@ -126,6 +136,24 @@ uses the pre-import snapshot for storage cleanup. A snapshot or row-delete failu
 import, while a storage-file failure is reported as partial cleanup. Shared `presets/` references are skipped.
 
 `/persona generate` emits the canonical six generated attributes and marks only the generated Appearance attribute public. `/persona create` emits an explicit all-private flag array because its single freeform description is not guaranteed to be an appearance-only field. SillyTavern card conversion also defaults converted attributes to private because ST cards do not carry Tomori public visibility metadata.
+
+### Image input and the vision caption
+
+`/persona generate` accepts an optional uploaded image. The primary model always performs generation, so its provider, key, and codename stay paired for the whole flow. What changes is how the image reaches it:
+
+- **No image**: text-only generation, primary model throughout.
+- **Image, primary model sees images** (`tomoriState.llm.sees_images`): the image goes to the primary model's own generation call.
+- **Image, primary model cannot see images, a vision model is configured**: a separate caption call asks the vision model to describe the avatar, and only that text reaches the primary model's generation call. The image itself is never sent to the primary model.
+- **Image, no usable vision anywhere**: generation fails immediately with a message naming the missing capability, unless the PNG carried a card or preset, whose extracted text replaces the need for vision.
+- **Image carrying an extracted card or preset**: the extracted data only substitutes for vision when no model can see the image. If either model can, the image still wins: the card is a text approximation, while the upload is the character the user actually chose, so the two travel together.
+
+`planImageHandling()` in the command owns this precedence, and its unit tests are what keep the cases from drifting.
+
+The caption travels in `GeneratePresetParams.appearanceDescription`, which is a distinct prompt section from `existingPresetContext`: the prompt labels one as observed appearance and the other as an uploaded card's data, so the model does not read a caption as structured preset input.
+
+Both this path and `AnalyzeImageTool` share `analyzeImageWithVisionModel()` in `src/utils/provider/visionCaption.ts`, which reconciles `resolveCapabilityCredentials` against the cached `vision_llm` row. The vision model may be saved under a different provider than the primary model, each with its own encrypted key, and the reconciliation is what keeps the transport (chosen from the resolved credentials) and the model codename sent to it describing the same model. The primary generation call is unaffected by that pairing problem, because it never leaves the primary model's own credentials.
+
+The captioning request and its wall-clock ceiling are separate budgets from the chat reply caps (`VISION_CAPTION_MAX_OUTPUT_TOKENS`, `VISION_CAPTION_TIMEOUT_MS`), because shortening a chat reply must not truncate the description a persona is generated from.
 
 ### Import Now button
 

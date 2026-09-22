@@ -7,7 +7,6 @@ import {
   type ActionRowData,
   type ButtonComponentData,
   type ComponentInContainerData,
-  type ContainerComponentData,
   type StringSelectMenuComponentData,
   type TopLevelComponentData,
 } from "discord.js";
@@ -31,6 +30,7 @@ import {
 } from "@/utils/discord/helpProviderGuides";
 import { SUPPORT_SERVER_URL, buildDocsUrl } from "@/utils/discord/docsLinks";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import { isHostedPolicyEnvironment } from "@/utils/misc/hostedPolicy";
 import { localizer } from "@/utils/text/localizer";
 
@@ -351,11 +351,7 @@ export function buildHelpDashboardPayload(
 
   content.push(buildNavigationRow(locale, category, stops, Math.max(0, currentStopIndex)));
 
-  const container: ContainerComponentData<ComponentInContainerData> = {
-    type: ComponentType.Container,
-    accentColor: TOMORI_TURQUOISE,
-    components: content,
-  };
+  const container = buildPanelContainer(content, TOMORI_TURQUOISE);
   return {
     components: [container, buildPersistentFooterRow(locale, activeVariant?.docsPath ?? page.docsPath)],
     flags: MessageFlags.IsComponentsV2,

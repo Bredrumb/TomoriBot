@@ -76,8 +76,8 @@ export function processEmbedsFromMessage(args: {
 
   // Components V2 pass: a CV2 notice carries no embeds at all, so its text has
   // to be reconstructed from the component tree before it can be classified.
-  // Runs after the embed loop and is naturally exclusive with it , so Discord
-  // rejects messages that mix `embeds` with the IsComponentsV2 flag.
+  // This runs after the embed loop and is mutually exclusive with it, because
+  // Discord rejects messages that mix `embeds` with the IsComponentsV2 flag.
   const notice = extractNoticeTextFromComponents(args.components);
   if (notice?.title && notice.description) {
     const noticeCheck = checkTargetEmbedTitle(notice.title);

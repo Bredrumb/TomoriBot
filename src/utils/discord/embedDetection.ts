@@ -11,7 +11,7 @@ import { classifyProtocolEmbed } from "./embedProtocol";
  * Checks whether a single embed is a "refresh marker": an embed that signals
  * a conversation reset or compact-refresh boundary.
  *
- * New embeds carry a footer marker; older embeds use the startup title lookup.
+ * Detection uses the startup title lookup, or a legacy footer token on older embeds.
  */
 export function isRefreshMarkerEmbed(embed: Embed): boolean {
   const kind = classifyProtocolEmbed(embed);

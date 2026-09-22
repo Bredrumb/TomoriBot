@@ -1,17 +1,17 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { EmbedBuilder, type Embed, type Message } from "discord.js";
 import {
+  PROTOCOL_KEYS,
   buildProtocolLookup,
   classifyProtocolEmbed,
   classifyProtocolTitle,
-  stampProtocolEmbed,
 } from "@/utils/discord/embedProtocol";
 import { checkTargetEmbed } from "@/utils/discord/embedClassifier";
 import { isRefreshMarkerEmbed, sliceMessagesAtResetMarker } from "@/utils/discord/embedDetection";
 import { createStandardEmbed } from "@/utils/discord/embedHelper";
 import { buildConversationEmbed } from "@/utils/compaction/compact/rendering";
 import { findReplyContextTargetInMessage } from "@/utils/chat/contextAnnotations";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { getSupportedLocales, hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => {
   await initializeLocalizer();
@@ -21,31 +21,52 @@ function message(embed?: EmbedBuilder): Pick<Message, "embeds"> {
   return { embeds: embed ? [embed.toJSON() as unknown as Embed] : [] };
 }
 
+/** Recreates an embed posted while the bot still wrote the footer token. */
+function withLegacyToken(embed: EmbedBuilder, kind: string): EmbedBuilder {
+  return embed.setFooter({ text: `[tomori:v1:${kind}]` });
+}
+
 describe("embed protocol", () => {
   it("recognizes historical localized titles without a marker", () => {
     const oldEmbed = new EmbedBuilder().setTitle(localizer("ja", "commands.refresh.title"));
     expect(classifyProtocolEmbed(oldEmbed.toJSON() as unknown as Embed)).toBe("reset");
   });
 
-  it("prefers a new marker when a translated title changes", () => {
-    const embed = stampProtocolEmbed(
+  it("prefers a legacy footer token over the title", () => {
+    const embed = withLegacyToken(
       new EmbedBuilder().setTitle(localizer("en-US", "commands.refresh.title")),
       "compact_refresh",
     );
     expect(classifyProtocolTitle(embed.data.title)).toBe("reset");
     expect(checkTargetEmbed(embed.toJSON() as unknown as Embed)).toEqual({ isTarget: true, type: "compact_refresh" });
-    expect(embed.toJSON().footer?.text).toContain("[tomori:v1:compact_refresh]");
   });
 
-  it("stamps the standard reset writer and compact summary writer", () => {
+  it("classifies every authored protocol title by its rendered text alone", () => {
+    const misclassified: string[] = [];
+    let checked = 0;
+    for (const locale of getSupportedLocales()) {
+      for (const entry of PROTOCOL_KEYS) {
+        // Reply-context templates match embed fields, never titles.
+        if (entry.kind === "reply_context" || !hasLocaleKey(locale, entry.key)) continue;
+        const rendered = localizer(locale, entry.key).replace(/\{[a-zA-Z0-9_]+\}/g, "Sparrow");
+        const title = entry.match === "prefix" ? `${rendered} Sparrow` : rendered;
+        checked += 1;
+        if (classifyProtocolTitle(title) !== entry.kind) misclassified.push(`${locale} ${entry.key}`);
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(misclassified).toEqual([]);
+  });
+
+  it("writes no footer token from the standard embed and compact writers", () => {
     const reset = createStandardEmbed("en-US", {
       titleKey: "commands.refresh.title",
       descriptionKey: "commands.refresh.response",
       footerKey: "commands.refresh.footer",
     });
-    expect(reset.toJSON().footer?.text).toContain("[tomori:v1:reset]");
+    expect(reset.toJSON().footer?.text).not.toContain("[tomori:v1:");
     const compact = buildConversationEmbed("en-US", "Summary", true);
-    expect(compact.toJSON().footer?.text).toContain("[tomori:v1:compact_refresh]");
+    expect(compact.toJSON().footer?.text ?? "").not.toContain("[tomori:v1:");
   });
 
   it("rejects two distinct keys with the same rendered value", () => {
@@ -107,7 +128,7 @@ describe("embed protocol", () => {
 
   it("slices old resets after the marker and new compact refreshes at it", () => {
     const oldReset = new EmbedBuilder().setTitle(localizer("en-US", "commands.refresh.title"));
-    const newCompact = stampProtocolEmbed(new EmbedBuilder().setTitle("Retitled summary"), "compact_refresh");
+    const newCompact = withLegacyToken(new EmbedBuilder().setTitle("Retitled summary"), "compact_refresh");
     expect(isRefreshMarkerEmbed(oldReset.toJSON() as unknown as Embed)).toBe(true);
     expect(isRefreshMarkerEmbed(newCompact.toJSON() as unknown as Embed)).toBe(true);
     expect(isRefreshMarkerEmbed(new EmbedBuilder().setTitle("Unrelated").toJSON() as unknown as Embed)).toBe(false);
@@ -134,18 +155,31 @@ describe("embed protocol", () => {
     });
     expect(findReplyContextTargetInMessage(message(oldEmbed))).toEqual({ channelId: "2", messageId: "3" });
 
-    const marked = stampProtocolEmbed(
+    const marked = withLegacyToken(
       new EmbedBuilder().setURL(url).setAuthor({ name: "Retitled reply" }),
       "reply_context",
     );
     expect(findReplyContextTargetInMessage(message(marked))).toEqual({ channelId: "2", messageId: "3" });
   });
 
-  it("stamps reminder delivery-failure notices as diagnostics in every authored locale", () => {
+  it("reads description-only reply-context embeds but not prose that quotes a message link", () => {
+    const url = "https://discord.com/channels/1/2/3";
+    const missed = getSupportedLocales().filter((locale) => {
+      const description = localizer(locale, "genai.message_interaction.reply_context_description", {
+        message_url: url,
+      });
+      return findReplyContextTargetInMessage(message(new EmbedBuilder().setDescription(description))) === null;
+    });
+    expect(missed).toEqual([]);
+    const prose = new EmbedBuilder().setDescription(`Quoted from ${url} earlier`);
+    expect(findReplyContextTargetInMessage(message(prose))).toBeNull();
+  });
+
+  it("classifies reminder delivery-failure notices as diagnostics in every authored locale", () => {
     for (const locale of ["en-US", "ja"]) {
       for (const titleKey of ["reminders.reminder_triggered_title", "reminders.task_triggered_title"]) {
         const embed = createStandardEmbed(locale, { titleKey, description: "Original content" });
-        expect(embed.toJSON().footer?.text).toContain("[tomori:v1:diagnostic]");
+        expect(embed.toJSON().footer?.text).toBeUndefined();
         expect(classifyProtocolTitle(localizer(locale, titleKey))).toBe("diagnostic");
         expect(checkTargetEmbed(embed.toJSON() as unknown as Embed).isTarget).toBe(false);
       }

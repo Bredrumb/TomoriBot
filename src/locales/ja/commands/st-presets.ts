@@ -8,7 +8,8 @@ export default {
     select_add: `+ 新しいプリセットを追加`,
     select_add_description: `新しいSillyTavern JSONプリセットをインポート`,
     none_heading: `有効なプリセットがありません`,
-    none_disabled_explanation: `チャット補完プリセットは現在無効になっています。\n上のプリセットを選択して有効にしてください。`,
+    none_disabled_explanation:
+      "チャット補完プリセットは現在無効になっています。 上のプリセットを選択して有効にしてください。",
     currently_active: `現在有効なプリセット`,
     currently_active_with_nodes: `このプリセットは選択・有効化されており、{total}個中{enabled}個のノードが有効です`,
     toggle_nodes: `ノードを切り替え`,
@@ -17,7 +18,7 @@ export default {
     delete_preset: `プリセットを削除`,
     delete_title: `プリセットを削除`,
     delete_confirm: `プリセットを削除`,
-    delete_description: `**{name}**を削除しますか？このプリセットとその\nノード設定が完全に削除されます。`,
+    delete_description: "**{name}**を削除しますか？このプリセットとその ノード設定が完全に削除されます。",
     cancel: `キャンセル`,
     retry: `再試行`,
     stale_warning: `読み込みに失敗したため、表示中のデータは古い可能性があります。最新データを取得できるまで書き込み操作は利用できません。`,

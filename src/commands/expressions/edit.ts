@@ -128,11 +128,10 @@ export async function execute(
       return;
     }
 
-    // Normalize the raw input into the forms we may need to match against:
-    //    - `mention`: present when Discord auto-resolved a typed `:name:` into the
-    //      rendered `<:name:id>` / `<a:name:id>` form (gives us an exact emoji ID).
-    //    - `colonStripped`: bare emoji name with any surrounding colons removed.
-    //    - `rawInput`: untouched, for stickers whose names contain spaces/punctuation.
+    // Normalize the raw input into the forms the match below needs: `mention` is set
+    //      when Discord auto-resolved a typed `:name:` into the rendered
+    //      `<:name:id>` / `<a:name:id>` form, which carries the exact emoji ID;
+    //      `colonStripped` and `rawInput` keep the name-based sticker lookup working.
     const rawInput = interaction.options.getString("expression", true).trim();
     const mention = parseEmojiMention(rawInput);
     const colonStripped = (mention?.name ?? rawInput).replace(/^:+|:+$/g, "");
@@ -144,11 +143,9 @@ export async function execute(
       serverRepository.loadStickersByInternalId(tomoriState.server_id),
     ]);
 
-    // Resolve the input to a single expression.
-    //    - If Discord handed us an emoji mention, match by its exact Discord ID first
-    //      (robust against renames), then fall back to the parsed name.
-    //    - Otherwise match emojis by colon-stripped name, then stickers by raw name.
-    //    A parsed mention is unambiguously an emoji, so we never check stickers for it.
+    // Resolve the input to a single expression. A mention is matched by Discord ID
+    //    before its parsed name, because the ID survives an emoji rename, and a
+    //    mention is never checked against stickers since it is unambiguously an emoji.
     let match: ExpressionMatch | null = null;
 
     const emojiList = emojis ?? [];

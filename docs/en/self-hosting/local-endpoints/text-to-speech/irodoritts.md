@@ -104,11 +104,15 @@ select and activate the registered endpoint.
 
 ### Voice cloning
 
-1. Prepare a clean 10-20 second Japanese voice clip with one speaker and no background music.
+1. Prepare a clean Japanese voice clip with one speaker and no background music. Around 30 seconds is already enough: past that point the extra audio buys little timbre fidelity while costing upload size and inference time.
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
 Irodori v4.1 supports longer reference conditioning than the old v2 model, but clean source audio remains more important than raw duration.
+
+The v4.1 runtime caps the reference clip at the checkpoint default, which the v4.1 checkpoint sets to 120 seconds. Anything longer is trimmed to that cap rather than refused, and `IRODORI_MAX_REF_SECONDS` overrides it. A clip at TomoriBot's 130-second upload ceiling therefore still works: Irodori conditions on the first 120 seconds of it.
+
+Longer is not better here. Upstream reports that approximately 30 seconds of clean reference speech already captures most of the measurable speaker-similarity gain, and that multiple shorter clips from the same speaker beat one long recording. The extra reference latent steps that come with a longer clip also lengthen every synthesis request. Reach past 30 seconds only when a speaker's timbre drifts across the recording.
 
 ### VoiceDesign
 
@@ -119,6 +123,18 @@ Irodori v4.1 supports longer reference conditioning than the old v2 model, but c
 TomoriBot sends this prompt as `instruct`; the Irodori wrapper maps it to the v4.1 `caption` condition. VoiceDesign requests do not require a stored reference clip.
 
 TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `script_markup: emoji`, Unicode emojis are preserved for Irodori's text conditioning.
+
+## Long voice messages
+
+Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the sidecar does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.
+
+The implementation starts from the chunking approach used by the [official Irodori OpenAI-compatible server](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py), whose defaults enable chunking at 80 non-whitespace characters. TomoriBot adds stricter boundary handling so closing quotes and brackets stay with the punctuation they close, punctuation runs such as `！？` and `...` stay together, decimal points next to digits do not split, and very short final tails are merged back into the previous chunk.
+
+Chunking prefers strong sentence endings such as `。`, `！`, `？`, `.`, `!`, `?`, ellipses, and line breaks once the configured minimum length is reached. Commas are only used as fallback boundaries after the chunk grows to about 1.5 times that threshold. With the default `IRODORI_CHUNK_MIN_CHARS=80`, strong boundaries become eligible at 80 non-whitespace characters and commas at about 120. If a long passage contains no eligible punctuation, it can still remain a single synthesis request.
+
+For caption-only VoiceDesign, the first chunk's generated Irodori seed is reused for the remaining chunks to reduce random variation between seams. Reusing a seed does not guarantee identical timbre across independently synthesized chunks. Reference-audio mode continues to apply the same reference clip to each chunk.
+
+Long inputs require multiple sequential inference passes and can take substantially longer on slower hardware. TomoriBot's default TTS client timeout is 240 seconds. You can disable chunking with `IRODORI_CHUNKING_ENABLED=false` or tune the approximate split threshold with `IRODORI_CHUNK_MIN_CHARS`.
 
 ## Faster inference with Sway Sampling
 
@@ -159,4 +175,6 @@ The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Caption / VoiceDesign guidance scale |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Reference-speaker guidance scale |
 | `IRODORI_MAX_REF_SECONDS` | checkpoint default | Optional cap on reference audio duration |
+| `IRODORI_CHUNKING_ENABLED` | `true` | Split long text at eligible punctuation boundaries and concatenate the generated chunks |
+| `IRODORI_CHUNK_MIN_CHARS` | `80` | Minimum non-whitespace characters before strong sentence boundaries split; commas are fallback boundaries at about 1.5x this value |
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Per-request text length cap |

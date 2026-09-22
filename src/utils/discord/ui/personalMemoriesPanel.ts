@@ -30,10 +30,8 @@ import {
   buildPaginationRow,
   withLinePrefix,
 } from "@/utils/discord/ui/panel";
-import {
-  DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-  measureComponentTextLength,
-} from "@/utils/discord/ui/componentsV2Limits";
+import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getDiscordTextLength, neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
@@ -292,7 +290,11 @@ function buildPayload(components: ComponentInContainerData[], receipt?: PanelRec
 
 function measureReceiptTextLength(receipt?: PanelReceipt): number {
   if (!receipt) return 0;
-  return measureComponentTextLength(buildPanelReceiptContainer(receipt));
+  return measureFormattedPanelTextLength(buildPanelReceiptContainer(receipt));
+}
+
+function measurePanelTextLength(content: string): number {
+  return measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content });
 }
 
 export function buildPersonalMemoriesPanelPayload(
@@ -355,7 +357,9 @@ export function buildPersonalMemoriesPanelPayload(
       });
       const titleText = `### ${localizer(locale, "commands.personal.memories.remove_title")}\n${descriptionTemplate}`;
       const fixedTextLength =
-        measureReceiptTextLength(receipt) + measureComponentTextLength(components) + getDiscordTextLength(titleText);
+        measureReceiptTextLength(receipt) +
+        measureFormattedPanelTextLength(components) +
+        measurePanelTextLength(titleText);
       const availableBudget = Math.max(0, DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength);
 
       components.push(
@@ -521,9 +525,9 @@ ${localizer(locale, "commands.personal.memories.selector_guidance")}`,
           : [];
       const fixedTextLength =
         measureReceiptTextLength(receipt) +
-        measureComponentTextLength(components) +
-        measureComponentTextLength(bottomComponents) +
-        measureComponentTextLength(staleComponent);
+        measureFormattedPanelTextLength(components) +
+        measureFormattedPanelTextLength(bottomComponents) +
+        measureFormattedPanelTextLength(staleComponent);
       const availableBudget = Math.max(0, DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength);
 
       components.push({
@@ -785,9 +789,9 @@ ${localizer(locale, "commands.personal.memories.persona_description")}`,
             : [];
         const fixedTextLength =
           measureReceiptTextLength(receipt) +
-          measureComponentTextLength(components) +
-          getDiscordTextLength(channelAccessContent) +
-          measureComponentTextLength(staleComponent);
+          measureFormattedPanelTextLength(components) +
+          measurePanelTextLength(channelAccessContent) +
+          measureFormattedPanelTextLength(staleComponent);
         const availableBudget = Math.max(0, DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - fixedTextLength);
 
         components.push(

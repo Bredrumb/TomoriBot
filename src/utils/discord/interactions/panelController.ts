@@ -32,7 +32,7 @@ export interface PanelInteractionStart<T> {
   /**
    * The acknowledgement itself, raised before any authorization or state load.
    *
-   * A step rather than a direct `deferUpdate()` so the timing and its metric live in one place;
+   * A step rather than a direct `deferUpdate()` so the timing guard lives in one place;
    * defaults to `interaction.deferUpdate()`.
    */
   acknowledge?(): Promise<unknown>;
@@ -67,11 +67,6 @@ export async function acknowledgePanelInteraction(
   if (typeof startedAt !== "number") return;
 
   const elapsedMs = Date.now() - startedAt;
-  log.metric("panel_ack", {
-    route,
-    ack_latency_ms: elapsedMs,
-    over_deadline: elapsedMs >= INTERACTION_ACK_DEADLINE_MS ? 1 : 0,
-  });
   if (elapsedMs >= INTERACTION_ACK_WARN_MS) {
     log.rateLimit("Panel interaction acknowledged late", {
       route,

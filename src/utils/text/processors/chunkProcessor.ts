@@ -872,10 +872,9 @@ export function chunkMessage(inputText: string, humanizerDegree: number, chunkLe
       case "text": {
         let textToAdd = block.content.trim();
         if (prevBlockWasEmoji) {
-          // Strip leading sentence-ending punctuation orphaned by the emoji split.
-          // Still needed for trailing-emoji prose like "That was amazing! :Smile:"
-          // where the emoji is intentionally isolated (not "emoji_inline") and the
-          // following text fragment would otherwise begin with an orphan "!".
+          // Strip leading sentence-ending punctuation orphaned by the emoji split. An
+          // intentionally isolated trailing emoji (not "emoji_inline") leaves the following
+          // text fragment starting with an orphan "!".
           textToAdd = textToAdd.replace(/^[.!?。]+(?=\s|$)/, "");
         }
         prevBlockWasEmoji = false;

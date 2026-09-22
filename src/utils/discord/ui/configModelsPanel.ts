@@ -46,16 +46,15 @@ import {
   buildProviderPageEntries,
   type ProviderSelectEntry,
 } from "@/utils/discord/ui/modelRoutingControls";
+import { buildProviderSelectWindow, resolveProviderEntryStart } from "@/utils/discord/ui/providerSelectWindow";
 import { buildPaginationRow, buildStateControlRow, withLinePrefix } from "@/utils/discord/ui/panel";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import {
   buildProviderParameterBlock,
   formatStoredParameterValue,
 } from "@/utils/discord/ui/personalConfigParameterControls";
-import {
-  DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-  measureComponentTextLength,
-} from "@/utils/discord/ui/componentsV2Limits";
+import { DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX } from "@/utils/discord/ui/componentsV2Limits";
+import { measureFormattedPanelTextLength } from "@/utils/discord/ui/panelProse";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { formatStopStringForDisplay } from "@/utils/provider/stopStringConfig";
 import { getDiscordTextLength, neutralizeFenceRuns, truncateDiscordText } from "@/utils/text/discordTextLimits";
@@ -241,31 +240,13 @@ function buildCapabilityNoticeLine(locale: string, view: ConfigSwitchModelsView)
 
 interface SwitchProviderOptionsInput {
   locale: string;
-  capabilityLabel: string;
   visibleEntries: readonly ProviderSelectEntry[];
+  advanceEntry: ProviderSelectEntry | null;
   showClear: boolean;
-  overflows: boolean;
-  rangeIndex: number;
-  rangeCount: number;
-  windowSize: number;
-  expandedProvider: string | null;
 }
 
 function buildSwitchProviderOptions(input: SwitchProviderOptionsInput): ProviderSelectEntry[] {
-  const options = [...input.visibleEntries];
-  if (input.overflows) {
-    // Wrapping past the last window is what keeps every entry reachable from any window without a
-    // second control: advancing repeatedly always returns to the first.
-    const nextRangeIndex = (input.rangeIndex + 1) % input.rangeCount;
-    options.push({
-      value: encodeConfigProviderRangeValue(nextRangeIndex * input.windowSize, input.expandedProvider),
-      label: localizer(input.locale, "commands.config.panel.model_provider_more_option", {
-        capability: input.capabilityLabel,
-        page: nextRangeIndex + 1,
-        total: input.rangeCount,
-      }),
-    });
-  }
+  const options = input.advanceEntry ? [...input.visibleEntries, input.advanceEntry] : [...input.visibleEntries];
   if (options.length > 0 || input.showClear) return options;
   return [{ value: "none", label: localizer(input.locale, "commands.config.panel.no_providers_option") }];
 }
@@ -307,14 +288,20 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
 
     // Defaulting to the expansion's own offset keeps a freshly expanded provider on screen; a
     // stored start means the reader paged deliberately and outranks it.
-    const entryStart = slot.expandedProvider ? slot.providerPageStart || expandedStartIndex : slot.providerPageStart;
-    // A window that does not hold every entry spends one option slot on its own advance entry, so
-    // the window shrinks by one rather than leaving the last entry of each window unreachable.
-    const overflows = entries.length > directLimit;
-    const windowSize = overflows ? directLimit - 1 : directLimit;
-    const rangeCount = Math.max(1, Math.ceil(entries.length / windowSize));
-    const rangeIndex = Math.min(Math.max(0, Math.floor(entryStart / windowSize)), rangeCount - 1);
-    const visibleEntries = entries.slice(rangeIndex * windowSize, rangeIndex * windowSize + windowSize);
+    const entryStart = slot.expandedProvider
+      ? resolveProviderEntryStart(slot.providerPageStart, expandedStartIndex)
+      : slot.providerPageStart;
+    const routingWindow = buildProviderSelectWindow({
+      entries,
+      entryStart,
+      directLimit,
+      expandedProvider: slot.expandedProvider,
+      expandedPageCount,
+      locale,
+      capabilityLabel,
+      pagePlaceholderKey: "commands.config.panel.model_provider_page_placeholder",
+      encodeAdvanceValue: encodeConfigProviderRangeValue,
+    });
 
     components.push(
       buildModelRoutingControl({
@@ -323,14 +310,9 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
         activeProvider: slot.currentProvider,
         providerEntries: buildSwitchProviderOptions({
           locale,
-          capabilityLabel,
-          visibleEntries,
+          visibleEntries: routingWindow.visibleEntries,
+          advanceEntry: routingWindow.advanceEntry,
           showClear,
-          overflows,
-          rangeIndex,
-          rangeCount,
-          windowSize,
-          expandedProvider: slot.expandedProvider,
         }),
         customId: buildConfigRouteId({ action: "model-provider-select", locale, capability }),
         // A server has nothing to inherit from, so the leading entry is a clear rather than a
@@ -339,15 +321,7 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
         serverDefaultLabel: showClear ? localizer(locale, "commands.config.panel.model_no_model_option") : undefined,
         serverDefaultDescription: clearDescriptionKey ? localizer(locale, clearDescriptionKey) : undefined,
         serverDefaultDisplay: localizer(locale, "commands.config.panel.none_label"),
-        // While expanded the active model is the least useful thing the placeholder could say: the
-        // reader has already chosen a provider and is looking for its pages.
-        placeholderOverride:
-          expandedPageCount > 0 && slot.expandedProvider
-            ? localizer(locale, "commands.config.panel.model_provider_page_placeholder", {
-                capability: capabilityLabel,
-                provider: getProviderDisplayName(slot.expandedProvider),
-              })
-            : undefined,
+        placeholderOverride: routingWindow.placeholderOverride,
         // A model assignment can outlive the provider it came from, so the clear entry keeps the
         // select live even with nothing eligible left to pick; without it the select is inert
         // rather than absent, and the placeholder is what keeps the assignment readable.
@@ -742,7 +716,7 @@ ${localizer(locale, "commands.config.panel.logit_bias_description")}
   }
 
   if (view.selectedProvider?.toLowerCase() === "novelai" && view.naiPresetView) {
-    const remainingTextLength = measureComponentTextLength(components);
+    const remainingTextLength = measureFormattedPanelTextLength(components);
     const displayBudget = Math.max(
       0,
       DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX - remainingTextLength - CONFIG_NAI_PRESET_DISPLAY_HEADROOM,

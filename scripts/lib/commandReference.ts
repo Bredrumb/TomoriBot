@@ -5,6 +5,16 @@ import { initializeLocalizer } from "../../src/utils/text/localizer";
 
 export const COMMAND_REFERENCE_PATH = join(process.cwd(), "docs", "en", "features", "command-reference.md");
 
+/**
+ * Ends a script that loaded the command graph successfully.
+ *
+ * Loading command modules leaves an open handle, so a successful script cannot fall off the end
+ * of `main()`: its runner would kill the process and report a false failure instead.
+ */
+export function exitAfterCommandGraphLoad(): never {
+  process.exit(0);
+}
+
 type CommandOption = {
   name?: string;
   description?: string;

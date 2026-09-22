@@ -5,11 +5,13 @@ export default {
     empty_guild: `This server has no MCPs yet.`,
     empty_dm: `This DM workspace has no MCPs yet.`,
     unavailable: `MCP registrations could not be loaded. Retry to try again.`,
-    stale_warning: `Saved data may be out of date because the read failed.\nWrite actions are unavailable until a fresh read succeeds.`,
+    stale_warning:
+      "Saved data may be out of date because the read failed. Write actions are unavailable until a fresh read succeeds.",
     read_unavailable: `Current MCP registrations could not be loaded safely.`,
     retry: `Retry`,
     add: `+ Add MCP`,
-    trust_warning: `Only add MCP servers you trust. A malicious server may\ncollect tool input, return false or harmful results, or\nattempt prompt injection.`,
+    trust_warning:
+      "Only add MCP servers you trust. A malicious server may collect tool input, return false or harmful results, or attempt prompt injection.",
     type_general: `General Purpose`,
     type_general_description: `No built-in tools will be disabled`,
     type_web_search: `Web Search`,
@@ -27,7 +29,8 @@ export default {
     disable: `Disable`,
     remove: `Remove`,
     remove_title: `Remove MCP Server`,
-    remove_description: `Remove **{name}** and its saved endpoint/auth\nregistration? Any pooled connection will be\ndisconnected. Re-adding the server is the recovery path.`,
+    remove_description:
+      "Remove **{name}** and its saved endpoint/auth registration? Any pooled connection will be disconnected. Re-adding the server is the recovery path.",
     remove_confirm: `Remove MCP Server`,
     cancel: `Cancel`,
     add_modal_title: `Add MCP Server`,

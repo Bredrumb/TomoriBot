@@ -82,10 +82,9 @@ export function buildTextPreview(
     return { text: "", truncated: false, shownChars: 0, totalChars: 0 };
   }
 
-  // Guard the fence first so the guard's expansion counts against the
-  //    budget instead of being appended past it. A guarded run never contains
-  //    two adjacent backticks, so slicing it can at worst leave a single
-  //    trailing backtick, which cannot re-open a fence.
+  // Guard the fence first so the guard's expansion counts against the budget instead of being
+  // appended past it. A guarded run never contains two adjacent backticks, so slicing it can at
+  // worst leave a single trailing backtick, which cannot re-open a fence.
   const guardedFull = neutralizeFenceRuns(source);
   const truncated = getDiscordTextLength(guardedFull) > budget;
   const guarded = truncated ? truncateDiscordText(guardedFull, budget, "") : guardedFull;

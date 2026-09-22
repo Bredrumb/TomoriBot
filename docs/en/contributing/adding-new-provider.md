@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Add a New AI Provider"
 ---
 
@@ -461,6 +461,10 @@ Use this as the last pass before you call a provider integration "done".
 - create `src/providers/{providerName}/presetGenerator.ts` with one export:
   - `generatePresetFromPrompt{Provider}(apiKey, params, locale, options)`: structured output POST with an optional tool-calling loop
 - import `buildPresetResponseSchema()`, `buildPresetPrompt()`, `buildToolErrorResult()`, and the shared types (`PresetContentPart`, `PresetMessage`, `PresetToolCall`) from `src/providers/utils/presetCommon.ts`
+- turn the response into preset fields with `extractPresetGenerationFields(responseText, parse)` from the same module, where `parse` is `JSON.parse` or the vendor's own response parser:
+  - the helper repairs a payload the output-token ceiling truncated, then enforces the 6-attribute and 5-pair contract, so a provider must not re-implement either check
+  - on failure it returns the exact `PresetFieldFailure` code; map that to `errorType` with `presetGenerationFailureErrorType()`, and pick the user-facing text with `presetGenerationFailureMessage()` for a schema miss (`PRESET_SCHEMA_MISS_CODES`) versus a provider-named message when the response was unreadable
+  - a tool-call provider that already holds a decoded object calls `validatePresetGenerationFields()` directly, since there is no text to parse or repair
 - choose the right structured output mode for the vendor:
   - **strict schema** (`json_schema` response format): preferred when the vendor supports it (e.g. OpenRouter, NVIDIA); validate the response shape locally if needed
   - **JSON object mode** (`json_object` response format): required for vendors that only support JSON-mode (e.g. DeepSeek, ZAI); inject the JSON schema into the system prompt via a helper like `build{Provider}PresetSystemPrompt()` and run Zod validation locally

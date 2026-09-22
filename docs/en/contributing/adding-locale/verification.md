@@ -19,9 +19,10 @@ bun run check-locale-placeholders --locale=<code>  # {placeholder} parity agains
 bun run check-locale-lengths                       # Discord 45/100 code-point caps
 bun run check-locale-markers                       # protocol keys, templates, collisions
 bun run check-locale-links --locale=<code>         # project routes and heading fragments
-bun run find-stale-translations --locale=<code>    # untranslated English strings
+bun run find-stale-translations --locale=<code>    # review queue; default includes history-backed drift detection
 bun run check-intent-packs --locale=<code> --requests=<file.json>  # natural requests reach tools
 # Add --export to write the review list to scripts/maintenance/stale-translations.json.
+# Add --reason=drifted for historical source drift, or --reason=unfollowed --base=origin/main for branch follow-up.
 
 # Repository gates
 bun run check-seed-catalogs   # i18n map shape and catalog invariants
@@ -49,7 +50,7 @@ advertises an alternate fails the build rather than warning.
 | `check-locale-lengths` | Modal titles or input labels over 45 code points, or command, option, choice, and placeholder text over 100 | Exit 1 |
 | `check-locale-markers` | A protocol key absent from an authored locale, a template placeholder mismatch, a missing literal anchor, or two keys rendering the same title | Exit 1 |
 | `check-locale-links` | A project-owned docs route or heading fragment that resolves to nothing | Exit 1 |
-| `find-stale-translations` | Values that are byte-identical to English, plus English-looking text in a non-Latin script, checked against each locale's expected script | Exit 0 with a report; it exits 1 only for an unauthored locale, so it never passes vacuously |
+| `find-stale-translations` | Values that are byte-identical to English, English-looking text in a non-Latin script, historical source drift, and branch-local English changes that a translation did not follow | Exit 0 with a report, findings or not; 1 for an invocation or script error such as an unauthored locale; 2 when a requested history scan cannot read the history it needs |
 | `check-intent-packs` | A deliberate target or `explicit_memory` pack that is empty for the locale, fewer than three requests for a target, or a request that does not reach its expected tools | Exit 1 |
 | `check-seed-catalogs` | `i18n` map shape, persona uniqueness, unpaired sample dialogues, sprite validity | Exit 1 |
 | `check` | Any type error, including a `pt-br` key that is not a `LocaleCode` | Exit 1 |
@@ -62,6 +63,51 @@ Two gates are known to report pre-existing debt that is not caused by a new loca
 - `check-locale-links --locale=ja` reports two Japanese heading-fragment drifts, in
   `src/locales/ja/providers.ts` and `src/locales/ja/commands/setup.ts`. Japanese catch-up owns them.
 
+### Drifted Translations
+
+A key can be fully translated and still be wrong, because the English it was written against has
+changed since. Neither comparison above can see that: the value is not identical to English, and it
+is written in the locale's own script. `find-stale-translations` reports these as a third reason,
+`drifted`.
+
+The baseline comes from Git rather than a stored manifest. `git blame` reports the commit that last
+changed each key's own translated line, and the English file at that commit is the English the
+translator was working from. A key is reported when its English now differs from that version. There
+is no artifact to regenerate and nothing to keep in sync, so the measurement cannot itself go stale.
+
+Two properties are worth knowing before acting on the list:
+
+- **The count is a floor, not a census.** The baseline is per key, so retranslating one key in a file
+  leaves its neighbours on their own older baselines. Drift is under-reported rather than invented.
+- **A listed key may still read correctly.** English can change wording without changing meaning, for
+  example a rename from `ImageGen` to `Image Generation`. Review each entry rather than
+  retranslating the list.
+
+Values are compared the way the runtime loads them: the localizer dedents a multi-line string by the
+indent its first line establishes, and this scan applies the same rule to both sides. A reflowed
+sentence is therefore not a change, while a newline the runtime keeps is. Markdown hard breaks,
+fenced blocks, and the `-#` panel markers survive that dedent, so editing one of them is reported.
+A value rewritten from a template literal to a quoted string is not a change either.
+
+Every input describes the same revision. The scan reads values and blame from `HEAD`, so an
+uncommitted edit to a locale file is ignored rather than half-applied, and the report never mixes a
+committed translation with working-tree provenance.
+
+The default reason set includes `drifted`, so the ordinary command also needs complete Git history.
+A shallow clone cannot answer that scan, and it fails in the direction that matters: blame attributes
+every line to the grafted root, whose English file is the newest the clone holds, so the comparison
+would find nothing and read as clean. That case exits 2 with the fetch
+command that unblocks it rather than printing a clean report. The reason subset also passes through
+`--export`, where each drifted entry carries the superseded English alongside the current value.
+
+### Branch Follow-up
+
+`bun run find-stale-translations --reason=unfollowed --base=origin/main` asks a narrower review question: which `en-US` keys did this branch add, materially change, or remove while a translation did not move with them? It compares the merge base with committed `HEAD`, so work that landed on `main` after the branch started is not blamed on the branch.
+
+Added and changed keys list existing translations to review separately from locales that still render the English fallback. Removed keys are listed for cleanup, not translation. Every non-English locale is advisory follow-up. A touched translation can still be wrong, and an untouched one can still be correct after a non-semantic English edit, so this reason exits zero on findings.
+
+This reason needs a usable base ref. A shallow clone or unavailable base exits 2 with the fetch or ref error instead of claiming the branch is clean. It shares `--export` with the other reasons; exported entries include the current English, prior English when applicable, and the current translation when one exists.
+
 Report a gate failure with its exact output rather than describing it. A gate that was not run is not a
 passed gate.
 
@@ -70,13 +116,12 @@ passed gate.
 Passing every localization gate does not make `bun run test` pass, because several locale checks live
 only in the unit lane:
 
-- **Panel line width.** `tests/unit/discord/panelProseWidth.test.ts` holds every authored panel line
-  to 65 characters, or 40 beside a thumbnail. `check-locale-lengths` measures Discord's hard caps, not
-  this layout budget, so a translation that runs longer than English passes one and fails the other.
-  The static scan measures the bare string; the payload walks run once per authored locale and
-  measure the rendered line, including a `-# ` or `> ` marker and the thumbnail budget. Shorten the
-  wording. Add a line break only where the builder applies the marker per line (`withLinePrefix`),
-  because a string rendered as `` `-# ${text}` `` loses the subtext style after its first line.
+- **Panel runtime formatting.** `tests/unit/discord/panelProseRuntime.test.ts` builds localized panel
+  payloads and verifies that the shared container boundary already formatted every `TextDisplay`.
+  Write natural prose and reserve newlines for paragraphs, lists, quote rows, and other semantic
+  structure. Thumbnail context and repeated `-# ` or `> ` markers are inferred from the component
+  tree. `check-locale-lengths` still enforces Discord's hard component limits, which runtime visual
+  wrapping does not replace.
 - **Fixtures that list the authored locales.** The personal language picker test asserts every
   endonym in `tests/unit/discord/personalConfigRoutes.test.ts`, and
   `tests/unit/db/personaNamingCatalog.test.ts` asserts each persona's `namingConfig` per language.
@@ -103,7 +148,8 @@ recover from an ambiguous title, and startup is the only place the ambiguity is 
 
 **A protocol key's translation is frozen after that locale's first release.**
 
-Editing a released protocol value orphans every marker embed already posted in that locale's servers.
+Editing a released protocol value orphans every embed already posted with the old title in that
+locale's servers, because classification rests on the rendered title alone.
 `sliceMessagesAtResetMarker` reports no marker rather than an error, so the user's `/reset` or
 `/refresh` quietly stops applying with no log line and no failing test.
 

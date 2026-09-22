@@ -22,7 +22,9 @@ import type { ToolNoticeKey } from "@/constants/toolNotices";
 import type { DeliberateToolTriggerMap } from "@/utils/tools/deliberateToolMode";
 import type { WorkaroundConfigState } from "@/utils/discord/workaroundConfigMapping";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
+import type { LocalizerVariables } from "@/types/discord/global";
 import type { GuildMcpConfigReadResult } from "@/utils/cache/guildMcpConfigCache";
+import { getLastDbError } from "@/utils/cache/tomoriStateCache";
 import type { AddressingStyle } from "@/types/personaNaming";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
@@ -210,6 +212,12 @@ export interface ConfigRouteDependencies {
     interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
     forceRefresh?: boolean,
   ): Promise<ConfigScope | null>;
+  /**
+   * Most recent workspace read failure, which is what separates a transient scope miss from a setup
+   * gap. The cache reader behind it also reports the post-restart grace window, so an empty read
+   * taken while connections are still settling is never presented as "not set up".
+   */
+  getLastDbError?(serverDiscId: string): { message: string; timestamp: number } | null;
   getPersonaAvatarData(
     interaction: GlobalRoutableInteraction | ChatInputCommandInteraction,
     persona: TomoriState,
@@ -331,14 +339,18 @@ export function asEphemeralComponentsV2FollowUp(
   } as InteractionReplyOptions;
 }
 
-export function terminalPayload(locale: string, key: string): InteractionEditReplyOptions {
+export function terminalPayload(
+  locale: string,
+  key: string,
+  variables?: LocalizerVariables,
+): InteractionEditReplyOptions {
   return validateAndFallbackPanelPayload(
     {
       components: [
         buildPanelContainer([
           {
             type: ComponentType.TextDisplay,
-            content: localizer(locale, key),
+            content: localizer(locale, key, variables),
           },
         ]),
       ],
@@ -347,6 +359,47 @@ export function terminalPayload(locale: string, key: string): InteractionEditRep
     },
     locale,
   );
+}
+
+export type ConfigMissingScopeKey = "commands.config.panel.not_setup" | "commands.config.panel.unavailable";
+
+/** The command a panel that has fallen behind the workspace is re-run with. */
+const CONFIG_PANEL_COMMAND = "/config";
+
+/** The interaction fields this copy depends on, so component and command callers share one helper. */
+interface ConfigScopeInteraction {
+  guildId: string | null;
+  user: { id: string };
+}
+
+/**
+ * Chooses the copy for a `/config` interaction whose workspace scope could not be resolved.
+ *
+ * An empty workspace read has two causes that need opposite answers. A workspace that never ran
+ * `/setup` needs the setup instruction, while a failed read leaves the setup state unknown, so
+ * sending an admin to `/setup` there would be a false diagnosis of a transient fault.
+ */
+export function missingScopeMessageKey(
+  interaction: ConfigScopeInteraction,
+  dependencies: Pick<ConfigRouteDependencies, "getLastDbError"> = {},
+): ConfigMissingScopeKey {
+  const lookup = dependencies.getLastDbError ?? getLastDbError;
+  return lookup(interaction.guildId ?? interaction.user.id)
+    ? "commands.config.panel.unavailable"
+    : "commands.config.panel.not_setup";
+}
+
+/**
+ * Copy for a route that outlived the persona row it names. A write must never fall back to another
+ * persona, so the panel is re-run rather than silently applied somewhere else.
+ */
+export function outdatedConfigPanelMessage(locale: string): string {
+  return localizer(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });
+}
+
+/** The stale-panel copy as a terminal container, for routes that answer with components. */
+export function outdatedConfigPanelPayload(locale: string): InteractionEditReplyOptions {
+  return terminalPayload(locale, "commands.config.panel.outdated_panel", { command: CONFIG_PANEL_COMMAND });
 }
 
 export function deniedReceipt(locale: string): PanelReceipt {

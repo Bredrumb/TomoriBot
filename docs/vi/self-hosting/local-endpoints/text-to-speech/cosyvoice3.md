@@ -125,10 +125,16 @@ Sau đó mở `/config` > Models > Switch Models và kích hoạt endpoint giọ
 
 Đối với sao chép zero-shot thông thường:
 
-1. Chuẩn bị một mẫu âm thanh rõ ràng dài từ 10 đến 20 giây với một người nói và ít hoặc không có tiếng ồn nền.
+1. Chuẩn bị một mẫu âm thanh rõ ràng dài từ 3 đến 30 giây với một người nói và ít hoặc không có tiếng ồn nền.
 2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải mẫu âm thanh lên.
-3. Nhập bản phiên âm khớp khi có thể. CosyVoice 3 sử dụng bản phiên âm này cho đường dẫn zero-shot có hỗ trợ bản phiên âm.
+3. Nhập bản phiên âm khớp khi có thể. CosyVoice 3 sử dụng bản phiên âm này cho đường dẫn zero-shot có hỗ trợ bản phiên âm, và nó được token hóa như một tiền tố prompt, nên bản phiên âm phải mô tả âm thanh thực sự được dùng: 30 giây đầu tiên của clip.
 4. Mở `/config` trong phần Persona > Voice và gán mẫu âm thanh đó cho persona.
+
+Bộ token hóa giọng nói của CosyVoice hoạt động trên cửa sổ prompt 30 giây, và thượng nguồn thực thi điều đó bằng cách báo lỗi: giao diện web của chính thượng nguồn hướng dẫn giữ âm thanh prompt dưới 30 giây, và bộ token hóa khẳng định giới hạn đó thay vì rút ngắn chính âm thanh. Sidecar thì cắt bớt, nên một clip dài hơn được cắt về 30 giây đầu tiên và quá trình tổng hợp vẫn tiếp tục. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` đặt cửa sổ đó, và việc cắt bớt được ghi log ra console của sidecar.
+
+Việc cắt bớt đọc clip ngay tại chỗ, nghĩa là embedding người nói được lấy từ đúng 30 giây đầu đó, cùng đoạn với các token giọng nói của prompt. CosyVoice điều kiện hóa dựa trên chính cặp này, nên một tham chiếu dài không mất đi bất cứ thứ gì mà engine vốn sẽ dùng. Tác động thực tế là chỉ 30 giây đầu của một tệp tải lên dài mới định hình giọng nói, còn phần còn lại vẫn được tải lên và lưu trữ mà không được dùng đến.
+
+Giữ mẫu được gán trong khoảng 10 đến 20 giây sẽ nằm trong cửa sổ với biên độ thoải mái, đồng thời giữ cho bản phiên âm đã lưu khớp với âm thanh mà model đọc.
 
 Hỗ trợ sao chép chéo ngôn ngữ. Người nói tham chiếu có thể nói ngôn ngữ khác với văn bản được tạo. Nếu không có bản phiên âm tham chiếu, wrapper sẽ sử dụng đường dẫn chéo ngôn ngữ chuyên dụng của CosyVoice 3.
 
@@ -154,7 +160,7 @@ Sử dụng `/generate voice-message` để thử nghiệm endpoint đang hoạt
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Độ dài văn bản tổng hợp tối đa |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Bật trình tạo streaming nội bộ của CosyVoice |
 | `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Kích thước âm thanh tham chiếu sau giải mã tối đa |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Thời lượng âm thanh tham chiếu tối đa |
+| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Cửa sổ prompt cho bộ token hóa giọng nói; tham chiếu dài hơn được cắt về N giây đầu tiên |
 | `COSYVOICE3_BEARER_TOKEN` | chưa đặt | Bearer token tùy chọn cho `/synthesize` |
 | `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Cho phép liên kết ngoài loopback; hãy xem xét việc lộ ra ngoài và sử dụng bearer token |
 | `COSYVOICE3_SPEED` | `1.0` | Hệ số nhân tốc độ dạng số toàn cục được chuyển đến suy luận thượng nguồn |

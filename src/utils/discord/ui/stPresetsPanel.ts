@@ -155,7 +155,6 @@ export function buildStPresetsPanelComponents(input: StPresetsPanelRenderInput):
     return components;
   }
 
-  // Preset Selector building
   // A repaint that names a preset has to land on the selector page holding it. Defaulting to the
   // first page instead drops the reader back to page 1 after every action taken further in, and
   // leaves the selection off-screen so no option carries the default marker.

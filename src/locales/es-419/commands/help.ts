@@ -353,259 +353,114 @@ Ingresa \`{project_id}::{location}\` con {configSetup} o {configApikeySet}
       description: `Guía sobre cómo empezar conmigo y usar mis funciones`,
       get_api_key: {
         title: `Obtener una clave de API`,
-        description: `Una clave de API me da acceso al modelo de un proveedor de
-IA. Todo lo que genero se factura a esa clave, así que
-trátala como cualquier otra contraseña.
-Para terminar necesito una:
-> **1.** Elige un proveedor para abrir su guía.
-> **2.** Copia la clave. **NO la compartas** con nadie, y
-> nunca la pegues en un canal: solo en la caja que te
-> abrirá {setup}.
-> **3.** Ejecuta {setup} y pega la clave cuando te la pida.`,
-        picker_footer: `-# La segunda lista es opcional: Brave Search agrega
--# resultados web, y ElevenLabs agrega voz. Cada uno
--# abre su guía, y no son necesarios para terminar.
--# Si tu endpoint no está listado, omite la clave y
--# lee **Endpoints personalizados (Avanzado)** aquí.`,
+        description:
+          "Una clave de API me da acceso al modelo de un proveedor de IA. Todo lo que genero se factura a esa clave, así que trátala como cualquier otra contraseña. Para terminar necesito una:\n> **1.** Elige un proveedor para abrir su guía.\n> **2.** Copia la clave. **NO la compartas** con nadie, y nunca la pegues en un canal: solo en la caja que te abrirá {setup}.\n> **3.** Ejecuta {setup} y pega la clave cuando te la pida.",
+        picker_footer:
+          "-# La segunda lista es opcional: Brave Search agrega resultados web, y ElevenLabs agrega voz. Cada uno abre su guía, y no son necesarios para terminar. Si tu endpoint no está listado, omite la clave y lee **Endpoints personalizados (Avanzado)** aquí.",
       },
       change_trigger_behavior: {
         title: `Cambiar comportamiento de activación`,
-        description: `De forma predeterminada respondo si me llamas por mi nombre,
-me mencionas, o me respondes. Puedes ampliar eso, limitarlo
-o apagarlo por canal.
-
-**Dónde tengo permitido hablar**
-Puedes hacer que solo responda en canales en la lista blanca.
-Agrégalos en {moderationWhitelist}.
-> Un canal que no esté en la lista permanece en silencio.
-
-**Hablar por mi cuenta**
-{configAutoTrigger} me permite enviar automáticamente un
-mensaje cada pocos mensajes o al azar.
-
-**Activarme solo con menciones**
-El modo de activación deliberada evita que responda a un
-simple llamado por nombre. Me hace esperar por menciones.
-Enciéndelo en {configBehaviorTrigger}.`,
+        description:
+          "De forma predeterminada respondo si me llamas por mi nombre, me mencionas, o me respondes. Puedes ampliar eso, limitarlo o apagarlo por canal.\n\n**Dónde tengo permitido hablar**\nPuedes hacer que solo responda en canales en la lista blanca. Agrégalos en {moderationWhitelist}.\n> Un canal que no esté en la lista permanece en silencio.\n\n**Hablar por mi cuenta**\n{configAutoTrigger} me permite enviar automáticamente un mensaje cada pocos mensajes o al azar.\n\n**Activarme solo con menciones**\nEl modo de activación deliberada evita que responda a un simple llamado por nombre. Me hace esperar por menciones. Enciéndelo en {configBehaviorTrigger}.",
       },
       create_first_persona: {
         title: `Crea tu primera persona`,
-        description: `Una *persona* soy yo con otro nombre, avatar y personalidad,
-¡pero con las mismas funciones! Edita la que ya tienes, o
-crea nuevas.
-
-**Cambia la que tienes**
-{configPersonaGeneral} establece mi nombre, personalidad y
-cómo me dirijo a las personas. {configPersonaAppearance}
-establece mi avatar.
-
-**Escribe una nueva desde una oración**
-{personaGenerate} construye una persona completa desde una
-descripción corta. {personaCreate} te da la plantilla en
-blanco.
-
-**Trae una desde otro lugar**
-{personaImport} acepta tarjetas de personajes descargadas de
-sitios de tarjetas como botbooru o chub.`,
-        footer: `Puedes mantener varias personas a la vez. Ve **Múltiples
--# personas** en Funciones.`,
+        description:
+          "Una *persona* soy yo con otro nombre, avatar y personalidad, ¡pero con las mismas funciones! Edita la que ya tienes, o crea nuevas.\n\n**Cambia la que tienes**\n{configPersonaGeneral} establece mi nombre, personalidad y cómo me dirijo a las personas. {configPersonaAppearance} establece mi avatar.\n\n**Escribe una nueva desde una oración**\n{personaGenerate} construye una persona completa desde una descripción corta. {personaCreate} te da la plantilla en blanco.\n\n**Trae una desde otro lugar**\n{personaImport} acepta tarjetas de personajes descargadas de sitios de tarjetas como botbooru o chub.",
+        footer: "Puedes mantener varias personas a la vez. Ve **Múltiples personas** en Funciones.",
       },
       explore_features: {
         title: `¡Explora mis funciones!`,
-        description: `La configuración está lista. Esto es lo que puedo hacer
-ahora que puedo hablar.
-- **Usa emoji y stickers de este servidor** una vez
-  ejecutes {expressionsInitialize}.
-- **Saluda a nuevos miembros** desde {configWelcome}.
-- **Recuerda y recuerda**: solo pídeme que te lo recuerde,
-  o cuéntame algo que valga la pena guardar.
-- **Busca en la web** y usa herramientas, encendidas en
-  {configTools}.
-- **Crea imágenes, videos y voz** con {generateImage},
-  {generateVideo}, y {generateVoice}.
-
-La mayoría de mis ajustes viven en {config}.`,
-        footer: `**Brave Search** agrega resultados web a la búsqueda que ya
--# hago. Necesita su propia clave, y **Obtener una clave de
--# API** en Configuración abre su guía.
--# El sitio de documentación es la versión completa de este
--# panel, y explica cada ajuste en detalle.`,
+        description:
+          "La configuración está lista. Esto es lo que puedo hacer ahora que puedo hablar.\n- **Usa emoji y stickers de este servidor** una vez ejecutes {expressionsInitialize}.\n- **Saluda a nuevos miembros** desde {configWelcome}.\n- **Recuerda y recuerda**: solo pídeme que te lo recuerde, o cuéntame algo que valga la pena guardar.\n- **Busca en la web** y usa herramientas, encendidas en {configTools}.\n- **Crea imágenes, videos y voz** con {generateImage}, {generateVideo}, y {generateVoice}.\n\nLa mayoría de mis ajustes viven en {config}.",
+        footer:
+          "**Brave Search** agrega resultados web a la búsqueda que ya hago. Necesita su propia clave, y **Obtener una clave de API** en Configuración abre su guía. El sitio de documentación es la versión completa de este panel, y explica cada ajuste en detalle.",
       },
     },
     personal_profile: {
       title: `Perfil personal`,
-      description: `Ajustes que te pertenecen y te siguen a cada servidor en el
-que estoy.`,
+      description: "Ajustes que te pertenecen y te siguen a cada servidor en el que estoy.",
       nickname_pronouns: {
         title: `Tu apodo y pronombres`,
-        description: `Dime cómo llamarte, lo cual usaré en todas partes.
-
-Establécelos en {personalProfile}.
-> Apodo: cómo te llamo en lugar de tu nombre de Discord
-> Prefijo y sufijo: un título u honorífico, como \`-san\`
-> Pronombres: \`ella\`, \`él\`, \`cualquiera\` o tu nombre
-
-Deja un campo en blanco y volveré a usar tu nombre real de
-Discord y los hábitos de nombramiento de la persona.`,
-        footer: `Una sola persona puede dirigirse a ti de forma diferente.
--# Ajústalo bajo Perfil > Preferencias de la persona.`,
+        description:
+          "Dime cómo llamarte, lo cual usaré en todas partes.\n\nEstablécelos en {personalProfile}.\n> Apodo: cómo te llamo en lugar de tu nombre de Discord\n> Prefijo y sufijo: un título u honorífico, como `-san`\n> Pronombres: `ella`, `él`, `cualquiera` o tu nombre\n\nDeja un campo en blanco y volveré a usar tu nombre real de Discord y los hábitos de nombramiento de la persona.",
+        footer:
+          "Una sola persona puede dirigirse a ti de forma diferente. Ajústalo bajo Perfil > Preferencias de la persona.",
       },
       personal_memories: {
         title: `Memorias personales`,
-        description: `Cosas que recuerdo sobre ti en todos los servidores.
-
-**Solo dímelo**
-Dilo en el chat y lo guardaré. Aparecerá un mensaje de
-confirmación cuando esto suceda.
-
-**O gestiónalas a mano**
-{personalMemories} enumera todo lo que tengo sobre ti y te
-permite editar o eliminar cualquier entrada individual.
-
-**Decide cuánto puedo usar**
-{personalPrivacy} establece tu nivel de privacidad, desde la
-personalización completa hasta ninguna.`,
-        footer: `Estas están separadas de las memorias del servidor,
--# que cualquiera aquí puede ver y editar.`,
+        description:
+          "Cosas que recuerdo sobre ti en todos los servidores.\n\n**Solo dímelo**\nDilo en el chat y lo guardaré. Aparecerá un mensaje de confirmación cuando esto suceda.\n\n**O gestiónalas a mano**\n{personalMemories} enumera todo lo que tengo sobre ti y te permite editar o eliminar cualquier entrada individual.\n\n**Decide cuánto puedo usar**\n{personalPrivacy} establece tu nivel de privacidad, desde la personalización completa hasta ninguna.",
+        footer: "Estas están separadas de las memorias del servidor, que cualquiera aquí puede ver y editar.",
       },
       personal_providers: {
         title: `Proveedores personales (Avanzado)`,
-        description: `Responde con tu propia clave de API y modelo en lugar de
-los del servidor, donde sea que hables conmigo.
-
-**Guarda un proveedor**
-{personalProviders} almacena tu clave y enciende tu
-modelo de texto personal de inmediato.
-
-**Elige un modelo diferente**
-{personalModels} cambia modelos, muestreadores y más.
-> Tu configuración personal solo afecta tus respuestas.
-> Nadie más en el servidor es cambiado.
-
-Algunos servidores requieren esto. Si un servidor tiene
-BYOK encendido, no puedo responderte hasta que guardes
-un proveedor aquí.`,
+        description:
+          "Responde con tu propia clave de API y modelo en lugar de los del servidor, donde sea que hables conmigo.\n\n**Guarda un proveedor**\n{personalProviders} almacena tu clave y enciende tu modelo de texto personal de inmediato.\n\n**Elige un modelo diferente**\n{personalModels} cambia modelos, muestreadores y más.\n> Tu configuración personal solo afecta tus respuestas.\n> Nadie más en el servidor es cambiado.\n\nAlgunos servidores requieren esto. Si un servidor tiene BYOK encendido, no puedo responderte hasta que guardes un proveedor aquí.",
       },
     },
     custom_endpoints: {
       title: `Endpoints personalizados (Avanzado)`,
-      description: `Apúntame a un endpoint que alojes o en el que confíes: Ollama,
-LM Studio, LiteLLM, KoboldCPP o ComfyUI.
-> {providers} registra uno para el servidor.
-> {personalProviders} registra uno solo para ti.`,
+      description:
+        "Apúntame a un endpoint que alojes o en el que confíes: Ollama, LM Studio, LiteLLM, KoboldCPP o ComfyUI.\n> {providers} registra uno para el servidor.\n> {personalProviders} registra uno solo para ti.",
       text_models: {
         title: `Modelos de texto`,
-        description: `Elige **Añadir nuevo endpoint personalizado**, luego dale una
-etiqueta, una URL base y su estilo de API. Agrega un token de
-autenticación si lo necesita.
-
-Selecciona la etiqueta, elige **+ Añadir nuevo modelo de
-texto**, e ingresa el código exacto del modelo. Agregarlo lo
-activa.
-> Declara la visión, uso de herramientas y salida
-> estructurada honestamente. Confío en esas banderas.
-
-Cambia a él más tarde desde {configSwitchModels}.`,
-        footer: `La referencia completa de estilo de API y compatibilidad
--# está en el sitio de documentación.`,
+        description:
+          "Elige **Añadir nuevo endpoint personalizado**, luego dale una etiqueta, una URL base y su estilo de API. Agrega un token de autenticación si lo necesita.\n\nSelecciona la etiqueta, elige **+ Añadir nuevo modelo de texto**, e ingresa el código exacto del modelo. Agregarlo lo activa.\n> Declara la visión, uso de herramientas y salida estructurada honestamente. Confío en esas banderas.\n\nCambia a él más tarde desde {configSwitchModels}.",
+        footer: "La referencia completa de estilo de API y compatibilidad está en el sitio de documentación.",
       },
       comfyui: {
         title: `ComfyUI (para video e imagen)`,
-        description: `Construye y prueba el flujo de trabajo en ComfyUI, luego
-expórtalo con **Save (API Format)**.
-
-Pon el marcador de posición del prompt donde debe ir, y los
-demás donde quieras el tamaño, duración, o código.
-
-Registra el endpoint con Compatibilidad \`ComfyUI\` (por
-ejemplo \`http://127.0.0.1:8188\`), luego agrega un modelo de
-imagen o video y sube el JSON exportado.
-> El gráfico tiene que terminar en un nodo de guardado
-> real. Los nodos de solo vista previa no dejan un archivo.`,
-        footer: `Flujos listos para usar se envían en el repositorio, y
--# la lista completa de marcadores de posición está en la
--# documentación.`,
+        description:
+          "Construye y prueba el flujo de trabajo en ComfyUI, luego expórtalo con **Save (API Format)**.\n\nPon el marcador de posición del prompt donde debe ir, y los demás donde quieras el tamaño, duración, o código.\n\nRegistra el endpoint con Compatibilidad `ComfyUI` (por ejemplo `http://127.0.0.1:8188`), luego agrega un modelo de imagen o video y sube el JSON exportado.\n> El gráfico tiene que terminar en un nodo de guardado real. Los nodos de solo vista previa no dejan un archivo.",
+        footer:
+          "Flujos listos para usar se envían en el repositorio, y la lista completa de marcadores de posición está en la documentación.",
       },
       text_to_speech: {
         title: `Texto a voz (para voz)`,
-        description: `Registra un endpoint de voz de la misma manera, luego dale a
-cada persona una voz.
-
-Tanto servicios alojados como autoalojados funcionan. Registra
-el endpoint, luego agrégale un modelo de voz.
-> Asigna la voz en {configPersonaVoice}.
-> Ajusta la velocidad y valores en {configVoices}.`,
-        footer: `Los mensajes de voz que me envíes se transcriben a través
--# de la misma lista. Para voces alojadas, ElevenLabs tiene
--# su propia guía en **Obtener una clave de API**.`,
+        description:
+          "Registra un endpoint de voz de la misma manera, luego dale a cada persona una voz.\n\nTanto servicios alojados como autoalojados funcionan. Registra el endpoint, luego agrégale un modelo de voz.\n> Asigna la voz en {configPersonaVoice}.\n> Ajusta la velocidad y valores en {configVoices}.",
+        footer:
+          "Los mensajes de voz que me envíes se transcriben a través de la misma lista. Para voces alojadas, ElevenLabs tiene su propia guía en **Obtener una clave de API**.",
       },
     },
     multiple_personas: {
       title: `Múltiples personas`,
-      description: `Puedes tener múltiples personas en un servidor, ¡cada una
-con su propio nombre, memorias y agendas!`,
+      description:
+        "Puedes tener múltiples personas en un servidor, ¡cada una con su propio nombre, memorias y agendas!",
       mains_alters_title: `Principales y alters`,
-      mains_alters_body: `La persona principal me representa en el servidor. Un alter
-es una segunda identidad por la que puedo hablar, con su
-propio nombre y avatar en el mensaje.`,
+      mains_alters_body:
+        "La persona principal me representa en el servidor. Un alter es una segunda identidad por la que puedo hablar, con su propio nombre y avatar en el mensaje.",
       bringing_in_title: `Traer a una persona`,
-      bringing_in_body: `{personaImport} toma una tarjeta de personaje como archivo:
-> Tarjeta \`.png\` de TomoriBot o SillyTavern
-> Tarjeta \`.json\` de TomoriBot o SillyTavern
-> Archivo \`.charx\`, Character Card V3
-
-Solo se lee el texto. Los sprites, audios y videos incluidos
-se omiten, configúralos tú mismo bajo
-{configPersonaAppearance} y {configPersonaSprites}.`,
+      bringing_in_body:
+        "{personaImport} toma una tarjeta de personaje como archivo:\n> Tarjeta `.png` de TomoriBot o SillyTavern\n> Tarjeta `.json` de TomoriBot o SillyTavern\n> Archivo `.charx`, Character Card V3\n\nSolo se lee el texto. Los sprites, audios y videos incluidos se omiten, configúralos tú mismo bajo {configPersonaAppearance} y {configPersonaSprites}.",
       where_to_find_title: `Dónde encontrar tarjetas`,
-      where_to_find_body: `Haz las tuyas con {personaGenerate} o {personaCreate}, o
-busca una que ya exista.
-
-Sitios de tarjetas como botbooru y chub alojan miles de
-ellas. Son sitios de otras personas, y una tarjeta escrita
-para otro bot puede no convertirse limpiamente.`,
+      where_to_find_body:
+        "Haz las tuyas con {personaGenerate} o {personaCreate}, o busca una que ya exista.\n\nSitios de tarjetas como botbooru y chub alojan miles de ellas. Son sitios de otras personas, y una tarjeta escrita para otro bot puede no convertirse limpiamente.",
       talking_title: `Dejar que hablen entre ellas`,
-      talking_body: `Dale a cada persona sus propias palabras de activación y
-canales en {configPersonaTriggers}, y responderán juntas
-en la misma conversación.`,
+      talking_body:
+        "Dale a cada persona sus propias palabras de activación y canales en {configPersonaTriggers}, y responderán juntas en la misma conversación.",
       footer: `Comparte una tuya con {personaExport}.`,
     },
     media_generation: {
       title: `Generación multimedia`,
-      description: `Puedo hacer imágenes, video y voz, ya sea con un comando o
-porque me lo pediste.
-> Cada uno cuenta para la cuota del servidor. Ve **Cuotas**
-> bajo Moderación.`,
+      description:
+        "Puedo hacer imágenes, video y voz, ya sea con un comando o porque me lo pediste.\n> Cada uno cuenta para la cuota del servidor. Ve **Cuotas** bajo Moderación.",
       image_generation: {
         title: `Generación de imágenes`,
-        description: `{generateImage} abre un cuadro para prompt. Escribe tu prompt
-o elige **Dibuja lo que ocurre ahora** y lo haré.
-> Adjunta hasta tres imágenes de referencia.
-> Elige la relación de aspecto en el mismo cuadro.
-
-Cualquier proveedor o endpoint guardado que incluya soporte de
-imagen puede dibujar, y {providers} muestra cuáles lo hacen.
-Si no puede usar imágenes de referencia lo dirá.`,
+        description:
+          "{generateImage} abre un cuadro para prompt. Escribe tu prompt o elige **Dibuja lo que ocurre ahora** y lo haré.\n> Adjunta hasta tres imágenes de referencia.\n> Elige la relación de aspecto en el mismo cuadro.\n\nCualquier proveedor o endpoint guardado que incluya soporte de imagen puede dibujar, y {providers} muestra cuáles lo hacen. Si no puede usar imágenes de referencia lo dirá.",
         footer: `Los valores predeterminados viven en {configImageDefaults}.`,
       },
       video_generation: {
         title: `Generación de video`,
-        description: `{generateVideo} toma un prompt, y opcionalmente un marco
-inicial de una imagen que ya esté en el canal.
-
-Cualquier proveedor o endpoint que indique soporte de video
-puede crear uno. {providers} muestra cuáles lo hacen.
-> El video es lento y costoso en todas partes. Espera.`,
+        description:
+          "{generateVideo} toma un prompt, y opcionalmente un marco inicial de una imagen que ya esté en el canal.\n\nCualquier proveedor o endpoint que indique soporte de video puede crear uno. {providers} muestra cuáles lo hacen.\n> El video es lento y costoso en todas partes. Espera.",
       },
       speech_generation: {
         title: `Generación de voz`,
-        description: `{generateVoice} convierte texto en un mensaje de voz en la
-voz de la persona actual.
-
-Un endpoint de voz debe estar registrado primero, alojado o
-autoalojado: ve **Endpoints personalizados (Avanzado)**.
-> Cada persona puede sonar diferente. La voz viene de
-> {configPersonaVoice}.`,
+        description:
+          "{generateVoice} convierte texto en un mensaje de voz en la voz de la persona actual.\n\nUn endpoint de voz debe estar registrado primero, alojado o autoalojado: ve **Endpoints personalizados (Avanzado)**.\n> Cada persona puede sonar diferente. La voz viene de {configPersonaVoice}.",
       },
     },
     tons_of_tweakability: {
@@ -613,259 +468,157 @@ autoalojado: ve **Endpoints personalizados (Avanzado)**.
       description: `Personalízame a tus preferencias y las del servidor`,
       behavior_tuning: {
         title: `Ajuste de comportamiento`,
-        description: `Cómo escribo, cómo pienso y qué tengo permitido hacer.
-> **Modelo**: {configSwitchModels} elige qué modelo
-> responde, así como sus parámetros
-> **Humanizador**: {configBehaviorGeneral} controla qué tan
-> humana es mi entrega, desde formal hasta muy casual.
-> **Instrucciones**: también {configBehaviorGeneral},
-> para órdenes que aplican a toda respuesta.
-> **Herramientas**: {configTools} decide qué capacidades
-> puedo usar, como búsqueda web.`,
-        footer: `Perillas a nivel de muestreador (temperatura y amigos)
--# se ubican bajo {configParameters}.`,
+        description:
+          "Cómo escribo, cómo pienso y qué tengo permitido hacer.\n> **Modelo**: {configSwitchModels} elige qué modelo responde, así como sus parámetros\n> **Humanizador**: {configBehaviorGeneral} controla qué tan humana es mi entrega, desde formal hasta muy casual.\n> **Instrucciones**: también {configBehaviorGeneral}, para órdenes que aplican a toda respuesta.\n> **Herramientas**: {configTools} decide qué capacidades puedo usar, como búsqueda web.",
+        footer: "Perillas a nivel de muestreador (temperatura y amigos) se ubican bajo {configParameters}.",
       },
       server_wide_settings: {
         title: `Ajustes del servidor`,
-        description: `Límites que se aplican a todos en este servidor. Solo
-para administradores.
-> **Dónde hablo**: canales, límites de canal por persona
-> y enfriamientos, todo en {moderation}.
-> **Cuándo hablo por mi cuenta**: {configAutoTrigger}.
-> **Quién me activa**: roles permitidos, también bajo
-> {moderation}.
-> **Dónde van mis notas**: {configWelcome}.`,
-        footer: `Las excepciones de canal pueden dar a un canal su propio
--# modelo o reglas. Ve {configChannelOverrides}.`,
+        description:
+          "Límites que se aplican a todos en este servidor. Solo para administradores.\n> **Dónde hablo**: canales, límites de canal por persona y enfriamientos, todo en {moderation}.\n> **Cuándo hablo por mi cuenta**: {configAutoTrigger}.\n> **Quién me activa**: roles permitidos, también bajo {moderation}.\n> **Dónde van mis notas**: {configWelcome}.",
+        footer:
+          "Las excepciones de canal pueden dar a un canal su propio modelo o reglas. Ve {configChannelOverrides}.",
       },
       personal_settings: {
         title: `Ajustes personales`,
-        description: `Tus preferencias, que anulan en silencio las del servidor.
-> **Quién creo que eres**: apodo, pronombres y privacidad,
-> en {personalProfile}.
-> **Qué te responde**: tu propio proveedor y modelo, en
-> {personalProviders}.
-> **Cómo te trato**: modos de respuesta y Foco personal,
-> en {personalConfig}.
-
-Todo esto viaja contigo entre servidores.`,
-        footer: `El Foco personal permite que una persona te trate como su
--# enfoque, y se establece en {personalSpotlight}.`,
+        description:
+          "Tus preferencias, que anulan en silencio las del servidor.\n> **Quién creo que eres**: apodo, pronombres y privacidad, en {personalProfile}.\n> **Qué te responde**: tu propio proveedor y modelo, en {personalProviders}.\n> **Cómo te trato**: modos de respuesta y Foco personal, en {personalConfig}.\n\nTodo esto viaja contigo entre servidores.",
+        footer:
+          "El Foco personal permite que una persona te trate como su enfoque, y se establece en {personalSpotlight}.",
       },
     },
     memory_catalog: {
       title: `Memoria`,
-      description: `Guardo dos tipos de memoria: datos a largo plazo y una nota
-de trabajo de la conversación actual.`,
+      description: "Guardo dos tipos de memoria: datos a largo plazo y una nota de trabajo de la conversación actual.",
       long_term_memory: {
         title: `Memoria a largo plazo`,
-        description: `Datos que guardo permanentemente, para el servidor o para ti.
-
-**Enséñame**
-Dilo en el chat, o agrégalo a mano en {memories} para el
-servidor y {personalMemories} para ti mismo.
-
-**Haz que olvide**
-Ambos comandos listan cada entrada y eliminan cualquiera.
-
-**Dame documentos**
-{memories} también acepta archivos subidos.
-> Una memoria del servidor llega a todos aquí. Una memoria
-> personal solo aflora cuando eres parte de la charla.`,
+        description:
+          "Datos que guardo permanentemente, para el servidor o para ti.\n\n**Enséñame**\nDilo en el chat, o agrégalo a mano en {memories} para el servidor y {personalMemories} para ti mismo.\n\n**Haz que olvide**\nAmbos comandos listan cada entrada y eliminan cualquiera.\n\n**Dame documentos**\n{memories} también acepta archivos subidos.\n> Una memoria del servidor llega a todos aquí. Una memoria personal solo aflora cuando eres parte de la charla.",
       },
       short_term_memory: {
         title: `Memoria a corto plazo`,
-        description: `Mi nota de la conversación en este canal ahora mismo,
-guardada por separado por canal.
-
-Resumo lo que ocurre, así un hilo largo sigue coherente
-sin reenviar cada mensaje.
-> **Cadencia de actualización**: con qué frecuencia lo hago.
-> **Modo de renderizado**: si el resumen reemplaza los
-> mensajes recientes o se sitúa junto a ellos.
-> **Categorías**: hasta cinco campos, como \`Metas\`.
-
-Se ajustan en {configAdvancedMemory}. {memories} puede
-borrar una nota activa.`,
-        footer: `Pídeme que recuerde algo para siempre y se convertirá
--# en una memoria a largo plazo.`,
+        description:
+          "Mi nota de la conversación en este canal ahora mismo, guardada por separado por canal.\n\nResumo lo que ocurre, así un hilo largo sigue coherente sin reenviar cada mensaje.\n> **Cadencia de actualización**: con qué frecuencia lo hago.\n> **Modo de renderizado**: si el resumen reemplaza los mensajes recientes o se sitúa junto a ellos.\n> **Categorías**: hasta cinco campos, como `Metas`.\n\nSe ajustan en {configAdvancedMemory}. {memories} puede borrar una nota activa.",
+        footer: "Pídeme que recuerde algo para siempre y se convertirá en una memoria a largo plazo.",
       },
       rewards_punishments: {
         title: `Recompensas y castigos`,
-        description: `Comandos divertidos que noto y recuerdo. Sé amable
-conmigo, o no lo seas, y actuaré en consecuencia.
-> {reward} por un abrazo, beso, cosquillas o comida.
-> {punish} por un golpe, mordida, pellizco o nalgada.`,
+        description:
+          "Comandos divertidos que noto y recuerdo. Sé amable conmigo, o no lo seas, y actuaré en consecuencia.\n> {reward} por un abrazo, beso, cosquillas o comida.\n> {punish} por un golpe, mordida, pellizco o nalgada.",
         footer: `Elige a qué persona te refieres si hay varias activas.`,
       },
       memory_tagging: {
         title: `Etiquetado de memoria (Avanzado)`,
-        description: `Por defecto toda memoria se envía con cada mensaje.
-El etiquetado limita eso.
-> **Etiquetas clave**: una memoria etiquetada despierta
-> solo cuando su palabra clave aparece en la charla.
-> **Etiquetas de canal**: una etiqueta \`#canal\` limita una
-> memoria a ese canal, y se combina con otras etiquetas.
-
-Enciende ambas en {configAdvancedMemory}, luego usa
-{toolPromptSnapshot} para ver qué memorias están activas.`,
-        footer: `Los documentos subidos y el historial extraído
--# pueden llevar etiquetas de canal también.`,
+        description:
+          "Por defecto toda memoria se envía con cada mensaje. El etiquetado limita eso.\n> **Etiquetas clave**: una memoria etiquetada despierta solo cuando su palabra clave aparece en la charla.\n> **Etiquetas de canal**: una etiqueta `#canal` limita una memoria a ese canal, y se combina con otras etiquetas.\n\nEnciende ambas en {configAdvancedMemory}, luego usa {toolPromptSnapshot} para ver qué memorias están activas.",
+        footer: "Los documentos subidos y el historial extraído pueden llevar etiquetas de canal también.",
       },
     },
     scheduled_tasks: {
       title: `Tareas programadas`,
-      description: `Puedo responder en un temporizador, una vez o de forma
-repetida.`,
+      description: "Puedo responder en un temporizador, una vez o de forma repetida.",
       making_title: `Crear una`,
-      making_body: `Solo pregunta. "Recuérdame estirar a las 14:30" o "cada
-mañana, envía la pregunta del standup" es suficiente, y la
-configuraré y confirmaré los detalles.`,
+      making_body:
+        'Solo pregunta. "Recuérdame estirar a las 14:30" o "cada mañana, envía la pregunta del standup" es suficiente, y la configuraré y confirmaré los detalles.',
       changing_title: `Cambiar o cancelar una`,
-      changing_body: `{scheduledTaskEdit} abre cualquier tarea: su contenido,
-próxima hora, repetición y si te hace ping.
-{scheduledTaskRemove} borra una.`,
+      changing_body:
+        "{scheduledTaskEdit} abre cualquier tarea: su contenido, próxima hora, repetición y si te hace ping. {scheduledTaskRemove} borra una.",
       who_title: `Quién puede tocar qué`,
-      who_body: `Siempre puedes editar las tuyas. Los administradores pueden
-editar las de cualquiera.
-> Las horas usan la zona horaria ajustada en la
-> configuración, así que verifícala primero.`,
+      who_body:
+        "Siempre puedes editar las tuyas. Los administradores pueden editar las de cualquiera.\n> Las horas usan la zona horaria ajustada en la configuración, así que verifícala primero.",
     },
     server_moderation: {
       title: `Moderación del servidor`,
-      description: `Todo sobre quién puede usarme aquí y en dónde. Requiere
-Gestionar servidor y vive en {moderation}.
-> **Acceso de miembros**: quién puede activarme en
-> absoluto, y qué modelos pueden alcanzar.
-> **Lista blanca**: canales y roles.
-> **Cuotas**: cuánta generación permite este servidor.
-> **Lista negra de usuarios**: miembros que debo ignorar.`,
+      description:
+        "Todo sobre quién puede usarme aquí y en dónde. Requiere Gestionar servidor y vive en {moderation}.\n> **Acceso de miembros**: quién puede activarme en absoluto, y qué modelos pueden alcanzar.\n> **Lista blanca**: canales y roles.\n> **Cuotas**: cuánta generación permite este servidor.\n> **Lista negra de usuarios**: miembros que debo ignorar.",
       blacklisting: {
         title: `Listas negras`,
-        description: `Un miembro en lista negra no puede activarme para nada,
-en ningún canal, con ninguna persona.
-
-Añade uno en {moderationBlacklist}. Esa misma página los
-lista y los elimina.
-> Se trata de acceso, no de borrado. Las memorias
-> sobre ese miembro se mantienen.`,
-        footer: `Para silenciar todo un canal en lugar de a una persona,
--# quita el canal de la lista blanca.`,
+        description:
+          "Un miembro en lista negra no puede activarme para nada, en ningún canal, con ninguna persona.\n\nAñade uno en {moderationBlacklist}. Esa misma página los lista y los elimina.\n> Se trata de acceso, no de borrado. Las memorias sobre ese miembro se mantienen.",
+        footer: "Para silenciar todo un canal en lugar de a una persona, quita el canal de la lista blanca.",
       },
     },
     quotas: {
       title: `Cuotas`,
-      description: `Una cuota limita cuánta generación ocurre aquí, para que no
-se gasten accidentalmente muchos créditos.`,
+      description:
+        "Una cuota limita cuánta generación ocurre aquí, para que no se gasten accidentalmente muchos créditos.",
       spent_title: `Cómo se gasta`,
-      spent_body: `Hay tres fondos separados: texto, imagen y video. Cada uno
-se cuenta dos veces, por miembro y para el servidor en
-conjunto, y el que se agote primero detiene la petición.
-> Una petición rechazada te dice qué fondo se agotó y
-> cuándo regresa.`,
+      spent_body:
+        "Hay tres fondos separados: texto, imagen y video. Cada uno se cuenta dos veces, por miembro y para el servidor en conjunto, y el que se agote primero detiene la petición.\n> Una petición rechazada te dice qué fondo se agotó y cuándo regresa.",
       limits_title: `Establecer los límites`,
-      limits_body: `{moderationQuotas} ajusta el límite diario.
-Deja un fondo ilimitado si prefieres no limitarlo.`,
+      limits_body: "{moderationQuotas} ajusta el límite diario. Deja un fondo ilimitado si prefieres no limitarlo.",
       starting_over_title: `Reiniciar un fondo`,
-      starting_over_body: `{quotaResetUser} limpia el uso diario de un miembro, y
-{quotaResetGlobal} limpia el del servidor. Ambos
-necesitan Gestionar servidor.`,
-      footer: `Los fondos se reinician a diario por sí solos. Un
--# reinicio manual es para casos urgentes.`,
+      starting_over_body:
+        "{quotaResetUser} limpia el uso diario de un miembro, y {quotaResetGlobal} limpia el del servidor. Ambos necesitan Gestionar servidor.",
+      footer: "Los fondos se reinician a diario por sí solos. Un reinicio manual es para casos urgentes.",
     },
     age_restricted_commands: {
       title: `Comandos con restricción de edad`,
       description: `Solo adultos. Lee esta sección antes de activar nada.`,
       filter_title: `No filtro de forma predeterminada`,
-      filter_body: `Vengo sin filtro de contenido propio, porque filtrar degrada
-las respuestas ordinarias tanto como bloquea cualquier
-otra cosa. Lo que es apropiado aquí es decisión del
-administrador, no mía.
-> Tu proveedor de IA aún aplica sus propias reglas
-> y puede rechazar una petición sin importar qué ajustes.`,
+      filter_body:
+        "Vengo sin filtro de contenido propio, porque filtrar degrada las respuestas ordinarias tanto como bloquea cualquier otra cosa. Lo que es apropiado aquí es decisión del administrador, no mía.\n> Tu proveedor de IA aún aplica sus propias reglas y puede rechazar una petición sin importar qué ajustes.",
       gated_title: `Las funciones para adultos deliberadas están limitadas`,
-      gated_body: `Cualquier cosa para adultos está tras {nsfw} y funciona
-solo en canales marcados para adultos por Discord.
-
-{nsfwJailbreaks} elige qué estrategias de prompt están
-activas para este servidor. Están apagadas hasta que un
-administrador las encienda.
-> Cambian cómo soy incitada. Pueden hacerme rechazar
-> menos pero causar comportamientos no deseados.`,
-      footer: `Al encender esto, los administradores del servidor
--# confirman que el canal es solo para adultos y se hacen
--# responsables de él.`,
+      gated_body:
+        "Cualquier cosa para adultos está tras {nsfw} y funciona solo en canales marcados para adultos por Discord.\n\n{nsfwJailbreaks} elige qué estrategias de prompt están activas para este servidor. Están apagadas hasta que un administrador las encienda.\n> Cambian cómo soy incitada. Pueden hacerme rechazar menos pero causar comportamientos no deseados.",
+      footer:
+        "Al encender esto, los administradores del servidor confirman que el canal es solo para adultos y se hacen responsables de él.",
     },
     user_byok: {
       title: `BYOK de usuario (Avanzado)`,
-      description: `BYOK significa trae tu propia clave: cada miembro paga por
-sus propias respuestas con su propio proveedor.`,
+      description:
+        "BYOK significa trae tu propia clave: cada miembro paga por sus propias respuestas con su propio proveedor.",
       changes_title: `Qué cambia`,
-      changes_body: `Con BYOK encendido, un mensaje se responde solo si ese
-miembro ha guardado un proveedor personal. El proveedor del
-servidor no es un respaldo para ellos.
-> Enciéndelo en {moderationMemberAccess}, o elígelo
-> durante {setup}.`,
+      changes_body:
+        "Con BYOK encendido, un mensaje se responde solo si ese miembro ha guardado un proveedor personal. El proveedor del servidor no es un respaldo para ellos.\n> Enciéndelo en {moderationMemberAccess}, o elígelo durante {setup}.",
       suits_title: `A quién le conviene`,
-      suits_body: `Un servidor grande o público donde una clave compartida se
-agotaría rápido. Uno pequeño suele preferir compartir.`,
+      suits_body:
+        "Un servidor grande o público donde una clave compartida se agotaría rápido. Uno pequeño suele preferir compartir.",
       members_title: `Qué deben hacer los miembros`,
-      members_body: `Guardar una clave en {personalProviders}. Apúntalos a
-**Proveedores personales (Avanzado)** para la guía.`,
-      footer: `Solo en servidores. Un mensaje directo no tiene
--# miembros, así que la opción no se ofrece allí.`,
+      members_body:
+        "Guardar una clave en {personalProviders}. Apúntalos a **Proveedores personales (Avanzado)** para la guía.",
+      footer: "Solo en servidores. Un mensaje directo no tiene miembros, así que la opción no se ofrece allí.",
     },
     sillytavern_presets: {
       title: `Preajustes de SillyTavern`,
-      description: `Importa un preajuste de prompt de SillyTavern y construiré
-mis prompts como diga ese preajuste.`,
+      description: "Importa un preajuste de prompt de SillyTavern y construiré mis prompts como diga ese preajuste.",
       importing_title: `Importar uno`,
-      importing_body: `{configStPresets} toma el JSON del preajuste exportado,
-luego te permite activarlo, desactivarlo o eliminarlo.`,
+      importing_body:
+        "{configStPresets} toma el JSON del preajuste exportado, luego te permite activarlo, desactivarlo o eliminarlo.",
       controls_title: `Qué controla`,
-      controls_body: `El preajuste asume el control del orden del prompt y los
-bloques de instrucciones de la conversación.
-> Un preajuste activo reemplaza al prompt del sistema
-> de {configBehaviorGeneral} y al prompt de la persona
-> de {configPersonaAdvanced}.`,
+      controls_body:
+        "El preajuste asume el control del orden del prompt y los bloques de instrucciones de la conversación.\n> Un preajuste activo reemplaza al prompt del sistema de {configBehaviorGeneral} y al prompt de la persona de {configPersonaAdvanced}.",
       still_applies_title: `Qué se sigue aplicando`,
-      still_applies_body: `Los atributos de la persona, diálogo de muestra, memorias y
-herramientas aún se envían. El preajuste decide el arreglo.`,
-      footer: `Apaga el preajuste para volver a mi propio diseño de
--# prompt sin perder nada.`,
+      still_applies_body:
+        "Los atributos de la persona, diálogo de muestra, memorias y herramientas aún se envían. El preajuste decide el arreglo.",
+      footer: "Apaga el preajuste para volver a mi propio diseño de prompt sin perder nada.",
     },
     mcp_servers: {
       title: `Servidores MCP`,
-      description: `MCP es una forma estándar de darle una herramienta a una
-IA. Conecta uno y sus herramientas se vuelven cosas que
-realmente puedo hacer.`,
+      description:
+        "MCP es una forma estándar de darle una herramienta a una IA. Conecta uno y sus herramientas se vuelven cosas que realmente puedo hacer.",
       hosted_title: `Servidores alojados`,
-      hosted_body: `{configMcp} toma una URL y un token opcional. Cualquier
-cosa que exponga el servidor aparece en mi lista.`,
+      hosted_body:
+        "{configMcp} toma una URL y un token opcional. Cualquier cosa que exponga el servidor aparece en mi lista.",
       local_title: `Servidores locales`,
-      local_body: `Un servidor que corre en tu propia máquina funciona igual
-una vez sea accesible. La documentación tiene la guía.`,
+      local_body:
+        "Un servidor que corre en tu propia máquina funciona igual una vez sea accesible. La documentación tiene la guía.",
       before_title: `Antes de conectar uno`,
-      before_body: `> Las herramientas de un servidor MCP corren con
-> el acceso que le diste, y las usaré si parecen
-> relevantes. Conecta los que confíes, y lee antes.`,
+      before_body:
+        "> Las herramientas de un servidor MCP corren con el acceso que le diste, y las usaré si parecen relevantes. Conecta los que confíes, y lee antes.",
       footer: `Apaga herramientas de forma individual en {configTools}.`,
     },
     matrix_bridge: {
       title: `Matrix`,
-      description: `Puedo estar en una sala de Matrix y en un canal de Discord a
-la vez, llevando la conversación entre ellos.`,
+      description:
+        "Puedo estar en una sala de Matrix y en un canal de Discord a la vez, llevando la conversación entre ellos.",
       linking_title: `Vincular una sala`,
-      linking_body: `{matrixLink} conecta el canal actual a una ID de sala
-de Matrix, como \`!abcdef:matrix.org\`. Invita a
-{matrixBotUser} a esa sala primero.`,
+      linking_body:
+        "{matrixLink} conecta el canal actual a una ID de sala de Matrix, como `!abcdef:matrix.org`. Invita a {matrixBotUser} a esa sala primero.",
       reads_title: `Cómo se lee`,
-      reads_body: `Los mensajes de ambos lados me llegan como una sola
-conversación, y respondo en ambos.
-> Los adjuntos, ediciones y reacciones no siempre
-> sobreviven. El texto es lo que viaja seguro.`,
-      footer: `¿Nada vinculado? Revisa que la invitación fue
--# aceptada antes que nada.`,
+      reads_body:
+        "Los mensajes de ambos lados me llegan como una sola conversación, y respondo en ambos.\n> Los adjuntos, ediciones y reacciones no siempre sobreviven. El texto es lo que viaja seguro.",
+      footer: "¿Nada vinculado? Revisa que la invitación fue aceptada antes que nada.",
     },
   },
 };

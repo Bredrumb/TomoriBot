@@ -40,6 +40,17 @@ config({ quiet: true });
  */
 const TEST_TIMEOUT_MS = process.env.TOMORI_TEST_TIMEOUT_MS ?? "30000";
 
+const DATABASE_ENV_KEYS = [
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_HOST",
+  "POSTGRES_PORT",
+  "POSTGRES_USER",
+  "POSTGRES_PASSWORD",
+  "POSTGRES_DB",
+  "TEST_DB_READY",
+] as const;
+
 /** Unique suffix for the disposable database created per run. */
 const runId = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const tempDbName = `tomoribot_${runId}`;
@@ -244,7 +255,12 @@ interface LaneResult {
  * because lanes run concurrently and interleaved test output is unreadable; the
  * caller replays each lane's buffer in lane order once everything settles.
  */
-async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOutfile?: string): Promise<LaneResult> {
+async function runLane(
+  lane: Lane,
+  extraEnv: Record<string, string>,
+  requestedOutfile?: string,
+  omitDatabaseEnv = false,
+): Promise<LaneResult> {
   const junitOutfiles: string[] = [];
   const chunks: string[] = [];
   let exitCode = 0;
@@ -259,8 +275,15 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
 
     // Spawn the batch and track it so signal-driven cleanup can terminate it.
     const streamOutput = process.env.TOMORI_TEST_STREAM_OUTPUT === "true";
-    const proc = Bun.spawn(["bun", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs], {
-      env: { ...process.env, ...extraEnv },
+    const childEnv = { ...process.env, ...extraEnv };
+    if (omitDatabaseEnv) {
+      for (const key of DATABASE_ENV_KEYS) delete childEnv[key];
+    }
+
+    // The wrapper owns environment loading and database selection. Prevent a child from loading a
+    // more specific local env file and silently undoing the disposable-database or skip decision.
+    const proc = Bun.spawn(["bun", "--no-env-file", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs], {
+      env: childEnv,
       stdout: streamOutput ? "inherit" : "pipe",
       stderr: streamOutput ? "inherit" : "pipe",
     });
@@ -287,11 +310,17 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
  * then merged into that requested path.
  *
  */
-async function runTestFiles(files: string[], extraEnv: Record<string, string> = {}): Promise<number> {
+async function runTestFiles(
+  files: string[],
+  extraEnv: Record<string, string> = {},
+  omitDatabaseEnv = false,
+): Promise<number> {
   const requestedOutfile = process.env.BUN_TEST_JUNIT_OUTFILE;
   const lanes = await planLanes(files);
 
-  const results = await Promise.all(lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile)));
+  const results = await Promise.all(
+    lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv)),
+  );
 
   // Replay buffered output in fixed lane order so concurrent runs stay readable.
   // TOMORI_TEST_QUIET is set by `vl` on the full-suite run, where it re-reports each
@@ -333,7 +362,7 @@ async function main(): Promise<void> {
 
   if (!params) {
     console.log("[test-runner] No Postgres credentials found. DB regression tests will be skipped.");
-    process.exit(await runTestFiles(testFiles));
+    process.exit(await runTestFiles(testFiles, {}, true));
   }
 
   // Non-local host detected, so fall back to skip mode to avoid touching remote DBs.
@@ -342,7 +371,7 @@ async function main(): Promise<void> {
       `[test-runner] Postgres host "${params.host}" is not local. Skipping DB provisioning.\n` +
         "Set TOMORI_TESTS_ALLOW_NONLOCAL_DB=true to override.",
     );
-    process.exit(await runTestFiles(testFiles));
+    process.exit(await runTestFiles(testFiles, {}, true));
   }
 
   const adminUrl = buildUrl(params, params.maintenanceDb);
@@ -385,7 +414,7 @@ async function main(): Promise<void> {
     console.log("[test-runner] Could not reach Postgres. DB regression tests will be skipped.");
     await adminSql?.close({ timeout: 1 }).catch(() => undefined);
     adminSql = null;
-    process.exit(await runTestFiles(testFiles));
+    process.exit(await runTestFiles(testFiles, {}, true));
   }
 
   let exitCode = 1;

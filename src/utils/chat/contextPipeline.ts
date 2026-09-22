@@ -230,8 +230,8 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
   // before the first webhook chunk is sent. Deliberately NOT gated on `is_alter`: the main
   // persona also switches to a webhook whenever a sprite renders, and webhooks cannot use
   // Discord's native reply, so it needs the standalone notice for exactly the same reason.
-  // Whether a sprite fires is only known at delivery time, so the allocation happens up front
-  // and the uiUpdater gates the actual send on real webhook delivery . leaving this an inert
+  // Whether a sprite fires is only known at delivery time, so the state is allocated up front
+  // and the uiUpdater gates the actual send on real webhook delivery, leaving this an inert
   // no-op for queued turns that end up replying natively.
   if (incoming.isFromQueue) {
     streamingContext.replyNoticeState = { attempted: false, sent: false };
@@ -254,13 +254,9 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     impersonatedUserNickname = identity.displayName;
   }
 
-  // Resolve deliberate tool mode + intent allowlist for this turn.
-  // Mirrors main's tomoriChat.ts wiring (~lines 5557-5645). MUST run before
+  // Resolve deliberate tool mode + intent allowlist for this turn. MUST run before
   // buildContext() so any has_tools override flows into context synthesis
-  // (e.g. memories.ts:243 gates STM tool affordance text on has_tools).
-  // Combines: user-intent matches, follow-up matches from recent message
-  // content/attachments, retained affordances from prior successful tool
-  // calls, and reminder-driven hints.
+  // (has_tools gates the STM tool affordance text there).
   const deliberateToolModeActive = resolveDeliberateToolMode(
     turn.persona.config.deliberate_tool_mode,
     turn.userRow.personal_deliberate_tool_mode ?? "follow",
@@ -375,11 +371,10 @@ export async function buildChatTurnContext(turn: ChatTurn): Promise<ChatTurnCont
     );
   }
 
-  // Derive an effective persona for this turn, applying overrides in order:
-  //    a) RP-channel: zero out emoji/sticker flags so context builders skip their
-  //       DB fallback and the sticker tool is not registered (gates on these flags).
-  //    b) disableAllTools: set has_tools=false as the universal kill switch for
-  //       every provider's tool-list builder.
+  // Derive an effective persona for this turn, applying two overrides in sequence. An RP
+  // channel zeroes the emoji/sticker flags so context builders skip their DB fallback and the
+  // sticker tool is not registered (it gates on these flags). `disableAllTools` then sets
+  // has_tools=false as the universal kill switch for every provider's tool-list builder.
   const rpBasePersona = assets.isRpChannel
     ? {
         ...turn.persona,
@@ -924,8 +919,6 @@ async function simplifyMessage(
     const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByName);
     const matchedPersona = renderModifierSource?.persona ?? personaByName.get(normalizeRenderModifierName(webhookName));
     if (matchedPersona) {
-      // Clean-named sprite messages carry no "(sprite)" suffix in the webhook
-      // name; recover the decorated label from the persisted mapping.
       const spriteDisplayName = renderModifierSource
         ? null
         : await resolveSpriteMessageDisplayName(msg.id, matchedPersona.persona_id, matchedPersona.persona_nickname);

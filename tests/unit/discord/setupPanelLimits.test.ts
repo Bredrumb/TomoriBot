@@ -310,9 +310,8 @@ describe("setupPanel Components V2 layout and limits", () => {
   });
 
   it("holds text and component budgets when catalog names reach their option-label maximum", () => {
-    // Discord caps a modal select option label at 100 characters and the panel truncates to that,
-    // but the catalog row itself is unbounded, so the longest name the panel can be handed is
-    // whatever the row holds. Fixtures that use a short "Lighthouse" name measure nothing here.
+    // Discord caps a modal select option label at 100 characters. The panel renders that stored
+    // identity in full and relies on runtime wrapping rather than applying a second display cap.
     const maxPersonaName = "p".repeat(100);
     const maxPromptName = "r".repeat(100);
     const catalogs = {
@@ -369,7 +368,7 @@ describe("setupPanel Components V2 layout and limits", () => {
     });
 
     expect(validateComponentsV2MessageLimits(receipt).valid).toBe(true);
-    expect(JSON.stringify(receipt)).not.toContain(maxPersonaName);
+    expect(JSON.stringify(receipt)).toContain(maxPersonaName);
   });
 
   it("holds text and component budgets under maximum-length fixtures", () => {

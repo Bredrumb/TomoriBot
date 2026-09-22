@@ -114,6 +114,8 @@ Luego agrega la entrada del modelo del endpoint y actívala a través de `/confi
 4. En `/config`, abre Persona > Voz y asigna la muestra a la persona.
 5. Genera un mensaje de voz con `/generate voice-message` o deja que TomoriBot genere uno a través de su herramienta de mensajes de voz.
 
+El upstream describe una clonación precisa a partir de muestras de referencia de típicamente 10-30 segundos. El propio tiempo de ejecución de Fish S2 Pro no aplica ningún límite de duración de la referencia, así que un clip más largo se acepta en lugar de recortarse, pero la calidad de clonación documentada proviene del rango de 10-30 segundos.
+
 ## Controles de expresión
 
 Fish S2 Pro puede variar la entrega dentro de un enunciado usando etiquetas entre corchetes. Por ejemplo:

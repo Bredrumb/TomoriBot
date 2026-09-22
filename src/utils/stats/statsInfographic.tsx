@@ -6,8 +6,6 @@
 import type { Timeframe } from "@/utils/stats/statsDashboard";
 import { localizer } from "@/utils/text/localizer";
 
-// ── JSX factory ───────────────────────────────────────────────────────────────
-
 export interface VNode {
   type: string;
   props: Record<string, unknown> & { children?: unknown };
@@ -39,8 +37,6 @@ export function h(
 export function Fragment(props: { children?: unknown }): unknown {
   return props.children;
 }
-
-// ── Canvas + theme ────────────────────────────────────────────────────────────
 
 function readIntEnv(name: string, fallback: number): number {
   const raw = process.env[name]?.trim();
@@ -144,8 +140,6 @@ export function buildDonutSvg(
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${track}${paths}</svg>`;
 }
-
-// ── Personal Wrapped ──────────────────────────────────────────────────────────
 
 export interface PersonalCardPalette {
   background: string;
@@ -634,8 +628,6 @@ export function renderPersonalCard(data: PersonalCardData): VNode {
   );
 }
 
-// ── Persona Affinity ──────────────────────────────────────────────────────────
-
 export interface PersonaCardData {
   locale: string;
   timeframe: Timeframe;
@@ -1119,8 +1111,6 @@ export function renderPersonaCard(data: PersonaCardData): VNode {
     </div>
   );
 }
-
-// ── Server Leaderboard ────────────────────────────────────────────────────────
 
 /**
  * One persona's vertical-bar entry, ranked by total tokens (highest = leftmost).

@@ -401,11 +401,10 @@ export async function execute(
   // deployments that predate the endpoint pathway, but it counts only when that endpoint is
   // itself ElevenLabs: the tool forwards any active endpoint's key here, which on a `tts-clone`
   // server hands a local endpoint's credential to ElevenLabs.
-  //
   // The lookup is keyed on the persona holding a voice id rather than on the endpoint, because
   // the endpoint does not determine whether the id is reachable: a persona with a sample and a
   // voice id on an ElevenLabs endpoint resolves to the voice id only after the sample is
-  // discarded, and a voice-id-only persona on a `tts-clone` server falls back to it as well.
+  // discarded, and a voice-id-only persona on a `tts-clone` server can resolve to it too.
   const elevenLabsApiKey = usesElevenLabsVoice(persona)
     ? (endpointIsElevenLabs ? speechEndpoint?.apiKey : "") ||
       ((await getOptApiKey(mainPersona.server_id, ELEVENLABS_SERVICE_NAME)) ?? "")

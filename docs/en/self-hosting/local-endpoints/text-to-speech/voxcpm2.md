@@ -127,12 +127,14 @@ After saving the connection, select it and use its model dropdown to add a Speec
 
 For a persona that should clone an existing speaker:
 
-1. Prepare a clean reference clip with one speaker and little or no background music.
+1. Prepare a clean reference clip with one speaker and little or no background music. Upstream treats 5 to 30 seconds as the practical range.
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Add the exact transcript of the reference clip when available. VoxCPM2 uses it for Ultimate Cloning and can reproduce more of the reference rhythm, emotion, and style.
 4. Open `/config` under Persona > Voice, choose the persona, and assign the saved sample.
 
 If no transcript is stored, VoxCPM2 still performs normal reference-audio cloning.
+
+The 5 to 30 second figure is a documented quality range rather than an enforced cap: VoxCPM2 applies no reference-duration limit of its own, so TomoriBot's upload ceiling is what stops a longer clip.
 
 ## Persona Voice Design
 

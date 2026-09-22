@@ -1153,9 +1153,9 @@ describe("config Persona General collections", () => {
 
     expect(
       components.some((component) =>
-        component.content?.includes(
-          "**Feminine**\nControls how this persona addresses people\nwho identify as feminine.",
-        ),
+        component.content
+          ?.replace(/\s+/gu, " ")
+          .includes("**Feminine** Controls how this persona addresses people who identify as feminine."),
       ),
     ).toBe(true);
     expect(components.some((component) => component.content?.includes("> Prefix: `Miss`"))).toBe(true);
@@ -1709,8 +1709,6 @@ describe("config Behavior pages", () => {
   });
 
   it("swaps the Random Trigger Add entry for a persona range select past one page", () => {
-    // Within one page a range select would be the inert one-option selector the shell avoids, so
-    // the plain button has to survive the common case and only give way once paging is real.
     const renderTrigger = (personaCount: number): string => {
       const personas = Array.from({ length: personaCount }, (_unused, index) => makePersona({ persona_id: index + 1 }));
       return JSON.stringify(build(GUILD_MANAGER, { category: "behavior", page: "trigger", behaviorView, personas }));

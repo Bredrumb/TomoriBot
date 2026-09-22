@@ -153,10 +153,6 @@ export const personaSpriteSchema = z.object({
 });
 export type PersonaSpriteRow = z.infer<typeof personaSpriteSchema>;
 
-// Shared official preset sprites, resolved live by pointer personas. Keyed by
-// the preset identity (preset_lineage_id, preset_language) and seeded from the
-// catalog; the avatar_url is a shared object-storage reference used by every
-// server's pointer persona. See docs/subsystems/persona-presets.md.
 /**
  * Maps a webhook-delivered sprite message to the sprite label it rendered with.
  * Sprite messages display a clean persona name in Discord; context rebuilding

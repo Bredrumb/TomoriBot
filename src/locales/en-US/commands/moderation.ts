@@ -7,7 +7,8 @@ export default {
     not_setup: `TomoriBot is not set up in this server yet. Run /setup first.`,
     guild_only: `The moderation panel is only available in a server.`,
     unavailable: `Moderation settings could not be loaded. Retry to try again.`,
-    stale_warning: `Saved data may be out of date because the read failed.\nWrite actions are unavailable until a fresh read succeeds.`,
+    stale_warning:
+      "Saved data may be out of date because the read failed. Write actions are unavailable until a fresh read succeeds.",
     retry: `Retry`,
 
     // Category buttons
@@ -54,7 +55,7 @@ export default {
     personalization_blacklist_section: `Personalization Blacklist`,
     personalization_blacklist_description: `I do not load personal memories or saved names for these members:`,
     persona_blocks_section: `Persona User Blocks`,
-    persona_blocks_description: `The following members have persona-specific\ninteraction restrictions:`,
+    persona_blocks_description: "The following members have persona-specific interaction restrictions:",
     personalization_blacklist_empty: `No members blacklisted from personalization.`,
     persona_blocks_empty: `No active persona user blocks.`,
     add_blacklist: `+ Add Blacklist`,
@@ -79,8 +80,10 @@ export default {
     user_blacklist_remove_title: `Remove Blacklisted Member`,
     user_blacklist_bulk_remove_title: `Remove Blacklist Entries`,
     user_blacklist_remove_success_detail: `Removed {count} blacklist entries.`,
-    user_blacklist_remove_personalization_description: `Remove {user} from the personalization blacklist?\nI will resume loading personal memories and saved names\nfor this member.`,
-    user_blacklist_remove_persona_block_description: `Remove the interaction restriction for {user} on\n**{persona}** ({type})? The member will be able to\ninteract with this persona again.`,
+    user_blacklist_remove_personalization_description:
+      "Remove {user} from the personalization blacklist? I will resume loading personal memories and saved names for this member.",
+    user_blacklist_remove_persona_block_description:
+      "Remove the interaction restriction for {user} on **{persona}** ({type})? The member will be able to interact with this persona again.",
     user_blacklist_remove_success: `Blacklist entry removed`,
     user_blacklist_remove_personalization_success_detail: `Removed {user_name} from the personalization blacklist.`,
     user_blacklist_remove_persona_block_success_detail: `Removed {user_name}'s restriction on **{persona_name}**.`,
@@ -101,7 +104,7 @@ export default {
     // Whitelist: Channels
     whitelist_channels_count: `Whitelisted Channels \`({count})\``,
     whitelist_channels_description: `I can only be triggered in the following channels:`,
-    whitelist_channels_empty: `No channels are whitelisted.\nThe bot can respond in any accessible channel.`,
+    whitelist_channels_empty: "No channels are whitelisted. The bot can respond in any accessible channel.",
     cooldown_inherited: `Inherited server global cooldown`,
     cooldown_custom: `Cooldown: {type}, {length}s`,
     cooldown_instant: `Cooldown: {type}, Instant`,
@@ -127,7 +130,8 @@ export default {
     whitelist_channel_add_invalid_length: `The cooldown length must be an integer between 0 and 86400 seconds.`,
     whitelist_channel_remove_title: `Remove Whitelisted Channel`,
     whitelist_channel_bulk_remove_title: `Remove Channels`,
-    whitelist_channel_remove_description: `Remove {channel} from the whitelist? If no channels\nremain whitelisted, I can respond in any accessible\nchannel.`,
+    whitelist_channel_remove_description:
+      "Remove {channel} from the whitelist? If no channels remain whitelisted, I can respond in any accessible channel.",
     whitelist_channel_remove_success: `Channel removed from whitelist`,
     whitelist_channel_remove_success_detail: `Removed #{channel_name} from the whitelist.`,
     whitelist_channel_remove_batch_success_detail: `Removed {count} channels from the whitelist.`,
@@ -139,7 +143,8 @@ export default {
     // Whitelist: Persona Channels
     whitelist_persona_channels_count: `Personas \`({count})\``,
     whitelist_persona_channels_description: `The following personas can only respond in their listed channels:`,
-    whitelist_persona_channels_empty: `No persona channel restrictions configured.\nPersonas can respond in all allowed channels.`,
+    whitelist_persona_channels_empty:
+      "No persona channel restrictions configured. Personas can respond in all allowed channels.",
     persona_channels_restriction: `**{persona}** restricted to: {channels}`,
     add_persona: `+ Add Persona`,
     remove_persona: `- Remove Persona`,
@@ -193,7 +198,7 @@ export default {
 
     // Quotas
     quotas_title: `Generation Quotas`,
-    quotas_description: `Configure daily per-user limits and server-wide pooled\nquotas for AI generation.`,
+    quotas_description: "Configure daily per-user limits and server-wide pooled quotas for AI generation.",
     quotas_image_generation: `Image Generation`,
     quotas_text_generation: `Text Generation`,
     quotas_video_generation: `Video Generation`,

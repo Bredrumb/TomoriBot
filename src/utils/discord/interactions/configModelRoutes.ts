@@ -46,6 +46,8 @@ import {
 import {
   repaint,
   staleReceipt,
+  missingScopeMessageKey,
+  outdatedConfigPanelMessage,
   type ConfigRepaintOptions,
   type ConfigRouteDependencies,
   type ConfigScope,
@@ -236,10 +238,17 @@ export async function handleConfigModelModalOpen(
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
-  const state = scope ? serverStateFromScope(scope) : null;
-  if (!scope || !state) {
+  if (!scope) {
     await interaction.reply({
-      content: localizer(locale, "commands.config.panel.unavailable"),
+      content: localizer(locale, missingScopeMessageKey(interaction, dependencies)),
+      flags: MessageFlags.Ephemeral,
+    });
+    return true;
+  }
+  const state = serverStateFromScope(scope);
+  if (!state) {
+    await interaction.reply({
+      content: outdatedConfigPanelMessage(locale),
       flags: MessageFlags.Ephemeral,
     });
     return true;

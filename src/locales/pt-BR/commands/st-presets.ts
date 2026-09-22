@@ -8,7 +8,8 @@ export default {
     select_add: `+ Adicionar nova Predefinição`,
     select_add_description: `Importar um novo arquivo JSON de predefinição do SillyTavern`,
     none_heading: `Nenhuma Predefinição Ativa`,
-    none_disabled_explanation: `As predefinições de conclusão de chat estão desativadas.\nEscolha uma predefinição acima para ativá-la.`,
+    none_disabled_explanation:
+      "As predefinições de conclusão de chat estão desativadas. Escolha uma predefinição acima para ativá-la.",
     currently_active: `Predefinição ativa no momento`,
     currently_active_with_nodes: `Esta predefinição está selecionada e ativada com {enabled} de {total} nós`,
     toggle_nodes: `Alternar Nós`,
@@ -17,10 +18,12 @@ export default {
     delete_preset: `Excluir Predefinição`,
     delete_title: `Excluir Predefinição`,
     delete_confirm: `Excluir Predefinição`,
-    delete_description: `Excluir **{name}**? Isso removerá permanentemente esta\npredefinição e sua configuração de nós.`,
+    delete_description:
+      "Excluir **{name}**? Isso removerá permanentemente esta predefinição e sua configuração de nós.",
     cancel: `Cancelar`,
     retry: `Tentar Novamente`,
-    stale_warning: `Os dados salvos podem estar desatualizados: a leitura falhou.\nAs ações de gravação ficam indisponíveis até uma nova leitura.`,
+    stale_warning:
+      "Os dados salvos podem estar desatualizados: a leitura falhou. As ações de gravação ficam indisponíveis até uma nova leitura.",
     unavailable: `Não foi possível carregar a predefinição. Tente novamente.`,
     not_setup: `Este servidor ainda não está configurado. Execute /setup primeiro.`,
     add_modal_title: `Adicionar Nova Predefinição`,

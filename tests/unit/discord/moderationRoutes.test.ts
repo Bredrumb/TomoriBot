@@ -38,8 +38,13 @@ import {
   buildWhitelistRoleAddModal,
   type ModerationPanelRenderInput,
 } from "@/utils/discord/ui/moderationPanel";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { moderationOperations, type ModerationScopeData } from "@/utils/moderation/moderationOperations";
 import { initializeLocalizer } from "@/utils/text/localizer";
+
+function serializedPanelProse(markdown: string): string {
+  return JSON.stringify(formatPanelProse(markdown)).slice(1, -1);
+}
 
 beforeAll(async () => initializeLocalizer());
 
@@ -648,7 +653,9 @@ describe("moderation interaction routes", () => {
     expect(updateCalled).toBe(0);
     const serialized = JSON.stringify(editReplyCalls[0]);
     expect(serialized).toContain("Member access could not be updated");
-    expect(serialized).toContain("The modal submission could not be processed. Open the editor again to retry.");
+    expect(serialized).toContain(
+      serializedPanelProse("> The modal submission could not be processed. Open the editor again to retry."),
+    );
   });
 
   it("blocks writes on submit when refreshed moderation scope is stale or unavailable", async () => {
@@ -793,7 +800,9 @@ describe("moderation interaction routes", () => {
     expect(resolveCalls).toEqual([false, false]);
     const serialized = JSON.stringify(editReplyCalls[0]);
     expect(serialized).toContain("Member access was already current");
-    expect(serialized).toContain("Member permissions already match the requested state. No write was needed.");
+    expect(serialized).toContain(
+      serializedPanelProse("> Member permissions already match the requested state. No write was needed."),
+    );
   });
 
   it("handles repository failure on submit with failure receipt", async () => {
@@ -841,7 +850,7 @@ describe("moderation interaction routes", () => {
     const serialized = JSON.stringify(editReplyCalls[0]);
     expect(serialized).toContain("Member access could not be updated");
     expect(serialized).toContain(
-      "The database write failed or permissions changed. Retry to refresh current settings.",
+      serializedPanelProse("> The database write failed or permissions changed. Retry to refresh current settings."),
     );
   });
 
@@ -1391,7 +1400,9 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("The selected user could not be found or is no longer in this server.");
+      expect(serialized).toContain(
+        serializedPanelProse("> The selected user could not be found or is no longer in this server."),
+      );
     });
 
     it("repaints with cannot_blacklist_bot receipt when target user is a bot", async () => {
@@ -1646,7 +1657,9 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("The selected user could not be found or is no longer in this server.");
+      expect(serialized).toContain(
+        serializedPanelProse("> The selected user could not be found or is no longer in this server."),
+      );
     });
   });
 
@@ -2396,7 +2409,9 @@ describe("moderation interaction routes", () => {
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
       expect(serialized).toContain(
-        "The selected channel could not be found, is not a text channel, or is no longer in this server.",
+        serializedPanelProse(
+          "> The selected channel could not be found, is not a text channel, or is no longer in this server.",
+        ),
       );
     });
 
@@ -2457,7 +2472,9 @@ describe("moderation interaction routes", () => {
       const serialized = JSON.stringify(editReplies[0]);
       expect(serialized).toContain("Channel whitelist already current");
       expect(serialized).toContain(
-        "Whitelist settings for #bot-lounge already match the requested state. No write was needed.",
+        serializedPanelProse(
+          "> Whitelist settings for #bot-lounge already match the requested state. No write was needed.",
+        ),
       );
     });
 
@@ -3082,7 +3099,9 @@ describe("moderation interaction routes", () => {
       expect(addCalled).toBe(0);
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("The selected user could not be found or is no longer in this server.");
+      expect(serialized).toContain(
+        serializedPanelProse("> The selected user could not be found or is no longer in this server."),
+      );
     });
 
     it("defaultResolveChannel does not fall back to client.channels.fetch when channel is not in guild", async () => {
@@ -3166,7 +3185,9 @@ describe("moderation interaction routes", () => {
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
       expect(serialized).toContain(
-        "The selected channel could not be found, is not a text channel, or is no longer in this server.",
+        serializedPanelProse(
+          "> The selected channel could not be found, is not a text channel, or is no longer in this server.",
+        ),
       );
     });
   });

@@ -220,14 +220,12 @@ async function recordUsageStats(context: ChatTurnContext, result: GenerationTurn
     }
 
     // Custom-emoji uses that actually reached Discord, one increment per occurrence,
-    //    pre-aggregated per name so repeats collapse to one UPSERT. Counted off each
-    //    stream segment's accumulatedText (appended only after Discord accepts a send)
-    //    rather than personaResponses[].text, which is the short-term-memory payload:
-    //    that string carries the `[Scene Metadata]` block drained out of `<details>`,
-    //    so emoji the model wrote there would score despite never surfacing in chat.
-    //    Reading the segments also recovers text delivered before a tool call, since
-    //    stream state is fresh per streamOnce and only the last segment reaches the
-    //    response.
+    // pre-aggregated per name so repeats collapse to one UPSERT. Read from each stream
+    // segment's accumulatedText, which is appended only after Discord accepts a send, not
+    // from personaResponses[].text: that string is the short-term-memory payload and
+    // carries the `[Scene Metadata]` block drained out of `<details>`, so emoji the model
+    // wrote there would score despite never surfacing in chat. Per-stream state also
+    // recovers text delivered before a tool call, which the final response no longer holds.
     const emojiCounts = new Map<string, number>();
     for (const stream of result.streamResults) {
       for (const match of (stream.accumulatedText ?? "").matchAll(RESOLVED_CUSTOM_EMOJI_RE)) {

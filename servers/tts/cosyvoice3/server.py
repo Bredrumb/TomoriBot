@@ -21,6 +21,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from routing import resolve_synthesis_mode
+from reference_audio import trim_reference_audio
 
 
 ROOT = Path(__file__).resolve().parent
@@ -43,12 +44,16 @@ LOAD_VLLM = os.getenv("COSYVOICE3_LOAD_VLLM", "0").lower() in {"1", "true", "yes
 SPEED = float(os.getenv("COSYVOICE3_SPEED", "1.0"))
 DEFAULT_INSTRUCT = os.getenv("COSYVOICE3_DEFAULT_INSTRUCT", "").strip()
 MAX_REF_AUDIO_BYTES = int(os.getenv("COSYVOICE3_MAX_REF_AUDIO_BYTES", str(25 * 1024 * 1024)))
+# The speech tokenizer's trained prompt window. A longer clip is trimmed to the leading window
+# rather than refused, so the sidecar adapts to whatever reference the caller stored.
 MAX_REF_AUDIO_SECONDS = float(os.getenv("COSYVOICE3_MAX_REF_AUDIO_SECONDS", "30"))
 BEARER_TOKEN = os.getenv("COSYVOICE3_BEARER_TOKEN", "").strip()
 ALLOW_REMOTE_BIND = os.getenv("COSYVOICE3_ALLOW_REMOTE_BIND", "0").lower() in {"1", "true", "yes", "on"}
 
 if MAX_REF_AUDIO_BYTES <= 0:
     raise ValueError("COSYVOICE3_MAX_REF_AUDIO_BYTES must be greater than zero.")
+# Read as validation rather than as a cap: trimming wins over refusing, but an unusable window
+# would silently disable the clamp and hand the tokenizer audio it asserts on.
 if MAX_REF_AUDIO_SECONDS <= 0:
     raise ValueError("COSYVOICE3_MAX_REF_AUDIO_SECONDS must be greater than zero.")
 
@@ -168,7 +173,7 @@ def health() -> dict[str, object]:
         "upstream_streaming": UPSTREAM_STREAM,
         "port": PORT,
         "max_ref_audio_bytes": MAX_REF_AUDIO_BYTES,
-        "max_ref_audio_seconds": MAX_REF_AUDIO_SECONDS,
+        "ref_audio_window_seconds": MAX_REF_AUDIO_SECONDS,
         "supports_zero_shot": True,
         "supports_cross_lingual": True,
         "supports_instruct": True,
@@ -200,10 +205,12 @@ def decode_reference_audio(raw_base64: str, directory: str) -> str:
         raise HTTPException(status_code=400, detail="ref_audio must contain audio frames.")
     if info.samplerate < 16000:
         raise HTTPException(status_code=400, detail="ref_audio sample rate must be at least 16000 Hz.")
-    if info.duration > MAX_REF_AUDIO_SECONDS:
-        raise HTTPException(
-            status_code=413,
-            detail=f"ref_audio exceeds the configured {MAX_REF_AUDIO_SECONDS:g}-second duration limit.",
+    trimmed = trim_reference_audio(ref_path, MAX_REF_AUDIO_SECONDS)
+    if trimmed is not None:
+        before_seconds, after_seconds = trimmed
+        log_info(
+            f"Reference audio trimmed from {before_seconds:.2f}s to {after_seconds:.2f}s "
+            f"(tokenizer window {MAX_REF_AUDIO_SECONDS:g}s)."
         )
     return str(ref_path)
 

@@ -1,4 +1,4 @@
-﻿# Contributing to TomoriBot
+# Contributing to TomoriBot
 
 Thanks for your interest in contributing! This guide covers what you need to know before opening a PR.
 
@@ -31,6 +31,9 @@ Please refer to the [Pull Request Template](./pull_request_template.md) for the 
 
 ### AI-Generated Code
 This project accepts code and documentation created/assisted by AI tools. But just like all tools, the one using it (you) is responsible for it. It is also preferred to point your agent to `docs\architecture` and `docs\contributing` so it can follow conventions and security measures established around the codebase. Please test and review thoroughly before opening a PR, and be ready to discuss and fix problems that the maintainer(s) find, if any.
+
+### Translations
+You do not have to keep every user-facing string/locale up to date. Author your strings in `src/locales/en-US/` and you are done: other locales render the English value for any key they do not define, so `en-US` alone is enough to merge. Translating the string yourself is welcome but optional.
 
 ## Scope of Contributions
 

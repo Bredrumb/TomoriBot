@@ -1,7 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, EmbedBuilder } from "discord.js";
 import { ColorCode } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { stampProtocolEmbed } from "@/utils/discord/embedProtocol";
 import type {} from "./types";
 
 export function buildConversationEmbed(
@@ -21,7 +20,7 @@ export function buildConversationEmbed(
 
   const footerText = buildFooterText(locale, refresh, editDeadline);
   if (footerText) embed.setFooter({ text: footerText });
-  return stampProtocolEmbed(embed, refresh ? "compact_refresh" : "compact_summary", footerText);
+  return embed;
 }
 
 export function buildRoleplayEmbeds(
@@ -41,7 +40,7 @@ export function buildRoleplayEmbeds(
 
   const footerText = buildFooterText(locale, refresh, editDeadline);
   if (footerText) embed.setFooter({ text: footerText });
-  return [stampProtocolEmbed(embed, refresh ? "compact_refresh" : "compact_summary", footerText)];
+  return [embed];
 }
 
 function buildFooterText(locale: string, refresh: boolean, editDeadline?: string): string {
@@ -80,7 +79,7 @@ export function buildManualEmbed(
 
   const footerText = buildFooterText(locale, refresh, editDeadline);
   if (footerText) embed.setFooter({ text: footerText });
-  return stampProtocolEmbed(embed, refresh ? "compact_refresh" : "compact_summary", footerText);
+  return embed;
 }
 
 export const COMPACT_EDIT_BUTTON_ID = "compact_edit_summary";

@@ -299,61 +299,90 @@ async function hasRegisteredCustomEndpointCapability(
   return true;
 }
 
-export async function loadSavedProvidersForCapability(
-  serverId: number,
+/** The model-selection columns shared by the server and user saved-provider rows. */
+type SavedProviderModelSelection = Pick<
+  SavedProviderConfigRow,
+  "llm_id" | "embedding_model_id" | "diffusion_model_id" | "nai_diffusion_model_id" | "video_model_id" | "vision_llm_id"
+>;
+
+/** Whether one saved row's selections make it eligible to serve `capability`. */
+function savedProviderSelectionServesCapability(
+  provider: string,
   capability: SavedProviderCapability,
-): Promise<SavedProviderConfigRow[]> {
-  const savedConfigs = await llmProviderRepo.loadSavedProviderConfigs(serverId);
+  config: SavedProviderModelSelection,
+): boolean {
+  if (!isCustomProvider(provider)) {
+    switch (capability) {
+      case "text":
+        return true;
+      case "embedding":
+        return supportsEmbeddingCapability(provider);
+      case "image":
+        return supportsImageCapability(provider);
+      case "video":
+        return supportsVideoCapability(provider);
+      case "vision":
+        return supportsVisionCapability(provider);
+      default:
+        return false;
+    }
+  }
+
+  switch (capability) {
+    case "text":
+      return config.llm_id !== null;
+    case "embedding":
+      return config.embedding_model_id !== null;
+    case "image":
+      return config.diffusion_model_id !== null || config.nai_diffusion_model_id !== null;
+    case "video":
+      return config.video_model_id !== null;
+    // Unlike the other slots, vision has no saved selection to require: registering an
+    // image-capable text endpoint is what makes the label eligible, and the picker chooses
+    // among that label's image-capable models.
+    case "vision":
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Keeps the saved rows whose provider is registered for `capability`.
+ *
+ * Server and user scopes share the eligibility rules and differ only in which registry they read
+ * and which owner a custom endpoint connection must belong to.
+ *
+ * @param savedConfigs - Rows loaded for the scope
+ * @param owner - Scope a custom endpoint connection must belong to
+ */
+async function filterSavedProvidersByCapability<T extends SavedProviderModelSelection & { provider: string }>(
+  savedConfigs: readonly T[],
+  capability: SavedProviderCapability,
+  owner: { serverId?: number; userId?: number },
+): Promise<T[]> {
   const registeredVisibility = await Promise.all(
     savedConfigs.map(async (config) => {
       if (!isCustomProvider(config.provider)) {
         return true;
       }
 
-      return await hasRegisteredCustomEndpointCapability(config.provider, capability, { serverId });
+      return await hasRegisteredCustomEndpointCapability(config.provider, capability, owner);
     }),
   );
 
-  return savedConfigs.filter((config, index) => {
-    if (!registeredVisibility[index]) {
-      return false;
-    }
+  return savedConfigs.filter(
+    (config, index) =>
+      registeredVisibility[index] && savedProviderSelectionServesCapability(config.provider, capability, config),
+  );
+}
 
-    if (isCustomProvider(config.provider)) {
-      switch (capability) {
-        case "text":
-          return config.llm_id !== null;
-        case "embedding":
-          return config.embedding_model_id !== null;
-        case "image":
-          return config.diffusion_model_id !== null || config.nai_diffusion_model_id !== null;
-        case "video":
-          return config.video_model_id !== null;
-        // Unlike the other slots, vision has no saved selection to require: registering an
-        // image-capable text endpoint is what makes the label eligible, and the picker chooses
-        // among that label's image-capable models.
-        case "vision":
-          return true;
-        default:
-          return false;
-      }
-    }
-
-    switch (capability) {
-      case "text":
-        return true;
-      case "embedding":
-        return supportsEmbeddingCapability(config.provider);
-      case "image":
-        return supportsImageCapability(config.provider);
-      case "video":
-        return supportsVideoCapability(config.provider);
-      case "vision":
-        return supportsVisionCapability(config.provider);
-      default:
-        return false;
-    }
-  });
+export async function loadSavedProvidersForCapability(
+  serverId: number,
+  capability: SavedProviderCapability,
+): Promise<SavedProviderConfigRow[]> {
+  const savedConfigs = await llmProviderRepo.loadSavedProviderConfigs(serverId);
+  return await filterSavedProvidersByCapability(savedConfigs, capability, { serverId });
 }
 
 export async function loadUserSavedProvidersForCapability(
@@ -361,54 +390,5 @@ export async function loadUserSavedProvidersForCapability(
   capability: SavedProviderCapability,
 ): Promise<UserSavedProviderConfigRow[]> {
   const savedConfigs = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
-  const registeredVisibility = await Promise.all(
-    savedConfigs.map(async (config) => {
-      if (!isCustomProvider(config.provider)) {
-        return true;
-      }
-
-      return await hasRegisteredCustomEndpointCapability(config.provider, capability, { userId });
-    }),
-  );
-
-  return savedConfigs.filter((config, index) => {
-    if (!registeredVisibility[index]) {
-      return false;
-    }
-
-    if (isCustomProvider(config.provider)) {
-      switch (capability) {
-        case "text":
-          return config.llm_id !== null;
-        case "embedding":
-          return config.embedding_model_id !== null;
-        case "image":
-          return config.diffusion_model_id !== null || config.nai_diffusion_model_id !== null;
-        case "video":
-          return config.video_model_id !== null;
-        // Unlike the other slots, vision has no saved selection to require: registering an
-        // image-capable text endpoint is what makes the label eligible, and the picker chooses
-        // among that label's image-capable models.
-        case "vision":
-          return true;
-        default:
-          return false;
-      }
-    }
-
-    switch (capability) {
-      case "text":
-        return true;
-      case "embedding":
-        return supportsEmbeddingCapability(config.provider);
-      case "image":
-        return supportsImageCapability(config.provider);
-      case "video":
-        return supportsVideoCapability(config.provider);
-      case "vision":
-        return supportsVisionCapability(config.provider);
-      default:
-        return false;
-    }
-  });
+  return await filterSavedProvidersByCapability(savedConfigs, capability, { userId });
 }

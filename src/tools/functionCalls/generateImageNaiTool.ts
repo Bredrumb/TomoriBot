@@ -42,11 +42,8 @@ import {
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
-import {
-  CredentialUnavailableError,
-  getResolvedCapabilityModelId,
-  resolveCapabilityCredentials,
-} from "@/utils/provider/credentialResolver";
+import { CredentialUnavailableError, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
+import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
 
 // Disabled by default because the suggest-tags endpoint is currently unstable and
 // can hurt generation reliability; enable again once the API is consistently healthy.
@@ -915,15 +912,15 @@ export class GenerateImageNaiTool extends BaseTool {
     let quotaCheck: QuotaCheckResult = { allowed: true };
 
     try {
-      // Resolve credentials first so we can skip server quota for personal BYOK users
-      const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-nai", {
-        userId: context.internalUserId ?? null,
-      });
-
-      // Personal BYOK users bring their own API quota, so bypass server quota entirely
-      if (creds.source === "server") {
-        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
+        context.tomoriState.server_id,
+        "image-nai",
+        context.internalUserId ?? null,
+        checkImageQuota,
+        userDiscId,
+        quotaCheck,
+      );
+      quotaCheck = serverQuotaCheck;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";

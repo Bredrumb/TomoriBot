@@ -16,6 +16,21 @@ const REQUEST_TIMEOUT = Number.parseInt(process.env.NOVELAI_REQUEST_TIMEOUT_MS |
 const STREAM_READ_TIMEOUT_MS = Number.parseInt(process.env.NOVELAI_STREAM_READ_TIMEOUT_MS || "30000", 10);
 
 /**
+ * Cancels a response body that is still open after the read loop ended.
+ *
+ * `releaseLock` only detaches the reader: the body stays open and keeps its buffers and connection.
+ * The inactivity timeout above exits the loop without `done`, which is exactly that case, so an
+ * unfinished read is cancelled rather than merely released.
+ */
+async function cancelUnfinishedReader(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  completed: boolean,
+): Promise<void> {
+  if (completed) return;
+  await reader.cancel().catch(() => undefined);
+}
+
+/**
  * NovelAI generation parameters
  * Based on reference implementation and API documentation
  */
@@ -402,11 +417,7 @@ async function* novelaiGenerateStreamOpenAI(
         }
       }
     } finally {
-      // `releaseLock` only detaches the reader: the body stays open and keeps its buffers and
-      // connection. The inactivity timeout above exits without `done`, which is exactly that case.
-      if (!completed) {
-        await reader.cancel().catch(() => undefined);
-      }
+      await cancelUnfinishedReader(reader, completed);
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -544,11 +555,7 @@ async function* novelaiGenerateStreamNative(
         }
       }
     } finally {
-      // `releaseLock` only detaches the reader: the body stays open and keeps its buffers and
-      // connection. The inactivity timeout above exits without `done`, which is exactly that case.
-      if (!completed) {
-        await reader.cancel().catch(() => undefined);
-      }
+      await cancelUnfinishedReader(reader, completed);
     }
   } catch (error) {
     if (error instanceof Error) {

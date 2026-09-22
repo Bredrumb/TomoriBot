@@ -3,7 +3,6 @@ import { MessageFlags, EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { localizer } from "@/utils/text/localizer";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
-import { stampProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { personaRepository } from "@/utils/db/repositories";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { resolvePersonaWebhookIdentity } from "@/utils/discord/webhook/identity";
@@ -520,7 +519,7 @@ export async function executeUserImpersonation(
         .setDescription(description)
         .setColor(ColorCode.ERROR);
       await interaction.editReply({
-        embeds: [isTimeoutError ? stampProtocolEmbed(errorEmbed, "diagnostic") : errorEmbed],
+        embeds: [errorEmbed],
       });
     }
   }
@@ -576,7 +575,6 @@ export async function executeSystemImpersonation(
     }),
     iconURL: invokerAvatarUrl,
   });
-  stampProtocolEmbed(embed, "system_injection");
 
   await channel.send({
     embeds: [embed],

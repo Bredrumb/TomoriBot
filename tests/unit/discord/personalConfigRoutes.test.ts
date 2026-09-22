@@ -49,6 +49,7 @@ import {
   type PersonalConfigModelDisplayInfo,
   type PersonalConfigRoutingRow,
 } from "@/utils/discord/ui/personalConfigPanel";
+import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import type { ThinkingLevelValue } from "@/constants/thinkingLevels";
 import type { ModelParameterOptions } from "@/utils/discord/modelParametersConfigMapping";
 import type { PersonalConfigManagedCapability } from "@/utils/discord/personalConfigPanelCatalog";
@@ -84,6 +85,20 @@ function requireRoute(customId: string): ParsedInteractionRoute {
   const parsed = parseInteractionRoute(customId);
   if (!parsed) throw new Error(`Failed to parse route for customId: ${customId}`);
   return parsed;
+}
+
+/**
+ * Source span between two anchors, for gates that parse the declarations a file contains.
+ *
+ * A missing anchor makes indexOf return -1, which slice() silently accepts as an offset from the
+ * end, so the gate would keep passing over the wrong span. Fail on the anchor instead.
+ */
+function sliceBetweenAnchors(source: string, startAnchor: string, endAnchor: string): string {
+  const start = source.indexOf(startAnchor);
+  const end = source.indexOf(endAnchor);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
 }
 
 interface ObservedComponent {
@@ -1107,13 +1122,11 @@ describe("personalConfigPanelCatalog", () => {
       new URL("../../../src/utils/discord/personalConfigPanelCatalog.ts", import.meta.url),
       "utf8",
     );
-    const unionStart = source.indexOf("export type PersonalConfigPanelRoute");
-    const unionEnd = source.indexOf("export type PersonalConfigAction");
-    // A missing anchor makes indexOf return -1, which slice() silently accepts as an offset from the
-    // end, so the gate would keep passing over the wrong span. Fail on the anchor instead.
-    expect(unionStart).toBeGreaterThanOrEqual(0);
-    expect(unionEnd).toBeGreaterThan(unionStart);
-    const union = source.slice(unionStart, unionEnd);
+    const union = sliceBetweenAnchors(
+      source,
+      "export type PersonalConfigPanelRoute",
+      "export type PersonalConfigAction",
+    );
     const declared = new Set(
       [...union.matchAll(/action: "([a-z0-9-]+)"(?:\s*\|\s*"([a-z0-9-]+)")?/g)].flatMap((m) =>
         [m[1], m[2]].filter((v): v is string => Boolean(v)),
@@ -1394,13 +1407,11 @@ describe("personalConfigPanelCatalog", () => {
       return source;
     });
 
-    const tableStart = catalogSource.indexOf("export const PERSONAL_CONFIG_ROUTE_CODECS");
-    const tableEnd = catalogSource.indexOf("const CODECS_BY_WIRE_TOKEN");
-    // A missing anchor makes indexOf return -1, which slice() silently accepts as an offset from the
-    // end, so the gate would keep passing over the wrong span. Fail on the anchor instead.
-    expect(tableStart).toBeGreaterThanOrEqual(0);
-    expect(tableEnd).toBeGreaterThan(tableStart);
-    const tableBlock = catalogSource.slice(tableStart, tableEnd);
+    const tableBlock = sliceBetweenAnchors(
+      catalogSource,
+      "export const PERSONAL_CONFIG_ROUTE_CODECS",
+      "const CODECS_BY_WIRE_TOKEN",
+    );
     const tableActions = new Set(
       [...tableBlock.matchAll(/^\s*(?:"([a-z0-9-]+)"|([a-z0-9-]+)):\s*\{/gm)].map((m) => m[1] ?? m[2]),
     );
@@ -4449,6 +4460,8 @@ describe("personalConfigOperations Advanced operations", () => {
   });
 
   it("setSpotlight calls userRepository.replacePersonalSpotlight", async () => {
+    const personalSpotlightCache = await import("@/utils/cache/personalSpotlightCache");
+    const getCachedSpy = spyOn(personalSpotlightCache, "getCachedPersonalSpotlightStatus").mockResolvedValue(null);
     const spotSpy = spyOn(userRepository, "replacePersonalSpotlight").mockImplementation(async () => {});
     const result = await personalConfigOperations.setSpotlight({
       serverId: 42,
@@ -4461,6 +4474,7 @@ describe("personalConfigOperations Advanced operations", () => {
     });
     expect(result).toEqual({ status: "success" });
     expect(spotSpy).toHaveBeenCalledWith(42, 1, "ch-100", [1, 2], 1, null);
+    getCachedSpy.mockRestore();
     spotSpy.mockRestore();
   });
 
@@ -4950,7 +4964,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(dtmHeadingDisplay.content).toContain(
               "**[Deliberate Trigger Mode](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)**",
             );
-            expect(dtmHeadingDisplay.content).toContain("Controls when I reply without being\naddressed directly.");
+            expect(dtmHeadingDisplay.content.replaceAll("\n", " ")).toContain(
+              "Controls when I reply without being addressed directly.",
+            );
             expect(dtmHeadingDisplay.content).not.toContain(">");
 
             const dtmEffectDisplay = container.components[dtmRowIndex + 1] as TextDisplayComponentData;
@@ -5007,8 +5023,8 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(toolHeadingDisplay.content).toContain(
               "**[Deliberate Tool Mode](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/#deliberate-tool-mode)** (EXPERIMENTAL)",
             );
-            expect(toolHeadingDisplay.content).toContain(
-              "Controls whether tools are offered for\nevery message or only when relevant.",
+            expect(toolHeadingDisplay.content.replaceAll("\n", " ")).toContain(
+              "Controls whether tools are offered for every message or only when relevant.",
             );
             expect(toolHeadingDisplay.content).not.toContain(">");
 
@@ -8080,7 +8096,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         const payloadJson = JSON.stringify(payload);
         // Precondition explained in prose
-        expect(payloadJson).toContain("-# Model Randomizer requires at least one configured fallback model.");
+        expect(payloadJson).toContain(
+          JSON.stringify(
+            formatPanelProse("-# Model Randomizer requires at least one configured fallback model."),
+          ).slice(1, -1),
+        );
         // Effective behavior quote is Off
         expect(payloadJson).toContain("> I try the primary model first");
       });
@@ -8144,7 +8164,11 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const payloadJson = JSON.stringify(payload);
         expect(payloadJson).toContain("> I try the primary model first");
         expect(payloadJson).not.toContain("> I pick a random model from my primary and fallbacks first");
-        expect(payloadJson).toContain("-# Model Randomizer requires at least one configured fallback model.");
+        expect(payloadJson).toContain(
+          JSON.stringify(
+            formatPanelProse("-# Model Randomizer requires at least one configured fallback model."),
+          ).slice(1, -1),
+        );
       });
     });
 

@@ -60,6 +60,8 @@ Use isso para personas que devem imitar um clipe de referência:
 2. Abra `/config` em Models > TTS Parameters & Voices e envie o clipe.
 3. Abra `/config` em Persona > Voice e, em seguida, escolha a persona e a amostra de voz.
 
+O Qwen3-TTS anuncia clonagem rápida a partir de apenas 3 segundos de áudio de referência, e seu tempo de execução não documenta nem aplica um limite de duração da referência. O comprimento do clipe é, portanto, uma decisão de qualidade que você controla, e não um limite que o servidor verifica.
+
 ### VoiceDesign
 
 Use isso para personas que devem usar uma descrição de voz escrita em vez de uma amostra:

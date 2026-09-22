@@ -264,12 +264,6 @@ Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo que suporte 
 1. Use \`/config\` > Modelos > Mudar Modelos para definir um modelo de visão dedicado, OU
 2. Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo capaz de visão, OU
 3. Remova a imagem e gere novamente sem ela`,
-      vision_model_provider_unsupported_title: `🔴 Provedor do Modelo de Visão Não Suportado`,
-      vision_model_provider_unsupported_description: `Seu modelo de visão (**{vision_model_name}**) está no provedor **{vision_provider}**, que não suporta a geração de predefinição de persona.
-
-**Próximos passos:**
-1. Use \`/config\` > Modelos > Mudar Modelos para definir um modelo de visão de um provedor suportado (Google, OpenRouter, DeepSeek, Z.ai, Custom, NVIDIA NIM), OU
-2. Use \`/config\` > Modelos > Mudar Modelos para mudar seu modelo principal para um que suporte visão e geração de predefinição`,
       web_search_tools_required_title: `🔴 Pesquisa na Web Indisponível`,
       web_search_tools_required_description: `Você selecionou pesquisa na web, mas o modelo atual (**{model_name}**) não suporta **FERRAMENTAS**.
 
@@ -278,6 +272,8 @@ Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo que suporte 
 2. Gere novamente sem a pesquisa na web (escolha "Não" quando perguntado)`,
       api_key_decrypt_failed_title: `🔴 Erro na Chave de API`,
       api_key_decrypt_failed_description: `Falha ao descriptografar as credenciais do provedor ativo. Por favor, reconfigure-as usando \`/providers\`.`,
+      vision_credentials_unavailable_title: `🔴 Credenciais do Modelo de Visão Indisponíveis`,
+      vision_credentials_unavailable_description: `Seu modelo de visão (**{vision_model_name}**) roda no provedor **{vision_provider}**, mas sua chave de API salva não pôde ser usada para descrever a imagem. Reconfigure as credenciais desse provedor com \`/providers\`, ou verifique \`/config\` > Modelos.`,
       invalid_image_title: `🔴 Imagem Inválida`,
       invalid_image_description: `Por favor, envie um arquivo de imagem válido (PNG, JPG, JPEG, etc.).`,
       error_file_too_large: `A imagem do avatar deve ter {max_size}MB ou menos.`,
@@ -287,10 +283,19 @@ Use \`/config\` > Modelos > Mudar Modelos para mudar para um modelo que suporte 
       processing_description: `Isso pode levar de 1 a 2 minutos. Por favor, aguarde enquanto o personagem é gerado...
 
 Isso pode produzir resultados inesperados. Você pode gerar novamente se necessário.`,
+      captioning_title: `Descrevendo seu avatar...`,
+      captioning_description: `Seu modelo principal não consegue ver imagens, então primeiro peço ao seu modelo de visão (**{model_name}**) que descreva o avatar enviado. Depois, seu modelo principal escreve a personalidade a partir dessa descrição. Isso pode levar 1-2 minutos.`,
       generation_failed_title: `🔴 Falha na Geração`,
       generation_failed_description: `Falha ao gerar personalidade: {error}
 
 Por favor, tente novamente com diferentes entradas ou verifique sua chave de API.`,
+      vision_caption_failed_title: `🔴 Falha ao descrever o avatar`,
+      vision_caption_failed_description: `Seu modelo de visão (**{vision_model_name}** em {vision_provider}) não conseguiu descrever o avatar enviado.
+
+**Próximos passos:**
+1. Verifique a chave de API desse provedor com \`/providers\`, OU
+2. Remova a imagem e gere novamente, OU
+3. Configure outro modelo de visão em \`/config\` > Modelos`,
       validation_failed_title: `🔴 Falha na Validação`,
       validation_failed_description: `Os dados da personalidade gerada falharam na validação. Por favor, tente novamente.`,
       image_processing_failed_title: `🔴 Falha no Processamento da Imagem`,
@@ -312,7 +317,7 @@ Ou pressione o botão Importar`,
       success_next_steps_description_dm: `1. Baixe o arquivo PNG anexado
 2. Use \`/persona import\` com o PNG
 3. Execute \`/refresh\` para aplicar a nova personalidade`,
-      success_next_steps_footer: `Você pode editar mais a persona com os comandos \`/persona\` depois.`,
+      success_next_steps_footer: `Depois você pode me personalizar mais em \`/config\`.`,
       avatar_update_skipped_dm: `Por favor, note que as atualizações de avatar e apelido não estão disponíveis para importação em Mensagens Diretas.`,
     },
     create: {
@@ -363,7 +368,7 @@ Ou pressione o botão Importar`,
       success_next_steps_description: `1. Baixe o arquivo PNG anexado à direita
 2. Use \`/persona import\` com o PNG
 Ou pressione o botão Importar`,
-      success_next_steps_footer: `Você pode editar mais a persona com os comandos \`/persona\` depois.`,
+      success_next_steps_footer: `Depois você pode me personalizar mais em \`/config\`.`,
       avatar_update_skipped_dm: `Por favor, note que as atualizações de avatar e apelido não estão disponíveis em Mensagens Diretas.`,
     },
   },

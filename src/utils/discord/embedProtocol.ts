@@ -1,4 +1,4 @@
-import type { Embed, EmbedBuilder } from "discord.js";
+import type { Embed } from "discord.js";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { getLocaleSubKeys, getSupportedLocales, hasLocaleKey, localizer } from "@/utils/text/localizer";
 
@@ -71,7 +71,8 @@ export const PROTOCOL_KEYS: ProtocolEntry[] = [
   })),
 ];
 
-const EMBED_PROTOCOL_TOKEN = "[tomori:v1:";
+// The bot no longer writes this footer token because it rendered as visible text. Embeds already
+// posted with it still carry it, so the reader keeps honoring it.
 const TOKEN_PATTERN = /\[tomori:v1:([a-z_]+)\]/;
 const targetKinds = new Set<ProtocolKind>([
   "memory_learning",
@@ -92,6 +93,10 @@ type Match = { key: string; kind: ProtocolKind; value: string; pattern?: RegExp;
 let exactTitles = new Map<string, Match>();
 let templates: Match[] = [];
 let prefixes: Match[] = [];
+
+// Most locales author the reply-context description as a bare `{message_url}`. A template that is
+// only a placeholder compiles to `^.+?$`, which would classify any embed with a description as one.
+const PLACEHOLDER_PATTERNS = new Map([["message_url", "https?://\\S+"]]);
 
 function placeholderSignature(value: string): string {
   return [...value.matchAll(/\{([a-zA-Z0-9_]+)\}/g)]
@@ -138,7 +143,9 @@ export function buildProtocolLookup(
       if (entry.match === "prefix") {
         if (value) prefixMatches.push({ ...match, prefix: true });
       } else if (entry.match === "template") {
-        match.pattern = new RegExp(`^${escapeRegExp(value).replace(/\\\{[^}]+\\\}/g, ".+?")}$`);
+        match.pattern = new RegExp(
+          `^${escapeRegExp(value).replace(/\\\{([a-zA-Z0-9_]+)\\\}/g, (_, name: string) => PLACEHOLDER_PATTERNS.get(name) ?? ".+?")}$`,
+        );
         dynamic.push(match);
       } else {
         exact.set(value, match);
@@ -186,21 +193,6 @@ export function classifyProtocolEmbed(embed: Pick<Embed, "title" | "footer">): P
 
 export function isTargetProtocolKind(kind: ProtocolKind | null): kind is TargetEmbedType {
   return kind !== null && targetKinds.has(kind);
-}
-
-export function stampProtocolEmbed(embed: EmbedBuilder, kind: ProtocolKind, footerText?: string): EmbedBuilder {
-  const token = `${EMBED_PROTOCOL_TOKEN}${kind}]`;
-  const existingText = footerText ?? embed.data.footer?.text;
-  const iconURL = embed.data.footer?.icon_url;
-  return embed.setFooter({
-    text: existingText ? `${existingText} · ${token}` : token,
-    ...(iconURL ? { iconURL } : {}),
-  });
-}
-
-export function getProtocolKindForKey(key: string): ProtocolKind | null {
-  const entry = PROTOCOL_KEYS.find((item) => item.key === key);
-  return entry?.kind ?? null;
 }
 
 export function matchesProtocolTemplateKey(key: string, text: string): boolean {

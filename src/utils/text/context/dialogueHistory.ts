@@ -466,10 +466,10 @@ async function appendTextParts(
       // casing/semicolon normalization, so a rebuilt prompt's history prefix stays byte-stable.
       [processedContent] = humanizeString(processedContent, { suppressPunctuationNoise: true });
     }
-    // Mentions, channel links, and roles still resolve here. Only the identity macros are left
+    // Mentions, channel links, and roles still resolve here. Only the identity macros stay
     //    literal: this string carries a real Discord message body, so rewriting "{bot}"/"{char}"
-    //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user) and,
-    //    on a model-role line, would collapse both macros onto the persona's own name.
+    //    would corrupt legitimate content (e.g. a persona preset Tomori drafted for a user).
+    //    On a model-role line it would also collapse both macros onto the persona's own name.
     processedContent = await params.convertMentions(
       processedContent,
       params.client,

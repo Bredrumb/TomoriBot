@@ -72,15 +72,17 @@ TomoriBot 支持多种本地语音合成边车（sidecar），各自适合不同
 
 目前 TomoriBot 的所有边车（sidecar）都向 bot 返回一个完整的 WAV 文件。「流式路径」是指上游模型或单独的推理后端具备流式输出，**并不**表示已经实现了 Discord 语音通话的流式传输。体积指的是模型参数量，**不是**显存占用或下载体积，16 GB 那一列只是配置建议，不是实测峰值。速度那一列描述的是各引擎的设计取舍；上面的实测耗时来自同一台 Windows 机器，不能用来给各引擎在 Linux 上的表现排名。
 
-| 引擎 | 模型体积；16 GB GPU | 语言 | 语音来源与控制方式 | 速度 / 流式路径 | 适合场景 |
-|---|---|---|---|---|---|
-| [Chatterbox](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 350M Turbo（默认）、110M Nano 或 500M Standard；可以，Nano 能用 CPU | 英语 | 参考音频克隆，受支持的事件标签；标准模型提供 CFG 与夸张程度 | 主打快速与轻量；封装程序返回完整 WAV | 小体积的英语克隆搭建，或在 CPU 上做实验 |
-| [Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 每种模式 1.7B；可以，模型会切换 | 10 种，含英语与日语 | 克隆，或用文字描述的 VoiceDesign | 主打质量；上游支持流式，封装程序会缓冲 | 通用多语言克隆与日语 VoiceDesign |
-| [MOSS-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/moss/) | 4B 克隆模型加约 1.7B 设计模型，二者会切换；16 GB 只是试验目标，未经验证；8B 旗舰模型大概跑不动 | 克隆：31 种，含日语；设计：英语与中文 | 克隆，或用文字描述的 VoiceGenerator；克隆支持语言标签 | 试验性；本地克隆有上游流式后端，封装程序会缓冲 | 对比 MOSS 的克隆质量，或做英语与中文语音设计 |
-| [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 当前 v4.1 Small 约 0.8B；一次本地运行中观察到约 3-4 GB 显存 | 仅日语 | 克隆或 VoiceDesign；emoji 风格提示 | 用采样步数在质量与速度之间取舍；封装程序会缓冲 | 小体积的日语语音，以及由 emoji 驱动的表达方式 |
-| [Fish S2 Pro](/zh-CN/self-hosting/local-endpoints/text-to-speech/fishs2/) | 4B；默认官方 BF16（约 16-18 GB），16 GB 可选 INT8 | 上游声称 83 种 | 参考音频克隆（需要参考文本），自由格式的方括号表达标签 | 重型 Dual-AR 模型；想快速合成需要 Linux/WSL2 加 Triton（Windows eager 模式下约 65× RTF） | 细粒度、富有表现力的克隆；请留意研究许可条款 |
-| [VoxCPM2](/zh-CN/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 2B；上游报告 BF16 约 8 GB | 30 种 | 克隆、语音设计、参考文本辅助的 Ultimate Cloning、表达方式指令 | 上游 RTX 4090 上约 0.30 RTF；上游支持流式，封装程序会缓冲 | 一个多语言模型，提供最丰富的语音来源控制方式 |
-| [CosyVoice 3](/zh-CN/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | 核心 0.5B；16 GB 够用，下载体积与运行时占用更大 | 9 种，含日语，另有中文方言 | 克隆、跨语言克隆、自然语言表达方式 | 主打低延迟；上游原生支持文本与音频流式，封装程序会缓冲 | 将来做流式传输的候选方案，支持跨语言克隆 |
+「参考片段」列列出的是各引擎在文档中记载、或在运行时实际套用的参考音频长度，因此混合了已发布的指引与从上游代码读出的限制。大多数引擎不会拒绝请求，而是静默裁剪到自己的窗口，所以这一列给出的是引擎读取的长度，而不只是引擎接受的长度。这是上游行为，不是在本页测得的结果，也和 TomoriBot 的上传上限无关。
+
+| 引擎 | 模型体积；16 GB GPU | 语言 | 参考片段 | 语音来源与控制方式 | 速度 / 流式路径 | 适合场景 |
+|---|---|---|---|---|---|---|
+| [Chatterbox](/zh-CN/self-hosting/local-endpoints/text-to-speech/chatterbox/) | 350M Turbo（默认）、110M Nano 或 500M Standard；可以，Nano 能用 CPU | 英语 | 10 秒；更长的内容一旦超出提示的 10 秒窗就会被静默忽略 | 参考音频克隆，受支持的事件标签；标准模型提供 CFG 与夸张程度 | 主打快速与轻量；封装程序返回完整 WAV | 小体积的英语克隆搭建，或在 CPU 上做实验 |
+| [Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 每种模式 1.7B；可以，模型会切换 | 10 种，含英语与日语 | 3 秒起；没有文档记载的上限 | 克隆，或用文字描述的 VoiceDesign | 主打质量；上游支持流式，封装程序会缓冲 | 通用多语言克隆与日语 VoiceDesign |
+| [MOSS-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/moss/) | 4B 克隆模型加约 1.7B 设计模型，二者会切换；16 GB 只是试验目标，未经验证；8B 旗舰模型大概跑不动 | 克隆：31 种，含日语；设计：英语与中文 | 上游没有文档；运行时也没有上限 | 克隆，或用文字描述的 VoiceGenerator；克隆支持语言标签 | 试验性；本地克隆有上游流式后端，封装程序会缓冲 | 对比 MOSS 的克隆质量，或做英语与中文语音设计 |
+| [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 当前 v4.1 Small 约 0.8B；一次本地运行中观察到约 3-4 GB 显存 | 仅日语 | 约 30 秒；会按检查点的 120 秒上限裁剪 | 克隆或 VoiceDesign；emoji 风格提示 | 用采样步数在质量与速度之间取舍；封装程序会缓冲 | 小体积的日语语音，以及由 emoji 驱动的表达方式 |
+| [Fish S2 Pro](/zh-CN/self-hosting/local-endpoints/text-to-speech/fishs2/) | 4B；默认官方 BF16（约 16-18 GB），16 GB 可选 INT8 | 上游声称 83 种 | 10-30 秒；运行时没有上限 | 参考音频克隆（需要参考文本），自由格式的方括号表达标签 | 重型 Dual-AR 模型；想快速合成需要 Linux/WSL2 加 Triton（Windows eager 模式下约 65× RTF） | 细粒度、富有表现力的克隆；请留意研究许可条款 |
+| [VoxCPM2](/zh-CN/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 2B；上游报告 BF16 约 8 GB | 30 种 | 5-30 秒；这是文档记载的范围，运行时没有上限 | 克隆、语音设计、参考文本辅助的 Ultimate Cloning、表达方式指令 | 上游 RTX 4090 上约 0.30 RTF；上游支持流式，封装程序会缓冲 | 一个多语言模型，提供最丰富的语音来源控制方式 |
+| [CosyVoice 3](/zh-CN/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | 核心 0.5B；16 GB 够用，下载体积与运行时占用更大 | 9 种，含日语，另有中文方言 | 3-30 秒；更长会被截到最前面的 30 秒 | 克隆、跨语言克隆、自然语言表达方式 | 主打低延迟；上游原生支持文本与音频流式，封装程序会缓冲 | 将来做流式传输的候选方案，支持跨语言克隆 |
 
 模型体积与语言数量来自 [Chatterbox](https://github.com/resemble-ai/chatterbox)、[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)、[MOSS](https://github.com/OpenMOSS/MOSS-TTS)、[Irodori](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small)、[Fish S2 Pro](https://huggingface.co/fishaudio/s2-pro)、[VoxCPM2](https://huggingface.co/openbmb/VoxCPM2) 和 [CosyVoice 3](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) 的上游页面。操作系统、驱动、许可、模型版本和内存等细节请查看各篇指南。16 GB 显卡不一定能同时跑一个语音合成模型和一个大型本地 LLM。
 

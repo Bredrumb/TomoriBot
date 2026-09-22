@@ -6,7 +6,6 @@ import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { stampProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { sendMatrixInviteSetupNotice } from "./client";
 import { downloadMatrixMedia, MATRIX_MAX_ATTACHMENT_BYTES } from "./media";
 import { getDiscordChannelForRoom, getJoinViaServers } from "./rooms";
@@ -194,13 +193,10 @@ async function handleMatrixRefresh(channel: BaseGuildTextChannel, channelDiscId:
 
   await channel.send({
     embeds: [
-      stampProtocolEmbed(
-        new EmbedBuilder()
-          .setTitle(localizer("en-US", "commands.refresh.title"))
-          .setDescription(localizer("en-US", "commands.refresh.response"))
-          .setColor(ColorCode.SECTION),
-        "reset",
-      ),
+      new EmbedBuilder()
+        .setTitle(localizer("en-US", "commands.refresh.title"))
+        .setDescription(localizer("en-US", "commands.refresh.response"))
+        .setColor(ColorCode.SECTION),
     ],
     flags: MessageFlags.SuppressNotifications,
   });

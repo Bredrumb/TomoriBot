@@ -695,10 +695,10 @@ async function runIncrementalExtraction(params: {
   const windows = splitIntoWindows(messageLines, HISTORY_EXTRACTION_WINDOW_SIZE);
   const allChunks: string[] = [];
   let previousRestatements: string[] = [];
-  // Failure bookkeeping: the first provider error is the one shown to the user, since
-  //    a model that cannot emit structured output fails identically on every window.
-  //    `discardedEntries` counts facts the model returned in an unusable shape, which is a
-  //    softer failure than a window erroring outright but must not vanish silently.
+  // Failure bookkeeping. Only the first provider error is kept, because a model that
+  //    cannot emit structured output fails identically on every window and the user
+  //    needs one message, not one per window. `discardedEntries` counts facts the model
+  //    returned in an unusable shape, a softer failure that must not vanish silently.
   let failedWindows = 0;
   let firstExtractionError: string | null = null;
   let discardedEntries = 0;

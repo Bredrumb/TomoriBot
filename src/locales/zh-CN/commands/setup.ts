@@ -14,21 +14,16 @@ export default {
     learn_more_title: `了解更多`,
     heads_up_title: `几点需要注意`,
     novelai_expressions_warning_field: `表情与贴纸已关闭`,
-    novelai_expressions_warning_value: `表情和贴纸已自动关闭，好让 NovelAI
-的上下文保持精简稳定。你可以随时用 \`/config\` >
-权限重新打开。`,
+    novelai_expressions_warning_value:
+      "表情和贴纸已自动关闭，好让 NovelAI 的上下文保持精简稳定。你可以随时用 `/config` > 权限重新打开。",
     zai_tos_warning_field: `Z.ai 服务条款`,
-    zai_tos_warning_value: `Z.ai 的服务条款已更新，现在只允许
-编码和智能体用途。把 Z.ai 用于普通聊天
-风险自负，而且可能违反他们的条款。`,
+    zai_tos_warning_value:
+      "Z.ai 的服务条款已更新，现在只允许 编码和智能体用途。把 Z.ai 用于普通聊天 风险自负，而且可能违反他们的条款。",
     byok_bootstrap_field: `用户 BYOK`,
     byok_bootstrap_value: `设置过程中已打开。成员现在需要自己的个人提供方才能触发回复。之后可以用 {toggle_command} 关闭，成员设置流程见 {help_personal_provider}（功能 > 个人提供方）。`,
     dm_context_explanation_title: `关于私信`,
-    dm_context_explanation: `我仍然会把这条私信当作一个「服务器」。
-也就是说所有「服务器」功能在这里都一样能
-用，只是这里是私下在我们之间用！把这条
-私信想成和我一对一的服务器，所以它的
-服务器记忆只属于这里。`,
+    dm_context_explanation:
+      "我仍然会把这条私信当作一个「服务器」。 也就是说所有「服务器」功能在这里都一样能 用，只是这里是私下在我们之间用！把这条 私信想成和我一对一的服务器，所以它的 服务器记忆只属于这里。",
     already_setup_title: `已经设置好了`,
     already_setup_summary_description: `这个服务器已经配置过了。以下是当前的文本提供方状态，以及最快的修改方式。`,
     current_provider_field: `当前文本提供方`,
@@ -56,13 +51,8 @@ export default {
       policies_button_start: `查看并接受政策`,
       policies_button_edit: `查看政策`,
       policies_modal_title: `政策`,
-      policies_modal_context: `结束设置前请先查看 TomoriBot 的政策。
-
-TomoriBot 不会保存你的聊天记录。当它在
-频道里回复时，会读取该频道最近的消息作为
-上下文，并发送给这个服务器的 AI 提供方。
-提供方和自定义端点有各自的条款和隐私
-做法，请另外查看。`,
+      policies_modal_context:
+        "结束设置前请先查看 TomoriBot 的政策。\n\nTomoriBot 不会保存你的聊天记录。当它在 频道里回复时，会读取该频道最近的消息作为 上下文，并发送给这个服务器的 AI 提供方。 提供方和自定义端点有各自的条款和隐私 做法，请另外查看。",
       policies_modal_acceptance: `继续即表示你确认已阅读并接受 TomoriBot 的[服务条款]({terms_url})和[隐私政策]({privacy_url})。成员随时可以用 \`/legal\` 查看这两份文件，但只有你能告诉他们这里有 AI 在回复，以及它会读什么。`,
       policies_modal_choice_label: `三项都确认后才能继续`,
       policies_choice_terms: `我接受 TomoriBot 的服务条款`,
@@ -125,47 +115,31 @@ TomoriBot 不会保存你的聊天记录。当它在
       change_failed_title: `设置改动没有保存`,
       commit_in_progress: `这次设置已经在保存了。请稍等一下。`,
       commit_in_progress_title: `正在保存设置`,
-      receipt_footer_avatar_skipped_dm: `私信里无法更新头像，
-所以跳过了预设集头像。`,
-      receipt_footer_avatar_failed: `无法在这个服务器里更新预设集头像。
-你可以之后再设置一次。`,
+      receipt_footer_avatar_skipped_dm: "私信里无法更新头像， 所以跳过了预设集头像。",
+      receipt_footer_avatar_failed: "无法在这个服务器里更新预设集头像。 你可以之后再设置一次。",
       receipt_title: `设置完成！`,
       receipt_desc: `我已经以 \`{persona}\` 的身份为这个服务器设置好了！`,
-      receipt_desc_with_model: `我已经为这个服务器设置好了！我会以 \`{persona}\` 的
-身份，用 \`{model_name}\` 模型（\`{provider}\` 的默认值）回复。`,
-      receipt_desc_custom_endpoint: `我已经为这个服务器设置好了！我会以
-\`{persona}\` 的身份，用 \`{endpoint}\` 上的
-\`{model_name}\` 回复。`,
-      receipt_desc_byok: `我已经以用户 BYOK 模式为这个服务器设置好了，
-身份是 \`{persona}\`！在关闭 BYOK 之前，每位成员
-都用自己的提供方回复。`,
+      receipt_desc_with_model:
+        "我已经为这个服务器设置好了！我会以 `{persona}` 的 身份，用 `{model_name}` 模型（`{provider}` 的默认值）回复。",
+      receipt_desc_custom_endpoint:
+        "我已经为这个服务器设置好了！我会以 `{persona}` 的身份，用 `{endpoint}` 上的 `{model_name}` 回复。",
+      receipt_desc_byok:
+        "我已经以用户 BYOK 模式为这个服务器设置好了， 身份是 `{persona}`！在关闭 BYOK 之前，每位成员 都用自己的提供方回复。",
       receipt_desc_dm: `我已经以 \`{persona}\` 的身份为我们的私信设置好了！`,
-      receipt_desc_dm_with_model: `我已经以 \`{persona}\` 的身份为我们的私信设置好了！
-我会用 \`{provider}\` 的 \`{model_name}\` 模型回复。`,
-      receipt_desc_custom_endpoint_dm: `我已经为我们的私信设置好了！我会以
-\`{persona}\` 的身份，用 \`{endpoint}\` 上的
-\`{model_name}\` 回复。`,
-      receipt_desc_byok_dm: `我已经以用户 BYOK 模式为我们的私信设置好了，
-身份是 \`{persona}\`！在关闭 BYOK 之前，你的每条
-消息都用自己的提供方。`,
-      receipt_next_steps: `- **在聊天里提到我**就能开始对话！
-- 用 \`/persona\` 改我的名字、外观和人格。
-- 用 \`/config\` 调整我的行为和能力。
-- 用 \`/memories\` 教我关于你和这个服务器的事。
-- 用 \`/expressions initialize\` 让我使用这个
-  服务器的表情和贴纸。`,
+      receipt_desc_dm_with_model:
+        "我已经以 `{persona}` 的身份为我们的私信设置好了！ 我会用 `{provider}` 的 `{model_name}` 模型回复。",
+      receipt_desc_custom_endpoint_dm:
+        "我已经为我们的私信设置好了！我会以 `{persona}` 的身份，用 `{endpoint}` 上的 `{model_name}` 回复。",
+      receipt_desc_byok_dm:
+        "我已经以用户 BYOK 模式为我们的私信设置好了， 身份是 `{persona}`！在关闭 BYOK 之前，你的每条 消息都用自己的提供方。",
+      receipt_next_steps:
+        "- **在聊天里提到我**就能开始对话！\n- 用 `/persona` 改我的名字、外观和人格。\n- 用 `/config` 调整我的行为和能力。\n- 用 `/memories` 教我关于你和这个服务器的事。\n- 用 `/expressions initialize` 让我使用这个 服务器的表情和贴纸。",
       receipt_next_steps_dm: `- **直接在这里给我发消息**就能开始对话！
 - 用 \`/persona\` 改我的名字、外观和人格。
 - 用 \`/config\` 调整我的行为和能力。
 - 用 \`/memories\` 教我关于你的事。`,
-      receipt_learn_more: `阅读[官方 Wiki](https://docs.tomoribot.app/zh-CN/features/)，或打开 {help}
-（然后选功能），了解更多我能做的事。
-- [多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/) = 外观、声音和触发设置
-- [聊天与触发](https://docs.tomoribot.app/zh-CN/features/chatting-personality/chatting-and-triggers/) = 我何时以及如何加入
-- [记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/) = 人物、事实和上下文
-- [个性化](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/) = 你希望被如何对待
-- [媒体生成](https://docs.tomoribot.app/zh-CN/features/capabilities/media-generation/) = 图像、视频和语音
-- [工具与扩展](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/) = 网络搜索和自定义工具`,
+      receipt_learn_more:
+        "阅读[官方 Wiki](https://docs.tomoribot.app/zh-CN/features/)，或打开 {help} （然后选功能），了解更多我能做的事。\n- [多个人格](https://docs.tomoribot.app/zh-CN/features/chatting-personality/multiple-personas/) = 外观、声音和触发设置\n- [聊天与触发](https://docs.tomoribot.app/zh-CN/features/chatting-personality/chatting-and-triggers/) = 我何时以及如何加入\n- [记忆](https://docs.tomoribot.app/zh-CN/features/knowledge/memory/) = 人物、事实和上下文\n- [个性化](https://docs.tomoribot.app/zh-CN/features/knowledge/personalization/) = 你希望被如何对待\n- [媒体生成](https://docs.tomoribot.app/zh-CN/features/capabilities/media-generation/) = 图像、视频和语音\n- [工具与扩展](https://docs.tomoribot.app/zh-CN/features/capabilities/tools-and-extensions/) = 网络搜索和自定义工具",
       permission_denied: `你需要有管理服务器权限才能进行设置。`,
       env_mismatch: `环境配置已变更。请重新开始设置。`,
       forbidden: `这次设置会话属于其他用户或频道。`,

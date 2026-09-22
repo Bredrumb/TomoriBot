@@ -252,9 +252,8 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     }
 
     // A timed-out member keeps every permission bit, so the check above passes while Discord
-    // rejects the send with 50013 regardless. Nothing in the bitfield expresses this, which is
-    // why it has to be read from the member. One production guild timed the bot out and drew
-    // 397 failed sends across two days, each one a completed LLM call thrown away.
+    // rejects the send with 50013 regardless. Nothing in the bitfield expresses this, so it
+    // has to be read from the member rather than inferred from permissions.
     if (isBotTimedOut(channel.guild, client)) {
       return blocked("bot_timed_out_in_guild");
     }

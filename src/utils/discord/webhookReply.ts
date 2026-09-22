@@ -1,7 +1,6 @@
 import { EmbedBuilder, type Message, type Webhook } from "discord.js";
 import { stripBridgePrefix } from "@/utils/bridges";
 import { localizer } from "@/utils/text/localizer";
-import { stampProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 
@@ -49,16 +48,13 @@ function buildReplyContextEmbed(
       forceStatic: true,
     });
 
-  return stampProtocolEmbed(
-    new EmbedBuilder().setURL(targetMessage.url).setAuthor({
-      name: localizer(locale, "genai.message_interaction.reply_context_author", {
-        user: getReplyContextAuthorName(targetMessage, botUserId, botName),
-      }),
-      url: targetMessage.url,
-      iconURL: authorIconUrl,
+  return new EmbedBuilder().setURL(targetMessage.url).setAuthor({
+    name: localizer(locale, "genai.message_interaction.reply_context_author", {
+      user: getReplyContextAuthorName(targetMessage, botUserId, botName),
     }),
-    "reply_context",
-  );
+    url: targetMessage.url,
+    iconURL: authorIconUrl,
+  });
 }
 
 export async function sendWebhookReplyWithContext(

@@ -203,6 +203,53 @@ export function describeDegradationTrigger(kind: DegradableErrorKind | null, que
   return "an error naming request parameters";
 }
 
+/** Input for one retry decision at either failure point: an unsuccessful fetch or a pre-commit SSE error. */
+export interface DegradationRetryPlanInput extends DegradableErrorInput {
+  /** The ladder being walked; the queue callbacks may append to it. */
+  attempts: DegradationAttempt[];
+  /** Index of the attempt that just failed. */
+  attemptIndex: number;
+  /** Body of the failed attempt, which a queue callback clones and trims. */
+  body: Record<string, unknown>;
+  /** Provider policy for the shared classifier, minus the status and message it already receives. */
+  classifyOptions?: Omit<ClassifyDegradableErrorOptions, "statusCode" | "message">;
+  queueTargetedAttempt: (attemptIndex: number, body: Record<string, unknown>, errorMessage: string) => boolean;
+  queueImageStripAttempt: (attemptIndex: number, body: Record<string, unknown>, errorMessage: string) => boolean;
+}
+
+/** What the adapter should say when it retries with a degraded payload. */
+export interface DegradationRetryPlan {
+  /** Log label for whichever signal justified the retry. */
+  trigger: string;
+}
+
+/**
+ * Decide whether a failed attempt should be retried with a degraded payload, queueing the two
+ * targeted retries as a side effect. Returns null when nothing justified a retry or the ladder
+ * has no rung left to try.
+ *
+ * A message that names a droppable request param is sufficient evidence on its own, so a queued
+ * targeted or image-strip attempt justifies the retry even when the generic status and wording
+ * classifier finds nothing.
+ *
+ * The queue callbacks run before the remaining-attempt check because queueing appends to the
+ * ladder: the final rung's failure is still allowed to extend it, and that check reads the
+ * updated length.
+ */
+export function planDegradationRetry(input: DegradationRetryPlanInput): DegradationRetryPlan | null {
+  const queuedTargeted = input.queueTargetedAttempt(input.attemptIndex, input.body, input.message);
+  const queuedImageStrip = input.queueImageStripAttempt(input.attemptIndex, input.body, input.message);
+  const kind = classifyDegradableError({
+    statusCode: input.statusCode,
+    message: input.message,
+    ...input.classifyOptions,
+  });
+
+  if (!kind && !queuedTargeted && !queuedImageStrip) return null;
+  if (input.attemptIndex >= input.attempts.length - 1) return null;
+  return { trigger: describeDegradationTrigger(kind, queuedImageStrip) };
+}
+
 /**
  * Build the bounded static degradation ladder for a request body.
  * Duplicate serialized bodies are removed while preserving attempt order.

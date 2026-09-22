@@ -72,15 +72,17 @@ TomoriBotは複数のローカルText-to-Speechサイドカーに対応してお
 
 現在、TomoriBotのすべてのサイドカーは完成したWAVをボットに返します。「ストリーミング経路」とは、上流のモデルまたは別の配信バックエンドがその手段を持つという意味であり、Discordの音声チャットへのストリーミングが実装されているという意味では**ありません**。サイズはモデルのパラメーター数であり、VRAMやダウンロードサイズでは**ありません**。また、16 GB欄はセットアップの目安であり、実測されたピーク値ではありません。速度欄は各エンジンが意図するトレードオフを示すものです。上記の計測はいずれも1台のWindowsマシンによるもので、Linuxでの順位付けを示すものではありません。
 
-| エンジン | モデルサイズ・16 GB GPU | 対応言語 | 音声ソースと制御 | 速度・ストリーミング経路 | 選ぶ理由 |
-|---|---|---|---|---|---|
-| [Chatterbox](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/) | Turbo 350M（既定）、Nano 110M、またはStandard 500M。対応、NanoはCPUも使用可 | 英語 | 参照クローン、対応済みイベントタグ。標準モデルはCFG／誇張表現に対応 | 速度・小型重視。ラッパーは完全なWAVを返却 | 小規模な英語クローンのセットアップやCPUでの実験 |
-| [Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 各モード1.7B。対応、モデルを入れ替え | 10言語（英語・日本語を含む） | クローンまたはテキストによるボイスデザイン | 品質重視。上流はストリーミング対応、ラッパーはバッファリング | 汎用の多言語クローンと日本語のボイスデザイン |
-| [MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/) | クローン4B＋設計約1.7Bを入れ替え。16 GBは未検証の試用目標、8Bのフラッグシップはおそらく不可 | クローン: 31言語（日本語を含む）、設計: 英語・中国語 | クローンまたはテキストによるVoiceGenerator。クローンは言語タグに対応 | 実験的。ローカルクローンには上流のストリーミングバックエンドがあるが、ラッパーはバッファリング | MOSSのクローン品質、または英語・中国語の音声設計を比較する |
-| [IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 現行のv4.1 Smallで約0.8B。1件のローカル実行で約3〜4 GBのVRAMを観測 | 日本語のみ | クローンまたはボイスデザイン。絵文字によるスタイル指示 | サンプリングステップ数で品質と速度をトレードオフ。ラッパーはバッファリング | 省メモリな日本語音声と絵文字主導の発話 |
-| [Fish S2 Pro](/ja/self-hosting/local-endpoints/text-to-speech/fishs2/) | 4B。公式BF16が既定（約16〜18 GB）、16 GB向けの任意のINT8もあり | 上流の公称83言語 | 参照クローン（参照文字起こしが必要）、自由形式の角括弧表現タグ | 重いDual-ARモデル。高速な合成にはTritonを使うLinux/WSL2が必要（Windowsのeagerモードでは約65× RTF） | 細かな表現制御。研究ライセンスの条件を確認すること |
-| [VoxCPM2](/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 2B。上流ではBF16で約8 GBと報告 | 30言語 | クローン、ボイスデザイン、文字起こし支援のUltimate Cloning、発話指示 | 上流のRTX 4090で約0.30 RTF。上流はストリーミング対応、ラッパーはバッファリング | 幅広い音声ソース制御を備えた1つの多言語モデル |
-| [CosyVoice 3](/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | コアは0.5B。16 GBで快適、ダウンロード・実行時のサイズはより大きい | 日本語を含む9言語＋中国語の方言 | クローン、クロスリンガルクローン、自然言語による発話指示 | 低遅延重視。上流ではネイティブのテキスト・音声ストリーミング、ラッパーはバッファリング | クロスリンガルクローンを備えた将来のストリーミング候補 |
+「参照クリップ」列は、各エンジンがドキュメントに記載しているか、実行時に適用している参照音声の長さをまとめたものです。そのため、公開されている指針と、上流のコードから読み取った制限が混在しています。ほとんどのエンジンはリクエストを拒否するのではなく、自分の窓に合わせて黙って切り詰めます。だからこそ、この列はエンジンが受け入れる長さだけでなく、エンジンが読み取る長さを示しています。これは上流の挙動であり、ここで計測した値ではなく、TomoriBotのアップロード上限とは独立しています。
+
+| エンジン | モデルサイズ・16 GB GPU | 対応言語 | 参照クリップ | 音声ソースと制御 | 速度・ストリーミング経路 | 選ぶ理由 |
+|---|---|---|---|---|---|---|
+| [Chatterbox](/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/) | Turbo 350M（既定）、Nano 110M、またはStandard 500M。対応、NanoはCPUも使用可 | 英語 | 10秒。それより長い部分は、10秒のプロンプトの窓を超えると黙って無視されます | 参照クローン、対応済みイベントタグ。標準モデルはCFG／誇張表現に対応 | 速度・小型重視。ラッパーは完全なWAVを返却 | 小規模な英語クローンのセットアップやCPUでの実験 |
+| [Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/) | 各モード1.7B。対応、モデルを入れ替え | 10言語（英語・日本語を含む） | 3秒以上。上限についての記載はなし | クローンまたはテキストによるボイスデザイン | 品質重視。上流はストリーミング対応、ラッパーはバッファリング | 汎用の多言語クローンと日本語のボイスデザイン |
+| [MOSS-TTS](/ja/self-hosting/local-endpoints/text-to-speech/moss/) | クローン4B＋設計約1.7Bを入れ替え。16 GBは未検証の試用目標、8Bのフラッグシップはおそらく不可 | クローン: 31言語（日本語を含む）、設計: 英語・中国語 | 上流に記載なし。実行時の上限もなし | クローンまたはテキストによるVoiceGenerator。クローンは言語タグに対応 | 実験的。ローカルクローンには上流のストリーミングバックエンドがあるが、ラッパーはバッファリング | MOSSのクローン品質、または英語・中国語の音声設計を比較する |
+| [IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/) | 現行のv4.1 Smallで約0.8B。1件のローカル実行で約3〜4 GBのVRAMを観測 | 日本語のみ | 約30秒。チェックポイントの120秒上限で切り詰められます | クローンまたはボイスデザイン。絵文字によるスタイル指示 | サンプリングステップ数で品質と速度をトレードオフ。ラッパーはバッファリング | 省メモリな日本語音声と絵文字主導の発話 |
+| [Fish S2 Pro](/ja/self-hosting/local-endpoints/text-to-speech/fishs2/) | 4B。公式BF16が既定（約16〜18 GB）、16 GB向けの任意のINT8もあり | 上流の公称83言語 | 10〜30秒。実行時の上限なし | 参照クローン（参照文字起こしが必要）、自由形式の角括弧表現タグ | 重いDual-ARモデル。高速な合成にはTritonを使うLinux/WSL2が必要（Windowsのeagerモードでは約65× RTF） | 細かな表現制御。研究ライセンスの条件を確認すること |
+| [VoxCPM2](/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/) | 2B。上流ではBF16で約8 GBと報告 | 30言語 | 5〜30秒。記載された範囲で、実行時の上限はなし | クローン、ボイスデザイン、文字起こし支援のUltimate Cloning、発話指示 | 上流のRTX 4090で約0.30 RTF。上流はストリーミング対応、ラッパーはバッファリング | 幅広い音声ソース制御を備えた1つの多言語モデル |
+| [CosyVoice 3](/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/) | コアは0.5B。16 GBで快適、ダウンロード・実行時のサイズはより大きい | 日本語を含む9言語＋中国語の方言 | 3〜30秒。それより長いものは最初の30秒に切り詰められます | クローン、クロスリンガルクローン、自然言語による発話指示 | 低遅延重視。上流ではネイティブのテキスト・音声ストリーミング、ラッパーはバッファリング | クロスリンガルクローンを備えた将来のストリーミング候補 |
 
 モデルサイズと対応言語数は、[Chatterbox](https://github.com/resemble-ai/chatterbox)、[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)、[MOSS](https://github.com/OpenMOSS/MOSS-TTS)、[Irodori](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small)、[Fish S2 Pro](https://huggingface.co/fishaudio/s2-pro)、[VoxCPM2](https://huggingface.co/openbmb/VoxCPM2)、[CosyVoice 3](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512)の各上流ページに準拠しています。OS、ドライバー、ライセンス、モデルのリビジョン、メモリの詳細については各ガイドを確認してください。16 GBのGPUが、TTSモデルと大きなローカルLLMを同時にホストできるとは限りません。
 

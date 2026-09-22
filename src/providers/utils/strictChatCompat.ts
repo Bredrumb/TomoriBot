@@ -1,20 +1,16 @@
-import type { ContextPart, StructuredContextItem } from "@/types/misc/context";
+import { ContextItemTag, type ContextPart, type StructuredContextItem } from "@/types/misc/context";
 
-// Shared "strict chat-completion" message normalizations.
-//
-// Several provider APIs require message shapes that others merely tolerate. Historically each
-// adapter hardwired its own copy of these rules, which left custom-endpoint proxies (which inherit
-// the OpenAI-compatible builder) unable to front strict backends such as Claude. This module
-// centralizes the three normalizations behind one tested seam:
+// Shared "strict chat-completion" message normalizations: message shapes some provider APIs
+// require and others merely tolerate. Three normalizations live behind this one tested seam, so a
+// custom-endpoint proxy can front strict backends such as Claude.
 //
 //   A. Prefix-completion: vendor "continue this assistant turn" extension (`prefix: true`).
 //   B. Role alternation: merge consecutive same-role turns + guarantee a leading `user` turn.
 //   C. Media relocation: assistant turns cannot carry media; peel it into a synthetic `user`
-//                           turn. This one is ALWAYS-ON (universal across OpenAI/Anthropic/Gemini
-//                           shaped APIs) and is never gated by a toggle.
+//      turn. This one is ALWAYS-ON (universal across OpenAI/Anthropic/Gemini shaped APIs) and is
+//      never gated by a toggle.
 //
-// A and B are exposed as per-endpoint toggles (`supports_prefix_completion`,
-// `strict_role_alternation`); C is unconditional.
+// A and B are exposed as per-endpoint toggles, C is unconditional.
 
 /**
  * Minimal message shape shared by the OpenAI-compatible and Anthropic message arrays: a `role`
@@ -234,6 +230,41 @@ export function unseenToolImageNotice(imageCount: number): string {
     `[System: The tool returned ${imagePhrase} and delivered ${pronoun} to the user in Discord, but ` +
     "the current model cannot see images. Do not describe or claim to see the contents. If you need " +
     "to see images, tell the user to set up `/model vision` or to use a model with the vision capability.]"
+  );
+}
+
+/**
+ * Context tags that belong in the instruction channel rather than the dialogue history: the
+ * standing material a provider receives once, ahead of the conversation.
+ *
+ * The list is a shared pipeline contract. An adapter that routes one of these tags into dialogue,
+ * or a dialogue tag into the instruction channel, makes the same conversation read differently per
+ * provider, so membership is decided here rather than per adapter.
+ */
+export const SYSTEM_INSTRUCTION_CONTEXT_TAGS: readonly ContextItemTag[] = [
+  ContextItemTag.SYSTEM_HUMANIZER_RULES,
+  ContextItemTag.SYSTEM_PERSONA_PROMPT,
+  ContextItemTag.SYSTEM_PERSONALITY,
+  ContextItemTag.KNOWLEDGE_SERVER_INFO,
+  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
+  ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Text-based with semantic metadata (deterministic ordering)
+  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
+];
+
+/**
+ * True when a context item carries standing instructions instead of a dialogue turn.
+ *
+ * Every user or model item belongs in dialogue unless it carries one of
+ * {@link SYSTEM_INSTRUCTION_CONTEXT_TAGS}. DIALOGUE_HISTORY, DIALOGUE_SAMPLE, and newer tags such as
+ * KNOWLEDGE_USERS_IN_CONVERSATION are therefore not listed anywhere: they route through the
+ * dialogue branch by default.
+ */
+export function isSystemInstructionContextItem(item: StructuredContextItem): boolean {
+  return (
+    item.role === "system" ||
+    (item.role === "user" &&
+      item.metadataTag !== undefined &&
+      SYSTEM_INSTRUCTION_CONTEXT_TAGS.includes(item.metadataTag))
   );
 }
 

@@ -354,147 +354,112 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       description: `Guide on how to get started with me and my features`,
       get_api_key: {
         title: `Get an API Key`,
-        description: `An API key grants me access to an AI provider's model.
-Whatever I generate is billed to that key, so treat
-it like any other password.
-To finish setup I need one:
-> **1.** Pick a provider below to open its guide.
-> **2.** Copy the key it gives you. **Do NOT share it** with
-> anyone, and never paste it into a channel: only into the
-> box {setup} opens for you.
-> **3.** Run {setup} and paste the key when I ask for it.`,
-        picker_footer: `-# The second list is optional: Brave Search adds web
--# results, and ElevenLabs adds hosted speech. Each opens
--# its own guide, and neither is needed to finish setup.
--# If your endpoint isn't listed, skip the key and
--# read **Custom Endpoints (Advanced)** in this same page.`,
+        description:
+          "An API key grants me access to an AI provider's model. Whatever I generate is billed to that key, so treat it like any other password. To finish setup I need one:\n> **1.** Pick a provider below to open its guide.\n> **2.** Copy the key it gives you. **Do NOT share it** with anyone, and never paste it into a channel: only into the box {setup} opens for you.\n> **3.** Run {setup} and paste the key when I ask for it.",
+        picker_footer:
+          "-# The second list is optional: Brave Search adds web results, and ElevenLabs adds hosted speech. Each opens its own guide, and neither is needed to finish setup. If your endpoint isn't listed, skip the key and read **Custom Endpoints (Advanced)** in this same page.",
       },
       change_trigger_behavior: {
         title: `Change Trigger Behavior`,
-        description: `Out of the box I answer when you say my name, @mention me,
-or reply to me. You can widen that, narrow it, or turn it
-off per channel.
-
-**Where I am allowed to speak**
-You can make me only reply in whitelisted channels.
-Add them under {moderationWhitelist}.
-> A channel that is not on the list stays quiet.
-
-**Speaking up on my own**
-{configAutoTrigger} lets me automatically send a message
-either every few messages or at random.
-
-**Trigger me with mentions only**
-Deliberate Trigger Mode prevents me from responding at a
-simple name call. Makes me wait for @mentions instead.
-Turn it on in {configBehaviorTrigger}.`,
+        description:
+          "Out of the box I answer when you say my name, @mention me, or reply to me. You can widen that, narrow it, or turn it off per channel.\n\n**Where I am allowed to speak**\nYou can make me only reply in whitelisted channels. Add them under {moderationWhitelist}.\n> A channel that is not on the list stays quiet.\n\n**Speaking up on my own**\n{configAutoTrigger} lets me automatically send a message either every few messages or at random.\n\n**Trigger me with mentions only**\nDeliberate Trigger Mode prevents me from responding at a simple name call. Makes me wait for @mentions instead. Turn it on in {configBehaviorTrigger}.",
       },
       create_first_persona: {
         title: `Create your First Persona`,
-        description: `A *Persona* is me with a different name, avatar, personality,
-and more, but with the same features! Edit the one you
-already have, or make new ones.
-
-**Change the one you have**
-{configPersonaGeneral} sets my name, personality, and how I
-address people. {configPersonaAppearance} sets my avatar.
-
-**Write a new one from a sentence**
-{personaGenerate} builds a whole persona from a short
-description. {personaCreate} gives you the blank template.
-
-**Bring one in from elsewhere**
-{personaImport} accepts character cards downloaded from card
-sites such as botbooru or chub.`,
-        footer: `You can keep several personas at once. See **Multiple
--# personas** under Features.`,
+        description:
+          "A *Persona* is me with a different name, avatar, personality, and more, but with the same features! Edit the one you already have, or make new ones.\n\n**Change the one you have**\n{configPersonaGeneral} sets my name, personality, and how I address people. {configPersonaAppearance} sets my avatar.\n\n**Write a new one from a sentence**\n{personaGenerate} builds a whole persona from a short description. {personaCreate} gives you the blank template.\n\n**Bring one in from elsewhere**\n{personaImport} accepts character cards downloaded from card sites such as botbooru or chub.",
+        footer: "You can keep several personas at once. See **Multiple personas** under Features.",
       },
       explore_features: {
         title: `Explore my Features!`,
-        description: `Setup is done. Here is what I can do now that I can talk.
-- **Use this server's emoji and stickers** once you run
-  {expressionsInitialize}.
-- **Greet new members** from {configWelcome}.
-- **Remember and remind**: just ask me to remind you, or
-  tell me something worth keeping.
-- **Search the web** and use other tools, switched on in
-  {configTools}.
-- **Make images, video, and voice** with {generateImage},
-  {generateVideo}, and {generateVoice}.
-
-Most of my switches live in {config}, but not all of them.`,
-        footer: `**Brave Search** adds web results to the search I already
--# do. It needs its own key, and **Get an API Key** under
--# Setup opens its guide from the optional services list.
--# The documentation site is the complete version of this
--# panel, and it explains every setting in detail.`,
+        description:
+          "Setup is done. Here is what I can do now that I can talk.\n- **Use this server's emoji and stickers** once you run {expressionsInitialize}.\n- **Greet new members** from {configWelcome}.\n- **Remember and remind**: just ask me to remind you, or tell me something worth keeping.\n- **Search the web** and use other tools, switched on in {configTools}.\n- **Make images, video, and voice** with {generateImage}, {generateVideo}, and {generateVoice}.\n\nMost of my switches live in {config}, but not all of them.",
+        footer:
+          "**Brave Search** adds web results to the search I already do. It needs its own key, and **Get an API Key** under Setup opens its guide from the optional services list. The documentation site is the complete version of this panel, and it explains every setting in detail.",
       },
     },
     personal_profile: {
       title: `Personal Profile`,
-      description: `Settings that belong to you and follow you into every server\nI am in.`,
+      description: "Settings that belong to you and follow you into every server I am in.",
       nickname_pronouns: {
         title: `Your Nickname and Pronouns`,
-        description: `Tell me what to call you, which I will use everywhere.\n\nSet them in {personalProfile}.\n> Nickname: what I call you instead of your Discord name\n> Prefix and suffix: a title or honorific, like \`-san\`\n> Pronouns: \`she/her\`, \`they/them\`, \`any\`, or your name\n\nLeave a field blank and I fall back to your live Discord\nname and the persona's own naming habits.`,
-        footer: `A single persona can address you differently. Set that\n-# under Profile > Persona-specific Preferences.`,
+        description:
+          "Tell me what to call you, which I will use everywhere.\n\nSet them in {personalProfile}.\n> Nickname: what I call you instead of your Discord name\n> Prefix and suffix: a title or honorific, like `-san`\n> Pronouns: `she/her`, `they/them`, `any`, or your name\n\nLeave a field blank and I fall back to your live Discord name and the persona's own naming habits.",
+        footer: "A single persona can address you differently. Set that under Profile > Persona-specific Preferences.",
       },
       personal_memories: {
         title: `Personal Memories`,
-        description: `Things I remember about you specifically, in every server.\n\n**Just tell me**\nSay it in chat and I will save it myself. A confirmation\nmessage will appear when this happens.\n\n**Or manage them by hand**\n{personalMemories} lists everything I hold about you and\nlets you edit or delete any single entry.\n\n**Decide how much I may use**\n{personalPrivacy} sets your privacy level, from full\npersonalization down to no personalization at all.`,
-        footer: `These are separate from this server's shared memories,\n-# which anyone here can see and edit.`,
+        description:
+          "Things I remember about you specifically, in every server.\n\n**Just tell me**\nSay it in chat and I will save it myself. A confirmation message will appear when this happens.\n\n**Or manage them by hand**\n{personalMemories} lists everything I hold about you and lets you edit or delete any single entry.\n\n**Decide how much I may use**\n{personalPrivacy} sets your privacy level, from full personalization down to no personalization at all.",
+        footer: "These are separate from this server's shared memories, which anyone here can see and edit.",
       },
       personal_providers: {
         title: `Personal Providers (Advanced)`,
-        description: `Answer with your own API key and your own model instead of\nwhatever the server uses, everywhere you talk to me.\n\n**Save a provider**\n{personalProviders} stores your key and turns on your\npersonal text model right away.\n\n**Pick a different model**\n{personalModels} switches models, and samplers and\nfallbacks sit beside it in the same category.\n> Your personal setup only affects replies you trigger.\n> Nobody else in the server is switched over.\n\nSome servers require this. If a server has User BYOK turned\non, I cannot answer you until you save a provider here.`,
+        description:
+          "Answer with your own API key and your own model instead of whatever the server uses, everywhere you talk to me.\n\n**Save a provider**\n{personalProviders} stores your key and turns on your personal text model right away.\n\n**Pick a different model**\n{personalModels} switches models, and samplers and fallbacks sit beside it in the same category.\n> Your personal setup only affects replies you trigger.\n> Nobody else in the server is switched over.\n\nSome servers require this. If a server has User BYOK turned on, I cannot answer you until you save a provider here.",
       },
     },
     custom_endpoints: {
       title: `Custom Endpoints (Advanced)`,
-      description: `Point me at an endpoint you run or trust: Ollama, LM Studio,\nLiteLLM, KoboldCPP, ComfyUI, or a self-hosted speech server.\n> {providers} registers one for the whole server.\n> {personalProviders} registers one for you alone.`,
+      description:
+        "Point me at an endpoint you run or trust: Ollama, LM Studio, LiteLLM, KoboldCPP, ComfyUI, or a self-hosted speech server.\n> {providers} registers one for the whole server.\n> {personalProviders} registers one for you alone.",
       text_models: {
         title: `Text Models`,
-        description: `Choose **Add New Custom Endpoint**, then give it a label, a\nbase URL, and its API style. Add an auth token if it needs\none.\n\nSelect the saved label, choose **+ Add new Text Model**, and\nenter the exact model code the endpoint expects. Adding the\nmodel activates it.\n> Declare vision, tool use, and structured output honestly.\n> I trust those flags when I decide what to send you.\n\nSwitch to it later from {configSwitchModels}.`,
-        footer: `The full API-style and compatibility reference is on the\n-# documentation site.`,
+        description:
+          "Choose **Add New Custom Endpoint**, then give it a label, a base URL, and its API style. Add an auth token if it needs one.\n\nSelect the saved label, choose **+ Add new Text Model**, and enter the exact model code the endpoint expects. Adding the model activates it.\n> Declare vision, tool use, and structured output honestly.\n> I trust those flags when I decide what to send you.\n\nSwitch to it later from {configSwitchModels}.",
+        footer: "The full API-style and compatibility reference is on the documentation site.",
       },
       comfyui: {
         title: `ComfyUI (for video and image)`,
-        description: `Build and test the workflow in ComfyUI first, then export it\nwith **Save (API Format)**.\n\nPut the prompt placeholder where the prompt belongs, and the\nother placeholders wherever you want size, duration, or the\nmodel code injected.\n\nRegister the endpoint with API Compatibility \`ComfyUI\` (for\nexample \`http://127.0.0.1:8188\`), then add an image or video\nmodel to it and upload the exported JSON.\n> The graph has to end in a real save node. Preview-only\n> nodes leave me with no file to download.`,
-        footer: `Ready-made workflows ship in the GitHub repository, and\n-# the full placeholder list is on the documentation site.`,
+        description:
+          "Build and test the workflow in ComfyUI first, then export it with **Save (API Format)**.\n\nPut the prompt placeholder where the prompt belongs, and the other placeholders wherever you want size, duration, or the model code injected.\n\nRegister the endpoint with API Compatibility `ComfyUI` (for example `http://127.0.0.1:8188`), then add an image or video model to it and upload the exported JSON.\n> The graph has to end in a real save node. Preview-only nodes leave me with no file to download.",
+        footer:
+          "Ready-made workflows ship in the GitHub repository, and the full placeholder list is on the documentation site.",
       },
       text_to_speech: {
         title: `Text-to-Speech (for voice)`,
-        description: `Register a speech endpoint the same way, then give each\npersona a voice.\n\nHosted services and self-hosted servers both work, among\nthem Chatterbox-Turbo, Qwen3-TTS, IrodoriTTS, and ElevenLabs.\nRegister the endpoint, then add a speech model to it.\n> Assign the voice in {configPersonaVoice}.\n> Tune speed and defaults in {configVoices}.`,
-        footer: `Voice messages you send me are transcribed through the\n-# same endpoint list, set up the same way. For hosted\n-# voices, ElevenLabs has its own guide in **Get an API Key**\n-# under Setup, listed with the optional services.`,
+        description:
+          "Register a speech endpoint the same way, then give each persona a voice.\n\nHosted services and self-hosted servers both work, among them Chatterbox-Turbo, Qwen3-TTS, IrodoriTTS, and ElevenLabs. Register the endpoint, then add a speech model to it.\n> Assign the voice in {configPersonaVoice}.\n> Tune speed and defaults in {configVoices}.",
+        footer:
+          "Voice messages you send me are transcribed through the same endpoint list, set up the same way. For hosted voices, ElevenLabs has its own guide in **Get an API Key** under Setup, listed with the optional services.",
       },
     },
     multiple_personas: {
       title: `Multiple personas`,
-      description: `You can have multiple personas in one server, each with its\nown name, memories, and agendas!`,
+      description: "You can have multiple personas in one server, each with its own name, memories, and agendas!",
       mains_alters_title: `Mains and alters`,
-      mains_alters_body: `The main persona is the persona representing me in the\nserver. An alter is a second identity I can speak as, with\nits own name and avatar on the message itself.`,
+      mains_alters_body:
+        "The main persona is the persona representing me in the server. An alter is a second identity I can speak as, with its own name and avatar on the message itself.",
       bringing_in_title: `Bringing a persona in`,
-      bringing_in_body: `{personaImport} takes a character card as a file:\n> \`.png\` card, from TomoriBot or SillyTavern\n> \`.json\` card, from TomoriBot or SillyTavern\n> \`.charx\` archive, Character Card V3\n\nOnly the character's text is read. Currently, bundled sprites,\naudio, and video are skipped, so set those yourself under\n{configPersonaAppearance} and {configPersonaSprites}.`,
+      bringing_in_body:
+        "{personaImport} takes a character card as a file:\n> `.png` card, from TomoriBot or SillyTavern\n> `.json` card, from TomoriBot or SillyTavern\n> `.charx` archive, Character Card V3\n\nOnly the character's text is read. Currently, bundled sprites, audio, and video are skipped, so set those yourself under {configPersonaAppearance} and {configPersonaSprites}.",
       where_to_find_title: `Where to find cards`,
-      where_to_find_body: `Make your own with {personaGenerate} or {personaCreate}, or\nlook for one that already exists.\n\nCard sites such as botbooru and chub host thousands of\nthem. They are other people's sites, and a card written for\nanother bot may not convert cleanly.`,
+      where_to_find_body:
+        "Make your own with {personaGenerate} or {personaCreate}, or look for one that already exists.\n\nCard sites such as botbooru and chub host thousands of them. They are other people's sites, and a card written for another bot may not convert cleanly.",
       talking_title: `Letting them talk to each other`,
-      talking_body: `Give each persona its own trigger words and channels in\n{configPersonaTriggers}, and they will answer side by side\nin the same conversation.`,
+      talking_body:
+        "Give each persona its own trigger words and channels in {configPersonaTriggers}, and they will answer side by side in the same conversation.",
       footer: `Share one of your own with {personaExport}.`,
     },
     media_generation: {
       title: `Media generation`,
-      description: `I can make images, video, and voice, either from a command or\nbecause you asked me to in conversation.\n> Each one counts against a server's quota. See **Quotas**\n> under Moderation.`,
+      description:
+        "I can make images, video, and voice, either from a command or because you asked me to in conversation.\n> Each one counts against a server's quota. See **Quotas** under Moderation.",
       image_generation: {
         title: `Image Generation`,
-        description: `{generateImage} opens a prompt box. Write your own prompt, or\nchoose **Draw what's happening now** and I will illustrate\nthe scene myself.\n> Attach up to three reference images to steer the result.\n> Pick the aspect ratio in the same box.\n\nAny provider or endpoint saved here that lists image support\ncan draw, and {providers} shows which of yours do. One that\ncannot use reference images says so and draws from the text.`,
+        description:
+          "{generateImage} opens a prompt box. Write your own prompt, or choose **Draw what's happening now** and I will illustrate the scene myself.\n> Attach up to three reference images to steer the result.\n> Pick the aspect ratio in the same box.\n\nAny provider or endpoint saved here that lists image support can draw, and {providers} shows which of yours do. One that cannot use reference images says so and draws from the text.",
         footer: `Defaults live in {configImageDefaults}.`,
       },
       video_generation: {
         title: `Video Generation`,
-        description: `{generateVideo} takes a prompt, and optionally a starting\nframe from an image already in the channel.\n\nAny provider or endpoint that lists video support can make\none, ComfyUI video workflows included. {providers} shows\nwhich of yours do.\n> Video is slow and expensive everywhere. Expect a wait.`,
+        description:
+          "{generateVideo} takes a prompt, and optionally a starting frame from an image already in the channel.\n\nAny provider or endpoint that lists video support can make one, ComfyUI video workflows included. {providers} shows which of yours do.\n> Video is slow and expensive everywhere. Expect a wait.",
       },
       speech_generation: {
         title: `Speech Generation`,
-        description: `{generateVoice} turns text into a voice message in the\ncurrent persona's voice.\n\nA speech endpoint has to be registered first, hosted or\nself-hosted: see **Custom Endpoints (Advanced)** under\nSetup.\n> Each persona can sound different. The voice comes from\n> {configPersonaVoice}.`,
+        description:
+          "{generateVoice} turns text into a voice message in the current persona's voice.\n\nA speech endpoint has to be registered first, hosted or self-hosted: see **Custom Endpoints (Advanced)** under Setup.\n> Each persona can sound different. The voice comes from {configPersonaVoice}.",
       },
     },
     tons_of_tweakability: {
@@ -502,123 +467,156 @@ Most of my switches live in {config}, but not all of them.`,
       description: `Tweak me to you and your server members' preferences`,
       behavior_tuning: {
         title: `Behavior Tuning`,
-        description: `How I write, how I think, and what I am allowed to do.\n> **Model**: {configSwitchModels} picks what model is\n> actually answering, as well as its parameters\n> **Humanizer**: {configBehaviorGeneral} controls how\n> humanlike my delivery is, from formal to very casual.\n> **System instructions**: also {configBehaviorGeneral},\n> for orders that apply to every reply.\n> **Tools**: {configTools} decides which capabilities I may\n> reach for, such as web search or image generation.`,
-        footer: `Sampler-level knobs (temperature and friends) sit under\n-# {configParameters} for adjusting randomness, etc.`,
+        description:
+          "How I write, how I think, and what I am allowed to do.\n> **Model**: {configSwitchModels} picks what model is actually answering, as well as its parameters\n> **Humanizer**: {configBehaviorGeneral} controls how humanlike my delivery is, from formal to very casual.\n> **System instructions**: also {configBehaviorGeneral}, for orders that apply to every reply.\n> **Tools**: {configTools} decides which capabilities I may reach for, such as web search or image generation.",
+        footer:
+          "Sampler-level knobs (temperature and friends) sit under {configParameters} for adjusting randomness, etc.",
       },
       server_wide_settings: {
         title: `Server-wide Settings`,
-        description: `Boundaries that apply to everyone in this server. Managers\nonly.\n> **Where I talk**: whitelisted channels, per-persona\n> channel limits, and cooldowns, all under {moderation}.\n> **When I talk on my own**: {configAutoTrigger}.\n> **Who may trigger me**: whitelisted roles, also under\n> {moderation}.\n> **Where my notes go**: {configWelcome} sets the log and\n> welcome channels.`,
-        footer: `Channel-level overrides can give one channel its own\n-# model or rules. See {configChannelOverrides}.`,
+        description:
+          "Boundaries that apply to everyone in this server. Managers only.\n> **Where I talk**: whitelisted channels, per-persona channel limits, and cooldowns, all under {moderation}.\n> **When I talk on my own**: {configAutoTrigger}.\n> **Who may trigger me**: whitelisted roles, also under {moderation}.\n> **Where my notes go**: {configWelcome} sets the log and welcome channels.",
+        footer: "Channel-level overrides can give one channel its own model or rules. See {configChannelOverrides}.",
       },
       personal_settings: {
         title: `Personal Settings`,
-        description: `Your own preferences, which quietly override the server's\nfor replies you trigger.\n> **Who I think you are**: nickname, pronouns, and privacy,\n> in {personalProfile}.\n> **What answers you**: your own provider and model, in\n> {personalProviders}.\n> **How I treat you**: response modes and Personal\n> Spotlight, in {personalConfig}.\n\nEverything here travels with you between servers.`,
-        footer: `Personal Spotlight lets one persona treat you as its\n-# focus, and is set in {personalSpotlight}.`,
+        description:
+          "Your own preferences, which quietly override the server's for replies you trigger.\n> **Who I think you are**: nickname, pronouns, and privacy, in {personalProfile}.\n> **What answers you**: your own provider and model, in {personalProviders}.\n> **How I treat you**: response modes and Personal Spotlight, in {personalConfig}.\n\nEverything here travels with you between servers.",
+        footer: "Personal Spotlight lets one persona treat you as its focus, and is set in {personalSpotlight}.",
       },
     },
     memory_catalog: {
       title: `Memory`,
-      description: `I keep two kinds of memory: lasting facts, and a working note\nof the conversation happening right now.`,
+      description:
+        "I keep two kinds of memory: lasting facts, and a working note of the conversation happening right now.",
       long_term_memory: {
         title: `Long-Term Memory`,
-        description: `Facts I keep permanently, for this server or for you.\n\n**Teach me**\nSay it in chat, or add it by hand in {memories} for the\nserver and {personalMemories} for yourself.\n\n**Make me forget**\nThe same two commands list every entry and delete any of\nthem.\n\n**Give me documents**\n{memories} also accepts uploaded files. I read the relevant\nparts back when they matter, instead of all of it at once\nby using Retrieval Augmented Generation (RAG).\n> A server memory reaches everyone here. A personal memory\n> only surfaces when you are part of the conversation.`,
+        description:
+          "Facts I keep permanently, for this server or for you.\n\n**Teach me**\nSay it in chat, or add it by hand in {memories} for the server and {personalMemories} for yourself.\n\n**Make me forget**\nThe same two commands list every entry and delete any of them.\n\n**Give me documents**\n{memories} also accepts uploaded files. I read the relevant parts back when they matter, instead of all of it at once by using Retrieval Augmented Generation (RAG).\n> A server memory reaches everyone here. A personal memory only surfaces when you are part of the conversation.",
       },
       short_term_memory: {
         title: `Short-Term Memory`,
-        description: `My working note of the conversation in this channel right\nnow, kept separately per channel.\n\nI summarize what is happening as we go, so a long thread\nstays coherent without resending every message.\n> **Refresh cadence**: how often I update that note.\n> **Render mode**: whether the summary replaces the recent\n> messages or sits beside them.\n> **Categories**: up to five labeled fields, such as\n> \`Goals\` or \`Inventory\`, instead of one free-form note.\n\nManagers tune all of it in {configAdvancedMemory}, and\n{memories} can clear an active note.`,
-        footer: `Ask me to remember something for good and it becomes a\n-# long-term memory instead.`,
+        description:
+          "My working note of the conversation in this channel right now, kept separately per channel.\n\nI summarize what is happening as we go, so a long thread stays coherent without resending every message.\n> **Refresh cadence**: how often I update that note.\n> **Render mode**: whether the summary replaces the recent messages or sits beside them.\n> **Categories**: up to five labeled fields, such as `Goals` or `Inventory`, instead of one free-form note.\n\nManagers tune all of it in {configAdvancedMemory}, and {memories} can clear an active note.",
+        footer: "Ask me to remember something for good and it becomes a long-term memory instead.",
       },
       rewards_punishments: {
         title: `Rewards and Punishments`,
-        description: `Fun commands I actually notice and remember. Be nice to\nme, or do not, and I will act accordingly.\n> {reward} for a headpat, hug, kiss, tickle, or feeding.\n> {punish} for a bonk, bite, pinch, spank, or squeeze.`,
+        description:
+          "Fun commands I actually notice and remember. Be nice to me, or do not, and I will act accordingly.\n> {reward} for a headpat, hug, kiss, tickle, or feeding.\n> {punish} for a bonk, bite, pinch, spank, or squeeze.",
         footer: `Pick which persona you meant when several are active.`,
       },
       memory_tagging: {
         title: `Memory Tagging (Advanced)`,
-        description: `By default every memory in scope is sent with every message.\nTagging narrows that down.\n> **Keyword tags**: a tagged memory wakes up only when its\n> keyword appears in the conversation. An untagged memory is\n> always active.\n> **Channel tags**: a \`#channel\` tag limits a memory to that\n> channel, and combines with keyword tags.\n\nTurn both on in {configAdvancedMemory}, then use\n{toolPromptSnapshot} to see exactly which memories are\nactive right now.`,
-        footer: `Uploaded documents and extracted history can carry\n-# channel tags too.`,
+        description:
+          "By default every memory in scope is sent with every message. Tagging narrows that down.\n> **Keyword tags**: a tagged memory wakes up only when its keyword appears in the conversation. An untagged memory is always active.\n> **Channel tags**: a `#channel` tag limits a memory to that channel, and combines with keyword tags.\n\nTurn both on in {configAdvancedMemory}, then use {toolPromptSnapshot} to see exactly which memories are active right now.",
+        footer: "Uploaded documents and extracted history can carry channel tags too.",
       },
     },
     scheduled_tasks: {
       title: `Scheduled Tasks`,
       description: `I can respond on a set timer, once or on a repeat.`,
       making_title: `Making one`,
-      making_body: `Just ask. "Remind me to stretch at 14:30" or "every morning,\npost the standup question" is enough, and I will set it up\nand confirm the details.`,
+      making_body:
+        'Just ask. "Remind me to stretch at 14:30" or "every morning, post the standup question" is enough, and I will set it up and confirm the details.',
       changing_title: `Changing or cancelling one`,
-      changing_body: `{scheduledTaskEdit} opens any existing task: its content,\nnext trigger time, repeat interval, and whether it pings you.\n{scheduledTaskRemove} deletes one.`,
+      changing_body:
+        "{scheduledTaskEdit} opens any existing task: its content, next trigger time, repeat interval, and whether it pings you. {scheduledTaskRemove} deletes one.",
       who_title: `Who can touch what`,
-      who_body: `You can always edit your own. Server managers can edit\nanyone's, since a task posts into a shared channel.\n> Times use the timezone set during setup, so double-check\n> that one before trusting a 6am alarm.`,
+      who_body:
+        "You can always edit your own. Server managers can edit anyone's, since a task posts into a shared channel.\n> Times use the timezone set during setup, so double-check that one before trusting a 6am alarm.",
     },
     server_moderation: {
       title: `Server Moderation`,
-      description: `Everything about who may use me here, and where. All of it\nneeds the Manage Server permission and lives in {moderation}.\n> **Member Access**: who may trigger me at all, and which\n> models they may reach.\n> **Whitelist**: the channels, roles, and personas I am\n> allowed to answer in.\n> **Quotas**: how much generation this server permits.\n> **User Blacklist**: individual members I must ignore.`,
+      description:
+        "Everything about who may use me here, and where. All of it needs the Manage Server permission and lives in {moderation}.\n> **Member Access**: who may trigger me at all, and which models they may reach.\n> **Whitelist**: the channels, roles, and personas I am allowed to answer in.\n> **Quotas**: how much generation this server permits.\n> **User Blacklist**: individual members I must ignore.",
       blacklisting: {
         title: `Blacklisting`,
-        description: `A blacklisted member cannot trigger me at all, in any\nchannel, with any persona.\n\nAdd one in {moderationBlacklist}. The same page lists every\ncurrent entry and removes them, one at a time or in bulk.\n> Blacklisting is about access, not deletion. Memories about\n> that member stay until someone removes them.`,
-        footer: `To silence a whole channel rather than a person, take the\n-# channel off the whitelist instead.`,
+        description:
+          "A blacklisted member cannot trigger me at all, in any channel, with any persona.\n\nAdd one in {moderationBlacklist}. The same page lists every current entry and removes them, one at a time or in bulk.\n> Blacklisting is about access, not deletion. Memories about that member stay until someone removes them.",
+        footer: "To silence a whole channel rather than a person, take the channel off the whitelist instead.",
       },
     },
     quotas: {
       title: `Quotas`,
-      description: `A quota caps how much generation happens here, so one\ncannot accidentally spend a month of credits.`,
+      description:
+        "A quota caps how much generation happens here, so one cannot accidentally spend a month of credits.",
       spent_title: `How it is spent`,
-      spent_body: `There are three separate pools: text, image, and video. Each\none is counted twice, per member and for the server as a\nwhole, and whichever runs out first stops the request.\n> A refused request tells you which pool ran out and when it\n> comes back.`,
+      spent_body:
+        "There are three separate pools: text, image, and video. Each one is counted twice, per member and for the server as a whole, and whichever runs out first stops the request.\n> A refused request tells you which pool ran out and when it comes back.",
       limits_title: `Setting the limits`,
-      limits_body: `{moderationQuotas} sets the daily allowance for each pool.\nLeave a pool unlimited if you would rather not cap it.`,
+      limits_body:
+        "{moderationQuotas} sets the daily allowance for each pool. Leave a pool unlimited if you would rather not cap it.",
       starting_over_title: `Starting a pool over`,
-      starting_over_body: `{quotaResetUser} clears one member's daily usage, and\n{quotaResetGlobal} clears the server-wide pool. Both need\nManage Server.`,
-      footer: `Pools reset on their own daily. A manual reset is for\n-# when someone should not have to wait.`,
+      starting_over_body:
+        "{quotaResetUser} clears one member's daily usage, and {quotaResetGlobal} clears the server-wide pool. Both need Manage Server.",
+      footer: "Pools reset on their own daily. A manual reset is for when someone should not have to wait.",
     },
     age_restricted_commands: {
       title: `Age-Restricted Commands`,
       description: `Adults only. Read this section before turning anything on.`,
       filter_title: `I do not filter by default`,
-      filter_body: `I ship with no content filter of my own, because filtering\ndegrades ordinary replies as much as it blocks anything else.\nWhat is appropriate here is the server manager's call, not\nmine.\n> Your AI provider still enforces its own rules on its own\n> side, and can refuse a request no matter what is set here.`,
+      filter_body:
+        "I ship with no content filter of my own, because filtering degrades ordinary replies as much as it blocks anything else. What is appropriate here is the server manager's call, not mine.\n> Your AI provider still enforces its own rules on its own side, and can refuse a request no matter what is set here.",
       gated_title: `Deliberate adult features are gated`,
-      gated_body: `Anything explicitly adult sits behind {nsfw} and works only\nin channels Discord itself marks age-restricted.\n\n{nsfwJailbreaks} chooses which prompt strategies are active\nfor this server. Every one of them is off until a manager\nturns it on.\n> These strategies change how I am prompted. They can make\n> me refuse less but may also cause unintended behavior.`,
-      footer: `By enabling these, the server's managers confirm the\n-# channel is adults-only and take responsibility for it.`,
+      gated_body:
+        "Anything explicitly adult sits behind {nsfw} and works only in channels Discord itself marks age-restricted.\n\n{nsfwJailbreaks} chooses which prompt strategies are active for this server. Every one of them is off until a manager turns it on.\n> These strategies change how I am prompted. They can make me refuse less but may also cause unintended behavior.",
+      footer:
+        "By enabling these, the server's managers confirm the channel is adults-only and take responsibility for it.",
     },
     user_byok: {
       title: `User BYOK (Advanced)`,
-      description: `BYOK means bring your own key: every member pays for their\nown replies with their own provider.`,
+      description: "BYOK means bring your own key: every member pays for their own replies with their own provider.",
       changes_title: `What it changes`,
-      changes_body: `With BYOK on, a message from a member is answered only if\nthat member has saved a personal provider. The server's own\nprovider is not a fallback for them.\n> Turn it on in {moderationMemberAccess}, or choose it\n> during {setup}.`,
+      changes_body:
+        "With BYOK on, a message from a member is answered only if that member has saved a personal provider. The server's own provider is not a fallback for them.\n> Turn it on in {moderationMemberAccess}, or choose it during {setup}.",
       suits_title: `Who it suits`,
-      suits_body: `A large or public server where one shared API key would be\ndrained. A small server is usually happier sharing one provider.`,
+      suits_body:
+        "A large or public server where one shared API key would be drained. A small server is usually happier sharing one provider.",
       members_title: `What members have to do`,
-      members_body: `Save a key in {personalProviders}. Point them at **Personal\nProviders (Advanced)** under Setup for the walkthrough.`,
-      footer: `Servers only. A direct message has no members to bring\n-# keys, so the option is not offered there.`,
+      members_body:
+        "Save a key in {personalProviders}. Point them at **Personal Providers (Advanced)** under Setup for the walkthrough.",
+      footer: "Servers only. A direct message has no members to bring keys, so the option is not offered there.",
     },
     sillytavern_presets: {
       title: `SillyTavern Presets`,
-      description: `Import a SillyTavern prompt preset and I will build my\nprompts the way that preset says to.`,
+      description: "Import a SillyTavern prompt preset and I will build my prompts the way that preset says to.",
       importing_title: `Importing one`,
-      importing_body: `{configStPresets} takes the exported preset JSON, then lets\nyou enable, disable, or remove it later.`,
+      importing_body:
+        "{configStPresets} takes the exported preset JSON, then lets you enable, disable, or remove it later.",
       controls_title: `What it controls`,
-      controls_body: `The preset takes over prompt ordering and the instruction\nblocks around the conversation.\n> An enabled preset overrides the system prompt from\n> {configBehaviorGeneral} and the persona prompt from\n> {configPersonaAdvanced}.`,
+      controls_body:
+        "The preset takes over prompt ordering and the instruction blocks around the conversation.\n> An enabled preset overrides the system prompt from {configBehaviorGeneral} and the persona prompt from {configPersonaAdvanced}.",
       still_applies_title: `What still applies`,
-      still_applies_body: `Persona attributes, sample dialogue, memories, and tools are\nstill sent. The preset decides arrangement, not contents.`,
-      footer: `Turn the preset off to fall back to my own prompt layout\n-# with nothing lost.`,
+      still_applies_body:
+        "Persona attributes, sample dialogue, memories, and tools are still sent. The preset decides arrangement, not contents.",
+      footer: "Turn the preset off to fall back to my own prompt layout with nothing lost.",
     },
     mcp_servers: {
       title: `MCP Servers`,
-      description: `MCP is a standard way to hand a tool to an AI. Connect one\nand its tools become things I can actually do.`,
+      description:
+        "MCP is a standard way to hand a tool to an AI. Connect one and its tools become things I can actually do.",
       hosted_title: `Hosted servers`,
-      hosted_body: `{configMcp} takes a URL and an optional auth token. Anything\nthat server exposes appears in my tool list.`,
+      hosted_body:
+        "{configMcp} takes a URL and an optional auth token. Anything that server exposes appears in my tool list.",
       local_title: `Local servers`,
-      local_body: `A server running on your own machine works the same way once\nit is reachable. The documentation site has the walkthrough.`,
+      local_body:
+        "A server running on your own machine works the same way once it is reachable. The documentation site has the walkthrough.",
       before_title: `Before you connect one`,
-      before_body: `> An MCP server's tools run with whatever access you gave\n> it, and I will use them when they look relevant. Connect\n> servers you trust, and read what their tools do first.`,
+      before_body:
+        "> An MCP server's tools run with whatever access you gave it, and I will use them when they look relevant. Connect servers you trust, and read what their tools do first.",
       footer: `Switch individual tools off any time in {configTools}.`,
     },
     matrix_bridge: {
       title: `Matrix`,
-      description: `I can sit in a Matrix room and a Discord channel at once,\ncarrying the conversation between them.`,
+      description: "I can sit in a Matrix room and a Discord channel at once, carrying the conversation between them.",
       linking_title: `Linking a room`,
-      linking_body: `{matrixLink} connects the current channel to a Matrix room\nID, which looks like \`!abcdef:matrix.org\`. Invite\n{matrixBotUser} to that room first.`,
+      linking_body:
+        "{matrixLink} connects the current channel to a Matrix room ID, which looks like `!abcdef:matrix.org`. Invite {matrixBotUser} to that room first.",
       reads_title: `How it reads`,
-      reads_body: `Messages from either side reach me as one conversation, and\nI answer in both.\n> Attachments, edits, and reactions do not all survive the\n> trip. Text is what travels reliably.`,
-      footer: `Nothing linked? Check that the invite was accepted before\n-# anything else.`,
+      reads_body:
+        "Messages from either side reach me as one conversation, and I answer in both.\n> Attachments, edits, and reactions do not all survive the trip. Text is what travels reliably.",
+      footer: "Nothing linked? Check that the invite was accepted before anything else.",
     },
   },
 };

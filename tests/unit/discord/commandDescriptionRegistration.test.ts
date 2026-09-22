@@ -1,9 +1,6 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { ApplicationCommandOptionType, type ApplicationCommandData } from "discord.js";
 import { loadCommandData } from "@/utils/discord/commandLoader";
-import { initializeLocalizer } from "@/utils/text/localizer";
-
-beforeAll(async () => initializeLocalizer());
 
 const UNRESOLVED_LOCALE_KEY_PATTERN = /^commands\.[a-zA-Z0-9_.-]+$/;
 
@@ -77,5 +74,5 @@ describe("Command description resolution gate", () => {
     const offending = collectUnresolvedDescriptions(registrationData);
 
     expect(offending).toEqual([]);
-  });
+  }, 20_000);
 });

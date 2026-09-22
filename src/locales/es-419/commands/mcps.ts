@@ -5,11 +5,13 @@ export default {
     empty_guild: `Este servidor aún no tiene MCP registrados.`,
     empty_dm: `Este espacio de mensajes directos aún no tiene MCP registrados.`,
     unavailable: `No se pudieron cargar los registros de MCP. Reintenta.`,
-    stale_warning: `Los datos pueden estar desactualizados: la lectura falló.\nNo podrás escribir hasta que una lectura nueva sea exitosa.`,
+    stale_warning:
+      "Los datos pueden estar desactualizados: la lectura falló. No podrás escribir hasta que una lectura nueva sea exitosa.",
     read_unavailable: `No se pudieron cargar de forma segura los registros de MCP actuales.`,
     retry: `Reintentar`,
     add: `+ Agregar MCP`,
-    trust_warning: `Solo agrega servidores MCP en los que confíes. Un servidor\nmalicioso puede recopilar la entrada de las herramientas,\ndevolver resultados falsos o dañinos, o intentar una\ninyección de prompts.`,
+    trust_warning:
+      "Solo agrega servidores MCP en los que confíes. Un servidor malicioso puede recopilar la entrada de las herramientas, devolver resultados falsos o dañinos, o intentar una inyección de prompts.",
     type_general: `Uso general`,
     type_general_description: `No se desactivará ninguna herramienta integrada`,
     type_web_search: `Búsqueda web`,
@@ -27,7 +29,8 @@ export default {
     disable: `Desactivar`,
     remove: `Eliminar`,
     remove_title: `Eliminar servidor MCP`,
-    remove_description: `¿Eliminar **{name}** y su registro guardado de\nendpoint/autenticación? Cualquier conexión agrupada se\ndesconectará. Volver a agregarlo es la forma de recuperarlo.`,
+    remove_description:
+      "¿Eliminar **{name}** y su registro guardado de endpoint/autenticación? Cualquier conexión agrupada se desconectará. Volver a agregarlo es la forma de recuperarlo.",
     remove_confirm: `Eliminar servidor MCP`,
     cancel: `Cancelar`,
     add_modal_title: `Agregar servidor MCP`,
