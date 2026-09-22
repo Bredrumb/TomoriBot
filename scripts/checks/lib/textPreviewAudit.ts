@@ -26,6 +26,9 @@ import { Glob } from "bun";
 /** The helper every fenced, user-authored placeholder must be routed through. */
 export const REQUIRED_HELPER = "buildTextPreview";
 
+/** Domain wrappers that apply the required preview before rendering their result. */
+export const SAFE_PREVIEW_WRAPPERS = ["renderMemoryNoticeContent"] as const;
+
 /**
  * Every locale audited for rule 1. Both are scanned because `check-locales`
  * enforces key PARITY, not content, so a baked ellipsis added only to `ja` would
@@ -112,7 +115,10 @@ export function scanFencedPlaceholderUsage(
   if (consumers.length === 0) return [];
 
   return consumers
-    .filter(([, content]) => !content.includes(REQUIRED_HELPER))
+    .filter(
+      ([, content]) =>
+        !content.includes(REQUIRED_HELPER) && !SAFE_PREVIEW_WRAPPERS.some((wrapper) => content.includes(wrapper)),
+    )
     .map(([file]) => ({
       kind: "unguarded-fenced-placeholder" as const,
       key,

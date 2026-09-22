@@ -87,6 +87,20 @@ function requireRoute(customId: string): ParsedInteractionRoute {
   return parsed;
 }
 
+/**
+ * Source span between two anchors, for gates that parse the declarations a file contains.
+ *
+ * A missing anchor makes indexOf return -1, which slice() silently accepts as an offset from the
+ * end, so the gate would keep passing over the wrong span. Fail on the anchor instead.
+ */
+function sliceBetweenAnchors(source: string, startAnchor: string, endAnchor: string): string {
+  const start = source.indexOf(startAnchor);
+  const end = source.indexOf(endAnchor);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end);
+}
+
 interface ObservedComponent {
   type?: number;
   customId?: string;
@@ -1108,13 +1122,11 @@ describe("personalConfigPanelCatalog", () => {
       new URL("../../../src/utils/discord/personalConfigPanelCatalog.ts", import.meta.url),
       "utf8",
     );
-    const unionStart = source.indexOf("export type PersonalConfigPanelRoute");
-    const unionEnd = source.indexOf("export type PersonalConfigAction");
-    // A missing anchor makes indexOf return -1, which slice() silently accepts as an offset from the
-    // end, so the gate would keep passing over the wrong span. Fail on the anchor instead.
-    expect(unionStart).toBeGreaterThanOrEqual(0);
-    expect(unionEnd).toBeGreaterThan(unionStart);
-    const union = source.slice(unionStart, unionEnd);
+    const union = sliceBetweenAnchors(
+      source,
+      "export type PersonalConfigPanelRoute",
+      "export type PersonalConfigAction",
+    );
     const declared = new Set(
       [...union.matchAll(/action: "([a-z0-9-]+)"(?:\s*\|\s*"([a-z0-9-]+)")?/g)].flatMap((m) =>
         [m[1], m[2]].filter((v): v is string => Boolean(v)),
@@ -1395,13 +1407,11 @@ describe("personalConfigPanelCatalog", () => {
       return source;
     });
 
-    const tableStart = catalogSource.indexOf("export const PERSONAL_CONFIG_ROUTE_CODECS");
-    const tableEnd = catalogSource.indexOf("const CODECS_BY_WIRE_TOKEN");
-    // A missing anchor makes indexOf return -1, which slice() silently accepts as an offset from the
-    // end, so the gate would keep passing over the wrong span. Fail on the anchor instead.
-    expect(tableStart).toBeGreaterThanOrEqual(0);
-    expect(tableEnd).toBeGreaterThan(tableStart);
-    const tableBlock = catalogSource.slice(tableStart, tableEnd);
+    const tableBlock = sliceBetweenAnchors(
+      catalogSource,
+      "export const PERSONAL_CONFIG_ROUTE_CODECS",
+      "const CODECS_BY_WIRE_TOKEN",
+    );
     const tableActions = new Set(
       [...tableBlock.matchAll(/^\s*(?:"([a-z0-9-]+)"|([a-z0-9-]+)):\s*\{/gm)].map((m) => m[1] ?? m[2]),
     );

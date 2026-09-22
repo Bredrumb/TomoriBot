@@ -22,6 +22,7 @@ import {
   CONFIG_CONTEXT_NOTE_DEPTH_FIELD,
   CONFIG_CONTEXT_NOTE_TEXT_FIELD,
   CONFIG_PERSONA_PROMPT_PART_FIELDS,
+  buildCheckboxGroupComponent,
   buildConfigModalFieldId,
 } from "@/utils/discord/ui/configModals";
 import type { RawModalPayload } from "@/utils/discord/ui/configModals";
@@ -973,24 +974,16 @@ export function buildBehaviorRandomRemoveModal(
         groupIndex === 0
           ? description(locale, "commands.config.random-trigger.remove.checkbox_description")
           : undefined,
-      component: (() => {
-        const groupOptions = triggers.slice(start, start + CONFIG_RANDOM_TRIGGER_CHECKBOX_GROUP_SIZE);
-        return {
-          type: CHECKBOX_GROUP,
-          custom_id: buildConfigModalFieldId(`behavior_random_trigger_${groupIndex}`, nonce),
-          min_values: 0,
-          // Discord requires options.length >= max_values, so a partial trailing group must cap
-          // max_values to its own size instead of the full group capacity.
-          max_values: groupOptions.length,
-          required: false,
-          options: groupOptions.map((trigger) => ({
-            value: String(trigger.trigger_id),
-            label: safeSelectOptionText(`<#${trigger.channel_disc_id}>`, 100),
-            description: safeSelectOptionText(`${trigger.timer_hours}h / ${trigger.chance_percent}%`, 100),
-            default: true,
-          })),
-        };
-      })(),
+      component: buildCheckboxGroupComponent(
+        buildConfigModalFieldId(`behavior_random_trigger_${groupIndex}`, nonce),
+        triggers.slice(start, start + CONFIG_RANDOM_TRIGGER_CHECKBOX_GROUP_SIZE),
+        (trigger) => ({
+          value: String(trigger.trigger_id),
+          label: safeSelectOptionText(`<#${trigger.channel_disc_id}>`, 100),
+          description: safeSelectOptionText(`${trigger.timer_hours}h / ${trigger.chance_percent}%`, 100),
+          default: true,
+        }),
+      ),
     });
   }
   return {

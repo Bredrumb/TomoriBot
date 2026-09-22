@@ -10,6 +10,7 @@ import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { extractCloudObjectKeyFromUrl } from "@/utils/storage/cloudObjectStorage";
 import { log } from "@/utils/misc/logger";
 
 type VoiceSampleStoreOptions = {
@@ -120,36 +121,7 @@ function resolveLocalVoiceSamplePath(reference: string): string | null {
 }
 
 function extractKeyFromVoiceSampleUrl(config: VoiceSampleStorageConfig, url: string): string | null {
-  try {
-    if (config.backend === "gcs") {
-      // GCS public URLs: https://storage.googleapis.com/BUCKET/PREFIX/...
-      // Strip the publicBaseUrl prefix to recover the object key.
-      const baseUrl = config.publicBaseUrl.replace(/\/+$/, "");
-      if (!url.startsWith(`${baseUrl}/`)) {
-        return null;
-      }
-      const key = url.slice(baseUrl.length + 1);
-      return key.startsWith(`${config.prefix}/`) ? key : null;
-    }
-
-    // S3: match on hostname (supports custom CDN domains, virtual-hosted style, and path-style)
-    const parsed = new URL(url);
-    const baseHost = new URL(config.publicBaseUrl).hostname;
-    const hostname = parsed.hostname;
-    const pathName = parsed.pathname.replace(/^\/+/, "");
-
-    if (hostname !== baseHost) {
-      const s3Host = `${config.bucket}.s3.${config.region}.amazonaws.com`;
-      const s3HostLegacy = `${config.bucket}.s3.amazonaws.com`;
-      if (hostname !== s3Host && hostname !== s3HostLegacy) {
-        return null;
-      }
-    }
-
-    return pathName.startsWith(`${config.prefix}/`) ? pathName : null;
-  } catch {
-    return null;
-  }
+  return extractCloudObjectKeyFromUrl(config, url);
 }
 
 async function storeVoiceSampleLocally(options: VoiceSampleStoreOptions): Promise<string | null> {

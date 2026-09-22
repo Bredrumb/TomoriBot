@@ -19,12 +19,12 @@ import { replyComponentsV2Status } from "@/utils/discord/ui/statusComponents";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { serverScheduleRepository } from "@/utils/db/repositories";
-import { isBridgeUserId } from "@/utils/bridges";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 import type { SelectOption } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { ReminderSelectionRow } from "@/utils/db/repositories";
+import { buildReminderOptionParts } from "@/commands/scheduled-task/reminderSelectOptions";
 
 const SELECT_MODAL_CUSTOM_ID = "scheduled_task_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "scheduled_task_edit_value_modal";
@@ -314,51 +314,26 @@ export async function execute(
       return;
     }
 
-    // Build select options: persona_id NULL means the main persona owns the reminder
     const reminderSelectOptions: SelectOption[] = reminders.map((reminder, index) => {
-      const personaName = reminder.persona_nickname ?? state.persona_nickname;
-      const formattedTime = formatTimeWithOffset(
-        new Date(reminder.reminder_time),
-        timezoneOffset,
-        {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        },
+      const parts = buildReminderOptionParts({
+        reminder,
+        state,
         locale,
-      );
-      const repeatText =
-        typeof reminder.repetition_interval_hours === "number" && reminder.repetition_interval_hours >= 1
-          ? localizer(locale, "commands.scheduled-task.edit.select_repeat_text", {
-              hours: reminder.repetition_interval_hours,
-            })
-          : "";
+        timezoneOffset,
+        hasManagePermission,
+        viewerUserId: userData.user_id,
+        repeatTextKey: "commands.scheduled-task.edit.select_repeat_text",
+        managerCreatedByKey: "commands.scheduled-task.edit.select_manager_created_by_text",
+      });
       const typeText = reminder.self_reminder
         ? localizer(locale, "commands.scheduled-task.edit.select_type_task")
         : localizer(locale, "commands.scheduled-task.edit.select_type_reminder", {
             user_nickname: reminder.user_nickname,
           });
-      const isMatrixReminder = reminder.created_by_user_id === null && isBridgeUserId(reminder.user_discord_id);
-      const creatorName = isMatrixReminder
-        ? `${reminder.user_nickname} (Matrix)`
-        : (reminder.created_by_nickname ??
-          (reminder.created_by_user_id ? `user #${reminder.created_by_user_id}` : "unknown"));
-      const managerCreatedByText =
-        hasManagePermission && reminder.created_by_user_id !== userData.user_id
-          ? localizer(locale, "commands.scheduled-task.edit.select_manager_created_by_text", {
-              creator_name: creatorName,
-            })
-          : "";
       const description = localizer(locale, "commands.scheduled-task.edit.select_option_description", {
-        persona_name: personaName,
-        reminder_time: formattedTime,
-        timezone: formatUTCOffset(timezoneOffset),
+        ...parts,
         target_channel: getChannelDisplay(interaction, reminder.channel_disc_id),
         reminder_type: typeText,
-        repeat_text: repeatText,
-        manager_created_by_text: managerCreatedByText,
       });
 
       return {

@@ -17,7 +17,11 @@ import {
 } from "@/utils/discord/interactions/configModelOperations";
 import { CONFIG_MODEL_CAPABILITY_LOCALE_KEYS } from "@/utils/discord/ui/configModelsPanel";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
-import { buildConfigModalFieldId, type RawModalPayload } from "@/utils/discord/ui/configModals";
+import {
+  buildCheckboxGroupComponent,
+  buildConfigModalFieldId,
+  type RawModalPayload,
+} from "@/utils/discord/ui/configModals";
 import { formatStoredParameterValue } from "@/utils/discord/ui/personalConfigParameterControls";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { TAGS_MODAL_MAX_LENGTH, formatImageTagsForModalValue } from "@/utils/image/tagHelpers";
@@ -280,26 +284,18 @@ export function buildConfigStopStringManageModal(
         groupIndex === 0
           ? modalDescription(locale, "commands.config.panel.stop_manage_checkbox_description")
           : undefined,
-      component: (() => {
-        const groupOptions = stopStrings.slice(offset, offset + CONFIG_STOP_STRING_CHECKBOX_GROUP_SIZE);
-        return {
-          type: 22,
-          custom_id: buildConfigStopStringGroupId(groupIndex, nonce),
-          min_values: 0,
-          // Discord requires options.length >= max_values, so a partial trailing group must cap
-          // max_values to its own size instead of the full group capacity.
-          max_values: groupOptions.length,
-          required: false,
-          options: groupOptions.map((stopString, indexInGroup) => ({
-            label: safeSelectOptionText(
-              formatStopStringForDisplay(stopString) || localizer(locale, "general.unknown"),
-              50,
-            ),
-            value: String(offset + indexInGroup),
-            default: true,
-          })),
-        };
-      })(),
+      component: buildCheckboxGroupComponent(
+        buildConfigStopStringGroupId(groupIndex, nonce),
+        stopStrings.slice(offset, offset + CONFIG_STOP_STRING_CHECKBOX_GROUP_SIZE),
+        (stopString, indexInGroup) => ({
+          label: safeSelectOptionText(
+            formatStopStringForDisplay(stopString) || localizer(locale, "general.unknown"),
+            50,
+          ),
+          value: String(offset + indexInGroup),
+          default: true,
+        }),
+      ),
     });
   }
 
@@ -390,24 +386,16 @@ export function buildConfigLogitBiasManageModal(
         groupIndex === 0
           ? modalDescription(locale, "commands.config.panel.logit_manage_checkbox_description")
           : undefined,
-      component: (() => {
-        const groupOptions = entries.slice(offset, offset + CONFIG_LOGIT_BIAS_CHECKBOX_GROUP_SIZE);
-        return {
-          type: 22,
-          custom_id: buildConfigLogitBiasGroupId(groupIndex, nonce),
-          min_values: 0,
-          // Discord requires options.length >= max_values, so a partial trailing group must cap
-          // max_values to its own size instead of the full group capacity.
-          max_values: groupOptions.length,
-          required: false,
-          options: groupOptions.map((entry) => ({
-            label: safeSelectOptionText(entry.text, 50),
-            value: entry.id,
-            description: safeSelectOptionText(String(entry.value), 100),
-            default: true,
-          })),
-        };
-      })(),
+      component: buildCheckboxGroupComponent(
+        buildConfigLogitBiasGroupId(groupIndex, nonce),
+        entries.slice(offset, offset + CONFIG_LOGIT_BIAS_CHECKBOX_GROUP_SIZE),
+        (entry) => ({
+          label: safeSelectOptionText(entry.text, 50),
+          value: entry.id,
+          description: safeSelectOptionText(String(entry.value), 100),
+          default: true,
+        }),
+      ),
     });
   }
 

@@ -581,10 +581,9 @@ export async function executeAutoImageCommand(
       `[/generate image:auto] Starting hidden image agent for channel ${interaction.channel.id}, backend=${selectedBackend}, preset=${settingPreset.plannerLabel}, sender=${selectedPersona?.persona_nickname ?? "active"}`,
     );
 
-    // Invoke the hidden image agent turn.
-    //     This replaces the old structured-output planner: the model now sees the
-    //     full conversation context (persona prompt, users, memories, RAG docs, etc.)
-    //     and is directed via a tail directive to call the appropriate image tool.
+    // Invoke the hidden image agent turn. The model sees the full conversation context
+    // (persona prompt, users, memories, RAG docs, etc.) and is directed via a tail directive
+    // to call the appropriate image tool.
     // Pass a context override only when the selected persona differs from the active one,
     // so buildContext() prompts the model as the chosen sender persona.
     const contextPersonaOverride =

@@ -1065,6 +1065,29 @@ export function clearShortTermMemorySummary(
 }
 
 /**
+ * Deletes the persisted rows a cache-clear just evicted.
+ *
+ * Eviction alone is not durable: hydrateEntryFromDb would resurrect the old row on the next cache
+ * miss, so the clear must also reach the DB. Fire-and-forget, because the clear is synchronous and
+ * a failed delete must not fail the caller.
+ *
+ * The caller also keeps its original failure message and named identifiers, so an operator can
+ * still identify the affected scope without decoding positional SQL parameters.
+ */
+interface StmDeleteInput {
+  whereClause: string;
+  params: Array<string | number | null>;
+  failureMessage: string;
+  metadata: Record<string, string | number | null | undefined>;
+}
+
+function deleteStmRowsInBackground({ whereClause, params, failureMessage, metadata }: StmDeleteInput): void {
+  void sql
+    .unsafe(`DELETE FROM short_term_memories WHERE ${whereClause}`, params)
+    .catch((err) => log.warn(`[shortTermMemoryCache] ${failureMessage}`, { error: err, ...metadata }));
+}
+
+/**
  * Clear all short-term memories for a specific channel (used by /refresh)
  *
  * @param channelId - Discord channel ID
@@ -1082,13 +1105,12 @@ export function clearShortTermMemoryForChannel(channelId: string): void {
 
     stats.invalidations += clearedCount;
 
-    // Eviction alone is not durable: hydrateEntryFromDb would resurrect the old
-    // row on the next cache miss, so the clear must also reach the DB.
-    void sql
-      .unsafe(`DELETE FROM short_term_memories WHERE channel_disc_id = $1`, [channelId])
-      .catch((err) =>
-        log.warn("[shortTermMemoryCache] Failed to delete STM from DB for channel", { error: err, channelId }),
-      );
+    deleteStmRowsInBackground({
+      whereClause: "channel_disc_id = $1",
+      params: [channelId],
+      failureMessage: "Failed to delete STM from DB for channel",
+      metadata: { channelId },
+    });
   } catch (error) {
     log.error(
       `[shortTermMemoryCache] Failed to clear short-term memories for channel - channelId=${channelId}`,
@@ -1125,20 +1147,15 @@ export function clearShortTermMemoryForServerChannel(
       stats.invalidations++;
     }
 
-    // Eviction alone is not durable: hydrateEntryFromDb would resurrect the old
-    // row on the next cache miss, so the clear must also reach the DB.
-    void sql
-      .unsafe(
-        `DELETE FROM short_term_memories
-       WHERE scope_kind = 'server'
+    deleteStmRowsInBackground({
+      whereClause: `scope_kind = 'server'
          AND server_disc_id = $1
          AND channel_disc_id = $2
          AND COALESCE(persona_id, 0) = COALESCE($3, 0)`,
-        [serverId, channelId, personaId ?? null],
-      )
-      .catch((err) =>
-        log.warn("[shortTermMemoryCache] Failed to delete server STM from DB", { error: err, serverId, channelId }),
-      );
+      params: [serverId, channelId, personaId ?? null],
+      failureMessage: "Failed to delete server STM from DB",
+      metadata: { serverId, channelId },
+    });
   } catch (error) {
     log.error(
       `[shortTermMemoryCache] Failed to clear server short-term memory entry - serverId=${serverId}, channelId=${channelId}, personaId=${personaId ?? "none"}`,
@@ -1169,11 +1186,12 @@ export function clearShortTermMemoryForUser(userId: string): void {
 
     stats.invalidations += clearedCount;
 
-    // Eviction alone is not durable: hydrateEntryFromDb would resurrect the old
-    // row on the next cache miss, so the clear must also reach the DB.
-    void sql
-      .unsafe(`DELETE FROM short_term_memories WHERE scope_kind = 'user' AND user_disc_id = $1`, [userId])
-      .catch((err) => log.warn("[shortTermMemoryCache] Failed to delete user STM from DB", { error: err, userId }));
+    deleteStmRowsInBackground({
+      whereClause: "scope_kind = 'user' AND user_disc_id = $1",
+      params: [userId],
+      failureMessage: "Failed to delete user STM from DB",
+      metadata: { userId },
+    });
   } catch (error) {
     log.error(`[shortTermMemoryCache] Failed to clear short-term memories for user - userId=${userId}`, error, {
       errorType: "CACHE_CLEAR_ERROR",

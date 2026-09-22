@@ -554,8 +554,6 @@ async function resolveMessageAuthorDisplayName(params: {
     return params.botDisplayName || "Bot";
   }
 
-  // Clean-named sprite messages carry no "(sprite)" suffix in the webhook name;
-  // recover the decorated label from the persisted mapping.
   const spriteDisplayName =
     !renderModifierSource && matchedPersona
       ? await resolveSpriteMessageDisplayName(

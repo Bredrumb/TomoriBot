@@ -31,6 +31,7 @@ import {
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
+import { buildIntegerParameterList } from "@/utils/db/parameterBinding";
 import { log } from "@/utils/misc/logger";
 import { buildCustomProviderName, rememberCustomProviderLabel } from "@/utils/provider/customProviderUtils";
 import type { OpenRouterModelScope } from "./LlmModelRepository";
@@ -794,10 +795,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     if (ids.length === 0) return [];
 
     try {
-      // Avoid ANY($1) array binding, because Bun SQL can intermittently fail on
-      // integer-array parameters with protocol error 08P01.
-      const distinctIds = Array.from(new Set(ids));
-      const placeholders = distinctIds.map((_, i) => `$${i + 1}`).join(", ");
+      const { values, placeholders } = buildIntegerParameterList(ids);
       const rows = await sql.unsafe(
         `SELECT
           ce.custom_endpoint_id,
@@ -825,7 +823,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
         FROM custom_endpoints ce
         JOIN custom_endpoint_connections cec ON ce.connection_id = cec.connection_id
         WHERE ce.custom_endpoint_id IN (${placeholders})`,
-        distinctIds,
+        values,
       );
 
       const rowMap = new Map<number, CustomEndpointRow>();

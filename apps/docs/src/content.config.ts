@@ -25,9 +25,9 @@ export const collections = {
     // Extend Starlight's frontmatter schema with an AI-disclaimer opt-out.
     // Defaults to true, so every page renders the disclaimer note unless a
     // human-authored doc explicitly sets `aiGenerated: false`. The note itself
-    // is injected at render time by the MarkdownContent component override
-    // no per-file markdown edits, so pages stay clean and the wording lives
-    // in exactly one place.
+    // is injected at render time by the MarkdownContent component override, so
+    // pages need no per-file markdown edits and the wording lives in exactly
+    // one place.
     schema: docsSchema({
       extend: z.object({
         aiGenerated: z.boolean().default(true),

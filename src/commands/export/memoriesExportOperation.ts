@@ -1,6 +1,6 @@
 import {
   AttachmentBuilder,
-  EmbedBuilder,
+  type EmbedBuilder,
   MessageFlags,
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
@@ -23,6 +23,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeSelectOptionText } from "@/utils/discord/ui/interactionCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
+import { deliverTransferExport } from "./transferExportDelivery";
 
 export type MemoryExportScope = TransferExportScope;
 
@@ -228,34 +229,15 @@ export async function runMemoryExport(
       }),
     });
 
-    try {
-      await dependencies.deliverDirectMessage(interaction, {
-        embeds: [
-          new EmbedBuilder()
-            .setTitle(localizer(locale, "commands.data.export.dm_title"))
-            .setDescription(localizer(locale, "commands.transfer.memory_export_dm_description", { type: typeLabel }))
-            .setColor(ColorCode.INFO),
-        ],
-        files: [attachment],
-      });
-
-      await dependencies.replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.data.export.success_title",
-        descriptionKey: "commands.data.export.success_description",
-        descriptionVars: { type: typeLabel },
-        color: ColorCode.SUCCESS,
-        flags: MessageFlags.Ephemeral,
-      });
-    } catch (dmError) {
-      // The export read is non-destructive, so a closed DM needs only its own receipt and no compensating write.
-      log.warn(`Failed to send memory export DM to user ${interaction.user.id}:`, dmError as Error);
-      await dependencies.replyInfoEmbed(interaction, locale, {
-        titleKey: "commands.data.export.dm_failed_title",
-        descriptionKey: "commands.data.export.dm_failed_description",
-        color: ColorCode.ERROR,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await deliverTransferExport({
+      interaction,
+      locale,
+      typeLabel,
+      dmDescriptionKey: "commands.transfer.memory_export_dm_description",
+      attachment,
+      operationLabel: "memory",
+      dependencies,
+    });
   } catch (error) {
     log.error(`Error executing the ${scope} memory export:`, error, {
       errorType: "CommandExecutionError",

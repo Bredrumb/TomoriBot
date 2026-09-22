@@ -554,7 +554,6 @@ describe("config Behavior routes", () => {
       | { component?: { options?: Array<{ value: string }> } }
       | undefined;
     const options = personaWrapper?.component?.options ?? [];
-    // Random is repeated on every page, which is why a page holds 24 personas rather than 25.
     expect(options[0]?.value).toBe("random");
     expect(options).toHaveLength(25);
     const values = options.map((option) => option.value);

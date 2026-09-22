@@ -18,7 +18,7 @@ const NUMBERED_LINE_PATTERN = new RegExp(
   String.raw`^//\s*(?:${NUMBERED_PREFIX_PATTERNS.join("|")})\s+(?=[A-Z])`,
 );
 const RULE_HEAD_PATTERN =
-  /^(?:\/\/|\*)\s*Rule\s*\d+(?:\s*(?:,|&|and)\s*\d+)*\s*[:,]?/;
+  /^(?:\/\/|\*)\s*Rule\s*#?\d+(?:\s*(?:,|&|and)\s*#?\d+)*\s*[:,]?/;
 const ACTION_HEADS = [
   "Get",
   "Set",
@@ -99,8 +99,82 @@ const SECTION_DIVIDER_PATTERN =
   /^\/\/\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
 const LICENSE_HEADER_PATTERN =
   /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
+// A suppression comment repeats at every site it silences, and each one is a separate lint
+// decision rather than rationale copied between call sites.
+const INLINE_SUPPRESSION_PATTERN =
+  /biome-ignore|@ts-expect-error|@ts-ignore|eslint-disable|oxlint-disable/;
+const TEST_PATH_PATTERN = /(?:^|\/)tests\//;
+
+/**
+ * The calibrated limits the audit heuristics run with, and the shape a caller can pass to
+ * override them.
+ *
+ * The defaults live here rather than only behind the environment so the thresholds are a value a
+ * caller supplies, not ambient state a helper reads on its own. That keeps a self-test
+ * deterministic when a maintainer has exported a recalibration override, and leaves the
+ * environment as one entry point at the command line instead of a hidden input to every call.
+ */
+export interface CommentAuditLimits {
+  /** A duplicate must carry at least this many words. */
+  duplicateMinWords: number;
+  /** A duplicate must carry at least this many characters. */
+  duplicateMinChars: number;
+  /** A consecutive line-comment block must reach this many rendered lines. */
+  longBlockMinLines: number;
+}
+
+export const DEFAULT_AUDIT_LIMITS: CommentAuditLimits = {
+  // A duplicate has to clear the length floor before it is worth a maintainer's attention: a short
+  // fallback note such as `// Fallback: keep last value` is repeated by design, while a
+  // sentence-long rationale repeated verbatim is a copy. The character floor keeps a string of
+  // identifiers from reaching the word count without carrying a sentence.
+  duplicateMinChars: 60,
+  duplicateMinWords: 12,
+  longBlockMinLines: 11,
+};
+
+/**
+ * Reads a limit override from the environment.
+ *
+ * A malformed value falls back to the calibrated default rather than silently disabling the rule,
+ * and the whole string has to be a positive integer: `parseInt` would read `12words` as 12 and
+ * `2.5` as 2, which is how a typo becomes a threshold nobody chose.
+ */
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const raw = Bun.env[name]?.trim();
+  if (!raw || !/^\d+$/.test(raw)) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * The limits the audit runs with, after any environment override.
+ *
+ * Only the command line calls this. Recalibration overrides live in the environment because they
+ * exist to be changed and reverted, not because the heuristics should read ambient state.
+ */
+export function resolveAuditLimits(): CommentAuditLimits {
+  const limits = { ...DEFAULT_AUDIT_LIMITS };
+  limits.duplicateMinWords = readPositiveIntEnv(
+    "COMMENT_AUDIT_DUPLICATE_MIN_WORDS",
+    limits.duplicateMinWords,
+  );
+  limits.duplicateMinChars = readPositiveIntEnv(
+    "COMMENT_AUDIT_DUPLICATE_MIN_CHARS",
+    limits.duplicateMinChars,
+  );
+  limits.longBlockMinLines = readPositiveIntEnv(
+    "COMMENT_AUDIT_LONG_BLOCK_LINES",
+    limits.longBlockMinLines,
+  );
+  return limits;
+}
 
 export type CommentPolicyRule =
+  | "duplicate-comment"
+  | "long-comment-block"
   | "orphaned-comment"
   | "jsdoc-restatement"
   | "numbered-narration"
@@ -125,7 +199,17 @@ export interface CommentPolicyException {
   text: string;
 }
 
+/**
+ * The block heuristics answer repository-wide questions, so they need a scope wider than one
+ * file's findings list. Every standalone line comment is collected while scanning and grouped
+ * once the corpus is complete.
+ */
+interface InspectionAuditBlocks {
+  blocks: CommentBlock[];
+}
+
 export interface CommentPolicyOptions {
+  auditLimits?: CommentAuditLimits;
   auditNarration?: boolean;
   changedLines?: ReadonlyMap<string, ReadonlySet<number>>;
   exceptionPath?: string;
@@ -151,7 +235,19 @@ interface CommentToken {
   kind: "block" | "line";
   line: number;
   standalone: boolean;
+  /** The trailing comment sits after code on its line, so it annotates that line only. */
+  inline: boolean;
   text: string;
+}
+
+interface CommentBlock {
+  file: string;
+  startLine: number;
+  /** Prose lines after dropping empty `//` paragraph separators. */
+  lines: string[];
+  words: number;
+  chars: number;
+  normalized: string;
 }
 
 interface ParsedArguments {
@@ -185,6 +281,8 @@ export async function checkCommentPolicy(
   );
   const findings: CommentPolicyFinding[] = [];
   const usedExceptionKeys = new Set<string>();
+  const auditBlocks: InspectionAuditBlocks = { blocks: [] };
+  const auditLimits = options.auditLimits ?? DEFAULT_AUDIT_LIMITS;
 
   const applyExceptions = (candidates: CommentPolicyFinding[]): CommentPolicyFinding[] =>
     candidates.filter((finding) => {
@@ -206,16 +304,26 @@ export async function checkCommentPolicy(
     }
 
     assertParseable(source, file);
+    // The block heuristics collect their own view of the file so a JSDoc block never enters the
+    // duplicate or length comparison, and the whole corpus is grouped in one place.
+    if (options.auditNarration) {
+      auditBlocks.blocks.push(...collectCommentBlocks(source, file));
+    }
     const fileFindings = [
       ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
       ...collectStructuralCommentFindings(source, file),
       ...collectJsDocFindings(source, file, options),
+      ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, auditLimits) : []),
       ...collectLocaleStringFindings(source, file),
     ];
 
     for (const finding of applyExceptions(fileFindings)) {
       findings.push(finding);
     }
+  }
+
+  if (options.auditNarration) {
+    findings.push(...findDuplicateCommentBlocks(auditBlocks.blocks, auditLimits));
   }
 
   for (const exception of exceptions) {
@@ -250,19 +358,143 @@ export async function checkCommentPolicy(
 
 /**
  * Inspects one TypeScript source without loading repository exceptions.
+ *
+ * The block heuristics are audit-only, so `auditNarration` gates the length rule here the same
+ * way it gates the command line. The duplicate rule compares blocks across files, so it needs
+ * `inspectAuditCorpusSources()` or `findDuplicateCommentBlocks()` instead.
  */
 export function inspectCommentPolicySource(
   source: string,
   file = "fixture.ts",
-  options: Pick<CommentPolicyOptions, "auditNarration" | "changedLines"> = {},
+  options: Pick<CommentPolicyOptions, "auditLimits" | "auditNarration" | "changedLines"> = {},
 ): CommentPolicyFinding[] {
   assertParseable(source, file);
+  const limits = options.auditLimits ?? DEFAULT_AUDIT_LIMITS;
   return [
     ...collectLocaleStringFindings(source, file),
     ...collectCommentLines(source, file).flatMap((line) => inspectCommentLine(line, options)),
     ...collectStructuralCommentFindings(source, file),
     ...collectJsDocFindings(source, file, options),
+    ...(options.auditNarration ? collectLongCommentBlockFindings(source, file, limits) : []),
   ];
+}
+
+/**
+ * Runs the full audit over a set of fixtures, which is how the duplicate rule is self-tested:
+ * it needs two files to compare and returned findings, not a block list.
+ */
+export function inspectAuditCorpusSources(
+  sources: ReadonlyMap<string, string>,
+  limits: CommentAuditLimits = DEFAULT_AUDIT_LIMITS,
+): CommentPolicyFinding[] {
+  const findings: CommentPolicyFinding[] = [];
+  const blocks: CommentBlock[] = [];
+  for (const [file, source] of sources) {
+    findings.push(
+      ...inspectCommentPolicySource(source, file, { auditLimits: limits, auditNarration: true }),
+    );
+    blocks.push(...collectCommentBlocks(source, file));
+  }
+  findings.push(...findDuplicateCommentBlocks(blocks, limits));
+  return findings;
+}
+
+/**
+ * Names the locations a duplicate was found at, most recent last, so the reporter can list them
+ * on the lines under the finding. A group of two is common enough that it still reads as prose.
+ */
+function describeDuplicateLocations(blocks: CommentBlock[]): string {
+  return blocks.map((block) => `at ${block.file}:${block.startLine}`).join("\n");
+}
+
+/**
+ * Groups standalone line-comment blocks that say the same thing and turns each group into one
+ * warning naming every location.
+ *
+ * The rule looks for copy-paste, not for repetition a reader would expect, and the word and
+ * character floor lets short fallback notes repeat freely. Two shapes report: the same rationale in
+ * more than one file, where a comment was copied instead of the code being shared, and the same
+ * rationale twice in one file, where the extraction is the obvious fix. The one shape that does not
+ * report is the same authored sentence standing in every locale tree, which is how a translated
+ * locale tree is built rather than a decision anyone made twice.
+ */
+export function findDuplicateCommentBlocks(
+  blocks: CommentBlock[],
+  limits: CommentAuditLimits = DEFAULT_AUDIT_LIMITS,
+): CommentPolicyFinding[] {
+  const byNormalized = new Map<string, CommentBlock[]>();
+  for (const block of blocks) {
+    if (!block.normalized) continue;
+    const group = byNormalized.get(block.normalized) ?? [];
+    group.push(block);
+    byNormalized.set(block.normalized, group);
+  }
+
+  const findings: CommentPolicyFinding[] = [];
+  for (const group of byNormalized.values()) {
+    if (group.length < 2) continue;
+    const eligible = group.every(
+      (block) =>
+        block.words >= limits.duplicateMinWords && block.chars >= limits.duplicateMinChars,
+    );
+    if (!eligible) continue;
+    // Each locale tree collapses to one identity, so the same English comment carried into every
+    // translated file reads as one authored sentence rather than one repetition per language. A
+    // group that spans more than one identity still reports, as does genuine repetition inside a
+    // single file, where the extraction is the obvious fix.
+    const identities = new Set(group.map((block) => commentScope(block.file)));
+    const files = new Set(group.map((block) => block.file));
+    if (identities.size === 1 && files.size === group.length) {
+      continue;
+    }
+
+    // The finding sits on the most recent copy, the line a reviewer changes to delete the
+    // repetition, and carries every location so one group is one reviewable item.
+    const ordered = [...group].sort(
+      (left, right) =>
+        left.file.localeCompare(right.file) || left.startLine - right.startLine,
+    );
+    const anchor = ordered[ordered.length - 1];
+    if (!anchor) continue;
+    findings.push({
+      file: anchor.file,
+      line: anchor.startLine,
+      message: `This rationale is repeated at ${ordered.length} locations; keep one copy or move it to the code path they share.`,
+      rule: "duplicate-comment",
+      severity: "warning",
+      text: [anchor.lines[0] ?? "", describeDuplicateLocations(ordered)].join("\n"),
+    });
+  }
+  return findings;
+}
+
+/**
+ * Flags a run of consecutive standalone `//` lines long enough that the surplus is usually
+ * narrative rather than constraint.
+ *
+ * JSDoc is out of scope: a long ordered procedure can be a public contract, and the JSDoc
+ * rules answer for it. Tests are out of scope for a different reason: a test comment explains
+ * the fixture it sits in, which no function name can carry, and the corpus shows those blocks
+ * sit at the threshold by design rather than by drift.
+ */
+export function collectLongCommentBlockFindings(
+  source: string,
+  file: string,
+  limits: CommentAuditLimits = DEFAULT_AUDIT_LIMITS,
+): CommentPolicyFinding[] {
+  if (TEST_PATH_PATTERN.test(file)) {
+    return [];
+  }
+  return collectCommentBlocks(source, file)
+    .filter((block) => block.lines.length >= limits.longBlockMinLines)
+    .map((block) => ({
+      file,
+      line: block.startLine,
+      message: `This comment runs ${block.lines.length} lines; keep the constraint and move the narrative into the code, a named helper, or the commit message.`,
+      rule: "long-comment-block" as const,
+      severity: "warning" as const,
+      text: block.lines[0] ?? "",
+    }));
 }
 
 async function loadExceptions(path: string): Promise<CommentPolicyException[]> {
@@ -820,6 +1052,7 @@ function collectCommentTokens(source: string, file: string): CommentToken[] {
     ts.SyntaxKind.MultiLineCommentTrivia,
   );
 
+  const inlineCommentKeys = collectInlineCommentKeys(source);
   return [...ranges.values()]
     .map((range) => normalizeCommentRange(source, range))
     .filter((range): range is ts.CommentRange => range !== undefined)
@@ -836,9 +1069,134 @@ function collectCommentTokens(source: string, file: string): CommentToken[] {
             : "block",
         line: startLocation.line + 1,
         standalone: prefix.trim().length === 0,
+        inline: inlineCommentKeys.has(`${range.pos}:${range.end}`),
         text: source.slice(range.pos, range.end),
       };
     });
+}
+
+/**
+ * Keys the line comments that follow code on their own line.
+ *
+ * The comment ranges alone cannot answer this: they are ordered by file position, and a trailing
+ * comment and the standalone block below it are indistinguishable once positions are flattened.
+ * One scanner pass records whether code preceded the comment on the same line, which is what
+ * keeps a trailing note from joining the `//` run under it.
+ */
+function collectInlineCommentKeys(source: string): Set<string> {
+  const keys = new Set<string>();
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.Standard,
+    source,
+  );
+  let codeOnLine = false;
+  let pending: string[] = [];
+
+  const flushLine = (): void => {
+    for (const key of pending) {
+      keys.add(key);
+    }
+    pending = [];
+    codeOnLine = false;
+  };
+
+  for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
+    const text = scanner.getTokenText();
+    if (kind === ts.SyntaxKind.NewLineTrivia || text.includes("\n")) {
+      flushLine();
+      continue;
+    }
+    if (kind === ts.SyntaxKind.WhitespaceTrivia) {
+      continue;
+    }
+    if (kind === ts.SyntaxKind.SingleLineCommentTrivia) {
+      if (codeOnLine) {
+        const start = scanner.getTokenPos();
+        pending.push(`${start}:${start + text.length}`);
+      }
+      continue;
+    }
+    if (kind === ts.SyntaxKind.MultiLineCommentTrivia) {
+      continue;
+    }
+    codeOnLine = true;
+  }
+  flushLine();
+  return keys;
+}
+
+/**
+ * Joins consecutive standalone `//` lines into one block and measures it.
+ *
+ * A block ends where the comments stop being adjacent, so a paragraph break written as an empty
+ * `//` line stays inside the block while an intervening statement splits it. JSDoc never enters:
+ * the length rule would otherwise compete with the JSDoc rules over the same text.
+ */
+function collectCommentBlocks(source: string, file: string): CommentBlock[] {
+  const standalone = collectCommentTokens(source, file)
+    .filter((token) => token.kind === "line" && token.standalone)
+    .sort((left, right) => left.line - right.line);
+  const blocks: CommentBlock[] = [];
+  let current: { endLine: number; lines: string[]; startLine: number } | null = null;
+
+  const flush = (): void => {
+    if (!current) return;
+    const key = blockKey(current.lines);
+    blocks.push({
+      chars: key.prose.length,
+      file,
+      lines: current.lines,
+      normalized: key.prose,
+      startLine: current.startLine,
+      words: key.words,
+    });
+    current = null;
+  };
+
+  for (const token of standalone) {
+    if (token.inline || INLINE_SUPPRESSION_PATTERN.test(token.text)) {
+      continue;
+    }
+    const content = token.text.replace(/^\/\/+/, "").trim();
+    if (current && token.line === current.endLine + 1) {
+      current.endLine = token.line;
+      if (content) {
+        current.lines.push(content);
+      }
+      continue;
+    }
+    flush();
+    current = {
+      endLine: token.line,
+      lines: content ? [content] : [],
+      startLine: token.line,
+    };
+  }
+  flush();
+  return blocks;
+}
+
+/**
+ * Compares blocks on their prose alone. Markers, indentation, and case drop out, and so does the
+ * line break, because where a comment was wrapped is a function of the surrounding indent rather
+ * than of what it says: the same sentence wrapped at forty columns and at ninety is one rationale,
+ * and comparing physical lines would report the pair as unrelated.
+ */
+function blockKey(lines: string[]): { prose: string; words: number } {
+  const prose = lines.join(" ").replace(/\s+/g, " ").trim().toLowerCase();
+  return { prose, words: countCommentWords(prose) };
+}
+
+/** Counts words in already-normalized prose, so the same text always measures the same. */
+function countCommentWords(normalized: string): number {
+  return normalized.split(/[^A-Za-z0-9_'’-]+/).filter(Boolean).length;
+}
+
+/** Collapses the locale trees into one scope so translated copies never read as duplicates. */
+function commentScope(file: string): string {
+  return file.replace(/(^|\/)src\/locales\/(?!<locale>)[^/]+\//, "$1src/locales/<locale>/");
 }
 
 function normalizeCommentRange(
@@ -1088,6 +1446,7 @@ async function main(): Promise<void> {
         )
       : undefined;
   const result = await checkCommentPolicy({
+    auditLimits: resolveAuditLimits(),
     auditNarration: args.auditNarration,
     changedLines,
     paths,

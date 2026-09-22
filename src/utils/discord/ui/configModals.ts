@@ -1,6 +1,7 @@
 import { TextInputStyle } from "discord.js";
 import type { LlmRow, PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
+import type { CheckboxGroupOption } from "@/types/discord/modal";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
 import { PERSONA_NAMING_VALUE_MAX_LENGTH, type AddressingStyle } from "@/types/personaNaming";
@@ -36,6 +37,30 @@ export interface RawModalPayload {
 
 export function buildConfigModalFieldId(field: string, nonce: string): string {
   return `${field}_${nonce}`;
+}
+
+/** Discord component type 22, the Checkbox Group. */
+const CHECKBOX_GROUP = 22 as const;
+
+/**
+ * Builds one Checkbox Group from a page of a longer option list.
+ *
+ * Discord requires options.length >= max_values, so a partial trailing group caps max_values to its
+ * own size instead of the full group capacity.
+ */
+export function buildCheckboxGroupComponent<T>(
+  customId: string,
+  groupOptions: readonly T[],
+  toOption: (item: T, indexInGroup: number) => CheckboxGroupOption,
+): RawDiscordComponent {
+  return {
+    type: CHECKBOX_GROUP,
+    custom_id: customId,
+    min_values: 0,
+    max_values: groupOptions.length,
+    required: false,
+    options: groupOptions.map(toOption),
+  };
 }
 
 export const CONFIG_ATTRIBUTE_INPUT_FIELD = "attribute";
@@ -1015,25 +1040,17 @@ export function buildTriggerRemoveModal(
                 : "commands.config.panel.trigger_remove_checkbox_description",
             )
           : undefined,
-      component: (() => {
-        const groupOptions = presented.slice(offset, offset + CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE);
-        return {
-          // 22 is CheckboxGroup. A FileUpload (19) also renders and submits, but with no option
-          // values, which would make unchecked-means-remove delete every presented word.
-          type: 22,
-          custom_id: buildTriggerRemoveCheckboxGroupId(groupIndex, nonce),
-          min_values: 0,
-          // Discord requires options.length >= max_values, so a partial trailing group (fewer
-          // than CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE words) must cap max_values to its own size.
-          max_values: groupOptions.length,
-          required: false,
-          options: groupOptions.map((triggerWord, indexInGroup) => ({
-            label: safeSelectOptionText(normalizeTriggerWord(triggerWord, { lowercase: false }), 50),
-            value: String(offset + indexInGroup),
-            default: true,
-          })),
-        };
-      })(),
+      // A FileUpload (19) also renders and submits, but with no option values, which would make
+      // unchecked-means-remove delete every presented word.
+      component: buildCheckboxGroupComponent(
+        buildTriggerRemoveCheckboxGroupId(groupIndex, nonce),
+        presented.slice(offset, offset + CONFIG_TRIGGER_CHECKBOX_GROUP_SIZE),
+        (triggerWord, indexInGroup) => ({
+          label: safeSelectOptionText(normalizeTriggerWord(triggerWord, { lowercase: false }), 50),
+          value: String(offset + indexInGroup),
+          default: true,
+        }),
+      ),
     });
   }
 
@@ -1113,43 +1130,35 @@ export function buildPersonaConditioningRemoveModal(
                 : "commands.config.panel.conditioning_checkbox_description",
             )
           : undefined,
-      component: (() => {
-        const groupOptions = presented.slice(offset, offset + CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE);
-        return {
-          type: 22,
-          custom_id: buildConditioningCheckboxGroupId(groupIndex, nonce),
-          min_values: 0,
-          // Discord requires options.length >= max_values, so a partial trailing group must cap
-          // max_values to its own size instead of the full group capacity.
-          max_values: groupOptions.length,
-          required: false,
-          options: groupOptions.map((group, indexInGroup) => {
-            const action = localizer(locale, `commands.${group.conditioningType}.${group.actionKey}.history_label`);
-            const descriptionKey =
-              group.totalCount > 1
-                ? "commands.conditioning.shared.option_reason_description"
-                : "commands.conditioning.shared.option_reason_description_single";
-            let description = localizer(locale, descriptionKey, {
-              count: String(group.totalCount),
-              reason: group.reasonText,
-            });
-            if (group.actionText) description = `${description} • ${group.actionText}`;
-            return {
-              label: safeSelectOptionText(
-                localizer(locale, "commands.conditioning.shared.option_label", {
-                  persona_name: personaName,
-                  type_marker: localizer(locale, `commands.conditioning.shared.marker_${group.conditioningType}`),
-                  action,
-                }),
-                100,
-              ),
-              value: String(offset + indexInGroup),
-              description: safeSelectOptionText(description, 100),
-              default: true,
-            };
-          }),
-        };
-      })(),
+      component: buildCheckboxGroupComponent(
+        buildConditioningCheckboxGroupId(groupIndex, nonce),
+        presented.slice(offset, offset + CONFIG_CONDITIONING_CHECKBOX_GROUP_SIZE),
+        (group, indexInGroup) => {
+          const action = localizer(locale, `commands.${group.conditioningType}.${group.actionKey}.history_label`);
+          const descriptionKey =
+            group.totalCount > 1
+              ? "commands.conditioning.shared.option_reason_description"
+              : "commands.conditioning.shared.option_reason_description_single";
+          let description = localizer(locale, descriptionKey, {
+            count: String(group.totalCount),
+            reason: group.reasonText,
+          });
+          if (group.actionText) description = `${description} • ${group.actionText}`;
+          return {
+            label: safeSelectOptionText(
+              localizer(locale, "commands.conditioning.shared.option_label", {
+                persona_name: personaName,
+                type_marker: localizer(locale, `commands.conditioning.shared.marker_${group.conditioningType}`),
+                action,
+              }),
+              100,
+            ),
+            value: String(offset + indexInGroup),
+            description: safeSelectOptionText(description, 100),
+            default: true,
+          };
+        },
+      ),
     });
   }
 

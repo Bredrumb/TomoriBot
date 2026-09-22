@@ -333,10 +333,10 @@ export class ReminderTool extends BaseTool {
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
 
     if (reminderTimeArg && typeof reminderTimeArg === "string" && reminderTimeArg.trim()) {
-      // Method 1: Absolute time provided - parse in the offset the model labeled
-      // the time with (utc_offset), falling back to the server's configured timezone.
-      // The model passes wall-clock time as spoken and labels the frame instead of
-      // converting it, so deterministic code does the offset arithmetic here.
+      // Absolute time: parse in the offset the model labeled the time with (utc_offset),
+      // falling back to the server's configured timezone. The model passes wall-clock time as
+      // spoken and labels the frame instead of converting it, so deterministic code does the
+      // offset arithmetic here.
       timeCalculationMethod = "absolute";
 
       // Validate utc_offset only when it will actually be used (absolute path)

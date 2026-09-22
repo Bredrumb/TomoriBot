@@ -438,10 +438,6 @@ export class CustomProvider
       );
     }
 
-    // Determine which model name to use:
-    // If custom_model_name is set, use it (for Ollama, etc. that require exact model names)
-    // Fall back to the endpoint's registered model_name hint (set during /providers)
-    // Last resort: llm_codename (for KoboldCpp, etc. that don't care about model selection)
     const modelName = tomoriState.config.custom_model_name || endpointModelNameHint || tomoriState.llm.llm_codename;
 
     log.info(`Custom provider: Using endpoint URL: ${endpointUrl}`);

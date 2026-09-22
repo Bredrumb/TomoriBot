@@ -1,9 +1,9 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
+import { resolveStatsServerId } from "@/utils/stats/statsServerContext";
 import {
   buildPersonalTabs,
   DEFAULT_TIMEFRAME,
@@ -66,11 +66,11 @@ export async function execute(
   }
 
   try {
-    // Resolve the internal server id; stat reads key on it, not the snowflake.
-    const tomoriState = await getCachedTomoriState(guild.id);
-    const serverId = tomoriState?.server_id;
+    const serverId = await resolveStatsServerId(interaction, locale);
     const userId = userData.user_id;
-    if (!serverId || !userId) {
+    if (!serverId) return;
+
+    if (!userId) {
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.tomori_not_setup_title",
         descriptionKey: "general.errors.tomori_not_setup_description",

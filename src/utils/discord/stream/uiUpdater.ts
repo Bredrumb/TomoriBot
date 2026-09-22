@@ -229,9 +229,9 @@ export class StreamUiUpdater {
         `Send message limit reached: ${state.messageSentCount} messages sent (server limit: ${sendMessageLimit})`,
       );
       // Deliberate operator config, not a failure, and never reached before the first send
-      // (messageSentCount only increments after one lands). User impersonation used to throw
-      // here, which surfaced as `status: "error"` and made generationTurn retry across every
-      // fallback key and model, each burning tokens on a limit that can never pass.
+      // (messageSentCount only increments after one lands). Treating it as an error would make
+      // generationTurn retry across every fallback key and model, each burning tokens on a
+      // limit that can never pass.
       this.deps.requestStop(context.channel.id, "send_message_limit");
       return null;
     }
@@ -451,8 +451,7 @@ export class StreamUiUpdater {
 
       // A refused send is cached so the admission gate can stop generating for this channel.
       // Only the first refusal of an episode is logged at error level: the rest are the same
-      // fact repeated, and at error level they crowd out unrelated signal (one guild's timeout
-      // once accounted for 63% of a day's error rows).
+      // fact repeated, and at error level they crowd out unrelated signal.
       const sendFailureReason = classifySendFailure(discordError);
       const isFirstOfEpisode = sendFailureReason
         ? noteSendFailure(context.channel.id, sendFailureReason).isFirstOfEpisode

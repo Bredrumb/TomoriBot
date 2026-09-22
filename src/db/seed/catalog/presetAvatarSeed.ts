@@ -14,6 +14,7 @@ import { convertToPNG } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import { buildPresetAvatarRelativeKey, uploadPresetAvatarToStorage } from "@/utils/storage/avatarStorage";
 import { personaSections } from "./personas";
+import { resolveSharedPresetAssetReference } from "./presetAssetReference";
 import type { PersonaInput } from "./types";
 
 /** Length of the content hash embedded in shared avatar filenames + version token. */
@@ -29,8 +30,6 @@ const CONTENT_HASH_LENGTH = 12;
  */
 export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> {
   const personas = personaSections.flatMap((section) => section.rows);
-  // Every locale variant of a preset resolves to the same storage key, so without this an art
-  // change re-uploads identical bytes once per authored locale.
   const uploadedThisRun = new Map<string, string>();
   for (const persona of personas) {
     await seedOneAvatar(client, persona, uploadedThisRun);
@@ -54,8 +53,6 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput, uploadedThisRun
     return;
   }
 
-  // Compared against the whole relative key, not the filename: a row written under the retired
-  // per-language key ends with the same filename, so a suffix test would pin it to its old path.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
   const expectedKey = buildPresetAvatarRelativeKey({ lineageId: persona.lineageId, contentHash });
 
@@ -67,26 +64,27 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput, uploadedThisRun
     LIMIT 1
   `;
 
-  const existingUrl = existing?.preset_avatar_shared_url ?? null;
-  let sharedUrl: string;
-  if (existingUrl?.endsWith(expectedKey)) {
-    // Same content already uploaded, so skip the (network) upload, refresh metadata only.
-    sharedUrl = existingUrl;
-  } else {
-    const alreadyUploaded = uploadedThisRun.get(expectedKey);
-    const uploadedUrl =
-      alreadyUploaded ??
-      (await uploadPresetAvatarToStorage({
+  const sharedUrl = await resolveSharedPresetAssetReference({
+    expectedKey,
+    existingReference: existing?.preset_avatar_shared_url ?? null,
+    uploadedThisRun,
+    upload: () =>
+      uploadPresetAvatarToStorage({
         lineageId: persona.lineageId,
         contentHash,
         buffer: pngBuffer,
-      }));
-    if (!uploadedUrl) {
-      log.warn(`[Preset Avatars] Skipping ${persona.name}: avatar upload failed`);
-      return;
-    }
-    uploadedThisRun.set(expectedKey, uploadedUrl);
-    sharedUrl = uploadedUrl;
+      }),
+    logFailure: (error) => {
+      const message = `[Preset Avatars] Skipping ${persona.name}: avatar upload failed`;
+      if (error) {
+        log.warn(message, error);
+      } else {
+        log.warn(message);
+      }
+    },
+  });
+  if (!sharedUrl) {
+    return;
   }
 
   // Stamp the shared URL + version hash onto the preset row. The hash is the

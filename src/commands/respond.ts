@@ -370,10 +370,9 @@ export async function execute(
       embeds: [successEmbed],
     });
 
-    // We need to ensure this message will pass the trigger checks
-    // NOTE: tomoriChat has built-in logic (lines 2004-2040) that injects a
-    // "[Continue your last message]" prompt when isManuallyTriggered=true
-    // and the last message in history is from the bot
+    // tomoriChat injects its "[Continue your last message]" prompt when a manual
+    // trigger's tail message is the bot's own, so replaying the latest message keeps
+    // /respond on that path instead of a plain chat turn.
     const passportMessage = latestMessage;
 
     log.info(

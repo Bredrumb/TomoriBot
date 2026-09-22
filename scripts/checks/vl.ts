@@ -733,7 +733,10 @@ async function main() {
       summarizeFailure: (output) => output.match(/\d+ error\(s\), \d+ warning\(s\), \d+ file\(s\) checked/)?.[0],
       // A failing audit is entirely file-and-line findings, so the listing is the report.
       failureNeedsDetail: true,
-      acceptsDetailFlag: true,
+      // No detail flag is forwarded: `audit-comments` already asks for its own listing, and a
+      // `--no-verbose` here would arrive after it and mute the warning lines this row counts.
+      // Under `vl --verbose` the listing prints, because the aggregator echoes a warned check's
+      // captured output.
     }),
     runAudit(),
 

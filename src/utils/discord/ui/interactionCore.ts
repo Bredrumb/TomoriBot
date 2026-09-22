@@ -1092,7 +1092,7 @@ export async function replySummaryEmbed(
     | MessageFlags.SuppressNotifications
     | undefined = MessageFlags.Ephemeral,
 ): Promise<void> {
-  // Components V2 collision guard (see replyInfoEmbed step 2.5). A summary embed cannot
+  // Components V2 collision guard (see replyInfoEmbed). A summary embed cannot
   // be edited onto a V2 message, so flatten the title/description plus each field into a
   // single notice container. Docs link and appended embeds are dropped, so this path is a
   // rare defensive fallback for a marked interaction.
