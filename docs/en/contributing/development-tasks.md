@@ -32,6 +32,7 @@ Run these before merging any change:
 bun run check           # TypeScript strict mode
 bun run lint            # Biome lint/format
 bun run check-locales   # locale key parity (when locale keys or command metadata changed)
+bun run find-stale-translations --reason=unfollowed --base=origin/main  # branch follow-up, advisory
 bun run db:lifecycle    # schema lifecycle test (when schema.sql changed; needs local PostgreSQL)
 ```
 
