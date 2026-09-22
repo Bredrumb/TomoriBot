@@ -1,6 +1,6 @@
 {
   "name": "tomoribot",
-  "version": "0.8.0.06a",
+  "version": "0.8.0.07a",
   "description": "Customizable AI Assistant Discord Bot",
   "main": "./src/index.ts",
   "type": "module",

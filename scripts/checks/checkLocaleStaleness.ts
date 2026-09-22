@@ -27,7 +27,9 @@ import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
 export const STALENESS_DOC_PATH = "docs/en/contributing/adding-locale/verification.md";
 
 const DEFAULT_LOCALE = "en-US";
-const LOCALES_ROOT = join("src", "locales");
+// Forward slash is required, not cosmetic: this value is concatenated into a git treeish
+// (`<ref>:<path>`), and git rejects a separator that arrived from path.join on Windows.
+const LOCALES_ROOT = "src/locales";
 const LOCALE_FILE_EXTENSION = ".ts";
 const DISPLAY_KEY_LIMIT = 25;
 const NO_KEY = "none";

@@ -59,6 +59,16 @@ Sprites (unlike avatars) **do** fan out to pointer personas. A sprite image is f
 
 Resolution is centralized in `PersonaSpriteRepository.listForPersona()`: for a pointer persona it returns the shared `preset_sprites` set (shaped as `PersonaSpriteRow`); for a materialized persona it returns the persona's own `persona_sprites` rows. Every downstream consumer (prompt context builder, render-modifier resolver, `/config` > Persona > Sprites) reads through that one method, so they are pointer-agnostic. Editing the catalog sprite set fans out to all still-pointer personas on the next boot.
 
+That reconcile is deliberately conservative, because these rows are the only record of a usable shared image URL and pointer personas resolve them live:
+
+- It deletes only keys the catalog no longer declares, and scopes the delete to every key the catalog *does* declare, **including sprites whose upload failed this run**. A failed upload is therefore never mistaken for a removed sprite.
+- A preset variant that seeds **none** of its declared sprites preserves its stored rows and warns instead of reconciling, because a mass upload failure is indistinguishable from a catalog that dropped every key, and the rows are the only surviving reference to images that stay in storage.
+- A preset that declares an empty `sprites` array preserves its rows and warns, because an empty declaration carries no key to scope a delete to, so its rows cannot be told apart from a wider removal. Omitting the `sprites` field keeps a preset out of the reconcile, which is how a preset opts out.
+- A sprite name that normalizes to no key at all (only invisible or control characters) contributes nothing to the protected set, because an unnormalized value can never match a stored `sprite_key`.
+- The seed returns counts (`presets`, `declarations`, `seeded`, `failed`, `removed`) and startup prints them. `declarations` counts each preset variant's own set, so the same art appears once per authored locale, and `presets` counts variants rather than lineages. A boot that seeds nothing has to be distinguishable from a healthy one in the log, because otherwise the two look identical.
+
+Because a seed short-circuits on a stored reference that already ends with the expected key, the cheap metadata-refresh path only applies while rows exist. With the rows gone the seeder must upload on every boot, so repopulating them also requires a working storage write path.
+
 The shared `presets/` images are **immutable and never deleted** by per-persona paths: `deletePersonaAvatarFromStorage` refuses any reference under that prefix (`isSharedPresetAssetReference`), so one server replacing/removing a sprite, or re-running `/persona default`, can never delete art other servers rely on. The guard covers both shared asset layouts: sprites (`presets/{lineage}/sprites/...`) and avatars (`presets/{lineage}/avatar-{hash}.png`), and it still matches the retired per-language layout that stored rows keep until an environment re-seeds.
 
 ### Avatar syncing (alter live-resolve + main fan-out)
