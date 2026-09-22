@@ -51,8 +51,8 @@ import {
   appendSupportedMediaFromMessage,
   extractEmojiImageAttachments,
 } from "@/utils/chat/contextMedia";
-import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
+import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { llmSections } from "@/db/seed/catalog/models";
 
 // Char-per-token ratios and the primitive estimators live in @/utils/text/tokenEstimate
@@ -719,27 +719,15 @@ async function buildRuntimeParityContext(
       personaName = authorName;
     } else if (message.webhookId) {
       const webhookName = message.author.username?.trim();
-      const renderModifierSource = webhookName
-        ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
+      const resolvedPersona = webhookName
+        ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
         : null;
-      const matchedPersona = webhookName
-        ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
-        : undefined;
 
-      if (matchedPersona) {
-        // Mirror the real pipeline: recover the decorated "Name (sprite)" label
-        // for clean-named sprite messages from the persisted mapping.
-        const spriteDisplayName = renderModifierSource
-          ? null
-          : await resolveSpriteMessageDisplayName(
-              message.id,
-              matchedPersona.persona_id,
-              matchedPersona.persona_nickname,
-            );
-        authorName = renderModifierSource?.displayName ?? spriteDisplayName ?? matchedPersona.persona_nickname;
+      if (resolvedPersona) {
+        authorName = resolvedPersona.displayName;
         authorType = "persona";
-        personaName = matchedPersona.persona_nickname;
-        effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
+        personaName = resolvedPersona.persona.persona_nickname;
+        effectiveAuthorId = `persona:${resolvedPersona.persona.persona_id ?? resolvedPersona.persona.persona_nickname}`;
       } else if (webhookName) {
         authorName = webhookName;
       }

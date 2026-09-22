@@ -73,8 +73,8 @@ import {
   isSupportedImageAttachmentContentType,
   isSupportedVideoAttachmentContentType,
 } from "@/utils/chat/contextMedia";
-import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
+import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 
 const PERSONA_SELECT_ID = "prompt_snapshot_persona_select";
@@ -564,26 +564,14 @@ export async function execute(
         personaName = authorName;
       } else if (message.webhookId) {
         const webhookName = message.author.username?.trim();
-        const renderModifierSource = webhookName
-          ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
+        const resolvedPersona = webhookName
+          ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
           : null;
-        const matchedPersona = webhookName
-          ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
-          : undefined;
-        if (matchedPersona) {
-          // Mirror the real pipeline: recover the decorated "Name (sprite)" label
-          // for clean-named sprite messages from the persisted mapping.
-          const spriteDisplayName = renderModifierSource
-            ? null
-            : await resolveSpriteMessageDisplayName(
-                message.id,
-                matchedPersona.persona_id,
-                matchedPersona.persona_nickname,
-              );
-          authorName = renderModifierSource?.displayName ?? spriteDisplayName ?? matchedPersona.persona_nickname;
+        if (resolvedPersona) {
+          authorName = resolvedPersona.displayName;
           authorType = "persona";
-          personaName = matchedPersona.persona_nickname;
-          effectiveAuthorId = String(matchedPersona.persona_id ?? matchedPersona.persona_nickname);
+          personaName = resolvedPersona.persona.persona_nickname;
+          effectiveAuthorId = String(resolvedPersona.persona.persona_id ?? resolvedPersona.persona.persona_nickname);
           syntheticUsers.set(effectiveAuthorId, { displayName: authorName, type: "persona" });
         } else if (webhookName) {
           authorName = webhookName;

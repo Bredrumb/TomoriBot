@@ -86,9 +86,8 @@ async function main(): Promise<void> {
 
   if (comparison.ok) {
     console.log(`Command roots documentation OK (${runtimeRoots.length} roots match runtime registration)`);
-    // Loading the command graph leaves an open handle, so a run that falls off the end of main() never
-    // exits. The failure branch exits explicitly, and the success branch must too to prevent runner hangs.
-    process.exit(0);
+    const { exitAfterCommandGraphLoad } = await import("../lib/commandReference");
+    exitAfterCommandGraphLoad();
   }
 
   console.error(
