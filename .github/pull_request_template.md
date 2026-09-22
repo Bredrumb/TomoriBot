@@ -22,6 +22,7 @@ No need to mark if irrelevant
 - ( ) Followed command patterns and conventions in [`docs/en/architecture/subsystems/command-system.md`](../docs/en/architecture/subsystems/command-system.md) (If adding or modifying a Discord Command) 
 - ( ) Updated the matching [`docs/`](../docs/) page(s) (If behavior/flow/schema/config changed) 
 - ( ) Used `localizer()` with an en-US key, not a hardcoded string (If adding or changing user-facing text) 
+- ( ) No hardcoded user-facing locales, all in `src/locales/en-US/` (Translating it into other languages is optional, [see Translations](./CONTRIBUTING.md#translations)) .
 
 ## Testing
 _What was manually verified? Include commands run, Discord tests, edge cases hit, etc._
