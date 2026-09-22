@@ -81,6 +81,8 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 2. 開啟 `/config`，在模型 > TTS 參數與語音 底下上傳該片段。
 3. 開啟 `/config`，在人格 > 語音 底下選擇人格與語音樣本。
 
+較長的片段對 Chatterbox 沒有幫助。它的執行階段會把參考音訊截斷為解碼器條件的前 10 秒，以及編碼器條件的前 6 秒（[`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)），所以超過約 10 秒的片段會被上傳、儲存，然後有一部分被忽略。說話者嵌入仍會從整段片段計算。
+
 當快速模型開關啟用時，Turbo 與 Nano 可以使用 `[laugh]` 與 `[sigh]` 這類方括號事件標籤。
 
 ## 選用調校

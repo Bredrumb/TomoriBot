@@ -103,11 +103,15 @@ seleccionar y activar el endpoint registrado.
 
 ### Clonación de voz
 
-1. Prepara un clip de voz en japonés limpio de 10-20 segundos con un solo orador y sin música de fondo.
+1. Prepara un clip de voz en japonés limpio con un solo orador y sin música de fondo. Alrededor de 30 segundos ya es suficiente: más allá de eso, el audio adicional aporta poco a la fidelidad del timbre y aumenta el tamaño de la carga y el tiempo de inferencia.
 2. Abre `/config` bajo Modelos > Parámetros y voces TTS y sube el clip.
 3. Abre `/config` bajo Persona > Voz, luego elige la persona y la muestra de voz.
 
 Irodori v4.1 admite un condicionamiento de referencia más largo que el modelo v2 antiguo, pero el audio fuente limpio sigue siendo más importante que la duración bruta.
+
+El entorno de ejecución de v4.1 limita el clip de referencia al valor predeterminado del punto de control, que el punto de control v4.1 establece en 120 segundos. Todo lo que sea más largo se recorta a ese límite en lugar de rechazarse, y `IRODORI_MAX_REF_SECONDS` lo anula. Por lo tanto, un clip en el límite de carga de 130 segundos de TomoriBot todavía funciona: Irodori usa como condicionamiento los primeros 120 segundos.
+
+Más largo no es mejor aquí. El upstream informa que aproximadamente 30 segundos de habla de referencia limpia ya capturan la mayor parte de la ganancia medible de similitud con el orador, y que varios clips más cortos del mismo orador superan a una sola grabación larga. Los pasos de latente de referencia adicionales que acompañan a un clip más largo también alargan cada solicitud de síntesis. Solo supera los 30 segundos cuando el timbre del orador varíe a lo largo de la grabación.
 
 ### Diseño de Voz
 

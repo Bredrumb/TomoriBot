@@ -109,6 +109,8 @@ Sau đó thêm mục model của endpoint và kích hoạt mục đó qua `/conf
 4. Trong `/config`, mở Persona > Voice và gán mẫu cho persona.
 5. Tạo tin nhắn thoại bằng `/generate voice-message` hoặc để TomoriBot tạo tin nhắn qua công cụ tin nhắn thoại của bot.
 
+Thượng nguồn mô tả việc sao chép chính xác từ các mẫu tham chiếu thường dài 10-30 giây. Runtime của riêng Fish S2 Pro không áp đặt giới hạn thời lượng tham chiếu, vì vậy clip dài hơn vẫn được chấp nhận thay vì bị cắt bớt, nhưng chất lượng sao chép được tài liệu hóa đến từ khoảng 10-30 giây.
+
 ## Điều khiển biểu cảm
 
 Fish S2 Pro có thể thay đổi cách truyền đạt trong cùng một câu nói bằng cách sử dụng các thẻ trong ngoặc vuông. Ví dụ:

@@ -171,7 +171,7 @@ export default {
           format_error_title: `未対応の音声形式です`,
           format_error_description: `WAV、MP3、OGG、OPUS、FLAC、M4A、AAC の音声ファイルをアップロードしてください。`,
           size_error_title: `音声ファイルが大きすぎます`,
-          size_error_description: `音声サンプルは {limit_mb} MB 以下にしてください。`,
+          size_error_description: `音声サンプルは {limit_mb} MB 以下にしてください。今回の失敗は長さが原因ではありません。非圧縮のWAVは1分あたり約10 MBを使用するため、長さの上限に近いクリップでもサイズが大きすぎることがあります。FLAC、MP3、OGGでエクスポートすれば、同じ容量にはるかに多くの音声を収められます。`,
           duration_error_title: `音声クリップが長すぎます`,
           duration_error_description: `音声サンプルは {limit_secs} 秒以下にしてください。`,
           normalization_error_title: `音声変換に失敗しました`,

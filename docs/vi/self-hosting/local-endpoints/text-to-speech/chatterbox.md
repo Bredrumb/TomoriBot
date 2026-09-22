@@ -80,6 +80,8 @@ Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau 
 2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải đoạn âm thanh lên.
 3. Mở `/config` trong phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
+Đoạn âm thanh dài hơn không mang lại thêm giá trị nào cho Chatterbox. Runtime của nó cắt đoạn tham chiếu xuống 10 giây đầu cho điều kiện decoder và 6 giây đầu cho điều kiện encoder ([`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)), vì vậy một đoạn dài hơn khoảng 10 giây vẫn được tải lên, lưu trữ, rồi sau đó bị bỏ qua một phần. Embedding của người nói vẫn được tính từ toàn bộ đoạn âm thanh.
+
 Turbo và Nano có thể sử dụng các thẻ sự kiện trong ngoặc vuông như `[laugh]` và `[sigh]` khi nút bật tắt model nhanh được bật.
 
 ## Tinh chỉnh tùy chọn

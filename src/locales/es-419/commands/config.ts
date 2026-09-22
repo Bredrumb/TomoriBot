@@ -1174,7 +1174,7 @@ export default {
           format_error_title: `Formato de audio no soportado`,
           format_error_description: `Sube un archivo de audio WAV, MP3, OGG, OPUS, FLAC, M4A, o AAC.`,
           size_error_title: `Archivo de audio demasiado grande`,
-          size_error_description: `Las muestras de voz deben ser de {limit_mb} MB o menos.`,
+          size_error_description: `Las muestras de voz deben ser de {limit_mb} MB o menos. La duración no es la razón de esta falla: el WAV sin comprimir usa alrededor de 10 MB por minuto, así que un clip cerca del límite de duración todavía puede ser demasiado grande. Expórtalo como FLAC, MP3 u OGG para que quepa mucho más audio en el mismo espacio.`,
           duration_error_title: `Clip de audio demasiado largo`,
           duration_error_description: `Las muestras de voz deben durar {limit_secs} segundos o menos.`,
           normalization_error_title: `Conversión de audio fallida`,

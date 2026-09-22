@@ -127,12 +127,14 @@ O modo `Auto` é recomendado porque o mesmo servidor suporta tanto a clonagem po
 
 Para uma persona que deve clonar um falante existente:
 
-1. Prepare um clipe de referência nítido com um falante e pouca ou nenhuma música de fundo.
+1. Prepare um clipe de referência nítido com um falante e pouca ou nenhuma música de fundo. A fonte (upstream) trata 5 a 30 segundos como a faixa prática.
 2. Abra `/config` em Models (Modelos) > TTS Parameters & Voices (Parâmetros e Vozes TTS) e envie o clipe (upload).
 3. Adicione a transcrição exata do clipe de referência, quando disponível. O VoxCPM2 utiliza isso para a Clonagem Suprema e consegue reproduzir mais do ritmo, emoção e estilo da referência.
 4. Abra `/config` em Persona > Voice (Voz), escolha a persona e atribua a amostra salva.
 
 Se nenhuma transcrição for armazenada, o VoxCPM2 ainda executará a clonagem normal por áudio de referência.
+
+O número de 5 a 30 segundos é uma faixa de qualidade documentada, e não um limite aplicado: o VoxCPM2 não aplica nenhum limite próprio de duração da referência, então o teto de upload do TomoriBot é o que impede um clipe mais longo.
 
 ## Voice Design da persona
 

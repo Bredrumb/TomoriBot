@@ -139,10 +139,16 @@ Then open `/config` > Models > Switch Models and activate the CosyVoice 3 speech
 
 For normal zero-shot cloning:
 
-1. Prepare a clean 10 to 20 second sample with one speaker and little or no background noise.
+1. Prepare a clean 3 to 30 second sample with one speaker and little or no background noise.
 2. Open `/config` under Models > TTS Parameters & Voices and upload the sample.
-3. Enter the matching transcript when possible. CosyVoice 3 uses it for the transcript-backed zero-shot path.
+3. Enter the matching transcript when possible. CosyVoice 3 uses it for the transcript-backed zero-shot path, and it is tokenized as a prompt prefix, so it should describe the audio that is actually used: the first 30 seconds of the clip.
 4. Open `/config` under Persona > Voice and assign that sample to the persona.
+
+CosyVoice's speech tokenizer works on a 30-second prompt window, and upstream enforces it by failing: its own web UI tells you to keep the prompt audio under 30 seconds, and the tokenizer asserts that limit instead of shortening the audio itself. The sidecar trims instead, so a longer clip is cut to its first 30 seconds and synthesis proceeds. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` sets that window, and the trim is logged on the sidecar's console.
+
+The trim reads the clip in place, which means the speaker embedding is taken from the same opening 30 seconds as the prompt speech tokens. That pairing is what CosyVoice conditions on, so a long reference loses nothing that the engine would have used. The practical effect is that only the opening 30 seconds of a long upload condition the voice, while the rest is uploaded and stored without being used.
+
+Keeping the assigned sample at 10 to 20 seconds stays inside the window with room to spare, which also keeps the stored transcript aligned with the audio the model reads.
 
 Cross-lingual cloning is supported. The reference speaker can speak a different language from the generated text. If a reference transcript is unavailable, the wrapper uses CosyVoice 3's dedicated cross-lingual path.
 
@@ -170,7 +176,7 @@ before synthesis rather than being misrepresented as whole-utterance instruction
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Maximum synthesis text length |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Enable CosyVoice's internal streaming generator |
 | `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Maximum decoded reference-audio size |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Maximum reference-audio duration |
+| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Prompt window for the speech tokenizer; a longer reference is trimmed to its first N seconds |
 | `COSYVOICE3_BEARER_TOKEN` | unset | Optional bearer token for `/synthesize` |
 | `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Permit non-loopback binding; review remote exposure and use a bearer token |
 | `COSYVOICE3_SPEED` | `1.0` | Global numeric speed multiplier passed to upstream inference |

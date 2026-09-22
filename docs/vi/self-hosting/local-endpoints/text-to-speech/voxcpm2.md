@@ -126,12 +126,14 @@ Sau khi lưu kết nối, hãy chọn kết nối đó và sử dụng menu th�
 
 Đối với persona cần sao chép một người nói hiện có:
 
-1. Chuẩn bị một clip tham chiếu rõ ràng với một người nói và ít hoặc không có nhạc nền.
+1. Chuẩn bị một clip tham chiếu rõ ràng với một người nói và ít hoặc không có nhạc nền. Thượng nguồn coi 5 đến 30 giây là khoảng thực tế.
 2. Mở `/config` dưới phần Models > TTS Parameters & Voices và tải clip lên.
 3. Thêm bản phiên âm chính xác của clip tham chiếu khi có sẵn. VoxCPM2 sử dụng bản phiên âm này cho Ultimate Cloning và có thể tái tạo nhiều hơn nhịp điệu, cảm xúc và phong cách của bản tham chiếu.
 4. Mở `/config` dưới phần Persona > Voice, chọn persona, và gán mẫu đã lưu.
 
 Nếu không có bản phiên âm nào được lưu, VoxCPM2 vẫn thực hiện sao chép bằng âm thanh tham chiếu thông thường.
+
+Con số 5 đến 30 giây là một khoảng chất lượng đã được tài liệu hóa, chứ không phải một giới hạn được áp đặt: VoxCPM2 không áp dụng giới hạn thời lượng tham chiếu nào của riêng nó, vì vậy giới hạn tải lên của TomoriBot mới là thứ chặn một clip dài hơn.
 
 ## Thiết kế giọng nói persona
 

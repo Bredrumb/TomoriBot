@@ -12,8 +12,17 @@ import { storeVoiceSample } from "@/utils/storage/voiceSampleStorage";
 /** Default max upload size in MB (overridden by SPEECH_SAMPLE_MAX_MB env var). */
 export const SPEECH_SAMPLE_MAX_MB = Math.max(1, Number.parseInt(process.env.SPEECH_SAMPLE_MAX_MB ?? "10", 10) || 10);
 
-/** Maximum allowed clip duration in seconds. */
-export const SPEECH_SAMPLE_MAX_DURATION_SECS = 40;
+/**
+ * Default max clip duration in seconds (overridden by SPEECH_SAMPLE_MAX_DURATION_SECS env var).
+ *
+ * The cap is deliberately looser than any single clone engine accepts: engines differ on how much
+ * reference audio they condition on, and the per-engine limit is enforced where the audio is sent,
+ * so a clip that one engine rejects may be useful to another.
+ */
+export const SPEECH_SAMPLE_MAX_DURATION_SECS = (() => {
+  const parsed = Number.parseInt(process.env.SPEECH_SAMPLE_MAX_DURATION_SECS ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 130;
+})();
 
 /** Accepted audio MIME types and file extensions for reference samples. */
 const ACCEPTED_MIME_TYPES = new Set([

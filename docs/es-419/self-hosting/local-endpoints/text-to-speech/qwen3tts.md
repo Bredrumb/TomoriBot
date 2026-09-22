@@ -60,6 +60,8 @@ Usa esto para las personas que deban imitar un clip de referencia:
 2. Abre `/config` bajo Modelos > Parámetros y voces TTS y sube el clip.
 3. Abre `/config` bajo Persona > Voz, luego elige la persona y la muestra de voz.
 
+Qwen3-TTS anuncia clonación rápida a partir de tan solo 3 segundos de audio de referencia, y su tiempo de ejecución no documenta ni aplica un límite de duración de la referencia. Por lo tanto, la longitud del clip es una compensación de calidad que tú controlas, y no un límite que el servidor compruebe.
+
 ### Diseño de Voz
 
 Usa esto para las personas que deban usar una descripción de voz escrita en lugar de una muestra:

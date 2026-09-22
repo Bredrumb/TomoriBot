@@ -137,10 +137,16 @@ Luego abre `/config` > Modelos > Cambiar modelos y activa el endpoint de voz de 
 
 Para la clonación zero-shot normal:
 
-1. Prepara una muestra limpia de 10 a 20 segundos con un solo orador y poco o ningún ruido de fondo.
+1. Prepara una muestra limpia de 3 a 30 segundos con un solo orador y poco o ningún ruido de fondo.
 2. Abre `/config` bajo Modelos > Parámetros y voces TTS y sube la muestra.
-3. Ingresa la transcripción coincidente cuando sea posible. CosyVoice 3 la usa para la ruta zero-shot respaldada por transcripción.
+3. Ingresa la transcripción coincidente cuando sea posible. CosyVoice 3 la usa para la ruta zero-shot respaldada por transcripción, y se tokeniza como prefijo del prompt, así que debe describir el audio que realmente se usa: los primeros 30 segundos del clip.
 4. Abre `/config` bajo Persona > Voz y asigna esa muestra a la persona.
+
+El tokenizador de voz de CosyVoice trabaja con una ventana de prompt de 30 segundos, y el upstream la impone al fallar: su propia interfaz web indica mantener el audio de prompt por debajo de 30 segundos, y el tokenizador afirma ese límite en lugar de acortar el audio en sí. En cambio, el sidecar recorta, así que un clip más largo se recorta a sus primeros 30 segundos y la síntesis continúa. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` define esa ventana, y el recorte queda registrado en la consola del sidecar.
+
+El recorte lee el clip en su propio lugar, lo que significa que el embedding de locutor se toma de los mismos 30 segundos iniciales que los tokens de voz del prompt. Es ese par lo que CosyVoice usa como condicionamiento, así que una referencia larga no pierde nada que el motor habría usado. El efecto práctico es que solo los 30 segundos iniciales de una subida larga condicionan la voz, mientras que el resto se sube y se almacena sin usarse.
+
+Mantener la muestra asignada entre 10 y 20 segundos se queda dentro de la ventana con margen de sobra, lo que también mantiene la transcripción almacenada alineada con el audio que lee el modelo.
 
 Se admite la clonación translingüe. El orador de referencia puede hablar un idioma diferente al del texto generado. Si una transcripción de referencia no está disponible, el envoltorio usa la ruta translingüe dedicada de CosyVoice 3.
 
@@ -168,7 +174,7 @@ antes de la síntesis en lugar de representarse incorrectamente como instruccion
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Longitud máxima del texto de síntesis |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Habilitar el generador de transmisión interna de CosyVoice |
 | `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Tamaño máximo de audio de referencia decodificado |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Duración máxima del audio de referencia |
+| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Ventana de prompt del tokenizador de voz; una referencia más larga se recorta a sus primeros N segundos |
 | `COSYVOICE3_BEARER_TOKEN` | sin establecer | Token portador opcional para `/synthesize` |
 | `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Permitir el enlace que no sea loopback; revisa la exposición remota y usa un token portador |
 | `COSYVOICE3_SPEED` | `1.0` | Multiplicador numérico global de velocidad pasado a la inferencia upstream |

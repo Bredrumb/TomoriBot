@@ -133,10 +133,16 @@ bun run launch --cosyvoice3
 
 一般的零樣本複製：
 
-1. 準備一段乾淨、10 到 20 秒、只有一位說話者且背景噪音很少或沒有的樣本。
+1. 準備一段乾淨、3 到 30 秒、只有一位說話者且背景噪音很少或沒有的樣本。
 2. 開啟 `/config`，在模型 > TTS 參數與語音 底下上傳該樣本。
-3. 盡可能輸入對應的逐字稿。CosyVoice 3 會用它走有逐字稿的零樣本路徑。
+3. 盡可能輸入對應的逐字稿。CosyVoice 3 會用它走有逐字稿的零樣本路徑，而它會以提示前綴的形式被 tokenizer 處理，所以它應該描述實際被使用的音訊：也就是片段最前面的 30 秒。
 4. 開啟 `/config`，在人格 > 語音 底下將該樣本指派給人格。
+
+CosyVoice 的語音 tokenizer 以 30 秒的提示窗運作，而上游是用失敗來強制這一點：上游自己的網頁介面會請你把提示音訊保持在 30 秒以下，而 tokenizer 會斷言這個上限，而不是縮短音訊本身。sidecar 改為截短，所以較長的片段會被截到最前面的 30 秒並繼續合成。`COSYVOICE3_MAX_REF_AUDIO_SECONDS` 設定的就是這個窗，而截短會記錄在 sidecar 的主控台。
+
+截短會就地讀取片段，這表示說話者嵌入取自與提示語音 token 相同的最前面 30 秒。CosyVoice 用來做條件設定的就是這個配對，所以較長的參考音訊不會失去引擎原本會用到的任何內容。實際影響是，較長的上傳只有最前面的 30 秒會影響聲音，其餘部分會被上傳並儲存，卻不會被使用。
+
+把指派給人格的樣本保持在 10 到 20 秒，就能從容地落在這個窗內，也能讓儲存的逐字稿與模型讀取的音訊保持一致。
 
 跨語言複製是支援的。參考說話者可以說與生成文字不同的語言。如果沒有參考逐字稿，包裝會使用 CosyVoice 3 專屬的跨語言路徑。
 
@@ -163,7 +169,7 @@ bun run launch --cosyvoice3
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 合成文字長度上限 |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | 啟用 CosyVoice 內部的串流生成器 |
 | `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | 解碼後參考音訊大小上限 |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | 參考音訊時長上限 |
+| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | 語音 tokenizer 的提示窗；較長的參考音訊會截到最前面的 N 秒 |
 | `COSYVOICE3_BEARER_TOKEN` | 未設定 | `/synthesize` 的選用 bearer token |
 | `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | 允許非回送位址綁定；請檢視遠端曝露風險並使用 bearer token |
 | `COSYVOICE3_SPEED` | `1.0` | 傳給上游推論的全局數值速度倍率 |

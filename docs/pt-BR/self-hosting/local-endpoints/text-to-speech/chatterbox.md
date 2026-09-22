@@ -82,6 +82,8 @@ Use `/providers` para registro do endpoint e configuração do modelo. Em seguid
 2. Abra `/config` em Models > TTS Parameters & Voices e envie o clipe.
 3. Abra `/config` em Persona > Voice, e então escolha a persona e a amostra de voz.
 
+Um clipe mais longo não acrescenta nada ao Chatterbox. O runtime dele trunca a referência para os primeiros 10 segundos na condição do decodificador e para os primeiros 6 segundos na condição do codificador ([`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)), então um clipe com mais de cerca de 10 segundos é enviado, armazenado e depois parcialmente ignorado. O embedding do falante ainda é calculado a partir do clipe inteiro.
+
 O Turbo e o Nano podem usar tags de eventos entre colchetes como `[laugh]` e `[sigh]` quando a alternância de fast-model está ativada.
 
 ## Ajuste Opcional

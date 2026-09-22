@@ -43,10 +43,14 @@ O TomoriBot trata a fala como uma capacidade de endpoint personalizado. Motores 
 
 Para motores de clone, adicione e atribua uma amostra de voz por persona:
 
-1. Prepare um clipe limpo de 10-20 segundos com um locutor e sem música de fundo.
-2. Abra `/config` em Models > TTS Parameters & Voices e faça o upload da amostra. Qualquer formato de áudio é aceito; o TomoriBot o converte para WAV mono.
+1. Prepare um clipe limpo com um locutor e sem música de fundo. Cada motor documenta o melhor comprimento por conta própria, de 3 a 30 segundos dependendo do modelo; os guias por motor abaixo trazem os números.
+2. Abra `/config` em Models > TTS Parameters & Voices e faça o upload da amostra. Qualquer formato de áudio é aceito; o TomoriBot o converte para WAV mono, até 130 segundos.
 3. Forneça uma transcrição correspondente quando o motor se beneficiar disso. O Fish S2 Pro encaminha a transcrição de referência armazenada para a solicitação de clonagem, e o VoxCPM2 a usa para uma Ultimate Cloning de maior fidelidade.
 4. Abra `/config` em Persona > Voice, depois escolha a persona e a amostra de voz.
+
+O limite de upload de 130 segundos é do TomoriBot, não de qualquer motor. Cada sidecar aplica seu próprio limite de áudio de referência quando o clipe é enviado, e esses limites diferem o suficiente para que um clipe adequado a um motor seja rejeitado ou ignorado em parte por outro. Consulte o guia do motor antes de enviar um clipe longo.
+
+O limite de tamanho do upload e o teto de duração são independentes, e a verificação de tamanho acontece primeiro. O WAV sem compressão custa cerca de 10 MB por minuto em estéreo 44.1 kHz, então uma exportação de 130 segundos feita na DAW pode chegar a cerca de 22 MB e ser recusada por ser grande demais, enquanto uma exportação comprimida do mesmo clipe cabe facilmente. `SPEECH_SAMPLE_MAX_MB` eleva esse limite de tamanho (10 MB por padrão). Para um clipe de referência longo, exporte como FLAC, MP3 ou OGG em vez de WAV: o TomoriBot converte qualquer formato aceito para WAV mono a 22.05 kHz antes de armazená-lo, então o upload comprimido não custa nada em qualidade.
 
 Para Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS ou VoxCPM2 VoiceDesign, pule a amostra de áudio e use Persona > Voice em `/config` para salvar uma descrição de voz em linguagem natural para a persona. O CosyVoice 3 usa o modo Clone com uma amostra de referência e aceita orientações de entrega pontuais através de `voice_instructions`.
 

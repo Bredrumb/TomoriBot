@@ -100,11 +100,15 @@ Sử dụng `/providers` để đăng ký endpoint và thiết lập model. Sau 
 
 ### Sao chép giọng nói
 
-1. Chuẩn bị một đoạn clip giọng nói tiếng Nhật rõ ràng dài 10-20 giây với một người nói và không có nhạc nền.
+1. Chuẩn bị một đoạn clip giọng nói tiếng Nhật rõ ràng với một người nói và không có nhạc nền. Khoảng 30 giây là đã đủ: vượt quá mốc đó, phần âm thanh thêm vào hầu như không cải thiện độ trung thực của âm sắc mà còn làm tăng kích thước tải lên và thời gian suy luận.
 2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải clip lên.
 3. Mở `/config` trong phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
 Irodori v4.1 hỗ trợ điều kiện hóa tham chiếu dài hơn so với model v2 cũ, nhưng âm thanh nguồn rõ ràng vẫn quan trọng hơn thời lượng thô.
+
+Runtime của v4.1 giới hạn clip tham chiếu theo giá trị mặc định của checkpoint, và checkpoint v4.1 đặt giá trị này là 120 giây. Phần dài hơn sẽ bị cắt theo giới hạn đó thay vì bị từ chối, và `IRODORI_MAX_REF_SECONDS` sẽ ghi đè giới hạn này. Vì vậy, một clip ở mức trần tải lên 130 giây của TomoriBot vẫn dùng được: Irodori điều kiện hóa trên 120 giây đầu tiên của clip.
+
+Ở đây, dài hơn không có nghĩa là tốt hơn. Tài liệu upstream cho biết khoảng 30 giây giọng nói tham chiếu rõ ràng đã mang lại phần lớn mức cải thiện đo được về độ tương đồng với người nói, và nhiều clip ngắn hơn từ cùng một người nói sẽ tốt hơn một bản ghi dài. Các bước latent tham chiếu tăng thêm khi clip dài hơn cũng làm mọi yêu cầu tổng hợp lâu hơn. Chỉ vượt quá 30 giây khi âm sắc của người nói thay đổi trong suốt bản ghi.
 
 ### VoiceDesign
 

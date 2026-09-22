@@ -126,12 +126,14 @@ Se recomienda `Auto` porque el mismo servidor admite clonación de audio de refe
 
 Para una persona que debe clonar a un orador existente:
 
-1. Prepara un clip de referencia limpio con un solo orador y poca o ninguna música de fondo.
+1. Prepara un clip de referencia limpio con un solo orador y poca o ninguna música de fondo. La fuente upstream considera 5 a 30 segundos como el rango práctico.
 2. Abre `/config` bajo Modelos > Parámetros y voces TTS y sube el clip.
 3. Agrega la transcripción exacta del clip de referencia cuando esté disponible. VoxCPM2 la usa para Clonación Definitiva y puede reproducir más del ritmo, la emoción y el estilo de referencia.
 4. Abre `/config` bajo Persona > Voz, elige la persona y asigna la muestra guardada.
 
 Si no se guarda ninguna transcripción, VoxCPM2 aún realiza la clonación normal de audio de referencia.
+
+La cifra de 5 a 30 segundos es un rango de calidad documentado, y no un límite aplicado: VoxCPM2 no aplica ningún límite propio de duración de la referencia, así que el techo de carga de TomoriBot es lo que detiene un clip más largo.
 
 ## Diseño de Voz de Persona
 

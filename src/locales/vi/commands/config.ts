@@ -1159,7 +1159,7 @@ export default {
           format_error_title: `Định dạng không hỗ trợ`,
           format_error_description: `Tải lên tệp âm thanh WAV, MP3, OGG, OPUS, FLAC, M4A hoặc AAC.`,
           size_error_title: `Tệp âm thanh quá lớn`,
-          size_error_description: `Mẫu giọng nói phải có dung lượng từ {limit_mb} MB trở xuống.`,
+          size_error_description: `Mẫu giọng nói phải có dung lượng từ {limit_mb} MB trở xuống. Thời lượng không phải là nguyên nhân khiến lần này thất bại: WAV không nén tốn khoảng 10 MB mỗi phút, nên một clip gần giới hạn thời lượng vẫn có thể quá lớn. Hãy xuất dưới dạng FLAC, MP3 hoặc OGG để chứa được nhiều âm thanh hơn hẳn trong cùng dung lượng.`,
           duration_error_title: `Đoạn âm thanh quá dài`,
           duration_error_description: `Mẫu giọng nói phải có thời lượng từ {limit_secs} giây trở xuống.`,
           normalization_error_title: `Chuyển đổi âm thanh thất bại`,

@@ -1145,7 +1145,7 @@ export default {
           format_error_title: `音频格式不受支持`,
           format_error_description: `请上传 WAV、MP3、OGG、OPUS、FLAC、M4A 或 AAC 音频文件。`,
           size_error_title: `音频文件太大`,
-          size_error_description: `语音样本必须不超过 {limit_mb} MB。`,
+          size_error_description: `语音样本必须不超过 {limit_mb} MB。这次失败的原因不是时长：未压缩的 WAV 每分钟约占用 10 MB，所以接近时长上限的片段仍可能太大。请改用 FLAC、MP3 或 OGG 导出，就能在同样的空间里装下多得多的音频。`,
           duration_error_title: `音频片段太长`,
           duration_error_description: `语音样本必须不超过 {limit_secs} 秒。`,
           normalization_error_title: `音频转换失败`,

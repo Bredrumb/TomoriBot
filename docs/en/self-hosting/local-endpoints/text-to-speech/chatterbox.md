@@ -82,6 +82,8 @@ Use `/providers` for endpoint registration and model setup. Then open `/config` 
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
+A longer clip adds nothing for Chatterbox. Its runtime truncates the reference to the first 10 seconds for the decoder condition and the first 6 seconds for the encoder condition ([`tts.py`](https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py)), so a clip beyond about 10 seconds is uploaded, stored, and then partially ignored. The speaker embedding is still computed from the whole clip.
+
 Turbo and Nano can use bracket event tags such as `[laugh]` and `[sigh]` when the fast-model toggle is enabled.
 
 ## Optional Tuning

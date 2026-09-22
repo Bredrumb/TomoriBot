@@ -1151,7 +1151,7 @@ export default {
           format_error_title: `不支援的音訊格式`,
           format_error_description: `請上傳 WAV、MP3、OGG、OPUS、FLAC、M4A 或 AAC 音訊檔。`,
           size_error_title: `音訊檔太大`,
-          size_error_description: `語音樣本必須小於或等於 {limit_mb} MB。`,
+          size_error_description: `語音樣本必須小於或等於 {limit_mb} MB。這次失敗的原因不是長度：未壓縮的 WAV 每分鐘約使用 10 MB，因此接近長度上限的片段仍可能太大。請改用 FLAC、MP3 或 OGG 匯出，就能在同一容量中容納更多音訊。`,
           duration_error_title: `音訊片段太長`,
           duration_error_description: `語音樣本長度必須為 {limit_secs} 秒以內。`,
           normalization_error_title: `音訊轉換失敗`,

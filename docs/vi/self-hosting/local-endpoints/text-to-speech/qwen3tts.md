@@ -59,6 +59,8 @@ Sử dụng tính năng này cho các persona cần bắt chước một đoạn
 2. Mở `/config` trong phần Models > TTS Parameters & Voices và tải clip lên.
 3. Mở `/config` trong phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
+Qwen3-TTS quảng cáo khả năng sao chép nhanh chỉ từ 3 giây âm thanh tham chiếu, và runtime của nó không tài liệu hóa cũng không áp đặt giới hạn thời lượng tham chiếu. Vì vậy, độ dài clip là một sự đánh đổi về chất lượng do bạn kiểm soát, chứ không phải một giới hạn mà máy chủ kiểm tra.
+
 ### VoiceDesign
 
 Sử dụng tính năng này cho các persona cần sử dụng mô tả giọng nói bằng văn bản thay vì một mẫu âm thanh:

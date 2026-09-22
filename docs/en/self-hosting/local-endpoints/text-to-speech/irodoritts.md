@@ -104,11 +104,15 @@ select and activate the registered endpoint.
 
 ### Voice cloning
 
-1. Prepare a clean 10-20 second Japanese voice clip with one speaker and no background music.
+1. Prepare a clean Japanese voice clip with one speaker and no background music. Around 30 seconds is already enough: past that point the extra audio buys little timbre fidelity while costing upload size and inference time.
 2. Open `/config` under Models > TTS Parameters & Voices and upload the clip.
 3. Open `/config` under Persona > Voice, then choose the persona and the voice sample.
 
 Irodori v4.1 supports longer reference conditioning than the old v2 model, but clean source audio remains more important than raw duration.
+
+The v4.1 runtime caps the reference clip at the checkpoint default, which the v4.1 checkpoint sets to 120 seconds. Anything longer is trimmed to that cap rather than refused, and `IRODORI_MAX_REF_SECONDS` overrides it. A clip at TomoriBot's 130-second upload ceiling therefore still works: Irodori conditions on the first 120 seconds of it.
+
+Longer is not better here. Upstream reports that approximately 30 seconds of clean reference speech already captures most of the measurable speaker-similarity gain, and that multiple shorter clips from the same speaker beat one long recording. The extra reference latent steps that come with a longer clip also lengthen every synthesis request. Reach past 30 seconds only when a speaker's timbre drifts across the recording.
 
 ### VoiceDesign
 
@@ -122,7 +126,7 @@ TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `s
 
 ## Long voice messages
 
-Irodori's runtime caps a single predicted utterance at 30 seconds by default. TomoriBot therefore chunks longer text before synthesis and concatenates the generated audio into one WAV response, so Discord still receives one voice message.
+Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the sidecar does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.
 
 The implementation starts from the chunking approach used by the [official Irodori OpenAI-compatible server](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py), whose defaults enable chunking at 80 non-whitespace characters. TomoriBot adds stricter boundary handling so closing quotes and brackets stay with the punctuation they close, punctuation runs such as `！？` and `...` stay together, decimal points next to digits do not split, and very short final tails are merged back into the previous chunk.
 
