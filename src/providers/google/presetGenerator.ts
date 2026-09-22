@@ -10,6 +10,13 @@ import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provi
 import { PRESET_MAX_STRING_LENGTH, type PresetExportData } from "../../types/preset/presetExport";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
+import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
+import {
+  buildPresetPrompt,
+  extractPresetGenerationFields,
+  presetGenerationFailureErrorType,
+  presetGenerationFailureMessage,
+} from "@/providers/utils/presetCommon";
 export type {
   GeneratePresetParams,
   PresetGenerationResult,
@@ -153,26 +160,6 @@ function createGoogleErrorMessage(
 
   const displayCode = errorCode || "unknown";
   return `Error Code ${displayCode}: ${googleMessage}`;
-}
-
-/**
- * Sanitize sample dialogue by removing speaker prefixes
- * Removes patterns like "User:", "Character:", "{{char}}:", etc.
- *
- */
-export function sanitizeSampleDialogueText(dialogue: string): string {
-  if (!dialogue) return "";
-
-  // Remove speaker prefixes like "User:", "Character:", "{{char}}:", etc.
-  const cleaned = dialogue
-    .replace(/^{{char}}:\s*/i, "") // Remove {{char}}: prefix
-    .replace(/^{{character}}:\s*/i, "") // Remove {{character}}: prefix
-    .replace(/^{user}:\s*/i, "") // Remove {user}: prefix
-    .replace(/^User:\s*/i, "") // Remove User: prefix
-    .replace(/^Character:\s*/i, "") // Remove Character: prefix
-    .replace(/^[^:]+:\s*/, ""); // Remove any "Name:" style prefix
-
-  return cleaned.trim();
 }
 
 /**
@@ -472,69 +459,16 @@ export async function generatePresetFromPrompt(
     const generationConfig: GenerateContentConfig = {
       temperature: 1.5, // Creative but controlled
       topP: 0.9,
-      maxOutputTokens: 8192, // Increased for longer descriptions
+      // The caller resolved this against the server's ceiling and the model's own limit, so
+      // recomputing it here would silently ignore a cap the deployment set.
+      maxOutputTokens: params.maxOutputTokens ?? resolvePresetGenerationMaxOutputTokens(),
       responseMimeType: "application/json",
       responseJsonSchema: responseJsonSchema,
     };
 
-    let prompt = `You are an expert character creator for a Discord chatbot. Create a detailed character profile based on the following information.
-
-Character Name: ${params.characterName}
-
-Character Description:
-${params.characterDescription}
-
-How the Character Speaks:
-${params.speechExamples}
-
-Instructions:
-- Create a rich, detailed character profile in the structured JSON format
-- The character should be interesting and engaging for conversation
-- Do NOT prepend the sample dialogues with character names or "User:"/"Character:" prefixes - the chat application will handle that
-- Use "{user}" ONLY where you would write the conversation partner's name (NOT for the pronoun "you"). Keep "you" as "you"
-- Use "{bot}" ONLY where you would write the character's own name (NOT for the pronouns "I"/"me"). Keep "I" as "I" and "I'm" as "I'm"
-- Default dialogue voice is FIRST PERSON. Use normal first-person pronouns (I, me, my) in the character's speech. Only use {bot} where the character would literally say their own name, such as a self-introduction. The only exception is characters who canonically refer to themselves in third person (e.g., young children, certain anime archetypes)
-- Ensure exactly 5 sample dialogue pairs (sample_dialogues_in paired with sample_dialogues_out)
-
-The attribute_list MUST contain exactly 6 items in this exact order:
-
-1. {bot}'s Description: A comprehensive 2-4 sentence description capturing the character's core identity, essence, and overall vibe. What makes them unique? What's their deal?
-
-2. {bot}'s Appearance: Physical description including hair, eyes, clothing, accessories, and any distinctive features. Be specific and vivid.
-
-3. {bot}'s Personality: A comma-separated list of personality traits that define how they think, act, and interact. Focus on specific, actionable traits (e.g., "selective passion, authentic advisor, music obsessive, practical pessimist").
-
-4. {bot}'s Likes: Things, activities, topics, or concepts the character genuinely enjoys or gravitates toward. Can include brief explanations in parentheses.
-
-5. {bot}'s Dislikes: Things, activities, topics, or concepts the character dislikes, avoids, or finds irritating. Can include brief explanations in parentheses or quotes.
-
-6. {bot}'s Behavioral Quirks: Specific mannerisms, speech patterns, habits, or behaviors that make the character distinctive. How do they express themselves? What are their tells?
-
-The sample_dialogues_in and sample_dialogues_out MUST follow this structure (exactly 5 dialogue pairs):
-
-**3 GUIDED SCENARIOS (Required, in this exact order):**
-
-1. **Self-Introduction Request**: User asks {bot} to introduce themselves (e.g., "Can you introduce yourself, {bot}?" or "Who are you?" or "Tell me about yourself")
-   - Response should establish identity, tone, core personality, and set expectations
-   - This is the character's "first impression" - make it memorable and authentic
-
-2. **Emotional/Personal Scenario**: User shares feelings, asks for advice, or engages emotionally (e.g., "I'm feeling really down today..." or "I'm having relationship problems..." or "Thanks for helping me, {bot}!")
-   - Response should demonstrate empathy, emotional intelligence, and how they handle vulnerability
-   - Show their relational depth and caring capacity (or lack thereof, if fitting)
-
-3. **Practical/Functional Scenario**: User asks for help, explanation, or practical advice (e.g., "Can you help me understand taxes?" or "How do I fix this problem?" or "What should I do about...")
-   - Response should demonstrate competence, knowledge, and helpfulness
-   - Show they can actually be useful beyond just personality
-
-**2 FREE SCENARIOS (Your creative choice):**
-
-4. **Free Dialogue #1**: Choose a scenario that showcases a unique character trait, interest, or quirk
-   - Examples: Questions about their specific interests/hobbies, unexpected situations, character-specific topics
-   - Make it distinctive and memorable - something that reveals depth
-
-5. **Free Dialogue #2**: Choose another scenario that demonstrates different aspects of the character
-   - Avoid repeating patterns from previous dialogues
-   - Could be humor, vulnerability, expertise, philosophical musings, or anything that adds dimension`;
+    // Google prefetches search results instead of exposing search tools, so the shared prompt
+    // is told not to instruct the model to call tools it was not given.
+    let prompt = buildPresetPrompt(params, { webSearchResultsProvided: true });
 
     if (searchInfo) {
       if (!searchInfo.includes("None found")) {
@@ -546,29 +480,6 @@ Use the web search information to accurately represent the character's personali
         prompt += `\n\nNote: This is an original character. Create a unique profile based on the provided description and image (if any).`;
       }
     }
-
-    if (params.existingPresetContext?.trim()) {
-      prompt += `\n\nExisting Character Data (from uploaded card/preset):
-Use this as reference material to transform, refine, or expand upon according to the user's description and instructions. Preserve the core character identity while incorporating requested changes.
-
-${params.existingPresetContext.trim()}`;
-    }
-
-    if (params.additionalInstructions?.trim()) {
-      prompt += `\n\nAdditional Instructions: ${params.additionalInstructions.trim()}`;
-    }
-
-    prompt += `\n\nIMPORTANT:
-- Respond with COMPLETE valid JSON only
-- Follow the exact schema provided with strict length limits
-- Exactly 6 items in attribute_list in the exact order specified above (each MAX ${maxPresetStringLength} characters)
-- Exactly 5 dialogue pairs following the 3 GUIDED + 2 FREE structure in the exact order specified
-- sample_dialogues_in: Keep user messages concise (1-3 sentences, MAX ${maxPresetStringLength} characters each)
-- sample_dialogues_out: Character responses can be longer and more detailed to showcase personality (MAX ${maxPresetStringLength} characters each)
-- No speaker name prefixes in any dialogue (no "User:", "Character:", "{user}:", "{bot}:", etc.)
-- "{user}" and "{bot}" are NAME placeholders, never pronoun replacements: use "{user}" only in place of the conversation partner's name and "{bot}" only in place of the character's own name
-- NEVER replace pronouns: write "you", "I", "me", "I'm" literally (e.g. write "I'm {bot}", never "{bot}'m {bot}")
-- All string lengths must not exceed ${maxPresetStringLength} characters per item`;
 
     const promptParts: Array<{
       text?: string;
@@ -645,89 +556,28 @@ ${params.existingPresetContext.trim()}`;
           continue; // Try fallback model if available
         }
 
-        let parsedResponse: {
-          attribute_list?: string[];
-          sample_dialogues_in?: string[];
-          sample_dialogues_out?: string[];
-        };
-
-        try {
-          parsedResponse = JSON.parse(responseText);
-        } catch (parseError) {
-          log.error("Failed to parse generation JSON:", parseError);
-          const parseErrorMsg = `Failed to parse character data: ${parseError instanceof Error ? parseError.message : "Invalid JSON format"}`;
-          lastError = {
-            error: createGoogleErrorMessage("INVALID_JSON", undefined, parseErrorMsg, locale),
-            errorType: "INVALID_JSON",
-          };
-          continue; // Try fallback model if available
-        }
-
-        if (
-          !parsedResponse.attribute_list ||
-          !parsedResponse.sample_dialogues_in ||
-          !parsedResponse.sample_dialogues_out
-        ) {
+        const decoded = extractPresetGenerationFields(responseText, JSON.parse, (parseError) =>
+          log.error("Google preset generation response could not be parsed", parseError),
+        );
+        if (!decoded.ok) {
+          const failureType = presetGenerationFailureErrorType(decoded.failure);
+          log.error(`Google preset generation rejected: ${decoded.failure.code}`);
           lastError = {
             error: createGoogleErrorMessage(
-              "INVALID_JSON",
+              failureType,
               undefined,
-              "Generated character data is incomplete. Please try again with different inputs.",
+              presetGenerationFailureMessage(decoded.failure),
               locale,
             ),
-            errorType: "INVALID_JSON",
+            errorType: failureType,
           };
           continue; // Try fallback model if available
         }
-
-        if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
-          lastError = {
-            error: createGoogleErrorMessage(
-              "VALIDATION_ERROR",
-              undefined,
-              `Generated attribute list must contain exactly 6 items (Description, Appearance, Personality, Likes, Dislikes, Behavioral Quirks). Received ${parsedResponse.attribute_list?.length || 0} items. Please try again.`,
-              locale,
-            ),
-            errorType: "VALIDATION_ERROR",
-          };
-          continue; // Try fallback model if available
-        }
-
-        if (!Array.isArray(parsedResponse.sample_dialogues_in) || parsedResponse.sample_dialogues_in.length !== 5) {
-          lastError = {
-            error: createGoogleErrorMessage(
-              "VALIDATION_ERROR",
-              undefined,
-              "Generated sample dialogues must contain exactly 5 user inputs. Please try again.",
-              locale,
-            ),
-            errorType: "VALIDATION_ERROR",
-          };
-          continue; // Try fallback model if available
-        }
-
-        if (!Array.isArray(parsedResponse.sample_dialogues_out) || parsedResponse.sample_dialogues_out.length !== 5) {
-          lastError = {
-            error: createGoogleErrorMessage(
-              "VALIDATION_ERROR",
-              undefined,
-              "Generated sample dialogues must contain exactly 5 character responses. Please try again.",
-              locale,
-            ),
-            errorType: "VALIDATION_ERROR",
-          };
-          continue; // Try fallback model if available
-        }
-
-        const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
-        const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
         const preset: PresetExportData = {
           tomori_nickname: params.characterName,
           trigger_words: [params.characterName],
-          attribute_list: parsedResponse.attribute_list,
-          sample_dialogues_in: sanitizedDialoguesIn,
-          sample_dialogues_out: sanitizedDialoguesOut,
+          ...decoded.preset,
         };
 
         log.success(`Preset generation successful with model: ${MODEL_NAME}`);

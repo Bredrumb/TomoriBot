@@ -264,12 +264,6 @@ Use \`/config\` > Models > Switch Models to switch to a model that supports stru
 1. Use \`/config\` > Models > Switch Models to set a dedicated vision model, OR
 2. Use \`/config\` > Models > Switch Models to switch to a vision-capable model, OR
 3. Remove the image and regenerate without it`,
-      vision_model_provider_unsupported_title: `🔴 Vision Model Provider Unsupported`,
-      vision_model_provider_unsupported_description: `Your vision model (**{vision_model_name}**) is on provider **{vision_provider}**, which does not support persona preset generation.
-
-**Next steps:**
-1. Use \`/config\` > Models > Switch Models to set a vision model from a supported provider (Google, OpenRouter, DeepSeek, Z.ai, Custom, NVIDIA NIM), OR
-2. Use \`/config\` > Models > Switch Models to switch your primary model to one that supports both vision and preset generation`,
       web_search_tools_required_title: `🔴 Web Search Unavailable`,
       web_search_tools_required_description: `You selected web search, but the current model (**{model_name}**) does not support **TOOLS**.
 
@@ -278,6 +272,8 @@ Use \`/config\` > Models > Switch Models to switch to a model that supports stru
 2. Regenerate without web search (choose "No" when asked)`,
       api_key_decrypt_failed_title: `🔴 API Key Error`,
       api_key_decrypt_failed_description: `Failed to decrypt the active provider credentials. Please reconfigure them using \`/providers\`.`,
+      vision_credentials_unavailable_title: `🔴 Vision Model Credentials Unavailable`,
+      vision_credentials_unavailable_description: `Your vision model (**{vision_model_name}**) runs on provider **{vision_provider}**, but its saved API key could not be used to describe the image. Reconfigure that provider's credentials with \`/providers\`, or check \`/config\` > Models.`,
       invalid_image_title: `🔴 Invalid Image`,
       invalid_image_description: `Please upload a valid image file (PNG, JPG, JPEG, etc.).`,
       error_file_too_large: `Avatar image must be {max_size}MB or smaller.`,
@@ -287,10 +283,19 @@ Use \`/config\` > Models > Switch Models to switch to a model that supports stru
       processing_description: `This may take 1-2 minutes. Please wait while I generate the character...
 
 This may produce unexpected results. You can regenerate if needed.`,
+      captioning_title: `Describing Your Avatar...`,
+      captioning_description: `Your primary model cannot see images, so I am asking your vision model (**{model_name}**) to describe the uploaded avatar first. Your primary model then writes the personality from that description. This may take 1-2 minutes.`,
       generation_failed_title: `🔴 Generation Failed`,
       generation_failed_description: `Failed to generate personality: {error}
 
 Please try again with different inputs or check your API key.`,
+      vision_caption_failed_title: `🔴 Avatar Description Failed`,
+      vision_caption_failed_description: `Your vision model (**{vision_model_name}** on {vision_provider}) could not describe the uploaded avatar.
+
+**Next steps:**
+1. Check that provider's API key with \`/providers\`, OR
+2. Remove the image and regenerate, OR
+3. Set a different vision model under \`/config\` > Models`,
       validation_failed_title: `🔴 Validation Failed`,
       validation_failed_description: `The generated personality data failed validation. Please try again.`,
       image_processing_failed_title: `🔴 Image Processing Failed`,
@@ -312,7 +317,7 @@ Or press the Import button`,
       success_next_steps_description_dm: `1. Download the attached PNG file
 2. Use \`/persona import\` with the PNG
 3. Run \`/refresh\` to apply my new personality`,
-      success_next_steps_footer: `You may edit me more with \`/persona\` commands after.`,
+      success_next_steps_footer: `You may customize me further under \`/config\` after.`,
       avatar_update_skipped_dm: `Please note that avatar and nickname updates are not available to import in Direct Messages.`,
     },
     create: {
@@ -363,7 +368,7 @@ Or press the Import button`,
       success_next_steps_description: `1. Download the attached PNG file on the right
 2. Use \`/persona import\` with the PNG
 Or press the Import button`,
-      success_next_steps_footer: `You may edit me more with \`/persona\` commands after.`,
+      success_next_steps_footer: `You may customize me further under \`/config\` after.`,
       avatar_update_skipped_dm: `Please note that avatar and nickname updates are not available in Direct Messages.`,
     },
   },

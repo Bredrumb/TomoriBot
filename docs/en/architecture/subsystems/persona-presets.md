@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Persona Presets"
 ---
 
@@ -126,6 +126,24 @@ uses the pre-import snapshot for storage cleanup. A snapshot or row-delete failu
 import, while a storage-file failure is reported as partial cleanup. Shared `presets/` references are skipped.
 
 `/persona generate` emits the canonical six generated attributes and marks only the generated Appearance attribute public. `/persona create` emits an explicit all-private flag array because its single freeform description is not guaranteed to be an appearance-only field. SillyTavern card conversion also defaults converted attributes to private because ST cards do not carry Tomori public visibility metadata.
+
+### Image input and the vision caption
+
+`/persona generate` accepts an optional uploaded image. The primary model always performs generation, so its provider, key, and codename stay paired for the whole flow. What changes is how the image reaches it:
+
+- **No image**: text-only generation, primary model throughout.
+- **Image, primary model sees images** (`tomoriState.llm.sees_images`): the image goes to the primary model's own generation call.
+- **Image, primary model cannot see images, a vision model is configured**: a separate caption call asks the vision model to describe the avatar, and only that text reaches the primary model's generation call. The image itself is never sent to the primary model.
+- **Image, no usable vision anywhere**: generation fails immediately with a message naming the missing capability, unless the PNG carried a card or preset, whose extracted text replaces the need for vision.
+- **Image carrying an extracted card or preset**: the extracted data only substitutes for vision when no model can see the image. If either model can, the image still wins: the card is a text approximation, while the upload is the character the user actually chose, so the two travel together.
+
+`planImageHandling()` in the command owns this precedence, and its unit tests are what keep the cases from drifting.
+
+The caption travels in `GeneratePresetParams.appearanceDescription`, which is a distinct prompt section from `existingPresetContext`: the prompt labels one as observed appearance and the other as an uploaded card's data, so the model does not read a caption as structured preset input.
+
+Both this path and `AnalyzeImageTool` share `analyzeImageWithVisionModel()` in `src/utils/provider/visionCaption.ts`, which reconciles `resolveCapabilityCredentials` against the cached `vision_llm` row. The vision model may be saved under a different provider than the primary model, each with its own encrypted key, and the reconciliation is what keeps the transport (chosen from the resolved credentials) and the model codename sent to it describing the same model. The primary generation call is unaffected by that pairing problem, because it never leaves the primary model's own credentials.
+
+The captioning request and its wall-clock ceiling are separate budgets from the chat reply caps (`VISION_CAPTION_MAX_OUTPUT_TOKENS`, `VISION_CAPTION_TIMEOUT_MS`), because shortening a chat reply must not truncate the description a persona is generated from.
 
 ### Import Now button
 

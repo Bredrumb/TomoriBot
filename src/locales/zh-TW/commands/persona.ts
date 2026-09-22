@@ -264,12 +264,6 @@ export default {
 1. 用 \`/config\` > 模型 > 切換模型設定專門的視覺模型，或
 2. 用 \`/config\` > 模型 > 切換模型切換到支援視覺的模型，或
 3. 移除圖片後重新生成`,
-      vision_model_provider_unsupported_title: `🔴 不支援視覺模型的供應商`,
-      vision_model_provider_unsupported_description: `你的視覺模型（**{vision_model_name}**）位於供應商 **{vision_provider}**，而該供應商不支援生成人格預設集。
-
-**接下來可以這樣做：**
-1. 用 \`/config\` > 模型 > 切換模型，從支援的供應商（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）設定視覺模型，或
-2. 用 \`/config\` > 模型 > 切換模型，把主要模型換成同時支援視覺與預設集生成的模型`,
       web_search_tools_required_title: `🔴 無法使用網路搜尋`,
       web_search_tools_required_description: `你選擇了網路搜尋，但目前的模型（**{model_name}**）不支援 **TOOLS**。
 
@@ -278,6 +272,8 @@ export default {
 2. 不要網路搜尋，重新生成一次（被問到時選「否」）`,
       api_key_decrypt_failed_title: `🔴 API 金鑰錯誤`,
       api_key_decrypt_failed_description: `無法解密使用中供應商的憑證。請用 \`/providers\` 重新設定。`,
+      vision_credentials_unavailable_title: `🔴 視覺模型的憑證不可用`,
+      vision_credentials_unavailable_description: `你的視覺模型（**{vision_model_name}**）在供應商 **{vision_provider}** 上執行，但無法用它的 API 金鑰描述圖片。請用 \`/providers\` 重新設定該供應商的憑證，或到 \`/config\` > 模型 檢查一下。`,
       invalid_image_title: `🔴 圖片無效`,
       invalid_image_description: `請上傳有效的圖片檔（PNG、JPG、JPEG 等）。`,
       error_file_too_large: `頭像圖片必須是 {max_size}MB 以內。`,
@@ -287,10 +283,19 @@ export default {
       processing_description: `這可能需要 1 到 2 分鐘。請稍等，我正在生成這個角色...
 
 結果可能不如預期。需要的話可以重新生成。`,
+      captioning_title: `正在描述你的頭像...`,
+      captioning_description: `你的主要模型無法辨識圖片，所以我會先請視覺模型（**{model_name}**）描述你上傳的頭像。接著主要模型會根據這段描述來生成人格。這可能需要 1-2 分鐘。`,
       generation_failed_title: `🔴 生成失敗`,
       generation_failed_description: `人格生成失敗：{error}
 
 請換一組輸入再試一次，或檢查你的 API 金鑰。`,
+      vision_caption_failed_title: `🔴 頭像描述失敗`,
+      vision_caption_failed_description: `你的視覺模型（**{vision_model_name}**，{vision_provider}）無法描述上傳的頭像。
+
+**後續步驟：**
+1. 用 \`/providers\` 檢查該供應商的 API 金鑰，或
+2. 移除圖片後重新生成，或
+3. 在 \`/config\` > 模型 中換一個視覺模型`,
       validation_failed_title: `🔴 驗證失敗`,
       validation_failed_description: `生成的人格資料沒有通過驗證。請再試一次。`,
       image_processing_failed_title: `🔴 圖片處理失敗`,
@@ -312,7 +317,7 @@ export default {
       success_next_steps_description_dm: `1. 下載附加的 PNG 檔
 2. 用這個 PNG 執行 \`/persona import\`
 3. 執行 \`/refresh\` 套用我的新人格`,
-      success_next_steps_footer: `之後你還可以用 \`/persona\` 相關指令繼續編輯我。`,
+      success_next_steps_footer: `之後你可以在 \`/config\` 中進一步自訂我。`,
       avatar_update_skipped_dm: `請注意，私訊中無法匯入頭像與暱稱更新。`,
     },
     create: {
@@ -363,7 +368,7 @@ export default {
       success_next_steps_description: `1. 下載右側附加的 PNG 檔
 2. 用這個 PNG 執行 \`/persona import\`
 或按下「匯入」按鈕`,
-      success_next_steps_footer: `之後你還可以用 \`/persona\` 相關指令繼續編輯我。`,
+      success_next_steps_footer: `之後你可以在 \`/config\` 中進一步自訂我。`,
       avatar_update_skipped_dm: `請注意，私訊中無法匯入頭像與暱稱更新。`,
     },
   },

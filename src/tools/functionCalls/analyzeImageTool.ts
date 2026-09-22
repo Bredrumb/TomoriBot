@@ -4,35 +4,21 @@
  * Only available when: (1) a vision model is configured AND (2) the active chat model cannot see images.
  */
 
-import { GoogleGenAI } from "@google/genai";
-import type { Part } from "@google/genai";
 import { escapeMarkdown } from "discord.js";
 import { BaseTool } from "@/types/tool/interfaces";
 import type { ToolContext, ToolResult, ToolParameterSchema } from "@/types/tool/interfaces";
 import { log, ColorCode } from "@/utils/misc/logger";
 import { sendToolProgressNotice } from "@/utils/discord/toolProgressNotice";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
-import { llmModelRepo } from "@/utils/db/repositories";
-import {
-  toZaiApiModelName,
-  ZAI_CODING_CHAT_COMPLETIONS_URL,
-  ZAI_GENERAL_CHAT_COMPLETIONS_URL,
-} from "@/providers/zai/zaiShared";
-import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
-import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import {
+  analyzeImageWithVisionModel,
+  resolveVisionApiModelName,
+  type VisionImage,
+} from "@/utils/provider/visionCaption";
 import { downloadDiscoveredImage, resolveMessageImageUrls } from "@/utils/image/imageExtractor";
 
-/**
- * Provider-to-chat-completions-URL mapping for OpenAI-compatible providers.
- * Google uses its own SDK and is handled separately.
- */
-const PROVIDER_CHAT_COMPLETIONS_URLS: Record<string, string> = {
-  openrouter: "https://openrouter.ai/api/v1/chat/completions",
-  zai: ZAI_GENERAL_CHAT_COMPLETIONS_URL,
-  zaicoding: ZAI_CODING_CHAT_COMPLETIONS_URL,
-  deepseek: "https://api.deepseek.com/chat/completions",
-};
+export { resolveVisionApiModelName } from "@/utils/provider/visionCaption";
 
 /** Discord message ID pattern (17-19 digit snowflake) */
 const DISCORD_ID_PATTERN = /^\d{17,19}$/;
@@ -50,26 +36,6 @@ const VISION_ANALYSIS_TIMEOUT_MS =
   Number.isFinite(parsedVisionAnalysisTimeoutMs) && parsedVisionAnalysisTimeoutMs > 0
     ? parsedVisionAnalysisTimeoutMs
     : 60_000;
-
-/**
- * Resolves the model identifier the vision backend will accept.
- *
- * A custom endpoint's `llm_codename` is a local catalog value; the backend model string lives on
- * the endpoint row, so sending the catalog value can be rejected as an unknown model. This mirrors the
- * text path's resolution in `customProvider`, which falls back to the codename for backends
- * that ignore the field entirely (KoboldCpp and similar).
- */
-export function resolveVisionApiModelName(
-  provider: string,
-  llmCodename: string,
-  customEndpointModelName?: string | null,
-): string {
-  if (provider === "zai" || provider === "zaicoding") {
-    return toZaiApiModelName(llmCodename);
-  }
-
-  return customEndpointModelName?.trim() || llmCodename;
-}
 
 /**
  * Built-in tool that analyzes images using a dedicated vision model.
@@ -130,9 +96,8 @@ export class AnalyzeImageTool extends BaseTool {
    * Execute the image analysis.
    * 1. Validate parameters and context
    * 2. Extract images from the Discord message
-   * 3. Decrypt the API key
-   * 4. Route the images to the vision model's API
-   * 5. Return the analysis result
+   * 3. Route the images to the vision model, which owns its own credential resolution
+   * 4. Return the analysis result
    */
   async execute(args: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
     const rawMediaId = args.media_id as string;
@@ -157,31 +122,6 @@ export class AnalyzeImageTool extends BaseTool {
     const analysisSignal = context.abortSignal ? AbortSignal.any([context.abortSignal, timeoutSignal]) : timeoutSignal;
 
     try {
-      const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "vision", {
-        userId: context.internalUserId ?? null,
-      });
-      const visionLlmId = getResolvedCapabilityModelId(creds, "vision") ?? context.tomoriState.config.vision_llm_id;
-      const visionLlm =
-        visionLlmId === context.tomoriState.vision_llm?.llm_id
-          ? context.tomoriState.vision_llm
-          : visionLlmId
-            ? await llmModelRepo.loadById(visionLlmId)
-            : null;
-
-      if (!visionLlm) {
-        return {
-          success: false,
-          error: "No vision model configured. Use /model vision to set one.",
-        };
-      }
-
-      const provider = visionLlm.llm_provider.toLowerCase();
-      const apiModelName = resolveVisionApiModelName(
-        provider,
-        visionLlm.llm_codename,
-        creds.customEndpoint?.model_name,
-      );
-
       await sendToolProgressNotice(
         context,
         "image_analysis",
@@ -189,7 +129,14 @@ export class AnalyzeImageTool extends BaseTool {
           titleKey: "tools.vision.analyzing_title",
           descriptionKey: "tools.vision.analyzing_description",
           descriptionVars: {
-            model: escapeMarkdown(apiModelName),
+            // The resolved call resolves its own model, but it cannot report which one before
+            // the first request, so this names the cached row the user configured.
+            model: escapeMarkdown(
+              resolveVisionApiModelName(
+                context.tomoriState.vision_llm?.llm_provider ?? "",
+                context.tomoriState.vision_llm?.llm_codename ?? "",
+              ),
+            ),
           },
           footerKey: "tools.vision.analyzing_footer",
           color: ColorCode.INFO,
@@ -197,29 +144,36 @@ export class AnalyzeImageTool extends BaseTool {
         "AnalyzeImageTool",
       );
 
-      // Extract images from the Discord message
       const images = await this.extractImagesFromMessage(messageId, context, analysisSignal);
 
-      const apiKey = creds.apiKey;
-
-      let analysisResult: string;
-
-      if (provider === "google") {
-        analysisResult = await this.callGoogleVision(apiKey, apiModelName, images, prompt, analysisSignal);
-      } else {
-        // OpenAI-compatible providers (openrouter, zai, zaicoding, deepseek, custom)
-        const endpointUrl = this.getEndpointUrl(provider, context, creds.customEndpoint?.endpoint_url ?? null);
-        analysisResult = await this.callOpenAICompatibleVision(
-          apiKey,
-          apiModelName,
-          endpointUrl,
-          images,
+      // The tool accepts one image per call, so a multi-image message is described one at a
+      // time and joined: the caller asked for a reading of the message, not of its first file.
+      const readings: string[] = [];
+      for (const image of images) {
+        const result = await analyzeImageWithVisionModel({
+          serverId: context.tomoriState.server_id,
+          image,
           prompt,
-          analysisSignal,
-        );
+          cachedVisionLlm: context.tomoriState.vision_llm,
+          userId: context.internalUserId ?? null,
+          abortSignal: analysisSignal,
+          // This tool owns the deadline it advertises, so the shared default must not become a
+          // second, shorter one that silently overrides VISION_ANALYSIS_TIMEOUT_MS.
+          timeoutMs: VISION_ANALYSIS_TIMEOUT_MS,
+        });
+
+        if (!result.ok) {
+          return {
+            success: false,
+            error: `Image analysis failed: ${describeVisionFailure(result.failure)}`,
+          };
+        }
+
+        readings.push(result.text ?? "");
       }
 
-      log.info(`Vision analysis completed: ${images.length} image(s) analyzed via ${provider}/${apiModelName}`);
+      const analysisResult = readings.join("\n\n");
+      log.info(`Vision analysis completed: ${images.length} image(s) analyzed`);
 
       return {
         success: true,
@@ -242,129 +196,6 @@ export class AnalyzeImageTool extends BaseTool {
   }
 
   /**
-   * Resolve the chat completions endpoint URL for a given provider.
-   * Uses the static map for known providers, falls back to custom endpoint.
-   * @param context - Tool context (for custom endpoint URL)
-   * @returns Chat completions URL
-   */
-  private getEndpointUrl(provider: string, context: ToolContext, customEndpointUrl?: string | null): string {
-    const knownUrl = PROVIDER_CHAT_COMPLETIONS_URLS[provider];
-    if (knownUrl) return knownUrl;
-
-    const customUrl = customEndpointUrl ?? context.tomoriState.config.custom_endpoint_url;
-    if (customUrl) {
-      return customUrl.endsWith("/chat/completions") ? customUrl : `${customUrl}/chat/completions`;
-    }
-
-    // Fallback: OpenAI default
-    return "https://api.openai.com/v1/chat/completions";
-  }
-
-  /**
-   * Call an OpenAI-compatible vision API (Z.ai, OpenRouter, DeepSeek, Custom).
-   * Sends images as base64-encoded data URLs in the content array.
-   * @param images - Array of base64-encoded image data
-   * @param signal - Combined turn-cancellation and vision-analysis timeout signal
-   */
-  private async callOpenAICompatibleVision(
-    apiKey: string,
-    model: string,
-    endpointUrl: string,
-    images: Array<{ mimeType: string; data: string }>,
-    prompt: string,
-    signal: AbortSignal,
-  ): Promise<string> {
-    const contentParts: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
-
-    for (const image of images) {
-      contentParts.push({
-        type: "image_url",
-        image_url: {
-          url: `data:${image.mimeType};base64,${image.data}`,
-        },
-      });
-    }
-
-    const requestBody = {
-      model,
-      messages: [
-        {
-          role: "user",
-          content: contentParts,
-        },
-      ],
-      max_tokens: 1024,
-    };
-
-    const response = await fetchUserRemoteUrl(endpointUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "Unknown error");
-      throw new Error(`Vision API returned ${response.status}: ${errorText}`);
-    }
-
-    const data = (await response.json()) as {
-      choices?: Array<{
-        message?: { content?: string };
-      }>;
-    };
-
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error("Vision API returned an empty response. The model may not support image inputs.");
-    }
-
-    return content;
-  }
-
-  /**
-   * Call Google GenAI vision API using the official SDK.
-   * @param model - Model name (e.g., "gemini-2.0-flash")
-   * @param images - Array of base64-encoded image data
-   * @param signal - Combined turn-cancellation and vision-analysis timeout signal
-   */
-  private async callGoogleVision(
-    apiKey: string,
-    model: string,
-    images: Array<{ mimeType: string; data: string }>,
-    prompt: string,
-    signal: AbortSignal,
-  ): Promise<string> {
-    const genAI = new GoogleGenAI({ apiKey });
-
-    const parts: Part[] = [{ text: prompt }];
-    for (const image of images) {
-      parts.push({
-        inlineData: {
-          data: image.data,
-          mimeType: image.mimeType,
-        },
-      });
-    }
-
-    const result = await genAI.models.generateContent({
-      model,
-      contents: [{ role: "user", parts }],
-      config: { abortSignal: signal },
-    });
-
-    const text = result.text;
-    if (!text) {
-      throw new Error("Google Vision API returned an empty response.");
-    }
-
-    return text;
-  }
-
-  /**
    * Extract images from a Discord message and convert to base64 format.
    *
    * Discovery is delegated to the shared {@link resolveMessageImageUrls} helper,
@@ -379,14 +210,14 @@ export class AnalyzeImageTool extends BaseTool {
     messageId: string,
     context: ToolContext,
     signal: AbortSignal,
-  ): Promise<Array<{ mimeType: string; data: string }>> {
+  ): Promise<VisionImage[]> {
     // Discover images on the message, or on its direct reply target when the
     //    reply itself is text-only.
     const { imageUrls, sourceMessageId } = await resolveMessageImageUrls(messageId, context);
 
     log.info(`Found ${imageUrls.length} image(s) in message ${sourceMessageId} for vision analysis`);
 
-    const inlineDataArray: Array<{ mimeType: string; data: string }> = [];
+    const inlineDataArray: VisionImage[] = [];
     let totalBytes = 0;
 
     for (const imageInfo of imageUrls) {
@@ -427,5 +258,23 @@ export class AnalyzeImageTool extends BaseTool {
     }
 
     return inlineDataArray;
+  }
+}
+
+/** Turns a vision failure into the reason text this tool reports to the calling model. */
+function describeVisionFailure(failure: { reason: string; detail?: string } | undefined): string {
+  if (!failure) return "unknown error";
+
+  switch (failure.reason) {
+    case "credentials_unavailable":
+      return "no usable credentials for the configured vision model";
+    case "no_vision_model":
+      return "No vision model configured. Use /model vision to set one.";
+    case "unsupported_provider":
+      return failure.detail ?? "the configured vision provider has no supported transport";
+    case "empty_response":
+      return "the vision model returned an empty response";
+    default:
+      return failure.detail ?? "the vision request failed";
   }
 }

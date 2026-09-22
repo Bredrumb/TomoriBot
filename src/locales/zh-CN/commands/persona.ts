@@ -264,12 +264,6 @@ export default {
 1. 到 \`/config\` > 模型 > 切换模型，指定一个专用的视觉模型，或者
 2. 到 \`/config\` > 模型 > 切换模型，换成一个支持视觉的模型，或者
 3. 去掉图片，重新生成`,
-      vision_model_provider_unsupported_title: `🔴 视觉模型的提供方不受支持`,
-      vision_model_provider_unsupported_description: `你的视觉模型（**{vision_model_name}**）在提供方 **{vision_provider}** 上，而这个提供方不支持生成人格预设集。
-
-**接下来可以这样做：**
-1. 到 \`/config\` > 模型 > 切换模型，从受支持的提供方（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）里选一个视觉模型，或者
-2. 到 \`/config\` > 模型 > 切换模型，把主模型换成同时支持视觉和生成预设集的模型`,
       web_search_tools_required_title: `🔴 网络搜索不可用`,
       web_search_tools_required_description: `你选择了网络搜索，但当前模型（**{model_name}**）不支持 **TOOLS**。
 
@@ -278,6 +272,8 @@ export default {
 2. 去掉网络搜索重新生成（被问到时选「否」）`,
       api_key_decrypt_failed_title: `🔴 API 密钥错误`,
       api_key_decrypt_failed_description: `无法解密当前提供方的凭据。请用 \`/providers\` 重新配置。`,
+      vision_credentials_unavailable_title: `🔴 视觉模型的凭据不可用`,
+      vision_credentials_unavailable_description: `你的视觉模型（**{vision_model_name}**）运行在提供方 **{vision_provider}** 上，但无法用它的 API 密钥描述图片。请用 \`/providers\` 重新配置那个提供方的凭据，或到 \`/config\` > 模型 检查一下。`,
       invalid_image_title: `🔴 图像无效`,
       invalid_image_description: `请上传有效的图像文件（PNG、JPG、JPEG 等）。`,
       error_file_too_large: `头像图片不能超过 {max_size}MB。`,
@@ -287,10 +283,19 @@ export default {
       processing_description: `这可能需要 1-2 分钟。请稍等，我正在生成角色……
 
 结果可能不符合预期，需要的话可以重新生成。`,
+      captioning_title: `正在描述你的头像...`,
+      captioning_description: `你的主模型无法识别图片，所以我会先请视觉模型（**{model_name}**）描述你上传的头像。然后主模型会根据这段描述来生成人格。这可能需要 1-2 分钟。`,
       generation_failed_title: `🔴 生成失败`,
       generation_failed_description: `人格生成失败：{error}
 
 请换个输入重试，或检查你的 API 密钥。`,
+      vision_caption_failed_title: `🔴 头像描述失败`,
+      vision_caption_failed_description: `你的视觉模型（**{vision_model_name}**，{vision_provider}）无法描述上传的头像。
+
+**后续步骤：**
+1. 用 \`/providers\` 检查那个提供方的 API 密钥，或
+2. 去掉图片后重新生成，或
+3. 在 \`/config\` > 模型 中换一个视觉模型`,
       validation_failed_title: `🔴 校验失败`,
       validation_failed_description: `生成的人格数据没有通过校验，请重试。`,
       image_processing_failed_title: `🔴 图像处理失败`,
@@ -312,7 +317,7 @@ export default {
       success_next_steps_description_dm: `1. 下载附加的 PNG 文件
 2. 用 \`/persona import\` 导入这个 PNG
 3. 运行 \`/refresh\` 让我用上新人格`,
-      success_next_steps_footer: `之后你还可以用 \`/persona\` 相关指令继续修改我。`,
+      success_next_steps_footer: `之后你可以在 \`/config\` 中进一步自定义我。`,
       avatar_update_skipped_dm: `请注意，私信（DM）里无法导入头像和昵称的更新。`,
     },
     create: {
@@ -363,7 +368,7 @@ export default {
       success_next_steps_description: `1. 在右边下载附加的 PNG 文件
 2. 用 \`/persona import\` 导入这个 PNG
 或者按下「导入」按钮`,
-      success_next_steps_footer: `之后你还可以用 \`/persona\` 相关指令继续修改我。`,
+      success_next_steps_footer: `之后你可以在 \`/config\` 中进一步自定义我。`,
       avatar_update_skipped_dm: `请注意，私信（DM）里无法导入头像和昵称的更新。`,
     },
   },

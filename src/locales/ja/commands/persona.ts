@@ -264,12 +264,6 @@ export default {
 1. \`/config\` > モデル > モデルの切り替えを使用して専用ビジョンモデルを設定する、または
 2. \`/config\` > モデル > モデルの切り替えを使用してビジョン対応モデルに切り替える、または
 3. 画像を削除して画像なしで再生成する`,
-      vision_model_provider_unsupported_title: `🔴 ビジョンモデルのプロバイダー非対応`,
-      vision_model_provider_unsupported_description: `ビジョンモデル（**{vision_model_name}**）はプロバイダー **{vision_provider}** に設定されていますが、このプロバイダーはペルソナプリセット生成に対応していません。
-
-**次のステップ:**
-1. \`/config\` > モデル > モデルの切り替えを使用して対応プロバイダー（Google、OpenRouter、DeepSeek、Z.ai、Custom、NVIDIA NIM）のビジョンモデルを設定する、または
-2. \`/config\` > モデル > モデルの切り替えを使用してビジョンとプリセット生成の両方に対応したプライマリモデルに切り替える`,
       web_search_tools_required_title: `🔴 ウェブ検索を利用できません`,
       web_search_tools_required_description: `ウェブ検索が選択されましたが、現在のモデル（**{model_name}**）は**ツール**に対応していません。
 
@@ -278,6 +272,8 @@ export default {
 2. ウェブ検索なしで再生成する（質問されたら「いいえ」を選択）`,
       api_key_decrypt_failed_title: `🔴 APIキーエラー`,
       api_key_decrypt_failed_description: `有効なプロバイダー認証情報の復号化に失敗しました。\`/providers\`で再設定してください。`,
+      vision_credentials_unavailable_title: `🔴 ビジョンモデルの認証情報を利用できません`,
+      vision_credentials_unavailable_description: `ビジョンモデル（**{vision_model_name}**）はプロバイダー **{vision_provider}** で動作していますが、保存されたAPIキーを画像の説明に使用できませんでした。\`/providers\`でそのプロバイダーの認証情報を再設定するか、\`/config\` > モデルを確認してください。`,
       invalid_image_title: `🔴 無効な画像`,
       invalid_image_description: `有効な画像ファイル(PNG、JPG、JPEGなど)をアップロードしてください。`,
       error_file_too_large: `アバター画像は{max_size}MB以下である必要があります。`,
@@ -287,10 +283,19 @@ export default {
       processing_description: `これには1～2分かかる場合があります。キャラクターを生成していますので、お待ちください...
 
 これは予期しない結果が生成される場合があります。必要に応じて再生成できます。`,
+      captioning_title: `画像を確認しています...`,
+      captioning_description: `プライマリモデルは画像を認識できないため、まずビジョンモデル（**{model_name}**）にアップロードされた画像を説明してもらいます。その説明をもとにプライマリモデルが人格を生成します。1〜2分ほどかかる場合があります。`,
       generation_failed_title: `🔴 生成に失敗しました`,
       generation_failed_description: `人格の生成に失敗しました：{error}
 
 異なる入力で再度お試しいただくか、APIキーを確認してください。`,
+      vision_caption_failed_title: `🔴 画像の説明に失敗しました`,
+      vision_caption_failed_description: `ビジョンモデル（**{vision_model_name}**、{vision_provider}）がアップロードされた画像を説明できませんでした。
+
+**次の手順:**
+1. \`/providers\` でそのプロバイダーのAPIキーを確認する、または
+2. 画像を外して再生成する、または
+3. \`/config\` > モデルで別のビジョンモデルを設定する`,
       validation_failed_title: `🔴 検証に失敗しました`,
       validation_failed_description: `生成された人格データの検証に失敗しました。もう一度お試しください。`,
       image_processing_failed_title: `🔴 画像処理に失敗しました`,
@@ -313,7 +318,7 @@ export default {
       success_next_steps_description_dm: `1. 添付されたPNGファイルをダウンロード
 2. PNGファイルと共に\`/persona import\`を使用
 3. \`/refresh\`を実行して新しい人格を適用`,
-      success_next_steps_footer: `あとで\`/persona\`でさらに編集できます。`,
+      success_next_steps_footer: `あとで\`/config\`でさらにカスタマイズできます。`,
       avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでインポートできませんのでご注意ください。`,
     },
     create: {
@@ -365,7 +370,7 @@ export default {
 2. PNGファイルと共に\`/persona import\`を使用
 3. \`/refresh\`を実行して新しい人格を適用
 または「今すぐインポート」ボタンを押す`,
-      success_next_steps_footer: `あとで\`/persona\`でさらに編集できます。`,
+      success_next_steps_footer: `あとで\`/config\`でさらにカスタマイズできます。`,
       avatar_update_skipped_dm: `アバターとニックネームの更新はダイレクトメッセージでは利用できませんのでご注意ください。`,
     },
   },

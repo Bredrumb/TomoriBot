@@ -758,16 +758,6 @@ export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRender
         }),
       },
       {
-        id: "models",
-        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.models),
-        customId: buildPersonalConfigRouteId({
-          action: "category",
-          locale,
-          category: "models",
-          page: DEFAULT_PAGE_FOR_CATEGORY.models,
-        }),
-      },
-      {
         id: "advanced",
         label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.advanced),
         customId: buildPersonalConfigRouteId({
@@ -775,6 +765,16 @@ export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRender
           locale,
           category: "advanced",
           page: DEFAULT_PAGE_FOR_CATEGORY.advanced,
+        }),
+      },
+      {
+        id: "models",
+        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.models),
+        customId: buildPersonalConfigRouteId({
+          action: "category",
+          locale,
+          category: "models",
+          page: DEFAULT_PAGE_FOR_CATEGORY.models,
         }),
       },
     ],

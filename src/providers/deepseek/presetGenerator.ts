@@ -11,14 +11,18 @@ import { executeTool } from "@/tools/toolRegistry";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provider/featureInterfaces";
 import { getDeepseekToolAdapter } from "@/providers/deepseek/deepseekToolAdapter";
-import { sanitizeSampleDialogueText } from "@/providers/google/presetGenerator";
 import {
   buildPresetResponseSchema,
   buildPresetPrompt,
   buildToolErrorResult,
+  extractPresetGenerationFields,
+  PRESET_SCHEMA_MISS_CODES,
+  presetGenerationFailureErrorType,
+  presetGenerationFailureMessage,
   type PresetMessage,
   type PresetToolCall,
 } from "@/providers/utils/presetCommon";
+import { resolvePresetGenerationMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 
@@ -76,12 +80,13 @@ export async function generatePresetFromPromptDeepseek(
 
   const maxToolRounds = options.maxToolRounds ?? 3;
   let toolRounds = 0;
+  const maxOutputTokens = resolvePresetGenerationMaxOutputTokens({ configured: params.maxOutputTokens });
 
   while (true) {
     const body: Record<string, unknown> = {
       model: options.model,
       messages,
-      max_tokens: 8192,
+      max_tokens: maxOutputTokens,
       response_format: { type: "json_object" },
       stream: false,
     };
@@ -215,59 +220,23 @@ export async function generatePresetFromPromptDeepseek(
       };
     }
 
-    let parsedResponse: {
-      attribute_list?: string[];
-      sample_dialogues_in?: string[];
-      sample_dialogues_out?: string[];
-    };
-
-    try {
-      parsedResponse = JSON.parse(responseText);
-    } catch (parseError) {
-      log.error("DeepSeek preset generation JSON parse failed", parseError as Error);
+    const decoded = extractPresetGenerationFields(responseText, JSON.parse, (parseError) =>
+      log.error("DeepSeek preset generation response could not be parsed", parseError),
+    );
+    if (!decoded.ok) {
+      log.error(`DeepSeek preset generation rejected: ${decoded.failure.code}`);
       return {
-        error: "Invalid JSON response from DeepSeek.",
-        errorType: "INVALID_JSON",
+        error: PRESET_SCHEMA_MISS_CODES.includes(decoded.failure.code)
+          ? presetGenerationFailureMessage(decoded.failure)
+          : "Invalid JSON response from DeepSeek.",
+        errorType: presetGenerationFailureErrorType(decoded.failure),
       };
     }
-
-    if (!parsedResponse.attribute_list || !parsedResponse.sample_dialogues_in || !parsedResponse.sample_dialogues_out) {
-      return {
-        error: "Generated character data is incomplete. Please try again.",
-        errorType: "INVALID_JSON",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.attribute_list) || parsedResponse.attribute_list.length !== 6) {
-      return {
-        error: "Generated attribute list must contain exactly 6 items. Please try again.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_in) || parsedResponse.sample_dialogues_in.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 user inputs.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    if (!Array.isArray(parsedResponse.sample_dialogues_out) || parsedResponse.sample_dialogues_out.length !== 5) {
-      return {
-        error: "Generated sample dialogues must contain exactly 5 character responses.",
-        errorType: "VALIDATION_ERROR",
-      };
-    }
-
-    const sanitizedDialoguesIn = parsedResponse.sample_dialogues_in.map(sanitizeSampleDialogueText);
-    const sanitizedDialoguesOut = parsedResponse.sample_dialogues_out.map(sanitizeSampleDialogueText);
 
     const preset = {
       tomori_nickname: params.characterName,
       trigger_words: [params.characterName],
-      attribute_list: parsedResponse.attribute_list,
-      sample_dialogues_in: sanitizedDialoguesIn,
-      sample_dialogues_out: sanitizedDialoguesOut,
+      ...decoded.preset,
     };
 
     log.success(`DeepSeek preset generation successful for ${params.characterName}`);
