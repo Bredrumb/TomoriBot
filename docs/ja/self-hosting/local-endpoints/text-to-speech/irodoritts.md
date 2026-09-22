@@ -116,6 +116,18 @@ TomoriBotはこのプロンプトを`instruct`として送信し、Irodoriラッ
 
 TomoriBotはTTSへ送信する前にDiscordのカスタム絵文字構文を削除します。`script_markup: emoji`では、Unicode絵文字をIrodoriのテキスト条件用に保持します。
 
+## 長い音声メッセージ
+
+Irodoriのランタイムでは、1回の予測発話の上限がデフォルトで30秒です。そのためTomoriBotは長いテキストを合成前に分割し、生成した音声を1つのWAVへ連結します。Discord側では1つの音声メッセージとして送信されます。
+
+実装は[公式Irodori OpenAI互換サーバー](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py)のチャンク処理を基準にしています。公式サーバーでは80文字の非空白文字を基準にチャンク処理がデフォルトで有効です。TomoriBotではさらに、閉じ引用符や閉じ括弧を直前の句読点と同じチャンクに残し、`！？`や`...`のような連続した終端記号をまとめ、数字に隣接する小数点では分割せず、短すぎる最後のチャンクを直前へ結合します。
+
+設定した最小文字数に達すると、`。`、`！`、`？`、`.`、`!`、`?`、省略記号、改行などの強い文末を優先して分割します。カンマはチャンクがしきい値のおよそ1.5倍まで長くなった場合にだけフォールバック境界として使います。デフォルトの`IRODORI_CHUNK_MIN_CHARS=80`では、強い文末は非空白文字80文字から、カンマはおよそ120文字から分割候補になります。十分に長い文章でも分割候補の記号がなければ、1回の合成リクエストのままになる場合があります。
+
+参照音声を使わないVoiceDesignでは、最初のチャンクで実際に使用されたIrodoriのseedを後続チャンクでも再利用し、チャンク間のランダムな変動を抑えます。同じseedを使っても、個別に合成されたチャンク間で声質が完全に一致する保証はありません。参照音声モードでは、同じ参照クリップを各チャンクへ適用します。
+
+長文では複数回の推論を順番に実行するため、低速な環境では処理時間が大きく伸びる場合があります。TomoriBotのTTSクライアントのデフォルトタイムアウトは240秒です。`IRODORI_CHUNKING_ENABLED=false`でチャンク処理を無効化でき、`IRODORI_CHUNK_MIN_CHARS`でおおよその分割しきい値を調整できます。
+
 ## Sway Samplingで高速化
 
 デフォルトは高品質寄りの40ステップlinear samplingです。レイテンシを下げたい場合は、ステップ数を減らしたSway Samplingを試せます。
@@ -155,4 +167,6 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Caption / ボイスデザイン条件のguidance scale |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | 参照話者条件のguidance scale |
 | `IRODORI_MAX_REF_SECONDS` | チェックポイント側のデフォルト | 参照音声長の任意上限 |
+| `IRODORI_CHUNKING_ENABLED` | `true` | 長文を分割して生成音声を1つに連結 |
+| `IRODORI_CHUNK_MIN_CHARS` | `80` | 強い文末で分割可能になる非空白文字数。カンマはこの値のおよそ1.5倍でフォールバック境界になる |
 | `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | 1リクエストあたりのテキスト長上限 |
