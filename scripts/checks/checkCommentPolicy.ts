@@ -18,7 +18,7 @@ const NUMBERED_LINE_PATTERN = new RegExp(
   String.raw`^//\s*(?:${NUMBERED_PREFIX_PATTERNS.join("|")})\s+(?=[A-Z])`,
 );
 const RULE_HEAD_PATTERN =
-  /^(?:\/\/|\*)\s*Rule\s*\d+(?:\s*(?:,|&|and)\s*\d+)*\s*[:,]?/;
+  /^(?:\/\/|\*)\s*Rule\s*#?\d+(?:\s*(?:,|&|and)\s*#?\d+)*\s*[:,]?/;
 const ACTION_HEADS = [
   "Get",
   "Set",

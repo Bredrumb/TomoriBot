@@ -18,6 +18,7 @@ import {
 } from "@/utils/persona/sprites";
 import { buildPresetSpriteRelativeKey, uploadPresetSpriteToStorage } from "@/utils/storage/avatarStorage";
 import { personaSections } from "./personas";
+import { resolveSharedPresetAssetReference } from "./presetAssetReference";
 import type { PersonaInput, PresetSpriteInput } from "./types";
 
 /** Length of the content hash embedded in shared sprite filenames. */
@@ -32,8 +33,6 @@ const CONTENT_HASH_LENGTH = 12;
  */
 export async function seedPersonaSpritesFromCatalog(client: SQL): Promise<void> {
   const personas = personaSections.flatMap((section) => section.rows);
-  // Every locale variant of a preset resolves to the same storage key, so without this an art
-  // change re-uploads identical bytes once per authored locale.
   const uploadedThisRun = new Map<string, string>();
   for (const persona of personas) {
     // Only personas that explicitly author a sprites array participate. Omitting
@@ -86,8 +85,6 @@ async function seedOneSprite(
     return null;
   }
 
-  // Compared against the whole relative key, not the filename: a row written under the retired
-  // per-language key ends with the same filename, so a suffix test would pin it to its old path.
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
   const expectedKey = buildPresetSpriteRelativeKey({ lineageId: persona.lineageId, spriteKey, contentHash });
 
@@ -100,27 +97,28 @@ async function seedOneSprite(
     LIMIT 1
   `;
 
-  const existingUrl = existing?.avatar_url ?? null;
-  let avatarUrl: string;
-  if (existingUrl?.endsWith(expectedKey)) {
-    // Same content already uploaded, so skip the (network) upload, refresh metadata only.
-    avatarUrl = existingUrl;
-  } else {
-    const alreadyUploaded = uploadedThisRun.get(expectedKey);
-    const uploadedUrl =
-      alreadyUploaded ??
-      (await uploadPresetSpriteToStorage({
+  const avatarUrl = await resolveSharedPresetAssetReference({
+    expectedKey,
+    existingReference: existing?.avatar_url ?? null,
+    uploadedThisRun,
+    upload: () =>
+      uploadPresetSpriteToStorage({
         lineageId: persona.lineageId,
         spriteKey,
         contentHash,
         buffer: pngBuffer,
-      }));
-    if (!uploadedUrl) {
-      log.warn(`[Preset Sprites] Skipping ${persona.name}/${sprite.name}: image upload failed`);
-      return null;
-    }
-    uploadedThisRun.set(expectedKey, uploadedUrl);
-    avatarUrl = uploadedUrl;
+      }),
+    logFailure: (error) => {
+      const message = `[Preset Sprites] Skipping ${persona.name}/${sprite.name}: image upload failed`;
+      if (error) {
+        log.warn(message, error);
+      } else {
+        log.warn(message);
+      }
+    },
+  });
+  if (!avatarUrl) {
+    return null;
   }
 
   await client`

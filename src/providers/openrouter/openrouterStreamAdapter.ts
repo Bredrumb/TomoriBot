@@ -15,9 +15,8 @@
  */
 
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
+import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
-import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
@@ -34,6 +33,11 @@ import {
 } from "../../utils/cache/openrouterCapabilityCache";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
+import {
+  buildGifToolHint,
+  buildGifUrlPlaceholder,
+  buildInlineGifPlaceholder,
+} from "@/providers/utils/gifContextPlaceholders";
 import { inlineToolResponseImage } from "@/providers/utils/toolImageContent";
 import { buildOpenrouterProviderRouting } from "./providerRouting";
 import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingControl";
@@ -46,20 +50,22 @@ import {
   assistantMediaRelocationNotice,
   CONVERSATION_START_USER_TEXT,
   ensureLeadingUserTurn,
+  isSystemInstructionContextItem,
   mergeConsecutiveSameRole,
   type NormalizableMessage,
   relocateAssistantMediaContextItems,
 } from "@/providers/utils/strictChatCompat";
 import { ThinkBlockContentStripper } from "@/providers/utils/thinkBlockContentStripper";
+import { parseAccumulatedToolArguments } from "@/providers/utils/toolCallArguments";
 import {
   buildDegradationAttempts,
   buildImageStripAttempt,
   buildTargetedAttempt,
   classifyDegradableError,
-  describeDegradationTrigger,
   extractRejectedParams,
   isMultimodalRejectionError,
   MAX_TARGETED_DEGRADATION_ATTEMPTS,
+  planDegradationRetry,
   stripImageBlocksWithNotice,
   type DegradableErrorInput,
 } from "@/providers/utils/paramDegradation";
@@ -183,16 +189,6 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
-
-  private static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-    ContextItemTag.SYSTEM_HUMANIZER_RULES,
-    ContextItemTag.SYSTEM_PERSONA_PROMPT,
-    ContextItemTag.SYSTEM_PERSONALITY,
-    ContextItemTag.KNOWLEDGE_SERVER_INFO,
-    ContextItemTag.KNOWLEDGE_SERVER_EMOJIS, // Text-based with semantic metadata (deterministic ordering)
-    ContextItemTag.KNOWLEDGE_SERVER_STICKERS, // Text-based with semantic metadata (deterministic ordering)
-    ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-  ];
 
   private toolCallAccumulator: Map<number, AccumulatedToolCall> = new Map();
 
@@ -777,18 +773,19 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
               attempt.label,
             );
 
-            // A message that names a droppable request param is sufficient evidence on
-            // its own, so retry even when the generic status/wording classifier misses.
-            const queuedTargeted = queueTargetedAttempt(i, attempt.body, parsedError.errorMessage);
-            const queuedImageStrip = queueImageStripAttempt(i, attempt.body, parsedError.errorMessage);
-            const degradationKind = classifyDegradableError({
+            const retryPlan = planDegradationRetry({
+              attempts,
+              attemptIndex: i,
+              body: attempt.body,
               statusCode: parsedError.statusCode,
               message: parsedError.errorMessage,
-              degradeOn502: true,
+              classifyOptions: { degradeOn502: true },
+              queueTargetedAttempt,
+              queueImageStripAttempt,
             });
-            if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
+            if (retryPlan) {
               log.warn(
-                `OpenRouter returned ${describeDegradationTrigger(degradationKind, queuedImageStrip)} on attempt '${attempt.label}', trying fallback payload`,
+                `OpenRouter returned ${retryPlan.trigger} on attempt '${attempt.label}', trying fallback payload`,
                 { model: config.model, errorMessage: parsedError.errorMessage },
               );
               continue;
@@ -881,14 +878,19 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
                 const midStreamError = this.getMidStreamError(normalizedChunk);
                 if (midStreamError && !committedToAttempt) {
-                  // Same rule as the fetch path: a message naming droppable params
-                  // justifies a retry even without a generic classifier match.
-                  const queuedTargeted = queueTargetedAttempt(i, attempt.body, midStreamError.message);
-                  const queuedImageStrip = queueImageStripAttempt(i, attempt.body, midStreamError.message);
-                  const degradationKind = classifyDegradableError({ ...midStreamError, degradeOn502: true });
-                  if ((degradationKind || queuedTargeted || queuedImageStrip) && i < attempts.length - 1) {
+                  const retryPlan = planDegradationRetry({
+                    attempts,
+                    attemptIndex: i,
+                    body: attempt.body,
+                    statusCode: midStreamError.statusCode,
+                    message: midStreamError.message,
+                    classifyOptions: { degradeOn502: true },
+                    queueTargetedAttempt,
+                    queueImageStripAttempt,
+                  });
+                  if (retryPlan) {
                     log.warn(
-                      `OpenRouter received ${describeDegradationTrigger(degradationKind, queuedImageStrip)} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
+                      `OpenRouter received ${retryPlan.trigger} before stream commitment on attempt '${attempt.label}', trying fallback payload`,
                       { model: config.model, errorMessage: midStreamError.message },
                     );
                     // Cancelled before aborting so the teardown is graceful rather than a
@@ -1783,34 +1785,17 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         `OpenRouter: Accumulated state - id: ${accumulated.id}, type: ${accumulated.type}, thought_signature: ${accumulated.thought_signature || "NONE"}, name: ${accumulated.functionName}`,
       );
 
-      let parsedArgs: Record<string, unknown> = {};
-      // Set when the endpoint cut the argument payload short. The recovered keys are real,
-      // but the call itself is incomplete, so the flag travels with it to the tool loop.
-      let argumentsTruncated = false;
-      if (accumulated.functionArguments) {
-        try {
-          parsedArgs = JSON.parse(accumulated.functionArguments);
-          log.info(`OpenRouter: Successfully parsed tool call arguments: ${JSON.stringify(parsedArgs)}`);
-        } catch (parseError) {
-          const repaired = tryRepairIncompleteJson(accumulated.functionArguments);
-          if (repaired) {
-            parsedArgs = repaired;
-            argumentsTruncated = true;
-            // A metric rather than a warning: `log.warn` is filtered out whenever
-            // RUN_ENV=production, the only environment this truncation happens in.
-            log.metric("tool_arguments_truncated", {
-              adapter: "OpenRouterStreamAdapter",
-              tool_name: accumulated.functionName,
-              recovered_keys: Object.keys(repaired).length,
-              argument_chars: accumulated.functionArguments.length,
-            });
-          } else {
-            log.error(
-              `OpenRouter: Failed to parse accumulated arguments as JSON: "${accumulated.functionArguments}"`,
-              parseError,
-            );
-          }
-        }
+      const {
+        args: parsedArgs,
+        parsed: argumentsParsed,
+        truncated: argumentsTruncated,
+      } = parseAccumulatedToolArguments({
+        adapterName: "OpenRouterStreamAdapter",
+        toolName: accumulated.functionName,
+        rawArguments: accumulated.functionArguments,
+      });
+      if (argumentsParsed) {
+        log.info(`OpenRouter: Successfully parsed tool call arguments: ${JSON.stringify(parsedArgs)}`);
       }
 
       const functionCall: FunctionCall = {
@@ -2281,17 +2266,9 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           .join("\n");
       }
 
-      if (
-        item.role === "system" ||
-        (item.role === "user" &&
-          item.metadataTag &&
-          OpenrouterStreamAdapter.SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-      ) {
+      if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) systemInstructionParts.push(itemTextContent);
       } else if (item.role === "user" || item.role === "model") {
-        // CRITICAL: ALL user/model items go to dialogue (unless in SYSTEM_INSTRUCTION_TAGS)
-        // This handles DIALOGUE_HISTORY, DIALOGUE_SAMPLE, and new tags like KNOWLEDGE_USERS_IN_CONVERSATION
-
         const role = item.role === "user" ? "user" : "assistant";
         // Collects resolved image parts from assistant turns for injection into a synthetic
         // user turn, since OpenRouter only permits image content on user-role messages.
@@ -2329,26 +2306,20 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
 
                 if (typeof inlineData === "object" && inlineData.mimeType && inlineData.data) {
                   if (inlineData.mimeType === "image/gif") {
-                    const isProduction = process.env.RUN_ENV === "production";
-
-                    if (isProduction) {
-                      contentParts.push({
-                        type: "text",
-                        text: "[System: This context contains inline GIF data. GIF processing disabled in production.]",
-                      });
+                    if (process.env.RUN_ENV === "production") {
+                      contentParts.push({ type: "text", text: buildInlineGifPlaceholder() });
 
                       log.info(
                         "OpenrouterStreamAdapter: Inline GIF detected in production mode, replaced with placeholder",
                       );
                     } else {
-                      // Development: Replace with message ID hint for process_gif tool
-                      // Note: URL intentionally omitted to prevent hallucinations - AI should use the tool
-                      const mediaMessageId = item.messageId
-                        ? (messageIdMap?.register(item.messageId, "media") ?? item.messageId)
-                        : "unknown";
                       contentParts.push({
                         type: "text",
-                        text: `[System: This message (ID: ${mediaMessageId}) contains inline GIF data. Use process_gif tool with this message ID to process it if needed for context.]`,
+                        text: buildGifToolHint({
+                          messageId: item.messageId,
+                          messageIdMap,
+                          subject: "inline GIF data",
+                        }),
                       });
 
                       log.info(
@@ -2394,36 +2365,20 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   }
                 } else {
                   if (part.mimeType === "image/gif") {
-                    const isProduction = process.env.RUN_ENV === "production";
-
-                    if (isProduction) {
-                      // Production: Replace with text placeholder
-                      // Check if this is a Tenor link (has descriptive slug)
-                      if (part.uri.includes("tenor.com")) {
-                        contentParts.push({
-                          type: "text",
-                          text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
-                        });
-                      } else {
-                        // Discord attachment GIF: Just note its presence
-                        contentParts.push({
-                          type: "text",
-                          text: "[System: This message contains a GIF. GIF processing disabled in production.]",
-                        });
-                      }
+                    if (process.env.RUN_ENV === "production") {
+                      contentParts.push({ type: "text", text: buildGifUrlPlaceholder(part.uri) });
 
                       log.info(
                         `OpenrouterStreamAdapter: GIF detected in production mode, replaced with placeholder: ${part.uri}`,
                       );
                     } else {
-                      // Development: Replace with message ID hint for process_gif tool
-                      // Note: URL intentionally omitted to prevent hallucinations - AI should use the tool
-                      const mediaMessageId = item.messageId
-                        ? (messageIdMap?.register(item.messageId, "media") ?? item.messageId)
-                        : "unknown";
                       contentParts.push({
                         type: "text",
-                        text: `[System: This message (ID: ${mediaMessageId}) contains a GIF. Use process_gif tool with this message ID to process it if needed for context.]`,
+                        text: buildGifToolHint({
+                          messageId: item.messageId,
+                          messageIdMap,
+                          subject: "a GIF",
+                        }),
                       });
 
                       log.info(

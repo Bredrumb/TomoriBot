@@ -13,6 +13,7 @@ import {
   isSetupDraftComplete,
   isSetupDraftProviderAccessComplete,
   type SetupDraftRecord,
+  type SetupDraftStartingSettings,
 } from "@/types/discord/setupWizard";
 import { setupCustomEndpointCapabilitySchema } from "@/types/db/schema";
 import {
@@ -261,6 +262,42 @@ function makeSettingsDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraf
     },
     ...overrides,
   });
+}
+
+/**
+ * Repaints the dashboard for one drifted catalog and asserts the step re-pends with the other
+ * stored values intact.
+ *
+ * The step re-pends while the removed row reads as unavailable and every other stored value
+ * keeps resolving, so which catalog drifted is visible in the panel itself.
+ */
+async function expectRependAfterCatalogDrift(input: {
+  nonce: string;
+  removedField: string;
+  summaryKey: string;
+  summaryVariable: string;
+  stored: SetupDraftStartingSettings;
+}): Promise<void> {
+  const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce: input.nonce });
+  const interaction = makeMockInteraction({ customId, kind: "button" });
+
+  await dispatchGlobalInteraction({} as Client, interaction);
+
+  expect(interaction.updateCalls.length).toBe(1);
+  const repainted = JSON.stringify(interaction.updateCalls[0]);
+  expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
+  expect(repainted).toContain(
+    `> ${localizer("en-US", input.summaryKey, {
+      [input.summaryVariable]: localizer("en-US", `commands.setup.wizard.settings_${input.removedField}_unknown`),
+    })}`,
+  );
+
+  // A removed row re-pends the step without discarding the actor's other stored values.
+  const check = readSetupDraft(input.nonce, "actor-1", "guild-1", "guild");
+  expect(check.status).toBe("ok");
+  if (check.status === "ok") {
+    expect(check.draft.startingSettings).toEqual(input.stored);
+  }
 }
 
 describe("setupWizardRoutes", () => {
@@ -2570,29 +2607,14 @@ describe("setupWizardRoutes", () => {
       const personaRows = await configRepository.loadPresetRowsByLocale("en-US");
       expect(personaRows?.map((row) => row.persona_preset_id)).toEqual([3585]);
 
-      const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
-      const interaction = makeMockInteraction({ customId, kind: "button" });
-
-      await dispatchGlobalInteraction({} as Client, interaction);
-
+      await expectRependAfterCatalogDrift({
+        nonce,
+        removedField,
+        summaryKey,
+        summaryVariable,
+        stored,
+      });
       expect(personaSpy).toHaveBeenCalledTimes(2);
-      expect(interaction.updateCalls.length).toBe(1);
-      const repainted = JSON.stringify(interaction.updateCalls[0]);
-      // The step re-pends while the removed row reads as unavailable and every other stored value
-      // keeps resolving, so which catalog drifted is visible in the panel itself.
-      expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
-      expect(repainted).toContain(
-        `> ${localizer("en-US", summaryKey, {
-          [summaryVariable]: localizer("en-US", `commands.setup.wizard.settings_${removedField}_unknown`),
-        })}`,
-      );
-
-      // A removed row re-pends the step without discarding the actor's other stored values.
-      const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
-      expect(check.status).toBe("ok");
-      if (check.status === "ok") {
-        expect(check.draft.startingSettings).toEqual(stored);
-      }
     } finally {
       personaSpy.mockRestore();
       promptSpy.mockRestore();
@@ -2624,28 +2646,14 @@ describe("setupWizardRoutes", () => {
       const promptRows = await configRepository.loadSystemPromptPresets();
       expect(promptRows?.map((row) => row.system_prompt_preset_name)).toEqual(["Concise"]);
 
-      const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
-      const interaction = makeMockInteraction({ customId, kind: "button" });
-
-      await dispatchGlobalInteraction({} as Client, interaction);
-
+      await expectRependAfterCatalogDrift({
+        nonce,
+        removedField,
+        summaryKey,
+        summaryVariable,
+        stored,
+      });
       expect(promptSpy).toHaveBeenCalledTimes(2);
-      expect(interaction.updateCalls.length).toBe(1);
-      const repainted = JSON.stringify(interaction.updateCalls[0]);
-      // The step re-pends while the removed row reads as unavailable and every other stored value
-      // keeps resolving, so which catalog drifted is visible in the panel itself.
-      expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
-      expect(repainted).toContain(
-        `> ${localizer("en-US", summaryKey, {
-          [summaryVariable]: localizer("en-US", `commands.setup.wizard.settings_${removedField}_unknown`),
-        })}`,
-      );
-
-      const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
-      expect(check.status).toBe("ok");
-      if (check.status === "ok") {
-        expect(check.draft.startingSettings).toEqual(stored);
-      }
     } finally {
       personaSpy.mockRestore();
       promptSpy.mockRestore();

@@ -11,7 +11,7 @@ import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import type { StructuredContextItem } from "../../types/misc/context";
 import { ContextItemTag } from "../../types/misc/context";
-import { isRefreshMarkerEmbed } from "../../utils/discord/embedDetection";
+import { truncateHistoryAtRefreshMarker } from "@/utils/discord/refreshMarkerHistory";
 import { resolveChannelTarget } from "@/utils/discord/targetResolver";
 import { resolveContextAuthorLabel } from "@/utils/discord/contextAuthorLabel";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -445,19 +445,10 @@ export class CrossChannelMessageTool extends BaseTool {
         };
       }
 
-      // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
-      const messagesArray = [...recentMessages.values()];
-      const filteredMessages: Message[] = [];
-      for (const m of messagesArray) {
-        if (m.embeds.length > 0 && m.embeds.some(isRefreshMarkerEmbed)) {
-          log.info(
-            `Cross-channel tool: Peek hit refresh embed at ${m.id} in #${targetChannel.name} — truncating older messages`,
-          );
-          break;
-        }
-        filteredMessages.push(m);
-      }
-      filteredMessages.reverse();
+      const filteredMessages = truncateHistoryAtRefreshMarker(
+        [...recentMessages.values()],
+        `Cross-channel tool: Peek hit refresh embed at ${targetChannel.name}`,
+      );
 
       const formattedMessages = await Promise.all(
         filteredMessages.map(async (m) => ({
@@ -590,20 +581,10 @@ export class CrossChannelMessageTool extends BaseTool {
           const recentMessages = await targetChannel.messages.fetch({
             limit: 10,
           });
-          // Discord returns newest-first; truncate at refresh embed boundary, then reverse to chronological order
-          const messagesArray = [...recentMessages.values()];
-          const filteredMessages: Message[] = [];
-          for (const m of messagesArray) {
-            // Stop if we hit a refresh/reset embed, so everything before it is stale context
-            if (m.embeds.length > 0 && m.embeds.some(isRefreshMarkerEmbed)) {
-              log.info(
-                `Cross-channel tool: Boomerang message fetch hit refresh embed at ${m.id} — truncating older messages`,
-              );
-              break;
-            }
-            filteredMessages.push(m);
-          }
-          filteredMessages.reverse();
+          const filteredMessages = truncateHistoryAtRefreshMarker(
+            [...recentMessages.values()],
+            "Cross-channel tool: Boomerang message fetch hit refresh embed at",
+          );
           targetMessages = await Promise.all(
             filteredMessages.map(async (m) => ({
               author: await resolveContextAuthorLabel(m, {

@@ -132,9 +132,22 @@ describe("comment policy", () => {
   });
 
   it("finds prompt-style rule scaffolding", () => {
-    const findings = inspectCommentPolicySource("// Rule 20: Constants at the top\nconst value = 1;\n");
+    const source = [
+      "// Rule 20: Constants at the top",
+      "const first = 1;",
+      "// Rule #7: Validate the partial data",
+      "const second = 2;",
+      "// Rule #8 and #9: Normalize the result",
+      "const third = 3;",
+      "",
+    ].join("\n");
+    const findings = inspectCommentPolicySource(source);
 
-    expect(findings.map((finding) => finding.rule)).toEqual(["rule-scaffolding"]);
+    expect(findings.map((finding) => finding.rule)).toEqual([
+      "rule-scaffolding",
+      "rule-scaffolding",
+      "rule-scaffolding",
+    ]);
   });
 
   it("reports obvious narration during audits", () => {

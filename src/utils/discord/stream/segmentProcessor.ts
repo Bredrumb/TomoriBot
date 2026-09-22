@@ -410,8 +410,8 @@ export class StreamSegmentProcessor {
    * Logs the persona the sprite lookup was performed against alongside that persona's actual
    * sprite keys, which distinguishes the two candidate causes:
    *
-   * - Wrong persona, so `personaId` is not the persona the model was told to speak as, so its
-   *    sprite keys can never match (the failure mode expected on queued/chained turns).
+   * - Wrong persona: `personaId` is not the persona the model was told to speak as, so its sprite
+   *   keys can never match (the failure mode expected on queued/chained turns).
    * - Right persona, unknown label: the model invented a sprite key, or the sprite exists
    *    but its avatar is unusable (`resolveSpriteIdentity` returning null).
    *

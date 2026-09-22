@@ -501,7 +501,6 @@ describe("Channels Destinations routes", () => {
     const options = shownModals[0]?.components[1]?.component?.options ?? [];
     expect(options).toContainEqual(expect.objectContaining({ value: "47", default: true }));
     expect(options).not.toContainEqual(expect.objectContaining({ value: "1" }));
-    // Random is repeated on every page, which is why a page holds 24 personas rather than 25.
     expect(options[0]?.value).toBe("random");
     expect(options).toHaveLength(25);
   });
@@ -828,8 +827,6 @@ describe("Channels Destinations panel", () => {
   });
 
   it("swaps the Welcome and Auto-Trigger entry points for range selects past one page", () => {
-    // Within one page a range select would be the inert one-option selector the shell avoids, so
-    // the plain button has to survive the common case and only give way once paging is real.
     const renderDestinations = (personaCount: number): string => {
       const personas = Array.from({ length: personaCount }, (_unused, index) =>
         makePersona({

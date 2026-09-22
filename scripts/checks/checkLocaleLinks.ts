@@ -316,7 +316,6 @@ export async function validateLocaleLinks(options?: {
     );
   }
 
-  // Validate links across collected files
   const findings: LinkFinding[] = [];
   let totalLinksChecked = 0;
   let validLinksCount = 0;

@@ -54,6 +54,19 @@ async function collectRawChunks(adapter: OpenrouterStreamAdapter): Promise<RawSt
 }
 
 /**
+ * Consumes a stream to completion and discards the chunks.
+ *
+ * Request assembly and provider-side processing run inside the generator, so a test that asserts on
+ * what the adapter sent has to pull every chunk first. Use `collectRawChunks` when the chunks
+ * themselves are what the test is about.
+ */
+async function drainStream(stream: AsyncIterable<unknown>): Promise<void> {
+  for await (const _chunk of stream) {
+    // Discarded: the assertion reads state the generator wrote while producing them.
+  }
+}
+
+/**
  * Builds a RawStreamChunk wrapping an OpenRouter-shaped data object.
  * chunk.data is typed as unknown so no type assertion is needed in the fixture.
  */
@@ -352,9 +365,7 @@ describe("OpenrouterStreamAdapter tool history", () => {
       },
     ];
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
-      // Drain the stream so the request body is fully assembled and processed.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
 
     const messages = requestBody?.messages as Array<Record<string, unknown>>;
     expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
@@ -394,9 +405,7 @@ describe("OpenrouterStreamAdapter tool history", () => {
     ];
     const config = { ...makeStreamConfig(), seesImages: true };
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(config, context)) {
-      // Drain the stream so the request body is fully assembled and processed.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(config, context));
 
     const messages = requestBody?.messages as Array<Record<string, unknown>>;
     expect(messages[2]).toEqual({
@@ -553,9 +562,7 @@ describe("OpenrouterStreamAdapter response body teardown", () => {
         headers: { "Content-Type": "text/event-stream" },
       })) as typeof fetch;
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), makeStreamContext())) {
-      // Drain fully so the stream reaches its natural end.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), makeStreamContext()));
 
     expect(cancelled).toBe(false);
   });
@@ -577,9 +584,7 @@ describe("OpenrouterStreamAdapter strict chat-completion compatibility", () => {
       { role: "model", parts: [{ type: "text", text: "Second model response" }] },
     ];
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
-      // Drain stream to capture the request body.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
 
     const messages = requestBody?.messages as Array<Record<string, unknown>>;
     expect(messages).toEqual([
@@ -618,9 +623,7 @@ describe("OpenrouterStreamAdapter strict chat-completion compatibility", () => {
       },
     ];
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
-      // Drain stream to capture the request body.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
 
     const messages = requestBody?.messages as Array<Record<string, unknown>>;
     expect(messages[0]).toEqual({ role: "user", content: "[System: Conversation start]" });
@@ -653,9 +656,7 @@ describe("OpenrouterStreamAdapter strict chat-completion compatibility", () => {
       context.currentTurnModelParts = currentTurnParts;
       context.outputPrefill = outputPrefill;
 
-      for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
-        // Drain stream to capture the request body.
-      }
+      await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
       return capturedBody;
     };
 
@@ -693,9 +694,7 @@ describe("OpenrouterStreamAdapter strict chat-completion compatibility", () => {
     context.currentTurnModelParts = [{ text: "Let me explain:" }];
     context.outputPrefill = "Let me explain:";
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
-      // Drain stream to capture the request body.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
 
     const messages = requestBody?.messages as Array<Record<string, unknown>>;
     expect(messages).toEqual([

@@ -9,6 +9,7 @@ import {
   preWarmServerStmEntries,
   preWarmStmEntry,
   preWarmUserStmEntries,
+  type ShortTermMemoryEntry,
 } from "@/utils/cache/shortTermMemoryCache";
 import { log } from "@/utils/misc/logger";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -111,6 +112,34 @@ function formatCategoryLines(categories: Record<string, string>, labelMap?: Map<
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Renders the most recent crude turns of one other-channel memory entry.
+ *
+ * The speaker falls back through the stored name, then the triggerer for user turns and the bot for
+ * model turns, so a turn whose author was never recorded still renders with someone recognizable.
+ *
+ * @param messages - Turns held by the cache entry
+ * @param depth - Configured number of most recent turns to keep
+ * @param isSameServerSharedMemory - Whether the entry belongs to the current server
+ * @returns The turn lines, each terminated by a newline
+ */
+function renderCrudeTurns(
+  messages: ShortTermMemoryEntry["messages"],
+  depth: number,
+  isSameServerSharedMemory: boolean,
+  params: { triggererName: string; botName: string },
+): string {
+  let crudeText = "";
+  // Cap the rendered crude turns to the configured depth (most recent N).
+  for (const msg of messages.slice(-depth)) {
+    const speaker =
+      msg.speakerName ||
+      (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : params.triggererName) : params.botName);
+    crudeText += `${speaker}: "${msg.content}"\n`;
+  }
+  return crudeText;
 }
 
 /**
@@ -348,6 +377,13 @@ export async function buildShortTermMemoryContext(params: {
           : params.isUserImpersonation
             ? `[System: Recent conversation with ${params.triggererName} in ${channelReference} (${relativeTime}):\n`
             : `[System: ${params.botName} remembers a recent conversation with ${params.triggererName} in ${channelReference} (${relativeTime}):\n`;
+        const crudeTurnPrefix = isSameServerSharedMemory
+          ? params.isUserImpersonation
+            ? `[System: Recent raw messages from ${channelReference}:\n`
+            : `[System: ${params.botName}'s recent raw messages from ${channelReference}:\n`
+          : params.isUserImpersonation
+            ? `[System: Recent raw messages with ${params.triggererName} in ${channelReference}:\n`
+            : `[System: ${params.botName}'s recent raw messages with ${params.triggererName} in ${channelReference}:\n`;
 
         if (categoryContent) {
           // Category content available: use it as the primary memory representation
@@ -355,55 +391,33 @@ export async function buildShortTermMemoryContext(params: {
 
           // Mode B (crude_summary): also show recent crude messages additively for other-channel
           if (renderMode === "crude_summary" && memory.messages.length > 0) {
-            const crudePrefix = isSameServerSharedMemory
-              ? params.isUserImpersonation
-                ? `[System: Recent raw messages from ${channelReference}:\n`
-                : `[System: ${params.botName}'s recent raw messages from ${channelReference}:\n`
-              : params.isUserImpersonation
-                ? `[System: Recent raw messages with ${params.triggererName} in ${channelReference}:\n`
-                : `[System: ${params.botName}'s recent raw messages with ${params.triggererName} in ${channelReference}:\n`;
-            let crudeText = crudePrefix;
-            // Cap the rendered crude turns to the configured depth (most recent N).
-            for (const msg of memory.messages.slice(-crudeMessageCount)) {
-              const speaker =
-                msg.speakerName ||
-                (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : params.triggererName) : params.botName);
-              crudeText += `${speaker}: "${msg.content}"\n`;
-            }
-            otherChannelText += `${crudeText}]\n\n`;
+            otherChannelText += `${crudeTurnPrefix}${renderCrudeTurns(
+              memory.messages,
+              crudeMessageCount,
+              isSameServerSharedMemory,
+              params,
+            )}]\n\n`;
           }
         } else if (memory.summary) {
           // Single-blob summary (fallback / pre-category entries)
           otherChannelText += `${memoryPrefix}${memory.summary}]\n\n`;
 
           if (renderMode === "crude_summary" && memory.messages.length > 0) {
-            const crudePrefix = isSameServerSharedMemory
-              ? params.isUserImpersonation
-                ? `[System: Recent raw messages from ${channelReference}:\n`
-                : `[System: ${params.botName}'s recent raw messages from ${channelReference}:\n`
-              : params.isUserImpersonation
-                ? `[System: Recent raw messages with ${params.triggererName} in ${channelReference}:\n`
-                : `[System: ${params.botName}'s recent raw messages with ${params.triggererName} in ${channelReference}:\n`;
-            let crudeText = crudePrefix;
-            // Cap the rendered crude turns to the configured depth (most recent N).
-            for (const msg of memory.messages.slice(-crudeMessageCount)) {
-              const speaker =
-                msg.speakerName ||
-                (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : params.triggererName) : params.botName);
-              crudeText += `${speaker}: "${msg.content}"\n`;
-            }
-            otherChannelText += `${crudeText}]\n\n`;
+            otherChannelText += `${crudeTurnPrefix}${renderCrudeTurns(
+              memory.messages,
+              crudeMessageCount,
+              isSameServerSharedMemory,
+              params,
+            )}]\n\n`;
           }
         } else {
           // No summary or categories: fall back to crude turn listing (capped to depth).
-          otherChannelText += memoryPrefix;
-          for (const msg of memory.messages.slice(-crudeMessageCount)) {
-            const speaker =
-              msg.speakerName ||
-              (msg.role === "user" ? (isSameServerSharedMemory ? "Someone" : params.triggererName) : params.botName);
-            otherChannelText += `${speaker}: "${msg.content}"\n`;
-          }
-          otherChannelText += "]\n\n";
+          otherChannelText += `${memoryPrefix}${renderCrudeTurns(
+            memory.messages,
+            crudeMessageCount,
+            isSameServerSharedMemory,
+            params,
+          )}]\n\n`;
         }
       }
 

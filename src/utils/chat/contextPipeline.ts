@@ -919,8 +919,6 @@ async function simplifyMessage(
     const renderModifierSource = resolveRenderModifierSourcePersona(webhookName, personaByName);
     const matchedPersona = renderModifierSource?.persona ?? personaByName.get(normalizeRenderModifierName(webhookName));
     if (matchedPersona) {
-      // Clean-named sprite messages carry no "(sprite)" suffix in the webhook
-      // name; recover the decorated label from the persisted mapping.
       const spriteDisplayName = renderModifierSource
         ? null
         : await resolveSpriteMessageDisplayName(msg.id, matchedPersona.persona_id, matchedPersona.persona_nickname);

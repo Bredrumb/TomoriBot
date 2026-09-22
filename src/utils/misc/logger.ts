@@ -162,6 +162,21 @@ const pinoLogger = pino(
 );
 
 /**
+ * The custom level methods `customLevels` above registers. Pino attaches them to the logger
+ * instance at runtime, so the base `Logger` type does not declare them. One cast names the whole
+ * boundary here instead of an `any` at every call site, and the signatures stay enforced.
+ */
+interface CustomLevelLogger extends pino.Logger {
+  success(message: string): void;
+  section(message: string): void;
+  metric(payload: Record<string, number | string>, message: string): void;
+  rateLimit(payload: Record<string, unknown>, message: string): void;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: Pino adds the custom level methods at runtime
+const customLevels = pinoLogger as any as CustomLevelLogger;
+
+/**
  * ANSI color codes for terminal output
  */
 const colors = {
@@ -259,9 +274,7 @@ export const log = {
    * Logs success messages (hidden in production).
    */
   success: (msg: string) => {
-    // Pino adds custom level methods at runtime, but TypeScript doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    (pinoLogger as any).success(shouldHideLogs ? `✓ ${msg}` : `${colors.green}✓ ${msg}${colors.reset}`);
+    customLevels.success(shouldHideLogs ? `✓ ${msg}` : `${colors.green}✓ ${msg}${colors.reset}`);
   },
 
   /**
@@ -285,13 +298,10 @@ export const log = {
    */
   rateLimit: (msg: string, metadata?: Record<string, unknown>) => {
     const coloredMsg = shouldHideLogs ? msg : `${colors.brightYellow}${msg}${colors.reset}`;
-    // Pino adds custom level methods at runtime, but TypeScript doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    const logger = pinoLogger as any;
     if (metadata) {
-      logger.rateLimit({ metadata: sanitizeLogPayload(metadata) }, coloredMsg);
+      customLevels.rateLimit({ metadata: sanitizeLogPayload(metadata) }, coloredMsg);
     } else {
-      logger.rateLimit(coloredMsg);
+      customLevels.rateLimit({}, coloredMsg);
     }
   },
 
@@ -305,9 +315,7 @@ export const log = {
    */
   metric: (name: string, fields: Record<string, number | string>) => {
     const payload = { metric: name, ...fields };
-    // Pino adds custom level methods at runtime; TS doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    (pinoLogger as any).metric(payload, `metric:${name}`);
+    customLevels.metric(payload, `metric:${name}`);
   },
 
   /**
@@ -350,8 +358,6 @@ export const log = {
    */
   section: (msg: string) => {
     const coloredMsg = shouldHideLogs ? `\n=== ${msg} ===` : `${colors.magenta}\n=== ${msg} ===${colors.reset}`;
-    // Pino adds custom level methods at runtime, but TypeScript doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    (pinoLogger as any).section(coloredMsg);
+    customLevels.section(coloredMsg);
   },
 };

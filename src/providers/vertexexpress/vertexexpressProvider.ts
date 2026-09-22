@@ -11,6 +11,7 @@ import type {
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { buildStreamContext } from "@/utils/provider/streamContext";
+import { buildGeminiImagePromptParts } from "@/providers/utils/geminiImageParts";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { applyStreamContextAvailability } from "@/tools/availability";
 import type { StreamingContext } from "@/types/tool/interfaces";
@@ -210,13 +211,7 @@ export class VertexexpressProvider
       model: request.model,
     });
 
-    // Build parts: reference images (as inlineData) followed by the text prompt.
-    // SendMessageParameters.message is PartListUnion: inline images must be
-    // passed as inlineData parts, not via a non-existent "media" field.
-    const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
-      ...(request.referenceImages ?? []).map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
-      request.prompt,
-    ];
+    const messageParts = buildGeminiImagePromptParts(request.prompt, request.referenceImages ?? []);
 
     const response = await chat.sendMessage({
       message: messageParts,

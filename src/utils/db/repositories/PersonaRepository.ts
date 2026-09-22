@@ -3210,7 +3210,6 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async updateTomori(personaId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
     try {
-      // Validate the partial data with Zod (Rule #7)
       const validTomoriData = tomoriSchema.partial().parse(tomoriData);
 
       // Filter to only keys present in the original input: Zod injects defaults for every

@@ -13,9 +13,8 @@
  */
 
 import type { FunctionCall, FunctionResponseImageMetadata, ThoughtLogEntry } from "../../types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
+import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
-import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
 import { localizer } from "../../utils/text/localizer";
 import { fetchAndOptimizeImage } from "../../utils/image/imageProcessor";
 import { isParamDisabled, selectAnthropicSamplingParams } from "@/utils/provider/samplingControl";
@@ -24,12 +23,14 @@ import {
   assistantMediaRelocationNotice,
   CONVERSATION_START_USER_TEXT,
   ensureLeadingUserTurn,
+  isSystemInstructionContextItem,
   mergeConsecutiveSameRole,
   type NormalizableMessage,
   providerRequiresAlternation,
   relocateAssistantMediaContextItems,
 } from "../utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
+import { parseAccumulatedToolArguments } from "../utils/toolCallArguments";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
   ProcessedChunk,
@@ -132,16 +133,6 @@ interface ParsedSseEvent {
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
-// Tags that should be extracted to the top-level system parameter
-const SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-  ContextItemTag.SYSTEM_HUMANIZER_RULES,
-  ContextItemTag.SYSTEM_PERSONA_PROMPT,
-  ContextItemTag.SYSTEM_PERSONALITY,
-  ContextItemTag.KNOWLEDGE_SERVER_INFO,
-  ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-  ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-  ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-];
 
 export class AnthropicStreamAdapter extends BaseStreamAdapter {
   private toolCallAccumulator: Map<number, AccumulatedToolCall> = new Map();
@@ -491,33 +482,11 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
         const accumulated = this.toolCallAccumulator.get(blockIdx);
 
         if (accumulated?.name) {
-          let parsedArgs: Record<string, unknown> = {};
-          // Set when the endpoint cut the argument payload short. The recovered keys are
-          // real, but the call itself is incomplete, so the flag reaches the tool loop.
-          let argumentsTruncated = false;
-          if (accumulated.argumentsJson) {
-            try {
-              parsedArgs = JSON.parse(accumulated.argumentsJson);
-            } catch (parseErr) {
-              const repaired = tryRepairIncompleteJson(accumulated.argumentsJson);
-              if (repaired) {
-                parsedArgs = repaired;
-                argumentsTruncated = true;
-                // A metric rather than a warning: `log.warn` is filtered out whenever
-                // RUN_ENV=production, the only environment this truncation happens in.
-                log.metric("tool_arguments_truncated", {
-                  adapter: "AnthropicStreamAdapter",
-                  tool_name: accumulated.name,
-                  recovered_keys: Object.keys(repaired).length,
-                  argument_chars: accumulated.argumentsJson.length,
-                });
-              } else {
-                log.error(
-                  `AnthropicStreamAdapter: Failed to parse tool arguments for ${accumulated.name}: ${parseErr}`,
-                );
-              }
-            }
-          }
+          const { args: parsedArgs, truncated: argumentsTruncated } = parseAccumulatedToolArguments({
+            adapterName: "AnthropicStreamAdapter",
+            toolName: accumulated.name,
+            rawArguments: accumulated.argumentsJson,
+          });
 
           const functionCall: FunctionCall = {
             name: accumulated.name,
@@ -767,10 +736,7 @@ export class AnthropicStreamAdapter extends BaseStreamAdapter {
       }
 
       // Check if this should go to system prompt (top-level parameter)
-      if (
-        item.role === "system" ||
-        (item.role === "user" && item.metadataTag && SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-      ) {
+      if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) {
           systemParts.push(itemTextContent);
         }

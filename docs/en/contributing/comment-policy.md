@@ -37,7 +37,7 @@ instead of narrating the operation.
 Also avoid:
 
 - procedural labels such as `// 1. Parse the value` or `// 5c-2. Build the menu`;
-- prompt-style scaffolding such as `// Rule 3: Validate input`;
+- prompt-style scaffolding such as `// Rule 3: Validate input` or `// Rule #3: Validate input`;
 - decorative section banners; and
 - commented-out code.
 
@@ -110,8 +110,10 @@ not the story of how it was found:
 // resolves permissions through the client's own member.
 ```
 
-Length is the usual symptom. If a comment runs past two or three lines, the surplus is almost
-always narrative rather than constraint.
+Length can prompt a review, but ordinary wrapping makes short thresholds noisy. Read a comment
+that runs past two or three lines for removable history or narration; do not assume that every line
+beyond the third is wrong. Compatibility constraints, security boundaries, and ordering rules
+often need a compact paragraph.
 
 The same restraint applies to this page and every other doc: examples of bad comments should be
 illustrative, not transcribed from production. Deployment sizes, record counts, and host details do
@@ -232,7 +234,7 @@ file.
 | Rule | Reports | Calibrated limit | Override |
 |---|---|---|---|
 | `duplicate-comment` | One warning per group of blocks that say the same thing, naming every location | 12 words and 60 characters per block | `COMMENT_AUDIT_DUPLICATE_MIN_WORDS`, `COMMENT_AUDIT_DUPLICATE_MIN_CHARS` |
-| `long-comment-block` | One block whose rendered line count is past the limit | 11 lines, non-test files | `COMMENT_AUDIT_LONG_BLOCK_LINES` |
+| `long-comment-block` | One block whose rendered line count reaches the limit | 11 lines, non-test files | `COMMENT_AUDIT_LONG_BLOCK_LINES` |
 
 Those variables exist for recalibration, not for routine use: they are read only by the audit
 command line and never by the running bot, since a value that lives in an operator's environment
@@ -268,6 +270,13 @@ blocks, and relaxing the length limit to 8 lines raises that rule to 26. Those n
 reason for the limits: they are the largest candidate sets a maintainer can read in one sitting and
 still trust. A comment-to-code ratio was measured during calibration and rejected, because a
 definition that separated narrative from legitimate explanation did not emerge.
+
+A later manual review lowered the inventory floor to 4 lines and classified all 348 blocks. It
+found 83 blocks to remove, rewrite, or replace through a code refactor, while 265 carried justified
+context. The 24 percent actionable rate is too noisy for the routine audit, so 4 lines remains a
+recalibration tool and the default stays at 11. Candidate phrase rules from that review were also
+rejected when legitimate constraints produced too many counterexamples; only the deterministic
+`Rule #N` spelling was added to the existing `rule-scaffolding` check.
 
 The seven long blocks that were narrative have since been trimmed, so the length rule now reports
 one standing finding: the pricing source table in `src/db/seed/catalog/models.ts`, where the length

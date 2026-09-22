@@ -36,6 +36,7 @@ import {
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { generateOpenRouterImage } from "@/providers/openrouter/openrouterImageGeneration";
+import { buildGeminiImagePromptParts } from "@/providers/utils/geminiImageParts";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
@@ -434,13 +435,7 @@ export async function execute(
         model: modelCodename,
       });
 
-      // Build parts: reference images (as inlineData) followed by the text prompt.
-      // SendMessageParameters.message is PartListUnion: inline images must be
-      // passed as inlineData parts, not via a non-existent "media" field.
-      const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
-        ...referenceImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
-        prompt,
-      ];
+      const messageParts = buildGeminiImagePromptParts(prompt, referenceImages);
 
       const response = await chat.sendMessage({
         message: messageParts,

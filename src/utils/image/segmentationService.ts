@@ -298,7 +298,6 @@ async function buildBoundingBoxMask(
       .toBuffer();
   }
 
-  // Convert to RGBA format matching NAI's expected mask encoding.
   // NAI expects RGBA PNG where:
   //   - White pixels (redraw):   R=255, G=255, B=255, A=255
   //   - Black pixels (preserve): R=0,   G=0,   B=0,   A=0
