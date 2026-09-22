@@ -1,13 +1,7 @@
-// Runtime model seeding from the typed catalog (`models.ts`).
-//
-// This is the single source of truth for seeded models: the catalog is rendered
-// into INSERT … ON CONFLICT statements and executed directly during database
-// initialization (see `seedModelsFromCatalog`). There is no generated .sql file
-// to keep in sync, so editing `models.ts` is all that's needed.
-//
-// The same row tuples and ON CONFLICT upserts used by the old 01_models.sql are
-// reproduced here, so seeding behavior (idempotent upsert on every startup) is
-// unchanged.
+// Runtime model seeding from the typed catalog (`models.ts`), the single source of truth for
+// seeded models: the catalog is rendered into INSERT … ON CONFLICT statements and executed
+// directly during database initialization (see `seedModelsFromCatalog`). There is no generated
+// .sql file to keep in sync, and seeding stays an idempotent upsert on every startup.
 
 import type { SQL } from "bun";
 import { embeddingSections, imageSections, llmSections, videoSections } from "./models";

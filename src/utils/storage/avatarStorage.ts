@@ -12,6 +12,7 @@ import path from "node:path";
 import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilename";
 import { PERSONA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { extractCloudObjectKeyFromUrl } from "@/utils/storage/cloudObjectStorage";
 import { log } from "@/utils/misc/logger";
 
 /**
@@ -145,36 +146,7 @@ function resolveLocalAvatarPath(storedPath: string): string | null {
 }
 
 function extractKeyFromAvatarUrl(config: AvatarStorageConfig, url: string): string | null {
-  try {
-    if (config.backend === "gcs") {
-      // GCS public URLs: https://storage.googleapis.com/BUCKET/PREFIX/...
-      // Strip the publicBaseUrl prefix to recover the object key.
-      const baseUrl = config.publicBaseUrl.replace(/\/+$/, "");
-      if (!url.startsWith(`${baseUrl}/`)) {
-        return null;
-      }
-      const key = url.slice(baseUrl.length + 1);
-      return key.startsWith(`${config.prefix}/`) ? key : null;
-    }
-
-    // S3: match on hostname (supports custom CDN domains, virtual-hosted style, and path-style)
-    const parsed = new URL(url);
-    const baseHost = new URL(config.publicBaseUrl).hostname;
-    const hostname = parsed.hostname;
-    const pathName = parsed.pathname.replace(/^\/+/, "");
-
-    if (hostname !== baseHost) {
-      const s3Host = `${config.bucket}.s3.${config.region}.amazonaws.com`;
-      const s3HostLegacy = `${config.bucket}.s3.amazonaws.com`;
-      if (hostname !== s3Host && hostname !== s3HostLegacy) {
-        return null;
-      }
-    }
-
-    return pathName.startsWith(`${config.prefix}/`) ? pathName : null;
-  } catch {
-    return null;
-  }
+  return extractCloudObjectKeyFromUrl(config, url);
 }
 
 function getNonProductionPublicBaseUrl(): string | null {

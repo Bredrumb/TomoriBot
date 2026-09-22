@@ -3210,13 +3210,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async updateTomori(personaId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
     try {
-      // Validate the partial data with Zod (Rule #7)
       const validTomoriData = tomoriSchema.partial().parse(tomoriData);
 
-      // Extract field names and values for the SQL query.
-      // Filter to only keys present in the original input, because Zod injects defaults
-      // for all schema fields with .default(), which would incorrectly expand the
-      // SET clause (e.g. attribute_list: [] would overwrite existing data).
+      // Filter to only keys present in the original input: Zod injects defaults for every
+      // schema field with .default(), which would expand the SET clause and overwrite existing
+      // data (e.g. attribute_list: []).
       const fields = Object.keys(validTomoriData).filter((key) => key !== "persona_id" && key in tomoriData);
 
       if (fields.length === 0) {

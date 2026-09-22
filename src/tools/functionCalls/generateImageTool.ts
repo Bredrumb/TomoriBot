@@ -37,7 +37,8 @@ import { resolveNativeImageGenerationCapability } from "@/utils/provider/provide
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import { generateOpenRouterImage } from "@/providers/openrouter/openrouterImageGeneration";
 import { ZAI_CODING_IMAGES_GENERATIONS_URL, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
-import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
+import { getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
+import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
 import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
@@ -919,15 +920,15 @@ export class GenerateImageTool extends BaseTool {
     let quotaCheck: QuotaCheckResult = { allowed: true };
 
     try {
-      // Resolve credentials first so we can skip server quota for personal BYOK users
-      const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-standard", {
-        userId: context.internalUserId ?? null,
-      });
-
-      // Personal BYOK users bring their own API quota, so bypass server quota entirely
-      if (creds.source === "server") {
-        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
+        context.tomoriState.server_id,
+        "image-standard",
+        context.internalUserId ?? null,
+        checkImageQuota,
+        userDiscId,
+        quotaCheck,
+      );
+      quotaCheck = serverQuotaCheck;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -1423,11 +1424,9 @@ export class GenerateImageTool extends BaseTool {
         });
       }
 
-      // Note: We intentionally DO NOT include imageMetadata for generated images
-      // because Discord CDN URLs are protected and cannot be fetched by external
-      // servers (like OpenRouter). The model doesn't need to see its own generated
-      // output - it just needs confirmation that the generation succeeded.
-      // The text message includes the Discord message ID for reference.
+      // Generated images omit imageMetadata: Discord CDN URLs are protected and cannot be
+      // fetched by external servers such as OpenRouter. The model needs only confirmation
+      // that generation succeeded, and the text message carries the Discord message ID.
 
       let successMessage = `Successfully generated and sent image to Discord (message ID: ${sentMessage.id}). The image has been created based on your prompt${
         referenceImagesUsed ? " and the reference image(s)" : ""

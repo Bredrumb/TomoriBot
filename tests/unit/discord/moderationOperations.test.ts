@@ -1,7 +1,8 @@
-import { beforeAll, describe, expect, it } from "bun:test";
+import { beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { ChannelPersonaWhitelistRow, ChannelWhitelistRow, RoleWhitelistRow, TomoriState } from "@/types/db/schema";
 import { CooldownType } from "@/types/db/schema";
 import { whitelistRepository } from "@/utils/db/repositories";
+import { log } from "@/utils/misc/logger";
 import type { PersonaUserBlockWithPersona } from "@/utils/db/repositories/PersonaUserBlockRepository";
 import type {
   ServerModelAccessOperationsDependencies,
@@ -1487,6 +1488,75 @@ describe("whitelist role operations", () => {
     );
     expect(missing.status).toBe("not_found");
     expect(events).toEqual([]);
+  });
+});
+
+describe("moderation write failure reporting", () => {
+  // The route reports only that the write failed, so the operation name and the row identifiers
+  // have to reach the log at error level or the cause is lost in production.
+  it("records the failing operation and its target identifiers", async () => {
+    const errorCalls: Array<{ msg: string; context?: { errorType?: string; metadata?: Record<string, unknown> } }> = [];
+    const logSpy = spyOn(log, "error").mockImplementation((async (msg, _err, context) => {
+      errorCalls.push({ msg: String(msg), context });
+    }) as typeof log.error);
+
+    try {
+      const result = await removeWhitelistRole(
+        { guildId: "guild-1", serverId: 10, roleId: "role-1" },
+        {
+          removeRoleWhitelist: async () => {
+            throw new Error("db down");
+          },
+          invalidateCache: () => {},
+        },
+      );
+
+      expect(result.status).toBe("failure");
+      expect(errorCalls).toHaveLength(1);
+      expect(errorCalls[0]?.msg).toBe("Moderation removeWhitelistRole failed");
+      expect(errorCalls[0]?.context?.errorType).toBe("ModerationWriteFailed");
+      expect(errorCalls[0]?.context?.metadata).toEqual({
+        operation: "removeWhitelistRole",
+        serverId: 10,
+        roleId: "role-1",
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it("keeps per-operation identifiers rather than one shared metadata shape", async () => {
+    const errorCalls: Array<{ metadata?: Record<string, unknown> }> = [];
+    const logSpy = spyOn(log, "error").mockImplementation((async (_msg, _err, context) => {
+      errorCalls.push({ metadata: context?.metadata });
+    }) as typeof log.error);
+
+    try {
+      await replacePersonaChannelWhitelist(
+        {
+          guildId: "guild-1",
+          serverId: 10,
+          personaId: 4,
+          selectedChannelIds: new Set(["channel-1"]),
+          availableChannelIds: ["channel-1"],
+        },
+        {
+          readPersonaWhitelistChannels: async () => [],
+          replacePersonaWhitelistChannels: async () => {
+            throw new Error("db down");
+          },
+          invalidateCache: () => {},
+        },
+      );
+
+      expect(errorCalls[0]?.metadata).toEqual({
+        operation: "replacePersonaChannelWhitelist",
+        serverId: 10,
+        personaId: 4,
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 });
 

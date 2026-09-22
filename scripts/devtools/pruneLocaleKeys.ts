@@ -195,11 +195,9 @@ async function main(): Promise<void> {
   const slices = await loadLocaleSlices();
   log.info(`Loaded ${slices.length} leaf slice files`);
 
-  // For each unused key, find the matching slice(s) and delete the sub-path.
-  //    A key like "commands.tool.prompt.snapshot.description" maps to sub-path "tool.prompt.snapshot.description"
-  //    in the slice whose keyPrefix is "commands".
-  //    A key like "general.defaults.bot_name" maps to sub-path "general.defaults.bot_name"
-  //    in the top-level slice with keyPrefix "".
+  // A key like "commands.tool.prompt.snapshot.description" maps to sub-path "tool.prompt.snapshot.description"
+  // in the slice whose keyPrefix is "commands". A key like "general.defaults.bot_name" maps to sub-path
+  // "general.defaults.bot_name" in the top-level slice with keyPrefix "".
   const modifiedSlices = new Set<number>();
 
   for (const key of unusedKeys) {

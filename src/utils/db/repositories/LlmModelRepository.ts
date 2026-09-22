@@ -11,6 +11,7 @@ import {
 } from "@/types/db/schema";
 import { getCachedLLM } from "@/utils/cache/llmCache";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
+import { buildIntegerParameterList } from "@/utils/db/parameterBinding";
 import { log } from "@/utils/misc/logger";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
@@ -85,11 +86,8 @@ class LlmModelRepository {
     if (ids.length === 0) return [];
 
     try {
-      // Avoid ANY($1) array binding, because Bun SQL can intermittently fail on
-      // integer-array parameters with protocol error 08P01.
-      const distinctIds = Array.from(new Set(ids));
-      const placeholders = distinctIds.map((_, i) => `$${i + 1}`).join(", ");
-      const rows = await sql.unsafe(`SELECT * FROM llms WHERE llm_id IN (${placeholders})`, distinctIds);
+      const { values, placeholders } = buildIntegerParameterList(ids);
+      const rows = await sql.unsafe(`SELECT * FROM llms WHERE llm_id IN (${placeholders})`, values);
 
       const rowMap = new Map<number, LlmRow>();
       for (const row of rows) {

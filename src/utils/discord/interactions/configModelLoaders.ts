@@ -33,6 +33,7 @@ import type {
   ConfigSwitchModelsView,
 } from "@/utils/discord/ui/configModelsPanel";
 import { buildProviderPageEntries } from "@/utils/discord/ui/modelRoutingControls";
+import { resolveProviderEntryStart } from "@/utils/discord/ui/providerSelectWindow";
 import { resolveNaiImageParams } from "@/utils/image/naiImageParams";
 import { isCustomProvider, parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
@@ -372,9 +373,7 @@ export async function loadConfigFallbacksView(
     })),
     providerEntries: entries,
     expandedProvider,
-    // Defaulting to the expansion's own offset keeps a freshly expanded provider on screen; a
-    // stored start means the reader paged deliberately and outranks it.
-    entryStart: entryStart || expandedStartIndex,
+    entryStart: resolveProviderEntryStart(entryStart, expandedStartIndex),
     randomizerEnabled: state.config.model_randomizer_enabled ?? false,
     hasFallbacks: refs.length > 0,
   };

@@ -151,11 +151,6 @@ export async function execute(
   const overwrite = interaction.options.getBoolean("overwrite") ?? false;
 
   try {
-    // Force sync emojis and stickers from Discord to ensure DB is populated
-    // This handles scenarios where:
-    // - Bot was just added to server (empty DB)
-    // - Bot was kicked and re-added with new emojis/stickers
-    // - Existing servers before expression refresh feature was implemented
     log.info(`[Initialize Expressions] Force syncing emojis/stickers for guild ${interaction.guild.name}`);
 
     await lazySyncGuildEmojis(interaction.guild, tomoriState.server_id, true);
@@ -278,16 +273,9 @@ export async function execute(
       return;
     }
 
-    // Self-looping batch processor.
-    //    Previously the command processed a single provider-sized batch and asked
-    //    the user to re-run for the rest. It now drains the entire backlog on its
-    //    own, one batch per iteration.
-    //
-    //    Loop-safety guard: the backlog size is compared between iterations. When a
-    //    batch makes no progress (the remaining count is unchanged), it is counted
-    //    as a retry of the same "stuck" chunk. After `maxChunkRetries` consecutive
-    //    no-progress iterations the loop aborts, so a model that consistently errors
-    //    or fails to match items can never loop forever.
+    // Loop-safety guard: after `maxChunkRetries` consecutive no-progress iterations
+    //    the loop aborts, so a model that consistently errors or fails to match items
+    //    can never loop forever. Any other exit condition must keep that guarantee.
     const maxChunkRetries = Number.parseInt(process.env.EXPRESSION_INIT_MAX_CHUNK_RETRIES || "3", 10);
     const batchDelayMs = Number.parseInt(process.env.EXPRESSION_INIT_BATCH_DELAY_MS || "1000", 10);
 

@@ -1,9 +1,9 @@
 import type { ChatInputCommandInteraction, Client, SlashCommandSubcommandBuilder } from "discord.js";
 import type { UserRow } from "@/types/db/schema";
-import { getCachedTomoriState } from "@/utils/cache/tomoriStateCache";
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { localizer } from "@/utils/text/localizer";
 import { log, ColorCode } from "@/utils/misc/logger";
+import { resolveStatsServerId } from "@/utils/stats/statsServerContext";
 import {
   buildServerTabs,
   buildSubtitle,
@@ -55,17 +55,8 @@ export async function execute(
   }
 
   try {
-    // Resolve the internal server id; stat reads key on it, not the snowflake.
-    const tomoriState = await getCachedTomoriState(guild.id);
-    const serverId = tomoriState?.server_id;
-    if (!serverId) {
-      await replyInfoEmbed(interaction, locale, {
-        titleKey: "general.errors.tomori_not_setup_title",
-        descriptionKey: "general.errors.tomori_not_setup_description",
-        color: ColorCode.ERROR,
-      });
-      return;
-    }
+    const serverId = await resolveStatsServerId(interaction, locale);
+    if (!serverId) return;
 
     const timeframe = (interaction.options.getString("timeframe") ?? DEFAULT_TIMEFRAME) as Timeframe;
     const from = resolveWindowFrom(timeframe);

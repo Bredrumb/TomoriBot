@@ -73,8 +73,8 @@ import {
   isSupportedImageAttachmentContentType,
   isSupportedVideoAttachmentContentType,
 } from "@/utils/chat/contextMedia";
-import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
+import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 
 const PERSONA_SELECT_ID = "prompt_snapshot_persona_select";
@@ -564,26 +564,14 @@ export async function execute(
         personaName = authorName;
       } else if (message.webhookId) {
         const webhookName = message.author.username?.trim();
-        const renderModifierSource = webhookName
-          ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
+        const resolvedPersona = webhookName
+          ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
           : null;
-        const matchedPersona = webhookName
-          ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
-          : undefined;
-        if (matchedPersona) {
-          // Mirror the real pipeline: recover the decorated "Name (sprite)" label
-          // for clean-named sprite messages from the persisted mapping.
-          const spriteDisplayName = renderModifierSource
-            ? null
-            : await resolveSpriteMessageDisplayName(
-                message.id,
-                matchedPersona.persona_id,
-                matchedPersona.persona_nickname,
-              );
-          authorName = renderModifierSource?.displayName ?? spriteDisplayName ?? matchedPersona.persona_nickname;
+        if (resolvedPersona) {
+          authorName = resolvedPersona.displayName;
           authorType = "persona";
-          personaName = matchedPersona.persona_nickname;
-          effectiveAuthorId = String(matchedPersona.persona_id ?? matchedPersona.persona_nickname);
+          personaName = resolvedPersona.persona.persona_nickname;
+          effectiveAuthorId = String(resolvedPersona.persona.persona_id ?? resolvedPersona.persona.persona_nickname);
           syntheticUsers.set(effectiveAuthorId, { displayName: authorName, type: "persona" });
         } else if (webhookName) {
           authorName = webhookName;
@@ -1244,10 +1232,10 @@ async function buildJsonSnapshot(
     // flatten `contextItems` into a plain `{model, messages: [{role, content}]}` shape.
     // Role remap: `model` → `assistant` to match OpenAI conventions.
 
-    // Consolidate all system items into a single leading entry
-    //    OpenAI-compatible APIs only accept one `role: "system"` message,
-    //    so we flatten multiple system blocks (personality, rules, knowledge, etc.)
-    //    by joining their text parts with "\n\n" into one entry.
+    // OpenAI-compatible APIs accept only one leading `role: "system"` message, so the
+    //    system blocks (personality, rules, knowledge) are flattened into a single entry
+    //    by joining their text parts. A second system message would be rejected or, worse,
+    //    silently dropped by the endpoint.
     const systemTextChunks: string[] = [];
     const nonSystemItems: StructuredContextItem[] = [];
     for (const item of contextItems) {
@@ -1298,10 +1286,10 @@ async function buildJsonSnapshot(
     requestData = { model: modelName, messages: messagesList };
   }
 
-  // Merge per-provider sampling/request config into the top level.
-  //    For Google/Vertex we nest under existing keys (`generation_config`, `safety_settings`, etc.)
-  //    so the shape continues to match what the adapter would send. For Anthropic and
-  //    OpenAI-compat we just spread onto the root object.
+  // requestConfig is already provider-shaped: Google/Vertex nest samplers under
+  //    `generation_config`, `safety_settings`, and friends, while Anthropic and
+  //    OpenAI-compatible providers use root-level keys. Copying at the top level keeps
+  //    that shape and cannot overwrite a key the adapter already set.
   for (const [key, value] of Object.entries(requestConfig)) {
     if (!(key in requestData)) requestData[key] = value;
   }

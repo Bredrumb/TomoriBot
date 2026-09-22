@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { MessageFlags, type Attachment, type ChatInputCommandInteraction } from "discord.js";
 import { parseExportFile } from "@/types/db/dataExport";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
@@ -19,6 +18,7 @@ import { buildMemoryTransferPreviewPayload, type MemoryTransferKind } from "@/ut
 import { ColorCode, log } from "@/utils/misc/logger";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload, type SafeDownloadResult } from "@/utils/security/safeDownload";
+import { readImportFile } from "./importFileIntake";
 
 export type MemoryImportScope = "workspace" | "personal";
 
@@ -89,18 +89,6 @@ const defaultDependencies: MemoryImportDependencies = {
   replyInfoEmbed,
 };
 
-function fingerprintExportFile(buffer: Buffer): string {
-  return createHash("sha256").update(buffer).digest("hex");
-}
-
-function parseJsonObject(buffer: Buffer): unknown | null {
-  try {
-    return JSON.parse(buffer.toString("utf8"));
-  } catch {
-    return null;
-  }
-}
-
 /**
  * The upload operation shared by `/import memories` and `/import personal memories`. It validates the file and
  * stores the parsed result behind an actor-bound nonce. The routed actions read that snapshot, and only
@@ -134,23 +122,14 @@ export async function startMemoryImport(
       return;
     }
 
-    // Acknowledge before the download and the parse, both of which outlive Discord's three-second window.
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
     const attachment = interaction.options.getAttachment("file", true);
-    const download = await dependencies.downloadAttachment(attachment);
-    if (!download.success || !download.buffer) {
+    const intake = await readImportFile(interaction, attachment, dependencies);
+    if (!intake.ok) {
       await refuseInvalidFile();
       return;
     }
 
-    const jsonData = parseJsonObject(download.buffer);
-    if (jsonData === null) {
-      await refuseInvalidFile();
-      return;
-    }
-
-    const parseResult = parseExportFile(jsonData);
+    const parseResult = parseExportFile(intake.jsonData);
     if (!parseResult.success) {
       await refuseInvalidFile();
       return;
@@ -197,7 +176,7 @@ export async function startMemoryImport(
       kind,
       ownership: scope,
       destinationKey,
-      fingerprint: fingerprintExportFile(download.buffer),
+      fingerprint: intake.fingerprint,
       exportResult: parseResult,
     });
 

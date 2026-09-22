@@ -280,13 +280,11 @@ async function buildBoundingBoxMask(
 
   let maskBuffer = await sharp(svgMask).resize(originalWidth, originalHeight).greyscale().toBuffer();
 
-  // Step 2: Quantize mask to NAI's latent space grid (1/8th resolution).
-  // NAI's diffusion model operates at 1/8th pixel resolution in latent space.
-  // The mask gets downsampled internally regardless; but if we send a full-res
-  // mask with smooth edges, the internal downsampling creates intermediate grey
-  // values at boundaries that the model interprets as partial redraw (= halo).
-  // Pre-quantizing with nearest-neighbor ensures every mask pixel aligns exactly
-  // with a latent-space cell. This matches ComfyUI_NAIDGenerator's resize_to_naimask().
+  // Quantize the mask to NAI's latent space grid (1/8th resolution). The mask gets
+  // downsampled internally regardless, but a full-res mask with smooth edges creates
+  // intermediate grey values at the boundaries during that downsampling, which the model
+  // reads as partial redraw (= halo). Pre-quantizing with nearest-neighbor keeps every mask
+  // pixel aligned to a latent-space cell, matching ComfyUI_NAIDGenerator's resize_to_naimask().
   const latentW = Math.ceil(originalWidth / 64) * 8;
   const latentH = Math.ceil(originalHeight / 64) * 8;
 
@@ -300,7 +298,6 @@ async function buildBoundingBoxMask(
       .toBuffer();
   }
 
-  // Step 3: Convert to RGBA format matching NAI's expected mask encoding.
   // NAI expects RGBA PNG where:
   //   - White pixels (redraw):   R=255, G=255, B=255, A=255
   //   - Black pixels (preserve): R=0,   G=0,   B=0,   A=0

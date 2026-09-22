@@ -125,14 +125,14 @@ export class StreamSegmentProcessor {
           : await resolveCopiedRenderModifierTarget(renderModifierMatch.modifier, context, sourceDisplayName);
 
       if (renderTarget) {
-        // Non-identity sprites all share the clean persona username, so Discord, so
-        // which groups consecutive webhook messages by webhook + username and
-        // ignores the per-message avatar, so would render back-to-back sprites under
-        // the first sprite's avatar. When a sprite change would collide with the
-        // previous message's clean name, fall back to the decorated
-        // "Persona (sprite)" name for that one message so Discord treats it as a
-        // distinct author and renders its avatar. Identity sprites already use a
-        // distinct decorated name, so they are excluded.
+        // Non-identity sprites all share the clean persona username, and Discord groups
+        // consecutive webhook messages by webhook + username while ignoring the
+        // per-message avatar, so back-to-back sprites would render under the first
+        // sprite's avatar. When a sprite change would collide with the previous
+        // message's clean name, fall back to the decorated "Persona (sprite)" name for
+        // that one message so Discord treats it as a distinct author and renders its
+        // avatar. Identity sprites already use a distinct decorated name, so they are
+        // excluded.
         const identity =
           renderTarget.spriteRecord && !renderTarget.isIdentitySprite
             ? this.resolveSpriteGroupBreakIdentity(
@@ -410,8 +410,8 @@ export class StreamSegmentProcessor {
    * Logs the persona the sprite lookup was performed against alongside that persona's actual
    * sprite keys, which distinguishes the two candidate causes:
    *
-   * - Wrong persona, so `personaId` is not the persona the model was told to speak as, so its
-   *    sprite keys can never match (the failure mode expected on queued/chained turns).
+   * - Wrong persona: `personaId` is not the persona the model was told to speak as, so its sprite
+   *   keys can never match (the failure mode expected on queued/chained turns).
    * - Right persona, unknown label: the model invented a sprite key, or the sprite exists
    *    but its avatar is unusable (`resolveSpriteIdentity` returning null).
    *

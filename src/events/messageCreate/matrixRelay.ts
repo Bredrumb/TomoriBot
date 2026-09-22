@@ -340,10 +340,9 @@ const handler = async (client: Client, message: Message): Promise<void> => {
 
   const personaName = persona?.persona_nickname ?? message.author.username;
 
-  // Relay the text content (skip if empty after trim)
-  //    Identity is conveyed by the virtual Matrix user, so no bold prefix needed.
-  //    @{name} placeholders are transformed to proper Matrix mention links so
-  //    Matrix clients highlight and notify the mentioned user (MSC3952).
+  // Identity is conveyed by the virtual Matrix user, so no bold prefix needed.
+  // @{name} placeholders are transformed to proper Matrix mention links so
+  // Matrix clients highlight and notify the mentioned user (MSC3952).
   const rawText = message.content.trim();
   if (rawText) {
     const { body, formattedBody, mentionedIds } = resolveDiscordTextForMatrix(rawText, message);
