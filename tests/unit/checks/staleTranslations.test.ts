@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
   EXPECTED_SCRIPT,
+  filterUnfollowedReport,
   findStaleTranslations,
   isIntentionallySharedTranslation,
   looksLikeEnglish,
+  unfollowedEntries,
 } from "../../../scripts/devtools/findStaleTranslations";
+import type { StalenessReport } from "../../../scripts/checks/checkLocaleStaleness";
 
 describe("staleTranslations expected script detection", () => {
   it("maps all 32 Discord locales to their expected script family", () => {
@@ -100,5 +103,60 @@ describe("staleTranslations expected script detection", () => {
   it("rejects en-US as target locale and non-existent unauthored locales", async () => {
     expect(findStaleTranslations("en-US")).rejects.toThrow("translation target");
     expect(findStaleTranslations("fr")).rejects.toThrow("does not exist");
+  });
+
+  it("exports branch follow-up under the unfollowed reason", () => {
+    const report: StalenessReport = {
+      requestedBase: "origin/main",
+      baseRevision: "base",
+      headRevision: "head",
+      includesUncommittedEdits: false,
+      uncommittedLocalePaths: [],
+      translationLocales: ["ja", "zh-CN"],
+      added: [
+        {
+          key: "general.new_key",
+          english: "New English",
+          review: [],
+          missing: [{ locale: "ja", present: false, touched: false }],
+        },
+      ],
+      changed: [
+        {
+          key: "general.changed_key",
+          english: "Current English",
+          previousEnglish: "Previous English",
+          review: [{ locale: "zh-CN", present: true, value: "现有翻译", touched: false }],
+          missing: [],
+        },
+      ],
+      removed: [],
+      localeEditCounts: new Map(),
+      conflicts: new Set(),
+    };
+
+    expect(unfollowedEntries(report)).toEqual([
+      {
+        key: "general.new_key",
+        en: "New English",
+        previousEn: undefined,
+        target: undefined,
+        locale: "ja",
+        reason: "unfollowed",
+        change: "added",
+      },
+      {
+        key: "general.changed_key",
+        en: "Current English",
+        previousEn: "Previous English",
+        target: "现有翻译",
+        locale: "zh-CN",
+        reason: "unfollowed",
+        change: "changed",
+      },
+    ]);
+    expect(unfollowedEntries(report, "ja")).toHaveLength(1);
+    expect(filterUnfollowedReport(report, "ja").changed).toEqual([]);
+    expect(filterUnfollowedReport(report, "ja").added[0]?.missing).toHaveLength(1);
   });
 });

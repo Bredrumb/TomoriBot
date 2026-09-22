@@ -44,9 +44,12 @@ and everything optional degrades to English rather than to a broken surface.
 | `tools.intent_packs` | Recommended | The union drops to the packs that do exist |
 | Persona voice authoring | Optional per locale, required for the shipped roster | English preset content |
 
-Only `en-US` and `ja` are authored today. The eight target locales (`pt-BR`, `es-419`, `fr`, `zh-TW`,
-`zh-CN`, `vi`, `ru`, `ko`) are registered in the shared docs configuration and are waiting for their
-trees.
+`en-US` is the source. `src/locales/` also carries six translated trees today (`ja`, `es-419`,
+`pt-BR`, `vi`, `zh-CN`, `zh-TW`), and `fr`, `ru`, and `ko` are registered in the shared docs
+configuration without a tree yet.
+
+A change to `en-US` may need follow-up in any authored translation locale. That work is advisory:
+authoring it is welcome, and falling behind is not a merge blocker. `bun run find-stale-translations --reason=unfollowed --base=origin/main` reports one branch follow-up queue for all authored translation locales. [Verification](/contributing/adding-locale/verification/) owns its contract.
 
 ## Definition Of Done
 
