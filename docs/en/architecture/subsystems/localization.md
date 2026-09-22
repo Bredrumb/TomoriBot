@@ -78,6 +78,15 @@ instead of showing users a raw `commands.foo.bar_description` path. The `warn` f
 `check-locales` treats missing translations as an advisory exit 2 while the Japanese catch-up is
 pending. A source key missing from every locale remains a blocking error.
 
+`bun run find-stale-translations --reason=unfollowed --base=origin/main` is the branch-scoped advisory
+for the review question parity reporting cannot answer: which `en-US` keys this branch changed while
+another locale stayed as it was. It parses the `en-US` tree at the merge base and committed `HEAD`,
+reports added, materially changed, and removed keys separately, and names the locales that did not
+follow. Whitespace-only reformatting is not a material change, and a key one locale defines twice with
+different values is skipped rather than guessed at. It exits zero on findings by design, so it cannot
+become an all-locale merge gate or change the fallback chain above. Missing history, which a shallow
+clone produces, is reported as an unusable base ref rather than as a branch that added every key.
+
 `bun run list-unused-locales` reports keys without a known runtime consumer. Its scanner includes
 TypeScript and TSX literals, template-built key namespaces, command metadata generated from the live
 command tree, help guide key construction, runtime string lists, and the embed protocol registry.

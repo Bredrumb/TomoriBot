@@ -3,6 +3,22 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Glob } from "bun";
 import { type LocaleCode, isDiscordLocaleCode } from "@/constants/locales";
+import {
+  GitUnavailableError,
+  LocaleParseError,
+  MissingBaseRefError,
+  type StalenessReport,
+  checkLocaleStaleness,
+  renderStalenessReport,
+} from "../checks/checkLocaleStaleness";
+import {
+  type DriftReport,
+  type DriftedEntry,
+  DriftHistoryError,
+  analyzeLocaleDrift,
+  createGitDriftSource,
+  formatDriftReport,
+} from "./localeDrift";
 
 /**
  * Lightweight logger (no DB dependency)
@@ -203,6 +219,38 @@ export interface StaleEntry {
 }
 
 /**
+ * A drifted finding with the discriminant the export needs.
+ *
+ * The analysis in {@link ./localeDrift} already reports the shape a batch translator needs, so this
+ * only adds the reason tag rather than restating every field.
+ */
+export interface DriftedStaleEntry extends DriftedEntry {
+  reason: "drifted";
+}
+
+/** A translation this branch did not touch after changing its English source. */
+export interface UnfollowedStaleEntry {
+  key: string;
+  en: string;
+  previousEn?: string;
+  target?: string;
+  locale: LocaleCode;
+  reason: "unfollowed";
+  change: "added" | "changed";
+}
+
+export type AnyStaleEntry = StaleEntry | DriftedStaleEntry | UnfollowedStaleEntry;
+
+/** Reasons the CLI accepts, in report order. */
+export const STALE_REASONS = ["identical", "likely_english", "drifted", "unfollowed"] as const;
+export type StaleReason = (typeof STALE_REASONS)[number];
+const DEFAULT_STALE_REASONS: readonly StaleReason[] = ["identical", "likely_english", "drifted"];
+
+export function isStaleReason(value: string): value is StaleReason {
+  return (STALE_REASONS as readonly string[]).includes(value);
+}
+
+/**
  * Loads and merges all category slice files for a locale into a single flat object.
  */
 export async function loadMergedLocale(localeName: string): Promise<Record<string, unknown>> {
@@ -217,14 +265,50 @@ export async function loadMergedLocale(localeName: string): Promise<Record<strin
 }
 
 /**
- * Finds keys where a translation is either identical to the English value (never translated)
- * or contains Latin letters with zero characters of the expected script (for non-Latin locales).
+ * Validates a caller-supplied locale and returns the locales to scan.
+ *
+ * Shared by both scan kinds so `--locale` rejects `en-US` and unknown trees identically whether the
+ * caller asked for a value comparison, a drift comparison, or both.
  */
-export async function findStaleTranslations(targetLocale?: string): Promise<StaleEntry[]> {
-  const enLocale = await loadMergedLocale("en-US");
-  const enFlat = flatten(enLocale);
+async function resolveTargetLocales(targetLocale?: string, repoRoot = process.cwd()): Promise<LocaleCode[]> {
+  if (!targetLocale) {
+    const localesToCheck: LocaleCode[] = [];
+    const localesDir = join(repoRoot, "src", "locales");
+    const glob = new Glob("*");
+    for await (const entry of glob.scan({ cwd: localesDir, onlyFiles: false })) {
+      if (entry !== "en-US" && isDiscordLocaleCode(entry)) {
+        localesToCheck.push(entry);
+      }
+    }
+    return localesToCheck;
+  }
 
-  const localesToCheck: LocaleCode[] = [];
+  if (!isDiscordLocaleCode(targetLocale)) {
+    throw new Error(`Invalid Discord locale code: ${targetLocale}`);
+  }
+  if (targetLocale === "en-US") {
+    throw new Error(`"en-US" is the English source and cannot be scanned as a translation target.`);
+  }
+  const targetDir = join(repoRoot, "src", "locales", targetLocale);
+  if (!existsSync(targetDir)) {
+    throw new Error(`Locale "${targetLocale}" does not exist in src/locales/`);
+  }
+
+  return [targetLocale];
+}
+
+/**
+ * Collects translations whose English source moved after the key was translated.
+ *
+ * Reads history through {@link createGitDriftSource}, so this needs a checkout with the commits the
+ * blame reaches. `DriftHistoryError` carries the git failure the caller should report verbatim,
+ * which is what a shallow clone produces.
+ */
+export async function findDriftedTranslations(targetLocale?: string, repoRoot = process.cwd()): Promise<DriftReport> {
+  const source = createGitDriftSource(repoRoot);
+  const authoredLocales = source.listTranslationLocales();
+  let locales: LocaleCode[];
+
   if (targetLocale) {
     if (!isDiscordLocaleCode(targetLocale)) {
       throw new Error(`Invalid Discord locale code: ${targetLocale}`);
@@ -232,20 +316,108 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
     if (targetLocale === "en-US") {
       throw new Error(`"en-US" is the English source and cannot be scanned as a translation target.`);
     }
-    const targetDir = join(process.cwd(), "src", "locales", targetLocale);
-    if (!existsSync(targetDir)) {
-      throw new Error(`Locale "${targetLocale}" does not exist in src/locales/`);
+    if (!authoredLocales.includes(targetLocale)) {
+      throw new Error(`Locale "${targetLocale}" does not exist in committed HEAD under src/locales/`);
     }
-    localesToCheck.push(targetLocale);
+    locales = [targetLocale];
   } else {
-    const localesDir = join(process.cwd(), "src", "locales");
-    const glob = new Glob("*");
-    for await (const entry of glob.scan({ cwd: localesDir, onlyFiles: false })) {
-      if (entry !== "en-US" && isDiscordLocaleCode(entry)) {
-        localesToCheck.push(entry);
-      }
+    locales = authoredLocales.filter((locale): locale is LocaleCode => isDiscordLocaleCode(locale));
+  }
+
+  // A shallow checkout cannot answer this question, and it fails in the worst possible direction.
+  // `git blame` attributes every line to the grafted root, whose English file is the newest one the
+  // clone holds, so the comparison finds nothing and the report reads as clean. Refuse instead.
+  if (source.isShallow()) {
+    throw new DriftHistoryError("this checkout is shallow, so translation baselines are missing");
+  }
+
+  const englishFiles = source.listLocaleFiles("en-US");
+
+  const entries: DriftedEntry[] = [];
+  const files: DriftReport["files"] = [];
+
+  for (const locale of locales) {
+    const report = analyzeLocaleDrift({ locale, source, englishFiles });
+    files.push(...report.files);
+    for (const entry of report.entries) {
+      entries.push(entry);
     }
   }
+
+  entries.sort((a, b) => a.locale.localeCompare(b.locale) || a.key.localeCompare(b.key));
+  files.sort((a, b) => b.count - a.count || a.file.localeCompare(b.file));
+
+  return { entries, files, scannedLocales: locales };
+}
+
+/**
+ * Finds branch-local translation follow-up without granting it a separate command surface.
+ *
+ * Unlike the historical `drifted` reason, this only asks whether a translation moved in the same
+ * branch as its English source. It remains opt-in because a no-argument stale scan must not need a
+ * merge base.
+ */
+export async function findUnfollowedTranslations(base?: string, repoRoot = process.cwd()): Promise<StalenessReport> {
+  return checkLocaleStaleness({ repoRoot, base });
+}
+
+/** Turns branch follow-up into the batch-export shape used by the other stale reasons. */
+export function unfollowedEntries(report: StalenessReport, locale?: string): UnfollowedStaleEntry[] {
+  const entries: UnfollowedStaleEntry[] = [];
+  const addEntries = (change: "added" | "changed", reports: typeof report.added): void => {
+    for (const reportEntry of reports) {
+      for (const status of [...reportEntry.review, ...reportEntry.missing]) {
+        if (locale && status.locale !== locale) continue;
+        entries.push({
+          key: reportEntry.key,
+          en: reportEntry.english,
+          previousEn: reportEntry.previousEnglish,
+          target: status.value,
+          locale: status.locale as LocaleCode,
+          reason: "unfollowed",
+          change,
+        });
+      }
+    }
+  };
+
+  addEntries("added", report.added);
+  addEntries("changed", report.changed);
+  return entries.sort((left, right) => left.locale.localeCompare(right.locale) || left.key.localeCompare(right.key));
+}
+
+/** Keeps the human branch report aligned with the locale filter used by its export. */
+export function filterUnfollowedReport(report: StalenessReport, locale?: string): StalenessReport {
+  if (!locale) return report;
+
+  const filterEntries = (entries: typeof report.added): typeof report.added =>
+    entries
+      .map((entry) => ({
+        ...entry,
+        review: entry.review.filter((status) => status.locale === locale),
+        missing: entry.missing.filter((status) => status.locale === locale),
+      }))
+      .filter((entry) => entry.review.length > 0 || entry.missing.length > 0);
+
+  return {
+    ...report,
+    translationLocales: report.translationLocales.filter((candidate) => candidate === locale),
+    added: filterEntries(report.added),
+    changed: filterEntries(report.changed),
+    removed: report.removed,
+    localeEditCounts: new Map([...report.localeEditCounts].filter(([candidate]) => candidate === locale || candidate === "en-US")),
+  };
+}
+
+/**
+ * Finds keys where a translation is either identical to the English value (never translated)
+ * or contains Latin letters with zero characters of the expected script (for non-Latin locales).
+ */
+export async function findStaleTranslations(targetLocale?: string): Promise<StaleEntry[]> {
+  const enLocale = await loadMergedLocale("en-US");
+  const enFlat = flatten(enLocale);
+
+  const localesToCheck = await resolveTargetLocales(targetLocale);
 
   const stale: StaleEntry[] = [];
 
@@ -286,29 +458,76 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
 
 /**
  * Main entry:
- *   (default)     Print a compact human-readable review list to the console
- *   --export      Write a JSON file for batch translation
- *   --locale=<code> Filter scan to a specific locale
+ *   (default)            Print a compact human-readable review list to the console
+ *   --export             Write a JSON file for batch translation
+ *   --locale=<code>      Filter scan to a specific locale
+ *   --reason=<reason>    Limit the scan to one reason, repeatable
+ *   --base=<ref>         Compare against a branch base for --reason=unfollowed
+ *
+ * Exit codes: 0 with findings, 1 for a script error, 2 when the drift scan cannot reach the history
+ * it needs. A git failure is reported rather than swallowed, because a shallow clone otherwise
+ * reports every tree as clean.
  */
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const doExport = args.includes("--export");
   const localeArg = args.find((arg) => arg.startsWith("--locale="))?.split("=")[1] ??
     (args.includes("--locale") ? args[args.indexOf("--locale") + 1] : undefined);
+  const baseFlagIndex = args.findIndex((arg) => arg === "--base");
+  const baseEquals = args.find((arg) => arg.startsWith("--base="));
+  const base = baseEquals
+    ? baseEquals.slice("--base=".length)
+    : baseFlagIndex >= 0
+      ? args[baseFlagIndex + 1]
+      : undefined;
+  if (baseFlagIndex >= 0 && !base) {
+    throw new Error("--base requires a git ref argument (for example, --base=origin/main)");
+  }
 
-  log.info(`Scanning for stale translations${localeArg ? ` in ${localeArg}` : ""}…`);
-  const stale = await findStaleTranslations(localeArg);
+  const reasonArgs = args.filter((arg) => arg.startsWith("--reason=")).map((arg) => arg.split("=")[1]);
+  const unknownReasons = reasonArgs.filter((value) => !isStaleReason(value));
+  if (unknownReasons.length > 0) {
+    throw new Error(`Unknown --reason value: ${unknownReasons.join(", ")}. Known: ${STALE_REASONS.join(", ")}`);
+  }
 
-  const identical = stale.filter((e) => e.reason === "identical");
-  const likelyEnglish = stale.filter((e) => e.reason === "likely_english");
+  const requestedReasons: StaleReason[] = reasonArgs.length > 0 ? (reasonArgs as StaleReason[]) : [...DEFAULT_STALE_REASONS];
+  const wantsReason = (reason: StaleReason): boolean => requestedReasons.includes(reason);
+  if (base && !wantsReason("unfollowed")) {
+    throw new Error("--base only applies to --reason=unfollowed");
+  }
 
-  log.info(`Found ${stale.length} potentially stale entries:`);
+  log.info(`Scanning for stale translations${localeArg ? ` in ${localeArg}` : ""}...`);
+
+  const staleValueEntries = wantsReason("identical") || wantsReason("likely_english")
+    ? await findStaleTranslations(localeArg)
+    : [];
+  const identical = wantsReason("identical") ? staleValueEntries.filter((e) => e.reason === "identical") : [];
+  const likelyEnglish = wantsReason("likely_english")
+    ? staleValueEntries.filter((e) => e.reason === "likely_english")
+    : [];
+
+  let drift: DriftReport | undefined;
+  if (wantsReason("drifted")) {
+    drift = await findDriftedTranslations(localeArg);
+  }
+
+  let unfollowed: StalenessReport | undefined;
+  let unfollowedExport: UnfollowedStaleEntry[] = [];
+  if (wantsReason("unfollowed")) {
+    if (localeArg) await resolveTargetLocales(localeArg);
+    unfollowed = filterUnfollowedReport(await findUnfollowedTranslations(base), localeArg);
+    unfollowedExport = unfollowedEntries(unfollowed, localeArg);
+  }
+
+  log.info(`Found ${identical.length + likelyEnglish.length + (drift?.entries.length ?? 0) + unfollowedExport.length} potentially stale entries:`);
   log.info(`  • ${identical.length} keys with value identical to English (never translated)`);
   log.info(`  • ${likelyEnglish.length} keys with value that appears to be English text`);
+  log.info(`  • ${drift?.entries.length ?? 0} keys whose English source moved after the translation`);
+  log.info(`  • ${unfollowedExport.length} locale/key pairs not updated with this branch's English changes`);
 
   if (!doExport) {
     const grouped = new Map<string, StaleEntry[]>();
-    for (const entry of stale) {
+    for (const entry of [...identical, ...likelyEnglish]) {
       const prefix = `${entry.locale}::${entry.key.split(".").slice(0, 3).join(".")}`;
       const group = grouped.get(prefix) ?? [];
       group.push(entry);
@@ -331,18 +550,44 @@ async function main(): Promise<void> {
       }
     }
 
+    if (drift) {
+      for (const line of formatDriftReport(drift)) console.log(line);
+    }
+    if (unfollowed) {
+      console.log(`\n${renderStalenessReport(unfollowed, { verboseOutput: args.includes("--verbose") })}`);
+    }
+
     console.log(`\n${"=".repeat(80)}`);
     console.log("Run with --export to write stale-translations.json for batch translation.");
   } else {
+    // Drifted entries keep their own shape rather than being flattened into the value-comparison
+    // one. A batch translator needs the superseded English to judge whether a re-read is warranted,
+    // and dropping that field would leave a bare list of keys that look translated already.
+    const drifted: DriftedStaleEntry[] = (drift?.entries ?? []).map((entry) => ({ ...entry, reason: "drifted" }));
+    const exported: AnyStaleEntry[] = [...identical, ...likelyEnglish, ...drifted, ...unfollowedExport];
     const outputPath = join(process.cwd(), "scripts", "maintenance", "stale-translations.json");
     await mkdir(join(process.cwd(), "scripts", "maintenance"), { recursive: true });
-    await writeFile(outputPath, JSON.stringify(stale, null, 2), "utf-8");
-    log.success(`Exported ${stale.length} entries to ${outputPath}`);
+    await writeFile(outputPath, JSON.stringify(exported, null, 2), "utf-8");
+    log.success(`Exported ${exported.length} entries to ${outputPath}`);
   }
 }
 
 if (import.meta.main) {
   main().catch((err) => {
+    if (err instanceof DriftHistoryError) {
+      console.error(`Cannot read repository history: ${err.message}`);
+      console.error("A shallow clone has no blame history. Fetch the full history and re-run:");
+      console.error("  git fetch --unshallow");
+      process.exit(2);
+    }
+    if (err instanceof MissingBaseRefError) {
+      console.error(`Cannot compare this branch: ${err.message}`);
+      process.exit(2);
+    }
+    if (err instanceof GitUnavailableError || err instanceof LocaleParseError) {
+      console.error("Fatal error:", err.message);
+      process.exit(1);
+    }
     console.error("Fatal error:", err);
     process.exit(1);
   });
