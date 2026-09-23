@@ -173,9 +173,25 @@ export async function execute(
         effectiveLlm = visionLlm;
       } else {
         const effectiveModelName = getEffectiveLlmModelName(llm, tomoriState.config.custom_model_name);
+        const missingCapability = !llm.sees_images ? "IMAGE VISION" : "STRUCTURED OUTPUT";
 
         if (!visionLlm) {
-          const missingCapability = !llm.sees_images ? "IMAGE VISION" : "STRUCTURED OUTPUT";
+          log.warn(
+            `[Initialize Expressions] Model "${effectiveModelName}" is missing capability: ${missingCapability} (no vision fallback configured)`,
+            undefined,
+            {
+              userId: userData.user_id,
+              serverId: tomoriState.server_id,
+              personaId: tomoriState.persona_id,
+              metadata: {
+                command: "server expressions initialize",
+                guildId: interaction.guild.id,
+                model: effectiveModelName,
+                missingCapability,
+              },
+            },
+          );
+
           await interaction.editReply({
             embeds: [
               {
@@ -189,6 +205,23 @@ export async function execute(
             ],
           });
         } else {
+          log.warn(
+            `[Initialize Expressions] Model "${effectiveModelName}" is missing capability (${missingCapability}) and fallback vision model "${visionLlm.llm_codename}" lacks required capabilities`,
+            undefined,
+            {
+              userId: userData.user_id,
+              serverId: tomoriState.server_id,
+              personaId: tomoriState.persona_id,
+              metadata: {
+                command: "server expressions initialize",
+                guildId: interaction.guild.id,
+                model: effectiveModelName,
+                visionModel: visionLlm.llm_codename,
+                missingCapability,
+              },
+            },
+          );
+
           await interaction.editReply({
             embeds: [
               {
@@ -209,6 +242,22 @@ export async function execute(
     const effectiveModelName = getEffectiveLlmModelName(effectiveLlm, tomoriState.config.custom_model_name);
 
     if (!providerSupportsFeature(effectiveLlm.llm_provider, "expressionInitialization")) {
+      log.warn(
+        `[Initialize Expressions] Provider "${effectiveLlm.llm_provider}" does not support expression initialization`,
+        undefined,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "server expressions initialize",
+            guildId: interaction.guild.id,
+            provider: effectiveLlm.llm_provider,
+            model: effectiveModelName,
+          },
+        },
+      );
+
       await interaction.editReply({
         embeds: [
           {
@@ -238,6 +287,17 @@ export async function execute(
 
     // Verify an API key exists, then decrypt it once for reuse across all batches
     if (!tomoriState.config.api_key) {
+      log.warn(`[Initialize Expressions] API key missing for provider "${effectiveLlm.llm_provider}"`, undefined, {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "server expressions initialize",
+          guildId: interaction.guild.id,
+          provider: effectiveLlm.llm_provider,
+        },
+      });
+
       await interaction.editReply({
         embeds: [
           {

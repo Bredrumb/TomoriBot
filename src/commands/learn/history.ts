@@ -860,6 +860,14 @@ async function resolveHistoryImportRuntime(
     ]);
   } catch (error) {
     if (error instanceof PersonalProviderRequiredError) {
+      log.warn(`[Learn History] Personal provider required for capability "text" or "embedding"`, error, {
+        userId,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "learn history",
+        },
+      });
       return {
         ok: false,
         notice: {
@@ -869,6 +877,15 @@ async function resolveHistoryImportRuntime(
       };
     }
     if (error instanceof CredentialUnavailableError && error.source === "personal") {
+      log.warn(`[Learn History] Personal provider credentials unavailable: ${error.reason}`, error, {
+        userId,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "learn history",
+          reason: error.reason,
+        },
+      });
       return {
         ok: false,
         notice: {
@@ -883,6 +900,14 @@ async function resolveHistoryImportRuntime(
   const embeddingModelId =
     getResolvedCapabilityModelId(embeddingCreds, "embedding") ?? tomoriState.config.embedding_model_id;
   if (!embeddingModelId) {
+    log.warn(`[Learn History] No embedding model configured for server ${tomoriState.server_id}`, undefined, {
+      userId,
+      serverId: tomoriState.server_id,
+      personaId: tomoriState.persona_id,
+      metadata: {
+        command: "learn history",
+      },
+    });
     return {
       ok: false,
       notice: {
@@ -893,6 +918,19 @@ async function resolveHistoryImportRuntime(
   }
   const embeddingModel = await llmModelRepo.loadEmbeddingModelById(embeddingModelId);
   if (!embeddingModel) {
+    log.warn(
+      `[Learn History] Embedding model ${embeddingModelId} not found in catalog for server ${tomoriState.server_id}`,
+      undefined,
+      {
+        userId,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "learn history",
+          embeddingModelId,
+        },
+      },
+    );
     return {
       ok: false,
       notice: {
@@ -1048,7 +1086,19 @@ export async function execute(
     const overlayResult = await applyPersonalProviderSelectionsToTomoriState(tomoriState, userData.user_id ?? null);
     tomoriState = overlayResult.tomoriState;
 
+    const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
+
     if (!tomoriState.llm.supports_structoutput) {
+      log.warn(`[Learn History] Model "${effectiveModelName}" does not support structured output`, undefined, {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "learn history",
+          provider: tomoriState.llm.llm_provider,
+          model: effectiveModelName,
+        },
+      });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.learn.history.model_incompatible_title",
         descriptionKey: "commands.learn.history.model_incompatible_description",
@@ -1059,6 +1109,20 @@ export async function execute(
     }
 
     if (!providerSupportsFeature(tomoriState.llm.llm_provider, "historyExtraction")) {
+      log.warn(
+        `[Learn History] Provider "${tomoriState.llm.llm_provider}" does not support history extraction`,
+        undefined,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "learn history",
+            provider: tomoriState.llm.llm_provider,
+            model: effectiveModelName,
+          },
+        },
+      );
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.provider_not_supported_title",
         descriptionKey: "general.errors.provider_not_supported_description",

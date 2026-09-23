@@ -129,6 +129,62 @@ describe("buildLogStreams", () => {
     expect(sanitizeLogPayload(value)).toBe(value);
   });
 
+  test("provider API keys and key-value assignments are redacted in strings", () => {
+    const rawKeys = [
+      "sk-proj-1234567890abcdef1234567890",
+      "sk-ant-api03-abcdef123456789012345",
+      "AIzaSyA1234567890123456789012345678901",
+      "nvapi-1234567890abcdef1234567890",
+    ];
+
+    for (const key of rawKeys) {
+      const sanitized = sanitizeLogPayload(`Upstream error with token ${key} in request`) as string;
+      expect(sanitized).not.toContain(key);
+      expect(sanitized).toContain("[REDACTED]");
+    }
+
+    const keyValueString = sanitizeLogPayload(
+      'Failed with api_key: "temp-secret-key-123" and secret=mySecret456',
+    ) as string;
+    expect(keyValueString).not.toContain("temp-secret-key-123");
+    expect(keyValueString).not.toContain("mySecret456");
+    expect(keyValueString).toContain("[REDACTED]");
+
+    const jsonString = sanitizeLogPayload(
+      JSON.stringify({ apiKey: "secret-key-123", api_key: "secret-456" }),
+    ) as string;
+    expect(jsonString).not.toContain("secret-key-123");
+    expect(jsonString).not.toContain("secret-456");
+    expect(jsonString).toBe('{"apiKey":"[REDACTED]","api_key":"[REDACTED]"}');
+
+    const escapedJson = sanitizeLogPayload('{"error":"{\\"apiKey\\":\\"escaped-secret\\"}"}') as string;
+    expect(escapedJson).not.toContain("escaped-secret");
+    expect(escapedJson).toContain("[REDACTED]");
+  });
+
+  test("structured metadata objects have sensitive fields and nested keys redacted", () => {
+    const sensitivePayload = {
+      command: "persona generate",
+      apiKey: "super-secret-key",
+      details: {
+        api_key: "nested-secret-key",
+        normalField: "safe-value",
+      },
+    };
+
+    const sanitized = sanitizeLogPayload(sensitivePayload) as Record<string, unknown>;
+    expect(sanitized.apiKey).toBe("[REDACTED]");
+    expect((sanitized.details as Record<string, unknown>).api_key).toBe("[REDACTED]");
+    expect((sanitized.details as Record<string, unknown>).normalField).toBe("safe-value");
+  });
+
+  test("truncated colored strings preserve ANSI reset sequence", () => {
+    const longColoredText = `\x1b[33m${"x".repeat(5000)}\x1b[0m`;
+    const sanitized = sanitizeLogPayload(longColoredText) as string;
+    expect(sanitized).toContain("[TRUNCATED");
+    expect(sanitized.endsWith("\x1b[0m")).toBe(true);
+  });
+
   test("the custom level methods are registered on the live logger", () => {
     // `log` exposes success, section, metric, and rateLimit through one typed cast over the pino
     // instance. A name pino was never given would throw instead of logging, so calling each one is

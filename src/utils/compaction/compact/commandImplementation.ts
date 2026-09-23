@@ -44,7 +44,7 @@ const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/;
 export async function executeCompactCommand(
   client: Client,
   interaction: ChatInputCommandInteraction,
-  _userData: UserRow,
+  userData: UserRow,
   locale: string,
 ): Promise<void> {
   if (!interaction.channel) {
@@ -97,23 +97,29 @@ export async function executeCompactCommand(
       wantsRoleplay: modalSelection.summaryType === "roleplay",
       wantsImages: modalSelection.analyzeImages,
       encryptedApiKey,
+      userId: userData.user_id,
+      serverId: tomoriState.server_id,
+      personaId: tomoriState.persona_id,
     }))
   ) {
     return;
   }
 
   if (!encryptedApiKey) {
-    await editError(
-      modalSelection.submitInteraction,
-      locale,
-      "general.errors.api_key_missing_title",
-      "general.errors.api_key_missing_description",
-    );
     return;
   }
 
   const apiKey = await decryptApiKey(encryptedApiKey, tomoriState.config.key_version || 1);
   if (!apiKey) {
+    log.warn(`[Compact] Failed to decrypt API key for provider "${providerName}"`, undefined, {
+      userId: userData.user_id,
+      serverId: tomoriState.server_id,
+      personaId: tomoriState.persona_id,
+      metadata: {
+        command: "compact",
+        provider: providerName,
+      },
+    });
     await editError(
       modalSelection.submitInteraction,
       locale,
@@ -295,8 +301,21 @@ async function validateProviderReadiness(params: {
   wantsRoleplay: boolean;
   wantsImages: boolean;
   encryptedApiKey: Buffer | null | undefined;
+  userId?: number | null;
+  serverId?: number;
+  personaId?: number;
 }): Promise<boolean> {
   if (!providerSupportsFeature(params.providerName, "conversationCompaction")) {
+    log.warn(`[Compact] Provider "${params.providerLabel}" does not support conversation compaction`, undefined, {
+      userId: params.userId,
+      serverId: params.serverId,
+      personaId: params.personaId,
+      metadata: {
+        command: "compact",
+        provider: params.providerName,
+        model: params.modelName,
+      },
+    });
     await editError(
       params.interaction,
       params.locale,
@@ -309,6 +328,19 @@ async function validateProviderReadiness(params: {
     return false;
   }
   if (params.wantsRoleplay && !params.supportsStructuredOutput) {
+    log.warn(
+      `[Compact] Roleplay compaction requested but model "${params.modelName}" does not support structured output`,
+      undefined,
+      {
+        userId: params.userId,
+        serverId: params.serverId,
+        personaId: params.personaId,
+        metadata: {
+          command: "compact",
+          model: params.modelName,
+        },
+      },
+    );
     await editError(
       params.interaction,
       params.locale,
@@ -321,6 +353,15 @@ async function validateProviderReadiness(params: {
     return false;
   }
   if (params.wantsImages && !params.seesImages) {
+    log.warn(`[Compact] Image analysis requested but model "${params.modelName}" does not support vision`, undefined, {
+      userId: params.userId,
+      serverId: params.serverId,
+      personaId: params.personaId,
+      metadata: {
+        command: "compact",
+        model: params.modelName,
+      },
+    });
     await editError(
       params.interaction,
       params.locale,
@@ -333,6 +374,15 @@ async function validateProviderReadiness(params: {
     return false;
   }
   if (!params.encryptedApiKey) {
+    log.warn(`[Compact] API key missing for provider "${params.providerLabel}"`, undefined, {
+      userId: params.userId,
+      serverId: params.serverId,
+      personaId: params.personaId,
+      metadata: {
+        command: "compact",
+        provider: params.providerName,
+      },
+    });
     await editError(
       params.interaction,
       params.locale,

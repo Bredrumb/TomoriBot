@@ -457,6 +457,20 @@ export async function execute(
   };
   const candidates = resolveVoiceSourceCandidates(candidateInput);
   if (candidates.length === 0) {
+    log.warn(
+      `[/generate voice-message] No voice source candidates available for persona ${persona.persona_id}`,
+      undefined,
+      {
+        userId: userData.user_id,
+        serverId: mainPersona.server_id,
+        personaId: persona.persona_id,
+        metadata: {
+          command: "generate voice-message",
+          personaId: persona.persona_id,
+          endpoint: effectiveEndpoint?.connection_id ?? null,
+        },
+      },
+    );
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.voice-message.no_voice_source_title",
       descriptionKey: "commands.generate.voice-message.no_voice_source_description",
@@ -472,6 +486,16 @@ export async function execute(
   // ElevenLabs id on a server with no speech endpoint is indistinguishable from a `tts-clone`
   // server by endpoint alone, and its voice id is precisely what the source table falls back to.
   if (defaultSource?.id === "elevenlabs" && !elevenLabsApiKey) {
+    log.warn(`[/generate voice-message] ElevenLabs API key missing for voice message generation`, undefined, {
+      userId: userData.user_id,
+      serverId: mainPersona.server_id,
+      personaId: persona.persona_id,
+      metadata: {
+        command: "generate voice-message",
+        personaId: persona.persona_id,
+        source: defaultSource.id,
+      },
+    });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.voice-message.no_api_key_title",
       descriptionKey: "commands.generate.voice-message.no_api_key_description",

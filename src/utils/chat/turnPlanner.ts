@@ -564,6 +564,13 @@ async function resolveTextCredentialPolicy(params: {
     }
     if (error instanceof PersonalProviderRequiredError) {
       if (params.shouldSurfaceUserErrors) {
+        log.warn(`Personal provider required for deliberate chat turn in channel ${params.channel.id}`, error, {
+          serverId: params.tomoriState.server_id,
+          personaId: params.tomoriState.persona_id,
+          metadata: {
+            channelId: params.channel.id,
+          },
+        });
         await sendStandardEmbed(params.channel as SendableChannel, params.locale, {
           color: ColorCode.ERROR,
           titleKey: "general.errors.personal_provider_required_title",
@@ -586,6 +593,19 @@ async function resolveTextCredentialPolicy(params: {
       const isPersonalError = error.source === "personal";
       const isMissingConfig = error.reason === "no_saved_config" || error.reason === "missing_model_id";
       if (params.shouldSurfaceUserErrors) {
+        log.warn(
+          `Credential unavailable for deliberate chat turn in channel ${params.channel.id}: source=${error.source}, reason=${error.reason}`,
+          error,
+          {
+            serverId: params.tomoriState.server_id,
+            personaId: params.tomoriState.persona_id,
+            metadata: {
+              channelId: params.channel.id,
+              source: error.source,
+              reason: error.reason,
+            },
+          },
+        );
         await sendStandardEmbed(params.channel as SendableChannel, params.locale, {
           color: ColorCode.ERROR,
           titleKey: isPersonalError

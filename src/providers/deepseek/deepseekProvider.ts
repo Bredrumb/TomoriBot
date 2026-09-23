@@ -123,6 +123,11 @@ export class DeepseekProvider
     return await callDeepseekStructuredJSON(request, responseSchema, zodSchema);
   }
 
+  getExpressionInitializationBatchSize(): number {
+    const parsed = Number.parseInt(process.env.DEEPSEEK_EXPRESSION_BATCH_SIZE || "20", 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
+  }
+
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
