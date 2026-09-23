@@ -8,7 +8,7 @@ import type {
   NaiPresetRow,
   TomoriState,
 } from "@/types/db/schema";
-import { configRepository, llmModelRepo, llmOverrideRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import {
   CONFIG_FALLBACK_PAGE_SIZE,
   CONFIG_FALLBACK_SLOT_COUNT,
@@ -17,6 +17,8 @@ import {
   isConfigCatalogModelCapability,
   type ConfigCatalogModelCapability,
 } from "@/utils/discord/configPanelCatalog";
+import { formatModelOverrideModelSummary } from "@/utils/discord/modelOverrideCatalog";
+import { loadModelOverrideEntries } from "@/utils/discord/interactions/modelOverrideRoutes";
 import {
   CONFIG_FALLBACK_ENDPOINT_PREFIX,
   loadConfigModelChoices,
@@ -181,8 +183,16 @@ async function resolveSlotAssignment(
   }
 }
 
+/**
+ * Builds the Switch page view for one workspace.
+ *
+ * The workspace snowflake is required rather than derived from `state`, because `TomoriState`
+ * carries the internal server id only and the persona half of the override list is read through the
+ * workspace persona cache.
+ */
 export async function loadConfigSwitchModelsView(
   state: TomoriState,
+  workspaceDiscId: string,
   providerPage: ConfigSwitchModelsProviderPage | undefined,
   endpointPage: ConfigEndpointPage | undefined = undefined,
   loadCapabilityEndpoints: LoadConfigCapabilityEndpoints = loadConfigCapabilityEndpoints,
@@ -218,15 +228,20 @@ export async function loadConfigSwitchModelsView(
     })),
   );
 
-  const [channelOverrides, personaOverrides] = await Promise.all([
-    llmOverrideRepo.getAllChannelLlmOverridesForServer(state.server_id),
-    llmOverrideRepo.loadPersonaLlmOverridesForServer(state.server_id),
-  ]);
+  // The removal list and this summary read one loader, so a target named here is a target that
+  // command can clear, and both surfaces print the same effective model for it.
+  const { channelOverrides, personasWithOverride } = await loadModelOverrideEntries(state.server_id, workspaceDiscId);
 
   return {
     slots,
-    channelOverrideCount: channelOverrides.length,
-    personaOverrideCount: personaOverrides.length,
+    channelOverrides: channelOverrides.map((entry) => ({
+      target: `<#${entry.channelDiscId}>`,
+      model: formatModelOverrideModelSummary(entry.llm),
+    })),
+    personaOverrides: personasWithOverride.map((entry) => ({
+      target: `**${entry.persona_nickname}**`,
+      model: formatModelOverrideModelSummary(entry.persona_llm),
+    })),
     imageGenerationEnabled: state.config.imagegen_enabled,
     videoGenerationEnabled: state.config.videogen_enabled,
     speechCapabilityEnabled: state.config.voice_message_enabled ?? true,

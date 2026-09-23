@@ -194,6 +194,14 @@ export async function execute(
     });
   } catch (error) {
     if (error instanceof PersonalProviderRequiredError) {
+      log.warn(`[Generate Video] Personal provider required for video generation`, error, {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "generate video",
+        },
+      });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.personal_provider_required_title",
         descriptionKey: "general.errors.personal_provider_required_description",
@@ -204,6 +212,20 @@ export async function execute(
     }
 
     if (error instanceof CredentialUnavailableError) {
+      log.warn(
+        `[Generate Video] Video credentials unavailable: source=${error.source}, reason=${error.reason}`,
+        error,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "generate video",
+            source: error.source,
+            reason: error.reason,
+          },
+        },
+      );
       if (error.source === "personal") {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.personal_provider_credentials_error_title",
@@ -238,6 +260,14 @@ export async function execute(
 
   const videoModelId = getResolvedCapabilityModelId(videoCreds, "video") ?? tomoriState.config.video_model_id;
   if (!videoModelId) {
+    log.warn(`[Generate Video] No video model configured for server ${tomoriState.server_id}`, undefined, {
+      userId: userData.user_id,
+      serverId: tomoriState.server_id,
+      personaId: tomoriState.persona_id,
+      metadata: {
+        command: "generate video",
+      },
+    });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.video.no_video_model_title",
       descriptionKey: "commands.generate.video.no_video_model_description",

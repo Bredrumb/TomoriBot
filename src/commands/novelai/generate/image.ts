@@ -142,6 +142,18 @@ export async function execute(
 
     resolvedModel = await resolveNaiDiffusionModel(tomoriState.config);
     if (!resolvedModel) {
+      log.warn(
+        `[NovelAI Generate Image] No NovelAI diffusion model resolved for server ${tomoriState.server_id}`,
+        undefined,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "novelai generate image",
+          },
+        },
+      );
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.novelai.generate.image.no_model_title",
         descriptionKey: "commands.novelai.generate.image.no_model_description",
@@ -153,6 +165,18 @@ export async function execute(
 
     const apiKey = await resolveNovelAiApiKey(tomoriState);
     if (!apiKey) {
+      log.warn(
+        `[NovelAI Generate Image] NovelAI API key missing or decryption failed for server ${tomoriState.server_id}`,
+        undefined,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "novelai generate image",
+          },
+        },
+      );
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.novelai.generate.image.no_api_key_title",
         descriptionKey: "commands.novelai.generate.image.no_api_key_description",

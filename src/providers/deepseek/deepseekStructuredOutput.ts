@@ -1,8 +1,15 @@
 import type { z } from "zod";
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
+import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
 type DeepseekStructuredOutputRequest = ProviderStructuredJsonRequest;
+
+type DeepseekContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+
+type DeepseekStructuredMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string | DeepseekContentPart[] };
 
 function buildExampleJsonFromSchema(schema: unknown): unknown {
   if (!schema || typeof schema !== "object") {
@@ -76,6 +83,55 @@ function buildDeepseekStructuredSystemPrompt(
     .join("\n\n");
 }
 
+function parseDeepseekJsonResponse(text: string): unknown {
+  const cleanedText = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<\/?think>/gi, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleanedText);
+  } catch {
+    // Continue to fallback extraction attempts below.
+  }
+
+  const fencedMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
+    try {
+      return JSON.parse(fencedMatch[1]);
+    } catch {}
+  }
+
+  const firstBrace = cleanedText.indexOf("{");
+  const lastBrace = cleanedText.lastIndexOf("}");
+  const firstBracket = cleanedText.indexOf("[");
+  const lastBracket = cleanedText.lastIndexOf("]");
+
+  const hasBrackets = firstBracket !== -1 && lastBracket > firstBracket;
+  const hasBraces = firstBrace !== -1 && lastBrace > firstBrace;
+
+  // Inspect whichever delimiter appears first so array roots enclosing objects are not stripped
+  if (hasBrackets && (!hasBraces || firstBracket < firstBrace)) {
+    try {
+      return JSON.parse(cleanedText.slice(firstBracket, lastBracket + 1));
+    } catch {}
+  }
+
+  if (hasBraces) {
+    try {
+      return JSON.parse(cleanedText.slice(firstBrace, lastBrace + 1));
+    } catch {}
+  }
+
+  if (hasBrackets) {
+    try {
+      return JSON.parse(cleanedText.slice(firstBracket, lastBracket + 1));
+    } catch {}
+  }
+
+  return JSON.parse(cleanedText);
+}
+
 /**
  * Call DeepSeek with JSON Output (`response_format: json_object`).
  * DeepSeek does not currently expose a schema-enforced JSON mode in the stable API,
@@ -87,27 +143,48 @@ export async function callDeepseekStructuredJSON<T>(
   responseSchema: Record<string, unknown>,
   zodSchema: z.ZodType<T>,
 ): Promise<StructuredOutputResult<T>> {
-  const images = request.images ?? [];
-  if (images.length > 0) {
-    return {
-      success: false,
-      error: "DeepSeek structured output does not support image inputs.",
-    };
-  }
-
   try {
+    const contentParts: DeepseekContentPart[] = [{ type: "text", text: request.userPrompt }];
+
+    if (request.images && request.images.length > 0) {
+      for (const image of request.images) {
+        try {
+          const optimized = await fetchAndOptimizeImage(image.url, image.mimeType);
+          contentParts.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${optimized.mimeType};base64,${optimized.data}`,
+            },
+          });
+        } catch (fetchError) {
+          log.error(`Error fetching DeepSeek image ${image.name ?? image.url}`, fetchError as Error, {
+            errorType: "DeepseekImageFetchError",
+            metadata: {
+              imageName: image.name ?? null,
+              imageUrl: image.url,
+            },
+          });
+        }
+      }
+    }
+
+    const userContent =
+      contentParts.length === 1 && contentParts[0].type === "text" ? contentParts[0].text : contentParts;
+
+    const messages: DeepseekStructuredMessage[] = [
+      {
+        role: "system",
+        content: buildDeepseekStructuredSystemPrompt(request.systemPrompt, responseSchema, request.schemaName),
+      },
+      {
+        role: "user",
+        content: userContent,
+      },
+    ];
+
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: [
-        {
-          role: "system",
-          content: buildDeepseekStructuredSystemPrompt(request.systemPrompt, responseSchema, request.schemaName),
-        },
-        {
-          role: "user",
-          content: request.userPrompt,
-        },
-      ],
+      messages,
       response_format: {
         type: "json_object",
       },
@@ -119,7 +196,8 @@ export async function callDeepseekStructuredJSON<T>(
       body.temperature = request.temperature ?? 1.0;
     }
 
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
+    const endpointUrl = request.endpointUrl || "https://api.deepseek.com/chat/completions";
+    const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${request.apiKey}`,
@@ -178,7 +256,7 @@ export async function callDeepseekStructuredJSON<T>(
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(responseText);
+      parsed = parseDeepseekJsonResponse(responseText);
     } catch (parseError) {
       log.error("DeepSeek structured JSON parse failed", parseError as Error, {
         errorType: "DeepseekStructuredJSONParseError",

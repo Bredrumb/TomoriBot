@@ -5,23 +5,60 @@
  *   chat-completions endpoint.
  * - Roleplay structured summaries delegated to callDeepseekStructuredJSON,
  *   which handles json_object mode + Zod validation.
- *
- * Note: DeepSeek does not support image inputs (supportsImages: false).
  */
 import { log } from "@/utils/misc/logger";
 import type {
   CompactConversationResult,
   CompactRoleplayResult,
   ProviderCompactSummaryRequest,
+  ProviderImageInput,
 } from "@/types/provider/featureInterfaces";
 import { callDeepseekStructuredJSON } from "@/providers/deepseek/deepseekStructuredOutput";
 import { buildRoleplaySchema, CompactRoleplaySummarySchema } from "@/providers/utils/compactCommon";
+import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 
+type DeepseekContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+
+async function buildDeepseekUserContent(
+  userPrompt: string,
+  images?: ProviderImageInput[],
+): Promise<string | DeepseekContentPart[]> {
+  if (!images || images.length === 0) {
+    return userPrompt;
+  }
+
+  const parts: DeepseekContentPart[] = [{ type: "text", text: userPrompt }];
+  for (const image of images) {
+    try {
+      const optimized = await fetchAndOptimizeImage(image.url, image.mimeType);
+      parts.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${optimized.mimeType};base64,${optimized.data}`,
+        },
+      });
+    } catch (fetchError) {
+      log.error(`Error fetching DeepSeek image ${image.name ?? image.url}`, fetchError as Error, {
+        errorType: "DeepseekImageFetchError",
+        metadata: {
+          imageName: image.name ?? null,
+          imageUrl: image.url,
+        },
+      });
+    }
+  }
+
+  if (parts.length === 1) {
+    return userPrompt;
+  }
+
+  return parts;
+}
+
 /**
  * Generate a plain-text conversation summary using the DeepSeek API.
- *
  */
 export async function generateConversationSummaryDeepseek(
   request: ProviderCompactSummaryRequest,
@@ -31,11 +68,13 @@ export async function generateConversationSummaryDeepseek(
       return { error: "Invalid DeepSeek API key" };
     }
 
+    const userContent = await buildDeepseekUserContent(request.userPrompt, request.images);
+
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemPrompt) {
       messages.push({ role: "system", content: request.systemPrompt });
     }
-    messages.push({ role: "user", content: request.userPrompt });
+    messages.push({ role: "user", content: userContent });
 
     const body: Record<string, unknown> = {
       model: request.model,
@@ -49,7 +88,9 @@ export async function generateConversationSummaryDeepseek(
       body.temperature = request.temperature ?? 0.7;
     }
 
-    const response = await fetch(DEEPSEEK_CHAT_COMPLETIONS_URL, {
+    const endpointUrl = request.endpointUrl || DEEPSEEK_CHAT_COMPLETIONS_URL;
+
+    const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${request.apiKey}`,
@@ -97,7 +138,6 @@ export async function generateConversationSummaryDeepseek(
  *
  * Delegates to callDeepseekStructuredJSON, which uses json_object mode
  * with schema/example injected into the system prompt and Zod validation.
- *
  */
 export async function generateRoleplaySummaryDeepseek(
   request: ProviderCompactSummaryRequest,
@@ -110,6 +150,8 @@ export async function generateRoleplaySummaryDeepseek(
       userPrompt: request.userPrompt,
       temperature: request.temperature,
       schemaName: "roleplay_summary",
+      images: request.images,
+      endpointUrl: request.endpointUrl,
     },
     buildRoleplaySchema(),
     CompactRoleplaySummarySchema,

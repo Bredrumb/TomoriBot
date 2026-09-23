@@ -266,6 +266,7 @@ export interface ConfigRouteDependencies {
   loadCapabilityEndpoints: LoadConfigCapabilityEndpoints;
   loadSwitchModelsView(
     state: TomoriState,
+    workspaceDiscId: string,
     providerPage: { capability: ConfigCatalogModelCapability; start: number } | undefined,
     endpointPage?: ConfigEndpointPage,
     loadCapabilityEndpoints?: LoadConfigCapabilityEndpoints,
@@ -553,6 +554,7 @@ export async function repaint(
       if (page === "switch") {
         switchModelsView = await dependencies.loadSwitchModelsView(
           state,
+          scope.serverDiscId,
           options.modelProviderPage,
           options.endpointPage,
           dependencies.loadCapabilityEndpoints,

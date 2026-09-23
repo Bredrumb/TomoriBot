@@ -32,7 +32,7 @@ export default {
       transcription: `Transcription`,
     },
     marker_workspace_active: `currently active`,
-    marker_workspace_fallback: `workspace fallback`,
+    marker_workspace_fallback: `fallback model`,
     marker_personal_active: `personal active`,
     marker_personal_fallback: `personal fallback`,
     marker_provider_fallback: `provider fallback`,

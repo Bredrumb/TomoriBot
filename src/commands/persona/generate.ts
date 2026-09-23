@@ -360,6 +360,20 @@ export async function execute(
     const effectiveModelName = getEffectiveLlmModelName(tomoriState.llm, tomoriState.config.custom_model_name);
 
     if (!providerSupportsFeature(providerName, "presetGeneration")) {
+      log.warn(
+        `[Generate Persona] Provider "${tomoriState.llm.llm_provider}" does not support preset generation`,
+        undefined,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "persona generate",
+            provider: tomoriState.llm.llm_provider,
+            model: effectiveModelName,
+          },
+        },
+      );
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.generate.wrong_provider_title",
         descriptionKey: "commands.persona.generate.wrong_provider_description",
@@ -375,6 +389,16 @@ export async function execute(
     // Only check for structured output before modal (always required)
     // Image vision and tools will be validated after modal based on user selections
     if (!tomoriState.llm.supports_structoutput) {
+      log.warn(`[Generate Persona] Model "${effectiveModelName}" does not support structured output`, undefined, {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "persona generate",
+          provider: tomoriState.llm.llm_provider,
+          model: effectiveModelName,
+        },
+      });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.generate.model_incompatible_title",
         descriptionKey: "commands.persona.generate.model_incompatible_description",
@@ -388,6 +412,15 @@ export async function execute(
     }
 
     if (!tomoriState.config.api_key) {
+      log.warn(`[Generate Persona] API key missing for provider "${tomoriState.llm.llm_provider}"`, undefined, {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "persona generate",
+          provider: tomoriState.llm.llm_provider,
+        },
+      });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.generate.no_api_key_title",
         descriptionKey: "commands.persona.generate.no_api_key_description",
@@ -400,6 +433,19 @@ export async function execute(
     const keyVersion = tomoriState.config.key_version || 1; // Default to V1 for backward compatibility
     const decryptedApiKey = await decryptApiKey(tomoriState.config.api_key, keyVersion);
     if (!decryptedApiKey) {
+      log.warn(
+        `[Generate Persona] Failed to decrypt API key for provider "${tomoriState.llm.llm_provider}"`,
+        undefined,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "persona generate",
+            provider: tomoriState.llm.llm_provider,
+          },
+        },
+      );
       await replyInfoEmbed(interaction, locale, {
         titleKey: "commands.persona.generate.api_key_decrypt_failed_title",
         descriptionKey: "commands.persona.generate.api_key_decrypt_failed_description",
@@ -687,6 +733,20 @@ export async function execute(
       });
 
       if (imagePlan === "fail_no_vision") {
+        log.warn(
+          `[Generate Persona] Image provided but neither primary model "${effectiveModelName}" nor vision model supports image input`,
+          undefined,
+          {
+            userId: userData.user_id,
+            serverId: tomoriState.server_id,
+            personaId: tomoriState.persona_id,
+            metadata: {
+              command: "persona generate",
+              model: effectiveModelName,
+              visionModel: tomoriState.vision_llm?.llm_codename ?? null,
+            },
+          },
+        );
         await modalSubmitInteraction.editReply({
           embeds: [
             new EmbedBuilder()
@@ -721,6 +781,19 @@ export async function execute(
       log.info("Web search requested but disabled by server configuration; proceeding without search.");
     }
     if (webSearchRequested && tomoriState.config.web_search_enabled && !tomoriState.llm.has_tools) {
+      log.warn(
+        `[Generate Persona] Web search requested but model "${effectiveModelName}" lacks tool calling support`,
+        undefined,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "persona generate",
+            model: effectiveModelName,
+          },
+        },
+      );
       await modalSubmitInteraction.editReply({
         embeds: [
           new EmbedBuilder()

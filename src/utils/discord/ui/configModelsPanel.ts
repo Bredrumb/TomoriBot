@@ -126,10 +126,21 @@ export interface ConfigEndpointSlotView {
   pageStart: number;
 }
 
+/**
+ * One Text-scope override as the Switch page lists it: the target the assignment applies to and the
+ * model that target actually generates with, matching the rows `/model override remove` presents.
+ */
+export interface ConfigTextOverrideEntry {
+  /** Channel mention or persona nickname the override applies to. */
+  target: string;
+  /** Effective model, formatted as `codename (provider)`. */
+  model: string;
+}
+
 export interface ConfigSwitchModelsView {
   slots: ConfigModelSlotView[];
-  channelOverrideCount: number;
-  personaOverrideCount: number;
+  channelOverrides: ConfigTextOverrideEntry[];
+  personaOverrides: ConfigTextOverrideEntry[];
   imageGenerationEnabled: boolean;
   videoGenerationEnabled: boolean;
   speechCapabilityEnabled?: boolean;
@@ -223,7 +234,10 @@ function buildCapabilityNoticeLine(locale: string, view: ConfigSwitchModelsView)
   if (view.speechCapabilityEnabled === false) {
     warnings.push(localizer(locale, "commands.config.panel.speech_capability_disabled_direction"));
   } else if (view.speechCapabilityEnabled !== undefined) {
-    warnings.push(localizer(locale, "commands.config.panel.speech_capability_enabled_direction"));
+    // Speech owns two endpoint slots above this notice, so announcing the enabled state would only
+    // restate a working setup on every repaint. Only the missing endpoint needs an action, and that
+    // sentence already names the enabled state, which keeps the healthy case as silent as the Image
+    // and Video notices.
     const speechSlot = view.endpointSlots?.find((slot) => slot.capability === "tts");
     const hasActiveSpeechEndpoint = speechSlot?.endpoints.some((endpoint) => endpoint.isActive && endpoint.id > 0);
     if (!hasActiveSpeechEndpoint) {
@@ -249,6 +263,35 @@ function buildSwitchProviderOptions(input: SwitchProviderOptionsInput): Provider
   const options = input.advanceEntry ? [...input.visibleEntries, input.advanceEntry] : [...input.visibleEntries];
   if (options.length > 0 || input.showClear) return options;
   return [{ value: "none", label: localizer(input.locale, "commands.config.panel.no_providers_option") }];
+}
+
+/** Rows one Text scope lists before the remainder collapses into a count. */
+const CONFIG_TEXT_OVERRIDE_ROW_LIMIT = 8;
+
+/**
+ * Lists one scope's overrides under its label, so the page names which target diverges from the
+ * server default and which model it uses rather than only how many targets do.
+ *
+ * The row limit exists because one scope can hold a full modal page of overrides, and every row
+ * spends the same message-wide text budget the eight capability selectors already draw on. The
+ * label keeps the true total, so a collapsed list still reports how many are hidden.
+ */
+function buildTextOverrideScopeLines(
+  locale: string,
+  entries: readonly ConfigTextOverrideEntry[],
+  keys: { labelKey: string; hintKey: string },
+): string[] {
+  const lines = [`> **${localizer(locale, keys.labelKey)}**: ${entries.length}`];
+  const visible = entries.slice(0, CONFIG_TEXT_OVERRIDE_ROW_LIMIT);
+  for (const entry of visible) {
+    lines.push(`> ${entry.target} · ${entry.model}`);
+  }
+  const hiddenCount = entries.length - visible.length;
+  if (hiddenCount > 0) {
+    lines.push(`> ${localizer(locale, "commands.config.panel.text_overrides_more_summary", { count: hiddenCount })}`);
+  }
+  lines.push(withLinePrefix("-# ", localizer(locale, keys.hintKey)));
+  return lines;
 }
 
 function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContainerData[] {
@@ -417,12 +460,18 @@ function buildSwitchModelsBody(input: ConfigModelsPageInput): ComponentInContain
   // that the six other slots support overrides at all.
   components.push({
     type: ComponentType.TextDisplay,
-    content: `**${localizer(locale, "commands.config.panel.text_overrides_title")}**
-${localizer(locale, "commands.config.panel.text_overrides_description")}
-> ${localizer(locale, "commands.config.panel.channel_overrides_label")}: ${view.channelOverrideCount}
-${withLinePrefix("-# ", localizer(locale, "commands.config.panel.channel_overrides_hint"))}
-> ${localizer(locale, "commands.config.panel.persona_overrides_label")}: ${view.personaOverrideCount}
-${withLinePrefix("-# ", localizer(locale, "commands.config.panel.persona_overrides_hint"))}`,
+    content: [
+      `**${localizer(locale, "commands.config.panel.text_overrides_title")}**`,
+      localizer(locale, "commands.config.panel.text_overrides_description"),
+      ...buildTextOverrideScopeLines(locale, view.channelOverrides, {
+        labelKey: "commands.config.panel.channel_overrides_label",
+        hintKey: "commands.config.panel.channel_overrides_hint",
+      }),
+      ...buildTextOverrideScopeLines(locale, view.personaOverrides, {
+        labelKey: "commands.config.panel.persona_overrides_label",
+        hintKey: "commands.config.panel.persona_overrides_hint",
+      }),
+    ].join("\n"),
   });
 
   return components;

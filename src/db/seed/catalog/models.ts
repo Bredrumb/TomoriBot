@@ -2122,7 +2122,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
     ],
   },
   {
-    comment: "DeepSeek Models (bounded MVP: text chat + seeded tool calling only)",
+    comment: "DeepSeek Models",
     rows: [
       {
         provider: "deepseek",
@@ -2145,6 +2145,25 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
       {
         provider: "deepseek",
+        codename: "deepseek-v4-flash-vision",
+        inputPricePerMillion: 0.22,
+        outputPricePerMillion: 0.66,
+        supportsPrefixCompletion: true,
+        seesImages: true,
+        hasTools: true,
+        supportsStructoutput: true,
+        desc: "DeepSeek v4 Flash model with image vision capabilities",
+        i18n: {
+          ja: "画像認識機能を持つDeepSeek v4 Flashモデル",
+          "pt-BR": "Modelo DeepSeek v4 Flash com capacidade de visão",
+          "es-419": "Modelo DeepSeek v4 Flash con capacidad de visión de imágenes",
+          "zh-TW": "具備圖像視覺能力的 DeepSeek v4 Flash 模型",
+          vi: "Model DeepSeek v4 Flash có khả năng thị giác hình ảnh",
+          "zh-CN": "具备图像视觉能力的 DeepSeek v4 Flash 模型",
+        },
+      },
+      {
+        provider: "deepseek",
         codename: "deepseek-v4-flash-vision-exp",
         inputPricePerMillion: 0.22,
         outputPricePerMillion: 0.66,
@@ -2152,14 +2171,17 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         hasTools: true,
         supportsStructoutput: true,
-        desc: "Experimental DeepSeek v4 Flash model with image vision capabilities",
+        isDeprecated: true,
+        desc: "Experimental DeepSeek v4 Flash model with image vision capabilities (deprecated, use deepseek-v4-flash-vision)",
         i18n: {
-          ja: "画像認識機能を持つ実験的なDeepSeek v4 Flashモデル",
-          "pt-BR": "Modelo experimental DeepSeek v4 Flash com capacidade de visão",
-          "es-419": "Modelo experimental DeepSeek v4 Flash con capacidad de visión de imágenes",
-          "zh-TW": "具備圖像視覺能力的實驗性 DeepSeek v4 Flash 模型",
-          vi: "Model thử nghiệm DeepSeek v4 Flash có khả năng thị giác hình ảnh",
-          "zh-CN": "具备图像视觉能力的实验性 DeepSeek v4 Flash 模型",
+          ja: "画像認識機能を持つ実験的なDeepSeek v4 Flashモデル（非推奨、deepseek-v4-flash-visionを使用）",
+          "pt-BR":
+            "Modelo experimental DeepSeek v4 Flash com capacidade de visão (obsoleto, use deepseek-v4-flash-vision)",
+          "es-419":
+            "Modelo experimental DeepSeek v4 Flash con capacidad de visión de imágenes (obsoleto, use deepseek-v4-flash-vision)",
+          "zh-TW": "具備圖像視覺能力的實驗性 DeepSeek v4 Flash 模型（已淘汰，請改用 deepseek-v4-flash-vision）",
+          vi: "Model thử nghiệm DeepSeek v4 Flash có khả năng thị giác hình ảnh (đã lỗi thời, hãy dùng deepseek-v4-flash-vision)",
+          "zh-CN": "具备图像视觉能力的实验性 DeepSeek v4 Flash 模型（已淘汰，请改用 deepseek-v4-flash-vision）",
         },
       },
       {

@@ -210,7 +210,9 @@ const REDACTION_OVERLAP_CHARS = 512;
 function sanitizeLogString(value: string): string {
   if (value.length <= LOG_MAX_STRING_LENGTH) return redactLogString(value);
   const redactedHead = redactLogString(value.slice(0, LOG_MAX_STRING_LENGTH + REDACTION_OVERLAP_CHARS));
-  return `${redactedHead.slice(0, LOG_MAX_STRING_LENGTH)}...[TRUNCATED ${value.length - LOG_MAX_STRING_LENGTH} chars]`;
+  const truncatedSuffix = `...[TRUNCATED ${value.length - LOG_MAX_STRING_LENGTH} chars]`;
+  const truncatedText = `${redactedHead.slice(0, LOG_MAX_STRING_LENGTH)}${truncatedSuffix}`;
+  return value.includes("\x1b[") ? `${truncatedText}${colors.reset}` : truncatedText;
 }
 
 function redactLogString(value: string): string {
@@ -221,6 +223,13 @@ function redactLogString(value: string): string {
       /([?&](?:access_token|refresh_token|token|api[_-]?key|key|signature|sig|x-amz-signature)=)[^&#\s]+/gi,
       `$1${REDACTED}`,
     )
+    .replace(
+      /((?:\\?["'])?(?:api[_-]?key|apikey|token|secret|authorization|password|passwd|client[_-]?secret)(?:\\?["'])?\s*[:=]\s*(?:\\?["'])?)[^\s,"'\\]+/gi,
+      `$1${REDACTED}`,
+    )
+    .replace(/\b(sk-(?:proj-|ant-|or-)?(?:live-)?[a-zA-Z0-9_-]{20,})\b/gi, REDACTED)
+    .replace(/\b(AIza[0-9A-Za-z\-_]{30,40})\b/g, REDACTED)
+    .replace(/\b(nvapi-[a-zA-Z0-9_-]{20,})\b/gi, REDACTED)
     .replace(/(https:\/\/(?:canary\.)?discord(?:app)?\.com\/api\/webhooks\/[^/\s]+\/)[^/?\s]+/gi, `$1${REDACTED}`);
 }
 
@@ -267,14 +276,16 @@ export const log = {
    * Logs informational messages (hidden in production).
    */
   info: (msg: string) => {
-    pinoLogger.info(shouldHideLogs ? msg : `${colors.cyan}${msg}${colors.reset}`);
+    const sanitizedMsg = sanitizeLogString(msg);
+    pinoLogger.info(shouldHideLogs ? sanitizedMsg : `${colors.cyan}${sanitizedMsg}${colors.reset}`);
   },
 
   /**
    * Logs success messages (hidden in production).
    */
   success: (msg: string) => {
-    customLevels.success(shouldHideLogs ? `✓ ${msg}` : `${colors.green}✓ ${msg}${colors.reset}`);
+    const sanitizedMsg = sanitizeLogString(msg);
+    customLevels.success(shouldHideLogs ? `✓ ${sanitizedMsg}` : `${colors.green}✓ ${sanitizedMsg}${colors.reset}`);
   },
 
   /**
@@ -282,12 +293,15 @@ export const log = {
    * @param err - Optional error object to include.
    */
   warn: (msg: string, err?: unknown, context?: ErrorContext) => {
-    const coloredMsg = shouldHideLogs ? msg : `${colors.yellow}${msg}${colors.reset}`;
+    const sanitizedPlainMsg = sanitizeLogString(msg);
+    const coloredMsg = shouldHideLogs ? sanitizedPlainMsg : `${colors.yellow}${sanitizedPlainMsg}${colors.reset}`;
     const resolvedContext = resolveErrorContext(context);
-    if (err) {
-      pinoLogger.warn({ err: toLoggableError(err), context: sanitizeLogPayload(resolvedContext) }, coloredMsg);
+    const sanitizedContext = sanitizeLogPayload(resolvedContext);
+    const sanitizedError = err ? toLoggableError(err) : undefined;
+    if (sanitizedError) {
+      pinoLogger.warn({ err: sanitizedError, context: sanitizedContext }, coloredMsg);
     } else {
-      pinoLogger.warn({ context: sanitizeLogPayload(resolvedContext) }, coloredMsg);
+      pinoLogger.warn({ context: sanitizedContext }, coloredMsg);
     }
   },
 
@@ -297,7 +311,8 @@ export const log = {
    * @param metadata - Optional metadata object with rate limit details.
    */
   rateLimit: (msg: string, metadata?: Record<string, unknown>) => {
-    const coloredMsg = shouldHideLogs ? msg : `${colors.brightYellow}${msg}${colors.reset}`;
+    const sanitizedMsg = sanitizeLogString(msg);
+    const coloredMsg = shouldHideLogs ? sanitizedMsg : `${colors.brightYellow}${sanitizedMsg}${colors.reset}`;
     if (metadata) {
       customLevels.rateLimit({ metadata: sanitizeLogPayload(metadata) }, coloredMsg);
     } else {
@@ -325,23 +340,23 @@ export const log = {
    * @param context - Optional context containing IDs and metadata for DB logging.
    */
   error: async (msg: string, err?: unknown, context?: ErrorContext): Promise<void> => {
-    const coloredMsg = shouldHideLogs ? msg : `${colors.red}${msg}${colors.reset}`;
+    const sanitizedPlainMsg = sanitizeLogString(msg);
+    const coloredMsg = shouldHideLogs ? sanitizedPlainMsg : `${colors.red}${sanitizedPlainMsg}${colors.reset}`;
     const resolvedContext = resolveErrorContext(context);
+    const sanitizedContext = sanitizeLogPayload(resolvedContext) as ErrorContext | undefined;
+    const sanitizedError = err ? toLoggableError(err) : undefined;
 
-    if (err) {
-      pinoLogger.error(
-        { err: toLoggableError(err), context: sanitizeLogPayload(resolvedContext) },
-        sanitizeLogString(coloredMsg),
-      );
+    if (sanitizedError) {
+      pinoLogger.error({ err: sanitizedError, context: sanitizedContext }, coloredMsg);
     } else {
-      pinoLogger.error({ context: sanitizeLogPayload(resolvedContext) }, sanitizeLogString(coloredMsg));
+      pinoLogger.error({ context: sanitizedContext }, coloredMsg);
     }
 
     if (!isErrorDbLoggingEnabled()) {
       return;
     }
 
-    const dbPayload = buildErrorLogPayload(msg, err, resolvedContext);
+    const dbPayload = buildErrorLogPayload(sanitizedPlainMsg, sanitizedError, sanitizedContext);
 
     // insertErrorLog never throws and reports a skip separately from a failure. Neither is
     // logged here: the record above already reached the durable host file, and emitting a
@@ -357,7 +372,12 @@ export const log = {
    * Logs section dividers for grouping related logs (hidden in production).
    */
   section: (msg: string) => {
-    const coloredMsg = shouldHideLogs ? `\n=== ${msg} ===` : `${colors.magenta}\n=== ${msg} ===${colors.reset}`;
-    customLevels.section(coloredMsg);
+    if (!shouldHideLogs) {
+      const sanitizedMsg = sanitizeLogString(msg);
+      const coloredMsg = shouldHideLogs
+        ? `\n=== ${sanitizedMsg} ===`
+        : `${colors.magenta}\n=== ${sanitizedMsg} ===${colors.reset}`;
+      customLevels.section(coloredMsg);
+    }
   },
 };
