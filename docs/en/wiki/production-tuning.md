@@ -159,5 +159,6 @@ run with a read-only root filesystem.
 
 - `TOMORI_LOG_FILE`: Mirrors log records with level >= 50 (error, metric, rateLimit, fatal) to an
   append-only JSONL file for consumption by host agents (e.g. Azure Monitor Agent).
-- `LOG_MAX_STRING_LENGTH` (default: 4096): Truncates oversized string fields, preventing base64
-  payloads or stack traces from exceeding Docker's 16 KB log line chunking limit.
+- `LOG_MAX_STRING_LENGTH` (default: unset): Optional cap for oversized string fields. Unset by
+  default so prompts, memories, and stack traces remain complete. Base64 data URIs are collapsed
+  directly in log redaction regardless of this setting.

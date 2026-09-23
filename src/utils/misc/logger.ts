@@ -198,25 +198,35 @@ function normalizeSensitiveKey(key: string): string {
 
 const SENSITIVE_NORMALIZED_KEYS = new Set(SENSITIVE_LOG_KEYS.map(normalizeSensitiveKey));
 
-// An unbounded string (a base64 avatar data URI reached 111 KB) is copied by every redaction regex
-// and then written whole to both sinks, and the Docker json-file driver splits any line past 16 KB.
-const parsedLogMaxStringLength = Number.parseInt(process.env.LOG_MAX_STRING_LENGTH || "", 10);
-const LOG_MAX_STRING_LENGTH =
-  Number.isFinite(parsedLogMaxStringLength) && parsedLogMaxStringLength > 0 ? parsedLogMaxStringLength : 4096;
+// Base64 data URIs can reach over 100 KB (e.g. avatar uploads) and split Docker json-file
+// driver log lines past 16 KB. Collapsing base64 payloads keeps logs intact while avoiding
+// blunt truncation of normal prompts, memories, or stack traces.
+// LOG_MAX_STRING_LENGTH is optional; when unset, text strings are never truncated.
+function getLogMaxStringLength(): number | undefined {
+  const envVal = process.env.LOG_MAX_STRING_LENGTH;
+  if (!envVal) return undefined;
+  const parsed = Number.parseInt(envVal, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 // Redaction runs this far past the cap before the tail is dropped, so a credential straddling the cut
 // is matched whole; cutting first could leave a password that lost its trailing `@` unredacted.
 const REDACTION_OVERLAP_CHARS = 512;
 
 function sanitizeLogString(value: string): string {
-  if (value.length <= LOG_MAX_STRING_LENGTH) return redactLogString(value);
-  const redactedHead = redactLogString(value.slice(0, LOG_MAX_STRING_LENGTH + REDACTION_OVERLAP_CHARS));
-  const truncatedSuffix = `...[TRUNCATED ${value.length - LOG_MAX_STRING_LENGTH} chars]`;
-  const truncatedText = `${redactedHead.slice(0, LOG_MAX_STRING_LENGTH)}${truncatedSuffix}`;
+  const maxStringLength = getLogMaxStringLength();
+  if (!maxStringLength || value.length <= maxStringLength) {
+    return redactLogString(value);
+  }
+  const redactedHead = redactLogString(value.slice(0, maxStringLength + REDACTION_OVERLAP_CHARS));
+  const truncatedSuffix = `...[TRUNCATED ${value.length - maxStringLength} chars]`;
+  const truncatedText = `${redactedHead.slice(0, maxStringLength)}${truncatedSuffix}`;
   return value.includes("\x1b[") ? `${truncatedText}${colors.reset}` : truncatedText;
 }
 
 function redactLogString(value: string): string {
   return value
+    .replace(/(data:[a-z0-9/._\\+-]+;base64,)[A-Za-z0-9+/=]{80,}/gi, `$1...[BASE64 TRUNCATED]`)
     .replace(/((?:https?|postgres(?:ql)?):\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${REDACTED}@`)
     .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, `$1 ${REDACTED}`)
     .replace(
