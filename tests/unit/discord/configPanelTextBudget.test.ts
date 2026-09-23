@@ -234,8 +234,8 @@ function makeSwitchModelsView(
         expandedOptionCount: 0,
       };
     }),
-    channelOverrideCount: 0,
-    personaOverrideCount: 0,
+    channelOverrides: [],
+    personaOverrides: [],
     imageGenerationEnabled,
     videoGenerationEnabled,
   };
@@ -285,8 +285,8 @@ function makeExplicitEightSlotView(
       makeExplicitCatalogSlot("nai-image", slotState),
       makeExplicitCatalogSlot("video", slotState),
     ],
-    channelOverrideCount: 0,
-    personaOverrideCount: 0,
+    channelOverrides: [],
+    personaOverrides: [],
     imageGenerationEnabled,
     videoGenerationEnabled,
     speechCapabilityEnabled,
@@ -1259,23 +1259,25 @@ describe("Switch Models capability notice budgeting", () => {
     }
 
     for (const locale of RUNTIME_LOCALES) {
+      // A working speech setup stays silent: the capability notice carries only states that need an
+      // action, and its missing-endpoint sentence already names the enabled state.
       const speechStates = [
         {
           enabled: false,
           activeIndex: 0,
           present: ["speech_capability_disabled_direction"],
-          absent: ["speech_capability_enabled_direction", "speech_capability_missing_endpoint"],
+          absent: ["speech_capability_missing_endpoint"],
         },
         {
           enabled: true,
           activeIndex: -1,
-          present: ["speech_capability_enabled_direction", "speech_capability_missing_endpoint"],
+          present: ["speech_capability_missing_endpoint"],
           absent: ["speech_capability_disabled_direction"],
         },
         {
           enabled: true,
           activeIndex: 0,
-          present: ["speech_capability_enabled_direction"],
+          present: [],
           absent: ["speech_capability_disabled_direction", "speech_capability_missing_endpoint"],
         },
       ] as const;

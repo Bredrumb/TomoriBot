@@ -1236,6 +1236,17 @@ endpoint list before writing, so a stale choice cannot change state. TTS follows
 STT has no equivalent flag. `/personal config` retains six personal model-routing slots and directs users
 to `/config` for workspace-wide TTS/STT.
 
+The Text model overrides block on that page names every channel and persona override with the model it
+resolves to, read through the loader `/model override remove` presents, so the summary and the removal
+modal cannot disagree about which targets carry an override or which model each one uses. A scope lists
+at most eight rows and then reports how many it hid, because one scope can hold a full modal page of
+overrides while the block shares the message-wide text budget with the eight capability selectors.
+
+The capability notice above the override block carries only states that need an action: a disabled Image,
+Video, or Speech capability, an enabled Image or Video capability with no usable model, or an enabled
+Speech capability with no active endpoint. A working capability renders no line, which keeps the enabled
+Speech capability from restating itself on every repaint.
+
 `/conditioning remove` shows the removal modal directly when stored conditioning entries are at or under
 the modal ceiling of 50. When more than 50 entries exist, it displays a minimal ephemeral page-select
 whose routed buttons each open the removal modal for a 50-entry batch. Modal submissions remain bound to a

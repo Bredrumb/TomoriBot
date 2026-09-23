@@ -303,8 +303,8 @@ export default {
       deliberate_tool_mode_title: `Modo de herramientas deliberado`,
       deliberate_tool_mode_description:
         "Controla si se ofrecen herramientas en cada mensaje o solo cuando son relevantes.",
-      deliberate_tool_mode_on: `Todas mis herramientas están siempre disponibles.`,
-      deliberate_tool_mode_off: `Mis herramientas se ofrecen solo cuando la conversación las requiere.`,
+      deliberate_tool_mode_on: `Mis herramientas se ofrecen solo cuando la conversación las requiere.`,
+      deliberate_tool_mode_off: `Todas mis herramientas están siempre disponibles.`,
       tool_context_title: `Contexto de herramientas`,
       tool_context_description:
         "Controla en cuántos turnos de canal siguientes se mantienen disponibles las herramientas exitosas.",
@@ -883,7 +883,6 @@ export default {
       endpoint_activated_detail: `**{endpoint}** ahora está activo para esta capacidad.`,
       endpoint_already_active_detail: `**{endpoint}** ya está activo. Nada cambió.`,
       endpoint_source_changed_direction: `**{endpoint}** ahora está activo. La fuente de voz cambió, reasigna voces si es necesario.`,
-      speech_capability_enabled_direction: `Los mensajes de voz están activados.`,
       speech_capability_disabled_direction:
         "Los mensajes de voz están desactivados. Actívalos bajo Permisos > Capacidades del bot.",
       speech_capability_missing_endpoint: `Los mensajes de voz están activados, pero no hay un endpoint de voz activo.`,
@@ -914,6 +913,7 @@ export default {
       text_overrides_title: `Excepciones de modelos de texto`,
       text_overrides_description:
         "Estas asignaciones de texto reemplazan el valor predeterminado del servidor en alcances más reducidos.",
+      text_overrides_more_summary: `y {count} más`,
       channel_overrides_label: `Excepciones de canal`,
       channel_overrides_hint: `Edita las excepciones de canal bajo Canales.`,
       persona_overrides_label: `Excepciones de persona`,

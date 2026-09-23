@@ -299,8 +299,8 @@ export default {
       deliberate_tool_mode_title: `Modo de Ferramenta Deliberada`,
       deliberate_tool_mode_description:
         "Controla se as ferramentas são oferecidas em todas as mensagens ou apenas quando relevantes.",
-      deliberate_tool_mode_on: `Todas as minhas ferramentas estão sempre disponíveis.`,
-      deliberate_tool_mode_off: `Minhas ferramentas são oferecidas apenas quando a conversa pede.`,
+      deliberate_tool_mode_on: `Minhas ferramentas são oferecidas apenas quando a conversa pede.`,
+      deliberate_tool_mode_off: `Todas as minhas ferramentas estão sempre disponíveis.`,
       tool_context_title: `Contexto de Ferramentas`,
       tool_context_description:
         "Controla por quantos turnos do canal as ferramentas bem-sucedidas permanecem disponíveis.",
@@ -875,7 +875,6 @@ export default {
       endpoint_activated_detail: `**{endpoint}** agora está ativo para esta capacidade.`,
       endpoint_already_active_detail: `**{endpoint}** já está ativo. Nada mudou.`,
       endpoint_source_changed_direction: `**{endpoint}** agora está ativo. A fonte da fala mudou, então reatribua as vozes, se necessário.`,
-      speech_capability_enabled_direction: `As mensagens de fala estão ativadas.`,
       speech_capability_disabled_direction:
         "As mensagens de fala estão desativadas. Ative-as em Permissões > Capacidades do Bot.",
       speech_capability_missing_endpoint: `Mensagens de fala ativadas, mas nenhum endpoint de Fala ativo configurado.`,
@@ -906,6 +905,7 @@ export default {
       text_overrides_title: `Substituições de modelo de Texto`,
       text_overrides_description:
         "Estas atribuições de Texto substituem o padrão do servidor em escopos mais restritos.",
+      text_overrides_more_summary: `e mais {count}`,
       channel_overrides_label: `Substituições de canal`,
       channel_overrides_hint: `Edite as substituições de canal em Canais.`,
       persona_overrides_label: `Substituições de persona`,

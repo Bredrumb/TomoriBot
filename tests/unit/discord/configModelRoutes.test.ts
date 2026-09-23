@@ -243,7 +243,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
       takeCheckboxValues: (_interactionId, fieldId) => checkboxValues[fieldId],
       takeSelectValue: (_interactionId, fieldId) => selectValues[fieldId],
       takeFileUpload: () => undefined,
-      loadSwitchModelsView: async (state, providerPage, endpointPage) => ({
+      loadSwitchModelsView: async (state, _workspaceDiscId, providerPage, endpointPage) => ({
         slots: CATALOG_MODEL_CAPABILITIES.map((capability) => ({
           capability,
           currentModelName:
@@ -264,8 +264,8 @@ function makeHarness(options: HarnessOptions = {}): Harness {
           expandedOptionCount:
             providerPage?.capability === capability && providerPage.provider ? (options.models?.length ?? 1) : 0,
         })),
-        channelOverrideCount: 3,
-        personaOverrideCount: 2,
+        channelOverrides: [{ target: "<#111>", model: "gemini-2.5-flash (google)" }],
+        personaOverrides: [{ target: "**Juno**", model: "claude-sonnet-4 (openrouter)" }],
         imageGenerationEnabled: state.config.imagegen_enabled,
         videoGenerationEnabled: state.config.videogen_enabled,
         endpointSlots: options.endpointSlots?.map((slot) => ({
@@ -662,7 +662,7 @@ describe("config models switch page", () => {
     });
   });
 
-  it("renders all six capability slots and the Text-override counts", async () => {
+  it("renders all six capability slots and the Text-override rows", async () => {
     const harness = makeHarness();
     await dispatch(
       harness,
@@ -678,8 +678,10 @@ describe("config models switch page", () => {
     for (const capability of CATALOG_MODEL_CAPABILITIES) {
       expect(rendered).toContain(buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability }));
     }
-    expect(rendered).toContain("Channel overrides");
-    expect(rendered).toContain("Persona overrides");
+    expect(rendered).toContain("> **Channel overrides**: 1");
+    expect(rendered).toContain("> <#111> · gemini-2.5-flash (google)");
+    expect(rendered).toContain("> **Persona overrides**: 1");
+    expect(rendered).toContain("> **Juno** · claude-sonnet-4 (openrouter)");
   });
 
   it("renders an inert selector for a capability with no eligible provider", async () => {
@@ -2214,24 +2216,30 @@ describe("config models image generation", () => {
 });
 
 describe("config models view loaders", () => {
-  it("reports the eligible provider list and the two override counts for the Switch page", async () => {
+  it("reports the eligible provider list and every Text override for the Switch page", async () => {
     const providers = spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([
       makeSavedProvider("google"),
     ]);
     const channelOverrides = spyOn(llmOverrideRepo, "getAllChannelLlmOverridesForServer").mockResolvedValue([
-      { channelDiscId: "c1", llm: {} },
+      { channelDiscId: "111", llm: { llm_codename: "kayra-v1", llm_provider: "novelai" } },
     ] as never);
-    const personaOverrides = spyOn(llmOverrideRepo, "loadPersonaLlmOverridesForServer").mockResolvedValue([
-      { persona_id: 55, llm_id: 7 },
-      { persona_id: 56, llm_id: 8 },
-    ]);
+    const personas = spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([
+      {
+        ...makeState(),
+        persona_id: 56,
+        persona_nickname: "Juno",
+        persona_llm: { llm_codename: "claude-sonnet-4", llm_provider: "openrouter" },
+      },
+      makeState(),
+    ] as unknown as TomoriState[]);
 
-    const view = await loadConfigSwitchModelsView(makeState(), undefined);
+    const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined);
     expect(view.slots).toHaveLength(6);
     expect(view.slots.map((slot) => slot.capability)).toEqual(CATALOG_MODEL_CAPABILITIES);
     expect(providers).toHaveBeenCalledTimes(6);
-    expect(view.channelOverrideCount).toBe(1);
-    expect(view.personaOverrideCount).toBe(2);
+    // A persona without a resolved override is an ordinary default, not an override row.
+    expect(view.channelOverrides).toEqual([{ target: "<#111>", model: "kayra-v1 (novelai)" }]);
+    expect(view.personaOverrides).toEqual([{ target: "**Juno**", model: "claude-sonnet-4 (openrouter)" }]);
     expect(view.imageGenerationEnabled).toBe(true);
     expect(view.videoGenerationEnabled).toBe(false);
     expect(view.speechCapabilityEnabled).toBe(true);
@@ -2249,10 +2257,50 @@ describe("config models view loaders", () => {
     const contents = textDisplayContents(payload);
     expect(contents.some((content) => content.includes("Image generation is enabled."))).toBe(false);
     expect(contents.some((content) => content.includes("Video generation is disabled."))).toBe(true);
+    const overrideBlock = contents.find((content) => content.includes("Text model overrides"));
+    expect(overrideBlock).toContain("> **Channel overrides**: 1");
+    expect(overrideBlock).toContain("> <#111> · kayra-v1 (novelai)");
+    expect(overrideBlock).toContain("> **Persona overrides**: 1");
+    expect(overrideBlock).toContain("> **Juno** · claude-sonnet-4 (openrouter)");
 
     providers.mockRestore();
     channelOverrides.mockRestore();
-    personaOverrides.mockRestore();
+    personas.mockRestore();
+  });
+
+  it("collapses overrides past the row limit instead of spending the page text budget on rows", async () => {
+    const providers = spyOn(llmProviderRepo, "loadSavedProviderConfigs").mockResolvedValue([
+      makeSavedProvider("google"),
+    ]);
+    const channelOverrides = spyOn(llmOverrideRepo, "getAllChannelLlmOverridesForServer").mockResolvedValue(
+      Array.from({ length: 11 }, (_unused, index) => ({
+        channelDiscId: `channel-${index}`,
+        llm: { llm_codename: `model-${index}`, llm_provider: "google" },
+      })) as never,
+    );
+    const personas = spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([] as unknown as TomoriState[]);
+
+    const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined);
+    const payload = buildConfigPanelPayload({
+      locale: "en-US",
+      actor: { workspaceKind: "guild", isManager: true },
+      category: "models",
+      page: "switch",
+      personas: [makeState()],
+      selectedPersonaId: 55,
+      readStatus: "fresh",
+      switchModelsView: view,
+    });
+    const overrideBlock = textDisplayContents(payload).find((content) => content.includes("Text model overrides"));
+    expect(overrideBlock).toContain("> **Channel overrides**: 11");
+    expect(overrideBlock).toContain("> <#channel-7> · model-7 (google)");
+    expect(overrideBlock).not.toContain("> <#channel-8> · model-8 (google)");
+    expect(overrideBlock).toContain("> and 3 more");
+    expectValidComponentsV2Payload(payload);
+
+    providers.mockRestore();
+    channelOverrides.mockRestore();
+    personas.mockRestore();
   });
 
   it("falls back to the active Text provider when the requested one is gone", async () => {
