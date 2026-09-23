@@ -8,6 +8,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { seedPersonasFromCatalog } from "@/db/seed/catalog/personaSeed";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -48,7 +49,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Fork naming config backfill", () => {
 
     // Any official pair carrying a non-empty catalog config proves the join; the
     // specific lineage is incidental, so the test does not pin one.
-    const [preset] = await testSql`
+    let [preset] = await testSql`
       SELECT preset_lineage_id, preset_language, preset_naming_config
       FROM persona_presets
       WHERE preset_naming_config -> 'prefixes' <> '{}'::JSONB
@@ -56,6 +57,23 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Fork naming config backfill", () => {
          OR preset_naming_config -> 'addressTerms' <> '{}'::JSONB
       ORDER BY preset_lineage_id
       LIMIT 1`;
+
+    if (!preset) {
+      await seedPersonasFromCatalog(testSql);
+      [preset] = await testSql`
+        SELECT preset_lineage_id, preset_language, preset_naming_config
+        FROM persona_presets
+        WHERE preset_naming_config -> 'prefixes' <> '{}'::JSONB
+           OR preset_naming_config -> 'suffixes' <> '{}'::JSONB
+           OR preset_naming_config -> 'addressTerms' <> '{}'::JSONB
+        ORDER BY preset_lineage_id
+        LIMIT 1`;
+    }
+
+    if (!preset) {
+      throw new Error("Expected at least one persona preset with naming configs");
+    }
+
     presetConfig = preset.preset_naming_config;
 
     const [server] = await testSql`
@@ -86,7 +104,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Fork naming config backfill", () => {
   });
 
   afterAll(async () => {
-    await testSql`DELETE FROM servers WHERE server_disc_id = ${PROBE_SERVER}`;
+    try {
+      await executeSqlFile(UP);
+    } finally {
+      await testSql`DELETE FROM servers WHERE server_disc_id = ${PROBE_SERVER}`;
+    }
   });
 
   it("fills a fork from its preset, leaves pointers and edited configs alone, and rolls back", async () => {
