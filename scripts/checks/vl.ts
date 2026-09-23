@@ -1,4 +1,4 @@
-﻿import { rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "bun";
@@ -144,11 +144,11 @@ async function runLocalesCheck(
   const exitCode = await proc.exited;
   const output = stdout + stderr;
 
-  // Exit code 2 means only locale parity issues were found. Those are advisory, so the
-  // child collapses its five-figure per-key listing to a count. The `summary` below is
-  // what surfaces that count: echoing the child's text here too would say it twice.
-  // Exit code 1 is a real failure and prints its full detail.
-  if (exitCode !== 2 || verboseOutput) {
+  // Exit code 2 means only locale parity issues were found (advisory), and exit code 0
+  // means all keys matched (clean pass). Both stay quiet unless verbose mode is requested;
+  // only fatal errors print their full detail in quiet mode.
+  const isFatal = exitCode !== 0 && exitCode !== 2;
+  if (isFatal || verboseOutput) {
     console.log(output);
   }
 
@@ -156,7 +156,7 @@ async function runLocalesCheck(
   return {
     name,
     exitCode,
-    fatal: exitCode === 1 || (exitCode !== 0 && exitCode !== 2),
+    fatal: isFatal,
     summary:
       advisoryCount && !verboseOutput
         ? `(${advisoryCount} keys missing in some locale, re-run with --verbose to list)`

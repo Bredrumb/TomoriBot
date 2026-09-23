@@ -1,6 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { buildLogStreams, LOG_REDACTION_PATHS, log, sanitizeLogPayload } from "@/utils/misc/logger";
 import pino from "pino";
+
+const originalLogMaxStringLength = process.env.LOG_MAX_STRING_LENGTH;
+
+afterEach(() => {
+  if (originalLogMaxStringLength === undefined) {
+    delete process.env.LOG_MAX_STRING_LENGTH;
+  } else {
+    process.env.LOG_MAX_STRING_LENGTH = originalLogMaxStringLength;
+  }
+});
 
 /**
  * Minimal in-memory sink implementing pino's DestinationStream contract.
