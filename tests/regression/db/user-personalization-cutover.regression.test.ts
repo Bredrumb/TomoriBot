@@ -7,6 +7,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { seedPersonasFromCatalog } from "@/db/seed/catalog/personaSeed";
 import { loadUserNaiProfileByDiscordId } from "@/tools/functionCalls/generateImageNaiTool";
 import { PrivacyLevel } from "@/types/db/schema";
 import { clearUserCache } from "@/utils/cache/userCache";
@@ -242,6 +243,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
       expect(legacyColumns).toHaveLength(0);
     } finally {
       await executeSqlFile(upPath);
+      // Migration 062 down dropped preset_naming_config on persona_presets;
+      // re-seeding restores catalog configurations for subsequent harness tests.
+      await seedPersonasFromCatalog(testSql);
+      await executeSqlFile(path.join(process.cwd(), "src", "db", "migrations", "063_fork_naming_config_backfill.sql"));
       clearUserCache();
     }
   });
