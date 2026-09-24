@@ -24,6 +24,7 @@ it covers backing up *before* the on-boot migration runner touches your schema.
 | `bun run nuke-db` | Drop all tables (start the bot afterward to reinitialize). |
 | `bun run purge-commands` | Clear all registered Discord slash commands. |
 | `bun run rotate-keys` | Re-encrypt all encrypted fields to the current key version. |
+| `bun run env-doctor` | Read-only check of your configuration: lists `.env` entries that nothing reads (names only, never values) and where each variable is used. |
 
 `bun run backup` and `bun run update` require the PostgreSQL client tools (`pg_dump`, `psql`)
 in your PATH.

@@ -60,6 +60,39 @@ const TIMEOUT_MS = Number.parseInt(process.env.EXAMPLE_TIMEOUT_MS || "5000", 10)
 const FEATURE_ENABLED = process.env.ENABLE_EXAMPLE_FEATURE === "true";
 ```
 
+## Auditing Variables with `env-doctor`
+
+`bun run env-doctor` is a read-only inventory of every variable: where it is declared, which files
+read it (TypeScript, Python, shell, PowerShell, Dockerfiles, Compose, and workflows), its documented
+default next to its code fallback, and the Compose or Docker layers that override it.
+
+```bash
+bun run env-doctor                     # summary and diagnostics
+bun run env-doctor --var MY_VARIABLE   # full evidence for one variable
+bun run env-doctor --json              # machine-readable report
+bun run env-doctor --no-live-env       # omit your .env names before sharing the output
+```
+
+After adding a variable, run `--var` on it and confirm the doctor finds your read and that the code
+fallback matches the value in `.env.optional.example`. A mismatch shows up under **Conflicting
+defaults**.
+
+The diagnostics list variables declared but unread, read but undocumented, conflicting defaults,
+several names feeding one setting, and live `.env` entries nothing reads. The doctor never prints a
+live `.env` value, and it redacts every value of a variable whose name marks a credential.
+
+Classification (`deployment`, `runtime-preference`, `algorithmic-invariant`, `dead`, or
+`undecided`) is a review aid built from name patterns and `.env.optional.example` tiers. It is not a
+removal verdict. `dead` means no file reads the name by any recognized route and every consumer
+surface was scanned; deleting the variable still needs its owner's analysis of deployments and
+operator docs. When a surface is missing, such as the release-only `deploy/` and `terraform/` trees
+with no `release` ref available, the doctor reports `undecided` instead.
+
+Static analysis cannot follow every read. When the report lists an **UNREGISTERED** dynamic read,
+either give that read a literal name or register the site with its reason in
+`scripts/devtools/envDoctor/policy.ts` (`REGISTERED_DYNAMIC_READS`). A variable read only by a
+dependency, such as a cloud SDK, belongs in `LIBRARY_CONSUMERS` there.
+
 ## Quality Gate
 
 Run these checks after updating `.env.optional.example` and code:
