@@ -105,8 +105,6 @@ $env:VOXCPM2_PREFETCH = "0"
 
 設定完成之後，`bun run launch --voxcpm2` 會將 sidecar 與 TomoriBot 一起啟動。預設端點是 `http://127.0.0.1:8016`。
 
-如果設定了 `VOXCPM2_API_KEY` 或 `TOMORI_TTS_API_KEY`，請以啟用驗證的方式註冊端點，並在 TomoriBot 中儲存相同的金鑰。啟動器仍然會探測未經驗證的 `/health` 路由，而合成請求則使用 `Authorization: Bearer <key>`。
-
 ## 在 TomoriBot 中註冊
 
 執行 `/providers`，選擇 **新增自訂端點**，並設定 Speech 端點：
@@ -172,16 +170,10 @@ TomoriBot 會將儲存的描述以 `instruct` 送出。VoxCPM2 會將它轉成�
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | 自動重試次數上限 |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | 上游的壞例長度門檻 |
 | `VOXCPM2_PREFETCH` | `1` | 僅安裝程式：設定時下載模型 |
-| `VOXCPM2_PORT` | `8016` | VoxCPM2 sidecar 連接埠；未設定時退回 `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Sidecar 綁定位址 |
-| `TOMORI_TTS_PORT` | `8016` | 向後相容的共用 sidecar 連接埠備援 |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | 解碼後參考音訊大小上限 |
-| `VOXCPM2_API_KEY` | 未設定 | `/synthesize` 的選用 bearer token；接受 `TOMORI_TTS_API_KEY` 作為備援 |
-| `TOMORI_TTS_API_KEY` | 未設定 | `/synthesize` 的共用選用 bearer token 備援 |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | 只有在要允許沒有 bearer token 的非回送位址綁定時才設為 `1` |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 可接受的合成文字長度上限 |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2 本機伺服器連接埠 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 本機伺服器綁定位址; 請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-參考音訊必須是非空的 WAV 容器。包裝會在寫入暫存檔之前強制執行解碼後的位元組上限。`/health` 對本機就緒檢查維持不驗證；每當設定了金鑰，`/synthesize` 就要求 `Authorization: Bearer <key>`。除非有反向代理或明確的遠端政策，否則請維持預設的回送位址綁定。
+參考音訊必須是解碼後不超過 10 MB 的非空 WAV 容器，包裝會在寫入暫存檔之前檢查這一點。
 
 ## 替代檢查點與執行環境
 

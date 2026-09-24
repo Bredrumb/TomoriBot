@@ -184,7 +184,7 @@ bun run launch --cosyvoice3
 bun run launch --help
 ```
 
-Flags disponíveis: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--whisperx`, `--help`
+Flags disponíveis: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`, `--help`
 
 **Ctrl+C** interrompe o bot e quaisquer processos de sidecar em Python. Os contêineres Docker (`--searxng`, `--crawl4ai`) são deixados intencionalmente em execução; pare-os manualmente com `docker stop searxng` / `docker stop crawl4ai` quando terminar.
 

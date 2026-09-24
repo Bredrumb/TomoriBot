@@ -184,7 +184,7 @@ bun run launch --cosyvoice3
 bun run launch --help
 ```
 
-Các cờ có sẵn: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--whisperx`, `--help`
+Các cờ có sẵn: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`, `--help`
 
 **Ctrl+C** sẽ dừng bot và mọi tiến trình sidecar Python. Các container Docker (`--searxng`, `--crawl4ai`) được chủ ý giữ tiếp tục chạy, hãy dừng chúng thủ công bằng lệnh `docker stop searxng` / `docker stop crawl4ai` khi bạn hoàn tất.
 

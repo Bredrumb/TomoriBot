@@ -38,6 +38,15 @@ TomoriBot xem giọng nói là một tính năng endpoint tùy chỉnh. Các eng
 3. Chọn endpoint đã lưu và sử dụng menu thả xuống model để thêm model Speech, Voice Source Mode, và Script Markup của nó.
 4. Mở `/config` > Models > Switch Models và chọn model Speech đã đăng ký.
 
+## Truy cập mạng
+<!-- anchor: network-access -->
+
+Mọi máy chủ cục bộ TTS đều mặc định liên kết với `127.0.0.1`, nên chỉ bot trên cùng máy mới truy cập được. Khi TomoriBot chạy trong Docker hoặc trên một máy khác, hãy đặt `TOMORI_TTS_HOST=0.0.0.0` cho máy chủ và đăng ký endpoint bằng địa chỉ của máy chủ vật lý, ví dụ `http://host.docker.internal:8015`.
+
+Các máy chủ không có xác thực: bất kỳ ai truy cập được cổng đều có thể chạy tổng hợp trên GPU của bạn. Chỉ liên kết ra ngoài loopback trong mạng bạn tin cậy, và đặt một reverse proxy có xác thực phía trước bất kỳ máy chủ nào bạn mở ra ngoài mạng đó.
+
+Mỗi máy chủ đọc biến cổng riêng (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), nên nhiều máy chủ có thể chạy cùng lúc từ một tệp `.env`. `bun run launch` truyền `.env` cho các máy chủ mà nó khởi động; máy chủ khởi động thủ công chỉ đọc môi trường của shell.
+
 ## Quy trình giọng nói persona
 
 Đối với các engine sao chép, hãy thêm và gán một mẫu giọng nói cho mỗi persona:

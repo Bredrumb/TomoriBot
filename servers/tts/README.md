@@ -43,7 +43,7 @@ After setup, start it directly or use the launcher:
 bun run launch --voxcpm2
 ```
 
-Fish S2 Pro has its own installer because the sidecar also installs the Fish Speech runtime and downloads the quantized checkpoint. See `docs/en/self-hosting/local-endpoints/text-to-speech/fishs2.md`. The default `Imagilux/fishaudio-s2-pro` checkpoint uses INT8 weight-only quantization and is intended to fit consumer GPUs with 16 GB VRAM while keeping the codec, embeddings, and layer norms in BF16. The installer pins both upstream revisions and requires an explicit override for updates.
+Fish S2 Pro has its own installer because the local server also installs the Fish Speech runtime and downloads the checkpoint. See `docs/en/self-hosting/local-endpoints/text-to-speech/fishs2.md`. The default is the official BF16 `fishaudio/s2-pro` checkpoint; the guide covers the optional INT8 `Imagilux/fishaudio-s2-pro` checkpoint for smaller GPUs. The installer pins the Fish Speech runtime commit, and updating it means changing that pin.
 
 CosyVoice 3 has its own installer because the sidecar checks out the reviewed upstream runtime and downloads the pinned model snapshot. See `docs/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3.md`.
 
@@ -67,7 +67,17 @@ Irodori-TTS v4.1 also supports TomoriBot's `Auto` voice source mode from one end
 
 Fish S2 Pro is registered as a cloning endpoint with `Bracket Tags` markup. TomoriBot sends the stored reference WAV and transcript directly to Fish, while expression tags such as `[whisper]`, `[excited]`, and `[angry]` remain in the generated script for Fish's fine-grained delivery control.
 
-Fish's wrapper accepts PCM WAV references up to the configured decoded-audio limit and binds to loopback by default. Configure a bearer token before exposing it on a non-loopback address.
+Every wrapper binds to loopback by default and has no authentication. Read the Network access section of the [TTS overview](../../docs/en/self-hosting/local-endpoints/text-to-speech/README.mdx) before setting `TOMORI_TTS_HOST` to another address.
+
 VoxCPM2 uses one official `openbmb/VoxCPM2` model for all modes. Reference audio maps to normal cloning, reference audio plus its stored transcript maps to Ultimate Cloning, and `instruct` is converted into VoxCPM2's natural-language Voice Design / controllable-cloning prefix. Register it with Voice Source Mode `Auto`, Script Markup `Plain`, and Supports Instruct `Yes`. If a clone request includes both a transcript and one-off instruction, the instruction path wins and the transcript prompt is omitted.
 
 CosyVoice 3 is registered with Voice Source Mode `Clone`, Script Markup `Plain`, and Supports Instruct `Yes`. A matching transcript enables the zero-shot path; without one, the wrapper uses cross-lingual cloning. `voice_instructions` selects the instruction-conditioned path and takes precedence over the stored transcript.
+
+## Manual tests
+
+Two helpers have unit tests that no CI job runs. After changing one, run its test from the engine folder with that engine's venv (`.venv\Scripts\python.exe` on Windows):
+
+```sh
+cd servers/tts/cosyvoice3 && .venv/bin/python -m unittest test_reference_audio
+cd servers/tts/irodoritts && .venv/bin/python -m unittest test_chunking
+```

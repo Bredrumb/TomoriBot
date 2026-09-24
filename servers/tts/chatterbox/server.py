@@ -18,9 +18,9 @@ from pydantic import BaseModel
 
 MODEL_NAME = "chatterbox"
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("TOMORI_TTS_PORT", "8011"))
+PORT = int(os.getenv("CHATTERBOX_PORT", "8011"))
 DEVICE = os.getenv("TOMORI_TTS_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
+MAX_TEXT_CHARS = 2000
 FAST_MODEL = os.getenv("CHATTERBOX_FAST_MODEL", "turbo").strip().lower()
 if FAST_MODEL not in {"turbo", "nano"}:
   raise ValueError("CHATTERBOX_FAST_MODEL must be 'turbo' or 'nano'.")

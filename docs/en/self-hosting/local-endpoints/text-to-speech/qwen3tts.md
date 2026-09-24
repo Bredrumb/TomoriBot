@@ -1,6 +1,6 @@
 ---
 title: "Qwen3-TTS"
-aiGenerated: false
+aiGenerated: true
 ---
 
 Use `servers/tts/qwen3tts/server.py` for both Qwen3-TTS 12Hz 1.7B modes, large but most accurate TTS amongst current TomoriBot options. By default it starts in auto mode, which chooses the Base voice-clone model or VoiceDesign model from each request shape.
@@ -29,7 +29,7 @@ python -m pip install -r servers/tts/qwen3tts/requirements.txt
 python servers/tts/qwen3tts/server.py
 ```
 
-The default auto-mode endpoint URL is `http://127.0.0.1:8012`. You can also specify auto mode explicitly:
+The default auto-mode endpoint URL is `http://127.0.0.1:8012`; set `QWEN3TTS_PORT` to use another port. You can also specify auto mode explicitly:
 
 ```powershell
 python servers\tts\qwen3tts\server.py --mode auto

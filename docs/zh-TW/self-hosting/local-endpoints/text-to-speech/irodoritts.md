@@ -147,8 +147,8 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Hugging Face 模型 repo，或支援的 repo 與子資料夾來源 |
 | `IRODORI_TTS_CHECKPOINT` | 未設定 | 選用的本機 `.pt` 或 `.safetensors` 檢查點；會覆寫 Hugging Face 模型 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | 伺服器綁定位址 |
-| `TOMORI_TTS_PORT` | `8013` | 伺服器連接埠 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 伺服器綁定位址; 請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | 伺服器連接埠 |
 | `IRODORI_MODEL_DEVICE` | `auto` | 模型裝置（`auto`、`cuda`、`cpu`、`mps`、`xpu`） |
 | `IRODORI_CODEC_DEVICE` | `auto` | 編解碼器裝置 |
 | `IRODORI_MODEL_PRECISION` | CUDA 上為 `bf16`，其餘為 `fp32` | 模型精確度 |
@@ -162,4 +162,3 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | 說明文字與 VoiceDesign 的引導強度 |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | 參考說話者的引導強度 |
 | `IRODORI_MAX_REF_SECONDS` | 檢查點預設 | 參考音訊時長的選用上限 |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | 每個請求的文字長度上限 |

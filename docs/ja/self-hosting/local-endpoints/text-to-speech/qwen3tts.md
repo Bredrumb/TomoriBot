@@ -28,7 +28,7 @@ python -m pip install -r servers/tts/qwen3tts/requirements.txt
 python servers/tts/qwen3tts/server.py
 ```
 
-オートモードのデフォルトのエンドポイントURLは`http://127.0.0.1:8012`です。オートモードを明示的に指定することもできます。
+オートモードのデフォルトのエンドポイントURLは`http://127.0.0.1:8012`です。別のポートを使う場合は`QWEN3TTS_PORT`を設定します。オートモードを明示的に指定することもできます。
 
 ```powershell
 python servers\tts\qwen3tts\server.py --mode auto

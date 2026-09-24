@@ -144,8 +144,8 @@ Sidecar hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập ba
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repo model Hugging Face hoặc nguồn repo/thư mục con được hỗ trợ |
 | `IRODORI_TTS_CHECKPOINT` | chưa đặt | Checkpoint `.pt` hoặc `.safetensors` cục bộ tùy chọn; ghi đè model Hugging Face |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết máy chủ |
-| `TOMORI_TTS_PORT` | `8013` | Cổng máy chủ |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết máy chủ; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Cổng máy chủ |
 | `IRODORI_MODEL_DEVICE` | `auto` | Thiết bị chạy model (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
 | `IRODORI_CODEC_DEVICE` | `auto` | Thiết bị chạy codec |
 | `IRODORI_MODEL_PRECISION` | `bf16` trên CUDA, ngược lại `fp32` | Độ chính xác model |
@@ -159,4 +159,3 @@ Sidecar hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập ba
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Tỷ lệ hướng dẫn chú thích / VoiceDesign |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Tỷ lệ hướng dẫn người nói tham chiếu |
 | `IRODORI_MAX_REF_SECONDS` | mặc định checkpoint | Giới hạn tùy chọn cho thời lượng âm thanh tham chiếu |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Giới hạn độ dài văn bản trên mỗi yêu cầu |

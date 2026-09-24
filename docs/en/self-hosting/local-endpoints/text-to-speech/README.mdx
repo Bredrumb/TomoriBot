@@ -1,6 +1,6 @@
 ---
 title: "Text-to-Speech (Local Engines)"
-aiGenerated: false
+aiGenerated: true
 sidebar:
   label: "Overview"
   groupLabel: "Text-to-Speech"
@@ -38,6 +38,15 @@ TomoriBot treats speech as a custom endpoint capability. Local engines run outsi
 2. In `/providers`, choose **Add New Custom Endpoint** and use API Compatibility `tts-clone`.
 3. Select the saved endpoint and use its model dropdown to add its Speech model, Voice Source Mode, and Script Markup.
 4. Open `/config` > Models > Switch Models and select the registered Speech model.
+
+## Network access
+<!-- anchor: network-access -->
+
+Every TTS local server binds to `127.0.0.1` by default, so only a bot on the same machine can reach it. When TomoriBot runs in Docker or on another machine, set `TOMORI_TTS_HOST=0.0.0.0` for the server and register the endpoint with the host's address, for example `http://host.docker.internal:8015`.
+
+The servers have no authentication: anyone who can reach the port can run synthesis on your GPU. Bind off loopback only on a network you trust, and put an authenticating reverse proxy in front of any server you expose beyond it.
+
+Each server reads its own port variable (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), so several can run at once from one `.env`. `bun run launch` passes `.env` to the servers it starts; a server started by hand reads only its shell environment.
 
 ## Persona Voice Flow
 

@@ -30,7 +30,7 @@ python -m pip install -r servers/tts/chatterbox/requirements.txt
 python servers/tts/chatterbox/server.py
 ```
 
-Giữ cửa sổ terminal đó mở trong khi TomoriBot đang sử dụng Chatterbox. URL endpoint mặc định là `http://127.0.0.1:8011`.
+Giữ cửa sổ terminal đó mở trong khi TomoriBot đang sử dụng Chatterbox. URL endpoint mặc định là `http://127.0.0.1:8011`; đặt `CHATTERBOX_PORT` để dùng cổng khác.
 
 ### Tùy chọn: sử dụng Chatterbox-Nano
 

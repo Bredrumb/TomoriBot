@@ -38,6 +38,15 @@ TomoriBot 把語音視為自訂端點功能。本機引擎在 bot 之外以 HTTP
 3. 選取已儲存的端點，並用它的模型下拉選單加入它的 Speech 模型、語音來源模式與腳本標記風格。
 4. 開啟 `/config` > 模型 > 切換模型，選取註冊好的 Speech 模型。
 
+## 網路存取
+<!-- anchor: network-access -->
+
+所有 TTS 本機伺服器預設都綁定到 `127.0.0.1`，所以只有同一台機器上的 bot 能連到它們。當 TomoriBot 在 Docker 或另一台機器上執行時，請為伺服器設定 `TOMORI_TTS_HOST=0.0.0.0`，並用主機的位址註冊端點，例如 `http://host.docker.internal:8015`。
+
+這些伺服器沒有驗證機制：任何能連到該連接埠的人都能用你的 GPU 執行合成。只在可信任的網路中綁定到回送以外的位址；若要把伺服器公開到該網路之外，請在前方放一個具備驗證的反向代理。
+
+每個伺服器都讀取自己的連接埠變數（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`），因此可以用同一個 `.env` 同時執行多個伺服器。`bun run launch` 會把 `.env` 傳給它啟動的伺服器；手動啟動的伺服器只讀取其 shell 環境。
+
 ## 人格語音流程
 
 對複製引擎而言，請為每個人格加入並指派一個語音樣本：

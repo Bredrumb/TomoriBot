@@ -100,10 +100,7 @@ bun run launch --cosyvoice3
 3. 現行の上流CosyVoiceの依存関係と、小さなラッパーの依存関係セットをインストールする。
 4. `FunAudioLLM/Fun-CosyVoice3-0.5B-2512`をHugging Faceのリビジョン`29e01c4e8d000f4bcd70751be16fa94bf3d85a18`で`CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/`にダウンロードする。
 
-通常の再実行では、これらの正確なリビジョンが維持されます。インストールを意図的に更新するには、
-`COSYVOICE3_UPDATE=1`を設定し、明示的な`COSYVOICE3_RUNTIME_COMMIT`や`COSYVOICE3_MODEL_REVISION`の
-オーバーライドを与えてください。インストーラーは、記録済みのリビジョンと一致しないチェックアウトや
-モデルへ黙って切り替えることを拒否します。
+再実行ではこれらの正確なリビジョンが維持されます。新しいリビジョンへ移行するには、インストーラー内の2つの固定値を変更します。ランタイムのチェックアウトにローカルの変更がある場合、インストーラーは再インストールを拒否します。
 
 上流の依存関係は現在、CUDA 12.1のパッケージインデックスを使うPyTorch 2.3.1、Linux上のCUDA 12対応ONNX Runtimeパッケージ、Linux上のTensorRT 10.13パッケージを使用します。より新しいPyTorch CUDAビルドを必要とするハードウェアを使用している場合は、上流の依存関係をインストールした後にサイドカーのvenv内へ互換性のあるPyTorchビルドをインストールし、お使いのドライバーでテストしてください。
 
@@ -142,7 +139,7 @@ NVIDIA GPUを使用する場合は**WSL2を推奨**します。現行の上流�
 3. 可能であれば対応する文字起こしを入力します。CosyVoice 3はこれを文字起こし付きゼロショットのパスに使用し、プロンプトの接頭辞としてトークン化するため、実際に使用される音声、つまりクリップの最初の30秒を記述したものにしてください。
 4. `/config`でペルソナ > 音声を開き、そのサンプルをペルソナに割り当てます。
 
-CosyVoiceの音声トークナイザーは30秒のプロンプトウィンドウで動作し、上流は失敗させることでこれを強制します：上流自身のWeb UIはプロンプト音声を30秒未満に保つよう案内しており、トークナイザーは音声自体を短縮するのではなくその上限を表明します。サイドカーは代わりに切り詰めるため、長いクリップは最初の30秒に切り詰められて合成が続行されます。このウィンドウを設定するのが`COSYVOICE3_MAX_REF_AUDIO_SECONDS`で、切り詰めはサイドカーのコンソールにログとして記録されます。
+CosyVoiceの音声トークナイザーは30秒のプロンプトウィンドウで動作し、上流は失敗させることでこれを強制します：上流自身のWeb UIはプロンプト音声を30秒未満に保つよう案内しており、トークナイザーは音声自体を短縮するのではなくその上限を表明します。ローカルサーバーは代わりに切り詰めるため、長いクリップは最初の30秒に切り詰められて合成が続行され、切り詰めはサーバーのコンソールにログとして記録されます。
 
 切り詰めはクリップをその場で読み取るため、話者埋め込みはプロンプトの音声トークンと同じ冒頭30秒から取得されます。CosyVoiceが条件付けに使うのはこの組み合わせなので、長い参照音声でもエンジンが使用したはずのものを失いません。実際の影響は、長いアップロードのうち音声を条件付けるのは冒頭30秒だけで、残りの部分はアップロードおよび保存されても使用されないことです。
 
@@ -163,21 +160,10 @@ CosyVoiceの音声トークナイザーは30秒のプロンプトウィンドウ
 
 | 変数 | 既定値 | 用途 |
 |---|---|---|
-| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` | 公式CosyVoiceのチェックアウト |
 | `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | ローカルのチェックポイントディレクトリ |
-| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` | セットアップがダウンロードするHugging Faceモデル |
-| `COSYVOICE3_RUNTIME_COMMIT` | 上記のレビュー済みコミット | CosyVoiceのチェックアウトリビジョン |
-| `COSYVOICE3_MODEL_REVISION` | 上記のモデルリビジョン | Hugging Faceのスナップショットリビジョン |
-| `COSYVOICE3_UPDATE` | `0` | インストーラーによる明示的なリビジョン更新を許可 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | ラッパーのバインドアドレス |
-| `COSYVOICE3_PORT` | `8017` | ラッパーのポート。未設定時は`TOMORI_TTS_PORT`にフォールバック |
-| `TOMORI_TTS_PORT` | 未設定 | 後方互換の共有ポートフォールバック |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 合成テキストの最大長 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | ラッパーのバインドアドレス。[ネットワークアクセス](/self-hosting/local-endpoints/text-to-speech/#network-access)を参照 |
+| `COSYVOICE3_PORT` | `8017` | ラッパーのポート |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | CosyVoiceの内部ストリーミングジェネレーターを有効化 |
-| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | デコード後の参照音声の最大サイズ |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | 音声トークナイザーのプロンプトウィンドウ。より長い参照音声は最初のN秒に切り詰められる |
-| `COSYVOICE3_BEARER_TOKEN` | 未設定 | `/synthesize`用の任意のベアラートークン |
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | ループバック以外のバインドを許可。リモート公開を確認しベアラートークンを使用すること |
 | `COSYVOICE3_SPEED` | `1.0` | 上流の推論に渡されるグローバルな数値の速度倍率 |
 | `COSYVOICE3_DEFAULT_INSTRUCT` | 空 | リクエストが指定しなかった場合に追加される任意の指示 |
 | `COSYVOICE3_FP16` | `0` | 公式ランタイムにfp16モードの使用を要求 |

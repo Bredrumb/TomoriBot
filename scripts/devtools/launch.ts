@@ -10,7 +10,7 @@ config();
 
 // scripts/devtools/launch.ts
 //
-//   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts] [--voxcpm2] [--fishs2] [--cosyvoice3]
+//   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts] [--voxcpm2] [--fishs2] [--cosyvoice3] [--moss]
 //
 //   Starts requested sidecar services, waits for them to be ready, then
 //   launches the bot in watch mode (equivalent to `bun run dev`).
@@ -42,6 +42,7 @@ ${pc.bold("Options:")}
   --voxcpm2     Start the VoxCPM2 Python server (requires venv setup)
   --fishs2      Start the Fish Audio S2 Pro Python server (requires venv + model setup)
   --cosyvoice3  Start the CosyVoice 3 Python server (requires venv setup)
+  --moss        Start the MOSS-TTS Python server (requires venv setup and prefetch)
   --whisperx    Start the WhisperX transcription Python server (requires venv setup)
   --help        Show this message
 
@@ -87,10 +88,6 @@ interface PythonSidecar {
   healthUrl: string;
   /** Status values that mean the server can accept requests. */
   readyStatuses?: readonly string[];
-  /** Maximum time to wait for the model to become ready. */
-  healthTimeoutMs?: number;
-  /** Headers sent to the health endpoint, such as a configured bearer token. */
-  healthHeaders?: Record<string, string>;
 }
 
 type SidecarDef = DockerSidecar | PythonSidecar;
@@ -160,7 +157,7 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "Qwen3-TTS",
     venvRelPath: "servers/tts/qwen3tts/.venv",
     scriptRelPath: "servers/tts/qwen3tts/server.py",
-    healthUrl: `http://127.0.0.1:${process.env.TOMORI_TTS_PORT ?? (process.env.TOMORI_TTS_MODE === "voice-design" ? "8014" : "8012")}/health`,
+    healthUrl: `http://127.0.0.1:${process.env.QWEN3TTS_PORT ?? (process.env.TOMORI_TTS_MODE === "voice-design" ? "8014" : "8012")}/health`,
     readyStatuses: ["ok", "idle"],
   },
 
@@ -169,7 +166,7 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "Chatterbox TTS",
     venvRelPath: "servers/tts/chatterbox/.venv",
     scriptRelPath: "servers/tts/chatterbox/server.py",
-    healthUrl: `http://127.0.0.1:${process.env.TOMORI_TTS_PORT ?? "8011"}/health`,
+    healthUrl: `http://127.0.0.1:${process.env.CHATTERBOX_PORT ?? "8011"}/health`,
   },
 
   irodoritts: {
@@ -177,7 +174,7 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "IrodoriTTS",
     venvRelPath: "servers/tts/irodoritts/.venv",
     scriptRelPath: "servers/tts/irodoritts/server.py",
-    healthUrl: `http://127.0.0.1:${process.env.TOMORI_TTS_PORT ?? "8013"}/health`,
+    healthUrl: `http://127.0.0.1:${process.env.IRODORI_TTS_PORT ?? "8013"}/health`,
   },
 
   voxcpm2: {
@@ -185,7 +182,7 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "VoxCPM2",
     venvRelPath: "servers/tts/voxcpm2/.venv",
     scriptRelPath: "servers/tts/voxcpm2/server.py",
-    healthUrl: `http://127.0.0.1:${process.env.VOXCPM2_PORT ?? process.env.TOMORI_TTS_PORT ?? "8016"}/health`,
+    healthUrl: `http://127.0.0.1:${process.env.VOXCPM2_PORT ?? "8016"}/health`,
   },
 
   fishs2: {
@@ -193,13 +190,7 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "Fish S2 Pro",
     venvRelPath: "servers/tts/fishs2/.venv",
     scriptRelPath: "servers/tts/fishs2/server.py",
-    healthUrl: `http://127.0.0.1:${process.env.FISH_S2_PORT ?? process.env.TOMORI_TTS_PORT ?? "8015"}/health`,
-    healthTimeoutMs: resolvePositiveTimeoutMs(process.env.FISH_S2_LAUNCH_TIMEOUT_MS, 240_000),
-    healthHeaders: {
-      ...(process.env.FISH_S2_API_KEY || process.env.TOMORI_TTS_API_KEY
-        ? { Authorization: `Bearer ${process.env.FISH_S2_API_KEY ?? process.env.TOMORI_TTS_API_KEY}` }
-        : {}),
-    },
+    healthUrl: `http://127.0.0.1:${process.env.FISH_S2_PORT ?? "8015"}/health`,
   },
 
   cosyvoice3: {
@@ -207,7 +198,17 @@ const SIDECARS: Record<string, SidecarDef> = {
     displayName: "CosyVoice 3",
     venvRelPath: "servers/tts/cosyvoice3/.venv",
     scriptRelPath: "servers/tts/cosyvoice3/server.py",
-    healthUrl: `http://127.0.0.1:${process.env.COSYVOICE3_PORT ?? process.env.TOMORI_TTS_PORT ?? "8017"}/health`,
+    healthUrl: `http://127.0.0.1:${process.env.COSYVOICE3_PORT ?? "8017"}/health`,
+  },
+
+  moss: {
+    kind: "python",
+    displayName: "MOSS-TTS",
+    venvRelPath: "servers/tts/moss/.venv",
+    scriptRelPath: "servers/tts/moss/server.py",
+    healthUrl: `http://127.0.0.1:${process.env.MOSS_TTS_PORT ?? "8018"}/health`,
+    // With MOSS_TTS_WARM_MODE=none the server reports "idle" until the first request loads a model.
+    readyStatuses: ["ok", "idle"],
   },
 
   whisperx: {
@@ -278,13 +279,9 @@ async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<vo
 
 type PythonHealthResult = { kind: "ready"; ready: boolean } | { kind: "exit"; code: number } | { kind: "retry" };
 
-async function probeJsonHealth(
-  url: string,
-  readyStatuses: readonly string[],
-  headers: Record<string, string> = {},
-): Promise<boolean> {
+async function probeJsonHealth(url: string, readyStatuses: readonly string[]): Promise<boolean> {
   try {
-    const response = await fetch(url, { headers, signal: AbortSignal.timeout(3_000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(3_000) });
     if (!response.ok) return false;
     const payload: unknown = await response.json();
     if (!payload || typeof payload !== "object" || !("status" in payload)) return false;
@@ -306,9 +303,7 @@ async function waitForPythonReady(
 
   while (Date.now() < deadline) {
     const result = await Promise.race<PythonHealthResult>([
-      probeJsonHealth(def.healthUrl, readyStatuses, def.healthHeaders).then(
-        (ready): PythonHealthResult => ({ kind: "ready", ready }),
-      ),
+      probeJsonHealth(def.healthUrl, readyStatuses).then((ready): PythonHealthResult => ({ kind: "ready", ready })),
       processExit,
       Bun.sleep(1_000).then((): PythonHealthResult => ({ kind: "retry" })),
     ]);
@@ -359,21 +354,35 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
 }
 
 /**
+ * Stops a spawned process together with its children. On Windows `proc.kill()` ends only the
+ * top process, which would orphan a wrapper's nested runtime (Fish S2 starts its own API server).
+ */
+function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
+  try {
+    if (process.platform === "win32" && proc.pid) {
+      Bun.spawnSync(["taskkill", "/F", "/T", "/PID", String(proc.pid)], {
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+    } else {
+      proc.kill();
+    }
+  } catch {
+    /* already exited */
+  }
+}
+
+/**
  * Spawns a Python sidecar server from its pre-built venv and waits for JSON readiness before
  * returning the handle.
  * Throws if the venv is missing (user must run setup first).
  */
 async function startPythonSidecar(def: PythonSidecar, flagName: string): Promise<ReturnType<typeof Bun.spawn>> {
-  const {
-    displayName,
-    venvRelPath,
-    scriptRelPath,
-    scriptArgs = [],
-    healthTimeoutMs = resolvePositiveTimeoutMs(
-      process.env.TOMORI_TTS_STARTUP_TIMEOUT_MS,
-      DEFAULT_PYTHON_HEALTH_TIMEOUT_MS,
-    ),
-  } = def;
+  const { displayName, venvRelPath, scriptRelPath, scriptArgs = [] } = def;
+  const healthTimeoutMs = resolvePositiveTimeoutMs(
+    process.env.TOMORI_TTS_STARTUP_TIMEOUT_MS,
+    DEFAULT_PYTHON_HEALTH_TIMEOUT_MS,
+  );
   const label = pc.magenta(`[${displayName}]`);
 
   const pythonExe = resolvePythonExe(venvRelPath);
@@ -397,11 +406,7 @@ async function startPythonSidecar(def: PythonSidecar, flagName: string): Promise
   try {
     await waitForPythonReady(proc, def, healthTimeoutMs);
   } catch (error) {
-    try {
-      proc.kill();
-    } catch {
-      /* already exited */
-    }
+    terminateProcess(proc);
     throw new Error(`${displayName} did not become ready: ${error instanceof Error ? error.message : error}`);
   }
   console.log(`${label} ${pc.green("Ready ✓")}`);
@@ -418,21 +423,6 @@ async function main(): Promise<void> {
   }
 
   const childProcesses: ReturnType<typeof Bun.spawn>[] = [];
-
-  function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
-    try {
-      if (process.platform === "win32" && proc.pid) {
-        Bun.spawnSync(["taskkill", "/F", "/T", "/PID", String(proc.pid)], {
-          stdout: "ignore",
-          stderr: "ignore",
-        });
-      } else {
-        proc.kill();
-      }
-    } catch {
-      /* already exited */
-    }
-  }
 
   for (const flag of requested) {
     const def = SIDECARS[flag];

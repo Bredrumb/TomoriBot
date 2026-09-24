@@ -100,10 +100,7 @@ El instalador:
 3. instala los requisitos actuales upstream de CosyVoice más el pequeño conjunto de dependencias del envoltorio; y
 4. descarga `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` en la revisión de Hugging Face `29e01c4e8d000f4bcd70751be16fa94bf3d85a18` en `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/`.
 
-Las ejecuciones normales posteriores conservan esas revisiones exactas. Para actualizar deliberadamente una instalación, configura
-`COSYVOICE3_UPDATE=1` y proporciona modificaciones explícitas de `COSYVOICE3_RUNTIME_COMMIT` y/o
-`COSYVOICE3_MODEL_REVISION`. El instalador se niega a cambiar silenciosamente una copia o
-modelo que no coincida con la revisión registrada.
+Las ejecuciones posteriores conservan esas revisiones exactas; pasar a revisiones más nuevas significa cambiar ambos valores fijados en el instalador. El instalador se niega a reinstalar sobre una copia del tiempo de ejecución que tenga cambios locales.
 
 Los requisitos upstream actualmente usan PyTorch 2.3.1 con el índice del paquete CUDA 12.1, paquetes ONNX Runtime de CUDA 12 en Linux, y paquetes TensorRT 10.13 en Linux. Si estás usando hardware que requiere una compilación más reciente de PyTorch CUDA, instala una compilación compatible de PyTorch en el entorno virtual del sidecar después de los requisitos upstream y pruébala con tu controlador.
 
@@ -142,7 +139,7 @@ Para la clonación zero-shot normal:
 3. Ingresa la transcripción coincidente cuando sea posible. CosyVoice 3 la usa para la ruta zero-shot respaldada por transcripción, y se tokeniza como prefijo del prompt, así que debe describir el audio que realmente se usa: los primeros 30 segundos del clip.
 4. Abre `/config` bajo Persona > Voz y asigna esa muestra a la persona.
 
-El tokenizador de voz de CosyVoice trabaja con una ventana de prompt de 30 segundos, y el upstream la impone al fallar: su propia interfaz web indica mantener el audio de prompt por debajo de 30 segundos, y el tokenizador afirma ese límite en lugar de acortar el audio en sí. En cambio, el sidecar recorta, así que un clip más largo se recorta a sus primeros 30 segundos y la síntesis continúa. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` define esa ventana, y el recorte queda registrado en la consola del sidecar.
+El tokenizador de voz de CosyVoice trabaja con una ventana de prompt de 30 segundos, y el upstream la impone al fallar: su propia interfaz web indica mantener el audio de prompt por debajo de 30 segundos, y el tokenizador afirma ese límite en lugar de acortar el audio en sí. En cambio, el servidor local recorta, así que un clip más largo se recorta a sus primeros 30 segundos, la síntesis continúa y el recorte queda registrado en la consola del servidor.
 
 El recorte lee el clip en su propio lugar, lo que significa que el embedding de locutor se toma de los mismos 30 segundos iniciales que los tokens de voz del prompt. Es ese par lo que CosyVoice usa como condicionamiento, así que una referencia larga no pierde nada que el motor habría usado. El efecto práctico es que solo los 30 segundos iniciales de una subida larga condicionan la voz, mientras que el resto se sube y se almacena sin usarse.
 
@@ -162,21 +159,10 @@ antes de la síntesis en lugar de representarse incorrectamente como instruccion
 
 | Variable | Predeterminado | Propósito |
 |---|---|---|
-| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` | Copia oficial de CosyVoice |
 | `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | Directorio local del punto de control |
-| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` | Modelo de Hugging Face descargado por la configuración |
-| `COSYVOICE3_RUNTIME_COMMIT` | commit revisado anterior | Revisión del repositorio de CosyVoice |
-| `COSYVOICE3_MODEL_REVISION` | revisión del modelo anterior | Revisión del snapshot de Hugging Face |
-| `COSYVOICE3_UPDATE` | `0` | Permite una actualización explícita de revisión del instalador |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del envoltorio |
-| `COSYVOICE3_PORT` | `8017` | Puerto del envoltorio, alternativa a `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_PORT` | sin establecer | Alternativa de puerto compartido compatible con versiones anteriores |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Longitud máxima del texto de síntesis |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del envoltorio; consulta [Acceso de red](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | Puerto del envoltorio |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Habilitar el generador de transmisión interna de CosyVoice |
-| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Tamaño máximo de audio de referencia decodificado |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Ventana de prompt del tokenizador de voz; una referencia más larga se recorta a sus primeros N segundos |
-| `COSYVOICE3_BEARER_TOKEN` | sin establecer | Token portador opcional para `/synthesize` |
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Permitir el enlace que no sea loopback; revisa la exposición remota y usa un token portador |
 | `COSYVOICE3_SPEED` | `1.0` | Multiplicador numérico global de velocidad pasado a la inferencia upstream |
 | `COSYVOICE3_DEFAULT_INSTRUCT` | vacío | Instrucción opcional añadida cuando una solicitud no proporciona una |
 | `COSYVOICE3_FP16` | `0` | Pide al tiempo de ejecución oficial que use su modo fp16 |

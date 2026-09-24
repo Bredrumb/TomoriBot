@@ -28,7 +28,7 @@ python -m pip install -r servers/tts/qwen3tts/requirements.txt
 python servers/tts/qwen3tts/server.py
 ```
 
-默认的自动模式端点 URL 是 `http://127.0.0.1:8012`。你也可以显式指定自动模式：
+默认的自动模式端点 URL 是 `http://127.0.0.1:8012`；要使用其他端口，请设置 `QWEN3TTS_PORT`。你也可以显式指定自动模式：
 
 ```powershell
 python servers\tts\qwen3tts\server.py --mode auto

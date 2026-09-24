@@ -91,7 +91,7 @@ bun run launch --cosyvoice3
 3. 安装当前上游 CosyVoice 的依赖，再加上这一小套封装程序依赖；
 4. 把 `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 以 Hugging Face 修订版 `29e01c4e8d000f4bcd70751be16fa94bf3d85a18` 下载到 `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/`。
 
-正常的重新运行会保持这些确切的修订版。要有意更新一次安装，请设置 `COSYVOICE3_UPDATE=1`，并提供显式的 `COSYVOICE3_RUNTIME_COMMIT` 和/或 `COSYVOICE3_MODEL_REVISION` 覆盖值。如果检出的代码或模型与记录的修订版不匹配，安装程序会拒绝静默切换它们。
+重新运行会保持这些确切的修订版；要改用更新的修订版，请同时修改安装程序中的两个固定值。如果运行时检出目录有本地修改，安装程序会拒绝在其上重新安装。
 
 上游依赖目前使用 PyTorch 2.3.1 与 CUDA 12.1 包索引、Linux 上的 CUDA 12 ONNX Runtime 包，以及 Linux 上的 TensorRT 10.13 包。如果你使用的硬件需要更新的 PyTorch CUDA 构建，请在装完上游依赖之后，在边车服务的 venv 里安装兼容的 PyTorch 构建，并用你的驱动测试它。
 
@@ -130,7 +130,7 @@ bun run launch --cosyvoice3
 3. 尽可能填入匹配的语音转写。CosyVoice 3 会在有转写文本支持的零样本路径中使用它，而它会作为提示前缀被分词，所以它应该描述实际被使用的音频：也就是片段最前面的 30 秒。
 4. 打开 `/config`，进入人格 > 语音，把该样本指定给这个人格。
 
-CosyVoice 的语音分词器以 30 秒的提示窗口工作，而上游是用失败来强制这一点：上游自己的网页界面会提示你把提示音频保持在 30 秒以下，而分词器会断言这个上限，而不是缩短音频本身。边车服务改为截短，所以较长的片段会被截到最前面的 30 秒并继续合成。`COSYVOICE3_MAX_REF_AUDIO_SECONDS` 设置的就是这个窗口，而截短会记录在边车服务的控制台。
+CosyVoice 的语音分词器以 30 秒的提示窗口工作，而上游是用失败来强制这一点：上游自己的网页界面会提示你把提示音频保持在 30 秒以下，而分词器会断言这个上限，而不是缩短音频本身。本地服务器改为截短，所以较长的片段会被截到最前面的 30 秒并继续合成，截短会记录在服务器的控制台。
 
 截短会就地读取片段，这意味着说话者嵌入取自与提示语音 token 相同的最前面 30 秒。CosyVoice 用来做条件设定的就是这个配对，所以较长的参考音频不会失去引擎原本会使用的任何内容。实际影响是，较长的上传只有最前面的 30 秒会影响声音，其余部分会被上传并存储，却不会被使用。
 
@@ -148,21 +148,10 @@ CosyVoice 的语音分词器以 30 秒的提示窗口工作，而上游是用失
 
 | 变量 | 默认值 | 用途 |
 |---|---|---|
-| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` | 官方 CosyVoice 检出目录 |
 | `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | 本地检查点目录 |
-| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` | 安装程序下载的 Hugging Face 模型 |
-| `COSYVOICE3_RUNTIME_COMMIT` | 上面经过审查的提交 | CosyVoice 检出修订版 |
-| `COSYVOICE3_MODEL_REVISION` | 上面的模型修订版 | Hugging Face 快照修订版 |
-| `COSYVOICE3_UPDATE` | `0` | 允许安装程序显式刷新修订版 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | 封装程序绑定地址 |
-| `COSYVOICE3_PORT` | `8017` | 封装程序端口，回退到 `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_PORT` | 未设置 | 向后兼容的共享端口回退项 |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 合成文本的最大长度 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 封装程序绑定地址; 参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | 封装程序端口 |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | 启用 CosyVoice 内部的流式生成器 |
-| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | 解码后的参考音频最大体积 |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | 语音分词器的提示窗口；较长的参考音频会截到最前面的 N 秒 |
-| `COSYVOICE3_BEARER_TOKEN` | 未设置 | `/synthesize` 的可选 bearer 令牌 |
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | 允许非回环绑定；请检查远程暴露风险并使用 bearer 令牌 |
 | `COSYVOICE3_SPEED` | `1.0` | 传给上游推理的全局数值速度倍数 |
 | `COSYVOICE3_DEFAULT_INSTRUCT` | 空 | 请求未提供指令时附加的可选指令 |
 | `COSYVOICE3_FP16` | `0` | 要求官方运行时使用其 fp16 模式 |

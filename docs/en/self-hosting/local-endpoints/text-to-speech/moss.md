@@ -36,7 +36,7 @@ python servers/tts/moss/server.py
 
 The prefetch command downloads the clone model, VoiceGenerator, and each model's audio tokenizer into the Hugging Face cache before the server starts. It checks available cache-volume disk space before each repository download and reuses cached files, but both models need substantial space. If the check fails, free space or set `HF_HOME` to a larger volume in the shell before prefetching and starting the server. Run prefetch again after changing either model ID. To download only one mode for a limited trial, pass `--mode clone` or `--mode voice-design`; the other mode may still download on first use.
 
-The endpoint is `http://127.0.0.1:8018`. Auto mode warms the clone model from the local cache before reporting startup complete. If the clone was not prefetched, startup fails rather than downloading it unexpectedly. `MOSS_TTS_WARM_MODE=voice-design` warms VoiceGenerator instead; `MOSS_TTS_WARM_MODE=none` keeps the previous lazy startup. Only one mode stays in GPU memory. Check `GET /health` for `warm_mode`, `active_mode`, and `model_id`. The wrapper uses Hugging Face `trust_remote_code=True`, so install only from a source you trust and review upstream changes before updating.
+The endpoint is `http://127.0.0.1:8018`, and `bun run launch --moss` starts the server together with TomoriBot. Auto mode warms the clone model from the local cache before reporting startup complete. If the clone was not prefetched, startup fails rather than downloading it unexpectedly. `MOSS_TTS_WARM_MODE=voice-design` warms VoiceGenerator instead; `MOSS_TTS_WARM_MODE=none` keeps the previous lazy startup. Only one mode stays in GPU memory. Check `GET /health` for `warm_mode`, `active_mode`, and `model_id`. The wrapper uses Hugging Face `trust_remote_code=True`, so install only from a source you trust and review upstream changes before updating.
 
 ## Register in TomoriBot
 
@@ -48,4 +48,4 @@ TomoriBot's current clone adapter sends no language tag. For a single-language t
 
 The sidecar reads its own process environment. Adding a value to the bot's `.env` does not automatically pass it to a separately started Python process.
 
-To try the 8B flagship on a machine with enough memory, set `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` before prefetching. `TOMORI_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE`, `MOSS_TTS_MAX_REF_AUDIO_BYTES`, and `MOSS_TTS_MAX_NEW_TOKENS` are also configurable in `.env.optional.example`. The bot's `TTS_SYNTHESIZE_TIMEOUT_MS` may need increasing for mode swaps or CPU inference.
+To try the 8B flagship on a machine with enough memory, set `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` before prefetching. `MOSS_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE`, and `MOSS_TTS_MAX_NEW_TOKENS` are also configurable in `.env.optional.example`. The bot's `TTS_SYNTHESIZE_TIMEOUT_MS` may need increasing for mode swaps or CPU inference.

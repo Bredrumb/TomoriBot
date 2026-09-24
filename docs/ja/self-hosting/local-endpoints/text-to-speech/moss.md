@@ -36,7 +36,7 @@ python servers/tts/moss/server.py
 
 事前ダウンロードでは、クローンモデル、VoiceGenerator、および両モデルが使う音声トークナイザーをHugging Faceのキャッシュに保存します。各リポジトリのダウンロード前にキャッシュ先の空き容量を確認し、既にキャッシュ済みのファイルは再利用します。容量不足なら空きを増やすか、事前ダウンロードとサーバー起動の前に同じシェルで`HF_HOME`を空き容量の多いドライブに設定してください。モデルIDを変更した場合は再実行してください。片方だけを試すなら`--mode clone`または`--mode voice-design`を指定できますが、もう片方の初回使用時にはダウンロードが発生する場合があります。
 
-標準URLは`http://127.0.0.1:8018`です。Autoモードでは、HTTPサーバーの起動完了前にキャッシュ済みのクローンモデルを読み込みます。事前ダウンロードしていない場合は、不意にダウンロードを始めず起動に失敗します。代わりにVoiceGeneratorを読み込むには`MOSS_TTS_WARM_MODE=voice-design`、起動時に読み込まない場合は`MOSS_TTS_WARM_MODE=none`を設定します。GPUには一度に一つのモデルだけを保持します。`GET /health`の`warm_mode`、`active_mode`、`model_id`で確認できます。このラッパーはHugging Faceの`trust_remote_code=True`を使うため、信頼できるソースからのみインストールし、更新時には上流の変更を確認してください。
+標準URLは`http://127.0.0.1:8018`で、`bun run launch --moss`でTomoriBotと一緒にサーバーを起動できます。Autoモードでは、HTTPサーバーの起動完了前にキャッシュ済みのクローンモデルを読み込みます。事前ダウンロードしていない場合は、不意にダウンロードを始めず起動に失敗します。代わりにVoiceGeneratorを読み込むには`MOSS_TTS_WARM_MODE=voice-design`、起動時に読み込まない場合は`MOSS_TTS_WARM_MODE=none`を設定します。GPUには一度に一つのモデルだけを保持します。`GET /health`の`warm_mode`、`active_mode`、`model_id`で確認できます。このラッパーはHugging Faceの`trust_remote_code=True`を使うため、信頼できるソースからのみインストールし、更新時には上流の変更を確認してください。
 
 ## TomoriBotへの登録
 

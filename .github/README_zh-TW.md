@@ -184,7 +184,7 @@ bun run launch --cosyvoice3
 bun run launch --help
 ```
 
-可用旗標：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--whisperx`、`--help`
+可用旗標：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`、`--help`
 
 **Ctrl+C** 會停止 bot 與所有 Python sidecar 程序。Docker 容器（`--searxng`、`--crawl4ai`）刻意保持執行，結束時請用 `docker stop searxng` / `docker stop crawl4ai` 手動停止。
 

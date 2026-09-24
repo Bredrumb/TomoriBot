@@ -1,6 +1,6 @@
 ---
 title: "VoxCPM2"
-aiGenerated: false
+aiGenerated: true
 ---
 
 VoxCPM2 is OpenBMB's 2B-parameter multilingual text-to-speech model. It supports 30 languages, 48 kHz output, natural-language Voice Design, reference-audio voice cloning, controllable cloning, and transcript-assisted "Ultimate Cloning". TomoriBot uses the official `voxcpm` Python package through the thin wrapper in `servers/tts/voxcpm2/`.
@@ -106,8 +106,6 @@ $env:VOXCPM2_PREFETCH = "0"
 
 After setup, `bun run launch --voxcpm2` starts the sidecar together with TomoriBot. The default endpoint is `http://127.0.0.1:8016`.
 
-If `VOXCPM2_API_KEY` or `TOMORI_TTS_API_KEY` is set, register the endpoint with authentication enabled and save the same key in TomoriBot. The launcher still probes the unauthenticated `/health` route, while synthesis requests use `Authorization: Bearer <key>`.
-
 ## Register in TomoriBot
 
 Run `/providers`, choose **Add New Custom Endpoint**, and configure the Speech endpoint:
@@ -173,16 +171,10 @@ Once VoxCPM2 is the active Speech model, `/generate voice-message` uses the pers
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | Maximum automatic retries |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | Upstream bad-case length threshold |
 | `VOXCPM2_PREFETCH` | `1` | Installer only: download the model during setup |
-| `VOXCPM2_PORT` | `8016` | VoxCPM2 sidecar port; falls back to `TOMORI_TTS_PORT` when unset |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Sidecar bind address |
-| `TOMORI_TTS_PORT` | `8016` | Backward-compatible shared sidecar port fallback |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | Maximum decoded reference-audio size |
-| `VOXCPM2_API_KEY` | unset | Optional bearer token for `/synthesize`; `TOMORI_TTS_API_KEY` is accepted as a fallback |
-| `TOMORI_TTS_API_KEY` | unset | Shared optional bearer token fallback for `/synthesize` |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | Set to `1` only to allow a non-loopback bind without a bearer token |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Maximum accepted synthesis text length |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2 local server port |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Local server bind address; see [Network access](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-Reference audio must be a non-empty WAV container. The wrapper enforces the decoded byte limit before writing a temporary file. `/health` remains unauthenticated for local readiness checks; `/synthesize` requires `Authorization: Bearer <key>` whenever a key is configured. Keep the default loopback bind unless a reverse proxy or explicit remote policy is in place.
+Reference audio must be a non-empty WAV container of at most 10 MB decoded, which the wrapper checks before writing a temporary file.
 
 ## Alternate checkpoints and runtimes
 

@@ -16,7 +16,7 @@ import numpy as np
 import soundfile as sf
 import torch
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -25,37 +25,30 @@ from reference_audio import trim_reference_audio
 
 
 ROOT = Path(__file__).resolve().parent
-RUNTIME_DIR = Path(os.getenv("COSYVOICE3_RUNTIME_DIR", ROOT / "CosyVoice")).resolve()
+RUNTIME_DIR = ROOT / "CosyVoice"
 MODEL_DIR = Path(
     os.getenv(
         "COSYVOICE3_MODEL_DIR",
         RUNTIME_DIR / "pretrained_models" / "Fun-CosyVoice3-0.5B",
     )
 ).resolve()
-MODEL_ID = os.getenv("COSYVOICE3_MODEL_ID", "FunAudioLLM/Fun-CosyVoice3-0.5B-2512")
+MODEL_ID = "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
 
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("COSYVOICE3_PORT", os.getenv("TOMORI_TTS_PORT", "8017")))
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
+PORT = int(os.getenv("COSYVOICE3_PORT", "8017"))
+MAX_TEXT_CHARS = 2000
 UPSTREAM_STREAM = os.getenv("COSYVOICE3_UPSTREAM_STREAM", "0").lower() in {"1", "true", "yes", "on"}
 FP16 = os.getenv("COSYVOICE3_FP16", "0").lower() in {"1", "true", "yes", "on"}
 LOAD_TRT = os.getenv("COSYVOICE3_LOAD_TRT", "0").lower() in {"1", "true", "yes", "on"}
 LOAD_VLLM = os.getenv("COSYVOICE3_LOAD_VLLM", "0").lower() in {"1", "true", "yes", "on"}
 SPEED = float(os.getenv("COSYVOICE3_SPEED", "1.0"))
 DEFAULT_INSTRUCT = os.getenv("COSYVOICE3_DEFAULT_INSTRUCT", "").strip()
-MAX_REF_AUDIO_BYTES = int(os.getenv("COSYVOICE3_MAX_REF_AUDIO_BYTES", str(25 * 1024 * 1024)))
+# Bounds memory before decoding. TomoriBot sends 16-bit mono 22.05 kHz WAV (about 44 KB/s), so this holds
+# about 594 s; lowering it below the bot's SPEECH_SAMPLE_MAX_DURATION_SECS rejects clips the bot accepted.
+MAX_REF_AUDIO_BYTES = 25 * 1024 * 1024
 # The speech tokenizer's trained prompt window. A longer clip is trimmed to the leading window
-# rather than refused, so the sidecar adapts to whatever reference the caller stored.
-MAX_REF_AUDIO_SECONDS = float(os.getenv("COSYVOICE3_MAX_REF_AUDIO_SECONDS", "30"))
-BEARER_TOKEN = os.getenv("COSYVOICE3_BEARER_TOKEN", "").strip()
-ALLOW_REMOTE_BIND = os.getenv("COSYVOICE3_ALLOW_REMOTE_BIND", "0").lower() in {"1", "true", "yes", "on"}
-
-if MAX_REF_AUDIO_BYTES <= 0:
-    raise ValueError("COSYVOICE3_MAX_REF_AUDIO_BYTES must be greater than zero.")
-# Read as validation rather than as a cap: trimming wins over refusing, but an unusable window
-# would silently disable the clamp and hand the tokenizer audio it asserts on.
-if MAX_REF_AUDIO_SECONDS <= 0:
-    raise ValueError("COSYVOICE3_MAX_REF_AUDIO_SECONDS must be greater than zero.")
+# rather than refused, so the local server adapts to whatever reference the caller stored.
+MAX_REF_AUDIO_SECONDS = 30.0
 
 SYSTEM_PROMPT = "You are a helpful assistant."
 END_OF_PROMPT = "<|endofprompt|>"
@@ -76,22 +69,6 @@ LANGUAGE_NAMES = {
 
 TAG_REGEX = re.compile(r"\[([^\]\r\n]{1,40})\]")
 
-
-def is_loopback_host(host: str) -> bool:
-    return host in {"127.0.0.1", "localhost", "::1"}
-
-
-if not is_loopback_host(HOST) and not ALLOW_REMOTE_BIND:
-    raise RuntimeError(
-        "CosyVoice 3 refuses non-loopback binding by default. "
-        "Set COSYVOICE3_ALLOW_REMOTE_BIND=1 only when remote access is intentional."
-    )
-if not is_loopback_host(HOST) and not BEARER_TOKEN:
-    print(
-        "[CosyVoice3] Warning: remote binding is enabled without COSYVOICE3_BEARER_TOKEN.",
-        file=sys.stderr,
-        flush=True,
-    )
 
 model = None
 model_lock = threading.Lock()
@@ -118,7 +95,7 @@ def require_installation() -> None:
     if not (MODEL_DIR / "cosyvoice3.yaml").is_file():
         raise RuntimeError(
             f"CosyVoice 3 checkpoint not found at {MODEL_DIR}. "
-            f"Download {MODEL_ID} before starting the sidecar."
+            f"Download {MODEL_ID} before starting the local server."
         )
 
 
@@ -314,9 +291,7 @@ def iter_inference(
 
 
 @app.post("/synthesize")
-def synthesize(payload: SynthesizeRequest, authorization: Optional[str] = Header(default=None)) -> Response:
-    if BEARER_TOKEN and authorization != f"Bearer {BEARER_TOKEN}":
-        raise HTTPException(status_code=401, detail="A valid bearer token is required.")
+def synthesize(payload: SynthesizeRequest) -> Response:
     if model is None:
         raise HTTPException(status_code=503, detail="CosyVoice 3 is still loading.")
 

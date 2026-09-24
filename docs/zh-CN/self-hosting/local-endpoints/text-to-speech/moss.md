@@ -36,7 +36,7 @@ python servers/tts/moss/server.py
 
 prefetch 命令会在服务器启动之前，把克隆模型、VoiceGenerator 以及每个模型各自的音频分词器下载到 Hugging Face 缓存里。它在下载每个仓库之前都会检查缓存卷的可用磁盘空间，并复用已缓存的文件，但这两个模型都需要相当大的空间。如果检查未通过，请腾出空间，或者在预取和启动服务器之前，在 shell 中把 `HF_HOME` 指向更大的卷。更改任何一个模型 ID 之后，请重新运行 prefetch。若只想为有限的试用下载一种模式，请传入 `--mode clone` 或 `--mode voice-design`；另一种模式在首次使用时仍然可能被下载。
 
-端点是 `http://127.0.0.1:8018`。自动模式会在报告启动完成之前，从本地缓存预热克隆模型。如果没有预先拉取克隆模型，启动会失败，而不是意外去下载它。`MOSS_TTS_WARM_MODE=voice-design` 会改为预热 VoiceGenerator；`MOSS_TTS_WARM_MODE=none` 会保持之前的惰性启动行为。只有一种模式会留在 GPU 内存中。请检查 `GET /health` 查看 `warm_mode`、`active_mode` 和 `model_id`。封装程序使用 Hugging Face 的 `trust_remote_code=True`，所以请只从你信任的来源安装，并在更新之前审阅上游的改动。
+端点是 `http://127.0.0.1:8018`，`bun run launch --moss` 会把服务器和 TomoriBot 一起启动。自动模式会在报告启动完成之前，从本地缓存预热克隆模型。如果没有预先拉取克隆模型，启动会失败，而不是意外去下载它。`MOSS_TTS_WARM_MODE=voice-design` 会改为预热 VoiceGenerator；`MOSS_TTS_WARM_MODE=none` 会保持之前的惰性启动行为。只有一种模式会留在 GPU 内存中。请检查 `GET /health` 查看 `warm_mode`、`active_mode` 和 `model_id`。封装程序使用 Hugging Face 的 `trust_remote_code=True`，所以请只从你信任的来源安装，并在更新之前审阅上游的改动。
 
 ## 在 TomoriBot 中注册
 
@@ -48,4 +48,4 @@ TomoriBot 当前的克隆适配器不发送语言标记。如果要针对单一�
 
 边车服务读取的是它自己进程的环境变量。把值加到 bot 的 `.env` 里，并不会自动传递到单独启动的 Python 进程。
 
-要在内存足够的机器上试用 8B 旗舰模型，请在预取之前设置 `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`。`TOMORI_TTS_PORT`、`MOSS_TTS_DEVICE`、`MOSS_TTS_DTYPE`、`MOSS_TTS_MAX_REF_AUDIO_BYTES` 和 `MOSS_TTS_MAX_NEW_TOKENS` 也可以在 `.env.optional.example` 中配置。遇到模式切换或 CPU 推理时，bot 的 `TTS_SYNTHESIZE_TIMEOUT_MS` 可能需要调大。
+要在内存足够的机器上试用 8B 旗舰模型，请在预取之前设置 `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`。`MOSS_TTS_PORT`、`MOSS_TTS_DEVICE`、`MOSS_TTS_DTYPE` 和 `MOSS_TTS_MAX_NEW_TOKENS` 也可以在 `.env.optional.example` 中配置。遇到模式切换或 CPU 推理时，bot 的 `TTS_SYNTHESIZE_TIMEOUT_MS` 可能需要调大。

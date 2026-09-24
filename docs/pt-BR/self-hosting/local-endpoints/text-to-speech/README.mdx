@@ -39,6 +39,15 @@ O TomoriBot trata a fala como uma capacidade de endpoint personalizado. Motores 
 3. Selecione o endpoint salvo e use seu menu suspenso de modelo para adicionar seu modelo de Speech, Voice Source Mode e Script Markup.
 4. Abra `/config` > Models > Switch Models e selecione o modelo de Speech registrado.
 
+## Acesso de rede
+<!-- anchor: network-access -->
+
+Todo servidor local de TTS faz bind em `127.0.0.1` por padrão, então apenas um bot na mesma máquina consegue alcançá-lo. Quando o TomoriBot roda no Docker ou em outra máquina, defina `TOMORI_TTS_HOST=0.0.0.0` para o servidor e registre o endpoint com o endereço do host, por exemplo `http://host.docker.internal:8015`.
+
+Os servidores não têm autenticação: qualquer pessoa que alcance a porta pode executar síntese na sua GPU. Faça bind fora do loopback apenas em uma rede confiável e coloque um proxy reverso com autenticação na frente de qualquer servidor exposto além dela.
+
+Cada servidor lê sua própria variável de porta (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), então vários podem rodar ao mesmo tempo a partir de um único `.env`. O `bun run launch` repassa o `.env` aos servidores que inicia; um servidor iniciado manualmente lê apenas o ambiente do seu shell.
+
 ## Fluxo de Voz de Persona
 
 Para motores de clone, adicione e atribua uma amostra de voz por persona:

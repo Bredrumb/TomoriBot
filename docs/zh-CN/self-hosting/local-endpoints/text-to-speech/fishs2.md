@@ -46,7 +46,7 @@ servers/tts/fishs2/.venv/bin/python servers/tts/fishs2/server.py
 3. 安装 Fish Speech 以及 TomoriBot 封装程序的依赖；
 4. 把官方 BF16 `fishaudio/s2-pro` 检查点下载到 `fish-speech/checkpoints/fish-speech-s2-pro/`。
 
-正常的重新安装会停留在固定的运行时提交 `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` 上，而不会跟随一个不断变动的分支。模型修订版默认是 `main`；当一次部署需要可复现时，请把 `FISH_S2_MODEL_REVISION` 固定到一个不可变的 Hugging Face 修订版。安装程序设置列在[安装器变量](#安装器变量)下。
+正常的重新安装会停留在固定的运行时提交 `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` 上，而不会跟随一个不断变动的分支；要改用更新的运行时，请修改安装程序中固定的值。模型修订版默认是 `main`；当一次部署需要可复现时，请把 `FISH_S2_MODEL_REVISION` 固定到一个不可变的 Hugging Face 修订版。安装程序设置列在[安装器变量](#安装器变量)下。
 
 这个 Hugging Face 模型是受限访问的。请先在 Hugging Face 上接受它的许可。如果下载时要求身份验证，请运行：
 
@@ -97,7 +97,7 @@ PowerShell 安装程序默认面向 CUDA GPU 加速（`cu124`）。要在没有 
 - 端点 URL：`http://127.0.0.1:8015`
 - 语音来源模式：`Clone`
 - 脚本标记风格：`Bracket Tags`
-- API 密钥：默认的回环设置请留空。如果启用了 bearer 认证，请输入完全一致的 `FISH_S2_API_KEY` 值。
+- API 密钥：留空。封装程序没有身份验证，参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access)。
 
 然后添加该端点的模型条目，并通过 `/config` 的 模型 > 切换模型 启用它。
 
@@ -125,18 +125,10 @@ Fish S2 Pro 可以用方括号标签在同一句话内部改变表达方式。�
 
 | 变量 | 默认值 | 用途 |
 |---|---|---|
-| `FISH_SPEECH_DIR` | `servers/tts/fishs2/fish-speech` | Fish Speech 运行时目录 |
 | `FISH_S2_MODEL_DIR` | `fish-speech/checkpoints/fish-speech-s2-pro` | S2 Pro 检查点目录 |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | 模型仓库，以及已配置检查点的健康检查元数据标签 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | TomoriBot 封装程序的绑定地址 |
-| `FISH_S2_PORT` | `8015` | Fish 封装程序端口；未设置时回退到 `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_PORT` | 未设置 | 向后兼容的共享端口覆盖项 |
-| `FISH_S2_API_KEY` | 未设置 | 可选的 bearer 令牌，进行需要认证的远程绑定时也必须提供 |
-| `TOMORI_TTS_API_KEY` | 未设置 | `FISH_S2_API_KEY` 未设置时使用的共享 bearer 令牌回退项 |
-| `FISH_S2_ALLOW_INSECURE_REMOTE` | `0` | 在没有 bearer 令牌的情况下明确允许非回环绑定 |
-| `FISH_S2_MAX_REF_AUDIO_BYTES` | `10485760` | 解码后的参考 WAV 最大体积 |
-| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | 未设置 | 共享的解码后参考音频大小上限回退项 |
-| `FISH_S2_UPSTREAM_HOST` | `127.0.0.1` | 内部 Fish API 绑定地址 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 封装程序的绑定地址; 参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `FISH_S2_PORT` | `8015` | Fish 封装程序端口 |
 | `FISH_S2_UPSTREAM_PORT` | `8025` | 内部 Fish API 端口 |
 | `FISH_S2_COMPILE` | `0` | 启用 Fish Speech 的 `torch.compile`（需要带 Triton 的 Linux/WSL2） |
 | `FISH_S2_HALF` | `0` | 请求 FP16 运行时模式 |
@@ -146,10 +138,6 @@ Fish S2 Pro 可以用方括号标签在同一句话内部改变表达方式。�
 | `FISH_S2_REPETITION_PENALTY` | `1.1` | 重复惩罚 |
 | `FISH_S2_MAX_NEW_TOKENS` | `1024` | 每个请求生成的最大语义 token 数 |
 | `FISH_S2_USE_MEMORY_CACHE` | `on` | 在 Fish 运行时中缓存已编码的参考语音 |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 封装程序接受的最大脚本长度 |
-| `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` | 等待嵌套 Fish API 的最长时间 |
-| `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` | 等待单次上游合成请求的最长时间 |
-| `FISH_S2_LAUNCH_TIMEOUT_MS` | `240000` | `bun run launch --fishs2` 等待封装程序健康检查的时长 |
 
 ### 安装器变量
 
@@ -157,15 +145,10 @@ Fish S2 Pro 可以用方括号标签在同一句话内部改变表达方式。�
 
 | 变量 | 默认值 | 用途 |
 |---|---|---|
-| `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` | Fish Speech 运行时仓库，例如一个经过审查的镜像 |
-| `FISH_S2_RUNTIME_REF` | `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` | 安装时检出的运行时提交 |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | 要下载的 Hugging Face 仓库 |
 | `FISH_S2_MODEL_REVISION` | `main` | 要下载的 Hugging Face 修订版 |
-| `FISH_S2_UPDATE` | `0` | 设为 `1` 以有意更新运行时并重新下载模型 |
-| `FISH_S2_UPDATE_REF` | 未设置 | 更新时使用的运行时 ref。若不提供，则保留显式设置的 `FISH_S2_RUNTIME_REF`；否则更新使用 `main` |
-| `FISH_S2_UPDATE_MODEL_REVISION` | 未设置 | 更新时使用的模型修订版，优先级规则与 `FISH_S2_UPDATE_REF` 相同 |
 
-参考音频必须是非空、未压缩的 PCM RIFF/WAVE 文件。解码后的大小限制会在推理前检查，以防过大的 base64 请求消耗不受限的内存。
+参考音频必须是非空、未压缩、解码后不超过 10 MB 的 PCM RIFF/WAVE 文件。该上限会在推理前检查，以防过大的 base64 请求消耗不受限的内存；对于 TomoriBot 发送的 22.05 kHz 单声道 WAV，它约可容纳 237 秒。
 
 ## 低显存选项（INT8 量化）
 

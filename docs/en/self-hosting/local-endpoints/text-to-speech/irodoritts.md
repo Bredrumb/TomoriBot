@@ -1,6 +1,6 @@
 ---
 title: "IrodoriTTS"
-aiGenerated: false
+aiGenerated: true
 ---
 
 Irodori-TTS v4.1 is a Japanese-focused TTS model with voice cloning and caption-based VoiceDesign in one checkpoint. TomoriBot runs it through the local FastAPI wrapper in `servers/tts/irodoritts/`.
@@ -160,8 +160,8 @@ The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Hugging Face model repo or supported repo/subfolder source |
 | `IRODORI_TTS_CHECKPOINT` | unset | Optional local `.pt` or `.safetensors` checkpoint; overrides the Hugging Face model |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Server bind address |
-| `TOMORI_TTS_PORT` | `8013` | Server port |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Server bind address; see [Network access](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Server port |
 | `IRODORI_MODEL_DEVICE` | `auto` | Model device (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
 | `IRODORI_CODEC_DEVICE` | `auto` | Codec device |
 | `IRODORI_MODEL_PRECISION` | `bf16` on CUDA, otherwise `fp32` | Model precision |
@@ -177,4 +177,3 @@ The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend
 | `IRODORI_MAX_REF_SECONDS` | checkpoint default | Optional cap on reference audio duration |
 | `IRODORI_CHUNKING_ENABLED` | `true` | Split long text at eligible punctuation boundaries and concatenate the generated chunks |
 | `IRODORI_CHUNK_MIN_CHARS` | `80` | Minimum non-whitespace characters before strong sentence boundaries split; commas are fallback boundaries at about 1.5x this value |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Per-request text length cap |

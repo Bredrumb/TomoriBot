@@ -45,19 +45,18 @@ def read_startup_mode() -> str:
 MODE = resolve_mode(read_startup_mode())
 WARM_MODE = resolve_warm_mode(os.getenv("MOSS_TTS_WARM_MODE", "clone")) if MODE == "auto" else MODE
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("TOMORI_TTS_PORT", "8018"))
+PORT = int(os.getenv("MOSS_TTS_PORT", "8018"))
 DEVICE = os.getenv("MOSS_TTS_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DTYPE = os.getenv("MOSS_TTS_DTYPE", "bfloat16" if DEVICE.startswith("cuda") else "float32")
 CLONE_MODEL_ID = os.getenv("MOSS_TTS_CLONE_MODEL_ID", DEFAULT_CLONE_MODEL_ID)
 DESIGN_MODEL_ID = os.getenv("MOSS_TTS_DESIGN_MODEL_ID", DEFAULT_DESIGN_MODEL_ID)
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
-MAX_REF_AUDIO_BYTES = int(os.getenv("MOSS_TTS_MAX_REF_AUDIO_BYTES", "10485760"))
+MAX_TEXT_CHARS = 2000
+# Bounds memory before decoding. TomoriBot sends 16-bit mono 22.05 kHz WAV (about 44 KB/s), so this holds
+# about 237 s; lowering it below the bot's SPEECH_SAMPLE_MAX_DURATION_SECS rejects clips the bot accepted.
+MAX_REF_AUDIO_BYTES = 10 * 1024 * 1024
 MAX_NEW_TOKENS = int(os.getenv("MOSS_TTS_MAX_NEW_TOKENS", "4096"))
 DEFAULT_LANGUAGE = os.getenv("MOSS_TTS_DEFAULT_LANGUAGE", "").strip()
 LANGUAGE_NAMES = {"en": "English", "ja": "Japanese", "zh": "Chinese"}
-
-if HOST not in {"127.0.0.1", "::1", "localhost"} and os.getenv("TOMORI_TTS_ALLOW_REMOTE_BIND") != "true":
-  raise ValueError("Remote bind requires TOMORI_TTS_ALLOW_REMOTE_BIND=true.")
 
 model = None
 processor = None

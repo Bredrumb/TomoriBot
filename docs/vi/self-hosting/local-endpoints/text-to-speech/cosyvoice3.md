@@ -91,7 +91,7 @@ Trình cài đặt thực hiện:
 3. cài đặt các yêu cầu CosyVoice thượng nguồn hiện tại cùng bộ phụ thuộc wrapper gọn nhẹ; và
 4. tải `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` tại bản sửa đổi Hugging Face `29e01c4e8d000f4bcd70751be16fa94bf3d85a18` vào `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/`.
 
-Các lần chạy lại thông thường sẽ giữ nguyên các bản sửa đổi chính xác đó. Để chủ động cập nhật bản cài đặt, hãy đặt `COSYVOICE3_UPDATE=1` và cung cấp các giá trị ghi đè `COSYVOICE3_RUNTIME_COMMIT` và/hoặc `COSYVOICE3_MODEL_REVISION` rõ ràng. Trình cài đặt từ chối tự động chuyển đổi bản tải về hoặc model không khớp với bản sửa đổi đã ghi lại.
+Các lần chạy lại giữ nguyên các bản sửa đổi chính xác đó; để chuyển sang bản mới hơn, hãy thay đổi cả hai giá trị đã ghim trong trình cài đặt. Trình cài đặt từ chối cài đặt lại lên bản tải về runtime có thay đổi cục bộ.
 
 Các phần phụ thuộc thượng nguồn hiện sử dụng PyTorch 2.3.1 với chỉ mục gói CUDA 12.1, các gói ONNX Runtime CUDA 12 trên Linux, và các gói TensorRT 10.13 trên Linux. Nếu bạn đang sử dụng phần cứng yêu cầu bản dựng PyTorch CUDA mới hơn, hãy cài đặt bản dựng PyTorch tương thích trong venv của sidecar sau các yêu cầu thượng nguồn và kiểm tra với driver của bạn.
 
@@ -130,7 +130,7 @@ Sau đó mở `/config` > Models > Switch Models và kích hoạt endpoint giọ
 3. Nhập bản phiên âm khớp khi có thể. CosyVoice 3 sử dụng bản phiên âm này cho đường dẫn zero-shot có hỗ trợ bản phiên âm, và nó được token hóa như một tiền tố prompt, nên bản phiên âm phải mô tả âm thanh thực sự được dùng: 30 giây đầu tiên của clip.
 4. Mở `/config` trong phần Persona > Voice và gán mẫu âm thanh đó cho persona.
 
-Bộ token hóa giọng nói của CosyVoice hoạt động trên cửa sổ prompt 30 giây, và thượng nguồn thực thi điều đó bằng cách báo lỗi: giao diện web của chính thượng nguồn hướng dẫn giữ âm thanh prompt dưới 30 giây, và bộ token hóa khẳng định giới hạn đó thay vì rút ngắn chính âm thanh. Sidecar thì cắt bớt, nên một clip dài hơn được cắt về 30 giây đầu tiên và quá trình tổng hợp vẫn tiếp tục. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` đặt cửa sổ đó, và việc cắt bớt được ghi log ra console của sidecar.
+Bộ token hóa giọng nói của CosyVoice hoạt động trên cửa sổ prompt 30 giây, và thượng nguồn thực thi điều đó bằng cách báo lỗi: giao diện web của chính thượng nguồn hướng dẫn giữ âm thanh prompt dưới 30 giây, và bộ token hóa khẳng định giới hạn đó thay vì rút ngắn chính âm thanh. Máy chủ cục bộ thì cắt bớt, nên một clip dài hơn được cắt về 30 giây đầu tiên, quá trình tổng hợp vẫn tiếp tục và việc cắt bớt được ghi log ra console của máy chủ.
 
 Việc cắt bớt đọc clip ngay tại chỗ, nghĩa là embedding người nói được lấy từ đúng 30 giây đầu đó, cùng đoạn với các token giọng nói của prompt. CosyVoice điều kiện hóa dựa trên chính cặp này, nên một tham chiếu dài không mất đi bất cứ thứ gì mà engine vốn sẽ dùng. Tác động thực tế là chỉ 30 giây đầu của một tệp tải lên dài mới định hình giọng nói, còn phần còn lại vẫn được tải lên và lưu trữ mà không được dùng đến.
 
@@ -148,21 +148,10 @@ Sử dụng `/generate voice-message` để thử nghiệm endpoint đang hoạt
 
 | Biến | Mặc định | Mục đích |
 |---|---|---|
-| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` | Mã nguồn CosyVoice chính thức |
 | `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | Thư mục checkpoint cục bộ |
-| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` | Model Hugging Face được tải về khi thiết lập |
-| `COSYVOICE3_RUNTIME_COMMIT` | commit đã duyệt ở trên | Bản sửa đổi mã nguồn CosyVoice |
-| `COSYVOICE3_MODEL_REVISION` | bản sửa đổi model ở trên | Bản sửa đổi snapshot Hugging Face |
-| `COSYVOICE3_UPDATE` | `0` | Cho phép làm mới bản sửa đổi của trình cài đặt một cách rõ ràng |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết của wrapper |
-| `COSYVOICE3_PORT` | `8017` | Cổng wrapper, dự phòng về `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_PORT` | chưa đặt | Cổng dự phòng dùng chung tương thích ngược |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Độ dài văn bản tổng hợp tối đa |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết của wrapper; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | Cổng wrapper |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Bật trình tạo streaming nội bộ của CosyVoice |
-| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Kích thước âm thanh tham chiếu sau giải mã tối đa |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Cửa sổ prompt cho bộ token hóa giọng nói; tham chiếu dài hơn được cắt về N giây đầu tiên |
-| `COSYVOICE3_BEARER_TOKEN` | chưa đặt | Bearer token tùy chọn cho `/synthesize` |
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Cho phép liên kết ngoài loopback; hãy xem xét việc lộ ra ngoài và sử dụng bearer token |
 | `COSYVOICE3_SPEED` | `1.0` | Hệ số nhân tốc độ dạng số toàn cục được chuyển đến suy luận thượng nguồn |
 | `COSYVOICE3_DEFAULT_INSTRUCT` | trống | Hướng dẫn tùy chọn được thêm vào khi một yêu cầu không cung cấp hướng dẫn |
 | `COSYVOICE3_FP16` | `0` | Yêu cầu runtime chính thức sử dụng chế độ fp16 |

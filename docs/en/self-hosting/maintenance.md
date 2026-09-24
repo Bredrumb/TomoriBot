@@ -248,6 +248,64 @@ below: `COOLDOWN_PERSONA=1000` becomes `COMMAND_COOLDOWN_SCALE=0.1`.
 
 </details>
 
+### Removed TTS local server variables
+
+The TTS local servers under `servers/tts/` lost their shared fallbacks, per-engine limits, and
+authentication settings. An old value in `.env` or your shell is ignored, so check the rows below
+that change behavior rather than only restating a default.
+
+- **Ports:** `TOMORI_TTS_PORT` is gone because one value in `.env` put every launched server on the
+  same port. Each engine reads its own variable instead: `CHATTERBOX_PORT` (8011), `QWEN3TTS_PORT`
+  (8012, or 8014 in voice-design mode), `IRODORI_TTS_PORT` (8013), `FISH_S2_PORT` (8015),
+  `VOXCPM2_PORT` (8016), `COSYVOICE3_PORT` (8017), and `MOSS_TTS_PORT` (8018).
+- **Authentication:** the servers no longer check a bearer token or refuse a non-loopback bind.
+  If you set `FISH_S2_API_KEY`, `VOXCPM2_API_KEY`, `TOMORI_TTS_API_KEY`, or
+  `COSYVOICE3_BEARER_TOKEN`, the endpoint now accepts requests without it. Read
+  [Network access](/self-hosting/local-endpoints/text-to-speech/#network-access) before binding
+  off loopback.
+- **Installer pins:** the Fish Speech runtime commit and the CosyVoice runtime and model revisions are
+  fixed in the installers. Updating them means editing the pin in the script.
+
+<details>
+<summary>All removed TTS local server variables</summary>
+
+| Variable | Now |
+|---|---|
+| `COSYVOICE3_ALLOW_REMOTE_BIND` | removed; any `TOMORI_TTS_HOST` is accepted |
+| `COSYVOICE3_BEARER_TOKEN` | removed; no authentication |
+| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` |
+| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` |
+| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` |
+| `COSYVOICE3_MODEL_REVISION` | pinned in the installer |
+| `COSYVOICE3_RUNTIME_COMMIT` | pinned in the installer |
+| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` |
+| `COSYVOICE3_RUNTIME_REPO` | `https://github.com/QwenAudio/CosyVoice.git` |
+| `COSYVOICE3_UPDATE` | removed; a rerun checks out the installer's pins |
+| `FISH_S2_ALLOW_INSECURE_REMOTE` | removed; any `TOMORI_TTS_HOST` is accepted |
+| `FISH_S2_API_KEY` | removed; no authentication |
+| `FISH_S2_LAUNCH_TIMEOUT_MS` | `TOMORI_TTS_STARTUP_TIMEOUT_MS` applies (`300000`) |
+| `FISH_S2_MAX_REF_AUDIO_BYTES` | `10485760` |
+| `FISH_S2_RUNTIME_REF` | pinned in the installer |
+| `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` |
+| `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` |
+| `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` |
+| `FISH_S2_UPDATE` | removed; a rerun checks out the installer's pin and refreshes the model |
+| `FISH_S2_UPDATE_MODEL_REVISION` | use `FISH_S2_MODEL_REVISION` |
+| `FISH_S2_UPDATE_REF` | pinned in the installer |
+| `FISH_S2_UPSTREAM_HOST` | `127.0.0.1` |
+| `FISH_SPEECH_DIR` | `servers/tts/fishs2/fish-speech` |
+| `MOSS_TTS_MAX_REF_AUDIO_BYTES` | `10485760` |
+| `TOMORI_TTS_ALLOW_REMOTE_BIND` | removed; any `TOMORI_TTS_HOST` is accepted |
+| `TOMORI_TTS_API_KEY` | removed; no authentication |
+| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | `10485760` (Fish) |
+| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` (`1000` for Irodori-TTS) |
+| `TOMORI_TTS_PORT` | the engine's own port variable |
+| `TTS_CLONE_TIMEOUT_MS` | use `TTS_SYNTHESIZE_TIMEOUT_MS` |
+| `VOXCPM2_API_KEY` | removed; no authentication |
+| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` |
+
+</details>
+
 ## Backups & restore
 
 `bun run backup` creates a timestamped bundle in `backups/` (or your `TOMORI_BACKUP_DIR` if

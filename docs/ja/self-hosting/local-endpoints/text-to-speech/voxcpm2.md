@@ -105,8 +105,6 @@ $env:VOXCPM2_PREFETCH = "0"
 
 セットアップ後、`bun run launch --voxcpm2`でサイドカーをTomoriBotと一緒に起動できます。既定のエンドポイントは`http://127.0.0.1:8016`です。
 
-`VOXCPM2_API_KEY`または`TOMORI_TTS_API_KEY`が設定されている場合は、認証を有効にしてエンドポイントを登録し、同じキーをTomoriBotにも保存してください。ランチャーは認証不要の`/health`ルートには引き続きアクセスしますが、合成リクエストには`Authorization: Bearer <key>`を使用します。
-
 ## TomoriBotへの登録
 
 `/providers`を実行し、**新しいカスタムエンドポイントを追加**を選んで、音声エンドポイントを次のように設定します。
@@ -172,16 +170,10 @@ VoxCPM2が有効な音声モデルになると、`/generate voice-message`は通
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | 自動再試行の最大回数 |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | 上流の不良ケース長のしきい値 |
 | `VOXCPM2_PREFETCH` | `1` | インストーラー専用: セットアップ中にモデルをダウンロード |
-| `VOXCPM2_PORT` | `8016` | VoxCPM2サイドカーのポート。未設定時は`TOMORI_TTS_PORT`にフォールバック |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | サイドカーのバインドアドレス |
-| `TOMORI_TTS_PORT` | `8016` | 後方互換の共有サイドカーポートのフォールバック |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | デコード後の参照音声の最大サイズ |
-| `VOXCPM2_API_KEY` | 未設定 | `/synthesize`用の任意のベアラートークン。フォールバックとして`TOMORI_TTS_API_KEY`も受け付ける |
-| `TOMORI_TTS_API_KEY` | 未設定 | `/synthesize`用の共有の任意ベアラートークンのフォールバック |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | ベアラートークンなしでループバック以外のバインドを許可する場合のみ`1`に設定 |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 合成テキストとして受け付ける最大長 |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2ローカルサーバーのポート |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | ローカルサーバーのバインドアドレス。[ネットワークアクセス](/self-hosting/local-endpoints/text-to-speech/#network-access)を参照 |
 
-参照音声は空でないWAVコンテナである必要があります。ラッパーは一時ファイルを書き込む前にデコード後のバイト数上限を強制します。`/health`はローカルの準備確認のため認証不要のままですが、キーが設定されている場合は常に`/synthesize`に`Authorization: Bearer <key>`が必要です。リバースプロキシや明示的なリモートポリシーがない限り、既定のループバックバインドを維持してください。
+参照音声はデコード後10 MB以下の空でないWAVコンテナである必要があり、ラッパーは一時ファイルを書き込む前にこれを確認します。
 
 ## 代替のチェックポイントとランタイム
 

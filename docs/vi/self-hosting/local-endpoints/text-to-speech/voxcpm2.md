@@ -105,8 +105,6 @@ $env:VOXCPM2_PREFETCH = "0"
 
 Sau khi thiết lập, `bun run launch --voxcpm2` sẽ khởi động sidecar cùng với TomoriBot. Endpoint mặc định là `http://127.0.0.1:8016`.
 
-Nếu `VOXCPM2_API_KEY` hoặc `TOMORI_TTS_API_KEY` được đặt, hãy đăng ký endpoint với xác thực được bật và lưu cùng một khóa trong TomoriBot. Trình khởi chạy vẫn thăm dò tuyến `/health` không yêu cầu xác thực, trong khi các yêu cầu tổng hợp sử dụng `Authorization: Bearer <key>`.
-
 ## Đăng ký trong TomoriBot
 
 Chạy `/providers`, chọn **Add New Custom Endpoint**, và định cấu hình endpoint Speech:
@@ -172,16 +170,10 @@ Khi VoxCPM2 là model Speech đang hoạt động, `/generate voice-message` s�
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | Số lần tự động thử lại tối đa |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | Ngưỡng độ dài trường hợp bất thường ở thượng nguồn |
 | `VOXCPM2_PREFETCH` | `1` | Chỉ dành cho trình cài đặt: tải xuống model trong quá trình thiết lập |
-| `VOXCPM2_PORT` | `8016` | Cổng sidecar VoxCPM2; dự phòng về `TOMORI_TTS_PORT` khi chưa đặt |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết sidecar |
-| `TOMORI_TTS_PORT` | `8016` | Cổng sidecar dùng chung tương thích ngược |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | Kích thước âm thanh tham chiếu sau giải mã tối đa |
-| `VOXCPM2_API_KEY` | chưa đặt | Bearer token tùy chọn cho `/synthesize`; `TOMORI_TTS_API_KEY` được chấp nhận làm giá trị dự phòng |
-| `TOMORI_TTS_API_KEY` | chưa đặt | Bearer token dự phòng tùy chọn dùng chung cho `/synthesize` |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | Đặt thành `1` chỉ để cho phép liên kết ngoài loopback mà không cần bearer token |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Độ dài văn bản tổng hợp tối đa được chấp nhận |
+| `VOXCPM2_PORT` | `8016` | Cổng máy chủ cục bộ VoxCPM2 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết máy chủ cục bộ; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-Âm thanh tham chiếu phải là một container WAV không rỗng. Wrapper thực thi giới hạn byte sau khi giải mã trước khi ghi tệp tạm thời. Tuyến `/health` vẫn không yêu cầu xác thực cho các kiểm tra tính sẵn sàng cục bộ; `/synthesize` yêu cầu `Authorization: Bearer <key>` bất cứ khi nào khóa được cấu hình. Giữ liên kết loopback mặc định trừ khi có reverse proxy hoặc chính sách từ xa rõ ràng.
+Âm thanh tham chiếu phải là một container WAV không rỗng, tối đa 10 MB sau khi giải mã; wrapper kiểm tra điều này trước khi ghi tệp tạm thời.
 
 ## Các checkpoint và runtime thay thế
 

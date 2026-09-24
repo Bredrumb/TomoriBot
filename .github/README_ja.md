@@ -182,7 +182,7 @@ bun run launch --qwen3tts
 bun run launch --help
 ```
 
-利用可能なフラグ： `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--whisperx`、`--help`
+利用可能なフラグ： `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`、`--help`
 
 **Ctrl+C**でボットとPython製サイドカープロセスが停止します。Dockerコンテナ（`--searxng``--crawl4ai`）は意図的に起動したまま残されます。終了時は`docker stop searxng` / `docker stop crawl4ai`で手動停止してください。
 

@@ -147,8 +147,8 @@ El sidecar ahora tiene su propio `pyproject.toml` y sigue la configuración del 
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repositorio de modelos de Hugging Face o fuente compatible de repositorio/subcarpeta |
 | `IRODORI_TTS_CHECKPOINT` | sin establecer | Punto de control opcional local `.pt` o `.safetensors`; anula el modelo de Hugging Face |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del servidor |
-| `TOMORI_TTS_PORT` | `8013` | Puerto del servidor |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del servidor; consulta [Acceso de red](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Puerto del servidor |
 | `IRODORI_MODEL_DEVICE` | `auto` | Dispositivo del modelo (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
 | `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo del códec |
 | `IRODORI_MODEL_PRECISION` | `bf16` en CUDA, de lo contrario `fp32` | Precisión del modelo |
@@ -162,4 +162,3 @@ El sidecar ahora tiene su propio `pyproject.toml` y sigue la configuración del 
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Escala de orientación de subtítulos / Diseño de voz |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Escala de orientación del orador de referencia |
 | `IRODORI_MAX_REF_SECONDS` | valor predeterminado del punto de control | Límite opcional en la duración del audio de referencia |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Límite de longitud de texto por solicitud |

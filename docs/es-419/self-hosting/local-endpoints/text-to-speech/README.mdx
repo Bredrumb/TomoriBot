@@ -38,6 +38,15 @@ TomoriBot trata la voz como una capacidad de endpoint personalizado. Los motores
 3. Selecciona el endpoint guardado y usa su menú desplegable de modelos para agregar su modelo de Voz, Modo de fuente de voz y Estilo de marcado del guion.
 4. Abre `/config` > Modelos > Cambiar modelos y selecciona el modelo de Voz registrado.
 
+## Acceso de red
+<!-- anchor: network-access -->
+
+Todos los servidores locales de TTS se enlazan a `127.0.0.1` de forma predeterminada, así que solo un bot en la misma máquina puede alcanzarlos. Cuando TomoriBot se ejecuta en Docker o en otra máquina, configura `TOMORI_TTS_HOST=0.0.0.0` para el servidor y registra el punto de conexión con la dirección del host, por ejemplo `http://host.docker.internal:8015`.
+
+Los servidores no tienen autenticación: cualquiera que alcance el puerto puede ejecutar síntesis en tu GPU. Enlaza fuera de loopback solo en una red de confianza y coloca un proxy inverso con autenticación delante de cualquier servidor que expongas más allá de ella.
+
+Cada servidor lee su propia variable de puerto (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), así que varios pueden ejecutarse a la vez desde un mismo `.env`. `bun run launch` pasa el `.env` a los servidores que inicia; un servidor iniciado a mano solo lee el entorno de su shell.
+
 ## Flujo de voz de la persona
 
 Para los motores de clonación, agrega y asigna una muestra de voz por persona:

@@ -156,8 +156,8 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Hugging Faceモデル、または対応するrepo/subfolder指定 |
 | `IRODORI_TTS_CHECKPOINT` | 未設定 | 任意のローカル`.pt` / `.safetensors`チェックポイント。設定時はHugging Faceモデルより優先 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | サーバーのバインドアドレス |
-| `TOMORI_TTS_PORT` | `8013` | サーバーポート |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | サーバーのバインドアドレス。[ネットワークアクセス](/self-hosting/local-endpoints/text-to-speech/#network-access)を参照 |
+| `IRODORI_TTS_PORT` | `8013` | サーバーポート |
 | `IRODORI_MODEL_DEVICE` | `auto` | モデルデバイス（`auto`、`cuda`、`cpu`、`mps`、`xpu`） |
 | `IRODORI_CODEC_DEVICE` | `auto` | コーデックデバイス |
 | `IRODORI_MODEL_PRECISION` | CUDAでは`bf16`、それ以外は`fp32` | モデル精度 |
@@ -173,4 +173,3 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_MAX_REF_SECONDS` | チェックポイント側のデフォルト | 参照音声長の任意上限 |
 | `IRODORI_CHUNKING_ENABLED` | `true` | 長文を分割して生成音声を1つに連結 |
 | `IRODORI_CHUNK_MIN_CHARS` | `80` | 強い文末で分割可能になる非空白文字数。カンマはこの値のおよそ1.5倍でフォールバック境界になる |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | 1リクエストあたりのテキスト長上限 |

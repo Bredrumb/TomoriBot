@@ -106,8 +106,6 @@ $env:VOXCPM2_PREFETCH = "0"
 
 Após a configuração, `bun run launch --voxcpm2` inicia o sidecar em conjunto com o TomoriBot. O endpoint padrão é `http://127.0.0.1:8016`.
 
-Se `VOXCPM2_API_KEY` ou `TOMORI_TTS_API_KEY` estiver definida, registre o endpoint com a autenticação ativada e salve a mesma chave no TomoriBot. O launcher ainda testa a rota não autenticada `/health`, enquanto as requisições de síntese utilizam `Authorization: Bearer <key>`.
-
 ## Registrar no TomoriBot
 
 Execute `/providers`, escolha **Add New Custom Endpoint** (Adicionar Novo Endpoint Personalizado) e configure o endpoint de Fala (Speech):
@@ -173,16 +171,10 @@ Quando o VoxCPM2 for o modelo de Fala ativo, o `/generate voice-message` usará 
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | Número máximo de repetições automáticas |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | Limite de comprimento de caso ruim (bad-case) da fonte |
 | `VOXCPM2_PREFETCH` | `1` | Apenas para o instalador: baixar o modelo durante a configuração |
-| `VOXCPM2_PORT` | `8016` | Porta do sidecar do VoxCPM2; recua para `TOMORI_TTS_PORT` quando não definida |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de vinculação (bind) do sidecar |
-| `TOMORI_TTS_PORT` | `8016` | Porta compartilhada compatível com versões anteriores (fallback) |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | Tamanho máximo decodificado do áudio de referência |
-| `VOXCPM2_API_KEY` | não definido | Token de portador (bearer) opcional para `/synthesize`; `TOMORI_TTS_API_KEY` é aceito como alternativa |
-| `TOMORI_TTS_API_KEY` | não definido | Token de portador compartilhado opcional (fallback) para `/synthesize` |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | Defina como `1` apenas para permitir uma vinculação não-loopback sem um token de portador |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Comprimento máximo aceito para o texto de síntese |
+| `VOXCPM2_PORT` | `8016` | Porta do servidor local do VoxCPM2 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de bind do servidor local; consulte [Acesso de rede](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-O áudio de referência deve ser um contêiner WAV não vazio. O wrapper impõe o limite de bytes decodificados antes de escrever um arquivo temporário. `/health` permanece sem autenticação para verificações locais de prontidão; `/synthesize` exige `Authorization: Bearer <key>` sempre que uma chave for configurada. Mantenha a vinculação de loopback padrão, a menos que um proxy reverso ou uma política remota explícita esteja em vigor.
+O áudio de referência deve ser um contêiner WAV não vazio de no máximo 10 MB decodificado, o que o wrapper verifica antes de escrever um arquivo temporário.
 
 ## Checkpoints alternativos e tempos de execução
 
