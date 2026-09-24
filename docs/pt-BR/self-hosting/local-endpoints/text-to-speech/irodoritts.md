@@ -122,6 +122,60 @@ O TomoriBot envia esse prompt como `instruct`; o wrapper do Irodori o mapeia par
 
 O TomoriBot remove a sintaxe de emoji personalizado do Discord antes de enviar o texto para o TTS. Com `script_markup: emoji`, os emojis Unicode são preservados para o condicionamento de texto do Irodori.
 
+### Controles de estilo por emoji
+
+O IrodoriTTS aceita anotações de emoji no texto de entrada para influenciar efeitos sonoros, modos de fala e expressões emocionais. Com o `Script Markup Style` do TomoriBot definido como `Emoji`, esses emojis Unicode são preservados e enviados ao Irodori.
+
+| Emoji | Significado / emoção / estilo |
+| --- | --- |
+| 👂 | Sussurro, sons próximos ao ouvido |
+| 😮‍💨 | Respiração, suspiro, respiração durante o sono |
+| ⏸️ | Pausa, silêncio |
+| 🤭 | Risadinha, riso contido |
+| 🥵 | Respiração ofegante, gemido, grunhido |
+| 📢 | Eco, reverberação |
+| 😏 | Provocando, de forma brincalhona e doce / persuadindo |
+| 🥺 | Voz trêmula, timidamente / com incerteza |
+| 🌬️ | Falta de ar, respiração pesada |
+| 😮 | Arfar / inspirar de repente |
+| 👅 | Som de lamber, mastigar, sons molhados |
+| 💋 | Estalo dos lábios / ruído labial |
+| 🫶 | Suavemente, com ternura |
+| 😭 | Soluço, choro, tristeza |
+| 😱 | Grito, berro, guincho |
+| 😪 | Com sono, de forma lânguida |
+| 😴 | Falar dormindo, roncar |
+| ⏩ | Fala rápida, em rajada, com pressa |
+| 📞 | Como por telefone ou alto-falante |
+| 🐢 | Devagar |
+| 🥤 | Som de deglutição |
+| 🤧 | Tosse, fungada, espirro, pigarro |
+| 😒 | Estalo da língua |
+| 😰 | Em pânico, agitado, nervoso, gaguejando |
+| 😆 | Com alegria, feliz |
+| 💥 | Com força / impulso |
+| 😠 | Com raiva, descontente, emburrado |
+| 😲 | Surpresa, admiração / exclamação |
+| 🥱 | Bocejo |
+| 😖 | Com dor, em agonia |
+| 😟 | Ansioso, preocupado |
+| 🫣 | Timidamente, envergonhado |
+| 🙄 | Exasperado, revirando os olhos |
+| 😊 | Alegremente, contente |
+| 😎 | Com confiança, orgulhosamente |
+| 👌 | Sinal de concordância / som de assentimento |
+| 🙏 | Suplicando, implorando |
+| 🥴 | Embriagado |
+| 🎵 | Cantarolando |
+| 🤐 | Abafado (boca coberta) |
+| 😌 | Aliviado, satisfeito |
+| 🤔 | Voz de dúvida / questionamento |
+| 💪 | Com esforço, com força |
+| 👃 | Som de farejar / cheirar |
+| 📖 | Narração, monólogo |
+
+Repetir o mesmo emoji pode intensificar o efeito. O controle por emoji não é perfeitamente consistente, então trate esses símbolos como dicas de estilo, não como uma garantia do resultado. Consulte as [anotações oficiais de emoji do IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) para ver a lista original e futuras atualizações.
+
 ## Inferência mais rápida com Sway Sampling
 
 O padrão continua sendo a amostragem linear de 40 passos do Irodori, de maior qualidade. Para menor latência, tente o Sway Sampling com menos passos:
