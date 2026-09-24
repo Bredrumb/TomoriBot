@@ -55,6 +55,8 @@ This is a current map of shared utility modules under `src/utils/`.
 - `textDisplayModal.ts`: reusable read-only text modal, trigger button, and collector wiring
 - `resolveSendableChannel.ts`: cache-first, REST-fallback channel resolution for send paths, plus `isChannelGoneError` for the deleted-channel and lost-access cases
 - `historyFetcher.ts`, `historyFormatter.ts`
+- `importFileIntake.ts`, `transferExportDelivery.ts`: the upload intake and DM delivery the portable transfer leaves share, so no leaf re-implements either sequence
+- `reminderSelectOptions.ts`: resolves one reminder row into the option caption both `/scheduled-task` selectors render, taking the repeat and creator locale keys from its caller
 
 #### Sending into a channel the cache no longer holds
 

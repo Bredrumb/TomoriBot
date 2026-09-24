@@ -5,7 +5,7 @@ import {
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { parsePersonaOptionId, resolveSelectedPersona } from "@/commands/stats/persona";
+import { parsePersonaOptionId, resolveSelectedPersona } from "@/utils/persona/personaOptionValue";
 import type { ExportResult } from "@/types/db/dataExport";
 import type { TomoriState } from "@/types/db/schema";
 import type { StandardEmbedOptions } from "@/types/discord/embed";
@@ -23,7 +23,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { safeSelectOptionText } from "@/utils/discord/ui/interactionCore";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { deliverTransferExport } from "./transferExportDelivery";
+import { deliverTransferExport } from "@/utils/discord/transferExportDelivery";
 
 export type MemoryExportScope = TransferExportScope;
 

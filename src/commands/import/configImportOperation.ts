@@ -21,7 +21,7 @@ import {
 import { ColorCode, log } from "@/utils/misc/logger";
 import { IMPORT_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload, type SafeDownloadResult } from "@/utils/security/safeDownload";
-import { readImportFile } from "./importFileIntake";
+import { readImportFile } from "@/utils/discord/importFileIntake";
 
 export type ConfigImportScope = "workspace" | "personal";
 

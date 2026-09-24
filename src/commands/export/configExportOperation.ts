@@ -14,7 +14,7 @@ import {
 import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
-import { deliverTransferExport } from "./transferExportDelivery";
+import { deliverTransferExport } from "@/utils/discord/transferExportDelivery";
 
 export type ConfigExportScope = TransferExportScope;
 
