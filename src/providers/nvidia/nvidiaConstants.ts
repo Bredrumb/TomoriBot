@@ -24,31 +24,3 @@ export const NVIDIA_STRUCTURED_OUTPUT_VISION_MODELS = new Set(["qwen/qwen3.5-397
  * NVIDIA currently runs these models with speculative decoding backends that reject `min_p`.
  */
 export const NVIDIA_MIN_P_UNSUPPORTED_MODELS = new Set(["nvidia/nemotron-3-ultra-550b-a55b"]);
-
-/**
- * Models that require extended-thinking parameters injected at request time.
- * These receive `reasoning_budget` and `chat_template_kwargs: { enable_thinking: true }`
- * in addition to the standard chat-completion body.
- */
-export const NVIDIA_THINKING_MODELS = new Set(["nvidia/nemotron-3-ultra-550b-a55b"]);
-
-/**
- * Default reasoning budget (tokens) for Nemotron-style thinking-enabled models.
- *
- * Unused while every thinking model is in {@link NVIDIA_THINKING_BUDGET_UNSUPPORTED_MODELS}. It is
- * also four times the 4096 `maxOutputTokens` default in `nvidiaProvider.ts`, so reconcile the two
- * before re-enabling it anywhere rather than restoring this value as-is.
- */
-export const NVIDIA_THINKING_BUDGET_TOKENS = 16384;
-
-/**
- * Models whose NIM deployment has moved to the vLLM V2 model runner, which dropped the
- * thinking-budget parameter. Sending `reasoning_budget` to one of these returns a clean 400
- * (`thinking_token_budget is not yet supported by the V2 model runner`) when non-streaming and an
- * opaque mid-SSE 500 when streaming, which is the only path we use. `chat_template_kwargs` is
- * verified to still work on the V2 runner and must stay: it is what actually enables thinking.
- *
- * Kept as a denylist rather than deleting the injection so restoring the parameter is one line if
- * NVIDIA re-adds it (see the budget-vs-output-cap note on {@link NVIDIA_THINKING_BUDGET_TOKENS}).
- */
-export const NVIDIA_THINKING_BUDGET_UNSUPPORTED_MODELS = new Set(["nvidia/nemotron-3-ultra-550b-a55b"]);

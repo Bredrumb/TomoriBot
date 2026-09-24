@@ -42,6 +42,14 @@ export interface CustomThinkingRequest {
   reasoning_effort?: "none" | "low" | "medium" | "high";
 }
 
+export interface NvidiaThinkingRequest {
+  chat_template_kwargs?: {
+    enable_thinking: boolean;
+    thinking: boolean;
+  };
+  reasoning_effort?: "low" | "medium" | "high";
+}
+
 type ProviderEffortLevel = "low" | "medium" | "high";
 type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel;
 
@@ -327,6 +335,39 @@ export function buildCustomThinkingRequest(
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
   return { reasoning_effort: toProviderReasoningEffortLevel(effectiveLevel) };
+}
+
+/**
+ * Maps `thinking_level` onto NVIDIA NIM, which serves many model families behind one endpoint and
+ * each family reads a different switch, so every level other than `auto` sends all of them:
+ * `enable_thinking` (Nemotron) and `thinking` (DeepSeek) are chat-template kwargs that other
+ * templates ignore, and `reasoning_effort` is the only control GLM and gpt-oss honor.
+ *
+ * `none` still sends effort `"low"`: NIM validates `reasoning_effort` against low/medium/high on
+ * gpt-oss and Llama and returns 400 for `"none"`, and GLM ignores both template switches, so low
+ * effort is the closest it gets to off. Levels map to effort rather than a token budget because
+ * NIM's V2 model runner rejects `reasoning_budget`.
+ */
+export function buildNvidiaThinkingRequest(
+  configuredLevel: string | null | undefined,
+  forceReason?: boolean,
+): NvidiaThinkingRequest {
+  const effectiveLevel = resolveEffectiveThinkingLevel(configuredLevel, forceReason);
+  if (effectiveLevel === "auto") {
+    return {};
+  }
+
+  if (effectiveLevel === "none") {
+    return {
+      chat_template_kwargs: { enable_thinking: false, thinking: false },
+      reasoning_effort: "low",
+    };
+  }
+
+  return {
+    chat_template_kwargs: { enable_thinking: true, thinking: true },
+    reasoning_effort: toProviderEffortLevel(effectiveLevel),
+  };
 }
 
 export function getNovelAiThinkingDirective(

@@ -365,6 +365,13 @@ export class OpenAICompatibleStreamAdapter extends BaseStreamAdapter {
             "stream_options" in attempt.body &&
             (statusCode === 400 || statusCode === 422) &&
             message.toLowerCase().includes("stream_options"),
+          // A strict validator (vLLM's pydantic `literal_error`) names the key it rejects without
+          // the "unsupported parameter" wording the shared classifier looks for.
+          ({ statusCode, message }: DegradableErrorInput) =>
+            (statusCode === 400 || statusCode === 422) &&
+            (this.options.degradationPriorityKeys ?? []).some(
+              (key) => key in attempt.body && new RegExp(`\\b${key}\\b`).test(message),
+            ),
           ...(this.options.shouldRetryWithoutStop && "stop" in attempt.body
             ? [
                 ({ statusCode, message }: DegradableErrorInput) =>

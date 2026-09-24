@@ -107,8 +107,13 @@ three, and a key the user never asked for is the better first hypothesis.
 
 Declare only keys that are safe to drop. A key that changes the shape of the reply belongs in
 `mandatoryBodyKeys` instead, because probing it early would find a "working" request that silently
-lost a capability. NVIDIA declares `reasoning_budget` as droppable and keeps `chat_template_kwargs`
-mandatory, since the latter is what enables thinking.
+lost a capability. NVIDIA declares its thinking keys (`reasoning_effort`, `chat_template_kwargs`)
+droppable: losing them falls back to the model's own thinking default, and NIM needs no
+`reasoning_content` replay that a change in thinking could break.
+
+A 400 or 422 whose message names a declared key present in the request also counts as a parameter
+rejection. Strict validators such as vLLM's pydantic models name the rejected key (`'loc': ('body',
+'reasoning_effort')`) without the "unsupported parameter" wording the shared classifier looks for.
 
 An SSE error can restart transparently only before the attempt commits. The commitment point is the
 first meaningful chunk yielded to the consumer: visible text, reasoning, a tool-call delta, or usage.
