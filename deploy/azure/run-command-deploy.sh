@@ -8,7 +8,7 @@ set -euo pipefail
 : "${dockerHubTokenB64:?dockerHubTokenB64 is required}"
 : "${tomoribotImage:?tomoribotImage is required}"
 : "${searxngImage:?searxngImage is required}"
-# Optional, and doubles as the SearXNG on/off switch: the sidecar refuses to start without a
+# Optional, and doubles as the SearXNG on/off switch: the container refuses to start without a
 # secret, so gating the profile on the same value makes "configured" and "running" one state
 # instead of two that can disagree. Absent means the bot keeps using Brave -> DDG -> Felo.
 searxngSecretB64="${searxngSecretB64:-}"
