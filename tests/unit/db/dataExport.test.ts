@@ -65,7 +65,6 @@ function fullWorkspaceConfig(): Record<string, unknown> {
     time_awareness_enabled: false,
     tool_use_enabled: true,
     short_term_memory_enabled: true,
-    verbatim_tool_calling_enabled: false,
     user_info_updates_enabled: true,
     tool_notice_hidden_keys: ["web_search"],
     uncensor_injection_enabled: true,

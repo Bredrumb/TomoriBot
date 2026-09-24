@@ -169,7 +169,6 @@ export default {
     field_user_byok_enabled: `已啟用。成員需要自己的個人供應商，才能傳送使用者觸發的訊息。請用 {toggle_command} 切換。`,
     field_user_byok_disabled: `已停用。使用者觸發的訊息仍可改由伺服器供應商處理。請用 {toggle_command} 切換。`,
     field_tool_use: `工具使用`,
-    field_verbatim_tool_calling: `逐字工具呼叫`,
     field_prompt_snapshot: `提示詞快照`,
     field_short_term_memory: `短期記憶`,
     field_user_info_updates: `使用者資訊更新`,

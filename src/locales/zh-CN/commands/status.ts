@@ -169,7 +169,6 @@ export default {
     field_user_byok_enabled: `已启用。用户触发的消息需要成员自己的个人提供方。用 {toggle_command} 切换。`,
     field_user_byok_disabled: `已关闭。用户触发的消息仍然可以回落到服务器提供方。用 {toggle_command} 切换。`,
     field_tool_use: `工具使用`,
-    field_verbatim_tool_calling: `逐字工具调用`,
     field_prompt_snapshot: `提示词快照`,
     field_short_term_memory: `短期记忆`,
     field_user_info_updates: `用户信息更新`,

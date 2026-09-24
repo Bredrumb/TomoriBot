@@ -82,7 +82,7 @@ async function dirtyEverySingleton(serverId: number): Promise<void> {
       manage_message_enabled = false, thread_creation_enabled = false, imagegen_enabled = false,
       videogen_enabled = true, voice_message_enabled = false, user_blocking_enabled = false,
       time_awareness_enabled = false, tool_use_enabled = false, short_term_memory_enabled = false,
-      verbatim_tool_calling_enabled = true, user_info_updates_enabled = false
+      user_info_updates_enabled = false
   `;
   await testSql`
     INSERT INTO server_notice_embeds_configs (server_id) VALUES (${serverId})

@@ -145,6 +145,7 @@ export default {
       structured: `Salida estructurada`,
       "strict-roles": `Alternancia estricta de roles`,
       prefix: `Finalización de prefijo`,
+      "verbatim-tools": `Llamadas literales a herramientas`,
     },
     model_flag_descriptions: {
       tools: `Marca si este modelo puede llamar herramientas. Desmárcalo y dejaré de ofrecérselas.`,
@@ -152,9 +153,10 @@ export default {
       structured: `Marca si este modelo puede devolver JSON estricto cuando se le pide.`,
       "strict-roles": `Combina turnos del mismo rol y comienza con un turno de usuario. Márcalo para un proxy que expone Claude.`,
       prefix: `Permite que le entregue un turno a medio escribir para que lo continúe. Márcalo para un proxy que expone DeepSeek o Z.ai.`,
+      "verbatim-tools": `Marcar si el endpoint no admite herramientas nativas. Extrae llamadas del texto sin procesar.`,
     },
     model_compat_label: `Compatibilidades de finalización de chat`,
-    model_compat_description: `Ajustes de forma de mensaje para un backend estricto. Deja ambos desactivados a menos que las solicitudes sean rechazadas.`,
+    model_compat_description: `Ajustes de formato y protocolo para backends estrictos. Déjalo desactivado salvo si hace falta.`,
     model_image_supports_label: `Capacidades de imagen`,
     model_image_supports_description: `Declara solo las funciones de imagen que este modelo y punto de conexión realmente admiten.`,
     model_image_supports: {

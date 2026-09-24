@@ -169,7 +169,6 @@ export default {
     field_user_byok_enabled: `Habilitado. Los miembros necesitan su propio proveedor personal para mensajes activados por usuario. Cambia con {toggle_command}.`,
     field_user_byok_disabled: `Deshabilitado. Los mensajes activados por usuario aún pueden usar el proveedor del servidor. Cambia con {toggle_command}.`,
     field_tool_use: `Uso de Herramientas`,
-    field_verbatim_tool_calling: `Llamada de Herramientas Textual`,
     field_prompt_snapshot: `Instantánea de Prompt`,
     field_short_term_memory: `Memoria a Corto Plazo`,
     field_user_info_updates: `Actualizaciones de Información del Usuario`,

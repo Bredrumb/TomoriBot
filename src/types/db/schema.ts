@@ -215,6 +215,9 @@ export const llmSchema = z.object({
   // supports_prefix_completion: allow `prefix: true` on the trailing assistant prefill turn.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  // verbatim_tool_calling: the model has no native tool channel, so schemas travel in-band and
+  // the assistant's text is scanned for calls. Only the custom adapter runs that parser.
+  verbatim_tool_calling: z.boolean().default(false),
   llm_description: z.string().nullable().optional(),
   descriptions: z.record(z.string(), z.string()).nullable().optional(),
   // Official per-model pricing (USD per million tokens, uncached standard rate). Null for
@@ -335,6 +338,9 @@ export const customEndpointSchema = customEndpointConnectionSchema.extend({
   // endpoint's synthetic llms row so the runtime resolves them uniformly with built-in providers.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  // Per model like the strict flags, and for a sharper reason: one connection can host both a
+  // native-tool-calling model and a text-only one that needs the in-band schema dump and its parser.
+  verbatim_tool_calling: z.boolean().default(false),
   is_default: z.boolean().default(false),
 });
 export type CustomEndpointRow = z.infer<typeof customEndpointSchema>;
@@ -689,7 +695,6 @@ const serverCapabilitiesConfigSchema = z.object({
   // Master switch for the short-term memory subsystem (tool + context injection).
   // Default true keeps existing servers unchanged; see migration 054.
   short_term_memory_enabled: z.boolean().default(true),
-  verbatim_tool_calling_enabled: z.boolean().default(false),
   user_info_updates_enabled: z.boolean().default(true),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),

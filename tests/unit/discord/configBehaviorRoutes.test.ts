@@ -452,8 +452,6 @@ describe("config Behavior routes", () => {
       "behavior-send-limit-open": { wireToken: "beh-send-limit-open", fields: [] },
       "behavior-send-limit-submit": { wireToken: "beh-send-limit-sub", fields: ["nonce"] },
       "behavior-self-debug-set": { wireToken: "beh-self-debug-set", fields: ["enabled"] },
-      "behavior-workarounds-open": { wireToken: "beh-workarounds-open", fields: [] },
-      "behavior-workarounds-submit": { wireToken: "beh-workarounds-sub", fields: ["nonce"] },
       "behavior-notice-visibility-open": { wireToken: "beh-notices-open", fields: [] },
       "behavior-notice-visibility-submit": { wireToken: "beh-notices-sub", fields: ["nonce"] },
       "behavior-speech-transcripts-set": { wireToken: "beh-transcripts-set", fields: ["enabled"] },

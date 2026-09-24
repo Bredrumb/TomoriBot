@@ -6,12 +6,7 @@
 import type { LlmRow } from "../../types/db/schema";
 import { log } from "../misc/logger";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
-
-/**
- * In-memory cache for LLM configurations
- * Key: llm_id, Value: LLM configuration row
- */
-const llmCache = new Map<number, LlmRow>();
+import { cachedLlmCount, readCachedLlm, readCachedLlms, replaceCachedLlms } from "@/utils/cache/llmCacheStore";
 
 /**
  * Initializes the LLM configuration cache by loading all LLM models into memory
@@ -21,20 +16,15 @@ export async function initializeLLMCache(): Promise<void> {
   try {
     log.info("Initializing LLM configuration cache...");
 
-    llmCache.clear();
-
     const llms = await llmModelRepo.loadAvailableLlms(true);
 
     if (!llms || llms.length === 0) {
+      replaceCachedLlms([]);
       log.warn("No LLM configurations found in database");
       return;
     }
 
-    for (const llm of llms) {
-      if (llm.llm_id !== undefined) {
-        llmCache.set(llm.llm_id, llm as LlmRow);
-      }
-    }
+    replaceCachedLlms(llms as LlmRow[]);
 
     const providerCounts = new Map<string, number>();
     for (const llm of llms) {
@@ -46,7 +36,7 @@ export async function initializeLLMCache(): Promise<void> {
       .map(([provider, count]) => `${provider}: ${count}`)
       .join(", ");
 
-    log.success(`LLM cache initialized with ${llmCache.size} models (${providerStats})`);
+    log.success(`LLM cache initialized with ${cachedLlmCount()} models (${providerStats})`);
   } catch (error) {
     log.error("Failed to initialize LLM configuration cache:", error as Error);
   }
@@ -58,7 +48,7 @@ export async function initializeLLMCache(): Promise<void> {
  * @returns LLM configuration or undefined
  */
 export function getCachedLLM(llmId: number): LlmRow | undefined {
-  return llmCache.get(llmId);
+  return readCachedLlm(llmId);
 }
 
 /**
@@ -68,9 +58,7 @@ export function getCachedLLM(llmId: number): LlmRow | undefined {
  */
 export function getCachedDefaultLLM(provider: string): LlmRow | undefined {
   const normalizedProvider = provider.toLowerCase();
-  return Array.from(llmCache.values()).find(
-    (llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_default,
-  );
+  return readCachedLlms().find((llm) => llm.llm_provider.toLowerCase() === normalizedProvider && llm.is_default);
 }
 
 /**
@@ -78,12 +66,12 @@ export function getCachedDefaultLLM(provider: string): LlmRow | undefined {
  * @returns True if cache is ready, false otherwise
  */
 export function isLLMCacheReady(): boolean {
-  return llmCache.size > 0;
+  return cachedLlmCount() > 0;
 }
 
 /**
  * Gets the size of the LLM cache
  */
 export function getLLMCacheSize(): number {
-  return llmCache.size;
+  return cachedLlmCount();
 }

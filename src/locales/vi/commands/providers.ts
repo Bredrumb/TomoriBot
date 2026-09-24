@@ -143,6 +143,7 @@ export default {
       structured: `Đầu ra có cấu trúc`,
       "strict-roles": `Luân phiên vai trò nghiêm ngặt`,
       prefix: `Hoàn thiện tiền tố`,
+      "verbatim-tools": `Gọi công cụ nguyên văn`,
     },
     model_flag_descriptions: {
       tools: `Tích chọn nếu model có thể gọi công cụ. Bỏ tích và mình sẽ ngừng cung cấp chúng.`,
@@ -150,9 +151,10 @@ export default {
       structured: `Tích chọn nếu model có thể trả về JSON chuẩn khi được yêu cầu.`,
       "strict-roles": `Gộp các lượt cùng vai trò và mở đầu bằng lượt người dùng. Tích chọn cho proxy đứng trước Claude.`,
       prefix: `Cho phép mình gửi lại lượt viết dở để tiếp tục. Tích chọn cho proxy đứng trước DeepSeek hoặc Z.ai.`,
+      "verbatim-tools": `Chọn nếu endpoint không hỗ trợ gọi công cụ gốc. Phân tích lệnh gọi từ văn bản thô.`,
     },
     model_compat_label: `Tương thích Chat Completion`,
-    model_compat_description: `Sửa định dạng tin nhắn cho backend nghiêm ngặt. Để tắt cả hai trừ khi yêu cầu bị từ chối.`,
+    model_compat_description: `Điều chỉnh định dạng và giao thức cho backend nghiêm ngặt. Để tắt trừ khi thật sự cần.`,
     model_image_supports_label: `Tính năng hình ảnh`,
     model_image_supports_description: `Chỉ khai báo các tính năng hình ảnh mà model và endpoint này thực sự hỗ trợ.`,
     model_image_supports: {

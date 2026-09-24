@@ -105,7 +105,6 @@ function makeConfig(): AssembledServerConfig {
     personal_memories_enabled: true,
     uncensor_unicode_space_enabled: false,
     uncensor_sanitize_enabled: false,
-    verbatim_tool_calling_enabled: false,
   } as AssembledServerConfig;
 }
 

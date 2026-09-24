@@ -142,6 +142,7 @@ export default {
       structured: `構造化出力`,
       "strict-roles": `厳格なロール交互`,
       prefix: `プレフィックス補完`,
+      "verbatim-tools": `逐語的ツール呼び出し`,
     },
     model_flag_descriptions: {
       tools: `このモデルがツールを呼び出せる場合はチェックしてください。外すとツールの提示を停止します。`,
@@ -149,9 +150,10 @@ export default {
       structured: `このモデルが要求時に厳格なJSONを返せる場合はチェックしてください。`,
       "strict-roles": `同じロールのターンを結合し、userターンで開始します。Claudeをフロントに置くプロキシではチェックしてください。`,
       prefix: `途中で終わったターンの続きを生成させます。DeepSeekやZ.aiをフロントに置くプロキシではチェックしてください。`,
+      "verbatim-tools": `ネイティブのツール呼び出しに対応していないエンドポイント向け。テキスト出力から呼び出しを解析します。`,
     },
     model_compat_label: `チャット補完の互換性`,
-    model_compat_description: `厳格なバックエンド向けのメッセージ形式の修正です。リクエストが拒否される場合を除き、両方ともオフのままにしてください。`,
+    model_compat_description: `厳格なバックエンド向けのメッセージ形式とプロトコルの回避策です。不要な場合はオフのままにしてください。`,
     model_image_supports_label: `画像機能`,
     model_image_supports_description: `このモデルとエンドポイントが実際に対応する画像機能のみを選択してください。`,
     model_image_supports: {

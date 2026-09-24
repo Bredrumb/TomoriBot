@@ -61,7 +61,6 @@ interface WorkspaceConfigProjectionRow {
   time_awareness_enabled: boolean;
   tool_use_enabled: boolean;
   short_term_memory_enabled: boolean;
-  verbatim_tool_calling_enabled: boolean;
   user_info_updates_enabled: boolean;
   tool_notice_hidden_keys: string[];
   uncensor_injection_enabled: boolean;
@@ -370,7 +369,6 @@ export class ExportRepository {
           COALESCE(snc.uncensor_sanitize_enabled, false)            AS uncensor_sanitize_enabled,
           COALESCE(scac.tool_use_enabled, true)                     AS tool_use_enabled,
           COALESCE(scac.short_term_memory_enabled, true)            AS short_term_memory_enabled,
-          COALESCE(scac.verbatim_tool_calling_enabled, false)       AS verbatim_tool_calling_enabled,
           COALESCE(scac.user_info_updates_enabled, true)            AS user_info_updates_enabled,
           COALESCE(smpc.prompt_snapshot_enabled, false)             AS prompt_snapshot_enabled,
           COALESCE(smemoc.memory_tagging_enabled, false)            AS memory_tagging_enabled,
@@ -549,7 +547,6 @@ export class ExportRepository {
             uncensor_sanitize_enabled: configData.uncensor_sanitize_enabled,
             tool_use_enabled: configData.tool_use_enabled,
             short_term_memory_enabled: configData.short_term_memory_enabled,
-            verbatim_tool_calling_enabled: configData.verbatim_tool_calling_enabled,
             user_info_updates_enabled: configData.user_info_updates_enabled,
             prompt_snapshot_enabled: configData.prompt_snapshot_enabled,
             memory_tagging_enabled: configData.memory_tagging_enabled,
@@ -717,7 +714,6 @@ export class ExportRepository {
           COALESCE(scac.time_awareness_enabled, true) AS time_awareness_enabled,
           COALESCE(scac.tool_use_enabled, true) AS tool_use_enabled,
           COALESCE(scac.short_term_memory_enabled, true) AS short_term_memory_enabled,
-          COALESCE(scac.verbatim_tool_calling_enabled, false) AS verbatim_tool_calling_enabled,
           COALESCE(scac.user_info_updates_enabled, true) AS user_info_updates_enabled,
           COALESCE(snec.tool_notice_hidden_keys, ARRAY[]::TEXT[]) AS tool_notice_hidden_keys,
           COALESCE(snc.uncensor_injection_enabled, false) AS uncensor_injection_enabled,
@@ -836,7 +832,6 @@ export class ExportRepository {
           time_awareness_enabled: configData.time_awareness_enabled,
           tool_use_enabled: configData.tool_use_enabled,
           short_term_memory_enabled: configData.short_term_memory_enabled,
-          verbatim_tool_calling_enabled: configData.verbatim_tool_calling_enabled,
           user_info_updates_enabled: configData.user_info_updates_enabled,
           tool_notice_hidden_keys: configData.tool_notice_hidden_keys,
           uncensor_injection_enabled: configData.uncensor_injection_enabled,

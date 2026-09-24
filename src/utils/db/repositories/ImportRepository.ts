@@ -153,7 +153,6 @@ const WORKSPACE_SECTION_TABLES: Record<WorkspaceConfigSection, readonly SectionT
         "time_awareness_enabled",
         "tool_use_enabled",
         "short_term_memory_enabled",
-        "verbatim_tool_calling_enabled",
         "user_info_updates_enabled",
       ],
     },
@@ -905,9 +904,6 @@ class ImportRepository {
         ...(config.tool_use_enabled !== undefined && { tool_use_enabled: config.tool_use_enabled }),
         ...(config.short_term_memory_enabled !== undefined && {
           short_term_memory_enabled: config.short_term_memory_enabled,
-        }),
-        ...(config.verbatim_tool_calling_enabled !== undefined && {
-          verbatim_tool_calling_enabled: config.verbatim_tool_calling_enabled,
         }),
         user_info_updates_enabled: config.user_info_updates_enabled,
       };

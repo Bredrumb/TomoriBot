@@ -23,7 +23,6 @@ import {
   BEHAVIOR_RANDOM_SETTINGS_FIELD,
   buildBehaviorNoticeVisibilityModal,
   buildBehaviorRandomAddModal,
-  buildBehaviorWorkaroundsModal,
   RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE,
 } from "@/utils/discord/ui/configBehaviorModals";
 import {
@@ -49,7 +48,7 @@ import {
 } from "@/utils/discord/ui/componentsV2Limits";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import type { WorkaroundDefinition } from "@/utils/discord/workaroundConfigMapping";
+import type { ToolNoticeDefinition, ToolNoticeKey } from "@/constants/toolNotices";
 
 const STRING_SELECT = 3;
 const LABEL = 18;
@@ -77,13 +76,11 @@ function makePersonas(count: number): TomoriState[] {
   return Array.from({ length: count }, (_unused, index) => makePersona(index + 1));
 }
 
-function makeWorkaroundDefinitions(count: number): WorkaroundDefinition[] {
+function makeNoticeDefinitions(count: number): ToolNoticeDefinition[] {
   return Array.from({ length: count }, (_unused, index) => ({
-    value: `workaround_${index + 1}`,
-    dbColumn: "verbatim_tool_calling_enabled",
-    labelKey: "commands.config.workarounds.verbatim_tool_calling_option",
-    descKey: "commands.config.workarounds.verbatim_tool_calling_desc",
-    getState: () => false,
+    key: `notice_${index + 1}` as ToolNoticeKey,
+    labelKey: "commands.config.notice-embeds.visibility.notice_web_search_label",
+    descriptionKey: "commands.config.notice-embeds.visibility.notice_web_search_description",
   }));
 }
 
@@ -238,14 +235,6 @@ describe("raw config modal limits", () => {
     }
   });
 
-  it("keeps the Workarounds modal within Discord limits across all runtime locales", () => {
-    for (const locale of RUNTIME_LOCALES) {
-      const payload = buildBehaviorWorkaroundsModal(locale, "nonce", { verbatim_tool_calling: true });
-      assertWithinDiscordLimits(payload, `workarounds/${locale}`);
-      expect(payload.components.length).toBe(1);
-    }
-  });
-
   it("keeps the Random Trigger Add modal within Discord limits across all runtime locales and roster sizes", () => {
     for (const locale of RUNTIME_LOCALES) {
       for (const size of ROSTER_SIZES) {
@@ -294,29 +283,25 @@ describe("raw config modal limits", () => {
     }
   });
 
-  it("chunks Workarounds at 10, 11, and 50 definitions without exceeding modal limits", () => {
+  it("chunks the Notice Visibility catalog at 10, 11, and 50 entries without exceeding modal limits", () => {
     for (const locale of RUNTIME_LOCALES) {
-      // 10 definitions fit into exactly one Checkbox Group
-      const tenDefs = makeWorkaroundDefinitions(10);
-      const modal10 = buildBehaviorWorkaroundsModal(locale, "nonce", {}, tenDefs);
-      assertWithinDiscordLimits(modal10, `workarounds-10/${locale}`);
+      // 10 entries fit into exactly one Checkbox Group
+      const modal10 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(10));
+      assertWithinDiscordLimits(modal10, `notices-10/${locale}`);
       expect(modal10.components.length).toBe(1);
 
-      // 11 definitions chunk into two Checkbox Groups
-      const elevenDefs = makeWorkaroundDefinitions(11);
-      const modal11 = buildBehaviorWorkaroundsModal(locale, "nonce", {}, elevenDefs);
-      assertWithinDiscordLimits(modal11, `workarounds-11/${locale}`);
+      // 11 entries chunk into two Checkbox Groups
+      const modal11 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(11));
+      assertWithinDiscordLimits(modal11, `notices-11/${locale}`);
       expect(modal11.components.length).toBe(2);
 
-      // 50 definitions chunk into exactly five Checkbox Groups (the 5-component modal boundary)
-      const fiftyDefs = makeWorkaroundDefinitions(50);
-      const modal50 = buildBehaviorWorkaroundsModal(locale, "nonce", {}, fiftyDefs);
-      assertWithinDiscordLimits(modal50, `workarounds-50/${locale}`);
+      // 50 entries chunk into exactly five Checkbox Groups (the 5-component modal boundary)
+      const modal50 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(50));
+      assertWithinDiscordLimits(modal50, `notices-50/${locale}`);
       expect(modal50.components.length).toBe(5);
 
-      // 51 definitions produce 6 groups, which violates the 5-component modal boundary
-      const fiftyOneDefs = makeWorkaroundDefinitions(51);
-      const modal51 = buildBehaviorWorkaroundsModal(locale, "nonce", {}, fiftyOneDefs);
+      // 51 entries produce 6 groups, which violates the 5-component modal boundary
+      const modal51 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(51));
       const result51 = validateRawModalLimits(modal51);
       expect(result51.valid).toBe(false);
       expect(result51.violations.some((v) => v.code === "MODAL_COMPONENTS_OVERSIZED")).toBe(true);

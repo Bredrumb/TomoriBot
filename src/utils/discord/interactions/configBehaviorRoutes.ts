@@ -62,7 +62,6 @@ import { formatUTCOffset, UTC_OFFSET_MAX, UTC_OFFSET_MIN } from "@/utils/text/ti
 import { localizer } from "@/utils/text/localizer";
 import { getShortTermMemoriesForServer } from "@/utils/cache/shortTermMemoryCache";
 import { shortTermMemoryRepository } from "@/utils/db/repositories/ShortTermMemoryRepository";
-import { buildWorkaroundConfigWritePlan, WORKAROUND_DEFINITIONS } from "@/utils/discord/workaroundConfigMapping";
 import {
   DELIBERATE_TOOL_TRIGGER_TARGETS,
   getToolNamesForDeliberateTriggerTarget,
@@ -94,7 +93,6 @@ import {
   BEHAVIOR_TOOL_TRIGGER_REMOVE_GROUP_PREFIX,
   BEHAVIOR_TOOL_TRIGGER_REGEX_FIELD,
   BEHAVIOR_TOOL_TRIGGER_TARGET_FIELD,
-  BEHAVIOR_WORKAROUND_GROUP_PREFIX,
   buildBehaviorMemoryTaggingModal,
   buildBehaviorNoticeVisibilityModal,
   buildBehaviorSendLimitModal,
@@ -104,7 +102,6 @@ import {
   buildBehaviorToolContextModal,
   buildBehaviorToolTriggerAddModal,
   buildBehaviorToolTriggerRemoveModal,
-  buildBehaviorWorkaroundsModal,
 } from "@/utils/discord/ui/configBehaviorModals";
 
 export const CONFIG_BEHAVIOR_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
@@ -823,7 +820,6 @@ export const CONFIG_BEHAVIOR_D10_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["
   "behavior-tool-trigger-add-open",
   "behavior-tool-trigger-remove-open",
   "behavior-send-limit-open",
-  "behavior-workarounds-open",
   "behavior-notice-visibility-open",
   "behavior-memory-tagging-open",
   "behavior-stm-parameters-open",
@@ -836,7 +832,6 @@ export const CONFIG_BEHAVIOR_D10_MODAL_SUBMIT_ACTIONS = new Set<ConfigPanelRoute
   "behavior-tool-trigger-add-submit",
   "behavior-tool-trigger-remove-submit",
   "behavior-send-limit-submit",
-  "behavior-workarounds-submit",
   "behavior-notice-visibility-submit",
   "behavior-memory-tagging-submit",
   "behavior-stm-parameters-submit",
@@ -852,7 +847,6 @@ const CONFIG_BEHAVIOR_D10_DIRECT_ACTIONS = new Set<ConfigPanelRoute["action"]>([
 
 const MAX_TOOL_TRIGGER_ENTRIES = 50;
 const MAX_NOTICE_ENTRIES = 50;
-const MAX_WORKAROUND_ENTRIES = 50;
 
 function fallbackD10View(state: TomoriState) {
   return {
@@ -862,7 +856,6 @@ function fallbackD10View(state: TomoriState) {
       deliberateToolTriggers: state.config.deliberate_tool_triggers ?? {},
       sendLimit: state.config.send_message_limit ?? 0,
       selfDebugEnabled: state.config.self_debug_enabled ?? false,
-      workarounds: { verbatim_tool_calling_enabled: state.config.verbatim_tool_calling_enabled ?? false },
     },
     notices: {
       hiddenNoticeKeys: (state.config.tool_notice_hidden_keys ?? []).filter(isToolNoticeKey),
@@ -958,29 +951,6 @@ export async function handleConfigBehaviorD10ModalOpen(
       await dependencies.showModal(
         interaction,
         buildBehaviorSendLimitModal(route.locale, nonce, view.experimental.sendLimit),
-      );
-      break;
-    case "behavior-workarounds-open":
-      if (WORKAROUND_DEFINITIONS.length > MAX_WORKAROUND_ENTRIES) {
-        await interaction.reply({
-          content: `${localizer(route.locale, "commands.config.workarounds.too_many_title")}\n${localizer(
-            route.locale,
-            "commands.config.workarounds.too_many_description",
-            {
-              count: WORKAROUND_DEFINITIONS.length,
-              max_entries: MAX_WORKAROUND_ENTRIES,
-              max_groups: MAX_WORKAROUND_ENTRIES / 10,
-            },
-          )}`,
-          flags: MessageFlags.Ephemeral,
-        });
-        break;
-      }
-      await dependencies.showModal(
-        interaction,
-        buildBehaviorWorkaroundsModal(route.locale, nonce, {
-          verbatim_tool_calling: view.experimental.workarounds.verbatim_tool_calling_enabled,
-        }),
       );
       break;
     case "behavior-notice-visibility-open":
@@ -1224,28 +1194,6 @@ async function runD10Write(
     return {
       receipt: receipt(locale, "success", "state_updated_heading", "state_updated_detail"),
       telemetry: "server-config.workspace.send-limit.set",
-    };
-  }
-  if (route.action === "behavior-workarounds-submit") {
-    const groupCount = Math.ceil(WORKAROUND_DEFINITIONS.length / 10);
-    const selected = new Set<string>();
-    for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
-      const values = dependencies.takeCheckboxValues(
-        submitted.id,
-        buildConfigModalFieldId(`${BEHAVIOR_WORKAROUND_GROUP_PREFIX}_${groupIndex}`, route.nonce),
-      );
-      if (values === undefined) return { receipt: staleReceipt(locale) };
-      for (const value of values) selected.add(value);
-    }
-    const plan = buildWorkaroundConfigWritePlan(state.config, selected);
-    if (plan.changes.length === 0)
-      return { receipt: receipt(locale, "info", "state_no_changes_heading", "state_no_changes_detail") };
-    const updated = await repositories.configRepository[plan.method](state.server_id, plan.patch);
-    if (!updated) return { receipt: writeFailed(locale) };
-    invalidateTomoriStateCache(scope.serverDiscId);
-    return {
-      receipt: receipt(locale, "success", "state_updated_heading", "state_updated_detail"),
-      telemetry: "server-config.workspace.workarounds.set",
     };
   }
   if (route.action === "behavior-notice-visibility-submit") {

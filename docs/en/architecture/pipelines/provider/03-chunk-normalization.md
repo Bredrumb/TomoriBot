@@ -72,8 +72,8 @@ The method also handles three additional responsibilities:
   strings (`stopStrings.ts`) are matched literally by the provider, so namespaced close tags must be
   added per model rule explicitly rather than via the shared pattern.
 
-- **Custom verbatim tool-call fallback**: when
-  `server_capabilities_configs.verbatim_tool_calling_enabled` is true, the active Custom text model
+- **Custom verbatim tool-call fallback**: when the active model has
+  `llms.verbatim_tool_calling` set (a per-model opt-in under `/providers`), uses a `custom` provider,
   has tools, and the request includes OpenAI-compatible tool schemas, `CustomStreamAdapter` runs
   `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It scans
   the stream for an anchor `<knownToolName>(`, only names from the exposed tool set trigger, then

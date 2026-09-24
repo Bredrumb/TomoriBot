@@ -482,7 +482,7 @@ Examples:
 
 - `/moderation` User Blacklist and Whitelist removal actions
 - `/model override remove` (channels + personas together)
-- `/config` > Engine > Experimental (experimental server-scoped workaround toggles)
+- `/config` > Engine > Experimental (experimental server-scoped toggles)
 - `/memories` Short-Term category (active server-shared STM entries)
 - `/config` > Channels > Channel Rules (private, roleplay, and cross-channel blocklist sets)
 
@@ -1265,7 +1265,7 @@ The command holds the same pre-modal line as the other `/generate` subcommands: 
 
 The randomizer on `/config` > Models > Fallbacks & Randomizer is a server-level toggle for the per-turn text model randomizer. When enabled, each generation turn randomly promotes one model from the pool (primary model + configured fallbacks) to lead the attempt chain, breaking the bot out of any single model's repetitive phrasing while keeping the rest as failover. It enforces a **block-until-fallbacks** precondition: enabling is refused with a localized warning embed unless the server has ≥1 fallback configured on that same page, guaranteeing the pool always has ≥2 members so the toggle is never a silent no-op. The flag lives in `server_chat_configs.model_randomizer_enabled` and is consumed by `buildGenerationAttempts` (see the [generation-turn pipeline](../pipelines/chat/06-per-turn/03-run-generation-turn)).
 
-The Compatibility section of `/config` > Engine > Experimental is a checkbox-group modal for experimental compatibility patches. V1 exposes `Verbatim Tool-Calling`, a default-off server flag stored in `server_capabilities_configs.verbatim_tool_calling_enabled`. It writes only changed columns through `ConfigRepository.updateCapabilitiesConfig` and invalidates TomoriState cache after a successful DB write.
+The Compatibility section that once sat on `/config` > Engine > Experimental is retired. Its only entry, `Verbatim Tool-Calling`, described a single backend's parser rather than server-wide behavior, so it now lives per model in `/providers`: select a custom endpoint, then add or edit a text model, and use **Chat Completion Compatibilities** alongside the same `strict_role_alternation` and `supports_prefix_completion` toggles. The value is stored on `custom_endpoints.verbatim_tool_calling` and mirrored to the endpoint's synthetic `llms` row, which is what the runtime reads. See the [tool-loop pipeline](../pipelines/tool-loop/README.md) for how it drives prompt assembly.
 
 ### Personal-provider (BYOK) routing in commands
 

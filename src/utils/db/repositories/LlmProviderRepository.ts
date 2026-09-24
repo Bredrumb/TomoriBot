@@ -687,6 +687,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
           ce.updated_at
@@ -758,6 +759,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
           ce.updated_at
@@ -817,6 +819,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
           ce.updated_at
@@ -887,6 +890,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
                 ce.updated_at
@@ -920,6 +924,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
                 ce.updated_at
@@ -994,6 +999,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
                 ce.updated_at
@@ -1027,6 +1033,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
                 ce.updated_at
@@ -1100,6 +1107,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
           ce.supports_structoutput,
           ce.strict_role_alternation,
           ce.supports_prefix_completion,
+          ce.verbatim_tool_calling,
           ce.is_default,
           ce.created_at,
           ce.updated_at
@@ -1147,6 +1155,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
                 ce.updated_at
@@ -1179,6 +1188,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
                 ce.supports_structoutput,
                 ce.strict_role_alternation,
                 ce.supports_prefix_completion,
+                ce.verbatim_tool_calling,
                 ce.is_default,
                 ce.created_at,
                 ce.updated_at
@@ -2055,6 +2065,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       supportsStructOutput?: boolean;
       strictRoleAlternation?: boolean;
       supportsPrefixCompletion?: boolean;
+      verbatimToolCalling?: boolean;
       isDefault?: boolean;
       // When set, update that exact row (edit path) instead of inserting. This lets an edit change
       // model_name without colliding with sibling models under the same label+capability.
@@ -2080,6 +2091,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       supportsStructOutput = false,
       strictRoleAlternation = false,
       supportsPrefixCompletion = false,
+      verbatimToolCalling = false,
       isDefault = true,
       customEndpointId = null,
     } = params;
@@ -2120,6 +2132,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               supports_structoutput = ${supportsStructOutput},
               strict_role_alternation = ${strictRoleAlternation},
               supports_prefix_completion = ${supportsPrefixCompletion},
+              verbatim_tool_calling = ${verbatimToolCalling},
               is_default = ${isDefault},
               updated_at = CURRENT_TIMESTAMP
             WHERE custom_endpoint_id = ${customEndpointId}
@@ -2154,11 +2167,13 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
             INSERT INTO custom_endpoints (
               connection_id, model_name, model_ref_id, num_ctx,
               extra_config, has_tools, sees_images, sees_videos,
-              supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
+              supports_structoutput, strict_role_alternation, supports_prefix_completion,
+              verbatim_tool_calling, is_default
             ) VALUES (
               ${connectionId}, ${modelName}, ${modelRefId}, ${numCtx},
               ${extraConfig}, ${hasTools}, ${seesImages}, ${seesVideos},
-              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
+              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion},
+              ${verbatimToolCalling}, ${isDefault}
             )
             ON CONFLICT (connection_id, COALESCE(model_name, ''))
             DO UPDATE SET
@@ -2171,6 +2186,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               supports_structoutput = EXCLUDED.supports_structoutput,
               strict_role_alternation = EXCLUDED.strict_role_alternation,
               supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
               is_default = EXCLUDED.is_default,
               updated_at = CURRENT_TIMESTAMP
             RETURNING custom_endpoint_id
@@ -2201,11 +2217,13 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
             INSERT INTO custom_endpoints (
               connection_id, model_name, model_ref_id, num_ctx,
               extra_config, has_tools, sees_images, sees_videos,
-              supports_structoutput, strict_role_alternation, supports_prefix_completion, is_default
+              supports_structoutput, strict_role_alternation, supports_prefix_completion,
+              verbatim_tool_calling, is_default
             ) VALUES (
               ${connectionId}, ${modelName}, ${modelRefId}, ${numCtx},
               ${extraConfig}, ${hasTools}, ${seesImages}, ${seesVideos},
-              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion}, ${isDefault}
+              ${supportsStructOutput}, ${strictRoleAlternation}, ${supportsPrefixCompletion},
+              ${verbatimToolCalling}, ${isDefault}
             )
             ON CONFLICT (connection_id, COALESCE(model_name, ''))
             DO UPDATE SET
@@ -2218,6 +2236,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
               supports_structoutput = EXCLUDED.supports_structoutput,
               strict_role_alternation = EXCLUDED.strict_role_alternation,
               supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+              verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
               is_default = EXCLUDED.is_default,
               updated_at = CURRENT_TIMESTAMP
             RETURNING custom_endpoint_id

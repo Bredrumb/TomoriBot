@@ -1787,7 +1787,6 @@ describe("config Behavior pages", () => {
         deliberateToolTriggers: { image: ["draw it"] },
         sendLimit: 3,
         selfDebugEnabled: false,
-        workarounds: { verbatim_tool_calling_enabled: true },
       },
       notices: {
         hiddenNoticeKeys: ["web_search" as const],

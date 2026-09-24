@@ -189,7 +189,8 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - Injects `[System: ${context_note}]` as a `user`-role item with tag
   `CONTEXT_NOTE_INJECTION` at the target index (or at the end if the
   history is shorter than the depth).
-- If `tomoriConfig.verbatim_tool_calling_enabled` is true and
+- If the active model opted into verbatim tool calling
+  (`tomoriState.llm.verbatim_tool_calling`, a `custom` provider) and
   `tomoriState.llm.has_tools` is true, injects one additional
   `CONTEXT_NOTE_INJECTION` at depth 3. This nudge tells Custom endpoint models
   how to emit the strict code-span/fenced verbatim tool-call syntax. The
@@ -289,7 +290,7 @@ After this stage runs:
 | `tomoriConfig` | `message_fetch_limit` | Caps media window |
 | `tomoriConfig` | `humanizer_degree` | HEAVY+ applies humanizer to model items |
 | `tomoriConfig` | `context_note`, `context_note_depth` | Context-note injection |
-| `tomoriConfig` | `verbatim_tool_calling_enabled` | Enables the depth-3 verbatim tool-calling nudge when the effective LLM has tools |
+| `tomoriState.llm` | `verbatim_tool_calling` | Enables the depth-3 verbatim tool-calling nudge when the model is a tool-capable `custom` provider |
 | `tomoriConfig` | `time_awareness_enabled` | Opt-out gate for reunion notes and date spacers |
 | `tomoriConfig` | `timezone_offset` | Server-calendar boundary for date spacers |
 | `tomoriConfig` | `uncensor_unicode_space_enabled`, `uncensor_sanitize_enabled` | Drives uncensor transforms |

@@ -316,11 +316,6 @@ export async function buildServerConfigPages(
         inline: true,
       },
       {
-        nameKey: "commands.status.field_verbatim_tool_calling",
-        value: formatBooleanLocalized(config.verbatim_tool_calling_enabled ?? false, locale),
-        inline: true,
-      },
-      {
         nameKey: "commands.status.field_prompt_snapshot",
         value: formatBooleanLocalized(config.prompt_snapshot_enabled ?? false, locale),
         inline: true,

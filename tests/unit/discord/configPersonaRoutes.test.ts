@@ -733,11 +733,6 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
     { action: "behavior-send-limit-submit", locale: "en-US", nonce: "nonce1234567" },
   ],
   ["config:v2:beh-self-debug-set:en-US:1", { action: "behavior-self-debug-set", locale: "en-US", enabled: true }],
-  ["config:v2:beh-workarounds-open:en-US", { action: "behavior-workarounds-open", locale: "en-US" }],
-  [
-    "config:v2:beh-workarounds-sub:en-US:nonce1234567",
-    { action: "behavior-workarounds-submit", locale: "en-US", nonce: "nonce1234567" },
-  ],
   ["config:v2:beh-notices-open:en-US", { action: "behavior-notice-visibility-open", locale: "en-US" }],
   [
     "config:v2:beh-notices-sub:en-US:nonce1234567",

@@ -193,6 +193,7 @@ export interface SaveProviderModelInput {
   supportsStructOutput?: boolean;
   strictRoleAlternation?: boolean;
   supportsPrefixCompletion?: boolean;
+  verbatimToolCalling?: boolean;
   // Raw checkbox values, because only the resolved connection knows the api style that decides
   // whether inpainting was offerable in the modal at all.
   imageSupportValues?: string[];
@@ -405,6 +406,7 @@ async function buildCuratedCapabilities(
           supportsStructOutput: row.supports_structoutput,
           strictRoleAlternation: row.strict_role_alternation,
           supportsPrefixCompletion: row.supports_prefix_completion,
+          verbatimToolCalling: row.verbatim_tool_calling,
         },
       );
       return model ? [model] : [];
@@ -515,6 +517,7 @@ function buildEndpointCapabilities(
                 supportsStructOutput: endpoint.supports_structoutput,
                 strictRoleAlternation: endpoint.strict_role_alternation,
                 supportsPrefixCompletion: endpoint.supports_prefix_completion,
+                verbatimToolCalling: endpoint.verbatim_tool_calling,
               }
             : undefined,
           capability === "image" ? readImageEndpointSupports(endpoint) : undefined,
@@ -1357,6 +1360,7 @@ async function registerEndpointModel(input: SaveProviderModelInput): Promise<Sav
     supportsStructOutput: input.supportsStructOutput,
     strictRoleAlternation: input.strictRoleAlternation,
     supportsPrefixCompletion: input.supportsPrefixCompletion,
+    verbatimToolCalling: input.verbatimToolCalling,
     extraConfig,
     editingEndpointId: editingEndpoint?.custom_endpoint_id,
   });

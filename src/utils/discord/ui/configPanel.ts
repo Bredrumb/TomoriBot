@@ -100,7 +100,6 @@ import {
 } from "@/utils/discord/ui/configModelsPanel";
 import { resolveSelectedVoiceSample } from "@/utils/discord/ui/configVoicesPanel";
 import { TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
-import { WORKAROUND_DEFINITIONS } from "@/utils/discord/workaroundConfigMapping";
 import { DEFAULT_STM_TOOL_DESCRIPTION } from "@/tools/functionCalls/updateShortTermMemoryTool";
 import { SEED_CATEGORY_UPDATE_HINT, SEED_SUMMARY_UPDATE_HINT } from "@/utils/text/context/memories";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
@@ -2870,34 +2869,6 @@ function buildBehaviorExperimentalBody(input: ConfigPanelRenderInput): Component
     },
   );
 
-  const workaroundLines = WORKAROUND_DEFINITIONS.map((definition) => {
-    const enabled = definition.getState(view.workarounds);
-    const key =
-      definition.value === "verbatim_tool_calling"
-        ? enabled
-          ? "commands.config.workarounds.verbatim_tool_calling_enabled"
-          : "commands.config.workarounds.verbatim_tool_calling_disabled"
-        : definition.descKey;
-    return `> ${enabled ? "🟢" : "🔴"} ${localizer(locale, key)}`;
-  });
-  components.push(
-    {
-      type: ComponentType.TextDisplay,
-      content: `**${localizer(locale, "commands.config.panel.compatibility_title")}**\n${localizer(locale, "commands.config.panel.compatibility_description")}\n${workaroundLines.join("\n")}\n${withLinePrefix("-# ", localizer(locale, "commands.config.panel.custom_provider_limitation"))}`,
-    },
-    {
-      type: ComponentType.ActionRow,
-      components: [
-        {
-          type: ComponentType.Button,
-          style: ButtonStyle.Secondary,
-          customId: buildConfigRouteId({ action: "behavior-workarounds-open", locale }),
-          label: localizer(locale, "commands.config.panel.edit_workarounds_button"),
-          disabled: writesDisabled,
-        },
-      ],
-    },
-  );
   return components;
 }
 

@@ -1937,7 +1937,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
-        scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
+        scaps.tool_use_enabled,
         scaps.short_term_memory_enabled, scaps.user_info_updates_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,
@@ -2042,7 +2042,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
-        scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
+        scaps.tool_use_enabled,
         scaps.short_term_memory_enabled, scaps.user_info_updates_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,

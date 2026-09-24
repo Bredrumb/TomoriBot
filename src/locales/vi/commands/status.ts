@@ -169,7 +169,6 @@ export default {
     field_user_byok_enabled: `Đã bật. Thành viên cần nhà cung cấp cá nhân cho tin nhắn tự kích hoạt. Bật/tắt bằng {toggle_command}.`,
     field_user_byok_disabled: `Đã tắt. Tin nhắn người dùng kích hoạt vẫn có thể dùng nhà cung cấp máy chủ. Bật/tắt bằng {toggle_command}.`,
     field_tool_use: `Sử dụng công cụ`,
-    field_verbatim_tool_calling: `Gọi công cụ nguyên văn`,
     field_prompt_snapshot: `Ảnh chụp nhanh prompt`,
     field_short_term_memory: `Bộ nhớ ngắn hạn`,
     field_user_info_updates: `Cập nhật thông tin người dùng`,

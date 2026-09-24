@@ -614,7 +614,7 @@ describe("providers panel rendering", () => {
     )?.component;
 
     expect(capabilities?.options?.map((option) => option.value)).toEqual(["tools", "images", "structured"]);
-    expect(compat?.options?.map((option) => option.value)).toEqual(["strict-roles", "prefix"]);
+    expect(compat?.options?.map((option) => option.value)).toEqual(["strict-roles", "prefix", "verbatim-tools"]);
     expect(JSON.stringify(endpointModal)).toContain("Chat Completion Compatibilities");
     // Every option says what it does and when to tick it.
     expect(compat?.options?.every((option) => (option.description?.length ?? 0) > 0)).toBe(true);
@@ -622,9 +622,35 @@ describe("providers panel rendering", () => {
     expect(JSON.stringify(endpointModal)).toContain("a proxy fronting Claude");
   });
 
+  it("defaults the verbatim tool-calling compat to the model's stored value", () => {
+    const compatOptions = (modal: ReturnType<typeof buildProviderModelModal>) =>
+      (
+        modal.components.find((entry) => entry.component?.custom_id === "compat_abcdefgh")?.component as
+          | { options?: Array<{ value: string; default?: boolean }> }
+          | undefined
+      )?.options;
+
+    const stored = buildProviderModelModal("en-US", "endpoint", "73", "text", 91, "abcdefgh", {
+      text: {
+        numCtx: 8192,
+        hasTools: true,
+        seesImages: false,
+        supportsStructOutput: false,
+        strictRoleAlternation: false,
+        supportsPrefixCompletion: false,
+        verbatimToolCalling: true,
+      },
+    });
+    expect(compatOptions(stored)?.find((option) => option.value === "verbatim-tools")?.default).toBe(true);
+
+    const blank = buildProviderModelModal("en-US", "endpoint", "73", "text", null, "abcdefgh");
+    expect(compatOptions(blank)?.find((option) => option.value === "verbatim-tools")?.default).toBe(false);
+  });
+
   it("offers each compatibility only where the request path can honour it", () => {
-    // Endpoints resolve through the `custom` provider's OpenAI-compatible adapter, which reads both.
-    expect(offeredChatCompatFlags("endpoint", "73")).toEqual(["strict-roles", "prefix"]);
+    // Endpoints resolve through the `custom` provider, whose adapter reads both compat columns and
+    // runs the only verbatim parser in the codebase.
+    expect(offeredChatCompatFlags("endpoint", "73")).toEqual(["strict-roles", "prefix", "verbatim-tools"]);
     expect(offeredChatCompatFlags("provider", "nvidia")).toEqual(["strict-roles", "prefix"]);
     // DeepSeek and Z.ai force prefix completion on regardless of the column, so the toggle is inert.
     expect(offeredChatCompatFlags("provider", "deepseek")).toEqual(["strict-roles"]);

@@ -169,7 +169,6 @@ export default {
     field_user_byok_enabled: `Ativado. Membros precisam do próprio provedor pessoal para acionar o bot. Alterne com {toggle_command}.`,
     field_user_byok_disabled: `Desativado. Mensagens de usuários podem usar o provedor do servidor. Alterne com {toggle_command}.`,
     field_tool_use: `Uso de Ferramenta`,
-    field_verbatim_tool_calling: `Chamada de Ferramenta Literal`,
     field_prompt_snapshot: `Snapshot do Prompt`,
     field_short_term_memory: `Memória de Curto Prazo`,
     field_user_info_updates: `Atualizações de Info do Usuário`,

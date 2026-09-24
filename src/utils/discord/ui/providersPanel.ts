@@ -377,25 +377,31 @@ const MODEL_SELECTION_CAPABILITIES: readonly ProviderPanelCapability[] = [
 ];
 
 const TEXT_CAPABILITY_FLAGS = ["tools", "images", "structured"] as const;
-const CHAT_COMPAT_FLAGS = ["strict-roles", "prefix"] as const;
+const CHAT_COMPAT_FLAGS = ["strict-roles", "prefix", "verbatim-tools"] as const;
 
 /**
  * Strict role alternation and prefix completion describe the backend's parser, not the model, and
  * only the OpenAI-compatible and Anthropic adapters read their columns. A flag the request path
  * either ignores or force-overrides is a control that cannot change anything, so it is not offered.
  * Re-derive this at submit time too: a panel may outlive the answer.
+ *
+ * Verbatim tool calling is different in kind: the request path always honors it, but only
+ * `CustomStreamAdapter` runs the parser that executes what the model writes, so offering it to a
+ * curated provider would produce tool calls nothing consumes.
  */
 export function offeredChatCompatFlags(
   entryKind: "provider" | "endpoint",
   entryKey: string,
 ): ReadonlyArray<(typeof CHAT_COMPAT_FLAGS)[number]> {
   // A custom endpoint is served by the `custom` provider, whose OpenAI-compatible adapter reads both
-  // columns. These toggles were introduced for exactly that case and must keep working there.
+  // compat columns. These toggles were introduced for exactly that case and must keep working there.
   const provider = entryKind === "endpoint" ? "custom" : entryKey;
   if (!providerUsesApiFamily(provider, "openai-compatible")) return [];
-  return CHAT_COMPAT_FLAGS.filter((flag) =>
-    flag === "strict-roles" ? !providerRequiresAlternation(provider) : !providerRequiresPrefixCompletion(provider),
-  );
+  return CHAT_COMPAT_FLAGS.filter((flag) => {
+    if (flag === "strict-roles") return !providerRequiresAlternation(provider);
+    if (flag === "prefix") return !providerRequiresPrefixCompletion(provider);
+    return entryKind === "endpoint";
+  });
 }
 
 const IMAGE_SUPPORT_FIELDS: ReadonlyArray<keyof ImageEndpointSupports> = [
@@ -513,6 +519,7 @@ export function buildProviderModelModal(
       structured: defaults?.text?.supportsStructOutput,
       "strict-roles": defaults?.text?.strictRoleAlternation,
       prefix: defaults?.text?.supportsPrefixCompletion,
+      "verbatim-tools": defaults?.text?.verbatimToolCalling,
     };
     const flagOption = (value: string) => ({
       value,

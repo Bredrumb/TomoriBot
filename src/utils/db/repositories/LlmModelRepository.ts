@@ -1178,17 +1178,20 @@ class LlmModelRepository {
     supportsStructOutput: boolean;
     strictRoleAlternation: boolean;
     supportsPrefixCompletion: boolean;
+    verbatimToolCalling: boolean;
   }): Promise<number | null> {
     try {
       const rows = await sql`
         INSERT INTO llms (
           llm_provider, llm_codename, has_tools, sees_images, sees_videos,
           sees_youtube, supports_structoutput, strict_role_alternation, supports_prefix_completion,
+          verbatim_tool_calling,
           is_smartest, is_default, is_reasoning, is_deprecated, is_free, is_uncensored,
           llm_description, descriptions
         ) VALUES (
           ${params.provider}, ${params.codename}, ${params.hasTools}, ${params.seesImages}, ${params.seesVideos},
           false, ${params.supportsStructOutput}, ${params.strictRoleAlternation}, ${params.supportsPrefixCompletion},
+          ${params.verbatimToolCalling},
           false, true, false, false, false, false,
           ${params.displayName}, ${{ "en-US": params.displayName }}
         )
@@ -1199,6 +1202,7 @@ class LlmModelRepository {
           supports_structoutput = EXCLUDED.supports_structoutput,
           strict_role_alternation = EXCLUDED.strict_role_alternation,
           supports_prefix_completion = EXCLUDED.supports_prefix_completion,
+          verbatim_tool_calling = EXCLUDED.verbatim_tool_calling,
           llm_description = EXCLUDED.llm_description,
           descriptions = jsonb_set(COALESCE(llms.descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
           updated_at = CURRENT_TIMESTAMP
@@ -1640,6 +1644,7 @@ class LlmModelRepository {
     supportsStructOutput: boolean;
     strictRoleAlternation: boolean;
     supportsPrefixCompletion: boolean;
+    verbatimToolCalling: boolean;
   }): Promise<void> {
     switch (params.capability) {
       case "text":
@@ -1652,6 +1657,7 @@ class LlmModelRepository {
             supports_structoutput = ${params.supportsStructOutput},
             strict_role_alternation = ${params.strictRoleAlternation},
             supports_prefix_completion = ${params.supportsPrefixCompletion},
+            verbatim_tool_calling = ${params.verbatimToolCalling},
             llm_description = ${params.displayName},
             descriptions = jsonb_set(COALESCE(descriptions, '{}'::jsonb), '{en-US}', to_jsonb(${params.displayName}::text)),
             updated_at = CURRENT_TIMESTAMP

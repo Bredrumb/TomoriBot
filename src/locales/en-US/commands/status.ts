@@ -169,7 +169,6 @@ export default {
     field_user_byok_enabled: `Enabled. Members need their own personal provider for user-triggered messages. Toggle with {toggle_command}.`,
     field_user_byok_disabled: `Disabled. User-triggered messages can still fall back to the server provider. Toggle with {toggle_command}.`,
     field_tool_use: `Tool Use`,
-    field_verbatim_tool_calling: `Verbatim Tool-Calling`,
     field_prompt_snapshot: `Prompt Snapshot`,
     field_short_term_memory: `Short-Term Memory`,
     field_user_info_updates: `User Info Updates`,
