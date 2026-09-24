@@ -39,6 +39,7 @@ import { getCachedVoiceTranscript, setCachedVoiceTranscript } from "@/utils/audi
 import { isAudioAttachment, transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
 import { resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import { buildQueuedReplyDirective, normalizeTailDirective } from "@/utils/chat/contextDirectives";
+import { excludeMessagesAwaitingOwnTurn } from "@/utils/chat/channelQueue";
 import {
   buildCombinedTailDirectiveMessage,
   buildReactionContextAnnotation,
@@ -611,6 +612,12 @@ async function buildSimplifiedHistory(
   ) {
     messages.push(turn.lockedTurn.admission.message);
   }
+  messages = excludeMessagesAwaitingOwnTurn(
+    messages,
+    turn.lockedTurn.channelId,
+    turn.lockedTurn.admission.message.id,
+    turn.allPersonas,
+  );
 
   // Find the most recent reset or compact_refresh embed and slice history at that point.
   // "reset" starts after the marker; "compact_refresh" starts at the marker (it's included).

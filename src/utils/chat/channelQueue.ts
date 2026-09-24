@@ -723,6 +723,40 @@ export function enqueueLatestFollowUp(
   return removedCount;
 }
 
+/**
+ * Removes history messages that are still waiting for a turn of their own in the channel queue.
+ *
+ * History is fetched as of "now", so a message that arrives while an earlier turn is being
+ * prepared is visible to that turn even though it is also queued. The model then answers it
+ * early and the queued turn's reply directive makes it answer the same message again.
+ * @param messages - Fetched channel history
+ * @param channelId - Channel whose queue is consulted
+ * @param triggerMessageId - Message the current turn answers; always kept, since persona jobs
+ *   queue further entries for this same message
+ * @param allPersonas - Server personas; their own messages stay visible so a turn never loses
+ *   what another persona just said
+ * @returns The history without messages that have a pending turn
+ */
+export function excludeMessagesAwaitingOwnTurn(
+  messages: Message[],
+  channelId: string,
+  triggerMessageId: string,
+  allPersonas: TomoriState[],
+): Message[] {
+  const queue = channelLocks.get(channelId)?.messageQueue;
+  if (!queue || queue.length === 0) {
+    return messages;
+  }
+
+  const pendingMessageIds = new Set(queue.map((queuedMessage) => queuedMessage.message.id));
+  pendingMessageIds.delete(triggerMessageId);
+  if (pendingMessageIds.size === 0) {
+    return messages;
+  }
+
+  return messages.filter((message) => !pendingMessageIds.has(message.id) || isSelfTriggerMessage(message, allPersonas));
+}
+
 export function clearQueuedSelfReplyWork(
   channelId: string,
   allPersonas: TomoriState[],
