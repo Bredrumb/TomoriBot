@@ -259,6 +259,37 @@ When a tool call immediately follows the thinking block, KoboldCPP does not spli
 
 Thought logs are suppressed for private channels (channels listed under `/config` > Channels > Channel Rules) regardless of model or provider. Test thought log routing in a non-private channel.
 
+### NVIDIA NIM
+
+NIM serves many model families behind one endpoint, and each family reads a different switch, so
+every level other than `auto` sends all of them:
+
+| Level | NIM request |
+| --- | --- |
+| `auto` | omit all thinking keys; the model's own default applies |
+| `none` | `chat_template_kwargs: { enable_thinking: false, thinking: false }` + `reasoning_effort: "low"` |
+| `minimal` / `low` | `chat_template_kwargs: { enable_thinking: true, thinking: true }` + `reasoning_effort: "low"` |
+| `medium` | same switches on + `reasoning_effort: "medium"` |
+| `high` | same switches on + `reasoning_effort: "high"` |
+
+Verified per family by sending each key on its own:
+
+| Family | `enable_thinking` | `thinking` | `reasoning_effort` |
+| --- | --- | --- | --- |
+| DeepSeek | toggles | toggles | scales |
+| Nemotron | toggles | toggles | scales |
+| GLM | ignored | ignored | `low` nearly removes thinking |
+| gpt-oss | not measurable (timed out) | not measurable | scales; cannot be turned off |
+| Llama (non-reasoning) | ignored | ignored | accepted |
+
+`none` sends effort `"low"` rather than `"none"` because NIM validates `reasoning_effort` against
+low/medium/high on gpt-oss and Llama and returns 400 for `"none"`. For GLM and gpt-oss, `none`
+therefore means minimal thinking, not zero.
+
+Levels map to effort rather than a token budget because NIM's V2 model runner rejects
+`reasoning_budget`. Both thinking keys are droppable in the degradation ladder, so a model that
+rejects one falls back to its own default instead of failing the reply.
+
 ### NovelAI GLM
 
 Tomori maps `thinking_level` to the GLM prompt directive:
@@ -313,6 +344,7 @@ These are the vendor docs used for the current mapping:
 - Ollama OpenAI compatibility: <https://docs.ollama.com/openai>
 - Ollama thinking: <https://docs.ollama.com/capabilities/thinking>
 - vLLM reasoning outputs: <https://docs.vllm.ai/en/latest/features/reasoning_outputs.html>
+- NVIDIA NIM: no vendor doc covers these keys across families; the NIM mapping above is verified by live probes
 
 ## Notes on Inference
 
