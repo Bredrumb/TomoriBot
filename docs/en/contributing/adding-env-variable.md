@@ -7,14 +7,20 @@ its tier in `.env.optional.example`, and the naming and formatting standards req
 
 ## When to Use an Environment Variable
 
-Not every configurable setting belongs in an environment file. Use this decision tree before adding a variable:
+A named code constant is the default. An environment variable represents a deployment boundary: a
+value that reasonably differs between installations because of the host, the network, or an
+external service. Pick the first row that fits:
 
 | Target Location | Use Case | Examples |
 |---|---|---|
-| PostgreSQL (Slash Command / Model / Server Setting) | Per-server or per-user configurations that administrators or members change at runtime. | Channel whitelists, persona prompts, temperature overrides, server prefixes. |
+| PostgreSQL (Slash Command / Model / Server Setting) | Per-server or per-user configurations that administrators or members change at runtime. | Channel whitelists, persona prompts, temperature overrides. |
 | `.env.example` | Core required credentials and endpoints without which the bot cannot boot. | `DISCORD_TOKEN`, `DATABASE_URL`. |
-| `.env.optional.example` | Global operational limits, timeouts, feature flags, cache lifetimes, and opt-in integrations. Every variable here must have a safe working default in code. | `WEB_SEARCH_TIMEOUT_MS`, `MAX_DOCUMENT_SIZE_MB`. |
-| Code Constant (`src/constants/` or module-local) | Fixed architectural invariants, protocol constraints, or Discord API limits that cannot be safely tuned. | Discord interaction token 15-minute window, modal text input limits. |
+| `.env.optional.example` | Host resources, network behavior, external service credentials or quotas, opt-in integrations, and operator choices that reasonably vary between installations. Every variable here must have a safe working default in code. | `WEB_SEARCH_TIMEOUT_MS`, `MAX_DOCUMENT_SIZE_MB`. |
+| Code constant (module-local, or `src/constants/` when shared) | Everything else: internal probabilities, parser lookbacks, UI geometry, algorithm tuning, protocol constraints, and Discord API limits. | Discord interaction token 15-minute window, modal text input limits. |
+
+Promote a constant to a variable only when you can name the deployment that needs a different value.
+Give each setting one variable; an engine-specific variable plus a shared fallback for the same value
+is two names to document and debug for one knob.
 
 ## The Eight-Tier Taxonomy
 

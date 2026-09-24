@@ -31,7 +31,7 @@ Run these before merging any change:
 ```bash
 bun run check           # TypeScript strict mode
 bun run lint            # Biome lint/format
-bun run check-locales   # locale key parity (when locale keys or command metadata changed)
+bun run check-locales   # locale keys (when locale keys or command metadata changed); non-English parity is advisory
 bun run find-stale-translations --reason=unfollowed --base=origin/main  # branch follow-up, advisory
 bun run db:lifecycle    # schema lifecycle test (when schema.sql changed; needs local PostgreSQL)
 ```
@@ -120,16 +120,17 @@ These rules apply to all TomoriBot source code regardless of task type.
 
 ### Configuration and Magic Numbers
 
-- Do not hardcode operational limits/timeouts/thresholds in feature logic.
-- Use env vars with fallback defaults:
-
-```ts
-const VALUE = Number.parseInt(process.env.CONFIG_VAR || "10", 10);
-```
-
-- Add required setup vars to `.env.example` and optional/tuning vars to `.env.optional.example`,
-  each with a clear comment. See [`adding-env-variable.md`](./adding-env-variable) for the tier
-  system and placement conventions.
+- Give a magic number a name: a constant in the module that owns it, with a comment when the value
+  was measured or comes from an external limit.
+- Promote a value to an environment variable only when it is a deployment boundary: host resources,
+  network behavior, external service credentials or quotas, or an operator choice that reasonably
+  varies between installations. Internal probabilities, parser lookbacks, UI geometry, and algorithm
+  tuning stay constants unless a concrete deployment use case proves otherwise.
+- One variable per setting. Do not add an engine-specific variable plus a shared fallback for the
+  same value.
+- Settings a server or user changes at runtime belong in the database, not the environment.
+- See [`adding-env-variable.md`](./adding-env-variable) for placement and naming once a variable
+  passes this test.
 
 ### Database and Migrations
 
@@ -158,3 +159,49 @@ See [`docs/en/architecture/subsystems/caching.md`](../subsystems/caching) for th
 - Slash commands only (no legacy prefix command surface).
 - All user-facing text must be localized via `localizer()`.
 - Follow interaction timing patterns in [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system).
+
+---
+
+## Proportionality
+
+Every test, variable, CI job, abstraction, and comment has a maintenance cost. Add one when it
+prevents a named failure, not because a category of change usually has one.
+
+### Reuse and abstraction
+
+- Search for an existing helper, registry, or pattern before writing a new one, and extend it.
+- Extract a shared helper when a second real caller exists, not for an anticipated one.
+- Fix a bug in the shared function after checking every caller.
+- Do not add compatibility shims, fallback paths, or options for states the code cannot reach.
+  Validate at trust boundaries and trust typed internal values.
+- File size alone does not justify a split. Name the maintenance or correctness problem.
+
+### Tests
+
+- Test behavior, regression risk, or an interface other code depends on (an exported API, a stored
+  data shape, a Discord limit). A bug fix gets the regression test that would have caught it.
+- Do not test that wiring or a helper merely exists.
+- Loop locales or panels inside one test that collects every failure, instead of generating one test
+  per locale.
+- Assert an exact count or a complete member list only when that exact count or list is what must
+  not change. Otherwise assert stable IDs, uniqueness, or that the required members are present.
+- Optional local servers (`servers/`), installers, and devtools do not get dedicated test suites or
+  CI jobs by default.
+- A function whose only remaining caller is a test is dead code; delete both.
+- Add CI coverage only when unattended enforcement is valuable and the environment is supportable.
+- Before a broad audit, write the candidate filter and the decision rubric.
+
+### Review findings
+
+Give every finding, from an agent or a human, one disposition before implementation:
+
+| Disposition | Meaning |
+|---|---|
+| Accept now | Fix it in this change. |
+| Defer | Record the concrete trigger that will make it worth doing. |
+| Not worth it | Real, but the fix costs more to carry than the risk it removes. |
+| Reject | The premise is false or already handled. |
+
+Severity describes impact if the finding is real. It does not make a fix mandatory. A
+recommendation states its expected value, its implementation and maintenance cost, and the source
+evidence for its premise. Implement only accepted findings.
