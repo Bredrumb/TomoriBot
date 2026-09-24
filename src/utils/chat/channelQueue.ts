@@ -79,6 +79,10 @@ export interface ChannelLockEntry {
   messageQueue: QueuedMessage[];
   /** Callback that aborts the active HTTP request and rejects the stream Promise.race. Set by toolLoop, cleared on release. */
   activeStreamKill?: ((reason: Error) => void) | null;
+  /** Last sign of life from the turn holding the lock; `lockedAt` stays the turn's start time. */
+  lastProgressAt?: number;
+  /** One token per in-flight phase that carries its own timeout; see {@link runUnderWatchdog}. */
+  activeWatchdogs?: Set<symbol>;
   /** AbortController for the entire turn (streaming + tools). Aborted by /kill; signal forwarded to tools via ToolContext. */
   activeTurnAbortController: AbortController | null;
 }
@@ -150,11 +154,7 @@ export async function runWithChannelLock<T>(
 
 export function isActiveNaturalStopTurn(channelId: string, userDiscId: string): boolean {
   const lockEntry = channelLocks.get(channelId);
-  return Boolean(
-    lockEntry?.isLocked &&
-      Date.now() - lockEntry.lockedAt <= CHANNEL_LOCK_TIMEOUT_MS &&
-      lockEntry.userDiscId === userDiscId,
-  );
+  return Boolean(lockEntry?.isLocked && !isChannelLockExpired(lockEntry) && lockEntry.userDiscId === userDiscId);
 }
 
 export function getOrCreateChannelLockEntry(channelId: string, serverDiscId: string): ChannelLockEntry {
@@ -179,13 +179,65 @@ export function getOrCreateChannelLockEntry(channelId: string, serverDiscId: str
   return fresh;
 }
 
+/**
+ * Whether a held lock has outlived its turn and may be treated as abandoned.
+ *
+ * A lock is never expired while a {@link runUnderWatchdog} phase is in flight: that phase already
+ * carries its own timeout, and the stream's first-token budget and the tool budget both exceed
+ * {@link CHANNEL_LOCK_TIMEOUT_MS} on purpose. Expiring on turn age let any message sent in a busy
+ * channel kill a slow but healthy reply or tool call. Work outside those phases has no other bound,
+ * so it keeps this recovery.
+ */
+function isChannelLockExpired(lockEntry: ChannelLockEntry): boolean {
+  if (!lockEntry.isLocked || (lockEntry.activeWatchdogs?.size ?? 0) > 0) {
+    return false;
+  }
+  return Date.now() - (lockEntry.lastProgressAt ?? lockEntry.lockedAt) > CHANNEL_LOCK_TIMEOUT_MS;
+}
+
+/**
+ * Records that the turn holding this channel's lock is still making progress, so the stale-lock
+ * window measures time since the last sign of life rather than time since the turn began.
+ */
+export function touchChannelLock(channelId: string): void {
+  const lockEntry = channelLocks.get(channelId);
+  if (lockEntry?.isLocked) {
+    lockEntry.lastProgressAt = Date.now();
+  }
+}
+
+/**
+ * Runs a phase that enforces its own timeout, exempting the channel lock from stale release until it
+ * settles. Only wrap work whose every path ends within a bounded time (a `Promise.race` against a
+ * timer), because the exemption removes the lock's last recovery for that phase.
+ *
+ * Each phase holds its own token rather than a shared counter: `/kill` can release the lock and a
+ * new turn can acquire it while the old phase is still settling, and that phase's cleanup must not
+ * lift the new turn's exemption.
+ */
+export async function runUnderWatchdog<T>(channelId: string, work: () => Promise<T>): Promise<T> {
+  const lockEntry = channelLocks.get(channelId);
+  const token = Symbol("watchdog");
+  if (lockEntry) {
+    lockEntry.activeWatchdogs ??= new Set();
+    lockEntry.activeWatchdogs.add(token);
+  }
+  touchChannelLock(channelId);
+  try {
+    return await work();
+  } finally {
+    lockEntry?.activeWatchdogs?.delete(token);
+    touchChannelLock(channelId);
+  }
+}
+
 export function releaseStaleChannelLockIfExpired(channelId: string, lockEntry: ChannelLockEntry): boolean {
-  if (!lockEntry.isLocked || Date.now() - lockEntry.lockedAt <= CHANNEL_LOCK_TIMEOUT_MS) {
+  if (!isChannelLockExpired(lockEntry)) {
     return false;
   }
 
   log.warn(
-    `Channel ${channelId} lock is stale (locked since ${new Date(lockEntry.lockedAt).toISOString()} for message ${lockEntry.currentMessageId}). Forcibly releasing. Previous queue length: ${lockEntry.messageQueue.length}`,
+    `Channel ${channelId} lock is stale (locked since ${new Date(lockEntry.lockedAt).toISOString()}, last progress ${new Date(lockEntry.lastProgressAt ?? lockEntry.lockedAt).toISOString()}, for message ${lockEntry.currentMessageId}). Forcibly releasing. Previous queue length: ${lockEntry.messageQueue.length}`,
   );
   lockEntry.activeTurnAbortController?.abort();
   lockEntry.activeTurnAbortController = null;
@@ -220,6 +272,8 @@ export function acquireChannelLockForTurn(
 ): void {
   lockEntry.isLocked = true;
   lockEntry.lockedAt = Date.now();
+  lockEntry.lastProgressAt = lockEntry.lockedAt;
+  lockEntry.activeWatchdogs?.clear();
   lockEntry.currentMessageId = args.messageId;
   lockEntry.userDiscId = args.userDiscId;
   lockEntry.currentIsPersonaJob = args.isPersonaJob;
@@ -533,6 +587,8 @@ export function releaseChannelLockAndReplayQueue(args: {
 }): void {
   args.lockEntry.isLocked = false;
   args.lockEntry.lockedAt = 0;
+  args.lockEntry.lastProgressAt = undefined;
+  args.lockEntry.activeWatchdogs?.clear();
   args.lockEntry.currentMessageId = undefined;
   args.lockEntry.userDiscId = undefined;
   args.lockEntry.currentIsPersonaJob = false;
@@ -630,11 +686,7 @@ export async function startDiscordTypingKeepalive(
 
 export function isChannelProcessingLocked(channelId: string): boolean {
   const lockEntry = channelLocks.get(channelId);
-  if (!lockEntry?.isLocked) return false;
-  if (Date.now() - lockEntry.lockedAt > CHANNEL_LOCK_TIMEOUT_MS) {
-    return false;
-  }
-  return true;
+  return lockEntry ? lockEntry.isLocked && !isChannelLockExpired(lockEntry) : false;
 }
 
 /**

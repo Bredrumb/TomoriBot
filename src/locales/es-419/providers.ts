@@ -74,6 +74,7 @@ export default {
       flush_limit_description: `Esta respuesta ha alcanzado el límite de longitud máxima del mensaje y se ha detenido. Puedes usar \`/respond\` para continuar manualmente la respuesta si es necesario.`,
       inactivity_timeout_title: `🟡️ Tiempo de espera de respuesta agotado`,
       inactivity_timeout_description: `El proveedor de IA dejó de responder y se agotó el tiempo de espera de la conexión. Esto puede suceder cuando el proveedor está sobrecargado o experimenta problemas. Por favor, inténtalo de nuevo.`,
+      first_token_timeout_description: `El proveedor de IA aceptó la solicitud, pero nunca empezó a responder, así que se agotó el tiempo de espera de la conexión. Es probable que su cola esté saturada. Por favor, inténtalo de nuevo o cambia a un modelo menos ocupado.`,
     },
     tips: {
       title: `💡 Lo que puedes hacer`,
@@ -90,6 +91,9 @@ export default {
       choose_supported_model_personal: `Elige una identificación de modelo compatible con \`/personal config\` o tu configuración de punto final personalizado.`,
       verify_api_key: `Verifica la clave de API de este servidor y luego inténtalo de nuevo.`,
       verify_api_key_personal: `Verifica tu clave de API personal con \`/personal providers\` y luego inténtalo de nuevo.`,
+      verify_api_key_expiry: `Las claves de NVIDIA NIM caducan, y NVIDIA rechaza una clave caducada con el mismo error que una escrita incorrectamente. Revisa su fecha de vencimiento en [build.nvidia.com](https://build.nvidia.com) y genera una clave nueva si ya venció.`,
+      nvidia_register_free_model: `NVIDIA retira modelos alojados con frecuencia. Elige uno que sirva actualmente en los [puntos finales gratuitos de NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copia su ID de modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) y luego añádelo en \`/providers\` > NVIDIA NIM > **+ Añadir nuevo modelo de texto**.`,
+      nvidia_register_free_model_personal: `NVIDIA retira modelos alojados con frecuencia. Elige uno que sirva actualmente en los [puntos finales gratuitos de NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copia su ID de modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) y luego añádelo en \`/personal providers\` > NVIDIA NIM > **+ Añadir nuevo modelo de texto**.`,
       google_credential_type: `Esto parece un token de OAuth o de cuenta de servicio. El proveedor \`google\` necesita una clave de API normal de [Google AI Studio](https://aistudio.google.com/apikey); usa el proveedor \`vertex\` para credenciales completas de Google Cloud.`,
       openrouter_privacy_settings: `Ajusta tus ajustes de "Política de datos" en [Ajustes de privacidad de OpenRouter](https://openrouter.ai/settings/privacy) para permitir este modelo, o elige un modelo diferente.`,
       openrouter_fund_account: `Agrega al menos 10 créditos a tu cuenta de OpenRouter para desbloquear 1000 solicitudes de modelos gratuitos por día.`,
@@ -181,6 +185,8 @@ El modelo seleccionado requiere permitir datos para el entrenamiento del modelo 
       unknown_default_message: `Ocurrió un error inesperado`,
     },
     nvidia: {
+      "401_default_message": `NVIDIA no reconoció esta clave. Verifica que se haya copiado completa, incluido el prefijo \`nvapi-\`.`,
+      "403_default_message": `NVIDIA rechazó esta clave. Puede estar mal escrita, caducada o sin acceso de inferencia en su cuenta.`,
       "404_default_message": `El modelo NVIDIA NIM solicitado no se pudo encontrar. Puede estar desaprobado por NVIDIA.`,
       "500_default_message": `El backend de NVIDIA que sirve a este modelo falló. Esto suele ser transitorio, así que inténtalo de nuevo en un momento. Los detalles a continuación son el propio informe de NVIDIA y son autoritativos: si nombran un parámetro de solicitud, ajusta esa configuración en lugar de adivinar.`,
       "500_parameter_default_message": `NVIDIA rechazó uno o más parámetros de solicitud para este modelo. Si los detalles nombran parámetros de muestreador no compatibles como \`min_p\`, establécelos en \`0\` con \`/config\` > Modelos > Muestreadores y Parámetros para desactivarlos. Si los detalles nombran \`logit_bias\`, borra las entradas guardadas con \`/config\` > Modelos > Muestreadores y Parámetros.`,

@@ -7,6 +7,7 @@ import {
   isAccountBalanceExhaustedError,
   isContextLengthError,
   isCreditAffordabilityError,
+  isNvidiaCredentialRejected,
   isProviderModelError,
 } from "@/utils/provider/providerErrorClassification";
 import { localizer } from "@/utils/text/localizer";
@@ -132,6 +133,15 @@ export class StreamErrorUi {
     // handing the turn back to the server default, except where User BYOK mode forbids it.
     const disableOverrideTip = isPersonal ? ["genai.tips.disable_personal_text_override"] : [];
 
+    // Unscoped: the tip names no command, so it reads the same for a personal key.
+    const keyRejectionTips = isNvidiaCredentialRejected(providerName, providerError)
+      ? ["genai.tips.verify_api_key_expiry"]
+      : [];
+
+    // NVIDIA retires hosted models faster than the seeded catalog can follow, and a backed-up free
+    // queue looks like a timeout or overload, so each of those points at a model NVIDIA serves today.
+    const nvidiaFreeModelTip = providerName === "nvidia" ? [scoped("genai.tips.nvidia_register_free_model")] : [];
+
     // Specialized Error Conditions
     const isPrivacyError = providerError.message.includes("Privacy Policy Error");
     if (isPrivacyError) {
@@ -163,6 +173,7 @@ export class StreamErrorUi {
         titleKey: "genai.stream.model_error_title",
         tipKeys: [
           scoped("genai.tips.choose_supported_model"),
+          ...nvidiaFreeModelTip,
           ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
           ...disableOverrideTip,
         ],
@@ -254,13 +265,13 @@ export class StreamErrorUi {
       case "timeout":
         return {
           titleKey: "genai.stream.timeout_title",
-          tipKeys: ["genai.tips.shorten_message", "genai.tips.refresh_context"],
+          tipKeys: ["genai.tips.shorten_message", "genai.tips.refresh_context", ...nvidiaFreeModelTip],
           color: ColorCode.WARN,
         };
       case "provider_overloaded":
         return {
           titleKey: "genai.stream.provider_overloaded_title",
-          tipKeys: ["genai.tips.provider_overloaded_wait", ...modelFallbackTip],
+          tipKeys: ["genai.tips.provider_overloaded_wait", ...modelFallbackTip, ...nvidiaFreeModelTip],
           color: ColorCode.WARN,
         };
       default:
@@ -274,6 +285,10 @@ export class StreamErrorUi {
               ? ["genai.tips.google_credential_type"]
               : []),
             scoped("genai.tips.verify_api_key"),
+            ...keyRejectionTips,
+            // NIM answers some retired routes with a bare "404 page not found" that no model
+            // pattern can recognize without also catching unrelated 404s.
+            ...(providerError.code === "404" || providerError.code === "410" ? nvidiaFreeModelTip : []),
             scoped("genai.tips.switch_model_provider"),
             ...(isOpenRouter ? [scoped("genai.tips.openrouter_models")] : []),
             ...disableOverrideTip,

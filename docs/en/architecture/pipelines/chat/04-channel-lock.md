@@ -50,9 +50,14 @@ The callback receives `LockedChatTurn`:
 
 - Looks up or creates a `ChannelLockEntry` keyed by `channelId` in the in-memory
   `channelLocks` map.
-- Forcibly releases the lock if older than `CHANNEL_LOCK_TIMEOUT_MS` (default
-  180s, configurable via env). Logs a warning, aborts the turn abort controller,
-  fires the stream kill callback, and clears the existing queue.
+- Forcibly releases the lock if its last heartbeat is older than
+  `CHANNEL_LOCK_TIMEOUT_MS` (default 180s, configurable via env). Logs a warning,
+  aborts the turn abort controller, fires the stream kill callback, and clears
+  the existing queue. Staleness is measured from `lastProgressAt`, which
+  `touchChannelLock` refreshes on every stream heartbeat; `lockedAt` stays the
+  turn's start. A lock is never stale while a `runUnderWatchdog` phase is in
+  flight (the stream race and the tool-execution race), because each carries its
+  own timeout. Work outside those phases keeps the stale-lock recovery.
 - Sets `isLocked = true`, records `lockedAt`, `currentMessageId`, `userDiscId`,
   persona-job/persona-id/command-triggered flags.
 - Creates a **fresh `AbortController`** (`activeTurnAbortController`) for this

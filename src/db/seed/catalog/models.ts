@@ -2268,7 +2268,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "nvidia",
         codename: "qwen/qwen3.5-397b-a17b",
-        isSmartest: true,
         isFree: true,
         hasTools: true,
         seesImages: true,
@@ -2287,6 +2286,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "nvidia",
         codename: "moonshotai/kimi-k2-instruct",
+        isDeprecated: true,
         desc: "General-purpose NVIDIA NIM text model without tool or structured-output support",
         i18n: {
           ja: "ツール利用や構造化出力に対応しない、NVIDIA NIMの汎用テキストモデル",
@@ -2303,6 +2303,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isFree: true,
         hasTools: true,
         supportsStructoutput: true,
+        isDeprecated: true,
         desc: "Tool-capable NVIDIA NIM GLM model with structured output support",
         i18n: {
           ja: "ツール利用と構造化出力に対応した、NVIDIA NIMのGLMモデル",
@@ -2319,6 +2320,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isFree: true,
         hasTools: true,
         supportsStructoutput: true,
+        isDeprecated: true,
         desc: "Latest tool-capable NVIDIA NIM GLM 5.2 model with structured output support",
         i18n: {
           ja: "ツール利用と構造化出力に対応した、最新のNVIDIA NIM GLM 5.2モデル",
@@ -2334,6 +2336,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         codename: "stepfun-ai/step-3.5-flash",
         isFree: true,
         hasTools: true,
+        isDeprecated: true,
         desc: "Fast NVIDIA NIM chat model with tool support only",
         i18n: {
           ja: "ツール利用のみに対応した高速NVIDIA NIMチャットモデル",
@@ -2384,6 +2387,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isUncensored: true,
         supportsStructoutput: true,
         isFree: true,
+        isDeprecated: true,
         desc: "Fast and cost-efficient DeepSeek v4 model via NVIDIA NIM with tool support and structured output",
         i18n: {
           ja: "NVIDIA NIM経由でツール利用と構造化出力に対応した、高速でコスト効率の良いDeepSeek v4モデル",
@@ -2401,6 +2405,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         isUncensored: true,
         supportsStructoutput: true,
         isFree: true,
+        isDeprecated: true,
         desc: "DeepSeek v4 Flash 0731 version via NVIDIA NIM",
         i18n: {
           ja: "NVIDIA NIM経由のDeepSeek v4 Flash 0731バージョン",
@@ -2418,6 +2423,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         isFree: true,
+        isDeprecated: true,
         desc: "MiniMax M3 Preview — multimodal MoE vision-language model with reasoning, coding, and tool-calling capabilities",
         i18n: {
           ja: "MiniMax M3 Preview — 推論・コーディング・ツール呼び出し対応のマルチモーダルMoEビジョン言語モデル",
@@ -2433,6 +2439,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesImages: true,
         supportsStructoutput: true,
         isFree: true,
+        isDeprecated: true,
         desc: "Kimi K2.6 — 1T multimodal MoE for long-horizon coding, agentic tool use, and image/video understanding",
         i18n: {
           ja: "Kimi K2.6 — 長期コーディング・エージェントツール利用・画像/動画理解向け1TマルチモーダルMoEモデル",
@@ -2444,10 +2451,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "nvidia",
         codename: "nvidia/nemotron-3-ultra-550b-a55b",
-        isSmartest: true,
         isReasoning: true,
         hasTools: true,
-        isDefault: true,
         // NVIDIA's hosted endpoint serves this model via vLLM without
         // --enable-multimodal, so image parts are rejected with a 500 even
         // though degradation now recovers by stripping them. Keep sees_images
@@ -2468,7 +2473,6 @@ export const llmSections: ModelSection<LlmInput>[] = [
         provider: "nvidia",
         codename: "nvidia/nemotron-3.5-lightning-30b-a3b",
         hasTools: true,
-        supportsStructoutput: true,
         isFree: true,
         desc: "Fast and lightweight Nemotron 3.5 Lightning 30B model for general-purpose applications",
         i18n: {
@@ -2478,6 +2482,110 @@ export const llmSections: ModelSection<LlmInput>[] = [
           "zh-TW": "適合一般用途、快速輕量的 Nemotron 3.5 Lightning 30B 模型",
           vi: "Model Nemotron 3.5 Lightning 30B nhanh, nhẹ cho ứng dụng đa mục đích",
           "zh-CN": "适合通用场景、快速轻量的 Nemotron 3.5 Lightning 30B 模型",
+        },
+      },
+      {
+        provider: "nvidia",
+        codename: "deepseek-ai/deepseek-v4.1-flash",
+        isDefault: true,
+        isReasoning: true,
+        hasTools: true,
+        seesImages: true,
+        isUncensored: true,
+        isFree: true,
+        desc: "Default NVIDIA NIM model: fast DeepSeek v4.1 Flash with reasoning, tool use, and image understanding",
+        i18n: {
+          ja: "NVIDIA NIMのデフォルトモデル。推論、ツール利用、画像理解に対応した高速なDeepSeek v4.1 Flash",
+          "pt-BR": "Modelo padrão NVIDIA NIM: DeepSeek v4.1 Flash rápido com raciocínio, ferramentas e visão",
+          "es-419":
+            "Modelo predeterminado de NVIDIA NIM: DeepSeek v4.1 Flash rápido con razonamiento, herramientas y visión",
+          "zh-TW": "NVIDIA NIM 預設模型：支援推理、工具使用與圖像理解的快速 DeepSeek v4.1 Flash",
+          vi: "Model NVIDIA NIM mặc định: DeepSeek v4.1 Flash nhanh, có suy luận, công cụ và hiểu hình ảnh",
+          "zh-CN": "NVIDIA NIM 默认模型：支持推理、工具使用与图像理解的快速 DeepSeek v4.1 Flash",
+        },
+      },
+      {
+        provider: "nvidia",
+        codename: "z-ai/glm-5.3",
+        isSmartest: true,
+        hasTools: true,
+        supportsStructoutput: true,
+        isFree: true,
+        desc: "Most capable NVIDIA NIM model in TomoriBot's curated set: GLM 5.3 with tool use and structured output",
+        i18n: {
+          ja: "TomoriBotの厳選NVIDIA NIMセットで最も高性能なモデル。ツール利用と構造化出力に対応したGLM 5.3",
+          "pt-BR": "Modelo NVIDIA NIM mais capaz da seleção do TomoriBot: GLM 5.3 com ferramentas e saída estruturada",
+          "es-419":
+            "El modelo NVIDIA NIM más capaz del catálogo de TomoriBot: GLM 5.3 con herramientas y salida estructurada",
+          "zh-TW": "TomoriBot 精選 NVIDIA NIM 組合中效能最強的模型：支援工具使用與結構化輸出的 GLM 5.3",
+          vi: "Model NVIDIA NIM mạnh nhất trong bộ tuyển chọn của TomoriBot: GLM 5.3 có công cụ và xuất có cấu trúc",
+          "zh-CN": "TomoriBot 精选 NVIDIA NIM 组合中能力最强的模型：支持工具使用与结构化输出的 GLM 5.3",
+        },
+      },
+      {
+        provider: "nvidia",
+        codename: "nvidia/nemotron-3-super-120b-a12b",
+        hasTools: true,
+        supportsStructoutput: true,
+        isFree: true,
+        desc: "Nemotron 3 Super 120B via NVIDIA NIM: quick to respond, with tool use",
+        i18n: {
+          ja: "NVIDIA NIM経由のNemotron 3 Super 120B。応答が速く、ツール利用に対応",
+          "pt-BR": "Nemotron 3 Super 120B via NVIDIA NIM: resposta rápida, com ferramentas",
+          "es-419": "Nemotron 3 Super 120B vía NVIDIA NIM: responde rápido y usa herramientas",
+          "zh-TW": "經由 NVIDIA NIM 的 Nemotron 3 Super 120B：回應迅速，支援工具使用",
+          vi: "Nemotron 3 Super 120B qua NVIDIA NIM: phản hồi nhanh, có công cụ",
+          "zh-CN": "经由 NVIDIA NIM 的 Nemotron 3 Super 120B：响应迅速，支持工具使用",
+        },
+      },
+      {
+        provider: "nvidia",
+        codename: "openai/gpt-oss-20b",
+        hasTools: true,
+        supportsStructoutput: true,
+        isFree: true,
+        desc: "Lightweight OpenAI gpt-oss 20B via NVIDIA NIM with tool use and structured output",
+        i18n: {
+          ja: "NVIDIA NIM経由の軽量なOpenAI gpt-oss 20B。ツール利用と構造化出力に対応",
+          "pt-BR": "OpenAI gpt-oss 20B leve via NVIDIA NIM com ferramentas e saída estruturada",
+          "es-419": "OpenAI gpt-oss 20B ligero vía NVIDIA NIM con herramientas y salida estructurada",
+          "zh-TW": "經由 NVIDIA NIM 的輕量 OpenAI gpt-oss 20B，支援工具使用與結構化輸出",
+          vi: "OpenAI gpt-oss 20B gọn nhẹ qua NVIDIA NIM, có công cụ và xuất có cấu trúc",
+          "zh-CN": "经由 NVIDIA NIM 的轻量 OpenAI gpt-oss 20B，支持工具使用与结构化输出",
+        },
+      },
+      {
+        provider: "nvidia",
+        codename: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        isReasoning: true,
+        hasTools: true,
+        seesImages: true,
+        isFree: true,
+        desc: "Nemotron 3 Nano Omni 30B via NVIDIA NIM: small reasoning model with tool use and image understanding",
+        i18n: {
+          ja: "NVIDIA NIM経由のNemotron 3 Nano Omni 30B。ツール利用と画像理解に対応した小型推論モデル",
+          "pt-BR": "Nemotron 3 Nano Omni 30B via NVIDIA NIM: modelo de raciocínio compacto com ferramentas e visão",
+          "es-419":
+            "Nemotron 3 Nano Omni 30B vía NVIDIA NIM: modelo de razonamiento compacto con herramientas y visión",
+          "zh-TW": "經由 NVIDIA NIM 的 Nemotron 3 Nano Omni 30B：支援工具使用與圖像理解的小型推理模型",
+          vi: "Nemotron 3 Nano Omni 30B qua NVIDIA NIM: model suy luận nhỏ gọn có công cụ và hiểu hình ảnh",
+          "zh-CN": "经由 NVIDIA NIM 的 Nemotron 3 Nano Omni 30B：支持工具使用与图像理解的小型推理模型",
+        },
+      },
+      {
+        provider: "nvidia",
+        codename: "meta/llama-3.2-11b-vision-instruct",
+        hasTools: true,
+        seesImages: true,
+        isFree: true,
+        desc: "Llama 3.2 11B Vision via NVIDIA NIM: small vision model with tool use",
+        i18n: {
+          ja: "NVIDIA NIM経由のLlama 3.2 11B Vision。ツール利用に対応した小型ビジョンモデル",
+          "pt-BR": "Llama 3.2 11B Vision via NVIDIA NIM: modelo de visão compacto com ferramentas",
+          "es-419": "Llama 3.2 11B Vision vía NVIDIA NIM: modelo de visión compacto con herramientas",
+          "zh-TW": "經由 NVIDIA NIM 的 Llama 3.2 11B Vision：支援工具使用的小型視覺模型",
+          vi: "Llama 3.2 11B Vision qua NVIDIA NIM: model thị giác nhỏ gọn có công cụ",
+          "zh-CN": "经由 NVIDIA NIM 的 Llama 3.2 11B Vision：支持工具使用的小型视觉模型",
         },
       },
     ],

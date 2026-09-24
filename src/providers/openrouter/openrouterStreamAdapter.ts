@@ -44,6 +44,7 @@ import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingContro
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
+import { DISCORD_STREAMING_CONSTANTS } from "../../types/stream/types";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
 import {
   applyAssistantPrefixCompletion,
@@ -659,7 +660,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         applyAssistantPrefixCompletion(requestBody, context.outputPrefill?.trim());
       }
 
-      const inactivityTimeoutMs = config.inactivityTimeoutMs ?? 120000;
+      const inactivityTimeoutMs = config.inactivityTimeoutMs ?? DISCORD_STREAMING_CONSTANTS.INACTIVITY_TIMEOUT_MS;
+      // OpenRouter keeps a queued free-model request alive with `: OPENROUTER PROCESSING` comments,
+      // which never count as content, so judging that queue by the idle budget capped the wait for a
+      // first token at 120s regardless of the tool loop's longer first-token budget.
+      const firstTokenTimeoutMs = Math.max(inactivityTimeoutMs, DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS);
       const mandatoryKeys = new Set(["model", "messages", "stream"]);
       const attempts = buildDegradationAttempts(requestBody, {
         mandatoryKeys,
@@ -807,6 +812,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           const decoder = new TextDecoder();
           let buffer = "";
           let lastMeaningfulAt = Date.now();
+          let sawMeaningfulChunk = false;
+          const currentIdleBudgetMs = () => (sawMeaningfulChunk ? inactivityTimeoutMs : firstTokenTimeoutMs);
           let committedToAttempt = false;
           let recoveryLogged = false;
           // True once the body no longer needs cancelling: either the stream ended on its own,
@@ -830,7 +837,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             const timeoutPromise = new Promise<never>((_, reject) => {
               timeoutId = setTimeout(() => {
                 reject(new Error("OpenRouter stream timed out while waiting for data"));
-              }, inactivityTimeoutMs);
+              }, currentIdleBudgetMs());
             });
 
             try {
@@ -949,6 +956,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   }
 
                   lastMeaningfulAt = Date.now();
+                  sawMeaningfulChunk = true;
                   yield {
                     data: guardResult.chunk,
                     provider: "openrouter",
@@ -964,7 +972,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 }
               }
 
-              if (Date.now() - lastMeaningfulAt > inactivityTimeoutMs) {
+              if (Date.now() - lastMeaningfulAt > currentIdleBudgetMs()) {
                 currentController.abort();
                 throw new Error("OpenRouter stream timed out due to inactivity");
               }
