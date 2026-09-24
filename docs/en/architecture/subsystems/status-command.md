@@ -22,7 +22,7 @@ It exists so users can inspect current configuration without reopening every man
 
 ## Scope Coverage
 
-`/status` provides five ordered categories: Persona, Behavior, Models, Access, and Personal. Every invocation opens
+`/status` provides five ordered categories: Persona, Behavior, Access, Personal, and Models. Every invocation opens
 on the main Persona's Identity page. Every resulting dashboard displays all five category buttons at the top,
 allowing readers to navigate among every category without re-running the command. Category and
 page controls use persistent, versioned `status:v1` interaction routes, so navigation remains available after the
@@ -38,9 +38,9 @@ never use a collector or write to the database.
 Category page counts:
 - Persona: 5 pages (Identity, Attributes, Sample Dialogues, Memories, Prompt and Tags)
 - Behavior: 3 pages (General Behavior, Channels and Automation, Thought Logs & Matrix)
-- Models: 4 pages (Models and Sampling, Overrides, Integrations and Endpoints, NAI Image)
 - Access: 3 pages (System Prompt, Capabilities & Moderation, Quotas)
 - Personal: 2 pages (Personal Status, Providers and Endpoints)
+- Models: 4 pages (Models and Sampling, Overrides, Integrations and Endpoints, NAI Image)
 
 ### Personal
 
@@ -75,8 +75,8 @@ page body, so readers can move between categories without re-running the command
 Discord's 40 components for future controls and bounds Text Display output to Discord's 4,000-codepoint limit.
 
 - Behavior: general behavior, system prompt, channels, and automation.
-- Models: model and sampling, overrides, NAI image configuration, integrations, and endpoints.
 - Access: capabilities, moderation, member access, and image, text, and video quotas.
+- Models: model and sampling, overrides, NAI image configuration, integrations, and endpoints.
 
 Each page identifies the management command that owns its settings, so a status reader can return to the editor.
 
