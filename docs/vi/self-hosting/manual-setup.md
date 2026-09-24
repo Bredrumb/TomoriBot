@@ -53,7 +53,7 @@ docker run -d --name tomori-db \
 Sau đó đặt `POSTGRES_HOST=localhost`, `POSTGRES_PORT=5432`, cùng user/password/db ở trên. Image `pgvector/pgvector` đi kèm tiện ích mở rộng RAG đã cài sẵn; thay bằng `postgres:16` nếu bạn không cần bộ nhớ tài liệu/RAG. Thiết lập này chỉ chạy cơ sở dữ liệu trong Docker và bot vẫn chạy trên Bun của máy chủ lưu trữ. Để đóng gói toàn bộ bot và cơ sở dữ liệu trong container, hãy sử dụng [Docker Compose](/vi/self-hosting/docker-compose/) để thay thế.
 :::
 
-Các tùy chỉnh bổ sung nằm trong `.env.optional.example`. Sao chép bất kỳ giá trị nào bạn muốn tùy chỉnh (giới hạn, thời gian chờ, bật tắt tính năng, URL của sidecar, v.v.).
+Các tùy chỉnh bổ sung nằm trong `.env.optional.example`. Sao chép bất kỳ giá trị nào bạn muốn tùy chỉnh (giới hạn, thời gian chờ, bật tắt tính năng, URL của máy chủ cục bộ, v.v.).
 
 ## 3. Chạy
 
@@ -63,7 +63,7 @@ bun run dev
 
 Khi bạn thấy `TomoriBot up and running!`, hãy vào Discord và chạy `/setup` trong máy chủ của bạn để kết nối nhà cung cấp AI và khởi tạo bot. Lệnh này mở một bảng danh sách kiểm tra có hướng dẫn, và không có dữ liệu nào được ghi cho đến khi bạn nhấn **Finish Setup**; xem [Lệnh `/setup`](/vi/self-hosting/setup-wizard/#the-setup-command) để biết các bước thực hiện và [Bắt đầu nhanh](/vi/introduction/quickstart/) cho các thao tác trong Discord.
 
-Sử dụng `bun run launch` thay vì `bun run dev` nếu bạn muốn các sidecar tùy chọn (SearXNG, Crawl4AI, TTS/STT cục bộ) được khởi chạy cùng với bot:
+Sử dụng `bun run launch` thay vì `bun run dev` nếu bạn muốn các máy chủ cục bộ tùy chọn (SearXNG, Crawl4AI, TTS/STT cục bộ) được khởi chạy cùng với bot:
 
 ```sh
 bun run launch --searxng --crawl4ai

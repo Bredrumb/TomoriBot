@@ -17,7 +17,12 @@ export interface MenuItem<TId extends string = string> {
 }
 
 export function isNonInteractiveMode(): boolean {
-  return process.argv.includes("--yes") || process.argv.includes("--defaults") || process.env.CI === "true" || !process.stdin.isTTY;
+  return (
+    process.argv.includes("--yes") ||
+    process.argv.includes("--defaults") ||
+    process.env.CI === "true" ||
+    !process.stdin.isTTY
+  );
 }
 
 function formatQuestion(question: string, defaultValue?: string): string {
@@ -162,10 +167,7 @@ export async function askSecret(question: string, options: SecretPromptOptions =
     return value;
   }
 
-  const canMask =
-    process.stdin.isTTY &&
-    process.stdout.isTTY &&
-    typeof process.stdin.setRawMode === "function";
+  const canMask = process.stdin.isTTY && process.stdout.isTTY && typeof process.stdin.setRawMode === "function";
 
   if (!canMask) {
     if (options.allowVisibleFallback === false) {
@@ -215,10 +217,7 @@ export async function confirm(question: string, defaultValue = false): Promise<b
   }
 }
 
-export async function selectMenu<TId extends string>(
-  title: string,
-  items: MenuItem<TId>[],
-): Promise<MenuItem<TId>> {
+export async function selectMenu<TId extends string>(title: string, items: MenuItem<TId>[]): Promise<MenuItem<TId>> {
   const enabledItems = items.filter((item) => !item.disabled);
   if (enabledItems.length === 0) {
     throw new Error(`No selectable options for menu: ${title}`);

@@ -1,6 +1,6 @@
 ---
 title: "CosyVoice 3"
-aiGenerated: false
+aiGenerated: true
 ---
 
 CosyVoice 3 is the current generation of Alibaba/QwenAudio's multilingual CosyVoice TTS project. TomoriBot wraps the official runtime in `servers/tts/cosyvoice3/` and exposes the same `POST /synthesize` interface used by the other local speech endpoints.
@@ -23,7 +23,7 @@ The official CosyVoice 3 examples currently include one important Japanese cavea
 
 ## How TomoriBot maps requests
 
-The wrapper accepts the normal clone-sidecar fields:
+The wrapper accepts the normal `tts-clone` fields:
 
 - `text`
 - `ref_audio`
@@ -59,7 +59,7 @@ restrained excitement`.
 CosyVoice 3 supports bidirectional streaming upstream. The project documents both text-in streaming and audio-out streaming, with first-audio latency as low as roughly 150 ms in its optimized setup.
 
 TomoriBot's current custom TTS interface expects one complete audio response for a Discord voice
-message, so this sidecar returns a complete WAV and defaults upstream inference to
+message, so this server returns a complete WAV and defaults upstream inference to
 `stream=False`. Set `COSYVOICE3_UPSTREAM_STREAM=1` only when testing the upstream generator; it
 does not reduce TomoriBot's response latency until a streaming voice transport exists.
 
@@ -89,7 +89,7 @@ bash servers/tts/cosyvoice3/install-cosyvoice3.sh
 servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
 ```
 
-Or start the configured sidecar and TomoriBot together:
+Or start the configured server and TomoriBot together:
 
 ```bash
 bun run launch --cosyvoice3
@@ -102,12 +102,10 @@ The installer:
 3. installs the current upstream CosyVoice requirements plus the small wrapper dependency set; and
 4. downloads `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` at Hugging Face revision `29e01c4e8d000f4bcd70751be16fa94bf3d85a18` into `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/`.
 
-Normal reruns keep those exact revisions. To deliberately update an installation, set
-`COSYVOICE3_UPDATE=1` and provide explicit `COSYVOICE3_RUNTIME_COMMIT` and/or
-`COSYVOICE3_MODEL_REVISION` overrides. The installer refuses to silently switch a checkout or
-model that does not match the recorded revision.
+Reruns keep those exact revisions; moving to newer ones means changing both pins in the installer.
+The installer refuses to reinstall over a runtime checkout that has local changes.
 
-The upstream requirements currently use PyTorch 2.3.1 with the CUDA 12.1 package index, CUDA 12 ONNX Runtime packages on Linux, and TensorRT 10.13 packages on Linux. If you are using hardware that requires a newer PyTorch CUDA build, install a compatible PyTorch build in the sidecar venv after the upstream requirements and test it with your driver.
+The upstream requirements currently use PyTorch 2.3.1 with the CUDA 12.1 package index, CUDA 12 ONNX Runtime packages on Linux, and TensorRT 10.13 packages on Linux. If you are using hardware that requires a newer PyTorch CUDA build, install a compatible PyTorch build in the server's venv after the upstream requirements and test it with your driver.
 
 ### Windows PowerShell
 
@@ -144,7 +142,7 @@ For normal zero-shot cloning:
 3. Enter the matching transcript when possible. CosyVoice 3 uses it for the transcript-backed zero-shot path, and it is tokenized as a prompt prefix, so it should describe the audio that is actually used: the first 30 seconds of the clip.
 4. Open `/config` under Persona > Voice and assign that sample to the persona.
 
-CosyVoice's speech tokenizer works on a 30-second prompt window, and upstream enforces it by failing: its own web UI tells you to keep the prompt audio under 30 seconds, and the tokenizer asserts that limit instead of shortening the audio itself. The sidecar trims instead, so a longer clip is cut to its first 30 seconds and synthesis proceeds. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` sets that window, and the trim is logged on the sidecar's console.
+CosyVoice's speech tokenizer works on a 30-second prompt window, and upstream enforces it by failing: its own web UI tells you to keep the prompt audio under 30 seconds, and the tokenizer asserts that limit instead of shortening the audio itself. The local server trims instead, so a longer clip is cut to its first 30 seconds and synthesis proceeds, and the trim is logged on the server's console.
 
 The trim reads the clip in place, which means the speaker embedding is taken from the same opening 30 seconds as the prompt speech tokens. That pairing is what CosyVoice conditions on, so a long reference loses nothing that the engine would have used. The practical effect is that only the opening 30 seconds of a long upload condition the voice, while the rest is uploaded and stored without being used.
 
@@ -164,21 +162,10 @@ before synthesis rather than being misrepresented as whole-utterance instruction
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` | Official CosyVoice checkout |
 | `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | Local checkpoint directory |
-| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` | Hugging Face model downloaded by setup |
-| `COSYVOICE3_RUNTIME_COMMIT` | reviewed commit above | CosyVoice checkout revision |
-| `COSYVOICE3_MODEL_REVISION` | model revision above | Hugging Face snapshot revision |
-| `COSYVOICE3_UPDATE` | `0` | Permit an explicit installer revision refresh |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Wrapper bind address |
-| `COSYVOICE3_PORT` | `8017` | Wrapper port, falling back to `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_PORT` | unset | Backward-compatible shared port fallback |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Maximum synthesis text length |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Wrapper bind address; see [Network access](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | Wrapper port |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Enable CosyVoice's internal streaming generator |
-| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Maximum decoded reference-audio size |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Prompt window for the speech tokenizer; a longer reference is trimmed to its first N seconds |
-| `COSYVOICE3_BEARER_TOKEN` | unset | Optional bearer token for `/synthesize` |
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Permit non-loopback binding; review remote exposure and use a bearer token |
 | `COSYVOICE3_SPEED` | `1.0` | Global numeric speed multiplier passed to upstream inference |
 | `COSYVOICE3_DEFAULT_INSTRUCT` | empty | Optional instruction added when a request does not provide one |
 | `COSYVOICE3_FP16` | `0` | Ask the official runtime to use its fp16 mode |
@@ -203,7 +190,7 @@ The current official loader always reads a file named `llm.pt`. To experiment wi
 
 CosyVoice 3 also supports optional vLLM and TensorRT paths. Upstream currently documents vLLM 0.11.x+ using the V1 engine and vLLM 0.9.0 as the legacy path. These runtimes have additional version and hardware constraints, so TomoriBot does not install or enable them by default.
 
-Use them only after the ordinary PyTorch sidecar is working. For a Discord voice-message workload, avoiding extra runtime complexity is usually more useful than optimizing an already-small 0.5B model.
+Use them only after the ordinary PyTorch server is working. For a Discord voice-message workload, avoiding extra runtime complexity is usually more useful than optimizing an already-small 0.5B model.
 
 ## License
 

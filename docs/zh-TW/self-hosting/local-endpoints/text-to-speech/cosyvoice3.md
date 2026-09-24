@@ -22,7 +22,7 @@ TomoriBot 預設使用官方 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 檢查�
 
 ## TomoriBot 如何對應請求
 
-包裝接受一般的複製 sidecar 欄位：
+包裝接受一般的 `tts-clone` 欄位：
 
 - `text`
 - `ref_audio`
@@ -55,7 +55,7 @@ restrained excitement`。
 
 CosyVoice 3 上游支援雙向串流。專案同時記載文字輸入串流與音訊輸出串流，在其最佳化設定中首次音訊延遲可低至約 150 ms。
 
-TomoriBot 目前的自訂 TTS 介面預期一則 Discord 語音訊息對應一個完整的音訊回應，所以這個 sidecar 會回傳完整的 WAV，並將上游推論預設為
+TomoriBot 目前的自訂 TTS 介面預期一則 Discord 語音訊息對應一個完整的音訊回應，所以這個伺服器會回傳完整的 WAV，並將上游推論預設為
 `stream=False`。只有在你測試上游生成器時才設定 `COSYVOICE3_UPSTREAM_STREAM=1`；在串流語音傳輸存在之前，它不會降低 TomoriBot 的回應延遲。
 
 ## 硬體
@@ -84,7 +84,7 @@ bash servers/tts/cosyvoice3/install-cosyvoice3.sh
 servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
 ```
 
-或者把設定好的 sidecar 與 TomoriBot 一起啟動：
+或者把設定好的伺服器與 TomoriBot 一起啟動：
 
 ```bash
 bun run launch --cosyvoice3
@@ -97,11 +97,9 @@ bun run launch --cosyvoice3
 3. 安裝目前的上游 CosyVoice 需求，加上小型包裝的相依套件集；以及
 4. 將 `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 在 Hugging Face 修訂版 `29e01c4e8d000f4bcd70751be16fa94bf3d85a18` 下載到 `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/`。
 
-正常的重新執行會維持那些確切的修訂版。若要刻意更新安裝，請設定
-`COSYVOICE3_UPDATE=1`，並提供明確的 `COSYVOICE3_RUNTIME_COMMIT` 或
-`COSYVOICE3_MODEL_REVISION` 覆寫。安裝程式會拒絕悄悄切換與記錄修訂版不符的簽出或模型。
+重新執行會維持那些確切的修訂版；若要改用較新的修訂版，請同時修改安裝程式中的兩個釘住值。如果執行環境的簽出有本機變更，安裝程式會拒絕在其上重新安裝。
 
-上游需求目前使用 PyTorch 2.3.1 搭配 CUDA 12.1 套件索引、Linux 上的 CUDA 12 ONNX Runtime 套件，以及 Linux 上的 TensorRT 10.13 套件。如果你使用的硬體需要更新的 PyTorch CUDA 建置，請在上游需求之後，於 sidecar 的 venv 中安裝相容的 PyTorch 建置，並用你的驅動程式測試。
+上游需求目前使用 PyTorch 2.3.1 搭配 CUDA 12.1 套件索引、Linux 上的 CUDA 12 ONNX Runtime 套件，以及 Linux 上的 TensorRT 10.13 套件。如果你使用的硬體需要更新的 PyTorch CUDA 建置，請在上游需求之後，於伺服器的 venv 中安裝相容的 PyTorch 建置，並用你的驅動程式測試。
 
 ### Windows PowerShell
 
@@ -138,7 +136,7 @@ bun run launch --cosyvoice3
 3. 盡可能輸入對應的逐字稿。CosyVoice 3 會用它走有逐字稿的零樣本路徑，而它會以提示前綴的形式被 tokenizer 處理，所以它應該描述實際被使用的音訊：也就是片段最前面的 30 秒。
 4. 開啟 `/config`，在人格 > 語音 底下將該樣本指派給人格。
 
-CosyVoice 的語音 tokenizer 以 30 秒的提示窗運作，而上游是用失敗來強制這一點：上游自己的網頁介面會請你把提示音訊保持在 30 秒以下，而 tokenizer 會斷言這個上限，而不是縮短音訊本身。sidecar 改為截短，所以較長的片段會被截到最前面的 30 秒並繼續合成。`COSYVOICE3_MAX_REF_AUDIO_SECONDS` 設定的就是這個窗，而截短會記錄在 sidecar 的主控台。
+CosyVoice 的語音 tokenizer 以 30 秒的提示窗運作，而上游是用失敗來強制這一點：上游自己的網頁介面會請你把提示音訊保持在 30 秒以下，而 tokenizer 會斷言這個上限，而不是縮短音訊本身。本機伺服器改為截短，所以較長的片段會被截到最前面的 30 秒並繼續合成，截短會記錄在伺服器的主控台。
 
 截短會就地讀取片段，這表示說話者嵌入取自與提示語音 token 相同的最前面 30 秒。CosyVoice 用來做條件設定的就是這個配對，所以較長的參考音訊不會失去引擎原本會用到的任何內容。實際影響是，較長的上傳只有最前面的 30 秒會影響聲音，其餘部分會被上傳並儲存，卻不會被使用。
 
@@ -157,21 +155,10 @@ CosyVoice 的語音 tokenizer 以 30 秒的提示窗運作，而上游是用失�
 
 | 變數 | 預設 | 用途 |
 |---|---|---|
-| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` | 官方 CosyVoice 簽出 |
 | `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | 本機檢查點目錄 |
-| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` | 設定時下載的 Hugging Face 模型 |
-| `COSYVOICE3_RUNTIME_COMMIT` | 上面已審閱的提交 | CosyVoice 簽出修訂版 |
-| `COSYVOICE3_MODEL_REVISION` | 上面的模型修訂版 | Hugging Face 快照修訂版 |
-| `COSYVOICE3_UPDATE` | `0` | 允許安裝程式明確刷新修訂版 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | 包裝綁定位址 |
-| `COSYVOICE3_PORT` | `8017` | 包裝連接埠，退回使用 `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_PORT` | 未設定 | 向後相容的共用連接埠備援 |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 合成文字長度上限 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 包裝綁定位址; 請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | 包裝連接埠 |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | 啟用 CosyVoice 內部的串流生成器 |
-| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | 解碼後參考音訊大小上限 |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | 語音 tokenizer 的提示窗；較長的參考音訊會截到最前面的 N 秒 |
-| `COSYVOICE3_BEARER_TOKEN` | 未設定 | `/synthesize` 的選用 bearer token |
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | 允許非回送位址綁定；請檢視遠端曝露風險並使用 bearer token |
 | `COSYVOICE3_SPEED` | `1.0` | 傳給上游推論的全局數值速度倍率 |
 | `COSYVOICE3_DEFAULT_INSTRUCT` | 空 | 請求未提供指示時加入的選用指示 |
 | `COSYVOICE3_FP16` | `0` | 要求官方執行環境使用它的 fp16 模式 |
@@ -196,7 +183,7 @@ CosyVoice 的語音 tokenizer 以 30 秒的提示窗運作，而上游是用失�
 
 CosyVoice 3 也支援選用的 vLLM 與 TensorRT 路徑。上游目前記載使用 V1 引擎的 vLLM 0.11.x 以上，以及作為舊路徑的 vLLM 0.9.0。這些執行環境有額外的版本與硬體限制，所以 TomoriBot 預設不安裝也不啟用它們。
 
-請先讓普通的 PyTorch sidecar 可以運作，再使用它們。對 Discord 語音訊息的工作負載而言，避免額外的執行環境複雜度，通常比最佳化一個本來就小的 0.5B 模型更有用。
+請先讓普通的 PyTorch 伺服器可以運作，再使用它們。對 Discord 語音訊息的工作負載而言，避免額外的執行環境複雜度，通常比最佳化一個本來就小的 0.5B 模型更有用。
 
 ## 授權條款
 

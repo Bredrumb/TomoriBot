@@ -142,6 +142,7 @@ export default {
       structured: `Structured output`,
       "strict-roles": `Strict role alternation`,
       prefix: `Prefix completion`,
+      "verbatim-tools": `Verbatim tool calling`,
     },
     model_flag_descriptions: {
       tools: `Tick if this model can call tools. Untick and I will stop offering them.`,
@@ -149,9 +150,10 @@ export default {
       structured: `Tick if this model can return strict JSON when asked.`,
       "strict-roles": `Merge same-role turns and open on a user turn. Tick for a proxy fronting Claude.`,
       prefix: `Let me hand back a half-written turn to continue. Tick for a proxy fronting DeepSeek or Z.ai.`,
+      "verbatim-tools": `Tick for endpoints without native tool calling. Prompts and parses calls from raw text output.`,
     },
     model_compat_label: `Chat Completion Compatibilities`,
-    model_compat_description: `Message-shape fixes for a strict backend. Leave both off unless requests get rejected.`,
+    model_compat_description: `Message-shape and protocol workarounds for a strict backend. Leave off unless needed.`,
     model_image_supports_label: `Image Capabilities`,
     model_image_supports_description: `Declare only image features this model and endpoint actually support.`,
     model_image_supports: {

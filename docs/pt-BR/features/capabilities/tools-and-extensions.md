@@ -82,7 +82,7 @@ O modelo vê uma única ferramenta unificada `web_search(query, category)`. Por 
 
 - O **Brave** é executado primeiro quando uma chave de API do Brave está configurada (defina-a com `/providers`); ele adiciona pesquisa de imagens, vídeos e notícias. ⚠️ Defina um limite de uso de $5 no painel do Brave para evitar cobranças inesperadas.
 - O **DuckDuckGo** é o padrão quando nenhuma chave está configurada, alternando em cascata para o **IAsk** em caso de limites de taxa ou resultados vazios.
-- O **SearXNG** e o **Crawl4AI** são sidecars opcionais de hospedagem própria que desbloqueiam mais categorias e buscas de páginas renderizadas pelo navegador; veja [Hospedagem Própria](/pt-BR/self-hosting/).
+- O **SearXNG** e o **Crawl4AI** são servidores opcionais de hospedagem própria que desbloqueiam mais categorias e buscas de páginas renderizadas pelo navegador; veja [Hospedagem Própria](/pt-BR/self-hosting/).
 
 Para ler uma página específica, ela usa `fetch_url`. Ele não está disponível no NovelAI.
 

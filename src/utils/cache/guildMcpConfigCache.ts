@@ -19,11 +19,7 @@ export type GuildMcpConfigReadResult =
   | { status: "stale"; configs: GuildMcpServerRow[] }
   | { status: "unavailable"; configs: [] };
 
-/**
- * Cache TTL in milliseconds. Default: 5 minutes.
- * Configurable via GUILD_MCP_CONFIG_CACHE_TTL_MINUTES env var.
- */
-const CACHE_TTL_MS = (Number(process.env.GUILD_MCP_CONFIG_CACHE_TTL_MINUTES) || 5) * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export interface GuildMcpConfigCacheStats {
   hits: number;

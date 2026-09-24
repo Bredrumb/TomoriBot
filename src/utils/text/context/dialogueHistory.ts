@@ -89,7 +89,7 @@ export async function appendDialogueHistoryContext(params: {
       activeNotes.push({ text: globalNoteText, targetIndex: Math.max(0, totalMessages - depth), emitted: false });
     }
   }
-  if (shouldInjectVerbatimToolCallingNudge(params.tomoriConfig, params.tomoriState)) {
+  if (shouldInjectVerbatimToolCallingNudge(params.tomoriState)) {
     activeNotes.push({
       text: VERBATIM_TOOL_CALLING_NUDGE,
       targetIndex: Math.max(0, totalMessages - VERBATIM_TOOL_CALLING_CONTEXT_DEPTH),

@@ -14,7 +14,7 @@ describe("import dropped-field reporting", () => {
         spec: "chara_card_v3",
         spec_version: "3.0",
         data: {
-          name: "Sparrow",
+          name: "Mirri",
           description: "An archivist.",
           first_mes: "Hello.",
           extensions: { depth_prompt: { prompt: "Keep replies short.", depth: 4 } },
@@ -29,7 +29,7 @@ describe("import dropped-field reporting", () => {
   it("reports nickname, which the converter replaces with name", () => {
     const report = describeUnmappedCardFields({
       spec: "chara_card_v3",
-      data: { name: "Sparrow", nickname: "The Archivist" },
+      data: { name: "Mirri", nickname: "The Archivist" },
     });
     expect(report).toBe("nickname");
   });
@@ -37,7 +37,7 @@ describe("import dropped-field reporting", () => {
   it("reports group_only_greetings, which has no group-chat destination", () => {
     const report = describeUnmappedCardFields({
       spec: "chara_card_v3",
-      data: { name: "Sparrow", group_only_greetings: ["A group hello."] },
+      data: { name: "Mirri", group_only_greetings: ["A group hello."] },
     });
     expect(report).toBe("group_only_greetings");
   });
@@ -46,7 +46,7 @@ describe("import dropped-field reporting", () => {
     expect(
       describeUnmappedCardFields({
         spec: "chara_card_v3",
-        data: { name: "Sparrow", nickname: "   ", group_only_greetings: [] },
+        data: { name: "Mirri", nickname: "   ", group_only_greetings: [] },
       }),
     ).toBeNull();
   });
@@ -55,7 +55,7 @@ describe("import dropped-field reporting", () => {
     const report = describeUnmappedCardFields({
       spec: "chara_card_v3",
       data: {
-        name: "Sparrow",
+        name: "Mirri",
         character_book: {
           entries: [
             { keys: ["a"], content: "kept", enabled: true, insertion_order: 1 },
@@ -75,7 +75,7 @@ describe("import dropped-field reporting", () => {
     expect(
       describeUnmappedCardFields({
         spec: "chara_card_v3",
-        data: { name: "Sparrow", extensions: { depth_prompt: { prompt: "", depth: 4, role: "system" } } },
+        data: { name: "Mirri", extensions: { depth_prompt: { prompt: "", depth: 4, role: "system" } } },
       }),
     ).toBeNull();
   });
@@ -86,7 +86,7 @@ describe("import dropped-field reporting", () => {
     expect(
       describeUnmappedCardFields({
         spec: "chara_card_v3",
-        data: { name: "Sparrow", extensions: { depth_prompt: { prompt: "Keep replies short.", depth: 4 } } },
+        data: { name: "Mirri", extensions: { depth_prompt: { prompt: "Keep replies short.", depth: 4 } } },
       }),
     ).toBeNull();
   });
@@ -95,7 +95,7 @@ describe("import dropped-field reporting", () => {
     const report = describeUnmappedCardFields({
       spec: "chara_card_v3",
       data: {
-        name: "Sparrow",
+        name: "Mirri",
         nickname: "The Archivist",
         group_only_greetings: ["A group hello."],
         character_book: { entries: [{ keys: ["b"], content: "skipped", enabled: false, insertion_order: 1 }] },
@@ -107,12 +107,12 @@ describe("import dropped-field reporting", () => {
   });
 
   it("reads a root-level v2 card as well as a nested v3 one", () => {
-    expect(describeUnmappedCardFields({ name: "Sparrow", nickname: "The Archivist" })).toBe("nickname");
+    expect(describeUnmappedCardFields({ name: "Mirri", nickname: "The Archivist" })).toBe("nickname");
   });
 
   it("returns null for values that are not plain objects", () => {
     expect(describeUnmappedCardFields(null)).toBeNull();
-    expect(describeUnmappedCardFields("Sparrow")).toBeNull();
+    expect(describeUnmappedCardFields("Mirri")).toBeNull();
     expect(describeUnmappedCardFields([{ nickname: "x" }])).toBeNull();
   });
 

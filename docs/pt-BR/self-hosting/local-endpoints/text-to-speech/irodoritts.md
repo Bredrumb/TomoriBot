@@ -40,7 +40,7 @@ O URL do endpoint padrão é `http://127.0.0.1:8013`.
 
 O modelo padrão é `Aratako/Irodori-TTS-v4.1-Small`. Repositórios compatíveis do Hugging Face, ajustes finos da comunidade (como `phasefield-audio/Irodori-TTS-v4.1-Anime`), ou arquivos de checkpoint locais podem ser configurados via variáveis de ambiente.
 
-Ao iniciar o sidecar (diretamente com Python ou via `bun run launch --irodoritts`), o servidor lê automaticamente o `.env` da raiz do repositório (ou um `.env` local em `servers/tts/irodoritts/`) e registra o ID do modelo ativo na inicialização.
+Ao iniciar o servidor (diretamente com Python ou via `bun run launch --irodoritts`), ele lê automaticamente o `.env` da raiz do repositório (ou um `.env` local em `servers/tts/irodoritts/`) e registra o ID do modelo ativo na inicialização.
 
 ### Via `.env` (Persistente)
 
@@ -122,6 +122,60 @@ O TomoriBot envia esse prompt como `instruct`; o wrapper do Irodori o mapeia par
 
 O TomoriBot remove a sintaxe de emoji personalizado do Discord antes de enviar o texto para o TTS. Com `script_markup: emoji`, os emojis Unicode são preservados para o condicionamento de texto do Irodori.
 
+### Controles de estilo por emoji
+
+O IrodoriTTS aceita anotações de emoji no texto de entrada para influenciar efeitos sonoros, modos de fala e expressões emocionais. Com o `Script Markup Style` do TomoriBot definido como `Emoji`, esses emojis Unicode são preservados e enviados ao Irodori.
+
+| Emoji | Significado / emoção / estilo |
+| --- | --- |
+| 👂 | Sussurro, sons próximos ao ouvido |
+| 😮‍💨 | Respiração, suspiro, respiração durante o sono |
+| ⏸️ | Pausa, silêncio |
+| 🤭 | Risadinha, riso contido |
+| 🥵 | Respiração ofegante, gemido, grunhido |
+| 📢 | Eco, reverberação |
+| 😏 | Provocando, de forma brincalhona e doce / persuadindo |
+| 🥺 | Voz trêmula, timidamente / com incerteza |
+| 🌬️ | Falta de ar, respiração pesada |
+| 😮 | Arfar / inspirar de repente |
+| 👅 | Som de lamber, mastigar, sons molhados |
+| 💋 | Estalo dos lábios / ruído labial |
+| 🫶 | Suavemente, com ternura |
+| 😭 | Soluço, choro, tristeza |
+| 😱 | Grito, berro, guincho |
+| 😪 | Com sono, de forma lânguida |
+| 😴 | Falar dormindo, roncar |
+| ⏩ | Fala rápida, em rajada, com pressa |
+| 📞 | Como por telefone ou alto-falante |
+| 🐢 | Devagar |
+| 🥤 | Som de deglutição |
+| 🤧 | Tosse, fungada, espirro, pigarro |
+| 😒 | Estalo da língua |
+| 😰 | Em pânico, agitado, nervoso, gaguejando |
+| 😆 | Com alegria, feliz |
+| 💥 | Com força / impulso |
+| 😠 | Com raiva, descontente, emburrado |
+| 😲 | Surpresa, admiração / exclamação |
+| 🥱 | Bocejo |
+| 😖 | Com dor, em agonia |
+| 😟 | Ansioso, preocupado |
+| 🫣 | Timidamente, envergonhado |
+| 🙄 | Exasperado, revirando os olhos |
+| 😊 | Alegremente, contente |
+| 😎 | Com confiança, orgulhosamente |
+| 👌 | Sinal de concordância / som de assentimento |
+| 🙏 | Suplicando, implorando |
+| 🥴 | Embriagado |
+| 🎵 | Cantarolando |
+| 🤐 | Abafado (boca coberta) |
+| 😌 | Aliviado, satisfeito |
+| 🤔 | Voz de dúvida / questionamento |
+| 💪 | Com esforço, com força |
+| 👃 | Som de farejar / cheirar |
+| 📖 | Narração, monólogo |
+
+Repetir o mesmo emoji pode intensificar o efeito. O controle por emoji não é perfeitamente consistente, então trate esses símbolos como dicas de estilo, não como uma garantia do resultado. Consulte as [anotações oficiais de emoji do IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) para ver a lista original e futuras atualizações.
+
 ## Inferência mais rápida com Sway Sampling
 
 O padrão continua sendo a amostragem linear de 40 passos do Irodori, de maior qualidade. Para menor latência, tente o Sway Sampling com menos passos:
@@ -138,7 +192,7 @@ Esta é uma compensação entre qualidade e velocidade de inferência, portanto,
 
 O instalador anterior do TomoriBot clonava e corrigia o `pyproject.toml` do Irodori, instalava o `dacvae` manualmente e fixava um commit antigo do Irodori da era v2. Essas soluções alternativas eram necessárias para o layout de pacote upstream mais antigo, mas não são mais apropriadas para o Irodori atual.
 
-O sidecar agora tem seu próprio `pyproject.toml` e segue a configuração de backend `uv` do upstream. O Irodori e o `dacvae` permanecem fixados em commits conhecidos para instalações reproduzíveis, mas o TomoriBot não modifica mais o código-fonte upstream durante a instalação.
+O servidor agora tem seu próprio `pyproject.toml` e segue a configuração de backend `uv` do upstream. O Irodori e o `dacvae` permanecem fixados em commits conhecidos para instalações reproduzíveis, mas o TomoriBot não modifica mais o código-fonte upstream durante a instalação.
 
 ## Variáveis de ambiente
 
@@ -146,8 +200,8 @@ O sidecar agora tem seu próprio `pyproject.toml` e segue a configuração de ba
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repositório de modelo do Hugging Face ou fonte suportada repositório/subpasta |
 | `IRODORI_TTS_CHECKPOINT` | não definido | Checkpoint opcional local `.pt` ou `.safetensors`; substitui o modelo do Hugging Face |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de vinculação do servidor |
-| `TOMORI_TTS_PORT` | `8013` | Porta do servidor |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de vinculação do servidor; consulte [Acesso de rede](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Porta do servidor |
 | `IRODORI_MODEL_DEVICE` | `auto` | Dispositivo do modelo (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
 | `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo do codec |
 | `IRODORI_MODEL_PRECISION` | `bf16` em CUDA, caso contrário `fp32` | Precisão do modelo |
@@ -161,4 +215,3 @@ O sidecar agora tem seu próprio `pyproject.toml` e segue a configuração de ba
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Escala de orientação de legenda / VoiceDesign |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Escala de orientação de falante de referência |
 | `IRODORI_MAX_REF_SECONDS` | padrão do checkpoint | Limite opcional da duração do áudio de referência |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Limite de tamanho de texto por solicitação |

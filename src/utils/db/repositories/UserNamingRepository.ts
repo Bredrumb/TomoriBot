@@ -272,7 +272,7 @@ class UserNamingRepository {
   /**
    * Narrows the accounts worth rebuilding to those whose stored nickname appears
    * somewhere inside the requested name, which is the only part of a composed label
-   * ("Master Sparrow") that survives an unknown affix. Verification belongs to the
+   * ("Master Mirri") that survives an unknown affix. Verification belongs to the
    * caller: the join rules for affixes live in `formatUserName`, and reimplementing
    * them here would let the two drift apart silently.
    */

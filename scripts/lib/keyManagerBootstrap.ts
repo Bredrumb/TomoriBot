@@ -10,7 +10,7 @@
  * `keyManager` anywhere in the same program re-introduces the hoisting problem for that graph.
  */
 export async function loadInitializedKeyManager(): Promise<
-  (typeof import("../../src/utils/security/keyManager"))["keyManager"]
+  typeof import("../../src/utils/security/keyManager")["keyManager"]
 > {
   const { config } = await import("dotenv");
   config();

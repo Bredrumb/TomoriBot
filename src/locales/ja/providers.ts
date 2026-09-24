@@ -74,6 +74,7 @@ export default {
       flush_limit_description: `この応答はメッセージの最大長制限に達したため停止されました。必要に応じて \`/respond\` を使用して手動で応答を続けることができます。`,
       inactivity_timeout_title: `🟡️ 応答がタイムアウトしました`,
       inactivity_timeout_description: `AIプロバイダーからの応答が停止し、接続がタイムアウトしました。プロバイダーが過負荷状態にあるか、問題が発生している可能性があります。もう一度お試しください。`,
+      first_token_timeout_description: `AIプロバイダーはリクエストを受け付けましたが、応答を開始しなかったため、接続がタイムアウトしました。プロバイダー側のキューが混み合っている可能性があります。もう一度お試しいただくか、より空いているモデルに切り替えてください。`,
     },
     // createTipText() が読み取り専用モーダル内にダッシュ付き箇条書きとして表示する、
     // 個別のヒント項目文字列。各キーが1つの箇条書きで、呼び出し側が条件付き項目も含めて
@@ -93,6 +94,9 @@ export default {
       choose_supported_model_personal: `サポートされているモデルIDを \`/personal config\` またはカスタムエンドポイント設定で選択してください。`,
       verify_api_key: `このサーバーのAPIキーをもう一度確認してから、再試行してください。`,
       verify_api_key_personal: `\`/personal providers\` で個人APIキーをもう一度確認してから、再試行してください。`,
+      verify_api_key_expiry: `NVIDIA NIMのキーには有効期限があり、期限切れのキーは入力ミスのキーと同じエラーでNVIDIAに拒否されます。[build.nvidia.com](https://build.nvidia.com) で有効期限を確認し、期限が切れていれば新しいキーを生成してください。`,
+      nvidia_register_free_model: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
+      nvidia_register_free_model_personal: `NVIDIAはホスト型モデルを頻繁に終了します。[NVIDIAの無料エンドポイント](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)から現在提供されているモデルを選び、モデルID（例：\`deepseek-ai/deepseek-v4.1-flash\`）をコピーして、\`/personal providers\` > NVIDIA NIM > **+ 新しいテキストモデルを追加** から追加してください。`,
       google_credential_type: `OAuthトークンまたはサービスアカウントの認証情報が使われているようです。\`google\` プロバイダーには [Google AI Studio](https://aistudio.google.com/apikey) の通常のAPIキーが必要です。Google Cloudの認証情報を使う場合は \`vertex\` プロバイダーを選んでください。`,
       openrouter_privacy_settings: `[OpenRouter プライバシー設定](https://openrouter.ai/settings/privacy)で「Data Policy」を調整してこのモデルを許可するか、別のモデルを選択してください。`,
       openrouter_fund_account: `1日1000回までの無料モデルリクエストのロックを解除するには、OpenRouterアカウントに少なくとも10クレジットを追加してください。`,
@@ -185,6 +189,8 @@ export default {
       unknown_default_message: `予期しないエラーが発生しました`,
     },
     nvidia: {
+      "401_default_message": `NVIDIAはこのキーを認識できませんでした。\`nvapi-\` プレフィックスを含め、全体が正しくコピーされているか確認してください。`,
+      "403_default_message": `NVIDIAがこのキーを拒否しました。入力ミス、期限切れ、またはアカウントに推論のアクセス権がない可能性があります。`,
       "404_default_message": `要求されたNVIDIA NIMモデルが見つかりませんでした。NVIDIAによって非推奨にされた可能性があります。`,
       "500_default_message": `このモデルを提供している NVIDIA のバックエンドで障害が発生しました。多くの場合は一時的なものなので、少し待ってからもう一度お試しください。以下の詳細は NVIDIA 自身の報告であり、これが正確な情報です：リクエストパラメータが記載されている場合は、推測せずにその設定を見直してください。`,
       // NVIDIA 自身のテキストが除去可能なリクエストパラメータを名指しした場合のみ、500_default_message の代わりに表示されます。

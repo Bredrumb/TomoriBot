@@ -559,7 +559,6 @@ const defaultDependencies: ConfigRouteDependencies = {
       deliberateToolTriggers: state.config.deliberate_tool_triggers ?? {},
       sendLimit: rawChatConfig?.send_message_limit ?? state.config.send_message_limit ?? 0,
       selfDebugEnabled: rawChatConfig?.self_debug_enabled ?? state.config.self_debug_enabled ?? false,
-      workarounds: { verbatim_tool_calling_enabled: state.config.verbatim_tool_calling_enabled ?? false },
     };
     const notices: ConfigBehaviorNoticesView = {
       hiddenNoticeKeys: (state.config.tool_notice_hidden_keys ?? []).filter(isToolNoticeKey),

@@ -25,23 +25,12 @@ import { log } from "@/utils/misc/logger";
 import type { SQL } from "bun";
 import type { IRepository } from "./IRepository";
 
-/**
- * Reads a non-negative integer env var, falling back to a default when unset or
- * malformed. Mirrors the readIntEnv pattern used by the preset avatar reconciler.
- */
-function readIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 /** Master kill switch: set false to disable all stat recording (write side). */
 const STAT_TRACKING_ENABLED = (process.env.STAT_TRACKING_ENABLED?.trim().toLowerCase() ?? "true") !== "false";
 /** Interval between automatic buffer flushes. */
-const FLUSH_INTERVAL_MS = readIntEnv("STAT_FLUSH_INTERVAL_MS", 5000);
+const FLUSH_INTERVAL_MS = 5000;
 /** Buffer entry count that forces an immediate flush before the next interval. */
-const FLUSH_MAX_BUFFER = readIntEnv("STAT_FLUSH_MAX_BUFFER", 1000);
+const FLUSH_MAX_BUFFER = 1000;
 
 /** Delimiter for buffer keys: unit separator, never present in metric data. */
 const KEY_DELIMITER = "\x1f";

@@ -141,6 +141,7 @@ export default {
       structured: `结构化输出`,
       "strict-roles": `严格角色交替`,
       prefix: `前缀补全`,
+      "verbatim-tools": `逐字工具调用`,
     },
     model_flag_descriptions: {
       tools: `如果这个模型可以调用工具就勾上。取消勾选我就不再提供工具。`,
@@ -148,9 +149,10 @@ export default {
       structured: `如果要求时这个模型可以返回严格的 JSON 就勾上。`,
       "strict-roles": `合并同角色轮次，并以用户轮次开头。代理转发 Claude 时勾上。`,
       prefix: `允许我把写了一半的回复交回去继续写。代理转发 DeepSeek 或 Z.ai 时勾上。`,
+      "verbatim-tools": `适用于不支持原生工具调用的端点。直接从原始文本输出解析调用。`,
     },
     model_compat_label: `聊天补全兼容性`,
-    model_compat_description: `针对严格后端的消息结构修正。除非请求被拒绝，两项都保持关闭。`,
+    model_compat_description: `针对严格后端的消息结构与协议调整。非必要请保持关闭。`,
     model_image_supports_label: `图像能力`,
     model_image_supports_description: `只勾选这个模型和端点确实支持的图像功能。`,
     model_image_supports: {

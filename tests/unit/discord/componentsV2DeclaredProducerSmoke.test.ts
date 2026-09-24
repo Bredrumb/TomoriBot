@@ -38,7 +38,7 @@ describe("Declared Components V2 producer smoke fixtures", () => {
 
   it("validates generated image and video payload builders", () => {
     assertValidPayload(
-      buildGeneratedImageComponentsV2Payload("generated.png", 1_250, "en-US", ["Sparrow"]),
+      buildGeneratedImageComponentsV2Payload("generated.png", 1_250, "en-US", ["Mirri"]),
       "generatedImageMessage.buildGeneratedImageComponentsV2Payload",
     );
     assertValidPayload(

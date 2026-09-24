@@ -167,9 +167,7 @@ export async function auditTextPreview(): Promise<TextPreviewAuditResult> {
   // Flatten every audited locale so each string carries its dotted key.
   //    Locales load concurrently because this runs inside `bun run vl`'s shared unit
   //    lane, so avoidable serial I/O lands directly on the critical path.
-  const loaded = await Promise.all(
-    AUDITED_LOCALES.map(async (locale) => [locale, await loadLocale(locale)] as const),
-  );
+  const loaded = await Promise.all(AUDITED_LOCALES.map(async (locale) => [locale, await loadLocale(locale)] as const));
   const perLocale = new Map<string, Map<string, string>>();
   for (const [locale, tree] of loaded) {
     const flat = new Map<string, string>();

@@ -73,16 +73,13 @@ import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/p
 const MAX_DOCUMENT_NAME_LENGTH = 64;
 
 /** Number of messages per LLM extraction window */
-const HISTORY_EXTRACTION_WINDOW_SIZE = Number.parseInt(process.env.HISTORY_EXTRACTION_WINDOW_SIZE || "40", 10);
+const HISTORY_EXTRACTION_WINDOW_SIZE = 40;
 
 /** Number of previous restatements to pass as dedup context between windows */
 const DEDUP_CONTEXT_COUNT = 3;
 
 /** Max retrieved document chunks injected into the in-character system prompt per window */
-const HISTORY_INCHARACTER_RAG_MAX_RESULTS = (() => {
-  const parsed = Number.parseInt(process.env.HISTORY_INCHARACTER_RAG_MAX_RESULTS || "16", 10);
-  return Number.isFinite(parsed) ? Math.max(1, parsed) : 16;
-})();
+const HISTORY_INCHARACTER_RAG_MAX_RESULTS = 16;
 
 /** Minimum similarity score for chunks pulled into in-character context (loose; we're seeding awareness) */
 const HISTORY_INCHARACTER_RAG_MIN_SIMILARITY = 0.3;

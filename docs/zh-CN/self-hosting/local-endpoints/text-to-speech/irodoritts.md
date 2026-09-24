@@ -39,7 +39,7 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 默认模型是 `Aratako/Irodori-TTS-v4.1-Small`。兼容的 Hugging Face 仓库、社区微调版本（例如 `phasefield-audio/Irodori-TTS-v4.1-Anime`），以及本地检查点文件，都可以通过环境变量来配置。
 
-启动边车服务时（直接用 Python，或通过 `bun run launch --irodoritts`），服务器会自动读取仓库根目录的 `.env`（或 `servers/tts/irodoritts/` 里的本地 `.env`），并在启动时把当前生效的模型 ID 记录到日志里。
+启动服务器时（直接用 Python，或通过 `bun run launch --irodoritts`），服务器会自动读取仓库根目录的 `.env`（或 `servers/tts/irodoritts/` 里的本地 `.env`），并在启动时把当前生效的模型 ID 记录到日志里。
 
 ### 通过 `.env`（持久生效）
 
@@ -120,6 +120,60 @@ TomoriBot 会把这段提示词作为 `instruct` 发送；Irodori 封装程序�
 
 TomoriBot 在把文本发送给语音合成之前，会去掉 Discord 自定义 emoji 写法。当 `script_markup: emoji` 时，Unicode emoji 会被保留，用于 Irodori 的文本条件。
 
+### Emoji 风格控制
+
+IrodoriTTS 支持在输入文本中插入 emoji 标注，以影响音效、说话方式和情绪表达。当 TomoriBot 的 `Script Markup Style` 设置为 `Emoji` 时，这些 Unicode emoji 会被保留并发送给 Irodori。
+
+| Emoji | 含义 / 情绪 / 风格 |
+| --- | --- |
+| 👂 | 耳语、贴近耳边的声音 |
+| 😮‍💨 | 呼吸、叹气、睡眠时的呼吸声 |
+| ⏸️ | 停顿、静默 |
+| 🤭 | 轻笑、咯咯笑、憋笑 |
+| 🥵 | 喘息、呻吟、低哼 |
+| 📢 | 回声、混响 |
+| 😏 | 调侃、撒娇 / 哄劝 |
+| 🥺 | 声音颤抖、胆怯 / 不确定 |
+| 🌬️ | 气短、粗重呼吸、呼吸声 |
+| 😮 | 倒吸一口气 |
+| 👅 | 舔舐声、咀嚼声、水声 |
+| 💋 | 咂嘴声 / 唇音 |
+| 🫶 | 温柔、柔和 |
+| 😭 | 呜咽、哭泣、悲伤 |
+| 😱 | 尖叫、喊叫、惊叫 |
+| 😪 | 困倦、慵懒 |
+| 😴 | 梦话、打鼾 |
+| ⏩ | 快速说话、连珠炮式、匆忙 |
+| 📞 | 电话或扬声器传出的声音 |
+| 🐢 | 缓慢 |
+| 🥤 | 吞咽声 |
+| 🤧 | 咳嗽、吸鼻子、打喷嚏、清嗓 |
+| 😒 | 咂舌 |
+| 😰 | 慌张、激动、紧张、结巴 |
+| 😆 | 开心、喜悦 |
+| 💥 | 有冲劲、用力 |
+| 😠 | 生气、不满、闹别扭 |
+| 😲 | 惊讶、赞叹 / 感叹 |
+| 🥱 | 打哈欠 |
+| 😖 | 痛苦、难受 |
+| 😟 | 焦虑、担心 |
+| 🫣 | 害羞、腼腆 |
+| 🙄 | 无奈、翻白眼 |
+| 😊 | 愉快、高兴 |
+| 😎 | 自信、得意 |
+| 👌 | 附和、表示同意的声音 |
+| 🙏 | 恳求、哀求 |
+| 🥴 | 醉酒状态 |
+| 🎵 | 哼唱 |
+| 🤐 | 被捂住嘴时的闷声 |
+| 😌 | 放松、满足 |
+| 🤔 | 疑问语气、思索 |
+| 💪 | 用力、强劲 |
+| 👃 | 嗅闻声 |
+| 📖 | 旁白、独白 |
+
+重复同一个 emoji 可以增强效果。Emoji 控制并不完全一致，因此更适合作为风格提示，而不是保证得到某种输出。完整的上游列表和后续更新请参阅 [IrodoriTTS 官方 emoji 标注](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md)。
+
 ## 用 Sway Sampling 加快推理
 
 默认仍然是 Irodori 质量更高的 40 步线性采样。想要更低延迟，可以试试步数更少的 Sway Sampling：
@@ -136,7 +190,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 之前的 TomoriBot 安装程序会克隆并给 Irodori 的 `pyproject.toml` 打补丁、手动安装 `dacvae`，还固定了一个 v2 时代的旧 Irodori 提交。对那些较老的上游包布局来说，这些兼容处理是必要的，但对当前的 Irodori 已经不再合适。
 
-边车服务现在有自己的 `pyproject.toml`，并遵循上游的 `uv` 后端设置。Irodori 与 `dacvae` 在那里仍然固定到已知提交，以保证安装可复现，但 TomoriBot 在安装过程中不再修改上游源代码。
+服务器现在有自己的 `pyproject.toml`，并遵循上游的 `uv` 后端设置。Irodori 与 `dacvae` 在那里仍然固定到已知提交，以保证安装可复现，但 TomoriBot 在安装过程中不再修改上游源代码。
 
 ## 环境变量
 
@@ -144,8 +198,8 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Hugging Face 模型仓库，或受支持的仓库/子文件夹来源 |
 | `IRODORI_TTS_CHECKPOINT` | 未设置 | 可选的本地 `.pt` 或 `.safetensors` 检查点；会覆盖 Hugging Face 模型 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | 服务器绑定地址 |
-| `TOMORI_TTS_PORT` | `8013` | 服务器端口 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 服务器绑定地址; 参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | 服务器端口 |
 | `IRODORI_MODEL_DEVICE` | `auto` | 模型设备（`auto`、`cuda`、`cpu`、`mps`、`xpu`） |
 | `IRODORI_CODEC_DEVICE` | `auto` | 编解码器设备 |
 | `IRODORI_MODEL_PRECISION` | CUDA 上为 `bf16`，其他情况为 `fp32` | 模型精度 |
@@ -159,4 +213,3 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | 描述文本 / VoiceDesign 引导强度 |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | 参考说话者引导强度 |
 | `IRODORI_MAX_REF_SECONDS` | 检查点默认值 | 参考音频时长的可选上限 |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | 每个请求的文本长度上限 |

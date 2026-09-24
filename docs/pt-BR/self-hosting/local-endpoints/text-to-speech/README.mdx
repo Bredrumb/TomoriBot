@@ -39,6 +39,15 @@ O TomoriBot trata a fala como uma capacidade de endpoint personalizado. Motores 
 3. Selecione o endpoint salvo e use seu menu suspenso de modelo para adicionar seu modelo de Speech, Voice Source Mode e Script Markup.
 4. Abra `/config` > Models > Switch Models e selecione o modelo de Speech registrado.
 
+## Acesso de rede
+<!-- anchor: network-access -->
+
+Todo servidor local de TTS faz bind em `127.0.0.1` por padrão, então apenas um bot na mesma máquina consegue alcançá-lo. Quando o TomoriBot roda no Docker ou em outra máquina, defina `TOMORI_TTS_HOST=0.0.0.0` para o servidor e registre o endpoint com o endereço do host, por exemplo `http://host.docker.internal:8015`.
+
+Os servidores não têm autenticação: qualquer pessoa que alcance a porta pode executar síntese na sua GPU. Faça bind fora do loopback apenas em uma rede confiável e coloque um proxy reverso com autenticação na frente de qualquer servidor exposto além dela.
+
+Cada servidor lê sua própria variável de porta (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), então vários podem rodar ao mesmo tempo a partir de um único `.env`. O `bun run launch` repassa o `.env` aos servidores que inicia; um servidor iniciado manualmente lê apenas o ambiente do seu shell.
+
 ## Fluxo de Voz de Persona
 
 Para motores de clone, adicione e atribua uma amostra de voz por persona:
@@ -48,7 +57,7 @@ Para motores de clone, adicione e atribua uma amostra de voz por persona:
 3. Forneça uma transcrição correspondente quando o motor se beneficiar disso. O Fish S2 Pro encaminha a transcrição de referência armazenada para a solicitação de clonagem, e o VoxCPM2 a usa para uma Ultimate Cloning de maior fidelidade.
 4. Abra `/config` em Persona > Voice, depois escolha a persona e a amostra de voz.
 
-O limite de upload de 130 segundos é do TomoriBot, não de qualquer motor. Cada sidecar aplica seu próprio limite de áudio de referência quando o clipe é enviado, e esses limites diferem o suficiente para que um clipe adequado a um motor seja rejeitado ou ignorado em parte por outro. Consulte o guia do motor antes de enviar um clipe longo.
+O limite de upload de 130 segundos é do TomoriBot, não de qualquer motor. Cada motor aplica seu próprio limite de áudio de referência quando o clipe é enviado, e esses limites diferem o suficiente para que um clipe adequado a um motor seja rejeitado ou ignorado em parte por outro. Consulte o guia do motor antes de enviar um clipe longo.
 
 O limite de tamanho do upload e o teto de duração são independentes, e a verificação de tamanho acontece primeiro. O WAV sem compressão custa cerca de 10 MB por minuto em estéreo 44.1 kHz, então uma exportação de 130 segundos feita na DAW pode chegar a cerca de 22 MB e ser recusada por ser grande demais, enquanto uma exportação comprimida do mesmo clipe cabe facilmente. `SPEECH_SAMPLE_MAX_MB` eleva esse limite de tamanho (10 MB por padrão). Para um clipe de referência longo, exporte como FLAC, MP3 ou OGG em vez de WAV: o TomoriBot converte qualquer formato aceito para WAV mono a 22.05 kHz antes de armazená-lo, então o upload comprimido não custa nada em qualidade.
 
@@ -64,4 +73,4 @@ O CosyVoice 3 também usa **Plain** Script Markup. Ele mapeia referências apoia
 
 ## Comparação de Motores
 
-Para benchmarks empíricos de latência lado a lado, reprodução de amostras de áudio e uma matriz detalhada de recursos comparando todos os sidecars suportados, consulte **[Comparação de Motores TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/comparison/)**.
+Para benchmarks empíricos de latência lado a lado, reprodução de amostras de áudio e uma matriz detalhada de recursos comparando todos os motores suportados, consulte **[Comparação de Motores TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/comparison/)**.

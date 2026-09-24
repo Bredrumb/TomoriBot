@@ -49,6 +49,7 @@ export interface MockModuleSurfaceViolation {
   /** 1-based source line. */
   line: number;
   /** 1-based source column. */
+  column: number;
   moduleSpecifier: string;
   kind: MockModuleSurfaceViolationKind;
   message: string;
@@ -272,7 +273,12 @@ export async function auditMockModuleSurfaces(
       if (ts.isCallExpression(node)) {
         const receiver = moduleCallReceiver(node);
         const firstArgument = node.arguments[0] ? unwrapExpression(node.arguments[0]) : null;
-        if (receiver && firstArgument && ts.isStringLiteralLike(firstArgument) && HIGH_RISK_MOCK_MODULES.has(firstArgument.text)) {
+        if (
+          receiver &&
+          firstArgument &&
+          ts.isStringLiteralLike(firstArgument) &&
+          HIGH_RISK_MOCK_MODULES.has(firstArgument.text)
+        ) {
           guardedMocks++;
         }
       }
@@ -282,8 +288,7 @@ export async function auditMockModuleSurfaces(
   }
 
   violations.sort(
-    (a, b) =>
-      a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column || a.kind.localeCompare(b.kind),
+    (a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column || a.kind.localeCompare(b.kind),
   );
   return { violations, scannedFiles: candidates.length, guardedMocks };
 }

@@ -11,8 +11,11 @@ One provider generation pass, wrapped with a rolling AbortController SDK timeout
 Call `provider.streamToDiscord(...)` with the current accumulated context and
 tool history, and race the result against a configurable SDK timeout. The
 timeout is *rolling*: it resets on every `onStreamProgress` heartbeat, so a
-long but active stream is not killed; only a truly stalled one is. Returns a
-`StreamResult` describing how the generation ended.
+long but active stream is not killed; only a truly stalled one is. The wait for
+the first heartbeat gets a longer budget than the gaps after it, because hosted
+queues (NVIDIA NIM's free tier measured 266 s) can hold a healthy request for
+minutes before the first token. Returns a `StreamResult` describing how the
+generation ended.
 
 ## Input
 
@@ -34,7 +37,7 @@ long but active stream is not killed; only a truly stalled one is. Returns a
 |---|---|
 | `"completed"` | Provider finished; `accumulatedText` carries the final response |
 | `"error"` | Provider threw a non-timeout error |
-| `"timeout"` | SDK call exceeded `STREAM_SDK_CALL_TIMEOUT_MS` with no heartbeat |
+| `"timeout"` | No first heartbeat within the first-token budget, or no later heartbeat within `STREAM_SDK_CALL_TIMEOUT_MS` |
 | `"empty_response"` | Provider returned with no text and no tool call |
 | `"stopped_by_user"` | User triggered `/kill` while streaming |
 | `"follow_up_interrupt"` | A follow-up message arrived; caller should yield |
@@ -45,10 +48,20 @@ long but active stream is not killed; only a truly stalled one is. Returns a
 - **Sets `params.context.streamingContext.abortSignal`** to a fresh
   `AbortController.signal` before each call. Provider adapters consume this
   signal to abort in-flight HTTP requests when the timeout fires.
-- **Sets `params.context.streamingContext.onStreamProgress`** to the
-  `refreshTimeout` callback before the call and resets it to `undefined` in the
+- **Sets `params.context.streamingContext.onStreamProgress`** to a callback that
+  re-arms the timeout at the idle budget, and resets it to `undefined` in the
   `finally` block. Provider adapters call this on each token delivery to prevent
   the timeout from firing on active streams.
+- **Runs the race under `runUnderWatchdog`**, which exempts the channel lock
+  from stale release until the race settles, and heartbeats the lock via
+  `touchChannelLock` on every re-arm. Before this, a turn older than
+  `CHANNEL_LOCK_TIMEOUT_MS` was killed by the next message anyone sent in the
+  channel, even while it was actively streaming. Tool execution runs under the
+  same wrapper for the same reason.
+- **Records a `stream_sdk_timeout` metric** when the watchdog fires, with the
+  provider, the phase (`first_token` or `idle`), and the kill reason. The timeout
+  embed uses first-token copy when no heartbeat ever arrived, and adds a
+  free-model tip on NVIDIA.
 - **Registers `killStream` on the channel lock entry** via
   `setChannelStreamKill(channelId, killStream)`. `killStream` is a unified
   callback that both calls `abortController.abort()` *and* rejects the
@@ -92,6 +105,13 @@ After this stage runs:
 | Env var | Default | Minimum | Purpose |
 |---|---|---|---|
 | `STREAM_SDK_CALL_TIMEOUT_MS` | `120000` (2 min) | `10000` (10 s) | Idle timeout for one provider call; resets on each heartbeat |
+
+The first-token budget is `DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS`
+(300 s), or `STREAM_SDK_CALL_TIMEOUT_MS` when that is set higher. Adapters that
+run their own stall detection must honor it before the first token too, or the
+shortest detector caps the wait for all of them: the OpenRouter adapter applies
+it until its first content chunk, since its queue sends only
+`: OPENROUTER PROCESSING` keepalives, which never count as content.
 
 ## Related docs
 

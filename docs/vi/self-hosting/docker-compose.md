@@ -62,9 +62,9 @@ docker compose up      # bot + cơ sở dữ liệu
 các phần phụ thuộc. Khi bot trực tuyến, hãy chạy `/setup` trong Discord để thêm khóa nhà
 cung cấp AI của bạn: xem [Bắt đầu nhanh](/vi/introduction/quickstart/) cho các thao tác trong Discord.
 
-## 4. Các sidecar tùy chọn (Compose profile)
+## 4. Các máy chủ cục bộ tùy chọn (Compose profile)
 
-Các sidecar có thể kích hoạt tùy chọn qua các profile của Compose, giúp bạn chỉ chạy những gì mình cần:
+Các máy chủ cục bộ có thể kích hoạt tùy chọn qua các profile của Compose, giúp bạn chỉ chạy những gì mình cần:
 
 ```sh
 # SearXNG (tìm kiếm web riêng tư) + Crawl4AI (thu thập nội dung được render bởi trình duyệt)
@@ -72,7 +72,7 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
 Xem [SearXNG](/vi/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/vi/self-hosting/local-endpoints/setup-crawl4ai/),
-và [Giám sát cục bộ](/vi/self-hosting/local-monitoring/) để biết chi tiết về từng sidecar.
+và [Giám sát cục bộ](/vi/self-hosting/local-monitoring/) để biết chi tiết về từng máy chủ.
 
 ## Bảo trì, cập nhật và sao lưu
 

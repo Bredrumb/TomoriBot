@@ -1,8 +1,4 @@
-import {
-  PROTOCOL_KEYS,
-  buildProtocolLookup,
-  type ProtocolKind,
-} from "@/utils/discord/embedProtocol";
+import { PROTOCOL_KEYS, buildProtocolLookup } from "@/utils/discord/embedProtocol";
 import {
   getLocaleSubKeys,
   getSupportedLocales,
@@ -95,7 +91,8 @@ export async function validateProtocolMarkers(targetLocales?: string[]): Promise
   };
 }
 
-async function main(): Promise<void> {
+/** Prints the protocol marker section of `check-locales` and returns whether it passed. */
+export async function reportProtocolMarkers(): Promise<boolean> {
   log.info("Validating embed protocol keys and markers across authored locales…");
   const summary = await validateProtocolMarkers();
 
@@ -108,18 +105,10 @@ async function main(): Promise<void> {
     }
     console.log(`\n${"=".repeat(80)}`);
     log.error(`Protocol marker check FAILED: ${summary.issues.length} issue(s)`);
-    process.exit(1);
-  } else {
-    log.success(
-      `Protocol marker check PASSED: ${summary.totalProtocolKeys} keys verified across [${summary.localesChecked.join(", ")}] with 0 collisions or mismatches`,
-    );
-    process.exit(0);
+    return false;
   }
-}
-
-if (import.meta.main) {
-  main().catch((err) => {
-    console.error("Fatal error during protocol marker check:", err);
-    process.exit(1);
-  });
+  log.success(
+    `Protocol marker check PASSED: ${summary.totalProtocolKeys} keys verified across [${summary.localesChecked.join(", ")}] with 0 collisions or mismatches`,
+  );
+  return true;
 }

@@ -164,7 +164,7 @@ export interface ParsedArguments {
 }
 
 export function parseArguments(argv: string[]): ParsedArguments {
-  const baseFlagIndex = argv.findIndex((arg) => arg === "--base");
+  const baseFlagIndex = argv.indexOf("--base");
   const baseEquals = argv.find((arg) => arg.startsWith("--base="));
   const base = baseEquals
     ? baseEquals.slice("--base=".length)
@@ -537,12 +537,7 @@ function valuesDiffer(before: string | undefined, after: string | undefined): bo
   return normalizeLocaleValue(before) !== normalizeLocaleValue(after);
 }
 
-function statusForKey(
-  key: string,
-  base: LocaleSnapshot,
-  head: LocaleSnapshot,
-  locale: string,
-): LocaleKeyStatus {
+function statusForKey(key: string, base: LocaleSnapshot, head: LocaleSnapshot, locale: string): LocaleKeyStatus {
   const before = base.values.get(namespacedKey(locale, key));
   const after = head.values.get(namespacedKey(locale, key));
 
@@ -562,11 +557,7 @@ function translationLocales(locales: string[]): string[] {
  * Counts changed values per locale across the whole tree, so the summary reports the branch rather
  * than only the keys that `en-US` happened to move.
  */
-function collectLocaleEditCounts(
-  base: LocaleSnapshot,
-  head: LocaleSnapshot,
-  locales: string[],
-): Map<string, number> {
+function collectLocaleEditCounts(base: LocaleSnapshot, head: LocaleSnapshot, locales: string[]): Map<string, number> {
   const keys = new Set([...base.values.keys(), ...head.values.keys()]);
   const counts = new Map<string, number>();
 
@@ -833,18 +824,16 @@ export async function resolveBaseRef(git: GitRunner, repoRoot: string): Promise<
     try {
       await git(["rev-parse", "--verify", "--quiet", `${candidate}^{commit}`], repoRoot);
       return candidate;
-    } catch {
-      continue;
-    }
+    } catch {}
   }
 
   const shallow = await isShallowCheckout(git, repoRoot);
   throw new MissingBaseRefError(
     shallow
       ? "This is a shallow checkout with no base ref to compare against. Fetch the history first " +
-        "(`git fetch --unshallow`), or pass a ref this clone already holds with `--base <ref>`."
+          "(`git fetch --unshallow`), or pass a ref this clone already holds with `--base <ref>`."
       : "No base ref found. Fetch the branch this work targets (`git fetch origin <branch>`), then " +
-        "pass it with `--base <ref>` or leave the default resolution to find it.",
+          "pass it with `--base <ref>` or leave the default resolution to find it.",
   );
 }
 
@@ -891,9 +880,9 @@ async function assertUsableBase(git: GitRunner, repoRoot: string, base: string):
     throw new MissingBaseRefError(
       shallow
         ? `Base ref "${base}" is not present in this checkout. A shallow clone has no history to ` +
-          `compare, so fetch it (\`git fetch origin ${fetchTarget} --depth=100\`) or run \`git fetch --unshallow\`.`
+            `compare, so fetch it (\`git fetch origin ${fetchTarget} --depth=100\`) or run \`git fetch --unshallow\`.`
         : `Base ref "${base}" is not present in this checkout. Fetch it (\`git fetch origin ${fetchTarget}\`) ` +
-          `or pass a ref this clone holds.`,
+            `or pass a ref this clone holds.`,
     );
   }
 

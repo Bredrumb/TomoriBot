@@ -68,7 +68,7 @@ class SplitTextForSpeechTests(unittest.TestCase):
     self.assertEqual(split_text_for_speech(text, min_chars=10), [text])
 
   def test_sentence_final_symbols_stay_with_previous_chunk(self) -> None:
-    for suffix in ("♪", "♡", "😊", "……", "〜"):
+    for suffix in ("♪", "♡", "……", "〜"):
       with self.subTest(suffix=suffix):
         first = ("あ" * 20) + "。" + suffix
         second = ("い" * 20) + "次です。"
@@ -77,13 +77,15 @@ class SplitTextForSpeechTests(unittest.TestCase):
           [first, second],
         )
 
-  def test_emoji_variation_sequence_stays_with_previous_chunk(self) -> None:
-    first = ("あ" * 20) + "。❤️"
-    second = ("い" * 20) + "次です。"
-    self.assertEqual(
-      split_text_for_speech(first + second, min_chars=10),
-      [first, second],
-    )
+  def test_emoji_after_boundary_opens_next_chunk(self) -> None:
+    for emoji in ("😊", "❤️", "👂🏻"):
+      with self.subTest(emoji=emoji):
+        first = ("あ" * 20) + "。"
+        second = emoji + ("い" * 20) + "次です。"
+        self.assertEqual(
+          split_text_for_speech(first + second, min_chars=10),
+          [first, second],
+        )
 
   def test_short_tail_is_merged_into_previous_chunk(self) -> None:
     first = ("あ" * 82) + "。"

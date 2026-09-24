@@ -19,15 +19,10 @@ import { isBridgeUserId } from "../utils/bridges";
 import { sendMatrixReminderMention } from "../utils/bridges/matrix";
 import type { GenerationTurnResult, QueuedMessageDiscardReason } from "@/utils/chat/types";
 import { runWithErrorContext } from "@/utils/misc/errorContextStore";
-import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
 
-const REMINDER_DELIVERY_RETRY_DELAY_MS = parseIntegerEnvFlag(
-  process.env.REMINDER_DELIVERY_RETRY_DELAY_MS,
-  60_000,
-  1_000,
-);
+const REMINDER_DELIVERY_RETRY_DELAY_MS = 60_000;
 
 /**
  * Cap on unacknowledged delivery retries before a reminder is surfaced via the plain
@@ -35,7 +30,7 @@ const REMINDER_DELIVERY_RETRY_DELAY_MS = parseIntegerEnvFlag(
  * becomes an unbounded loop: the retry's own output changes the channel's last message,
  * which is the very input the next retry reads back.
  */
-const REMINDER_DELIVERY_MAX_RETRIES = parseIntegerEnvFlag(process.env.REMINDER_DELIVERY_MAX_RETRIES, 5, 1);
+const REMINDER_DELIVERY_MAX_RETRIES = 5;
 
 function getNextRecurringReminderTime(
   reminderTime: Date,

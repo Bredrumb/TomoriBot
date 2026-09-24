@@ -26,11 +26,8 @@ interface UserCacheEntry {
  */
 const cache = new Map<string, UserCacheEntry>();
 
-/**
- * Cache duration: configurable via env, default 30 minutes.
- * Longer TTL for user data since it changes even less frequently than server config.
- */
-const USER_CACHE_DURATION_MS = (Number(process.env.USER_CACHE_TTL_MINUTES) || 30) * 60 * 1000;
+// Longer TTL than server config caches since user data changes even less frequently.
+const USER_CACHE_DURATION_MS = 30 * 60 * 1000;
 
 /**
  * Cache statistics for monitoring

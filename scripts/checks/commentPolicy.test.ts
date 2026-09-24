@@ -54,7 +54,7 @@ describe("comment policy", () => {
   });
 
   it("finds prose dashes in locale strings, which ship to users as prose", () => {
-    const source = ['export const ja = {', '  note: `ご注意 — TXTファイル`,', "};", ""].join("\n");
+    const source = ["export const ja = {", "  note: `ご注意 — TXTファイル`,", "};", ""].join("\n");
 
     const findings = inspectCommentPolicySource(source, "src/locales/ja/commands/tool.ts");
 
@@ -62,14 +62,9 @@ describe("comment policy", () => {
   });
 
   it("reports the offending line inside a multi-line locale template", () => {
-    const source = [
-      "export const en = {",
-      "  help: `First line",
-      "Second line",
-      "tiny — 0.5 GB`,",
-      "};",
-      "",
-    ].join("\n");
+    const source = ["export const en = {", "  help: `First line", "Second line", "tiny — 0.5 GB`,", "};", ""].join(
+      "\n",
+    );
 
     const findings = inspectCommentPolicySource(source, "src/locales/en-US/commands/help.ts");
 
@@ -238,9 +233,7 @@ describe("comment policy", () => {
 
     expect(inspectCommentPolicySource(source)).toEqual([]);
     expect(
-      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }).map(
-        (finding) => finding.rule,
-      ),
+      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }).map((finding) => finding.rule),
     ).toEqual(["obvious-narration"]);
   });
 
@@ -253,9 +246,7 @@ describe("comment policy", () => {
       "",
     ].join("\n");
 
-    expect(
-      inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true }),
-    ).toEqual([]);
+    expect(inspectCommentPolicySource(source, "fixture.ts", { auditNarration: true })).toEqual([]);
   });
 
   it("keeps JSDoc tags that add what the type cannot express", () => {
@@ -322,11 +313,7 @@ describe("audit block signals", () => {
   ].join("\n");
 
   const source = (comment: string): string =>
-    [
-      ...comment.split("\n").map((line) => (line ? `// ${line}` : "//")),
-      "const value = true;",
-      "",
-    ].join("\n");
+    [...comment.split("\n").map((line) => (line ? `// ${line}` : "//")), "const value = true;", ""].join("\n");
 
   it("reports one finding per duplicate across two files", () => {
     const shared = "First line of the shared note.\nSecond line of the shared note.";
@@ -701,9 +688,7 @@ describe("audit command line", () => {
    */
   const withoutAuditOverrides = (extra: Record<string, string> = {}): Record<string, string> => {
     const env = Object.fromEntries(
-      Object.entries(Bun.env).filter(
-        ([key, value]) => !key.startsWith("COMMENT_AUDIT_") && value !== undefined,
-      ),
+      Object.entries(Bun.env).filter(([key, value]) => !key.startsWith("COMMENT_AUDIT_") && value !== undefined),
     ) as Record<string, string>;
     return { ...env, ...extra };
   };
@@ -768,9 +753,9 @@ describe("audit command line", () => {
   it("keeps the documented audit command reviewable", async () => {
     // The plan's review step is `bun run audit-comments`, so that invocation itself has to print
     // the locations. A count-only report would make the command useless for its stated purpose.
-    const packageJson = (await Bun.file(
-      join(import.meta.dir, "..", "..", "package.json"),
-    ).json()) as { scripts?: Record<string, string> };
+    const packageJson = (await Bun.file(join(import.meta.dir, "..", "..", "package.json")).json()) as {
+      scripts?: Record<string, string>;
+    };
     const script = packageJson.scripts?.["audit-comments"] ?? "";
     expect(script).toContain("--verbose");
 
@@ -781,10 +766,7 @@ describe("audit command line", () => {
       stderr: "pipe",
       stdout: "pipe",
     });
-    const [code, stdout] = await Promise.all([
-      process.exited,
-      new Response(process.stdout).text(),
-    ]);
+    const [code, stdout] = await Promise.all([process.exited, new Response(process.stdout).text()]);
 
     expect(stdout).toMatch(/^WARN .*\[duplicate-comment\]/m);
     expect(stdout).toMatch(/^at /m);

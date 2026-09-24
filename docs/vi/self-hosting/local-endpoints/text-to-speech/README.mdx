@@ -38,6 +38,15 @@ TomoriBot xem giọng nói là một tính năng endpoint tùy chỉnh. Các eng
 3. Chọn endpoint đã lưu và sử dụng menu thả xuống model để thêm model Speech, Voice Source Mode, và Script Markup của nó.
 4. Mở `/config` > Models > Switch Models và chọn model Speech đã đăng ký.
 
+## Truy cập mạng
+<!-- anchor: network-access -->
+
+Mọi máy chủ cục bộ TTS đều mặc định liên kết với `127.0.0.1`, nên chỉ bot trên cùng máy mới truy cập được. Khi TomoriBot chạy trong Docker hoặc trên một máy khác, hãy đặt `TOMORI_TTS_HOST=0.0.0.0` cho máy chủ và đăng ký endpoint bằng địa chỉ của máy chủ vật lý, ví dụ `http://host.docker.internal:8015`.
+
+Các máy chủ không có xác thực: bất kỳ ai truy cập được cổng đều có thể chạy tổng hợp trên GPU của bạn. Chỉ liên kết ra ngoài loopback trong mạng bạn tin cậy, và đặt một reverse proxy có xác thực phía trước bất kỳ máy chủ nào bạn mở ra ngoài mạng đó.
+
+Mỗi máy chủ đọc biến cổng riêng (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`, `IRODORI_TTS_PORT`, `FISH_S2_PORT`, `VOXCPM2_PORT`, `COSYVOICE3_PORT`, `MOSS_TTS_PORT`), nên nhiều máy chủ có thể chạy cùng lúc từ một tệp `.env`. `bun run launch` truyền `.env` cho các máy chủ mà nó khởi động; máy chủ khởi động thủ công chỉ đọc môi trường của shell.
+
 ## Quy trình giọng nói persona
 
 Đối với các engine sao chép, hãy thêm và gán một mẫu giọng nói cho mỗi persona:
@@ -47,7 +56,7 @@ TomoriBot xem giọng nói là một tính năng endpoint tùy chỉnh. Các eng
 3. Cung cấp bản phiên âm khớp khi engine hưởng lợi từ điều đó. Fish S2 Pro chuyển tiếp bản phiên âm tham chiếu đã lưu vào yêu cầu sao chép, và VoxCPM2 sử dụng bản phiên âm đó cho Ultimate Cloning có độ trung thực cao hơn.
 4. Mở `/config` dưới phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
-Giới hạn tải lên 130 giây là của TomoriBot, không phải của engine nào. Mỗi sidecar áp dụng giới hạn âm thanh tham chiếu riêng khi clip được gửi đi, và các giới hạn đó khác nhau đủ nhiều để một clip phù hợp với engine này có thể bị engine khác từ chối hoặc chỉ dùng một phần. Hãy xem hướng dẫn của engine trước khi tải lên một clip dài.
+Giới hạn tải lên 130 giây là của TomoriBot, không phải của engine nào. Mỗi engine áp dụng giới hạn âm thanh tham chiếu riêng khi clip được gửi đi, và các giới hạn đó khác nhau đủ nhiều để một clip phù hợp với engine này có thể bị engine khác từ chối hoặc chỉ dùng một phần. Hãy xem hướng dẫn của engine trước khi tải lên một clip dài.
 
 Giới hạn kích thước tải lên và giới hạn thời lượng là độc lập với nhau, và việc kiểm tra kích thước chạy trước. WAV không nén ở dạng stereo 44.1 kHz tốn khoảng 10 MB mỗi phút, nên một clip 130 giây xuất từ DAW có thể vào khoảng 22 MB và bị từ chối vì quá lớn, trong khi bản xuất nén của cùng clip đó lại vừa vặn dễ dàng. `SPEECH_SAMPLE_MAX_MB` nâng giới hạn kích thước đó (mặc định là 10 MB). Với một clip tham chiếu dài, hãy xuất dưới dạng FLAC, MP3 hoặc OGG thay vì WAV: TomoriBot chuyển đổi mọi định dạng được chấp nhận sang WAV đơn kênh ở 22.05 kHz trước khi lưu, nên bản tải lên nén không tốn gì về chất lượng.
 
@@ -63,4 +72,4 @@ CosyVoice 3 cũng sử dụng Script Markup **Plain**. Model này ánh xạ các
 
 ## So sánh engine
 
-Để xem các benchmark độ trễ thực nghiệm đối chiếu cạnh nhau, nghe phát mẫu âm thanh và ma trận tính năng chi tiết so sánh tất cả các sidecar được hỗ trợ, hãy xem **[So sánh các engine TTS](/vi/self-hosting/local-endpoints/text-to-speech/comparison/)**.
+Để xem các benchmark độ trễ thực nghiệm đối chiếu cạnh nhau, nghe phát mẫu âm thanh và ma trận tính năng chi tiết so sánh tất cả các engine được hỗ trợ, hãy xem **[So sánh các engine TTS](/vi/self-hosting/local-endpoints/text-to-speech/comparison/)**.

@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Adding a Setup Module"
 sidebar:
   label: "Adding a Setup Module"
@@ -18,8 +18,8 @@ integration launcher. Good candidates include:
 - checking/installing small local helper packages
 - printing guided fallback commands when automation cannot finish safely
 
-Do not add heavyweight sidecars, local voice servers, monitoring stacks, or external
-service bridges to the setup wizard. Keep those in their dedicated docs and launch
+Do not add heavyweight local servers (TTS, search, browser rendering), monitoring stacks, or
+external service bridges to the setup wizard. Keep those in their dedicated docs and launch
 flows.
 
 ## Contract

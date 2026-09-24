@@ -27,14 +27,14 @@ describe("convertMentions — identityMacroMode", () => {
       "{user_formatted}, {{user_term}}!",
       CLIENT,
       "guild-1",
-      "Sparrow",
+      "Mirri",
       "Tomori",
       true,
       undefined,
       "resolve",
-      { userFormatted: "Master Sparrow-san", userTerm: "fam" },
+      { userFormatted: "Master Mirri-san", userTerm: "fam" },
     );
-    expect(result).toBe("Master Sparrow-san, fam!");
+    expect(result).toBe("Master Mirri-san, fam!");
   });
 
   it("leaves identity macros literal in preserve mode", async () => {
@@ -70,12 +70,12 @@ describe("convertMentions — identityMacroMode", () => {
       "{user_formatted} / {{user_term}}",
       CLIENT,
       "guild-1",
-      "Sparrow",
+      "Mirri",
       "Tomori",
       true,
       undefined,
       "preserve",
-      { userFormatted: "Master Sparrow", userTerm: "fam" },
+      { userFormatted: "Master Mirri", userTerm: "fam" },
     );
     expect(result).toBe("{user_formatted} / {{user_term}}");
   });
@@ -105,7 +105,6 @@ function makeConfig(): AssembledServerConfig {
     personal_memories_enabled: true,
     uncensor_unicode_space_enabled: false,
     uncensor_sanitize_enabled: false,
-    verbatim_tool_calling_enabled: false,
   } as AssembledServerConfig;
 }
 
@@ -202,9 +201,9 @@ describe("appendDialogueHistoryContext — identity macros in message bodies", (
   it("uses a proven author persona lineage for real historical mentions", async () => {
     const message = { ...personaMessage("Hello <@123456789012345678>"), authorPersonaLineageId: 50 };
     const text = await buildHistoryText(message, {
-      historyPersonaMentionLabels: new Map([["50:123456789012345678", "Master Sparrow"]]),
+      historyPersonaMentionLabels: new Map([["50:123456789012345678", "Master Mirri"]]),
     });
-    expect(text).toBe("Tomori: Hello Master Sparrow");
+    expect(text).toBe("Tomori: Hello Master Mirri");
   });
 });
 

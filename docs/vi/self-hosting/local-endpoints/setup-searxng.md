@@ -1,5 +1,5 @@
 ---
-title: "Thiết lập: SearXNG (Sidecar)"
+title: "Thiết lập: SearXNG"
 sidebar:
   order: 3
 ---
@@ -57,7 +57,7 @@ Sau đó chạy `bun run dev` khi container đã ở trạng thái hoạt độn
 ### C. Không sử dụng SearXNG
 Để trống `SEARXNG_BASE_URL`. Chuỗi tìm kiếm sẽ tự động chuyển sang `Brave → DuckDuckGo → IAsk`.
 
-Khi không có sidecar SearXNG nào được cấu hình, schema `web_search` được tổng hợp sẽ không còn thông báo các danh mục chỉ có trên SearXNG. Các danh mục thông thường (`text`, `image`, `video`, `news`) vẫn xuất hiện khi Brave được cấu hình, và tìm kiếm chỉ dạng văn bản xuất hiện khi chỉ có phương án dự phòng MCP DuckDuckGo/IAsk.
+Khi không có máy chủ SearXNG nào được cấu hình, schema `web_search` được tổng hợp sẽ không còn thông báo các danh mục chỉ có trên SearXNG. Các danh mục thông thường (`text`, `image`, `video`, `news`) vẫn xuất hiện khi Brave được cấu hình, và tìm kiếm chỉ dạng văn bản xuất hiện khi chỉ có phương án dự phòng MCP DuckDuckGo/IAsk.
 
 ---
 
@@ -69,8 +69,6 @@ Kết quả hình ảnh từ SearXNG được xác thực bằng yêu cầu HEAD
 |---|---|---|
 | `SEARXNG_IMAGE_COUNT` | `3` (tối đa 10) | Số lượng hình ảnh hợp lệ được gửi tới Discord. Bị ghi đè bởi đối số `count` của LLM. |
 | `SEARXNG_IMAGE_POOL` | `10` | Tập hợp các URL ứng viên khi LLM không chỉ định `count`. Khi `count` được chỉ định, tập hợp sẽ là `count × 3` (tối đa 30) để xử lý các lỗi chặn hotlink. |
-| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | Các hình ảnh dưới kích thước này sẽ bị từ chối: lọc bỏ hình ảnh giữ chỗ/báo lỗi. Dùng chung với tìm kiếm hình ảnh Brave. |
 | `WEB_SEARCH_TIMEOUT_MS` | không đặt | Thời gian chờ yêu cầu cho từng engine. |
-| `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | Thời gian lưu tạm kết quả kiểm tra tình trạng trước khi kiểm tra lại. |
 
 *(Xem `.env.optional.example` để biết tất cả các tùy chọn cấu hình.)*

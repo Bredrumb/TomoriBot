@@ -72,7 +72,7 @@ Para instalar qualquer um deles manualmente, veja os
 
 ```bash
 bun run dev                          # apenas o bot
-bun run launch --searxng --crawl4ai  # bot + sidecars (veja bun run launch --help)
+bun run launch --searxng --crawl4ai  # bot + servidores locais (veja bun run launch --help)
 ```
 
 Quando o bot estiver online, execute `/setup` no Discord para conectar um provedor de IA. Um espaço de trabalho (workspace) que não contém um provedor próprio não pode responder, a menos que ele rode no modo BYOK de Usuário (User BYOK) onde o provedor pessoal de cada membro responde em seu lugar, então este é o último passo de todos os caminhos de instalação.
@@ -128,9 +128,8 @@ o estado do espaço de trabalho, faz o commit de todo o rascunho em uma única t
 recibo. **Cancel (Cancelar)** descarta o rascunho e expira todo controle no painel.
 
 Um rascunho vive no processo do bot, não no banco de dados, então ele termina apenas quando é cancelado,
-concluído ou quando o processo é reiniciado. No máximo `SETUP_DRAFT_MAX_ENTRIES` (padrão 200) rascunhos são mantidos
-ao mesmo tempo; o mais antigo é descartado no limite. Isso está documentado em `.env.optional.example` sob
-**Setup wizard drafts**. Um controle para uma sessão que não está mais disponível não escreve nada.
+concluído ou quando o processo é reiniciado. No máximo 200 rascunhos são mantidos
+ao mesmo tempo; o mais antigo é descartado no limite. Um controle para uma sessão que não está mais disponível não escreve nada.
 
 ## Atualizando
 

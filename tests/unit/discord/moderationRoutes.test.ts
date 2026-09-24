@@ -1568,7 +1568,7 @@ describe("moderation interaction routes", () => {
             fetch: async (id: string) => {
               fetchedMemberId = id;
               return {
-                user: { id, username: "Sparrow", bot: false },
+                user: { id, username: "Mirri", bot: false },
               };
             },
           },
@@ -1615,7 +1615,7 @@ describe("moderation interaction routes", () => {
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain("Member blacklisted");
-      expect(serialized).toContain("Added Sparrow to the personalization blacklist.");
+      expect(serialized).toContain("Added Mirri to the personalization blacklist.");
     });
 
     it("repaints with invalid_user receipt when default user resolver member fetch fails or outside guild", async () => {

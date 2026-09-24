@@ -1,17 +1,7 @@
-import { afterEach, describe, expect, it } from "bun:test";
-import { formatPromptPreview } from "@/utils/metrics/status/sharedFormatters";
+import { describe, expect, it } from "bun:test";
+import { MAX_PROMPT_PREVIEW, formatPromptPreview } from "@/utils/metrics/status/sharedFormatters";
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
 import { localizer } from "@/utils/text/localizer";
-
-const originalSyspromptPreview = process.env.SYSPROMPT_SHOW_MAX_PREVIEW;
-
-afterEach(() => {
-  if (originalSyspromptPreview === undefined) {
-    delete process.env.SYSPROMPT_SHOW_MAX_PREVIEW;
-  } else {
-    process.env.SYSPROMPT_SHOW_MAX_PREVIEW = originalSyspromptPreview;
-  }
-});
 
 describe("formatPromptPreview", () => {
   const locale = "en-US";
@@ -65,17 +55,21 @@ describe("formatPromptPreview", () => {
     }
   });
 
-  it("respects a lowered operator preview setting", () => {
-    process.env.SYSPROMPT_SHOW_MAX_PREVIEW = "100";
-    const input = "x".repeat(300);
+  it("caps an over-long prompt at the smaller of the preview limit and the embed field budget", () => {
+    const input = "x".repeat(MAX_PROMPT_PREVIEW * 2);
     const preview = formatPromptPreview(input, locale);
 
-    expect(getDiscordTextLength(preview)).toBeLessThanOrEqual(1024);
     expect(preview.includes(clippedNotice)).toBe(true);
+    expect(getDiscordTextLength(preview)).toBeLessThanOrEqual(1024);
 
     const bodyEnd = preview.indexOf("\n```\n");
     expect(bodyEnd).toBeGreaterThan(0);
     const body = preview.slice(4, bodyEnd);
-    expect(getDiscordTextLength(body)).toBe(100);
+    // The fence scaffolding and the clipped notice are what keep the field inside 1,024
+    // codepoints, so the body gives up that room before the preview limit itself binds.
+    // The clipped body is the head of the input plus the truncation ellipsis.
+    expect(body.endsWith("...")).toBe(true);
+    expect(input.startsWith(body.slice(0, -3))).toBe(true);
+    expect(body.length).toBeLessThan(MAX_PROMPT_PREVIEW);
   });
 });

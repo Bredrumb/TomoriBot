@@ -61,7 +61,7 @@ The transformation pipeline runs in this order:
 
 4. **Custom emoji deduplication** (`filterDuplicateCustomEmojis`): strips any custom emoji
    shortcode (`:name:`) from the segment if the same emoji was already used in a recent bot
-   message (lookback window controlled by `EMOJI_UNIQUE_LOOKBACK`, default 5). History is stored
+   message (lookback window of 5 messages, `EMOJI_UNIQUE_LOOKBACK_MESSAGES`). History is stored
    in converted Discord format (`<:name:id>`), so the filter normalises that form to shortcodes
    before comparison.
 
@@ -172,7 +172,7 @@ No return value. The normalized segment (or its table-split parts) is forwarded 
   persona job, tool-loop continuation) reset the alternation and let the new turn's first sprite
   collide with the previous turn's last one. That per-turn reset also stood in for adjacency, which
   is now tested directly, so removing it is what made the suffix appear after unrelated messages.
-  Entries expire after `SPRITE_GROUP_CONTINUITY_TTL_MINUTES` (default 10); past Discord's own
+  Entries expire after `CONTINUITY_TTL_MS` (10 minutes); past Discord's own
   grouping window, continuity no longer matters.
 
   The same module also records the **identity each message was actually delivered under**

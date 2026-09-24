@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Security & Privacy"
 ---
 
@@ -226,7 +226,7 @@ Controls include:
 - Command and message cooldown system (see `docs/en/architecture/subsystems/cooldowns.md`)
 - Production-only message concurrency limits per user/server
 - Daily in-memory quotas for persona/import/document/avatar operations
-- Stream flood guard (`MAX_FLUSH_COUNT`)
+- Stream flood guard (`STREAMING_LIMITS.MAX_FLUSH_COUNT`)
 - Memory pressure guard with warning/critical modes, emergency cooldown, and automatic recoverable-cache clearing
 - Safe attachment download with max size + timeout + response validation
 - Media download limits for provider-returned videos and Gemini/Vertex inline video context are configurable through `PROVIDER_VIDEO_DOWNLOAD_MAX_MB` and `VIDEO_CONTEXT_MAX_INLINE_MB`.

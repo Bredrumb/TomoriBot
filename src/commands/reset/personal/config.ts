@@ -10,7 +10,7 @@ import { replyInfoEmbed } from "@/utils/discord/ui/embeds";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
-const RESET_CONFIRMATION_TIMEOUT_MS = Number.parseInt(process.env.RESET_CONFIRMATION_TIMEOUT_MS || "60000", 10);
+const RESET_CONFIRMATION_TIMEOUT_MS = 60_000;
 
 export interface ResetPersonalConfigDependencies {
   promptWithConfirmation(

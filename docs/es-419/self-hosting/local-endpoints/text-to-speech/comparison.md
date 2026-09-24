@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot admite múltiples sidecars locales de texto a voz, cada uno adecuado para diferentes idiomas, perfiles de hardware y requisitos de latencia.
+TomoriBot admite múltiples servidores locales de texto a voz, cada uno adecuado para diferentes idiomas, perfiles de hardware y requisitos de latencia.
 
 Esta página proporciona resultados de benchmarks empíricos, tiempos de síntesis y clips de comparación de audio grabados en un entorno de prueba idéntico con referencias de clonación de voz coincidentes.
 
@@ -64,13 +64,13 @@ Los tiempos informan tanto el **tiempo de generación completo** (segundos total
 - **Elige [CosyVoice 3](/es-419/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** si necesitas clonación zero-shot multilingüe de alta calidad con dirección de entrega en lenguaje natural (`"Speak in English with excitement"`).
 - **Elige [VoxCPM2](/es-419/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** si necesitas soporte multilingüe completo (30 idiomas), Clonación Definitiva asistida por transcripción y diseño de voz natural.
 - **Elige [Qwen3-TTS](/es-419/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** si quieres una clonación limpia en varios idiomas con diseño de voz flexible y cumplimiento estable de prompts.
-- **Elige [IrodoriTTS](/es-419/self-hosting/local-endpoints/text-to-speech/irodoritts/)** si tu bot habla japonés. Fue el único motor exclusivo para japonés medido (~4s, 0.47× RTF en Windows) y analiza de forma nativa emojis Unicode (`😊`, `😢`, `😡`) para modular la emoción del personaje.
+- **Elige [IrodoriTTS](/es-419/self-hosting/local-endpoints/text-to-speech/irodoritts/)** si tu bot habla japonés. Fue el único motor exclusivo para japonés medido (~4s, 0.47× RTF en Windows) y analiza de forma nativa emojis Unicode (`😊`, `😭`, `😠`) para modular la emoción del personaje.
 
 ---
 
 ## Compara los motores
 
-Todos los sidecars de TomoriBot devuelven actualmente un WAV completo al bot. "Ruta de transmisión" significa que el modelo ascendente o un backend de servicio separado tiene una; **no** significa que la transmisión de chat de voz de Discord esté implementada. Los tamaños son parámetros del modelo, **no** tamaños de VRAM o descarga, y la columna de 16 GB es una guía de configuración en lugar de un pico medido. La columna de velocidad describe la compensación prevista de cada motor; los tiempos medidos arriba provienen de una máquina con Windows y no clasifican los motores en Linux.
+Todos los servidores de texto a voz de TomoriBot devuelven actualmente un WAV completo al bot. "Ruta de transmisión" significa que el modelo ascendente o un backend de servicio separado tiene una; **no** significa que la transmisión de chat de voz de Discord esté implementada. Los tamaños son parámetros del modelo, **no** tamaños de VRAM o descarga, y la columna de 16 GB es una guía de configuración en lugar de un pico medido. La columna de velocidad describe la compensación prevista de cada motor; los tiempos medidos arriba provienen de una máquina con Windows y no clasifican los motores en Linux.
 
 La columna "Clip de referencia" indica la duración de la referencia de clonación que cada motor documenta o aplica en tiempo de ejecución, así que mezcla orientación publicada con límites leídos del código upstream. La mayoría de los motores recorta en silencio la referencia a su ventana en lugar de rechazar la solicitud, y por eso la columna dice lo que el motor lee, no solo lo que acepta. Es comportamiento upstream, no una medición tomada aquí, y es independiente del límite de subida de TomoriBot.
 

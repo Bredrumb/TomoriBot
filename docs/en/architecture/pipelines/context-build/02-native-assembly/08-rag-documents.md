@@ -1,4 +1,4 @@
-﻿---
+---
 title: "02.8: RAG Documents"
 ---
 
@@ -65,10 +65,10 @@ After this stage runs:
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `DOCUMENT_MAX_RESULTS` | `6` | Max chunks to retrieve per turn |
-| `DOCUMENT_MIN_SIMILARITY` | `0.5` | Cosine similarity floor (0..1) |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Constant (`rag.ts`) | `DOCUMENT_MAX_RESULTS` | `6` | Max chunks to retrieve per turn |
+| Constant (`rag.ts`) | `DOCUMENT_MIN_SIMILARITY` | `0.5` | Cosine similarity floor (0..1) |
 | Constant | `DOCUMENT_QUERY_MIN_LENGTH = 3` | Skip RAG for very short queries |
 | Constant | `DOCUMENT_QUERY_MAX_LENGTH = 1000` | Truncate query to avoid embedding cost |
 

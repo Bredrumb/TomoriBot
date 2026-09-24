@@ -47,7 +47,7 @@ servers/tts/fishs2/.venv/bin/python servers/tts/fishs2/server.py
 4. 公式BF16の`fishaudio/s2-pro`チェックポイントを`fish-speech/checkpoints/fish-speech-s2-pro/`にダウンロードする。
 
 通常の再インストールでは、移動し続けるブランチではなく、固定されたランタイムコミット
-`2225e924e7d35cc0a1d24dbc67cd1819e6cf429f`にとどまります。モデルのリビジョンは既定で`main`
+`2225e924e7d35cc0a1d24dbc67cd1819e6cf429f`にとどまります。新しいランタイムへの移行は、インストーラー内の固定値を変更して行います。モデルのリビジョンは既定で`main`
 ですが、デプロイの再現性が必要な場合は`FISH_S2_MODEL_REVISION`を不変のHugging Faceリビジョンに
 固定してください。インストーラーの設定項目は[インストーラー変数](#インストーラー変数)にまとめて
 あります。
@@ -103,7 +103,7 @@ TomoriBotの`.env`でこの値を引き上げてください（例: `TTS_SYNTHES
 - エンドポイントURL: `http://127.0.0.1:8015`
 - 音声ソースモード: 音声クローン
 - スクリプトマークアップ形式: ブラケットタグ
-- APIキー: 既定のループバック構成では空欄のままにします。ベアラー認証を有効にしている場合は、`FISH_S2_API_KEY`の値を正確に入力してください。
+- APIキー: 空欄のままにします。ラッパーには認証がありません。詳しくは[ネットワークアクセス](/self-hosting/local-endpoints/text-to-speech/#network-access)を参照してください。
 
 続いてエンドポイントのモデルエントリを追加し、`/config`のモデル > モデルの切り替えから有効化します。
 
@@ -131,18 +131,10 @@ Fish S2 Proは、角括弧タグを使って1つの発話の中でも発話の�
 
 | 変数 | 既定値 | 用途 |
 |---|---|---|
-| `FISH_SPEECH_DIR` | `servers/tts/fishs2/fish-speech` | Fish Speechランタイムのディレクトリ |
 | `FISH_S2_MODEL_DIR` | `fish-speech/checkpoints/fish-speech-s2-pro` | S2 Proチェックポイントのディレクトリ |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | 設定済みチェックポイントのモデルリポジトリおよびヘルスメタデータのラベル |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | TomoriBotラッパーのバインドアドレス |
-| `FISH_S2_PORT` | `8015` | Fishラッパーのポート。未設定時は`TOMORI_TTS_PORT`にフォールバック |
-| `TOMORI_TTS_PORT` | 未設定 | 後方互換の共有ポートオーバーライド |
-| `FISH_S2_API_KEY` | 未設定 | 任意のベアラートークン。認証付きリモートバインドにも必要 |
-| `TOMORI_TTS_API_KEY` | 未設定 | `FISH_S2_API_KEY`が未設定の場合の共有ベアラートークンのフォールバック |
-| `FISH_S2_ALLOW_INSECURE_REMOTE` | `0` | ベアラートークンなしのループバック以外のバインドを明示的に許可 |
-| `FISH_S2_MAX_REF_AUDIO_BYTES` | `10485760` | デコード後の参照WAVの最大サイズ |
-| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | 未設定 | 共有のデコード済み参照音声上限のフォールバック |
-| `FISH_S2_UPSTREAM_HOST` | `127.0.0.1` | 内部Fish APIのバインドアドレス |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | ラッパーのバインドアドレス。[ネットワークアクセス](/self-hosting/local-endpoints/text-to-speech/#network-access)を参照 |
+| `FISH_S2_PORT` | `8015` | Fishラッパーのポート |
 | `FISH_S2_UPSTREAM_PORT` | `8025` | 内部Fish APIのポート |
 | `FISH_S2_COMPILE` | `0` | Fish Speechの`torch.compile`を有効化（Linux/WSL2とTritonが必要） |
 | `FISH_S2_HALF` | `0` | FP16ランタイムモードを要求 |
@@ -152,10 +144,6 @@ Fish S2 Proは、角括弧タグを使って1つの発話の中でも発話の�
 | `FISH_S2_REPETITION_PENALTY` | `1.1` | 繰り返しペナルティ |
 | `FISH_S2_MAX_NEW_TOKENS` | `1024` | 1リクエストあたりに生成される意味トークンの最大数 |
 | `FISH_S2_USE_MEMORY_CACHE` | `on` | Fishランタイム内でエンコード済み参照音声をキャッシュ |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | ラッパーが受け付けるスクリプトの最大文字数 |
-| `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` | 内部のFish APIの起動を待つ最大時間 |
-| `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` | 1回の上流合成リクエストを待つ最大時間 |
-| `FISH_S2_LAUNCH_TIMEOUT_MS` | `240000` | `bun run launch --fishs2`がラッパーのヘルスチェックを待つ時間 |
 
 ### インストーラー変数
 
@@ -163,16 +151,10 @@ Fish S2 Proは、角括弧タグを使って1つの発話の中でも発話の�
 
 | 変数 | 既定値 | 用途 |
 |---|---|---|
-| `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` | Fish Speechランタイムのリポジトリ。例えばレビュー済みのミラーなど |
-| `FISH_S2_RUNTIME_REF` | `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` | インストール時にチェックアウトされるランタイムコミット |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | ダウンロードするHugging Faceのリポジトリ |
 | `FISH_S2_MODEL_REVISION` | `main` | ダウンロードするHugging Faceのリビジョン |
-| `FISH_S2_UPDATE` | `0` | ランタイムを意図的に更新しモデルを再ダウンロードするには`1`を設定 |
-| `FISH_S2_UPDATE_REF` | 未設定 | 更新時のランタイムref。未設定の場合、明示的な`FISH_S2_RUNTIME_REF`があればそれを維持し、なければ更新は`main`を使用 |
-| `FISH_S2_UPDATE_MODEL_REVISION` | 未設定 | 更新時のモデルリビジョン。優先順位は`FISH_S2_UPDATE_REF`と同じ |
 
-参照音声は、空でない非圧縮のPCM RIFF/WAVEファイルである必要があります。デコード後のサイズ上限は、
-過大なbase64リクエストが無制限にメモリを消費するのを防ぐため、推論前にチェックされます。
+参照音声は、デコード後10 MB以下で、空でない非圧縮のPCM RIFF/WAVEファイルである必要があります。この上限は、過大なbase64リクエストが無制限にメモリを消費するのを防ぐため推論前にチェックされ、TomoriBotが送信する22.05 kHzモノラルWAVで約237秒分に相当します。
 
 ## 低VRAM向けオプション（INT8量子化）
 

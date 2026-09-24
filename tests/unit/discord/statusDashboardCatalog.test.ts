@@ -140,12 +140,12 @@ describe("status dashboard route catalog", () => {
         pages: [
           {
             titleKey: "commands.status.persona_page1_title",
-            titleVars: { persona_name: "Sparrow" },
+            titleVars: { persona_name: "Mirri" },
             fields: [],
           },
           {
             titleKey: "commands.status.persona_page2_title",
-            titleVars: { persona_name: "Sparrow" },
+            titleVars: { persona_name: "Mirri" },
             fields: [],
           },
         ],

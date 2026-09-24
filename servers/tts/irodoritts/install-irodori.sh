@@ -18,7 +18,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 cd "$SCRIPT_DIR"
-echo "Installing Irodori-TTS sidecar dependencies with backend '$BACKEND'..."
+echo "Installing Irodori-TTS server dependencies with backend '$BACKEND'..."
 uv sync --extra "$BACKEND"
-echo "Irodori-TTS sidecar installed successfully."
+echo "Irodori-TTS server installed successfully."
 echo "Virtual environment: $SCRIPT_DIR/.venv"

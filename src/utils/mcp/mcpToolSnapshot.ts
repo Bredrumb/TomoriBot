@@ -1,13 +1,5 @@
-function positiveIntegerFromEnvironment(name: string, fallback: number): number {
-  const parsed = Number(process.env[name]);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-export const MAX_MCP_TOOL_SNAPSHOT_NAMES = positiveIntegerFromEnvironment("MCP_TOOL_SNAPSHOT_MAX_NAMES", 100);
-export const MAX_MCP_TOOL_SNAPSHOT_NAME_CHARACTERS = positiveIntegerFromEnvironment(
-  "MCP_TOOL_SNAPSHOT_NAME_MAX_CHARS",
-  128,
-);
+export const MAX_MCP_TOOL_SNAPSHOT_NAMES = 100;
+export const MAX_MCP_TOOL_SNAPSHOT_NAME_CHARACTERS = 128;
 
 const MAX_DISPLAYED_NAMES = 5;
 const MAX_DISPLAYED_NAME_CHARACTERS = 40;

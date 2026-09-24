@@ -211,22 +211,18 @@ When adding a tip:
 bun run check-locales
 ```
 
-This validates cross-locale key parity and catches missing keys.
-Follow with the placeholder, marker, and link validation gates:
+This validates cross-locale key parity and catches missing keys. The same run checks placeholder
+parity against `en-US`, embed protocol key uniqueness and templates, and project doc routes and
+heading fragments; a lost placeholder, a marker collision, or a dead link fails it. Discord length
+caps have their own fast gate:
 
 ```bash
-bun run check-locale-placeholders --locale=<target>  # placeholder parity against en-US
-bun run check-locale-lengths                         # Discord 45/100 code-point caps
-bun run check-locale-markers                         # embed protocol key uniqueness and templates
-bun run check-locale-links --locale=<target>         # project doc routes and heading fragments
+bun run check-locale-lengths   # Discord 45/100 code-point caps
 ```
 
-Use `--locale=<code>` to validate a specific translation target. `check-locale-links` resolves a
-project-owned route in the linking file's own locale tree first and then in the default locale, so a
-link to a page whose translation has not landed yet passes, and only a route that exists in neither
-tree fails. Running it across the entire repository surfaces pre-existing Japanese catch-up debt (two
-heading fragments whose Japanese pages use different headings), which is reconciled during the
-Japanese catch-up phase.
+The link check resolves a project-owned route in the linking file's own locale tree first and then in
+the default locale, so a link to a page whose translation has not landed yet passes, and only a route
+that exists in neither tree fails.
 
 ## Docs Destinations and the Second Locale Table
 

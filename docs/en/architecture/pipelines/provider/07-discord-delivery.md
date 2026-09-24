@@ -1,4 +1,4 @@
-﻿---
+---
 title: "07: Discord Delivery"
 ---
 
@@ -118,7 +118,7 @@ The message carries a single **Show Markdown** button (`createShowMarkdownButton
   memory. A press after the cache TTL replies with `genai.markdown_table.source_expired`.
 - Tables too long for a Discord message go out as a `table.md` attachment instead of being
   truncated; half a table defeats the copy/paste the button exists for.
-- The button is disabled when the collector window (`MARKDOWN_TABLE_BUTTON_TIMEOUT_MS`) closes.
+- The button is disabled when the collector window (`SHOW_MARKDOWN_BUTTON_TIMEOUT_MS`) closes.
   Webhook-authored messages are edited through the authoring webhook, since the bot token cannot
   edit them.
 
@@ -137,7 +137,8 @@ parser that classifies the input into typed blocks, then emits chunks.
 ### Preserved spans
 
 The parser locates and protects regions whose internal structure must not be split mid-region.
-A chunk break can only happen at the boundary *between* such regions, never inside:
+A chunk break can only happen at the boundary *between* such regions, never inside. The one
+exception, a span containing a newline at `LIGHT`/`MEDIUM`, is described under Humanizer interaction:
 
 - Fenced code blocks (``` ``` ```): kept whole; split across multiple messages only if a single
   block exceeds the chunk limit, in which case the opening fence + language tag is repeated on
@@ -155,8 +156,8 @@ A chunk break can only happen at the boundary *between* such regions, never insi
 
 By default, every custom emoji block is **isolated**: flushed into its own Discord message rather
 than carried inline with surrounding text. Consecutive emojis are merged into a single
-"emoji-run" message **iff** their normalized names share the same prefix (length controlled by
-`EMOJI_RUN_PREFIX_LENGTH`, default 3; the regex `[^a-z0-9]` strips separators before slicing).
+"emoji-run" message **iff** their normalized names share the same prefix (length set by the
+`EMOJI_RUN_PREFIX_LENGTH` constant in `chunkProcessor.ts`, 3 characters; the regex `[^a-z0-9]` strips separators before slicing).
 This produces Discord's large-emoji rendering for reaction-style messages, while keeping
 unrelated emoji packs in separate messages.
 
@@ -185,6 +186,24 @@ the server-wide `server_chat_configs` value when NULL:
 | `NONE` (0) | Aggregated delivery: chunks join into one message at flush boundaries (see Mission §) |
 | `LIGHT` / `MEDIUM` (1-2) | Each paragraph (`\n+`-separated) becomes its own Discord message |
 | `HEAVY` (3) | Each sentence becomes its own message; sentence splitting uses an abbreviation-aware regex (`createSentenceSplitRegex`) to avoid breaking on "Mr.", "e.g.", numbered references, etc. `humanizeString()` then runs per sentence and can split it further (see below). |
+
+At `HEAVY`, the preserved spans above are also held out of both splits named in the table: the whole
+segment is scanned for spans before the paragraph split, each span is replaced by a placeholder, and
+the span is restored into whichever message holds it. Without that step the semantic-block merge that
+keeps a span with its surrounding prose would leave the span inside the paragraph and sentence
+splits, which cut at its internal newlines and periods, so each half would reach Discord as a separate
+message with one unmatched marker. A span longer than `chunkLength` is still split, because Discord's
+message limit outranks the no-split rule. At `LIGHT`/`MEDIUM` this pass does not run, so the paragraph
+split still cuts a span that contains a newline.
+
+Only emphasis candidates whose delimiter runs clear the flanking rules are held whole, so the markers
+prose is full of stay splittable: a `* ` list bullet, `2 * 3`, a kaomoji pair (`-_-`, `^_^`, `>_<`),
+`user_id`, and a marker inside inline code or a URL. Han, kana, and Hangul letters are not word
+characters, so a marker glued to Japanese or Chinese text is still a span
+(`ふん*顔をそむける。でも嬉しい*わけじゃない`). A paren candidate whose `(` is glued to a face
+(`ugh :( that sucks. anyway. glad you're back :)`) is an emoticon, not an aside, so the sentences
+between the two faces still split. Stage 05's hold decides the same emphasis question from the same
+classifier, which is what keeps the two stages aligned on which runs pair up.
 
 Standalone-punctuation chunks (a chunk that is purely `.,!?;:。！？、，` after trimming) are
 merged into the previous or next chunk by `mergeStandalonePunctuationChunks`, preventing orphan
@@ -270,7 +289,7 @@ After this stage (per successful send):
 
 ## Configuration
 
-| Source | Key / Env var | Default | Purpose |
+| Source | Key | Value | Purpose |
 |---|---|---|---|
 | `TomoriState.config` | `humanizer_degree` | `MEDIUM` | Controls delivery mode (aggregated vs. streaming) and typing simulation |
 | `TomoriState.config` | `send_message_limit` | `0` (no limit) | Per-stream Discord message cap; `0` means unlimited |
@@ -280,10 +299,10 @@ After this stage (per successful send):
 | `DISCORD_STREAMING_CONSTANTS` | `THINKING_PAUSE_CHANCE` | `0.25` | Probability of an extra "thinking" pause between chunks |
 | `DISCORD_STREAMING_CONSTANTS` | `MIN_RANDOM_PAUSE_MS` / `MAX_RANDOM_PAUSE_MS` | `250` / `1500` ms | Thinking pause duration range |
 | `STREAMING_LIMITS.MAX_FLUSH_COUNT` | `src/utils/security/rateLimiter.ts` | `40` | Absolute safety cap on messages per stream; a HEAVY-degree reply with many commas/emphasis marks reaches this sooner than a plain sentence-per-message split would |
-| Env var | `HUMANIZER_COMMA_REMOVE_PROBABILITY` | `0.4` | Chance each comma is deleted outright (HEAVY only) |
-| Env var | `HUMANIZER_COMMA_FLUSH_PROBABILITY` | `0.2` | Chance each comma instead splits into a new message (HEAVY only) |
-| Env var | `HUMANIZER_EMPHASIS_FLUSH_PROBABILITY` | `0.5` | Chance each `!`/`?`/`！`/`？` run splits into a new message right after it (HEAVY only) |
-| Env var | `MARKDOWN_TABLE_BUTTON_TIMEOUT_MS` | `7 200 000` ms (2 h) | How long a rendered table's "Show Markdown" button stays interactive; matches the `MARKDOWN_TABLE_CACHE_TTL_MINUTES` default so the button never outlives its cached source |
+| `formatters.ts` constant | `COMMA_REMOVE_PROBABILITY` | `0.4` | Chance each comma is deleted outright (HEAVY only) |
+| `formatters.ts` constant | `COMMA_FLUSH_PROBABILITY` | `0.2` | Chance each comma instead splits into a new message (HEAVY only) |
+| `formatters.ts` constant | `EMPHASIS_FLUSH_PROBABILITY` | `0.5` | Chance each `!`/`?`/`！`/`？` run splits into a new message right after it (HEAVY only) |
+| `markdownTableButton.ts` constant | `SHOW_MARKDOWN_BUTTON_TIMEOUT_MS` | `7 200 000` ms (2 h) | How long a rendered table's "Show Markdown" button stays interactive; matches the markdown-table cache TTL so the button never outlives its cached source |
 
 ## Related docs
 

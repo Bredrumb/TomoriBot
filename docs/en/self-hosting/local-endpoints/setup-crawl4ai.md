@@ -1,15 +1,15 @@
 ---
-title: "Setup: Crawl4AI (Sidecar)"
+title: "Setup: Crawl4AI"
 sidebar:
   order: 4
 ---
-# Setup: Crawl4AI Sidecar
+# Setup: Crawl4AI
 
-The `fetch_url` tool uses the in-process `safe_http` engine by default. It can optionally try a browser-rendering sidecar in trusted development environments when you need rendered content for JS-heavy pages.
+The `fetch_url` tool uses the in-process `safe_http` engine by default. It can optionally try a browser-rendering local server in trusted development environments when you need rendered content for JS-heavy pages.
 
 Default engine order is `safe_http`. Because Crawl4AI follows redirects outside TomoriBot's guarded HTTP client, it is only admitted where private-network fetching is permitted. Outside production this is automatic (no configuration needed). In production it requires an explicit `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` opt-in, which is not recommended.
 
-Crawl4AI is a browser-rendered markdown sidecar. It runs a Playwright-based headless browser and extracts LLM-friendly markdown server-side using its own content filters (no post-processing needed on TomoriBot's side).
+Crawl4AI is a browser-rendered markdown server. It runs a Playwright-based headless browser and extracts LLM-friendly markdown server-side using its own content filters (no post-processing needed on TomoriBot's side).
 
 Choose one Crawl4AI setup path:
 
@@ -23,11 +23,11 @@ Then, start with:
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-This starts the Compose stack with the Crawl4AI sidecar on TomoriBot's Docker network.
+This starts the Compose stack with the Crawl4AI container on TomoriBot's Docker network.
 
 If you run TomoriBot directly with `bun run dev`, use the standalone path below instead.
 
-If you also want the SearXNG sidecar, chain the profiles:
+If you also want SearXNG, chain the profiles:
 
 ```sh
 docker compose --profile searxng --profile fetch-crawl4ai up -d
@@ -41,13 +41,13 @@ If you enable Crawl4AI API-token auth, set `CRAWL4AI_TOKEN` in `.env`; Compose p
 
 First, set `CRAWL4AI_BASE_URL=http://localhost:11235/` and `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http` in `.env` so the bot connects to the host-published container port. Outside production no private-network opt-in is needed; only add `FETCH_URL_ALLOW_PRIVATE_NETWORK=true` if you run with `RUN_ENV=production`.
 
-Then, instead of running TomoriBot directly with `bun run dev`, use `bun run launch --crawl4ai`. This handles the container lifecycle automatically and waits for the sidecar to be healthy before starting the bot:
+Then, instead of running TomoriBot directly with `bun run dev`, use `bun run launch --crawl4ai`. This handles the container lifecycle automatically and waits for the server to be healthy before starting the bot:
 
 ```sh
 bun run launch --crawl4ai
 ```
 
-If you also want the SearXNG sidecar:
+If you also want SearXNG:
 
 ```sh
 bun run launch --searxng --crawl4ai
@@ -69,13 +69,13 @@ docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
   unclecode/crawl4ai:latest
 ```
 
-If you secure the sidecar, pass `-e CRAWL4AI_API_TOKEN=your_token` to `docker run` and set `CRAWL4AI_TOKEN=your_token` in `.env`.
+If you secure the container, pass `-e CRAWL4AI_API_TOKEN=your_token` to `docker run` and set `CRAWL4AI_TOKEN=your_token` in `.env`.
 
 Then run `bun run dev` once the container is healthy (`docker ps` shows `(healthy)`).
 
 ---
 
-### C. No Browser Sidecar
+### C. No Browser-Rendering Server
 
 Leave `CRAWL4AI_BASE_URL` unset. The `fetch_url` tool uses the guarded `safe_http` engine.
 
@@ -83,9 +83,9 @@ Leave `CRAWL4AI_BASE_URL` unset. The `fetch_url` tool uses the guarded `safe_htt
 
 ## Starting Order (Important)
 
-TomoriBot probes sidecar health on the **first `fetch_url` call after startup** and caches the result for 60 seconds. If the container isn't ready when that first probe fires, the bot treats it as unavailable for the next minute.
+TomoriBot probes server health on the **first `fetch_url` call after startup** and caches the result for 60 seconds. If the container isn't ready when that first probe fires, the bot treats it as unavailable for the next minute.
 
-For standalone Docker, start your sidecar container before starting TomoriBot. `bun run launch --crawl4ai` already does this for you.
+For standalone Docker, start your Crawl4AI container before starting TomoriBot. `bun run launch --crawl4ai` already does this for you.
 
 ### First-time setup
 
@@ -156,8 +156,7 @@ When this is set, `fetch_url` automatically switches from the `/md` endpoint to 
 | `CRAWL4AI_BASE_URL` | unset | Enables Crawl4AI when set. Use `http://crawl4ai:11235/` from Docker Compose, or `http://localhost:11235/` when TomoriBot runs directly on your machine. |
 | `CRAWL4AI_TOKEN` | unset | Optional bearer token. Must match `CRAWL4AI_API_TOKEN` on the Crawl4AI container when enabled. |
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | Comma-separated engine list. `safe_http` is always appended as the final fallback; the legacy `mcp_fetch` name aliases it. Crawl4AI entries are ignored where private-network fetching is not permitted (production without an opt-in). |
-| `FETCH_URL_TIMEOUT_MS` | `15000` | Per-engine request timeout for Crawl4AI and URL-fetch sidecars. |
+| `FETCH_URL_TIMEOUT_MS` | `15000` | Per-engine request timeout for Crawl4AI and the other URL-fetch engines. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Maximum characters returned by one fetch call before continuation is required. |
-| `FETCH_URL_HEALTHCHECK_CACHE_SEC` | `60` | How long the Crawl4AI health probe result is cached before re-checking. |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Production-only opt-in. Outside production (`RUN_ENV` != `production`) the SSRF guard auto-relaxes, so localhost/private/internal fetches and Crawl4AI dispatch work with no setup. Set `true` only to permit private-network fetches in a trusted production deployment. |
 | `FETCH_URL_FILTER_MODE` | `fit` | Crawl4AI `/md` filter mode. `fit` keeps markdown cleaner for LLM use; `fetch_url(..., raw=true)` overrides it per request. |

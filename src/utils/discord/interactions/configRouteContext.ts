@@ -20,7 +20,6 @@ import type {
 } from "@/types/db/schema";
 import type { ToolNoticeKey } from "@/constants/toolNotices";
 import type { DeliberateToolTriggerMap } from "@/utils/tools/deliberateToolMode";
-import type { WorkaroundConfigState } from "@/utils/discord/workaroundConfigMapping";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import type { LocalizerVariables } from "@/types/discord/global";
 import type { GuildMcpConfigReadResult } from "@/utils/cache/guildMcpConfigCache";
@@ -132,7 +131,6 @@ export interface ConfigBehaviorExperimentalView {
   deliberateToolTriggers: DeliberateToolTriggerMap;
   sendLimit: number;
   selfDebugEnabled: boolean;
-  workarounds: WorkaroundConfigState;
 }
 
 export interface ConfigBehaviorNoticesView {
@@ -657,9 +655,6 @@ export async function repaint(
               deliberateToolTriggers: {},
               sendLimit: state.config.send_message_limit ?? 0,
               selfDebugEnabled: state.config.self_debug_enabled ?? false,
-              workarounds: {
-                verbatim_tool_calling_enabled: state.config.verbatim_tool_calling_enabled ?? false,
-              },
             },
           };
     }

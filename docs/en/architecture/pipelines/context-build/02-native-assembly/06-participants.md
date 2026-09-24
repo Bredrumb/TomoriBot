@@ -254,7 +254,7 @@ After this stage runs:
   saved nickname (`user_personalization_configs.user_nickname`), global name, then
   username. Persona names outrank the global nickname because both are user-authored,
   but only the persona one was rendered to the model in this conversation.
-- A composed label such as "Master Sparrow" exists as an alias only while its owner sits
+- A composed label such as "Master Mirri" exists as an alias only while its owner sits
   in the participant context, so two fallbacks run once the ladder misses. The resolver
   first peels one persona-configured prefix and suffix off the input (every addressing
   variant, longest first, since the target's own style is unknown until the account
@@ -352,7 +352,7 @@ The `naming` field names each resolved affix separately from the nickname, using
 field words, and is emitted only when a prefix or suffix actually resolves:
 
 ```text
-- Nerine calls Sparrow "Master Sparrow-san" (prefix "Master", suffix "-san")
+- Nerine calls Mirri "Master Mirri-san" (prefix "Master", suffix "-san")
 ```
 
 A joined display name gives a model no way to tell an affix from the nickname, so a request to
@@ -372,8 +372,8 @@ Adding a core field kind requires an entry in both `hydrateDiscordUser` and
 | Client intent | `GuildPresences` | Required for online/activity status; without it, only static info is shown |
 | User row | `personal_dtm`, `privacy_level` | Reference eligibility and per-field privacy behavior; authored messages from `FULL` users are removed upstream |
 | User row | `physical_appearance_tags` | Public physical appearance image tags |
-| Environment | `PARTICIPANT_SOURCE_TIMEOUT_MS` | Abort timeout for each participant source; default 1500 ms |
-| Environment | `PARTICIPANT_ENRICHER_TIMEOUT_MS` | Abort timeout for each profile enricher; default 1500 ms |
+| Constant (`sources.ts`) | `SOURCE_TIMEOUT_MS` | Abort timeout for each participant source: 1500 ms |
+| Constant (`profileEnrichers.ts`) | `ENRICHER_TIMEOUT_MS` | Abort timeout for each profile enricher: 1500 ms |
 
 ## Extension points
 

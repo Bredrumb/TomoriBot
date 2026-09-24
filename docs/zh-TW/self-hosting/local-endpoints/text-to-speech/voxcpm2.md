@@ -58,17 +58,17 @@ VoxCPM2 以在要合成的文字前面加上括號包住的自然語言描述，
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-如果你原生 Windows 的 PyTorch 安裝需要手動重裝或重新對齊驅動程式，請直接將支援 CUDA 的 PyTorch 建置安裝進 sidecar 的虛擬環境：
+如果你原生 Windows 的 PyTorch 安裝需要手動重裝或重新對齊驅動程式，請直接將支援 CUDA 的 PyTorch 建置安裝進伺服器的虛擬環境：
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-OpenBMB 回報標準執行環境在 RTX 4090 上約為 0.30 RTF。上游也支援串流生成，並記載更快的 Nano-vLLM 與 vLLM-Omni 服務選項。TomoriBot 目前的 `POST /synthesize` 契約回傳單一 WAV 回應，所以這個 sidecar 刻意緩衝生成的語句，而不是另外提供串流協定。
+OpenBMB 回報標準執行環境在 RTX 4090 上約為 0.30 RTF。上游也支援串流生成，並記載更快的 Nano-vLLM 與 vLLM-Omni 服務選項。TomoriBot 目前的 `POST /synthesize` 契約回傳單一 WAV 回應，所以這個伺服器刻意緩衝生成的語句，而不是另外提供串流協定。
 
 ## 安裝
 
-這個 sidecar 釘住目前穩定的 `voxcpm` 2.0.3 套件，並將 `openbmb/VoxCPM2` 下載到一般的 Hugging Face 快取。
+這個伺服器釘住目前穩定的 `voxcpm` 2.0.3 套件，並將 `openbmb/VoxCPM2` 下載到一般的 Hugging Face 快取。
 
 ### Linux 與 WSL Bash
 
@@ -103,9 +103,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-設定完成之後，`bun run launch --voxcpm2` 會將 sidecar 與 TomoriBot 一起啟動。預設端點是 `http://127.0.0.1:8016`。
-
-如果設定了 `VOXCPM2_API_KEY` 或 `TOMORI_TTS_API_KEY`，請以啟用驗證的方式註冊端點，並在 TomoriBot 中儲存相同的金鑰。啟動器仍然會探測未經驗證的 `/health` 路由，而合成請求則使用 `Authorization: Bearer <key>`。
+設定完成之後，`bun run launch --voxcpm2` 會將伺服器與 TomoriBot 一起啟動。預設端點是 `http://127.0.0.1:8016`。
 
 ## 在 TomoriBot 中註冊
 
@@ -172,19 +170,13 @@ TomoriBot 會將儲存的描述以 `instruct` 送出。VoxCPM2 會將它轉成�
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | 自動重試次數上限 |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | 上游的壞例長度門檻 |
 | `VOXCPM2_PREFETCH` | `1` | 僅安裝程式：設定時下載模型 |
-| `VOXCPM2_PORT` | `8016` | VoxCPM2 sidecar 連接埠；未設定時退回 `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Sidecar 綁定位址 |
-| `TOMORI_TTS_PORT` | `8016` | 向後相容的共用 sidecar 連接埠備援 |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | 解碼後參考音訊大小上限 |
-| `VOXCPM2_API_KEY` | 未設定 | `/synthesize` 的選用 bearer token；接受 `TOMORI_TTS_API_KEY` 作為備援 |
-| `TOMORI_TTS_API_KEY` | 未設定 | `/synthesize` 的共用選用 bearer token 備援 |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | 只有在要允許沒有 bearer token 的非回送位址綁定時才設為 `1` |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 可接受的合成文字長度上限 |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2 本機伺服器連接埠 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 本機伺服器綁定位址; 請參閱[網路存取](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-參考音訊必須是非空的 WAV 容器。包裝會在寫入暫存檔之前強制執行解碼後的位元組上限。`/health` 對本機就緒檢查維持不驗證；每當設定了金鑰，`/synthesize` 就要求 `Authorization: Bearer <key>`。除非有反向代理或明確的遠端政策，否則請維持預設的回送位址綁定。
+參考音訊必須是解碼後不超過 10 MB 的非空 WAV 容器，包裝會在寫入暫存檔之前檢查這一點。
 
 ## 替代檢查點與執行環境
 
 官方 BF16 模型已經能塞進預期的 16 GB 消費級 GPU 目標，所以 TomoriBot 不以量化檢查點為預設。社群量化版本是存在的，但它們多了一層相容性與維護負擔，對正常設定而言並不必要。
 
-對高吞吐量的部署，OpenBMB 目前指向 Nano-vLLM-VoxCPM 與 vLLM-Omni 作為加速的服務選項。那些執行環境可以提供超出這個參考 sidecar 的串流與並行服務功能。它們不是 TomoriBot 一般本機語音訊息流程的必要條件，而這個包裝刻意留在官方 `voxcpm` API 上，讓上游的模型升級容易跟上。
+對高吞吐量的部署，OpenBMB 目前指向 Nano-vLLM-VoxCPM 與 vLLM-Omni 作為加速的服務選項。那些執行環境可以提供超出這個參考伺服器的串流與並行服務功能。它們不是 TomoriBot 一般本機語音訊息流程的必要條件，而這個包裝刻意留在官方 `voxcpm` API 上，讓上游的模型升級容易跟上。

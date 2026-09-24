@@ -15,10 +15,10 @@ function makeContext(enabled: boolean, namingConfig?: PersonaNamingConfig): Tool
     guildId: "987654321098765432",
     locale: "en-US",
     suppressProgressNotices: true,
-    personaUsername: "Sparrow",
+    personaUsername: "Mirri",
     tomoriState: {
       persona_lineage_id: 77,
-      persona_nickname: "Sparrow",
+      persona_nickname: "Mirri",
       naming_config: namingConfig ?? EMPTY_PERSONA_NAMING_CONFIG,
       config: { user_info_updates_enabled: enabled },
     },
@@ -31,7 +31,7 @@ describe("UpdateUserInfoTool", () => {
   });
 
   it("defends execution when the capability is disabled", async () => {
-    const result = await new UpdateUserInfoTool().execute({ nickname: "Sparrow" }, makeContext(false));
+    const result = await new UpdateUserInfoTool().execute({ nickname: "Mirri" }, makeContext(false));
     expect(result.success).toBe(false);
     expect(result.data).toMatchObject({ status: "user_info_updates_disabled" });
   });
@@ -68,13 +68,13 @@ describe("UpdateUserInfoTool", () => {
 
   it("redacts identity values from execution history and thought-log details", () => {
     const redacted = redactToolParametersForStorage("update_user_info", {
-      target_user: "Sparrow",
+      target_user: "Mirri",
       pronouns: "sensitive-value",
       timezone_offset: 8,
       clear: ["prefix"],
     });
     expect(redacted).toEqual({
-      target_user: "Sparrow",
+      target_user: "Mirri",
       changed_fields: ["pronouns", "timezone_offset"],
       cleared_fields: ["prefix"],
     });
@@ -92,14 +92,14 @@ describe("UpdateUserInfoTool", () => {
     const preferenceSpy = spyOn(userNamingRepository, "loadPreferences").mockResolvedValue(new Map() as never);
     try {
       const result = await new UpdateUserInfoTool().execute(
-        { nickname: "Sparrow", pronouns: "they/them", clear: ["prefix"] },
+        { nickname: "Mirri", pronouns: "they/them", clear: ["prefix"] },
         makeContext(true),
       );
       expect(result.success).toBe(true);
       expect(writeSpy).toHaveBeenCalledTimes(1);
       expect(writeSpy).toHaveBeenCalledWith(42, {
         global: { pronouns: "they/them" },
-        persona: { personaLineageId: 77, patch: { nickname_override: "Sparrow", prefix_override: "" } },
+        persona: { personaLineageId: 77, patch: { nickname_override: "Mirri", prefix_override: "" } },
       });
     } finally {
       loadSpy.mockRestore();
@@ -199,7 +199,7 @@ describe("UpdateUserInfoTool", () => {
     const writeSpy = spyOn(userNamingRepository, "applyUserInfoBatch");
     try {
       const result = await new UpdateUserInfoTool().execute(
-        { nickname: "Sparrow", timezone_offset: 15 },
+        { nickname: "Mirri", timezone_offset: 15 },
         makeContext(true),
       );
       expect(result.data).toMatchObject({ status: "user_info_update_invalid_args" });

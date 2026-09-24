@@ -9,14 +9,8 @@ import type { SimplifiedMessageForContext } from "./types";
 
 const DOCUMENT_QUERY_MAX_LENGTH = 1000;
 const DOCUMENT_QUERY_MIN_LENGTH = 3;
-const DOCUMENT_MAX_RESULTS = (() => {
-  const parsed = Number.parseInt(process.env.DOCUMENT_MAX_RESULTS || "6", 10);
-  return Number.isFinite(parsed) ? Math.max(1, parsed) : 6;
-})();
-const DOCUMENT_MIN_SIMILARITY = (() => {
-  const parsed = Number.parseFloat(process.env.DOCUMENT_MIN_SIMILARITY || "0.5");
-  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.5;
-})();
+const DOCUMENT_MAX_RESULTS = 6;
+const DOCUMENT_MIN_SIMILARITY = 0.5;
 
 function getLatestUserQuery(messages: SimplifiedMessageForContext[]): string | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {

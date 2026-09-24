@@ -65,11 +65,6 @@ const expectedSiblingCategories: StatusPageCategory[] = [
     pages: [configPages[0], configPages[3], channelPages[0]],
   },
   {
-    id: "models",
-    labelKey: "commands.status.scope_choice_models",
-    pages: [modelPages[0], modelPages[1], modelPages[3], configPages[4]],
-  },
-  {
     id: "access",
     labelKey: "commands.status.scope_choice_access",
     pages: [configPages[1], configPages[2], modelPages[2]],
@@ -78,6 +73,11 @@ const expectedSiblingCategories: StatusPageCategory[] = [
     id: "personal",
     labelKey: "commands.status.scope_choice_personal",
     pages: personalPages,
+  },
+  {
+    id: "models",
+    labelKey: "commands.status.scope_choice_models",
+    pages: [modelPages[0], modelPages[1], modelPages[3], configPages[4]],
   },
 ];
 
@@ -219,16 +219,16 @@ describe("executeStatusCommand", () => {
     expect((calls.dashboard[0]?.[2] as StatusPageCategory[]).map(({ id }) => id)).toEqual([
       "persona",
       "behavior",
-      "models",
       "access",
       "personal",
+      "models",
     ]);
     expect(calls.dashboard[0]?.[3]).toBe("persona");
     expect(calls.dashboard[0]?.[4]).toEqual({ selectedPersonaId: 1, personas });
   });
 
   it("renders exactly the five ordered buttons and expected page counts at the seam", () => {
-    const orderedCategoryIds = ["persona", "behavior", "models", "access", "personal"] as const;
+    const orderedCategoryIds = ["persona", "behavior", "access", "personal", "models"] as const;
     const expectedPageCounts = { persona: 5, behavior: 3, models: 4, access: 3, personal: 2 };
 
     for (const scope of orderedCategoryIds) {

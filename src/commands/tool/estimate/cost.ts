@@ -81,9 +81,10 @@ const MENTION_PING_RULE_CHARS_EST = 300;
 const EMOJI_USAGE_RULES_CHARS_EST = 340;
 const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines
 
-const EST_OUTPUT_SHORT = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_SHORT, 80, 1);
-const EST_OUTPUT_TYPICAL = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_TYPICAL, 220, 1);
-const EST_OUTPUT_LONG = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_LONG, 500, 1);
+/** Assumed reply lengths the cost estimate reports side by side, in tokens. */
+const EST_OUTPUT_SHORT = 80;
+const EST_OUTPUT_TYPICAL = 220;
+const EST_OUTPUT_LONG = 500;
 
 // First-party pricing is read from the `llms` catalog columns, so a model with no
 // catalog price reports "pricing unavailable" instead of billing against a

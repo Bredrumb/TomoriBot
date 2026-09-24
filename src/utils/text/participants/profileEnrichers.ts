@@ -14,7 +14,7 @@ import type {
   ParticipantProfileFieldKind,
 } from "@/utils/text/participants/hydration";
 
-const DEFAULT_ENRICHER_TIMEOUT_MS = 1_500;
+const ENRICHER_TIMEOUT_MS = 1_500;
 
 type HydratedParticipantBase = Omit<HydratedParticipantProfile, "fields">;
 
@@ -58,11 +58,6 @@ export type ParticipantProfileEnricherRegistry = ContributionRegistry<Registered
 export interface ParticipantProfileEnrichmentResult {
   profiles: readonly HydratedParticipantProfile[];
   diagnostics: readonly ContributionExecutionDiagnostic[];
-}
-
-function enricherTimeoutMs(): number {
-  const configured = Number.parseInt(process.env.PARTICIPANT_ENRICHER_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_ENRICHER_TIMEOUT_MS;
 }
 
 function coreFieldEnricher(
@@ -177,7 +172,7 @@ export async function applyParticipantProfileEnrichers(params: {
     for (const registration of registry.ordered) {
       const executed = await executeContribution<readonly ParticipantProfileFieldContribution[]>({
         descriptor: registration,
-        timeoutMs: enricherTimeoutMs(),
+        timeoutMs: ENRICHER_TIMEOUT_MS,
         outputCount: (output) => output.length,
         run: async (signal) => {
           if (!registration.enricher.supports(participant)) return [];

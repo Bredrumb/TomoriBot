@@ -199,7 +199,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
 
   it("migration 062 preserves moved settings through down and forward migration", async () => {
     const userDiscId = "_rt_user_naming_migration";
-    const registered = await userRepository.register(userDiscId, "Sparrow", "en-US");
+    const registered = await userRepository.register(userDiscId, "Mirri", "en-US");
     if (!registered?.user_id) throw new Error("Expected migration fixture user to have a user_id");
     await userRepository.update(registered.user_id, {
       user_nickname: "Juno",
@@ -306,7 +306,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("User personalization config cutover", () =
 
   it("rolls back persona preferences when an atomic user-info batch cannot update its global row", async () => {
     const userDiscId = "_rt_user_info_atomic_rollback";
-    const registered = await userRepository.register(userDiscId, "Sparrow", "en-US");
+    const registered = await userRepository.register(userDiscId, "Mirri", "en-US");
     if (!registered?.user_id) throw new Error("Expected atomic rollback user to have a user_id");
     await testSql`DELETE FROM user_personalization_configs WHERE user_id = ${registered.user_id}`;
 

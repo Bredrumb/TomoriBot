@@ -14,7 +14,6 @@ import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
-import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
@@ -30,9 +29,14 @@ import {
   selectApiKey,
 } from "@/utils/security/keyRotation";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
+import { buildVerbatimToolDefinitionsContextItem } from "@/utils/text/context/toolDefinitions";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop } from "@/utils/chat/toolLoop";
-import { VERBATIM_TOOL_CALLING_NUDGE, shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
+import {
+  VERBATIM_TOOL_CALLING_CONTEXT_DEPTH,
+  VERBATIM_TOOL_CALLING_NUDGE,
+  shouldInjectVerbatimToolCallingNudge,
+} from "@/utils/tools/verbatimToolCalling";
 
 interface GenerationAttempt {
   label: string;
@@ -44,11 +48,12 @@ interface GenerationAttempt {
   rotationKeyId: number | null;
 }
 
-const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = parseIntegerEnvFlag(
-  process.env.OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS,
-  2,
-  1,
-);
+/**
+ * How many of the oldest history exchange pairs each retry drops when OpenRouter stopped a
+ * reply on `length` with no content. Scaling by `retryCount` widens the trim on every retry,
+ * so a reply that overflowed once keeps losing context until it fits.
+ */
+const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = 2;
 
 export async function runGenerationTurn(
   context: ChatTurnContext,
@@ -452,6 +457,7 @@ async function createFallbackAttempt(
         supports_structoutput: entry.endpoint.supports_structoutput,
         strict_role_alternation: entry.endpoint.strict_role_alternation,
         supports_prefix_completion: entry.endpoint.supports_prefix_completion,
+        verbatim_tool_calling: entry.endpoint.verbatim_tool_calling,
       },
     };
     return await createAttempt(`fallback ${fallbackIndex}: ${entry.endpoint.label}`, state, "custom", disableAllTools);
@@ -591,13 +597,33 @@ async function prepareProviderContextItems(args: {
 }): Promise<StructuredContextItem[]> {
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState);
 
-  // The verbatim tool-calling nudge is baked into the base context from the PRIMARY
-  // model. On a fallback to an attempt that will not run the verbatim parser (any
-  // non-custom provider, or a custom endpoint without tools), strip it: the nudge is
-  // useless noise there and can steer native tool-callers toward unparseable
-  // text-form calls. `filter` produces a new array, leaving the shared base intact.
-  if (!shouldInjectVerbatimToolCallingNudge(args.tomoriState.config, args.tomoriState)) {
-    contextItems = stripVerbatimNudgeItems(contextItems);
+  // Verbatim prompt scaffolding is decided once, against the primary model, but every attempt
+  // carries its own provider and parser. Adapt the shared base per attempt so a fallback in either
+  // direction gets the shape its own adapter understands. `filter` and the spread helpers below
+  // produce new arrays, leaving the shared base intact for the other attempts.
+  //
+  // Each half is checked and applied independently: the schema dump is dropped when no tools resolve
+  // (or resolution throws), so a context can carry the nudge without it. Keying the whole decision on
+  // the dump alone would then leave the nudge on a native attempt, or inject a second copy of it.
+  const attemptNeedsVerbatim = shouldInjectVerbatimToolCallingNudge(args.tomoriState);
+  if (attemptNeedsVerbatim) {
+    // A verbatim attempt needs both halves. The native-primary -> custom-fallback case reaches here
+    // with neither: without them the custom model receives no tool schemas and no calling-format
+    // instructions, so every tool (voice messages included) fails.
+    if (!contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)) {
+      const toolItem = await buildVerbatimToolDefinitionsContextItem({ tomoriState: args.tomoriState });
+      if (toolItem) {
+        contextItems = injectVerbatimToolDefinitionsItem(contextItems, toolItem);
+      }
+    }
+    if (!contextItems.some(isVerbatimNudgeItem)) {
+      contextItems = injectVerbatimNudgeItem(contextItems);
+    }
+  } else if (contextItems.some(isAnyVerbatimItem)) {
+    // Verbatim-primary -> native-fallback. Both halves must go: the schema dump alone would leave
+    // conflicting text-form instructions beside the native tool payload, and this provider has no
+    // verbatim parser to execute whatever the model then writes into chat.
+    contextItems = stripAllVerbatimItems(contextItems);
   }
 
   contextItems = await applyProviderContextTruncation(contextItems, args.tomoriState, args.serverDiscId);
@@ -624,15 +650,69 @@ async function prepareProviderContextItems(args: {
  */
 const VERBATIM_NUDGE_CONTEXT_TEXT = `[System: ${VERBATIM_TOOL_CALLING_NUDGE}]`;
 
-/** Returns a new array with the verbatim tool-calling nudge note removed, if present. */
-function stripVerbatimNudgeItems(items: StructuredContextItem[]): StructuredContextItem[] {
-  return items.filter((item) => {
-    if (item.metadataTag !== ContextItemTag.CONTEXT_NOTE_INJECTION) {
-      return true;
+function isVerbatimNudgeItem(item: StructuredContextItem): boolean {
+  if (item.metadataTag !== ContextItemTag.CONTEXT_NOTE_INJECTION) {
+    return false;
+  }
+  const text = item.parts.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
+  return text === VERBATIM_NUDGE_CONTEXT_TEXT;
+}
+
+/** Either half of the verbatim scaffolding, which are toggled together across the fallback chain. */
+function isAnyVerbatimItem(item: StructuredContextItem): boolean {
+  return item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS || isVerbatimNudgeItem(item);
+}
+
+/** Returns a new array with both verbatim halves removed: the schema dump and the nudge note. */
+function stripAllVerbatimItems(items: StructuredContextItem[]): StructuredContextItem[] {
+  return items.filter((item) => !isAnyVerbatimItem(item));
+}
+
+/**
+ * Inserts the schema dump ahead of the first dialogue item, the same side of the dialogue boundary
+ * that stage 07b occupies in a natively-built context. It lands later than that stage's own slot
+ * (which sits ahead of server documents) because the pre-dialogue region cannot be re-derived here.
+ */
+function injectVerbatimToolDefinitionsItem(
+  items: StructuredContextItem[],
+  toolItem: StructuredContextItem,
+): StructuredContextItem[] {
+  const firstDialogueIndex = items.findIndex((item) => item.metadataTag === ContextItemTag.DIALOGUE_HISTORY);
+  const insertionIndex = firstDialogueIndex >= 0 ? firstDialogueIndex : items.length;
+  return [...items.slice(0, insertionIndex), toolItem, ...items.slice(insertionIndex)];
+}
+
+/**
+ * Inserts the nudge note near the dialogue tail, `VERBATIM_TOOL_CALLING_CONTEXT_DEPTH` dialogue items
+ * from the end.
+ *
+ * This counts `DIALOGUE_HISTORY` items, not messages, so date spacers and detached system parts
+ * inflate the count and pull the note slightly earlier than the message-indexed placement stage 11
+ * uses. The note only has to sit near the tail to steer the next call; exact index parity is not
+ * load-bearing, and the count is the only one recoverable from an already-assembled context.
+ */
+function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredContextItem[] {
+  const nudgeItem: StructuredContextItem = {
+    role: "user",
+    parts: [{ type: "text", text: VERBATIM_NUDGE_CONTEXT_TEXT }],
+    metadataTag: ContextItemTag.CONTEXT_NOTE_INJECTION,
+  };
+  const dialogueItemCount = items.filter((item) => item.metadataTag === ContextItemTag.DIALOGUE_HISTORY).length;
+  const targetDialogueIndex = Math.max(0, dialogueItemCount - VERBATIM_TOOL_CALLING_CONTEXT_DEPTH);
+
+  let dialogueSeen = 0;
+  let insertionIndex = items.length;
+  for (const [index, item] of items.entries()) {
+    if (item.metadataTag !== ContextItemTag.DIALOGUE_HISTORY) {
+      continue;
     }
-    const text = item.parts.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
-    return text !== VERBATIM_NUDGE_CONTEXT_TEXT;
-  });
+    if (dialogueSeen === targetDialogueIndex) {
+      insertionIndex = index;
+      break;
+    }
+    dialogueSeen += 1;
+  }
+  return [...items.slice(0, insertionIndex), nudgeItem, ...items.slice(insertionIndex)];
 }
 
 function dropOldestHistoryExchangePairs(

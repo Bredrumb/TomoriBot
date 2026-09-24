@@ -63,6 +63,7 @@ docker-npm-cache/
 characterDrafts.md
 backups/
 references/
+!.agents/skills/*/references/
 security-review/
 
 # Proompting
@@ -82,7 +83,6 @@ crash*/
 .antigravitycli/
 ACTIVECONTEXT.md
 GEMINI.md
-AGENTS.md
 
 # Logs
 logs

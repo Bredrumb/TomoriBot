@@ -27,15 +27,9 @@ export type BreadcrumbFinding = {
   message: string;
 };
 
-const BREADCRUMB_HELPERS = new Set([
-  "configPage",
-  "personalConfigPage",
-  "moderationPage",
-  "breadcrumbPage",
-]);
+const BREADCRUMB_HELPERS = new Set(["configPage", "personalConfigPage", "moderationPage", "breadcrumbPage"]);
 
-const BREADCRUMB_HELPER_CALL_PATTERN =
-  /(?:configPage|personalConfigPage|moderationPage|breadcrumbPage)\s*\(/;
+const BREADCRUMB_HELPER_CALL_PATTERN = /(?:configPage|personalConfigPage|moderationPage|breadcrumbPage)\s*\(/;
 
 type BreadcrumbResolver = (key: string) => string;
 
@@ -81,7 +75,7 @@ export function validateBreadcrumbCall(
     }
 
     const rootArg = args[0];
-    if (!rootArg || !rootArg.isKind(SyntaxKind.StringLiteral)) {
+    if (!rootArg?.isKind(SyntaxKind.StringLiteral)) {
       return {
         file,
         line,
@@ -130,7 +124,7 @@ export function validateBreadcrumbCall(
   }
 
   const keyArg = args[keyArgIndex];
-  if (!keyArg || !keyArg.isKind(SyntaxKind.StringLiteral)) {
+  if (!keyArg?.isKind(SyntaxKind.StringLiteral)) {
     return {
       file,
       line,
@@ -397,9 +391,7 @@ async function main(): Promise<void> {
   }
 
   if (allFindings.length === 0) {
-    console.log(
-      `Breadcrumbs OK (${totalCalls} call sites verified across ${candidateFiles.length} files)`,
-    );
+    console.log(`Breadcrumbs OK (${totalCalls} call sites verified across ${candidateFiles.length} files)`);
     process.exit(0);
   }
 

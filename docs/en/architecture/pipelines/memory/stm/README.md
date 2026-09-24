@@ -12,7 +12,7 @@ write paths exist:
 
 | Stage | File | Trigger | What it writes |
 |---|---|---|---|
-| `01-passive-capture.md` | `storeShortTermMemory` | Post-turn, always | Crude conversation capped by `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` |
+| `01-passive-capture.md` | `storeShortTermMemory` | Post-turn, always | Crude conversation capped by `MAX_MESSAGES_PER_CHANNEL` |
 | `02-summary-upgrade.md` | `updateShortTermMemorySummary` | Mid-turn, LLM tool call | LLM-authored summary written to the cache and database |
 
 ## Key design facts

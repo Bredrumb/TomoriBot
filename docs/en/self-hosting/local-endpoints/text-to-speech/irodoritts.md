@@ -1,6 +1,6 @@
 ---
 title: "IrodoriTTS"
-aiGenerated: false
+aiGenerated: true
 ---
 
 Irodori-TTS v4.1 is a Japanese-focused TTS model with voice cloning and caption-based VoiceDesign in one checkpoint. TomoriBot runs it through the local FastAPI wrapper in `servers/tts/irodoritts/`.
@@ -40,7 +40,7 @@ The default endpoint URL is `http://127.0.0.1:8013`.
 
 The default model is `Aratako/Irodori-TTS-v4.1-Small`. Compatible Hugging Face repositories, community fine-tunes (such as `phasefield-audio/Irodori-TTS-v4.1-Anime`), or local checkpoint files can be configured via environment variables.
 
-When starting the sidecar (directly with Python or via `bun run launch --irodoritts`), the server automatically reads the repository root `.env` (or a local `.env` in `servers/tts/irodoritts/`) and logs the active model ID on startup.
+When you start the server (directly with Python or via `bun run launch --irodoritts`), it automatically reads the repository root `.env` (or a local `.env` in `servers/tts/irodoritts/`) and logs the active model ID on startup.
 
 ### Via `.env` (Persistent)
 
@@ -124,9 +124,63 @@ TomoriBot sends this prompt as `instruct`; the Irodori wrapper maps it to the v4
 
 TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `script_markup: emoji`, Unicode emojis are preserved for Irodori's text conditioning.
 
+### Emoji style controls
+
+IrodoriTTS supports emoji annotations in input text to influence sound effects, speaking styles, and emotional expressions. With TomoriBot's `Script Markup Style` set to `Emoji`, these Unicode emojis are preserved and sent to Irodori.
+
+| Emoji | Meaning / emotion / style |
+| --- | --- |
+| 👂 | Whisper, sounds close to the ear |
+| 😮‍💨 | Breath, sigh, sleeping breath |
+| ⏸️ | Pause, silence |
+| 🤭 | Chuckle, giggle, suppressed laugh |
+| 🥵 | Panting, moan, groan |
+| 📢 | Echo, reverb |
+| 😏 | Teasing, playfully sweet / coaxing |
+| 🥺 | Trembling voice, timidly / uncertainly |
+| 🌬️ | Shortness of breath, heavy breathing |
+| 😮 | Gasp |
+| 👅 | Licking sound, chewing sound, wet sound |
+| 💋 | Lip smack / lip noise |
+| 🫶 | Gently, tenderly |
+| 😭 | Sobbing, crying, sorrowfully / sadly |
+| 😱 | Scream, shout, shriek |
+| 😪 | Sleepily, sluggishly / languidly |
+| 😴 | Sleep talking, snoring |
+| ⏩ | Fast-speaking, rapid-fire, hurriedly |
+| 📞 | Over the phone, through a speaker |
+| 🐢 | Slowly |
+| 🥤 | Gulp, swallowing sound |
+| 🤧 | Coughing, sniffling, sneeze, clearing throat |
+| 😒 | Tutting, clicking tongue |
+| 😰 | Panicked, agitated, nervous, stuttering |
+| 😆 | Joyfully, happily |
+| 💥 | With force / momentum, forcefully |
+| 😠 | Angry, displeased, sulking |
+| 😲 | Surprise, awe / exclamation |
+| 🥱 | Yawn |
+| 😖 | Painfully, agonizingly |
+| 😟 | Anxiously, worriedly |
+| 🫣 | Shyly, bashfully |
+| 🙄 | Exasperatedly, rolling eyes |
+| 😊 | Cheerfully, gladly |
+| 😎 | Confidently, proudly |
+| 👌 | Backchanneling, sound of agreement |
+| 🙏 | Pleadingly, begging |
+| 🥴 | Drunkenly |
+| 🎵 | Humming |
+| 🤐 | Muffled (mouth covered) |
+| 😌 | Relieved, contentedly |
+| 🤔 | Questioning voice, wondering |
+| 💪 | With effort, strongly |
+| 👃 | Sniffing / smelling sound |
+| 📖 | Narration, monologue |
+
+Repeating the same emoji can strengthen its effect. Emoji control is not perfectly consistent, so treat these as style cues rather than guaranteed output. See the [official IrodoriTTS emoji annotations](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) for the upstream list and future updates.
+
 ## Long voice messages
 
-Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the sidecar does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.
+Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the server does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.
 
 The implementation starts from the chunking approach used by the [official Irodori OpenAI-compatible server](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py), whose defaults enable chunking at 80 non-whitespace characters. TomoriBot adds stricter boundary handling so closing quotes and brackets stay with the punctuation they close, punctuation runs such as `！？` and `...` stay together, decimal points next to digits do not split, and very short final tails are merged back into the previous chunk.
 
@@ -152,7 +206,7 @@ This is an inference quality/speed tradeoff, so test it with your chosen checkpo
 
 The previous TomoriBot installer cloned and patched Irodori's `pyproject.toml`, manually installed `dacvae`, and pinned an old v2-era Irodori commit. Those workarounds were necessary for the older upstream package layout but are no longer appropriate for current Irodori.
 
-The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend setup. Irodori and `dacvae` remain pinned to known commits there for reproducible installs, but TomoriBot no longer modifies upstream source code during installation.
+The server now has its own `pyproject.toml` and follows upstream's `uv` backend setup. Irodori and `dacvae` remain pinned to known commits there for reproducible installs, but TomoriBot no longer modifies upstream source code during installation.
 
 ## Environment variables
 
@@ -160,8 +214,8 @@ The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Hugging Face model repo or supported repo/subfolder source |
 | `IRODORI_TTS_CHECKPOINT` | unset | Optional local `.pt` or `.safetensors` checkpoint; overrides the Hugging Face model |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Server bind address |
-| `TOMORI_TTS_PORT` | `8013` | Server port |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Server bind address; see [Network access](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Server port |
 | `IRODORI_MODEL_DEVICE` | `auto` | Model device (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
 | `IRODORI_CODEC_DEVICE` | `auto` | Codec device |
 | `IRODORI_MODEL_PRECISION` | `bf16` on CUDA, otherwise `fp32` | Model precision |
@@ -177,4 +231,3 @@ The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend
 | `IRODORI_MAX_REF_SECONDS` | checkpoint default | Optional cap on reference audio duration |
 | `IRODORI_CHUNKING_ENABLED` | `true` | Split long text at eligible punctuation boundaries and concatenate the generated chunks |
 | `IRODORI_CHUNK_MIN_CHARS` | `80` | Minimum non-whitespace characters before strong sentence boundaries split; commas are fallback boundaries at about 1.5x this value |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Per-request text length cap |

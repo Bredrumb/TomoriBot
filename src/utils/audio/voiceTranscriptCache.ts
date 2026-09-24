@@ -9,13 +9,13 @@
  *                   tool. The caption text is cached here so history formatting can
  *                   show the clean text without re-running STT on the audio file.
  *
- * Cache entries expire after VOICE_TRANSCRIPT_CACHE_TTL_MINUTES (default: 120 min).
- * On expiry, audio messages in history fall back to [Attachment: filename.mp3].
+ * Cache entries expire after 120 minutes. On expiry, audio messages in history fall
+ * back to [Attachment: filename.mp3].
  * The current-turn message is always re-STT'd fresh before trigger detection runs,
  * so the cache miss penalty only applies to older history messages.
  */
 
-const DEFAULT_TTL_MINUTES = 120;
+const VOICE_TRANSCRIPT_CACHE_TTL_MS = 120 * 60 * 1_000;
 
 /** Public shape returned on cache hit. */
 export interface VoiceTranscriptEntry {
@@ -31,12 +31,6 @@ interface StoredEntry extends VoiceTranscriptEntry {
 
 const cache = new Map<string, StoredEntry>();
 
-function getTtlMs(): number {
-  const parsed = Number.parseInt(process.env.VOICE_TRANSCRIPT_CACHE_TTL_MINUTES ?? "", 10);
-  const minutes = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TTL_MINUTES;
-  return minutes * 60 * 1_000;
-}
-
 /**
  * Retrieve a cached transcript for a Discord message ID.
  * Returns null on miss or expiry (and evicts the stale entry).
@@ -45,7 +39,7 @@ export function getCachedVoiceTranscript(messageId: string): VoiceTranscriptEntr
   const entry = cache.get(messageId);
   if (!entry) return null;
 
-  if (Date.now() - entry.cachedAt > getTtlMs()) {
+  if (Date.now() - entry.cachedAt > VOICE_TRANSCRIPT_CACHE_TTL_MS) {
     cache.delete(messageId);
     return null;
   }

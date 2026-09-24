@@ -210,7 +210,7 @@ const PERSONA_PRESET_ROWS = [
   },
   {
     persona_preset_id: 3585,
-    persona_preset_name: "Sparrow",
+    persona_preset_name: "Mirri",
     persona_preset_desc: "Quick, curious, and a little bratty.",
     preset_language: "en-US",
   },

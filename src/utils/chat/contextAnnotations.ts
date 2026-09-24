@@ -9,7 +9,6 @@ import { resolvePreferredDiscordDisplayName } from "@/utils/discord/displayName"
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
 import { log } from "@/utils/misc/logger";
-import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { compactWhitespace, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { formatTimestampInline } from "@/utils/text/contextBuilder";
@@ -19,21 +18,9 @@ import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const REACTION_CONTEXT_ENABLED = parseBooleanEnvFlag(process.env.REACTION_CONTEXT_ENABLED, true);
-const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_API_CALLS_PER_TURN,
-  20,
-  0,
-);
-const REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE,
-  4,
-  1,
-);
-const REACTION_CONTEXT_MAX_USERS_PER_REACTION = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_USERS_PER_REACTION,
-  5,
-  0,
-);
+const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = 20;
+const REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE = 4;
+const REACTION_CONTEXT_MAX_USERS_PER_REACTION = 5;
 const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/mp4",
   "video/mpeg",

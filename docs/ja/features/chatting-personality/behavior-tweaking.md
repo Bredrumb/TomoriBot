@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-TomoriBotの振る舞い（**彼女に許可する操作や生成方法**）は、性格（[マルチペルソナ](/ja/features/chatting-personality/multiple-personas/)）や知識（[記憶](/ja/features/knowledge/memory/)）の枠を超え、`/config` > 権限 と `/config` によって制御されます。このページでは重要度の高い設定を厳選して紹介します。すべてのコマンドは[コマンドリファレンス](/en/features/command-reference/)に記載されています。
+TomoriBotの振る舞い（**彼女に許可する操作や生成方法**）は、性格（[マルチペルソナ](/ja/features/chatting-personality/multiple-personas/)）や知識（[記憶](/ja/features/knowledge/memory/)）の枠を超え、`/config` > 権限 と `/config` によって制御されます。このページでは重要度の高い設定を厳選して紹介します。すべてのコマンドは[コマンドリファレンス](/ja/features/command-reference/)に記載されています。
 
 :::note
 この翻訳は利便性のためのものであり、英語版が優先されます。

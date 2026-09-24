@@ -21,11 +21,6 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 
-// Set env vars before any lazy import so module-level constants pick them up.
-process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS = "100";
-process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS = "5";
-process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD = "3";
-
 let toolExecuteCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 let toolExecuteQueue: ToolResult[] = [];
 let requiresFollowUp = false;
@@ -421,7 +416,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   it("consecutive tool errors: loop exits with 'error' after MAX_CONSECUTIVE_TOOL_ERRORS failures", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { runToolLoop, MAX_CONSECUTIVE_TOOL_ERRORS } = await import("@/utils/chat/toolLoop");
 
     const { provider } = makeProvider(Array.from({ length: 20 }, () => makeFunctionCallResult("fail_tool", {})));
     for (let i = 0; i < 20; i++) {
@@ -431,9 +426,8 @@ describe("runToolLoop — contract tests", () => {
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
 
-    // Cap is BOT_MAX_CONSECUTIVE_TOOL_ERRORS = 5 (set at the top of this file).
     expect(result.status).toBe("error");
-    expect(toolExecuteCalls).toHaveLength(5);
+    expect(toolExecuteCalls).toHaveLength(MAX_CONSECUTIVE_TOOL_ERRORS);
 
     expect(result.personaResponses).toHaveLength(0);
   });
@@ -479,14 +473,13 @@ describe("runToolLoop — contract tests", () => {
   });
 
   it("loop bound: exits with 'timeout' after MAX_FUNCTION_CALL_ITERATIONS with no final answer", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { runToolLoop, MAX_FUNCTION_CALL_ITERATIONS } = await import("@/utils/chat/toolLoop");
 
     // Provider never produces a terminal result, always requests another tool.
-    const limit = 100; // matches the production default and the test override above
     const { provider } = makeProvider(
-      Array.from({ length: limit + 5 }, () => makeFunctionCallResult("infinite_tool", {})),
+      Array.from({ length: MAX_FUNCTION_CALL_ITERATIONS + 5 }, () => makeFunctionCallResult("infinite_tool", {})),
     );
-    for (let i = 0; i < limit + 5; i++) {
+    for (let i = 0; i < MAX_FUNCTION_CALL_ITERATIONS + 5; i++) {
       toolExecuteQueue.push({ success: true, data: { ok: true } });
     }
 
@@ -494,9 +487,9 @@ describe("runToolLoop — contract tests", () => {
     const result = await runToolLoop(makeParams(context, provider));
 
     expect(result.status).toBe("timeout");
-    // Exactly limit iterations ran (one tool call per iteration).
-    expect(toolExecuteCalls).toHaveLength(limit);
-    expect(result.streamResults).toHaveLength(limit);
+    // Exactly one tool call per iteration, and no more iterations than the loop allows.
+    expect(toolExecuteCalls).toHaveLength(MAX_FUNCTION_CALL_ITERATIONS);
+    expect(result.streamResults).toHaveLength(MAX_FUNCTION_CALL_ITERATIONS);
   });
 
   it("malformed function-call (missing name) aborts with 'error' without dispatching any tool", async () => {
@@ -848,7 +841,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   it("NovelAI ends with the localized retry-exhausted embed at the configured threshold", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { runToolLoop, NAI_TOOL_FAILURE_RETRY_THRESHOLD } = await import("@/utils/chat/toolLoop");
     const { provider, capturedHistories } = makeProvider(
       Array.from({ length: 4 }, () => makeFunctionCallResult("web_search", {}, "Still trying.")),
       "novelai",
@@ -860,8 +853,8 @@ describe("runToolLoop — contract tests", () => {
     const result = await runToolLoop(makeParams(makeContext(), provider));
 
     expect(result.status).toBe("completed");
-    expect(capturedHistories).toHaveLength(3);
-    expect(toolExecuteCalls).toHaveLength(3);
+    expect(capturedHistories).toHaveLength(NAI_TOOL_FAILURE_RETRY_THRESHOLD);
+    expect(toolExecuteCalls).toHaveLength(NAI_TOOL_FAILURE_RETRY_THRESHOLD);
     expect(standardEmbedCalls).toContainEqual({
       titleKey: "genai.nai_tool_retry_exhausted_title",
       descriptionKey: "genai.nai_tool_retry_exhausted_description",

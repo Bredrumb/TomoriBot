@@ -109,7 +109,7 @@ phối sẽ định tuyến mỗi lệnh gọi qua chuỗi engine và trả về
   tránh các khoản phí phát sinh ngoài ý muốn.
 - **DuckDuckGo** là mặc định khi chưa đặt khóa, tự động chuyển tiếp sang **IAsk** nếu bị giới hạn tần suất
   hoặc kết quả trống.
-- **SearXNG** và **Crawl4AI** là các sidecar self-hosted tùy chọn giúp mở khóa nhiều danh mục hơn và tìm
+- **SearXNG** và **Crawl4AI** là các máy chủ self-hosted tùy chọn giúp mở khóa nhiều danh mục hơn và tìm
   nạp trang được render bằng trình duyệt; xem [Self-Hosting](/vi/self-hosting/).
 
 Để đọc một trang cụ thể, bot sử dụng `fetch_url`. Tính năng này không khả dụng trên NovelAI.

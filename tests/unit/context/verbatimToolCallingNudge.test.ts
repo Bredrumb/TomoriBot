@@ -17,7 +17,7 @@ function makeMessage(index: number): SimplifiedMessageForContext {
   };
 }
 
-function makeConfig(verbatimToolCallingEnabled: boolean): AssembledServerConfig {
+function makeConfig(): AssembledServerConfig {
   return {
     message_fetch_limit: 80,
     context_note: null,
@@ -26,23 +26,27 @@ function makeConfig(verbatimToolCallingEnabled: boolean): AssembledServerConfig 
     personal_memories_enabled: true,
     uncensor_unicode_space_enabled: false,
     uncensor_sanitize_enabled: false,
-    verbatim_tool_calling_enabled: verbatimToolCallingEnabled,
   } as AssembledServerConfig;
 }
 
-function makeTomoriState(hasTools: boolean, llmProvider = "custom"): TomoriState {
+function makeTomoriState(options: {
+  verbatimToolCalling: boolean;
+  hasTools: boolean;
+  llmProvider?: string;
+}): TomoriState {
   return {
     context_note: null,
     context_note_depth: 0,
     llm: {
-      has_tools: hasTools,
-      llm_provider: llmProvider,
+      verbatim_tool_calling: options.verbatimToolCalling,
+      has_tools: options.hasTools,
+      llm_provider: options.llmProvider ?? "custom",
     },
   } as TomoriState;
 }
 
 async function buildItems(options: {
-  verbatimToolCallingEnabled: boolean;
+  verbatimToolCalling: boolean;
   hasTools: boolean;
   llmProvider?: string;
   messageCount?: number;
@@ -54,8 +58,8 @@ async function buildItems(options: {
     guildId: "guild-1",
     simplifiedMessageHistory: Array.from({ length: options.messageCount ?? 5 }, (_, index) => makeMessage(index)),
     botName: "Tomori",
-    tomoriConfig: makeConfig(options.verbatimToolCallingEnabled),
-    tomoriState: makeTomoriState(options.hasTools, options.llmProvider ?? "custom"),
+    tomoriConfig: makeConfig(),
+    tomoriState: makeTomoriState(options),
     includeTimestamps: false,
     isUserImpersonation: false,
     uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
@@ -68,63 +72,75 @@ function itemText(item: { parts: Array<{ type: string; text?: string }> }): stri
   return item.parts.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
 }
 
+const NUDGE_PROBE = "write the tool call as exactly one Markdown inline code span or fenced code block";
+
+function hasNudge(items: Awaited<ReturnType<typeof buildItems>>): boolean {
+  return items.some((item) => itemText(item).includes(NUDGE_PROBE));
+}
+
 describe("appendDialogueHistoryContext — verbatim tool-calling nudge", () => {
-  it("injects the nudge at depth 3 when enabled and tools are available", async () => {
-    const items = await buildItems({ verbatimToolCallingEnabled: true, hasTools: true });
-    const nudgeIndex = items.findIndex((item) =>
-      itemText(item).includes("write the tool call as exactly one Markdown inline code span or fenced code block"),
-    );
+  it("injects the nudge at depth 3 when the model opted in and tools are available", async () => {
+    const items = await buildItems({ verbatimToolCalling: true, hasTools: true });
+    const nudgeIndex = items.findIndex((item) => itemText(item).includes(NUDGE_PROBE));
     const messageTwoIndex = items.findIndex((item) => item.messageId === "message-2");
 
     expect(nudgeIndex).toBeGreaterThan(-1);
     expect(nudgeIndex).toBe(messageTwoIndex - 1);
   });
 
-  it("does not inject the nudge when the workaround flag is off", async () => {
-    const items = await buildItems({ verbatimToolCallingEnabled: false, hasTools: true });
-
-    expect(
-      items.some((item) =>
-        itemText(item).includes("write the tool call as exactly one Markdown inline code span or fenced code block"),
-      ),
-    ).toBe(false);
+  it("does not inject the nudge when the model flag is off", async () => {
+    expect(hasNudge(await buildItems({ verbatimToolCalling: false, hasTools: true }))).toBe(false);
   });
 
   it("does not inject the nudge when effective tools are disabled", async () => {
-    const items = await buildItems({ verbatimToolCallingEnabled: true, hasTools: false });
-
-    expect(
-      items.some((item) =>
-        itemText(item).includes("write the tool call as exactly one Markdown inline code span or fenced code block"),
-      ),
-    ).toBe(false);
+    expect(hasNudge(await buildItems({ verbatimToolCalling: true, hasTools: false }))).toBe(false);
   });
 
   it("does not inject the nudge for a non-custom provider that has native tool calling", async () => {
-    const items = await buildItems({ verbatimToolCallingEnabled: true, hasTools: true, llmProvider: "openrouter" });
-
-    expect(
-      items.some((item) =>
-        itemText(item).includes("write the tool call as exactly one Markdown inline code span or fenced code block"),
-      ),
-    ).toBe(false);
+    expect(hasNudge(await buildItems({ verbatimToolCalling: true, hasTools: true, llmProvider: "openrouter" }))).toBe(
+      false,
+    );
   });
 });
 
 describe("shouldInjectVerbatimToolCallingNudge — per-attempt gating", () => {
-  // This predicate gates both base-context injection and the per-attempt strip in
-  // generationTurn, so the fallback chain only carries the nudge on custom attempts.
-  it("is true only for a custom provider with the flag on and tools available", () => {
-    expect(shouldInjectVerbatimToolCallingNudge(makeConfig(true), makeTomoriState(true, "custom"))).toBe(true);
+  // This predicate gates base-context injection and the per-attempt adaptation in generationTurn, so
+  // the fallback chain only carries verbatim scaffolding on the attempts that parse it.
+  it("is true for a custom provider whose model opted in and has tools", () => {
+    expect(shouldInjectVerbatimToolCallingNudge(makeTomoriState({ verbatimToolCalling: true, hasTools: true }))).toBe(
+      true,
+    );
+  });
+
+  it("matches a registered custom endpoint named custom:<connection_id>", () => {
+    expect(
+      shouldInjectVerbatimToolCallingNudge(
+        makeTomoriState({ verbatimToolCalling: true, hasTools: true, llmProvider: "custom:7" }),
+      ),
+    ).toBe(true);
   });
 
   it("is false for a native tool-calling provider even with the flag on", () => {
-    expect(shouldInjectVerbatimToolCallingNudge(makeConfig(true), makeTomoriState(true, "google"))).toBe(false);
-    expect(shouldInjectVerbatimToolCallingNudge(makeConfig(true), makeTomoriState(true, "openrouter"))).toBe(false);
+    for (const llmProvider of ["google", "openrouter"]) {
+      expect(
+        shouldInjectVerbatimToolCallingNudge(
+          makeTomoriState({ verbatimToolCalling: true, hasTools: true, llmProvider }),
+        ),
+      ).toBe(false);
+    }
   });
 
   it("is false for a custom provider without tools, or with the flag off", () => {
-    expect(shouldInjectVerbatimToolCallingNudge(makeConfig(true), makeTomoriState(false, "custom"))).toBe(false);
-    expect(shouldInjectVerbatimToolCallingNudge(makeConfig(false), makeTomoriState(true, "custom"))).toBe(false);
+    expect(shouldInjectVerbatimToolCallingNudge(makeTomoriState({ verbatimToolCalling: true, hasTools: false }))).toBe(
+      false,
+    );
+    expect(shouldInjectVerbatimToolCallingNudge(makeTomoriState({ verbatimToolCalling: false, hasTools: true }))).toBe(
+      false,
+    );
+  });
+
+  it("is false when no state is available", () => {
+    expect(shouldInjectVerbatimToolCallingNudge(null)).toBe(false);
+    expect(shouldInjectVerbatimToolCallingNudge(undefined)).toBe(false);
   });
 });

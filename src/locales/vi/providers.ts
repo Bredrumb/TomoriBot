@@ -74,6 +74,7 @@ export default {
       flush_limit_description: `Phản hồi này đã đạt giới hạn độ dài tin nhắn tối đa và đã bị dừng. Bạn có thể dùng \`/respond\` để tiếp tục phản hồi theo cách thủ công nếu cần.`,
       inactivity_timeout_title: `🟡️ Phản hồi đã hết thời gian`,
       inactivity_timeout_description: `Nhà cung cấp AI đã ngừng phản hồi và kết nối bị hết thời gian. Điều này có thể xảy ra khi nhà cung cấp bị quá tải hoặc gặp sự cố. Vui lòng thử lại.`,
+      first_token_timeout_description: `Nhà cung cấp AI đã nhận yêu cầu nhưng không bao giờ bắt đầu phản hồi, nên kết nối bị hết thời gian. Hàng đợi của họ có thể đang quá tải. Vui lòng thử lại, hoặc chuyển sang một model ít bận hơn.`,
     },
     // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
     // modal. Each key is one bullet; callers compose conditional items instead of maintaining
@@ -93,6 +94,9 @@ export default {
       choose_supported_model_personal: `Chọn ID model được hỗ trợ bằng \`/personal config\` hoặc cài đặt endpoint tùy chỉnh của bạn.`,
       verify_api_key: `Kiểm tra kỹ lại API key của máy chủ này, sau đó thử lại.`,
       verify_api_key_personal: `Kiểm tra kỹ lại API key cá nhân của bạn bằng \`/personal providers\`, sau đó thử lại.`,
+      verify_api_key_expiry: `API key NVIDIA NIM có hạn dùng, và NVIDIA từ chối key đã hết hạn bằng đúng lỗi như khi key bị gõ sai. Hãy kiểm tra ngày hết hạn tại [build.nvidia.com](https://build.nvidia.com) và tạo key mới nếu key đã hết hạn.`,
+      nvidia_register_free_model: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
+      nvidia_register_free_model_personal: `NVIDIA thường xuyên ngừng cung cấp các model được host. Hãy chọn một model mà NVIDIA hiện đang phục vụ trong [các endpoint miễn phí của NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), sao chép ID model (ví dụ \`deepseek-ai/deepseek-v4.1-flash\`), rồi thêm trong \`/personal providers\` > NVIDIA NIM > **+ Thêm model văn bản mới**.`,
       google_credential_type: `Thông tin này có vẻ là token OAuth hoặc service account. Nhà cung cấp \`google\` cần API key thông thường từ [Google AI Studio](https://aistudio.google.com/apikey); hãy dùng nhà cung cấp \`vertex\` cho thông tin xác thực Google Cloud.`,
       openrouter_privacy_settings: `Điều chỉnh cài đặt "Data Policy" tại [Cài đặt quyền riêng tư OpenRouter](https://openrouter.ai/settings/privacy) để cho phép model này, hoặc chọn model khác.`,
       openrouter_fund_account: `Nạp ít nhất 10 tín dụng vào tài khoản OpenRouter của bạn để mở khóa 1000 yêu cầu model miễn phí mỗi ngày.`,
@@ -186,6 +190,8 @@ Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện tr�
       unknown_default_message: `Đã xảy ra lỗi ngoài dự kiến`,
     },
     nvidia: {
+      "401_default_message": `NVIDIA không nhận ra key này. Hãy kiểm tra key đã được sao chép đầy đủ chưa, bao gồm cả tiền tố \`nvapi-\`.`,
+      "403_default_message": `NVIDIA đã từ chối key này. Key có thể bị gõ sai, đã hết hạn, hoặc tài khoản thiếu quyền truy cập inference.`,
       "404_default_message": `Không tìm thấy model NVIDIA NIM được yêu cầu. Model có thể đã bị NVIDIA ngừng hỗ trợ.`,
       "500_default_message": `Hệ thống phụ trợ NVIDIA cung cấp model này gặp sự cố. Lỗi này thường chỉ là tạm thời, hãy thử lại sau giây lát. Chi tiết bên dưới là báo cáo từ chính NVIDIA và mang tính xác thực: nếu có nêu tên tham số yêu cầu, hãy điều chỉnh cài đặt đó thay vì suy đoán.`,
       // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request

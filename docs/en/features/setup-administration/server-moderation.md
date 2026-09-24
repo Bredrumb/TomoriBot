@@ -61,7 +61,7 @@ are posted, useful for auditing what she's doing (including which trigger expose
 
 `/config` > Channels > Logs & Welcome configures an automated greeting for new members in a chosen
 channel. By default, Tomori waits one minute before greeting them so server onboarding can
-finish. Instance operators can tune this grace period with `WELCOME_DELAY_MS`. Use the
+finish. Use the
 **Clear Welcome** button on that same page to stop greetings.
 
 ## Expressions

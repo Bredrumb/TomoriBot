@@ -1,4 +1,4 @@
-﻿---
+---
 title: "06.2: Response Sink"
 ---
 
@@ -131,9 +131,9 @@ both the stream orchestrator (writes chunks) and the generation stage (calls
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `WEBHOOK_ERROR_COOLDOWN_MS` | `600000` | Per-channel cooldown between webhook-error embeds |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Constant (`responseEmitter.ts`) | `WEBHOOK_ERROR_COOLDOWN_MS` | `600000` | Per-channel cooldown between webhook-error embeds |
 
 ## Related docs
 

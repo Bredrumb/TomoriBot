@@ -110,7 +110,7 @@ the send path still classifies the resulting 50013 into the third check.
 
 That third check is `sendFailureCache`, populated by the stream send path on a 50013 or 50001 and
 cleared the moment any send to that channel lands, so lifting a timeout or granting a permission
-takes effect on the next message instead of after `SEND_FAILURE_RETRY_MINUTES`. It deliberately
+takes effect on the next message instead of after `SEND_FAILURE_RETRY_MS` (15 minutes). It deliberately
 ignores transient codes such as 429: silencing a channel that is having a bad minute is worse than
 the wasted call it exists to prevent.
 

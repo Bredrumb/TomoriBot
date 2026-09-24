@@ -175,7 +175,7 @@ A heading that is a link target should carry an `anchor:` comment immediately af
 
 `apps/docs/src/remarkHeadingIds.ts` removes the comment from the rendered page and assigns its value
 as the heading id. This pins the anchor against later rewording and lets every translated tree answer
-the same English fragment. Only the English slug belongs in the comment. `bun run check-locale-links`
+the same English fragment. Only the English slug belongs in the comment. `bun run check-locales`
 resolves every internal link and fragment, including the bot's own `DOCS_ROUTES` table against each
 published locale.
 

@@ -64,6 +64,12 @@ const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_BETA_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/beta/chat/completions";
 
+/**
+ * Expressions/emojis classified per structured-output call during `/expressions initialize`.
+ * One call keeps the whole batch inside a single response.
+ */
+export const DEEPSEEK_EXPRESSION_BATCH_SIZE = 20;
+
 export interface DeepseekProviderConfig extends ProviderConfig {
   endpointUrl: string;
   seesImages?: boolean;
@@ -123,9 +129,14 @@ export class DeepseekProvider
     return await callDeepseekStructuredJSON(request, responseSchema, zodSchema);
   }
 
-  getExpressionInitializationBatchSize(): number {
-    const parsed = Number.parseInt(process.env.DEEPSEEK_EXPRESSION_BATCH_SIZE || "20", 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 20;
+  /**
+   * @param batchSizeOverride - Sizes the batch differently from the provider default; callers
+   *                           that do not pass one get `DEEPSEEK_EXPRESSION_BATCH_SIZE`.
+   */
+  getExpressionInitializationBatchSize(batchSizeOverride?: number): number {
+    return typeof batchSizeOverride === "number" && batchSizeOverride > 0
+      ? batchSizeOverride
+      : DEEPSEEK_EXPRESSION_BATCH_SIZE;
   }
 
   async getTools(

@@ -347,11 +347,11 @@ export async function buildContextNative(params: BuildContextParams): Promise<Na
     log.warn("Failed to build short-term memory context", error);
   }
 
-  // Verbatim tool-calling workaround: when enabled, embed the resolved tool
+  // Verbatim tool-calling: when the model opted in, embed the resolved tool
   // schemas as JSON in-band so endpoints that ignore the native `tools` field
   // still expose them to the model. Placed in the stable reference zone (right
   // before server documents) to stay inside the prompt-cache-friendly prefix.
-  await appendOptionalItem(contextItems, buildVerbatimToolDefinitionsContextItem({ tomoriConfig, tomoriState }));
+  await appendOptionalItem(contextItems, buildVerbatimToolDefinitionsContextItem({ tomoriState }));
   await appendOptionalItem(
     contextItems,
     buildServerDocumentContextItem({ tomoriState, simplifiedMessageHistory, triggererUserId, channelName }),

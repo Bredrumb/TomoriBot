@@ -11,11 +11,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 
 const FALLBACK_DETAILS_BUTTON_ID = "fallback_notice_details";
-const DEFAULT_FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = 86_400_000;
-const FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
-  process.env.FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-  DEFAULT_FALLBACK_NOTICE_BUTTON_TIMEOUT_MS,
-);
+const FALLBACK_NOTICE_BUTTON_TIMEOUT_MS = 86_400_000;
 
 export interface FallbackNoticeAttempt {
   modelCodename: string;
@@ -26,13 +22,6 @@ interface SendFallbackModelUsageNoticeOptions {
   context: ToolContext;
   failures: FallbackNoticeAttempt[];
   successModel: LlmRow;
-}
-
-function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 // Characters reserved for the description text wrapping the failure list (slot/model prefix line),

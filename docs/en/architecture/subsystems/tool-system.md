@@ -73,9 +73,9 @@ stable `(server_id, guild_mcp_id)` identity in a detached task, so connection av
 display metadata persistence. An unchanged snapshot performs no write, a successful update invalidates
 only the guild MCP configuration cache, and a failed update leaves the live connection and prior snapshot
 intact. Live `listTools()` output remains authoritative for routing and invocation; the panel never
-connects remotely to render this metadata. Snapshot retention defaults to 100 names and 128 Unicode
-characters per name, configurable with `MCP_TOOL_SNAPSHOT_MAX_NAMES` and
-`MCP_TOOL_SNAPSHOT_NAME_MAX_CHARS`.
+connects remotely to render this metadata. Snapshot retention is capped at 100 names and 128 Unicode
+characters per name (`MAX_MCP_TOOL_SNAPSHOT_NAMES` and
+`MAX_MCP_TOOL_SNAPSHOT_NAME_CHARACTERS` in `mcpToolSnapshot.ts`).
 
 Guild MCP tools are appended after built-in and global MCP filtering, then collision-checked. If a guild enables a `url_fetcher` MCP server with at least one function, TomoriBot hides bundled `fetch_url` for that guild so the LLM receives one URL-fetch surface. Prompt macro resolution follows the same rule: `{url_fetch_tool}` prefers guild `url_fetcher` functions, then falls back to `fetch_url`.
 

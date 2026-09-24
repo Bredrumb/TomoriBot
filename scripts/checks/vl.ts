@@ -1,4 +1,4 @@
-﻿import { rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "bun";
@@ -134,21 +134,18 @@ async function runWarningCheck(
   };
 }
 
-async function runLocalesCheck(
-  name: string,
-  command: string[],
-): Promise<ResultItem> {
+async function runLocalesCheck(name: string, command: string[]): Promise<ResultItem> {
   console.log(`> Running ${name}...`);
   const proc = spawn(resolveArgv({ argv: command, acceptsDetailFlag: true }), { stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   const exitCode = await proc.exited;
   const output = stdout + stderr;
 
-  // Exit code 2 means only locale parity issues were found. Those are advisory, so the
-  // child collapses its five-figure per-key listing to a count. The `summary` below is
-  // what surfaces that count: echoing the child's text here too would say it twice.
-  // Exit code 1 is a real failure and prints its full detail.
-  if (exitCode !== 2 || verboseOutput) {
+  // Exit code 2 means only locale parity issues were found (advisory), and exit code 0
+  // means all keys matched (clean pass). Both stay quiet unless verbose mode is requested;
+  // only fatal errors print their full detail in quiet mode.
+  const isFatal = exitCode !== 0 && exitCode !== 2;
+  if (isFatal || verboseOutput) {
     console.log(output);
   }
 
@@ -156,7 +153,7 @@ async function runLocalesCheck(
   return {
     name,
     exitCode,
-    fatal: exitCode === 1 || (exitCode !== 0 && exitCode !== 2),
+    fatal: isFatal,
     summary:
       advisoryCount && !verboseOutput
         ? `(${advisoryCount} keys missing in some locale, re-run with --verbose to list)`
@@ -249,11 +246,7 @@ function humanizeDisplayName(value: string): string {
 }
 
 function displayNameFromSuiteName(suiteName: string): string {
-  return humanizeDisplayName(
-    suiteName
-      .replace(/\s*[—–-]\s*regression\s*$/i, "")
-      .replace(/\s+regression\s*$/i, ""),
-  );
+  return humanizeDisplayName(suiteName.replace(/\s*[—–-]\s*regression\s*$/i, "").replace(/\s+regression\s*$/i, ""));
 }
 
 function displayNameFromTestFile(file: string, topLevelDescribeNames: string[] = []): string {
@@ -307,7 +300,8 @@ export function parseJUnitSuites(xml: string): ResultItem[] | null {
   const fileSuites = new Map<string, Omit<JUnitSuite, "topLevelDescribeNames">>();
   const topLevelDescribeNames = new Map<string, string[]>();
   const stack: Array<{ name: string; file: string; isFileSuite: boolean }> = [];
-  const attr = (tag: string, key: string): string => decodeXmlAttr(tag.match(new RegExp(`${key}="([^"]*)"`))?.[1] ?? "");
+  const attr = (tag: string, key: string): string =>
+    decodeXmlAttr(tag.match(new RegExp(`${key}="([^"]*)"`))?.[1] ?? "");
   const countAttr = (tag: string, key: string): number => Number.parseInt(attr(tag, key) || "0", 10);
 
   for (const tag of xml.match(/<\/?testsuite\b[^>]*>/g) ?? []) {
@@ -425,7 +419,11 @@ async function runTests(): Promise<ResultItem[]> {
     stderr: "pipe",
     // TOMORI_TEST_QUIET suppresses the runner's lane replay, which the per-file rows
     // below replace. Under --verbose the replay is wanted, so the flag is not set.
-    env: { ...process.env, BUN_TEST_JUNIT_OUTFILE: junitOutfile, ...(verboseOutput ? {} : { TOMORI_TEST_QUIET: "true" }) },
+    env: {
+      ...process.env,
+      BUN_TEST_JUNIT_OUTFILE: junitOutfile,
+      ...(verboseOutput ? {} : { TOMORI_TEST_QUIET: "true" }),
+    },
   });
   const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   const exitCode = await proc.exited;
@@ -653,8 +651,7 @@ const CATEGORIES = {
       r.name.includes("Knip")),
   // Assets and seed data rather than source code: these fail on *content*
   // (an oversized PNG, a malformed catalog entry), not on how code is written.
-  CONTENT: (r: ResultItem) =>
-    isNamedCheck(r) && (r.name.includes("Media Size") || r.name.includes("Seed Catalog")),
+  CONTENT: (r: ResultItem) => isNamedCheck(r) && (r.name.includes("Media Size") || r.name.includes("Seed Catalog")),
   SECURITY: (r: ResultItem) => isNamedCheck(r) && r.name.includes("Dependency Audit"),
   UNIT_TESTS: (r: ResultItem) => r._category === "unit-test",
   REGRESSION_TESTS: (r: ResultItem) => r._category === "regression-test",
@@ -749,10 +746,20 @@ async function main() {
     runTests(),
     dbConfigured
       ? runCheck("Schema Drift Check (bun run check-schema)", ["bun", "run", "check-schema"], true, true)
-      : Promise.resolve<ResultItem>({ name: "Schema Drift Check", exitCode: null, fatal: true, skippedReason: "No local DB configured" }),
+      : Promise.resolve<ResultItem>({
+          name: "Schema Drift Check",
+          exitCode: null,
+          fatal: true,
+          skippedReason: "No local DB configured",
+        }),
     dbConfigured
       ? runCheck("DB Lifecycle Validation (bun run db:lifecycle)", ["bun", "run", "db:lifecycle"], true, true)
-      : Promise.resolve<ResultItem>({ name: "DB Lifecycle Validation", exitCode: null, fatal: true, skippedReason: "No local DB configured" }),
+      : Promise.resolve<ResultItem>({
+          name: "DB Lifecycle Validation",
+          exitCode: null,
+          fatal: true,
+          skippedReason: "No local DB configured",
+        }),
     runLocalesCheck("Localization Keys (bun run check-locales)", ["bun", "run", "check-locales"]),
     // Discord length limits are a hard blocker: modal placeholders/descriptions and command
     // descriptions get silently truncated by Discord beyond their max length, so any
@@ -846,8 +853,9 @@ async function main() {
     "Seed Catalog":
       "Run `bun run check-seed-catalogs` to see which invariant broke. Seed catalogs live in `src/db/seed/catalog/` — the same validations run at bot startup, so a failure here would also fail a real boot.",
     "Media Size":
-      "Run `bun run compress-media` to fix this automatically (lossless re-encode, downscaling oversized art to fit). Default Persona avatars/sprites ship to Discord, so keep them under 1 MB. Override the budget with MEDIA_SIZE_LIMIT_BYTES if truly needed.",
-    "Schema Drift Check": "Ensure `schema.sql` and your Zod types in `src/types/db/schema.ts` are in sync. See the check output for the specific mismatch (column missing from schema.sql, export coverage gap, or INSERT column count mismatch).",
+      "Run `bun run compress-media` to fix this automatically (lossless re-encode, downscaling oversized art to fit). Default Persona avatars/sprites ship to Discord, so keep them under 1 MB. The budget is the DEFAULT_LIMIT_BYTES constant in scripts/lib/media.ts; raise it there only when art that genuinely must ship at full size cannot fit.",
+    "Schema Drift Check":
+      "Ensure `schema.sql` and your Zod types in `src/types/db/schema.ts` are in sync. See the check output for the specific mismatch (column missing from schema.sql, export coverage gap, or INSERT column count mismatch).",
     "Migration Files":
       "Every `NNN_*.sql` up-migration needs a paired `NNN_*.down.sql`, and no two may share an `NNN` prefix. If another PR already merged your number, rename yours to the next free number.",
     "DB Lifecycle Validation": "Check the detailed logs above. Your migration might be invalid or nuke-db failed.",
@@ -856,7 +864,7 @@ async function main() {
     "Localization Discord Limits":
       "Discord truncates modal placeholders/descriptions and select-option labels/descriptions (>100 chars), modal titles/labels (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
     "Command Reference":
-      "Run `bun run generate-command-reference` and commit the regenerated docs/en/features/command-reference.md.",
+      "Run `bun run generate-command-reference` and commit the regenerated docs/*/features/command-reference.md files.",
     "Command Roots":
       "Update the documented top-level categories in docs/en/architecture/subsystems/command-system.md to match runtime registration.",
     "Config Breadcrumbs":
@@ -929,11 +937,20 @@ async function main() {
     }
   };
 
-  printSection("Code Quality", results.filter((r) => CATEGORIES.CODE(r)));
+  printSection(
+    "Code Quality",
+    results.filter((r) => CATEGORIES.CODE(r)),
+  );
 
-  printSection("\nContent Guards", results.filter((r) => CATEGORIES.CONTENT(r)));
+  printSection(
+    "\nContent Guards",
+    results.filter((r) => CATEGORIES.CONTENT(r)),
+  );
 
-  printSection("\nProject Security", results.filter((r) => CATEGORIES.SECURITY(r)));
+  printSection(
+    "\nProject Security",
+    results.filter((r) => CATEGORIES.SECURITY(r)),
+  );
 
   printTestSection(
     "\nUnit Tests (bun run test)",
@@ -947,18 +964,25 @@ async function main() {
     "No regression test files reported by runner",
   );
 
-  printSection("\nDatabase Validation", results.filter((r) => CATEGORIES.DB(r)));
+  printSection(
+    "\nDatabase Validation",
+    results.filter((r) => CATEGORIES.DB(r)),
+  );
 
-  printSection("\nLocalization", results.filter((r) => CATEGORIES.LOCALES(r)));
+  printSection(
+    "\nLocalization",
+    results.filter((r) => CATEGORIES.LOCALES(r)),
+  );
 
-  printSection("\nDocumentation", results.filter((r) => CATEGORIES.DOCUMENTATION(r)));
+  printSection(
+    "\nDocumentation",
+    results.filter((r) => CATEGORIES.DOCUMENTATION(r)),
+  );
 
   // Safety net: a check whose name matches no predicate still gates the exit code
   // but would otherwise never be printed, leaving a ❌ run with nothing to explain
   // it. Surfacing strays here means adding a check can never make it invisible.
-  const categorized = new Set(
-    Object.values(CATEGORIES).flatMap((matches) => results.filter((r) => matches(r))),
-  );
+  const categorized = new Set(Object.values(CATEGORIES).flatMap((matches) => results.filter((r) => matches(r))));
   const uncategorized = results.filter((r) => !categorized.has(r));
   if (uncategorized.length > 0) {
     printSection("\nOther Checks (uncategorized — add these to CATEGORIES in vl.ts)", uncategorized);

@@ -28,9 +28,7 @@ const MENTION_PATTERN = /(?:\\)?`\/([a-z][a-z0-9_-]*(?: [a-z][a-z0-9_-]*)*)(?:\\
  * action: "add" | "remove" is parsed as a root command. This list restricts bare
  * mention() scanning to files known to implement that pattern safely.
  */
-const WRAPPER_ALLOWLIST = [
-  "src/utils/discord/helpCatalog.ts",
-];
+const WRAPPER_ALLOWLIST = ["src/utils/discord/helpCatalog.ts"];
 
 // Overridable so a test can point at a temporary baseline instead of mutating the tracked file.
 // vl runs checks in parallel, so an in-place edit races the real check-command-mentions run.
@@ -86,7 +84,7 @@ export function findRuntimeMentions(source: string, relativePath: string): Findi
 
     const isAllLiterals = /^(\s*["'][a-z0-9_-]+["']\s*,?\s*)+$/.test(argsStr);
     if (isAllLiterals && argMatches.length > 0) {
-      const mentionPath = argMatches.map(m => m[1]).join(" ");
+      const mentionPath = argMatches.map((m) => m[1]).join(" ");
       const line = (source.slice(0, match.index).match(/\n/g) || []).length + 1;
       findings.push({ file: relativePath, line, mention: mentionPath });
     }
@@ -115,7 +113,7 @@ async function main(): Promise<void> {
   const [validPaths, allowed, baseline] = await Promise.all([
     collectValidCommandPaths(),
     loadExceptions(EXCEPTIONS_PATH),
-    loadExceptions(BASELINE_PATH)
+    loadExceptions(BASELINE_PATH),
   ]);
 
   const localeGlob = new Bun.Glob("**/*.ts");
@@ -160,7 +158,9 @@ async function main(): Promise<void> {
     }
   }
 
-  const stale = findings.filter((finding) => !validPaths.has(finding.mention) && !allowed.has(finding.mention) && !baseline.has(finding.mention));
+  const stale = findings.filter(
+    (finding) => !validPaths.has(finding.mention) && !allowed.has(finding.mention) && !baseline.has(finding.mention),
+  );
 
   // Self-cleaning: a baseline entry earns removal two different ways, and catching only the
   // first leaves an entry claiming a path is broken after it has been fixed. /impersonate and

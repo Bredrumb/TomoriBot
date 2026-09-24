@@ -75,7 +75,7 @@ bun run setup
 
 ```bash
 bun run dev                          # ボットのみ
-bun run launch --searxng --crawl4ai  # ボットとサイドカー（bun run launch --help を参照）
+bun run launch --searxng --crawl4ai  # ボットとローカルサーバー（bun run launch --help を参照）
 ```
 
 ボットがオンラインになったら、Discordで `/setup` を実行してAIプロバイダーを接続します。
@@ -142,9 +142,8 @@ bun run launch --searxng --crawl4ai  # ボットとサイドカー（bun run lau
 
 下書きはデータベースではなくボットのプロセス内に存在するため、キャンセル、完了、
 またはプロセスの再起動が発生するまで残り続けます。
-一度に保持される下書きは最大 `SETUP_DRAFT_MAX_ENTRIES`（デフォルト200）件で、
+一度に保持される下書きは最大200件で、
 上限に達すると最も古いものが破棄されます。
-これは `.env.optional.example` の**セットアップウィザードの下書き**の項に記載されています。
 すでに利用できなくなったセッションのコントロールは、何も書き込みません。
 
 ## 更新

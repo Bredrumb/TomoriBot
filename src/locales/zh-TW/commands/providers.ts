@@ -141,6 +141,7 @@ export default {
       structured: `結構化輸出`,
       "strict-roles": `嚴格角色交替`,
       prefix: `前綴續寫`,
+      "verbatim-tools": `逐字工具呼叫`,
     },
     model_flag_descriptions: {
       tools: `如果這個模型可以呼叫工具請勾選。取消勾選我就不再提供工具。`,
@@ -148,9 +149,10 @@ export default {
       structured: `如果這個模型可以在要求時回傳嚴格 JSON 請勾選。`,
       "strict-roles": `合併同角色的對話輪，並以使用者對話輪開場。代理 Claude 的前端請勾選。`,
       prefix: `讓我交回寫到一半的對話輪繼續寫。代理 DeepSeek 或 Z.ai 的前端請勾選。`,
+      "verbatim-tools": `適用於不支援原生工具呼叫的端點。直接從原始文字輸出解析呼叫。`,
     },
     model_compat_label: `聊天完成相容性`,
-    model_compat_description: `針對嚴格後端的訊息格式修正。除非請求被拒絕，否則兩者都保持關閉。`,
+    model_compat_description: `針對嚴格後端的訊息格式與協定調整。非必要時請保持關閉。`,
     model_image_supports_label: `圖片功能`,
     model_image_supports_description: `請只宣告這個模型與端點真正支援的圖片功能。`,
     model_image_supports: {

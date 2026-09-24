@@ -72,8 +72,8 @@ The method also handles three additional responsibilities:
   strings (`stopStrings.ts`) are matched literally by the provider, so namespaced close tags must be
   added per model rule explicitly rather than via the shared pattern.
 
-- **Custom verbatim tool-call fallback**: when
-  `server_capabilities_configs.verbatim_tool_calling_enabled` is true, the active Custom text model
+- **Custom verbatim tool-call fallback**: when the active model has
+  `llms.verbatim_tool_calling` set (a per-model opt-in under `/providers`), uses a `custom` provider,
   has tools, and the request includes OpenAI-compatible tool schemas, `CustomStreamAdapter` runs
   `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It scans
   the stream for an anchor `<knownToolName>(`, only names from the exposed tool set trigger, then
@@ -158,6 +158,17 @@ re-classifies a normalized `ProviderError` by matching its message text (and `or
 | `isAccountBalanceExhaustedError` | zero spendable balance (DeepSeek 402 `Insufficient Balance`, Z.ai `no resource package`) | No request of any size can succeed, so trimming tips are useless |
 | `isCreditAffordabilityError` | affordability ceiling (OpenRouter 402 `can only afford N`) | A smaller `max_tokens` still fits the remaining credit |
 | `isContextLengthError` | hard context-window overflow | Trimming history genuinely resolves it |
+| `isNvidiaCredentialRejected` | NVIDIA `403` on the credential itself | Expiry is a cause the key check alone does not name |
+
+`isNvidiaCredentialRejected` matches the provider name and status code rather than message text,
+because NIM reports a mistyped key, an expired key, and a key without inference access with the
+same `403 {"detail":"Authorization failed"}` body. Nothing in that payload distinguishes them, so
+the classification drives an added possibility rather than a verdict, and it stays NVIDIA-scoped:
+the same status means a different thing elsewhere. A key without the `nvapi-` prefix gets `401`
+instead and is left to the plain key check.
+
+NIM's model-availability failures are model errors through `MODEL_ERROR_PATTERNS`: a retired model
+answers `410 "has reached its end of life"` and an unreachable one `404 "Not found for account"`.
 
 The two credit classifiers must stay mutually exclusive. They map to opposite advice: an exhausted
 balance needs a top-up, an affordability ceiling needs fewer output tokens. Ordering in

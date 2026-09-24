@@ -33,7 +33,6 @@ function makeConfig(timezoneOffset = 0): AssembledServerConfig {
     uncensor_sanitize_enabled: false,
     timezone_offset: timezoneOffset,
     time_awareness_enabled: true,
-    verbatim_tool_calling_enabled: false,
   } as AssembledServerConfig;
 }
 

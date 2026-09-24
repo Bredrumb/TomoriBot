@@ -74,6 +74,7 @@ export default {
       flush_limit_description: `這則回覆已達到訊息長度上限並停止。需要的話，你可以用 \`/respond\` 手動繼續回覆。`,
       inactivity_timeout_title: `🟡️ 回覆逾時`,
       inactivity_timeout_description: `AI 供應商停止回應，連線已逾時。供應商超載或發生問題時可能會這樣。請再試一次。`,
+      first_token_timeout_description: `AI 供應商接受了請求，但一直沒有開始回覆，連線因此逾時。它的佇列很可能已經塞滿。請再試一次，或改用比較不忙的模型。`,
     },
     // createTipText() 會把這些單則提示字串算繪成唯讀 modal 中的破折號項目清單。
     // 每個鍵是一則項目；呼叫端組合條件式項目，而不是維護整段提示字串。
@@ -93,6 +94,9 @@ export default {
       choose_supported_model_personal: `用 \`/personal config\` 或你的自訂端點設定，選擇支援的模型 ID。`,
       verify_api_key: `請再次確認這個伺服器的 API 金鑰，然後再試一次。`,
       verify_api_key_personal: `請用 \`/personal providers\` 再次確認你的個人 API 金鑰，然後再試一次。`,
+      verify_api_key_expiry: `NVIDIA NIM 金鑰會過期，而 NVIDIA 對過期金鑰回傳的錯誤和輸錯的金鑰一樣。請到 [build.nvidia.com](https://build.nvidia.com) 查看它的有效期限，如果已經失效就重新產生一組。`,
+      nvidia_register_free_model: `NVIDIA 經常下架託管的模型。請從 [NVIDIA 的免費端點](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)選一個它目前提供的模型，複製模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），再到 \`/providers\` > NVIDIA NIM > **+ 新增文字模型** 新增。`,
+      nvidia_register_free_model_personal: `NVIDIA 經常下架託管的模型。請從 [NVIDIA 的免費端點](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)選一個它目前提供的模型，複製模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），再到 \`/personal providers\` > NVIDIA NIM > **+ 新增文字模型** 新增。`,
       google_credential_type: `這看起來像 OAuth 或服務帳號權杖。\`google\` 供應商需要來自 [Google AI Studio](https://aistudio.google.com/apikey) 的一般 API 金鑰；Google Cloud 憑證請改用 \`vertex\` 供應商。`,
       openrouter_privacy_settings: `請到 [OpenRouter 隱私設定](https://openrouter.ai/settings/privacy)調整你的「資料政策」設定以允許這個模型，或改選其他模型。`,
       openrouter_fund_account: `在你的 OpenRouter 帳號儲值至少 10 點，就能解鎖每天 1000 次免費模型要求。`,
@@ -186,6 +190,8 @@ export default {
       unknown_default_message: `發生未預期的錯誤`,
     },
     nvidia: {
+      "401_default_message": `NVIDIA 無法辨識這組金鑰。請確認它是否完整複製，包含 \`nvapi-\` 前綴。`,
+      "403_default_message": `NVIDIA 拒絕了這組金鑰。可能是輸錯、已過期，或所屬帳號沒有推論存取權限。`,
       "404_default_message": `找不到要求的 NVIDIA NIM 模型。可能已被 NVIDIA 下架。`,
       "500_default_message": `服務這個模型的 NVIDIA 後端發生錯誤。這通常是暫時性的，請稍後再試一次。下方詳細資料是 NVIDIA 自己的回報，最為準確：如果裡面提到某個要求參數，請調整該設定，不要自行猜測。`,
       // 只有在 NVIDIA 自己的訊息提到可移除的要求參數時，才會取代 500_default_message 顯示。

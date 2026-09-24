@@ -351,10 +351,6 @@ export default {
       self_debug_description: `控制我能否在聊天里看到自己的错误与诊断消息。`,
       self_debug_on: `我可以看到自己的错误与诊断消息。`,
       self_debug_off: `我看不到自己的错误与诊断消息。`,
-      compatibility_title: `兼容性`,
-      compatibility_description: "针对提供方怪癖的兼容处理。每一行说明当前 生效的行为。",
-      custom_provider_limitation: `只影响 Custom 提供方的文本端点。`,
-      edit_workarounds_button: `编辑兼容处理`,
       behavior_notices_title: `提示`,
       behavior_notices_description: `选择人们可以看到哪些回复细节。`,
       notice_embeds_title: `提示嵌入`,
@@ -1217,17 +1213,6 @@ export default {
           cancel_remove_button: `取消`,
         },
       },
-    },
-    workarounds: {
-      checkbox_label: `可用兼容处理`,
-      checkbox_label_continued: `可用兼容处理（续）`,
-      checkbox_description: `勾选的兼容处理会在这个服务器启用。`,
-      too_many_title: `兼容处理过多`,
-      too_many_description: `已配置 {count} 个兼容处理，超过弹窗在 {max_groups} 个分组内最多 {max_entries} 个条目的上限。`,
-      verbatim_tool_calling_option: `逐字工具调用`,
-      verbatim_tool_calling_desc: `解析 Custom 端点在没有原生工具时发出的严格文本工具调用。`,
-      verbatim_tool_calling_enabled: `工具调用按原文逐字发送。`,
-      verbatim_tool_calling_disabled: `工具调用按提供方的原生格式发送。`,
     },
     custom_models: {
       remove: {

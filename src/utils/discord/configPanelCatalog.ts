@@ -543,8 +543,6 @@ export type ConfigPanelRoute =
   | { action: "behavior-send-limit-open"; locale: string }
   | { action: "behavior-send-limit-submit"; locale: string; nonce: string }
   | { action: "behavior-self-debug-set"; locale: string; enabled: boolean }
-  | { action: "behavior-workarounds-open"; locale: string }
-  | { action: "behavior-workarounds-submit"; locale: string; nonce: string }
   | { action: "behavior-notice-visibility-open"; locale: string }
   | { action: "behavior-notice-visibility-submit"; locale: string; nonce: string }
   | { action: "behavior-speech-transcripts-set"; locale: string; enabled: boolean }
@@ -1039,8 +1037,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "behavior-send-limit-open": { wireToken: "beh-send-limit-open", fields: [] },
   "behavior-send-limit-submit": { wireToken: "beh-send-limit-sub", fields: [nonceField] },
   "behavior-self-debug-set": { wireToken: "beh-self-debug-set", fields: [enabledField] },
-  "behavior-workarounds-open": { wireToken: "beh-workarounds-open", fields: [] },
-  "behavior-workarounds-submit": { wireToken: "beh-workarounds-sub", fields: [nonceField] },
   "behavior-notice-visibility-open": { wireToken: "beh-notices-open", fields: [] },
   "behavior-notice-visibility-submit": { wireToken: "beh-notices-sub", fields: [nonceField] },
   "behavior-speech-transcripts-set": { wireToken: "beh-transcripts-set", fields: [enabledField] },

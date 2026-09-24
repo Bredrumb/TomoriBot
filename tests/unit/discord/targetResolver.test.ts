@@ -268,7 +268,7 @@ describe("resolveUserTarget - persona-scoped and affixed names", () => {
 
     const result = await resolveUserTarget(
       "Papa",
-      buildGuildContext([obonya, { id: "333", displayName: "Sparrow", username: "sparrow" }]),
+      buildGuildContext([obonya, { id: "333", displayName: "Mirri", username: "mirri" }]),
     );
 
     expect(result.status).toBe("ambiguous");
@@ -338,7 +338,7 @@ describe("resolveUserTarget - persona-scoped and affixed names", () => {
     stubNamingLookups();
 
     const result = await resolveUserTarget(
-      "Master Sparrow",
+      "Master Mirri",
       buildGuildContext([obonya], {
         namingConfig: { prefixes: { neutral: "Master" }, suffixes: {}, addressTerms: {} },
       }),

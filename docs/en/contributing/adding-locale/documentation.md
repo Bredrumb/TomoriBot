@@ -160,7 +160,7 @@ That makes the rule per locale, not per section:
   `src/constants/docsLocales.ts` stores one locale-less route per destination and `buildDocsUrl`
   prefixes the reader's locale onto it, so a translated anchor would leave every non-English reader
   at the top of the page. Use the slug the English heading already generates, never a new invented
-  one, and run `bun run check-locale-links`: it resolves that table's fragments against every
+  one, and run `bun run check-locales`: its link check resolves that table's fragments against every
   published tree and names the locales a heading is missing from.
 
 The `ja` tree is the worked example and shows both directions: 206 links point at `/ja/...`, and the
@@ -177,7 +177,7 @@ because they are static text, so their URLs are absolute and already carry the l
 those URLs live in `general.ts`, `providers.ts`, `commands/config.ts`, `commands/memories.ts`,
 `commands/personal.ts`, `commands/refresh.ts`, `commands/setup.ts`, and `commands/shared.ts`.
 
-`bun run check-locale-links` resolves each locale string's destination against the docs tree, so a
+The link check in `bun run check-locales` resolves each locale string's destination against the docs tree, so a
 repointed URL that does not exist fails the gate. It ignores root-relative Markdown links, so the docs
 link rule above has no automated backstop and rests on the translator and the reviewer.
 

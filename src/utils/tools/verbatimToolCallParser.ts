@@ -332,10 +332,16 @@ function buildToolSpecMap(tools: Array<Record<string, unknown>>): Map<string, Ve
   return specs;
 }
 
+/**
+ * Ceiling on the text this parser holds while it waits for a tool call to resolve.
+ *
+ * A call that never completes would otherwise buffer a whole runaway reply, so past this
+ * length the held text is emitted as visible prose and the call is abandoned.
+ */
+const VERBATIM_TOOL_CALL_MAX_BUFFER_CHARS = 8192;
+
 export function getVerbatimToolCallMaxBufferChars(): number {
-  const rawValue = process.env.VERBATIM_TOOL_CALL_MAX_BUFFER_CHARS ?? "8192";
-  const parsed = Number.parseInt(rawValue, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 8192;
+  return VERBATIM_TOOL_CALL_MAX_BUFFER_CHARS;
 }
 
 /**

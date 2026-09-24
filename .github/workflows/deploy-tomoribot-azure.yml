@@ -973,7 +973,7 @@ jobs:
           SEARXNG_SECRET: ${{ secrets.SEARXNG_SECRET }}
         run: |
           set -euo pipefail
-          # Empty until the secret is set, which is what keeps the sidecar off.
+          # Empty until the secret is set, which is what keeps SearXNG off.
           searxng_secret_b64=""
           if [[ -n "$SEARXNG_SECRET" ]]; then
             searxng_secret_b64=$(printf '%s' "$SEARXNG_SECRET" | base64 -w 0)

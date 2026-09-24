@@ -153,7 +153,7 @@ The caption travels in `GeneratePresetParams.appearanceDescription`, which is a 
 
 Both this path and `AnalyzeImageTool` share `analyzeImageWithVisionModel()` in `src/utils/provider/visionCaption.ts`, which reconciles `resolveCapabilityCredentials` against the cached `vision_llm` row. The vision model may be saved under a different provider than the primary model, each with its own encrypted key, and the reconciliation is what keeps the transport (chosen from the resolved credentials) and the model codename sent to it describing the same model. The primary generation call is unaffected by that pairing problem, because it never leaves the primary model's own credentials.
 
-The captioning request and its wall-clock ceiling are separate budgets from the chat reply caps (`VISION_CAPTION_MAX_OUTPUT_TOKENS`, `VISION_CAPTION_TIMEOUT_MS`), because shortening a chat reply must not truncate the description a persona is generated from.
+The captioning request and its wall-clock ceiling are separate budgets from the chat reply caps (`DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS`, `VISION_CAPTION_TIMEOUT_MS`), because shortening a chat reply must not truncate the description a persona is generated from.
 
 ### Import Now button
 
@@ -163,7 +163,7 @@ The `/persona generate` and `/persona create` success messages are rendered as D
 
 In guild contexts that card carries a manager-only **Import Now** button. Because the success message is public, the restriction is enforced on click (`ManageGuild`), not by visibility. Pressing it imports the freshly generated persona **as an alter** (it never replaces the existing main persona) using the same `importAlterPreset` core (`src/utils/persona/importAlterPreset.ts`) that backs `/persona import type=alter`. The in-memory preset and PNG buffer are reused, so no re-upload or re-download occurs. Wiring lives in `src/utils/persona/importNowButton.ts`.
 
-The button is one-shot (a successful import disables it and relabels it "Imported"; a failure re-arms it) and driven by a per-message collector; DMs never receive it because alter import is guild-only. Collector lifetime is capped below Discord's 15-minute interaction-token window so the timeout teardown can still edit the original reply, and is configurable via `PERSONA_IMPORT_NOW_BUTTON_TIMEOUT_MS` (default 14 minutes).
+The button is one-shot (a successful import disables it and relabels it "Imported"; a failure re-arms it) and driven by a per-message collector; DMs never receive it because alter import is guild-only. Collector lifetime is capped below Discord's 15-minute interaction-token window so the timeout teardown can still edit the original reply (`IMPORT_NOW_BUTTON_TIMEOUT_MS`, 14 minutes).
 
 ## Editing Official Presets
 

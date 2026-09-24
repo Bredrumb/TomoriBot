@@ -78,8 +78,8 @@ Rules to work by:
 | Avoid a short title that another key could also render | Two keys rendering the same string in one locale is a startup failure |
 | Never end a reward or punish title with a period | The classifier uses an explicit key-existence check, and a trailing period used to drop a title from classification |
 
-`bun run check-locale-markers` verifies key presence, template placeholder parity, literal anchors, and
-cross-locale title collisions. The runtime check runs at startup as well, because a collision has to
+`bun run check-locales` verifies protocol key presence, template placeholder parity, literal anchors,
+and cross-locale title collisions. The runtime check runs at startup as well, because a collision has to
 fail loudly rather than misclassify embeds under traffic.
 
 ## Intent Detector Packs
@@ -140,6 +140,12 @@ What that means for a locale:
 - **Paired quotation marks are protected in every script that has them.** `「」`, `『』`, `｢｣`, `«»`,
   `‹›`, `“”`, `〈〉`, and `《》` all keep their contents unsplit, so a flush never leaves one side of a
   pair as broken syntax in a separate Discord message.
+- **Word boundaries are per script.** An emphasis marker glued to Latin, Cyrillic, or Greek letters
+  sits inside a word and is not emphasis (`f***ing`), while Han, kana, and Hangul write without
+  spaces, so a `*` glued to those letters is (`ふん*顔をそむける*わけ`). The exemption is for `*`
+  only: `_` glued to a letter is an identifier in every script, and `~~` glued to kana is a
+  wave-dash elongation (`やだ~~w`), not strikethrough. That decision covers both the stream
+  buffer's hold and the `HEAVY` message splitter.
 - **Sentence splitting recognizes full-width periods** (`。`, `．`, `｡`) alongside ASCII `.` and
   matches a wide abbreviation list, including a few non-English address and title forms.
 
@@ -156,7 +162,7 @@ none of the target locales is right-to-left.
   [Panel Prose And Layout](/contributing/panel-prose-and-layout/), which applies to every authored
   locale.
 - Leave `{placeholder}` tokens exactly as English has them. A missing token is fatal to
-  `bun run check-locale-placeholders`; an extra token is an advisory warning, because a call site may
+  `bun run check-locales`; an extra token is an advisory warning, because a call site may
   supply a variable the English string does not use.
 - Respect the Discord length caps: 45 code points for modal titles and input labels, 100 for command
   descriptions, option descriptions, choice names, and placeholders. Counts are code points, not

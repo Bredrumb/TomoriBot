@@ -1,5 +1,5 @@
 ---
-title: "Configuração: SearXNG (Sidecar)"
+title: "Configuração: SearXNG"
 sidebar:
   order: 3
 ---
@@ -57,7 +57,7 @@ Em seguida, execute `bun run dev` assim que o contêiner estiver íntegro (`dock
 ### C. Sem SearXNG
 Deixe `SEARXNG_BASE_URL` não definido. A cadeia recorrerá para `Brave → DuckDuckGo → IAsk`.
 
-Quando nenhum sidecar do SearXNG está configurado, o esquema `web_search` montado não anuncia mais as categorias exclusivas do SearXNG. As categorias comuns (`text`, `image`, `video`, `news`) ainda aparecem quando o Brave está configurado, e a pesquisa apenas em texto aparece quando somente o fallback MCP do DuckDuckGo/IAsk está disponível.
+Quando nenhum servidor SearXNG está configurado, o esquema `web_search` montado não anuncia mais as categorias exclusivas do SearXNG. As categorias comuns (`text`, `image`, `video`, `news`) ainda aparecem quando o Brave está configurado, e a pesquisa apenas em texto aparece quando somente o fallback MCP do DuckDuckGo/IAsk está disponível.
 
 ---
 
@@ -69,8 +69,6 @@ Os resultados de imagem do SearXNG são validados com HEAD, opcionalmente compac
 |---|---|---|
 | `SEARXNG_IMAGE_COUNT` | `3` (máx. 10) | Quantas imagens válidas são enviadas ao Discord. Substituído pelo argumento `count` do LLM. |
 | `SEARXNG_IMAGE_POOL` | `10` | Conjunto de URLs candidatos quando o LLM não especifica `count`. Quando `count` é especificado, o conjunto é `count × 3` (limitado a 30) para absorver falhas de proteção contra hotlink. |
-| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | Imagens abaixo desse tamanho são rejeitadas: filtra imagens de erro/placeholder. Compartilhado com a pesquisa de imagens do Brave. |
 | `WEB_SEARCH_TIMEOUT_MS` | — | Tempo limite de solicitação por motor. |
-| `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | Por quanto tempo o resultado da verificação de integridade fica em cache antes de ser verificado novamente. |
 
 *(Veja `.env.optional.example` para todas as opções ajustáveis.)*

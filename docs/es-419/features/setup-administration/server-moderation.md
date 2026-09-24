@@ -8,7 +8,7 @@ TomoriBot le da a los administradores del servidor control sobre cómo se compor
 servidor: quién puede usarla, dónde y cuánto cuesta, a través del panel `/config` y sus
 comandos relacionados. La mayoría requiere el permiso **Administrar servidor**. Esta página
 cubre lo más destacado; cada comando está en la
-[Referencia de comandos](/en/features/command-reference/).
+[Referencia de comandos](/es-419/features/command-reference/).
 
 ## Control de costo: cuotas
 <!-- anchor: cost-control-quotas -->
@@ -69,8 +69,8 @@ expuso una herramienta en el
 
 `/config` > Canales > Registros y bienvenida configura un saludo automático para nuevos miembros
 en un canal elegido. Por defecto, Tomori espera un minuto antes de saludarlos para que la
-incorporación del servidor pueda terminar. Los operadores de instancia pueden ajustar este
-período de gracia con `WELCOME_DELAY_MS`. Usa el botón **Borrar bienvenida** en esa misma página
+incorporación del servidor pueda terminar.
+Usa el botón **Borrar bienvenida** en esa misma página
 para detener los saludos.
 
 ## Expresiones

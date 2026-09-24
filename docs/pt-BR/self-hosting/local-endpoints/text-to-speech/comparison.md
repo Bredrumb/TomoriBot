@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-O TomoriBot suporta vários sidecars locais de Text-to-Speech, cada um adequado a diferentes idiomas, perfis de hardware e requisitos de latência.
+O TomoriBot suporta vários servidores locais de Text-to-Speech, cada um adequado a diferentes idiomas, perfis de hardware e requisitos de latência.
 
 Esta página traz resultados empíricos de benchmark, tempos de síntese e clipes de áudio para comparação, gravados em um ambiente de teste idêntico com as mesmas referências de clonagem de voz.
 
@@ -65,13 +65,13 @@ Os tempos informam o **tempo total de geração** (segundos de relógio desde a 
 - **Escolha o [CosyVoice 3](/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** se você precisa de clonagem zero-shot multilíngue de alta qualidade com direção de entrega em linguagem natural (`"Speak in English with excitement"`).
 - **Escolha o [VoxCPM2](/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** se você precisa de suporte multilíngue abrangente (30 idiomas), Ultimate Cloning assistida por transcrição e design de voz natural.
 - **Escolha o [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** se você quer clonagem limpa em vários idiomas, com design de voz flexível e boa aderência ao prompt.
-- **Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** se o seu bot fala japonês. Foi o único motor exclusivo para japonês medido (~4s, 0.47× RTF no Windows) e interpreta nativamente emojis Unicode (`😊`, `😢`, `😡`) para modular a emoção da personagem.
+- **Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** se o seu bot fala japonês. Foi o único motor exclusivo para japonês medido (~4s, 0.47× RTF no Windows) e interpreta nativamente emojis Unicode (`😊`, `😭`, `😠`) para modular a emoção da personagem.
 
 ---
 
 ## Compare os Motores
 
-Todos os sidecars do TomoriBot atualmente retornam um WAV completo para o bot. "Caminho de streaming" significa que o modelo upstream ou um backend de serviço separado tem um; isso **não** significa que o streaming de chat de voz do Discord está implementado. Os tamanhos são parâmetros de modelo, **não** tamanhos de VRAM ou de download, e a coluna de 16 GB é uma orientação de configuração, não um pico medido. A coluna de velocidade descreve a troca pretendida de cada motor; os tempos medidos acima vêm de uma única máquina Windows e não classificam os motores no Linux.
+Todos os servidores TTS do TomoriBot atualmente retornam um WAV completo para o bot. "Caminho de streaming" significa que o modelo upstream ou um backend de serviço separado tem um; isso **não** significa que o streaming de chat de voz do Discord está implementado. Os tamanhos são parâmetros de modelo, **não** tamanhos de VRAM ou de download, e a coluna de 16 GB é uma orientação de configuração, não um pico medido. A coluna de velocidade descreve a troca pretendida de cada motor; os tempos medidos acima vêm de uma única máquina Windows e não classificam os motores no Linux.
 
 A coluna "Clipe de referência" informa o comprimento da referência de clonagem que cada motor documenta ou aplica no runtime, então ela mistura orientação publicada com limites lidos do código upstream. A maioria dos motores corta silenciosamente a referência para caber na própria janela em vez de recusar a requisição, e é por isso que a coluna indica o que o motor lê, não apenas o que ele aceita. É comportamento upstream, não uma medição feita aqui, e é independente do limite de upload do TomoriBot.
 

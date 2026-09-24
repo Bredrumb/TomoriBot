@@ -55,6 +55,8 @@ This is a current map of shared utility modules under `src/utils/`.
 - `textDisplayModal.ts`: reusable read-only text modal, trigger button, and collector wiring
 - `resolveSendableChannel.ts`: cache-first, REST-fallback channel resolution for send paths, plus `isChannelGoneError` for the deleted-channel and lost-access cases
 - `historyFetcher.ts`, `historyFormatter.ts`
+- `importFileIntake.ts`, `transferExportDelivery.ts`: the upload intake and DM delivery the portable transfer leaves share, so no leaf re-implements either sequence
+- `reminderSelectOptions.ts`: resolves one reminder row into the option caption both `/scheduled-task` selectors render, taking the repeat and creator locale keys from its caller
 
 #### Sending into a channel the cache no longer holds
 
@@ -105,7 +107,7 @@ the **What You Can Do** button below an error (e.g. in `stream/errorUi.ts` and `
   not list it in `tipKeys`; it is filtered out if they do, so it can never be duplicated or
   reordered. It is appended *after* the empty check, so a tip modal with no caller-supplied items
   still returns `null` rather than degrading into a support-link-only embed.
-- The button is disabled after `TIP_BUTTON_TIMEOUT_MS` (default 24 hours). The generic
+- The button is disabled after `TIP_BUTTON_TIMEOUT_MS` (24 hours). The generic
   `textDisplayModal.ts` builder is also available to read-only legal and help surfaces.
 
 ### `utils/text`

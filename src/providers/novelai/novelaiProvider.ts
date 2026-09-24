@@ -20,8 +20,8 @@ import type {
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { buildStreamContext } from "@/utils/provider/streamContext";
-import { NovelaiStreamAdapter, type NovelaiStreamConfig } from "./novelaiStreamAdapter";
-import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
+import { NovelaiStreamAdapter } from "./novelaiStreamAdapter";
+import type { ProviderError, StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { TomoriState } from "@/types/db/schema";
@@ -312,7 +312,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     log.info(`NovelAIProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`);
 
     try {
-      const streamConfig: NovelaiStreamConfig = {
+      const streamConfig: StreamConfig = {
         ...config,
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
         flushBufferSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,

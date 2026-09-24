@@ -30,7 +30,7 @@ python -m pip install -r servers/tts/chatterbox/requirements.txt
 python servers/tts/chatterbox/server.py
 ```
 
-TomoriBot 使用 Chatterbox 期间，请让这个终端一直开着。默认端点 URL 是 `http://127.0.0.1:8011`。
+TomoriBot 使用 Chatterbox 期间，请让这个终端一直开着。默认端点 URL 是 `http://127.0.0.1:8011`；要使用其他端口，请设置 `CHATTERBOX_PORT`。
 
 ### 可选：使用 Chatterbox-Nano
 

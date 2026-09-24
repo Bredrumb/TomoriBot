@@ -28,6 +28,16 @@ import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapa
 import { getEffectiveLlmModelName } from "@/utils/provider/modelDisplay";
 
 /**
+ * Loop-safety guard for the batch loop: after this many consecutive no-progress iterations the
+ * loop aborts, so a model that consistently errors or fails to match items can never loop
+ * forever. Any other exit condition must keep that guarantee.
+ */
+const EXPRESSION_INIT_MAX_CHUNK_RETRIES = 3;
+
+/** Brief pause between batches to stay within provider rate limits. */
+const EXPRESSION_INIT_BATCH_DELAY_MS = 1000;
+
+/**
  * Configure the subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
@@ -333,12 +343,6 @@ export async function execute(
       return;
     }
 
-    // Loop-safety guard: after `maxChunkRetries` consecutive no-progress iterations
-    //    the loop aborts, so a model that consistently errors or fails to match items
-    //    can never loop forever. Any other exit condition must keep that guarantee.
-    const maxChunkRetries = Number.parseInt(process.env.EXPRESSION_INIT_MAX_CHUNK_RETRIES || "3", 10);
-    const batchDelayMs = Number.parseInt(process.env.EXPRESSION_INIT_BATCH_DELAY_MS || "1000", 10);
-
     const systemPrompt = buildSystemPrompt();
     const temperature = 1.0;
 
@@ -364,11 +368,11 @@ export async function execute(
       if (remaining === previousRemaining) {
         chunkRetries++;
         log.warn(
-          `[Initialize Expressions] No progress on chunk (${remaining} remaining), retry ${chunkRetries}/${maxChunkRetries}`,
+          `[Initialize Expressions] No progress on chunk (${remaining} remaining), retry ${chunkRetries}/${EXPRESSION_INIT_MAX_CHUNK_RETRIES}`,
         );
-        if (chunkRetries >= maxChunkRetries) {
+        if (chunkRetries >= EXPRESSION_INIT_MAX_CHUNK_RETRIES) {
           log.warn(
-            `[Initialize Expressions] Aborting after ${maxChunkRetries} consecutive no-progress attempts; ${remaining} expressions left unprocessed`,
+            `[Initialize Expressions] Aborting after ${EXPRESSION_INIT_MAX_CHUNK_RETRIES} consecutive no-progress attempts; ${remaining} expressions left unprocessed`,
           );
           break;
         }
@@ -486,8 +490,8 @@ export async function execute(
 
       // Brief pause between batches to stay within provider rate limits, skipped
       //     when this batch drained the remaining backlog (no further iteration needed)
-      if (batchDelayMs > 0 && remaining - (emojiCount + stickerCount) > 0) {
-        await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
+      if (EXPRESSION_INIT_BATCH_DELAY_MS > 0 && remaining - (emojiCount + stickerCount) > 0) {
+        await new Promise((resolve) => setTimeout(resolve, EXPRESSION_INIT_BATCH_DELAY_MS));
       }
     }
 

@@ -1,8 +1,7 @@
 import type { SetupDraftContext, SetupDraftProviderAccess, SetupDraftRecord } from "@/types/discord/setupWizard";
 
-const parsedSetupDraftMaxEntries = Number.parseInt(process.env.SETUP_DRAFT_MAX_ENTRIES || "200", 10);
-export const SETUP_DRAFT_MAX_ENTRIES =
-  Number.isFinite(parsedSetupDraftMaxEntries) && parsedSetupDraftMaxEntries > 0 ? parsedSetupDraftMaxEntries : 200;
+/** Exported so the eviction test sizes its fixture against the real bound. */
+export const SETUP_DRAFT_MAX_ENTRIES = 200;
 
 export interface SetupDraftStoreEntry extends SetupDraftRecord {
   writeClaimed?: boolean;

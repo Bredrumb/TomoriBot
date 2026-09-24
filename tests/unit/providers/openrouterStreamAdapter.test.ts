@@ -705,3 +705,64 @@ describe("OpenrouterStreamAdapter strict chat-completion compatibility", () => {
     ]);
   });
 });
+
+/**
+ * Streams OpenRouter's queue keepalive comments for `keepaliveMs`, then the given data events.
+ * `contentFirst` sends one content chunk before the keepalives instead, to model a stall mid-reply.
+ */
+function makeQueuedSseResponse(keepaliveMs: number, contentFirst: boolean): Response {
+  const encoder = new TextEncoder();
+  const content = (text: string) =>
+    encoder.encode(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: text } }] })}\n\n`);
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      if (contentFirst) controller.enqueue(content("Hello"));
+      const until = Date.now() + keepaliveMs;
+      while (Date.now() < until) {
+        controller.enqueue(encoder.encode(": OPENROUTER PROCESSING\n\n"));
+        await Bun.sleep(10);
+      }
+      controller.enqueue(content(" world"));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+}
+
+async function collectWithIdleBudget(response: Response, inactivityTimeoutMs: number): Promise<RawStreamChunk[]> {
+  globalThis.fetch = (async () => response) as unknown as typeof fetch;
+  const chunks: RawStreamChunk[] = [];
+  const config = { ...makeStreamConfig(), inactivityTimeoutMs };
+  for await (const chunk of new OpenrouterStreamAdapter().startStream(config, makeStreamContext())) {
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+function streamedText(chunks: RawStreamChunk[]): string {
+  return chunks
+    .map((chunk) => {
+      const data = chunk.data as { choices?: Array<{ delta?: { content?: string } }> };
+      return data.choices?.[0]?.delta?.content ?? "";
+    })
+    .join("");
+}
+
+describe("OpenrouterStreamAdapter first-token budget", () => {
+  it("waits out a queue of keepalives longer than the idle budget before the first token", async () => {
+    // A queued free model sends only keepalives; judging that wait by the idle budget cut the
+    // request off before the model ever started.
+    const chunks = await collectWithIdleBudget(makeQueuedSseResponse(150, false), 40);
+
+    expect(streamedText(chunks)).toBe(" world");
+  });
+
+  it("still enforces the idle budget once the first token has arrived", async () => {
+    const chunks = await collectWithIdleBudget(makeQueuedSseResponse(150, true), 40);
+    const errors = chunks.map((chunk) => (chunk.data as { error?: { message?: string } }).error?.message);
+
+    expect(streamedText(chunks)).toBe("Hello");
+    expect(errors).toContainEqual(expect.stringContaining("timed out due to inactivity"));
+  });
+});

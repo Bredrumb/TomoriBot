@@ -28,7 +28,7 @@ python -m pip install -r servers/tts/qwen3tts/requirements.txt
 python servers/tts/qwen3tts/server.py
 ```
 
-URL endpoint mặc định ở chế độ tự động là `http://127.0.0.1:8012`. Bạn cũng có thể chỉ định rõ chế độ tự động:
+URL endpoint mặc định ở chế độ tự động là `http://127.0.0.1:8012`; đặt `QWEN3TTS_PORT` để dùng cổng khác. Bạn cũng có thể chỉ định rõ chế độ tự động:
 
 ```powershell
 python servers\tts\qwen3tts\server.py --mode auto

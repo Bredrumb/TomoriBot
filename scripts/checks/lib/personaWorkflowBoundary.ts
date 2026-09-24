@@ -312,12 +312,7 @@ export function scanPersonaWorkflowSource(
   const violations: PersonaWorkflowBoundaryViolation[] = [];
   const seen = new Set<string>();
 
-  const addViolation = (
-    node: ts.Node,
-    kind: PersonaWorkflowViolationKind,
-    symbol: string,
-    message: string,
-  ): void => {
+  const addViolation = (node: ts.Node, kind: PersonaWorkflowViolationKind, symbol: string, message: string): void => {
     const start = node.getStart(sourceFile);
     const key = `${kind}:${start}`;
     if (seen.has(key)) return;
@@ -392,8 +387,8 @@ export function scanPersonaWorkflowSource(
       const isStringIndexedLowLevelCall =
         ts.isElementAccessExpression(callee) &&
         Boolean(callee.argumentExpression) &&
-        ts.isStringLiteralLike(unwrapExpression(callee.argumentExpression!)) &&
-        (unwrapExpression(callee.argumentExpression!) as ts.StringLiteralLike).text === LOW_LEVEL_PICKER;
+        ts.isStringLiteralLike(unwrapExpression(callee.argumentExpression)) &&
+        (unwrapExpression(callee.argumentExpression) as ts.StringLiteralLike).text === LOW_LEVEL_PICKER;
 
       if (isAliasedLowLevelCall || isStringIndexedLowLevelCall) {
         addViolation(
@@ -520,8 +515,7 @@ export async function auditPersonaWorkflowBoundary(): Promise<PersonaWorkflowBou
   }
 
   violations.sort(
-    (a, b) =>
-      a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column || a.kind.localeCompare(b.kind),
+    (a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column || a.kind.localeCompare(b.kind),
   );
   return { violations, scannedFiles };
 }

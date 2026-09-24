@@ -58,17 +58,17 @@ Para instalar explícitamente en una máquina solo con CPU, pasa el interruptor 
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-Si tu instalación nativa de PyTorch en Windows alguna vez necesita una reinstalación manual o una realineación de controladores, instala la compilación de PyTorch con CUDA habilitado directamente en el entorno virtual del sidecar:
+Si tu instalación nativa de PyTorch en Windows alguna vez necesita una reinstalación manual o una realineación de controladores, instala la compilación de PyTorch con CUDA habilitado directamente en el entorno virtual del servidor:
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-OpenBMB reporta aproximadamente 0.30 RTF en una RTX 4090 con el tiempo de ejecución estándar. Upstream también admite la generación en streaming y documenta las opciones de servicio más rápidas Nano-vLLM y vLLM-Omni. El contrato actual `POST /synthesize` de TomoriBot devuelve una respuesta WAV, por lo que este sidecar almacena intencionalmente en búfer el enunciado generado en lugar de exponer un protocolo de transmisión separado.
+OpenBMB reporta aproximadamente 0.30 RTF en una RTX 4090 con el tiempo de ejecución estándar. Upstream también admite la generación en streaming y documenta las opciones de servicio más rápidas Nano-vLLM y vLLM-Omni. El contrato actual `POST /synthesize` de TomoriBot devuelve una respuesta WAV, por lo que este servidor almacena intencionalmente en búfer el enunciado generado en lugar de exponer un protocolo de transmisión separado.
 
 ## Instalación
 
-El sidecar fija el paquete estable actual `voxcpm` 2.0.3 y descarga `openbmb/VoxCPM2` en la caché normal de Hugging Face.
+El servidor fija el paquete estable actual `voxcpm` 2.0.3 y descarga `openbmb/VoxCPM2` en la caché normal de Hugging Face.
 
 ### Linux / WSL Bash
 
@@ -103,9 +103,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-Después de la configuración, `bun run launch --voxcpm2` inicia el sidecar junto con TomoriBot. El endpoint predeterminado es `http://127.0.0.1:8016`.
-
-Si `VOXCPM2_API_KEY` o `TOMORI_TTS_API_KEY` están configurados, registra el endpoint con autenticación habilitada y guarda la misma clave en TomoriBot. El lanzador todavía prueba la ruta no autenticada `/health`, mientras que las solicitudes de síntesis usan `Authorization: Bearer <key>`.
+Después de la configuración, `bun run launch --voxcpm2` inicia el servidor junto con TomoriBot. El endpoint predeterminado es `http://127.0.0.1:8016`.
 
 ## Registro en TomoriBot
 
@@ -172,19 +170,13 @@ Una vez que VoxCPM2 es el modelo de Voz activo, `/generate voice-message` usa la
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | Reintentos automáticos máximos |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | Umbral de longitud de caso malo upstream |
 | `VOXCPM2_PREFETCH` | `1` | Solo instalador: descargar el modelo durante la configuración |
-| `VOXCPM2_PORT` | `8016` | Puerto del sidecar de VoxCPM2; recurre a `TOMORI_TTS_PORT` si no está establecido |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del sidecar |
-| `TOMORI_TTS_PORT` | `8016` | Recurso de puerto de sidecar compartido compatible con versiones anteriores |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | Tamaño máximo de audio de referencia decodificado |
-| `VOXCPM2_API_KEY` | sin establecer | Token portador opcional para `/synthesize`; se acepta `TOMORI_TTS_API_KEY` como respaldo |
-| `TOMORI_TTS_API_KEY` | sin establecer | Recurso de token portador opcional compartido para `/synthesize` |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | Establecer en `1` solo para permitir un enlace no loopback sin un token portador |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Longitud máxima de texto de síntesis aceptada |
+| `VOXCPM2_PORT` | `8016` | Puerto del servidor local de VoxCPM2 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del servidor local; consulta [Acceso de red](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-El audio de referencia debe ser un contenedor WAV no vacío. El envoltorio aplica el límite de bytes decodificados antes de escribir un archivo temporal. `/health` permanece sin autenticar para verificaciones de preparación locales; `/synthesize` requiere `Authorization: Bearer <key>` siempre que se configure una clave. Mantén el enlace de loopback predeterminado a menos que exista un proxy inverso o una política remota explícita.
+El audio de referencia debe ser un contenedor WAV no vacío de 10 MB decodificados como máximo, lo que el envoltorio verifica antes de escribir un archivo temporal.
 
 ## Puntos de control y tiempos de ejecución alternativos
 
 El modelo BF16 oficial ya se adapta al objetivo previsto de GPU de consumo de 16 GB, por lo que TomoriBot no usa por defecto un punto de control cuantificado. Existen cuantificaciones de la comunidad, pero agregan otra capa de compatibilidad y mantenimiento sin ser necesarias para la configuración normal.
 
-Para implementaciones de alto rendimiento, OpenBMB apunta actualmente a Nano-vLLM-VoxCPM y vLLM-Omni como opciones de servicio acelerado. Esos tiempos de ejecución pueden exponer funciones de transmisión y de servicio simultáneo más allá de este sidecar de referencia. No son requeridos para el flujo de trabajo local normal de mensajes de voz de TomoriBot, y este envoltorio se mantiene deliberadamente en la API oficial de `voxcpm` para que las actualizaciones del modelo upstream sigan siendo fáciles de seguir.
+Para implementaciones de alto rendimiento, OpenBMB apunta actualmente a Nano-vLLM-VoxCPM y vLLM-Omni como opciones de servicio acelerado. Esos tiempos de ejecución pueden exponer funciones de transmisión y de servicio simultáneo más allá de este servidor de referencia. No son requeridos para el flujo de trabajo local normal de mensajes de voz de TomoriBot, y este envoltorio se mantiene deliberadamente en la API oficial de `voxcpm` para que las actualizaciones del modelo upstream sigan siendo fáciles de seguir.

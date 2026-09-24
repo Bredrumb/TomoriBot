@@ -47,7 +47,7 @@ El instalador:
 4. descarga el punto de control oficial BF16 `fishaudio/s2-pro` en `fish-speech/checkpoints/fish-speech-s2-pro/`.
 
 Una reinstalación normal se mantiene en el commit de tiempo de ejecución fijado `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` en lugar
-de seguir una rama en movimiento. La revisión del modelo predeterminada es `main`; fija `FISH_S2_MODEL_REVISION` a
+de seguir una rama en movimiento; pasar a un tiempo de ejecución más nuevo significa cambiar ese valor fijado en el instalador. La revisión del modelo predeterminada es `main`; fija `FISH_S2_MODEL_REVISION` a
 una revisión inmutable de Hugging Face cuando una implementación deba ser reproducible. La configuración del instalador
 se enumera en [Variables del instalador](#installer-variables).
 
@@ -102,7 +102,7 @@ En `/providers`, elige **Agregar nuevo punto de conexión personalizado** y conf
 - Endpoint URL: `http://127.0.0.1:8015`
 - Modo de fuente de voz: `Clone`
 - Estilo de marcado del guion: `Bracket Tags`
-- Clave de API: déjalo vacío para la configuración loopback predeterminada. Si la autenticación de portador está habilitada, ingresa el valor exacto de `FISH_S2_API_KEY`.
+- Clave de API: déjalo vacío. El envoltorio no tiene autenticación; consulta [Acceso de red](/self-hosting/local-endpoints/text-to-speech/#network-access).
 
 Luego agrega la entrada del modelo del endpoint y actívala a través de `/config` bajo Modelos > Cambiar modelos.
 
@@ -130,18 +130,10 @@ Debido a que el endpoint usa el marcado `Bracket Tags`, TomoriBot conserva estas
 
 | Variable | Predeterminado | Propósito |
 |---|---|---|
-| `FISH_SPEECH_DIR` | `servers/tts/fishs2/fish-speech` | Directorio de tiempo de ejecución de Fish Speech |
 | `FISH_S2_MODEL_DIR` | `fish-speech/checkpoints/fish-speech-s2-pro` | Directorio del punto de control S2 Pro |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | Repositorio de modelos y etiqueta de metadatos de salud para el punto de control configurado |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del envoltorio de TomoriBot |
-| `FISH_S2_PORT` | `8015` | Puerto del envoltorio Fish; recurre a `TOMORI_TTS_PORT` cuando no está establecido |
-| `TOMORI_TTS_PORT` | sin establecer | Anulación del puerto compartido compatible con versiones anteriores |
-| `FISH_S2_API_KEY` | sin establecer | Token portador opcional, también requerido para enlaces remotos autenticados |
-| `TOMORI_TTS_API_KEY` | sin establecer | Recurso de token portador compartido cuando `FISH_S2_API_KEY` no está establecido |
-| `FISH_S2_ALLOW_INSECURE_REMOTE` | `0` | Permitir explícitamente un enlace no loopback sin un token portador |
-| `FISH_S2_MAX_REF_AUDIO_BYTES` | `10485760` | Tamaño máximo de WAV de referencia decodificado |
-| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | sin establecer | Recurso de límite de audio de referencia decodificado compartido |
-| `FISH_S2_UPSTREAM_HOST` | `127.0.0.1` | Dirección de enlace interna de la API de Fish |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del envoltorio; consulta [Acceso de red](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `FISH_S2_PORT` | `8015` | Puerto del envoltorio Fish |
 | `FISH_S2_UPSTREAM_PORT` | `8025` | Puerto de la API interna de Fish |
 | `FISH_S2_COMPILE` | `0` | Habilitar Fish Speech `torch.compile` (requiere Linux/WSL2 con Triton) |
 | `FISH_S2_HALF` | `0` | Solicitar modo de tiempo de ejecución FP16 |
@@ -151,10 +143,6 @@ Debido a que el endpoint usa el marcado `Bracket Tags`, TomoriBot conserva estas
 | `FISH_S2_REPETITION_PENALTY` | `1.1` | Penalización por repetición |
 | `FISH_S2_MAX_NEW_TOKENS` | `1024` | Máximos tokens semánticos generados por solicitud |
 | `FISH_S2_USE_MEMORY_CACHE` | `on` | Almacenar en caché las voces de referencia codificadas en el tiempo de ejecución de Fish |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Longitud máxima del guion aceptada por el envoltorio |
-| `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` | Tiempo máximo de espera para la API anidada de Fish |
-| `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` | Tiempo máximo de espera para una solicitud de síntesis upstream |
-| `FISH_S2_LAUNCH_TIMEOUT_MS` | `240000` | Cuánto tiempo espera `bun run launch --fishs2` por la comprobación de estado del envoltorio |
 
 ### Variables del instalador
 
@@ -162,16 +150,10 @@ Leídas por `install-fishs2.sh` e `install-fishs2.ps1`. Registra cualquier valor
 
 | Variable | Predeterminado | Propósito |
 |---|---|---|
-| `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` | Repositorio de tiempo de ejecución de Fish Speech, por ejemplo un espejo revisado |
-| `FISH_S2_RUNTIME_REF` | `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` | Commit de tiempo de ejecución comprobado en la instalación |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | Repositorio de Hugging Face para descargar |
 | `FISH_S2_MODEL_REVISION` | `main` | Revisión de Hugging Face para descargar |
-| `FISH_S2_UPDATE` | `0` | Establecer en `1` para actualizar deliberadamente el tiempo de ejecución y volver a descargar el modelo |
-| `FISH_S2_UPDATE_REF` | sin establecer | Referencia de tiempo de ejecución para una actualización. Sin ella, se mantiene un explícito `FISH_S2_RUNTIME_REF`; de lo contrario, la actualización usa `main` |
-| `FISH_S2_UPDATE_MODEL_REVISION` | sin establecer | Revisión del modelo para una actualización, con la misma precedencia que `FISH_S2_UPDATE_REF` |
 
-El audio de referencia debe ser un archivo RIFF/WAVE PCM no vacío y sin comprimir. El límite de tamaño decodificado se
-verifica antes de la inferencia para evitar que una solicitud base64 de gran tamaño consuma memoria sin límites.
+El audio de referencia debe ser un archivo RIFF/WAVE PCM no vacío, sin comprimir y de 10 MB decodificados como máximo. El límite se verifica antes de la inferencia para que una solicitud base64 de gran tamaño no consuma memoria sin límites, y alcanza para unos 237 segundos del WAV mono de 22.05 kHz que envía TomoriBot.
 
 ## Opción de VRAM Baja (Cuantificación INT8)
 

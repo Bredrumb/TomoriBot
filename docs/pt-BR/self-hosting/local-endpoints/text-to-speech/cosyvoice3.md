@@ -23,7 +23,7 @@ Os exemplos oficiais do CosyVoice 3 incluem atualmente uma ressalva importante p
 
 ## Como o TomoriBot mapeia as solicitações
 
-O wrapper aceita os campos normais do sidecar de clonagem:
+O wrapper aceita os campos normais de `tts-clone`:
 
 - `text`
 - `ref_audio`
@@ -51,7 +51,7 @@ O campo `instruct` do `/synthesize` é passado para o condicionamento de instru�
 
 O CosyVoice 3 suporta streaming bidirecional no upstream. O projeto documenta tanto o streaming de entrada de texto quanto o streaming de saída de áudio, com latência para o primeiro áudio de cerca de 150 ms em sua configuração otimizada.
 
-A interface TTS personalizada atual do TomoriBot espera uma resposta de áudio completa para uma mensagem de voz no Discord, então este sidecar retorna um WAV completo e define a inferência upstream como padrão para `stream=False`. Defina `COSYVOICE3_UPSTREAM_STREAM=1` apenas ao testar o gerador upstream; isso não reduz a latência de resposta do TomoriBot até que exista um transporte de voz por streaming.
+A interface TTS personalizada atual do TomoriBot espera uma resposta de áudio completa para uma mensagem de voz no Discord, então este servidor retorna um WAV completo e define a inferência upstream como padrão para `stream=False`. Defina `COSYVOICE3_UPSTREAM_STREAM=1` apenas ao testar o gerador upstream; isso não reduz a latência de resposta do TomoriBot até que exista um transporte de voz por streaming.
 
 ## Hardware
 
@@ -79,7 +79,7 @@ bash servers/tts/cosyvoice3/install-cosyvoice3.sh
 servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
 ```
 
-Ou inicie o sidecar configurado e o TomoriBot juntos:
+Ou inicie o servidor configurado e o TomoriBot juntos:
 
 ```bash
 bun run launch --cosyvoice3
@@ -92,9 +92,9 @@ O instalador:
 3. instala os requisitos atuais do CosyVoice upstream, mais o pequeno conjunto de dependências do wrapper; e
 4. baixa o `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` na revisão `29e01c4e8d000f4bcd70751be16fa94bf3d85a18` do Hugging Face em `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/`.
 
-Execuções normais subsequentes mantêm exatamente essas revisões. Para atualizar deliberadamente uma instalação, defina `COSYVOICE3_UPDATE=1` e forneça substituições explícitas para `COSYVOICE3_RUNTIME_COMMIT` e/ou `COSYVOICE3_MODEL_REVISION`. O instalador recusa-se a alterar silenciosamente um checkout ou modelo que não corresponda à revisão registrada.
+Novas execuções mantêm exatamente essas revisões; migrar para revisões mais novas significa alterar os dois pins no instalador. O instalador se recusa a reinstalar sobre um checkout do runtime que tenha alterações locais.
 
-Os requisitos upstream atualmente usam o PyTorch 2.3.1 com o índice de pacotes do CUDA 12.1, pacotes CUDA 12 do ONNX Runtime no Linux e pacotes do TensorRT 10.13 no Linux. Se você estiver usando um hardware que exija uma compilação (build) mais recente do PyTorch para CUDA, instale uma compilação compatível do PyTorch no venv do sidecar após os requisitos upstream e teste-a com seu driver.
+Os requisitos upstream atualmente usam o PyTorch 2.3.1 com o índice de pacotes do CUDA 12.1, pacotes CUDA 12 do ONNX Runtime no Linux e pacotes do TensorRT 10.13 no Linux. Se você estiver usando um hardware que exija uma compilação (build) mais recente do PyTorch para CUDA, instale uma compilação compatível do PyTorch no venv do servidor após os requisitos upstream e teste-a com seu driver.
 
 ### Windows PowerShell
 
@@ -131,7 +131,7 @@ Para a clonagem zero-shot normal:
 3. Insira a transcrição correspondente quando possível. O CosyVoice 3 usa isso para o caminho zero-shot com suporte de transcrição, e ela é tokenizada como prefixo de prompt, então deve descrever o áudio que é realmente usado: os primeiros 30 segundos do clipe.
 4. Abra `/config` em Persona > Voice e atribua essa amostra à persona.
 
-O tokenizador de fala do CosyVoice trabalha com uma janela de prompt de 30 segundos, e o upstream a impõe ao falhar: a própria interface web do upstream orienta manter o áudio de prompt abaixo de 30 segundos, e o tokenizador afirma esse limite em vez de encurtar o áudio em si. O sidecar corta, então um clipe mais longo é cortado nos primeiros 30 segundos e a síntese continua. `COSYVOICE3_MAX_REF_AUDIO_SECONDS` define essa janela, e o corte é registrado no console do sidecar.
+O tokenizador de fala do CosyVoice trabalha com uma janela de prompt de 30 segundos, e o upstream a impõe ao falhar: a própria interface web do upstream orienta manter o áudio de prompt abaixo de 30 segundos, e o tokenizador afirma esse limite em vez de encurtar o áudio em si. O servidor local corta, então um clipe mais longo é cortado nos primeiros 30 segundos, a síntese continua e o corte é registrado no console do servidor.
 
 O corte lê o clipe no próprio lugar, o que significa que o embedding de locutor é obtido dos mesmos 30 segundos iniciais usados como tokens de fala do prompt. É esse par que o CosyVoice usa como condicionamento, então uma referência longa não perde nada que o motor teria usado. O efeito prático é que apenas os 30 segundos iniciais de um upload longo condicionam a voz, enquanto o restante é enviado e armazenado sem ser usado.
 
@@ -149,21 +149,10 @@ Para uma entrega expressiva, insira uma direção de entrega global no modal ou 
 
 | Variável | Padrão | Propósito |
 |---|---|---|
-| `COSYVOICE3_RUNTIME_DIR` | `servers/tts/cosyvoice3/CosyVoice` | Checkout oficial do CosyVoice |
 | `COSYVOICE3_MODEL_DIR` | `CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B` | Diretório de checkpoint local |
-| `COSYVOICE3_MODEL_ID` | `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` | Modelo do Hugging Face baixado pela instalação |
-| `COSYVOICE3_RUNTIME_COMMIT` | commit revisado acima | Revisão do checkout do CosyVoice |
-| `COSYVOICE3_MODEL_REVISION` | revisão do modelo acima | Revisão de snapshot do Hugging Face |
-| `COSYVOICE3_UPDATE` | `0` | Permitir uma atualização de revisão explícita pelo instalador |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de bind do wrapper |
-| `COSYVOICE3_PORT` | `8017` | Porta do wrapper, revertendo para `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_PORT` | não definido | Fallback de porta compartilhada retrocompatível |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Comprimento máximo do texto de síntese |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Endereço de bind do wrapper; consulte [Acesso de rede](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `COSYVOICE3_PORT` | `8017` | Porta do wrapper |
 | `COSYVOICE3_UPSTREAM_STREAM` | `0` | Habilitar o gerador de streaming interno do CosyVoice |
-| `COSYVOICE3_MAX_REF_AUDIO_BYTES` | `26214400` | Tamanho máximo decodificado do áudio de referência |
-| `COSYVOICE3_MAX_REF_AUDIO_SECONDS` | `30` | Janela de prompt do tokenizador de fala; uma referência mais longa é cortada nos primeiros N segundos |
-| `COSYVOICE3_BEARER_TOKEN` | não definido | Token bearer opcional para `/synthesize` |
-| `COSYVOICE3_ALLOW_REMOTE_BIND` | `0` | Permitir bind não-loopback; analise a exposição remota e use um token bearer |
 | `COSYVOICE3_SPEED` | `1.0` | Multiplicador numérico global de velocidade passado para inferência upstream |
 | `COSYVOICE3_DEFAULT_INSTRUCT` | vazio | Instrução opcional adicionada quando uma solicitação não a fornece |
 | `COSYVOICE3_FP16` | `0` | Pedir para o runtime oficial usar seu modo fp16 |
@@ -188,7 +177,7 @@ O carregador oficial atual sempre lê um arquivo chamado `llm.pt`. Para experime
 
 O CosyVoice 3 também suporta caminhos opcionais vLLM e TensorRT. Atualmente, o upstream documenta o vLLM 0.11.x+ usando o motor V1 e o vLLM 0.9.0 como o caminho legado. Esses runtimes têm restrições adicionais de versão e hardware, de modo que o TomoriBot não os instala ou habilita por padrão.
 
-Use-os apenas depois que o sidecar comum do PyTorch estiver funcionando. Para uma carga de trabalho de mensagens de voz no Discord, evitar complexidade adicional de runtime geralmente é mais útil do que otimizar um modelo já pequeno de 0.5B.
+Use-os apenas depois que o servidor comum do PyTorch estiver funcionando. Para uma carga de trabalho de mensagens de voz no Discord, evitar complexidade adicional de runtime geralmente é mais útil do que otimizar um modelo já pequeno de 0.5B.
 
 ## Licença
 

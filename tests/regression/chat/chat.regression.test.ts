@@ -604,7 +604,7 @@ describe("chat regression harness", () => {
       textQuotaSource: "user",
       manualTriggerInvoker: {
         userDiscId: activeMessage.author.id,
-        username: "Sparrow",
+        username: "Mirri",
       },
     };
     const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);

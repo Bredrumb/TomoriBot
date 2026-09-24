@@ -3,9 +3,7 @@ from __future__ import annotations
 import atexit
 import base64
 import binascii
-import hmac
 import io
-import ipaddress
 import os
 import subprocess
 import sys
@@ -19,13 +17,13 @@ from typing import Optional
 
 import ormsgpack
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 
 ROOT = Path(__file__).resolve().parent
-FISH_SPEECH_DIR = Path(os.getenv("FISH_SPEECH_DIR", ROOT / "fish-speech")).resolve()
+FISH_SPEECH_DIR = ROOT / "fish-speech"
 MODEL_DIR = Path(
     os.getenv(
         "FISH_S2_MODEL_DIR",
@@ -34,26 +32,21 @@ MODEL_DIR = Path(
 ).resolve()
 
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("FISH_S2_PORT", os.getenv("TOMORI_TTS_PORT", "8015")))
-UPSTREAM_HOST = os.getenv("FISH_S2_UPSTREAM_HOST", "127.0.0.1")
+PORT = int(os.getenv("FISH_S2_PORT", "8015"))
+# The nested Fish API has no authentication, so it stays on loopback even when the wrapper is exposed.
+UPSTREAM_HOST = "127.0.0.1"
 UPSTREAM_PORT = int(os.getenv("FISH_S2_UPSTREAM_PORT", "8025"))
 UPSTREAM_URL = f"http://{UPSTREAM_HOST}:{UPSTREAM_PORT}"
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
-MAX_REFERENCE_AUDIO_BYTES = int(
-    os.getenv("FISH_S2_MAX_REF_AUDIO_BYTES", os.getenv("TOMORI_TTS_MAX_REF_AUDIO_BYTES", str(10 * 1024 * 1024)))
-)
-STARTUP_TIMEOUT_SECONDS = float(os.getenv("FISH_S2_STARTUP_TIMEOUT_SECONDS", "180"))
-SYNTHESIS_TIMEOUT_SECONDS = float(os.getenv("FISH_S2_SYNTHESIS_TIMEOUT_SECONDS", "1800"))
+MAX_TEXT_CHARS = 2000
+# Bounds memory before decoding. TomoriBot sends 16-bit mono 22.05 kHz WAV (about 44 KB/s), so this holds
+# about 237 s; lowering it below the bot's SPEECH_SAMPLE_MAX_DURATION_SECS rejects clips the bot accepted.
+MAX_REFERENCE_AUDIO_BYTES = 10 * 1024 * 1024
+STARTUP_TIMEOUT_SECONDS = 180.0
+# Longer than TomoriBot's own request timeout, so the bot rather than the wrapper decides when to give up.
+SYNTHESIS_TIMEOUT_SECONDS = 1800.0
 COMPILE = os.getenv("FISH_S2_COMPILE", "0").lower() in {"1", "true", "yes", "on"}
 HALF = os.getenv("FISH_S2_HALF", "0").lower() in {"1", "true", "yes", "on"}
 MODEL_ID = os.getenv("FISH_S2_MODEL_ID", "fishaudio/s2-pro")
-API_KEY = (os.getenv("FISH_S2_API_KEY") or os.getenv("TOMORI_TTS_API_KEY") or "").strip()
-ALLOW_INSECURE_REMOTE = os.getenv("FISH_S2_ALLOW_INSECURE_REMOTE", "0").lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
 
 CHUNK_LENGTH = int(os.getenv("FISH_S2_CHUNK_LENGTH", "200"))
 TOP_P = float(os.getenv("FISH_S2_TOP_P", "0.8"))
@@ -73,37 +66,6 @@ class SynthesizeRequest(BaseModel):
     language: Optional[str] = None
 
 
-def is_loopback_host(host: str) -> bool:
-    normalized = host.strip().lower()
-    if normalized == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(normalized).is_loopback
-    except ValueError:
-        return False
-
-
-def validate_bind_policy() -> None:
-    if not is_loopback_host(HOST) and not API_KEY and not ALLOW_INSECURE_REMOTE:
-        raise RuntimeError(
-            "Fish S2 remote binding requires FISH_S2_API_KEY or "
-            "FISH_S2_ALLOW_INSECURE_REMOTE=1. Keep TOMORI_TTS_HOST on loopback when possible."
-        )
-
-
-def authorize_request(request: Request | None) -> None:
-    if not API_KEY:
-        return
-    authorization = request.headers.get("authorization", "") if request is not None else ""
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(token, API_KEY):
-        raise HTTPException(
-            status_code=401,
-            detail="A valid bearer token is required.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
 def require_installation() -> None:
     api_server = FISH_SPEECH_DIR / "tools" / "api_server.py"
     codec = MODEL_DIR / "codec.pth"
@@ -115,7 +77,7 @@ def require_installation() -> None:
     if not codec.is_file():
         raise RuntimeError(
             f"Fish S2 Pro checkpoint not found at {MODEL_DIR}. "
-            f"Download {MODEL_ID} before starting the sidecar."
+            f"Download {MODEL_ID} before starting the local server."
         )
 
 
@@ -126,7 +88,7 @@ def wait_for_upstream() -> None:
         if fish_process is not None and fish_process.poll() is not None:
             raise RuntimeError(f"Fish Speech API exited during startup with code {fish_process.returncode}.")
         try:
-            # UPSTREAM_URL hardcodes http:// and takes host and port from operator env, never from a request.
+            # UPSTREAM_URL hardcodes http:// and loopback; only the port comes from operator env, never from a request.
             # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             with urllib.request.urlopen(health_url, timeout=2) as response:
                 if 200 <= response.status < 300:
@@ -139,7 +101,6 @@ def wait_for_upstream() -> None:
 
 def start_fish_api() -> None:
     global fish_process
-    validate_bind_policy()
     require_installation()
 
     api_server_script = str(FISH_SPEECH_DIR / "tools" / "api_server.py")
@@ -211,8 +172,7 @@ app = FastAPI(title="TomoriBot Fish Audio S2 Pro TTS Server", lifespan=lifespan)
 
 
 @app.get("/health")
-def health(request: Request) -> dict[str, str | bool]:
-    authorize_request(request)
+def health() -> dict[str, str | bool]:
     running = fish_process is not None and fish_process.poll() is None
     return {
         "status": "ok" if running else "loading",
@@ -274,8 +234,7 @@ def decode_reference_audio(raw_base64: str) -> bytes:
 
 
 @app.post("/synthesize")
-def synthesize(payload: SynthesizeRequest, request: Request) -> Response:
-    authorize_request(request)
+def synthesize(payload: SynthesizeRequest) -> Response:
     if fish_process is None or fish_process.poll() is not None:
         raise HTTPException(status_code=503, detail="Fish Speech runtime is not ready.")
 

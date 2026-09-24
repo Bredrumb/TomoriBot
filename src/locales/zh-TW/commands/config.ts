@@ -351,10 +351,6 @@ export default {
       self_debug_description: "控制我是否能在聊天中看到自己的錯誤與 診斷訊息。",
       self_debug_on: `我可以看到自己的錯誤與診斷訊息。`,
       self_debug_off: `我看不到自己的錯誤與診斷訊息。`,
-      compatibility_title: `相容性`,
-      compatibility_description: "因應供應商特殊行為的處理方式。每一行說明了 目前生效的行為。",
-      custom_provider_limitation: `只影響 Custom 供應商的文字端點。`,
-      edit_workarounds_button: `編輯相容性調整`,
       behavior_notices_title: `通知`,
       behavior_notices_description: `選擇大家能看到哪些回覆細節。`,
       notice_embeds_title: `通知嵌入`,
@@ -1227,17 +1223,6 @@ CFG 權重：**{cfg_weight}**
           cancel_remove_button: `取消`,
         },
       },
-    },
-    workarounds: {
-      checkbox_label: `可用的相容性調整`,
-      checkbox_label_continued: `可用的相容性調整（續）`,
-      checkbox_description: `已勾選的相容性調整會在這個伺服器啟用。`,
-      too_many_title: `相容性調整過多`,
-      too_many_description: `目前設定了 {count} 項相容性調整，超過視窗上限：{max_groups} 個群組共 {max_entries} 個項目。`,
-      verbatim_tool_calling_option: `逐字工具呼叫`,
-      verbatim_tool_calling_desc: `在沒有原生工具的 Custom 端點上，解析嚴格的文字工具呼叫。`,
-      verbatim_tool_calling_enabled: `工具呼叫會依原文逐字送出。`,
-      verbatim_tool_calling_disabled: `工具呼叫會以供應商的原生格式送出。`,
     },
     custom_models: {
       remove: {

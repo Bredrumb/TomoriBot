@@ -32,7 +32,8 @@ Handler: `src/events/interactionCreate/handleCommands.ts`
 
 - Cooldown type: `CooldownType.COMMAND_CATEGORY`
 - Key shape: `user_disc_id + command_category`
-- Durations come from env (`DEFAULT_COMMAND_COOLDOWN`, `COOLDOWN_CONFIG`, `COOLDOWN_PERSONA`, `COOLDOWN_MEMORY`, `COOLDOWN_SERVER`, `COOLDOWN_PERSONAL`, `COOLDOWN_CONDITIONING`)
+- Base durations are constants in `handleCommands.ts`: `COOLDOWN_PERSONA_MS` (10,000 ms) for `/persona`, `CATEGORY_COOLDOWN_MS` (3,000 ms) for the other listed categories, and `DEFAULT_COOLDOWN_MS` (1,600 ms) for everything else
+- `COMMAND_COOLDOWN_SCALE` multiplies every base duration (default `1`), so the ratio between categories holds at any scale; `0` skips both the cooldown check and the write
 - Cooldown warning uses localized `general.cooldown*` keys
 
 ## Message Trigger Cooldowns

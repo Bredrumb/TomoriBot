@@ -39,7 +39,7 @@ La URL predeterminada del punto de conexión es `http://127.0.0.1:8013`.
 
 El modelo predeterminado es `Aratako/Irodori-TTS-v4.1-Small`. Los repositorios compatibles de Hugging Face, ajustes finos de la comunidad (como `phasefield-audio/Irodori-TTS-v4.1-Anime`), o archivos de puntos de control locales se pueden configurar a través de variables de entorno.
 
-Al iniciar el sidecar (directamente con Python o a través de `bun run launch --irodoritts`), el servidor lee automáticamente el `.env` de la raíz del repositorio (o un `.env` local en `servers/tts/irodoritts/`) y registra el ID del modelo activo al inicio.
+Al iniciar el servidor (directamente con Python o a través de `bun run launch --irodoritts`), lee automáticamente el `.env` de la raíz del repositorio (o un `.env` local en `servers/tts/irodoritts/`) y registra el ID del modelo activo al inicio.
 
 ### A través de `.env` (Persistente)
 
@@ -123,6 +123,60 @@ TomoriBot envía este prompt como `instruct`; el envoltorio de Irodori lo asigna
 
 TomoriBot elimina la sintaxis de emoji personalizados de Discord antes de enviar el texto al texto a voz. Con `script_markup: emoji`, los emojis Unicode se conservan para el condicionamiento de texto de Irodori.
 
+### Controles de estilo con emoji
+
+IrodoriTTS admite anotaciones con emoji en el texto de entrada para influir en los efectos de sonido, la forma de hablar y las expresiones emocionales. Con `Script Markup Style` de TomoriBot configurado como `Emoji`, estos emojis Unicode se conservan y se envían a Irodori.
+
+| Emoji | Significado / emoción / estilo |
+| --- | --- |
+| 👂 | Susurro, sonidos cerca del oído |
+| 😮‍💨 | Respiración, suspiro, respiración al dormir |
+| ⏸️ | Pausa, silencio |
+| 🤭 | Risita, risa contenida |
+| 🥵 | Jadeo, gemido, gruñido |
+| 📢 | Eco, reverberación |
+| 😏 | En tono burlón, dulce y juguetón / persuasivo |
+| 🥺 | Voz temblorosa, tímidamente / con inseguridad |
+| 🌬️ | Falta de aire, respiración agitada |
+| 😮 | Jadeo / inhalación repentina |
+| 👅 | Sonido de lamer, masticar, sonidos húmedos |
+| 💋 | Chasquido de labios / ruido de labios |
+| 🫶 | Suavemente, con ternura |
+| 😭 | Sollozo, llanto, tristeza |
+| 😱 | Grito, alarido, chillido |
+| 😪 | Con sueño, lánguidamente |
+| 😴 | Hablar dormido, roncar |
+| ⏩ | Habla rápida, atropellada, con prisa |
+| 📞 | Como por teléfono o altavoz |
+| 🐢 | Lentamente |
+| 🥤 | Trago / sonido al tragar |
+| 🤧 | Tos, aspirar por la nariz, estornudo, carraspeo |
+| 😒 | Chasquido de lengua |
+| 😰 | Con pánico, agitación, nervios, tartamudeo |
+| 😆 | Con alegría, feliz |
+| 💥 | Con fuerza / impulso |
+| 😠 | Enojado, molesto, haciendo pucheros |
+| 😲 | Sorpresa, asombro / exclamación |
+| 🥱 | Bostezo |
+| 😖 | Con dolor, agonía |
+| 😟 | Con ansiedad, preocupación |
+| 🫣 | Con timidez, vergüenza |
+| 🙄 | Con exasperación, poniendo los ojos en blanco |
+| 😊 | Alegremente, con gusto |
+| 😎 | Con confianza, orgullosamente |
+| 👌 | Asentimiento / sonido de acuerdo |
+| 🙏 | Suplicando, rogando |
+| 🥴 | Borracho |
+| 🎵 | Tarareo |
+| 🤐 | Voz amortiguada (boca cubierta) |
+| 😌 | Aliviado, satisfecho |
+| 🤔 | Voz interrogativa / de duda |
+| 💪 | Con esfuerzo, con fuerza |
+| 👃 | Sonido de olfatear |
+| 📖 | Narración, monólogo |
+
+Repetir el mismo emoji puede intensificar el efecto. El control mediante emoji no es perfectamente consistente, así que conviene tratarlos como indicaciones de estilo y no como una garantía del resultado. Consulta las [anotaciones oficiales de emoji de IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) para ver la lista original y futuras actualizaciones.
+
 ## Inferencia más rápida con Sway Sampling
 
 El valor predeterminado sigue siendo el muestreo lineal de 40 pasos de mayor calidad de Irodori. Para menor latencia, prueba Sway Sampling con menos pasos:
@@ -139,7 +193,7 @@ Esta es una compensación entre calidad y velocidad de inferencia, así que pru�
 
 El instalador anterior de TomoriBot clonaba y parcheaba el `pyproject.toml` de Irodori, instalaba manualmente `dacvae` y fijaba un commit antiguo de Irodori de la era v2. Esas soluciones alternativas eran necesarias para el diseño del paquete upstream anterior, pero ya no son apropiadas para el Irodori actual.
 
-El sidecar ahora tiene su propio `pyproject.toml` y sigue la configuración del backend `uv` upstream. Irodori y `dacvae` permanecen fijados a commits conocidos allí para instalaciones reproducibles, pero TomoriBot ya no modifica el código fuente upstream durante la instalación.
+El servidor ahora tiene su propio `pyproject.toml` y sigue la configuración del backend `uv` upstream. Irodori y `dacvae` permanecen fijados a commits conocidos allí para instalaciones reproducibles, pero TomoriBot ya no modifica el código fuente upstream durante la instalación.
 
 ## Variables de entorno
 
@@ -147,8 +201,8 @@ El sidecar ahora tiene su propio `pyproject.toml` y sigue la configuración del 
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repositorio de modelos de Hugging Face o fuente compatible de repositorio/subcarpeta |
 | `IRODORI_TTS_CHECKPOINT` | sin establecer | Punto de control opcional local `.pt` o `.safetensors`; anula el modelo de Hugging Face |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del servidor |
-| `TOMORI_TTS_PORT` | `8013` | Puerto del servidor |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Dirección de enlace del servidor; consulta [Acceso de red](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Puerto del servidor |
 | `IRODORI_MODEL_DEVICE` | `auto` | Dispositivo del modelo (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
 | `IRODORI_CODEC_DEVICE` | `auto` | Dispositivo del códec |
 | `IRODORI_MODEL_PRECISION` | `bf16` en CUDA, de lo contrario `fp32` | Precisión del modelo |
@@ -162,4 +216,3 @@ El sidecar ahora tiene su propio `pyproject.toml` y sigue la configuración del 
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Escala de orientación de subtítulos / Diseño de voz |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Escala de orientación del orador de referencia |
 | `IRODORI_MAX_REF_SECONDS` | valor predeterminado del punto de control | Límite opcional en la duración del audio de referencia |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Límite de longitud de texto por solicitud |

@@ -20,7 +20,6 @@ if (mode !== "--backup" && mode !== "--restore") {
   process.exit(1);
 }
 
-
 async function runExternalCommand(
   command: string,
   args: string[],
@@ -63,11 +62,9 @@ function resolveDatabaseUrl(): string {
   return `postgresql://${user}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-
 async function runBackup(): Promise<void> {
   await runDataBackup({ backupType: "manual" });
 }
-
 
 /**
  * Restores a TomoriBot install from a transfer bundle created by --backup.
@@ -225,7 +222,6 @@ async function runRestore(bundlePath: string): Promise<void> {
   log.info("  3. Start the bot with `bun run dev` or `bun run start`.");
 }
 
-
 /**
  * Scans the backups/ directory and returns the path of the most recently
  * created bundle. Bundle folders are named backup_YYYY-MM-DD_HH-MM-SS so
@@ -256,7 +252,6 @@ function resolveLatestBundle(): string {
   log.info(`Using latest bundle: ${bundles[0]}`);
   return latest;
 }
-
 
 let entryPromise: Promise<void>;
 

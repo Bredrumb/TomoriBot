@@ -74,6 +74,7 @@ export default {
       flush_limit_description: `这条回复已经达到最大消息长度上限，所以被中断了。如果需要，你可以用 \`/respond\` 手动继续生成。`,
       inactivity_timeout_title: `🟡️ 回复超时`,
       inactivity_timeout_description: `AI 提供方停止响应，连接超时了。提供方过载或出问题时都可能这样。请再试一次。`,
+      first_token_timeout_description: `AI 提供方接受了请求，但一直没有开始回复，连接因此超时。它的队列很可能已经积压。请再试一次，或者换一个没那么忙的模型。`,
     },
     // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
     // modal. Each key is one bullet; callers compose conditional items instead of maintaining
@@ -93,6 +94,9 @@ export default {
       choose_supported_model_personal: `用 \`/personal config\` 或者你的自定义端点设置，选择一个受支持的模型 ID。`,
       verify_api_key: `请再核对一次这个服务器的 API 密钥，然后重试。`,
       verify_api_key_personal: `用 \`/personal providers\` 再核对一次你的个人 API 密钥，然后重试。`,
+      verify_api_key_expiry: `NVIDIA NIM 密钥会过期，而 NVIDIA 对过期密钥返回的错误和输错的密钥一样。请到 [build.nvidia.com](https://build.nvidia.com) 查看它的有效期，如果已经失效就重新生成一个。`,
+      nvidia_register_free_model: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
+      nvidia_register_free_model_personal: `NVIDIA 经常下线托管的模型。请从 [NVIDIA 的免费端点](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview)里选一个它当前提供的模型，复制模型 ID（例如 \`deepseek-ai/deepseek-v4.1-flash\`），然后在 \`/personal providers\` > NVIDIA NIM > **+ 添加新文本模型** 里添加。`,
       google_credential_type: `这看起来像 OAuth 或服务账号令牌。\`google\` 提供方需要来自 [Google AI Studio](https://aistudio.google.com/apikey) 的普通 API 密钥；Google Cloud 凭据请改用 \`vertex\` 提供方。`,
       openrouter_privacy_settings: `到 [OpenRouter 隐私设置](https://openrouter.ai/settings/privacy)调整你的「Data Policy」，允许这个模型，或者换一个模型。`,
       openrouter_fund_account: `往你的 OpenRouter 账户充值至少 10 美元额度，才能解锁每天 1000 次免费模型请求。`,
@@ -186,6 +190,8 @@ export default {
       unknown_default_message: `发生了意料之外的错误`,
     },
     nvidia: {
+      "401_default_message": `NVIDIA 没有识别出这个密钥。请检查它是否完整复制，包括 \`nvapi-\` 前缀。`,
+      "403_default_message": `NVIDIA 拒绝了这个密钥。它可能输错了、已经过期，或者所属账号没有推理访问权限。`,
       "404_default_message": `找不到所请求的 NVIDIA NIM 模型。它可能已经被 NVIDIA 弃用。`,
       "500_default_message": `为这个模型提供服务的 NVIDIA 后端失败了。这通常是暂时性的，请稍后再试。下面的细节是 NVIDIA 自己的报告，具有权威性：如果里面点名了某个请求参数，请调整那项设置，不要靠猜。`,
       // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request

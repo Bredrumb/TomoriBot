@@ -6,24 +6,11 @@ RUNTIME_DIR="${SCRIPT_DIR}/fish-speech"
 VENV_DIR="${SCRIPT_DIR}/.venv"
 MODEL_DIR="${FISH_S2_MODEL_DIR:-${RUNTIME_DIR}/checkpoints/fish-speech-s2-pro}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-RUNTIME_REPOSITORY="${FISH_S2_RUNTIME_REPOSITORY:-https://github.com/Imagilux/fish-speech.git}"
-RUNTIME_REF="${FISH_S2_RUNTIME_REF:-2225e924e7d35cc0a1d24dbc67cd1819e6cf429f}"
+RUNTIME_REPOSITORY="https://github.com/Imagilux/fish-speech.git"
+# The wrapper depends on this runtime's CLI flags and MessagePack schema. Bump it here after testing.
+RUNTIME_REF="2225e924e7d35cc0a1d24dbc67cd1819e6cf429f"
 MODEL_ID="${FISH_S2_MODEL_ID:-fishaudio/s2-pro}"
 MODEL_REVISION="${FISH_S2_MODEL_REVISION:-main}"
-UPDATE_RUNTIME="${FISH_S2_UPDATE:-0}"
-
-if [[ "${UPDATE_RUNTIME,,}" =~ ^(1|true|yes|on)$ ]]; then
-  if [ -n "${FISH_S2_UPDATE_REF:-}" ]; then
-    RUNTIME_REF="$FISH_S2_UPDATE_REF"
-  elif [ -z "${FISH_S2_RUNTIME_REF:-}" ]; then
-    RUNTIME_REF="main"
-  fi
-  if [ -n "${FISH_S2_UPDATE_MODEL_REVISION:-}" ]; then
-    MODEL_REVISION="$FISH_S2_UPDATE_MODEL_REVISION"
-  elif [ -z "${FISH_S2_MODEL_REVISION:-}" ]; then
-    MODEL_REVISION="main"
-  fi
-fi
 
 if ! command -v git >/dev/null 2>&1; then
   echo "git is required." >&2
@@ -46,11 +33,10 @@ git -C "$RUNTIME_DIR" checkout --detach --force "$RUNTIME_REF"
 "$VENV_DIR/bin/python" -m pip install -r "$SCRIPT_DIR/requirements.txt"
 "$VENV_DIR/bin/python" -m pip install -e "$RUNTIME_DIR"
 
-if [[ "${UPDATE_RUNTIME,,}" =~ ^(1|true|yes|on)$ ]] || [ ! -f "$MODEL_DIR/model.pth" ] || [ ! -f "$MODEL_DIR/codec.pth" ]; then
-  echo "Downloading ${MODEL_ID} checkpoint at revision ${MODEL_REVISION}..."
-  echo "If Hugging Face requests authentication, accept the model license and run: hf auth login"
-  "$VENV_DIR/bin/hf" download "$MODEL_ID" --revision "$MODEL_REVISION" --local-dir "$MODEL_DIR"
-fi
+# hf download skips files already current in --local-dir, so a rerun only fetches a changed revision.
+echo "Downloading ${MODEL_ID} checkpoint at revision ${MODEL_REVISION}..."
+echo "If Hugging Face requests authentication, accept the model license and run: hf auth login"
+"$VENV_DIR/bin/hf" download "$MODEL_ID" --revision "$MODEL_REVISION" --local-dir "$MODEL_DIR"
 
 cat <<EOF
 Fish S2 Pro setup complete.

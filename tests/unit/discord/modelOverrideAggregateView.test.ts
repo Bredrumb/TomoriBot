@@ -55,7 +55,7 @@ function makePersona(overrides: Partial<TomoriState>): TomoriState {
   return {
     server_id: 9,
     persona_id: 55,
-    persona_nickname: "Sparrow",
+    persona_nickname: "Mirri",
     persona_lineage_id: 101,
     config: {},
     ...overrides,
@@ -235,7 +235,7 @@ describe("/model override remove - (1) route codecs and IDs", () => {
 describe("/model override remove - (2) literal wire types and defaults", () => {
   it("pins wrapper type 18 and nested CheckboxGroup type 22 with default true", () => {
     const channel = makeChannelEntry("channel-1");
-    const persona = makePersonaEntry(55, "Sparrow");
+    const persona = makePersonaEntry(55, "Mirri");
     const modal = buildModelOverrideRemoveModal("en-US", 0, "abcd1234", "nonce123", [channel, persona]);
 
     // Discord component types are bare wire integers. Type 19 is FileUpload and is destructive
@@ -285,7 +285,7 @@ describe("/model override remove - (4) slash command <=50 direct modal vs >50 pa
       makePersona({}) as Awaited<ReturnType<typeof tomoriStateCache.getCachedTomoriState>>,
     );
     const personasSpy = spyOn(tomoriStateCache, "getCachedAllPersonas").mockResolvedValue([
-      makePersona({ persona_id: 55, persona_nickname: "Sparrow", persona_llm: LLM_A }),
+      makePersona({ persona_id: 55, persona_nickname: "Mirri", persona_llm: LLM_A }),
     ] as unknown as Awaited<ReturnType<typeof tomoriStateCache.getCachedAllPersonas>>);
     const channelSpy = spyOn(llmOverrideRepo, "getAllChannelLlmOverridesForServer").mockResolvedValue([
       { channelDiscId: "channel-1", llm: LLM_A },
@@ -484,7 +484,7 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
   it("performs no repository write when fingerprint is stale", async () => {
     let writeCalled = false;
 
-    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Sparrow")];
+    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Mirri")];
 
     const dependencies: ModelOverrideRouteDependencies = {
       resolveScope: async () => ({
@@ -523,7 +523,7 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
   it("performs no repository write when all checkbox lookups return undefined (no evidence)", async () => {
     let writeCalled = false;
 
-    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Sparrow")];
+    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Mirri")];
     const validFp = computeModelOverrideBatchFingerprint(entries, 0);
 
     const dependencies: ModelOverrideRouteDependencies = {
@@ -564,7 +564,7 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
   it("clears unchecked persona while keeping checked channel upon valid submission with serverDiscId", async () => {
     const writtenInputs: TextModelOverrideInput[] = [];
 
-    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Sparrow")];
+    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Mirri")];
     const validFp = computeModelOverrideBatchFingerprint(entries, 0);
 
     const dependencies: ModelOverrideRouteDependencies = {
@@ -611,7 +611,7 @@ describe("/model override remove - (6) routed submit stale fp and absent checkbo
   it("treats empty array checkbox lookup as evidence that all presented rows are unchecked and supplies serverDiscId", async () => {
     const writtenInputs: TextModelOverrideInput[] = [];
 
-    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Sparrow")];
+    const entries: ModelOverrideEntry[] = [makeChannelEntry("channel-1"), makePersonaEntry(55, "Mirri")];
     const validFp = computeModelOverrideBatchFingerprint(entries, 0);
 
     const dependencies: ModelOverrideRouteDependencies = {
@@ -929,7 +929,7 @@ describe("setTextModelOverride cache invalidation behavior", () => {
 describe("buildModelOverrideRemoveModal option descriptions and mixed chunk contract", () => {
   it("labels each row with its target and describes only the effective model", () => {
     const channelEntry = makeChannelEntry("channel-1", LLM_A);
-    const personaEntry = makePersonaEntry(55, "Sparrow", LLM_A);
+    const personaEntry = makePersonaEntry(55, "Mirri", LLM_A);
 
     const mockGuild = {
       channels: {
@@ -953,7 +953,7 @@ describe("buildModelOverrideRemoveModal option descriptions and mixed chunk cont
     expect(options[0].label).toBe("#general");
     expect(options[0].description).toBe("gemini-2.5-flash (google)");
 
-    expect(options[1].label).toBe("Sparrow");
+    expect(options[1].label).toBe("Mirri");
     expect(options[1].description).toBe("gemini-2.5-flash (google)");
   });
 
@@ -979,7 +979,7 @@ describe("buildModelOverrideRemoveModal option descriptions and mixed chunk cont
       0,
       "abcd1234",
       "nonce123",
-      [makePersonaEntry(55, "Sparrow")],
+      [makePersonaEntry(55, "Mirri")],
       null,
     );
     expect(personaModal.components[0].label).toBe(
@@ -993,7 +993,7 @@ describe("buildModelOverrideRemoveModal option descriptions and mixed chunk cont
 
   it("labels mixed chunk with mixed checkbox label and description instead of lying about contents", () => {
     const channelEntry = makeChannelEntry("channel-1", LLM_A);
-    const personaEntry = makePersonaEntry(55, "Sparrow", LLM_A);
+    const personaEntry = makePersonaEntry(55, "Mirri", LLM_A);
 
     const modal = buildModelOverrideRemoveModal("en-US", 0, "abcd1234", "nonce123", [channelEntry, personaEntry], null);
 
@@ -1067,7 +1067,7 @@ describe("buildModelOverrideRemoveModal option descriptions and mixed chunk cont
       0,
       "abcd1234",
       "nonce123",
-      [makePersonaEntry(56, "Sparrow", withinCapLlm)],
+      [makePersonaEntry(56, "Mirri", withinCapLlm)],
       null,
     );
     const options = (modal.components[0].component as { options: Array<{ label: string; description: string }> })
@@ -1086,7 +1086,7 @@ describe("buildModelOverrideRemoveModal option descriptions and mixed chunk cont
       0,
       "abcd1234",
       "nonce123",
-      [makePersonaEntry(57, "Sparrow", overCapLlm)],
+      [makePersonaEntry(57, "Mirri", overCapLlm)],
       null,
     );
     const overCapOptions = (

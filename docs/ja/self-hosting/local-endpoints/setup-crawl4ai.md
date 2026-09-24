@@ -1,15 +1,15 @@
 ---
-title: "セットアップ: Crawl4AI (サイドカー)"
+title: "セットアップ: Crawl4AI"
 sidebar:
   order: 4
 ---
-# セットアップ: Crawl4AIサイドカー
+# セットアップ: Crawl4AI
 
-`fetch_url`ツールは、デフォルトでプロセス内の`safe_http`エンジンを使用します。JSを多用するページでレンダリングされたコンテンツが必要な場合、信頼された開発環境でのみブラウザレンダリングサイドカーをオプションで使用できます。
+`fetch_url`ツールは、デフォルトでプロセス内の`safe_http`エンジンを使用します。JSを多用するページでレンダリングされたコンテンツが必要な場合、信頼された開発環境でのみブラウザレンダリング用のローカルサーバーをオプションで使用できます。
 
 デフォルトのエンジンの順序は`safe_http`です。Crawl4AIはTomoriBotの保護されたHTTPクライアント外でリダイレクトを追跡するため、プライベートネットワーク取得が許可されている場合にのみ使用されます。本番環境以外では自動的に許可され、設定は不要です。本番環境では明示的な`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`のオプトインが必要ですが、推奨しません。
 
-Crawl4AIは、ブラウザでレンダリングされたマークダウンサイドカーです。Playwrightベースのヘッドレスブラウザを実行し、独自のコンテンツフィルターを使用してLLMフレンドリーなマークダウンをサーバー側で抽出します。TomoriBot側での後処理は必要ありません。
+Crawl4AIは、ブラウザでレンダリングされたマークダウンサーバーです。Playwrightベースのヘッドレスブラウザを実行し、独自のコンテンツフィルターを使用してLLMフレンドリーなマークダウンをサーバー側で抽出します。TomoriBot側での後処理は必要ありません。
 
 Crawl4AIのセットアップパスを1つ選択してください。
 
@@ -23,11 +23,11 @@ Crawl4AIのセットアップパスを1つ選択してください。
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-これにより、TomoriBotのDockerネットワーク上でCrawl4AIサイドカーを含むComposeスタックが開始されます。
+これにより、TomoriBotのDockerネットワーク上でCrawl4AIコンテナを含むComposeスタックが開始されます。
 
 TomoriBotを`bun run dev`で直接実行している場合は、代わりに以下のスタンドアロンパスを使用してください。
 
-SearXNGサイドカーも必要な場合は、プロファイルをチェーンします。
+SearXNGも必要な場合は、プロファイルをチェーンします。
 
 ```sh
 docker compose --profile searxng --profile fetch-crawl4ai up -d
@@ -41,13 +41,13 @@ Crawl4AIのAPIトークン認証を有効にする場合は、`.env`に`CRAWL4AI
 
 まず、ボットがホストの公開されたコンテナポートに接続するように、`.env`に`CRAWL4AI_BASE_URL=http://localhost:11235/`と`FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`を設定します。本番環境以外ではプライベートネットワークのオプトインは不要です。`RUN_ENV=production`で実行する場合のみ`FETCH_URL_ALLOW_PRIVATE_NETWORK=true`を追加してください。
 
-次に、TomoriBotを`bun run dev`で直接実行する代わりに、`bun run launch --crawl4ai`を使用します。これにより、コンテナのライフサイクルが自動的に処理され、サイドカーが正常になるのを待ってからボットが起動します。
+次に、TomoriBotを`bun run dev`で直接実行する代わりに、`bun run launch --crawl4ai`を使用します。これにより、コンテナのライフサイクルが自動的に処理され、サーバーが正常になるのを待ってからボットが起動します。
 
 ```sh
 bun run launch --crawl4ai
 ```
 
-SearXNGサイドカーも必要な場合:
+SearXNGも必要な場合:
 
 ```sh
 bun run launch --searxng --crawl4ai
@@ -69,13 +69,13 @@ docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
   unclecode/crawl4ai:latest
 ```
 
-サイドカーを保護する場合は、`docker run`に`-e CRAWL4AI_API_TOKEN=your_token`を渡し、`.env`に`CRAWL4AI_TOKEN=your_token`を設定します。
+コンテナを保護する場合は、`docker run`に`-e CRAWL4AI_API_TOKEN=your_token`を渡し、`.env`に`CRAWL4AI_TOKEN=your_token`を設定します。
 
 その後、コンテナが正常に動作したら（`docker ps`で`(healthy)`と表示されたら）、`bun run dev`を実行します。
 
 ---
 
-### C. ブラウザサイドカーなし
+### C. ブラウザレンダリングサーバーなし
 
 `CRAWL4AI_BASE_URL`は設定しないでください。`fetch_url`ツールは保護された`safe_http`エンジンを使用します。
 
@@ -83,9 +83,9 @@ docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
 
 ## 起動順序 (重要)
 
-TomoriBotは、**起動後の最初の`fetch_url`呼び出し**でサイドカーのヘルスをプローブし、その結果を60秒間キャッシュします。その最初のプローブが実行されたときにコンテナの準備ができていない場合、ボットは次の1分間、コンテナが利用できないものとして扱います。
+TomoriBotは、**起動後の最初の`fetch_url`呼び出し**でサーバーのヘルスをプローブし、その結果を60秒間キャッシュします。その最初のプローブが実行されたときにコンテナの準備ができていない場合、ボットは次の1分間、コンテナが利用できないものとして扱います。
 
-スタンドアロンDockerの場合、TomoriBotを起動する前にサイドカーコンテナを起動してください。`bun run launch --crawl4ai`はすでにこれを自動で行います。
+スタンドアロンDockerの場合、TomoriBotを起動する前にCrawl4AIコンテナを起動してください。`bun run launch --crawl4ai`はすでにこれを自動で行います。
 
 ### 初回セットアップ
 
@@ -156,8 +156,7 @@ CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":"
 | `CRAWL4AI_BASE_URL` | 未設定 | 設定するとCrawl4AIが有効になります。Docker Composeからは`http://crawl4ai:11235/`を使用し、TomoriBotがマシンで直接実行されている場合は`http://localhost:11235/`を使用します。 |
 | `CRAWL4AI_TOKEN` | 未設定 | オプションのベアラートークン。有効にする場合は、Crawl4AIコンテナの`CRAWL4AI_API_TOKEN`と一致する必要があります。 |
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | コンマ区切りのエンジンリスト。`safe_http`は常に最終フォールバックとして追加され、従来の`mcp_fetch`名はそのエイリアスです。プライベートネットワーク取得が許可されていない場合（オプトインなしの本番環境）、Crawl4AIは無視されます。 |
-| `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AIおよびURLフェッチサイドカーのエンジンごとのリクエストタイムアウト。 |
+| `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AIおよびその他のURLフェッチエンジンのエンジンごとのリクエストタイムアウト。 |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | 続きを取得する必要が生じる前に、1回のフェッチで返す最大文字数。 |
-| `FETCH_URL_HEALTHCHECK_CACHE_SEC` | `60` | Crawl4AIのヘルスプローブ結果が再チェックされる前にキャッシュされる時間。 |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | 本番環境専用のオプトイン。本番環境以外（`RUN_ENV` != `production`）ではSSRFガードが自動的に緩和されるため、localhost/プライベート/内部URLの取得とCrawl4AIディスパッチは設定なしで機能します。信頼された本番環境でプライベートネットワーク取得を許可する場合のみ`true`に設定してください。 |
 | `FETCH_URL_FILTER_MODE` | `fit` | Crawl4AIの`/md`フィルターモード。`fit`はLLMで使用するためにマークダウンをクリーンに保ちます。`fetch_url(..., raw=true)`はリクエストごとにこれをオーバーライドします。 |

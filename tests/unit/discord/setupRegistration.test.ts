@@ -67,8 +67,8 @@ describe("/setup registration", () => {
   });
 
   it("applies the correct cooldown to the setup root", () => {
-    const configCooldown = Number.parseInt(process.env.COOLDOWN_CONFIG || "3000", 10);
-    const defaultCooldown = Number.parseInt(process.env.DEFAULT_COMMAND_COOLDOWN || "1600", 10);
+    const configCooldown = 3000;
+    const defaultCooldown = 1600;
 
     expect(resolveCommandCooldown("setup")).toBe(configCooldown);
     expect(resolveCommandCooldown("config")).toBe(configCooldown);

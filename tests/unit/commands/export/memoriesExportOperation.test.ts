@@ -50,7 +50,7 @@ const PERSONAL_MEMORIES_EXPORT = getPersonalMemoriesV2ExportSchema().parse({
 const USER_DATA = { user_id: 1, user_disc_id: ACTOR_ID, language_pref: LOCALE } as unknown as UserRow;
 
 const WORKSPACE_PERSONAS = [
-  { persona_id: 7, persona_lineage_id: 70, persona_nickname: "Sparrow" },
+  { persona_id: 7, persona_lineage_id: 70, persona_nickname: "Mirri" },
   { persona_id: 8, persona_lineage_id: 80, persona_nickname: "Juno" },
 ] as unknown as TomoriState[];
 
@@ -444,11 +444,11 @@ describe("memory export persona autocomplete", () => {
       ...Array.from({ length: 40 }, (_unused, index) => ({
         persona_id: index + 1,
         persona_lineage_id: index + 1,
-        persona_nickname: `Sparrow ${index}`,
+        persona_nickname: `Mirri ${index}`,
       })),
-      { persona_id: 99, persona_lineage_id: 99, persona_nickname: "Sparrow" },
+      { persona_id: 99, persona_lineage_id: 99, persona_nickname: "Mirri" },
     ] as unknown as TomoriState[];
-    const { interaction, answers } = makeAutocompleteInteraction({ inGuild: true, focused: "sparrow" });
+    const { interaction, answers } = makeAutocompleteInteraction({ inGuild: true, focused: "mirri" });
     const { deps } = makeDependencies({ personas });
 
     await respondWithMemoryExportPersonas(interaction, deps);

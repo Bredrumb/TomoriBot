@@ -70,7 +70,7 @@ bun run setup
 
 ```bash
 bun run dev                          # 只启动 bot
-bun run launch --searxng --crawl4ai  # bot 加边车服务（见 bun run launch --help）
+bun run launch --searxng --crawl4ai  # bot 加本地服务器（见 bun run launch --help）
 ```
 
 bot 上线后，在 Discord 里运行 `/setup` 来接入 AI 提供方。没有自己的提供方的工作区无法回复，除非它以用户 BYOK 模式运行，由每位成员的个人提供方代为回答，所以这是每条安装路径的最后一步。
@@ -103,7 +103,7 @@ bot 上线后，在 Discord 里运行 `/setup` 来接入 AI 提供方。没有�
 
 **完成设置** 会一直处于禁用状态，直到渲染出来的每一步都完成。它会重新校验目录与工作区状态，在一个事务里提交整份草稿，然后用回执替换面板。**取消** 会丢弃草稿，并让面板上的每个控件失效。
 
-草稿保存在 bot 进程里，而不是数据库里，所以它只会在被取消、被完成或进程重启时结束。最多同时保留 `SETUP_DRAFT_MAX_ENTRIES`（默认 200）份草稿，达到上限时丢弃最旧的那份。它记录在 `.env.optional.example` 的 **Setup wizard drafts** 一节。对已不存在的会话操作控件不会写入任何内容。
+草稿保存在 bot 进程里，而不是数据库里，所以它只会在被取消、被完成或进程重启时结束。最多同时保留 200 份草稿，达到上限时丢弃最旧的那份。对已不存在的会话操作控件不会写入任何内容。
 
 ## 更新
 

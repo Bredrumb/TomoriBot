@@ -8,17 +8,20 @@ import handler, { resolveCommandCooldown } from "@/events/interactionCreate/hand
 
 describe("handleCommands", () => {
   it("keeps /punish and /reward on the configured conditioning cooldown after leaving that category", () => {
-    const conditioningCooldown = Number.parseInt(
-      process.env.COOLDOWN_CONDITIONING || process.env.COOLDOWN_SERVER || "3000",
-      10,
-    );
-    const defaultCooldown = Number.parseInt(process.env.DEFAULT_COMMAND_COOLDOWN || "1600", 10);
+    const conditioningCooldown = 3000;
+    const defaultCooldown = 1600;
 
-    expect(resolveCommandCooldown("conditioning")).toBe(conditioningCooldown);
-    expect(resolveCommandCooldown("punish")).toBe(conditioningCooldown);
-    expect(resolveCommandCooldown("reward")).toBe(conditioningCooldown);
+    expect(resolveCommandCooldown("conditioning", 1)).toBe(conditioningCooldown);
+    expect(resolveCommandCooldown("punish", 1)).toBe(conditioningCooldown);
+    expect(resolveCommandCooldown("reward", 1)).toBe(conditioningCooldown);
 
-    expect(resolveCommandCooldown("unknown-command")).toBe(defaultCooldown);
+    expect(resolveCommandCooldown("unknown-command", 1)).toBe(defaultCooldown);
+  });
+
+  it("scales every cooldown by COMMAND_COOLDOWN_SCALE, keeping /persona proportionally longer", () => {
+    expect(resolveCommandCooldown("persona", 0.1)).toBe(1000);
+    expect(resolveCommandCooldown("config", 0.1)).toBe(300);
+    expect(resolveCommandCooldown("persona", 0)).toBe(0);
   });
 
   it("should respond with empty array for autocomplete when no autocomplete map matches", async () => {

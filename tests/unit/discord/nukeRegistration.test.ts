@@ -46,8 +46,8 @@ describe("/nuke registration", () => {
   });
 
   it("applies the correct cooldown to the new bare root", () => {
-    const serverCooldown = Number.parseInt(process.env.COOLDOWN_SERVER || "3000", 10);
-    const defaultCooldown = Number.parseInt(process.env.DEFAULT_COMMAND_COOLDOWN || "1600", 10);
+    const serverCooldown = 3000;
+    const defaultCooldown = 1600;
 
     expect(resolveCommandCooldown("nuke")).toBe(serverCooldown);
     expect(resolveCommandCooldown("server")).toBe(serverCooldown);

@@ -30,7 +30,7 @@ python -m pip install -r servers/tts/chatterbox/requirements.txt
 python servers/tts/chatterbox/server.py
 ```
 
-Mantén esa terminal abierta mientras TomoriBot esté usando Chatterbox. La URL del punto de conexión predeterminado es `http://127.0.0.1:8011`.
+Mantén esa terminal abierta mientras TomoriBot esté usando Chatterbox. La URL del punto de conexión predeterminado es `http://127.0.0.1:8011`; configura `CHATTERBOX_PORT` para usar otro puerto.
 
 ### Opcional: usa Chatterbox-Nano
 

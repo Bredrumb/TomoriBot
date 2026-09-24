@@ -1,6 +1,6 @@
 ---
 title: "Chatterbox TTS"
-aiGenerated: false
+aiGenerated: true
 ---
 
 Use `servers/tts/chatterbox/server.py` for English voice cloning with supported event tags. The fast-model path defaults to Chatterbox-Turbo (350M parameters). Chatterbox-Nano (110M parameters) can be selected for smaller CPU-oriented deployments. This wrapper does not load Chatterbox Multilingual V3.
@@ -31,7 +31,7 @@ python -m pip install -r servers/tts/chatterbox/requirements.txt
 python servers/tts/chatterbox/server.py
 ```
 
-Keep that terminal open while TomoriBot is using Chatterbox. The default endpoint URL is `http://127.0.0.1:8011`.
+Keep that terminal open while TomoriBot is using Chatterbox. The default endpoint URL is `http://127.0.0.1:8011`; set `CHATTERBOX_PORT` to use another port.
 
 ### Optional: use Chatterbox-Nano
 

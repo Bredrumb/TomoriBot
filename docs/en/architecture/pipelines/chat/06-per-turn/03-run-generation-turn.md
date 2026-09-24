@@ -1,4 +1,4 @@
-﻿---
+---
 title: "06.3: Generation Turn"
 ---
 
@@ -207,13 +207,13 @@ The stage is a coordinator over several plugin-relevant subsystems:
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `OPENROUTER_APP_ATTRIBUTION_ENABLED` | `true` | Sends TomoriBot app attribution headers to OpenRouter for app rankings and aggregated usage analytics. Set to `false` to omit them. |
-| `OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS` | `2` | Per-retry history-pair drop count when OpenRouter returns empty/length |
-| `OPENROUTER_MAX_OUTPUT_TOKENS` | `8192` | OpenRouter truncation/request output-token cap (overridden by `/config` > Models > Text Samplers & Parameters) |
-| `GOOGLE_MAX_OUTPUT_TOKENS` | `8192` | Gemini truncation/request output-token cap (overridden by `/config` > Models > Text Samplers & Parameters) |
-| `STREAM_ABANDONED_SETTLE_TIMEOUT_MS` | `5000` | Max wait (ms) for an SDK-timeout-aborted stream to settle so its in-flight sends are recorded before superseded-message cleanup. `0` disables the wait. Defined in `toolLoop.ts`. |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Env var | `OPENROUTER_APP_ATTRIBUTION_ENABLED` | `true` | Sends TomoriBot app attribution headers to OpenRouter for app rankings and aggregated usage analytics. Set to `false` to omit them. |
+| Constant (`generationTurn.ts`) | `OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS` | `2` | Per-retry history-pair drop count when OpenRouter returns empty/length |
+| Env var | `OPENROUTER_MAX_OUTPUT_TOKENS` | `8192` | OpenRouter truncation/request output-token cap (overridden by `/config` > Models > Text Samplers & Parameters) |
+| Env var | `GOOGLE_MAX_OUTPUT_TOKENS` | `8192` | Gemini truncation/request output-token cap (overridden by `/config` > Models > Text Samplers & Parameters) |
+| Constant (`toolLoop.ts`) | `STREAM_ABANDONED_SETTLE_TIMEOUT_MS` | `5000` | Max wait (ms) for an SDK-timeout-aborted stream to settle so its in-flight sends are recorded before superseded-message cleanup. `0` disables the wait. |
 
 Plus `MAX_KEY_ATTEMPTS` from `keyRotation.ts`.
 

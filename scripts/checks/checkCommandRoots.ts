@@ -97,7 +97,9 @@ async function main(): Promise<void> {
     console.error(`  Missing from docs (${comparison.missingInDoc.length}): ${comparison.missingInDoc.join(", ")}`);
   }
   if (comparison.unexpectedInDoc.length > 0) {
-    console.error(`  Unexpected in docs (${comparison.unexpectedInDoc.length}): ${comparison.unexpectedInDoc.join(", ")}`);
+    console.error(
+      `  Unexpected in docs (${comparison.unexpectedInDoc.length}): ${comparison.unexpectedInDoc.join(", ")}`,
+    );
   }
   if (comparison.outOfOrder) {
     console.error("  Documented roots are not in alphabetical order matching registration.");

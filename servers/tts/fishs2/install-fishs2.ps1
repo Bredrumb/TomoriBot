@@ -10,27 +10,13 @@ $VenvDir = Join-Path $ScriptDir ".venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 $HfExe = Join-Path $VenvDir "Scripts\hf.exe"
 $ModelDir = if ($env:FISH_S2_MODEL_DIR) { $env:FISH_S2_MODEL_DIR } else { Join-Path $RuntimeDir "checkpoints\fish-speech-s2-pro" }
-$RuntimeRepository = if ($env:FISH_S2_RUNTIME_REPOSITORY) { $env:FISH_S2_RUNTIME_REPOSITORY } else { "https://github.com/Imagilux/fish-speech.git" }
-$RuntimeRef = if ($env:FISH_S2_RUNTIME_REF) { $env:FISH_S2_RUNTIME_REF } else { "2225e924e7d35cc0a1d24dbc67cd1819e6cf429f" }
+$RuntimeRepository = "https://github.com/Imagilux/fish-speech.git"
+# The wrapper depends on this runtime's CLI flags and MessagePack schema. Bump it here after testing.
+$RuntimeRef = "2225e924e7d35cc0a1d24dbc67cd1819e6cf429f"
 $ModelId = if ($env:FISH_S2_MODEL_ID) { $env:FISH_S2_MODEL_ID } else { "fishaudio/s2-pro" }
 $ModelRevision = if ($env:FISH_S2_MODEL_REVISION) { $env:FISH_S2_MODEL_REVISION } else { "main" }
 $UseCpu = $Cpu.IsPresent -or ($env:CPU_ONLY -match "^(1|true|yes|on)$")
 $CudaIndex = if ($env:TORCH_CUDA_INDEX) { $env:TORCH_CUDA_INDEX } else { "https://download.pytorch.org/whl/cu124" }
-$UpdateRuntime = $env:FISH_S2_UPDATE -match "^(1|true|yes|on)$"
-if ($UpdateRuntime) {
-  if ($env:FISH_S2_UPDATE_REF) {
-    $RuntimeRef = $env:FISH_S2_UPDATE_REF
-  } elseif (-not $env:FISH_S2_RUNTIME_REF) {
-    $RuntimeRef = "main"
-  }
-}
-if ($UpdateRuntime) {
-  if ($env:FISH_S2_UPDATE_MODEL_REVISION) {
-    $ModelRevision = $env:FISH_S2_UPDATE_MODEL_REVISION
-  } elseif (-not $env:FISH_S2_MODEL_REVISION) {
-    $ModelRevision = "main"
-  }
-}
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
   throw "git is required."
@@ -57,11 +43,10 @@ if (-not $UseCpu) {
 & $VenvPython -m pip install -r (Join-Path $ScriptDir "requirements.txt")
 & $VenvPython -m pip install -e $RuntimeDir
 
-if ($UpdateRuntime -or -not (Test-Path (Join-Path $ModelDir "model.pth")) -or -not (Test-Path (Join-Path $ModelDir "codec.pth"))) {
-  Write-Host "Downloading $ModelId checkpoint at revision $ModelRevision..."
-  Write-Host "If Hugging Face requests authentication, accept the model license and run: hf auth login"
-  & $HfExe download $ModelId --revision $ModelRevision --local-dir $ModelDir
-}
+# hf download skips files already current in --local-dir, so a rerun only fetches a changed revision.
+Write-Host "Downloading $ModelId checkpoint at revision $ModelRevision..."
+Write-Host "If Hugging Face requests authentication, accept the model license and run: hf auth login"
+& $HfExe download $ModelId --revision $ModelRevision --local-dir $ModelDir
 
 $TorchCheck = @'
 import torch

@@ -26,15 +26,15 @@ async function run() {
   // for the times the exemption inventory is itself the question being asked.
   if (writes.length > 0) {
     console.log("=== WRITES ===");
-    writes.forEach((w) => console.log(`${normalizePath(w.file)}:${w.line}`));
+    for (const w of writes) console.log(`${normalizePath(w.file)}:${w.line}`);
   }
   if (reads.length > 0) {
     console.log("=== READS ===");
-    reads.forEach((r) => console.log(`${normalizePath(r.file)}:${r.line}`));
+    for (const r of reads) console.log(`${normalizePath(r.file)}:${r.line}`);
   }
   if (exemptions.length > 0 && (violations.length > 0 || isVerboseOutput())) {
     console.log("=== EXEMPTIONS ===");
-    exemptions.forEach((e) => console.log(`exempt: ${normalizePath(e.file)}:${e.line} (${e.kind}; ${e.reason})`));
+    for (const e of exemptions) console.log(`exempt: ${normalizePath(e.file)}:${e.line} (${e.kind}; ${e.reason})`);
   }
 
   if (violations.length > 0) {

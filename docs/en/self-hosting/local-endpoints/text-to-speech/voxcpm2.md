@@ -1,6 +1,6 @@
 ---
 title: "VoxCPM2"
-aiGenerated: false
+aiGenerated: true
 ---
 
 VoxCPM2 is OpenBMB's 2B-parameter multilingual text-to-speech model. It supports 30 languages, 48 kHz output, natural-language Voice Design, reference-audio voice cloning, controllable cloning, and transcript-assisted "Ultimate Cloning". TomoriBot uses the official `voxcpm` Python package through the thin wrapper in `servers/tts/voxcpm2/`.
@@ -59,17 +59,17 @@ To explicitly install on a CPU-only machine, pass the `-Cpu` switch:
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-If your native Windows PyTorch installation ever needs a manual reinstall or driver realignment, install the CUDA-enabled PyTorch build directly into the sidecar's virtual environment:
+If your native Windows PyTorch installation ever needs a manual reinstall or driver realignment, install the CUDA-enabled PyTorch build directly into the server's virtual environment:
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-OpenBMB reports about 0.30 RTF on an RTX 4090 with the standard runtime. Upstream also supports streaming generation and documents faster Nano-vLLM and vLLM-Omni serving options. TomoriBot's current `POST /synthesize` contract returns one WAV response, so this sidecar intentionally buffers the generated utterance instead of exposing a separate streaming protocol.
+OpenBMB reports about 0.30 RTF on an RTX 4090 with the standard runtime. Upstream also supports streaming generation and documents faster Nano-vLLM and vLLM-Omni serving options. TomoriBot's current `POST /synthesize` contract returns one WAV response, so this server intentionally buffers the generated utterance instead of exposing a separate streaming protocol.
 
 ## Installation
 
-The sidecar pins the current stable `voxcpm` 2.0.3 package and downloads `openbmb/VoxCPM2` into the normal Hugging Face cache.
+The server pins the current stable `voxcpm` 2.0.3 package and downloads `openbmb/VoxCPM2` into the normal Hugging Face cache.
 
 ### Linux / WSL Bash
 
@@ -104,9 +104,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-After setup, `bun run launch --voxcpm2` starts the sidecar together with TomoriBot. The default endpoint is `http://127.0.0.1:8016`.
-
-If `VOXCPM2_API_KEY` or `TOMORI_TTS_API_KEY` is set, register the endpoint with authentication enabled and save the same key in TomoriBot. The launcher still probes the unauthenticated `/health` route, while synthesis requests use `Authorization: Bearer <key>`.
+After setup, `bun run launch --voxcpm2` starts the server together with TomoriBot. The default endpoint is `http://127.0.0.1:8016`.
 
 ## Register in TomoriBot
 
@@ -173,19 +171,13 @@ Once VoxCPM2 is the active Speech model, `/generate voice-message` uses the pers
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | Maximum automatic retries |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | Upstream bad-case length threshold |
 | `VOXCPM2_PREFETCH` | `1` | Installer only: download the model during setup |
-| `VOXCPM2_PORT` | `8016` | VoxCPM2 sidecar port; falls back to `TOMORI_TTS_PORT` when unset |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Sidecar bind address |
-| `TOMORI_TTS_PORT` | `8016` | Backward-compatible shared sidecar port fallback |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | Maximum decoded reference-audio size |
-| `VOXCPM2_API_KEY` | unset | Optional bearer token for `/synthesize`; `TOMORI_TTS_API_KEY` is accepted as a fallback |
-| `TOMORI_TTS_API_KEY` | unset | Shared optional bearer token fallback for `/synthesize` |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | Set to `1` only to allow a non-loopback bind without a bearer token |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Maximum accepted synthesis text length |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2 local server port |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Local server bind address; see [Network access](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-Reference audio must be a non-empty WAV container. The wrapper enforces the decoded byte limit before writing a temporary file. `/health` remains unauthenticated for local readiness checks; `/synthesize` requires `Authorization: Bearer <key>` whenever a key is configured. Keep the default loopback bind unless a reverse proxy or explicit remote policy is in place.
+Reference audio must be a non-empty WAV container of at most 10 MB decoded, which the wrapper checks before writing a temporary file.
 
 ## Alternate checkpoints and runtimes
 
 The official BF16 model already fits the intended 16 GB consumer-GPU target, so TomoriBot does not default to a quantized checkpoint. Community quantizations exist, but they add another compatibility and maintenance layer without being necessary for the normal setup.
 
-For high-throughput deployments, OpenBMB currently points to Nano-vLLM-VoxCPM and vLLM-Omni as accelerated serving options. Those runtimes can expose streaming and concurrent-serving features beyond this reference sidecar. They are not required for TomoriBot's normal local voice-message workflow, and this wrapper deliberately stays on the official `voxcpm` API so upstream model upgrades remain easy to follow.
+For high-throughput deployments, OpenBMB currently points to Nano-vLLM-VoxCPM and vLLM-Omni as accelerated serving options. Those runtimes can expose streaming and concurrent-serving features beyond this reference server. They are not required for TomoriBot's normal local voice-message workflow, and this wrapper deliberately stays on the official `voxcpm` API so upstream model upgrades remain easy to follow.

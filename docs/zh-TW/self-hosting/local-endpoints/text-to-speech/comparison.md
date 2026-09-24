@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot 支援多種本機文字轉語音 sidecar，各自適合不同的語言、硬體配置與延遲需求。
+TomoriBot 支援多種本機文字轉語音伺服器，各自適合不同的語言、硬體配置與延遲需求。
 
 本頁提供在同一套測試環境、使用相符的語音複製參考下錄製的實測基準結果、合成時間與音訊比較片段。
 
@@ -64,13 +64,13 @@ TomoriBot 支援多種本機文字轉語音 sidecar，各自適合不同的語�
 - **如果你需要高品質的多語言零樣本複製，並能用自然語言指示語氣（`"Speak in English with excitement"`），請選 [CosyVoice 3](/zh-TW/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)**。
 - **如果你需要完整的多語言支援（30 種語言）、逐字稿輔助的 Ultimate Cloning 與自然的語音設計，請選 [VoxCPM2](/zh-TW/self-hosting/local-endpoints/text-to-speech/voxcpm2/)**。
 - **如果你想要乾淨的多語言複製、有彈性的語音設計與穩定的提示詞遵循度，請選 [Qwen3-TTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/qwen3tts/)**。
-- **如果你的 bot 說日文，請選 [IrodoriTTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/irodoritts/)**。它是唯一受測的純日文引擎（Windows 上約 4 秒，0.47× RTF），並原生解析 Unicode 表情符號（`😊`、`😢`、`😡`）來調節角色情緒。
+- **如果你的 bot 說日文，請選 [IrodoriTTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/irodoritts/)**。它是唯一受測的純日文引擎（Windows 上約 4 秒，0.47× RTF），並原生解析 Unicode 表情符號（`😊`、`😭`、`😠`）來調節角色情緒。
 
 ---
 
 ## 比較各引擎
 
-TomoriBot 目前所有 sidecar 都回傳完整的 WAV 給 bot。「串流路徑」指的是上游模型或另外的服務後端具備串流能力，**不**代表 Discord 語音通話串流已經實作。大小是模型參數，**不是** VRAM 或下載大小，而 16 GB 那一欄是設定指引，不是實測峰值。速度欄描述每個引擎預期的取捨；上面的實測時間來自同一台 Windows 機器，並不能用來在 Linux 上排名這些引擎。
+TomoriBot 目前所有伺服器都回傳完整的 WAV 給 bot。「串流路徑」指的是上游模型或另外的服務後端具備串流能力，**不**代表 Discord 語音通話串流已經實作。大小是模型參數，**不是** VRAM 或下載大小，而 16 GB 那一欄是設定指引，不是實測峰值。速度欄描述每個引擎預期的取捨；上面的實測時間來自同一台 Windows 機器，並不能用來在 Linux 上排名這些引擎。
 
 「參考片段」欄列出的是各引擎在文件中記載、或在執行時套用的參考音訊長度，因此混雜了已發布的指引與從上游程式碼讀出的限制。大多數引擎不會拒絕請求，而是靜默裁切到自己的視窗，所以這一欄說的是引擎讀取的長度，而不只是引擎接受的長度。這是上游行為，不是在本頁測得的結果，也和 TomoriBot 的上傳上限無關。
 

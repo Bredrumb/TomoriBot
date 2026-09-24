@@ -51,12 +51,7 @@ export type ConfigBehaviorTriggerAction =
   | "always-reply"
   | "cooldown";
 
-export type ConfigBehaviorExperimentalAction =
-  | "tool-mode"
-  | "tool-context"
-  | "tool-trigger"
-  | "send-limit"
-  | "workarounds";
+export type ConfigBehaviorExperimentalAction = "tool-mode" | "tool-context" | "tool-trigger" | "send-limit";
 export type ConfigBehaviorNoticesAction = "notice-visibility" | "speech-transcripts";
 export type ConfigBehaviorMemoryAction = "memory-tagging" | "stm-parameters" | "stm-categories" | "stm-prompt";
 export type ConfigPermissionsCapabilitiesAction = "tool-use" | "manage";
@@ -440,8 +435,6 @@ export const BEHAVIOR_EXPERIMENTAL_ACTION_BY_ROUTE: Partial<
   "behavior-tool-trigger-remove-submit": "tool-trigger",
   "behavior-send-limit-open": "send-limit",
   "behavior-send-limit-submit": "send-limit",
-  "behavior-workarounds-open": "workarounds",
-  "behavior-workarounds-submit": "workarounds",
 };
 
 export const BEHAVIOR_NOTICES_ACTION_BY_ROUTE: Partial<

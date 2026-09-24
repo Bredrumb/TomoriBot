@@ -1,17 +1,10 @@
 import type { ExportParseSuccess } from "@/types/db/dataExport";
 
-const parsedTransferSnapshotTtlMinutes = Number.parseInt(process.env.TRANSFER_SNAPSHOT_TTL_MINUTES || "15", 10);
-export const TRANSFER_SNAPSHOT_TTL_MINUTES =
-  Number.isFinite(parsedTransferSnapshotTtlMinutes) && parsedTransferSnapshotTtlMinutes > 0
-    ? parsedTransferSnapshotTtlMinutes
-    : 15;
+// Exported so the expiry and eviction tests size their fixtures against the real bounds.
+export const TRANSFER_SNAPSHOT_TTL_MINUTES = 15;
 const TRANSFER_SNAPSHOT_TTL_MS = TRANSFER_SNAPSHOT_TTL_MINUTES * 60 * 1000;
 
-const parsedTransferSnapshotMaxEntries = Number.parseInt(process.env.TRANSFER_SNAPSHOT_MAX_ENTRIES || "200", 10);
-export const TRANSFER_SNAPSHOT_MAX_ENTRIES =
-  Number.isFinite(parsedTransferSnapshotMaxEntries) && parsedTransferSnapshotMaxEntries > 0
-    ? parsedTransferSnapshotMaxEntries
-    : 200;
+export const TRANSFER_SNAPSHOT_MAX_ENTRIES = 200;
 
 type TransferSnapshotKind = "workspace_config" | "personal_config" | "workspace_memories" | "personal_memories";
 

@@ -44,6 +44,7 @@ import { buildOpenRouterReasoningRequest } from "@/utils/provider/thinkingContro
 import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 import { logRawProviderError } from "@/utils/provider/providerErrorLogging";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
+import { DISCORD_STREAMING_CONSTANTS } from "../../types/stream/types";
 import { ReasoningContentSpillGuard } from "@/providers/utils/reasoningContentSpillGuard";
 import {
   applyAssistantPrefixCompletion,
@@ -176,6 +177,19 @@ interface AccumulatedToolCall {
 // redact it. Enabling this writes the OpenRouter API key in clear text to container logs
 // and to anything shipping them onward.
 const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "false").trim().toLowerCase() === "true";
+
+/**
+ * Share of the context window still free after the estimated input that a reply may claim.
+ * The remainder absorbs the estimate's error, since a request that overshoots the window is
+ * rejected outright rather than trimmed.
+ */
+const OPENROUTER_OUTPUT_SAFETY_FACTOR = 0.9;
+
+/**
+ * Floor for the safety cap above, so a nearly full window still leaves a usable reply instead
+ * of clamping to a token or two. Applied only when the remaining context can actually fit it.
+ */
+const OPENROUTER_MIN_OUTPUT_TOKENS = 256;
 
 /**
  * OpenRouter streaming adapter implementation
@@ -499,19 +513,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       if (effectiveMaxOutputTokens !== undefined && config.model && isOpenRouterCapabilityCacheReady()) {
         const tokenLimits = getOpenRouterTokenLimits(config.model);
         if (tokenLimits && tokenLimits.contextLength > 0) {
-          const outputSafetyFactorRaw = Number.parseFloat(process.env.OPENROUTER_OUTPUT_SAFETY_FACTOR || "0.9");
-          const outputSafetyFactor =
-            Number.isFinite(outputSafetyFactorRaw) && outputSafetyFactorRaw > 0 && outputSafetyFactorRaw < 1
-              ? outputSafetyFactorRaw
-              : 0.9;
-          const minOutputTokensRaw = Number.parseInt(process.env.OPENROUTER_MIN_OUTPUT_TOKENS || "256", 10);
-          const configuredMinOutputTokens =
-            Number.isFinite(minOutputTokensRaw) && minOutputTokensRaw > 0 ? minOutputTokensRaw : 256;
-          const minOutputTokensFloor = Math.min(configuredMinOutputTokens, effectiveMaxOutputTokens);
+          const minOutputTokensFloor = Math.min(OPENROUTER_MIN_OUTPUT_TOKENS, effectiveMaxOutputTokens);
           // Rough input token estimate from textual message content
           const estimatedInputTokens = this.estimateInputTokensForSafetyCap(messages);
           const remainingContextTokens = tokenLimits.contextLength - estimatedInputTokens;
-          const rawSafeOutputBudget = Math.floor(remainingContextTokens * outputSafetyFactor);
+          const rawSafeOutputBudget = Math.floor(remainingContextTokens * OPENROUTER_OUTPUT_SAFETY_FACTOR);
           let safeOutputBudget = Math.max(1, rawSafeOutputBudget);
           let minOutputFloorApplied = false;
 
@@ -524,14 +530,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             log.warn(
               `Context-window safety cap applied for ${config.model}: ` +
                 `maxOutputTokens ${effectiveMaxOutputTokens} → ${safeOutputBudget} ` +
-                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${outputSafetyFactor}, minFloor=${minOutputTokensFloor}, minFloorApplied=${minOutputFloorApplied})`,
+                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${OPENROUTER_OUTPUT_SAFETY_FACTOR}, minFloor=${minOutputTokensFloor}, minFloorApplied=${minOutputFloorApplied})`,
             );
             effectiveMaxOutputTokens = safeOutputBudget;
           } else if (minOutputFloorApplied) {
             log.info(
               `Context-window minimum output floor preserved for ${config.model}: ` +
                 `maxOutputTokens remains ${effectiveMaxOutputTokens} ` +
-                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${outputSafetyFactor}, minFloor=${minOutputTokensFloor})`,
+                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${OPENROUTER_OUTPUT_SAFETY_FACTOR}, minFloor=${minOutputTokensFloor})`,
             );
           }
         }
@@ -654,7 +660,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
         applyAssistantPrefixCompletion(requestBody, context.outputPrefill?.trim());
       }
 
-      const inactivityTimeoutMs = config.inactivityTimeoutMs ?? 120000;
+      const inactivityTimeoutMs = config.inactivityTimeoutMs ?? DISCORD_STREAMING_CONSTANTS.INACTIVITY_TIMEOUT_MS;
+      // OpenRouter keeps a queued free-model request alive with `: OPENROUTER PROCESSING` comments,
+      // which never count as content, so judging that queue by the idle budget capped the wait for a
+      // first token at 120s regardless of the tool loop's longer first-token budget.
+      const firstTokenTimeoutMs = Math.max(inactivityTimeoutMs, DISCORD_STREAMING_CONSTANTS.FIRST_TOKEN_TIMEOUT_MS);
       const mandatoryKeys = new Set(["model", "messages", "stream"]);
       const attempts = buildDegradationAttempts(requestBody, {
         mandatoryKeys,
@@ -802,6 +812,8 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
           const decoder = new TextDecoder();
           let buffer = "";
           let lastMeaningfulAt = Date.now();
+          let sawMeaningfulChunk = false;
+          const currentIdleBudgetMs = () => (sawMeaningfulChunk ? inactivityTimeoutMs : firstTokenTimeoutMs);
           let committedToAttempt = false;
           let recoveryLogged = false;
           // True once the body no longer needs cancelling: either the stream ended on its own,
@@ -825,7 +837,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             const timeoutPromise = new Promise<never>((_, reject) => {
               timeoutId = setTimeout(() => {
                 reject(new Error("OpenRouter stream timed out while waiting for data"));
-              }, inactivityTimeoutMs);
+              }, currentIdleBudgetMs());
             });
 
             try {
@@ -944,6 +956,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                   }
 
                   lastMeaningfulAt = Date.now();
+                  sawMeaningfulChunk = true;
                   yield {
                     data: guardResult.chunk,
                     provider: "openrouter",
@@ -959,7 +972,7 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
                 }
               }
 
-              if (Date.now() - lastMeaningfulAt > inactivityTimeoutMs) {
+              if (Date.now() - lastMeaningfulAt > currentIdleBudgetMs()) {
                 currentController.abort();
                 throw new Error("OpenRouter stream timed out due to inactivity");
               }

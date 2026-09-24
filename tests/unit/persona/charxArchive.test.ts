@@ -15,13 +15,13 @@ function v3Card(overrides: Record<string, unknown> = {}): Record<string, unknown
     spec: "chara_card_v3",
     spec_version: "3.0",
     data: {
-      name: "Sparrow",
-      nickname: "Sparrow",
+      name: "Mirri",
+      nickname: "Mirri",
       description: "A wandering archivist who catalogues forgotten songs.",
       personality: "Curious, dry-humored.",
       scenario: "A rain-soaked library at the edge of a drowned city.",
-      first_mes: "Sparrow looks up from a water-stained ledger.",
-      alternate_greetings: ["Sparrow hums a tune you almost recognize."],
+      first_mes: "Mirri looks up from a water-stained ledger.",
+      alternate_greetings: ["Mirri hums a tune you almost recognize."],
       mes_example: "<START>\n{{user}}: Who are you?\n{{char}}: A cataloguer. Nothing more.",
       system_prompt: "Stay in character at all times.",
       post_history_instructions: "Never break the fourth wall.",
@@ -96,11 +96,11 @@ describe("charx archive reader", () => {
     expect(result.ignoredAssetCount).toBe(2);
     const card = result.card as { spec: string; data: { name: string } };
     expect(card.spec).toBe("chara_card_v3");
-    expect(card.data.name).toBe("Sparrow");
+    expect(card.data.name).toBe("Mirri");
   });
 
   it("finds the card through a wrapping folder and a differently cased filename", async () => {
-    const buffer = await buildCharx({ cardName: "Sparrow/Card.JSON" });
+    const buffer = await buildCharx({ cardName: "Mirri/Card.JSON" });
 
     const result = await readCharxCard(buffer, LIMITS);
     expect(result.ok).toBe(true);
@@ -236,7 +236,7 @@ describe("charx archive reader", () => {
     // main thread.
     const junkCount = 400_000;
     const assets = `[${"null,".repeat(junkCount - 1)}null]`;
-    const rawCardJson = `{"spec":"chara_card_v3","spec_version":"3.0","data":{"name":"Sparrow","assets":${assets}}}`;
+    const rawCardJson = `{"spec":"chara_card_v3","spec_version":"3.0","data":{"name":"Mirri","assets":${assets}}}`;
     const buffer = await buildCharx({ rawCardJson });
 
     const started = Date.now();
@@ -253,7 +253,7 @@ describe("charx archive reader", () => {
 
   it("accepts a card whose spec is absent, leaving recognition to the converter", async () => {
     // A root-level V2 card has no `spec` at all, and the converter accepts one.
-    const noSpec = { name: "Sparrow", description: "An archivist.", first_mes: "Hello.", personality: "Curious." };
+    const noSpec = { name: "Mirri", description: "An archivist.", first_mes: "Hello.", personality: "Curious." };
     const buffer = await buildCharx({ card: noSpec });
 
     const result = await readCharxCard(buffer, LIMITS);
@@ -360,14 +360,14 @@ describe("charx card conversion", () => {
       return;
     }
 
-    expect(conversion.data.tomori_nickname).toBe("Sparrow");
+    expect(conversion.data.tomori_nickname).toBe("Mirri");
     // description, personality, scenario, system prompt, post-history, depth
     // prompt, and the character book entry.
     expect(conversion.data.attribute_list).toHaveLength(7);
     expect(conversion.data.attribute_list[0]).toContain("wandering archivist");
     expect(conversion.data.sample_dialogues_in).toHaveLength(3);
     expect(conversion.data.sample_dialogues_out).toHaveLength(3);
-    expect(conversion.data.trigger_words).toEqual(["sparrow"]);
+    expect(conversion.data.trigger_words).toEqual(["mirri"]);
   });
 
   it("accepts a bare V3 card.json handed over as a .json import", () => {
@@ -378,6 +378,6 @@ describe("charx card conversion", () => {
     if (!conversion.success) {
       return;
     }
-    expect(conversion.data.tomori_nickname).toBe("Sparrow");
+    expect(conversion.data.tomori_nickname).toBe("Mirri");
   });
 });

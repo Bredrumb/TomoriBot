@@ -822,7 +822,8 @@ const CONFIG_COLUMN_EXCLUSION_REASONS: Record<string, string> = {
   "server_model_configs.fallback_llm_ids": "Fallback model identifiers are deployment-specific.",
   "server_model_configs.other_model_codename": "The legacy model codename is deployment-specific.",
   "server_model_configs.other_model_capabilities": "Legacy model capabilities describe a deployment-specific model.",
-  "server_model_configs.other_model_capabilities_fetched_at": "Legacy model capability timestamps are runtime metadata.",
+  "server_model_configs.other_model_capabilities_fetched_at":
+    "Legacy model capability timestamps are runtime metadata.",
   "server_model_configs.hide_respond_embed": "The legacy response flag is not portable configuration.",
   "server_model_configs.created_at": "Creation timestamps are runtime metadata.",
   "server_model_configs.updated_at": "Update timestamps are runtime metadata.",
@@ -831,7 +832,8 @@ const CONFIG_COLUMN_EXCLUSION_REASONS: Record<string, string> = {
   "server_chat_configs.created_at": "Creation timestamps are runtime metadata.",
   "server_chat_configs.updated_at": "Update timestamps are runtime metadata.",
   "server_member_permissions_configs.server_id": "The database key identifies the source workspace.",
-  "server_member_permissions_configs.hide_impersonation_embeds": "The legacy notice flag was superseded by the notice table.",
+  "server_member_permissions_configs.hide_impersonation_embeds":
+    "The legacy notice flag was superseded by the notice table.",
   "server_member_permissions_configs.created_at": "Creation timestamps are runtime metadata.",
   "server_member_permissions_configs.updated_at": "Update timestamps are runtime metadata.",
   "server_capabilities_configs.server_id": "The database key identifies the source workspace.",
@@ -848,7 +850,8 @@ const CONFIG_COLUMN_EXCLUSION_REASONS: Record<string, string> = {
   "server_speech_configs.updated_at": "Update timestamps are runtime metadata.",
   "server_auto_trigger_configs.server_id": "The database key identifies the source workspace.",
   "server_auto_trigger_configs.autoch_disc_ids": "Discord channel identifiers are source-workspace specific.",
-  "server_auto_trigger_configs.autoch_persona_overrides": "Persona and channel references are source-workspace specific.",
+  "server_auto_trigger_configs.autoch_persona_overrides":
+    "Persona and channel references are source-workspace specific.",
   "server_auto_trigger_configs.autoch_threshold": "Automatic trigger thresholds are coupled to source channels.",
   "server_auto_trigger_configs.autoch_threshold_max": "Automatic trigger thresholds are coupled to source channels.",
   "server_auto_trigger_configs.created_at": "Creation timestamps are runtime metadata.",
@@ -856,8 +859,10 @@ const CONFIG_COLUMN_EXCLUSION_REASONS: Record<string, string> = {
   "server_channel_scope_configs.server_id": "The database key identifies the source workspace.",
   "server_channel_scope_configs.rp_channel_ids": "Discord channel identifiers are source-workspace specific.",
   "server_channel_scope_configs.private_channel_ids": "Discord channel identifiers are source-workspace specific.",
-  "server_channel_scope_configs.crosschannel_blocklist_ids": "Discord channel identifiers are source-workspace specific.",
-  "server_channel_scope_configs.thought_log_channel_disc_id": "Discord channel identifiers are source-workspace specific.",
+  "server_channel_scope_configs.crosschannel_blocklist_ids":
+    "Discord channel identifiers are source-workspace specific.",
+  "server_channel_scope_configs.thought_log_channel_disc_id":
+    "Discord channel identifiers are source-workspace specific.",
   "server_channel_scope_configs.created_at": "Creation timestamps are runtime metadata.",
   "server_channel_scope_configs.updated_at": "Update timestamps are runtime metadata.",
   "server_trigger_behavior_configs.server_id": "The database key identifies the source workspace.",
@@ -972,9 +977,7 @@ function checkV2ConfigProjectionCoverage(
   const sectionOwners = (scope: ConfigProjectionScope, field: string): string[] => {
     const fieldsBySection = sectionFields.get(scope);
     if (!fieldsBySection) return [];
-    return [...fieldsBySection.entries()]
-      .filter(([, fields]) => fields.has(field))
-      .map(([section]) => section);
+    return [...fieldsBySection.entries()].filter(([, fields]) => fields.has(field)).map(([section]) => section);
   };
 
   const allV1FieldsByScope = new Map<ConfigProjectionScope, Set<string>>();
@@ -1033,8 +1036,10 @@ function checkV2ConfigProjectionCoverage(
     workspace: workspaceProjection ?? "",
     personal: personalProjection ?? "",
   };
-  if (workspaceProjection === null) addIssue("v2-config-export", "ExportRepository.ts has no exportWorkspaceConfig method");
-  if (personalProjection === null) addIssue("v2-config-export", "ExportRepository.ts has no exportPersonalConfig method");
+  if (workspaceProjection === null)
+    addIssue("v2-config-export", "ExportRepository.ts has no exportWorkspaceConfig method");
+  if (personalProjection === null)
+    addIssue("v2-config-export", "ExportRepository.ts has no exportPersonalConfig method");
 
   for (const target of CONFIG_PROJECTION_TARGETS) {
     const sourceKeys = new Set([
@@ -1054,7 +1059,9 @@ function checkV2ConfigProjectionCoverage(
         sourceKey === "updated_at";
       const isExcluded = isIdentity || target.excludedKeys?.includes(sourceKey) || exclusionKeys.has(sourceKey);
       if (isExcluded) {
-        const reason = exclusionKeys.has(sourceKey) ? exclusionReasons.get(sourceKey) : CONFIG_COLUMN_EXCLUSION_REASONS[reasonKey];
+        const reason = exclusionKeys.has(sourceKey)
+          ? exclusionReasons.get(sourceKey)
+          : CONFIG_COLUMN_EXCLUSION_REASONS[reasonKey];
         if (!reason?.trim()) {
           addIssue("v2-config-exclusion", `${reasonKey} is excluded but has no named reason`);
         }
@@ -1070,7 +1077,10 @@ function checkV2ConfigProjectionCoverage(
       }
 
       if (!projection.match(new RegExp(`\\bas\\s+${sourceKey}\\b`, "i"))) {
-        addIssue("v2-config-read", `${reasonKey} is portable but exportWorkspaceConfig/exportPersonalConfig does not SELECT it`);
+        addIssue(
+          "v2-config-read",
+          `${reasonKey} is portable but exportWorkspaceConfig/exportPersonalConfig does not SELECT it`,
+        );
       }
       if (!projection.match(new RegExp(`\\b${sourceKey}\\s*:`, "i"))) {
         addIssue("v2-config-projection", `${reasonKey} is portable but its v2 projection does not emit it`);
@@ -1087,10 +1097,7 @@ function checkV2ConfigProjectionCoverage(
   }
 
   for (const field of exclusionKeys) {
-    const owners = [
-      ...sectionOwners("workspace", field),
-      ...sectionOwners("personal", field),
-    ];
+    const owners = [...sectionOwners("workspace", field), ...sectionOwners("personal", field)];
     if (owners.length > 0) {
       addIssue("v2-config-ownership", `${field} is excluded but appears in v2 section(s): ${owners.join(", ")}`);
     }

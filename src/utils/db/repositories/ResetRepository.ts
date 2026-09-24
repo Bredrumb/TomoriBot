@@ -119,7 +119,6 @@ export const SERVER_SINGLETON_RESET_TABLES: readonly SingletonResetClassificatio
       "time_awareness_enabled",
       "tool_use_enabled",
       "short_term_memory_enabled",
-      "verbatim_tool_calling_enabled",
       "user_info_updates_enabled",
     ],
     preserved: [],
@@ -377,7 +376,6 @@ class ResetRepository {
           time_awareness_enabled = DEFAULT,
           tool_use_enabled = DEFAULT,
           short_term_memory_enabled = DEFAULT,
-          verbatim_tool_calling_enabled = DEFAULT,
           user_info_updates_enabled = DEFAULT,
           updated_at = NOW()
       `;

@@ -61,7 +61,7 @@ Instead of filling the bounding box as a rectangle, we inscribe an **ellipse** w
 
 - **Diffusion models expect organic shapes**: NAI's inpainting model was trained on masks from brush strokes, lasso selections, and other organic tools: not perfect rectangles. A rectangular mask creates an unnatural latent-space discontinuity that the model reproduces as a visible edge.
 - **Curved boundaries blend naturally**: An ellipse's varying distance from the content center gives the model a more gradual transition to work with during denoising.
-- **Configurable padding** (`NAI_INPAINT_PADDING`, default 0.15): Each side of the bounding box is expanded by this fraction to capture content that extends beyond Gemini's detected region (e.g., wispy hair strands). The padding also compensates for the ellipse's curved boundary cutting into the corners.
+- **Fixed padding** (`NAI_INPAINT_PADDING`, 0.15): Each side of the bounding box is expanded by this fraction to capture content that extends beyond Gemini's detected region (e.g., wispy hair strands). The padding also compensates for the ellipse's curved boundary cutting into the corners.
 
 ### Latent Grid Quantization (Critical)
 
@@ -97,7 +97,7 @@ This parameter tells NAI to overlay the original image pixels onto the non-maske
 
 Full denoising strength ensures the masked region is completely redrawn from the prompt tags. Lower values (e.g., 0.7) preserve some of the original structure but cause the original colors to bleed through: white hair at 0.7 strength + "red hair" prompt = grey output.
 
-Configurable via `NAI_INPAINT_STRENGTH` env var.
+The strength is the `NAI_INPAINT_STRENGTH` constant in `src/tools/functionCalls/generateImageNaiTool.ts`, fixed at full denoise.
 
 ## Gemini Segmentation Configuration
 
@@ -116,10 +116,10 @@ The Gemini API call uses specific settings derived from Google's [spatial unders
 | Env Var | Default | Description |
 |---------|---------|-------------|
 | `NAI_INPAINT_DEBUG` | `false` | DMs the invoking user the mask + bounding box overlay for debugging |
-| `NAI_INPAINT_STRENGTH` | `1.0` | Denoising strength for the masked region (0.0-1.0) |
-| `NAI_INPAINT_PADDING` | `0.15` | Padding added to each side of the bounding box as a fraction of box dimension |
 | `NAI_SEGMENTATION_MODEL` | `gemini-2.5-flash` | Gemini model used for segmentation |
 | `NAI_SEGMENTATION_TIMEOUT_MS` | `90000` | Timeout for the Gemini segmentation API call |
+
+Mask strength (`NAI_INPAINT_STRENGTH`, 1.0) and padding (`NAI_INPAINT_PADDING`, 0.15) are code constants, not environment variables.
 
 ## Debugging
 

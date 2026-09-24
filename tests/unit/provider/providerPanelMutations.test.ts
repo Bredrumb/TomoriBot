@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import type { SavedProviderConfigUpsert, TomoriState } from "@/types/db/schema";
+import type { LlmRow, SavedProviderConfigUpsert, TomoriState } from "@/types/db/schema";
 import {
   addCustomEndpointConnection,
   addServerProvider,
@@ -8,8 +8,11 @@ import {
   type AddCustomEndpointConnectionDependencies,
   type AddServerProviderDependencies,
 } from "@/utils/provider/providerPanelOperations";
+import { registerCustomEndpoint } from "@/utils/provider/customEndpointService";
 import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
+import { readCachedLlm, replaceCachedLlms } from "@/utils/cache/llmCacheStore";
+import * as crypto from "@/utils/security/crypto";
 
 function state(): TomoriState {
   return { server_id: 7, config: {}, llm: { llm_provider: "google" } } as TomoriState;
@@ -343,6 +346,52 @@ describe("provider panel mutations", () => {
     for (const spy of spies) spy.mockRestore();
   });
 
+  it("persists the verbatim tool-calling opt-in on both the endpoint and its synthetic model", async () => {
+    const connection = {
+      connection_id: 73,
+      label: "juno",
+      capability: "text" as const,
+      api_style: "openai-compatible" as const,
+      endpoint_url: "https://models.example.com/v1",
+      requires_auth: false,
+      server_id: 7,
+      user_id: null,
+    };
+    const spies = [
+      spyOn(llmProviderRepo, "loadCustomEndpointConnectionById").mockResolvedValue(connection as never),
+      spyOn(llmProviderRepo, "loadCustomEndpointConnectionsForServerResult").mockResolvedValue({
+        connections: [connection],
+        endpoints: [],
+      } as never),
+      spyOn(llmProviderRepo, "upsertCustomEndpointConnection").mockResolvedValue(73 as never),
+      spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(null as never),
+      spyOn(llmProviderRepo, "loadCustomEndpointsByConnectionId").mockResolvedValue([] as never),
+    ];
+    const synthetic = spyOn(llmModelRepo, "upsertSyntheticCustomLlm").mockResolvedValue(900 as never);
+    const upsert = spyOn(llmProviderRepo, "upsertCustomEndpoint").mockResolvedValue(null as never);
+
+    await saveProviderModel({
+      serverDiscId: "guild",
+      state: state(),
+      entryId: "endpoint:73",
+      capability: "text",
+      codeName: "mirri-local",
+      hasTools: true,
+      verbatimToolCalling: true,
+    });
+
+    // The runtime reads the synthetic llms row while the panel reads the endpoint row, so both must
+    // carry the same value or an edit would show one state and generate with another.
+    expect(synthetic).toHaveBeenCalled();
+    expect(synthetic.mock.calls[0]?.[0].verbatimToolCalling).toBe(true);
+    expect(upsert).toHaveBeenCalled();
+    expect(upsert.mock.calls[0]?.[0].verbatimToolCalling).toBe(true);
+
+    upsert.mockRestore();
+    synthetic.mockRestore();
+    for (const spy of spies) spy.mockRestore();
+  });
+
   it("declares a curated image model's capabilities without the ComfyUI inpaint gate", async () => {
     const load = spyOn(llmModelRepo, "loadDiffusionModelByProviderAndCodename").mockResolvedValue(null as never);
     const upsert = spyOn(llmModelRepo, "upsertScopedDiffusionModel").mockResolvedValue(null as never);
@@ -437,5 +486,110 @@ describe("provider panel mutations", () => {
       removeUser.mockRestore();
       removeServer.mockRestore();
     }
+  });
+
+  describe("synthetic text model cache refresh", () => {
+    function editingEndpointRow(capability: "text" | "image" = "text") {
+      return {
+        connection_id: 73,
+        custom_endpoint_id: 501,
+        model_ref_id: 900,
+        capability,
+        label: "juno",
+        api_style: "openai-compatible" as const,
+        endpoint_url: "https://models.example.com/v1",
+        requires_auth: false,
+        server_id: 7,
+        user_id: null,
+        model_name: "mirri-local",
+      };
+    }
+
+    function makeLlmRow(verbatimToolCalling: boolean): LlmRow {
+      return {
+        llm_id: 900,
+        llm_provider: "custom:73",
+        llm_codename: "mirri-local",
+        verbatim_tool_calling: verbatimToolCalling,
+      } as LlmRow;
+    }
+
+    /**
+     * Rebuilding TomoriState reads the model through `llmModelRepo.loadById`, which is cache-first,
+     * so invalidating the server snapshot alone leaves the rebuilt state carrying the pre-edit
+     * capability flags. The repository read that follows a write is what this pins.
+     */
+    it("drops the edited model from the LLM cache so the next read is not the stale row", async () => {
+      replaceCachedLlms([makeLlmRow(false)]);
+      expect(readCachedLlm(900)?.verbatim_tool_calling).toBe(false);
+
+      const row = editingEndpointRow();
+      const spyList = [
+        spyOn(llmProviderRepo, "loadCustomEndpointsByIds").mockResolvedValue([row] as never),
+        spyOn(llmProviderRepo, "loadCustomEndpointsByConnectionId").mockResolvedValue([row] as never),
+        spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(null as never),
+        spyOn(llmProviderRepo, "upsertCustomEndpoint").mockResolvedValue(row as never),
+        spyOn(llmProviderRepo, "upsertSavedProviderConfig").mockResolvedValue(true as never),
+        spyOn(llmModelRepo, "updateSyntheticCustomCapabilityModelById").mockResolvedValue(undefined as never),
+        // The stored credential is encrypted through pgcrypto, which needs a live connection.
+        spyOn(crypto, "encryptApiKey").mockResolvedValue({ encrypted: Buffer.from(""), version: 1 } as never),
+      ];
+      try {
+        const result = await registerCustomEndpoint({
+          scope: { kind: "server", ownerId: 7, baseConfig: { fallback_model_refs: [] } as never },
+          label: "juno",
+          capability: "text",
+          apiStyle: "openai-compatible",
+          endpointUrl: "https://models.example.com/v1",
+          modelName: "mirri-local",
+          hasTools: true,
+          verbatimToolCalling: true,
+          editingEndpointId: 501,
+        });
+
+        expect(result?.modelId).toBe(900);
+        expect(readCachedLlm(900)).toBeUndefined();
+      } finally {
+        for (const spy of spyList) spy.mockRestore();
+        replaceCachedLlms([]);
+      }
+    });
+
+    /**
+     * A non-text endpoint's `model_ref_id` is an id in its own capability table, so the same number
+     * can name an unrelated llms row. Evicting it would push that model onto the database path until
+     * the next restart.
+     */
+    it("leaves the LLM cache alone when a non-text endpoint's model is edited", async () => {
+      replaceCachedLlms([makeLlmRow(false)]);
+
+      const row = editingEndpointRow("image");
+      const spyList = [
+        spyOn(llmProviderRepo, "loadCustomEndpointsByIds").mockResolvedValue([row] as never),
+        spyOn(llmProviderRepo, "loadCustomEndpointsByConnectionId").mockResolvedValue([row] as never),
+        spyOn(llmProviderRepo, "loadSavedProviderConfig").mockResolvedValue(null as never),
+        spyOn(llmProviderRepo, "upsertCustomEndpoint").mockResolvedValue(row as never),
+        spyOn(llmProviderRepo, "upsertSavedProviderConfig").mockResolvedValue(true as never),
+        spyOn(llmModelRepo, "updateSyntheticCustomCapabilityModelById").mockResolvedValue(undefined as never),
+        spyOn(crypto, "encryptApiKey").mockResolvedValue({ encrypted: Buffer.from(""), version: 1 } as never),
+      ];
+      try {
+        const result = await registerCustomEndpoint({
+          scope: { kind: "server", ownerId: 7, baseConfig: { fallback_model_refs: [] } as never },
+          label: "juno",
+          capability: "image",
+          apiStyle: "openai-compatible",
+          endpointUrl: "https://models.example.com/v1",
+          modelName: "mirri-local",
+          editingEndpointId: 501,
+        });
+
+        expect(result?.modelId).toBe(900);
+        expect(readCachedLlm(900)?.llm_codename).toBe("mirri-local");
+      } finally {
+        for (const spy of spyList) spy.mockRestore();
+        replaceCachedLlms([]);
+      }
+    });
   });
 });

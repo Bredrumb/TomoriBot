@@ -18,7 +18,7 @@ function makeAlter(): TomoriState {
   return {
     persona_id: 42,
     persona_lineage_id: 420,
-    persona_nickname: "Sparrow",
+    persona_nickname: "Mirri",
     is_alter: true,
     webhook_avatar_url: "data/avatars/servers/test/personas/42/avatar.png",
   } as unknown as TomoriState;

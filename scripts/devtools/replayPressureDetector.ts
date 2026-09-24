@@ -60,15 +60,11 @@ function parseArgs(argv: string[]): { path: string; thresholds: PressureThreshol
       recoveryIoFull: flag("recovery") ?? DEFAULT_PRESSURE_THRESHOLDS.recoveryIoFull,
       minSwapInPerS: flag("min-swap-in") ?? DEFAULT_PRESSURE_THRESHOLDS.minSwapInPerS,
       minDutyCycle: flag("min-duty") ?? DEFAULT_PRESSURE_THRESHOLDS.minDutyCycle,
-      elevatedDwellMs:
-        (flag("elevated-dwell-min") ?? DEFAULT_PRESSURE_THRESHOLDS.elevatedDwellMs / minute) * minute,
-      criticalDwellMs:
-        (flag("critical-dwell-min") ?? DEFAULT_PRESSURE_THRESHOLDS.criticalDwellMs / minute) * minute,
-      startupGraceMs:
-        (flag("grace-min") ?? DEFAULT_PRESSURE_THRESHOLDS.startupGraceMs / minute) * minute,
+      elevatedDwellMs: (flag("elevated-dwell-min") ?? DEFAULT_PRESSURE_THRESHOLDS.elevatedDwellMs / minute) * minute,
+      criticalDwellMs: (flag("critical-dwell-min") ?? DEFAULT_PRESSURE_THRESHOLDS.criticalDwellMs / minute) * minute,
+      startupGraceMs: (flag("grace-min") ?? DEFAULT_PRESSURE_THRESHOLDS.startupGraceMs / minute) * minute,
       minActionIntervalMs:
-        (flag("action-interval-h") ?? DEFAULT_PRESSURE_THRESHOLDS.minActionIntervalMs / 3_600_000) *
-        3_600_000,
+        (flag("action-interval-h") ?? DEFAULT_PRESSURE_THRESHOLDS.minActionIntervalMs / 3_600_000) * 3_600_000,
     },
   };
 }
@@ -107,7 +103,10 @@ async function main(): Promise<void> {
   const { path, thresholds, verbose } = parseArgs(Bun.argv.slice(2));
   const text = await readFile(path, "utf8");
 
-  const rows = text.split("\n").map(parseRow).filter((r): r is ObserverRow => r !== null);
+  const rows = text
+    .split("\n")
+    .map(parseRow)
+    .filter((r): r is ObserverRow => r !== null);
   if (rows.length === 0) throw new Error(`No parseable observer rows in ${path}`);
   rows.sort((a, b) => a.atMs - b.atMs);
 
@@ -157,8 +156,9 @@ async function main(): Promise<void> {
     }
   }
 
-  const span = (rows.at(-1)!.atMs - rows[0].atMs) / 3_600_000;
-  console.log(`Samples: ${rows.length} over ${span.toFixed(1)} h (${isoDay(rows[0].atMs)} to ${isoDay(rows.at(-1)!.atMs)})`);
+  const last = rows[rows.length - 1];
+  const span = (last.atMs - rows[0].atMs) / 3_600_000;
+  console.log(`Samples: ${rows.length} over ${span.toFixed(1)} h (${isoDay(rows[0].atMs)} to ${isoDay(last.atMs)})`);
   console.log(
     `Thresholds: elevated>=${thresholds.elevatedIoFull} critical>=${thresholds.criticalIoFull} ` +
       `recovery<=${thresholds.recoveryIoFull} minSwapIn=${thresholds.minSwapInPerS} ` +

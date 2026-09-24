@@ -1,4 +1,4 @@
-﻿---
+---
 title: "03: Enhanced Context Restart"
 ---
 
@@ -114,7 +114,7 @@ After this stage runs (when it returns `true`):
 |---|---|
 | `context_restart_*` type namespace | The seam: a tool that needs to inject enriched context before the next generation returns a `context_restart_<suffix>` payload. Adding a new suffix requires a matching `type.includes(...)` check here and a new disable flag if re-fetch prevention is needed. → plugin plan candidate |
 | `enhanced_context_item` field | The enrichment contract: any `StructuredContextItem` can be injected; type determines how the provider interprets it |
-| `pending_context_key` + `stashEnhancedContextItem()` | The same contract for bulk media; keeps multi-MB payloads out of the retained tool-execution history. Bounded by `ENHANCED_CONTEXT_STASH_TTL_MS` / `ENHANCED_CONTEXT_STASH_MAX_ENTRIES` |
+| `pending_context_key` + `stashEnhancedContextItem()` | The same contract for bulk media; keeps multi-MB payloads out of the retained tool-execution history. Bounded by `STASH_TTL_MS` (5 min) and `STASH_MAX_ENTRIES` (16) in `pendingEnhancedContext.ts` |
 | Disable flags on `StreamingContext` | Internal: flags are consumed by the context-build pipeline; adding a new flag requires both the restart handler and the context-build stage that checks it |
 
 ## Related docs

@@ -2,13 +2,13 @@
 title: "MOSS-TTS"
 ---
 
-用 `servers/tts/moss/server.py`，透過單一本機端點試用 MOSS 的語音複製與以文字描述的語音設計。當 TomoriBot 送出 `ref_audio` 時，自動模式會選擇複製模型；送出 `instruct` 時則選擇 MOSS-VoiceGenerator。它一次只保持一個模型載入。這是試用性質的 sidecar，不是串流的 Discord 語音通話整合。
+用 `servers/tts/moss/server.py`，透過單一本機端點試用 MOSS 的語音複製與以文字描述的語音設計。當 TomoriBot 送出 `ref_audio` 時，自動模式會選擇複製模型；送出 `instruct` 時則選擇 MOSS-VoiceGenerator。它一次只保持一個模型載入。這是試用性質的伺服器，不是串流的 Discord 語音通話整合。
 
 預設的複製模型是 [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5)（4B），選它是因為它是 16 GB GPU 的實務起點。[MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) 是 8B 的替代方案，但在 BF16 下通常需要超過 16 GB 的 VRAM。語音設計使用 [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator)（約 1.7B）。自動模式會切換模型，而不是把兩個都留在 VRAM，所以切換模式仍然會有一段 GPU 載入延遲。
 
 ## 設定
 
-請從 TomoriBot 儲存庫根目錄執行。使用 Python 3.12 與可相容於上游 CUDA 12.8 PyTorch wheel 的 CUDA 驅動程式。上游的 runtime extra 會釘住 PyTorch 與 Torchaudio 2.9.1+cu128；請讓這個 sidecar 待在自己的虛擬環境中。其他 CUDA 或 CPU 堆疊需要另行驗證過的安裝。
+請從 TomoriBot 儲存庫根目錄執行。使用 Python 3.12 與可相容於上游 CUDA 12.8 PyTorch wheel 的 CUDA 驅動程式。上游的 runtime extra 會釘住 PyTorch 與 Torchaudio 2.9.1+cu128；請讓這個伺服器待在自己的虛擬環境中。其他 CUDA 或 CPU 堆疊需要另行驗證過的安裝。
 
 ### Windows PowerShell
 
@@ -36,7 +36,7 @@ python servers/tts/moss/server.py
 
 prefetch 指令會在伺服器啟動之前，把複製模型、VoiceGenerator 與每個模型各自的音訊 tokenizer 下載到 Hugging Face 快取。它會在每次下載 repository 之前檢查快取磁碟區可用空間並重複使用已快取的檔案，但兩個模型都需要相當大的空間。如果檢查失敗，請清出空間，或在 shell 中把 `HF_HOME` 設到較大的磁碟區，再進行 prefetch 與啟動伺服器。變更任何一個模型 ID 之後請重新執行 prefetch。若只想為有限度的試用下載其中一個模式，請傳入 `--mode clone` 或 `--mode voice-design`；另一個模式仍然可能在第一次使用時下載。
 
-端點是 `http://127.0.0.1:8018`。自動模式會在回報啟動完成之前，先從本機快取預熱複製模型。如果沒有預先抓取複製模型，啟動會失敗，而不是意外地下載它。`MOSS_TTS_WARM_MODE=voice-design` 改為預熱 VoiceGenerator；`MOSS_TTS_WARM_MODE=none` 維持先前的延遲啟動。同一時間只有一個模式留在 GPU 記憶體中。用 `GET /health` 查看 `warm_mode`、`active_mode` 與 `model_id`。包裝使用 Hugging Face 的 `trust_remote_code=True`，所以請只從你信任的來源安裝，並在更新之前檢視上游變更。
+端點是 `http://127.0.0.1:8018`，`bun run launch --moss` 會把伺服器和 TomoriBot 一起啟動。自動模式會在回報啟動完成之前，先從本機快取預熱複製模型。如果沒有預先抓取複製模型，啟動會失敗，而不是意外地下載它。`MOSS_TTS_WARM_MODE=voice-design` 改為預熱 VoiceGenerator；`MOSS_TTS_WARM_MODE=none` 維持先前的延遲啟動。同一時間只有一個模式留在 GPU 記憶體中。用 `GET /health` 查看 `warm_mode`、`active_mode` 與 `model_id`。包裝使用 Hugging Face 的 `trust_remote_code=True`，所以請只從你信任的來源安裝，並在更新之前檢視上游變更。
 
 ## 在 TomoriBot 中註冊
 
@@ -46,6 +46,6 @@ prefetch 指令會在伺服器啟動之前，把複製模型、VoiceGenerator �
 
 TomoriBot 目前的複製轉接器不送出語言標記。若要做單一語言試用，請在啟動伺服器之前設定 `MOSS_TTS_DEFAULT_LANGUAGE=Japanese`（或 `English`、`Chinese` 等）。手動的 `/synthesize` 請求則可以逐請求提供 `language`。混合語言使用時請讓該變數保持未設定；在依賴日文輸出之前請先評估它。
 
-sidecar 會讀取自己的行程環境。把值加進 bot 的 `.env` 並不會自動傳給另外啟動的 Python 行程。
+伺服器會讀取自己的行程環境。把值加進 bot 的 `.env` 並不會自動傳給另外啟動的 Python 行程。
 
-若要在記憶體足夠的機器上試用 8B 旗艦模型，請在 prefetch 之前設定 `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`。`TOMORI_TTS_PORT`、`MOSS_TTS_DEVICE`、`MOSS_TTS_DTYPE`、`MOSS_TTS_MAX_REF_AUDIO_BYTES` 與 `MOSS_TTS_MAX_NEW_TOKENS` 也都可以在 `.env.optional.example` 中設定。bot 的 `TTS_SYNTHESIZE_TIMEOUT_MS` 在切換模式或 CPU 推論時可能需要調高。
+若要在記憶體足夠的機器上試用 8B 旗艦模型，請在 prefetch 之前設定 `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`。`MOSS_TTS_PORT`、`MOSS_TTS_DEVICE`、`MOSS_TTS_DTYPE` 與 `MOSS_TTS_MAX_NEW_TOKENS` 也都可以在 `.env.optional.example` 中設定。bot 的 `TTS_SYNTHESIZE_TIMEOUT_MS` 在切換模式或 CPU 推論時可能需要調高。

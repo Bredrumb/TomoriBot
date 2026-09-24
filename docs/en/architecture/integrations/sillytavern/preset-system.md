@@ -282,7 +282,7 @@ Active presets are cached in-memory to avoid a DB query on every `buildContext()
 |---------|--------|
 | **Cache key** | `server_id` (numeric) |
 | **Cached data** | `{ preset: StPresetRow, nodes: StPresetNodeRow[] }` or `null` (no active preset) |
-| **TTL** | Configurable via `ST_PRESET_CACHE_TTL_MINUTES` env var (default: 10 minutes) |
+| **TTL** | `CACHE_DURATION_MS` in `stPresetCache.ts` (10 minutes) |
 | **Invalidation** | On preset activate, deactivate, node toggle, or preset delete |
 | **Graceful fallback** | Returns stale cache on DB error |
 | **Negative caching** | `null` result is cached to avoid repeated "no preset" queries |

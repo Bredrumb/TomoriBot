@@ -1,3 +1,6 @@
+// Top-level await below needs this file to be a module, and it has no other import or export.
+export {};
+
 const runtimeImports = ["@google-cloud/storage"] as const;
 const lockfile = await Bun.file("bun.lock").text();
 

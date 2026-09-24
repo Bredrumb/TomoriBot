@@ -39,7 +39,7 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 デフォルトモデルは`Aratako/Irodori-TTS-v4.1-Small`です。環境変数を設定することで、互換性のあるHugging Faceリポジトリやコミュニティファインチューン（`phasefield-audio/Irodori-TTS-v4.1-Anime`など）、またはローカルのチェックポイントファイルを指定できます。
 
-サイドカー起動時（Pythonによる直接起動、または`bun run launch --irodoritts`）、サーバーはリポジトリ直下の`.env`（または`servers/tts/irodoritts/.env`）を自動的に読み込み、起動時に使用中のモデルIDをログ出力します。
+ローカルサーバーを起動すると（Pythonによる直接起動、または`bun run launch --irodoritts`）、リポジトリ直下の`.env`（または`servers/tts/irodoritts/.env`）を自動的に読み込み、起動時に使用中のモデルIDをログ出力します。
 
 ### `.env` を使用する場合（設定を保持）
 
@@ -120,9 +120,63 @@ TomoriBotはこのプロンプトを`instruct`として送信し、Irodoriラッ
 
 TomoriBotはTTSへ送信する前にDiscordのカスタム絵文字構文を削除します。`script_markup: emoji`では、Unicode絵文字をIrodoriのテキスト条件用に保持します。
 
+### 絵文字スタイル制御
+
+IrodoriTTSでは、入力テキストに絵文字アノテーションを挿入することで、効果音、話し方、感情表現に影響を与えられます。TomoriBotの`Script Markup Style`を`Emoji`に設定すると、これらのUnicode絵文字が保持され、Irodoriへ送信されます。
+
+| 絵文字 | 意味・感情・スタイル |
+| --- | --- |
+| 👂 | 囁き、耳元の音 |
+| 😮‍💨 | 吐息、溜息、寝息 |
+| ⏸️ | 間、沈黙 |
+| 🤭 | 笑い（くすくす、含み笑いなど） |
+| 🥵 | 喘ぎ、うめき声、唸り声 |
+| 📢 | エコー、リバーブ |
+| 😏 | からかうように、甘えるように |
+| 🥺 | 声を震わせながら、自信のなさげに |
+| 🌬️ | 息切れ、荒い息遣い、呼吸音 |
+| 😮 | 息をのむ |
+| 👅 | 舐める音、咀嚼音、水音 |
+| 💋 | リップノイズ |
+| 🫶 | 優しく |
+| 😭 | 嗚咽、泣き声、悲しみ |
+| 😱 | 悲鳴、叫び、絶叫 |
+| 😪 | 眠そうに、気だるげに |
+| 😴 | 寝言、いびき |
+| ⏩ | 早口、一気にまくしたてる、急いで |
+| 📞 | 電話越し、スピーカー越しのような音 |
+| 🐢 | ゆっくりと |
+| 🥤 | 唾を飲み込む音 |
+| 🤧 | 咳き込み、鼻をすする、くしゃみ、咳払い |
+| 😒 | 舌打ち |
+| 😰 | 慌てて、動揺、緊張、どもり |
+| 😆 | 喜びながら |
+| 💥 | 勢いよく、勢いに任せて |
+| 😠 | 怒り、不満げに、拗ねながら |
+| 😲 | 驚き、感嘆 |
+| 🥱 | あくび |
+| 😖 | 苦しげに |
+| 😟 | 心配そうに |
+| 🫣 | 恥ずかしそうに、照れながら |
+| 🙄 | 呆れたように |
+| 😊 | 楽しげに、嬉しそうに |
+| 😎 | 得意げに、自信ありげに |
+| 👌 | 相槌、頷く音 |
+| 🙏 | 懇願するように |
+| 🥴 | 酔っ払って |
+| 🎵 | 鼻歌 |
+| 🤐 | 口を塞がれて |
+| 😌 | 安堵、満足げに |
+| 🤔 | 疑問の声 |
+| 💪 | 力を込めて、力強く |
+| 👃 | 匂いを嗅ぐ音 |
+| 📖 | ナレーション、独白、モノローグ |
+
+同じ絵文字を繰り返すと効果を強調できます。絵文字制御は完全に一貫するわけではないため、確実な出力指定ではなくスタイルの手がかりとして扱ってください。完全な一覧と今後の更新については、[IrodoriTTS公式の絵文字アノテーション](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md)を参照してください。
+
 ## 長い音声メッセージ
 
-Irodori v4.1は固定長のクリップを生成するのではなく、duration predictorで出力長を予測するため、サイドカー側で1回の発話あたりの長さ上限を設けていません。それでもTomoriBotは長いテキストを合成前に分割し、生成した音声を1つのWAVレスポンスへ連結するため、Discord側には1つの音声メッセージとして届きます。分割によって各推論が短く保たれ、レイテンシが抑えられます。
+Irodori v4.1は固定長のクリップを生成するのではなく、duration predictorで出力長を予測するため、ローカルサーバー側で1回の発話あたりの長さ上限を設けていません。それでもTomoriBotは長いテキストを合成前に分割し、生成した音声を1つのWAVレスポンスへ連結するため、Discord側には1つの音声メッセージとして届きます。分割によって各推論が短く保たれ、レイテンシが抑えられます。
 
 実装は[公式Irodori OpenAI互換サーバー](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py)のチャンク処理を基準にしています。公式サーバーでは80文字の非空白文字を基準にチャンク処理がデフォルトで有効です。TomoriBotではさらに、閉じ引用符や閉じ括弧を直前の句読点と同じチャンクに残し、`！？`や`...`のような連続した終端記号をまとめ、数字に隣接する小数点では分割せず、短すぎる最後のチャンクを直前へ結合します。
 
@@ -148,7 +202,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 以前のTomoriBotインストーラーはIrodoriの`pyproject.toml`にパッチを当て、`dacvae`を手動インストールし、古いv2時代のIrodoriコミットを固定していました。当時のパッケージ構成では必要な回避策でしたが、現在のIrodoriでは適切ではありません。
 
-現在はサイドカー専用の`pyproject.toml`を用意し、アップストリームと同じ`uv`ベースのバックエンド構成を使います。再現可能なインストールのためIrodoriと`dacvae`の既知コミットは固定しますが、インストール時にアップストリームのソースコードを書き換えることはありません。
+現在はローカルサーバー専用の`pyproject.toml`を用意し、アップストリームと同じ`uv`ベースのバックエンド構成を使います。再現可能なインストールのためIrodoriと`dacvae`の既知コミットは固定しますが、インストール時にアップストリームのソースコードを書き換えることはありません。
 
 ## 環境変数
 
@@ -156,8 +210,8 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Hugging Faceモデル、または対応するrepo/subfolder指定 |
 | `IRODORI_TTS_CHECKPOINT` | 未設定 | 任意のローカル`.pt` / `.safetensors`チェックポイント。設定時はHugging Faceモデルより優先 |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | サーバーのバインドアドレス |
-| `TOMORI_TTS_PORT` | `8013` | サーバーポート |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | サーバーのバインドアドレス。[ネットワークアクセス](/self-hosting/local-endpoints/text-to-speech/#network-access)を参照 |
+| `IRODORI_TTS_PORT` | `8013` | サーバーポート |
 | `IRODORI_MODEL_DEVICE` | `auto` | モデルデバイス（`auto`、`cuda`、`cpu`、`mps`、`xpu`） |
 | `IRODORI_CODEC_DEVICE` | `auto` | コーデックデバイス |
 | `IRODORI_MODEL_PRECISION` | CUDAでは`bf16`、それ以外は`fp32` | モデル精度 |
@@ -173,4 +227,3 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 | `IRODORI_MAX_REF_SECONDS` | チェックポイント側のデフォルト | 参照音声長の任意上限 |
 | `IRODORI_CHUNKING_ENABLED` | `true` | 長文を分割して生成音声を1つに連結 |
 | `IRODORI_CHUNK_MIN_CHARS` | `80` | 強い文末で分割可能になる非空白文字数。カンマはこの値のおよそ1.5倍でフォールバック境界になる |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | 1リクエストあたりのテキスト長上限 |

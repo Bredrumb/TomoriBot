@@ -52,7 +52,7 @@ import { extractImagesFromMessage } from "@/utils/image/imageExtractor";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
-const IMAGE_REFERENCE_TINY_MAX_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_TINY_MAX_BYTES ?? "950000", 10);
+const IMAGE_REFERENCE_TINY_MAX_BYTES = 950_000;
 const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_SINGLE_BYTES ?? "2097152", 10);
 
 type ImageReference = {

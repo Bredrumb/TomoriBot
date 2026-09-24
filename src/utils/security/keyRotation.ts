@@ -24,16 +24,10 @@ import {
 } from "@/types/db/schema";
 
 /** Cooldown duration for rate limit errors (429) in milliseconds */
-const RATE_LIMIT_COOLDOWN_MS = (() => {
-  const parsed = Number.parseInt(process.env.KEY_ROTATION_RATE_LIMIT_COOLDOWN_MS || "60000", 10);
-  return Number.isFinite(parsed) ? Math.max(1000, parsed) : 60000;
-})();
+const RATE_LIMIT_COOLDOWN_MS = 60_000;
 
 /** Cooldown duration for other API errors (401, 403, etc.) in milliseconds */
-const API_ERROR_COOLDOWN_MS = (() => {
-  const parsed = Number.parseInt(process.env.KEY_ROTATION_ERROR_COOLDOWN_MS || "300000", 10);
-  return Number.isFinite(parsed) ? Math.max(1000, parsed) : 300000;
-})();
+const API_ERROR_COOLDOWN_MS = 5 * 60_000;
 
 /** Maximum number of key attempts per request before giving up */
 export const MAX_KEY_ATTEMPTS = 3;

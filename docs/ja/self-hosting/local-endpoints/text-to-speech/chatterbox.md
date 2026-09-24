@@ -30,7 +30,7 @@ python -m pip install -r servers/tts/chatterbox/requirements.txt
 python servers/tts/chatterbox/server.py
 ```
 
-TomoriBotがChatterboxを使用している間は、そのターミナルを開いたままにしてください。既定のエンドポイントURLは`http://127.0.0.1:8011`です。
+TomoriBotがChatterboxを使用している間は、そのターミナルを開いたままにしてください。既定のエンドポイントURLは`http://127.0.0.1:8011`です。別のポートを使う場合は`CHATTERBOX_PORT`を設定します。
 
 ### オプション: Chatterbox-Nanoを使う
 

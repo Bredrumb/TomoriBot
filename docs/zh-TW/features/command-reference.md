@@ -9,7 +9,7 @@ sidebar:
   Run `bun run generate-command-reference` from the repository root.
 -->
 
-TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使用的同一批指令建構器與英文語系說明產生的。
+TomoriBot 目前註冊的每一個斜線指令，都是從 Discord 註冊時使用的同一批指令建構器與繁體中文說明產生的（尚未翻譯的說明會以英文顯示）。
 
 頂層指令群組：**39**。可執行的斜線指令：**81**。
 

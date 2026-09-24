@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import hmac
 import io
 import os
 import tempfile
@@ -9,11 +8,11 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Optional
 
 import soundfile as sf
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -23,11 +22,11 @@ DEVICE = os.getenv("VOXCPM2_DEVICE", "auto")
 OPTIMIZE = os.getenv("VOXCPM2_OPTIMIZE", "1").lower() in {"1", "true", "yes", "on"}
 LOAD_DENOISER = os.getenv("VOXCPM2_LOAD_DENOISER", "0").lower() in {"1", "true", "yes", "on"}
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("VOXCPM2_PORT", os.getenv("TOMORI_TTS_PORT", "8016")))
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "2000"))
-MAX_REF_AUDIO_BYTES = int(os.getenv("VOXCPM2_MAX_REF_AUDIO_BYTES", str(10 * 1024 * 1024)))
-API_KEY = (os.getenv("VOXCPM2_API_KEY") or os.getenv("TOMORI_TTS_API_KEY", "")).strip()
-ALLOW_REMOTE_BIND = os.getenv("TOMORI_TTS_ALLOW_REMOTE_BIND", "0").lower() in {"1", "true", "yes", "on"}
+PORT = int(os.getenv("VOXCPM2_PORT", "8016"))
+MAX_TEXT_CHARS = 2000
+# Bounds memory before decoding. TomoriBot sends 16-bit mono 22.05 kHz WAV (about 44 KB/s), so this holds
+# about 237 s; lowering it below the bot's SPEECH_SAMPLE_MAX_DURATION_SECS rejects clips the bot accepted.
+MAX_REF_AUDIO_BYTES = 10 * 1024 * 1024
 CFG_VALUE = float(os.getenv("VOXCPM2_CFG_VALUE", "2.0"))
 INFERENCE_TIMESTEPS = int(os.getenv("VOXCPM2_INFERENCE_TIMESTEPS", "10"))
 MAX_LEN = int(os.getenv("VOXCPM2_MAX_LEN", "4096"))
@@ -66,26 +65,6 @@ def controlled_text(text: str, instruct: Optional[str]) -> str:
     if control.startswith("(") and control.endswith(")"):
         return f"{control}{text}"
     return f"({control}){text}"
-
-
-def is_loopback_host(host: str) -> bool:
-    return host.strip().lower() in {"127.0.0.1", "localhost", "::1"}
-
-
-def validate_bind_policy() -> None:
-    if not is_loopback_host(HOST) and not API_KEY and not ALLOW_REMOTE_BIND:
-        raise RuntimeError(
-            "Refusing non-loopback bind without VOXCPM2_API_KEY or "
-            "TOMORI_TTS_ALLOW_REMOTE_BIND=1."
-        )
-
-
-def require_bearer_token(authorization: Optional[str]) -> None:
-    if not API_KEY:
-        return
-    expected = f"Bearer {API_KEY}"
-    if not authorization or not hmac.compare_digest(authorization.strip(), expected):
-        raise HTTPException(status_code=401, detail="A valid bearer token is required.")
 
 
 def decode_ref_audio(raw_base64: str, directory: str) -> str:
@@ -135,7 +114,6 @@ def load_model() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    validate_bind_policy()
     load_model()
     yield
 
@@ -164,11 +142,7 @@ def health() -> dict[str, str | bool | int | float | None]:
 
 
 @app.post("/synthesize")
-def synthesize(
-    payload: SynthesizeRequest,
-    authorization: Annotated[Optional[str], Header()] = None,
-) -> Response:
-    require_bearer_token(authorization)
+def synthesize(payload: SynthesizeRequest) -> Response:
     if model is None:
         raise HTTPException(status_code=503, detail="VoxCPM2 is still loading.")
 

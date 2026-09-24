@@ -160,7 +160,7 @@ const MEMORY_VIEW: ConfigPersonaMemoryView = {
     channelId: "channel-1",
     personaId: 55,
     personaLineageId: 55,
-    categories: { summary: "A stored scene", people: "Sparrow" },
+    categories: { summary: "A stored scene", people: "Mirri" },
     lastUpdated: Date.now(),
   },
   conditioningGroups: [MEMORY_CONDITIONING],
@@ -1787,7 +1787,6 @@ describe("config Behavior pages", () => {
         deliberateToolTriggers: { image: ["draw it"] },
         sendLimit: 3,
         selfDebugEnabled: false,
-        workarounds: { verbatim_tool_calling_enabled: true },
       },
       notices: {
         hiddenNoticeKeys: ["web_search" as const],

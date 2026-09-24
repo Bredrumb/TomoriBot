@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot 支持多种本地语音合成边车（sidecar），各自适合不同的语言、硬件配置与延迟要求。
+TomoriBot 支持多种本地语音合成服务器，各自适合不同的语言、硬件配置与延迟要求。
 
 本页给出在同一套测试环境、使用同一份语音克隆参考的条件下录制的实测基准结果、合成耗时与音频对比片段。
 
@@ -64,13 +64,13 @@ TomoriBot 支持多种本地语音合成边车（sidecar），各自适合不同
 - 如果你需要高质量的多语言零样本克隆，并能用自然语言给出表达方式指令（`"Speak in English with excitement"`），那就**选 [CosyVoice 3](/zh-CN/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)**。
 - 如果你需要覆盖面足够广的多语言支持（30 种语言）、参考文本辅助的 Ultimate Cloning 以及自然的语音设计，那就**选 [VoxCPM2](/zh-CN/self-hosting/local-endpoints/text-to-speech/voxcpm2/)**。
 - 如果你想要干净的多语言克隆、灵活的语音设计以及稳定的提示词遵循度，那就**选 [Qwen3-TTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/qwen3tts/)**。
-- 如果你的 bot 说日语，那就**选 [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/)**。它是唯一被实测的纯日语引擎（Windows 上约 4 秒，0.47× RTF），并且能原生解析 Unicode emoji（`😊`、`😢`、`😡`）来调节角色情绪。
+- 如果你的 bot 说日语，那就**选 [IrodoriTTS](/zh-CN/self-hosting/local-endpoints/text-to-speech/irodoritts/)**。它是唯一被实测的纯日语引擎（Windows 上约 4 秒，0.47× RTF），并且能原生解析 Unicode emoji（`😊`、`😭`、`😠`）来调节角色情绪。
 
 ---
 
 ## 对比各引擎
 
-目前 TomoriBot 的所有边车（sidecar）都向 bot 返回一个完整的 WAV 文件。「流式路径」是指上游模型或单独的推理后端具备流式输出，**并不**表示已经实现了 Discord 语音通话的流式传输。体积指的是模型参数量，**不是**显存占用或下载体积，16 GB 那一列只是配置建议，不是实测峰值。速度那一列描述的是各引擎的设计取舍；上面的实测耗时来自同一台 Windows 机器，不能用来给各引擎在 Linux 上的表现排名。
+目前 TomoriBot 的所有语音合成服务器都向 bot 返回一个完整的 WAV 文件。「流式路径」是指上游模型或单独的推理后端具备流式输出，**并不**表示已经实现了 Discord 语音通话的流式传输。体积指的是模型参数量，**不是**显存占用或下载体积，16 GB 那一列只是配置建议，不是实测峰值。速度那一列描述的是各引擎的设计取舍；上面的实测耗时来自同一台 Windows 机器，不能用来给各引擎在 Linux 上的表现排名。
 
 「参考片段」列列出的是各引擎在文档中记载、或在运行时实际套用的参考音频长度，因此混合了已发布的指引与从上游代码读出的限制。大多数引擎不会拒绝请求，而是静默裁剪到自己的窗口，所以这一列给出的是引擎读取的长度，而不只是引擎接受的长度。这是上游行为，不是在本页测得的结果，也和 TomoriBot 的上传上限无关。
 

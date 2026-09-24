@@ -17,21 +17,7 @@ export const MAX_ITEMS_DISPLAY = 5; // Max channel/member items before switching
 export const MEMORY_TRUNCATE_LENGTH = 100; // Max chars per memory snippet
 export const ATTRIBUTE_TRUNCATE_LENGTH = 200; // Max chars per attribute snippet
 export const DIALOGUE_TRUNCATE_LENGTH = 140; // Max chars per sample dialogue side
-const MAX_PROMPT_PREVIEW = Number.parseInt(process.env.SYSPROMPT_SHOW_MAX_PREVIEW || "3800", 10); // Max chars shown for system/persona prompts
-
-/**
- * Resolves the operator-configured maximum prompt preview length, falling back to MAX_PROMPT_PREVIEW.
- */
-function resolveMaxPromptPreview(): number {
-  const envVal = process.env.SYSPROMPT_SHOW_MAX_PREVIEW;
-  if (envVal !== undefined) {
-    const parsed = Number.parseInt(envVal, 10);
-    if (!Number.isNaN(parsed)) {
-      return parsed;
-    }
-  }
-  return MAX_PROMPT_PREVIEW;
-}
+export const MAX_PROMPT_PREVIEW = 3800; // Max chars shown for system/persona prompts
 
 /**
  * Formats a fenced code-block preview for a prompt, guaranteeing the output stays within 1,024 codepoints.
@@ -42,7 +28,7 @@ export function formatPromptPreview(rawText: string, locale: string): string {
   const fenceScaffolding = "```\n\n```\n";
   // Discord embed field values are capped at 1,024 codepoints, so the body budget accounts for fence scaffolding and the notice.
   const bodyBudget = 1024 - getDiscordTextLength(fenceScaffolding) - getDiscordTextLength(notice);
-  const maxBodyLength = Math.min(resolveMaxPromptPreview(), bodyBudget);
+  const maxBodyLength = Math.min(MAX_PROMPT_PREVIEW, bodyBudget);
   const textLength = getDiscordTextLength(neutralized);
 
   if (textLength <= maxBodyLength) {

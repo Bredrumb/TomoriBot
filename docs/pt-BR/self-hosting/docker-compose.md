@@ -51,16 +51,16 @@ docker compose up      # bot + banco de dados
 
 Para inicializações posteriores, apenas `docker compose up` é suficiente, a menos que você tenha alterado código ou dependências. Quando o bot estiver online, execute `/setup` no Discord para adicionar a chave da API do seu provedor de IA: veja o [Início Rápido](/pt-BR/introduction/quickstart/) para a parte do Discord.
 
-## 4. Sidecars opcionais (Perfis do Compose)
+## 4. Servidores locais opcionais (Perfis do Compose)
 
-Os sidecars são opcionais (opt-in) por meio dos perfis do Compose, para que você execute apenas o que precisar:
+Os servidores locais são opcionais (opt-in) por meio dos perfis do Compose, para que você execute apenas o que precisar:
 
 ```sh
 # SearXNG (busca web privada) + Crawl4AI (busca renderizada por navegador)
 docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
-Consulte [SearXNG](/pt-BR/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/pt-BR/self-hosting/local-endpoints/setup-crawl4ai/) e [Monitoramento Local](/pt-BR/self-hosting/local-monitoring/) para obter detalhes de cada sidecar.
+Consulte [SearXNG](/pt-BR/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/pt-BR/self-hosting/local-endpoints/setup-crawl4ai/) e [Monitoramento Local](/pt-BR/self-hosting/local-monitoring/) para obter detalhes de cada servidor.
 
 ## Manutenção, atualização e backups
 

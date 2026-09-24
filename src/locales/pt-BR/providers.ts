@@ -74,6 +74,7 @@ export default {
       flush_limit_description: `Esta resposta atingiu o limite máximo de comprimento de mensagem e foi interrompida. Você pode usar \`/respond\` para continuar manualmente a resposta, se necessário.`,
       inactivity_timeout_title: `🟡️ Tempo Limite da Resposta Esgotado`,
       inactivity_timeout_description: `O provedor de IA parou de responder e o tempo limite da conexão se esgotou. Isso pode acontecer quando o provedor está sobrecarregado ou com problemas. Por favor, tente novamente.`,
+      first_token_timeout_description: `O provedor de IA aceitou a solicitação, mas nunca começou a responder, então o tempo limite da conexão se esgotou. A fila dele provavelmente está congestionada. Por favor, tente novamente ou troque para um modelo menos ocupado.`,
     },
     // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
     // modal. Each key is one bullet; callers compose conditional items instead of maintaining
@@ -93,6 +94,9 @@ export default {
       choose_supported_model_personal: `Escolha um ID de modelo suportado com \`/personal config\` ou nas configurações do seu endpoint personalizado.`,
       verify_api_key: `Verifique novamente a chave de API deste servidor e tente novamente.`,
       verify_api_key_personal: `Verifique novamente sua chave de API pessoal com \`/personal providers\` e tente novamente.`,
+      verify_api_key_expiry: `As chaves do NVIDIA NIM expiram, e a NVIDIA recusa uma chave expirada com o mesmo erro de uma chave digitada errado. Confira a validade em [build.nvidia.com](https://build.nvidia.com) e gere uma nova chave se ela tiver vencido.`,
+      nvidia_register_free_model: `A NVIDIA aposenta modelos hospedados com frequência. Escolha um que ela esteja servindo no momento nos [endpoints gratuitos da NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copie o ID do modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) e depois adicione em \`/providers\` > NVIDIA NIM > **+ Adicionar novo Modelo de Texto**.`,
+      nvidia_register_free_model_personal: `A NVIDIA aposenta modelos hospedados com frequência. Escolha um que ela esteja servindo no momento nos [endpoints gratuitos da NVIDIA](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copie o ID do modelo (como \`deepseek-ai/deepseek-v4.1-flash\`) e depois adicione em \`/personal providers\` > NVIDIA NIM > **+ Adicionar novo Modelo de Texto**.`,
       google_credential_type: `Isso parece ser um token de conta de serviço ou OAuth. O provedor \`google\` precisa de uma chave de API simples do [Google AI Studio](https://aistudio.google.com/apikey); use o provedor \`vertex\` para credenciais do Google Cloud.`,
       openrouter_privacy_settings: `Ajuste suas configurações de "Política de Dados" em [Configurações de Privacidade do OpenRouter](https://openrouter.ai/settings/privacy) para permitir este modelo ou escolha um modelo diferente.`,
       openrouter_fund_account: `Adicione pelo menos 10 créditos à sua conta do OpenRouter para desbloquear 1000 solicitações de modelo gratuitas por dia.`,
@@ -186,6 +190,8 @@ O modelo selecionado requer a permissão de dados para treinamento de modelo pag
       unknown_default_message: `Ocorreu um erro inesperado`,
     },
     nvidia: {
+      "401_default_message": `A NVIDIA não reconheceu esta chave. Verifique se ela foi copiada por completo, incluindo o prefixo \`nvapi-\`.`,
+      "403_default_message": `A NVIDIA recusou esta chave. Ela pode estar digitada errado, expirada ou sem acesso a inferência na conta.`,
       "404_default_message": `O modelo NVIDIA NIM solicitado não pôde ser encontrado. Ele pode ter sido descontinuado pela NVIDIA.`,
       "500_default_message": `O backend da NVIDIA servindo este modelo falhou. Isso geralmente é temporário, então tente novamente em um momento. Os detalhes abaixo são do próprio relatório da NVIDIA e são oficiais: se eles nomearem um parâmetro de solicitação, ajuste essa configuração em vez de adivinhar.`,
       // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request

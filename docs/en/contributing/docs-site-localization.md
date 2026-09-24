@@ -51,6 +51,7 @@ in `DOCS_LOCALES`, or derives from it.
 | `docs/{locale}/**` | The translated page tree. |
 | `src/locales/{locale}/**` | Hardcoded docs URLs inside locale strings, which carry their own locale prefix. Repoint them to `/{locale}/` once the tree is published. |
 | `.github/README_{locale}.md` | The translated README, plus a switcher row pointing back at `../README.md`. |
+| `scripts/lib/commandReference.ts` | Add the locale's `COMMAND_REFERENCE_COPY` entry (page title, intro, table headers), then run `bun run generate-command-reference`. The generator refuses to run for a published locale without one. |
 | `README.md` | The locale's switcher entry becomes a live link once its translated file exists. |
 
 `apps/docs/public/_redirects` is already staged for every target locale in `DOCS_LOCALES`. Its entries name
@@ -59,7 +60,7 @@ step. Add the locale's landing-page copy before publishing it so its generated p
 content and metadata.
 
 Pages that stay English-only are linked with an explicit English destination, per the scope rule below.
-`bun run check-locale-links` resolves each project-owned route in the linking file's own locale tree first and
+`bun run check-locales` resolves each project-owned route in the linking file's own locale tree first and
 then in the default tree, so a link to an untranslated page passes while a link to a page that exists nowhere
 fails.
 
@@ -86,6 +87,30 @@ fallback behavior. That fallback route:
 
 Publishing a translation flips all four automatically and adds the alternate pair.
 
+### Finding stale translated pages
+
+`bun run find-stale-translations` checks translated pages and READMEs alongside locale keys. For
+docs, the page is the unit, and a page is reported as:
+
+| Reason | Meaning |
+|---|---|
+| `unfollowed` | The branch changed the English page (with `--base`) but not the translation. |
+| `drifted` | The English page changed after the translation's last commit. |
+| `missing` | No translation exists, so readers get the English fallback. |
+| `orphaned` | A translation with no English source, or inside an English-only section. |
+
+```bash
+bun run find-stale-translations --reason=unfollowed --base=origin/main   # this branch's follow-up
+bun run find-stale-translations --scope=docs --locale=ja                  # one tree's backlog
+```
+
+Only the title, description, sidebar label, and body count as translatable, so a change to sidebar
+order or `aiGenerated` creates no work. The `architecture/`, `contributing/`, and `wiki/` sections and
+`features/command-reference.md` are never reported: the reference is regenerated in every locale from
+the command description keys, and `bun run check-command-reference` owns its freshness. The baseline
+is the translation's last commit, so a commit that touches both trees, such as a link sweep, resets it
+even when the prose was not re-translated.
+
 ### Links inside a translated page
 
 Starlight emits a per-locale route set but does not rewrite a root-relative `href` in page source into the
@@ -102,7 +127,7 @@ redirect and ejects the reader into English.
 The `ja` tree is the worked example: most of its links carry `/ja/`, and the ones that carry `/en/` are pages
 the Japanese tree does not have. Two links under `docs/ja/legal/` still use unprefixed routes and send a
 Japanese reader to English; Japanese catch-up owns fixing them.
-`bun run check-locale-links` only scans absolute `docs.tomoribot.app` URLs, so this rule has no automated
+The link check in `bun run check-locales` only scans absolute `docs.tomoribot.app` URLs, so this rule has no automated
 backstop for Markdown source.
 
 ## Review Notices and `aiGenerated`
@@ -169,7 +194,7 @@ cd apps/docs && bun run build   # docs build, hreflang and llms.txt checks
 bun test tests/unit/docs/       # locale config, routing, fallback, and notice rules
 bun run check                   # TypeScript strict mode
 bun run lint                    # Biome formatting
-bun run check-locale-links      # locale strings, docs, and README routes resolve
+bun run check-locales          # keys, placeholders, markers, and docs and README links
 ```
 
 `bun run build` fails rather than warns when a fallback route advertises an alternate, which is the check

@@ -20,7 +20,7 @@ import type { UserRow, ErrorContext, TomoriState } from "@/types/db/schema";
 import type { SelectOption } from "@/types/discord/modal";
 import { serverScheduleRepository } from "@/utils/db/repositories";
 import type { ReminderSelectionRow } from "@/utils/db/repositories";
-import { buildReminderOptionParts } from "@/commands/scheduled-task/reminderSelectOptions";
+import { buildReminderOptionParts } from "@/utils/discord/reminderSelectOptions";
 
 const MODAL_CUSTOM_ID = "scheduled_task_remove_modal";
 const REMINDER_SELECT_ID = "reminder_select";

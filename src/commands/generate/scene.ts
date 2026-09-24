@@ -34,25 +34,14 @@ const CYCLES_INPUT_ID = "generate_scene_cycles";
 const INSTRUCTIONS_INPUT_ID = "generate_scene_instructions";
 const MAX_PERSONA_SELECT_OPTIONS = 25;
 
+/**
+ * Round-trip ceiling for `/generate scene`: each cycle replays every selected speaker once.
+ * Kept low because a cycle costs one LLM turn per speaker and they all post to the channel.
+ */
+const GENERATE_SCENE_MAX_CYCLES = 10;
+
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
   subcommand.setName("scene").setDescription(localizer("en-US", "commands.generate.scene.description"));
-
-function parsePositiveIntegerEnv(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (!value) return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? defaultValue : Math.max(minimum, parsed);
-}
-
-function getMaxCycles(): number {
-  // BOT_GENERATE_SCENE_MAX_CYCLES is the name operators already have set from when this
-  // command lived at /bot generate scene, so it stays readable: dropping it would silently
-  // return a tuned deployment to the default of 10.
-  return parsePositiveIntegerEnv(
-    process.env.GENERATE_SCENE_MAX_CYCLES ?? process.env.BOT_GENERATE_SCENE_MAX_CYCLES,
-    10,
-    1,
-  );
-}
 
 function getPersonaOptions(personas: TomoriState[], locale: string) {
   return personas
@@ -289,7 +278,8 @@ export async function execute(
   }
 
   const personaOptions = getPersonaOptions(availablePersonas, locale);
-  const maxCycles = getMaxCycles();
+  const maxCycles = GENERATE_SCENE_MAX_CYCLES;
+
   const modalResult = await promptWithRawModal(
     interaction,
     locale,

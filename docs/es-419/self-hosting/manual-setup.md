@@ -66,7 +66,7 @@ contenedores, usa [Docker Compose](/es-419/self-hosting/docker-compose/) en su l
 :::
 
 El ajuste opcional vive en `.env.optional.example`. Copia los valores que quieras personalizar (límites,
-tiempos de espera, interruptores de funciones, URLs de sidecars, etc.).
+tiempos de espera, interruptores de funciones, URLs de servidores locales, etc.).
 
 ## 3. Ejecuta
 
@@ -80,7 +80,7 @@ escribe nada hasta que presiones **Finalizar configuración**; consulta
 [El comando `/setup`](/es-419/self-hosting/setup-wizard/#el-comando-setup) para los pasos y la
 [Guía rápida](/es-419/introduction/quickstart/) para el lado dentro de Discord.
 
-Usa `bun run launch` en lugar de `bun run dev` si quieres que los sidecars opcionales (SearXNG, Crawl4AI,
+Usa `bun run launch` en lugar de `bun run dev` si quieres que los servidores locales opcionales (SearXNG, Crawl4AI,
 TTS/STT local) se inicien junto al bot:
 
 ```sh

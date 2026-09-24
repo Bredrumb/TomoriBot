@@ -24,7 +24,7 @@ import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelp
 import type { SelectOption } from "@/types/discord/modal";
 import type { ErrorContext, TomoriState, UserRow } from "@/types/db/schema";
 import type { ReminderSelectionRow } from "@/utils/db/repositories";
-import { buildReminderOptionParts } from "@/commands/scheduled-task/reminderSelectOptions";
+import { buildReminderOptionParts } from "@/utils/discord/reminderSelectOptions";
 
 const SELECT_MODAL_CUSTOM_ID = "scheduled_task_edit_select_modal";
 const EDIT_MODAL_CUSTOM_ID = "scheduled_task_edit_value_modal";

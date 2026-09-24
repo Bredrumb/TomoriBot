@@ -14,10 +14,7 @@ import { log } from "@/utils/misc/logger";
  * (non-sprite) sends, and caching the miss avoids re-querying them every turn.
  */
 
-const parsedCacheTtlMinutes = Number.parseInt(process.env.PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES || "120", 10);
-const CACHE_TTL_MINUTES =
-  Number.isFinite(parsedCacheTtlMinutes) && parsedCacheTtlMinutes > 0 ? parsedCacheTtlMinutes : 120;
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = 120 * 60 * 1000;
 
 const parsedRetentionDays = Number.parseInt(process.env.PERSONA_SPRITE_MESSAGE_RETENTION_DAYS || "30", 10);
 const RETENTION_DAYS = Number.isFinite(parsedRetentionDays) && parsedRetentionDays > 0 ? parsedRetentionDays : 30;

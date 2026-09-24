@@ -202,7 +202,7 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
 
     const tools = Array.isArray(config.tools) ? config.tools : [];
     const enabled = Boolean(
-      context.tomoriState.config.verbatim_tool_calling_enabled &&
+      context.tomoriState.llm.verbatim_tool_calling &&
         resolveToolsEnabled(context.tomoriState, context.tomoriState.llm.has_tools) &&
         tools.length > 0,
     );

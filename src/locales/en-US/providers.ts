@@ -74,6 +74,7 @@ export default {
       flush_limit_description: `This response has reached the maximum message length limit and has been stopped. You can use \`/respond\` to manually continue the response if needed.`,
       inactivity_timeout_title: `🟡️ Response Timed Out`,
       inactivity_timeout_description: `The AI provider stopped responding and the connection timed out. This can happen when the provider is overloaded or experiencing issues. Please try again.`,
+      first_token_timeout_description: `The AI provider accepted the request but never started replying, so the connection timed out. Its queue is likely backed up. Please try again, or switch to a less busy model.`,
     },
     // Atomic tip-item strings rendered by createTipText() as a dashed bullet list in a read-only
     // modal. Each key is one bullet; callers compose conditional items instead of maintaining
@@ -93,6 +94,9 @@ export default {
       choose_supported_model_personal: `Choose a supported model ID with \`/personal config\` or your custom endpoint settings.`,
       verify_api_key: `Double-check this server's API key, then try again.`,
       verify_api_key_personal: `Double-check your personal API key with \`/personal providers\`, then try again.`,
+      verify_api_key_expiry: `NVIDIA NIM keys expire, and NVIDIA refuses an expired key with the same error as a mistyped one. Check its expiry on [build.nvidia.com](https://build.nvidia.com) and generate a new key if it has lapsed.`,
+      nvidia_register_free_model: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
+      nvidia_register_free_model_personal: `If this model keeps failing, NVIDIA may have retired it or its free queue may be backed up. Pick one it currently serves from [NVIDIA's free endpoints](https://build.nvidia.com/models?filters=nimType%3Anim_type_preview), copy its model ID (such as \`deepseek-ai/deepseek-v4.1-flash\`), then add it in \`/personal providers\` > NVIDIA NIM > **+ Add new Text Model**.`,
       google_credential_type: `This looks like an OAuth or service account token. The \`google\` provider needs a plain API key from [Google AI Studio](https://aistudio.google.com/apikey); use the \`vertex\` provider for Google Cloud credentials.`,
       openrouter_privacy_settings: `Adjust your "Data Policy" settings at [OpenRouter Privacy Settings](https://openrouter.ai/settings/privacy) to allow this model, or choose a different model.`,
       openrouter_fund_account: `Add at least 10 credits to your OpenRouter account to unlock 1000 free model requests per day.`,
@@ -186,6 +190,8 @@ The selected model requires allowing data for paid model training, but your Open
       unknown_default_message: `An unexpected error occurred`,
     },
     nvidia: {
+      "401_default_message": `NVIDIA did not recognize this key. Check that it was copied in full, including its \`nvapi-\` prefix.`,
+      "403_default_message": `NVIDIA refused this key. It may be mistyped, expired, or missing inference access on its account.`,
       "404_default_message": `The requested NVIDIA NIM model could not be found. It may be deprecated by NVIDIA.`,
       "500_default_message": `The NVIDIA backend serving this model failed. This is usually transient, so try again in a moment. The details below are NVIDIA's own report and are authoritative: if they name a request parameter, adjust that setting rather than guessing.`,
       // Shown instead of 500_default_message only when NVIDIA's own text names a droppable request

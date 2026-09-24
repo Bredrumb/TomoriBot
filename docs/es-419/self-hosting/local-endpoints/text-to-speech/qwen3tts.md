@@ -28,7 +28,7 @@ python -m pip install -r servers/tts/qwen3tts/requirements.txt
 python servers/tts/qwen3tts/server.py
 ```
 
-La URL predeterminada del punto de conexión del modo automático es `http://127.0.0.1:8012`. También puedes especificar el modo automático explícitamente:
+La URL predeterminada del punto de conexión del modo automático es `http://127.0.0.1:8012`; configura `QWEN3TTS_PORT` para usar otro puerto. También puedes especificar el modo automático explícitamente:
 
 ```powershell
 python servers\tts\qwen3tts\server.py --mode auto

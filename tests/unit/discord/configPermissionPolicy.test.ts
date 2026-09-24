@@ -342,8 +342,6 @@ describe("Behavior action policy", () => {
       { action: "behavior-send-limit-open", locale: "en-US" },
       { action: "behavior-send-limit-submit", locale: "en-US", nonce: "nonce1234567" },
       { action: "behavior-self-debug-set", locale: "en-US", enabled: true },
-      { action: "behavior-workarounds-open", locale: "en-US" },
-      { action: "behavior-workarounds-submit", locale: "en-US", nonce: "nonce1234567" },
       { action: "behavior-notice-visibility-open", locale: "en-US" },
       { action: "behavior-notice-visibility-submit", locale: "en-US", nonce: "nonce1234567" },
       { action: "behavior-speech-transcripts-set", locale: "en-US", enabled: true },

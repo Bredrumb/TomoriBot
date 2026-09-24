@@ -194,7 +194,9 @@ async function main(): Promise<void> {
     if (conflictedPaths.length > 0) {
       printGitConflictGuidance(conflictedPaths);
     } else {
-      log.info("No unresolved merge files were reported. Review the Git output above, fix the issue, then re-run update.");
+      log.info(
+        "No unresolved merge files were reported. Review the Git output above, fix the issue, then re-run update.",
+      );
     }
     process.exit(1);
   }

@@ -7,7 +7,7 @@ sidebar:
 El comportamiento de TomoriBot, **lo que puede hacer y cómo genera sus respuestas**, se controla desde
 `/config` > Permisos y `/config`, además de la personalidad ([Múltiples personas](/es-419/features/chatting-personality/multiple-personas/))
 y el conocimiento ([Memoria](/es-419/features/knowledge/memory/)). Esta página reúne los controles más importantes.
-Todos los comandos están en la [Referencia de comandos](/en/features/command-reference/).
+Todos los comandos están en la [Referencia de comandos](/es-419/features/command-reference/).
 
 ## Capacidades: lo que puede hacer
 <!-- anchor: capabilities-what-shes-allowed-to-do -->

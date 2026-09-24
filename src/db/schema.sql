@@ -400,6 +400,7 @@ SELECT add_column_if_not_exists('llms', 'supports_structoutput', 'BOOLEAN', 'fal
 -- the per-provider required defaults (anthropic → alternation; deepseek/zai/zaicoding → prefix).
 SELECT add_column_if_not_exists('llms', 'strict_role_alternation', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'supports_prefix_completion', 'BOOLEAN', 'false');
+SELECT add_column_if_not_exists('llms', 'verbatim_tool_calling', 'BOOLEAN', 'false');
 SELECT add_column_if_not_exists('llms', 'llm_description', 'TEXT');
 SELECT add_column_if_not_exists('llms', 'descriptions', 'JSONB');
 -- Per-model official pricing (USD per million tokens, uncached standard rate). Nullable on purpose:
@@ -620,7 +621,7 @@ SELECT add_column_if_not_exists('persona_configs', 'humanizer_degree', 'INT', NU
 -- Min 20, max 100 enforced by command and schema validation
 
 -- Send message limit (March 2026)
--- Caps the number of Discord messages sent per response (0 = unlimited, capped by MAX_FLUSH_COUNT)
+-- Caps the number of Discord messages sent per response (0 = unlimited, capped by the MAX_FLUSH_COUNT constant)
 -- Each message is a semantically complete chunk, so this produces clean cutoffs unlike maxOutputTokens
 
 -- Always-reply mode (March 2026)
@@ -2361,6 +2362,7 @@ CREATE TABLE IF NOT EXISTS custom_endpoints (
   supports_structoutput BOOLEAN DEFAULT false,
   strict_role_alternation BOOLEAN DEFAULT false,
   supports_prefix_completion BOOLEAN DEFAULT false,
+  verbatim_tool_calling BOOLEAN NOT NULL DEFAULT false,
   is_default BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2724,7 +2726,6 @@ CREATE TABLE IF NOT EXISTS server_capabilities_configs (
   time_awareness_enabled BOOLEAN NOT NULL DEFAULT true,
   tool_use_enabled       BOOLEAN NOT NULL DEFAULT true,
   short_term_memory_enabled BOOLEAN NOT NULL DEFAULT true,
-  verbatim_tool_calling_enabled BOOLEAN NOT NULL DEFAULT false,
   user_info_updates_enabled BOOLEAN NOT NULL DEFAULT true,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()

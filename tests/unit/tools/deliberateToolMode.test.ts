@@ -10,6 +10,7 @@ import {
   applyDeliberateToolAllowlist,
   getDeliberateToolAllowedNames,
   matchesLocaleDeliberateToolPack,
+  resolveDeliberateToolContextTurns,
 } from "@/utils/tools/deliberateToolMode";
 
 const ALL_PACK_KEYS = [...Object.values(DELIBERATE_TOOL_PACK_KEYS), EXPLICIT_MEMORY_PACK_KEY];
@@ -60,7 +61,7 @@ describe("deliberate tool mode", () => {
 
   it("allows structured user info updates for naming, identity, and timezone requests", () => {
     for (const prompt of [
-      "call me Sparrow",
+      "call me Mirri",
       "change my pronouns to they/them",
       "set my UTC offset to 8",
       "clear my honorific",
@@ -164,5 +165,17 @@ describe("locale intent packs", () => {
     expect(getIntentPackEntryProblem("lembr*")).toBeNull();
     expect(getIntentPackEntryProblem("画像")).toBeNull();
     expect(getIntentPackEntryProblem("don't forget")).toBeNull();
+  });
+});
+
+describe("resolveDeliberateToolContextTurns", () => {
+  it("keeps tools for four turns when the server has not chosen a value", () => {
+    expect(resolveDeliberateToolContextTurns(null)).toBe(4);
+    expect(resolveDeliberateToolContextTurns(undefined)).toBe(4);
+  });
+
+  it("clamps a server value into 0-10", () => {
+    expect(resolveDeliberateToolContextTurns(-2)).toBe(0);
+    expect(resolveDeliberateToolContextTurns(25)).toBe(10);
   });
 });

@@ -1,5 +1,6 @@
 import type { TomoriState } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 import { personaRepository } from "@/utils/db/repositories";
 import { cache, lastDbError, invalidateTomoriStateCache } from "./tomoriStateCacheStore";
 import { log } from "../misc/logger";
@@ -17,12 +18,6 @@ export { invalidateTomoriStateCache };
 const DB_ERROR_STALENESS_MS = 2 * 60 * 1000;
 
 /**
- * Cache duration: configurable via env, default 10 minutes.
- * Longer TTL than emoji cache since config changes are less frequent.
- */
-const TOMORI_STATE_CACHE_DURATION_MS = (Number(process.env.TOMORI_STATE_CACHE_TTL_MINUTES) || 10) * 60 * 1000;
-
-/**
  * Cache statistics for monitoring
  */
 let cacheHits = 0;
@@ -38,11 +33,8 @@ let cacheMisses = 0;
  */
 const botStartTimestamp = Date.now();
 
-/**
- * How long after process start to treat empty persona results as "updating"
- * rather than "not set up". Configurable via env (default 3 minutes).
- */
-const STARTUP_GRACE_PERIOD_MS = (Number(process.env.STARTUP_GRACE_PERIOD_MINUTES) || 3) * 60 * 1000;
+/** How long after process start to treat empty persona results as "updating" rather than "not set up". */
+const STARTUP_GRACE_PERIOD_MS = 3 * 60 * 1000;
 
 /** Returns only a recent database failure recorded for this workspace. */
 export function getRecordedDbError(serverDiscId: string): { message: string; timestamp: number } | null {
@@ -100,7 +92,7 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
   if (cachedEntry) {
     // Check if cache is still fresh (< 10 minutes old)
     const cacheAge = now - cachedEntry.cachedAt;
-    if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
+    if (cacheAge < TOMORI_STATE_CACHE_TTL_MS) {
       cacheHits++;
       return cachedEntry.personas;
     }
@@ -178,7 +170,7 @@ export async function getCachedMainPersona(serverDiscId: string): Promise<Tomori
   const cachedEntry = cache.get(serverDiscId);
   if (cachedEntry) {
     const cacheAge = Date.now() - cachedEntry.cachedAt;
-    if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
+    if (cacheAge < TOMORI_STATE_CACHE_TTL_MS) {
       cacheHits++;
       return cachedEntry.mainPersona;
     }

@@ -95,7 +95,7 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 
 - Key: `serverDiscId`
 - Stores all personas for a server + main persona shortcut
-- Default TTL: `TOMORI_STATE_CACHE_TTL_MINUTES` (default 10)
+- Default TTL: `TOMORI_STATE_CACHE_TTL_MS` in `src/constants/cacheTtl.ts` (10 minutes)
 - Main APIs:
   - `getCachedAllPersonas(serverDiscId)`
   - `getCachedMainPersona(serverDiscId)`
@@ -106,7 +106,7 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 
 - Key: `userDiscId`
 - Stores user row, privacy level, and per-server blacklist sub-cache
-- Default TTL: `USER_CACHE_TTL_MINUTES` (default 30)
+- Default TTL: `USER_CACHE_DURATION_MS` (30 minutes)
 - APIs:
   - `getCachedUserRow`, `getCachedPrivacyLevel`, `getCachedBlacklistStatus`
   - `invalidateUserCache`, `invalidateUserBlacklistCache`
@@ -115,7 +115,7 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 
 - Key: internal `server_id`
 - Stores expression rows loaded from DB after lazy sync checks
-- Default TTL: `EMOJI_STICKER_CACHE_TTL_MINUTES` (default 10)
+- Default TTL: `MEMORY_CACHE_DURATION_MS` (10 minutes)
 - API: `loadEmojiStickerCache`, `invalidateEmojiStickerCache`
 
 ### 4) Channel whitelist cache (`channelWhitelistCache.ts`)
@@ -123,7 +123,7 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 - Key: `serverDiscId:channelDiscId:parentChannelDiscId:roleSignature`
 - Stores whitelist decision (channel + role), persona-channel restriction metadata, and optional channel cooldown overrides
 - For thread triggers, the parent channel ID is part of the cache key so parent-whitelist inheritance does not collide with non-thread checks
-- Default TTL: `CHANNEL_WHITELIST_CACHE_TTL_MINUTES` (default 5)
+- Default TTL: `CACHE_TTL_MS` (5 minutes)
 - API: `getCachedWhitelistStatus`, `invalidateWhitelistCache`
 
 ### 5) Short-term memory cache (`shortTermMemoryCache.ts`)
@@ -134,10 +134,10 @@ fallback before rendering `@UnknownUser`. Sweeping a `User` still referenced by 
 - Stores per-channel conversation snippets and optional summaries
 - Guild behavior: the latest STM for a persona in a channel is shared across that server's other channels; user-scoped STM is retained for cross-server opt-in behavior
 - When the triggering user message explicitly asks Tomori to remember something for future use, STM tool nudges are suppressed for that turn so long-term memory tools take priority; raw short-term conversation capture still continues after the reply
-- TTL env vars:
-  - `SHORT_TERM_MEMORY_TTL_HOURS`
-  - `SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS`
-- Code fallback defaults are 12h/24h; deployers commonly override in `.env`.
+- TTL constants in `shortTermMemoryCache.ts`:
+  - `CRUDE_CONVERSATION_TTL_HOURS` (12h)
+  - `SUMMARY_TTL_HOURS` (24h)
+- Both were environment-tunable before; they are now fixed in code.
 - APIs:
   - `storeShortTermMemory`, `getShortTermMemoryForUserChannel`, `getShortTermMemoryForServerChannel`
   - `getShortTermMemoriesForUser`, `getShortTermMemoriesForServer`
@@ -174,14 +174,14 @@ All four share the refresh machinery in `openrouterCatalog.ts`:
 - Warmed at startup, then refreshed on a cache miss and on a TTL
 - A refresh builds a replacement map and swaps it only on success, so a failed refresh leaves
   the previous catalog serving rather than emptying it
-- Concurrent refreshes are collapsed into one request, and attempts are rate-limited by
-  `OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS` (default 60s) so an unrecognized codename cannot
+- Concurrent refreshes are collapsed into one request, and attempts are rate-limited by the
+  `minRefreshIntervalMs` catalog setting (60s by default) so an unrecognized codename cannot
   amplify into a fetch per lookup
 - Interactive model registration passes `{ fresh: true }` to `getOrFetch`, which refreshes
   before the lookup and ignores that rate limit. A codename someone types by hand is usually
   one OpenRouter published minutes ago, and the rate is bounded by submitted registrations
   rather than by chat turns
-- `OPENROUTER_CATALOG_TTL_MS` (default 6h) drives the background refresher in
+- The catalog TTL (6h by default) drives the background refresher in
   `timers/openrouterCatalogRefresher.ts`, which exists for the synchronous readers: pricing,
   context limits, tokenizer, and `supported_parameters` are consulted per turn and never
   refresh on their own
@@ -225,36 +225,35 @@ the next refresh window to reclaim a few hundred KB.
 
 - Key: Discord message ID
 - Stores STT/TTS transcript text for older audio messages in history
-- Default TTL: `VOICE_TRANSCRIPT_CACHE_TTL_MINUTES` (default 120)
+- Default TTL: `VOICE_TRANSCRIPT_CACHE_TTL_MS` (120 minutes)
 
 ### 13) Markdown table render cache (`utils/text/markdownTableCache.ts`)
 
 - Key: Discord message ID
 - Stores original markdown behind rendered table images
-- Default TTL: `MARKDOWN_TABLE_CACHE_TTL_MINUTES` (default 120)
+- Default TTL: `MARKDOWN_TABLE_CACHE_TTL_MS` (120 minutes)
 - Read by history/context builders so Tomori sees the table's text rather than an opaque image,
-  and by the message's "Show Markdown" button to serve the source ephemerally. Keep
-  `MARKDOWN_TABLE_BUTTON_TIMEOUT_MS` at or below this TTL, or the button will outlive its entry
-  and reply with the expired notice.
+  and by the message's "Show Markdown" button to serve the source ephemerally. `SHOW_MARKDOWN_BUTTON_TIMEOUT_MS`
+  is kept at this TTL, so the button cannot outlive its entry and reply with the expired notice.
 
 ### 14b) Channel system prompt cache (`channelPromptCache.ts`)
 
 - **Scope:** per `(server_id, channel_disc_id)`: one entry per channel that may carry an override
 - **Value:** `{ prompt, mode }` (`append`/`replace`) for the per-channel system prompt, or `null`
 - **Negative caching:** channels with no override cache `null` so DM channels and unconfigured channels cost a single cheap lookup
-- Default TTL: `TOMORI_STATE_CACHE_TTL_MINUTES` (default 10)
+- Default TTL: `TOMORI_STATE_CACHE_TTL_MS` in `src/constants/cacheTtl.ts` (10 minutes)
 - Backed by the standalone `channel_prompt_overrides` table; `ChannelPromptRepository` invalidates the entry after each successful write/delete (`invalidateChannelPromptCache`). Mirrors the per-channel LLM override cache (`channelLlmCache.ts`).
 
 ### 15) Persona sprite cache (`personaSpriteCache.ts`)
 
 - **Scope:** per `persona_id`
 - **Value:** ordered `persona_sprites` rows used by prompt context and render-modifier resolution
-- Default TTL: `PERSONA_SPRITE_CACHE_TTL_MINUTES` (falls back to `TOMORI_STATE_CACHE_TTL_MINUTES`, default 10)
+- Default TTL: `TOMORI_STATE_CACHE_TTL_MS` (10 minutes)
 - Backed by `persona_sprites`; `PersonaSpriteRepository` invalidates after successful add/replace/delete.
 - Related operational limits:
-  - `PERSONA_SPRITE_MAX_PER_PERSONA` (default 50)
-  - `PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH` (default 300, DB maximum 1000)
-  - `PERSONA_SPRITE_PROMPT_MAX_COUNT` (default 20)
+  - `PERSONA_SPRITE_MAX_PER_PERSONA` (environment-backed, default 50)
+  - `PERSONA_SPRITE_LIMITS.MAX_INSTRUCTIONS_LENGTH` (300; the DB column allows 1000)
+  - `PERSONA_SPRITE_LIMITS.PROMPT_MAX_COUNT` (20)
 
 ### 15b) Persona sprite message cache (`personaSpriteMessageCache.ts`)
 
@@ -263,7 +262,7 @@ the next refresh window to reclaim a few hundred KB.
   message has no sprite mapping. Most persona webhook messages are plain sends, so caching
   the miss avoids re-querying them every turn
 - Entries are **immutable** (a sent message's sprite never changes), so the cache needs no
-  invalidation; the TTL only bounds memory (`PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES`, default 120)
+  invalidation; the TTL only bounds memory (120 minutes)
 - Expired entries are swept on the write path at most once every 10 minutes. Expiry is otherwise
   lazy (an entry is dropped only when that message is looked up again), so without the sweep the TTL
   would free nothing until restart
@@ -321,8 +320,8 @@ Two maps, deliberately keyed at different granularities.
 - **Gate:** `serverId -> { hasAny, expiresAt }`, bounded by guild count
 - **Result:** `serverId:userId:channelDiscId -> { result, expiresAt }`, the highest-cardinality key
   in the cache layer
-- Default TTL: `PERSONAL_SPOTLIGHT_CACHE_TTL_MINUTES` (default 5), applied to both maps
-- Hard cap: `PERSONAL_SPOTLIGHT_CACHE_MAX_ENTRIES` (default 2000) on the result map
+- Default TTL: `CACHE_TTL_MS` (5 minutes), applied to both maps
+- Hard cap: `MAX_ENTRIES` (2000) on the result map
 - API: `getCachedPersonalSpotlightStatus`, `invalidatePersonalSpotlightCache`
 
 A read consults the gate before the triple. When a server has no spotlight rows, the gate answers
@@ -439,29 +438,18 @@ operation cache and one worker thread per CPU. Raise these only with headroom ab
 
 ## Recommended Env Knobs
 
+TTLs and entry ceilings are fixed in code (see each layer above), so the environment only carries the settings that
+reasonably differ between installations:
+
 ```dotenv
-TOMORI_STATE_CACHE_TTL_MINUTES=10
-USER_CACHE_TTL_MINUTES=30
-EMOJI_STICKER_CACHE_TTL_MINUTES=10
-CHANNEL_WHITELIST_CACHE_TTL_MINUTES=5
-PERSONAL_SPOTLIGHT_CACHE_TTL_MINUTES=5
-PERSONAL_SPOTLIGHT_CACHE_MAX_ENTRIES=2000
-PERSONA_SPRITE_CACHE_TTL_MINUTES=10
 PERSONA_SPRITE_MAX_PER_PERSONA=50
-PERSONA_SPRITE_MAX_INSTRUCTIONS_LENGTH=300
-PERSONA_SPRITE_PROMPT_MAX_COUNT=20
-PERSONA_SPRITE_MESSAGE_CACHE_TTL_MINUTES=120
 PERSONA_SPRITE_MESSAGE_RETENTION_DAYS=30
 EMERGENCY_CACHE_CLEAR_ENABLED=true
 EMERGENCY_CACHE_CLEAR_INCLUDE_STM=false
 EMERGENCY_CACHE_CLEAR_DISCORD_VOLATILE=true
-SHORT_TERM_MEMORY_TTL_HOURS=2
-SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS=4
-SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH=500
-SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT=6
-SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL=10
-SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS=3
 ```
+
+The `PERSONA_SPRITE_*` pair is a storage and DB-retention choice; the `EMERGENCY_CACHE_CLEAR_*` switches are operational.
 
 ## Practical Rule
 

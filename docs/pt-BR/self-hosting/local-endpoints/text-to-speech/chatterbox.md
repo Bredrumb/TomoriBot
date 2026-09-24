@@ -31,7 +31,7 @@ python -m pip install -r servers/tts/chatterbox/requirements.txt
 python servers/tts/chatterbox/server.py
 ```
 
-Mantenha esse terminal aberto enquanto o TomoriBot estiver usando o Chatterbox. O URL do endpoint padrão é `http://127.0.0.1:8011`.
+Mantenha esse terminal aberto enquanto o TomoriBot estiver usando o Chatterbox. O URL do endpoint padrão é `http://127.0.0.1:8011`; defina `CHATTERBOX_PORT` para usar outra porta.
 
 ### Opcional: usar Chatterbox-Nano
 

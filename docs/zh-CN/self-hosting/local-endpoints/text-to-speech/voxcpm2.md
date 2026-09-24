@@ -58,17 +58,17 @@ VoxCPM2 把自然语言描述放在待合成文本前的括号里，以此表示
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-如果你的原生 Windows PyTorch 安装需要手动重装或重新对齐驱动，请把支持 CUDA 的 PyTorch 构建直接安装到边车服务的虚拟环境里：
+如果你的原生 Windows PyTorch 安装需要手动重装或重新对齐驱动，请把支持 CUDA 的 PyTorch 构建直接安装到服务器的虚拟环境里：
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-OpenBMB 报告，在 RTX 4090 上使用标准运行时的 RTF 约为 0.30。上游还支持流式生成，并记录了更快的 Nano-vLLM 与 vLLM-Omni 服务方案。TomoriBot 当前的 `POST /synthesize` 契约只返回一个 WAV 响应，所以这个边车服务会有意缓冲生成的语音，而不对外暴露单独的流式协议。
+OpenBMB 报告，在 RTX 4090 上使用标准运行时的 RTF 约为 0.30。上游还支持流式生成，并记录了更快的 Nano-vLLM 与 vLLM-Omni 服务方案。TomoriBot 当前的 `POST /synthesize` 契约只返回一个 WAV 响应，所以这个服务器会有意缓冲生成的语音，而不对外暴露单独的流式协议。
 
 ## 安装
 
-边车服务固定使用当前稳定的 `voxcpm` 2.0.3 包，并把 `openbmb/VoxCPM2` 下载到常规的 Hugging Face 缓存里。
+服务器固定使用当前稳定的 `voxcpm` 2.0.3 包，并把 `openbmb/VoxCPM2` 下载到常规的 Hugging Face 缓存里。
 
 ### Linux / WSL Bash
 
@@ -103,9 +103,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-安装完成后，`bun run launch --voxcpm2` 会同时启动边车服务与 TomoriBot。默认端点是 `http://127.0.0.1:8016`。
-
-如果设置了 `VOXCPM2_API_KEY` 或 `TOMORI_TTS_API_KEY`，请以启用认证的方式注册端点，并在 TomoriBot 中保存同一个密钥。启动器仍会探测无需认证的 `/health` 路由，而合成请求会使用 `Authorization: Bearer <key>`。
+安装完成后，`bun run launch --voxcpm2` 会同时启动服务器与 TomoriBot。默认端点是 `http://127.0.0.1:8016`。
 
 ## 在 TomoriBot 中注册
 
@@ -172,19 +170,13 @@ TomoriBot 会把保存好的描述作为 `instruct` 发送。VoxCPM2 会把它�
 | `VOXCPM2_RETRY_BADCASE_MAX_TIMES` | `3` | 最大自动重试次数 |
 | `VOXCPM2_RETRY_BADCASE_RATIO_THRESHOLD` | `6.0` | 上游的异常长度阈值 |
 | `VOXCPM2_PREFETCH` | `1` | 仅安装程序：在安装过程中下载模型 |
-| `VOXCPM2_PORT` | `8016` | VoxCPM2 边车服务端口；未设置时回退到 `TOMORI_TTS_PORT` |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | 边车服务的绑定地址 |
-| `TOMORI_TTS_PORT` | `8016` | 向后兼容的共享边车服务端口回退值 |
-| `VOXCPM2_MAX_REF_AUDIO_BYTES` | `10485760` | 解码后的参考音频大小上限 |
-| `VOXCPM2_API_KEY` | 未设置 | `/synthesize` 的可选 bearer token；也可以回退接受 `TOMORI_TTS_API_KEY` |
-| `TOMORI_TTS_API_KEY` | 未设置 | `/synthesize` 共享的可选 bearer token 回退值 |
-| `TOMORI_TTS_ALLOW_REMOTE_BIND` | `0` | 仅当要在没有 bearer token 的情况下允许非回环绑定时才设为 `1` |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | 可接受的合成文本长度上限 |
+| `VOXCPM2_PORT` | `8016` | VoxCPM2 本地服务器端口 |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | 本地服务器的绑定地址; 参见[网络访问](/self-hosting/local-endpoints/text-to-speech/#network-access) |
 
-参考音频必须是非空的 WAV 容器。封装程序会在写入临时文件之前强制执行解码后的字节上限。`/health` 始终保持无需认证，供本地就绪检查使用；只要配置了密钥，`/synthesize` 就要求 `Authorization: Bearer <key>`。除非已经部署了反向代理或有明确的远程策略，否则请保持默认的回环绑定。
+参考音频必须是解码后不超过 10 MB 的非空 WAV 容器，封装程序会在写入临时文件之前检查这一点。
 
 ## 备用检查点与运行时
 
 官方 BF16 模型已经能放进预期的 16 GB 消费级 GPU 目标，所以 TomoriBot 默认不使用量化检查点。社区里存在一些量化版本，但它们会额外增加一层兼容性与维护负担，而常规安装并不需要。
 
-对于高吞吐量的部署，OpenBMB 目前推荐把 Nano-vLLM-VoxCPM 和 vLLM-Omni 作为加速服务方案。那些运行时可以提供超出这个参考边车服务的流式与并发服务能力。它们并不是 TomoriBot 常规本地语音消息工作流所必需的，而这个封装程序有意停留在官方 `voxcpm` API 上，以便在上游模型升级时仍然容易跟进。
+对于高吞吐量的部署，OpenBMB 目前推荐把 Nano-vLLM-VoxCPM 和 vLLM-Omni 作为加速服务方案。那些运行时可以提供超出这个参考服务器的流式与并发服务能力。它们并不是 TomoriBot 常规本地语音消息工作流所必需的，而这个封装程序有意停留在官方 `voxcpm` API 上，以便在上游模型升级时仍然容易跟进。

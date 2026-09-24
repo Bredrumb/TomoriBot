@@ -126,7 +126,7 @@ toàn máy chủ? Đó là Tiêu điểm cá nhân; xem
 
 Quản lý máy chủ có thể sử dụng `/config` > Persona > Identity & Personality để cung cấp cho mỗi persona
 các tiền tố, hậu tố và danh xưng độc lập cho nam giới, nữ giới và trung tính. Tùy chỉnh ghi đè theo phạm vi
-persona của chính người dùng được liên kết theo nguồn gốc persona ổn định, do đó hai persona có thể gọi Sparrow
+persona của chính người dùng được liên kết theo nguồn gốc persona ổn định, do đó hai persona có thể gọi Mirri
 bằng các tên khác nhau trong cùng một phản hồi đa persona trong khi cả hai vẫn nhắm tới cùng một người dùng
 Discord. Việc chỉnh sửa một con trỏ chính thức trước tiên sẽ tạo ra một bản sao độc lập; thao tác này không
 bao giờ làm thay đổi danh mục chia sẻ hoặc persona của máy chủ khác.

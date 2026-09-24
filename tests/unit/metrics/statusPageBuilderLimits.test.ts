@@ -221,7 +221,7 @@ describe("actual status page builders", () => {
           for (const [pageIndex, page] of category.pages.entries()) {
             const personaRoster = Array.from({ length: 51 }, (_, index) => ({
               persona_id: index + 1,
-              persona_nickname: index === 0 ? "Sparrow" : `Persona ${index + 1}`,
+              persona_nickname: index === 0 ? "Mirri" : `Persona ${index + 1}`,
             })) as TomoriState[];
             const payload =
               category.id === "persona"

@@ -165,14 +165,14 @@ docker compose up --build
 
 Para inicializações posteriores, `docker compose up` é o suficiente a menos que você tenha alterado código ou dependências.
 
-### C. Sidecars & Servidores Opcionais
+### C. Servidores Locais Opcionais
 
-A TomoriBot suporta serviços de sidecar/servidor opcionais juntamente com qualquer um dos caminhos de instalação para aprimorar suas ferramentas e adicionar monitoramento local: SearXNG para busca web, Crawl4AI para busca em páginas renderizadas via navegador, e servidores locais de voz TTS/STT.
+A TomoriBot suporta servidores locais opcionais (opt-in) juntamente com qualquer um dos caminhos de instalação para aprimorar suas ferramentas e adicionar monitoramento local: SearXNG para busca web, Crawl4AI para busca em páginas renderizadas via navegador, e servidores locais de voz TTS/STT.
 
 **Com a configuração local com Bun (A)**, use `bun run launch` em vez de `bun run dev`, exemplos de execução:
 
 ```sh
-# Com os sidecars do Docker SearXNG e Crawl4AI
+# Com os contêineres Docker do SearXNG e Crawl4AI
 bun run launch --searxng --crawl4ai
 
 # Com um servidor local TTS após seguir a documentação de configuração de voz
@@ -184,11 +184,11 @@ bun run launch --cosyvoice3
 bun run launch --help
 ```
 
-Flags disponíveis: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--whisperx`, `--help`
+Flags disponíveis: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`, `--help`
 
-**Ctrl+C** interrompe o bot e quaisquer processos de sidecar em Python. Os contêineres Docker (`--searxng`, `--crawl4ai`) são deixados intencionalmente em execução; pare-os manualmente com `docker stop searxng` / `docker stop crawl4ai` quando terminar.
+**Ctrl+C** interrompe o bot e quaisquer processos de servidor em Python. Os contêineres Docker (`--searxng`, `--crawl4ai`) são deixados intencionalmente em execução; pare-os manualmente com `docker stop searxng` / `docker stop crawl4ai` quando terminar.
 
-**Com Docker Compose (B)**, os sidecars são habilitados via perfis no Compose:
+**Com Docker Compose (B)**, os servidores locais são habilitados via perfis no Compose:
 
 ```sh
 # + SearXNG busca web (metabusca de hospedagem própria)
@@ -203,8 +203,8 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 Consulte os guias abaixo para detalhes completos de configuração:
 
-- **[Sidecar de Busca Web SearXNG](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/setup-searxng/)** - Uma instância de metabusca de hospedagem própria para contornar limites de API de mecanismo único para a ferramenta `web_search`.
-- **[Sidecar Crawl4AI](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/setup-crawl4ai/)** - Um sidecar de renderização de navegador para buscar e processar páginas da web com muito JavaScript para a ferramenta `fetch_url`.
+- **[Busca Web SearXNG](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/setup-searxng/)** - Uma instância de metabusca de hospedagem própria para contornar limites de API de mecanismo único para a ferramenta `web_search`.
+- **[Crawl4AI](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/setup-crawl4ai/)** - Um servidor de renderização de navegador para buscar e processar páginas da web com muito JavaScript para a ferramenta `fetch_url`.
 - **[Text-to-Speech](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/text-to-speech/)** / **[Speech-to-Text](https://docs.tomoribot.app/pt-BR/self-hosting/local-endpoints/speech-to-text/)** - Servidores de voz Python para as mensagens de voz da TomoriBot; o venv deles deve ser configurado uma vez com antecedência.
 
 ### Atualizando a TomoriBot

@@ -70,7 +70,7 @@ bun run setup
 
 ```bash
 bun run dev                          # 只有 bot
-bun run launch --searxng --crawl4ai  # bot 加 sidecar（請看 bun run launch --help）
+bun run launch --searxng --crawl4ai  # bot 加本機伺服器（請看 bun run launch --help）
 ```
 
 bot 上線之後，在 Discord 執行 `/setup` 來連接 AI 供應商。自己的工作區沒有自帶供應商就無法回覆，除非它以使用者 BYOK 模式運行，改由每位成員的個人供應商回答，所以這是每一條安裝路徑的最後一步。
@@ -119,8 +119,7 @@ bot 上線之後，在 Discord 執行 `/setup` 來連接 AI 供應商。自己�
 草稿，並用收據取代面板。**取消**會丟棄草稿，並讓面板上每一個控制項失效。
 
 草稿存在 bot 行程中，不在資料庫裡，所以它只會在取消、完成或行程重新啟動時結束。同時最多保留
-`SETUP_DRAFT_MAX_ENTRIES`（預設 200）份草稿；達到上限時最舊的會被丟棄。這件事記錄在
-`.env.optional.example` 的 **Setup wizard drafts** 底下。工作階段已不存在時，對應的控制項不會寫入任何東西。
+200 份草稿；達到上限時最舊的會被丟棄。工作階段已不存在時，對應的控制項不會寫入任何東西。
 
 ## 更新
 

@@ -10,6 +10,7 @@ import type {
   UserSavedProviderConfigRow,
 } from "@/types/db/schema";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCache";
+import { forgetCachedLlm } from "@/utils/cache/llmCacheStore";
 import { configRepository, llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
@@ -58,6 +59,9 @@ export interface CustomEndpointRegistrationInput {
   // row so the runtime resolves them uniformly with built-in providers.
   strictRoleAlternation?: boolean;
   supportsPrefixCompletion?: boolean;
+  // Per-model verbatim tool-calling opt-in: the runtime reads it from the synthetic llms row while
+  // the panel reads the endpoint row, so both must carry the same value.
+  verbatimToolCalling?: boolean;
   extraConfig?: Record<string, unknown>;
   // When set, edit that exact endpoint row in place (update its model + row by id) instead of
   // registering a new model. Add flows omit it; the edit command supplies the selected row's id.
@@ -83,6 +87,20 @@ async function getExistingSavedConfig(
     : await llmProviderRepo.loadUserSavedProviderConfig(scope.ownerId, provider);
 }
 
+/**
+ * Drops the cached row for a synthetic text model just written.
+ *
+ * TomoriState invalidation alone is not enough: rebuilding the state reads the model through
+ * `llmModelRepo.loadById`, which is cache-first, so the rebuilt state would carry the pre-edit
+ * capability flags. Dropping the entry makes that read fall through to the row that was just
+ * written.
+ */
+function forgetCachedTextModel(modelId: number | null | undefined): void {
+  if (modelId != null) {
+    forgetCachedLlm(modelId);
+  }
+}
+
 async function upsertSyntheticTextModel(
   provider: string,
   endpoint: CustomEndpointRegistrationInput,
@@ -99,8 +117,10 @@ async function upsertSyntheticTextModel(
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
     strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
     supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
+    verbatimToolCalling: endpoint.verbatimToolCalling ?? false,
   });
 
+  forgetCachedTextModel(modelId);
   return modelId;
 }
 
@@ -200,7 +220,12 @@ async function writeSyntheticCapabilityModel(
     supportsStructOutput: endpoint.supportsStructOutput ?? false,
     strictRoleAlternation: endpoint.strictRoleAlternation ?? false,
     supportsPrefixCompletion: endpoint.supportsPrefixCompletion ?? false,
+    verbatimToolCalling: endpoint.verbatimToolCalling ?? false,
   });
+  // `model_ref_id` points at a different table per capability, so only a text id names an llms row.
+  if (endpoint.capability === "text") {
+    forgetCachedTextModel(existingModelRefId);
+  }
   return existingModelRefId;
 }
 
@@ -500,6 +525,7 @@ export async function registerCustomEndpoint(
       supportsStructOutput: input.supportsStructOutput ?? false,
       strictRoleAlternation: input.strictRoleAlternation ?? false,
       supportsPrefixCompletion: input.supportsPrefixCompletion ?? false,
+      verbatimToolCalling: input.verbatimToolCalling ?? false,
       isDefault: shouldBeDefault,
       customEndpointId: isEdit ? input.editingEndpointId : null,
     },

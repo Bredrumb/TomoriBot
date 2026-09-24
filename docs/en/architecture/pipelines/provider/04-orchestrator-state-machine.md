@@ -40,12 +40,13 @@ determine the shape of the final `StreamResult`. Three concerns are woven throug
      terminal `done` metadata (Anthropic `message_stop`). `state.usage` is drained into
      `StreamResult.usage` on the `function_call` and `completed` results.
 
-3. **Inactivity timeout**: a rolling `setTimeout` resets on every chunk (`resetInactivityTimer`).
-   If no chunk arrives for `config.inactivityTimeoutMs`, `state.timedOut = true`. The loop detects
-   this flag on the next iteration (or at generator exhaust) and returns `{ status: "timeout" }`.
+3. **No local timeout**: every chunk calls `context.onStreamProgress`, and the stage 01 watchdog in
+   the tool loop owns stall detection. The orchestrator used to keep its own inactivity flag, but
+   `for await` blocks while the provider is silent, so the flag was only ever read after a chunk
+   arrived: it could never catch a dead stream, and it discarded streams that had recovered.
 
 After the generator exhausts normally, `completeStreamAfterProviderEnd()` runs the final flush
-path (stage 05 `flushFinalBuffer`), checks for timeout, and assembles the completed `StreamResult`.
+path (stage 05 `flushFinalBuffer`) and assembles the completed `StreamResult`.
 
 The outer `streamToDiscord()` method (the public entry point) calls `executeStream()` and then
 does one additional check: if the result is `"completed"` but `wasEmptyStreamResponse()` is true
@@ -70,7 +71,7 @@ interface StreamResult {
     | "completed"        // generator exhausted; text was sent
     | "function_call"    // provider requested a tool; tool-loop handles it
     | "error"            // provider or Discord error
-    | "timeout"          // inactivity timer expired
+    | "timeout"          // stage 01 watchdog fired
     | "stopped_by_user"  // user /kill command
     | "empty_response"   // completed but no text or function call
     | "follow_up_interrupt"; // new user message arrived during generation
@@ -93,8 +94,6 @@ billed separately, so the sum is billing-accurate, and falls back to the charact
 
 ## Side effects
 
-- **Inactivity timer**: a `setTimeout` is set on entry and cleared in `finally`. The timer runs
-  against `NodeJS.Timeout`; it is always cleared before the method returns.
 - **Stop-request mutation**: `clearStopRequest(channelId)` is called on exit paths that consumed
   a stop. The stop registry is a shared module-level map in `stopRequests.ts`.
 - **Error embed**: when `chunk.type === "error"` and `!context.suppressUserErrors`, calls
@@ -108,8 +107,6 @@ billed separately, so the sum is billing-accurate, and falls back to the charact
   embed send path for `ProviderError` types: the downstream response sink (`emitStreamResult` in
   `responseEmitter.ts`) deliberately skips the generic fallback embed when `result.data` is a
   `ProviderError`, to avoid double-sending.
-- **Timeout embed**: when the inactivity timer fires and user errors are not suppressed, sends
-  a timeout embed via `sendStandardEmbed()`.
 - **Progress callback**: calls `context.onStreamProgress?.()` on each chunk to reset the
   rolling timeout in the stage 01 caller (`streamOnce` in the tool-loop pipeline).
 - **`currentTurnModelParts` accumulation**: stage 05 (`processTextChunk`) pushes text parts into
@@ -121,7 +118,6 @@ After this stage:
 
 - Exactly one `StreamResult` is returned; the method never throws to its caller
   (`streamToDiscord` catches all errors and converts them to `{ status: "error" }`).
-- The inactivity timer has been cleared unconditionally (via `finally`).
 - If `status === "function_call"`, `result.data` is a `FunctionCall` and
   `result.accumulatedText` contains all text sent to Discord before the tool call.
 - If `status === "completed"`, all buffered text has been flushed (including final `<think>`

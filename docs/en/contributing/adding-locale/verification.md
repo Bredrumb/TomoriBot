@@ -5,20 +5,16 @@ title: "Verification"
 Run the gates per locale, in this order. The localization checks come first because they are cheap and
 they catch the errors that a later full-suite run would bury under unrelated output.
 
-Most of these accept `--locale=<code>`, which scopes the run to one tree. A scoped run is the right
-default for a translation lane: a full scan reports every locale's existing debt alongside the new
-work. `check-locales` and `check-locale-markers` have no scope flag and always scan every authored
-locale.
+The review tools accept `--locale=<code>`, which scopes the run to one tree, so a translation lane
+sees its own work rather than every locale's existing debt. `check-locales` has no scope flag: it
+always scans every authored locale and tags each finding with its locale.
 
 ## The Gate Sequence
 
 ```bash
 # Localization safety
-bun run check-locales                              # key parity, all authored locales
-bun run check-locale-placeholders --locale=<code>  # {placeholder} parity against en-US
+bun run check-locales                              # key parity, placeholders, protocol markers, docs links
 bun run check-locale-lengths                       # Discord 45/100 code-point caps
-bun run check-locale-markers                       # protocol keys, templates, collisions
-bun run check-locale-links --locale=<code>         # project routes and heading fragments
 bun run find-stale-translations --locale=<code>    # review queue; default includes history-backed drift detection
 bun run check-intent-packs --locale=<code> --requests=<file.json>  # natural requests reach tools
 # Add --export to write the review list to scripts/maintenance/stale-translations.json.
@@ -45,23 +41,16 @@ advertises an alternate fails the build rather than warning.
 
 | Gate | Fails on | Exit behavior |
 |---|---|---|
-| `check-locales` | A key missing from every locale | Exit 1 is fatal; parity gaps in one locale are advisory exit 2 |
-| `check-locale-placeholders` | An English placeholder absent from the translation | Exit 1; a placeholder the translation adds is an advisory warning |
+| `check-locales` | A key missing from every locale; an English placeholder absent from a translation; a protocol key absent from an authored locale, a template placeholder mismatch, a missing literal anchor, or two keys rendering the same title; a project-owned docs route or heading fragment that resolves to nothing | Exit 1 for any of those; parity gaps in one locale are advisory exit 2, and a placeholder a translation adds is an advisory warning |
 | `check-locale-lengths` | Modal titles or input labels over 45 code points, or command, option, choice, and placeholder text over 100 | Exit 1 |
-| `check-locale-markers` | A protocol key absent from an authored locale, a template placeholder mismatch, a missing literal anchor, or two keys rendering the same title | Exit 1 |
-| `check-locale-links` | A project-owned docs route or heading fragment that resolves to nothing | Exit 1 |
 | `find-stale-translations` | Values that are byte-identical to English, English-looking text in a non-Latin script, historical source drift, and branch-local English changes that a translation did not follow | Exit 0 with a report, findings or not; 1 for an invocation or script error such as an unauthored locale; 2 when a requested history scan cannot read the history it needs |
 | `check-intent-packs` | A deliberate target or `explicit_memory` pack that is empty for the locale, fewer than three requests for a target, or a request that does not reach its expected tools | Exit 1 |
 | `check-seed-catalogs` | `i18n` map shape, persona uniqueness, unpaired sample dialogues, sprite validity | Exit 1 |
 | `check` | Any type error, including a `pt-br` key that is not a `LocaleCode` | Exit 1 |
 | `test` | Behavior regressions | Exit 1 |
 
-Two gates are known to report pre-existing debt that is not caused by a new locale:
-
-- `check-locales` reports the Japanese parity gap as an advisory exit 2. Nothing is missing
-  everywhere, so the run still proves the required invariant.
-- `check-locale-links --locale=ja` reports two Japanese heading-fragment drifts, in
-  `src/locales/ja/providers.ts` and `src/locales/ja/commands/setup.ts`. Japanese catch-up owns them.
+`check-locales` may report a parity gap as an advisory exit 2 while a locale catches up. Nothing
+is missing everywhere, so the run still proves the required invariant.
 
 ### Drifted Translations
 

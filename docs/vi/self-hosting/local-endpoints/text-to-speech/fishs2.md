@@ -46,7 +46,7 @@ Trình cài đặt thực hiện:
 3. cài đặt Fish Speech cùng các phần phụ thuộc wrapper của TomoriBot; và
 4. tải checkpoint BF16 chính thức `fishaudio/s2-pro` vào `fish-speech/checkpoints/fish-speech-s2-pro/`.
 
-Một lần cài đặt lại thông thường sẽ giữ nguyên commit runtime đã ghim `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` thay vì đi theo một nhánh đang thay đổi. Bản sửa đổi model mặc định là `main`; hãy ghim `FISH_S2_MODEL_REVISION` vào một bản sửa đổi Hugging Face cố định khi quá trình triển khai cần khả năng tái lập. Các cài đặt trình cài đặt được liệt kê trong [Biến bộ cài đặt](#biến-bộ-cài-đặt).
+Một lần cài đặt lại thông thường sẽ giữ nguyên commit runtime đã ghim `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` thay vì đi theo một nhánh đang thay đổi; để chuyển sang runtime mới hơn, hãy thay đổi giá trị đã ghim trong trình cài đặt. Bản sửa đổi model mặc định là `main`; hãy ghim `FISH_S2_MODEL_REVISION` vào một bản sửa đổi Hugging Face cố định khi quá trình triển khai cần khả năng tái lập. Các cài đặt trình cài đặt được liệt kê trong [Biến bộ cài đặt](#biến-bộ-cài-đặt).
 
 Model Hugging Face bị giới hạn quyền truy cập. Hãy chấp nhận giấy phép của model trên Hugging Face trước. Nếu quá trình tải xuống yêu cầu xác thực, hãy chạy:
 
@@ -97,7 +97,7 @@ Trong `/providers`, chọn **Add New Custom Endpoint** và cấu hình:
 - Endpoint URL: `http://127.0.0.1:8015`
 - Voice Source Mode: `Clone`
 - Script Markup: `Bracket Tags`
-- API key: để trống cho thiết lập loopback mặc định. Nếu bật xác thực bearer, hãy nhập chính xác giá trị `FISH_S2_API_KEY`.
+- API key: để trống. Wrapper không có xác thực; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access).
 
 Sau đó thêm mục model của endpoint và kích hoạt mục đó qua `/config` dưới phần Models > Switch Models.
 
@@ -125,18 +125,10 @@ Vì endpoint sử dụng markup `Bracket Tags`, TomoriBot sẽ giữ lại các 
 
 | Biến | Mặc định | Mục đích |
 |---|---|---|
-| `FISH_SPEECH_DIR` | `servers/tts/fishs2/fish-speech` | Thư mục runtime Fish Speech |
 | `FISH_S2_MODEL_DIR` | `fish-speech/checkpoints/fish-speech-s2-pro` | Thư mục checkpoint S2 Pro |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | Kho lưu trữ model và nhãn siêu dữ liệu trạng thái cho checkpoint đã cấu hình |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết của wrapper TomoriBot |
-| `FISH_S2_PORT` | `8015` | Cổng wrapper Fish; dự phòng về `TOMORI_TTS_PORT` khi chưa đặt |
-| `TOMORI_TTS_PORT` | chưa đặt | Ghi đè cổng dùng chung tương thích ngược |
-| `FISH_S2_API_KEY` | chưa đặt | Bearer token tùy chọn, cũng bắt buộc đối với các liên kết từ xa có xác thực |
-| `TOMORI_TTS_API_KEY` | chưa đặt | Dự phòng bearer token dùng chung khi `FISH_S2_API_KEY` chưa được đặt |
-| `FISH_S2_ALLOW_INSECURE_REMOTE` | `0` | Cho phép liên kết ngoài loopback một cách rõ ràng mà không cần bearer token |
-| `FISH_S2_MAX_REF_AUDIO_BYTES` | `10485760` | Kích thước WAV tham chiếu sau giải mã tối đa |
-| `TOMORI_TTS_MAX_REF_AUDIO_BYTES` | chưa đặt | Dự phòng giới hạn âm thanh tham chiếu sau giải mã dùng chung |
-| `FISH_S2_UPSTREAM_HOST` | `127.0.0.1` | Địa chỉ liên kết API Fish nội bộ |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết của wrapper; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `FISH_S2_PORT` | `8015` | Cổng wrapper Fish |
 | `FISH_S2_UPSTREAM_PORT` | `8025` | Cổng API Fish nội bộ |
 | `FISH_S2_COMPILE` | `0` | Bật `torch.compile` của Fish Speech (yêu cầu Linux/WSL2 với Triton) |
 | `FISH_S2_HALF` | `0` | Yêu cầu chế độ runtime FP16 |
@@ -146,10 +138,6 @@ Vì endpoint sử dụng markup `Bracket Tags`, TomoriBot sẽ giữ lại các 
 | `FISH_S2_REPETITION_PENALTY` | `1.1` | Hình phạt lặp lại |
 | `FISH_S2_MAX_NEW_TOKENS` | `1024` | Số lượng token ngữ nghĩa tối đa được tạo trên mỗi yêu cầu |
 | `FISH_S2_USE_MEMORY_CACHE` | `on` | Lưu bộ nhớ đệm giọng nói tham chiếu đã mã hóa trong runtime Fish |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `2000` | Độ dài kịch bản tối đa được wrapper chấp nhận |
-| `FISH_S2_STARTUP_TIMEOUT_SECONDS` | `180` | Thời gian tối đa để chờ API Fish lồng nhau |
-| `FISH_S2_SYNTHESIS_TIMEOUT_SECONDS` | `1800` | Thời gian tối đa để chờ một yêu cầu tổng hợp thượng nguồn |
-| `FISH_S2_LAUNCH_TIMEOUT_MS` | `240000` | Thời gian `bun run launch --fishs2` chờ kiểm tra tình trạng của wrapper |
 
 ### Biến bộ cài đặt
 
@@ -157,15 +145,10 @@ Vì endpoint sử dụng markup `Bracket Tags`, TomoriBot sẽ giữ lại các 
 
 | Biến | Mặc định | Mục đích |
 |---|---|---|
-| `FISH_S2_RUNTIME_REPOSITORY` | `https://github.com/Imagilux/fish-speech.git` | Kho lưu trữ runtime Fish Speech, ví dụ một bản mirror đã được kiểm duyệt |
-| `FISH_S2_RUNTIME_REF` | `2225e924e7d35cc0a1d24dbc67cd1819e6cf429f` | Commit runtime được lấy ra khi cài đặt |
 | `FISH_S2_MODEL_ID` | `fishaudio/s2-pro` | Kho lưu trữ Hugging Face cần tải về |
 | `FISH_S2_MODEL_REVISION` | `main` | Bản sửa đổi Hugging Face cần tải về |
-| `FISH_S2_UPDATE` | `0` | Đặt thành `1` để chủ động cập nhật runtime và tải lại model |
-| `FISH_S2_UPDATE_REF` | chưa đặt | Bản sửa đổi runtime cho một bản cập nhật. Nếu không có, `FISH_S2_RUNTIME_REF` rõ ràng sẽ được giữ lại; nếu không, bản cập nhật sử dụng `main` |
-| `FISH_S2_UPDATE_MODEL_REVISION` | chưa đặt | Bản sửa đổi model cho một bản cập nhật, với thứ tự ưu tiên tương tự như `FISH_S2_UPDATE_REF` |
 
-Âm thanh tham chiếu phải là một tệp PCM RIFF/WAVE không nén và không rỗng. Giới hạn kích thước sau khi giải mã được kiểm tra trước khi suy luận để ngăn yêu cầu base64 quá lớn tiêu tốn bộ nhớ không giới hạn.
+Âm thanh tham chiếu phải là một tệp PCM RIFF/WAVE không nén, không rỗng và tối đa 10 MB sau khi giải mã. Giới hạn này được kiểm tra trước khi suy luận để yêu cầu base64 quá lớn không tiêu tốn bộ nhớ không giới hạn, và chứa được khoảng 237 giây WAV mono 22,05 kHz mà TomoriBot gửi.
 
 ## Tùy chọn VRAM thấp (Lượng tử hóa INT8)
 

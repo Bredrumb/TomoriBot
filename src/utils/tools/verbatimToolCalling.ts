@@ -1,4 +1,5 @@
-import type { AssembledServerConfig, TomoriState } from "@/types/db/schema";
+import type { TomoriState } from "@/types/db/schema";
+import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 
 export const VERBATIM_TOOL_CALLING_CONTEXT_DEPTH = 3;
 
@@ -15,14 +16,19 @@ export const VERBATIM_TOOL_CALLING_NUDGE =
  * parser, so the nudge there is useless noise that can even steer the model into
  * emitting unparseable text-form calls. Evaluating this per attempt lets the
  * nudge be stripped for those attempts while kept for custom ones.
+ *
+ * The flag is per model, so it is read from the attempt's own llm row rather
+ * than server config: one connection can serve a native-tool-calling model and a
+ * text-only one side by side.
  */
-export function shouldInjectVerbatimToolCallingNudge(
-  tomoriConfig: AssembledServerConfig,
-  tomoriState: TomoriState | null | undefined,
-): boolean {
-  return Boolean(
-    tomoriConfig.verbatim_tool_calling_enabled &&
-      tomoriState?.llm?.has_tools &&
-      tomoriState?.llm?.llm_provider?.toLowerCase() === "custom",
-  );
+export function shouldInjectVerbatimToolCallingNudge(tomoriState: TomoriState | null | undefined): boolean {
+  const llm = tomoriState?.llm;
+  if (!llm?.verbatim_tool_calling || !llm.has_tools) {
+    return false;
+  }
+
+  // Registered custom endpoints are named `custom:<connection_id>`, so an exact
+  // match against "custom" would miss every one of them.
+  const provider = llm.llm_provider ?? "";
+  return isCustomProvider(provider) || provider.trim().toLowerCase() === "custom";
 }

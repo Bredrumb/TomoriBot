@@ -1,6 +1,5 @@
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { log } from "@/utils/misc/logger";
-import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 
 /**
  * Cross-turn Discord delivery continuity, keyed by channel.
@@ -24,7 +23,7 @@ import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 
 // Discord stops grouping consecutive same-author messages after a few minutes, so continuity
 // beyond that window is pointless, so an expired entry is equivalent to a fresh channel.
-const CONTINUITY_TTL_MS = parseIntegerEnvFlag(process.env.SPRITE_GROUP_CONTINUITY_TTL_MINUTES, 10, 1) * 60 * 1000;
+const CONTINUITY_TTL_MS = 10 * 60 * 1000;
 
 // Housekeeping (not an operational limit): channels are unbounded, so sweep expired entries
 // once the map grows past this size rather than wiring up a timer.

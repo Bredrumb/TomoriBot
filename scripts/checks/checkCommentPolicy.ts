@@ -14,11 +14,8 @@ const NUMBERED_PREFIX_PATTERNS = [
   String.raw`\d+\.\d+[a-z]?`,
   String.raw`\d+[a-z]?(?:\.\d+[a-z]?)*(?:-\d+[a-z]?)*\)`,
 ];
-const NUMBERED_LINE_PATTERN = new RegExp(
-  String.raw`^//\s*(?:${NUMBERED_PREFIX_PATTERNS.join("|")})\s+(?=[A-Z])`,
-);
-const RULE_HEAD_PATTERN =
-  /^(?:\/\/|\*)\s*Rule\s*#?\d+(?:\s*(?:,|&|and)\s*#?\d+)*\s*[:,]?/;
+const NUMBERED_LINE_PATTERN = new RegExp(String.raw`^//\s*(?:${NUMBERED_PREFIX_PATTERNS.join("|")})\s+(?=[A-Z])`);
+const RULE_HEAD_PATTERN = /^(?:\/\/|\*)\s*Rule\s*#?\d+(?:\s*(?:,|&|and)\s*#?\d+)*\s*[:,]?/;
 const ACTION_HEADS = [
   "Get",
   "Set",
@@ -48,9 +45,7 @@ const ACTION_HEADS = [
   "Fallback",
   "Exercise",
 ];
-const ACTION_HEAD_PATTERN = new RegExp(
-  String.raw`^//\s*(?:${ACTION_HEADS.join("|")})\b`,
-);
+const ACTION_HEAD_PATTERN = new RegExp(String.raw`^//\s*(?:${ACTION_HEADS.join("|")})\b`);
 const RATIONALE_SIGNALS = [
   "after",
   "before",
@@ -71,10 +66,7 @@ const RATIONALE_SIGNALS = [
   "without",
   "workaround",
 ];
-const RATIONALE_PATTERN = new RegExp(
-  String.raw`\b(?:${RATIONALE_SIGNALS.join("|")})\b|[:(]`,
-  "i",
-);
+const RATIONALE_PATTERN = new RegExp(String.raw`\b(?:${RATIONALE_SIGNALS.join("|")})\b|[:(]`, "i");
 const SUMMARY_STOPWORDS = new Set([
   "all",
   "and",
@@ -95,14 +87,12 @@ const SUMMARY_STOPWORDS = new Set([
   "with",
 ]);
 const SUMMARY_ADDED_WORD_LIMIT = 2;
-const SECTION_DIVIDER_PATTERN =
-  /^\/\/\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
+const SECTION_DIVIDER_PATTERN = /^\/\/\s*(?:[-=─]{3,}|[-=─]{2,}\s*[^-=─]+\s*[-=─]{2,})\s*$/;
 const LICENSE_HEADER_PATTERN =
   /\bCopyright(?:\s+\(c\))?|\bSPDX-License-Identifier\s*:|\bLicensed under the\b|\bPermission is hereby granted\b/i;
 // A suppression comment repeats at every site it silences, and each one is a separate lint
 // decision rather than rationale copied between call sites.
-const INLINE_SUPPRESSION_PATTERN =
-  /biome-ignore|@ts-expect-error|@ts-ignore|eslint-disable|oxlint-disable/;
+const INLINE_SUPPRESSION_PATTERN = /biome-ignore|@ts-expect-error|@ts-ignore|eslint-disable|oxlint-disable/;
 const TEST_PATH_PATTERN = /(?:^|\/)tests\//;
 
 /**
@@ -157,18 +147,9 @@ function readPositiveIntEnv(name: string, fallback: number): number {
  */
 export function resolveAuditLimits(): CommentAuditLimits {
   const limits = { ...DEFAULT_AUDIT_LIMITS };
-  limits.duplicateMinWords = readPositiveIntEnv(
-    "COMMENT_AUDIT_DUPLICATE_MIN_WORDS",
-    limits.duplicateMinWords,
-  );
-  limits.duplicateMinChars = readPositiveIntEnv(
-    "COMMENT_AUDIT_DUPLICATE_MIN_CHARS",
-    limits.duplicateMinChars,
-  );
-  limits.longBlockMinLines = readPositiveIntEnv(
-    "COMMENT_AUDIT_LONG_BLOCK_LINES",
-    limits.longBlockMinLines,
-  );
+  limits.duplicateMinWords = readPositiveIntEnv("COMMENT_AUDIT_DUPLICATE_MIN_WORDS", limits.duplicateMinWords);
+  limits.duplicateMinChars = readPositiveIntEnv("COMMENT_AUDIT_DUPLICATE_MIN_CHARS", limits.duplicateMinChars);
+  limits.longBlockMinLines = readPositiveIntEnv("COMMENT_AUDIT_LONG_BLOCK_LINES", limits.longBlockMinLines);
   return limits;
 }
 
@@ -265,20 +246,13 @@ interface RawExceptionFile {
 /**
  * Audits repository comments against TomoriBot's deterministic policy and optional narration ratchet.
  */
-export async function checkCommentPolicy(
-  options: CommentPolicyOptions = {},
-): Promise<CommentPolicyResult> {
+export async function checkCommentPolicy(options: CommentPolicyOptions = {}): Promise<CommentPolicyResult> {
   const repoRoot = resolve(options.repoRoot ?? process.cwd());
   const paths = options.paths?.length ? options.paths : DEFAULT_PATHS;
-  const exceptionPath = resolve(
-    repoRoot,
-    options.exceptionPath ?? DEFAULT_EXCEPTIONS_PATH,
-  );
+  const exceptionPath = resolve(repoRoot, options.exceptionPath ?? DEFAULT_EXCEPTIONS_PATH);
   const exceptions = await loadExceptions(exceptionPath);
   const files = await discoverTypeScriptFiles(repoRoot, paths);
-  const scannedFiles = new Set(
-    files.map((file) => normalizePath(relative(repoRoot, file))),
-  );
+  const scannedFiles = new Set(files.map((file) => normalizePath(relative(repoRoot, file))));
   const findings: CommentPolicyFinding[] = [];
   const usedExceptionKeys = new Set<string>();
   const auditBlocks: InspectionAuditBlocks = { blocks: [] };
@@ -327,10 +301,7 @@ export async function checkCommentPolicy(
   }
 
   for (const exception of exceptions) {
-    if (
-      scannedFiles.has(normalizePath(exception.file)) &&
-      !usedExceptionKeys.has(exceptionKey(exception))
-    ) {
+    if (scannedFiles.has(normalizePath(exception.file)) && !usedExceptionKeys.has(exceptionKey(exception))) {
       findings.push({
         file: exception.file,
         line: 0,
@@ -346,13 +317,9 @@ export async function checkCommentPolicy(
     filesChecked: files.length,
     findings: findings.sort(
       (left, right) =>
-        left.file.localeCompare(right.file) ||
-        left.line - right.line ||
-        left.rule.localeCompare(right.rule),
+        left.file.localeCompare(right.file) || left.line - right.line || left.rule.localeCompare(right.rule),
     ),
-    usedExceptions: exceptions.filter((entry) =>
-      usedExceptionKeys.has(exceptionKey(entry)),
-    ),
+    usedExceptions: exceptions.filter((entry) => usedExceptionKeys.has(exceptionKey(entry))),
   };
 }
 
@@ -390,9 +357,7 @@ export function inspectAuditCorpusSources(
   const findings: CommentPolicyFinding[] = [];
   const blocks: CommentBlock[] = [];
   for (const [file, source] of sources) {
-    findings.push(
-      ...inspectCommentPolicySource(source, file, { auditLimits: limits, auditNarration: true }),
-    );
+    findings.push(...inspectCommentPolicySource(source, file, { auditLimits: limits, auditNarration: true }));
     blocks.push(...collectCommentBlocks(source, file));
   }
   findings.push(...findDuplicateCommentBlocks(blocks, limits));
@@ -434,8 +399,7 @@ export function findDuplicateCommentBlocks(
   for (const group of byNormalized.values()) {
     if (group.length < 2) continue;
     const eligible = group.every(
-      (block) =>
-        block.words >= limits.duplicateMinWords && block.chars >= limits.duplicateMinChars,
+      (block) => block.words >= limits.duplicateMinWords && block.chars >= limits.duplicateMinChars,
     );
     if (!eligible) continue;
     // Each locale tree collapses to one identity, so the same English comment carried into every
@@ -451,8 +415,7 @@ export function findDuplicateCommentBlocks(
     // The finding sits on the most recent copy, the line a reviewer changes to delete the
     // repetition, and carries every location so one group is one reviewable item.
     const ordered = [...group].sort(
-      (left, right) =>
-        left.file.localeCompare(right.file) || left.startLine - right.startLine,
+      (left, right) => left.file.localeCompare(right.file) || left.startLine - right.startLine,
     );
     const anchor = ordered[ordered.length - 1];
     if (!anchor) continue;
@@ -520,9 +483,7 @@ async function loadExceptions(path: string): Promise<CommentPolicyException[]> {
   return exceptions;
 }
 
-function isCommentPolicyException(
-  value: unknown,
-): value is CommentPolicyException {
+function isCommentPolicyException(value: unknown): value is CommentPolicyException {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -722,11 +683,7 @@ function inspectCommentLine(
     });
   }
 
-  if (
-    comment.kind === "line" &&
-    comment.standalone &&
-    NUMBERED_LINE_PATTERN.test(comment.text)
-  ) {
+  if (comment.kind === "line" && comment.standalone && NUMBERED_LINE_PATTERN.test(comment.text)) {
     findings.push({
       file: comment.file,
       line: comment.line,
@@ -749,9 +706,7 @@ function inspectCommentLine(
   }
 
   if (isNarrationCandidate(comment)) {
-    const changed = options.changedLines
-      ?.get(comment.file)
-      ?.has(comment.line);
+    const changed = options.changedLines?.get(comment.file)?.has(comment.line);
     if (options.auditNarration || changed) {
       findings.push({
         file: comment.file,
@@ -850,9 +805,7 @@ function collectJsDocFindings(
         }
 
         const parameterName = tag.name.getText(sourceFile);
-        const declared = node.parameters.find(
-          (parameter) => parameter.name.getText(sourceFile) === parameterName,
-        );
+        const declared = node.parameters.find((parameter) => parameter.name.getText(sourceFile) === parameterName);
         const declaredType = declared?.type ? normalizeJsDocPhrase(declared.type.getText(sourceFile)) : "";
 
         if (described === normalizeJsDocPhrase(parameterName)) {
@@ -920,7 +873,10 @@ function stemWord(word: string): string {
 
 /** Removes JSDoc framing so a line yields its prose, or an empty string when it has none. */
 function stripJsDocDecoration(line: string): string {
-  return line.replace(/^\s*\/?\*+\/?/, "").replace(/\*\/\s*$/, "").trim();
+  return line
+    .replace(/^\s*\/?\*+\/?/, "")
+    .replace(/\*\/\s*$/, "")
+    .trim();
 }
 
 /** Reduces tag text to comparable form: leading article dropped, then letters and digits only. */
@@ -932,20 +888,13 @@ function normalizeJsDocPhrase(value: string | undefined): string {
 }
 
 function isNarrationCandidate(comment: CommentLine): boolean {
-  if (
-    comment.kind !== "line" ||
-    !comment.standalone ||
-    /biome-ignore|@ts-expect-error/.test(comment.text)
-  ) {
+  if (comment.kind !== "line" || !comment.standalone || /biome-ignore|@ts-expect-error/.test(comment.text)) {
     return false;
   }
   if (SECTION_DIVIDER_PATTERN.test(comment.text)) {
     return true;
   }
-  return (
-    ACTION_HEAD_PATTERN.test(comment.text) &&
-    !RATIONALE_PATTERN.test(comment.text)
-  );
+  return ACTION_HEAD_PATTERN.test(comment.text) && !RATIONALE_PATTERN.test(comment.text);
 }
 
 function exceptionKey(exception: CommentPolicyException): string {
@@ -991,16 +940,8 @@ function collectCommentLines(source: string, file: string): CommentLine[] {
 }
 
 function collectCommentTokens(source: string, file: string): CommentToken[] {
-  const scriptKind = file.toLowerCase().endsWith(".tsx")
-    ? ts.ScriptKind.TSX
-    : ts.ScriptKind.TS;
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind,
-  );
+  const scriptKind = file.toLowerCase().endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, scriptKind);
   const ranges = new Map<string, ts.CommentRange>();
 
   const addRanges = (found: ts.CommentRange[] | undefined): void => {
@@ -1010,9 +951,7 @@ function collectCommentTokens(source: string, file: string): CommentToken[] {
   };
   const addStandaloneMatches = (
     pattern: RegExp,
-    kind:
-      | ts.SyntaxKind.MultiLineCommentTrivia
-      | ts.SyntaxKind.SingleLineCommentTrivia,
+    kind: ts.SyntaxKind.MultiLineCommentTrivia | ts.SyntaxKind.SingleLineCommentTrivia,
   ): void => {
     for (const match of source.matchAll(pattern)) {
       const text = match[1];
@@ -1039,18 +978,9 @@ function collectCommentTokens(source: string, file: string): CommentToken[] {
 
   visit(sourceFile);
   addRanges(ts.getLeadingCommentRanges(source, sourceFile.end));
-  addStandaloneMatches(
-    /^[\t ]*(\/\/[^\r\n]*)/gm,
-    ts.SyntaxKind.SingleLineCommentTrivia,
-  );
-  addStandaloneMatches(
-    /^[\t ]*(\/\*(?!\*)[^\r\n]*\*\/)[\t ]*$/gm,
-    ts.SyntaxKind.MultiLineCommentTrivia,
-  );
-  addStandaloneMatches(
-    /^[\t ]*(\/\*\*[\s\S]*?\*\/)/gm,
-    ts.SyntaxKind.MultiLineCommentTrivia,
-  );
+  addStandaloneMatches(/^[\t ]*(\/\/[^\r\n]*)/gm, ts.SyntaxKind.SingleLineCommentTrivia);
+  addStandaloneMatches(/^[\t ]*(\/\*(?!\*)[^\r\n]*\*\/)[\t ]*$/gm, ts.SyntaxKind.MultiLineCommentTrivia);
+  addStandaloneMatches(/^[\t ]*(\/\*\*[\s\S]*?\*\/)/gm, ts.SyntaxKind.MultiLineCommentTrivia);
 
   const inlineCommentKeys = collectInlineCommentKeys(source);
   return [...ranges.values()]
@@ -1059,14 +989,10 @@ function collectCommentTokens(source: string, file: string): CommentToken[] {
     .sort((left, right) => left.pos - right.pos)
     .map((range) => {
       const startLocation = sourceFile.getLineAndCharacterOfPosition(range.pos);
-      const lineStart =
-        source.lastIndexOf("\n", Math.max(0, range.pos - 1)) + 1;
+      const lineStart = source.lastIndexOf("\n", Math.max(0, range.pos - 1)) + 1;
       const prefix = source.slice(lineStart, range.pos);
       return {
-        kind:
-          range.kind === ts.SyntaxKind.SingleLineCommentTrivia
-            ? "line"
-            : "block",
+        kind: range.kind === ts.SyntaxKind.SingleLineCommentTrivia ? "line" : "block",
         line: startLocation.line + 1,
         standalone: prefix.trim().length === 0,
         inline: inlineCommentKeys.has(`${range.pos}:${range.end}`),
@@ -1085,12 +1011,7 @@ function collectCommentTokens(source: string, file: string): CommentToken[] {
  */
 function collectInlineCommentKeys(source: string): Set<string> {
   const keys = new Set<string>();
-  const scanner = ts.createScanner(
-    ts.ScriptTarget.Latest,
-    false,
-    ts.LanguageVariant.Standard,
-    source,
-  );
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, source);
   let codeOnLine = false;
   let pending: string[] = [];
 
@@ -1199,33 +1120,18 @@ function commentScope(file: string): string {
   return file.replace(/(^|\/)src\/locales\/(?!<locale>)[^/]+\//, "$1src/locales/<locale>/");
 }
 
-function normalizeCommentRange(
-  source: string,
-  range: ts.CommentRange,
-): ts.CommentRange | undefined {
+function normalizeCommentRange(source: string, range: ts.CommentRange): ts.CommentRange | undefined {
   const text = source.slice(range.pos, range.end);
   if (
-    (range.kind === ts.SyntaxKind.SingleLineCommentTrivia &&
-      text.startsWith("//")) ||
-    (range.kind === ts.SyntaxKind.MultiLineCommentTrivia &&
-      text.startsWith("/*"))
+    (range.kind === ts.SyntaxKind.SingleLineCommentTrivia && text.startsWith("//")) ||
+    (range.kind === ts.SyntaxKind.MultiLineCommentTrivia && text.startsWith("/*"))
   ) {
     return range;
   }
 
-  const scanner = ts.createScanner(
-    ts.ScriptTarget.Latest,
-    false,
-    ts.LanguageVariant.Standard,
-    text,
-  );
-  const expectedMarker =
-    range.kind === ts.SyntaxKind.SingleLineCommentTrivia ? "//" : "/*";
-  for (
-    let tokenKind = scanner.scan();
-    tokenKind !== ts.SyntaxKind.EndOfFileToken;
-    tokenKind = scanner.scan()
-  ) {
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, text);
+  const expectedMarker = range.kind === ts.SyntaxKind.SingleLineCommentTrivia ? "//" : "/*";
+  for (let tokenKind = scanner.scan(); tokenKind !== ts.SyntaxKind.EndOfFileToken; tokenKind = scanner.scan()) {
     if (scanner.getTokenText().startsWith(expectedMarker)) {
       return {
         ...range,
@@ -1237,15 +1143,10 @@ function normalizeCommentRange(
   return undefined;
 }
 
-async function discoverTypeScriptFiles(
-  repoRoot: string,
-  paths: string[],
-): Promise<string[]> {
+async function discoverTypeScriptFiles(repoRoot: string, paths: string[]): Promise<string[]> {
   const discovered = new Set<string>();
   for (const input of paths) {
-    const absoluteInput = isAbsolute(input)
-      ? input
-      : resolve(repoRoot, input);
+    const absoluteInput = isAbsolute(input) ? input : resolve(repoRoot, input);
     const inputStat = await stat(absoluteInput).catch(() => undefined);
 
     if (inputStat?.isFile()) {
@@ -1298,16 +1199,11 @@ function isExcludedPath(path: string): boolean {
   return /(?:^|[\\/])(?:\.git|dist|node_modules)(?:[\\/]|$)/.test(path);
 }
 
-async function filterGitIgnoredFiles(
-  repoRoot: string,
-  paths: string[],
-): Promise<string[]> {
+async function filterGitIgnoredFiles(repoRoot: string, paths: string[]): Promise<string[]> {
   if (paths.length === 0) {
     return paths;
   }
-  const relativePaths = paths.map((path) =>
-    normalizePath(relative(repoRoot, path)),
-  );
+  const relativePaths = paths.map((path) => normalizePath(relative(repoRoot, path)));
   const process = Bun.spawn({
     cmd: ["git", "check-ignore", "--stdin", "-z"],
     cwd: repoRoot,
@@ -1439,11 +1335,7 @@ async function main(): Promise<void> {
   const paths = args.paths.length ? args.paths : DEFAULT_PATHS;
   const changedLines =
     args.baseRef || args.staged
-      ? await collectChangedLines(
-          repoRoot,
-          { baseRef: args.baseRef, staged: args.staged },
-          paths,
-        )
+      ? await collectChangedLines(repoRoot, { baseRef: args.baseRef, staged: args.staged }, paths)
       : undefined;
   const result = await checkCommentPolicy({
     auditLimits: resolveAuditLimits(),
@@ -1453,9 +1345,7 @@ async function main(): Promise<void> {
     repoRoot,
   });
 
-  const errors = result.findings.filter(
-    (finding) => finding.severity === "error",
-  );
+  const errors = result.findings.filter((finding) => finding.severity === "error");
   const warnings = result.findings.length - errors.length;
 
   // Errors print in full under either mode: they are why anyone runs this. Warnings do
@@ -1467,9 +1357,7 @@ async function main(): Promise<void> {
 
     for (const finding of result.findings) {
       const label = finding.severity === "error" ? "ERROR" : "WARN";
-      console.log(
-        `${label} ${finding.file}:${finding.line} [${finding.rule}] ${finding.message}`,
-      );
+      console.log(`${label} ${finding.file}:${finding.line} [${finding.rule}] ${finding.message}`);
       console.log(`  ${finding.text}`);
     }
   }
@@ -1485,9 +1373,7 @@ async function main(): Promise<void> {
   console.log(
     `Comment policy passed: ${result.filesChecked} file(s), ` +
       `${result.usedExceptions.length} exception(s), ${warnings} warning(s).` +
-      (warnings > 0 && !args.verboseOutput
-        ? ` Re-run with \`bun run audit-comments --verbose\` to list them.`
-        : ""),
+      (warnings > 0 && !args.verboseOutput ? ` Re-run with \`bun run audit-comments --verbose\` to list them.` : ""),
   );
 }
 

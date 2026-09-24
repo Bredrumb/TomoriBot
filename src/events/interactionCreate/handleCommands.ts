@@ -21,34 +21,42 @@ import {
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
 import { dispatchGlobalInteraction, isGlobalRoutableInteraction } from "@/utils/discord/interactions/router";
 
-// Define constants at the top (Rule #20)
-const DEFAULT_COOLDOWN = Number.parseInt(process.env.DEFAULT_COMMAND_COOLDOWN || "1600", 10); // Default cooldown for all commands in milliseconds
+// Cooldown for any command whose category is listed below, in milliseconds.
+const DEFAULT_COOLDOWN_MS = 1_600;
+
+// Every category except `persona` shares this window: the retired per-category overrides
+// (COOLDOWN_CONFIG, COOLDOWN_MEMORY, COOLDOWN_TEACH, COOLDOWN_FORGET, COOLDOWN_SERVER,
+// COOLDOWN_PERSONAL, COOLDOWN_CONDITIONING) all resolved to the same 3000 ms in practice.
+const CATEGORY_COOLDOWN_MS = 3_000;
+const COOLDOWN_PERSONA_MS = 10_000;
+
+/**
+ * Operators tune every cooldown with one unitless multiplier instead of per-category
+ * milliseconds, so `/persona` stays proportionally longer than the rest whatever the scale.
+ * 0 disables cooldowns; an unset or invalid value keeps the windows above unchanged.
+ */
+function parseCooldownScale(raw: string | undefined): number {
+  const trimmed = raw?.trim();
+  if (!trimmed) return 1;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1;
+}
+
+const COMMAND_COOLDOWN_SCALE = parseCooldownScale(process.env.COMMAND_COOLDOWN_SCALE);
 
 const COOLDOWN_MAP = new Map<string, number>([
-  ["config", Number.parseInt(process.env.COOLDOWN_CONFIG || "3000", 10)],
-  ["persona", Number.parseInt(process.env.COOLDOWN_PERSONA || "10000", 10)],
-  [
-    "memory",
-    Number.parseInt(
-      process.env.COOLDOWN_MEMORY || process.env.COOLDOWN_TEACH || process.env.COOLDOWN_FORGET || "3000",
-      10,
-    ),
-  ],
-  [
-    "learn",
-    Number.parseInt(
-      process.env.COOLDOWN_MEMORY || process.env.COOLDOWN_TEACH || process.env.COOLDOWN_FORGET || "3000",
-      10,
-    ),
-  ],
-  ["server", Number.parseInt(process.env.COOLDOWN_SERVER || "3000", 10)],
-  ["personal", Number.parseInt(process.env.COOLDOWN_PERSONAL || "3000", 10)],
-  ["scheduled-task", Number.parseInt(process.env.COOLDOWN_PERSONAL || "3000", 10)],
-  ["conditioning", Number.parseInt(process.env.COOLDOWN_CONDITIONING || process.env.COOLDOWN_SERVER || "3000", 10)],
-  ["punish", Number.parseInt(process.env.COOLDOWN_CONDITIONING || process.env.COOLDOWN_SERVER || "3000", 10)],
-  ["reward", Number.parseInt(process.env.COOLDOWN_CONDITIONING || process.env.COOLDOWN_SERVER || "3000", 10)],
-  ["nuke", Number.parseInt(process.env.COOLDOWN_SERVER || "3000", 10)],
-  ["setup", Number.parseInt(process.env.COOLDOWN_CONFIG || "3000", 10)],
+  ["config", CATEGORY_COOLDOWN_MS],
+  ["persona", COOLDOWN_PERSONA_MS],
+  ["memory", CATEGORY_COOLDOWN_MS],
+  ["learn", CATEGORY_COOLDOWN_MS],
+  ["server", CATEGORY_COOLDOWN_MS],
+  ["personal", CATEGORY_COOLDOWN_MS],
+  ["scheduled-task", CATEGORY_COOLDOWN_MS],
+  ["conditioning", CATEGORY_COOLDOWN_MS],
+  ["punish", CATEGORY_COOLDOWN_MS],
+  ["reward", CATEGORY_COOLDOWN_MS],
+  ["nuke", CATEGORY_COOLDOWN_MS],
+  ["setup", CATEGORY_COOLDOWN_MS],
 ]);
 
 type LoadedCommandMaps = {
@@ -150,10 +158,14 @@ async function ensureCommandsLoaded(): Promise<LoadedCommandMaps | null> {
   return { executionMap, cooldownMap, autocompleteMap };
 }
 
-export function resolveCommandCooldown(commandName: string): number {
-  const loaded = cooldownMap?.get(commandName);
-  if (loaded !== undefined) return loaded;
-  return COOLDOWN_MAP.get(commandName) ?? DEFAULT_COOLDOWN;
+/**
+ * @param commandName - Root command name, which doubles as its cooldown category
+ * @param scale - Multiplier applied to the base window; defaults to `COMMAND_COOLDOWN_SCALE`
+ * @returns Cooldown in milliseconds; 0 means the command has no cooldown
+ */
+export function resolveCommandCooldown(commandName: string, scale = COMMAND_COOLDOWN_SCALE): number {
+  const baseMs = cooldownMap?.get(commandName) ?? COOLDOWN_MAP.get(commandName) ?? DEFAULT_COOLDOWN_MS;
+  return Math.round(baseMs * scale);
 }
 
 const runChatInputCommand = async (client: Client, interaction: ChatInputCommandInteraction): Promise<void> => {
@@ -230,7 +242,7 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
     const mainLogicPromise = async () => {
       const cooldownDuration = resolveCommandCooldown(commandName);
 
-      const isOnCooldown = await checkCooldown(interaction.user.id, commandName);
+      const isOnCooldown = cooldownDuration > 0 && (await checkCooldown(interaction.user.id, commandName));
       if (isOnCooldown) {
         const remainingSeconds = await getRemainingCooldown(interaction.user.id, commandName);
         await replyInfoEmbed(
@@ -250,7 +262,9 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
         return;
       }
 
-      await setCooldown(interaction.user.id, commandName, cooldownDuration);
+      if (cooldownDuration > 0) {
+        await setCooldown(interaction.user.id, commandName, cooldownDuration);
+      }
 
       let userData: UserRow | undefined;
       const existingUser = await userRepository.loadByDiscordId(interaction.user.id);

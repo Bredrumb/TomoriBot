@@ -15,9 +15,7 @@
     "genai.google",
     "genai.novelai"
   ],
-  "preservedKeys": [
-    "commands.config.cooldown.type.choice_strict_server_wide"
-  ],
+  "preservedKeys": ["commands.config.cooldown.type.choice_strict_server_wide"],
   "_notes": {
     "commands.personal.deliberatetriggermode": "Dynamic ${selectedMode}_title|description via getString('mode'); selectedMode flows through getString return value the scanner can't follow.",
     "commands.personal.deliberatetoolmode": "Same pattern as deliberatetriggermode.",

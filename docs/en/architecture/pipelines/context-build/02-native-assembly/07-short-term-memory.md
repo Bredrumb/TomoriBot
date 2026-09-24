@@ -26,7 +26,7 @@ so the pipeline can inject it at a configurable dialogue depth.
 
 ## Categories
 
-Servers can configure up to `STM_MAX_CATEGORIES` (default 5) categories via
+Servers can configure up to `STM_MAX_CATEGORIES` (5) categories via
 `/config` > Engine > Memory & STM. Each category has a `label`, `description`,
 and `position`. The tool schema dynamically builds one string property per
 category slug.
@@ -131,8 +131,8 @@ but once the channel has gone quiet the same placement presents stale content as
 current.
 
 So the resolved depth is not always the configured one. When the same-channel STM
-entry is younger than `STM_FRESH_WINDOW_MINUTES` (default 60), the content block is
-injected at `STM_FRESH_INJECTION_DEPTH` (default `2`) instead. Once the entry ages past
+entry is younger than `STM_FRESH_WINDOW_MS` (60 minutes), the content block is
+injected at `STM_FRESH_INJECTION_DEPTH` (2) instead. Once the entry ages past
 the window, the block snaps back to `content_injection_depth`.
 
 `STM_FRESH_INJECTION_DEPTH` is a **ceiling, not a replacement**: the override may only
@@ -281,16 +281,16 @@ After this stage runs:
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT` | `6` | Fallback crude-message render depth when a server has no `crude_message_count` set |
-| `SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS` | `3` | Cap on other-channel memory items |
-| `SHORT_TERM_MEMORY_TTL_HOURS` | `12` | TTL for crude conversation entries in cache |
-| `SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS` | `24` | TTL for summary entries in cache |
-| `SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH` | `1500` | Max length of a single summary/category value |
-| `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` | `10` | Max crude messages stored per channel |
-| `STM_MAX_CATEGORIES` | `5` | Maximum number of categories per server |
-| `STM_JANITOR_RETENTION_DAYS` | `90` | Days before orphaned STM rows are purged |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Constant (`memories.ts`) | `DEFAULT_CRUDE_MESSAGE_COUNT` | `6` | Fallback crude-message render depth when a server has no `crude_message_count` set |
+| Constant (`memories.ts`) | `MAX_OTHER_CHANNEL_MEMORIES` | `3` | Cap on other-channel memory items |
+| Constant (`shortTermMemoryCache.ts`) | `CRUDE_CONVERSATION_TTL_HOURS` | `12` | TTL for crude conversation entries in cache |
+| Constant (`shortTermMemoryCache.ts`) | `SUMMARY_TTL_HOURS` | `24` | TTL for summary entries in cache |
+| Constant (`shortTermMemoryCache.ts`) | `MAX_SUMMARY_LENGTH` | `1500` | Max length of a single summary/category value |
+| Constant (`shortTermMemoryCache.ts`) | `MAX_MESSAGES_PER_CHANNEL` | `10` | Max crude messages stored per channel |
+| Constant (`shortTermMemoryCache.ts`) | `STM_MAX_CATEGORIES` | `5` | Maximum number of categories per server |
+| Env var | `STM_JANITOR_RETENTION_DAYS` | `90` | Days before orphaned STM rows are purged |
 
 > [!NOTE]
 > The default cadence of `5` and the default `nudge_injection_depth` of `2`

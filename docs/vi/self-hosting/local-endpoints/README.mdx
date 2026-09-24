@@ -54,15 +54,15 @@ Hãy chọn một tính năng để thiết lập:
     description="Chạy máy chủ MCP cục bộ để mở rộng TomoriBot bằng các công cụ của riêng bạn (chỉ dành cho phiên bản self-host)." />
 </CardGrid>
 
-## Khởi động các sidecar bằng `bun run launch`
+## Khởi động các máy chủ cục bộ bằng `bun run launch`
 
-Thay vì khởi động các dịch vụ sidecar một cách thủ công, hãy sử dụng `bun run launch` để khởi động các sidecar được yêu cầu, đợi chúng sẵn sàng, sau đó tự động chạy bot ở chế độ theo dõi:
+Thay vì khởi động các máy chủ cục bộ một cách thủ công, hãy sử dụng `bun run launch` để khởi động các máy chủ được yêu cầu, đợi chúng sẵn sàng, sau đó tự động chạy bot ở chế độ theo dõi:
 
 ```sh
 # Chỉ bot, giống hệt bun run dev
 bun run launch
 
-# Đi kèm các sidecar Docker SearXNG và Crawl4AI
+# Đi kèm các container Docker SearXNG và Crawl4AI
 bun run launch --searxng --crawl4ai
 
 # Đi kèm máy chủ TTS cục bộ (trước tiên phải thiết lập venv, xem hướng dẫn Chuyển văn bản thành giọng nói bên dưới)
@@ -75,8 +75,8 @@ bun run launch --cosyvoice3
 bun run launch --help
 ```
 
-Các cờ khả dụng: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--whisperx`
+Các cờ khả dụng: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`
 
-Các sidecar Docker (`--searxng`, `--crawl4ai`) được tạo trong lần chạy đầu tiên và được tái sử dụng trong các lần chạy tiếp theo. Các sidecar Python TTS/STT yêu cầu môi trường ảo venv phải được thiết lập một lần từ trước; xem các hướng dẫn thiết lập riêng lẻ trong [Chuyển văn bản thành giọng nói](/vi/self-hosting/local-endpoints/text-to-speech/) và [Chuyển giọng nói thành văn bản](/vi/self-hosting/local-endpoints/speech-to-text/).
+Các máy chủ dựa trên Docker (`--searxng`, `--crawl4ai`) được tạo trong lần chạy đầu tiên và được tái sử dụng trong các lần chạy tiếp theo. Các máy chủ TTS/STT Python yêu cầu môi trường ảo venv phải được thiết lập một lần từ trước; xem các hướng dẫn thiết lập riêng lẻ trong [Chuyển văn bản thành giọng nói](/vi/self-hosting/local-endpoints/text-to-speech/) và [Chuyển giọng nói thành văn bản](/vi/self-hosting/local-endpoints/speech-to-text/).
 
-**Ctrl+C** sẽ dừng bot và mọi tiến trình sidecar Python. Các Docker container được giữ chạy có chủ đích. Hãy dừng chúng thủ công bằng `docker stop searxng` / `docker stop crawl4ai` khi hoàn tất.
+**Ctrl+C** sẽ dừng bot và mọi tiến trình máy chủ Python. Các Docker container được giữ chạy có chủ đích. Hãy dừng chúng thủ công bằng `docker stop searxng` / `docker stop crawl4ai` khi hoàn tất.

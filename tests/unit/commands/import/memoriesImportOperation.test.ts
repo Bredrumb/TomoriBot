@@ -477,7 +477,7 @@ describe("memory import operation", () => {
         data: {
           buckets: [
             { name: "global", label: "Global", memories: [{ content: "A memory", tags: [] }] },
-            { name: "persona-1", label: "Sparrow", memories: [{ content: "Another memory", tags: [] }] },
+            { name: "persona-1", label: "Mirri", memories: [{ content: "Another memory", tags: [] }] },
           ],
         },
       }),

@@ -64,7 +64,7 @@ still runs on host Bun. For a fully containerized bot and database, use
 :::
 
 Optional tuning lives in `.env.optional.example`. Copy over any values you want to
-customize (limits, timeouts, feature toggles, sidecar URLs, etc.).
+customize (limits, timeouts, feature toggles, local server URLs, etc.).
 
 ## 3. Run
 
@@ -78,7 +78,7 @@ checklist panel, and nothing is written until you press **Finish Setup**; see
 [The `/setup` command](/self-hosting/setup-wizard/#the-setup-command) for the steps and the
 [Quickstart](/introduction/quickstart/) for the in-Discord side.
 
-Use `bun run launch` instead of `bun run dev` if you want optional sidecars (SearXNG, Crawl4AI, local TTS/STT) launched alongside the bot:
+Use `bun run launch` instead of `bun run dev` if you want optional local servers (SearXNG, Crawl4AI, local TTS/STT) launched alongside the bot:
 
 ```sh
 bun run launch --searxng --crawl4ai

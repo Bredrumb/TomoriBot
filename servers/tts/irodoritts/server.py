@@ -66,7 +66,7 @@ else:
   print(f"[Irodori-TTS] Using model ID: {MODEL_ID} (default)")
 
 HOST = os.getenv("TOMORI_TTS_HOST", "127.0.0.1")
-PORT = int(os.getenv("TOMORI_TTS_PORT", "8013"))
+PORT = int(os.getenv("IRODORI_TTS_PORT", "8013"))
 
 MODEL_DEVICE = os.getenv("IRODORI_MODEL_DEVICE", "auto")
 CODEC_DEVICE = os.getenv("IRODORI_CODEC_DEVICE", "auto")
@@ -87,7 +87,7 @@ CFG_SCALE_SPEAKER = float(os.getenv("IRODORI_CFG_SCALE_SPEAKER", "5.0"))
 MAX_REF_SECONDS_RAW = os.getenv("IRODORI_MAX_REF_SECONDS")
 MAX_REF_SECONDS = float(MAX_REF_SECONDS_RAW) if MAX_REF_SECONDS_RAW else None
 
-MAX_TEXT_CHARS = int(os.getenv("TOMORI_TTS_MAX_TEXT_CHARS", "1000"))
+MAX_TEXT_CHARS = 1000
 
 
 def _env_bool(name: str, default: bool) -> bool:

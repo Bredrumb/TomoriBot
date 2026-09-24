@@ -29,7 +29,7 @@ python -m pip install -r servers/tts/qwen3tts/requirements.txt
 python servers/tts/qwen3tts/server.py
 ```
 
-A URL padrão do endpoint no modo automático é `http://127.0.0.1:8012`. Você também pode especificar o modo automático explicitamente:
+A URL padrão do endpoint no modo automático é `http://127.0.0.1:8012`; defina `QWEN3TTS_PORT` para usar outra porta. Você também pode especificar o modo automático explicitamente:
 
 ```powershell
 python servers\tts\qwen3tts\server.py --mode auto

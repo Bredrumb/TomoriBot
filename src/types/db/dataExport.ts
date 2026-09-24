@@ -222,7 +222,6 @@ const serverCapabilitiesConfigExportSchema = z.object({
   time_awareness_enabled: z.boolean().optional(),
   tool_use_enabled: z.boolean().optional(),
   short_term_memory_enabled: z.boolean().optional(),
-  verbatim_tool_calling_enabled: z.boolean().optional(),
   user_info_updates_enabled: z.boolean().default(true),
 });
 

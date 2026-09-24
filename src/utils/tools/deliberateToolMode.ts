@@ -242,18 +242,12 @@ function uniqueMatches(matches: DeliberateToolIntentMatch[]): DeliberateToolInte
   });
 }
 
-function parseDeliberateToolContextTurnsEnv(): number {
-  const parsed = Number.parseInt(process.env.DELIBERATE_TOOL_CONTEXT_TURNS ?? "", 10);
-  if (!Number.isFinite(parsed)) return DEFAULT_TOOL_CONTEXT_TURNS;
-  return Math.min(Math.max(parsed, 0), MAX_TOOL_CONTEXT_TURNS);
-}
-
 export function resolveDeliberateToolContextTurns(configuredTurns: number | null | undefined): number {
   if (typeof configuredTurns === "number" && Number.isFinite(configuredTurns)) {
     return Math.min(Math.max(Math.trunc(configuredTurns), 0), MAX_TOOL_CONTEXT_TURNS);
   }
 
-  return parseDeliberateToolContextTurnsEnv();
+  return DEFAULT_TOOL_CONTEXT_TURNS;
 }
 
 function escapeRegExpLiteral(value: string): string {

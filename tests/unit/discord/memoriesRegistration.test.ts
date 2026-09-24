@@ -62,7 +62,7 @@ describe("/memories registration restrictions", () => {
  */
 describe("/memories Short-Term manager gate", () => {
   const entries = [
-    { channelId: "12345678901234567", personaId: 10, personaName: "Sparrow", lastUpdated: 2 },
+    { channelId: "12345678901234567", personaId: 10, personaName: "Mirri", lastUpdated: 2 },
     { channelId: "12345678901234568", personaId: null, personaName: "Unscoped", lastUpdated: 1 },
   ];
 

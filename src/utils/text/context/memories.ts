@@ -24,11 +24,8 @@ import { buildSlugMap } from "@/utils/text/slugifyLabel";
 
 // Default render depth for crude messages (Mode B additive blocks + no-summary
 // fallback listing). Also the fallback when a server has no crude_message_count set.
-const DEFAULT_CRUDE_MESSAGE_COUNT = Number.parseInt(
-  process.env.SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT || "6",
-  10,
-);
-const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS || "3", 10);
+const DEFAULT_CRUDE_MESSAGE_COUNT = 6;
+const MAX_OTHER_CHANNEL_MEMORIES = 3;
 
 // Position in context reads as recency to the model: a summary sitting at the tail
 // implies "this is happening now". While the conversation is still live that is
@@ -36,8 +33,8 @@ const MAX_OTHER_CHANNEL_MEMORIES = Number.parseInt(process.env.SHORT_TERM_MEMORY
 // quiet the same placement would present stale content as current. `lastUpdated` is
 // refreshed by the per-turn crude write (not the cadence-gated summary write), so it
 // tracks the last turn Tomori took part in.
-const STM_FRESH_WINDOW_MS = Number.parseInt(process.env.STM_FRESH_WINDOW_MINUTES || "60", 10) * 60 * 1000;
-const STM_FRESH_INJECTION_DEPTH = Number.parseInt(process.env.STM_FRESH_INJECTION_DEPTH || "2", 10);
+const STM_FRESH_WINDOW_MS = 60 * 60 * 1000;
+const STM_FRESH_INJECTION_DEPTH = 2;
 
 /**
  * Resolves the depth a fresh STM content block should use.

@@ -50,9 +50,14 @@ The callback receives `LockedChatTurn`:
 
 - Looks up or creates a `ChannelLockEntry` keyed by `channelId` in the in-memory
   `channelLocks` map.
-- Forcibly releases the lock if older than `CHANNEL_LOCK_TIMEOUT_MS` (default
-  180s, configurable via env). Logs a warning, aborts the turn abort controller,
-  fires the stream kill callback, and clears the existing queue.
+- Forcibly releases the lock if its last heartbeat is older than
+  `CHANNEL_LOCK_TIMEOUT_MS` (default 180s, configurable via env). Logs a warning,
+  aborts the turn abort controller, fires the stream kill callback, and clears
+  the existing queue. Staleness is measured from `lastProgressAt`, which
+  `touchChannelLock` refreshes on every stream heartbeat; `lockedAt` stays the
+  turn's start. A lock is never stale while a `runUnderWatchdog` phase is in
+  flight (the stream race and the tool-execution race), because each carries its
+  own timeout. Work outside those phases keeps the stale-lock recovery.
 - Sets `isLocked = true`, records `lockedAt`, `currentMessageId`, `userDiscId`,
   persona-job/persona-id/command-triggered flags.
 - Creates a **fresh `AbortController`** (`activeTurnAbortController`) for this
@@ -161,17 +166,17 @@ Replacing this stage from a plugin would risk breaking those guarantees.
 | `requestNaturalStopForLockedTurn` | Add a new "soft stop" signal type | Internal: coupled to `StreamOrchestrator.requestStop` semantics |
 | `clearQueuedSelfReplyWork` | Customize what gets cleared on natural stop | Internal: coupled to `isSelfTriggerMessage` and persona-job semantics |
 
-The lock's *policy* (timeout, typing interval, max follow-ups) is configurable
-via env vars; behaviour customization should go through that channel rather
-than monkey-patching the stage.
+The lock's *policy* (timeout, typing interval, max follow-ups) lives in named
+constants; behaviour customization should go through those rather than
+monkey-patching the stage.
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `CHANNEL_LOCK_TIMEOUT_MS` | `180000` | Stale-lock detection threshold |
-| `DISCORD_TYPING_KEEPALIVE_INTERVAL_MS` | `8000` | Typing-refresh cadence |
-| `MAX_FOLLOW_UP_INTERRUPTS` | `3` | Per-lock follow-up interrupt cap |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Env var | `CHANNEL_LOCK_TIMEOUT_MS` | `180000` | Stale-lock detection threshold |
+| Constant (`channelQueue.ts`) | `DISCORD_TYPING_KEEPALIVE_INTERVAL_MS` | `8000` | Typing-refresh cadence |
+| Env var | `MAX_FOLLOW_UP_INTERRUPTS` | `3` | Per-lock follow-up interrupt cap |
 
 ## Related docs
 

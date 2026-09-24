@@ -4,7 +4,7 @@ sidebar:
   hidden: true
 ---
 
-Detailed operational rationale, container sizing, and incident tuning for Tier 8 configuration
+Detailed operational rationale, container sizing, and incident tuning for Tier 7 configuration
 variables. These settings govern dedicated 24/7 production hosts, virtual private servers (VPS),
 and cloud provider environments (such as Azure VM and AWS EC2).
 
@@ -25,7 +25,7 @@ swap device capacity so unevicted memory overflows safely to disk.
 
 ### SearXNG Python Worker Footprint
 
-`SEARXNG_BLOCKING_THREADS` controls concurrent upstream engine queries in the SearXNG sidecar.
+`SEARXNG_BLOCKING_THREADS` controls concurrent upstream engine queries in the SearXNG container.
 
 SearXNG uses a Python worker architecture where deallocated objects return to internal arenas
 instead of the host operating system. Peak concurrency establishes a resident memory floor that
@@ -159,5 +159,6 @@ run with a read-only root filesystem.
 
 - `TOMORI_LOG_FILE`: Mirrors log records with level >= 50 (error, metric, rateLimit, fatal) to an
   append-only JSONL file for consumption by host agents (e.g. Azure Monitor Agent).
-- `LOG_MAX_STRING_LENGTH` (default: 4096): Truncates oversized string fields, preventing base64
-  payloads or stack traces from exceeding Docker's 16 KB log line chunking limit.
+- `LOG_MAX_STRING_LENGTH` (default: unset): Optional cap for oversized string fields. Unset by
+  default so prompts, memories, and stack traces remain complete. Base64 data URIs are collapsed
+  directly in log redaction regardless of this setting.

@@ -150,7 +150,7 @@ const WORKSPACE_DESTINATIONS: MemoryTransferDestination[] = [
 
 const PERSONAL_DESTINATIONS: MemoryTransferDestination[] = [
   { ownership: "personal", lineageId: 0, label: "Global" },
-  { ownership: "personal", lineageId: 55, label: "Sparrow" },
+  { ownership: "personal", lineageId: 55, label: "Mirri" },
 ];
 
 /** W7e-1's marker for a surface a later slice still owed. No control a user can press may still reach it. */
@@ -686,7 +686,7 @@ describe("transfer interaction routes", () => {
 
     const personalPanel = collectText(personalUpdate.mock.calls[0]?.[0]);
     expect(personalPanel).toContain(localizer("en-US", "commands.transfer.memory_mapping_title"));
-    expect(personalPanel).toContain("Sparrow");
+    expect(personalPanel).toContain("Mirri");
   });
 
   it("keeps every non-terminal memory mapping action from consuming the snapshot", async () => {
@@ -1483,7 +1483,7 @@ describe("transfer interaction routes", () => {
     );
     const userSpy = spyOn(userRepository, "loadByDiscordId").mockResolvedValue({ user_id: 9 } as never);
     const lineageSpy = spyOn(personalMemoryRepository, "destinationLineages").mockResolvedValue([
-      { lineageId: 55, nickname: "Sparrow" },
+      { lineageId: 55, nickname: "Mirri" },
       { lineageId: 60, nickname: null },
     ]);
     activeSpies.push(userSpy, lineageSpy);

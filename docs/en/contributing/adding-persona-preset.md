@@ -78,9 +78,9 @@ bun run lint         # Biome formatting
 ```
 
 Persona avatars and sprites are uploaded to Discord at seed time, so keep each
-image under the `check-media-size` budget (default 1 MiB, `MEDIA_SIZE_LIMIT_BYTES`).
+image under the `check-media-size` budget (1 MiB).
 Run `bun run compress-media` to fix oversized art automatically: it re-encodes
-losslessly and downscales (long-edge cap `MEDIA_MAX_DIMENSION`, default 768px) only
+losslessly and downscales (long-edge cap 768px) only
 when lossless alone cannot fit. `bun run vl` rejects oversized files, so run the
 compressor before committing new art.
 

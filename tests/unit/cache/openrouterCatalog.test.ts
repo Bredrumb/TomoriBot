@@ -26,17 +26,15 @@ function errorResponse(status: number): Response {
   } as unknown as Response;
 }
 
-function makeCatalog() {
+function makeCatalog(settings: { minRefreshIntervalMs?: number; ttlMs?: number } = {}) {
   return createOpenRouterCatalog<TestEntry>({
     label: "test",
     url: "https://openrouter.test/api/v1/models",
     parse: (payload) => parseOpenRouterCatalogModelList("test", payload).map((entry) => ({ id: entry.id })),
     keyOf: (entry) => entry.id,
+    ...settings,
   });
 }
-
-const originalMinInterval = process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS;
-const originalTtl = process.env.OPENROUTER_CATALOG_TTL_MS;
 
 let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
 
@@ -46,14 +44,11 @@ beforeEach(() => {
 
 afterEach(() => {
   fetchSpy.mockRestore();
-  process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = originalMinInterval;
-  process.env.OPENROUTER_CATALOG_TTL_MS = originalTtl;
 });
 
 describe("OpenRouter catalog refresh", () => {
   it("finds a model published after the initial load", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "0";
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
     await catalog.initialize();
 
     expect(await catalog.getOrFetch("vendor/published-later")).toBeUndefined();
@@ -64,10 +59,9 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("reaches the network after a failed startup fetch instead of staying closed", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "0";
     fetchSpy.mockImplementation(mock(async () => errorResponse(503)));
 
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
     await catalog.initialize();
     expect(catalog.isReady()).toBe(false);
 
@@ -78,8 +72,7 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("keeps the cached catalog when a refresh fails", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "0";
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
     await catalog.initialize();
 
     fetchSpy.mockImplementation(mock(async () => errorResponse(503)));
@@ -90,8 +83,7 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("treats an empty catalog as a failed refresh", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "0";
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
     await catalog.initialize();
 
     fetchSpy.mockImplementation(mock(async () => jsonResponse([])));
@@ -102,8 +94,7 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("rate-limits repeated misses to one fetch per cooldown window", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "600000";
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 600000 });
     await catalog.initialize();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
@@ -117,8 +108,7 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("bypasses the cooldown for a fresh lookup", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "600000";
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 600000 });
     await catalog.initialize();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
@@ -132,8 +122,7 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("refreshes on a fresh lookup even when the codename is already cached", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "600000";
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 600000 });
     await catalog.initialize();
 
     expect(await catalog.getOrFetch("vendor/first", { fresh: true })).toEqual({ id: "vendor/first" });
@@ -141,8 +130,7 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("collapses concurrent misses into a single fetch", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "0";
-    const catalog = makeCatalog();
+    const catalog = makeCatalog({ minRefreshIntervalMs: 0 });
 
     await Promise.all([
       catalog.getOrFetch("vendor/first"),
@@ -154,18 +142,20 @@ describe("OpenRouter catalog refresh", () => {
   });
 
   it("refreshes only once the TTL has elapsed", async () => {
-    process.env.OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS = "0";
-    process.env.OPENROUTER_CATALOG_TTL_MS = "3600000";
-    const catalog = makeCatalog();
-    await catalog.initialize();
+    // Within the freshness window a stale check reuses the snapshot the startup fetch stored.
+    const freshCatalog = makeCatalog({ minRefreshIntervalMs: 0, ttlMs: 3600000 });
+    await freshCatalog.initialize();
 
-    await catalog.refreshIfStale();
+    await freshCatalog.refreshIfStale();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    process.env.OPENROUTER_CATALOG_TTL_MS = "1";
+    // Past it, the same check refreshes. Each catalog carries its own window, so the elapsed
+    // case needs its own catalog rather than a mutated shared setting.
+    const expiredCatalog = makeCatalog({ minRefreshIntervalMs: 0, ttlMs: 1 });
+    await expiredCatalog.initialize();
     await Bun.sleep(2);
-    await catalog.refreshIfStale();
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    await expiredCatalog.refreshIfStale();
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
   });
 
   it("matches codenames case-insensitively", async () => {

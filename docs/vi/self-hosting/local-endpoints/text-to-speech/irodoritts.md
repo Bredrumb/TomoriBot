@@ -39,7 +39,7 @@ URL endpoint mặc định là `http://127.0.0.1:8013`.
 
 Model mặc định là `Aratako/Irodori-TTS-v4.1-Small`. Các kho lưu trữ Hugging Face tương thích, các bản tinh chỉnh cộng đồng (chẳng hạn như `phasefield-audio/Irodori-TTS-v4.1-Anime`), hoặc các tệp checkpoint cục bộ có thể được định cấu hình qua các biến môi trường.
 
-Khi khởi động sidecar (trực tiếp bằng Python hoặc qua `bun run launch --irodoritts`), máy chủ sẽ tự động đọc tệp `.env` ở thư mục gốc của kho lưu trữ (hoặc tệp `.env` cục bộ trong `servers/tts/irodoritts/`) và ghi log ID model đang hoạt động khi khởi động.
+Khi khởi động máy chủ (trực tiếp bằng Python hoặc qua `bun run launch --irodoritts`), máy chủ sẽ tự động đọc tệp `.env` ở thư mục gốc của kho lưu trữ (hoặc tệp `.env` cục bộ trong `servers/tts/irodoritts/`) và ghi log ID model đang hoạt động khi khởi động.
 
 ### Qua `.env` (Cố định)
 
@@ -120,6 +120,60 @@ TomoriBot gửi prompt này dưới dạng `instruct`; wrapper Irodori ánh xạ
 
 TomoriBot loại bỏ cú pháp emoji tùy chỉnh của Discord trước khi gửi văn bản đến TTS. Với `script_markup: emoji`, các Unicode emoji được giữ lại cho quá trình điều kiện hóa văn bản của Irodori.
 
+### Điều khiển phong cách bằng emoji
+
+IrodoriTTS hỗ trợ chú thích emoji trong văn bản đầu vào để tác động đến hiệu ứng âm thanh, cách nói và biểu cảm cảm xúc. Khi `Script Markup Style` của TomoriBot được đặt thành `Emoji`, các emoji Unicode này sẽ được giữ lại và gửi đến Irodori.
+
+| Emoji | Ý nghĩa / cảm xúc / phong cách |
+| --- | --- |
+| 👂 | Thì thầm, âm thanh sát tai |
+| 😮‍💨 | Hơi thở, tiếng thở dài, nhịp thở khi ngủ |
+| ⏸️ | Ngắt quãng, im lặng |
+| 🤭 | Cười khúc khích, cười nhẹ, cười nén |
+| 🥵 | Thở hổn hển, rên, rên rỉ |
+| 📢 | Tiếng vọng, reverb |
+| 😏 | Trêu chọc, ngọt ngào tinh nghịch / dỗ dành |
+| 🥺 | Giọng run, rụt rè / thiếu tự tin |
+| 🌬️ | Hụt hơi, thở nặng |
+| 😮 | Hít mạnh / thở hắt |
+| 👅 | Tiếng liếm, nhai, âm thanh ướt |
+| 💋 | Tiếng môi / chép môi |
+| 🫶 | Nhẹ nhàng, dịu dàng |
+| 😭 | Nức nở, khóc, buồn bã |
+| 😱 | La hét, hét lớn, thét |
+| 😪 | Ngái ngủ, uể oải |
+| 😴 | Nói mớ, ngáy |
+| ⏩ | Nói nhanh, dồn dập, vội vã |
+| 📞 | Như qua điện thoại hoặc loa |
+| 🐢 | Chậm rãi |
+| 🥤 | Tiếng nuốt |
+| 🤧 | Ho, sụt sịt, hắt hơi, hắng giọng |
+| 😒 | Tặc lưỡi |
+| 😰 | Hoảng hốt, bối rối, căng thẳng, nói lắp |
+| 😆 | Vui vẻ, hạnh phúc |
+| 💥 | Mạnh mẽ, dồn lực |
+| 😠 | Tức giận, bất mãn, dỗi |
+| 😲 | Ngạc nhiên, thán phục / cảm thán |
+| 🥱 | Ngáp |
+| 😖 | Đau đớn, khổ sở |
+| 😟 | Lo âu, lo lắng |
+| 🫣 | Ngượng ngùng, e thẹn |
+| 🙄 | Bực mình / ngán ngẩm |
+| 😊 | Vui tươi, phấn khởi |
+| 😎 | Tự tin, tự hào |
+| 👌 | Tiếng đáp lại / đồng tình |
+| 🙏 | Van nài, cầu xin |
+| 🥴 | Say xỉn |
+| 🎵 | Ngân nga |
+| 🤐 | Giọng bị nghẹt (bịt miệng) |
+| 😌 | Nhẹ nhõm, mãn nguyện |
+| 🤔 | Giọng nghi vấn / thắc mắc |
+| 💪 | Dồn sức, mạnh mẽ |
+| 👃 | Tiếng hít ngửi |
+| 📖 | Tường thuật, độc thoại |
+
+Lặp lại cùng một emoji có thể làm hiệu ứng mạnh hơn. Điều khiển bằng emoji không hoàn toàn nhất quán, vì vậy hãy xem chúng như gợi ý phong cách thay vì đầu ra được đảm bảo. Xem [chú thích emoji chính thức của IrodoriTTS](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) để biết danh sách gốc và các cập nhật sau này.
+
 ## Suy luận nhanh hơn với Sway Sampling
 
 Mặc định vẫn là phương pháp lấy mẫu tuyến tính 40 bước chất lượng cao hơn của Irodori. Để có độ trễ thấp hơn, hãy thử Sway Sampling với ít bước hơn:
@@ -136,7 +190,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 Trình cài đặt TomoriBot trước đây đã sao chép và vá tệp `pyproject.toml` của Irodori, cài đặt thủ công `dacvae`, và ghim một commit Irodori cũ thời kỳ v2. Các giải pháp tạm thời đó là cần thiết cho bố cục gói thượng nguồn cũ hơn nhưng không còn phù hợp với Irodori hiện tại.
 
-Sidecar hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập backend `uv` của thượng nguồn. Irodori và `dacvae` vẫn được ghim vào các commit đã biết tại đó để cài đặt có thể tái lập, nhưng TomoriBot không còn sửa đổi mã nguồn thượng nguồn trong quá trình cài đặt nữa.
+Máy chủ hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập backend `uv` của thượng nguồn. Irodori và `dacvae` vẫn được ghim vào các commit đã biết tại đó để cài đặt có thể tái lập, nhưng TomoriBot không còn sửa đổi mã nguồn thượng nguồn trong quá trình cài đặt nữa.
 
 ## Biến môi trường
 
@@ -144,8 +198,8 @@ Sidecar hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập ba
 |---|---|---|
 | `IRODORI_TTS_MODEL_ID` | `Aratako/Irodori-TTS-v4.1-Small` | Repo model Hugging Face hoặc nguồn repo/thư mục con được hỗ trợ |
 | `IRODORI_TTS_CHECKPOINT` | chưa đặt | Checkpoint `.pt` hoặc `.safetensors` cục bộ tùy chọn; ghi đè model Hugging Face |
-| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết máy chủ |
-| `TOMORI_TTS_PORT` | `8013` | Cổng máy chủ |
+| `TOMORI_TTS_HOST` | `127.0.0.1` | Địa chỉ liên kết máy chủ; xem [Truy cập mạng](/self-hosting/local-endpoints/text-to-speech/#network-access) |
+| `IRODORI_TTS_PORT` | `8013` | Cổng máy chủ |
 | `IRODORI_MODEL_DEVICE` | `auto` | Thiết bị chạy model (`auto`, `cuda`, `cpu`, `mps`, `xpu`) |
 | `IRODORI_CODEC_DEVICE` | `auto` | Thiết bị chạy codec |
 | `IRODORI_MODEL_PRECISION` | `bf16` trên CUDA, ngược lại `fp32` | Độ chính xác model |
@@ -159,4 +213,3 @@ Sidecar hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập ba
 | `IRODORI_CFG_SCALE_CAPTION` | `3.0` | Tỷ lệ hướng dẫn chú thích / VoiceDesign |
 | `IRODORI_CFG_SCALE_SPEAKER` | `5.0` | Tỷ lệ hướng dẫn người nói tham chiếu |
 | `IRODORI_MAX_REF_SECONDS` | mặc định checkpoint | Giới hạn tùy chọn cho thời lượng âm thanh tham chiếu |
-| `TOMORI_TTS_MAX_TEXT_CHARS` | `1000` | Giới hạn độ dài văn bản trên mỗi yêu cầu |
