@@ -85,8 +85,12 @@ async function main(): Promise<void> {
   }
 
   const asMb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
-  console.log(`Per-language preset images : ${candidates.length} (${asMb(candidates.reduce((sum, c) => sum + c.bytes, 0))} MB)`);
-  console.log(`Verified duplicates        : ${deletable.length} (${asMb(deletable.reduce((sum, c) => sum + c.bytes, 0))} MB)`);
+  console.log(
+    `Per-language preset images : ${candidates.length} (${asMb(candidates.reduce((sum, c) => sum + c.bytes, 0))} MB)`,
+  );
+  console.log(
+    `Verified duplicates        : ${deletable.length} (${asMb(deletable.reduce((sum, c) => sum + c.bytes, 0))} MB)`,
+  );
   console.log(`Kept, needs attention      : ${blocked.length}`);
   for (const { candidate, reason } of blocked.slice(0, 20)) {
     console.log(`  ${path.relative(process.cwd(), candidate.legacyPath)}  <- ${reason}`);
@@ -114,7 +118,9 @@ async function main(): Promise<void> {
       }
     }
   }
-  console.log(`\nDeleted ${deletable.length} duplicate images, reclaiming ${asMb(deletable.reduce((sum, c) => sum + c.bytes, 0))} MB.`);
+  console.log(
+    `\nDeleted ${deletable.length} duplicate images, reclaiming ${asMb(deletable.reduce((sum, c) => sum + c.bytes, 0))} MB.`,
+  );
 }
 
 await main();

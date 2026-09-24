@@ -33,7 +33,12 @@ function buildDatabaseUrl(env: Record<string, string>): string | undefined {
   return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`;
 }
 
-async function runCommand(command: string, args: string[], cwd: string, extraEnv: Record<string, string> = {}): Promise<void> {
+async function runCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  extraEnv: Record<string, string> = {},
+): Promise<void> {
   const proc = Bun.spawn([command, ...args], {
     cwd,
     stdout: "inherit",
@@ -66,7 +71,9 @@ async function psqlCommand(ctx: SetupContext, sql: string): Promise<boolean> {
 
 function printPgvectorInstallGuide(): void {
   log.info("If PostgreSQL says vector is unavailable, install pgvector first:");
-  log.info("  Windows: use a PostgreSQL package/distribution that includes pgvector, or build pgvector for your version.");
+  log.info(
+    "  Windows: use a PostgreSQL package/distribution that includes pgvector, or build pgvector for your version.",
+  );
   log.info("  macOS:   brew install pgvector");
   log.info("  Ubuntu:  sudo apt-get install postgresql-16-pgvector");
   log.info("Then re-run Full Install or restart TomoriBot.");
@@ -122,7 +129,10 @@ export const SETUP_MODULES: SetupModule[] = [
     label: "Tokenizer assets",
     async run(ctx) {
       log.section("Tokenizer assets");
-      const useToken = await confirm("Do you want to provide a temporary HuggingFace token for gated tokenizers?", false);
+      const useToken = await confirm(
+        "Do you want to provide a temporary HuggingFace token for gated tokenizers?",
+        false,
+      );
       const extraEnv: Record<string, string> = {};
       if (useToken) {
         extraEnv.HF_TOKEN = await askSecret("HF_TOKEN", {

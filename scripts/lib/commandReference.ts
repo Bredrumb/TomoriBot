@@ -48,7 +48,8 @@ const COMMAND_REFERENCE_COPY: Record<string, CommandReferenceCopy> = {
     title: "コマンドリファレンス",
     intro:
       "TomoriBotに現在登録されているすべてのスラッシュコマンドです。Discordへの登録に使われるものと同じコマンド定義と日本語の説明文から生成しています（未翻訳の説明は英語で表示されます）。",
-    counts: (groups, commands) => `トップレベルのコマンドグループ：**${groups}**。実行できるスラッシュコマンド：**${commands}**。`,
+    counts: (groups, commands) =>
+      `トップレベルのコマンドグループ：**${groups}**。実行できるスラッシュコマンド：**${commands}**。`,
     commandHeader: "コマンド",
     summaryHeader: "概要",
     noDescription: "説明はありません。",
@@ -66,7 +67,8 @@ const COMMAND_REFERENCE_COPY: Record<string, CommandReferenceCopy> = {
   },
   "zh-CN": {
     title: "指令参考",
-    intro: "TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同一批指令构建器和简体中文描述生成（尚未翻译的描述以英文显示）。",
+    intro:
+      "TomoriBot 当前注册的全部斜杠指令，由与 Discord 注册所用的同一批指令构建器和简体中文描述生成（尚未翻译的描述以英文显示）。",
     counts: (groups, commands) => `顶层指令组：**${groups}**。可执行的斜杠指令：**${commands}**。`,
     commandHeader: "指令",
     summaryHeader: "摘要",
@@ -99,7 +101,8 @@ const COMMAND_REFERENCE_COPY: Record<string, CommandReferenceCopy> = {
     title: "Danh mục lệnh",
     intro:
       "Tất cả các lệnh slash hiện được TomoriBot đăng ký, được tạo từ cùng trình xây dựng lệnh và mô tả tiếng Việt dùng để đăng ký trên Discord (mô tả chưa được dịch sẽ hiển thị bằng tiếng Anh).",
-    counts: (groups, commands) => `Các nhóm lệnh cấp cao nhất: **${groups}**. Các lệnh slash có thể thực thi: **${commands}**.`,
+    counts: (groups, commands) =>
+      `Các nhóm lệnh cấp cao nhất: **${groups}**. Các lệnh slash có thể thực thi: **${commands}**.`,
     commandHeader: "Lệnh",
     summaryHeader: "Tóm tắt",
     noDescription: "Chưa có mô tả.",
@@ -233,7 +236,9 @@ function renderGroup(group: CommandGroup, copy: CommandReferenceCopy): string {
   ];
 
   for (const command of group.commands) {
-    lines.push(`| ${formatCommandPath(command.path)} | ${escapeTableCell(command.description || copy.noDescription)} |`);
+    lines.push(
+      `| ${formatCommandPath(command.path)} | ${escapeTableCell(command.description || copy.noDescription)} |`,
+    );
   }
 
   return lines.join("\n");

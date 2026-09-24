@@ -282,11 +282,14 @@ async function runLane(
 
     // The wrapper owns environment loading and database selection. Prevent a child from loading a
     // more specific local env file and silently undoing the disposable-database or skip decision.
-    const proc = Bun.spawn(["bun", "--no-env-file", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs], {
-      env: childEnv,
-      stdout: streamOutput ? "inherit" : "pipe",
-      stderr: streamOutput ? "inherit" : "pipe",
-    });
+    const proc = Bun.spawn(
+      ["bun", "--no-env-file", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs],
+      {
+        env: childEnv,
+        stdout: streamOutput ? "inherit" : "pipe",
+        stderr: streamOutput ? "inherit" : "pipe",
+      },
+    );
     liveProcesses.add(proc);
 
     const [stdout, stderr] = streamOutput
@@ -318,9 +321,7 @@ async function runTestFiles(
   const requestedOutfile = process.env.BUN_TEST_JUNIT_OUTFILE;
   const lanes = await planLanes(files);
 
-  const results = await Promise.all(
-    lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv)),
-  );
+  const results = await Promise.all(lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv)));
 
   // Replay buffered output in fixed lane order so concurrent runs stay readable.
   // TOMORI_TEST_QUIET is set by `vl` on the full-suite run, where it re-reports each

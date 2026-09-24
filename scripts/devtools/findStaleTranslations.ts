@@ -39,14 +39,7 @@ const log = {
   success: (msg: string) => console.log(`✅ ${msg}`),
 };
 
-export type ExpectedScript =
-  | "latin"
-  | "cjk"
-  | "cyrillic"
-  | "hangul"
-  | "greek"
-  | "devanagari"
-  | "thai";
+export type ExpectedScript = "latin" | "cjk" | "cyrillic" | "hangul" | "greek" | "devanagari" | "thai";
 
 /**
  * Script a locale's strings are expected to be written in. Locales on Latin script cannot use
@@ -113,10 +106,7 @@ export function flatten(obj: unknown, prefix = ""): Record<string, string> {
 /**
  * Counts target-script and Latin letters in a string after stripping placeholders, URLs, and emoji.
  */
-export function countScriptLetters(
-  value: string,
-  script: ExpectedScript,
-): { latinCount: number; targetCount: number } {
+export function countScriptLetters(value: string, script: ExpectedScript): { latinCount: number; targetCount: number } {
   const stripped = value
     .replace(/\{[^}]+\}/g, "") // remove {placeholders}
     .replace(/https?:\/\/\S+/g, "") // remove URLs
@@ -279,7 +269,9 @@ export function findDocsStaleness(options: {
   const git = createGitDocsSource(repoRoot);
   const entries: DocsStaleEntry[] = [];
 
-  const wantsTree = options.reasons.some((reason) => reason === "drifted" || reason === "missing" || reason === "orphaned");
+  const wantsTree = options.reasons.some(
+    (reason) => reason === "drifted" || reason === "missing" || reason === "orphaned",
+  );
   if (wantsTree) {
     if (options.reasons.includes("drifted") && createGitDriftSource(repoRoot).isShallow()) {
       throw new DriftHistoryError("this checkout is shallow, so translation baselines are missing");
@@ -457,7 +449,9 @@ export function filterUnfollowedReport(report: StalenessReport, locale?: string)
     added: filterEntries(report.added),
     changed: filterEntries(report.changed),
     removed: report.removed,
-    localeEditCounts: new Map([...report.localeEditCounts].filter(([candidate]) => candidate === locale || candidate === "en-US")),
+    localeEditCounts: new Map(
+      [...report.localeEditCounts].filter(([candidate]) => candidate === locale || candidate === "en-US"),
+    ),
   };
 }
 
@@ -480,9 +474,7 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
       targetLocaleObj = await loadMergedLocale(locale);
     } catch (error) {
       if (targetLocale) {
-        throw new Error(
-          `Failed to load locale "${locale}": ${error instanceof Error ? error.message : String(error)}`,
-        );
+        throw new Error(`Failed to load locale "${locale}": ${error instanceof Error ? error.message : String(error)}`);
       }
       continue;
     }
@@ -524,9 +516,10 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const doExport = args.includes("--export");
-  const localeArg = args.find((arg) => arg.startsWith("--locale="))?.split("=")[1] ??
+  const localeArg =
+    args.find((arg) => arg.startsWith("--locale="))?.split("=")[1] ??
     (args.includes("--locale") ? args[args.indexOf("--locale") + 1] : undefined);
-  const baseFlagIndex = args.findIndex((arg) => arg === "--base");
+  const baseFlagIndex = args.indexOf("--base");
   const baseEquals = args.find((arg) => arg.startsWith("--base="));
   const base = baseEquals
     ? baseEquals.slice("--base=".length)
@@ -550,7 +543,8 @@ async function main(): Promise<void> {
   const scansKeys = scopeArg !== "docs";
   const scansDocs = scopeArg !== "keys";
 
-  const requestedReasons: StaleReason[] = reasonArgs.length > 0 ? (reasonArgs as StaleReason[]) : [...DEFAULT_STALE_REASONS];
+  const requestedReasons: StaleReason[] =
+    reasonArgs.length > 0 ? (reasonArgs as StaleReason[]) : [...DEFAULT_STALE_REASONS];
   const wantsReason = (reason: StaleReason): boolean => requestedReasons.includes(reason);
   const wantsKeyReason = (reason: StaleReason): boolean => scansKeys && wantsReason(reason);
   if (base && !wantsReason("unfollowed")) {
@@ -559,9 +553,8 @@ async function main(): Promise<void> {
 
   log.info(`Scanning for stale translations${localeArg ? ` in ${localeArg}` : ""}...`);
 
-  const staleValueEntries = wantsKeyReason("identical") || wantsKeyReason("likely_english")
-    ? await findStaleTranslations(localeArg)
-    : [];
+  const staleValueEntries =
+    wantsKeyReason("identical") || wantsKeyReason("likely_english") ? await findStaleTranslations(localeArg) : [];
   const identical = wantsKeyReason("identical") ? staleValueEntries.filter((e) => e.reason === "identical") : [];
   const likelyEnglish = wantsKeyReason("likely_english")
     ? staleValueEntries.filter((e) => e.reason === "likely_english")

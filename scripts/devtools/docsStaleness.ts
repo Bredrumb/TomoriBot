@@ -112,7 +112,9 @@ export function createGitDocsSource(repoRoot: string): DocsGit {
       return results;
     },
     changedPaths(from, to) {
-      return runGit(repoRoot, ["diff", "--name-only", from, to, "--", ...DOC_PATHSPECS]).split("\n").filter(Boolean);
+      return runGit(repoRoot, ["diff", "--name-only", from, to, "--", ...DOC_PATHSPECS])
+        .split("\n")
+        .filter(Boolean);
     },
     shortRevision(revision) {
       return runGit(repoRoot, ["rev-parse", "--short", revision]).trim();
@@ -166,7 +168,10 @@ export function englishPageFor(path: string): PagePath | null {
 }
 
 /** Maps a translated path back to its page identity and locale. */
-function translatedPageFor(path: string, locales: readonly string[]): { page: string; locale: string; english: string } | null {
+function translatedPageFor(
+  path: string,
+  locales: readonly string[],
+): { page: string; locale: string; english: string } | null {
   const readme = /^\.github\/README_(.+)\.md$/.exec(path);
   if (readme && locales.includes(readme[1])) return { page: "README.md", locale: readme[1], english: "README.md" };
   const doc = /^docs\/([^/]+)\/(.+\.mdx?)$/.exec(path);
@@ -216,7 +221,10 @@ export function findDocsTreeStaleness(git: DocsGit, locales: readonly string[]):
 
   const texts = git.readMany([
     ...driftCandidates.map((candidate) => ({ revision: candidate.baseline, path: candidate.page.english })),
-    ...[...new Set(driftCandidates.map((candidate) => candidate.page.english))].map((path) => ({ revision: "HEAD", path })),
+    ...[...new Set(driftCandidates.map((candidate) => candidate.page.english))].map((path) => ({
+      revision: "HEAD",
+      path,
+    })),
   ]);
   for (const { page, locale, baseline } of driftCandidates) {
     // A missing English page at the baseline means the translation predates its source (a rename,

@@ -177,7 +177,7 @@ async function main(): Promise<void> {
     .filter((m): m is MigrationFile => m !== undefined)
     .sort((a, b) => b.version - a.version);
 
-    let targets: MigrationFile[];
+  let targets: MigrationFile[];
   if (lastCount !== undefined) {
     targets = appliedWithFiles.slice(0, lastCount);
   } else {
@@ -215,7 +215,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-    for (const t of targets) {
+  for (const t of targets) {
     log.info(`Rolling back: ${t.name}`);
     try {
       await rollbackOne(t);

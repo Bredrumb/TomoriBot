@@ -104,15 +104,24 @@ const SIDECARS: Record<string, SidecarDef> = {
     httpHealthUrl: "http://localhost:8080/healthz",
     runArgs: [
       "-d",
-      "--name", "searxng",
-      "-p", "8080:8080",
-      "-v", `${ROOT}/servers/searxng:/etc/searxng:rw`,
-      "-e", "SEARXNG_SECRET=dev-only-not-for-production",
-      "--health-cmd", "wget -q --spider http://localhost:8080/healthz || exit 1",
-      "--health-interval", "10s",
-      "--health-timeout", "3s",
-      "--health-retries", "5",
-      "--health-start-period", "15s",
+      "--name",
+      "searxng",
+      "-p",
+      "8080:8080",
+      "-v",
+      `${ROOT}/servers/searxng:/etc/searxng:rw`,
+      "-e",
+      "SEARXNG_SECRET=dev-only-not-for-production",
+      "--health-cmd",
+      "wget -q --spider http://localhost:8080/healthz || exit 1",
+      "--health-interval",
+      "10s",
+      "--health-timeout",
+      "3s",
+      "--health-retries",
+      "5",
+      "--health-start-period",
+      "15s",
       "searxng/searxng:latest",
     ],
   },
@@ -126,15 +135,22 @@ const SIDECARS: Record<string, SidecarDef> = {
     httpHealthUrl: "http://localhost:11235/health",
     runArgs: [
       "-d",
-      "--name", "crawl4ai",
-      "-p", "11235:11235",
+      "--name",
+      "crawl4ai",
+      "-p",
+      "11235:11235",
       "--shm-size=3g",
       ...(process.env.CRAWL4AI_TOKEN ? ["-e", `CRAWL4AI_API_TOKEN=${process.env.CRAWL4AI_TOKEN}`] : []),
-      "--health-cmd", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:11235/health', timeout=3).read()\"",
-      "--health-interval", "10s",
-      "--health-timeout", "5s",
-      "--health-retries", "12",
-      "--health-start-period", "45s",
+      "--health-cmd",
+      "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:11235/health', timeout=3).read()\"",
+      "--health-interval",
+      "10s",
+      "--health-timeout",
+      "5s",
+      "--health-retries",
+      "12",
+      "--health-start-period",
+      "45s",
       "unclecode/crawl4ai:latest",
     ],
   },
@@ -209,10 +225,10 @@ const SIDECARS: Record<string, SidecarDef> = {
  * if the container does not exist.
  */
 async function getContainerState(name: string): Promise<string | null> {
-  const proc = Bun.spawn(
-    ["docker", "inspect", "--format", "{{.State.Status}}", name],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+  const proc = Bun.spawn(["docker", "inspect", "--format", "{{.State.Status}}", name], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const code = await proc.exited;
   if (code !== 0) return null;
   return new Response(proc.stdout).text().then((t) => t.trim());
@@ -223,10 +239,10 @@ async function getContainerState(name: string): Promise<string | null> {
  * Returns "healthy", "unhealthy", "starting", or "" if no healthcheck is defined.
  */
 async function getContainerHealth(name: string): Promise<string> {
-  const proc = Bun.spawn(
-    ["docker", "inspect", "--format", "{{.State.Health.Status}}", name],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+  const proc = Bun.spawn(["docker", "inspect", "--format", "{{.State.Health.Status}}", name], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   await proc.exited;
   return new Response(proc.stdout).text().then((t) => t.trim());
 }
@@ -252,8 +268,7 @@ async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<vo
       try {
         const res = await fetch(httpHealthUrl, { signal: AbortSignal.timeout(3_000) });
         if (res.ok) return;
-      } catch {
-      }
+      } catch {}
     }
 
     await Bun.sleep(2_000);
@@ -261,10 +276,7 @@ async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<vo
   throw new Error(`Container "${containerName}" did not become healthy within ${timeoutMs / 1000}s.`);
 }
 
-type PythonHealthResult =
-  | { kind: "ready"; ready: boolean }
-  | { kind: "exit"; code: number }
-  | { kind: "retry" };
+type PythonHealthResult = { kind: "ready"; ready: boolean } | { kind: "exit"; code: number } | { kind: "retry" };
 
 async function probeJsonHealth(
   url: string,
@@ -351,10 +363,7 @@ async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
  * returning the handle.
  * Throws if the venv is missing (user must run setup first).
  */
-async function startPythonSidecar(
-  def: PythonSidecar,
-  flagName: string,
-): Promise<ReturnType<typeof Bun.spawn>> {
+async function startPythonSidecar(def: PythonSidecar, flagName: string): Promise<ReturnType<typeof Bun.spawn>> {
   const {
     displayName,
     venvRelPath,
@@ -371,7 +380,7 @@ async function startPythonSidecar(
   if (!existsSync(pythonExe)) {
     throw new Error(
       `${displayName} venv not found at "${join(ROOT, venvRelPath)}". ` +
-      `Run the setup instructions in the docs before using --${flagName}.`,
+        `Run the setup instructions in the docs before using --${flagName}.`,
     );
   }
 
@@ -388,7 +397,11 @@ async function startPythonSidecar(
   try {
     await waitForPythonReady(proc, def, healthTimeoutMs);
   } catch (error) {
-    try { proc.kill(); } catch { /* already exited */ }
+    try {
+      proc.kill();
+    } catch {
+      /* already exited */
+    }
     throw new Error(`${displayName} did not become ready: ${error instanceof Error ? error.message : error}`);
   }
   console.log(`${label} ${pc.green("Ready ✓")}`);

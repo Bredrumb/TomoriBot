@@ -38,9 +38,24 @@ export function resolveMaxDimension(): number {
 
 /** File extensions treated as media (lower-cased, no leading dot). */
 export const MEDIA_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "ico", "avif",
-  "mp4", "webm", "mov", "mkv",
-  "mp3", "wav", "ogg", "flac", "m4a",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "tiff",
+  "ico",
+  "avif",
+  "mp4",
+  "webm",
+  "mov",
+  "mkv",
+  "mp3",
+  "wav",
+  "ogg",
+  "flac",
+  "m4a",
 ]);
 
 /**
@@ -105,10 +120,10 @@ export function listTrackedFiles(): string[] {
 export function listUntrackedInScopePaths(prefixes: string[]): string[] {
   // --others = untracked files; --exclude-standard = respect .gitignore.
   // Passing the prefixes as pathspecs scopes the output without a repo-wide walk.
-  const result = spawnSync(
-    ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", ...prefixes],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+  const result = spawnSync(["git", "ls-files", "--others", "--exclude-standard", "-z", "--", ...prefixes], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   if (result.exitCode !== 0) {
     const stderr = result.stderr.toString().trim();
     throw new Error(`git ls-files --others failed: ${stderr || `exit code ${result.exitCode}`}`);
@@ -128,9 +143,7 @@ export function listInScopeMedia(): MediaFile[] {
   const tracked = listTrackedFiles().filter(
     (path) => SCOPE_PREFIXES.some((prefix) => path.startsWith(prefix)) && MEDIA_EXTENSIONS.has(extensionOf(path)),
   );
-  const untracked = listUntrackedInScopePaths(SCOPE_PREFIXES).filter((path) =>
-    MEDIA_EXTENSIONS.has(extensionOf(path)),
-  );
+  const untracked = listUntrackedInScopePaths(SCOPE_PREFIXES).filter((path) => MEDIA_EXTENSIONS.has(extensionOf(path)));
 
   // Merge, deduplicate by path (a file staged but not committed appears in both).
   const seen = new Set<string>();

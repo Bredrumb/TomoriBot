@@ -8,7 +8,7 @@
       "!!**/node_modules",
       "!!**/dist",
       "!!**/tokenizers",
-      "!!scripts",
+      "!!scripts/archived",
       "!!apps/docs",
       "!!apps/landing"
     ]

@@ -170,7 +170,7 @@ export function scanFileForSqlQueries(content: string): Array<{ line: number; qu
       const match = line.match(matchRegex);
       if (match) {
         queryStartLine = i + 1;
-        const splitPoint = match.index! + match[0].length;
+        const splitPoint = (match.index ?? 0) + match[0].length;
         const restOfLine = line.substring(splitPoint);
         if (restOfLine.includes("`")) {
           hits.push({ line: queryStartLine, query: restOfLine.split("`")[0].trim() });

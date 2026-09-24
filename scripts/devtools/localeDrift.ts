@@ -198,9 +198,7 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
       const locales = new Set<string>();
       const pattern = new RegExp(`^${LOCALES_ROOT}/([^/]+)/`);
 
-      for (const line of runGit(["ls-tree", "-r", "--name-only", "HEAD", "--", `${LOCALES_ROOT}/`], cwd).split(
-        "\n",
-      )) {
+      for (const line of runGit(["ls-tree", "-r", "--name-only", "HEAD", "--", `${LOCALES_ROOT}/`], cwd).split("\n")) {
         const match = pattern.exec(line.trim());
         if (match && match[1] !== DEFAULT_LOCALE) locales.add(match[1]);
       }
@@ -252,7 +250,10 @@ export function createGitDriftSource(cwd = process.cwd()): DriftGitSource {
         if (objectId) resolved.push({ objectId, key: blobKey(revision, path) });
       }
 
-      const blobs = batchReadBlobs(resolved.map((entry) => entry.objectId), cwd);
+      const blobs = batchReadBlobs(
+        resolved.map((entry) => entry.objectId),
+        cwd,
+      );
       const result = new Map<string, string>();
       for (const { objectId, key } of resolved) {
         const content = blobs.get(objectId);
@@ -539,15 +540,13 @@ export function mapLinesToBaselines(
  * every-key-is-drifted avalanche, which is the failure mode a missing baseline would otherwise
  * create.
  */
-export function analyzeLocaleDrift(input: {
-  locale: string;
-  source: DriftGitSource;
-  englishFiles: string[];
-}): { entries: DriftedEntry[]; files: DriftFileSummary[] } {
+export function analyzeLocaleDrift(input: { locale: string; source: DriftGitSource; englishFiles: string[] }): {
+  entries: DriftedEntry[];
+  files: DriftFileSummary[];
+} {
   const { locale, source, englishFiles } = input;
 
-  const relativeOf = (englishPath: string): string =>
-    englishPath.replace(`${LOCALES_ROOT}/${DEFAULT_LOCALE}/`, "");
+  const relativeOf = (englishPath: string): string => englishPath.replace(`${LOCALES_ROOT}/${DEFAULT_LOCALE}/`, "");
 
   const englishPathByFile = new Map<string, string>();
   for (const englishPath of englishFiles) englishPathByFile.set(relativeOf(englishPath), englishPath);

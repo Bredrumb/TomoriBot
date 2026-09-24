@@ -52,7 +52,7 @@ const PNG_LOSSLESS = { compressionLevel: 9, adaptiveFiltering: true } as const;
 const extOf = (p: string) => p.slice(p.lastIndexOf(".") + 1).toLowerCase();
 
 /** Encode a sharp pipeline losslessly in the file's own format; null if unsupported. */
-async function encodeLossless(pipeline: sharp.Sharp, ext: string): Promise<Buffer | null> {
+async function encodeLossless(pipeline: ReturnType<typeof sharp>, ext: string): Promise<Buffer | null> {
   switch (ext) {
     case "png":
       return await pipeline.png(PNG_LOSSLESS).toBuffer();
@@ -90,7 +90,14 @@ async function runLosslessFit(file: CompressTarget, limit: number, maxDim: numbe
   // Lossless at native resolution: preferred (full quality).
   const native = await encodeLossless(sharp(input), ext);
   if (!native) {
-    return { path: file.path, newPath: file.path, oldSize: file.size, newSize: file.size, written: false, note: `no optimizer for .${ext}` };
+    return {
+      path: file.path,
+      newPath: file.path,
+      oldSize: file.size,
+      newSize: file.size,
+      written: false,
+      note: `no optimizer for .${ext}`,
+    };
   }
 
   let chosen = native;
@@ -149,7 +156,14 @@ async function runWebp(file: CompressTarget, quality: number, dryRun: boolean): 
 
   // Already WebP, so leave it alone (re-encoding lossy WebP each run degrades it).
   if (ext === "webp") {
-    return { path: file.path, newPath: file.path, oldSize: file.size, newSize: file.size, written: false, note: "already webp" };
+    return {
+      path: file.path,
+      newPath: file.path,
+      oldSize: file.size,
+      newSize: file.size,
+      written: false,
+      note: "already webp",
+    };
   }
 
   // Convert to WebP q90 at native resolution (showcase art is viewed full-size).
@@ -229,7 +243,8 @@ async function main(): Promise<void> {
       const verb = o.written ? "→" : "would →";
       console.log(`  [↓] ${label} — ${formatBytes(o.oldSize)} ${verb} ${formatBytes(o.newSize)} (-${pct}%, ${o.note})`);
     }
-    if (o.refsUpdated?.length) console.log(`      ↳ refs ${dryRun ? "to update" : "updated"}: ${o.refsUpdated.join(", ")}`);
+    if (o.refsUpdated?.length)
+      console.log(`      ↳ refs ${dryRun ? "to update" : "updated"}: ${o.refsUpdated.join(", ")}`);
     if (o.releaseTagToUpdate) releaseTags.add(o.releaseTagToUpdate);
     // Budget only applies to lossless-fit (gate) files, not WebP release cards.
     if (o.newPath === o.path && o.newSize > limit && o.note.includes("lossless")) stillOver.push(o);

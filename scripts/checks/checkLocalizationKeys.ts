@@ -935,7 +935,7 @@ export async function extractRegisteredDescriptionKeys(): Promise<Map<string, Se
 
     // Glob yields the host separator, and these strings are printed in gate output that a
     // reader pastes back as a path, so normalize to the repo-relative POSIX form.
-    const source = `src/commands/${file.split(/[\/]/).join("/")}`;
+    const source = `src/commands/${file.split(/[/]/).join("/")}`;
 
     const pattern = /\.setDescription\s*\(\s*localizer\s*\(\s*"en-US"\s*,\s*"([a-zA-Z0-9._-]+)"/g;
     let match: RegExpExecArray | null = pattern.exec(content);
@@ -1170,10 +1170,7 @@ function resolveAssignedStringValues(content: string, variableName: string): str
     directMatch = directAssignmentPattern.exec(content);
   }
 
-  const concatAssignmentPattern = new RegExp(
-    `${safeVar}\\s*=\\s*((?:["'][^"']*["']\\s*\\+\\s*)+["'][^"']*["'])`,
-    "g",
-  );
+  const concatAssignmentPattern = new RegExp(`${safeVar}\\s*=\\s*((?:["'][^"']*["']\\s*\\+\\s*)+["'][^"']*["'])`, "g");
   let concatMatch = concatAssignmentPattern.exec(content);
   while (concatMatch !== null) {
     const expression = concatMatch[1];
@@ -1474,8 +1471,7 @@ async function extractGetLocaleSubKeysUsage(availableKeys: Set<string>): Promise
         }
         match = getSubKeysPattern.exec(content);
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return matchedKeys;
@@ -1923,7 +1919,8 @@ function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }
     const KIND_HEADERS: Record<ModalKind, string> = {
       title: "📏 MODAL TITLE USAGE VIOLATIONS (setTitle cap: ≤45 chars)",
       label: "📏 MODAL LABEL USAGE VIOLATIONS (setLabel cap: ≤45 chars)",
-      description: "📏 MODAL DESCRIPTION USAGE VIOLATIONS (setPlaceholder cap: ≤100 chars — truncated by interactionCore.ts)",
+      description:
+        "📏 MODAL DESCRIPTION USAGE VIOLATIONS (setPlaceholder cap: ≤100 chars — truncated by interactionCore.ts)",
       placeholder: "📏 MODAL PLACEHOLDER USAGE VIOLATIONS (setPlaceholder cap: ≤100 chars)",
       optionLabel: "📏 SELECT OPTION LABEL VIOLATIONS (option setLabel cap: ≤100 chars)",
       optionDescription: "📏 SELECT OPTION DESCRIPTION VIOLATIONS (option setDescription cap: ≤100 chars)",
@@ -1936,14 +1933,19 @@ function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }
       byKind.set(v.kind, list);
     }
 
-    for (const kind of ["title", "label", "description", "placeholder", "optionLabel", "optionDescription"] as ModalKind[]) {
+    for (const kind of [
+      "title",
+      "label",
+      "description",
+      "placeholder",
+      "optionLabel",
+      "optionDescription",
+    ] as ModalKind[]) {
       const list = byKind.get(kind);
       if (!list || list.length === 0) continue;
       console.log(`\n${KIND_HEADERS[kind]}:`);
       console.log("-".repeat(60));
-      for (const { key, value, length, maxLength, locale, files } of list.sort((a, b) =>
-        a.key.localeCompare(b.key),
-      )) {
+      for (const { key, value, length, maxLength, locale, files } of list.sort((a, b) => a.key.localeCompare(b.key))) {
         const filesPreview = Array.from(files).slice(0, 2).join(", ") + (files.size > 2 ? "..." : "");
         console.log(`  ⚠️  ${key} [${locale}] (cap ${maxLength})`);
         console.log(`     ❌ Too long: "${value}" (${length} characters)`);
@@ -1972,9 +1974,7 @@ function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }
       if (!list || list.length === 0) continue;
       console.log(`\n${MESSAGE_KIND_HEADERS[kind]}:`);
       console.log("-".repeat(60));
-      for (const { key, value, length, maxLength, locale, files } of list.sort((a, b) =>
-        a.key.localeCompare(b.key),
-      )) {
+      for (const { key, value, length, maxLength, locale, files } of list.sort((a, b) => a.key.localeCompare(b.key))) {
         const filesPreview = Array.from(files).slice(0, 2).join(", ") + (files.size > 2 ? "..." : "");
         console.log(`  ⚠️  ${key} [${locale}] (cap ${maxLength})`);
         console.log(`     ❌ Too long: "${value}" (${length} characters)`);
@@ -1993,7 +1993,9 @@ function displayResults(results: AnalysisResult, { verboseOutput, rerunCommand }
       console.log(`  ⚠️  ${key} [${locale}]`);
       console.log(`     ❌ ${status}: "${value}" (${length} characters)`);
       if (files && files.size > 0) {
-        console.log(`     📁 Registered from: ${Array.from(files).slice(0, 2).join(", ")}${files.size > 2 ? "..." : ""}`);
+        console.log(
+          `     📁 Registered from: ${Array.from(files).slice(0, 2).join(", ")}${files.size > 2 ? "..." : ""}`,
+        );
       }
     }
   }

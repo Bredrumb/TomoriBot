@@ -34,7 +34,7 @@ export interface LinkValidationSummary {
  * Slugs a markdown heading to match Starlight / GitHub anchor generation.
  */
 export function slugifyHeading(heading: string): string {
-  let clean = heading
+  const clean = heading
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // markdown links [text](url) -> text
     .replace(/[*_~`]/g, "") // formatting
     .replace(/<[^>]+>/g, "") // html tags
@@ -427,6 +427,8 @@ export async function reportLocaleLinks(): Promise<boolean> {
     log.error(`Locale link check FAILED: ${summary.findings.length} broken link(s) or fragment(s)`);
     return false;
   }
-  log.success(`Locale link check PASSED: all ${summary.validLinksCount} project-owned links and heading fragments resolve`);
+  log.success(
+    `Locale link check PASSED: all ${summary.validLinksCount} project-owned links and heading fragments resolve`,
+  );
   return true;
 }

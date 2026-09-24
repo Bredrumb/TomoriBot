@@ -18,7 +18,6 @@ function resolveBackupsRoot(): string {
 // (webhook avatar URL, trigger words, server memories) that /persona import does not
 // consume. Organized into per-server subdirectories.
 
-
 interface ServerRow {
   server_id: number;
   server_disc_id: string;
@@ -60,7 +59,6 @@ interface BundleManifest {
   servers: ServerManifest[];
 }
 
-
 /** Retrieve all registered servers. */
 async function getAllServers(): Promise<ServerRow[]> {
   return await sql<ServerRow[]>`
@@ -99,7 +97,6 @@ async function getMemoriesForPersona(serverId: number, lineageId: number): Promi
   `;
   return rows.map((r) => r.content);
 }
-
 
 async function runBackup(): Promise<void> {
   log.section("PERSONA BACKUP");

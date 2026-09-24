@@ -130,9 +130,7 @@ export async function analyzePlaceholderParity(targetLocale?: string): Promise<P
       throw new Error(`Invalid Discord locale code: ${targetLocale}`);
     }
     if (targetLocale === "en-US") {
-      throw new Error(
-        `"en-US" is the English source template and cannot be checked as a target translation.`,
-      );
+      throw new Error(`"en-US" is the English source template and cannot be checked as a target translation.`);
     }
     const targetDir = join(process.cwd(), "src", "locales", targetLocale);
     if (!existsSync(targetDir)) {
@@ -159,9 +157,7 @@ export async function analyzePlaceholderParity(targetLocale?: string): Promise<P
       targetLocaleObj = await loadMergedLocale(locale);
     } catch (error) {
       if (targetLocale) {
-        throw new Error(
-          `Failed to load locale "${locale}": ${error instanceof Error ? error.message : String(error)}`,
-        );
+        throw new Error(`Failed to load locale "${locale}": ${error instanceof Error ? error.message : String(error)}`);
       }
       continue;
     }
@@ -231,6 +227,8 @@ export async function reportPlaceholderParity(): Promise<boolean> {
     );
     return true;
   }
-  log.error(`Placeholder parity check FAILED: ${summary.errors.length} error(s), ${summary.warnings.length} warning(s)`);
+  log.error(
+    `Placeholder parity check FAILED: ${summary.errors.length} error(s), ${summary.warnings.length} warning(s)`,
+  );
   return false;
 }

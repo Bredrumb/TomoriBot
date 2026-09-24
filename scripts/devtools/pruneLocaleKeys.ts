@@ -157,10 +157,7 @@ async function loadAllowlist(): Promise<{ preservedPrefixes: string[]; preserved
   }
 }
 
-function isAllowlisted(
-  key: string,
-  allowlist: { preservedPrefixes: string[]; preservedKeys: Set<string> },
-): boolean {
+function isAllowlisted(key: string, allowlist: { preservedPrefixes: string[]; preservedKeys: Set<string> }): boolean {
   if (allowlist.preservedKeys.has(key)) return true;
   for (const prefix of allowlist.preservedPrefixes) {
     if (key === prefix || key.startsWith(`${prefix}.`)) return true;

@@ -36,22 +36,22 @@ const directorySize = 16 * count;
 let offset = headerSize + directorySize;
 
 const header = Buffer.alloc(headerSize);
-header.writeUInt16LE(0, 0);     // reserved
-header.writeUInt16LE(1, 2);     // type: ICO
+header.writeUInt16LE(0, 0); // reserved
+header.writeUInt16LE(1, 2); // type: ICO
 header.writeUInt16LE(count, 4); // image count
 
 const directory = Buffer.alloc(directorySize);
 for (let i = 0; i < count; i++) {
   const size = SIZES[i];
   const entry = i * 16;
-  directory.writeUInt8(size === 256 ? 0 : size, entry);      // width  (0 = 256 in ICO spec)
-  directory.writeUInt8(size === 256 ? 0 : size, entry + 1);  // height (0 = 256 in ICO spec)
-  directory.writeUInt8(0, entry + 2);                         // color count (0 = no palette)
-  directory.writeUInt8(0, entry + 3);                         // reserved
-  directory.writeUInt16LE(1, entry + 4);                      // color planes
-  directory.writeUInt16LE(32, entry + 6);                     // bits per pixel
-  directory.writeUInt32LE(layers[i].length, entry + 8);       // image data size
-  directory.writeUInt32LE(offset, entry + 12);                // offset from file start
+  directory.writeUInt8(size === 256 ? 0 : size, entry); // width  (0 = 256 in ICO spec)
+  directory.writeUInt8(size === 256 ? 0 : size, entry + 1); // height (0 = 256 in ICO spec)
+  directory.writeUInt8(0, entry + 2); // color count (0 = no palette)
+  directory.writeUInt8(0, entry + 3); // reserved
+  directory.writeUInt16LE(1, entry + 4); // color planes
+  directory.writeUInt16LE(32, entry + 6); // bits per pixel
+  directory.writeUInt32LE(layers[i].length, entry + 8); // image data size
+  directory.writeUInt32LE(offset, entry + 12); // offset from file start
   offset += layers[i].length;
 }
 

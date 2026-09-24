@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import { Glob } from "bun";
 
 function escapeRegExp(string: string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
@@ -57,7 +56,7 @@ async function main() {
       const contentStr = hasBOM ? buffer.toString("utf8", 3) : buffer.toString("utf8");
 
       let fileReplacements = 0;
-      const newContent = contentStr.replace(oldPathRegex, (match) => {
+      const newContent = contentStr.replace(oldPathRegex, () => {
         fileReplacements++;
         return `/${newPath}`;
       });
