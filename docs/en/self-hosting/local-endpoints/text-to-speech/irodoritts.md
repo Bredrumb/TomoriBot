@@ -124,6 +124,60 @@ TomoriBot sends this prompt as `instruct`; the Irodori wrapper maps it to the v4
 
 TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `script_markup: emoji`, Unicode emojis are preserved for Irodori's text conditioning.
 
+### Emoji style controls
+
+IrodoriTTS supports emoji annotations in input text to influence sound effects, speaking styles, and emotional expressions. With TomoriBot's `Script Markup Style` set to `Emoji`, these Unicode emojis are preserved and sent to Irodori.
+
+| Emoji | Meaning / emotion / style |
+| --- | --- |
+| 👂 | Whisper, sounds close to the ear |
+| 😮‍💨 | Breath, sigh, sleeping breath |
+| ⏸️ | Pause, silence |
+| 🤭 | Chuckle, giggle, suppressed laugh |
+| 🥵 | Panting, moan, groan |
+| 📢 | Echo, reverb |
+| 😏 | Teasing, playfully sweet / coaxing |
+| 🥺 | Trembling voice, timidly / uncertainly |
+| 🌬️ | Shortness of breath, heavy breathing |
+| 😮 | Gasp |
+| 👅 | Licking sound, chewing sound, wet sound |
+| 💋 | Lip smack / lip noise |
+| 🫶 | Gently, tenderly |
+| 😭 | Sobbing, crying, sorrowfully / sadly |
+| 😱 | Scream, shout, shriek |
+| 😪 | Sleepily, sluggishly / languidly |
+| 😴 | Sleep talking, snoring |
+| ⏩ | Fast-speaking, rapid-fire, hurriedly |
+| 📞 | Over the phone, through a speaker |
+| 🐢 | Slowly |
+| 🥤 | Gulp, swallowing sound |
+| 🤧 | Coughing, sniffling, sneeze, clearing throat |
+| 😒 | Tutting, clicking tongue |
+| 😰 | Panicked, agitated, nervous, stuttering |
+| 😆 | Joyfully, happily |
+| 💥 | With force / momentum, forcefully |
+| 😠 | Angry, displeased, sulking |
+| 😲 | Surprise, awe / exclamation |
+| 🥱 | Yawn |
+| 😖 | Painfully, agonizingly |
+| 😟 | Anxiously, worriedly |
+| 🫣 | Shyly, bashfully |
+| 🙄 | Exasperatedly, rolling eyes |
+| 😊 | Cheerfully, gladly |
+| 😎 | Confidently, proudly |
+| 👌 | Backchanneling, sound of agreement |
+| 🙏 | Pleadingly, begging |
+| 🥴 | Drunkenly |
+| 🎵 | Humming |
+| 🤐 | Muffled (mouth covered) |
+| 😌 | Relieved, contentedly |
+| 🤔 | Questioning voice, wondering |
+| 💪 | With effort, strongly |
+| 👃 | Sniffing / smelling sound |
+| 📖 | Narration, monologue |
+
+Repeating the same emoji can strengthen its effect. Emoji control is not perfectly consistent, so treat these as style cues rather than guaranteed output. See the [official IrodoriTTS emoji annotations](https://huggingface.co/Aratako/Irodori-TTS-v4.1-Small/blob/main/EMOJI_ANNOTATIONS.md) for the upstream list and future updates.
+
 ## Long voice messages
 
 Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the server does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.

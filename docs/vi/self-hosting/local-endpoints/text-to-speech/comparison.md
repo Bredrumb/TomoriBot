@@ -64,7 +64,7 @@ Thời gian đo lường báo cáo cả **toàn bộ thời gian tạo** (tổng
 - **Chọn [CosyVoice 3](/vi/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** nếu bạn cần sao chép zero-shot đa ngôn ngữ chất lượng cao với chỉ dẫn truyền đạt bằng ngôn ngữ tự nhiên (`"Speak in English with excitement"`).
 - **Chọn [VoxCPM2](/vi/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** nếu bạn cần hỗ trợ đa ngôn ngữ toàn diện (30 ngôn ngữ), Ultimate Cloning có hỗ trợ của bản phiên âm, và thiết kế giọng nói tự nhiên.
 - **Chọn [Qwen3-TTS](/vi/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** nếu bạn muốn sao chép đa ngôn ngữ rõ ràng với khả năng thiết kế giọng nói linh hoạt và mức độ bám sát prompt ổn định.
-- **Chọn [IrodoriTTS](/vi/self-hosting/local-endpoints/text-to-speech/irodoritts/)** nếu bot của bạn nói tiếng Nhật. Đây là engine thuần tiếng Nhật duy nhất được đo lường (~4s, 0.47× RTF trên Windows) và phân tích cú pháp Unicode emoji gốc (`😊`, `😢`, `😡`) để điều chỉnh cảm xúc của nhân vật.
+- **Chọn [IrodoriTTS](/vi/self-hosting/local-endpoints/text-to-speech/irodoritts/)** nếu bot của bạn nói tiếng Nhật. Đây là engine thuần tiếng Nhật duy nhất được đo lường (~4s, 0.47× RTF trên Windows) và phân tích cú pháp Unicode emoji gốc (`😊`, `😭`, `😠`) để điều chỉnh cảm xúc của nhân vật.
 
 ---
 

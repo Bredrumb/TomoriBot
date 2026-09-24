@@ -65,7 +65,7 @@ Os tempos informam o **tempo total de geração** (segundos de relógio desde a 
 - **Escolha o [CosyVoice 3](/pt-BR/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)** se você precisa de clonagem zero-shot multilíngue de alta qualidade com direção de entrega em linguagem natural (`"Speak in English with excitement"`).
 - **Escolha o [VoxCPM2](/pt-BR/self-hosting/local-endpoints/text-to-speech/voxcpm2/)** se você precisa de suporte multilíngue abrangente (30 idiomas), Ultimate Cloning assistida por transcrição e design de voz natural.
 - **Escolha o [Qwen3-TTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/qwen3tts/)** se você quer clonagem limpa em vários idiomas, com design de voz flexível e boa aderência ao prompt.
-- **Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** se o seu bot fala japonês. Foi o único motor exclusivo para japonês medido (~4s, 0.47× RTF no Windows) e interpreta nativamente emojis Unicode (`😊`, `😢`, `😡`) para modular a emoção da personagem.
+- **Escolha o [IrodoriTTS](/pt-BR/self-hosting/local-endpoints/text-to-speech/irodoritts/)** se o seu bot fala japonês. Foi o único motor exclusivo para japonês medido (~4s, 0.47× RTF no Windows) e interpreta nativamente emojis Unicode (`😊`, `😭`, `😠`) para modular a emoção da personagem.
 
 ---
 
