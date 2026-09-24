@@ -165,14 +165,14 @@ docker compose up --build
 
 之後要再啟動時，只要沒有改過程式碼或相依套件，執行 `docker compose up` 就夠了。
 
-### C. 選用的 sidecar 與伺服器
+### C. 選用的本機伺服器
 
-不論用哪種安裝方式，TomoriBot 都支援自行選擇啟用的 sidecar 與伺服器服務，用來強化她的工具並加入本機監控：用於網頁搜尋的 SearXNG、用於瀏覽器渲染頁面抓取的 Crawl4AI，以及本機 TTS/STT 語音伺服器。
+不論用哪種安裝方式，TomoriBot 都支援自行選擇啟用的本機伺服器，用來強化她的工具並加入本機監控：用於網頁搜尋的 SearXNG、用於瀏覽器渲染頁面抓取的 Crawl4AI，以及本機 TTS/STT 語音伺服器。
 
 **使用本機 Bun 安裝（A）時**，改用 `bun run launch` 取代 `bun run dev`，執行範例：
 
 ```sh
-# 搭配 SearXNG 與 Crawl4AI 的 Docker sidecar
+# 搭配 SearXNG 與 Crawl4AI 的 Docker 容器
 bun run launch --searxng --crawl4ai
 
 # 依照語音設定文件完成後，搭配本機 TTS 伺服器
@@ -186,9 +186,9 @@ bun run launch --help
 
 可用旗標：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`、`--help`
 
-**Ctrl+C** 會停止 bot 與所有 Python sidecar 程序。Docker 容器（`--searxng`、`--crawl4ai`）刻意保持執行，結束時請用 `docker stop searxng` / `docker stop crawl4ai` 手動停止。
+**Ctrl+C** 會停止 bot 與所有 Python 伺服器程序。Docker 容器（`--searxng`、`--crawl4ai`）刻意保持執行，結束時請用 `docker stop searxng` / `docker stop crawl4ai` 手動停止。
 
-**使用 Docker Compose（B）時**，sidecar 改為透過 Compose profile 選擇性啟用：
+**使用 Docker Compose（B）時**，本機伺服器改為透過 Compose profile 選擇性啟用：
 
 ```sh
 # + SearXNG 網頁搜尋（自架的元搜尋引擎）
@@ -203,8 +203,8 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 完整設定細節請見以下指南：
 
-- **[SearXNG 網頁搜尋 sidecar](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/setup-searxng/)** - 自架的元搜尋引擎執行個體，讓 `web_search` 工具不受單一引擎的 API 限制。
-- **[Crawl4AI sidecar](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/setup-crawl4ai/)** - 瀏覽器渲染的 sidecar，為 `fetch_url` 工具抓取並處理大量 JavaScript 的網頁。
+- **[SearXNG 網頁搜尋](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/setup-searxng/)** - 自架的元搜尋引擎執行個體，讓 `web_search` 工具不受單一引擎的 API 限制。
+- **[Crawl4AI](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/setup-crawl4ai/)** - 瀏覽器渲染的伺服器，為 `fetch_url` 工具抓取並處理大量 JavaScript 的網頁。
 - **[文字轉語音](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/text-to-speech/)** / **[語音轉文字](https://docs.tomoribot.app/zh-TW/self-hosting/local-endpoints/speech-to-text/)** - 供 TomoriBot 語音訊息使用的 Python 語音伺服器；需要事先設定一次它們的 venv。
 
 ### 更新 TomoriBot

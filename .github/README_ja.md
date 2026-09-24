@@ -165,14 +165,14 @@ docker compose up --build
 
 以降の起動では、コードや依存関係を変更していない限り`docker compose up`だけで十分です。
 
-### C. オプションのサイドカー・サーバー
+### C. オプションのローカルサーバー
 
-TomoriBotは、どちらのセットアップ方法でも併用できるオプトイン方式のサイドカー/サーバーサービスをサポートしており、ツールの強化やローカルモニタリングに利用できます：Web検索用のSearXNG、ブラウザレンダリングによるページ取得用のCrawl4AI、ローカルTTS/STT音声サーバーが含まれます。
+TomoriBotは、どちらのセットアップ方法でも併用できるオプトイン方式のローカルサーバーをサポートしており、ツールの強化やローカルモニタリングに利用できます：Web検索用のSearXNG、ブラウザレンダリングによるページ取得用のCrawl4AI、ローカルTTS/STT音声サーバーが含まれます。
 
 **ローカルBunセットアップ（A）の場合**は、`bun run dev`の代わりに`bun run launch`を使用します。実行例：
 
 ```sh
-# SearXNGとCrawl4AIのDockerサイドカーを併用
+# SearXNGとCrawl4AIのDockerコンテナを併用
 bun run launch --searxng --crawl4ai
 
 # 音声セットアップ手順に従った後、ローカルTTSサーバーを併用
@@ -184,9 +184,9 @@ bun run launch --help
 
 利用可能なフラグ： `--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`、`--help`
 
-**Ctrl+C**でボットとPython製サイドカープロセスが停止します。Dockerコンテナ（`--searxng``--crawl4ai`）は意図的に起動したまま残されます。終了時は`docker stop searxng` / `docker stop crawl4ai`で手動停止してください。
+**Ctrl+C**でボットとPython製サーバープロセスが停止します。Dockerコンテナ（`--searxng``--crawl4ai`）は意図的に起動したまま残されます。終了時は`docker stop searxng` / `docker stop crawl4ai`で手動停止してください。
 
-**Docker Composeセットアップ（B）の場合**は、代わりにComposeプロファイルでサイドカーをオプトインします：
+**Docker Composeセットアップ（B）の場合**は、代わりにComposeプロファイルでローカルサーバーをオプトインします：
 
 ```sh
 # + SearXNG Web検索（自ホスト型メタ検索）
@@ -201,8 +201,8 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 詳細なセットアップ手順については、以下のガイドを参照してください：
 
-- **[SearXNG Web検索サイドカー](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-searxng/)** - `web_search`ツールで単一エンジンのAPI制限を回避するための自ホスト型メタ検索インスタンス。
-- **[Crawl4AIサイドカー](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-crawl4ai/)** - `fetch_url`ツールでJavaScriptの多いWebページを取得・処理するためのブラウザレンダリングサイドカー。
+- **[SearXNG Web検索](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-searxng/)** - `web_search`ツールで単一エンジンのAPI制限を回避するための自ホスト型メタ検索インスタンス。
+- **[Crawl4AI](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/setup-crawl4ai/)** - `fetch_url`ツールでJavaScriptの多いWebページを取得・処理するためのブラウザレンダリングサーバー。
 - **[テキスト読み上げ（TTS）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/text-to-speech/)** / **[音声認識（STT）](https://docs.tomoribot.app/ja/self-hosting/local-endpoints/speech-to-text/)** - TomoriBotのボイスメッセージ用のPython製音声サーバー。事前に一度venvのセットアップが必要です。
 
 ### TomoriBotの更新

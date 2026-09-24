@@ -81,7 +81,7 @@ TomoriBot 具備代理能力：聊天之外，她可以呼叫**工具**來搜尋
 
 - 設定了 Brave API 金鑰時，**Brave** 會優先執行（用 `/providers` 設定）；它會加入圖片、影片與新聞搜尋。⚠️ 請在 Brave 儀表板設定 $5 使用上限，以免收到意外的帳單。
 - 沒有設定金鑰時，**DuckDuckGo** 是預設選項，遇到速率限制或沒有結果時會串接至 **IAsk**。
-- **SearXNG** 與 **Crawl4AI** 是選用的自架 sidecar，可以解鎖更多分類與瀏覽器渲染的頁面抓取，請看[自架](/zh-TW/self-hosting/)。
+- **SearXNG** 與 **Crawl4AI** 是選用的自架伺服器，可以解鎖更多分類與瀏覽器渲染的頁面抓取，請看[自架](/zh-TW/self-hosting/)。
 
 要讀取特定頁面時，她使用 `fetch_url`。NovelAI 不支援這項功能。
 

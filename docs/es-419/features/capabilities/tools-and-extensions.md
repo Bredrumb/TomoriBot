@@ -113,7 +113,7 @@ dirige cada llamada por una cadena de motores y devuelve el primer éxito:
   $5 en el panel de Brave para evitar cargos inesperados.
 - **DuckDuckGo** es el predeterminado cuando no hay clave establecida, y pasa a **IAsk** en caso de
   límites de frecuencia o resultados vacíos.
-- **SearXNG** y **Crawl4AI** son sidecars opcionales con autoalojamiento que desbloquean más
+- **SearXNG** y **Crawl4AI** son servidores opcionales con autoalojamiento que desbloquean más
   categorías y obtención de páginas renderizadas por navegador; consulta
   [Autoalojamiento](/es-419/self-hosting/).
 

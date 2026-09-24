@@ -12,11 +12,11 @@ config();
 //
 //   bun run launch [--searxng] [--crawl4ai] [--qwen3tts] [--chatterbox] [--irodoritts] [--voxcpm2] [--fishs2] [--cosyvoice3] [--moss]
 //
-//   Starts requested sidecar services, waits for them to be ready, then
+//   Starts requested local servers, waits for them to be ready, then
 //   launches the bot in watch mode (equivalent to `bun run dev`).
 //
-//   Docker sidecars are started via docker inspect/start/run and polled until
-//   their healthcheck reports "healthy". Python sidecars are spawned directly
+//   Docker-backed servers are started via docker inspect/start/run and polled until
+//   their healthcheck reports "healthy". Python servers are spawned directly
 //   from their pre-built venv and polled through their JSON health endpoint.
 //
 //   Press Ctrl+C to stop everything.
@@ -28,7 +28,7 @@ const flags = new Set(argv.filter((a) => a.startsWith("--")).map((a) => a.slice(
 
 if (flags.has("help") || flags.has("h")) {
   console.log(`
-${pc.bold("bun run launch")} — start sidecars + TomoriBot in watch mode
+${pc.bold("bun run launch")} — start local servers + TomoriBot in watch mode
 
 ${pc.bold("Usage:")}
   bun run launch [options]
@@ -57,7 +57,7 @@ ${pc.bold("Examples:")}
   process.exit(0);
 }
 
-interface DockerSidecar {
+interface DockerLocalServer {
   kind: "docker";
   /** docker container name */
   containerName: string;
@@ -75,7 +75,7 @@ interface DockerSidecar {
   httpHealthUrl?: string;
 }
 
-interface PythonSidecar {
+interface PythonLocalServer {
   kind: "python";
   displayName: string;
   /** path to the .venv directory, relative to ROOT */
@@ -90,10 +90,10 @@ interface PythonSidecar {
   readyStatuses?: readonly string[];
 }
 
-type SidecarDef = DockerSidecar | PythonSidecar;
+type LocalServerDef = DockerLocalServer | PythonLocalServer;
 
-/** Registry of all supported --flag → sidecar definitions. */
-const SIDECARS: Record<string, SidecarDef> = {
+/** Registry of all supported --flag → local server definitions. */
+const LOCAL_SERVERS: Record<string, LocalServerDef> = {
   searxng: {
     kind: "docker",
     containerName: "searxng",
@@ -254,7 +254,7 @@ async function getContainerHealth(name: string): Promise<string> {
  * (e.g. an existing container created before --health-cmd was added to runArgs).
  * Throws on timeout or a Docker "unhealthy" status.
  */
-async function waitForHealthy(def: DockerSidecar, timeoutMs: number): Promise<void> {
+async function waitForHealthy(def: DockerLocalServer, timeoutMs: number): Promise<void> {
   const { containerName, httpHealthUrl } = def;
   const deadline = Date.now() + timeoutMs;
 
@@ -294,7 +294,7 @@ async function probeJsonHealth(url: string, readyStatuses: readonly string[]): P
 
 async function waitForPythonReady(
   proc: ReturnType<typeof Bun.spawn>,
-  def: PythonSidecar,
+  def: PythonLocalServer,
   timeoutMs: number,
 ): Promise<void> {
   const readyStatuses = def.readyStatuses ?? ["ok"];
@@ -318,11 +318,11 @@ async function waitForPythonReady(
 }
 
 /**
- * Ensures a Docker sidecar is running. Creates the container via "docker run"
+ * Ensures a Docker-backed local server is running. Creates the container via "docker run"
  * if it doesn't exist, or resumes it with "docker start" if it does.
  * Waits for the container's healthcheck to pass before returning.
  */
-async function ensureDockerSidecar(def: DockerSidecar): Promise<void> {
+async function ensureDockerLocalServer(def: DockerLocalServer): Promise<void> {
   const { containerName, healthTimeoutMs = 120_000 } = def;
   const label = pc.cyan(`[${containerName}]`);
 
@@ -373,11 +373,11 @@ function terminateProcess(proc: ReturnType<typeof Bun.spawn>): void {
 }
 
 /**
- * Spawns a Python sidecar server from its pre-built venv and waits for JSON readiness before
+ * Spawns a Python local server from its pre-built venv and waits for JSON readiness before
  * returning the handle.
  * Throws if the venv is missing (user must run setup first).
  */
-async function startPythonSidecar(def: PythonSidecar, flagName: string): Promise<ReturnType<typeof Bun.spawn>> {
+async function startPythonLocalServer(def: PythonLocalServer, flagName: string): Promise<ReturnType<typeof Bun.spawn>> {
   const { displayName, venvRelPath, scriptRelPath, scriptArgs = [] } = def;
   const healthTimeoutMs = resolvePositiveTimeoutMs(
     process.env.TOMORI_TTS_STARTUP_TIMEOUT_MS,
@@ -415,8 +415,8 @@ async function startPythonSidecar(def: PythonSidecar, flagName: string): Promise
 }
 
 async function main(): Promise<void> {
-  const requested = [...flags].filter((f) => f in SIDECARS);
-  const unknown = [...flags].filter((f) => !(f in SIDECARS) && f !== "help" && f !== "h");
+  const requested = [...flags].filter((f) => f in LOCAL_SERVERS);
+  const unknown = [...flags].filter((f) => !(f in LOCAL_SERVERS) && f !== "help" && f !== "h");
 
   if (unknown.length > 0) {
     console.warn(pc.yellow(`Unknown flags: ${unknown.map((f) => `--${f}`).join(", ")} — ignoring.`));
@@ -425,16 +425,16 @@ async function main(): Promise<void> {
   const childProcesses: ReturnType<typeof Bun.spawn>[] = [];
 
   for (const flag of requested) {
-    const def = SIDECARS[flag];
+    const def = LOCAL_SERVERS[flag];
     try {
       if (def.kind === "docker") {
-        await ensureDockerSidecar(def);
+        await ensureDockerLocalServer(def);
       } else {
-        const proc = await startPythonSidecar(def, flag);
+        const proc = await startPythonLocalServer(def, flag);
         childProcesses.push(proc);
       }
     } catch (err) {
-      console.error(pc.red(`Failed to start sidecar "${flag}": ${err instanceof Error ? err.message : err}`));
+      console.error(pc.red(`Failed to start local server "${flag}": ${err instanceof Error ? err.message : err}`));
       for (const p of childProcesses) terminateProcess(p);
       process.exit(1);
     }

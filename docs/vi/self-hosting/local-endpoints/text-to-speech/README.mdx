@@ -56,7 +56,7 @@ Mỗi máy chủ đọc biến cổng riêng (`CHATTERBOX_PORT`, `QWEN3TTS_PORT`
 3. Cung cấp bản phiên âm khớp khi engine hưởng lợi từ điều đó. Fish S2 Pro chuyển tiếp bản phiên âm tham chiếu đã lưu vào yêu cầu sao chép, và VoxCPM2 sử dụng bản phiên âm đó cho Ultimate Cloning có độ trung thực cao hơn.
 4. Mở `/config` dưới phần Persona > Voice, sau đó chọn persona và mẫu giọng nói.
 
-Giới hạn tải lên 130 giây là của TomoriBot, không phải của engine nào. Mỗi sidecar áp dụng giới hạn âm thanh tham chiếu riêng khi clip được gửi đi, và các giới hạn đó khác nhau đủ nhiều để một clip phù hợp với engine này có thể bị engine khác từ chối hoặc chỉ dùng một phần. Hãy xem hướng dẫn của engine trước khi tải lên một clip dài.
+Giới hạn tải lên 130 giây là của TomoriBot, không phải của engine nào. Mỗi engine áp dụng giới hạn âm thanh tham chiếu riêng khi clip được gửi đi, và các giới hạn đó khác nhau đủ nhiều để một clip phù hợp với engine này có thể bị engine khác từ chối hoặc chỉ dùng một phần. Hãy xem hướng dẫn của engine trước khi tải lên một clip dài.
 
 Giới hạn kích thước tải lên và giới hạn thời lượng là độc lập với nhau, và việc kiểm tra kích thước chạy trước. WAV không nén ở dạng stereo 44.1 kHz tốn khoảng 10 MB mỗi phút, nên một clip 130 giây xuất từ DAW có thể vào khoảng 22 MB và bị từ chối vì quá lớn, trong khi bản xuất nén của cùng clip đó lại vừa vặn dễ dàng. `SPEECH_SAMPLE_MAX_MB` nâng giới hạn kích thước đó (mặc định là 10 MB). Với một clip tham chiếu dài, hãy xuất dưới dạng FLAC, MP3 hoặc OGG thay vì WAV: TomoriBot chuyển đổi mọi định dạng được chấp nhận sang WAV đơn kênh ở 22.05 kHz trước khi lưu, nên bản tải lên nén không tốn gì về chất lượng.
 
@@ -72,4 +72,4 @@ CosyVoice 3 cũng sử dụng Script Markup **Plain**. Model này ánh xạ các
 
 ## So sánh engine
 
-Để xem các benchmark độ trễ thực nghiệm đối chiếu cạnh nhau, nghe phát mẫu âm thanh và ma trận tính năng chi tiết so sánh tất cả các sidecar được hỗ trợ, hãy xem **[So sánh các engine TTS](/vi/self-hosting/local-endpoints/text-to-speech/comparison/)**.
+Để xem các benchmark độ trễ thực nghiệm đối chiếu cạnh nhau, nghe phát mẫu âm thanh và ma trận tính năng chi tiết so sánh tất cả các engine được hỗ trợ, hãy xem **[So sánh các engine TTS](/vi/self-hosting/local-endpoints/text-to-speech/comparison/)**.

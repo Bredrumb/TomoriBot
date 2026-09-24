@@ -54,15 +54,15 @@ import { CardGrid, LinkCard } from "@astrojs/starlight/components";
     description="运行一个本地 MCP 服务器，用你自己的工具扩展 TomoriBot（仅限自部署实例）。" />
 </CardGrid>
 
-## 用 `bun run launch` 启动边车服务
+## 用 `bun run launch` 启动本地服务器
 
-不用手动逐个启动边车服务，改用 `bun run launch`：它会启动你要求的边车服务，等它们就绪，然后自动以 watch 模式启动 bot：
+不用手动逐个启动本地服务器，改用 `bun run launch`：它会启动你要求的服务器，等它们就绪，然后自动以 watch 模式启动 bot：
 
 ```sh
 # 只启动 bot，与 bun run dev 完全相同
 bun run launch
 
-# 带上 SearXNG 与 Crawl4AI 这两个 Docker 边车服务
+# 带上 SearXNG 与 Crawl4AI 这两个 Docker 容器
 bun run launch --searxng --crawl4ai
 
 # 带上本地 TTS 服务器（必须先建好 venv，见下面的语音合成指南）
@@ -77,6 +77,6 @@ bun run launch --help
 
 可用参数：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`
 
-Docker 边车服务（`--searxng`、`--crawl4ai`）在首次运行时创建，之后复用。Python 的 TTS 与 STT 边车服务需要事先建好各自的 venv；详见[语音合成](/zh-CN/self-hosting/local-endpoints/text-to-speech/)和[语音识别](/zh-CN/self-hosting/local-endpoints/speech-to-text/)下的各篇配置指南。
+跑在 Docker 里的服务器（`--searxng`、`--crawl4ai`）在首次运行时创建，之后复用。Python 的 TTS 与 STT 服务器需要事先建好各自的 venv；详见[语音合成](/zh-CN/self-hosting/local-endpoints/text-to-speech/)和[语音识别](/zh-CN/self-hosting/local-endpoints/speech-to-text/)下的各篇配置指南。
 
-**Ctrl+C** 会停掉 bot 和所有 Python 边车进程。Docker 容器会被有意留在运行状态，用完请用 `docker stop searxng` / `docker stop crawl4ai` 手动停掉它们。
+**Ctrl+C** 会停掉 bot 和所有 Python 服务器进程。Docker 容器会被有意留在运行状态，用完请用 `docker stop searxng` / `docker stop crawl4ai` 手动停掉它们。

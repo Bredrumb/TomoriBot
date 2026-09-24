@@ -1,4 +1,4 @@
-# SearXNG Sidecar
+# SearXNG Local Server
 
 Self-hosted [SearXNG](https://docs.searxng.org/) instance fronted by the TomoriBot
 web-search engine chain (`Brave → SearXNG → DuckDuckGo → IAsk`).
@@ -10,7 +10,7 @@ breakage.
 
 TomoriBot exposes the common categories (`text`, `image`, `video`, `news`) and
 SearXNG-only verticals (`science`, `it`, `files`, `music`) through the unified
-`web_search` tool. The specialty categories only work when this sidecar is
+`web_search` tool. The specialty categories only work when this server is
 configured and SearXNG has active engines for that category.
 
 ## Files
@@ -18,7 +18,7 @@ configured and SearXNG has active engines for that category.
 - `settings.yml` — SearXNG configuration. Mounted read-only at
   `/etc/searxng/settings.yml`. References `${SEARXNG_SECRET}` which the
   container substitutes from env at startup.
-- `limiter.toml` — Disables SearXNG's bot detection. Safe because the sidecar
+- `limiter.toml` — Disables SearXNG's bot detection. Safe because the container
   only listens on the private container network.
 
 ## Local development

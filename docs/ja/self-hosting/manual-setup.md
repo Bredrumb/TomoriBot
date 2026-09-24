@@ -61,7 +61,7 @@ docker run -d --name tomori-db \
 :::
 
 オプションの調整値は `.env.optional.example` にあります。
-カスタマイズしたい値（制限、タイムアウト、機能トグル、サイドカーURLなど）をコピーしてください。
+カスタマイズしたい値（制限、タイムアウト、機能トグル、ローカルサーバーURLなど）をコピーしてください。
 
 ## 3. 実行
 
@@ -73,7 +73,7 @@ bun run dev
 このコマンドはガイド付きのチェックリストパネルを開き、**セットアップを完了**（Finish Setup）を押すまで何も書き込まれません。
 手順については[`/setup` コマンド](/ja/self-hosting/setup-wizard/#setup-コマンド)を、Discord側の操作については[クイックスタート](/ja/introduction/quickstart/)を参照してください。
 
-オプションのサイドカー（SearXNG、Crawl4AI、ローカルTTS/STT）をボットと一緒に起動したい場合は、`bun run dev` の代わりに `bun run launch` を使用します。
+オプションのローカルサーバー（SearXNG、Crawl4AI、ローカルTTS/STT）をボットと一緒に起動したい場合は、`bun run dev` の代わりに `bun run launch` を使用します。
 
 ```sh
 bun run launch --searxng --crawl4ai

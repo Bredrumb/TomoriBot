@@ -75,7 +75,7 @@ bun run setup
 
 ```bash
 bun run dev                          # ボットのみ
-bun run launch --searxng --crawl4ai  # ボットとサイドカー（bun run launch --help を参照）
+bun run launch --searxng --crawl4ai  # ボットとローカルサーバー（bun run launch --help を参照）
 ```
 
 ボットがオンラインになったら、Discordで `/setup` を実行してAIプロバイダーを接続します。

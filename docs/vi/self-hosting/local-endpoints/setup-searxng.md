@@ -1,5 +1,5 @@
 ---
-title: "Thiết lập: SearXNG (Sidecar)"
+title: "Thiết lập: SearXNG"
 sidebar:
   order: 3
 ---
@@ -57,7 +57,7 @@ Sau đó chạy `bun run dev` khi container đã ở trạng thái hoạt độn
 ### C. Không sử dụng SearXNG
 Để trống `SEARXNG_BASE_URL`. Chuỗi tìm kiếm sẽ tự động chuyển sang `Brave → DuckDuckGo → IAsk`.
 
-Khi không có sidecar SearXNG nào được cấu hình, schema `web_search` được tổng hợp sẽ không còn thông báo các danh mục chỉ có trên SearXNG. Các danh mục thông thường (`text`, `image`, `video`, `news`) vẫn xuất hiện khi Brave được cấu hình, và tìm kiếm chỉ dạng văn bản xuất hiện khi chỉ có phương án dự phòng MCP DuckDuckGo/IAsk.
+Khi không có máy chủ SearXNG nào được cấu hình, schema `web_search` được tổng hợp sẽ không còn thông báo các danh mục chỉ có trên SearXNG. Các danh mục thông thường (`text`, `image`, `video`, `news`) vẫn xuất hiện khi Brave được cấu hình, và tìm kiếm chỉ dạng văn bản xuất hiện khi chỉ có phương án dự phòng MCP DuckDuckGo/IAsk.
 
 ---
 

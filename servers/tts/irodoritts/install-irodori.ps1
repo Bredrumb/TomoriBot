@@ -16,13 +16,13 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 
 Push-Location $ScriptDir
 try {
-    Write-Host "Installing Irodori-TTS sidecar dependencies with backend '$Backend'..."
+    Write-Host "Installing Irodori-TTS server dependencies with backend '$Backend'..."
     uv sync --extra $Backend
     if ($LASTEXITCODE -ne 0) {
         throw "uv sync failed with exit code $LASTEXITCODE."
     }
 
-    Write-Host "Irodori-TTS sidecar installed successfully."
+    Write-Host "Irodori-TTS server installed successfully."
     Write-Host "Virtual environment: $ScriptDir\.venv"
 } finally {
     Pop-Location

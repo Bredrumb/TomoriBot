@@ -40,7 +40,7 @@ O URL do endpoint padrão é `http://127.0.0.1:8013`.
 
 O modelo padrão é `Aratako/Irodori-TTS-v4.1-Small`. Repositórios compatíveis do Hugging Face, ajustes finos da comunidade (como `phasefield-audio/Irodori-TTS-v4.1-Anime`), ou arquivos de checkpoint locais podem ser configurados via variáveis de ambiente.
 
-Ao iniciar o sidecar (diretamente com Python ou via `bun run launch --irodoritts`), o servidor lê automaticamente o `.env` da raiz do repositório (ou um `.env` local em `servers/tts/irodoritts/`) e registra o ID do modelo ativo na inicialização.
+Ao iniciar o servidor (diretamente com Python ou via `bun run launch --irodoritts`), ele lê automaticamente o `.env` da raiz do repositório (ou um `.env` local em `servers/tts/irodoritts/`) e registra o ID do modelo ativo na inicialização.
 
 ### Via `.env` (Persistente)
 
@@ -138,7 +138,7 @@ Esta é uma compensação entre qualidade e velocidade de inferência, portanto,
 
 O instalador anterior do TomoriBot clonava e corrigia o `pyproject.toml` do Irodori, instalava o `dacvae` manualmente e fixava um commit antigo do Irodori da era v2. Essas soluções alternativas eram necessárias para o layout de pacote upstream mais antigo, mas não são mais apropriadas para o Irodori atual.
 
-O sidecar agora tem seu próprio `pyproject.toml` e segue a configuração de backend `uv` do upstream. O Irodori e o `dacvae` permanecem fixados em commits conhecidos para instalações reproduzíveis, mas o TomoriBot não modifica mais o código-fonte upstream durante a instalação.
+O servidor agora tem seu próprio `pyproject.toml` e segue a configuração de backend `uv` do upstream. O Irodori e o `dacvae` permanecem fixados em commits conhecidos para instalações reproduzíveis, mas o TomoriBot não modifica mais o código-fonte upstream durante a instalação.
 
 ## Variáveis de ambiente
 

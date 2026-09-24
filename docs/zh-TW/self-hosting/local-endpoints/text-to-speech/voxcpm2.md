@@ -58,17 +58,17 @@ VoxCPM2 以在要合成的文字前面加上括號包住的自然語言描述，
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-如果你原生 Windows 的 PyTorch 安裝需要手動重裝或重新對齊驅動程式，請直接將支援 CUDA 的 PyTorch 建置安裝進 sidecar 的虛擬環境：
+如果你原生 Windows 的 PyTorch 安裝需要手動重裝或重新對齊驅動程式，請直接將支援 CUDA 的 PyTorch 建置安裝進伺服器的虛擬環境：
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-OpenBMB 回報標準執行環境在 RTX 4090 上約為 0.30 RTF。上游也支援串流生成，並記載更快的 Nano-vLLM 與 vLLM-Omni 服務選項。TomoriBot 目前的 `POST /synthesize` 契約回傳單一 WAV 回應，所以這個 sidecar 刻意緩衝生成的語句，而不是另外提供串流協定。
+OpenBMB 回報標準執行環境在 RTX 4090 上約為 0.30 RTF。上游也支援串流生成，並記載更快的 Nano-vLLM 與 vLLM-Omni 服務選項。TomoriBot 目前的 `POST /synthesize` 契約回傳單一 WAV 回應，所以這個伺服器刻意緩衝生成的語句，而不是另外提供串流協定。
 
 ## 安裝
 
-這個 sidecar 釘住目前穩定的 `voxcpm` 2.0.3 套件，並將 `openbmb/VoxCPM2` 下載到一般的 Hugging Face 快取。
+這個伺服器釘住目前穩定的 `voxcpm` 2.0.3 套件，並將 `openbmb/VoxCPM2` 下載到一般的 Hugging Face 快取。
 
 ### Linux 與 WSL Bash
 
@@ -103,7 +103,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-設定完成之後，`bun run launch --voxcpm2` 會將 sidecar 與 TomoriBot 一起啟動。預設端點是 `http://127.0.0.1:8016`。
+設定完成之後，`bun run launch --voxcpm2` 會將伺服器與 TomoriBot 一起啟動。預設端點是 `http://127.0.0.1:8016`。
 
 ## 在 TomoriBot 中註冊
 
@@ -179,4 +179,4 @@ TomoriBot 會將儲存的描述以 `instruct` 送出。VoxCPM2 會將它轉成�
 
 官方 BF16 模型已經能塞進預期的 16 GB 消費級 GPU 目標，所以 TomoriBot 不以量化檢查點為預設。社群量化版本是存在的，但它們多了一層相容性與維護負擔，對正常設定而言並不必要。
 
-對高吞吐量的部署，OpenBMB 目前指向 Nano-vLLM-VoxCPM 與 vLLM-Omni 作為加速的服務選項。那些執行環境可以提供超出這個參考 sidecar 的串流與並行服務功能。它們不是 TomoriBot 一般本機語音訊息流程的必要條件，而這個包裝刻意留在官方 `voxcpm` API 上，讓上游的模型升級容易跟上。
+對高吞吐量的部署，OpenBMB 目前指向 Nano-vLLM-VoxCPM 與 vLLM-Omni 作為加速的服務選項。那些執行環境可以提供超出這個參考伺服器的串流與並行服務功能。它們不是 TomoriBot 一般本機語音訊息流程的必要條件，而這個包裝刻意留在官方 `voxcpm` API 上，讓上游的模型升級容易跟上。

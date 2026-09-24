@@ -22,7 +22,7 @@ TomoriBot 預設使用官方 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 檢查�
 
 ## TomoriBot 如何對應請求
 
-包裝接受一般的複製 sidecar 欄位：
+包裝接受一般的 `tts-clone` 欄位：
 
 - `text`
 - `ref_audio`
@@ -55,7 +55,7 @@ restrained excitement`。
 
 CosyVoice 3 上游支援雙向串流。專案同時記載文字輸入串流與音訊輸出串流，在其最佳化設定中首次音訊延遲可低至約 150 ms。
 
-TomoriBot 目前的自訂 TTS 介面預期一則 Discord 語音訊息對應一個完整的音訊回應，所以這個 sidecar 會回傳完整的 WAV，並將上游推論預設為
+TomoriBot 目前的自訂 TTS 介面預期一則 Discord 語音訊息對應一個完整的音訊回應，所以這個伺服器會回傳完整的 WAV，並將上游推論預設為
 `stream=False`。只有在你測試上游生成器時才設定 `COSYVOICE3_UPSTREAM_STREAM=1`；在串流語音傳輸存在之前，它不會降低 TomoriBot 的回應延遲。
 
 ## 硬體
@@ -84,7 +84,7 @@ bash servers/tts/cosyvoice3/install-cosyvoice3.sh
 servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
 ```
 
-或者把設定好的 sidecar 與 TomoriBot 一起啟動：
+或者把設定好的伺服器與 TomoriBot 一起啟動：
 
 ```bash
 bun run launch --cosyvoice3
@@ -99,7 +99,7 @@ bun run launch --cosyvoice3
 
 重新執行會維持那些確切的修訂版；若要改用較新的修訂版，請同時修改安裝程式中的兩個釘住值。如果執行環境的簽出有本機變更，安裝程式會拒絕在其上重新安裝。
 
-上游需求目前使用 PyTorch 2.3.1 搭配 CUDA 12.1 套件索引、Linux 上的 CUDA 12 ONNX Runtime 套件，以及 Linux 上的 TensorRT 10.13 套件。如果你使用的硬體需要更新的 PyTorch CUDA 建置，請在上游需求之後，於 sidecar 的 venv 中安裝相容的 PyTorch 建置，並用你的驅動程式測試。
+上游需求目前使用 PyTorch 2.3.1 搭配 CUDA 12.1 套件索引、Linux 上的 CUDA 12 ONNX Runtime 套件，以及 Linux 上的 TensorRT 10.13 套件。如果你使用的硬體需要更新的 PyTorch CUDA 建置，請在上游需求之後，於伺服器的 venv 中安裝相容的 PyTorch 建置，並用你的驅動程式測試。
 
 ### Windows PowerShell
 
@@ -183,7 +183,7 @@ CosyVoice 的語音 tokenizer 以 30 秒的提示窗運作，而上游是用失�
 
 CosyVoice 3 也支援選用的 vLLM 與 TensorRT 路徑。上游目前記載使用 V1 引擎的 vLLM 0.11.x 以上，以及作為舊路徑的 vLLM 0.9.0。這些執行環境有額外的版本與硬體限制，所以 TomoriBot 預設不安裝也不啟用它們。
 
-請先讓普通的 PyTorch sidecar 可以運作，再使用它們。對 Discord 語音訊息的工作負載而言，避免額外的執行環境複雜度，通常比最佳化一個本來就小的 0.5B 模型更有用。
+請先讓普通的 PyTorch 伺服器可以運作，再使用它們。對 Discord 語音訊息的工作負載而言，避免額外的執行環境複雜度，通常比最佳化一個本來就小的 0.5B 模型更有用。
 
 ## 授權條款
 

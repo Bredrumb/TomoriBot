@@ -59,17 +59,17 @@ Para instalar explicitamente em uma máquina que utilize apenas a CPU, passe o a
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-Se a sua instalação nativa do PyTorch no Windows precisar de uma reinstalação manual ou de um realinhamento de driver, instale a compilação do PyTorch habilitada para CUDA diretamente no ambiente virtual do sidecar:
+Se a sua instalação nativa do PyTorch no Windows precisar de uma reinstalação manual ou de um realinhamento de driver, instale a compilação do PyTorch habilitada para CUDA diretamente no ambiente virtual do servidor:
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-A OpenBMB relata cerca de 0,30 RTF em uma RTX 4090 com a execução padrão. A fonte (upstream) também oferece suporte para geração em streaming e documenta opções de serviço mais rápidas com o Nano-vLLM e o vLLM-Omni. O contrato atual do `POST /synthesize` do TomoriBot retorna uma única resposta WAV, então esse sidecar propositalmente armazena a fala gerada em buffer, em vez de expor um protocolo de streaming separado.
+A OpenBMB relata cerca de 0,30 RTF em uma RTX 4090 com a execução padrão. A fonte (upstream) também oferece suporte para geração em streaming e documenta opções de serviço mais rápidas com o Nano-vLLM e o vLLM-Omni. O contrato atual do `POST /synthesize` do TomoriBot retorna uma única resposta WAV, então esse servidor propositalmente armazena a fala gerada em buffer, em vez de expor um protocolo de streaming separado.
 
 ## Instalação
 
-O sidecar fixa o pacote estável atual `voxcpm` 2.0.3 e faz o download de `openbmb/VoxCPM2` para o cache normal do Hugging Face.
+O servidor fixa o pacote estável atual `voxcpm` 2.0.3 e faz o download de `openbmb/VoxCPM2` para o cache normal do Hugging Face.
 
 ### Linux / WSL Bash
 
@@ -104,7 +104,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-Após a configuração, `bun run launch --voxcpm2` inicia o sidecar em conjunto com o TomoriBot. O endpoint padrão é `http://127.0.0.1:8016`.
+Após a configuração, `bun run launch --voxcpm2` inicia o servidor em conjunto com o TomoriBot. O endpoint padrão é `http://127.0.0.1:8016`.
 
 ## Registrar no TomoriBot
 
@@ -180,4 +180,4 @@ O áudio de referência deve ser um contêiner WAV não vazio de no máximo 10 M
 
 O modelo oficial em BF16 já se encaixa no alvo pretendido de uma GPU de consumidor de 16 GB, portanto o TomoriBot não utiliza um checkpoint quantizado por padrão. Quantizações da comunidade existem, mas elas adicionam outra camada de compatibilidade e manutenção sem serem necessárias para a configuração normal.
 
-Para implantações com alto volume de processamento (high-throughput), a OpenBMB atualmente aponta para o Nano-vLLM-VoxCPM e o vLLM-Omni como opções de serviço aceleradas. Esses tempos de execução podem expor recursos de streaming e atendimento simultâneo (concurrent-serving) além deste sidecar de referência. Eles não são exigidos para o fluxo normal de mensagens de voz locais do TomoriBot, e este wrapper deliberadamente se mantém na API oficial `voxcpm` para que as atualizações do modelo da fonte continuem fáceis de acompanhar.
+Para implantações com alto volume de processamento (high-throughput), a OpenBMB atualmente aponta para o Nano-vLLM-VoxCPM e o vLLM-Omni como opções de serviço aceleradas. Esses tempos de execução podem expor recursos de streaming e atendimento simultâneo (concurrent-serving) além deste servidor de referência. Eles não são exigidos para o fluxo normal de mensagens de voz locais do TomoriBot, e este wrapper deliberadamente se mantém na API oficial `voxcpm` para que as atualizações do modelo da fonte continuem fáceis de acompanhar.

@@ -1,4 +1,4 @@
-"""Pure CosyVoice request routing helpers used by the sidecar and contract tests."""
+"""Pure CosyVoice request routing helpers used by the server and contract tests."""
 
 from typing import Literal
 

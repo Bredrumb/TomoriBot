@@ -58,17 +58,17 @@ CPUのみのマシンに明示的にインストールするには、`-Cpu`ス�
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-ネイティブWindowsのPyTorchインストールを手動で再インストールしたり、ドライバーとの整合を取り直したりする必要が生じた場合は、サイドカーの仮想環境に直接CUDA対応のPyTorchビルドをインストールしてください。
+ネイティブWindowsのPyTorchインストールを手動で再インストールしたり、ドライバーとの整合を取り直したりする必要が生じた場合は、ローカルサーバーの仮想環境に直接CUDA対応のPyTorchビルドをインストールしてください。
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-OpenBMBは、標準ランタイムでRTX 4090においておよそ0.30 RTFを報告しています。上流はストリーミング生成にも対応しており、より高速なNano-vLLMとvLLM-Omniによる配信オプションも文書化しています。TomoriBotの現行の`POST /synthesize`契約は1つのWAVレスポンスを返す前提のため、このサイドカーは別途ストリーミングプロトコルを公開する代わりに、意図的に生成した発話をバッファリングします。
+OpenBMBは、標準ランタイムでRTX 4090においておよそ0.30 RTFを報告しています。上流はストリーミング生成にも対応しており、より高速なNano-vLLMとvLLM-Omniによる配信オプションも文書化しています。TomoriBotの現行の`POST /synthesize`契約は1つのWAVレスポンスを返す前提のため、このローカルサーバーは別途ストリーミングプロトコルを公開する代わりに、意図的に生成した発話をバッファリングします。
 
 ## インストール
 
-このサイドカーは、現行の安定版である`voxcpm` 2.0.3パッケージに固定し、`openbmb/VoxCPM2`を通常のHugging Faceキャッシュにダウンロードします。
+このローカルサーバーは、現行の安定版である`voxcpm` 2.0.3パッケージに固定し、`openbmb/VoxCPM2`を通常のHugging Faceキャッシュにダウンロードします。
 
 ### Linux / WSL Bash
 
@@ -103,7 +103,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-セットアップ後、`bun run launch --voxcpm2`でサイドカーをTomoriBotと一緒に起動できます。既定のエンドポイントは`http://127.0.0.1:8016`です。
+セットアップ後、`bun run launch --voxcpm2`でローカルサーバーをTomoriBotと一緒に起動できます。既定のエンドポイントは`http://127.0.0.1:8016`です。
 
 ## TomoriBotへの登録
 
@@ -179,4 +179,4 @@ VoxCPM2が有効な音声モデルになると、`/generate voice-message`は通
 
 公式のBF16モデルはすでに想定する16 GBのコンシューマーGPUという目標に収まるため、TomoriBotは既定で量子化済みチェックポイントを使用しません。コミュニティによる量子化版も存在しますが、通常のセットアップには不要なまま、互換性と保守のレイヤーをもう1つ増やすだけになります。
 
-高スループットのデプロイでは、OpenBMBは現在、高速化された配信オプションとしてNano-vLLM-VoxCPMとvLLM-Omniを挙げています。これらのランタイムは、この参照サイドカーを超えたストリーミングや並行配信の機能を公開できます。TomoriBotの通常のローカル音声メッセージのワークフローにはこれらは不要であり、このラッパーは上流のモデルのアップグレードを追いやすいままにするため、意図的に公式の`voxcpm` APIにとどまっています。
+高スループットのデプロイでは、OpenBMBは現在、高速化された配信オプションとしてNano-vLLM-VoxCPMとvLLM-Omniを挙げています。これらのランタイムは、この参照サーバーを超えたストリーミングや並行配信の機能を公開できます。TomoriBotの通常のローカル音声メッセージのワークフローにはこれらは不要であり、このラッパーは上流のモデルのアップグレードを追いやすいままにするため、意図的に公式の`voxcpm` APIにとどまっています。

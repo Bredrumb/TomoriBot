@@ -70,7 +70,7 @@ bun run setup
 
 ```bash
 bun run dev                          # 只启动 bot
-bun run launch --searxng --crawl4ai  # bot 加边车服务（见 bun run launch --help）
+bun run launch --searxng --crawl4ai  # bot 加本地服务器（见 bun run launch --help）
 ```
 
 bot 上线后，在 Discord 里运行 `/setup` 来接入 AI 提供方。没有自己的提供方的工作区无法回复，除非它以用户 BYOK 模式运行，由每位成员的个人提供方代为回答，所以这是每条安装路径的最后一步。

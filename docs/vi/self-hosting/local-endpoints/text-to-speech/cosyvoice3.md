@@ -22,7 +22,7 @@ Các ví dụ chính thức của CosyVoice 3 hiện bao gồm một lưu ý qua
 
 ## Cách TomoriBot ánh xạ các yêu cầu
 
-Wrapper chấp nhận các trường chuẩn của sidecar sao chép giọng nói:
+Wrapper chấp nhận các trường chuẩn của `tts-clone`:
 
 - `text`
 - `ref_audio`
@@ -50,7 +50,7 @@ Trường `instruct` của `/synthesize` được chuyển vào phần điều k
 
 CosyVoice 3 hỗ trợ streaming hai chiều ở thượng nguồn. Dự án tài liệu hóa cả streaming nhập văn bản và streaming xuất âm thanh, với độ trễ âm thanh đầu tiên thấp tới khoảng 150 ms trong thiết lập tối ưu hóa của nó.
 
-Giao diện TTS tùy chỉnh hiện tại của TomoriBot yêu cầu một phản hồi âm thanh hoàn chỉnh cho tin nhắn thoại Discord, vì vậy sidecar này trả về một tệp WAV hoàn chỉnh và đặt suy luận thượng nguồn mặc định là `stream=False`. Chỉ đặt `COSYVOICE3_UPSTREAM_STREAM=1` khi thử nghiệm trình tạo thượng nguồn; tùy chọn này không làm giảm độ trễ phản hồi của TomoriBot cho đến khi có phương thức truyền tải giọng nói dạng streaming.
+Giao diện TTS tùy chỉnh hiện tại của TomoriBot yêu cầu một phản hồi âm thanh hoàn chỉnh cho tin nhắn thoại Discord, vì vậy máy chủ này trả về một tệp WAV hoàn chỉnh và đặt suy luận thượng nguồn mặc định là `stream=False`. Chỉ đặt `COSYVOICE3_UPSTREAM_STREAM=1` khi thử nghiệm trình tạo thượng nguồn; tùy chọn này không làm giảm độ trễ phản hồi của TomoriBot cho đến khi có phương thức truyền tải giọng nói dạng streaming.
 
 ## Phần cứng
 
@@ -78,7 +78,7 @@ bash servers/tts/cosyvoice3/install-cosyvoice3.sh
 servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
 ```
 
-Hoặc khởi động đồng thời sidecar đã định cấu hình và TomoriBot:
+Hoặc khởi động đồng thời máy chủ đã định cấu hình và TomoriBot:
 
 ```bash
 bun run launch --cosyvoice3
@@ -93,7 +93,7 @@ Trình cài đặt thực hiện:
 
 Các lần chạy lại giữ nguyên các bản sửa đổi chính xác đó; để chuyển sang bản mới hơn, hãy thay đổi cả hai giá trị đã ghim trong trình cài đặt. Trình cài đặt từ chối cài đặt lại lên bản tải về runtime có thay đổi cục bộ.
 
-Các phần phụ thuộc thượng nguồn hiện sử dụng PyTorch 2.3.1 với chỉ mục gói CUDA 12.1, các gói ONNX Runtime CUDA 12 trên Linux, và các gói TensorRT 10.13 trên Linux. Nếu bạn đang sử dụng phần cứng yêu cầu bản dựng PyTorch CUDA mới hơn, hãy cài đặt bản dựng PyTorch tương thích trong venv của sidecar sau các yêu cầu thượng nguồn và kiểm tra với driver của bạn.
+Các phần phụ thuộc thượng nguồn hiện sử dụng PyTorch 2.3.1 với chỉ mục gói CUDA 12.1, các gói ONNX Runtime CUDA 12 trên Linux, và các gói TensorRT 10.13 trên Linux. Nếu bạn đang sử dụng phần cứng yêu cầu bản dựng PyTorch CUDA mới hơn, hãy cài đặt bản dựng PyTorch tương thích trong venv của máy chủ sau các yêu cầu thượng nguồn và kiểm tra với driver của bạn.
 
 ### Windows PowerShell
 
@@ -176,7 +176,7 @@ Trình tải chính thức hiện tại luôn đọc tệp có tên `llm.pt`. Đ
 
 CosyVoice 3 cũng hỗ trợ các đường dẫn tùy chọn vLLM và TensorRT. Thượng nguồn hiện ghi nhận vLLM 0.11.x+ sử dụng engine V1 và vLLM 0.9.0 là đường dẫn cũ. Các runtime này có thêm các ràng buộc về phiên bản và phần cứng, vì vậy TomoriBot không cài đặt hoặc bật chúng theo mặc định.
 
-Chỉ sử dụng chúng sau khi sidecar PyTorch thông thường đã hoạt động ổn định. Đối với khối lượng công việc tin nhắn thoại Discord, việc tránh độ phức tạp runtime bổ sung thường hữu ích hơn là tối ưu hóa một model 0.5B vốn đã nhỏ gọn.
+Chỉ sử dụng chúng sau khi máy chủ PyTorch thông thường đã hoạt động ổn định. Đối với khối lượng công việc tin nhắn thoại Discord, việc tránh độ phức tạp runtime bổ sung thường hữu ích hơn là tối ưu hóa một model 0.5B vốn đã nhỏ gọn.
 
 ## Giấy phép
 

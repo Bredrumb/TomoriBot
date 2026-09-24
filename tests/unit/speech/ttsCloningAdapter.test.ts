@@ -30,7 +30,7 @@ const COSYVOICE3_ENDPOINT = {
 } as unknown as CustomEndpointRow;
 
 describe("CosyVoice 3 clone adapter contract", () => {
-  it("maps generic voice instructions to the sidecar instruct field", async () => {
+  it("maps generic voice instructions to the TTS server instruct field", async () => {
     requestBody = null;
 
     const result = await synthesizeSpeechViaTtsCloneBuffer({

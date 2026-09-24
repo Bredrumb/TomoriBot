@@ -5,7 +5,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot supports multiple local Text-to-Speech sidecars, each suited for different languages, hardware profiles, and latency requirements.
+TomoriBot supports multiple local Text-to-Speech servers, each suited for different languages, hardware profiles, and latency requirements.
 
 This page provides empirical benchmark results, synthesis timings, and audio comparison clips recorded in an identical test environment with matching voice cloning references.
 
@@ -71,7 +71,7 @@ Timings report both the **full generation time** (total wall-clock seconds from 
 
 ## Compare the Engines
 
-All TomoriBot sidecars currently return a complete WAV to the bot. "Streaming path" means the upstream model or a separate serving backend has one; it does **not** mean Discord voice-chat streaming is implemented. Sizes are model parameters, **not** VRAM or download sizes, and the 16 GB column is setup guidance rather than a measured peak. The speed column describes each engine's intended trade-off; the measured timings above come from one Windows machine and do not rank the engines on Linux.
+All TomoriBot TTS servers currently return a complete WAV to the bot. "Streaming path" means the upstream model or a separate serving backend has one; it does **not** mean Discord voice-chat streaming is implemented. Sizes are model parameters, **not** VRAM or download sizes, and the 16 GB column is setup guidance rather than a measured peak. The speed column describes each engine's intended trade-off; the measured timings above come from one Windows machine and do not rank the engines on Linux.
 
 The "Reference clip" column reports the reference-audio length each engine documents or applies in its runtime, so it mixes published guidance with limits read from upstream code. Most engines silently truncate to their window rather than refusing the request, which is why the column says what the engine reads rather than only what it accepts. It is upstream behavior, not a measurement taken here, and it is independent of TomoriBot's upload ceiling.
 

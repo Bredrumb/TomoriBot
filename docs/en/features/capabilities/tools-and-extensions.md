@@ -107,7 +107,7 @@ routes each call through an engine chain and returns the first success:
   `/providers`); it adds image, video, and news search. ⚠️ Set a $5 usage limit
   in the Brave dashboard to avoid surprise charges.
 - **DuckDuckGo** is the default when no key is set, cascading to **IAsk** on rate limits or empty results.
-- **SearXNG** and **Crawl4AI** are optional self-hosted sidecars that unlock more categories
+- **SearXNG** and **Crawl4AI** are optional self-hosted servers that unlock more categories
   and browser-rendered page fetches; see [Self-Hosting](/self-hosting/).
 
 For reading a specific page, she uses `fetch_url`. It's unavailable on NovelAI.

@@ -62,7 +62,7 @@ Full Install sẽ chạy Base Install trước, sau đó thử cài đặt các 
 
 ```bash
 bun run dev                          # chỉ bot
-bun run launch --searxng --crawl4ai  # bot + sidecar (xem bun run launch --help)
+bun run launch --searxng --crawl4ai  # bot + máy chủ cục bộ (xem bun run launch --help)
 ```
 
 Khi bot đã trực tuyến, hãy chạy `/setup` trong Discord để kết nối nhà cung cấp AI. Một không gian làm việc không có nhà cung cấp riêng sẽ không thể phản hồi, trừ khi chạy ở chế độ User BYOK nơi nhà cung cấp cá nhân của từng thành viên sẽ trả lời thay thế, vì vậy đây là bước cuối cùng của mọi phương thức cài đặt.

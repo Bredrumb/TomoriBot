@@ -2,13 +2,13 @@
 title: "MOSS-TTS"
 ---
 
-用 `servers/tts/moss/server.py` 可以通过同一个本地端点试用 MOSS 的语音克隆与文字描述的语音设计。自动模式会在 TomoriBot 发送 `ref_audio` 时选择克隆模型，在发送 `instruct` 时选择 MOSS-VoiceGenerator。它一次只加载一个模型。这是一个试用性质的边车服务，不是流式的 Discord 语音聊天集成。
+用 `servers/tts/moss/server.py` 可以通过同一个本地端点试用 MOSS 的语音克隆与文字描述的语音设计。自动模式会在 TomoriBot 发送 `ref_audio` 时选择克隆模型，在发送 `instruct` 时选择 MOSS-VoiceGenerator。它一次只加载一个模型。这是一个试用性质的服务器，不是流式的 Discord 语音聊天集成。
 
 默认的克隆模型是 [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5)（4B），选它是因为它是 16 GB GPU 上比较实际的起点。[MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) 是 8B 的替代方案，但在 BF16 下通常需要超过 16 GB 的显存。语音设计使用 [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator)（约 1.7B）。自动模式会切换模型，而不是把两个模型都留在显存里，所以模式切换仍然会有一次 GPU 加载延迟。
 
 ## 设置
 
-请在 TomoriBot 仓库根目录运行。请使用 Python 3.12，以及能与上游 CUDA 12.8 的 PyTorch wheel 兼容的 CUDA 驱动。上游的运行时 extra 会固定 PyTorch 与 Torchaudio 2.9.1+cu128；请把这个边车服务放在它自己的虚拟环境里。其他 CUDA 或 CPU 组合需要单独验证过的安装方式。
+请在 TomoriBot 仓库根目录运行。请使用 Python 3.12，以及能与上游 CUDA 12.8 的 PyTorch wheel 兼容的 CUDA 驱动。上游的运行时 extra 会固定 PyTorch 与 Torchaudio 2.9.1+cu128；请把这个服务器放在它自己的虚拟环境里。其他 CUDA 或 CPU 组合需要单独验证过的安装方式。
 
 ### Windows PowerShell
 
@@ -46,6 +46,6 @@ prefetch 命令会在服务器启动之前，把克隆模型、VoiceGenerator �
 
 TomoriBot 当前的克隆适配器不发送语言标记。如果要针对单一语言试用，请在启动服务器之前设置 `MOSS_TTS_DEFAULT_LANGUAGE=Japanese`（或 `English`、`Chinese` 等）。手动发起 `/synthesize` 请求时，也可以改为按请求提供 `language`。混合语言使用场景请让该变量保持未设置；在依赖日语输出之前，请先评估它的效果。
 
-边车服务读取的是它自己进程的环境变量。把值加到 bot 的 `.env` 里，并不会自动传递到单独启动的 Python 进程。
+服务器读取的是它自己进程的环境变量。把值加到 bot 的 `.env` 里，并不会自动传递到单独启动的 Python 进程。
 
 要在内存足够的机器上试用 8B 旗舰模型，请在预取之前设置 `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`。`MOSS_TTS_PORT`、`MOSS_TTS_DEVICE`、`MOSS_TTS_DTYPE` 和 `MOSS_TTS_MAX_NEW_TOKENS` 也可以在 `.env.optional.example` 中配置。遇到模式切换或 CPU 推理时，bot 的 `TTS_SYNTHESIZE_TIMEOUT_MS` 可能需要调大。

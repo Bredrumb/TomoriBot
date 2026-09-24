@@ -165,14 +165,14 @@ docker compose up --build
 
 之后的启动，只要没改过代码或依赖，`docker compose up` 就够了。
 
-### C. 可选的侧车与服务
+### C. 可选的本地服务器
 
-无论选哪条安装路径，TomoriBot 都支持按需启用的侧车与服务来增强她的工具并加入本地监控：用于网页搜索的 SearXNG、用于抓取浏览器渲染页面的 Crawl4AI，以及本地 TTS 和 STT 语音服务器。
+无论选哪条安装路径，TomoriBot 都支持按需启用的本地服务器来增强她的工具并加入本地监控：用于网页搜索的 SearXNG、用于抓取浏览器渲染页面的 Crawl4AI，以及本地 TTS 和 STT 语音服务器。
 
 **用本地 Bun 安装（A）时**，用 `bun run launch` 代替 `bun run dev`，运行示例：
 
 ```sh
-# 同时启用 SearXNG 与 Crawl4AI 的 Docker 侧车
+# 同时启用 SearXNG 与 Crawl4AI 的 Docker 容器
 bun run launch --searxng --crawl4ai
 
 # 按照语音安装文档配置完之后，启用本地 TTS 服务器
@@ -186,9 +186,9 @@ bun run launch --help
 
 可用参数：`--searxng`、`--crawl4ai`、`--qwen3tts`、`--chatterbox`、`--irodoritts`、`--voxcpm2`、`--fishs2`、`--cosyvoice3`、`--moss`、`--whisperx`、`--help`
 
-**Ctrl+C** 会停止 bot 以及所有 Python 侧车进程。Docker 容器（`--searxng`、`--crawl4ai`）会被刻意留在运行状态，用完请手动停止：`docker stop searxng` / `docker stop crawl4ai`。
+**Ctrl+C** 会停止 bot 以及所有 Python 服务器进程。Docker 容器（`--searxng`、`--crawl4ai`）会被刻意留在运行状态，用完请手动停止：`docker stop searxng` / `docker stop crawl4ai`。
 
-**用 Docker Compose 安装（B）时**，侧车改为通过 Compose profile 按需启用：
+**用 Docker Compose 安装（B）时**，本地服务器改为通过 Compose profile 按需启用：
 
 ```sh
 # + SearXNG 网页搜索（自部署的元搜索引擎）
@@ -203,8 +203,8 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 完整安装细节见下面的指南：
 
-- **[SearXNG 网页搜索侧车](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/setup-searxng/)** - 自部署的元搜索引擎实例，让 `web_search` 工具不受单一引擎的 API 限制。
-- **[Crawl4AI 侧车](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/setup-crawl4ai/)** - 带浏览器渲染的侧车，为 `fetch_url` 工具抓取并处理 JavaScript 较重的网页。
+- **[SearXNG 网页搜索](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/setup-searxng/)** - 自部署的元搜索引擎实例，让 `web_search` 工具不受单一引擎的 API 限制。
+- **[Crawl4AI](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/setup-crawl4ai/)** - 带浏览器渲染的服务器，为 `fetch_url` 工具抓取并处理 JavaScript 较重的网页。
 - **[文本转语音](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/text-to-speech/)** / **[语音转文字](https://docs.tomoribot.app/zh-CN/self-hosting/local-endpoints/speech-to-text/)** - TomoriBot 语音消息所用的 Python 语音服务器，需要事先配置好一次它们的 venv。
 
 ### 更新 TomoriBot

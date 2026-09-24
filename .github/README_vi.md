@@ -165,14 +165,14 @@ docker compose up --build
 
 Đối với những lần khởi động sau, chỉ cần `docker compose up` là đủ trừ khi bạn đã thay đổi mã nguồn hoặc các phần phụ thuộc (dependencies).
 
-### C. Các sidecar & máy chủ tùy chọn
+### C. Máy chủ cục bộ tùy chọn
 
-TomoriBot hỗ trợ các dịch vụ sidecar/máy chủ tùy chọn đi kèm với một trong hai phương thức cài đặt để tăng cường công cụ và bổ sung giám sát cục bộ: SearXNG để tìm kiếm web, Crawl4AI để thu thập trang web được render bằng trình duyệt, và các máy chủ giọng nói TTS/STT cục bộ.
+TomoriBot hỗ trợ các máy chủ cục bộ tùy chọn đi kèm với một trong hai phương thức cài đặt để tăng cường công cụ và bổ sung giám sát cục bộ: SearXNG để tìm kiếm web, Crawl4AI để thu thập trang web được render bằng trình duyệt, và các máy chủ giọng nói TTS/STT cục bộ.
 
 **Với bản cài đặt Bun cục bộ (A)**, sử dụng `bun run launch` thay vì `bun run dev`, các ví dụ chạy:
 
 ```sh
-# Với các sidecar Docker SearXNG và Crawl4AI
+# Với các container Docker SearXNG và Crawl4AI
 bun run launch --searxng --crawl4ai
 
 # Với một máy chủ TTS cục bộ sau khi làm theo tài liệu hướng dẫn cài đặt giọng nói
@@ -186,9 +186,9 @@ bun run launch --help
 
 Các cờ có sẵn: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`, `--help`
 
-**Ctrl+C** sẽ dừng bot và mọi tiến trình sidecar Python. Các container Docker (`--searxng`, `--crawl4ai`) được chủ ý giữ tiếp tục chạy, hãy dừng chúng thủ công bằng lệnh `docker stop searxng` / `docker stop crawl4ai` khi bạn hoàn tất.
+**Ctrl+C** sẽ dừng bot và mọi tiến trình máy chủ Python. Các container Docker (`--searxng`, `--crawl4ai`) được chủ ý giữ tiếp tục chạy, hãy dừng chúng thủ công bằng lệnh `docker stop searxng` / `docker stop crawl4ai` khi bạn hoàn tất.
 
-**Với Docker Compose (B)**, các sidecar là tùy chọn thông qua các profile trong Compose:
+**Với Docker Compose (B)**, các máy chủ cục bộ là tùy chọn thông qua các profile trong Compose:
 
 ```sh
 # + Tìm kiếm web SearXNG (công cụ siêu tìm kiếm self-hosting)
@@ -203,8 +203,8 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 Xem các hướng dẫn bên dưới để biết chi tiết cài đặt đầy đủ:
 
-- **[Sidecar tìm kiếm web SearXNG](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/setup-searxng/)** - Phiên bản siêu tìm kiếm self-hosting để vượt qua giới hạn API của một công cụ tìm kiếm đơn lẻ cho công cụ `web_search`.
-- **[Sidecar Crawl4AI](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/setup-crawl4ai/)** - Sidecar render bằng trình duyệt để tải và xử lý các trang web nặng JavaScript cho công cụ `fetch_url`.
+- **[Tìm kiếm web SearXNG](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/setup-searxng/)** - Phiên bản siêu tìm kiếm self-hosting để vượt qua giới hạn API của một công cụ tìm kiếm đơn lẻ cho công cụ `web_search`.
+- **[Crawl4AI](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/setup-crawl4ai/)** - Máy chủ render bằng trình duyệt để tải và xử lý các trang web nặng JavaScript cho công cụ `fetch_url`.
 - **[Chuyển văn bản thành giọng nói (Text-to-Speech)](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/text-to-speech/)** / **[Chuyển giọng nói thành văn bản (Speech-to-Text)](https://docs.tomoribot.app/vi/self-hosting/local-endpoints/speech-to-text/)** - Các máy chủ giọng nói Python cho tin nhắn thoại của TomoriBot; môi trường ảo (venv) của chúng cần được thiết lập một lần từ trước.
 
 ### Cập nhật TomoriBot

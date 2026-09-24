@@ -1,5 +1,5 @@
 ---
-title: "Setup: SearXNG (Sidecar)"
+title: "Setup: SearXNG"
 sidebar:
   order: 3
 ---
@@ -57,7 +57,7 @@ Then run `bun run dev` once the container is healthy (`docker ps` shows `(health
 ### C. No SearXNG
 Leave `SEARXNG_BASE_URL` unset. The chain falls back to `Brave → DuckDuckGo → IAsk`.
 
-When no SearXNG sidecar is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only the DuckDuckGo/IAsk MCP fallback is available.
+When no SearXNG server is configured, the assembled `web_search` schema no longer advertises SearXNG-only categories. The common categories (`text`, `image`, `video`, `news`) still appear when Brave is configured, and text-only search appears when only the DuckDuckGo/IAsk MCP fallback is available.
 
 ---
 

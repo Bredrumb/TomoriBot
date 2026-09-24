@@ -56,16 +56,16 @@ docker compose up      # bot + database
 
 之後要再啟動時，除非你改過程式碼或相依套件，否則單獨執行 `docker compose up` 就夠了。bot 上線之後，在 Discord 執行 `/setup` 加入你的 AI 供應商金鑰，Discord 那一側請看[快速開始](/zh-TW/introduction/quickstart/)。
 
-## 4. 選用的 sidecar（Compose profile）
+## 4. 選用的本機伺服器（Compose profile）
 
-Sidecar 透過 Compose profile 選擇性啟用，所以你只會跑自己需要的東西：
+本機伺服器透過 Compose profile 選擇性啟用，所以你只會跑自己需要的東西：
 
 ```sh
 # SearXNG (private web search) + Crawl4AI (browser-rendered fetch)
 docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
-各 sidecar 的細節請看 [SearXNG](/zh-TW/self-hosting/local-endpoints/setup-searxng/)、
+各伺服器的細節請看 [SearXNG](/zh-TW/self-hosting/local-endpoints/setup-searxng/)、
 [Crawl4AI](/zh-TW/self-hosting/local-endpoints/setup-crawl4ai/) 與
 [本機監控](/zh-TW/self-hosting/local-monitoring/)。
 

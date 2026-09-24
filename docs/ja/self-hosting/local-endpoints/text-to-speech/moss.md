@@ -46,6 +46,6 @@ python servers/tts/moss/server.py
 
 TomoriBotの現在のクローンアダプターは言語タグを送りません。単一言語の試用では、起動前に`MOSS_TTS_DEFAULT_LANGUAGE=Japanese`（または`English`、`Chinese`など）を設定してください。手動の`/synthesize`リクエストでは`language`を個別に指定できます。多言語を混ぜる場合は未設定にし、日本語の出力品質を評価してください。
 
-サイドカーは自身のプロセス環境変数を読みます。ボットの`.env`に値を追加しても、別途起動したPythonプロセスには自動で渡されません。
+ローカルサーバーは自身のプロセス環境変数を読みます。ボットの`.env`に値を追加しても、別途起動したPythonプロセスには自動で渡されません。
 
 十分なメモリがある環境で8Bモデルを試す場合は、事前ダウンロードより前に`MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5`を設定します。その他の設定は`.env.optional.example`を参照してください。モデルの切り替えやCPU推論には、ボット側の`TTS_SYNTHESIZE_TIMEOUT_MS`を増やす必要がある場合があります。

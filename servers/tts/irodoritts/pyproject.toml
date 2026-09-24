@@ -1,7 +1,7 @@
 [project]
 name = "tomoribot-irodori-sidecar"
 version = "0.1.0"
-description = "TomoriBot local Irodori-TTS sidecar"
+description = "TomoriBot local Irodori-TTS server"
 requires-python = ">=3.10"
 dependencies = [
     "dacvae",

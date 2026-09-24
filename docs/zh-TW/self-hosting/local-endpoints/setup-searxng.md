@@ -1,5 +1,5 @@
 ---
-title: "設定：SearXNG（Sidecar）"
+title: "設定：SearXNG"
 sidebar:
   order: 3
 ---
@@ -57,7 +57,7 @@ docker run -d --name searxng -p 8080:8080 \
 ### C. 不使用 SearXNG
 讓 `SEARXNG_BASE_URL` 保持未設定。鏈會退回 `Brave → DuckDuckGo → IAsk`。
 
-沒有設定 SearXNG sidecar 時，組裝出來的 `web_search` 結構描述就不再宣告 SearXNG 專屬的分類。常見分類（`text`、`image`、`video`、`news`）在有設定 Brave 時仍然會出現，而只支援文字的搜尋會在只有 DuckDuckGo 與 IAsk MCP 備援可用時出現。
+沒有設定 SearXNG 伺服器時，組裝出來的 `web_search` 結構描述就不再宣告 SearXNG 專屬的分類。常見分類（`text`、`image`、`video`、`news`）在有設定 Brave 時仍然會出現，而只支援文字的搜尋會在只有 DuckDuckGo 與 IAsk MCP 備援可用時出現。
 
 ---
 

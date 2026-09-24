@@ -1,15 +1,15 @@
 ---
-title: "配置：Crawl4AI（边车服务）"
+title: "配置：Crawl4AI"
 sidebar:
   order: 4
 ---
-# 配置：Crawl4AI 边车服务
+# 配置：Crawl4AI
 
-`fetch_url` 工具默认使用进程内的 `safe_http` 引擎。在可信的开发环境里，当你需要为依赖 JS 的页面获取渲染后的内容时，它可以改为尝试一个浏览器渲染的边车服务。
+`fetch_url` 工具默认使用进程内的 `safe_http` 引擎。在可信的开发环境里，当你需要为依赖 JS 的页面获取渲染后的内容时，它可以改为尝试一个浏览器渲染的本地服务器。
 
 默认的引擎顺序是 `safe_http`。由于 Crawl4AI 会在 TomoriBot 受保护的 HTTP 客户端之外跟随重定向，它只在允许抓取私有网络的地方才会被采用。在生产环境之外这是自动的（无需配置）。在生产环境里，它需要显式选择启用 `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`，而这并不推荐。
 
-Crawl4AI 是一个做浏览器渲染 Markdown 的边车服务。它运行基于 Playwright 的无头浏览器，并在服务端用它自己的内容过滤器提取适合 LLM 的 Markdown（TomoriBot 这一侧不需要后处理）。
+Crawl4AI 是一个做浏览器渲染 Markdown 的服务器。它运行基于 Playwright 的无头浏览器，并在服务端用它自己的内容过滤器提取适合 LLM 的 Markdown（TomoriBot 这一侧不需要后处理）。
 
 Crawl4AI 的配置路径选一条：
 
@@ -23,11 +23,11 @@ Crawl4AI 的配置路径选一条：
 docker compose --profile fetch-crawl4ai up -d
 ```
 
-这会启动 Compose 技术栈，并把 Crawl4AI 边车服务接到 TomoriBot 的 Docker 网络上。
+这会启动 Compose 技术栈，并把 Crawl4AI 容器接到 TomoriBot 的 Docker 网络上。
 
 如果你直接用 `bun run dev` 运行 TomoriBot，请改用下面的独立路径。
 
-如果你还想要 SearXNG 边车服务，就把 profile 串起来：
+如果你还想要 SearXNG，就把 profile 串起来：
 
 ```sh
 docker compose --profile searxng --profile fetch-crawl4ai up -d
@@ -41,13 +41,13 @@ docker compose --profile searxng --profile fetch-crawl4ai up -d
 
 首先，在 `.env` 里设置 `CRAWL4AI_BASE_URL=http://localhost:11235/` 和 `FETCH_URL_ENGINE_ORDER=crawl4ai,safe_http`，这样 bot 会连接到主机发布的容器端口。在生产环境之外不需要私有网络选择启用；只有当你以 `RUN_ENV=production` 运行时才加上 `FETCH_URL_ALLOW_PRIVATE_NETWORK=true`。
 
-然后，不要直接用 `bun run dev` 运行 TomoriBot，改用 `bun run launch --crawl4ai`。它会自动处理容器的生命周期，并在启动 bot 之前等边车服务进入健康状态：
+然后，不要直接用 `bun run dev` 运行 TomoriBot，改用 `bun run launch --crawl4ai`。它会自动处理容器的生命周期，并在启动 bot 之前等服务器进入健康状态：
 
 ```sh
 bun run launch --crawl4ai
 ```
 
-如果你还想要 SearXNG 边车服务：
+如果你还想要 SearXNG：
 
 ```sh
 bun run launch --searxng --crawl4ai
@@ -69,13 +69,13 @@ docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
   unclecode/crawl4ai:latest
 ```
 
-如果你给边车服务加了安全防护，请给 `docker run` 传 `-e CRAWL4AI_API_TOKEN=your_token`，并在 `.env` 里设置 `CRAWL4AI_TOKEN=your_token`。
+如果你给容器加了安全防护，请给 `docker run` 传 `-e CRAWL4AI_API_TOKEN=your_token`，并在 `.env` 里设置 `CRAWL4AI_TOKEN=your_token`。
 
 等容器进入健康状态（`docker ps` 显示 `(healthy)`）之后，运行 `bun run dev`。
 
 ---
 
-### C. 不用浏览器边车服务
+### C. 不用浏览器渲染的本地服务器
 
 不要设置 `CRAWL4AI_BASE_URL`。`fetch_url` 工具会使用受保护的 `safe_http` 引擎。
 
@@ -83,9 +83,9 @@ docker run -d --name crawl4ai -p 11235:11235 --shm-size=3g \
 
 ## 启动顺序（重要）
 
-TomoriBot 会在**启动后第一次调用 `fetch_url` 时**探测边车服务的健康状态，并把结果缓存 60 秒。如果第一次探测发生时容器还没就绪，bot 就会在接下来一分钟里把它当作不可用。
+TomoriBot 会在**启动后第一次调用 `fetch_url` 时**探测本地服务器的健康状态，并把结果缓存 60 秒。如果第一次探测发生时容器还没就绪，bot 就会在接下来一分钟里把它当作不可用。
 
-对于独立 Docker，请先启动边车容器，再启动 TomoriBot。`bun run launch --crawl4ai` 已经替你做好了这件事。
+对于独立 Docker，请先启动 Crawl4AI 容器，再启动 TomoriBot。`bun run launch --crawl4ai` 已经替你做好了这件事。
 
 ### 首次配置
 
@@ -156,7 +156,7 @@ CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":"
 | `CRAWL4AI_BASE_URL` | 未设置 | 设置后启用 Crawl4AI。在 Docker Compose 里用 `http://crawl4ai:11235/`；当 TomoriBot 直接跑在你的机器上时用 `http://localhost:11235/`。 |
 | `CRAWL4AI_TOKEN` | 未设置 | 可选的 bearer 令牌。启用时它必须与 Crawl4AI 容器上的 `CRAWL4AI_API_TOKEN` 一致。 |
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | 逗号分隔的引擎列表。`safe_http` 总是作为最后的兜底被追加；旧名 `mcp_fetch` 是它的别名。在不允许抓取私有网络的地方（生产环境且未选择启用），Crawl4AI 条目会被忽略。 |
-| `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AI 与 URL 抓取边车服务的单引擎请求超时。 |
+| `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AI 与其他 URL 抓取引擎的单引擎请求超时。 |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | 一次抓取调用在需要续读之前返回的最大字符数。 |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | 仅生产环境选择启用。在生产环境之外（`RUN_ENV` 不等于 `production`），SSRF 防护会自动放宽，所以 localhost、私有和内部地址的抓取以及 Crawl4AI 调度都无需配置即可工作。只有在可信的生产部署里需要允许私有网络抓取时才设为 `true`。 |
 | `FETCH_URL_FILTER_MODE` | `fit` | Crawl4AI 的 `/md` 过滤器模式。`fit` 会让 Markdown 更适合给 LLM 使用；`fetch_url(..., raw=true)` 会按请求覆盖它。 |

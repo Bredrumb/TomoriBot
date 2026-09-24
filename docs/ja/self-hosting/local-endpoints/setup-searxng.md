@@ -1,5 +1,5 @@
 ---
-title: "セットアップ: SearXNG (サイドカー)"
+title: "セットアップ: SearXNG"
 sidebar:
   order: 3
 ---
@@ -57,7 +57,7 @@ docker run -d --name searxng -p 8080:8080 \
 ### C. SearXNGなし
 `SEARXNG_BASE_URL`を設定しない場合、チェーンは`Brave → DuckDuckGo → IAsk`にフォールバックします。
 
-SearXNGサイドカーが設定されていない場合、組み立てられた`web_search`スキーマはSearXNG専用カテゴリーをアドバタイズしなくなります。Braveが設定されている場合は一般的なカテゴリー（`text`、`image`、`video`、`news`）が引き続き表示され、DuckDuckGo/IAskのMCPフォールバックのみが利用可能な場合はテキストのみの検索が表示されます。
+SearXNGサーバーが設定されていない場合、組み立てられた`web_search`スキーマはSearXNG専用カテゴリーをアドバタイズしなくなります。Braveが設定されている場合は一般的なカテゴリー（`text`、`image`、`video`、`news`）が引き続き表示され、DuckDuckGo/IAskのMCPフォールバックのみが利用可能な場合はテキストのみの検索が表示されます。
 
 ---
 

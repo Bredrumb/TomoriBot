@@ -72,7 +72,7 @@ Para instalar qualquer um deles manualmente, veja os
 
 ```bash
 bun run dev                          # apenas o bot
-bun run launch --searxng --crawl4ai  # bot + sidecars (veja bun run launch --help)
+bun run launch --searxng --crawl4ai  # bot + servidores locais (veja bun run launch --help)
 ```
 
 Quando o bot estiver online, execute `/setup` no Discord para conectar um provedor de IA. Um espaço de trabalho (workspace) que não contém um provedor próprio não pode responder, a menos que ele rode no modo BYOK de Usuário (User BYOK) onde o provedor pessoal de cada membro responde em seu lugar, então este é o último passo de todos os caminhos de instalação.

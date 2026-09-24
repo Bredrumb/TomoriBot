@@ -1,5 +1,5 @@
 ---
-title: "配置：SearXNG（边车服务）"
+title: "配置：SearXNG"
 sidebar:
   order: 3
 ---
@@ -57,7 +57,7 @@ docker run -d --name searxng -p 8080:8080 \
 ### C. 不用 SearXNG
 不要设置 `SEARXNG_BASE_URL`。这条链会退回到 `Brave → DuckDuckGo → IAsk`。
 
-没有配置 SearXNG 边车服务时，组装出来的 `web_search` schema 不再对外声明 SearXNG 独有的分类。常见分类（`text`、`image`、`video`、`news`）在配置了 Brave 时依然会出现，而只有 DuckDuckGo 与 IAsk 的 MCP 兜底可用时，则只出现纯文本搜索。
+没有配置 SearXNG 服务器时，组装出来的 `web_search` schema 不再对外声明 SearXNG 独有的分类。常见分类（`text`、`image`、`video`、`news`）在配置了 Brave 时依然会出现，而只有 DuckDuckGo 与 IAsk 的 MCP 兜底可用时，则只出现纯文本搜索。
 
 ---
 

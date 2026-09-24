@@ -70,7 +70,7 @@ bun run setup
 
 ```bash
 bun run dev                          # 只有 bot
-bun run launch --searxng --crawl4ai  # bot 加 sidecar（請看 bun run launch --help）
+bun run launch --searxng --crawl4ai  # bot 加本機伺服器（請看 bun run launch --help）
 ```
 
 bot 上線之後，在 Discord 執行 `/setup` 來連接 AI 供應商。自己的工作區沒有自帶供應商就無法回覆，除非它以使用者 BYOK 模式運行，改由每位成員的個人供應商回答，所以這是每一條安裝路徑的最後一步。

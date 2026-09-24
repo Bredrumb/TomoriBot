@@ -4,7 +4,7 @@ sidebar:
   order: 1
 ---
 
-TomoriBot hỗ trợ nhiều sidecar Chuyển văn bản thành giọng nói (Text-to-Speech) cục bộ, mỗi sidecar phù hợp với các ngôn ngữ, cấu hình phần cứng và yêu cầu độ trễ khác nhau.
+TomoriBot hỗ trợ nhiều máy chủ Chuyển văn bản thành giọng nói (Text-to-Speech) cục bộ, mỗi máy chủ phù hợp với các ngôn ngữ, cấu hình phần cứng và yêu cầu độ trễ khác nhau.
 
 Trang này cung cấp kết quả benchmark thực nghiệm, thời gian tổng hợp và các đoạn âm thanh so sánh được ghi lại trong môi trường thử nghiệm giống hệt nhau với các mẫu âm thanh tham chiếu sao chép giọng nói tương ứng.
 
@@ -70,7 +70,7 @@ Thời gian đo lường báo cáo cả **toàn bộ thời gian tạo** (tổng
 
 ## So sánh các engine
 
-Tất cả các sidecar của TomoriBot hiện đều trả về một tệp WAV hoàn chỉnh cho bot. "Đường dẫn streaming" có nghĩa là model thượng nguồn hoặc backend cung cấp riêng biệt có hỗ trợ tính năng này; điều này **không** có nghĩa là tính năng phát trực tiếp trong kênh thoại Discord đã được triển khai. Kích thước ở đây là số lượng tham số của model, **không phải** dung lượng VRAM hoặc dung lượng tải về, và cột 16 GB GPU là hướng dẫn thiết lập thay vì mức đỉnh được đo lường. Cột tốc độ mô tả sự đánh đổi dự định của từng engine; các mốc thời gian đo được ở trên đến từ một máy chạy Windows và không phản ánh thứ hạng của các engine trên Linux.
+Tất cả các máy chủ TTS của TomoriBot hiện đều trả về một tệp WAV hoàn chỉnh cho bot. "Đường dẫn streaming" có nghĩa là model thượng nguồn hoặc backend cung cấp riêng biệt có hỗ trợ tính năng này; điều này **không** có nghĩa là tính năng phát trực tiếp trong kênh thoại Discord đã được triển khai. Kích thước ở đây là số lượng tham số của model, **không phải** dung lượng VRAM hoặc dung lượng tải về, và cột 16 GB GPU là hướng dẫn thiết lập thay vì mức đỉnh được đo lường. Cột tốc độ mô tả sự đánh đổi dự định của từng engine; các mốc thời gian đo được ở trên đến từ một máy chạy Windows và không phản ánh thứ hạng của các engine trên Linux.
 
 Cột "Clip tham chiếu" cho biết độ dài âm thanh tham chiếu mà mỗi engine ghi lại trong tài liệu hoặc áp dụng trong runtime, vì vậy cột này pha trộn hướng dẫn đã công bố với các giới hạn đọc được từ mã nguồn thượng nguồn. Hầu hết các engine cắt âm thầm theo cửa sổ của mình thay vì từ chối yêu cầu, đó là lý do cột này nêu những gì engine đọc chứ không chỉ những gì engine chấp nhận. Đây là hành vi ở thượng nguồn, không phải kết quả đo tại đây, và độc lập với giới hạn tải lên của TomoriBot.
 

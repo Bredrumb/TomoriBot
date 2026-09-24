@@ -39,7 +39,7 @@ URL endpoint mặc định là `http://127.0.0.1:8013`.
 
 Model mặc định là `Aratako/Irodori-TTS-v4.1-Small`. Các kho lưu trữ Hugging Face tương thích, các bản tinh chỉnh cộng đồng (chẳng hạn như `phasefield-audio/Irodori-TTS-v4.1-Anime`), hoặc các tệp checkpoint cục bộ có thể được định cấu hình qua các biến môi trường.
 
-Khi khởi động sidecar (trực tiếp bằng Python hoặc qua `bun run launch --irodoritts`), máy chủ sẽ tự động đọc tệp `.env` ở thư mục gốc của kho lưu trữ (hoặc tệp `.env` cục bộ trong `servers/tts/irodoritts/`) và ghi log ID model đang hoạt động khi khởi động.
+Khi khởi động máy chủ (trực tiếp bằng Python hoặc qua `bun run launch --irodoritts`), máy chủ sẽ tự động đọc tệp `.env` ở thư mục gốc của kho lưu trữ (hoặc tệp `.env` cục bộ trong `servers/tts/irodoritts/`) và ghi log ID model đang hoạt động khi khởi động.
 
 ### Qua `.env` (Cố định)
 
@@ -136,7 +136,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 Trình cài đặt TomoriBot trước đây đã sao chép và vá tệp `pyproject.toml` của Irodori, cài đặt thủ công `dacvae`, và ghim một commit Irodori cũ thời kỳ v2. Các giải pháp tạm thời đó là cần thiết cho bố cục gói thượng nguồn cũ hơn nhưng không còn phù hợp với Irodori hiện tại.
 
-Sidecar hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập backend `uv` của thượng nguồn. Irodori và `dacvae` vẫn được ghim vào các commit đã biết tại đó để cài đặt có thể tái lập, nhưng TomoriBot không còn sửa đổi mã nguồn thượng nguồn trong quá trình cài đặt nữa.
+Máy chủ hiện có tệp `pyproject.toml` riêng và tuân theo thiết lập backend `uv` của thượng nguồn. Irodori và `dacvae` vẫn được ghim vào các commit đã biết tại đó để cài đặt có thể tái lập, nhưng TomoriBot không còn sửa đổi mã nguồn thượng nguồn trong quá trình cài đặt nữa.
 
 ## Biến môi trường
 

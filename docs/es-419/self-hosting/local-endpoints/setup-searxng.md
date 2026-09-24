@@ -1,5 +1,5 @@
 ---
-title: "Configuración: SearXNG (Sidecar)"
+title: "Configuración: SearXNG"
 sidebar:
   order: 3
 ---
@@ -59,7 +59,7 @@ Luego ejecuta `bun run dev` una vez que el contenedor esté en buen estado (`doc
 ### C. Sin SearXNG
 Deja `SEARXNG_BASE_URL` sin establecer. La cadena recurre a `Brave → DuckDuckGo → IAsk`.
 
-Cuando no se configura ningún sidecar de SearXNG, el esquema de `web_search` ensamblado ya no anuncia categorías exclusivas de SearXNG. Las categorías comunes (`text`, `image`, `video`, `news`) aún aparecen cuando Brave está configurado, y la búsqueda solo de texto aparece cuando solo está disponible la alternativa de MCP de DuckDuckGo/IAsk.
+Cuando no se configura ningún servidor de SearXNG, el esquema de `web_search` ensamblado ya no anuncia categorías exclusivas de SearXNG. Las categorías comunes (`text`, `image`, `video`, `news`) aún aparecen cuando Brave está configurado, y la búsqueda solo de texto aparece cuando solo está disponible la alternativa de MCP de DuckDuckGo/IAsk.
 
 ---
 

@@ -25,7 +25,7 @@ swap device capacity so unevicted memory overflows safely to disk.
 
 ### SearXNG Python Worker Footprint
 
-`SEARXNG_BLOCKING_THREADS` controls concurrent upstream engine queries in the SearXNG sidecar.
+`SEARXNG_BLOCKING_THREADS` controls concurrent upstream engine queries in the SearXNG container.
 
 SearXNG uses a Python worker architecture where deallocated objects return to internal arenas
 instead of the host operating system. Peak concurrency establishes a resident memory floor that

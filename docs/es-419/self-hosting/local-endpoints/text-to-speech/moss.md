@@ -2,13 +2,13 @@
 title: "MOSS-TTS"
 ---
 
-Usa `servers/tts/moss/server.py` para probar la clonación de voz de MOSS y el diseño de voz descrito con texto a través de un endpoint local. El modo automático (Auto) selecciona el modelo de clonación cuando TomoriBot envía `ref_audio` y MOSS-VoiceGenerator cuando envía `instruct`. Mantiene solo un modelo cargado a la vez. Este es un sidecar de prueba, no una integración de transmisión de chat de voz de Discord.
+Usa `servers/tts/moss/server.py` para probar la clonación de voz de MOSS y el diseño de voz descrito con texto a través de un endpoint local. El modo automático (Auto) selecciona el modelo de clonación cuando TomoriBot envía `ref_audio` y MOSS-VoiceGenerator cuando envía `instruct`. Mantiene solo un modelo cargado a la vez. Este es un servidor de prueba, no una integración de transmisión de chat de voz de Discord.
 
 El modelo de clonación predeterminado es [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) (4B), elegido como el punto de partida práctico para una GPU de 16 GB. [MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) es una alternativa de 8B pero generalmente necesitará más de 16 GB de VRAM en BF16. El diseño de voz usa [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator) (alrededor de 1.7B). El modo automático intercambia los modelos en lugar de mantener ambos en la VRAM, por lo que un cambio de modo aún incurre en un retraso de carga de GPU.
 
 ## Configuración
 
-Ejecuta desde la raíz del repositorio de TomoriBot. Usa Python 3.12 y un controlador CUDA compatible con las ruedas PyTorch upstream CUDA 12.8. Los extras de tiempo de ejecución upstream fijan PyTorch y Torchaudio 2.9.1+cu128; mantén este sidecar en su propio entorno virtual. Otras pilas CUDA o CPU necesitan una instalación validada por separado.
+Ejecuta desde la raíz del repositorio de TomoriBot. Usa Python 3.12 y un controlador CUDA compatible con las ruedas PyTorch upstream CUDA 12.8. Los extras de tiempo de ejecución upstream fijan PyTorch y Torchaudio 2.9.1+cu128; mantén este servidor en su propio entorno virtual. Otras pilas CUDA o CPU necesitan una instalación validada por separado.
 
 ### Windows PowerShell
 
@@ -46,6 +46,6 @@ Para la clonación, sube un clip de referencia limpio en `/config` > Modelos > P
 
 El adaptador de clonación actual de TomoriBot no envía ninguna etiqueta de idioma. Para una prueba en un solo idioma, establece `MOSS_TTS_DEFAULT_LANGUAGE=Japanese` (o `English`, `Chinese`, etc.) antes de iniciar el servidor. Una solicitud manual `/synthesize` puede en su lugar proporcionar `language` por solicitud. Deja la variable sin establecer para uso de idiomas mixtos; evalúa la salida en japonés antes de depender de ella.
 
-El sidecar lee su propio entorno de procesos. Agregar un valor al `.env` del bot no lo pasa automáticamente a un proceso de Python iniciado por separado.
+El servidor lee su propio entorno de procesos. Agregar un valor al `.env` del bot no lo pasa automáticamente a un proceso de Python iniciado por separado.
 
 Para probar la insignia de 8B en una máquina con suficiente memoria, configura `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` antes del prefetch. `MOSS_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE` y `MOSS_TTS_MAX_NEW_TOKENS` también son configurables en `.env.optional.example`. El `TTS_SYNTHESIZE_TIMEOUT_MS` del bot puede necesitar un aumento para intercambios de modos o inferencia por CPU.

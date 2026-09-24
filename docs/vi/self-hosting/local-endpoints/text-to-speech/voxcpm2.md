@@ -58,17 +58,17 @@ Gói chính thức cũng cung cấp khả năng lựa chọn thiết bị CPU v�
 .\servers\tts\voxcpm2\install-voxcpm2.ps1 -Cpu
 ```
 
-Nếu bản cài đặt PyTorch trên Windows gốc của bạn cần cài đặt lại thủ công hoặc căn chỉnh lại driver, hãy cài đặt bản dựng PyTorch hỗ trợ CUDA trực tiếp vào môi trường ảo của sidecar:
+Nếu bản cài đặt PyTorch trên Windows gốc của bạn cần cài đặt lại thủ công hoặc căn chỉnh lại driver, hãy cài đặt bản dựng PyTorch hỗ trợ CUDA trực tiếp vào môi trường ảo của máy chủ:
 
 ```powershell
 .\servers\tts\voxcpm2\.venv\Scripts\pip.exe install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-OpenBMB báo cáo RTF khoảng 0.30 trên RTX 4090 với runtime tiêu chuẩn. Thượng nguồn cũng hỗ trợ tạo streaming và tài liệu hóa các tùy chọn phục vụ nhanh hơn là Nano-vLLM và vLLM-Omni. Giao ước `POST /synthesize` hiện tại của TomoriBot trả về một phản hồi WAV, do đó sidecar này chủ ý lưu vào bộ đệm câu nói được tạo thay vì cung cấp giao thức streaming riêng biệt.
+OpenBMB báo cáo RTF khoảng 0.30 trên RTX 4090 với runtime tiêu chuẩn. Thượng nguồn cũng hỗ trợ tạo streaming và tài liệu hóa các tùy chọn phục vụ nhanh hơn là Nano-vLLM và vLLM-Omni. Giao ước `POST /synthesize` hiện tại của TomoriBot trả về một phản hồi WAV, do đó máy chủ này chủ ý lưu vào bộ đệm câu nói được tạo thay vì cung cấp giao thức streaming riêng biệt.
 
 ## Cài đặt
 
-Sidecar ghim gói `voxcpm` 2.0.3 ổn định hiện tại và tải `openbmb/VoxCPM2` vào bộ nhớ đệm Hugging Face thông thường.
+Máy chủ ghim gói `voxcpm` 2.0.3 ổn định hiện tại và tải `openbmb/VoxCPM2` vào bộ nhớ đệm Hugging Face thông thường.
 
 ### Linux / WSL Bash
 
@@ -103,7 +103,7 @@ $env:VOXCPM2_PREFETCH = "0"
 .\servers\tts\voxcpm2\install-voxcpm2.ps1
 ```
 
-Sau khi thiết lập, `bun run launch --voxcpm2` sẽ khởi động sidecar cùng với TomoriBot. Endpoint mặc định là `http://127.0.0.1:8016`.
+Sau khi thiết lập, `bun run launch --voxcpm2` sẽ khởi động máy chủ cùng với TomoriBot. Endpoint mặc định là `http://127.0.0.1:8016`.
 
 ## Đăng ký trong TomoriBot
 
@@ -179,4 +179,4 @@ Khi VoxCPM2 là model Speech đang hoạt động, `/generate voice-message` s�
 
 Model BF16 chính thức đã vừa vặn với mục tiêu GPU 16 GB tiêu dùng dự kiến, vì vậy TomoriBot không mặc định dùng checkpoint lượng tử hóa. Các bản lượng tử hóa cộng đồng có tồn tại, nhưng chúng thêm một lớp tương thích và bảo trì khác mà không cần thiết cho thiết lập thông thường.
 
-Đối với các triển khai thông lượng cao, OpenBMB hiện trỏ đến Nano-vLLM-VoxCPM và vLLM-Omni làm các tùy chọn phục vụ tăng tốc. Những runtime đó có thể cung cấp các tính năng streaming và phục vụ đồng thời vượt ra ngoài sidecar tham chiếu này. Chúng không bắt buộc cho quy trình làm việc tin nhắn thoại cục bộ thông thường của TomoriBot, và wrapper này chủ ý tuân thủ API `voxcpm` chính thức để việc nâng cấp model thượng nguồn luôn dễ theo dõi.
+Đối với các triển khai thông lượng cao, OpenBMB hiện trỏ đến Nano-vLLM-VoxCPM và vLLM-Omni làm các tùy chọn phục vụ tăng tốc. Những runtime đó có thể cung cấp các tính năng streaming và phục vụ đồng thời vượt ra ngoài máy chủ tham chiếu này. Chúng không bắt buộc cho quy trình làm việc tin nhắn thoại cục bộ thông thường của TomoriBot, và wrapper này chủ ý tuân thủ API `voxcpm` chính thức để việc nâng cấp model thượng nguồn luôn dễ theo dõi.

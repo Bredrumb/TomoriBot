@@ -62,16 +62,16 @@ docker compose up      # ボットとデータベース
 ボットがオンラインになったら、Discordで `/setup` を実行してAIプロバイダーのキーを追加します。
 Discord側の操作については[クイックスタート](/ja/introduction/quickstart/)を参照してください。
 
-## 4. オプションのサイドカー（Composeプロファイル）
+## 4. オプションのローカルサーバー（Composeプロファイル）
 
-サイドカーはComposeプロファイルを介してオプトインされるため、必要なものだけを実行できます。
+ローカルサーバーはComposeプロファイルを介してオプトインされるため、必要なものだけを実行できます。
 
 ```sh
 # SearXNG（プライベートWeb検索）+ Crawl4AI（ブラウザレンダリングによるフェッチ）
 docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
-各サイドカーの詳細については、[SearXNG](/ja/self-hosting/local-endpoints/setup-searxng/)、
+各サーバーの詳細については、[SearXNG](/ja/self-hosting/local-endpoints/setup-searxng/)、
 [Crawl4AI](/ja/self-hosting/local-endpoints/setup-crawl4ai/)、
 および[ローカルモニタリング](/ja/self-hosting/local-monitoring/)を参照してください。
 

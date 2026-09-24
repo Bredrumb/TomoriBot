@@ -59,7 +59,7 @@ docker run -d --name tomori-db \
 [Docker Compose](/zh-CN/self-hosting/docker-compose/)。
 :::
 
-可选的调优项都在 `.env.optional.example` 里。想改哪些值（各类上限、超时、功能开关、边车服务 URL 等），就复制哪些过来。
+可选的调优项都在 `.env.optional.example` 里。想改哪些值（各类上限、超时、功能开关、本地服务器 URL 等），就复制哪些过来。
 
 ## 3. 运行
 
@@ -71,7 +71,7 @@ bun run dev
 [`/setup` 指令](/zh-CN/self-hosting/setup-wizard/#setup-指令)，Discord 里那一侧的操作见
 [快速上手](/zh-CN/introduction/quickstart/)。
 
-如果你想让可选边车服务（SearXNG、Crawl4AI、本地 TTS/STT）与 bot 一起启动，请用 `bun run launch` 代替 `bun run dev`：
+如果你想让可选的本地服务器（SearXNG、Crawl4AI、本地 TTS/STT）与 bot 一起启动，请用 `bun run launch` 代替 `bun run dev`：
 
 ```sh
 bun run launch --searxng --crawl4ai

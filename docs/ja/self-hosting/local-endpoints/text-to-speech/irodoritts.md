@@ -39,7 +39,7 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 デフォルトモデルは`Aratako/Irodori-TTS-v4.1-Small`です。環境変数を設定することで、互換性のあるHugging Faceリポジトリやコミュニティファインチューン（`phasefield-audio/Irodori-TTS-v4.1-Anime`など）、またはローカルのチェックポイントファイルを指定できます。
 
-サイドカー起動時（Pythonによる直接起動、または`bun run launch --irodoritts`）、サーバーはリポジトリ直下の`.env`（または`servers/tts/irodoritts/.env`）を自動的に読み込み、起動時に使用中のモデルIDをログ出力します。
+ローカルサーバーを起動すると（Pythonによる直接起動、または`bun run launch --irodoritts`）、リポジトリ直下の`.env`（または`servers/tts/irodoritts/.env`）を自動的に読み込み、起動時に使用中のモデルIDをログ出力します。
 
 ### `.env` を使用する場合（設定を保持）
 
@@ -122,7 +122,7 @@ TomoriBotはTTSへ送信する前にDiscordのカスタム絵文字構文を削�
 
 ## 長い音声メッセージ
 
-Irodori v4.1は固定長のクリップを生成するのではなく、duration predictorで出力長を予測するため、サイドカー側で1回の発話あたりの長さ上限を設けていません。それでもTomoriBotは長いテキストを合成前に分割し、生成した音声を1つのWAVレスポンスへ連結するため、Discord側には1つの音声メッセージとして届きます。分割によって各推論が短く保たれ、レイテンシが抑えられます。
+Irodori v4.1は固定長のクリップを生成するのではなく、duration predictorで出力長を予測するため、ローカルサーバー側で1回の発話あたりの長さ上限を設けていません。それでもTomoriBotは長いテキストを合成前に分割し、生成した音声を1つのWAVレスポンスへ連結するため、Discord側には1つの音声メッセージとして届きます。分割によって各推論が短く保たれ、レイテンシが抑えられます。
 
 実装は[公式Irodori OpenAI互換サーバー](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py)のチャンク処理を基準にしています。公式サーバーでは80文字の非空白文字を基準にチャンク処理がデフォルトで有効です。TomoriBotではさらに、閉じ引用符や閉じ括弧を直前の句読点と同じチャンクに残し、`！？`や`...`のような連続した終端記号をまとめ、数字に隣接する小数点では分割せず、短すぎる最後のチャンクを直前へ結合します。
 
@@ -148,7 +148,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 以前のTomoriBotインストーラーはIrodoriの`pyproject.toml`にパッチを当て、`dacvae`を手動インストールし、古いv2時代のIrodoriコミットを固定していました。当時のパッケージ構成では必要な回避策でしたが、現在のIrodoriでは適切ではありません。
 
-現在はサイドカー専用の`pyproject.toml`を用意し、アップストリームと同じ`uv`ベースのバックエンド構成を使います。再現可能なインストールのためIrodoriと`dacvae`の既知コミットは固定しますが、インストール時にアップストリームのソースコードを書き換えることはありません。
+現在はローカルサーバー専用の`pyproject.toml`を用意し、アップストリームと同じ`uv`ベースのバックエンド構成を使います。再現可能なインストールのためIrodoriと`dacvae`の既知コミットは固定しますが、インストール時にアップストリームのソースコードを書き換えることはありません。
 
 ## 環境変数
 

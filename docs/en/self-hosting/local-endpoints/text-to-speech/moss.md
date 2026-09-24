@@ -2,13 +2,13 @@
 title: "MOSS-TTS"
 ---
 
-Use `servers/tts/moss/server.py` to try MOSS voice cloning and text-described voice design through one local endpoint. Auto mode selects the clone model when TomoriBot sends `ref_audio` and MOSS-VoiceGenerator when it sends `instruct`. It keeps only one model loaded at a time. This is a trial sidecar, not a streaming Discord voice-chat integration.
+Use `servers/tts/moss/server.py` to try MOSS voice cloning and text-described voice design through one local endpoint. Auto mode selects the clone model when TomoriBot sends `ref_audio` and MOSS-VoiceGenerator when it sends `instruct`. It keeps only one model loaded at a time. This is a trial server, not a streaming Discord voice-chat integration.
 
 The default clone model is [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) (4B), chosen as the practical starting point for a 16 GB GPU. [MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) is an 8B alternative but will generally need more than 16 GB VRAM at BF16. Voice design uses [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator) (about 1.7B). Auto mode swaps models rather than keeping both in VRAM, so a mode change still incurs a GPU load delay.
 
 ## Setup
 
-Run from the TomoriBot repository root. Use Python 3.12 and a CUDA driver compatible with the upstream CUDA 12.8 PyTorch wheels. Upstream's runtime extra pins PyTorch and Torchaudio 2.9.1+cu128; keep this sidecar in its own virtual environment. Other CUDA or CPU stacks need a separately validated installation.
+Run from the TomoriBot repository root. Use Python 3.12 and a CUDA driver compatible with the upstream CUDA 12.8 PyTorch wheels. Upstream's runtime extra pins PyTorch and Torchaudio 2.9.1+cu128; keep this server in its own virtual environment. Other CUDA or CPU stacks need a separately validated installation.
 
 ### Windows PowerShell
 
@@ -46,6 +46,6 @@ For cloning, upload a clean reference clip under `/config` > Models > TTS Parame
 
 TomoriBot's current clone adapter sends no language tag. For a single-language trial, set `MOSS_TTS_DEFAULT_LANGUAGE=Japanese` (or `English`, `Chinese`, etc.) before starting the server. A manual `/synthesize` request can instead supply `language` per request. Leave the variable unset for mixed-language use; evaluate Japanese output before relying on it.
 
-The sidecar reads its own process environment. Adding a value to the bot's `.env` does not automatically pass it to a separately started Python process.
+The server reads its own process environment. Adding a value to the bot's `.env` does not automatically pass it to a separately started Python process.
 
 To try the 8B flagship on a machine with enough memory, set `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` before prefetching. `MOSS_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE`, and `MOSS_TTS_MAX_NEW_TOKENS` are also configurable in `.env.optional.example`. The bot's `TTS_SYNTHESIZE_TIMEOUT_MS` may need increasing for mode swaps or CPU inference.

@@ -23,7 +23,7 @@ Each engine lives in its own subfolder with its own `.venv` to keep dependencies
 
 ## Setup
 
-Each sidecar has its own setup guide under `docs/en/self-hosting/local-endpoints/text-to-speech/`. Modern sidecars include installer scripts where their upstream runtimes make that practical.
+Each local server has its own setup guide under `docs/en/self-hosting/local-endpoints/text-to-speech/`. Modern servers include installer scripts where their upstream runtimes make that practical.
 
 For VoxCPM2:
 
@@ -45,7 +45,7 @@ bun run launch --voxcpm2
 
 Fish S2 Pro has its own installer because the local server also installs the Fish Speech runtime and downloads the checkpoint. See `docs/en/self-hosting/local-endpoints/text-to-speech/fishs2.md`. The default is the official BF16 `fishaudio/s2-pro` checkpoint; the guide covers the optional INT8 `Imagilux/fishaudio-s2-pro` checkpoint for smaller GPUs. The installer pins the Fish Speech runtime commit, and updating it means changing that pin.
 
-CosyVoice 3 has its own installer because the sidecar checks out the reviewed upstream runtime and downloads the pinned model snapshot. See `docs/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3.md`.
+CosyVoice 3 has its own installer because the server checks out the reviewed upstream runtime and downloads the pinned model snapshot. See `docs/en/self-hosting/local-endpoints/text-to-speech/cosyvoice3.md`.
 
 ## Registering in TomoriBot
 
@@ -57,7 +57,7 @@ For voice samples, open `/config` under Models > TTS Parameters & Voices. Tomori
 
 ## Engine notes
 
-Chatterbox defaults to Turbo. For the smaller Nano model, install the pinned upstream revision in the [Chatterbox guide](../../docs/en/self-hosting/local-endpoints/text-to-speech/chatterbox.md) and set `CHATTERBOX_FAST_MODEL=nano` before starting the sidecar. The `/config` fast-model toggle chooses the configured Turbo or Nano model when enabled; disabling it selects standard Chatterbox for `cfg_weight` and `exaggeration` tuning.
+Chatterbox defaults to Turbo. For the smaller Nano model, install the pinned upstream revision in the [Chatterbox guide](../../docs/en/self-hosting/local-endpoints/text-to-speech/chatterbox.md) and set `CHATTERBOX_FAST_MODEL=nano` before starting the server. The `/config` fast-model toggle chooses the configured Turbo or Nano model when enabled; disabling it selects standard Chatterbox for `cfg_weight` and `exaggeration` tuning.
 
 Qwen3-TTS defaults to auto mode. One server URL can handle both clone and VoiceDesign requests: the server detects clone requests by `ref_audio`, detects VoiceDesign requests by `instruct`, and swaps the loaded model when needed. Start VoiceDesign only with `TOMORI_TTS_MODE=voice-design python servers/tts/qwen3tts/server.py` or `python servers/tts/qwen3tts/server.py --mode voice-design`.
 

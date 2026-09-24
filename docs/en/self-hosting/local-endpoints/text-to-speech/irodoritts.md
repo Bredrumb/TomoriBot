@@ -40,7 +40,7 @@ The default endpoint URL is `http://127.0.0.1:8013`.
 
 The default model is `Aratako/Irodori-TTS-v4.1-Small`. Compatible Hugging Face repositories, community fine-tunes (such as `phasefield-audio/Irodori-TTS-v4.1-Anime`), or local checkpoint files can be configured via environment variables.
 
-When starting the sidecar (directly with Python or via `bun run launch --irodoritts`), the server automatically reads the repository root `.env` (or a local `.env` in `servers/tts/irodoritts/`) and logs the active model ID on startup.
+When you start the server (directly with Python or via `bun run launch --irodoritts`), it automatically reads the repository root `.env` (or a local `.env` in `servers/tts/irodoritts/`) and logs the active model ID on startup.
 
 ### Via `.env` (Persistent)
 
@@ -126,7 +126,7 @@ TomoriBot strips Discord custom emoji syntax before sending text to TTS. With `s
 
 ## Long voice messages
 
-Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the sidecar does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.
+Irodori v4.1 predicts output length with its duration predictor rather than generating a fixed-length clip, so the server does not impose a per-utterance duration cap of its own. TomoriBot still chunks long text before synthesis and concatenates the generated audio into one WAV response, so Discord receives one voice message; the chunking keeps each inference pass short, which is what bounds latency.
 
 The implementation starts from the chunking approach used by the [official Irodori OpenAI-compatible server](https://github.com/Aratako/Irodori-TTS-Server/blob/main/src/irodori_openai_tts/app.py), whose defaults enable chunking at 80 non-whitespace characters. TomoriBot adds stricter boundary handling so closing quotes and brackets stay with the punctuation they close, punctuation runs such as `！？` and `...` stay together, decimal points next to digits do not split, and very short final tails are merged back into the previous chunk.
 
@@ -152,7 +152,7 @@ This is an inference quality/speed tradeoff, so test it with your chosen checkpo
 
 The previous TomoriBot installer cloned and patched Irodori's `pyproject.toml`, manually installed `dacvae`, and pinned an old v2-era Irodori commit. Those workarounds were necessary for the older upstream package layout but are no longer appropriate for current Irodori.
 
-The sidecar now has its own `pyproject.toml` and follows upstream's `uv` backend setup. Irodori and `dacvae` remain pinned to known commits there for reproducible installs, but TomoriBot no longer modifies upstream source code during installation.
+The server now has its own `pyproject.toml` and follows upstream's `uv` backend setup. Irodori and `dacvae` remain pinned to known commits there for reproducible installs, but TomoriBot no longer modifies upstream source code during installation.
 
 ## Environment variables
 

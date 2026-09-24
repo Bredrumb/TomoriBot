@@ -23,7 +23,7 @@ Os exemplos oficiais do CosyVoice 3 incluem atualmente uma ressalva importante p
 
 ## Como o TomoriBot mapeia as solicitações
 
-O wrapper aceita os campos normais do sidecar de clonagem:
+O wrapper aceita os campos normais de `tts-clone`:
 
 - `text`
 - `ref_audio`
@@ -51,7 +51,7 @@ O campo `instruct` do `/synthesize` é passado para o condicionamento de instru�
 
 O CosyVoice 3 suporta streaming bidirecional no upstream. O projeto documenta tanto o streaming de entrada de texto quanto o streaming de saída de áudio, com latência para o primeiro áudio de cerca de 150 ms em sua configuração otimizada.
 
-A interface TTS personalizada atual do TomoriBot espera uma resposta de áudio completa para uma mensagem de voz no Discord, então este sidecar retorna um WAV completo e define a inferência upstream como padrão para `stream=False`. Defina `COSYVOICE3_UPSTREAM_STREAM=1` apenas ao testar o gerador upstream; isso não reduz a latência de resposta do TomoriBot até que exista um transporte de voz por streaming.
+A interface TTS personalizada atual do TomoriBot espera uma resposta de áudio completa para uma mensagem de voz no Discord, então este servidor retorna um WAV completo e define a inferência upstream como padrão para `stream=False`. Defina `COSYVOICE3_UPSTREAM_STREAM=1` apenas ao testar o gerador upstream; isso não reduz a latência de resposta do TomoriBot até que exista um transporte de voz por streaming.
 
 ## Hardware
 
@@ -79,7 +79,7 @@ bash servers/tts/cosyvoice3/install-cosyvoice3.sh
 servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
 ```
 
-Ou inicie o sidecar configurado e o TomoriBot juntos:
+Ou inicie o servidor configurado e o TomoriBot juntos:
 
 ```bash
 bun run launch --cosyvoice3
@@ -94,7 +94,7 @@ O instalador:
 
 Novas execuções mantêm exatamente essas revisões; migrar para revisões mais novas significa alterar os dois pins no instalador. O instalador se recusa a reinstalar sobre um checkout do runtime que tenha alterações locais.
 
-Os requisitos upstream atualmente usam o PyTorch 2.3.1 com o índice de pacotes do CUDA 12.1, pacotes CUDA 12 do ONNX Runtime no Linux e pacotes do TensorRT 10.13 no Linux. Se você estiver usando um hardware que exija uma compilação (build) mais recente do PyTorch para CUDA, instale uma compilação compatível do PyTorch no venv do sidecar após os requisitos upstream e teste-a com seu driver.
+Os requisitos upstream atualmente usam o PyTorch 2.3.1 com o índice de pacotes do CUDA 12.1, pacotes CUDA 12 do ONNX Runtime no Linux e pacotes do TensorRT 10.13 no Linux. Se você estiver usando um hardware que exija uma compilação (build) mais recente do PyTorch para CUDA, instale uma compilação compatível do PyTorch no venv do servidor após os requisitos upstream e teste-a com seu driver.
 
 ### Windows PowerShell
 
@@ -177,7 +177,7 @@ O carregador oficial atual sempre lê um arquivo chamado `llm.pt`. Para experime
 
 O CosyVoice 3 também suporta caminhos opcionais vLLM e TensorRT. Atualmente, o upstream documenta o vLLM 0.11.x+ usando o motor V1 e o vLLM 0.9.0 como o caminho legado. Esses runtimes têm restrições adicionais de versão e hardware, de modo que o TomoriBot não os instala ou habilita por padrão.
 
-Use-os apenas depois que o sidecar comum do PyTorch estiver funcionando. Para uma carga de trabalho de mensagens de voz no Discord, evitar complexidade adicional de runtime geralmente é mais útil do que otimizar um modelo já pequeno de 0.5B.
+Use-os apenas depois que o servidor comum do PyTorch estiver funcionando. Para uma carga de trabalho de mensagens de voz no Discord, evitar complexidade adicional de runtime geralmente é mais útil do que otimizar um modelo já pequeno de 0.5B.
 
 ## Licença
 

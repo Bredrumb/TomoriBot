@@ -34,7 +34,7 @@ class TrimReferenceAudioTest(unittest.TestCase):
 
     def test_clamps_the_rate_tomoribot_normalizes_to(self) -> None:
         # TomoriBot converts every upload to 22.05 kHz mono WAV before storing it, so this is the
-        # shape the sidecar actually receives.
+        # shape the server actually receives.
         samplerate = 22050
         with tempfile.TemporaryDirectory() as directory:
             path = self._write_clip(directory, 130.0, samplerate=samplerate)

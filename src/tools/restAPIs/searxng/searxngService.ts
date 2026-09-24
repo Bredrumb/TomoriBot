@@ -9,7 +9,7 @@
  *
  * Availability gates on whether `SEARXNG_BASE_URL` is set AND the
  * instance responds healthy. We cache the health probe so we don't hit
- * the sidecar on every tool invocation (the chain dispatcher calls
+ * the local server on every tool invocation (the chain dispatcher calls
  * `isSearxngAvailable()` once per call).
  */
 
@@ -30,7 +30,7 @@ const USER_AGENT =
 const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS ?? "5000", 10) || 5000);
 
 // Cache duration for the "SearXNG reachable" probe, so avoids re-probing on every
-//    LLM tool turn while still allowing recovery within a minute when the sidecar
+//    LLM tool turn while still allowing recovery within a minute when the server
 //    comes back online.
 const HEALTHCHECK_CACHE_MS = 60_000;
 
@@ -47,7 +47,7 @@ let lastReportedAvailability: boolean | null = null;
 /**
  * Emits an error-level record when availability flips, and only then.
  *
- * A sidecar that is merely unreachable is otherwise invisible in production: the probe
+ * A server that is merely unreachable is otherwise invisible in production: the probe
  * failures below log at `warn`, which sits under the level-50 threshold on the JSONL sink
  * that Azure Monitor tails, and `dispatcher.ts` skips an unavailable engine silently on its
  * way down the chain. So the operator sees errors when SearXNG is up and broken, but nothing
@@ -71,7 +71,7 @@ function reportAvailabilityTransition(available: boolean, reason?: string): void
     // Recovery is only newsworthy against a previously reported outage.
     if (!firstResolution) {
       emit(
-        `${SERVICE_NAME} sidecar is reachable again; web_search will prefer it over the fallback chain`,
+        `${SERVICE_NAME} server is reachable again; web_search will prefer it over the fallback chain`,
         "SearxngRecovered",
       );
     }
@@ -79,7 +79,7 @@ function reportAvailabilityTransition(available: boolean, reason?: string): void
   }
 
   emit(
-    `${SERVICE_NAME} sidecar is unreachable; web_search is falling back down the engine chain${reason ? `: ${reason}` : ""}`,
+    `${SERVICE_NAME} server is unreachable; web_search is falling back down the engine chain${reason ? `: ${reason}` : ""}`,
     "SearxngUnavailable",
   );
 }

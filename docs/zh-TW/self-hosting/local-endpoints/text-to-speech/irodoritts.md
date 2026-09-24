@@ -39,7 +39,7 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 預設模型是 `Aratako/Irodori-TTS-v4.1-Small`。相容的 Hugging Face repository、社群微調版本（例如 `phasefield-audio/Irodori-TTS-v4.1-Anime`），或本機檢查點檔案，都可以透過環境變數設定。
 
-啟動 sidecar 時（直接用 Python 或透過 `bun run launch --irodoritts`），伺服器會自動讀取儲存庫根目錄的 `.env`（或 `servers/tts/irodoritts/` 中的本機 `.env`），並在啟動時記錄目前使用的模型 ID。
+啟動伺服器時（直接用 Python 或透過 `bun run launch --irodoritts`），它會自動讀取儲存庫根目錄的 `.env`（或 `servers/tts/irodoritts/` 中的本機 `.env`），並在啟動時記錄目前使用的模型 ID。
 
 ### 透過 `.env`（持續生效）
 
@@ -139,7 +139,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 先前的 TomoriBot 安裝程式會複製並修補 Irodori 的 `pyproject.toml`、手動安裝 `dacvae`，並釘住一個 v2 時代的舊 Irodori 提交。那些變通做法對較舊的上游套件配置是必要的，但對目前的 Irodori 已經不再合適。
 
-這個 sidecar 現在有自己的 `pyproject.toml`，並遵循上游的 `uv` 後端設定。Irodori 與 `dacvae` 在那裡仍然釘住已知的提交以確保安裝可重現，但 TomoriBot 不再於安裝期間修改上游原始碼。
+這個伺服器現在有自己的 `pyproject.toml`，並遵循上游的 `uv` 後端設定。Irodori 與 `dacvae` 在那裡仍然釘住已知的提交以確保安裝可重現，但 TomoriBot 不再於安裝期間修改上游原始碼。
 
 ## 環境變數
 

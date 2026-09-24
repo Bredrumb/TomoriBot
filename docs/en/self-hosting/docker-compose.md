@@ -62,9 +62,9 @@ For later starts, `docker compose up` alone is enough unless you changed code or
 dependencies. When the bot is online, run `/setup` in Discord to add your AI
 provider key: see the [Quickstart](/introduction/quickstart/) for the in-Discord side.
 
-## 4. Optional sidecars (Compose profiles)
+## 4. Optional local servers (Compose profiles)
 
-Sidecars are opt-in via Compose profiles, so you only run what you need:
+Local servers are opt-in via Compose profiles, so you only run what you need:
 
 ```sh
 # SearXNG (private web search) + Crawl4AI (browser-rendered fetch)
@@ -72,7 +72,7 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
 See [SearXNG](/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/),
-and [Local Monitoring](/self-hosting/local-monitoring/) for per-sidecar details.
+and [Local Monitoring](/self-hosting/local-monitoring/) for per-server details.
 
 ## Maintenance, updating & backups
 

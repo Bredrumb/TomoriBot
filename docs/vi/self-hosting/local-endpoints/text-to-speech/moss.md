@@ -2,13 +2,13 @@
 title: "MOSS-TTS"
 ---
 
-Sử dụng `servers/tts/moss/server.py` để thử nghiệm tính năng sao chép giọng nói và thiết kế giọng nói qua mô tả văn bản của MOSS thông qua một endpoint cục bộ. Chế độ tự động sẽ chọn model sao chép khi TomoriBot gửi `ref_audio` và chọn MOSS-VoiceGenerator khi bot gửi `instruct`. Endpoint này chỉ duy trì một model được nạp trong bộ nhớ tại một thời điểm. Đây là một sidecar thử nghiệm, không phải là tích hợp kênh thoại trực tiếp dạng streaming trên Discord.
+Sử dụng `servers/tts/moss/server.py` để thử nghiệm tính năng sao chép giọng nói và thiết kế giọng nói qua mô tả văn bản của MOSS thông qua một endpoint cục bộ. Chế độ tự động sẽ chọn model sao chép khi TomoriBot gửi `ref_audio` và chọn MOSS-VoiceGenerator khi bot gửi `instruct`. Endpoint này chỉ duy trì một model được nạp trong bộ nhớ tại một thời điểm. Đây là một máy chủ thử nghiệm, không phải là tích hợp kênh thoại trực tiếp dạng streaming trên Discord.
 
 Model sao chép mặc định là [MOSS-TTS-Local-Transformer-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) (4B), được chọn làm điểm khởi đầu thực tế cho GPU 16 GB. [MOSS-TTS-v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) là một lựa chọn thay thế 8B nhưng nhìn chung sẽ cần nhiều hơn 16 GB VRAM ở định dạng BF16. Tính năng thiết kế giọng nói sử dụng [MOSS-VoiceGenerator](https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator) (khoảng 1.7B). Chế độ tự động hoán đổi các model thay vì giữ cả hai trong VRAM, vì vậy việc thay đổi chế độ vẫn gây ra độ trễ nạp vào GPU.
 
 ## Cài đặt
 
-Chạy từ thư mục gốc của kho lưu trữ TomoriBot. Sử dụng Python 3.12 và driver CUDA tương thích với các bánh xe PyTorch CUDA 12.8 của thượng nguồn. Gói mở rộng runtime của thượng nguồn ghim PyTorch và Torchaudio 2.9.1+cu128; hãy giữ sidecar này trong môi trường ảo riêng của nó. Các ngăn xếp CUDA hoặc CPU khác cần có một bản cài đặt được xác thực riêng.
+Chạy từ thư mục gốc của kho lưu trữ TomoriBot. Sử dụng Python 3.12 và driver CUDA tương thích với các bánh xe PyTorch CUDA 12.8 của thượng nguồn. Gói mở rộng runtime của thượng nguồn ghim PyTorch và Torchaudio 2.9.1+cu128; hãy giữ máy chủ này trong môi trường ảo riêng của nó. Các ngăn xếp CUDA hoặc CPU khác cần có một bản cài đặt được xác thực riêng.
 
 ### Windows PowerShell
 
@@ -46,6 +46,6 @@ Trong `/providers`, chọn **Add New Custom Endpoint**, đặt API Compatibility
 
 Bộ chuyển đổi sao chép hiện tại của TomoriBot không gửi thẻ ngôn ngữ. Đối với một thử nghiệm đơn ngôn ngữ, hãy đặt `MOSS_TTS_DEFAULT_LANGUAGE=Japanese` (hoặc `English`, `Chinese`, v.v.) trước khi khởi động máy chủ. Một yêu cầu `/synthesize` thủ công có thể cung cấp `language` cho từng yêu cầu. Hãy để trống biến này cho việc sử dụng kết hợp nhiều ngôn ngữ; hãy đánh giá đầu ra tiếng Nhật trước khi dựa vào nó.
 
-Sidecar đọc môi trường tiến trình riêng của nó. Việc thêm một giá trị vào tệp `.env` của bot không tự động chuyển giá trị đó sang một tiến trình Python được khởi động riêng biệt.
+Máy chủ đọc môi trường tiến trình riêng của nó. Việc thêm một giá trị vào tệp `.env` của bot không tự động chuyển giá trị đó sang một tiến trình Python được khởi động riêng biệt.
 
 Để thử nghiệm model 8B đầu bảng trên máy có đủ bộ nhớ, hãy đặt `MOSS_TTS_CLONE_MODEL_ID=OpenMOSS-Team/MOSS-TTS-v1.5` trước khi prefetch. Các biến `MOSS_TTS_PORT`, `MOSS_TTS_DEVICE`, `MOSS_TTS_DTYPE` và `MOSS_TTS_MAX_NEW_TOKENS` cũng có thể định cấu hình trong `.env.optional.example`. Biến `TTS_SYNTHESIZE_TIMEOUT_MS` của bot có thể cần tăng lên cho các lần hoán đổi chế độ hoặc suy luận trên CPU.

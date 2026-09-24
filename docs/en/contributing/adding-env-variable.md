@@ -28,7 +28,7 @@ Optional variables in `.env.optional.example` are organized into seven tiers, or
 
 1. **Tier 1: Bot Identity and Everyday Behavior**: Knobs that shape what Tomori says or how she behaves without altering infrastructure (e.g. trigger words, the `EMOJI_PENALTY_ENABLED` switch, reaction context).
 2. **Tier 2: Optional Features and Integrations**: Opt-in external services where leaving the variable unset disables the whole feature (e.g. Matrix bridge, S3 storage, external search APIs, Documents and RAG, MCP servers).
-3. **Tier 3: Self-Hosted Sidecars and Local Services**: Settings for optional local AI containers, TTS sidecars (Fish Audio S2, VoxCPM2, CosyVoice 3, Chatterbox, MOSS, Irodori), Crawl4AI, SearXNG, and ComfyUI.
+3. **Tier 3: Self-Hosted Local Servers and Services**: Settings for optional local AI containers, TTS servers (Fish Audio S2, VoxCPM2, CosyVoice 3, Chatterbox, MOSS, Irodori), Crawl4AI, SearXNG, and ComfyUI.
 4. **Tier 4: AI Providers and Models**: Per-provider LLM and image generator tuning (e.g. Gemini max output tokens, provider request timeouts, and the turn timeouts: tool execution, SDK call, and channel lock).
 5. **Tier 5: Limits and Quotas**: Caps on counts, sizes, payload lengths, and rates (e.g. memory counts, import archive limits, media attachment byte limits, the command cooldown scale).
 6. **Tier 6: Diagnostics and Development Tooling**: Knobs that only matter with a debugger attached, during local testing, or in CI pipelines (e.g. verbose fetch logging, test database credentials, `bun run vl` gate limits).

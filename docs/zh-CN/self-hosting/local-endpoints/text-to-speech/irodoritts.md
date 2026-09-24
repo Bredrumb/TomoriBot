@@ -39,7 +39,7 @@ servers/tts/irodoritts/.venv/bin/python servers/tts/irodoritts/server.py
 
 默认模型是 `Aratako/Irodori-TTS-v4.1-Small`。兼容的 Hugging Face 仓库、社区微调版本（例如 `phasefield-audio/Irodori-TTS-v4.1-Anime`），以及本地检查点文件，都可以通过环境变量来配置。
 
-启动边车服务时（直接用 Python，或通过 `bun run launch --irodoritts`），服务器会自动读取仓库根目录的 `.env`（或 `servers/tts/irodoritts/` 里的本地 `.env`），并在启动时把当前生效的模型 ID 记录到日志里。
+启动服务器时（直接用 Python，或通过 `bun run launch --irodoritts`），服务器会自动读取仓库根目录的 `.env`（或 `servers/tts/irodoritts/` 里的本地 `.env`），并在启动时把当前生效的模型 ID 记录到日志里。
 
 ### 通过 `.env`（持久生效）
 
@@ -136,7 +136,7 @@ $env:IRODORI_SWAY_COEFF = "-1.0"
 
 之前的 TomoriBot 安装程序会克隆并给 Irodori 的 `pyproject.toml` 打补丁、手动安装 `dacvae`，还固定了一个 v2 时代的旧 Irodori 提交。对那些较老的上游包布局来说，这些兼容处理是必要的，但对当前的 Irodori 已经不再合适。
 
-边车服务现在有自己的 `pyproject.toml`，并遵循上游的 `uv` 后端设置。Irodori 与 `dacvae` 在那里仍然固定到已知提交，以保证安装可复现，但 TomoriBot 在安装过程中不再修改上游源代码。
+服务器现在有自己的 `pyproject.toml`，并遵循上游的 `uv` 后端设置。Irodori 与 `dacvae` 在那里仍然固定到已知提交，以保证安装可复现，但 TomoriBot 在安装过程中不再修改上游源代码。
 
 ## 环境变量
 

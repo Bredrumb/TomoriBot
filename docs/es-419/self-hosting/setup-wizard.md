@@ -77,7 +77,7 @@ Para instalar cualquiera de estos a mano, consulta los
 
 ```bash
 bun run dev                          # solo el bot
-bun run launch --searxng --crawl4ai  # bot + sidecars (ver bun run launch --help)
+bun run launch --searxng --crawl4ai  # bot + servidores locales (ver bun run launch --help)
 ```
 
 Cuando el bot esté en línea, ejecuta `/setup` en Discord para conectar un proveedor de IA. Un espacio de

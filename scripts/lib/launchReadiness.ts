@@ -1,4 +1,4 @@
-/** Default wait for a Python sidecar to report a ready health status. */
+/** Default wait for a Python local server to report a ready health status. */
 export const DEFAULT_PYTHON_HEALTH_TIMEOUT_MS = 300_000;
 
 /**

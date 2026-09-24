@@ -22,7 +22,7 @@ TomoriBot 默认使用官方的 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 检�
 
 ## TomoriBot 如何映射请求
 
-封装程序接受克隆边车服务常用的这些字段：
+封装程序接受 `tts-clone` 常用的这些字段：
 
 - `text`
 - `ref_audio`
@@ -50,7 +50,7 @@ TomoriBot 默认使用官方的 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 检�
 
 CosyVoice 3 在上游支持双向流式传输。该项目同时记录了文本输入流式与音频输出流式，在其优化配置下，首个音频的延迟可以低到大约 150 ms。
 
-TomoriBot 当前的自定义语音合成接口期望为一条 Discord 语音消息返回一整段音频，所以这个边车服务会返回完整的 WAV，并把上游推理默认设为 `stream=False`。只有在测试上游生成器时才设置 `COSYVOICE3_UPSTREAM_STREAM=1`；在流式语音传输出现之前，它并不会降低 TomoriBot 的响应延迟。
+TomoriBot 当前的自定义语音合成接口期望为一条 Discord 语音消息返回一整段音频，所以这个服务器会返回完整的 WAV，并把上游推理默认设为 `stream=False`。只有在测试上游生成器时才设置 `COSYVOICE3_UPSTREAM_STREAM=1`；在流式语音传输出现之前，它并不会降低 TomoriBot 的响应延迟。
 
 ## 硬件
 
@@ -78,7 +78,7 @@ bash servers/tts/cosyvoice3/install-cosyvoice3.sh
 servers/tts/cosyvoice3/.venv/bin/python servers/tts/cosyvoice3/server.py
 ```
 
-或者一起启动已配置的边车服务与 TomoriBot：
+或者一起启动已配置的服务器与 TomoriBot：
 
 ```bash
 bun run launch --cosyvoice3
@@ -93,7 +93,7 @@ bun run launch --cosyvoice3
 
 重新运行会保持这些确切的修订版；要改用更新的修订版，请同时修改安装程序中的两个固定值。如果运行时检出目录有本地修改，安装程序会拒绝在其上重新安装。
 
-上游依赖目前使用 PyTorch 2.3.1 与 CUDA 12.1 包索引、Linux 上的 CUDA 12 ONNX Runtime 包，以及 Linux 上的 TensorRT 10.13 包。如果你使用的硬件需要更新的 PyTorch CUDA 构建，请在装完上游依赖之后，在边车服务的 venv 里安装兼容的 PyTorch 构建，并用你的驱动测试它。
+上游依赖目前使用 PyTorch 2.3.1 与 CUDA 12.1 包索引、Linux 上的 CUDA 12 ONNX Runtime 包，以及 Linux 上的 TensorRT 10.13 包。如果你使用的硬件需要更新的 PyTorch CUDA 构建，请在装完上游依赖之后，在服务器的 venv 里安装兼容的 PyTorch 构建，并用你的驱动测试它。
 
 ### Windows PowerShell
 
@@ -176,7 +176,7 @@ CosyVoice 的语音分词器以 30 秒的提示窗口工作，而上游是用失
 
 CosyVoice 3 还支持可选的 vLLM 与 TensorRT 路径。上游目前记录了使用 V1 引擎的 vLLM 0.11.x+，以及作为旧路径的 vLLM 0.9.0。这些运行时在版本与硬件上有额外限制，所以 TomoriBot 默认不安装也不启用它们。
 
-只有在普通的 PyTorch 边车服务跑通之后才使用它们。对 Discord 语音消息这类工作负载来说，避免额外的运行时复杂性通常比优化一个本来就只有 0.5B 的模型更有用。
+只有在普通的 PyTorch 服务器跑通之后才使用它们。对 Discord 语音消息这类工作负载来说，避免额外的运行时复杂性通常比优化一个本来就只有 0.5B 的模型更有用。
 
 ## 许可证
 
