@@ -22,7 +22,7 @@ import {
   ZAI_CODING_CHAT_COMPLETIONS_URL,
   ZAI_GENERAL_CHAT_COMPLETIONS_URL,
 } from "@/providers/zai/zaiShared";
-import { resolveWelcomeDelayMs, waitForWelcomeDelay } from "@/events/guildMemberAdd/helpers/welcomeDelay";
+import { WELCOME_DELAY_MS, waitForWelcomeDelay } from "@/events/guildMemberAdd/helpers/welcomeDelay";
 import { type WelcomeMembershipCheck, checkWelcomeMembership } from "@/events/guildMemberAdd/helpers/welcomeMembership";
 
 /**
@@ -240,19 +240,16 @@ async function triggerWelcomeMessage(client: Client, member: GuildMember): Promi
   const additionalPrompt = initialTomoriState.config.welcome_prompt?.trim();
   if (!welcomeChannelId || !additionalPrompt) return;
 
-  const welcomeDelayMs = resolveWelcomeDelayMs();
-  if (welcomeDelayMs > 0) {
-    log.info(`Waiting ${welcomeDelayMs}ms before welcoming ${member.user.tag}`);
-    await waitForWelcomeDelay(welcomeDelayMs);
+  log.info(`Waiting ${WELCOME_DELAY_MS}ms before welcoming ${member.user.tag}`);
+  await waitForWelcomeDelay(WELCOME_DELAY_MS);
 
-    const graceMembership = await checkWelcomeMembership(member);
-    if (graceMembership.status !== "active") {
-      logSkippedWelcome(member, graceMembership, "during the onboarding grace period");
-      return;
-    }
+  const graceMembership = await checkWelcomeMembership(member);
+  if (graceMembership.status !== "active") {
+    logSkippedWelcome(member, graceMembership, "during the onboarding grace period");
+    return;
   }
 
-  const tomoriState = welcomeDelayMs > 0 ? await getCachedTomoriState(member.guild.id) : initialTomoriState;
+  const tomoriState = await getCachedTomoriState(member.guild.id);
   if (!tomoriState) return;
 
   const currentWelcomeChannelId = tomoriState.config.welcome_channel_disc_id;

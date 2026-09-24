@@ -158,6 +158,5 @@ CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":"
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | 逗号分隔的引擎列表。`safe_http` 总是作为最后的兜底被追加；旧名 `mcp_fetch` 是它的别名。在不允许抓取私有网络的地方（生产环境且未选择启用），Crawl4AI 条目会被忽略。 |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AI 与 URL 抓取边车服务的单引擎请求超时。 |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | 一次抓取调用在需要续读之前返回的最大字符数。 |
-| `FETCH_URL_HEALTHCHECK_CACHE_SEC` | `60` | Crawl4AI 健康探测结果在重新检查之前缓存多久。 |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | 仅生产环境选择启用。在生产环境之外（`RUN_ENV` 不等于 `production`），SSRF 防护会自动放宽，所以 localhost、私有和内部地址的抓取以及 Crawl4AI 调度都无需配置即可工作。只有在可信的生产部署里需要允许私有网络抓取时才设为 `true`。 |
 | `FETCH_URL_FILTER_MODE` | `fit` | Crawl4AI 的 `/md` 过滤器模式。`fit` 会让 Markdown 更适合给 LLM 使用；`fetch_url(..., raw=true)` 会按请求覆盖它。 |

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { callDeepseekStructuredJSON } from "@/providers/deepseek/deepseekStructuredOutput";
-import { DeepseekProvider } from "@/providers/deepseek/deepseekProvider";
+import { DEEPSEEK_EXPRESSION_BATCH_SIZE, DeepseekProvider } from "@/providers/deepseek/deepseekProvider";
 import {
   generateConversationSummaryDeepseek,
   generateRoleplaySummaryDeepseek,
@@ -10,18 +10,12 @@ import { z } from "zod";
 
 describe("DeepSeek structured output", () => {
   const originalFetch = globalThis.fetch;
-  const originalBatchSize = process.env.DEEPSEEK_EXPRESSION_BATCH_SIZE;
   let imageSpy: ReturnType<typeof spyOn> | undefined;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     imageSpy?.mockRestore();
     imageSpy = undefined;
-    if (originalBatchSize !== undefined) {
-      process.env.DEEPSEEK_EXPRESSION_BATCH_SIZE = originalBatchSize;
-    } else {
-      delete process.env.DEEPSEEK_EXPRESSION_BATCH_SIZE;
-    }
   });
 
   it("formats multimodal image inputs into OpenAI-compatible image_url parts", async () => {
@@ -121,12 +115,10 @@ describe("DeepSeek structured output", () => {
     expect(result.data).toEqual({ status: "ok" });
   });
 
-  it("provides expression initialization batch size with default and env override", () => {
+  it("provides the expression initialization batch size with its default and an override", () => {
     const provider = new DeepseekProvider();
-    expect(provider.getExpressionInitializationBatchSize()).toBe(20);
-
-    process.env.DEEPSEEK_EXPRESSION_BATCH_SIZE = "35";
-    expect(provider.getExpressionInitializationBatchSize()).toBe(35);
+    expect(provider.getExpressionInitializationBatchSize()).toBe(DEEPSEEK_EXPRESSION_BATCH_SIZE);
+    expect(provider.getExpressionInitializationBatchSize(35)).toBe(35);
   });
 
   it("parses JSON arrays containing objects surrounded by conversational text", async () => {

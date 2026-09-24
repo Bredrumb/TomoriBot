@@ -33,7 +33,7 @@ const NAI_SEGMENTATION_TIMEOUT_MS = Number.parseInt(process.env.NAI_SEGMENTATION
  * Gemini's detected bounding box (e.g. wispy hair strands, flowing fabric).
  * Clamped to image bounds after expansion.
  */
-const NAI_INPAINT_PADDING = Number.parseFloat(process.env.NAI_INPAINT_PADDING || "0.15");
+const NAI_INPAINT_PADDING = 0.15;
 
 /**
  * Safety settings for Gemini segmentation requests.

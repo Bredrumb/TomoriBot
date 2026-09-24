@@ -14,7 +14,6 @@ import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
-import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
@@ -49,11 +48,12 @@ interface GenerationAttempt {
   rotationKeyId: number | null;
 }
 
-const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = parseIntegerEnvFlag(
-  process.env.OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS,
-  2,
-  1,
-);
+/**
+ * How many of the oldest history exchange pairs each retry drops when OpenRouter stopped a
+ * reply on `length` with no content. Scaling by `retryCount` widens the trim on every retry,
+ * so a reply that overflowed once keeps losing context until it fits.
+ */
+const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = 2;
 
 export async function runGenerationTurn(
   context: ChatTurnContext,

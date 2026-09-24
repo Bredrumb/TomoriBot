@@ -4,7 +4,7 @@ sidebar:
   hidden: true
 ---
 
-Detailed operational rationale, container sizing, and incident tuning for Tier 8 configuration
+Detailed operational rationale, container sizing, and incident tuning for Tier 7 configuration
 variables. These settings govern dedicated 24/7 production hosts, virtual private servers (VPS),
 and cloud provider environments (such as Azure VM and AWS EC2).
 

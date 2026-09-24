@@ -311,8 +311,10 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
 }
 
 async function runToolLoopContractShim(params: ToolLoopParams): Promise<GenerationTurnResult> {
-  const maxIterations = Number.parseInt(process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS ?? "10", 10);
-  const maxConsecutiveToolErrors = Number.parseInt(process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS ?? "3", 10);
+  // Read the bounds off the link-time capture of the real module: this shim stands in for
+  // runToolLoop, so literals here would let it drift from the loop it models.
+  const maxIterations = realToolLoop.MAX_FUNCTION_CALL_ITERATIONS;
+  const maxConsecutiveToolErrors = realToolLoop.MAX_CONSECUTIVE_TOOL_ERRORS;
   const streamResults: StreamResult[] = [];
   const functionHistory: FunctionHistoryEntry[] = [];
   let consecutiveToolErrors = 0;

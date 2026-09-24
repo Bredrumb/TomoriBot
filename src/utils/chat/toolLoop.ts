@@ -29,17 +29,20 @@ import type { ChatTurnContext, GenerationTurnResult, ToolHistoryEntry } from "@/
 import { neutralizeFenceRuns } from "@/utils/text/discordTextLimits";
 import { redactToolParametersForStorage } from "@/utils/tools/toolParameterRedaction";
 
-const MAX_FUNCTION_CALL_ITERATIONS = parseIntegerEnvFlag(process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS, 100, 1);
+/** Hard ceiling on provider round trips in one turn; the loop exits with `buildResult("timeout")`. */
+export const MAX_FUNCTION_CALL_ITERATIONS = 100;
 const SOFT_WARN_ITERATION_THRESHOLD = 20;
-const MAX_CONSECUTIVE_TOOL_ERRORS = parseIntegerEnvFlag(process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS, 5, 1);
-const NAI_TOOL_FAILURE_RETRY_THRESHOLD = parseIntegerEnvFlag(process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD, 3, 1);
+/** Consecutive tool failures before the loop gives up and surfaces a tool-error embed. */
+export const MAX_CONSECUTIVE_TOOL_ERRORS = 5;
+/** NovelAI failures after visible pre-tool text before the retry-exhausted embed ends the turn. */
+export const NAI_TOOL_FAILURE_RETRY_THRESHOLD = 3;
 const STREAM_SDK_CALL_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_SDK_CALL_TIMEOUT_MS, 120000, 10000);
 // After the SDK-call watchdog aborts a stalled stream, how long to wait for the abandoned
 // `streamToDiscord` promise to actually settle before returning. `Promise.race` does not cancel the
 // loser and `abort()` only tears down the HTTP request, so a Discord send it already dispatched can
 // still be in flight; waiting for it guarantees that send is recorded in `deliveredMessageRefs`
 // before the fallback path's superseded-message cleanup runs, so it cannot leak past cleanup.
-const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = parseIntegerEnvFlag(process.env.STREAM_ABANDONED_SETTLE_TIMEOUT_MS, 5000, 0);
+const STREAM_ABANDONED_SETTLE_TIMEOUT_MS = 5000;
 const TOOL_EXECUTION_TIMEOUT_MS = parseIntegerEnvFlag(process.env.TOOL_EXECUTION_TIMEOUT_MS, 300000, 10000);
 const TOOLS_SUPPRESS_FOLLOWUP_AFTER_PRETOOL_TEXT = new Set(["update_short_term_memory"]);
 const TOOL_FAILURE_NOTICE_LIMIT = 1800;

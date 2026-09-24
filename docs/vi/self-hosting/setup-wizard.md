@@ -95,7 +95,7 @@ Một modal bốn hàng sẽ thu thập persona, phong cách phản hồi, độ
 
 Nút **Finish Setup** luôn bị vô hiệu hóa cho đến khi mọi bước hiển thị đã hoàn tất. Nút này sẽ xác thực lại các danh mục và trạng thái không gian làm việc, lưu toàn bộ bản nháp trong một transaction duy nhất và thay thế bảng điều khiển bằng biên nhận xác nhận. Nút **Cancel** sẽ hủy bỏ bản nháp và làm hết hạn mọi nút điều khiển trên bảng.
 
-Bản nháp tồn tại trong tiến trình bot chứ không nằm trong cơ sở dữ liệu, vì vậy nó chỉ kết thúc khi bị hủy, hoàn tất hoặc khi tiến trình khởi động lại. Tối đa `SETUP_DRAFT_MAX_ENTRIES` (mặc định 200) bản nháp được lưu giữ cùng lúc; bản nháp cũ nhất sẽ bị loại bỏ khi đạt giới hạn. Thiết lập này được ghi chú trong `.env.optional.example` tại mục **Setup wizard drafts**. Nút điều khiển của một phiên không còn tồn tại sẽ không ghi bất kỳ dữ liệu nào.
+Bản nháp tồn tại trong tiến trình bot chứ không nằm trong cơ sở dữ liệu, vì vậy nó chỉ kết thúc khi bị hủy, hoàn tất hoặc khi tiến trình khởi động lại. Tối đa 200 bản nháp được lưu giữ cùng lúc; bản nháp cũ nhất sẽ bị loại bỏ khi đạt giới hạn. Nút điều khiển của một phiên không còn tồn tại sẽ không ghi bất kỳ dữ liệu nào.
 
 ## Cập nhật
 

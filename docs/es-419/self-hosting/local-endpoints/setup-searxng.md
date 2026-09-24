@@ -71,8 +71,6 @@ Los resultados de imágenes de SearXNG son validados por HEAD, comprimidos opcio
 |---|---|---|
 | `SEARXNG_IMAGE_COUNT` | `3` (máx. 10) | Cuántas imágenes válidas se envían a Discord. Anulado por el argumento `count` del LLM. |
 | `SEARXNG_IMAGE_POOL` | `10` | Grupo de URL candidatas cuando el LLM no especifica `count`. Cuando se especifica `count`, el grupo es `count × 3` (con un tope de 30) para absorber los fallos de protección contra hotlinks. |
-| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | Las imágenes por debajo de este tamaño son rechazadas (filtra imágenes de marcador de posición/error). Compartido con la búsqueda de imágenes de Brave. |
 | `WEB_SEARCH_TIMEOUT_MS` | Ninguno | Tiempo de espera de la solicitud por motor. |
-| `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | Cuánto tiempo se almacena en caché el resultado de la prueba de estado antes de volver a verificar. |
 
 *(Consulta `.env.optional.example` para todos los ajustes configurables).*

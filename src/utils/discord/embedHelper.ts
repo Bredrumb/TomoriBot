@@ -39,11 +39,7 @@ export const MAX_EMBED_DESCRIPTION_LENGTH = 4096;
  */
 export const SUPPORT_SERVER_TIP_KEY = "genai.tips.support_server";
 export const TIP_DETAILS_BUTTON_ID = "error_tip_details";
-const DEFAULT_TIP_BUTTON_TIMEOUT_MS = 86_400_000;
-export const TIP_BUTTON_TIMEOUT_MS = (() => {
-  const parsed = Number.parseInt(process.env.TIP_BUTTON_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIP_BUTTON_TIMEOUT_MS;
-})();
+export const TIP_BUTTON_TIMEOUT_MS = 86_400_000;
 
 /**
  * Truncates text so it fits within Discord's embed description limit, optionally reserving

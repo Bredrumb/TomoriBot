@@ -12,11 +12,6 @@ import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAt
 const DEFAULT_MIN_REFRESH_INTERVAL_MS = 60 * 1000;
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
 
-function readIntEnv(name: string, fallbackMs: number, minimum: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isFinite(parsed) && parsed >= minimum ? parsed : fallbackMs;
-}
-
 /**
  * Floor on the gap between refresh *attempts*, shared by every catalog.
  *
@@ -25,14 +20,20 @@ function readIntEnv(name: string, fallbackMs: number, minimum: number): number {
  * of how the previous attempt ended, process-wide. That bound is the only thing standing
  * between a permanently invalid codename on the chat path and a fetch per turn, so the
  * window stays short rather than absent. Zero disables it.
+ *
+ * @param catalogMinRefreshIntervalMs - Per-catalog override; the shared default applies when omitted.
  */
-function getOpenRouterCatalogMinRefreshIntervalMs(): number {
-  return readIntEnv("OPENROUTER_CATALOG_REFRESH_MIN_INTERVAL_MS", DEFAULT_MIN_REFRESH_INTERVAL_MS, 0);
+function getOpenRouterCatalogMinRefreshIntervalMs(catalogMinRefreshIntervalMs?: number): number {
+  return catalogMinRefreshIntervalMs ?? DEFAULT_MIN_REFRESH_INTERVAL_MS;
 }
 
-/** Age past which a catalog is considered stale and eligible for a background refresh. */
-export function getOpenRouterCatalogTtlMs(): number {
-  return readIntEnv("OPENROUTER_CATALOG_TTL_MS", DEFAULT_TTL_MS, 1);
+/**
+ * Age past which a catalog is considered stale and eligible for a background refresh.
+ *
+ * @param catalogTtlMs - Per-catalog override; the shared default applies when omitted.
+ */
+export function getOpenRouterCatalogTtlMs(catalogTtlMs?: number): number {
+  return catalogTtlMs ?? DEFAULT_TTL_MS;
 }
 
 /** Codenames reach us from Discord input and from the database, neither of which enforces case. */
@@ -44,6 +45,13 @@ export interface OpenRouterCatalogSource<TEntry> {
   /** Human-readable catalog name used in log lines. */
   label: string;
   url: string;
+  /**
+   * Cooldown between refresh attempts for this catalog, defaulting to the shared window.
+   * Production catalogs leave it unset; a test that must reach the network passes 0.
+   */
+  minRefreshIntervalMs?: number;
+  /** Freshness window for this catalog, defaulting to the shared TTL. */
+  ttlMs?: number;
   /** Throws when the payload is malformed, which is treated as a failed refresh. */
   parse(payload: unknown): TEntry[];
   keyOf(entry: TEntry): string;
@@ -142,7 +150,7 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
     if (!ready || lastSuccessAt === null) {
       return true;
     }
-    return Date.now() - lastSuccessAt >= getOpenRouterCatalogTtlMs();
+    return Date.now() - lastSuccessAt >= getOpenRouterCatalogTtlMs(source.ttlMs);
   }
 
   function refresh(options?: { force?: boolean }): Promise<boolean> {
@@ -152,7 +160,7 @@ export function createOpenRouterCatalog<TEntry>(source: OpenRouterCatalogSource<
 
     if (!options?.force && lastAttemptAt !== null) {
       const elapsed = Date.now() - lastAttemptAt;
-      if (elapsed < getOpenRouterCatalogMinRefreshIntervalMs()) {
+      if (elapsed < getOpenRouterCatalogMinRefreshIntervalMs(source.minRefreshIntervalMs)) {
         return Promise.resolve(ready);
       }
     }

@@ -1,13 +1,6 @@
 import { formatDateWithOffset, getCalendarDayWithOffset, isValidUtcOffset } from "@/utils/text/timezoneHelper";
 
-function readIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
-const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7);
+const TIME_AWARENESS_REUNION_DAYS = 7;
 
 /**
  * How many messages deep the reunion note is injected. Depth 1 (the original
@@ -15,7 +8,7 @@ const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7)
  * user's actual prompt for the model's attention; depth 3 matches the verbatim
  * tool-calling nudge and keeps it advisory rather than imperative.
  */
-export const TIME_AWARENESS_NOTE_DEPTH = readIntEnv("TIME_AWARENESS_NOTE_DEPTH", 3);
+export const TIME_AWARENESS_NOTE_DEPTH = 3;
 
 export const SPACER_TEMPLATE =
   "[System: The messages above were sent on {date} ({relative}, server time). Use the {message_metadata_tool} tool to learn the exact times of each message, if needed.]";

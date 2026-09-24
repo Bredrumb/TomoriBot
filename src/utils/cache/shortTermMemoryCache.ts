@@ -88,14 +88,11 @@ interface CacheStats {
   expirations: number;
 }
 
-const CRUDE_CONVERSATION_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_TTL_HOURS || "12", 10);
-export const STM_MAX_CATEGORIES = Number.parseInt(process.env.STM_MAX_CATEGORIES || "5", 10);
-const SUMMARY_TTL_HOURS = Number.parseInt(process.env.SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS || "24", 10);
-const MAX_SUMMARY_LENGTH = Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH || "1500", 10);
-export const MAX_MESSAGES_PER_CHANNEL = Math.max(
-  1,
-  Number.parseInt(process.env.SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL || "10", 10) || 10,
-);
+const CRUDE_CONVERSATION_TTL_HOURS = 12;
+export const STM_MAX_CATEGORIES = 5;
+const SUMMARY_TTL_HOURS = 24;
+const MAX_SUMMARY_LENGTH = 1500;
+export const MAX_MESSAGES_PER_CHANNEL = 10;
 
 const CRUDE_CONVERSATION_TTL_MS = CRUDE_CONVERSATION_TTL_HOURS * 60 * 60 * 1000;
 const SUMMARY_TTL_MS = SUMMARY_TTL_HOURS * 60 * 60 * 1000;

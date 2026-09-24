@@ -19,7 +19,7 @@ import { log } from "@/utils/misc/logger";
  * Maximum forward hops to chase beyond the first snapshot level. Each hop costs one
  * Discord message fetch, so this is bounded to keep the context build path cheap.
  */
-const FORWARD_CHAIN_MAX_DEPTH = Math.max(0, Number.parseInt(process.env.FORWARD_CHAIN_MAX_DEPTH ?? "3", 10) || 3);
+const FORWARD_CHAIN_MAX_DEPTH = 3;
 
 /** Outcome of walking a message's forward chain down to real content. */
 export interface ResolvedForwardChain {

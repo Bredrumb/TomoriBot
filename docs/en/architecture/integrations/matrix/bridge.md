@@ -240,7 +240,7 @@ When relaying, it:
 - Identifies which persona sent the message (main bot account or alter webhook) to select the correct Matrix virtual user
 - Resolves `<@discordId>` and `@{name}` mention placeholders to proper Matrix mention anchor tags (`<a href="https://matrix.to/#/@user:host">Name</a>`) with MSC3952 `m.mentions` fields
 - Serializes every Discord embed into plain text and relays it (author/title/description/fields/footer/URLs)
-- Splits oversized serialized embeds into numbered chunks using `MATRIX_EMBED_CHUNK_MAX_CHARS` (default: `3500`) so relay remains deterministic
+- Splits oversized serialized embeds into numbered chunks at `MATRIX_EMBED_CHUNK_MAX_CHARS` (3500, a constant in `matrixRelay.ts`) so relay remains deterministic
 
 ---
 
@@ -332,7 +332,7 @@ Discord embeds cannot be rendered natively in Matrix. Instead, `matrixRelay.ts` 
 - Image/thumbnail/video URLs
 - Timestamp/footer text/footer icon URL
 
-If the serialized text exceeds `MATRIX_EMBED_CHUNK_MAX_CHARS` (default: `3500`), it is split into numbered chunks (`[1/N]`, `[2/N]`, ...), each sent as its own Matrix message.
+If the serialized text exceeds `MATRIX_EMBED_CHUNK_MAX_CHARS` (3500), it is split into numbered chunks (`[1/N]`, `[2/N]`, ...), each sent as its own Matrix message.
 
 This removed the old whitelist-title matching model and prevents silent drops when new embed formats are introduced.
 
@@ -398,10 +398,9 @@ All configuration is via environment variables. The bridge is silently disabled 
 | `MATRIX_APPSERVICE_PORT` | No | HTTP listen port (default: `9993`) |
 | `MATRIX_MAX_ATTACHMENT_MB` | No | Max file size to relay in either direction (default: `8`) |
 | `MATRIX_MEDIA_TIMEOUT_MS` | No | Timeout for media download/upload requests (default: `15000`) |
-| `MATRIX_EMBED_CHUNK_MAX_CHARS` | No | Max characters per relayed embed message chunk before splitting (default: `3500`) |
-| `MATRIX_TYPING_TIMEOUT_MS` | No | Typing indicator auto-clear timeout (default: `60000`) |
-| `MATRIX_LINK_CACHE_TTL_MINUTES` | No | TTL for channel↔room link cache (default: `5`) |
-| `MATRIX_MAX_TRACKED_SENT_EVENTS` | No | Max event IDs tracked for reply detection (default: `500`) |
+
+Typing-indicator auto-clear (`MATRIX_TYPING_TIMEOUT_MS`, 60s) and the tracked-event cap
+(`MATRIX_MAX_TRACKED_SENT_EVENTS`, 500) are code constants in `utils/bridges/matrix/state.ts`.
 
 The homeserver's `registration.yaml` is generated programmatically from these environment variables; there is no separate registration file to maintain.
 

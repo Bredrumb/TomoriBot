@@ -32,17 +32,7 @@ import type { TomoriState } from "@/types/db/schema";
 import { resolvePersonaAvatarPublicUrl } from "@/utils/storage/avatarStorage";
 import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
 
-const DEFAULT_MATRIX_EMBED_CHUNK_MAX_CHARS = 3500;
-
-function getMatrixEmbedChunkMaxChars(): number {
-  const parsed = Number.parseInt(
-    process.env.MATRIX_EMBED_CHUNK_MAX_CHARS ?? `${DEFAULT_MATRIX_EMBED_CHUNK_MAX_CHARS}`,
-    10,
-  );
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MATRIX_EMBED_CHUNK_MAX_CHARS;
-}
-
-const MATRIX_EMBED_CHUNK_MAX_CHARS = getMatrixEmbedChunkMaxChars();
+const MATRIX_EMBED_CHUNK_MAX_CHARS = 3500;
 
 /**
  * Strip Discord inline markdown from a string for plain-text Matrix relay.

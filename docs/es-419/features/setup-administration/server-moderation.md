@@ -69,8 +69,8 @@ expuso una herramienta en el
 
 `/config` > Canales > Registros y bienvenida configura un saludo automático para nuevos miembros
 en un canal elegido. Por defecto, Tomori espera un minuto antes de saludarlos para que la
-incorporación del servidor pueda terminar. Los operadores de instancia pueden ajustar este
-período de gracia con `WELCOME_DELAY_MS`. Usa el botón **Borrar bienvenida** en esa misma página
+incorporación del servidor pueda terminar.
+Usa el botón **Borrar bienvenida** en esa misma página
 para detener los saludos.
 
 ## Expresiones

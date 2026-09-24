@@ -30,12 +30,7 @@ import type { AvatarSessionCache } from "./interactionCore";
 import type { NoticeContainerOptions } from "./interactionCore";
 import { validateComponentsV2MessageLimits, type ComponentsV2MessagePayload } from "./componentsV2Limits";
 
-const DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS = 120000;
-const configuredWorkflowTimeout = Number.parseInt(process.env.PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS || "", 10);
-const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS =
-  Number.isFinite(configuredWorkflowTimeout) && configuredWorkflowTimeout > 0
-    ? configuredWorkflowTimeout
-    : DEFAULT_WORKFLOW_COMPONENT_TIMEOUT_MS;
+const PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS = 2 * 60_000;
 
 type PersonaWorkflowRootInteraction = ChatInputCommandInteraction | ButtonInteraction;
 type PersonaWorkflowMessageInteraction = ButtonInteraction | ModalMessageModalSubmitInteraction;

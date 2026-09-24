@@ -136,9 +136,8 @@ the workspace state, commits the whole draft in one transaction, and replaces th
 receipt. **Cancel** discards the draft and expires every control on the panel.
 
 A draft lives in the bot process, not in the database, so it ends only when it is cancelled,
-completed, or the process restarts. At most `SETUP_DRAFT_MAX_ENTRIES` (default 200) drafts are held
-at once; the oldest is discarded at the cap. It is documented in `.env.optional.example` under
-**Setup wizard drafts**. A control for a session that is no longer available writes nothing.
+completed, or the process restarts. At most 200 drafts are held
+at once; the oldest is discarded at the cap. A control for a session that is no longer available writes nothing.
 
 ## Updating
 

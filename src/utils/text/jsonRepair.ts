@@ -17,10 +17,8 @@
  * existing failure path.
  */
 
-import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
-
 /** Runaway-input ceiling; a larger argument blob is a caller bug, not a truncation. */
-const MAX_REPAIR_INPUT_CHARS = parseIntegerEnvFlag(process.env.BOT_JSON_REPAIR_MAX_CHARS, 1048576, 1024);
+const MAX_REPAIR_INPUT_CHARS = 1048576;
 /** Bounds the retry loop so a pathological payload can never spin. */
 const MAX_REPAIR_PASSES = 64;
 

@@ -46,7 +46,7 @@ describe("NVIDIA image request resolution", () => {
     expect(body).toMatchObject({ width: 1024, height: 1024 });
   });
 
-  it("prefers a caller-supplied cfg over the env default", () => {
+  it("prefers a caller-supplied cfg over the built-in default", () => {
     const { body } = resolveNvidiaImageRequest(createRequest({ cfg: 7 }));
     expect(body.cfg_scale).toBe(7);
   });

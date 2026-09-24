@@ -9,6 +9,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 
+/** One week, the ceiling a persona may block a user for in a single tool call. */
 export const DEFAULT_BLOCK_USER_MAX_DURATION_HOURS = 168;
 
 export type ParsedBlockUserArgs =
@@ -48,14 +49,9 @@ export type ResolvedBlockTarget =
       candidates?: string[];
     };
 
-export function getBlockUserMaxDurationHours(): number {
-  const parsed = Number.parseInt(process.env.BLOCK_USER_MAX_DURATION_HOURS ?? "", 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_BLOCK_USER_MAX_DURATION_HOURS;
-}
-
 export function parseBlockUserArgs(
   args: Record<string, unknown>,
-  maxDurationHours = getBlockUserMaxDurationHours(),
+  maxDurationHours = DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
 ): ParsedBlockUserArgs {
   const blockedUserArg = args.blocked_user;
   if (typeof blockedUserArg !== "string" || blockedUserArg.trim().length === 0) {

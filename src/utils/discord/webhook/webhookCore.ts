@@ -51,8 +51,7 @@ const personaWebhookCache = new Map<string, Webhook>();
  */
 const webhookFailureCache = new Map<string, { reason: WebhookCreateErrorReason; expiresAt: number }>();
 
-const WEBHOOK_FAILURE_RETRY_MS =
-  Math.max(Number.parseInt(process.env.WEBHOOK_FAILURE_RETRY_MINUTES || "", 10) || 15, 1) * 60_000;
+const WEBHOOK_FAILURE_RETRY_MS = 15 * 60_000;
 
 /**
  * Webhook name used for all multi-persona responses.

@@ -44,7 +44,7 @@ Lệnh `/server thought-logs` thiết lập một kênh nơi suy luận nội b�
 
 ## Lời chào mừng
 
-Lệnh `/config` > Channels > Logs & Welcome cấu hình lời chào tự động cho các thành viên mới trong kênh đã chọn. Theo mặc định, Tomori đợi một phút trước khi chào mừng họ để quá trình tiếp nhận thành viên của máy chủ có thể hoàn tất. Người vận hành phiên bản bot có thể tinh chỉnh khoảng thời gian ân hạn này bằng `WELCOME_DELAY_MS`. Sử dụng nút **Clear Welcome** trên cùng trang đó để dừng gửi lời chào.
+Lệnh `/config` > Channels > Logs & Welcome cấu hình lời chào tự động cho các thành viên mới trong kênh đã chọn. Theo mặc định, Tomori đợi một phút trước khi chào mừng họ để quá trình tiếp nhận thành viên của máy chủ có thể hoàn tất. Sử dụng nút **Clear Welcome** trên cùng trang đó để dừng gửi lời chào.
 
 ## Biểu cảm
 

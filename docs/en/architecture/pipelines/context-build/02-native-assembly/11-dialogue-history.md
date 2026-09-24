@@ -198,7 +198,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   ([`07b-verbatim-tool-definitions.md`](/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/)),
   gated by the same predicate.
 - The producer-supplied reunion note reuses the same `activeNotes` mechanism at
-  `TIME_AWARENESS_NOTE_DEPTH` (default 3). The chat pipeline omits it for user
+  `TIME_AWARENESS_NOTE_DEPTH` (3 messages). The chat pipeline omits it for user
   impersonation and when the direct triggerer has no internal user id.
 
 **Only the direct triggerer gets a note.** Passive authors in the channel history
@@ -226,7 +226,7 @@ leaderboard correctness.
    a failed claimant cannot make the user lose the pending reunion.
 
 The claim prevents separate channel locks from building the same reunion context at
-the same time. `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` releases abandoned claims after
+the same time. `REUNION_CLAIM_TTL_MS` (240000) releases abandoned claims after
 an interrupted turn. Empty-response retries finalize the old claim before rebuilding
 context, allowing the retry to claim the note itself.
 
@@ -276,14 +276,13 @@ After this stage runs:
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
-| `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
-| `TIME_AWARENESS_REUNION_DAYS` | `7` | Minimum personal-calendar-day reunion gap |
-| `TIME_AWARENESS_NOTE_DEPTH` | `3` | Messages from the end where reunion notes inject |
-| `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` | `240000` | Safety expiry for an abandoned process-local Reunion claim |
-| `STAT_TRACKING_ENABLED` | `true` | Write side of the presence clock; `false` disables reunion notes |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Env var | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
+| Constant (`personaUserBlockCache.ts`) | `CACHE_TTL_MS` | `60` | TTL for active persona user block lookups |
+| Constant (`timeAwareness.ts`) | `TIME_AWARENESS_REUNION_DAYS` | `7` | Minimum personal-calendar-day reunion gap |
+| Constant (`reunionPresence.ts`) | `REUNION_CLAIM_TTL_MS` | `240000` | Safety expiry for an abandoned process-local Reunion claim |
+| Env var | `STAT_TRACKING_ENABLED` | `true` | Write side of the presence clock; `false` disables reunion notes |
 
 | Source | Field | Effect |
 |---|---|---|

@@ -69,8 +69,6 @@ Kết quả hình ảnh từ SearXNG được xác thực bằng yêu cầu HEAD
 |---|---|---|
 | `SEARXNG_IMAGE_COUNT` | `3` (tối đa 10) | Số lượng hình ảnh hợp lệ được gửi tới Discord. Bị ghi đè bởi đối số `count` của LLM. |
 | `SEARXNG_IMAGE_POOL` | `10` | Tập hợp các URL ứng viên khi LLM không chỉ định `count`. Khi `count` được chỉ định, tập hợp sẽ là `count × 3` (tối đa 30) để xử lý các lỗi chặn hotlink. |
-| `IMAGE_MIN_SIZE_BYTES` | `5120` (5 KB) | Các hình ảnh dưới kích thước này sẽ bị từ chối: lọc bỏ hình ảnh giữ chỗ/báo lỗi. Dùng chung với tìm kiếm hình ảnh Brave. |
 | `WEB_SEARCH_TIMEOUT_MS` | không đặt | Thời gian chờ yêu cầu cho từng engine. |
-| `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | Thời gian lưu tạm kết quả kiểm tra tình trạng trước khi kiểm tra lại. |
 
 *(Xem `.env.optional.example` để biết tất cả các tùy chọn cấu hình.)*

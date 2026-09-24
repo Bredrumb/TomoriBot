@@ -159,11 +159,11 @@ embed and ends with the already-delivered text.
 
 ### Iteration guards
 
-| Constant | Source | Default | Effect |
+| Constant | Source | Value | Effect |
 |---|---|---|---|
-| `MAX_FUNCTION_CALL_ITERATIONS` | `BOT_MAX_FUNCTION_CALL_ITERATIONS` env | `100` | Hard ceiling; loop exits with `buildResult("timeout")` |
+| `MAX_FUNCTION_CALL_ITERATIONS` | Constant in `toolLoop.ts` | `100` | Hard ceiling; loop exits with `buildResult("timeout")` |
 | `SOFT_WARN_ITERATION_THRESHOLD` | Hardcoded | `20` | Sends "still working" embed once at this iteration if `shouldSurfaceUserErrors` |
-| `MAX_CONSECUTIVE_TOOL_ERRORS` | `BOT_MAX_CONSECUTIVE_TOOL_ERRORS` env | `5` | Consecutive tool failures before `emitToolErrorLoop` + `buildResult("error")` |
-| `NAI_TOOL_FAILURE_RETRY_THRESHOLD` | `NAI_TOOL_FAILURE_RETRY_THRESHOLD` env | `3` | NovelAI failures after visible pre-tool text before the retry-exhausted embed ends the turn |
+| `MAX_CONSECUTIVE_TOOL_ERRORS` | Constant in `toolLoop.ts` | `5` | Consecutive tool failures before `emitToolErrorLoop` + `buildResult("error")` |
+| `NAI_TOOL_FAILURE_RETRY_THRESHOLD` | Constant in `toolLoop.ts` | `3` | NovelAI failures after visible pre-tool text before the retry-exhausted embed ends the turn |
 | `STREAM_SDK_CALL_TIMEOUT_MS` | `STREAM_SDK_CALL_TIMEOUT_MS` env | `120000` | Per-call SDK inactivity timeout (rolling; see stage 01) |
 | `TOOL_EXECUTION_TIMEOUT_MS` | `TOOL_EXECUTION_TIMEOUT_MS` env | `300000` | Per-tool execution timeout; fresh per tool call; chains are unaffected (see stage 02) |

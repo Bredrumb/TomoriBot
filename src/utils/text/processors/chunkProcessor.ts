@@ -3,25 +3,10 @@ import { log } from "@/utils/misc/logger";
 import { escapeRegExp } from "./regexUtils";
 
 const DISCORD_CUSTOM_EMOJI_NAME_REGEX = /^<a?:([^:>]+):[^>]+>$/;
-const DEFAULT_EMOJI_RUN_PREFIX_LENGTH = 3;
-const MIN_EMOJI_RUN_PREFIX_LENGTH = 1;
-const MAX_EMOJI_RUN_PREFIX_LENGTH = 32;
+// Adjacent custom emojis merge into one message when their normalized names share this many
+// leading characters (JoeCaught_1 + JoeCaught_2), so sticker-like sets land together.
+const EMOJI_RUN_PREFIX_LENGTH = 3;
 const HEAVY_HUMANIZER_ELLIPSIS_PLACEHOLDER = "__TOMORI_ELLIPSIS__";
-
-function loadEmojiRunPrefixLength(): number {
-  const raw = process.env.EMOJI_RUN_PREFIX_LENGTH;
-  if (!raw) return DEFAULT_EMOJI_RUN_PREFIX_LENGTH;
-
-  const parsed = Number.parseInt(raw, 10);
-  if (Number.isNaN(parsed)) {
-    log.warn(`Invalid EMOJI_RUN_PREFIX_LENGTH value: ${raw}. Using default: ${DEFAULT_EMOJI_RUN_PREFIX_LENGTH}`);
-    return DEFAULT_EMOJI_RUN_PREFIX_LENGTH;
-  }
-
-  return Math.min(MAX_EMOJI_RUN_PREFIX_LENGTH, Math.max(MIN_EMOJI_RUN_PREFIX_LENGTH, parsed));
-}
-
-const EMOJI_RUN_PREFIX_LENGTH = loadEmojiRunPrefixLength();
 
 function getEmojiRunPrefix(emojiTag: string): string | null {
   const match = DISCORD_CUSTOM_EMOJI_NAME_REGEX.exec(emojiTag);

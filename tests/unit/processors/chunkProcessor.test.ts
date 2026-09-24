@@ -160,3 +160,11 @@ describe("chunkMessage hard breaks", () => {
     }
   });
 });
+
+describe("chunkMessage emoji runs", () => {
+  it("merges adjacent custom emojis only when their names share a three-character prefix", () => {
+    const chunks = chunkMessage("<:JoeCaught_1:1><:JoeCaught_2:2>\n<:abcx:3><:abdx:4><:tom:5><:tomori:6>", 1);
+
+    expect(chunks).toEqual(["<:JoeCaught_1:1><:JoeCaught_2:2>", "<:abcx:3>", "<:abdx:4>", "<:tom:5><:tomori:6>"]);
+  });
+});

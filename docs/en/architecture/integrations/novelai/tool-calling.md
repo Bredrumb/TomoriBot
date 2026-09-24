@@ -12,7 +12,7 @@ The implementation lives primarily in `src/providers/novelai/novelaiStreamAdapte
 
 - `generate_image_nai` now requires an explicit `server_novelai_imagegen_configs.nai_diffusion_model_id`. When that dedicated slot is `NULL`, the tool stays hidden and NovelAI image generation remains disabled until `/config` > Models > Switch Models sets a NovelAI model again.
 - `/config` > Models > Switch Models now also handles the dedicated NovelAI image slot when the selected provider is NovelAI.
-- `generate_image_nai` now resolves its sampler, steps, scale, noise schedule, and `cfg_rescale` from `server_novelai_imagegen_configs` first, falling back to the `NAI_IMAGE_*` / `NAI_CFG_RESCALE` env values when the server override is `NULL`.
+- `generate_image_nai` now resolves its sampler, steps, scale, noise schedule, and `cfg_rescale` from `server_novelai_imagegen_configs` first, falling back to the `DEFAULT_NAI_*` constants in `src/utils/image/naiImageParams.ts` when the server override is `NULL`.
 - `/novelai image params` is the admin-facing command for those parameter overrides.
 - Image tag profile commands are provider-neutral: `/config` > Persona > Appearance, `/personal config`, and the default positive and negative tag fields on `/config` > Models > Image Generation Defaults.
 - `/novelai generate image` is the slash-command image generation entrypoint for direct tag-based NAI image creation, and now opens a modal for prompt, extra negative tags, optional character reference, and orientation selection.

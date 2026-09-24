@@ -158,6 +158,5 @@ Khi biến này được thiết lập, `fetch_url` sẽ tự động chuyển t
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | Danh sách các engine phân tách bằng dấu phẩy. `safe_http` luôn được thêm vào cuối cùng làm phương án dự phòng; tên cũ `mcp_fetch` là bí danh của nó. Các mục Crawl4AI sẽ bị bỏ qua ở những nơi không cho phép thu thập qua mạng riêng tư (production không có tùy chọn cho phép). |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Thời gian chờ yêu cầu cho từng engine đối với Crawl4AI và các sidecar thu thập URL. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Số ký tự tối đa được trả về bởi một lần gọi fetch trước khi cần tiếp tục. |
-| `FETCH_URL_HEALTHCHECK_CACHE_SEC` | `60` | Thời gian lưu tạm kết quả kiểm tra tình trạng của Crawl4AI trước khi kiểm tra lại. |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Tùy chọn chỉ dành cho production. Bên ngoài production (`RUN_ENV` != `production`), cơ chế bảo vệ SSRF sẽ tự động nới lỏng, giúp việc thu thập từ localhost/mạng riêng tư/nội bộ và gửi tới Crawl4AI hoạt động mà không cần thiết lập thêm. Chỉ đặt `true` để cho phép thu thập qua mạng riêng tư trong bản triển khai production đáng tin cậy. |
 | `FETCH_URL_FILTER_MODE` | `fit` | Chế độ lọc `/md` của Crawl4AI. `fit` giữ cho markdown gọn gàng hơn khi dùng cho LLM; `fetch_url(..., raw=true)` sẽ ghi đè chế độ này cho từng yêu cầu. |

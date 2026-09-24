@@ -1,4 +1,3 @@
-import { log } from "@/utils/misc/logger";
 import { localizer, resolveSupportedLocale } from "@/utils/text/localizer";
 import {
   findBalancedParentheses,
@@ -90,48 +89,15 @@ const INTERNET_EXPRESSIONS = new Set([
   "tysm",
 ]);
 
-// Reported through log.metric because production pins pino at `error`, so a log.warn about a
-// misconfigured env var would never reach an operator.
-function reportInvalidHumanizerConfig(reason: string, raw: string, fallback: number | string): void {
-  log.metric("humanizer_config_invalid", { reason, raw, fallback });
-}
-
-function loadProbability(envVar: string, defaultValue: number): number {
-  const raw = process.env[envVar];
-  if (!raw) return defaultValue;
-
-  const parsed = Number.parseFloat(raw);
-  if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) {
-    reportInvalidHumanizerConfig(envVar, raw, defaultValue);
-    return defaultValue;
-  }
-
-  return parsed;
-}
-
-const DEFAULT_COMMA_REMOVE_PROBABILITY = 0.4;
-const DEFAULT_COMMA_FLUSH_PROBABILITY = 0.2;
-
-// Remove and flush share one roll, so a sum above 1 would silently shrink the effective flush
-// rate and zero out "keep". Both fall back together so the operator's intended ratio is not
-// half-applied.
-function loadCommaProbabilities(): { remove: number; flush: number } {
-  const remove = loadProbability("HUMANIZER_COMMA_REMOVE_PROBABILITY", DEFAULT_COMMA_REMOVE_PROBABILITY);
-  const flush = loadProbability("HUMANIZER_COMMA_FLUSH_PROBABILITY", DEFAULT_COMMA_FLUSH_PROBABILITY);
-  if (remove + flush > 1) {
-    reportInvalidHumanizerConfig("comma_probability_sum_exceeds_1", `${remove}+${flush}`, "defaults");
-    return { remove: DEFAULT_COMMA_REMOVE_PROBABILITY, flush: DEFAULT_COMMA_FLUSH_PROBABILITY };
-  }
-  return { remove, flush };
-}
-
 // Weighted rather than an even three-way split: a sentence with several commas would otherwise
 // have a good chance of picking up multiple flushes, which reads as more erratic typing than
-// the feature is meant to simulate. Flush stays the rare outcome.
-const { remove: COMMA_REMOVE_PROBABILITY, flush: COMMA_FLUSH_PROBABILITY } = loadCommaProbabilities();
+// the feature is meant to simulate. Flush stays the rare outcome. Remove and flush share one
+// roll, so their sum must stay at or below 1 or "keep" disappears.
+const COMMA_REMOVE_PROBABILITY = 0.4;
+const COMMA_FLUSH_PROBABILITY = 0.2;
 // "!"/"?" never get removed (that would blunt the tone they carry), so this is a single
 // flush-or-not roll instead of a three-way split.
-const EMPHASIS_FLUSH_PROBABILITY = loadProbability("HUMANIZER_EMPHASIS_FLUSH_PROBABILITY", 0.5);
+const EMPHASIS_FLUSH_PROBABILITY = 0.5;
 
 // ASCII "," "!" "?" only count as prose punctuation when whitespace or the end follows; otherwise
 // they are part of a token ("<@!123>", "!help", "a,b", "1,000", "?..."). Full-width 、，､！？ are

@@ -2,8 +2,8 @@ import sharp from "sharp";
 import type { ParsedMarkdownTable, MarkdownTableAlignment } from "@/utils/text/markdownTable";
 import { log } from "@/utils/misc/logger";
 
-const DEFAULT_MAX_WIDTH = 1400;
-const DEFAULT_MAX_HEIGHT = 5000;
+const MARKDOWN_TABLE_RENDER_MAX_WIDTH = 1400;
+const MARKDOWN_TABLE_RENDER_MAX_HEIGHT = 5000;
 const HEADER_FONT_SIZE = 24;
 const BODY_FONT_SIZE = 22;
 const BORDER_WIDTH = 1;
@@ -20,11 +20,6 @@ const HEADER_TEXT = "#f5f7fb";
 const BODY_TEXT = "#d6dbe6";
 const FONT_FAMILY = "Consolas, Menlo, 'Liberation Mono', monospace";
 const CHAR_WIDTH_FACTOR = 0.61;
-
-function getPositiveIntEnv(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function escapeXml(text: string): string {
   return text
@@ -155,8 +150,8 @@ function getTextX(cellX: number, cellWidth: number, alignment: MarkdownTableAlig
 }
 
 export async function renderMarkdownTableToPng(table: ParsedMarkdownTable): Promise<Buffer | null> {
-  const maxWidth = getPositiveIntEnv("MARKDOWN_TABLE_RENDER_MAX_WIDTH", DEFAULT_MAX_WIDTH);
-  const maxHeight = getPositiveIntEnv("MARKDOWN_TABLE_RENDER_MAX_HEIGHT", DEFAULT_MAX_HEIGHT);
+  const maxWidth = MARKDOWN_TABLE_RENDER_MAX_WIDTH;
+  const maxHeight = MARKDOWN_TABLE_RENDER_MAX_HEIGHT;
 
   const usableWidth = Math.max(
     table.columnCount * (CELL_PADDING_X * 2 + BODY_FONT_SIZE * 8),

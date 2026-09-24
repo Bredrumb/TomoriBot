@@ -26,9 +26,9 @@ const EDIT_MODAL_CUSTOM_ID = "server_expressions_edit_modal";
 const EMOTION_INPUT_ID = "expression_emotion_input";
 const INSTRUCTIONS_INPUT_ID = "expression_instructions_input";
 
-// The usage-description length is configurable so operators can tune how much
-//    guidance the model receives (no hardcoded operational limits).
-const INSTRUCTIONS_MAX_LENGTH = Number.parseInt(process.env.EXPRESSION_DESC_MAX_LENGTH || "500", 10);
+// The usage-description length bounds how much guidance the model receives per expression;
+//    the cap keeps a persona's expression list from crowding out the rest of the context.
+const INSTRUCTIONS_MAX_LENGTH = 500;
 
 // The emotion picker is a string select. Discord caps selects at 25 options, so we
 //    offer the curated 25-key subset (getManualEditEmotionKeys) rather than all 28.

@@ -38,15 +38,8 @@ export function Fragment(props: { children?: unknown }): unknown {
   return props.children;
 }
 
-function readIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
 /** Logical canvas width. All typography is sized for a Discord-scale preview. */
-export const CARD_W = readIntEnv("STATS_CARD_W", 1080);
+export const CARD_W = 1080;
 const BASE_CARD_W = 1080;
 const CARD_SCALE = CARD_W / BASE_CARD_W;
 
@@ -60,16 +53,16 @@ export const PERSONA_CARD_H = scaled(1920);
 /** @deprecated Use the card-specific height helpers instead. */
 export const CARD_H = PERSONAL_CARD_H;
 
-/** TomoriBot brand palette. Operators may override the three structural colors. */
+/** TomoriBot brand palette. */
 export const CARD_THEME = {
-  bg: process.env.STATS_CARD_THEME_BG ?? "#1d100e",
-  surface: process.env.STATS_CARD_THEME_SURFACE ?? "#2c1815",
+  bg: "#1d100e",
+  surface: "#2c1815",
   surfaceAlt: "#160b0a",
   border: "#4d2b26",
   text: "#f7f2f1",
   textMuted: "#d1b8b2",
   textSubtle: "#ab8981",
-  red: process.env.STATS_CARD_THEME_ACCENT ?? "#e7322a",
+  red: "#e7322a",
   magenta: "#db1458",
   cyan: "#00e5ff",
   teal: "#6ec4cf",

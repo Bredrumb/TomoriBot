@@ -621,7 +621,7 @@ SELECT add_column_if_not_exists('persona_configs', 'humanizer_degree', 'INT', NU
 -- Min 20, max 100 enforced by command and schema validation
 
 -- Send message limit (March 2026)
--- Caps the number of Discord messages sent per response (0 = unlimited, capped by MAX_FLUSH_COUNT)
+-- Caps the number of Discord messages sent per response (0 = unlimited, capped by the MAX_FLUSH_COUNT constant)
 -- Each message is a semantically complete chunk, so this produces clean cutoffs unlike maxOutputTokens
 
 -- Always-reply mode (March 2026)

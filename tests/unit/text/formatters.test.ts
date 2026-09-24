@@ -167,7 +167,7 @@ describe("humanizeString", () => {
   });
 });
 
-// With the default probabilities, 0.1 removes a comma and flushes emphasis, 0.5 flushes a comma
+// With the humanizer probabilities, 0.1 removes a comma and flushes emphasis, 0.5 flushes a comma
 // and keeps emphasis, and 0.9 keeps both.
 const ROLL_REMOVE_COMMA_FLUSH_EMPHASIS = 0.1;
 const ROLL_FLUSH_COMMA_KEEP_EMPHASIS = 0.5;
@@ -241,5 +241,30 @@ describe("humanizeString script parity", () => {
   it("does not treat a typographic apostrophe as a quotation", () => {
     rollAlways(ROLL_FLUSH_COMMA_KEEP_EMPHASIS);
     expect(humanizeString("don’t, ok")).toEqual(["don’t", "ok"]);
+  });
+});
+
+describe("humanizeString roll thresholds", () => {
+  afterEach(() => {
+    mock.restore();
+  });
+
+  function outcomeAt(roll: number): string[] {
+    spyOn(Math, "random").mockReturnValue(roll);
+    return humanizeString("well, sure! ok");
+  }
+
+  it("removes a comma below 0.4 and flushes it from 0.4 up to 0.6", () => {
+    expect(outcomeAt(0.39)).toEqual(["well sure!", "ok"]);
+    mock.restore();
+    expect(outcomeAt(0.4)).toEqual(["well", "sure!", "ok"]);
+  });
+
+  it("keeps a comma above 0.6 and flushes emphasis only below 0.5", () => {
+    expect(outcomeAt(0.49)).toEqual(["well", "sure!", "ok"]);
+    mock.restore();
+    expect(outcomeAt(0.5)).toEqual(["well", "sure! ok"]);
+    mock.restore();
+    expect(outcomeAt(0.61)).toEqual(["well, sure! ok"]);
   });
 });

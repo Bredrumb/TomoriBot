@@ -45,21 +45,16 @@ export interface CustomThinkingRequest {
 type ProviderEffortLevel = "low" | "medium" | "high";
 type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel;
 
-function parseBudgetEnv(name: string, fallback: number): number {
-  const raw = Number.parseInt(process.env[name] ?? String(fallback), 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
-}
-
 function getLevelBudget(level: Exclude<ThinkingLevelValue, "auto" | "none">): number {
   switch (level) {
     case "minimal":
       return 1;
     case "low":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_LOW_TOKENS", DEFAULT_LOW_BUDGET_TOKENS);
+      return DEFAULT_LOW_BUDGET_TOKENS;
     case "medium":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_MEDIUM_TOKENS", DEFAULT_MEDIUM_BUDGET_TOKENS);
+      return DEFAULT_MEDIUM_BUDGET_TOKENS;
     case "high":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_HIGH_TOKENS", DEFAULT_HIGH_BUDGET_TOKENS);
+      return DEFAULT_HIGH_BUDGET_TOKENS;
   }
 }
 

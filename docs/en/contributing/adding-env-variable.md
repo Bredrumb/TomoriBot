@@ -22,18 +22,17 @@ Promote a constant to a variable only when you can name the deployment that need
 Give each setting one variable; an engine-specific variable plus a shared fallback for the same value
 is two names to document and debug for one knob.
 
-## The Eight-Tier Taxonomy
+## The Seven-Tier Taxonomy
 
-Optional variables in `.env.optional.example` are organized into eight tiers, ordered by how frequently an administrator tunes them:
+Optional variables in `.env.optional.example` are organized into seven tiers, ordered by how frequently an administrator tunes them:
 
-1. **Tier 1: Bot Identity and Everyday Behavior**: Knobs that shape what Tomori says or how she behaves without altering infrastructure (e.g. trigger words, emoji penalty, short-term memory depth).
+1. **Tier 1: Bot Identity and Everyday Behavior**: Knobs that shape what Tomori says or how she behaves without altering infrastructure (e.g. trigger words, the `EMOJI_PENALTY_ENABLED` switch, reaction context).
 2. **Tier 2: Optional Features and Integrations**: Opt-in external services where leaving the variable unset disables the whole feature (e.g. Matrix bridge, S3 storage, external search APIs, Documents and RAG, MCP servers).
 3. **Tier 3: Self-Hosted Sidecars and Local Services**: Settings for optional local AI containers, TTS sidecars (Fish Audio S2, VoxCPM2, CosyVoice 3, Chatterbox, MOSS, Irodori), Crawl4AI, SearXNG, and ComfyUI.
-4. **Tier 4: AI Providers and Models**: Per-provider LLM and image generator tuning (e.g. Gemini max output tokens, OpenRouter safety factors, NovelAI parameters, tool-loop execution bounds).
-5. **Tier 5: Limits and Quotas**: Caps on counts, sizes, payload lengths, and rates (e.g. memory counts, import archive limits, cooldowns, media attachment byte limits).
-6. **Tier 6: Caches, TTLs, and Component Timeouts**: Cache lifetimes, interactive component expiration, and lock cleanup (e.g. user cache TTL, channel lock timeout, button interactive durations).
-7. **Tier 7: Diagnostics and Development Tooling**: Knobs that only matter with a debugger attached, during local testing, or in CI pipelines (e.g. verbose fetch logging, test database credentials, `bun run vl` gate limits).
-8. **Tier 8: Production Hosting and Operations**: Sizing, pool recycling, PSI pressure detection, and metrics sinks needed in dedicated 24/7 production hosts, a VPS, or cloud deployments (e.g. Azure, AWS).
+4. **Tier 4: AI Providers and Models**: Per-provider LLM and image generator tuning (e.g. Gemini max output tokens, provider request timeouts, and the turn timeouts: tool execution, SDK call, and channel lock).
+5. **Tier 5: Limits and Quotas**: Caps on counts, sizes, payload lengths, and rates (e.g. memory counts, import archive limits, media attachment byte limits, the command cooldown scale).
+6. **Tier 6: Diagnostics and Development Tooling**: Knobs that only matter with a debugger attached, during local testing, or in CI pipelines (e.g. verbose fetch logging, test database credentials, `bun run vl` gate limits).
+7. **Tier 7: Production Hosting and Operations**: Sizing, pool recycling, PSI pressure detection, and metrics sinks needed in dedicated 24/7 production hosts, a VPS, or cloud deployments (e.g. Azure, AWS).
 
 ## Placement Rule: Tier the Section, Not the Variable
 
@@ -53,10 +52,10 @@ Follow these rules when defining an environment variable:
 - Provide a safe fallback in code so that running without the variable in `.env` works out of the box.
 
 ```ts
-// Example: parsing an optional integer with fallback
-const TIMEOUT_MS = Number.parseInt(process.env.EXAMPLE_TIMEOUT_MS || "5000", 10);
+// Example: a deployment boundary, parsed with a code fallback for a bare checkout
+const WEB_SEARCH_TIMEOUT_MS = Number.parseInt(process.env.WEB_SEARCH_TIMEOUT_MS || "15000", 10);
 
-// Example: parsing an optional boolean flag
+// Example: an opt-in switch whose unset state disables the feature
 const FEATURE_ENABLED = process.env.ENABLE_EXAMPLE_FEATURE === "true";
 ```
 
@@ -106,4 +105,4 @@ bun run lint     # Biome lint and formatting
 
 - [`docs/en/contributing/development-tasks.md`](./development-tasks): general coding standards and gate checklist
 - [`docs/en/contributing/comment-policy.md`](./comment-policy): durable comment conventions and prose dash prohibition
-- [`docs/en/wiki/production-tuning.md`](../wiki/production-tuning): deep operational rationale for Tier 8 production settings
+- [`docs/en/wiki/production-tuning.md`](../wiki/production-tuning): deep operational rationale for Tier 7 production settings

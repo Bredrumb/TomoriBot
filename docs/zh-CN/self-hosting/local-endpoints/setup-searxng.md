@@ -69,8 +69,6 @@ SearXNG 的图像结果会经过 HEAD 校验，可选压缩，然后作为 Disco
 |---|---|---|
 | `SEARXNG_IMAGE_COUNT` | `3`（最大 10） | 发送到 Discord 的有效图像数量。会被 LLM 的 `count` 参数覆盖。 |
 | `SEARXNG_IMAGE_POOL` | `10` | LLM 未指定 `count` 时的候选 URL 池。指定 `count` 时，池大小为 `count × 3`（上限 30），用来吸收防盗链失败。 |
-| `IMAGE_MIN_SIZE_BYTES` | `5120`（5 KB） | 小于该大小的图像会被拒绝：用于过滤占位图和错误图。与 Brave 图像搜索共用。 |
 | `WEB_SEARCH_TIMEOUT_MS` | — | 单个引擎的请求超时。 |
-| `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | 健康探测结果在重新检查之前缓存多久。 |
 
 *（所有可调项见 `.env.optional.example`。）*

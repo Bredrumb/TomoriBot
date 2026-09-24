@@ -196,9 +196,8 @@ const TIER_CANDIDATES: Record<
   3: { candidate: "deployment", confidence: "medium", reason: "Tier 3 local server or local service" },
   4: { candidate: "runtime-preference", confidence: "low", reason: "Tier 4 provider or model tuning" },
   5: { candidate: "runtime-preference", confidence: "low", reason: "Tier 5 limit or quota" },
-  6: { candidate: "runtime-preference", confidence: "low", reason: "Tier 6 cache, TTL, or component timeout" },
-  7: { candidate: "deployment", confidence: "low", reason: "Tier 7 diagnostics or development tooling" },
-  8: { candidate: "deployment", confidence: "medium", reason: "Tier 8 production hosting" },
+  6: { candidate: "deployment", confidence: "low", reason: "Tier 6 diagnostics or development tooling" },
+  7: { candidate: "deployment", confidence: "medium", reason: "Tier 7 production hosting" },
 };
 
 /**

@@ -6,18 +6,21 @@
  *  • personas/** + assets/img/**  → "lossless-fit"
  *      Re-encode losslessly (max deflate + adaptive filtering, metadata stripped)
  *      at native resolution. These are already near-optimally encoded, so a file is
- *      only downscaled (long edge capped at MEDIA_MAX_DIMENSION, default 768px) when
- *      lossless alone cannot reach MEDIA_SIZE_LIMIT_BYTES. Color stays Δ0; only
+ *      only downscaled (long edge capped at DEFAULT_MAX_DIMENSION, default 768px) when
+ *      lossless alone cannot reach DEFAULT_LIMIT_BYTES. Color stays Δ0; only
  *      resolution drops, and only when necessary. Same format in/out.
  *
  *  • .github/release/**  → "webp"
  *      Release cards are web-viewed showcase art where WebP crushes PNG. Any
- *      non-WebP card is converted to WebP q90 (RELEASE_CARD_WEBP_QUALITY) at full
+ *      non-WebP card is converted to WebP (DEFAULT_RELEASE_WEBP_QUALITY, default 90) at full
  *      resolution, the old file is removed, and sibling release-notes.md references
  *      are rewritten. Files that are ALREADY WebP are left untouched because re-encoding a
  *      lossy format every run would accumulate generational artifacts.
  *      NOTE: published GitHub release bodies hotlink raw/main and must be updated
  *      separately (the command prints the exact `gh release edit` reminder per tag).
+ *
+ * The budget and the encoder settings are constants in scripts/lib/media.ts, not environment
+ * overrides, so every contributor computes the same result. None of them are tunable per run.
  *
  * A lossless-fit file is only overwritten when the result is actually smaller, so
  * the command is idempotent and safe to re-run.
@@ -32,12 +35,12 @@ import { config } from "dotenv";
 import sharp from "sharp";
 import {
   type CompressTarget,
+  DEFAULT_LIMIT_BYTES,
+  DEFAULT_MAX_DIMENSION,
+  DEFAULT_RELEASE_WEBP_QUALITY,
   formatBytes,
   listCompressTargets,
   RELEASE_PREFIX,
-  resolveLimitBytes,
-  resolveMaxDimension,
-  resolveReleaseWebpQuality,
 } from "../lib/media";
 
 config({ quiet: true });
@@ -166,7 +169,7 @@ async function runWebp(file: CompressTarget, quality: number, dryRun: boolean): 
     };
   }
 
-  // Convert to WebP q90 at native resolution (showcase art is viewed full-size).
+  // Convert to WebP at native resolution (showcase art is viewed full-size).
   const input = Buffer.from(await Bun.file(file.path).arrayBuffer());
   const webp = await sharp(input).webp({ quality, effort: 6 }).toBuffer();
   const newPath = file.path.replace(/\.[^.]+$/, ".webp");
@@ -198,9 +201,9 @@ async function runWebp(file: CompressTarget, quality: number, dryRun: boolean): 
 }
 
 async function main(): Promise<void> {
-  const limit = resolveLimitBytes();
-  const maxDim = resolveMaxDimension();
-  const webpQuality = resolveReleaseWebpQuality();
+  const limit = DEFAULT_LIMIT_BYTES;
+  const maxDim = DEFAULT_MAX_DIMENSION;
+  const webpQuality = DEFAULT_RELEASE_WEBP_QUALITY;
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
   const filters = args.filter((a) => !a.startsWith("--"));
@@ -268,7 +271,9 @@ async function main(): Promise<void> {
   if (stillOver.length > 0) {
     console.log(`\n⚠ ${stillOver.length} file(s) still exceed the ${formatBytes(limit)} budget:`);
     for (const o of stillOver) console.log(`  - ${o.path} — ${formatBytes(o.newSize)} (${o.note})`);
-    console.log("  Lower MEDIA_MAX_DIMENSION, raise MEDIA_SIZE_LIMIT_BYTES, or hand-edit these.");
+    console.log(
+      "  These files cannot shrink further under the current constants in scripts/lib/media.ts. Lower DEFAULT_MAX_DIMENSION, raise DEFAULT_LIMIT_BYTES, or hand-edit these.",
+    );
   }
 }
 

@@ -2,7 +2,7 @@ import type { PersonaUserBlockRow } from "@/types/db/schema";
 import { personaUserBlockRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
 
-const CACHE_TTL_MS = (Number(process.env.PERSONA_USER_BLOCK_CACHE_TTL_SECONDS) || 60) * 1000;
+const CACHE_TTL_MS = 60 * 1000;
 
 type CacheEntry<T> = {
   value: T;

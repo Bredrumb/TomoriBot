@@ -372,8 +372,8 @@ Adding a core field kind requires an entry in both `hydrateDiscordUser` and
 | Client intent | `GuildPresences` | Required for online/activity status; without it, only static info is shown |
 | User row | `personal_dtm`, `privacy_level` | Reference eligibility and per-field privacy behavior; authored messages from `FULL` users are removed upstream |
 | User row | `physical_appearance_tags` | Public physical appearance image tags |
-| Environment | `PARTICIPANT_SOURCE_TIMEOUT_MS` | Abort timeout for each participant source; default 1500 ms |
-| Environment | `PARTICIPANT_ENRICHER_TIMEOUT_MS` | Abort timeout for each profile enricher; default 1500 ms |
+| Constant (`sources.ts`) | `SOURCE_TIMEOUT_MS` | Abort timeout for each participant source: 1500 ms |
+| Constant (`profileEnrichers.ts`) | `ENRICHER_TIMEOUT_MS` | Abort timeout for each profile enricher: 1500 ms |
 
 ## Extension points
 

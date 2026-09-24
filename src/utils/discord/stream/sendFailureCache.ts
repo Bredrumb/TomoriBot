@@ -28,8 +28,7 @@ interface SendFailureEntry {
 
 const sendFailureCache = new Map<string, SendFailureEntry>();
 
-const SEND_FAILURE_RETRY_MS =
-  Math.max(Number.parseInt(process.env.SEND_FAILURE_RETRY_MINUTES || "", 10) || 15, 1) * 60_000;
+const SEND_FAILURE_RETRY_MS = 15 * 60_000;
 
 /**
  * Maps a Discord API error to a reason worth caching, or null when the failure could plausibly

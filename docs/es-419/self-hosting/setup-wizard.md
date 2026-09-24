@@ -141,9 +141,8 @@ reemplaza el panel con el comprobante. **Cancelar** descarta el borrador y hace 
 panel.
 
 Un borrador vive en el proceso del bot, no en la base de datos, así que solo termina cuando se cancela,
-se completa o el proceso se reinicia. Se conservan como máximo `SETUP_DRAFT_MAX_ENTRIES` (200 por
-defecto) borradores a la vez; el más antiguo se descarta al llegar al límite. Está documentado en
-`.env.optional.example` bajo **Borradores del asistente de configuración**. Un control de una sesión que
+se completa o el proceso se reinicia. Se conservan como máximo 200
+borradores a la vez; el más antiguo se descarta al llegar al límite. Un control de una sesión que
 ya no está disponible no escribe nada.
 
 ## Actualización

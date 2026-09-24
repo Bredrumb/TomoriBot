@@ -73,11 +73,11 @@ Current implementation rule:
 
 ## Numeric Budget Defaults
 
-When a provider accepts a numeric reasoning budget, Tomori maps `low` / `medium` / `high` using these env vars:
+When a provider accepts a numeric reasoning budget, Tomori maps `low` / `medium` / `high` using these constants in `src/utils/provider/thinkingControl.ts`:
 
-- `THINKING_LEVEL_BUDGET_LOW_TOKENS=1024`
-- `THINKING_LEVEL_BUDGET_MEDIUM_TOKENS=4096`
-- `THINKING_LEVEL_BUDGET_HIGH_TOKENS=8192`
+- `DEFAULT_LOW_BUDGET_TOKENS = 1024`
+- `DEFAULT_MEDIUM_BUDGET_TOKENS = 4096`
+- `DEFAULT_HIGH_BUDGET_TOKENS = 8192`
 
 These are Tomori defaults, not vendor defaults.
 

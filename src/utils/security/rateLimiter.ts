@@ -201,7 +201,7 @@ export const STREAMING_LIMITS = {
    * Each flush = 1 Discord message sent (semantically complete chunks)
    * @default 40 in production, Infinity in development
    */
-  MAX_FLUSH_COUNT: GUARDS_ENABLED ? Number.parseInt(process.env.MAX_FLUSH_COUNT || "40", 10) : Number.POSITIVE_INFINITY,
+  MAX_FLUSH_COUNT: GUARDS_ENABLED ? 40 : Number.POSITIVE_INFINITY,
 } as const;
 
 /**

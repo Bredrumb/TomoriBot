@@ -178,6 +178,19 @@ interface AccumulatedToolCall {
 const OPENROUTER_VERBOSE_FETCH = (process.env.OPENROUTER_VERBOSE_FETCH ?? "false").trim().toLowerCase() === "true";
 
 /**
+ * Share of the context window still free after the estimated input that a reply may claim.
+ * The remainder absorbs the estimate's error, since a request that overshoots the window is
+ * rejected outright rather than trimmed.
+ */
+const OPENROUTER_OUTPUT_SAFETY_FACTOR = 0.9;
+
+/**
+ * Floor for the safety cap above, so a nearly full window still leaves a usable reply instead
+ * of clamping to a token or two. Applied only when the remaining context can actually fit it.
+ */
+const OPENROUTER_MIN_OUTPUT_TOKENS = 256;
+
+/**
  * OpenRouter streaming adapter implementation
  */
 export class OpenrouterStreamAdapter extends BaseStreamAdapter {
@@ -499,19 +512,11 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
       if (effectiveMaxOutputTokens !== undefined && config.model && isOpenRouterCapabilityCacheReady()) {
         const tokenLimits = getOpenRouterTokenLimits(config.model);
         if (tokenLimits && tokenLimits.contextLength > 0) {
-          const outputSafetyFactorRaw = Number.parseFloat(process.env.OPENROUTER_OUTPUT_SAFETY_FACTOR || "0.9");
-          const outputSafetyFactor =
-            Number.isFinite(outputSafetyFactorRaw) && outputSafetyFactorRaw > 0 && outputSafetyFactorRaw < 1
-              ? outputSafetyFactorRaw
-              : 0.9;
-          const minOutputTokensRaw = Number.parseInt(process.env.OPENROUTER_MIN_OUTPUT_TOKENS || "256", 10);
-          const configuredMinOutputTokens =
-            Number.isFinite(minOutputTokensRaw) && minOutputTokensRaw > 0 ? minOutputTokensRaw : 256;
-          const minOutputTokensFloor = Math.min(configuredMinOutputTokens, effectiveMaxOutputTokens);
+          const minOutputTokensFloor = Math.min(OPENROUTER_MIN_OUTPUT_TOKENS, effectiveMaxOutputTokens);
           // Rough input token estimate from textual message content
           const estimatedInputTokens = this.estimateInputTokensForSafetyCap(messages);
           const remainingContextTokens = tokenLimits.contextLength - estimatedInputTokens;
-          const rawSafeOutputBudget = Math.floor(remainingContextTokens * outputSafetyFactor);
+          const rawSafeOutputBudget = Math.floor(remainingContextTokens * OPENROUTER_OUTPUT_SAFETY_FACTOR);
           let safeOutputBudget = Math.max(1, rawSafeOutputBudget);
           let minOutputFloorApplied = false;
 
@@ -524,14 +529,14 @@ export class OpenrouterStreamAdapter extends BaseStreamAdapter {
             log.warn(
               `Context-window safety cap applied for ${config.model}: ` +
                 `maxOutputTokens ${effectiveMaxOutputTokens} → ${safeOutputBudget} ` +
-                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${outputSafetyFactor}, minFloor=${minOutputTokensFloor}, minFloorApplied=${minOutputFloorApplied})`,
+                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${OPENROUTER_OUTPUT_SAFETY_FACTOR}, minFloor=${minOutputTokensFloor}, minFloorApplied=${minOutputFloorApplied})`,
             );
             effectiveMaxOutputTokens = safeOutputBudget;
           } else if (minOutputFloorApplied) {
             log.info(
               `Context-window minimum output floor preserved for ${config.model}: ` +
                 `maxOutputTokens remains ${effectiveMaxOutputTokens} ` +
-                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${outputSafetyFactor}, minFloor=${minOutputTokensFloor})`,
+                `(contextLength=${tokenLimits.contextLength}, estimatedInput≈${estimatedInputTokens}, remaining=${remainingContextTokens}, rawBudget=${rawSafeOutputBudget}, safetyFactor=${OPENROUTER_OUTPUT_SAFETY_FACTOR}, minFloor=${minOutputTokensFloor})`,
             );
           }
         }

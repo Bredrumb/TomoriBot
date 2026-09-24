@@ -158,6 +158,5 @@ CRAWL4AI_COOKIES_JSON=[{"name":"session","value":"YOUR_SESSION_TOKEN","domain":"
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | コンマ区切りのエンジンリスト。`safe_http`は常に最終フォールバックとして追加され、従来の`mcp_fetch`名はそのエイリアスです。プライベートネットワーク取得が許可されていない場合（オプトインなしの本番環境）、Crawl4AIは無視されます。 |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Crawl4AIおよびURLフェッチサイドカーのエンジンごとのリクエストタイムアウト。 |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | 続きを取得する必要が生じる前に、1回のフェッチで返す最大文字数。 |
-| `FETCH_URL_HEALTHCHECK_CACHE_SEC` | `60` | Crawl4AIのヘルスプローブ結果が再チェックされる前にキャッシュされる時間。 |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | 本番環境専用のオプトイン。本番環境以外（`RUN_ENV` != `production`）ではSSRFガードが自動的に緩和されるため、localhost/プライベート/内部URLの取得とCrawl4AIディスパッチは設定なしで機能します。信頼された本番環境でプライベートネットワーク取得を許可する場合のみ`true`に設定してください。 |
 | `FETCH_URL_FILTER_MODE` | `fit` | Crawl4AIの`/md`フィルターモード。`fit`はLLMで使用するためにマークダウンをクリーンに保ちます。`fetch_url(..., raw=true)`はリクエストごとにこれをオーバーライドします。 |

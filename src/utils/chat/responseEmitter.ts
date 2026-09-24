@@ -8,9 +8,8 @@ import { channelLocks, setActiveChannelTurnState, setChannelToolCallChainActive 
 import { cacheUserImpersonationWebhook, resolveImpersonatedIdentity } from "@/utils/chat/webhookIdentity";
 import type { ChatResponseSink, ChatResponseTarget, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ProviderError } from "@/types/stream/interfaces";
-import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 
-const WEBHOOK_ERROR_COOLDOWN_MS = parseIntegerEnvFlag(process.env.WEBHOOK_ERROR_COOLDOWN_MS, 600000, 1000);
+const WEBHOOK_ERROR_COOLDOWN_MS = 10 * 60_000;
 const webhookErrorCooldowns = new Map<string, number>();
 
 function shouldSendWebhookError(channelId: string): boolean {

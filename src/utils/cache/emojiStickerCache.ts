@@ -21,11 +21,8 @@ interface EmojiStickerCacheEntry {
  */
 const cache = new Map<number, EmojiStickerCacheEntry>();
 
-/**
- * Cache duration: configurable via env, default 10 minutes.
- * Balances freshness vs performance (99% of messages should hit cache)
- */
-const MEMORY_CACHE_DURATION_MS = (Number(process.env.EMOJI_STICKER_CACHE_TTL_MINUTES) || 10) * 60 * 1000;
+// 10 minutes balances freshness against performance: 99% of messages should hit cache.
+const MEMORY_CACHE_DURATION_MS = 10 * 60 * 1000;
 
 /**
  * Cache statistics for monitoring

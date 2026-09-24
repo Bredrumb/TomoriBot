@@ -12,12 +12,9 @@ import type { ToolResult } from "@/types/tool/interfaces";
 
 /**
  * Minimum image size in bytes, so rejects tiny placeholders and error images that
- * Discord renders as raw file attachments rather than inline media (default 5 KB).
+ * Discord renders as raw file attachments rather than inline media.
  */
-export const IMAGE_MIN_SIZE_BYTES = Math.max(
-  1,
-  Number.parseInt(process.env.IMAGE_MIN_SIZE_BYTES ?? "5120", 10) || 5120,
-);
+export const IMAGE_MIN_SIZE_BYTES = 5 * 1024;
 
 export type ImageSearchProvider = "brave" | "searxng";
 

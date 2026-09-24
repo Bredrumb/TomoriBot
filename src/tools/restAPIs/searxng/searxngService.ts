@@ -32,8 +32,7 @@ const REQUEST_TIMEOUT_MS = Math.max(1000, Number.parseInt(process.env.WEB_SEARCH
 // Cache duration for the "SearXNG reachable" probe, so avoids re-probing on every
 //    LLM tool turn while still allowing recovery within a minute when the sidecar
 //    comes back online.
-const HEALTHCHECK_CACHE_MS =
-  Math.max(5, Number.parseInt(process.env.WEB_SEARCH_HEALTHCHECK_CACHE_SEC ?? "60", 10) || 60) * 1000;
+const HEALTHCHECK_CACHE_MS = 60_000;
 
 interface HealthcheckCache {
   available: boolean;
@@ -98,8 +97,7 @@ function getSearxngBaseUrl(): string | null {
 /**
  * Test whether a configured SearXNG instance is reachable.
  *
- * Result is cached for `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` seconds (default 60)
- * to keep the dispatcher fast without locking the bot out of recovery.
+ * Result is cached for a minute to keep the dispatcher fast without locking the bot out of recovery.
  */
 export async function isSearxngAvailable(force = false): Promise<boolean> {
   const baseUrl = getSearxngBaseUrl();

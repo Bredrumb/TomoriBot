@@ -158,6 +158,5 @@ Quando isso é definido, `fetch_url` muda automaticamente do endpoint `/md` para
 | `FETCH_URL_ENGINE_ORDER` | `safe_http` | Lista de motores separados por vírgula. `safe_http` é sempre anexado como o fallback final; o nome legado `mcp_fetch` o apelida. As entradas do Crawl4AI são ignoradas onde a busca em rede privada não é permitida (produção sem um opt-in). |
 | `FETCH_URL_TIMEOUT_MS` | `15000` | Timeout de requisição por motor para o Crawl4AI e sidecars de fetch de URL. |
 | `FETCH_URL_MAX_CONTENT_LENGTH` | `50000` | Máximo de caracteres retornados por uma chamada de fetch antes que a continuação seja exigida. |
-| `FETCH_URL_HEALTHCHECK_CACHE_SEC` | `60` | Por quanto tempo o resultado da sondagem de saúde do Crawl4AI fica em cache antes de verificar novamente. |
 | `FETCH_URL_ALLOW_PRIVATE_NETWORK` | `false` | Opt-in apenas para produção. Fora da produção (`RUN_ENV` != `production`) o guarda SSRF relaxa automaticamente, então buscas no localhost/rede privada/interna e o despacho do Crawl4AI funcionam sem configuração. Defina `true` apenas para permitir buscas em rede privada em uma implantação de produção confiável. |
 | `FETCH_URL_FILTER_MODE` | `fit` | Modo de filtro `/md` do Crawl4AI. `fit` mantém o markdown mais limpo para uso de LLM; `fetch_url(..., raw=true)` o substitui por requisição. |

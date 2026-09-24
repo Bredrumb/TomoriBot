@@ -50,19 +50,9 @@ type SupportedChannel =
 // Default character count above which the "Expand" button is attached. Matches
 // the truncation applied by the task embed callers.
 const DEFAULT_TRUNCATION_THRESHOLD = 200;
-// Shared 24h fallback used when a caller does not provide its own timeout.
-const DEFAULT_EXPAND_BUTTON_TIMEOUT_MS = 86_400_000;
-const DEFAULT_MEMORY_NOTICE_PREVIEW_LIMIT = 600;
-
-// Per-notice-type collector timeouts, each independently configurable via env.
-const MEMORY_EXPAND_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
-  process.env.MEMORY_EXPAND_BUTTON_TIMEOUT_MS,
-  DEFAULT_EXPAND_BUTTON_TIMEOUT_MS,
-);
-const TASK_EXPAND_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
-  process.env.TASK_EXPAND_BUTTON_TIMEOUT_MS,
-  DEFAULT_EXPAND_BUTTON_TIMEOUT_MS,
-);
+// Both notice types offer their expand button for a day: long enough that the button
+// outlives the message it was attached to in the channel's scrollback.
+const EXPAND_BUTTON_TIMEOUT_MS = 86_400_000;
 
 /**
  * Characters of memory content shown inline before the notice truncates and
@@ -70,16 +60,7 @@ const TASK_EXPAND_BUTTON_TIMEOUT_MS = parsePositiveIntegerEnv(
  * the button still has a purpose, and far below Discord's 4000-char text
  * display cap so the title, footer, and framing sentence always fit.
  */
-export const MEMORY_NOTICE_PREVIEW_LIMIT = parsePositiveIntegerEnv(
-  process.env.MEMORY_NOTICE_PREVIEW_LIMIT,
-  DEFAULT_MEMORY_NOTICE_PREVIEW_LIMIT,
-);
-
-function parsePositiveIntegerEnv(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
+export const MEMORY_NOTICE_PREVIEW_LIMIT = 600;
 
 /**
  * Per-notice configuration for {@link sendEmbedWithExpand}. Each notice type
@@ -355,7 +336,7 @@ export async function sendMemoryEmbedWithExpand(
       buttonLabelKey: "genai.self_teach.expand_memory_button",
       expandTitleKey: "genai.self_teach.expand_memory_title",
       truncationThreshold: MEMORY_NOTICE_PREVIEW_LIMIT,
-      timeoutMs: MEMORY_EXPAND_BUTTON_TIMEOUT_MS,
+      timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
     },
     webhookContext,
   );
@@ -386,7 +367,7 @@ export async function sendTaskEmbedWithExpand(
       customId: "task_notice_expand",
       buttonLabelKey: "reminders.expand_task_button",
       expandTitleKey: "reminders.expand_task_title",
-      timeoutMs: TASK_EXPAND_BUTTON_TIMEOUT_MS,
+      timeoutMs: EXPAND_BUTTON_TIMEOUT_MS,
     },
     webhookContext,
   );

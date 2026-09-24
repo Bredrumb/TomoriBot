@@ -161,17 +161,17 @@ Replacing this stage from a plugin would risk breaking those guarantees.
 | `requestNaturalStopForLockedTurn` | Add a new "soft stop" signal type | Internal: coupled to `StreamOrchestrator.requestStop` semantics |
 | `clearQueuedSelfReplyWork` | Customize what gets cleared on natural stop | Internal: coupled to `isSelfTriggerMessage` and persona-job semantics |
 
-The lock's *policy* (timeout, typing interval, max follow-ups) is configurable
-via env vars; behaviour customization should go through that channel rather
-than monkey-patching the stage.
+The lock's *policy* (timeout, typing interval, max follow-ups) lives in named
+constants; behaviour customization should go through those rather than
+monkey-patching the stage.
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `CHANNEL_LOCK_TIMEOUT_MS` | `180000` | Stale-lock detection threshold |
-| `DISCORD_TYPING_KEEPALIVE_INTERVAL_MS` | `8000` | Typing-refresh cadence |
-| `MAX_FOLLOW_UP_INTERRUPTS` | `3` | Per-lock follow-up interrupt cap |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Env var | `CHANNEL_LOCK_TIMEOUT_MS` | `180000` | Stale-lock detection threshold |
+| Constant (`channelQueue.ts`) | `DISCORD_TYPING_KEEPALIVE_INTERVAL_MS` | `8000` | Typing-refresh cadence |
+| Env var | `MAX_FOLLOW_UP_INTERRUPTS` | `3` | Per-lock follow-up interrupt cap |
 
 ## Related docs
 

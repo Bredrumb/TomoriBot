@@ -1,5 +1,13 @@
 import { log } from "@/utils/misc/logger";
 
+const MAX_ATTRIBUTE_LENGTH = 2000;
+const MAX_ATTRIBUTES = 10;
+const MAX_SAMPLE_DIALOGUE_LENGTH = 2000;
+const MAX_SAMPLE_DIALOGUES = 15;
+const MAX_TRIGGER_WORDS = 10;
+const DOCUMENT_CHUNK_SIZE = 1000;
+const DOCUMENT_CHUNK_OVERLAP = 200;
+
 /**
  * Memory limit configuration loaded from environment variables with defaults
  */
@@ -54,43 +62,27 @@ export function getMemoryLimits(): MemoryLimits {
   const maxPersonalMemories = parsePositiveIntegerEnv("MAX_PERSONAL_MEMORIES", 100);
   const maxServerMemories = parsePositiveIntegerEnv("MAX_SERVER_MEMORIES", 100);
   const maxMemoryLength = parsePositiveIntegerEnv("MAX_MEMORY_LENGTH", 1000);
-  const maxSampleDialogueLength = parsePositiveIntegerEnv("MAX_SAMPLE_DIALOGUE_LENGTH", 2000);
-  const maxAttributeLength = parsePositiveIntegerEnv("MAX_ATTRIBUTE_LENGTH", 2000);
-  const maxTriggerWords = parsePositiveIntegerEnv("MAX_TRIGGER_WORDS", 10);
-  const maxSampleDialogues = parsePositiveIntegerEnv("MAX_SAMPLE_DIALOGUES", 15);
-  const maxAttributes = parsePositiveIntegerEnv("MAX_ATTRIBUTES", 10);
   const maxPersonasPerServer = parsePositiveIntegerEnv("MAX_PERSONAS_PER_SERVER", 20);
   const maxDocumentSizeMB = parsePositiveIntegerEnv("MAX_DOCUMENT_SIZE_MB", 4);
   const maxDocumentTextLength = parsePositiveIntegerEnv("MAX_DOCUMENT_TEXT_LENGTH", 120000);
-  const documentChunkSize = parsePositiveIntegerEnv("DOCUMENT_CHUNK_SIZE", 1000);
-  const parsedDocumentChunkOverlap = parseNonNegativeIntegerEnv("DOCUMENT_CHUNK_OVERLAP", 200);
   const maxDocumentChunks = parsePositiveIntegerEnv("MAX_DOCUMENT_CHUNKS", 150);
   const maxDocumentsPerServer = parsePositiveIntegerEnv("MAX_DOCUMENTS_PER_SERVER", 20);
   const maxDocumentChunksPerServer = parsePositiveIntegerEnv("MAX_DOCUMENT_CHUNKS_PER_SERVER", 1000);
-
-  let documentChunkOverlap = parsedDocumentChunkOverlap;
-  if (documentChunkOverlap >= documentChunkSize) {
-    const fallbackOverlap = Math.max(0, Math.min(200, documentChunkSize - 1));
-    log.warn(
-      `Invalid DOCUMENT_CHUNK_OVERLAP value: ${process.env.DOCUMENT_CHUNK_OVERLAP}. Using default: ${fallbackOverlap}`,
-    );
-    documentChunkOverlap = fallbackOverlap;
-  }
 
   return {
     maxPersonalMemories,
     maxServerMemories,
     maxMemoryLength,
-    maxSampleDialogueLength,
-    maxAttributeLength,
-    maxTriggerWords,
-    maxSampleDialogues,
-    maxAttributes,
+    maxSampleDialogueLength: MAX_SAMPLE_DIALOGUE_LENGTH,
+    maxAttributeLength: MAX_ATTRIBUTE_LENGTH,
+    maxTriggerWords: MAX_TRIGGER_WORDS,
+    maxSampleDialogues: MAX_SAMPLE_DIALOGUES,
+    maxAttributes: MAX_ATTRIBUTES,
     maxPersonasPerServer,
     maxDocumentSizeMB,
     maxDocumentTextLength,
-    documentChunkSize,
-    documentChunkOverlap,
+    documentChunkSize: DOCUMENT_CHUNK_SIZE,
+    documentChunkOverlap: DOCUMENT_CHUNK_OVERLAP,
     maxDocumentChunks,
     maxDocumentsPerServer,
     maxDocumentChunksPerServer,
@@ -102,18 +94,6 @@ function parsePositiveIntegerEnv(name: string, defaultValue: number): number {
   const parsedValue = Number.parseInt(rawValue || defaultValue.toString(), 10);
 
   if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
-    log.warn(`Invalid ${name} value: ${rawValue}. Using default: ${defaultValue}`);
-    return defaultValue;
-  }
-
-  return parsedValue;
-}
-
-function parseNonNegativeIntegerEnv(name: string, defaultValue: number): number {
-  const rawValue = process.env[name];
-  const parsedValue = Number.parseInt(rawValue || defaultValue.toString(), 10);
-
-  if (!Number.isInteger(parsedValue) || parsedValue < 0) {
     log.warn(`Invalid ${name} value: ${rawValue}. Using default: ${defaultValue}`);
     return defaultValue;
   }

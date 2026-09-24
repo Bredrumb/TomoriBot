@@ -61,7 +61,7 @@ são postados; útil para auditar o que ela está fazendo (incluindo qual gatilh
 
 `/config` > Channels > Logs & Welcome configura uma saudação automática para novos membros em um canal
 escolhido. Por padrão, a Tomori espera um minuto antes de cumprimentá-los para que o onboarding do servidor
-termine. Operadores da instância podem ajustar esse período de espera com `WELCOME_DELAY_MS`. Use o
+termine. Use o
 botão **Clear Welcome** na mesma página para parar as saudações.
 
 ## Expressões

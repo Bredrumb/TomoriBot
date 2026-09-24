@@ -22,8 +22,8 @@ durable database rows for this channel.
 On the next turn, the context-build STM stage renders the `summary` field
 instead of the raw `messages` array, reducing token cost and giving the LLM
 a self-authored context rather than a verbose turn-by-turn log. Upgraded
-entries also enjoy a longer TTL (`SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS`,
-default 24 h) compared to the crude conversation TTL (12 h default).
+entries also enjoy a longer TTL (`SUMMARY_TTL_HOURS`, 24 h)
+compared to the crude conversation TTL (`CRUDE_CONVERSATION_TTL_HOURS`, 12 h).
 
 Silent operation: no embed or user-facing message is sent.
 
@@ -81,15 +81,15 @@ After a successful execute:
 | Surface | Plugin-relevance |
 |---|---|
 | `updateShortTermMemorySummary()` | Internal: summary write is a direct cache mutation; no plugin-relevant seam. The `summary` field replaces crude conversation globally for the channel key; there is no per-plugin namespace. |
-| `MAX_SUMMARY_LENGTH` | Env-var configurable (`SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH`, default 1 500). Not a plugin seam. |
-| Summary TTL | Env-var configurable (`SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS`, default 24). Not a plugin seam. |
+| `MAX_SUMMARY_LENGTH` | Fixed in code at 1 500. Not a plugin seam. |
+| Summary TTL | Fixed in code at 24 hours (`SUMMARY_TTL_HOURS`). Not a plugin seam. |
 
 ## Configuration
 
-| Source | Key / Env var | Default | Purpose |
+| Source | Key | Value | Purpose |
 |---|---|---|---|
-| Env var | `SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH` | `1500` | Max summary length before truncation |
-| Env var | `SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS` | `24` | TTL for entries that have a summary |
+| Constant (`shortTermMemoryCache.ts`) | `MAX_SUMMARY_LENGTH` | `1500` | Max summary length before truncation |
+| Constant (`shortTermMemoryCache.ts`) | `SUMMARY_TTL_HOURS` | `24` | TTL for entries that have a summary |
 
 ## Related docs
 

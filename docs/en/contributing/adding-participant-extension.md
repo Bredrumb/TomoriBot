@@ -78,11 +78,9 @@ change is required.
 
 Optional contributions record a bounded `failed` or `timed_out` diagnostic and contribute no
 output. Critical first-party failures throw `ContributionExecutionError`, including the
-contribution identity, owner, source, status, and cause. The runtime aborts work at these
-configurable defaults:
-
-- `PARTICIPANT_SOURCE_TIMEOUT_MS=1500`
-- `PARTICIPANT_ENRICHER_TIMEOUT_MS=1500`
+contribution identity, owner, source, status, and cause. The runtime aborts a source or an
+enricher after 1500 ms (`SOURCE_TIMEOUT_MS` in `sources.ts`, `ENRICHER_TIMEOUT_MS` in
+`profileEnrichers.ts`), so a contribution must finish well inside that.
 
 Diagnostics and metrics contain stable contribution IDs and aggregate counts/durations, never
 participant IDs, aliases, or message content.

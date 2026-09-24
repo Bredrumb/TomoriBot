@@ -31,8 +31,7 @@ const SUBSCRIPTION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
  *   https://github.com/SillyTavern/SillyTavern/issues/924 and NAI documentation.
  * - tier=0 (Free Trial): smallest observed value, conservative fallback.
  *
- * If NAI ever changes these limits, update this map or add NAI_KAYRA_TIER_X_LIMIT
- * env vars for fine-grained control.
+ * If NAI ever changes these limits, update this map.
  */
 const KAYRA_CONTEXT_LIMIT_BY_TIER: Readonly<Record<number, number>> = {
   0: 1_024, // Free Trial
@@ -85,30 +84,13 @@ export function setCachedContextTokens(guildId: string, contextLimit: number, ti
  * Fetches the NovelAI subscription for the given API key, resolves the Kayra
  * context limit from the tier number, caches it under guildId, and returns it.
  *
- * If NAI_KAYRA_CONTEXT_LIMIT is explicitly set in the environment, it takes
- * priority over the API-derived tier lookup , so no API call is made. This lets
- * operators who know their exact limit skip the subscription fetch entirely.
- *
  * Returns undefined (without throwing) if the fetch fails , so the caller should
- * fall back to the NAI_KAYRA_CONTEXT_LIMIT env var default in that case.
+ * fall back to the shared Kayra context limit in that case.
  *
  * @param guildId - Discord guild (server) ID (used as cache key)
  * @param apiKey - Plaintext NovelAI API key
  */
 export async function refreshNovelAISubscription(guildId: string, apiKey: string): Promise<number | undefined> {
-  // If the operator has explicitly set NAI_KAYRA_CONTEXT_LIMIT, trust it over
-  // the tier lookup : skip the subscription API call entirely.
-  if (process.env.NAI_KAYRA_CONTEXT_LIMIT !== undefined) {
-    const explicitLimit = Number.parseInt(process.env.NAI_KAYRA_CONTEXT_LIMIT, 10);
-    if (!Number.isNaN(explicitLimit) && explicitLimit > 0) {
-      log.info(
-        `NovelAI: NAI_KAYRA_CONTEXT_LIMIT=${explicitLimit} explicitly set — skipping subscription fetch for guild ${guildId}`,
-      );
-      setCachedContextTokens(guildId, explicitLimit, -1);
-      return explicitLimit;
-    }
-  }
-
   try {
     const subscription = await fetchNovelAISubscription(apiKey);
     if (!subscription) return undefined;

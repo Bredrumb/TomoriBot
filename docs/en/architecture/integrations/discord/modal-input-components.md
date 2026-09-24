@@ -580,8 +580,8 @@ Do not call both operations for one submission. If `openModal(...)` returns `fat
 `throw modal.error`). The runner also records that fatal state, so even an accidental retry
 directive cannot reopen the picker.
 
-`PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS` controls how long the in-place launcher/range
-buttons remain active (default 120000 ms). It does not alter Discord's modal lifetime.
+`PERSONA_WORKFLOW_COMPONENT_TIMEOUT_MS` (120000 ms) controls how long the in-place launcher/range
+buttons remain active. It does not alter Discord's modal lifetime.
 
 ### Bulk Configuration Management Pattern
 

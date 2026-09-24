@@ -239,7 +239,7 @@ file.
 Those variables exist for recalibration, not for routine use: they are read only by the audit
 command line and never by the running bot, since a value that lives in an operator's environment
 would make two contributors see two different reports. Their defaults and units are listed here and
-in the Tier 7 comment audit block of `.env.optional.example`. A value that is not a whole positive
+in the Tier 6 comment audit block of `.env.optional.example`. A value that is not a whole positive
 number, including `12words` or `2.5`, falls back to the default above rather than being partially
 parsed, so a typo cannot quietly become a threshold nobody chose.
 

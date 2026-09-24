@@ -218,7 +218,7 @@ gatherXxxCardData()   ← DB + Discord API (async, sole touch-point)
 - Fonts (`VF`-format crashes satori) are loaded once at module init as static instances via `readFileSync`. See `cardRenderer.ts`.
 - Renderer and caller use the same `getXxxCardHeight(data)` helper. The footer
   follows the final section instead of being pushed to the canvas bottom.
-- Layout dimensions and typography scale with `STATS_CARD_W`; changing the
+- Layout dimensions and typography scale with `CARD_W`; changing the
   output resolution retains the same visual proportions.
 
 ## Gather / render split
@@ -245,13 +245,13 @@ read into the card renderer, while the public response attaches only the finishe
 PNG. Compacting the private picker clears its no-longer-referenced avatar
 attachments.
 
-## Env config
+## Card geometry and theme
 
-All card dimensions and theme colors are configurable. See `.env.optional.example` for the full list:
+Card dimensions and theme colors are constants in `src/utils/stats/statsInfographic.tsx`:
 
-| Var | Default | Description |
+| Constant | Value | Description |
 |---|---|---|
-| `STATS_CARD_W` | `1080` | Logical card width; typography, spacing, and data-dependent height scale with it |
-| `STATS_CARD_THEME_BG` | `#1d100e` | Deep espresso card background |
-| `STATS_CARD_THEME_SURFACE` | `#2c1815` | Dark espresso secondary surface |
-| `STATS_CARD_THEME_ACCENT` | `#e7322a` | Primary red accent |
+| `CARD_W` | `1080` | Logical card width; typography, spacing, and data-dependent height scale with it |
+| `CARD_THEME.bg` | `#1d100e` | Deep espresso card background |
+| `CARD_THEME.surface` | `#2c1815` | Dark espresso secondary surface |
+| `CARD_THEME.red` | `#e7322a` | Primary red accent |

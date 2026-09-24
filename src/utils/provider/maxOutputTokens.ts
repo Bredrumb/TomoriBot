@@ -38,8 +38,8 @@ export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
  * to it would let a user who capped chat replies short for brevity silently truncate
  * every persona they generate, with nothing connecting the two settings from their side.
  * Preset generation is a one-off structured-output task the schema itself sizes up to
- * 16 string fields (`PRESET_MAX_STRING_LENGTH` each), so its budget is set by
- * `PRESET_GENERATION_MAX_OUTPUT_TOKENS` alone.
+ * 16 string fields (`PRESET_MAX_STRING_LENGTH` each), so its budget is set by this
+ * constant alone.
  */
 export const DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS = 16384;
 
@@ -48,7 +48,7 @@ export const DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS = 16384;
  * conversation turn. Sized for a few paragraphs of appearance detail; the analysis tool's
  * historical literal of 1024 was small enough to clip a detailed character description.
  */
-export const DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS = 2048;
+const DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS = 2048;
 
 /**
  * Parses a positive integer from a raw env string.
@@ -107,14 +107,13 @@ export function resolvePresetGenerationMaxOutputTokens(params?: {
   configured?: number | null;
   modelCeiling?: number;
 }): number {
-  const requested = parsePositiveIntEnv(process.env.PRESET_GENERATION_MAX_OUTPUT_TOKENS);
   const configured = params?.configured;
 
   // A configured ceiling wins only when it is lower; otherwise the preset default applies.
   const desired =
     typeof configured === "number" && configured > 0
-      ? Math.min(configured, requested ?? DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS)
-      : (requested ?? DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS);
+      ? Math.min(configured, DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS)
+      : DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS;
 
   return resolveMaxOutputTokens({
     configured: desired,
@@ -135,7 +134,7 @@ export function resolvePresetGenerationMaxOutputTokens(params?: {
 export function resolveVisionCaptionMaxOutputTokens(providerReportedMax?: number): number {
   return resolveMaxOutputTokens({
     configured: undefined,
-    envRaw: process.env.VISION_CAPTION_MAX_OUTPUT_TOKENS,
+    envRaw: undefined,
     fallback: DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS,
     providerReportedMax,
   });

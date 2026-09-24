@@ -69,8 +69,6 @@ SearXNG 的圖片結果會經過 HEAD 驗證、視情況壓縮，並以 Discord 
 |---|---|---|
 | `SEARXNG_IMAGE_COUNT` | `3`（上限 10） | 送往 Discord 的合格圖片數量。會被 LLM 的 `count` 參數覆寫。 |
 | `SEARXNG_IMAGE_POOL` | `10` | LLM 未指定 `count` 時的候選 URL 池。指定 `count` 時，池的大小為 `count × 3`（上限 30），以吸收防盜連保護造成的失敗。 |
-| `IMAGE_MIN_SIZE_BYTES` | `5120`（5 KB） | 小於此大小的圖片會被拒絕，用來濾掉佔位圖與錯誤圖。與 Brave 圖片搜尋共用。 |
 | `WEB_SEARCH_TIMEOUT_MS` | — | 每個引擎的請求逾時。 |
-| `WEB_SEARCH_HEALTHCHECK_CACHE_SEC` | `60` | 健康探測結果在重新檢查之前會被快取多久。 |
 
 *（所有可調項目請看 `.env.optional.example`。）*

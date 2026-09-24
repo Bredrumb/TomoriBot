@@ -37,15 +37,11 @@ import type { PresetExportData } from "@/types/preset/presetExport";
 const IMPORT_NOW_CUSTOM_ID = "persona_import_now";
 
 /**
- * Collector lifetime for the Import Now button. Capped under Discord's 15-minute
+ * Collector lifetime for the Import Now button. Kept under Discord's 15-minute
  * interaction-token window so the timeout teardown can still edit the original
- * reply. Configurable via env.
+ * reply.
  */
-const IMPORT_NOW_BUTTON_TIMEOUT_MS = (() => {
-  const parsed = Number.parseInt(process.env.PERSONA_IMPORT_NOW_BUTTON_TIMEOUT_MS ?? "", 10);
-  // Default to 14 minutes; clamp to a sane range below the 15-minute token expiry.
-  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 14 * 60 * 1000) : 14 * 60 * 1000;
-})();
+const IMPORT_NOW_BUTTON_TIMEOUT_MS = 14 * 60 * 1000;
 
 /** Visual state of the Import Now button. */
 type ImportNowButtonState = "active" | "done" | "expired";

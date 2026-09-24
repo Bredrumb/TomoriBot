@@ -22,21 +22,14 @@ export const PRESET_EXPORT_VERSION = "1.0.0";
  */
 export const UNPAIRED_SAMPLE_DIALOGUE_SENTINEL = "__UNPAIRED_SAMPLE_DIALOGUE__";
 
-function parsePositiveIntegerEnv(name: string, defaultValue: number): number {
-  const parsedValue = Number.parseInt(process.env[name] ?? "", 10);
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue;
-}
-
 /**
  * Preset import/export schema limits.
- * Admins can raise these with env vars, but doing so affects untrusted import files
- * and cross-instance preset portability.
  */
-export const PRESET_MAX_STRING_LENGTH = parsePositiveIntegerEnv("PRESET_MAX_STRING_LENGTH", 5000);
-export const PRESET_MAX_ATTRIBUTES = parsePositiveIntegerEnv("PRESET_MAX_ATTRIBUTES", 200);
-const PRESET_MAX_SAMPLE_DIALOGUES = parsePositiveIntegerEnv("PRESET_MAX_SAMPLE_DIALOGUES", 100);
-const PRESET_MAX_TRIGGER_WORDS = parsePositiveIntegerEnv("PRESET_MAX_TRIGGER_WORDS", 100);
-const PRESET_MAX_IMAGE_TAGS = parsePositiveIntegerEnv("PRESET_MAX_IMAGE_TAGS", 200);
+export const PRESET_MAX_STRING_LENGTH = 5000;
+export const PRESET_MAX_ATTRIBUTES = 200;
+const PRESET_MAX_SAMPLE_DIALOGUES = 100;
+const PRESET_MAX_TRIGGER_WORDS = 100;
+const PRESET_MAX_IMAGE_TAGS = 200;
 
 /**
  * Generated presets use the canonical 6-attribute layout from presetCommon.ts:

@@ -20,8 +20,8 @@ const IMAGE_CONTEXT_MAX_BYTES = Number.parseInt(process.env.IMAGE_CONTEXT_MAX_BY
 /** Maximum pixel dimension on the longest side before downscaling (default 2048 px) */
 const IMAGE_CONTEXT_MAX_DIMENSION = Number.parseInt(process.env.IMAGE_CONTEXT_MAX_DIMENSION ?? "2048", 10);
 
-/** JPEG quality used when an image is downscaled (default 85) */
-const IMAGE_CONTEXT_JPEG_QUALITY = Number.parseInt(process.env.IMAGE_CONTEXT_JPEG_QUALITY ?? "85", 10);
+/** JPEG quality used when an image is downscaled */
+const IMAGE_CONTEXT_JPEG_QUALITY = 85;
 
 /** Timeout in milliseconds for fetching images for LLM context (default 20 s) */
 const IMAGE_FETCH_TIMEOUT_MS = Number.parseInt(process.env.IMAGE_FETCH_TIMEOUT_MS ?? "20000", 10);

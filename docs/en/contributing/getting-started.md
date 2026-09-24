@@ -81,8 +81,8 @@ Run in your test server:
 
 The command requires **Manage Server** and answers with a private checklist panel that only you can
 operate. Its items are a draft: **Finish Setup** is the only control that writes, so opening, editing,
-or cancelling leaves the database untouched. A draft is process-local, so a restart discards it too;
-`SETUP_DRAFT_MAX_ENTRIES` (default 200) bounds pending drafts in `.env.optional.example`.
+or cancelling leaves the database untouched. A draft is process-local, so a restart discards it too,
+and at most 200 drafts are held at once.
 
 Under `RUN_ENV=development` the panel renders two steps:
 
@@ -151,19 +151,19 @@ keeps the exit code intact.
 `bun run vl` and CI.
 
 `bun run check-media-size` (also bundled into `bun run vl`) rejects tracked media
-over a per-file budget (default 1 MiB, set via `MEDIA_SIZE_LIMIT_BYTES`). It scans
+over a per-file budget (1 MiB). It scans
 `src/db/seed/catalog/personas/**` (Default Persona avatars/sprites that ship to
 Discord) and `assets/img/**`.
 
 `bun run compress-media` fixes offenders automatically: it re-encodes losslessly
 (max deflate, metadata stripped, so color stays Δ0) and only downscales a file when
-lossless alone cannot reach the budget, capping the long edge at `MEDIA_MAX_DIMENSION`
-(default 768px). Use `--dry-run` to preview, or pass a path substring to target one file.
+lossless alone cannot reach the budget, capping the long edge at
+768px. Use `--dry-run` to preview, or pass a path substring to target one file.
 Note: these PNGs are already near-optimally compressed, so lossless rarely fits 1 MiB on
 its own: downscaling (invisible at Discord's <=128px avatar render size) is the trade.
 
 `compress-media` also normalizes release cards under `.github/release/**` (not gate-scoped)
-to WebP q`RELEASE_CARD_WEBP_QUALITY` (default 90) at full resolution, rewriting sibling
+to WebP quality 90 at full resolution, rewriting sibling
 `release-notes.md` references. Already-WebP cards are skipped (re-encoding lossy WebP each
 run would degrade it). That tree lives on the `release` branch only, so run this from a
 `release` checkout. During deployment, the release workflow rewrites the card URL to the immutable

@@ -33,10 +33,10 @@ import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { prepareParticipantContext } from "@/utils/text/participants/preparation";
 
 /** Number of recent messages to fetch from the channel for context. */
-const BOT_GENERATE_IMAGE_HISTORY_LIMIT = parseEnvInt("BOT_GENERATE_IMAGE_HISTORY_LIMIT", 24, 5, 100);
+const BOT_GENERATE_IMAGE_HISTORY_LIMIT = 24;
 
 /** Maximum streaming iterations in the hidden agent tool loop. */
-const BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS = parseEnvInt("BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS", 5, 1, 10);
+const BOT_GENERATE_IMAGE_AGENT_MAX_ITERATIONS = 5;
 
 /** Discord message types that carry no conversational content and should be skipped. */
 const SKIPPED_MESSAGE_TYPES = new Set<number>([
@@ -56,12 +56,6 @@ const SKIPPED_MESSAGE_TYPES = new Set<number>([
   22, // GuildInviteReminder
   24, // AutoModerationAction
 ]);
-
-function parseEnvInt(name: string, fallback: number, min: number, max: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  if (Number.isNaN(parsed)) return fallback;
-  return Math.min(Math.max(parsed, min), max);
-}
 
 /** Configuration for the hidden image agent. Caller (image.ts) owns preset/backend logic. */
 export interface HiddenImageTurnParams {

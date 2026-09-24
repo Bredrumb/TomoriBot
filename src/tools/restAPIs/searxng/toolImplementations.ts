@@ -31,10 +31,8 @@ const SEARXNG_IMAGE_DISCORD_LIMIT_MB = Math.max(
   1,
   Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
 );
-const SEARXNG_IMAGE_COMPRESSION_TARGET_MB = Math.max(
-  1,
-  Number.parseInt(process.env.BRAVE_IMAGE_COMPRESSION_TARGET_MB ?? "7", 10) || 7,
-);
+// Aims below the upload limit so an image that compresses slightly past its target still fits.
+const SEARXNG_IMAGE_COMPRESSION_TARGET_MB = Math.max(1, SEARXNG_IMAGE_DISCORD_LIMIT_MB - 1);
 const SEARXNG_IMAGE_DOWNLOAD_MAX_MB = Math.max(
   SEARXNG_IMAGE_DISCORD_LIMIT_MB,
   Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,

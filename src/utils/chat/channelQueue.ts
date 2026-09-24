@@ -22,11 +22,7 @@ import type {
 import { parseIntegerEnvFlag } from "@/utils/misc/envFlags";
 
 export const CHANNEL_LOCK_TIMEOUT_MS = parseIntegerEnvFlag(process.env.CHANNEL_LOCK_TIMEOUT_MS, 180000, 10000);
-const DISCORD_TYPING_KEEPALIVE_INTERVAL_MS = parseIntegerEnvFlag(
-  process.env.DISCORD_TYPING_KEEPALIVE_INTERVAL_MS,
-  8000,
-  1000,
-);
+const DISCORD_TYPING_KEEPALIVE_INTERVAL_MS = 8000;
 export const MAX_FOLLOW_UP_INTERRUPTS = Number.parseInt(process.env.MAX_FOLLOW_UP_INTERRUPTS || "3", 10);
 const SELF_REPLY_SUPPRESSION_TTL_MS = 5000;
 
