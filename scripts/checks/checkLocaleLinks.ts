@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
 import { PUBLISHED_DOCS_LOCALES } from "@/constants/docsLocales";
-import { type LocaleCode, isDiscordLocaleCode } from "@/constants/locales";
+import { isDiscordLocaleCode } from "@/constants/locales";
 
 const log = {
   info: (msg: string) => console.log(`ℹ️  ${msg}`),
@@ -405,18 +405,10 @@ export async function validateLocaleLinks(options?: {
   };
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const localeArg = args.find((arg) => arg.startsWith("--locale="))?.split("=")[1] ??
-    (args.includes("--locale") ? args[args.indexOf("--locale") + 1] : undefined);
-
-  if (localeArg && !isDiscordLocaleCode(localeArg)) {
-    console.error(`Invalid Discord locale code: ${localeArg}`);
-    process.exit(1);
-  }
-
-  log.info(`Validating project-owned documentation links${localeArg ? ` for ${localeArg}` : ""}…`);
-  const summary = await validateLocaleLinks({ locale: localeArg });
+/** Prints the link section of `check-locales` and returns whether every link resolved. */
+export async function reportLocaleLinks(): Promise<boolean> {
+  log.info("Validating project-owned documentation links…");
+  const summary = await validateLocaleLinks();
 
   log.info(`Checked ${summary.totalLinksChecked} project-owned link(s).`);
 
@@ -433,18 +425,8 @@ async function main(): Promise<void> {
 
     console.log(`\n${"=".repeat(80)}`);
     log.error(`Locale link check FAILED: ${summary.findings.length} broken link(s) or fragment(s)`);
-    process.exit(1);
-  } else {
-    log.success(
-      `Locale link check PASSED: all ${summary.validLinksCount} project-owned links and heading fragments resolve`,
-    );
-    process.exit(0);
+    return false;
   }
-}
-
-if (import.meta.main) {
-  main().catch((err) => {
-    console.error("Fatal error during link validation:", err);
-    process.exit(1);
-  });
+  log.success(`Locale link check PASSED: all ${summary.validLinksCount} project-owned links and heading fragments resolve`);
+  return true;
 }

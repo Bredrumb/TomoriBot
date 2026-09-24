@@ -195,13 +195,10 @@ export async function analyzePlaceholderParity(targetLocale?: string): Promise<P
   };
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const localeArg = args.find((arg) => arg.startsWith("--locale="))?.split("=")[1] ??
-    (args.includes("--locale") ? args[args.indexOf("--locale") + 1] : undefined);
-
-  log.info(`Checking locale placeholder parity${localeArg ? ` for ${localeArg}` : ""}…`);
-  const summary = await analyzePlaceholderParity(localeArg);
+/** Prints the placeholder section of `check-locales` and returns whether no placeholder was lost. */
+export async function reportPlaceholderParity(): Promise<boolean> {
+  log.info("Checking locale placeholder parity…");
+  const summary = await analyzePlaceholderParity();
 
   if (summary.warnings.length > 0) {
     console.log(`\n${"-".repeat(80)}`);
@@ -232,18 +229,8 @@ async function main(): Promise<void> {
     log.success(
       `Placeholder parity check PASSED across ${summary.localesChecked.join(", ")}: 0 errors, ${summary.warnings.length} warning(s)`,
     );
-    process.exit(0);
-  } else {
-    log.error(
-      `Placeholder parity check FAILED: ${summary.errors.length} error(s), ${summary.warnings.length} warning(s)`,
-    );
-    process.exit(1);
+    return true;
   }
-}
-
-if (import.meta.main) {
-  main().catch((err) => {
-    console.error("Fatal error during placeholder check:", err);
-    process.exit(1);
-  });
+  log.error(`Placeholder parity check FAILED: ${summary.errors.length} error(s), ${summary.warnings.length} warning(s)`);
+  return false;
 }

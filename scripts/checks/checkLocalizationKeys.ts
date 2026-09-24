@@ -3,6 +3,9 @@ import { readFile, readdir } from "node:fs/promises";
 import { Glob } from "bun";
 import { PROTOCOL_KEYS } from "@/utils/discord/embedProtocol";
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
+import { reportLocaleLinks } from "./checkLocaleLinks";
+import { reportProtocolMarkers } from "./checkLocaleMarkers";
+import { reportPlaceholderParity } from "./checkLocalePlaceholders";
 import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
 
 /**
@@ -20,16 +23,6 @@ const log = {
  */
 interface KeyUsage {
   key: string;
-  files: Set<string>;
-}
-
-/**
- * Interface for tracking string length violations
- */
-interface _StringLengthViolation {
-  key: string;
-  value: string;
-  length: number;
   files: Set<string>;
 }
 
@@ -207,37 +200,6 @@ function extractKeysFromLocaleObject(obj: unknown, prefix = ""): Set<string> {
   }
 
   return keys;
-}
-
-/**
- * Recursively extracts all string values and their lengths from a nested locale object
- * @param maxLength - Maximum allowed string length (default: 99 for Discord modal limit)
- */
-function _extractStringLengthViolations(
-  obj: unknown,
-  prefix = "",
-  maxLength = 99,
-): Map<string, { value: string; length: number }> {
-  const violations = new Map<string, { value: string; length: number }>();
-
-  if (typeof obj === "string") {
-    if (prefix && obj.length >= maxLength) {
-      violations.set(prefix, { value: obj, length: obj.length });
-    }
-    return violations;
-  }
-
-  if (typeof obj === "object" && obj !== null) {
-    for (const [key, value] of Object.entries(obj)) {
-      const currentPath = prefix ? `${prefix}.${key}` : key;
-      const nestedViolations = _extractStringLengthViolations(value, currentPath, maxLength);
-      for (const [nestedKey, violation] of nestedViolations) {
-        violations.set(nestedKey, violation);
-      }
-    }
-  }
-
-  return violations;
 }
 
 /**
@@ -2154,7 +2116,12 @@ async function main(): Promise<void> {
 
     displayResults(results, { verboseOutput, rerunCommand: "bun run check-locales" });
 
-    if (hasFatalFindings(results)) {
+    // Each section prints its own report, so all three run even after one fails. A lost
+    // placeholder, a protocol marker collision, or a dead docs link is a user-visible defect in
+    // every locale, which is why these are fatal while a parity gap stays advisory.
+    const contentChecks = [await reportPlaceholderParity(), await reportProtocolMarkers(), await reportLocaleLinks()];
+
+    if (hasFatalFindings(results) || contentChecks.includes(false)) {
       process.exit(1);
     } else if (results.parityIssues.length > 0) {
       process.exit(2);

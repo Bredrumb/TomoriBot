@@ -8,7 +8,7 @@ TomoriBot le da a los administradores del servidor control sobre cómo se compor
 servidor: quién puede usarla, dónde y cuánto cuesta, a través del panel `/config` y sus
 comandos relacionados. La mayoría requiere el permiso **Administrar servidor**. Esta página
 cubre lo más destacado; cada comando está en la
-[Referencia de comandos](/en/features/command-reference/).
+[Referencia de comandos](/es-419/features/command-reference/).
 
 ## Control de costo: cuotas
 <!-- anchor: cost-control-quotas -->

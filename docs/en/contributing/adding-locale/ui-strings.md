@@ -78,8 +78,8 @@ Rules to work by:
 | Avoid a short title that another key could also render | Two keys rendering the same string in one locale is a startup failure |
 | Never end a reward or punish title with a period | The classifier uses an explicit key-existence check, and a trailing period used to drop a title from classification |
 
-`bun run check-locale-markers` verifies key presence, template placeholder parity, literal anchors, and
-cross-locale title collisions. The runtime check runs at startup as well, because a collision has to
+`bun run check-locales` verifies protocol key presence, template placeholder parity, literal anchors,
+and cross-locale title collisions. The runtime check runs at startup as well, because a collision has to
 fail loudly rather than misclassify embeds under traffic.
 
 ## Intent Detector Packs
@@ -156,7 +156,7 @@ none of the target locales is right-to-left.
   [Panel Prose And Layout](/contributing/panel-prose-and-layout/), which applies to every authored
   locale.
 - Leave `{placeholder}` tokens exactly as English has them. A missing token is fatal to
-  `bun run check-locale-placeholders`; an extra token is an advisory warning, because a call site may
+  `bun run check-locales`; an extra token is an advisory warning, because a call site may
   supply a variable the English string does not use.
 - Respect the Discord length caps: 45 code points for modal titles and input labels, 100 for command
   descriptions, option descriptions, choice names, and placeholders. Counts are code points, not

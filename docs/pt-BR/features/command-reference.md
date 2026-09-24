@@ -9,107 +9,107 @@ sidebar:
   Run `bun run generate-command-reference` from the repository root.
 -->
 
-Todos os comandos de barra (slash commands) atualmente registrados pela TomoriBot, gerados a partir dos mesmos construtores de comando e descrições em inglês usados para o registro no Discord.
+Todos os comandos de barra (slash commands) atualmente registrados pela TomoriBot, gerados a partir dos mesmos construtores de comando e descrições em português usados para o registro no Discord (descrições ainda não traduzidas aparecem em inglês).
 
 Grupos de comandos de nível superior: **39**. Comandos de barra executáveis: **81**.
 
 ## `/comment`
 
-Enviar um embed de comentário visível no chat mas invisível no contexto.
+Envie um embed de comentário visível no chat, mas invisível no contexto.
 
 | Comando | Resumo |
 |---|---|
-| `/comment` | Enviar um embed de comentário visível no chat mas invisível no contexto. |
+| `/comment` | Envie um embed de comentário visível no chat, mas invisível no contexto. |
 
 ## `/compact`
 
-Resumir a conversa recente em uma memória compacta do sistema.
+Resuma a conversa recente em uma memória de sistema compacta.
 
 | Comando | Resumo |
 |---|---|
-| `/compact` | Resumir a conversa recente em uma memória compacta do sistema. |
+| `/compact` | Resuma a conversa recente em uma memória de sistema compacta. |
 
 ## `/conditioning`
 
-Gerenciar memórias persistentes de condicionamento de recompensa e punição.
+Gerencie memórias persistentes de condicionamento de recompensa e punição.
 
 | Comando | Resumo |
 |---|---|
-| `/conditioning manage` | Gerenciar histórico de condicionamento injetado em todas as personas neste servidor. |
-| `/conditioning remove` | Remover entradas de condicionamento de todas as personas neste servidor. |
+| `/conditioning manage` | Gerencie o histórico de condicionamento injetado em todas as personas neste servidor. |
+| `/conditioning remove` | Remova entradas de condicionamento de todas as personas neste servidor. |
 
 ## `/config`
 
-Configurar persona, comportamento, canal, permissão e configurações de modelo.
+Configure as configurações de persona, comportamento, canal, permissão e modelo.
 
 | Comando | Resumo |
 |---|---|
-| `/config` | Configurar persona, comportamento, canal, permissão e configurações de modelo. |
+| `/config` | Configure as configurações de persona, comportamento, canal, permissão e modelo. |
 
 ## `/contribute`
 
-Encontrar o código-fonte e formas de ajudar a construir a TomoriBot.
+Encontrar o código-fonte e maneiras de ajudar a construir o TomoriBot.
 
 | Comando | Resumo |
 |---|---|
-| `/contribute github` | Obter o link do repositório no GitHub e aprender como contribuir para a TomoriBot. |
+| `/contribute github` | Obter o link do repositório do GitHub e aprender como contribuir para o TomoriBot. |
 
 ## `/donate`
 
-Apoiar o desenvolvimento e custos de hospedagem da TomoriBot.
+Apoiar o desenvolvimento e os custos de hospedagem do TomoriBot.
 
 | Comando | Resumo |
 |---|---|
-| `/donate kofi` | Apoiar o desenvolvimento da TomoriBot através de doações no Ko-fi. |
+| `/donate kofi` | Apoiar o desenvolvimento do TomoriBot através de doações no Ko-fi. |
 
 ## `/export`
 
-Exportar sua configuração ou memórias como um arquivo portátil.
+Exporte sua configuração ou memórias como um arquivo portátil.
 
 | Comando | Resumo |
 |---|---|
-| `/export config` | Exportar a configuração deste servidor como um arquivo portátil. |
-| `/export memories` | Exportar memórias como um arquivo portátil. |
-| `/export personal config` | Exportar sua configuração pessoal como um arquivo portátil. |
-| `/export personal memories` | Exportar as memórias que sua conta possui como um arquivo portátil. |
+| `/export config` | Exporte a configuração deste servidor como um arquivo portátil. |
+| `/export memories` | Exporte memórias como um arquivo portátil. |
+| `/export personal config` | Exporte sua configuração pessoal como um arquivo portátil. |
+| `/export personal memories` | Exporte as memórias que sua conta possui como um arquivo portátil. |
 
 ## `/expressions`
 
-Ensinar à TomoriBot quando usar os emojis e figurinhas personalizados deste servidor.
+Ensine o TomoriBot quando usar os emojis e figurinhas personalizados deste servidor.
 
 | Comando | Resumo |
 |---|---|
-| `/expressions edit` | Editar a emoção e instruções de uso de um emoji ou figurinha individual |
-| `/expressions initialize` | Analisar e classificar todos os emojis e figurinhas personalizados usando visão de IA |
+| `/expressions edit` | Edita a emoção e instruções de uso de um único emoji ou figurinha |
+| `/expressions initialize` | Analisa e classifica todos os emojis e figurinhas personalizados usando visão de IA |
 
 ## `/generate`
 
-Gerar imagens, vídeos e mensagens de voz com IA.
+Gere imagens, vídeos e mensagens de voz por IA.
 
 | Comando | Resumo |
 |---|---|
-| `/generate image` | Gerar uma imagem de IA a partir do seu próprio prompt ou da cena atual do canal |
-| `/generate scene` | Gerar uma cena curta com roteiro entre personas selecionadas. |
-| `/generate video` | Gerar um vídeo de IA usando Google Veo, OpenRouter ou Z.ai |
-| `/generate voice-message` | Falar uma mensagem com uma voz que você escolher |
+| `/generate image` | Gere uma imagem por IA do seu próprio prompt ou da cena do canal |
+| `/generate scene` | Gere uma curta cena de texto roteirizada entre as personas selecionadas. |
+| `/generate video` | Gere um vídeo por IA usando Google Veo, OpenRouter, ou Z.ai |
+| `/generate voice-message` | Fale uma mensagem com uma voz que você escolher |
 
 ## `/help`
 
-Navegar por guias de configuração, recursos, provedores, memória, comportamento, ferramentas, mídia e integrações.
+Navegue por configurações, recursos, provedores, memória, ferramentas e guias de integração.
 
 | Comando | Resumo |
 |---|---|
-| `/help` | Navegar por guias de configuração, recursos, provedores, memória, comportamento, ferramentas, mídia e integrações. |
+| `/help` | Navegue por configurações, recursos, provedores, memória, ferramentas e guias de integração. |
 
 ## `/impersonate`
 
-Personificar personas, usuários ou injetar prompts de sistema.
+Imita personas, usuários ou injeta prompts de sistema.
 
 | Comando | Resumo |
 |---|---|
-| `/impersonate persona` | Enviar uma mensagem como uma das personas deste servidor. |
-| `/impersonate system` | Injetar uma mensagem de sistema no contexto da conversa. |
-| `/impersonate user` | Fazer o bot escrever e enviar uma mensagem como se fosse aquele membro. |
+| `/impersonate persona` | Envia uma mensagem como uma das personas deste servidor. |
+| `/impersonate system` | Injeta uma mensagem de sistema no contexto da conversa. |
+| `/impersonate user` | Faz o bot escrever e enviar uma mensagem como se fosse aquele membro. |
 
 ## `/import`
 
@@ -118,81 +118,81 @@ Importar configuração ou memórias de um arquivo portátil.
 | Comando | Resumo |
 |---|---|
 | `/import config` | Importar um arquivo de configuração do servidor. |
-| `/import memories` | Importar um arquivo de memórias do servidor. |
+| `/import memories` | Importar um arquivo de memória do servidor. |
 | `/import personal config` | Importar um arquivo de configuração pessoal. |
-| `/import personal memories` | Importar um arquivo de memórias pessoais. |
+| `/import personal memories` | Importar um arquivo de memória pessoal. |
 
 ## `/kill`
 
-Parar imediatamente o stream atual e limpar respostas enfileiradas neste canal.
+Pare imediatamente a stream atual e limpe as respostas na fila neste canal.
 
 | Comando | Resumo |
 |---|---|
-| `/kill` | Parar imediatamente o stream atual e limpar respostas enfileiradas neste canal. |
+| `/kill` | Pare imediatamente a stream atual e limpe as respostas na fila neste canal. |
 
 ## `/learn`
 
-Aprender, extrair e incorporar histórico de conversas na memória.
+Aprenda, extraia e ingira o histórico de conversas na memória.
 
 | Comando | Resumo |
 |---|---|
-| `/learn history` | Extrair conhecimento do histórico de mensagens deste canal usando IA. |
+| `/learn history` | Extraia conhecimento do histórico de mensagens deste canal usando IA. |
 
 ## `/legal`
 
-Ver os termos de serviço, política de privacidade e licença da TomoriBot.
+Ver os termos de serviço, política de privacidade e licença do TomoriBot.
 
 | Comando | Resumo |
 |---|---|
-| `/legal license` | Ver a licença de código aberto da TomoriBot |
-| `/legal privacy-policy` | Ver a Política de Privacidade da TomoriBot |
-| `/legal terms-of-service` | Ver os Termos de Serviço da TomoriBot |
+| `/legal license` | Ver a licença de código aberto do TomoriBot |
+| `/legal privacy-policy` | Ver a Política de Privacidade do TomoriBot |
+| `/legal terms-of-service` | Ver os Termos de Serviço do TomoriBot |
 
 ## `/matrix`
 
-Vincular canais do Discord a salas do Matrix para retransmissão bidirecional.
+Vincule canais do Discord a salas do Matrix para retransmissão bidirecional.
 
 | Comando | Resumo |
 |---|---|
-| `/matrix link` | Vincular um canal do Discord a uma sala do Matrix para retransmissão bidirecional |
-| `/matrix unlink` | Remover a ponte do Matrix de um canal do Discord |
+| `/matrix link` | Vincule um canal do Discord a uma sala do Matrix para retransmissão bidirecional |
+| `/matrix unlink` | Remova a conexão da ponte Matrix de um canal do Discord |
 
 ## `/memories`
 
-Inspecionar e gerenciar memórias do servidor, documentos e memória de curto prazo.
+Inspecione e gerencie memórias do servidor, documentos e memória de curto prazo.
 
 | Comando | Resumo |
 |---|---|
-| `/memories` | Inspecionar e gerenciar memórias do servidor, documentos e memória de curto prazo. |
+| `/memories` | Inspecione e gerencie memórias do servidor, documentos e memória de curto prazo. |
 
 ## `/model`
 
-Gerenciar os modelos de IA padrão deste servidor.
+Gerencia os modelos de IA padrão deste servidor.
 
 | Comando | Resumo |
 |---|---|
-| `/model override remove` | Remover substituições de modelo de canal e persona. |
+| `/model override remove` | Remove substituições de modelos de canais e personas. |
 
 ## `/moderation`
 
-Gerenciar permissões de membros, lista negra, lista de permissões de canais e cargos, e configurações de cota.
+Gerencie permissões de membros, lista negra, lista branca de canais e cargos e cotas.
 
 | Comando | Resumo |
 |---|---|
-| `/moderation` | Gerenciar permissões de membros, lista negra, lista de permissões de canais e cargos, e configurações de cota. |
+| `/moderation` | Gerencie permissões de membros, lista negra, lista branca de canais e cargos e cotas. |
 
 ## `/novelai`
 
-Configurar geração de texto e imagem do NovelAI para este servidor.
+Configure a geração de texto e imagem da NovelAI para este servidor.
 
 | Comando | Resumo |
 |---|---|
-| `/novelai generate image` | Gerar uma imagem NovelAI usando tags no estilo imageboard e uma referência de personagem opcional. |
-| `/novelai usage` | Mostrar o medidor de uso de geração NovelAI Opus deste servidor (Gerenciar Servidor necessário). |
+| `/novelai generate image` | Gere uma imagem NovelAI usando tags estilo imageboard e uma referência de personagem opcional. |
+| `/novelai usage` | Mostre o medidor de uso de geração Opus da NovelAI deste servidor (requer Gerenciar Servidor). |
 
 ## `/nsfw`
 
-Comandos e configurações com restrição de idade.
+Configurações e comandos com restrição de idade.
 
 | Comando | Resumo |
 |---|---|
@@ -200,11 +200,11 @@ Comandos e configurações com restrição de idade.
 
 ## `/nuke`
 
-Apagar completamente todos os dados do servidor. Requer re-executar /setup depois.
+Apagar totalmente os dados do servidor. Requer executar /setup novamente depois.
 
 | Comando | Resumo |
 |---|---|
-| `/nuke` | Apagar completamente todos os dados do servidor. Requer re-executar /setup depois. |
+| `/nuke` | Apagar totalmente os dados do servidor. Requer executar /setup novamente depois. |
 
 ## `/persona`
 
@@ -213,97 +213,97 @@ Gerenciar predefinições de personalidade
 | Comando | Resumo |
 |---|---|
 | `/persona create` | Criar uma predefinição de personalidade simples manualmente |
-| `/persona default` | Aplicar uma configuração de personalidade predefinida |
+| `/persona default` | Aplicar uma predefinição de personalidade |
 | `/persona export` | Exportar a personalidade atual como um arquivo PNG compartilhável |
-| `/persona generate` | Geração de personalidade com IA (requer um provedor compatível) |
-| `/persona import` | Importar uma persona de um arquivo PNG, JSON ou CHARX |
-| `/persona remove` | Remover uma persona alter do servidor |
+| `/persona generate` | Geração de personalidade baseada em IA (requer um provedor compatível) |
+| `/persona import` | Importar uma persona a partir de um arquivo PNG, JSON ou CHARX |
+| `/persona remove` | Remover um alter do servidor |
 
 ## `/personal`
 
-Gerenciar suas configurações pessoais
+Gerencie suas configurações pessoais
 
 | Comando | Resumo |
 |---|---|
-| `/personal config` | Gerenciar suas preferências pessoais, privacidade, modelos e perfil. |
+| `/personal config` | Gerencie suas preferências pessoais, privacidade, modelos e perfil. |
 | `/personal language` | Escolha o idioma em que a TomoriBot fala com você. |
-| `/personal memories` | Gerenciar suas memórias pessoais de longo prazo e contexto conversacional de curto prazo. |
-| `/personal nuke` | Apagar tudo que a TomoriBot armazena sobre você, em todos os servidores. |
-| `/personal providers` | Gerenciar suas credenciais de provedores pessoais, endpoints e catálogos de modelos. |
+| `/personal memories` | Gerencie suas memórias pessoais de longo prazo e contexto conversacional de curto prazo. |
+| `/personal nuke` | Apague tudo que o TomoriBot armazena sobre você, em todos os servidores. |
+| `/personal providers` | Gerencie suas credenciais de provedor pessoais, endpoints e catálogos de modelos. |
 
 ## `/ping`
 
-Verificar a latência do bot.
+Verifique a latência do bot.
 
 | Comando | Resumo |
 |---|---|
-| `/ping` | Verificar a latência do bot. |
+| `/ping` | Verifique a latência do bot. |
 
 ## `/providers`
 
-Adicionar, visualizar, editar e remover credenciais de provedores, endpoints e catálogos de modelos.
+Adicione, veja, edite e remova credenciais de provedores, endpoints e catálogos de modelos.
 
 | Comando | Resumo |
 |---|---|
-| `/providers` | Adicionar, visualizar, editar e remover credenciais de provedores, endpoints e catálogos de modelos. |
+| `/providers` | Adicione, veja, edite e remova credenciais de provedores, endpoints e catálogos de modelos. |
 
 ## `/punish`
 
-Me punir com interações brincalhonas.
+Puna-me com interações lúdicas.
 
 | Comando | Resumo |
 |---|---|
-| `/punish bite` | Me dê uma mordidinha brincalhona! |
-| `/punish bonk` | Me dê um bonk na cabeça! |
-| `/punish pinch` | Me dê um beliscão! |
-| `/punish spank` | Me dê uma palmadinha brincalhona! |
-| `/punish squeeze` | Me dê um apertão! |
+| `/punish bite` | Dê-me uma mordida lúdica! |
+| `/punish bonk` | Dê-me uma pancada na cabeça! |
+| `/punish pinch` | Dê-me um beliscão! |
+| `/punish spank` | Dê-me um tapa lúdico! |
+| `/punish squeeze` | Dê-me um apertão! |
 
 ## `/quota`
 
-Gerenciar redefinições de cota de geração.
+Gerencie as redefinições de cota de geração.
 
 | Comando | Resumo |
 |---|---|
-| `/quota reset global` | Redefinir o pool de cota de geração de todo o servidor. |
-| `/quota reset user` | Redefinir o uso diário de cota de um usuário. |
+| `/quota reset global` | Redefina o pool de cota de geração para todo o servidor. |
+| `/quota reset user` | Redefina o uso diário de cota para um usuário. |
 
 ## `/refresh`
 
-Limpar o histórico de conversa (somente neste canal).
+Limpe o histórico de conversa (apenas neste canal).
 
 | Comando | Resumo |
 |---|---|
-| `/refresh` | Limpar o histórico de conversa (somente neste canal). |
+| `/refresh` | Limpe o histórico de conversa (apenas neste canal). |
 
 ## `/reset`
 
-Redefinir a configuração do servidor ou pessoal para os padrões.
+Redefine a configuração do servidor ou pessoal para os padrões.
 
 | Comando | Resumo |
 |---|---|
-| `/reset config` | Redefinir a configuração deste servidor para os padrões do banco de dados. |
-| `/reset personal config` | Redefinir sua configuração pessoal para os padrões do banco de dados. |
+| `/reset config` | Redefine a configuração deste servidor para os padrões do banco de dados. |
+| `/reset personal config` | Redefine sua configuração pessoal para os padrões do banco de dados. |
 
 ## `/respond`
 
-Acionar manualmente resposta à última mensagem neste canal.
+Acione manualmente a resposta à última mensagem neste canal.
 
 | Comando | Resumo |
 |---|---|
-| `/respond` | Acionar manualmente resposta à última mensagem neste canal. |
+| `/respond` | Acione manualmente a resposta à última mensagem neste canal. |
 
 ## `/reward`
 
-Me recompensar com interações divertidas.
+Recompense-me com interações divertidas.
 
 | Comando | Resumo |
 |---|---|
-| `/reward feed` | Me dê um lanchinho delicioso! |
-| `/reward headpat` | Me faça um carinho na cabeça! |
-| `/reward hug` | Me dê um abraço! |
-| `/reward kiss` | Me dê um beijo! |
-| `/reward tickle` | Me faça cócegas! |
+| `/reward feed` | Alimente-me com um lanche delicioso! |
+| `/reward headpat` | Dê-me um cafuné! |
+| `/reward hug` | Dê-me um abraço! |
+| `/reward kiss` | Dê-me um beijo! |
+| `/reward tickle` | Faça cócegas em mim! |
 
 ## `/scheduled-task`
 
@@ -311,16 +311,16 @@ Gerenciar tarefas agendadas e lembretes.
 
 | Comando | Resumo |
 |---|---|
-| `/scheduled-task edit` | Editar uma tarefa agendada ou lembrete. |
-| `/scheduled-task remove` | Remover uma tarefa agendada ou lembrete. |
+| `/scheduled-task edit` | Edita uma tarefa agendada ou lembrete. |
+| `/scheduled-task remove` | Remove uma tarefa agendada ou lembrete. |
 
 ## `/setup`
 
-Iniciar o processo de configuração inicial. Configurar provedor de IA e personalidade.
+Inicie o processo de configuração inicial. Configure o provedor de IA e a personalidade.
 
 | Comando | Resumo |
 |---|---|
-| `/setup` | Iniciar o processo de configuração inicial. Configurar provedor de IA e personalidade. |
+| `/setup` | Inicie o processo de configuração inicial. Configure o provedor de IA e a personalidade. |
 
 ## `/stats`
 
@@ -328,26 +328,26 @@ Ver estatísticas de uso
 
 | Comando | Resumo |
 |---|---|
-| `/stats generate` | Gerar um cartão de imagem de estatísticas compartilhável. |
-| `/stats persona` | Ver as estatísticas de uso de uma persona neste servidor. |
-| `/stats personal` | Ver suas próprias estatísticas de uso. |
-| `/stats server` | Ver estatísticas de uso de todo o servidor. |
+| `/stats generate` | Gere um cartão de imagem de estatísticas compartilhável. |
+| `/stats persona` | Veja as estatísticas de uso de uma persona neste servidor. |
+| `/stats personal` | Veja suas próprias estatísticas de uso. |
+| `/stats server` | Veja as estatísticas de uso de todo o servidor. |
 
 ## `/status`
 
-Mostrar o status atual pessoal, do servidor ou da persona.
+Mostra o status atual da persona, servidor ou pessoal.
 
 | Comando | Resumo |
 |---|---|
-| `/status` | Mostrar o status atual pessoal, do servidor ou da persona. |
+| `/status` | Mostra o status atual da persona, servidor ou pessoal. |
 
 ## `/support`
 
-Obter ajuda, relatar bugs e entrar na comunidade da TomoriBot.
+Obter ajuda, relatar bugs e juntar-se à comunidade do TomoriBot.
 
 | Comando | Resumo |
 |---|---|
-| `/support discord` | Obter o link oficial do servidor Discord para relatos de bugs, feedback e chat da comunidade. |
+| `/support discord` | Obter o link do servidor oficial do Discord para bugs, feedback e bate-papo da comunidade. |
 
 ## `/tool`
 
@@ -355,14 +355,14 @@ Ações utilitárias para contexto de conversa, prompts e diagnósticos.
 
 | Comando | Resumo |
 |---|---|
-| `/tool delete turn` | Excluir o último turno da persona do canal. |
+| `/tool delete turn` | Excluir o turno da última persona do canal. |
 | `/tool estimate cost` | Estimar custos de API para provedores de IA pagos |
-| `/tool prompt snapshot` | Exportar o prompt LLM exato de uma persona para um arquivo para depuração. |
+| `/tool prompt snapshot` | Despeje o prompt exato do LLM para uma persona em um arquivo para depuração. |
 
 ## `/update`
 
-Ver as notas de lançamento mais recentes da TomoriBot
+Ver as notas de lançamento mais recentes do TomoriBot
 
 | Comando | Resumo |
 |---|---|
-| `/update` | Ver as notas de lançamento mais recentes da TomoriBot |
+| `/update` | Ver as notas de lançamento mais recentes do TomoriBot |

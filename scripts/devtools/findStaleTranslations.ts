@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Glob } from "bun";
+import { PUBLISHED_DOCS_LOCALES } from "@/constants/docsLocales";
 import { type LocaleCode, isDiscordLocaleCode } from "@/constants/locales";
 import {
   GitUnavailableError,
@@ -9,8 +10,17 @@ import {
   MissingBaseRefError,
   type StalenessReport,
   checkLocaleStaleness,
+  defaultGitRunner,
   renderStalenessReport,
+  resolveBaseRef,
 } from "../checks/checkLocaleStaleness";
+import {
+  type DocsStaleEntry,
+  createGitDocsSource,
+  findDocsTreeStaleness,
+  findDocsUnfollowed,
+  formatDocsStaleness,
+} from "./docsStaleness";
 import {
   type DriftReport,
   type DriftedEntry,
@@ -239,12 +249,54 @@ export interface UnfollowedStaleEntry {
   change: "added" | "changed";
 }
 
-export type AnyStaleEntry = StaleEntry | DriftedStaleEntry | UnfollowedStaleEntry;
+export type AnyStaleEntry = StaleEntry | DriftedStaleEntry | UnfollowedStaleEntry | DocsStaleEntry;
 
-/** Reasons the CLI accepts, in report order. */
-export const STALE_REASONS = ["identical", "likely_english", "drifted", "unfollowed"] as const;
+/**
+ * Reasons the CLI accepts, in report order. `drifted` and `unfollowed` cover both locale keys and
+ * docs pages; `missing` and `orphaned` exist only for docs pages, since `check-locales` already
+ * owns missing keys.
+ */
+export const STALE_REASONS = ["identical", "likely_english", "drifted", "unfollowed", "missing", "orphaned"] as const;
 export type StaleReason = (typeof STALE_REASONS)[number];
-const DEFAULT_STALE_REASONS: readonly StaleReason[] = ["identical", "likely_english", "drifted"];
+const DEFAULT_STALE_REASONS: readonly StaleReason[] = ["identical", "likely_english", "drifted", "missing", "orphaned"];
+
+export const STALE_SCOPES = ["all", "keys", "docs"] as const;
+export type StaleScope = (typeof STALE_SCOPES)[number];
+
+/**
+ * Page-level findings for the docs site and translated READMEs. Branch follow-up takes the merge
+ * base the key scan resolved, so both halves of one report compare the same range.
+ */
+export function findDocsStaleness(options: {
+  reasons: readonly StaleReason[];
+  locale?: string;
+  mergeBase?: string;
+  repoRoot?: string;
+}): DocsStaleEntry[] {
+  const repoRoot = options.repoRoot ?? process.cwd();
+  const locales = PUBLISHED_DOCS_LOCALES.filter((id) => id !== "en" && (!options.locale || id === options.locale));
+  if (locales.length === 0) return [];
+  const git = createGitDocsSource(repoRoot);
+  const entries: DocsStaleEntry[] = [];
+
+  const wantsTree = options.reasons.some((reason) => reason === "drifted" || reason === "missing" || reason === "orphaned");
+  if (wantsTree) {
+    if (options.reasons.includes("drifted") && createGitDriftSource(repoRoot).isShallow()) {
+      throw new DriftHistoryError("this checkout is shallow, so translation baselines are missing");
+    }
+    entries.push(...findDocsTreeStaleness(git, locales).filter((entry) => options.reasons.includes(entry.reason)));
+  }
+  if (options.mergeBase && options.reasons.includes("unfollowed")) {
+    entries.push(...findDocsUnfollowed(git, options.mergeBase, locales));
+  }
+  return entries;
+}
+
+/** Resolves the merge base for docs follow-up the same way the key follow-up resolves its base. */
+async function resolveMergeBase(base: string | undefined, repoRoot = process.cwd()): Promise<string> {
+  const ref = base ?? (await resolveBaseRef(defaultGitRunner, repoRoot));
+  return (await defaultGitRunner(["merge-base", ref, "HEAD"], repoRoot)).trim();
+}
 
 export function isStaleReason(value: string): value is StaleReason {
   return (STALE_REASONS as readonly string[]).includes(value);
@@ -463,6 +515,7 @@ export async function findStaleTranslations(targetLocale?: string): Promise<Stal
  *   --locale=<code>      Filter scan to a specific locale
  *   --reason=<reason>    Limit the scan to one reason, repeatable
  *   --base=<ref>         Compare against a branch base for --reason=unfollowed
+ *   --scope=<scope>      all (default), keys, or docs (docs pages and translated READMEs)
  *
  * Exit codes: 0 with findings, 1 for a script error, 2 when the drift scan cannot reach the history
  * it needs. A git failure is reported rather than swallowed, because a shallow clone otherwise
@@ -490,40 +543,64 @@ async function main(): Promise<void> {
     throw new Error(`Unknown --reason value: ${unknownReasons.join(", ")}. Known: ${STALE_REASONS.join(", ")}`);
   }
 
+  const scopeArg = args.find((arg) => arg.startsWith("--scope="))?.split("=")[1] ?? "all";
+  if (!(STALE_SCOPES as readonly string[]).includes(scopeArg)) {
+    throw new Error(`Unknown --scope value: ${scopeArg}. Known: ${STALE_SCOPES.join(", ")}`);
+  }
+  const scansKeys = scopeArg !== "docs";
+  const scansDocs = scopeArg !== "keys";
+
   const requestedReasons: StaleReason[] = reasonArgs.length > 0 ? (reasonArgs as StaleReason[]) : [...DEFAULT_STALE_REASONS];
   const wantsReason = (reason: StaleReason): boolean => requestedReasons.includes(reason);
+  const wantsKeyReason = (reason: StaleReason): boolean => scansKeys && wantsReason(reason);
   if (base && !wantsReason("unfollowed")) {
     throw new Error("--base only applies to --reason=unfollowed");
   }
 
   log.info(`Scanning for stale translations${localeArg ? ` in ${localeArg}` : ""}...`);
 
-  const staleValueEntries = wantsReason("identical") || wantsReason("likely_english")
+  const staleValueEntries = wantsKeyReason("identical") || wantsKeyReason("likely_english")
     ? await findStaleTranslations(localeArg)
     : [];
-  const identical = wantsReason("identical") ? staleValueEntries.filter((e) => e.reason === "identical") : [];
-  const likelyEnglish = wantsReason("likely_english")
+  const identical = wantsKeyReason("identical") ? staleValueEntries.filter((e) => e.reason === "identical") : [];
+  const likelyEnglish = wantsKeyReason("likely_english")
     ? staleValueEntries.filter((e) => e.reason === "likely_english")
     : [];
 
   let drift: DriftReport | undefined;
-  if (wantsReason("drifted")) {
+  if (wantsKeyReason("drifted")) {
     drift = await findDriftedTranslations(localeArg);
   }
 
   let unfollowed: StalenessReport | undefined;
   let unfollowedExport: UnfollowedStaleEntry[] = [];
-  if (wantsReason("unfollowed")) {
+  if (wantsKeyReason("unfollowed")) {
     if (localeArg) await resolveTargetLocales(localeArg);
     unfollowed = filterUnfollowedReport(await findUnfollowedTranslations(base), localeArg);
     unfollowedExport = unfollowedEntries(unfollowed, localeArg);
   }
 
-  log.info(`Found ${identical.length + likelyEnglish.length + (drift?.entries.length ?? 0) + unfollowedExport.length} potentially stale entries:`);
+  const docs = scansDocs
+    ? findDocsStaleness({
+        reasons: requestedReasons,
+        locale: localeArg,
+        mergeBase: wantsReason("unfollowed") ? await resolveMergeBase(unfollowed?.requestedBase ?? base) : undefined,
+      })
+    : [];
+  const docsCount = (reason: StaleReason): number => docs.filter((entry) => entry.reason === reason).length;
+
+  log.info(
+    `Found ${identical.length + likelyEnglish.length + (drift?.entries.length ?? 0) + unfollowedExport.length + docs.length} potentially stale entries:`,
+  );
   log.info(`  • ${identical.length} keys with value identical to English (never translated)`);
   log.info(`  • ${likelyEnglish.length} keys with value that appears to be English text`);
   log.info(`  • ${drift?.entries.length ?? 0} keys whose English source moved after the translation`);
   log.info(`  • ${unfollowedExport.length} locale/key pairs not updated with this branch's English changes`);
+  if (scansDocs) {
+    log.info(
+      `  • docs pages (per locale): ${docsCount("unfollowed")} unfollowed, ${docsCount("drifted")} drifted, ${docsCount("missing")} missing, ${docsCount("orphaned")} orphaned`,
+    );
+  }
 
   if (!doExport) {
     const grouped = new Map<string, StaleEntry[]>();
@@ -556,6 +633,7 @@ async function main(): Promise<void> {
     if (unfollowed) {
       console.log(`\n${renderStalenessReport(unfollowed, { verboseOutput: args.includes("--verbose") })}`);
     }
+    for (const line of formatDocsStaleness(docs)) console.log(line);
 
     console.log(`\n${"=".repeat(80)}`);
     console.log("Run with --export to write stale-translations.json for batch translation.");
@@ -564,7 +642,7 @@ async function main(): Promise<void> {
     // one. A batch translator needs the superseded English to judge whether a re-read is warranted,
     // and dropping that field would leave a bare list of keys that look translated already.
     const drifted: DriftedStaleEntry[] = (drift?.entries ?? []).map((entry) => ({ ...entry, reason: "drifted" }));
-    const exported: AnyStaleEntry[] = [...identical, ...likelyEnglish, ...drifted, ...unfollowedExport];
+    const exported: AnyStaleEntry[] = [...identical, ...likelyEnglish, ...drifted, ...unfollowedExport, ...docs];
     const outputPath = join(process.cwd(), "scripts", "maintenance", "stale-translations.json");
     await mkdir(join(process.cwd(), "scripts", "maintenance"), { recursive: true });
     await writeFile(outputPath, JSON.stringify(exported, null, 2), "utf-8");

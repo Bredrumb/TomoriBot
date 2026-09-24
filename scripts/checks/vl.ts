@@ -856,7 +856,7 @@ async function main() {
     "Localization Discord Limits":
       "Discord truncates modal placeholders/descriptions and select-option labels/descriptions (>100 chars), modal titles/labels (>45), and command descriptions (>100). Shorten the listed locale strings — both `en-US` and `ja` sides must fit.",
     "Command Reference":
-      "Run `bun run generate-command-reference` and commit the regenerated docs/en/features/command-reference.md.",
+      "Run `bun run generate-command-reference` and commit the regenerated docs/*/features/command-reference.md files.",
     "Command Roots":
       "Update the documented top-level categories in docs/en/architecture/subsystems/command-system.md to match runtime registration.",
     "Config Breadcrumbs":

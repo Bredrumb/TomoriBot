@@ -63,7 +63,7 @@ heading changes its anchor:
   after a heading keeps that ID in every language.
 
 Verify fragments against the rendered target in the locale you are writing, not against the English
-page. `bun run check-locale-links` extracts anchors from explicit `<a id="...">` tags, `anchor:`
+page. The link check in `bun run check-locales` extracts anchors from explicit `<a id="...">` tags, `anchor:`
 comments, and slugified headings, then fails on a fragment that resolves to nothing. It scans absolute
 `docs.tomoribot.app` URLs, which covers locale strings and READMEs, and it resolves a project-owned
 route in the linking file's own locale tree first and then in the default tree, so a link to an
