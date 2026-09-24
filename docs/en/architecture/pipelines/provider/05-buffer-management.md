@@ -81,6 +81,37 @@ the label it matches and would delete the real reply preceding a stray one.
 The final auto-close pass uses the same clamped opener count. An orphan closer before a later opener,
 as in `B) (barely`, cannot mask the missing final `)` after streaming ends.
 
+### Emphasis marker balance
+
+`hasIncompleteSemanticMarkers` holds for the same reason on an unclosed emphasis run: the newline and
+period breaks would cut inside `*...and more*`, and stage 07 can only protect a span it receives
+whole. The hold counts `*` and `~~`.
+
+Runs are classified by `classifyEmphasisMarkerRun` (`chunkProcessor.ts`), the same function stage 07
+uses to decide whether a span is a real delimiter pair, so the two stages agree on which runs pair
+up. An opener needs non-whitespace after it and must not sit inside a word, and a closer needs
+non-whitespace before it, which is what keeps prose full of stray markers split normally: `2 * 3`, a
+`* ` list bullet, a `Best*` footnote, and a censored `f***`. Han, kana, and Hangul letters do not
+count as word characters, because those scripts write without spaces and put the marker straight
+against the text (`ふん*顔をそむける*わけ`); the ja and zh-TW locales depend on that. `_` additionally
+needs a letter or digit against its inner side and keeps the full word rule, so `user_id`, `_id`,
+`-_-`, `^_^`, and `>_<` are not emphasis. Each run is weighted by its length, so a nested
+`**bold *italic***` closes both levels. Depth clamps at zero in step with the parenthesis count, so an
+orphan closer cannot cancel an open marker either.
+
+Inline code and URLs are blanked before the scan, because a `*args` argument list and a `/_next/`
+path segment are not emphasis. `_` is left out of the hold entirely: in chat prose it is far more
+often an identifier or a kaomoji character than emphasis, and a false hold stops streaming for the
+rest of the response, while a missed `_span_` only loses protection the hold never provided. Stage 07
+still recognizes `_` spans in text it receives whole, so a `_span_` containing a newline can still be
+cut at a flush boundary.
+
+The ceiling: a lone `*` opener (`*:･ﾟ✧`, a leading-letter censor such as `*sshole`) and an odd `**`
+run outside inline code (`def f(**kwargs):`, which a renderer would read as the start of bold) hold
+until the end of the response, so the reply arrives as one burst instead of a paced one. The final
+auto-close pass adds the missing closer, so a hold cannot outlive the response, and content is never
+lost.
+
 ### Semantic block detection
 
 `drainThinkBlocksFromBuffer(state)` and `drainDetailsBlocksFromBuffer(state)` scan `state.buffer`

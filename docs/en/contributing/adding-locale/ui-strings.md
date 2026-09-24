@@ -140,6 +140,12 @@ What that means for a locale:
 - **Paired quotation marks are protected in every script that has them.** `「」`, `『』`, `｢｣`, `«»`,
   `‹›`, `“”`, `〈〉`, and `《》` all keep their contents unsplit, so a flush never leaves one side of a
   pair as broken syntax in a separate Discord message.
+- **Word boundaries are per script.** An emphasis marker glued to Latin, Cyrillic, or Greek letters
+  sits inside a word and is not emphasis (`f***ing`), while Han, kana, and Hangul write without
+  spaces, so a `*` glued to those letters is (`ふん*顔をそむける*わけ`). The exemption is for `*`
+  only: `_` glued to a letter is an identifier in every script, and `~~` glued to kana is a
+  wave-dash elongation (`やだ~~w`), not strikethrough. That decision covers both the stream
+  buffer's hold and the `HEAVY` message splitter.
 - **Sentence splitting recognizes full-width periods** (`。`, `．`, `｡`) alongside ASCII `.` and
   matches a wide abbreviation list, including a few non-English address and title forms.
 

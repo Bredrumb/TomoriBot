@@ -2,7 +2,13 @@ import { HumanizerDegree } from "@/types/db/schema";
 import type { StreamConfig } from "@/types/stream/interfaces";
 import { type ChunkProcessingResult, DISCORD_STREAMING_CONSTANTS, type StreamState } from "@/types/stream/types";
 import { log } from "@/utils/misc/logger";
-import { createSentenceSplitRegex, PAIRED_QUOTE_MARKS } from "@/utils/text/processors/chunkProcessor";
+import {
+  classifyEmphasisMarkerRun,
+  createSentenceSplitRegex,
+  type EmphasisMarker,
+  maskInlineCodeAndUrls,
+  PAIRED_QUOTE_MARKS,
+} from "@/utils/text/processors/chunkProcessor";
 import {
   extractMarkdownTableSegments,
   findMarkdownTableBlockAt,
@@ -186,6 +192,42 @@ export function drainDetailsBlocksFromBuffer(state: StreamState): void {
   }
 }
 
+// Markers the hold counts. "_" is deliberately absent: in chat prose it is far more often an
+// identifier or a kaomoji character ("_id", "user_id", "-_-", "^_^") than emphasis, and a false hold
+// stops streaming for the rest of the response, while a missed "_span_" only loses protection the
+// hold never provided. The chunker still recognizes "_" spans in the text it receives whole.
+const HOLD_EMPHASIS_MARKERS: readonly EmphasisMarker[] = ["*", "~"];
+
+/**
+ * Counts the marker characters of `marker` that are still open.
+ *
+ * Runs are classified by the flanking rules a renderer applies (see
+ * {@link classifyEmphasisMarkerRun}), so prose full of stray markers ("2 * 3", a `* ` bullet,
+ * "Best*") never holds the buffer, and each run is weighted by its length so a nested
+ * "**bold *italic***" closes both levels instead of stranding the outer run. Depth clamps at zero in
+ * step with the parenthesis count, so an orphan closer cannot cancel a genuinely open marker.
+ *
+ * The ceiling: a false positive defers this response's remaining flushes to the final flush
+ * (longer messages, no loss), where a false negative splits the span across two messages.
+ */
+function countOpenEmphasisMarkers(buffer: string, marker: EmphasisMarker): number {
+  let depth = 0;
+
+  for (let index = 0; index < buffer.length; index++) {
+    if (buffer[index] !== marker) continue;
+
+    const runStart = index;
+    while (index + 1 < buffer.length && buffer[index + 1] === marker) index++;
+    const runLength = index - runStart + 1;
+    const { opens, closes } = classifyEmphasisMarkerRun(buffer, runStart, index + 1, marker);
+
+    if (closes && depth > 0) depth = Math.max(0, depth - runLength);
+    else if (opens) depth += runLength;
+  }
+
+  return depth;
+}
+
 export function hasIncompleteSemanticMarkers(buffer: string): boolean {
   // Only an unmatched OPENER is worth holding for: text is ordered, so a ")" that already passed
   // can never be matched by a "(" that follows. Counting it would both stall forever (the buffer
@@ -215,6 +257,20 @@ export function hasIncompleteSemanticMarkers(buffer: string): boolean {
   if (unclosedQuotePair) {
     log.info(`Stream: Buffer has an unclosed ${unclosedQuotePair[0]} quote`);
     return true;
+  }
+
+  // An unclosed emphasis run is the same hazard as an unclosed quote: the newline and period breaks
+  // in processBufferContent would cut inside "*...and more*", and chunkMessage() can only protect a
+  // span it receives whole. Inline code and URLs are blanked first, because a `*args` argument list
+  // and a /_next/ path segment are not emphasis. The final auto-close pass already repairs these
+  // markers, so a hold here can never outlive the response.
+  const emphasisScanText = maskInlineCodeAndUrls(buffer);
+  for (const marker of HOLD_EMPHASIS_MARKERS) {
+    const openMarkers = countOpenEmphasisMarkers(emphasisScanText, marker);
+    if (openMarkers > 0) {
+      log.info(`Stream: Buffer has ${openMarkers} unclosed "${marker}" emphasis marker(s)`);
+      return true;
+    }
   }
 
   const openBrackets = (buffer.match(/\[/g) || []).length;

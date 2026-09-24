@@ -137,7 +137,8 @@ parser that classifies the input into typed blocks, then emits chunks.
 ### Preserved spans
 
 The parser locates and protects regions whose internal structure must not be split mid-region.
-A chunk break can only happen at the boundary *between* such regions, never inside:
+A chunk break can only happen at the boundary *between* such regions, never inside. The one
+exception, a span containing a newline at `LIGHT`/`MEDIUM`, is described under Humanizer interaction:
 
 - Fenced code blocks (``` ``` ```): kept whole; split across multiple messages only if a single
   block exceeds the chunk limit, in which case the opening fence + language tag is repeated on
@@ -185,6 +186,24 @@ the server-wide `server_chat_configs` value when NULL:
 | `NONE` (0) | Aggregated delivery: chunks join into one message at flush boundaries (see Mission §) |
 | `LIGHT` / `MEDIUM` (1-2) | Each paragraph (`\n+`-separated) becomes its own Discord message |
 | `HEAVY` (3) | Each sentence becomes its own message; sentence splitting uses an abbreviation-aware regex (`createSentenceSplitRegex`) to avoid breaking on "Mr.", "e.g.", numbered references, etc. `humanizeString()` then runs per sentence and can split it further (see below). |
+
+At `HEAVY`, the preserved spans above are also held out of both splits named in the table: the whole
+segment is scanned for spans before the paragraph split, each span is replaced by a placeholder, and
+the span is restored into whichever message holds it. Without that step the semantic-block merge that
+keeps a span with its surrounding prose would leave the span inside the paragraph and sentence
+splits, which cut at its internal newlines and periods, so each half would reach Discord as a separate
+message with one unmatched marker. A span longer than `chunkLength` is still split, because Discord's
+message limit outranks the no-split rule. At `LIGHT`/`MEDIUM` this pass does not run, so the paragraph
+split still cuts a span that contains a newline.
+
+Only emphasis candidates whose delimiter runs clear the flanking rules are held whole, so the markers
+prose is full of stay splittable: a `* ` list bullet, `2 * 3`, a kaomoji pair (`-_-`, `^_^`, `>_<`),
+`user_id`, and a marker inside inline code or a URL. Han, kana, and Hangul letters are not word
+characters, so a marker glued to Japanese or Chinese text is still a span
+(`ふん*顔をそむける。でも嬉しい*わけじゃない`). A paren candidate whose `(` is glued to a face
+(`ugh :( that sucks. anyway. glad you're back :)`) is an emoticon, not an aside, so the sentences
+between the two faces still split. Stage 05's hold decides the same emphasis question from the same
+classifier, which is what keeps the two stages aligned on which runs pair up.
 
 Standalone-punctuation chunks (a chunk that is purely `.,!?;:。！？、，` after trimming) are
 merged into the previous or next chunk by `mergeStandalonePunctuationChunks`, preventing orphan

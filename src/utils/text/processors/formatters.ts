@@ -1,11 +1,11 @@
 import { localizer, resolveSupportedLocale } from "@/utils/text/localizer";
 import {
-  findBalancedParentheses,
   findMarkdownBold,
   findMarkdownItalic,
   findMarkdownLink,
   findMarkdownSpoiler,
   findMarkdownStrikethrough,
+  findNextBalancedParentheses,
   findPairedQuotedString,
   findQuotedString,
 } from "./chunkProcessor";
@@ -115,21 +115,6 @@ function pickFlushMarker(text: string): string {
     if (!text.includes(candidate)) return candidate;
   }
   return "";
-}
-
-// findBalancedParentheses() only examines the first "(" at or after startIndex, so an unclosed
-// "(" or an emoticon like ":(" would hide every balanced aside after it and let a flush sever one.
-function findNextBalancedParentheses(
-  text: string,
-  startIndex: number,
-): { start: number; end: number; content: string } | null {
-  let openIndex = text.indexOf("(", startIndex);
-  while (openIndex !== -1) {
-    const match = findBalancedParentheses(text, openIndex);
-    if (match) return match;
-    openIndex = text.indexOf("(", openIndex + 1);
-  }
-  return null;
 }
 
 // A flush landing inside a semantic unit like **bold**, a "quoted string", or a [markdown
