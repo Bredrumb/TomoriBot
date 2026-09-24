@@ -64,7 +64,7 @@ TomoriBotは複数のローカルText-to-Speechサーバーに対応しており
 - 自然言語による発話方向の指定を伴う、高品質な多言語ゼロショットクローンが必要なら、**[CosyVoice 3](/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)を選んでください**（「興奮気味に英語で話して」など）。
 - 幅広い多言語対応（30言語）、文字起こし支援のUltimate Cloning、自然な音声設計が必要なら、**[VoxCPM2](/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/)を選んでください**。
 - 柔軟な音声設計と安定したプロンプト追従性を備えた、すっきりとした多言語クローンが欲しいなら、**[Qwen3-TTS](/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/)を選んでください**。
-- ボットが日本語を話す場合は、**[IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)を選んでください**。今回計測した中で唯一の日本語専用エンジンであり（Windowsで約4秒、0.47× RTF）、Unicode絵文字（`😊`、`😢`、`😡`）をネイティブに解釈してキャラクターの感情を調整します。
+- ボットが日本語を話す場合は、**[IrodoriTTS](/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/)を選んでください**。今回計測した中で唯一の日本語専用エンジンであり（Windowsで約4秒、0.47× RTF）、Unicode絵文字（`😊`、`😭`、`😠`）をネイティブに解釈してキャラクターの感情を調整します。
 
 ---
 
