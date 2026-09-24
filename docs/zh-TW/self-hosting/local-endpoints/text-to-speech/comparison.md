@@ -64,7 +64,7 @@ TomoriBot 支援多種本機文字轉語音伺服器，各自適合不同的語�
 - **如果你需要高品質的多語言零樣本複製，並能用自然語言指示語氣（`"Speak in English with excitement"`），請選 [CosyVoice 3](/zh-TW/self-hosting/local-endpoints/text-to-speech/cosyvoice3/)**。
 - **如果你需要完整的多語言支援（30 種語言）、逐字稿輔助的 Ultimate Cloning 與自然的語音設計，請選 [VoxCPM2](/zh-TW/self-hosting/local-endpoints/text-to-speech/voxcpm2/)**。
 - **如果你想要乾淨的多語言複製、有彈性的語音設計與穩定的提示詞遵循度，請選 [Qwen3-TTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/qwen3tts/)**。
-- **如果你的 bot 說日文，請選 [IrodoriTTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/irodoritts/)**。它是唯一受測的純日文引擎（Windows 上約 4 秒，0.47× RTF），並原生解析 Unicode 表情符號（`😊`、`😢`、`😡`）來調節角色情緒。
+- **如果你的 bot 說日文，請選 [IrodoriTTS](/zh-TW/self-hosting/local-endpoints/text-to-speech/irodoritts/)**。它是唯一受測的純日文引擎（Windows 上約 4 秒，0.47× RTF），並原生解析 Unicode 表情符號（`😊`、`😭`、`😠`）來調節角色情緒。
 
 ---
 
