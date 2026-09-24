@@ -68,7 +68,7 @@ function makePersona(overrides: Partial<TomoriState> = {}): TomoriState {
   return {
     server_id: 9,
     persona_id: 55,
-    persona_nickname: "Sparrow",
+    persona_nickname: "Mirri",
     is_alter: false,
     trigger_words: [],
     naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
@@ -167,7 +167,7 @@ function makeInteraction(options: FakeInteractionOptions) {
   const interaction = {
     id: "interaction-1",
     customId: buildConfigRouteId(options.route),
-    user: { id: "user-1", username: "Sparrow" },
+    user: { id: "user-1", username: "Mirri" },
     channelId: CHANNEL_ONE,
     channel: { name: "lounge" },
     guildId: options.inGuild === false ? null : "guild-1",

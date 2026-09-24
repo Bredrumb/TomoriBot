@@ -465,7 +465,7 @@ function applyPersonaRelativeNaming(
 /**
  * Names the affixes separately from the nickname, so an affix stays removable.
  * Without it the model only ever sees the joined name and reads "stop calling me
- * Master Sparrow" as a nickname rewrite that re-composes to the same string. The
+ * Master Mirri" as a nickname rewrite that re-composes to the same string. The
  * parenthetical uses the tool's own field words so the mapping to a change is
  * direct.
  */

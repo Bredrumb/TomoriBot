@@ -282,7 +282,7 @@ function makeInteraction(options: FakeInteractionOptions) {
   const interaction = {
     id: "interaction-1",
     customId: options.customId,
-    user: { id: "user-1", username: "Sparrow" },
+    user: { id: "user-1", username: "Mirri" },
     channelId: "channel-1",
     channel: { name: "lounge" },
     guildId: options.inGuild === false ? null : "guild-1",

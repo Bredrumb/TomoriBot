@@ -48,8 +48,8 @@ describe("embed protocol", () => {
       for (const entry of PROTOCOL_KEYS) {
         // Reply-context templates match embed fields, never titles.
         if (entry.kind === "reply_context" || !hasLocaleKey(locale, entry.key)) continue;
-        const rendered = localizer(locale, entry.key).replace(/\{[a-zA-Z0-9_]+\}/g, "Sparrow");
-        const title = entry.match === "prefix" ? `${rendered} Sparrow` : rendered;
+        const rendered = localizer(locale, entry.key).replace(/\{[a-zA-Z0-9_]+\}/g, "Mirri");
+        const title = entry.match === "prefix" ? `${rendered} Mirri` : rendered;
         checked += 1;
         if (classifyProtocolTitle(title) !== entry.kind) misclassified.push(`${locale} ${entry.key}`);
       }
@@ -101,10 +101,10 @@ describe("embed protocol", () => {
 
   it("classifies Japanese template notices without reply-context shadowing", () => {
     const examples = [
-      ["genai.self_teach.server_memory_learned_title", { persona_nickname: "Sparrow" }, "memory_learning"],
-      ["reminders.task_set_title", { persona_nickname: "Sparrow" }, "reminder_set"],
+      ["genai.self_teach.server_memory_learned_title", { persona_nickname: "Mirri" }, "memory_learning"],
+      ["reminders.task_set_title", { persona_nickname: "Mirri" }, "reminder_set"],
       ["tools.user_info_update.success_title", { target_user: "Juno" }, "user_info_update"],
-      ["tools.user_block.unblock_success_title", { persona_name: "Sparrow", user_name: "Juno" }, "user_moderation"],
+      ["tools.user_block.unblock_success_title", { persona_name: "Mirri", user_name: "Juno" }, "user_moderation"],
     ] as const;
     for (const [key, variables, expected] of examples) {
       const title = localizer("ja", key, variables);
@@ -151,7 +151,7 @@ describe("embed protocol", () => {
   it("finds legacy and marked reply-context targets through the public reader", () => {
     const url = "https://discord.com/channels/1/2/3";
     const oldEmbed = new EmbedBuilder().setURL(url).setAuthor({
-      name: localizer("ja", "genai.message_interaction.reply_context_author", { user: "Sparrow" }),
+      name: localizer("ja", "genai.message_interaction.reply_context_author", { user: "Mirri" }),
     });
     expect(findReplyContextTargetInMessage(message(oldEmbed))).toEqual({ channelId: "2", messageId: "3" });
 

@@ -27,7 +27,7 @@ com escopo de persona segue a linhagem estável daquela persona entre servidores
 preferência da persona para a preferência global e depois para o nome de exibição ativo do Discord. Um apelido
 global em branco continua seguindo o Discord, incluindo alterações posteriores do nome de exibição. Salvar um apelido
 global congela esse valor personalizado até que seja limpo. Um prefixo ou sufixo em branco herda
-da mesma forma, e texto digitado o substitui, então `Master Sparrow-san`
+da mesma forma, e texto digitado o substitui, então `Master Mirri-san`
 pode combinar valores de diferentes níveis sem alterar o alvo de menção subjacente do Discord.
 Para remover um título que uma persona fornece por conta própria, peça diretamente à persona ("pare de me chamar
 de Master"); isso o suprime para aquela persona enquanto deixa suas outras personas intactas.

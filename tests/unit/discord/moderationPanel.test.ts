@@ -2003,7 +2003,7 @@ describe("moderation bulk and persona modals", () => {
       ["whitelist-role", "Whitelisted Roles"],
       ["persona-channel", "Whitelisted Personas"],
     ] as const) {
-      const modal = buildModerationRemovalModal("en-US", "nonce_list", action, [{ value: "entry", label: "Sparrow" }]);
+      const modal = buildModerationRemovalModal("en-US", "nonce_list", action, [{ value: "entry", label: "Mirri" }]);
       const serialized = JSON.stringify(modal);
       expect(serialized).toContain(`"label":"${title}"`);
       expect(serialized).toContain('"description":"Uncheck box then submit to remove whitelist"');
@@ -2011,7 +2011,7 @@ describe("moderation bulk and persona modals", () => {
   });
 
   it("builds persona add with a persona String Select and native text-channel select", () => {
-    const modal = buildPersonaChannelAddModal("en-US", "nonce_persona", new Map([[7, "Sparrow"]]));
+    const modal = buildPersonaChannelAddModal("en-US", "nonce_persona", new Map([[7, "Mirri"]]));
     expect(modal.custom_id).toBe("moderation:v1:persona-channel-add-submit:en-US:nonce_persona");
     const serialized = JSON.stringify(modal);
     expect(serialized).toContain('"type":3');

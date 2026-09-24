@@ -220,14 +220,14 @@ describe("persistent status interaction route", () => {
       replies.push(payload);
       return payload;
     };
-    const registry = makeRegistry(interaction, events, async () => categories(""), [persona(2, "Sparrow")]);
+    const registry = makeRegistry(interaction, events, async () => categories(""), [persona(2, "Mirri")]);
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(interaction.deferred).toBe(true);
     expect(events).toEqual(["user", "state", "personas", "pages", "persona:2"]);
     expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain("Sparrow");
+    expect(JSON.stringify(replies[0])).toContain("Mirri");
     expect(JSON.stringify(replies[0])).toContain(buildStatusPersonaSelectorId("en-US", 2));
   });
 
@@ -241,14 +241,14 @@ describe("persistent status interaction route", () => {
     };
     const registry = makeRegistry(interaction, events, async () => categories(""), [
       persona(1, "Main"),
-      persona(2, "Sparrow"),
+      persona(2, "Mirri"),
     ]);
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(events).toEqual(["user", "state", "personas", "pages", "persona:2"]);
     expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain("Sparrow");
+    expect(JSON.stringify(replies[0])).toContain("Mirri");
   });
 
   it("falls back safely when a selected Persona was deleted", async () => {
@@ -276,7 +276,7 @@ describe("persistent status interaction route", () => {
       replies.push(payload);
       return payload;
     };
-    const registry = makeRegistry(interaction, events, async () => categories(""), [persona(2, "Sparrow")]);
+    const registry = makeRegistry(interaction, events, async () => categories(""), [persona(2, "Mirri")]);
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 

@@ -21,7 +21,7 @@ string and a `memory_scope` of either `server_wide` or `target_user`.
 2. **Resolve target user** (scope `target_user` only): `resolveUserTarget()`
    looks up the provided display name in the conversation/guild, disambiguating
    multiple matches and handling bridge-user and bot-self fallbacks. Persona-scoped
-   nicknames and affixed labels ("Master Sparrow") resolve too; see
+   nicknames and affixed labels ("Master Mirri") resolve too; see
    `docs/en/architecture/pipelines/context-build/02-native-assembly/06-participants.md`
    for the stage ladder.
 3. **Sanitize content**: `sanitizeUnknownTemplatePlaceholders()` strips

@@ -55,7 +55,7 @@ describe("localizer per-key en-US fallback", () => {
         "await Promise.all([initializeLocalizer(), initializeLocalizer()]);",
         "console.log(`__PROBE__${JSON.stringify({",
         '  hit: localizer("ja", "probe.shared"),',
-        '  fallback: localizer("ja", "probe.english_only", { name: "Sparrow" }),',
+        '  fallback: localizer("ja", "probe.english_only", { name: "Mirri" }),',
         '  missEverywhere: localizer("ja", "probe.absent"),',
         '  hasKeyInPartialLocale: hasLocaleKey("ja", "probe.english_only"),',
         '  hasKeyInFallbackLocale: hasLocaleKey("en-US", "probe.english_only"),',
@@ -97,7 +97,7 @@ describe("localizer per-key en-US fallback", () => {
   });
 
   it("returns the en-US string, interpolated, when the key is missing from the requested locale", () => {
-    expect(probe.fallback).toBe("Hello Sparrow");
+    expect(probe.fallback).toBe("Hello Mirri");
   });
 
   it("warns once so a locale gap stays visible during development", () => {

@@ -192,7 +192,7 @@ describe("humanizeString script parity", () => {
 
   it("protects sender prefixes and inline code in every script", () => {
     const suppress = { suppressPunctuationNoise: true };
-    expect(humanizeString("(Sparrow): Hello", suppress)).toEqual(["(Sparrow): hello"]);
+    expect(humanizeString("(Mirri): Hello", suppress)).toEqual(["(Mirri): hello"]);
     expect(humanizeString("Жуно: Привет", suppress)).toEqual(["Жуно: привет"]);
     expect(humanizeString("ともり: やあ", suppress)).toEqual(["ともり: やあ"]);
     rollAlways(ROLL_FLUSH_COMMA_KEEP_EMPHASIS);

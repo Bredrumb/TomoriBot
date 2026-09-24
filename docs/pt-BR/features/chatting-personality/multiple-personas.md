@@ -134,6 +134,6 @@ configuração do servidor inteiro? Isso é o Destaque Pessoal; veja
 Administradores do servidor podem usar `/config` > Persona > Identity & Personality para dar a cada persona prefixos,
 sufixos e termos de tratamento independentes para masculino, feminino e neutro. A substituição pessoal
 com escopo de persona de cada usuário é vinculada pela linhagem estável da persona, de modo que duas personas
-podem chamar Sparrow por nomes diferentes na mesma resposta multi-persona, enquanto ambas ainda direcionam
+podem chamar Mirri por nomes diferentes na mesma resposta multi-persona, enquanto ambas ainda direcionam
 ao mesmo usuário do Discord. Editar um ponteiro oficial cria primeiro uma cópia independente; nunca altera
 o catálogo compartilhado ou a persona de outro servidor.

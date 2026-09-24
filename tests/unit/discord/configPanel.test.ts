@@ -160,7 +160,7 @@ const MEMORY_VIEW: ConfigPersonaMemoryView = {
     channelId: "channel-1",
     personaId: 55,
     personaLineageId: 55,
-    categories: { summary: "A stored scene", people: "Sparrow" },
+    categories: { summary: "A stored scene", people: "Mirri" },
     lastUpdated: Date.now(),
   },
   conditioningGroups: [MEMORY_CONDITIONING],

@@ -106,7 +106,7 @@ function registryFor(
             ...state,
             persona_id: 42,
             persona_lineage_id: 41,
-            persona_nickname: "Sparrow",
+            persona_nickname: "Mirri",
             is_alter: true,
             webhook_avatar_url: "https://example.invalid/persona.png",
           } as TomoriState,

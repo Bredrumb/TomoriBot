@@ -17,7 +17,7 @@ function buildContext(embed: Embed): string {
     imageAttachments: [],
     isTomoriAuthoredMessage: true,
     selfDebugEnabled: false,
-    tomoriNickname: "Sparrow",
+    tomoriNickname: "Mirri",
   }).content;
 }
 
@@ -36,7 +36,7 @@ describe("update_user_info notice visibility", () => {
 
   it("renders the notice into the [System: ...] block for a later turn", () => {
     const title = localizer("en-US", "tools.user_info_update.success_title", { target_user: "Bau" });
-    const body = 'Updated the following:\n1. Naming prefix: `none` → `Master`\n\nSparrow now calls Bau "Master Bau".';
+    const body = 'Updated the following:\n1. Naming prefix: `none` → `Master`\n\nMirri now calls Bau "Master Bau".';
 
     const content = buildContext(makeEmbed(title, body));
 
@@ -47,7 +47,7 @@ describe("update_user_info notice visibility", () => {
 
   it("survives the Components V2 round trip the tool actually sends through", () => {
     const targetLabel = "Bau";
-    const body = 'Updated the following:\n1. Naming prefix: `none` → `Master`\n\nSparrow now calls Bau "Master Bau".';
+    const body = 'Updated the following:\n1. Naming prefix: `none` → `Master`\n\nMirri now calls Bau "Master Bau".';
     const components = buildNoticeContainer({
       locale: "en-US",
       color: ColorCode.SUCCESS,
@@ -65,7 +65,7 @@ describe("update_user_info notice visibility", () => {
       imageAttachments: [],
       isTomoriAuthoredMessage: true,
       selfDebugEnabled: false,
-      tomoriNickname: "Sparrow",
+      tomoriNickname: "Mirri",
     }).content;
 
     expect(content).toContain("[System:");
@@ -88,7 +88,7 @@ describe("update_user_info notice visibility", () => {
       imageAttachments: [],
       isTomoriAuthoredMessage: true,
       selfDebugEnabled: false,
-      tomoriNickname: "Sparrow",
+      tomoriNickname: "Mirri",
     });
     expect(result.processedSystemEmbed).toBe(true);
     expect(result.content).toContain(title);
@@ -110,14 +110,14 @@ describe("update_user_info notice visibility", () => {
 
   it("also recognizes user block and unblock notices", () => {
     const blockTitle = localizer("en-US", "tools.user_block.block_block_title", {
-      persona_name: "Sparrow",
+      persona_name: "Mirri",
       user_name: "Bau",
       duration_hours: 2,
     });
     expect(checkTargetEmbedTitle(blockTitle)).toEqual({ isTarget: true, type: "user_moderation" });
 
     const unblockTitle = localizer("en-US", "tools.user_block.unblock_success_title", {
-      persona_name: "Sparrow",
+      persona_name: "Mirri",
       user_name: "Bau",
     });
     expect(checkTargetEmbedTitle(unblockTitle)).toEqual({ isTarget: true, type: "user_moderation" });

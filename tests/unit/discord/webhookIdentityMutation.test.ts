@@ -24,7 +24,7 @@ describe("runWithWebhookIdentity", () => {
 
     await runWithWebhookIdentity(
       webhook,
-      { username: "Sparrow", avatarDataUri: "data:image/png;base64,AAAA" },
+      { username: "Mirri", avatarDataUri: "data:image/png;base64,AAAA" },
       async () => {
         events.push("send");
       },
@@ -40,7 +40,7 @@ describe("runWithWebhookIdentity", () => {
 
     await runWithWebhookIdentity(
       webhook,
-      { username: "Sparrow", avatarUrl: "https://example.invalid/avatar.png" },
+      { username: "Mirri", avatarUrl: "https://example.invalid/avatar.png" },
       async () => undefined,
     );
 

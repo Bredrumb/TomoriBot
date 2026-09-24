@@ -16,7 +16,7 @@
 
 | English Term | Chosen Translation | Usage Note |
 |---|---|---|
-| persona | 人格 | RP 社群既有说法，指 bot 扮演的角色。人格名字（`Sparrow`、`Juno`）是专名，不译。**性格与人格的分工**：指成员本人、心理学意义上的性格时用「性格」；指 bot 扮演对象时用「人格」，包括 `personality presets`（「人格预设集」）、`Personality Preset`、`Default Persona`。唯一的例外是 `page_persona_general: Identity & Personality`，按页面标题的既有读法写「身份与性格」。判断标准是看它指的是不是扮演对象，而不是看英文用了哪个词。 |
+| persona | 人格 | RP 社群既有说法，指 bot 扮演的角色。人格名字（`Mirri`、`Juno`）是专名，不译。**性格与人格的分工**：指成员本人、心理学意义上的性格时用「性格」；指 bot 扮演对象时用「人格」，包括 `personality presets`（「人格预设集」）、`Personality Preset`、`Default Persona`。唯一的例外是 `page_persona_general: Identity & Personality`，按页面标题的既有读法写「身份与性格」。判断标准是看它指的是不是扮演对象，而不是看英文用了哪个词。 |
 | default persona | 默认人格 | `/persona default` 的目标（`type_choice_default`），指当前的主人格槽位。不要与 server default 的「服务器默认」混用，也不要写成「默认人设」。 |
 | alter / alter persona | 副人格 | 对应 UI 的 Alter persona（`role_alter`），指不占用服务器身份的那一个，与「主人格」成对使用。首次出现可写「副人格（alter）」，之后用「副人格」。 |
 | main persona | 主人格 | 对应 UI 的 Main persona（`role_main`），指占用服务器身份和头像的那一个。不要写「主要人格」。 |
@@ -146,7 +146,7 @@ Manage Server 与 Manage Webhooks 是 Discord 权限名而不是面板标签，�
 ## Names and literal strings
 
 - `Tomori`、`TomoriBot` 是专有名称，任何情况都不翻译。`general.defaults.bot_name` 的默认值保持 `Tomori`。
-- 人格名称（`Sparrow`、`Juno`、`Bau (@bau_h)` 等）是专有名称，不翻译、不改写、不加音译。
+- 人格名称（`Mirri`、`Juno`、`Bau (@bau_h)` 等）是专有名称，不翻译、不改写、不加音译。
 - 斜杠指令路径、选项名、环境变量、URL、模型代号、提供方名称保持英文。
 - 基础触发词 `tomori`、`tomo` 保持英文小写，翻译时不得改成中文。
 - `STM`、`DTM`、`BYOK`、`TTS`、`STT`、`NSFW`、`MCP`、`RAG` 等缩写保留英文，顺序统一为中文在前、缩写括注在后，例如「短期记忆（STM）」「明确触发模式（DTM）」。首次出现之后用哪一个，逐个词在术语表里写明：「短期记忆」按术语表用中文，「STM 分类」「STM 参数」等固定搭配用缩写，不在同一段里两种混用。

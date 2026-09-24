@@ -94,7 +94,7 @@
 ## Names and literal strings
 
 - `Tomori`、`TomoriBot` 是專有名稱，任何情況都不翻譯。`general.defaults.bot_name` 的預設值維持 `Tomori`。
-- 人格名稱（`Sparrow`、`Juno`、`Bau (@bau_h)` 等）是專有名稱，不翻譯、不改寫、不加音譯。
+- 人格名稱（`Mirri`、`Juno`、`Bau (@bau_h)` 等）是專有名稱，不翻譯、不改寫、不加音譯。
 - 斜線指令路徑、選項名、環境變數、URL、模型代號、供應商名稱保持英文。
 - 基礎觸發詞 `tomori`、`tomo` 保持英文小寫，翻譯時不得改為中文字。
 

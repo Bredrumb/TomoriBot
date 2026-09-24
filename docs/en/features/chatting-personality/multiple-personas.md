@@ -133,7 +133,7 @@ server-wide setup? That's Personal Spotlight; see
 
 Server managers can use `/config` > Persona > Identity & Personality to give each persona independent masculine,
 feminine, and neutral prefixes, suffixes, and standalone address terms. A user's own
-persona-scoped override is keyed by stable persona lineage, so two personas may call Sparrow
+persona-scoped override is keyed by stable persona lineage, so two personas may call Mirri
 different names in the same multi-persona response while both still target the same Discord
 user. Editing an official pointer first creates an independent copy; it never changes the
 shared catalog or another server's persona.

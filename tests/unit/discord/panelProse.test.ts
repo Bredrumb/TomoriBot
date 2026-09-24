@@ -69,7 +69,7 @@ describe("panel prose formatter", () => {
       "\\*literal asterisk",
       "https://example.com/a/long/path?with=query",
       "</config switch-models:123456789012345678>",
-      "<:sparrow_wave:123456789012345678>",
+      "<:mirri_wave:123456789012345678>",
     ];
     const input = tokens.join(" and ");
     const output = formatPanelProse(input, true);

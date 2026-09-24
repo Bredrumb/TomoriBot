@@ -112,6 +112,6 @@ Eso es el foco personal. Consulta [Personalización](/es-419/features/knowledge/
 
 Los administradores del servidor pueden usar `/config` > Persona > Identidad y personalidad para dar a cada persona
 prefijos, sufijos y formas de dirigirse independientes en masculino, femenino y neutro. El ajuste específico de una
-persona de un usuario se basa en el linaje estable de la persona. Por eso dos personas pueden llamar a Sparrow con
+persona de un usuario se basa en el linaje estable de la persona. Por eso dos personas pueden llamar a Mirri con
 nombres distintos en la misma respuesta de varias personas y seguir dirigiéndose al mismo usuario de Discord.
 Editar primero un puntero oficial crea una copia independiente. Nunca cambia el catálogo compartido ni la persona de otro servidor.

@@ -56,7 +56,7 @@ describe("voice sample duration cap", () => {
     const { deps } = makeDeps(SPEECH_SAMPLE_MAX_DURATION_SECS);
 
     const result = await addVoiceSample(
-      { serverId: 1, upload: upload(1024), sampleName: "Sparrow", refText: null },
+      { serverId: 1, upload: upload(1024), sampleName: "Mirri", refText: null },
       deps,
     );
 
@@ -67,7 +67,7 @@ describe("voice sample duration cap", () => {
     const { deps, writes } = makeDeps(SPEECH_SAMPLE_MAX_DURATION_SECS + 1);
 
     const result = await addVoiceSample(
-      { serverId: 1, upload: upload(1024), sampleName: "Sparrow", refText: null },
+      { serverId: 1, upload: upload(1024), sampleName: "Mirri", refText: null },
       deps,
     );
 
@@ -79,7 +79,7 @@ describe("voice sample duration cap", () => {
     const { deps } = makeDeps(10);
 
     const result = await addVoiceSample(
-      { serverId: 1, upload: upload(SPEECH_SAMPLE_MAX_MB * 1024 * 1024 + 1), sampleName: "Sparrow", refText: null },
+      { serverId: 1, upload: upload(SPEECH_SAMPLE_MAX_MB * 1024 * 1024 + 1), sampleName: "Mirri", refText: null },
       deps,
     );
 

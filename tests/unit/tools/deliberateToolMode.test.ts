@@ -60,7 +60,7 @@ describe("deliberate tool mode", () => {
 
   it("allows structured user info updates for naming, identity, and timezone requests", () => {
     for (const prompt of [
-      "call me Sparrow",
+      "call me Mirri",
       "change my pronouns to they/them",
       "set my UTC offset to 8",
       "clear my honorific",

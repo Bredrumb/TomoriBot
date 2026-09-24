@@ -27,7 +27,7 @@ apodos heredan de la preferencia de persona a la preferencia global y luego al n
 visualización en vivo de Discord. Un apodo global en blanco sigue mostrando el de Discord,
 incluidos cambios posteriores del nombre de visualización. Guardar un apodo global fija ese
 valor personalizado hasta que se elimine. Un prefijo o sufijo en blanco hereda de la misma
-manera, y el texto escrito lo reemplaza, así que `Master Sparrow-san` puede combinar valores de
+manera, y el texto escrito lo reemplaza, así que `Master Mirri-san` puede combinar valores de
 distintos niveles sin cambiar el objetivo de mención subyacente de Discord. Para quitar un
 título que una persona añade por su cuenta, pídeselo directamente a la persona ("deja de
 llamarme Master"); eso lo suprime para esa persona sin afectar a tus otras personas.

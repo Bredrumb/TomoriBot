@@ -3954,7 +3954,7 @@ describe("Operations that own their cache invalidation", () => {
           personalConfigOperations.setNaming({
             userId: 1,
             userDiscId: "u1",
-            nickname: "Sparrow",
+            nickname: "Mirri",
             prefix: null,
             suffix: null,
           }),
@@ -4870,7 +4870,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
     // which for the unchecked-means-remove modal means every presented row is treated as unchecked.
     const setModal = buildSpotlightSetModal("en-US", "nonce123456", "123456789012345678", 0, 0, "a1b2c3d4", [
       { id: 1, name: "Tomori", isAlter: false },
-      { id: 2, name: "Sparrow", isAlter: true },
+      { id: 2, name: "Mirri", isAlter: true },
     ]);
     const removeModal = buildSpotlightRemoveModal(
       "en-US",

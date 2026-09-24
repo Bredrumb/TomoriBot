@@ -96,8 +96,8 @@ function buildFieldPlans(input: UpdateUserInfoInput): { plans: FieldPlan[]; conf
  * Strips an affix the caller re-typed into the nickname.
  *
  * A model that only ever sees the joined formatted name will sometimes submit
- * "Master Sparrow" as the nickname while "Master" is already the resolved prefix,
- * which would otherwise render "Master Master Sparrow". Matching is against the
+ * "Master Mirri" as the nickname while "Master" is already the resolved prefix,
+ * which would otherwise render "Master Master Mirri". Matching is against the
  * resolved affix values only: the nickname is never split on whitespace or
  * punctuation to invent an affix boundary.
  */

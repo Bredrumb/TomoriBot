@@ -29,7 +29,7 @@ function makeState(): TomoriState {
   return {
     server_id: 9,
     persona_id: 55,
-    persona_nickname: "Sparrow",
+    persona_nickname: "Mirri",
     is_alter: false,
     trigger_words: [],
     naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
@@ -84,7 +84,7 @@ function makeInteraction(options: {
   return {
     id: "interaction-1",
     customId: options.customId,
-    user: { id: USER_ID, username: "Sparrow" },
+    user: { id: USER_ID, username: "Mirri" },
     channelId: "channel-1",
     guildId: GUILD_ID,
     guild: { id: GUILD_ID },

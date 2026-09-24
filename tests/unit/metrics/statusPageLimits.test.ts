@@ -64,7 +64,7 @@ function buildPage(category: StatusCategory, populated: boolean): SummaryEmbedOp
 
   return {
     titleKey: titleKeyByCategory[category],
-    titleVars: category === "persona" ? { persona_name: "Sparrow" } : undefined,
+    titleVars: category === "persona" ? { persona_name: "Mirri" } : undefined,
     descriptionKey: descriptionKeyByCategory[category],
     color: 0x65c6c5,
     fields: Array.from({ length: populated ? 12 : 2 }, (_, index) => ({
@@ -186,7 +186,7 @@ describe("status Components V2 limits and redaction", () => {
     const mcpText = formatMcpServers(
       [
         {
-          name: "Sparrow MCP",
+          name: "Mirri MCP",
           is_enabled: true,
           server_type: "custom",
           auth_token: Buffer.from(mcpToken),
@@ -209,7 +209,7 @@ describe("status Components V2 limits and redaction", () => {
     expect(serialized).not.toContain(endpointSecret);
     expect(serialized).not.toContain(mcpToken);
     expect(serialized).toContain("juno-model");
-    expect(serialized).toContain("Sparrow MCP");
+    expect(serialized).toContain("Mirri MCP");
   });
 
   it("keeps API values, Matrix room IDs, and custom prompts out of rendered status output", async () => {

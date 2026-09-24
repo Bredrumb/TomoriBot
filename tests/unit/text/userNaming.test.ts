@@ -4,10 +4,10 @@ import { formatUserName, resolveEffectiveUserNaming } from "@/utils/text/userNam
 
 describe("formatUserName", () => {
   test.each([
-    ["Sparrow", "Master", "", "Master Sparrow"],
-    ["sparrow", "@", "", "@sparrow"],
-    ["Sparrow", "", "-san", "Sparrow-san"],
-    ["Sparrow", "", "Jr.", "Sparrow Jr."],
+    ["Mirri", "Master", "", "Master Mirri"],
+    ["mirri", "@", "", "@mirri"],
+    ["Mirri", "", "-san", "Mirri-san"],
+    ["Mirri", "", "Jr.", "Mirri Jr."],
     ["スズメ", "マスター", "さん", "マスタースズメさん"],
     ["참새", "마스터", "님", "마스터참새님"],
   ])("formats %s with prefix %s and suffix %s", (nickname, prefix, suffix, expected) => {
@@ -16,11 +16,11 @@ describe("formatUserName", () => {
 
   test.each([
     ["Misu", "Ms.", "", "Ms. Misu"],
-    ["Sparrow", "Dr.", "", "Dr. Sparrow"],
-    ["Sparrow", "Yo!", "", "Yo! Sparrow"],
+    ["Mirri", "Dr.", "", "Dr. Mirri"],
+    ["Mirri", "Yo!", "", "Yo! Mirri"],
     ["美鈴", "Ms.", "", "Ms. 美鈴"],
-    ["Sparrow", "O'", "", "O'Sparrow"],
-    ["Sparrow", "super-", "", "Super-Sparrow"],
+    ["Mirri", "O'", "", "O'Mirri"],
+    ["Mirri", "super-", "", "Super-Mirri"],
     ["スズメ", "マスター", "", "マスタースズメ"],
   ])("spaces a prefix that closes on terminal punctuation but joins one that binds rightward (%s, %s)", (nickname, prefix, suffix, expected) => {
     expect(formatUserName(nickname, prefix, suffix)).toBe(expected);
@@ -29,8 +29,8 @@ describe("formatUserName", () => {
   test.each([
     ["Misuzu", "dad", "", "Dad Misuzu"],
     ["misuzu", "", "", "Misuzu"],
-    ["Sparrow", "xXxSlayerxXx", "", "xXxSlayerxXx Sparrow"],
-    ["Sparrow", "eSports", "", "eSports Sparrow"],
+    ["Mirri", "xXxSlayerxXx", "", "xXxSlayerxXx Mirri"],
+    ["Mirri", "eSports", "", "eSports Mirri"],
   ])("capitalizes an all-lowercase leading token but leaves stylized casing alone (%s, %s)", (nickname, prefix, suffix, expected) => {
     expect(formatUserName(nickname, prefix, suffix)).toBe(expected);
   });
@@ -40,12 +40,12 @@ describe("resolveEffectiveUserNaming", () => {
   test("resolves nickname and affixes independently through persona, global, and neutral fallbacks", () => {
     const resolved = resolveEffectiveUserNaming({
       global: {
-        userNickname: "Sparrow",
+        userNickname: "Mirri",
         prefixOverride: null,
         suffixOverride: "-san",
         addressingStyle: "masculine",
       },
-      liveDisplayName: "Live Sparrow",
+      liveDisplayName: "Live Mirri",
       persona: {
         prefixes: { masculine: "Master", neutral: "Mx." },
         suffixes: { neutral: "friend" },
@@ -54,10 +54,10 @@ describe("resolveEffectiveUserNaming", () => {
     });
 
     expect(resolved).toEqual({
-      nickname: "Sparrow",
+      nickname: "Mirri",
       prefix: "Master",
       suffix: "-san",
-      formattedName: "Master Sparrow-san",
+      formattedName: "Master Mirri-san",
       addressTerm: "bro",
     });
   });
@@ -65,12 +65,12 @@ describe("resolveEffectiveUserNaming", () => {
   test("explicit-none affixes suppress global and persona values", () => {
     const resolved = resolveEffectiveUserNaming({
       global: {
-        userNickname: "Sparrow",
+        userNickname: "Mirri",
         prefixOverride: "Captain",
         suffixOverride: "Jr.",
         addressingStyle: "feminine",
       },
-      liveDisplayName: "Live Sparrow",
+      liveDisplayName: "Live Mirri",
       persona: {
         prefixes: { feminine: "Mistress", neutral: "Mx." },
         suffixes: { feminine: "ma'am", neutral: "friend" },
@@ -83,7 +83,7 @@ describe("resolveEffectiveUserNaming", () => {
       },
     });
 
-    expect(resolved.formattedName).toBe("Sparrow");
+    expect(resolved.formattedName).toBe("Mirri");
     expect(resolved.addressTerm).toBe("fam");
   });
 
@@ -95,7 +95,7 @@ describe("resolveEffectiveUserNaming", () => {
         suffixOverride: null,
         addressingStyle: "masculine",
       },
-      liveDisplayName: "Sparrow",
+      liveDisplayName: "Mirri",
       persona: {
         prefixes: { feminine: "Mistress" },
         suffixes: { feminine: "Lady", neutral: "friend" },
@@ -106,26 +106,26 @@ describe("resolveEffectiveUserNaming", () => {
     expect(resolved.prefix).toBe("");
     expect(resolved.suffix).toBe("friend");
     expect(resolved.addressTerm).toBe("fam");
-    expect(resolved.formattedName).toBe("Sparrow friend");
+    expect(resolved.formattedName).toBe("Mirri friend");
   });
 
   test("persona nickname overrides global and live names", () => {
     const resolved = resolveEffectiveUserNaming({
       global: {
-        userNickname: "Global Sparrow",
+        userNickname: "Global Mirri",
         prefixOverride: null,
         suffixOverride: null,
         addressingStyle: null,
       },
-      liveDisplayName: "Live Sparrow",
+      liveDisplayName: "Live Mirri",
       preference: {
-        nickname_override: "Persona Sparrow",
+        nickname_override: "Persona Mirri",
         prefix_override: null,
         suffix_override: null,
       },
     });
 
-    expect(resolved.nickname).toBe("Persona Sparrow");
+    expect(resolved.nickname).toBe("Persona Mirri");
   });
 });
 

@@ -47,7 +47,7 @@ describe("checkTargetEmbedTitle", () => {
   });
 
   it("does not classify an unrelated title or an empty one", () => {
-    expect(checkTargetEmbedTitle("Sparrow posted a link")).toEqual({ isTarget: false, type: null });
+    expect(checkTargetEmbedTitle("Mirri posted a link")).toEqual({ isTarget: false, type: null });
     expect(checkTargetEmbedTitle(null)).toEqual({ isTarget: false, type: null });
   });
 });

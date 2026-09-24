@@ -17,7 +17,7 @@ function makePersona(overrides: Partial<TomoriState> = {}): TomoriState {
   return {
     persona_id: 55,
     server_id: 9,
-    persona_nickname: "Sparrow",
+    persona_nickname: "Mirri",
     is_alter: false,
     trigger_words: [],
     naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
@@ -163,7 +163,7 @@ function makeHarness(options: HarnessOptions = {}) {
     const interaction = {
       id: "interaction-1",
       customId,
-      user: { id: "user-1", username: "Sparrow" },
+      user: { id: "user-1", username: "Mirri" },
       channelId: "channel-1",
       channel: { name: "lounge" },
       guildId: "guild-1",

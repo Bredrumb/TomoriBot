@@ -1439,7 +1439,7 @@ describe("memory selector pagination & 25-option ceiling", () => {
       locale: "en-US",
       category: "persona",
       selectedLineageId: 10,
-      personas: [makePersona(1, 10, "Sparrow")],
+      personas: [makePersona(1, 10, "Mirri")],
       memories: hundredMemories.map((memory) => ({ ...memory, persona_lineage_id: 10 })),
       stmCount: 0,
       privacyLevel: PrivacyLevel.MINIMAL,
@@ -1491,7 +1491,7 @@ describe("persona selector lineage identity", () => {
       makePersona(55, 1770, "Aphel"),
       makePersona(39, 3585, "Tomori", true),
       makePersona(50, 3585, "Lilya", true),
-      makePersona(60, 10010, "Sparrow"),
+      makePersona(60, 10010, "Mirri"),
     ]);
 
     const select = personaSelect(payload);
@@ -1501,14 +1501,14 @@ describe("persona selector lineage identity", () => {
     expect(new Set(values).size).toBe(values.length);
 
     // The non-alter member names the shared scope; an all-alter lineage falls back to its first.
-    expect(select?.options?.map((option) => option.label)).toEqual(["Aphel", "Tomori", "Sparrow"]);
+    expect(select?.options?.map((option) => option.label)).toEqual(["Aphel", "Tomori", "Mirri"]);
   });
 
   it("describes each lineage by its memory count, singular and shared included", () => {
     const personas = [
       makePersona(51, 1770, "Timori", true),
       makePersona(55, 1770, "Aphel"),
-      makePersona(60, 10010, "Sparrow"),
+      makePersona(60, 10010, "Mirri"),
       makePersona(61, 10011, "Wren"),
     ];
     const payload = buildPersonaPage(
