@@ -6,6 +6,7 @@ import type { ProcessedChunk, RawStreamChunk, StreamConfig, StreamContext } from
 import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 import { log } from "@/utils/misc/logger";
 import { buildCustomThinkingRequest } from "@/utils/provider/thinkingControl";
+import { waitForTextModelHandoffBeforeTextRequest } from "@/utils/provider/textModelComfyUiHandoff";
 import { VerbatimToolCallParser, getVerbatimToolCallMaxBufferChars } from "@/utils/tools/verbatimToolCallParser";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
@@ -20,6 +21,7 @@ const GEMMA_TOOL_PARSER_ENABLED = (process.env.CUSTOM_GEMMA_TOOL_PARSER_ENABLED 
 
 export interface CustomStreamConfig extends OpenAICompatibleStreamConfig {
   endpointUrl: string;
+  customEndpointId?: number | null;
   /** Optional context window override sent as options.num_ctx (Ollama extension) */
   numCtx?: number | null;
 }
@@ -102,6 +104,9 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     config: StreamConfig,
     context: StreamContext,
   ): AsyncGenerator<RawStreamChunk, void, unknown> {
+    // This runs for every orchestrator tool round, not just the initial provider stream.
+    // It prevents every stream round from reaching a local model while its endpoint is handed off.
+    await waitForTextModelHandoffBeforeTextRequest((config as CustomStreamConfig).customEndpointId);
     this.configureVerbatimToolCallParser(config, context);
     try {
       yield* super.startStream(config, context);
