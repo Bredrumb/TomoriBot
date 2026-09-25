@@ -42,6 +42,6 @@ Habilita estas banderas de capacidad para ChatMock:
 - **Function Calling / Tools**: Sí
 - **Image Understanding**: Sí
 - **Video Understanding**: No
-- **Structured Output**: Sí
+- **Salida estructurada**: Sí
 
 **Nota**: Codex CLI no permite cambiar su prompt `system`, por lo que el prompt `system` de TomoriBot se convierte en un turno de `user` en el contexto como solución alternativa. Por favor configura la variable de entorno .env `CHATMOCK_PORT` para que coincida con tu puerto real de ChatMock y que esta solución alternativa funcione correctamente (el valor predeterminado es 8000).

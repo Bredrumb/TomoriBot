@@ -24,11 +24,11 @@ collects:
 | **Custom Endpoint (Advanced)** | The endpoint's connection and one text model, registered inside the wizard. See [Custom Endpoints](#custom-endpoints). |
 | **User BYOK** (guilds only) | Nothing: the workspace keeps no provider of its own, so members must supply personal ones. |
 
-Nothing is written until **Finish Setup**, so an abandoned or expired wizard leaves the workspace's
+Nothing is written until `Finish Setup`, so an abandoned or expired wizard leaves the workspace's
 existing provider rows alone. To replace a key that is already stored, use `/providers`, because
 `/setup` refuses to run on a workspace that is already configured.
 
-Each provider has its own key-generation steps. Run **`/help`**, choose **Setup**, then **Step 1: Get an API Key**, and pick your
+Each provider has its own key-generation steps. Run **`/help`**, choose `Setup`, then **Step 1: Get an API Key**, and pick your
 provider for the exact walkthrough, or use these starting points:
 
 | Provider | Notes | Get a key |
@@ -74,7 +74,7 @@ and model catalogs with `/personal providers`, then select personal models in `/
 Personal settings follow them across every server where they use TomoriBot. See
 [Personalization](/features/knowledge/personalization/#your-own-providers) for that side.
 
-The panels are titled **Server Providers** and **Personal Providers** so their ownership remains visible after
+The panels are titled `Server Providers` and `Personal Providers` so their ownership remains visible after
 the command interaction opens.
 
 After a provider is set, use `/config` > Models > Switch Models to choose the shared capability assignments.
@@ -110,7 +110,7 @@ LiteLLM, vLLM, ComfyUI, local TTS/STT) as **labeled provider bundles**.
 
 A **label** is the user-facing menu name and groups capabilities under one bundle when they share
 one endpoint URL. It is never sent to the remote endpoint. Capabilities served from different URLs
-need distinct labels. Choose **Add New Custom Endpoint**, select the
+need distinct labels. Choose `Add New Custom Endpoint`, select the
 API compatibility, and save the connection. Saving prepares the capabilities supported by that
 protocol without registering any models. Then select the new endpoint and use its model
 dropdown to register an exact model code and capability. Adding a model activates it for that
@@ -126,13 +126,13 @@ API compatibility determines the request paths and payloads the service implemen
 capability slots the connection prepares. Registering exact models for those slots is a separate step, and the
 protocol cannot be inferred reliably from the endpoint URL.
 
-`/setup`'s **Custom Endpoint (Advanced)** mode performs the same two steps inside the wizard:
+`/setup`'s `Custom Endpoint (Advanced)` mode performs the same two steps inside the wizard:
 **Configure Connection** saves the API compatibility, label, URL, and optional auth token behind a
-reachability check, and **Configure Text Model** registers the exact text model and its capability
+reachability check, and `Configure Text Model` registers the exact text model and its capability
 declarations. The model button stays disabled until a connection validates, and re-saving the
 connection clears the model declaration because the declarations depend on the API compatibility.
 The wizard creates the connection, saved provider, model, and active-model rows together when you
-press **Finish Setup**, so it never leaves a connection that has no usable text model. It registers
+press `Finish Setup`, so it never leaves a connection that has no usable text model. It registers
 text models only; image, video, TTS, and STT capabilities are still registered in `/providers`.
 
 For full walkthroughs of running the servers, see:

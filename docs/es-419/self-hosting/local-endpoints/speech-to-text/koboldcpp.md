@@ -17,7 +17,7 @@ Mantén KoboldCPP en ejecución mientras TomoriBot lo esté usando. Si tu compil
 
 ## Registro en TomoriBot
 
-Ejecuta `/providers`, elige **Agregar nuevo punto de conexión personalizado** y usa la compatibilidad de API de transcripción:
+Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado` y usa la compatibilidad de API de transcripción:
 
 - Compatibilidad de API: `openai-compatible-transcription`
 - `endpoint_url`: la raíz de tu servidor KoboldCPP

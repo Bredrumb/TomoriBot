@@ -77,7 +77,7 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 
 ## TomoriBotへの登録
 
-`/providers`で **新しいカスタムエンドポイントを追加** を選びます。
+`/providers`で `新しいカスタムエンドポイントを追加` を選びます。
 
 - API互換性: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`

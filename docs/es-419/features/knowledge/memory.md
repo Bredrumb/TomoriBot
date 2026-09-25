@@ -195,7 +195,7 @@ STM.
 - Si usas la base de conocimiento de documentos (RAG), las etiquetas de canal también se aplican
   a documentos e historiales extraídos.
 
-En `/help`, elige **Memoria** y luego **Etiquetado de memoria**, para ver el mismo resumen en
+En `/help`, elige `Memoria` y luego `Etiquetado de memoria`, para ver el mismo resumen en
 Discord.
 
 ## Memoria a corto plazo (STM)
@@ -249,16 +249,16 @@ Cualquiera puede ejecutar `/config` > Persona > Memorias, `/personal config` y
 ### Configuración de la STM
 
 Los administradores del espacio de trabajo pueden ajustar la memoria a corto plazo desde
-`/config` → **Comportamiento** → **Memoria y STM**. Estos ajustes se aplican a los registros
+`/config` → `Comportamiento` → **Memoria y STM**. Estos ajustes se aplican a los registros
 activos de STM del espacio de trabajo:
 
 - **Cadencia de actualización** controla cuántos turnos del bot pasan entre empujones de
   actualización. El rango permitido es de 1 a 100.
 - **Modo de renderizado** elige si los valores de categoría sustituyen a los turnos recientes o
   aparecen como un resumen simple.
-- **Mensajes en bruto** controla cuántos mensajes recientes se conservan, de 1 hasta el máximo
+- **Mensajes sin procesar** controla cuántos mensajes recientes se conservan, de 1 hasta el máximo
   del canal.
-- **Profundidad del empujón** ubica el empujón de actualización desde el final del contexto
+- **Profundidad de aviso** ubica el empujón de actualización desde el final del contexto
   ensamblado, de 0 a 20.
 - **Profundidad de contenido** ubica el contenido de STM desde el final del contexto ensamblado,
   de -1 a 20.

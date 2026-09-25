@@ -67,4 +67,4 @@ Những bất ngờ thường gặp khi preset có vẻ bị bỏ qua:
 - Các mục chèn sau lịch sử hoặc chèn theo độ sâu sẽ được hợp nhất vào các mục lịch sử trò chuyện hiện có thay vì trở thành tin nhắn độc lập; nhiều node ở cùng một độ sâu sẽ được gom nhóm lại.
 - Xử lý hậu kỳ Regex, tùy chỉnh ưu tiên nhiệt độ/top-p/model từ phía preset và các preset phân lớp đều không được hỗ trợ. Các preset hoàn thành văn bản kế thừa được nhập qua quy trình hỗ trợ tối đa, tự động loại bỏ các khối chỉ có ở ST (kịch bản, anchor, stop string, …).
 
-Trong `/help`, chọn **Integrations**, rồi chọn **SillyTavern Presets**, để xem tài liệu tham khảo trong Discord. Về cơ chế nội bộ của bộ máy nhập, hãy xem [kiến trúc hệ thống preset](/en/architecture/integrations/sillytavern/preset-system/).
+Trong `/help`, chọn **Integrations**, rồi chọn `Preset SillyTavern`, để xem tài liệu tham khảo trong Discord. Về cơ chế nội bộ của bộ máy nhập, hãy xem [kiến trúc hệ thống preset](/en/architecture/integrations/sillytavern/preset-system/).

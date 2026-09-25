@@ -19,7 +19,7 @@ sidebar:
 
 ## 在 TomoriBot 中註冊
 
-執行 `/providers`，選擇 **新增自訂端點**，並使用轉錄 API 相容性：
+執行 `/providers`，選擇 `新增自訂端點`，並使用轉錄 API 相容性：
 
 - API Compatibility：`openai-compatible-transcription`
 - `endpoint_url`：你的 whisper.cpp 伺服器根路徑

@@ -36,7 +36,7 @@ users or personas.
 Every tag source above is editable, each at a different scope. All of these open a modal
 pre-filled with the current tags, so you edit in place:
 
-- **`/config` > Persona > Appearance**: the selected persona's **Physical Appearance** tags (how *she*
+- **`/config` > Persona > Appearance**: the selected persona's `Physical Appearance` tags (how *she*
   looks). Requires the Manage Server permission.
 - **`/personal config`**: *your own* appearance tags, applied when a generation
   references you. Follows you across every server (see

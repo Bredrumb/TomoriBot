@@ -39,7 +39,7 @@ OpenBMB 另外記載了數種中文方言。TomoriBot 仍然可能為了與通�
 
 VoxCPM2 以在要合成的文字前面加上括號包住的自然語言描述，來表現語音設計與風格控制。TomoriBot 已經有為此用途設計的 `instruct` 欄位，所以包裝會自動完成那個轉換。
 
-請使用 **純文字** 腳本標記風格。VoxCPM2 不需要 TomoriBot 保留方括號標籤或表情符號控制語法，也不需要新的腳本標記模式。
+請使用 `純文字` 腳本標記風格。VoxCPM2 不需要 TomoriBot 保留方括號標籤或表情符號控制語法，也不需要新的腳本標記模式。
 
 ## 硬體與執行環境
 
@@ -107,7 +107,7 @@ $env:VOXCPM2_PREFETCH = "0"
 
 ## 在 TomoriBot 中註冊
 
-執行 `/providers`，選擇 **新增自訂端點**，並設定 Speech 端點：
+執行 `/providers`，選擇 `新增自訂端點`，並設定 Speech 端點：
 
 - Capability：`Speech`
 - API Compatibility：`tts-clone`

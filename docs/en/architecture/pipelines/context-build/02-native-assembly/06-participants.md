@@ -388,7 +388,7 @@ cannot replace profiles or core fields and receive no DB/client service bag. The
 `ContextContributor` registry has not landed, so this entire participant slice remains one
 adapter-ready boundary without claiming modularization Batch 4A completion.
 
-See [Adding a Participant Source or Profile Enricher](/contributing/adding-participant-extension/)
+See [Adding a Participant Source or Profile Enricher](/contributing/extending/participant-extension/)
 for contracts, registration, security rules, and required tests.
 
 ## Related docs

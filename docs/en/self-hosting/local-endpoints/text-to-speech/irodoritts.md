@@ -78,7 +78,7 @@ Current Irodori downloads the checkpoint together with any tokenizer assets bund
 
 ## Register in TomoriBot
 
-Run `/providers`, choose **Add New Custom Endpoint**, and use the speech API compatibility:
+Run `/providers`, choose `Add New Custom Endpoint`, and use the speech API compatibility:
 
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`

@@ -107,7 +107,7 @@ Sau khi thiết lập, `bun run launch --voxcpm2` sẽ khởi động máy chủ
 
 ## Đăng ký trong TomoriBot
 
-Chạy `/providers`, chọn **Add New Custom Endpoint**, và định cấu hình endpoint Speech:
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và định cấu hình endpoint Speech:
 
 - Capability: `Speech`
 - API Compatibility: `tts-clone`

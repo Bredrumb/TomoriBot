@@ -61,7 +61,7 @@ Các tùy chỉnh bổ sung nằm trong `.env.optional.example`. Sao chép bất
 bun run dev
 ```
 
-Khi bạn thấy `TomoriBot up and running!`, hãy vào Discord và chạy `/setup` trong máy chủ của bạn để kết nối nhà cung cấp AI và khởi tạo bot. Lệnh này mở một bảng danh sách kiểm tra có hướng dẫn, và không có dữ liệu nào được ghi cho đến khi bạn nhấn **Finish Setup**; xem [Lệnh `/setup`](/vi/self-hosting/setup-wizard/#the-setup-command) để biết các bước thực hiện và [Bắt đầu nhanh](/vi/introduction/quickstart/) cho các thao tác trong Discord.
+Khi bạn thấy `TomoriBot up and running!`, hãy vào Discord và chạy `/setup` trong máy chủ của bạn để kết nối nhà cung cấp AI và khởi tạo bot. Lệnh này mở một bảng danh sách kiểm tra có hướng dẫn, và không có dữ liệu nào được ghi cho đến khi bạn nhấn `Hoàn tất thiết lập`; xem [Lệnh `/setup`](/vi/self-hosting/setup-wizard/#the-setup-command) để biết các bước thực hiện và [Bắt đầu nhanh](/vi/introduction/quickstart/) cho các thao tác trong Discord.
 
 Sử dụng `bun run launch` thay vì `bun run dev` nếu bạn muốn các máy chủ cục bộ tùy chọn (SearXNG, Crawl4AI, TTS/STT cục bộ) được khởi chạy cùng với bot:
 

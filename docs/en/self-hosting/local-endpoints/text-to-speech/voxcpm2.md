@@ -108,7 +108,7 @@ After setup, `bun run launch --voxcpm2` starts the server together with TomoriBo
 
 ## Register in TomoriBot
 
-Run `/providers`, choose **Add New Custom Endpoint**, and configure the Speech endpoint:
+Run `/providers`, choose `Add New Custom Endpoint`, and configure the Speech endpoint:
 
 - Capability: `Speech`
 - API Compatibility: `tts-clone`

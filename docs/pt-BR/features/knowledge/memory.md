@@ -123,7 +123,7 @@ e fragmentos ao vivo, uploads, navegação de documentos e remoção:
 Ao importar o histórico de um canal com `/learn history`, a opção `prompt` muda como a TomoriBot extrai
 memórias:
 
-- **Conversation** extrai fatos isolados de chats normais. Ele resolve pronomes e usa timestamps absolutos quando datas ou horários são mencionados ou podem ser inferidos.
+- **Conversa** extrai fatos isolados de chats normais. Ele resolve pronomes e usa timestamps absolutos quando datas ou horários são mencionados ou podem ser inferidos.
 - **Roleplay** procura cenas, lore, relacionamentos e eventos memoráveis sem tentar preservar cada pequeno detalhe.
 - **In-Character** extrai memórias do ponto de vista da persona selecionada, usando o prompt, atributos, memórias existentes e documentos relevantes dessa persona como contexto.
 
@@ -177,7 +177,7 @@ uma palavra-chave ou apenas em um canal. Ative com `/config` > Engine > Memory &
 - Se você usa a base de conhecimento de documentos (RAG), tags de canal também se aplicam a documentos e
   históricos extraídos.
 
-Em `/help`, escolha **Memory**, depois **Memory Tagging**, para o mesmo resumo no Discord.
+Em `/help`, escolha `Memória`, depois `Marcação de Memória`, para o mesmo resumo no Discord.
 
 ## Memória de Curto Prazo (STM)
 <!-- anchor: short-term-memory-stm -->
@@ -225,20 +225,20 @@ Qualquer pessoa pode executar `/config` > Persona > Memories, `/personal config`
 
 ### Configuração da STM
 
-Gerentes do workspace podem ajustar a memória de curto prazo em `/config` → **Behavior** → **Memory & STM**.
+Gerentes do workspace podem ajustar a memória de curto prazo em `/config` → `Comportamento` → **Memory & STM**.
 Essas configurações se aplicam aos registros de STM ativos do workspace:
 
-- **Refresh cadence** controla quantos turnos do bot passam entre os empurrões de atualização. O intervalo permitido é 1-100.
-- **Render mode** escolhe se os valores das categorias substituem os turnos recentes ou aparecem como um resumo bruto.
-- **Crude messages** controla quantas mensagens recentes são retidas, de 1 até o máximo do canal.
-- **Nudge depth** posiciona o empurrão de atualização a partir do final do contexto montado, de 0-20.
-- **Content depth** posiciona o conteúdo da STM a partir do final do contexto montado, de −1-20.
+- **Frequência de atualização** controla quantos turnos do bot passam entre os empurrões de atualização. O intervalo permitido é 1-100.
+- **Modo de renderização** escolhe se os valores das categorias substituem os turnos recentes ou aparecem como um resumo bruto.
+- **Mensagens brutas** controla quantas mensagens recentes são retidas, de 1 até o máximo do canal.
+- **Profundidade do toque** posiciona o empurrão de atualização a partir do final do contexto montado, de 0-20.
+- **Profundidade do conteúdo** posiciona o conteúdo da STM a partir do final do contexto montado, de −1-20.
 
-**STM Categories** substitui o campo padrão Summary por até cinco campos rotulados. Insira cada campo como
+**Categorias STM** substitui o campo padrão Summary por até cinco campos rotulados. Insira cada campo como
 `Rótulo: Descrição`; deixar todos os campos em branco restaura a categoria padrão Summary. Salvar categorias
 limpa as STM ativas de canais do servidor que são incompatíveis, e o painel informa os canais afetados antes de salvar.
 
-**STM Prompt** permite que gerentes substituam a descrição da ferramenta e o empurrão de atualização. Substituições em branco restauram os
+**Prompt STM** permite que gerentes substituam a descrição da ferramenta e o empurrão de atualização. Substituições em branco restauram os
 valores padrão efetivos, incluindo o empurrão que considera as categorias quando elas estão habilitadas.
 
 :::tip

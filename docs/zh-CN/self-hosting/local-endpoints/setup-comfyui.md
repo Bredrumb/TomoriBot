@@ -8,7 +8,7 @@ TomoriBot 可以通过你自己的
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 实例生成图像和视频。它驱动 ComfyUI 的方式是提交一份**API 格式工作流**，其中替换进你的提示词与尺寸，然后轮询
 ComfyUI 的 `/history` 端点，直到输出就绪。
 
-本指南覆盖 ComfyUI 的安装、运行与注册。要**编写或编辑**一份与 TomoriBot 兼容的工作流（那些 `{TOMORI_*}` 占位符），请用 Discord 内的深入讲解：打开 `/help`，选择 **Features**，再选 **Custom Endpoints**，并使用 GitHub 上的
+本指南覆盖 ComfyUI 的安装、运行与注册。要**编写或编辑**一份与 TomoriBot 兼容的工作流（那些 `{TOMORI_*}` 占位符），请用 Discord 内的深入讲解：打开 `/help`，选择 `功能`，再选 `自定义端点`，并使用 GitHub 上的
 [workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)。
 
 :::note[不需要环境变量]
@@ -60,11 +60,11 @@ curl http://127.0.0.1:8188/system_stats
 | Anima v1（图像）：`tomoribot-anima-v1-comfyui.json` | `txt2img`、`img2img`、`inpaint` |
 | WAN i2v loop（视频）：`tomoribot-wan-i2v-loop-video.json` | 图生视频 |
 
-这些是 **API 格式**（ComfyUI 通过 *Save (API Format)* 导出的 JSON），不是普通的界面保存格式。如果你自己写一份，它必须包含 TomoriBot 会替换的 `{TOMORI_*}` 占位符（提示词、宽高、种子、参考图等）。见 workflow README，以及 `/help` 里 **Providers** 下的 **Custom Endpoints** 页面。
+这些是 **API 格式**（ComfyUI 通过 *Save (API Format)* 导出的 JSON），不是普通的界面保存格式。如果你自己写一份，它必须包含 TomoriBot 会替换的 `{TOMORI_*}` 占位符（提示词、宽高、种子、参考图等）。见 workflow README，以及 `/help` 里 **Providers** 下的 `自定义端点` 页面。
 
 ## 3. 在 Discord 里注册它
 
-运行 **`/providers`**（或 `/personal providers`），选择 **添加新自定义端点**，然后填入：
+运行 **`/providers`**（或 `/personal providers`），选择 `添加新自定义端点`，然后填入：
 
 | 字段 | ComfyUI 的取值 |
 |-------|-------------------|
@@ -75,7 +75,7 @@ curl http://127.0.0.1:8188/system_stats
 
 保存连接之后，选中它，并用它的模型下拉菜单添加一个图像或视频模型。填入检查点的确切代号，并**上传你从第 2 步下载的工作流 `.json`**。模型能力必须与工作流匹配（图像工作流 → `image`，视频工作流 → `video`）。
 
-图像模型还会询问它的 **图像能力**：文生图、参考图、局部重绘和负面提示词。只勾选你的工作流真正实现的模式，因为 Tomori 只会把已声明的模式提供给工具。局部重绘只会在 ComfyUI 连接里出现，因为没有其他 API 兼容类型接受遮罩。之后编辑该模型会带着当前选择重新打开表单，所以改代号不会清空它。
+图像模型还会询问它的 `图像能力`：文生图、参考图、局部重绘和负面提示词。只勾选你的工作流真正实现的模式，因为 Tomori 只会把已声明的模式提供给工具。局部重绘只会在 ComfyUI 连接里出现，因为没有其他 API 兼容类型接受遮罩。之后编辑该模型会带着当前选择重新打开表单，所以改代号不会清空它。
 
 添加模型会把它自动设为当前生效的 `image` 或 `video` 模型。在聊天里直接问 Tomori 就能触发生成。如果它因为某些原因没有生效，运行 `/config` > 模型 > 切换模型
 并选择你注册的 ComfyUI 端点。

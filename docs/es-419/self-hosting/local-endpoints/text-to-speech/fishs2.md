@@ -6,7 +6,7 @@ Fish Audio S2 Pro es un modelo de texto a voz multilingüe de 4B enfocado en la 
 
 La configuración predeterminada de TomoriBot usa los pesos oficiales BF16 (`fishaudio/s2-pro`) para proporcionar la fidelidad de síntesis más alta y evitar incompatibilidades de cuantificación. Para los usuarios con GPU de consumo con memoria limitada, se admite una cuantificación INT8 opcional de solo peso (`Imagilux/fishaudio-s2-pro`) a través de anulaciones de entorno.
 
-Fish S2 Pro admite etiquetas de expresión entre corchetes como `[whisper]`, `[excited]`, y `[angry]`. Configura el endpoint con el marcado **Etiquetas entre corchetes** para que TomoriBot conserve estos controles en los guiones de voz generados.
+Fish S2 Pro admite etiquetas de expresión entre corchetes como `[whisper]`, `[excited]`, y `[angry]`. Configura el endpoint con el marcado `Etiquetas entre corchetes` para que TomoriBot conserve estos controles en los guiones de voz generados.
 
 ## Licencia
 
@@ -91,11 +91,11 @@ es más corto de lo que tarda un clip de Windows nativo. Auméntalo en el `.env`
 >
 > Si subes una muestra de voz sin proporcionar su transcripción de referencia coincidente, Fish Speech **descarta silenciosamente los tokens de audio de referencia** y recurre a la voz de referencia cero aleatoria. El envoltorio Fish de TomoriBot valida y rechaza las solicitudes de síntesis que carecen de texto de referencia con un `400 Bad Request` para prevenir una generación accidental sin condicionamiento.
 
-Al agregar una voz de persona en `/config` bajo **Modelos > Parámetros y voces TTS**, siempre completa el campo **Transcripción de referencia** con el texto literal hablado en tu clip de audio de referencia.
+Al agregar una voz de persona en `/config` bajo `Modelos > Parámetros y voces TTS`, siempre completa el campo `Transcripción de referencia` con el texto literal hablado en tu clip de audio de referencia.
 
 ## Registro en TomoriBot
 
-En `/providers`, elige **Agregar nuevo punto de conexión personalizado** y configura:
+En `/providers`, elige `Agregar nuevo punto de conexión personalizado` y configura:
 
 - Capacidad: `Speech`
 - Compatibilidad de API: `tts-clone`

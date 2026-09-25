@@ -5,7 +5,7 @@
  * defaults, both preserve sets surviving, all 11 collections emptied, missing split rows repaired,
  * quota usage and short-term-memory data surviving, and rollback leaving no partial state.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {

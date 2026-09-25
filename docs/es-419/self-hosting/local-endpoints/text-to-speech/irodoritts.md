@@ -77,7 +77,7 @@ El Irodori actual descarga el punto de control junto con cualquier activo de tok
 
 ## Registro en TomoriBot
 
-Ejecuta `/providers`, elige **Agregar nuevo punto de conexión personalizado** y usa la compatibilidad de API de voz:
+Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado` y usa la compatibilidad de API de voz:
 
 - Compatibilidad de API: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`

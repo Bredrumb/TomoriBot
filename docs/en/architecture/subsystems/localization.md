@@ -241,7 +241,7 @@ it.
   builder. `tests/unit/docs/docsRouteRegistry.test.ts` resolves each of them against `docs/`.
 
 Adding a docs locale, including the sidebar, hreflang, and README surfaces, is covered in
-[Docs Site Localization](/contributing/docs-site-localization/).
+[Docs Site Localization](/contributing/localization/docs-site/).
 
 ## Discord Length Limits
 

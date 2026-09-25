@@ -13,13 +13,17 @@ enough that someone new to the codebase follows it on the first read.
 Edit the prose to that standard. Preserve meaning and the intended tone.
 
 This skill governs how prose reads. What deserves a comment at all is decided by
-`docs/en/contributing/comment-policy.md`, and where a page belongs by
-`docs/en/contributing/docs-authoring.md`.
+`docs/en/contributing/policies/comments.md`, and where a page belongs by
+`docs/en/contributing/localization/docs-authoring.md`.
 
 ## Process
 
-1. If the slop-guard MCP server is available, run `check_slop_file` on the file for a first pass.
-   Treat its findings as candidates; the rules below win where they disagree.
+1. For Markdown, run `bun run audit-comments --docs <file>` for a first pass. It runs slop-guard with
+   `slop-guard.jsonl` in this folder, which keeps only the rules that proved precise on this
+   repository, plus plain-word patterns for rules 6, 11, and 20. Findings cite the rule numbers below.
+   It needs `uv` for slop-guard and runs only the repository patterns without it. The slop-guard MCP
+   server's `check_slop_file` uses the unfiltered defaults, which also penalize checklists and tables,
+   so treat its extra findings as candidates only. The rules below win where they disagree.
 2. Scan for the patterns below.
 3. Rewrite, then ask what still makes the text read as generated, and fix that.
 
@@ -49,7 +53,14 @@ Rule numbers are stable IDs that tools and reviews cite. A removed rule leaves a
    intricate, landscape (abstract), pivotal, robust, seamless, showcase, tapestry, testament,
    underscore, vibrant. Use the plain word.
 6. **Fancy ways to say "is".** "serves as", "stands as", "boasts", "features". Say "is" or "has".
-7. **"Not just X, but Y" and "not X, it's Y".** State the point directly.
+7. **"Not X" contrasts.** "Not just X, but Y", "not X, it's Y", and "Y, not X". State the rule, then
+   decide what the negated half is doing:
+   - If no reader would do X, delete it: "Assert on the returned value, not only that the call did
+     not throw" becomes "Assert on the returned value."
+   - If readers do X, name the consequence in its own sentence: "Assert on the returned value. A test
+     that only checks the call did not throw passes when the query returns the wrong rows."
+   - If it separates two similar things, define the one you mean with an example: "`apiFamily` names
+     the wire protocol, such as `openai-compatible`."
 8. **Rule of three.** Forcing items into groups of three. Use the natural number.
 9. **Synonym cycling.** Persona, character, bot identity, and avatar for one thing in one paragraph.
    Pick the product term and repeat it.
@@ -67,7 +78,11 @@ Rule numbers are stable IDs that tools and reviews cite. A removed rule leaves a
     semicolon). In `ja`, use `：`, `。`, `（）`.
 14. **Dramatic colons.** A colon used as a drumroll before a reveal. A colon before a list, an example,
     or an explanation of the first half is correct.
-15. **Boldface overuse.** Do not bold every product name or acronym.
+15. **Bold and code spans.** Write a label the user sees on screen as a code span: a button, select
+    option, modal field, or Discord setting (`Finish Setup`, `Manage Server`). In a translated page,
+    the span holds that locale's UI text, not the English label. Use bold only for a list item's
+    lead-in label, never for emphasis or for product names; if a word needs stress, rewrite the
+    sentence.
 16. **Inline-header lists.** A bold label and colon that restates the line ("**Performance:**
     Performance improved"). Write the line as prose. A bold lead-in that names the item and is followed
     by new detail is fine.

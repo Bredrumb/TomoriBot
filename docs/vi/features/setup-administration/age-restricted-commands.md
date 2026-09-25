@@ -20,4 +20,4 @@ Nếu một lệnh bị giới hạn độ tuổi và kênh không được đá
 
 Việc tạo hình ảnh và video được kiểm soát riêng biệt bởi nhà cung cấp đã cấu hình và cài đặt tính năng của máy chủ; chúng không bị giới hạn bởi danh mục lệnh `/nsfw`.
 
-Nội dung giới hạn độ tuổi chỉ dành cho người dùng trưởng thành, vì vậy hãy sử dụng có trách nhiệm và tuân thủ [Nguyên tắc cộng đồng của Discord](https://discord.com/guidelines). Trong `/help`, chọn **Behavior**, rồi chọn **Age-Restricted Commands**, để xem hướng dẫn từng bước tương tự trong Discord.
+Nội dung giới hạn độ tuổi chỉ dành cho người dùng trưởng thành, vì vậy hãy sử dụng có trách nhiệm và tuân thủ [Nguyên tắc cộng đồng của Discord](https://discord.com/guidelines). Trong `/help`, chọn `Hành vi`, rồi chọn `Lệnh giới hạn độ tuổi`, để xem hướng dẫn từng bước tương tự trong Discord.

@@ -26,5 +26,5 @@ A geração de imagem e vídeo é controlada separadamente pelo provedor configu
 configurações de capacidade do servidor; elas não são restringidas pela categoria de comandos `/nsfw`.
 
 Conteúdo com restrição de idade é apenas para usuários adultos; use com responsabilidade e siga as
-[Diretrizes da Comunidade](https://discord.com/guidelines) do Discord. Em `/help`, escolha **Behavior**, depois **Age-Restricted Commands**, para o mesmo
+[Diretrizes da Comunidade](https://discord.com/guidelines) do Discord. Em `/help`, escolha `Comportamento`, depois `Comandos Restritos por Idade`, para o mesmo
 guia no Discord.

@@ -50,11 +50,11 @@ El modelo original Chatterbox base de 0.5B (`ChatterboxTTS`) está integrado dir
 
 Para usar el modelo Estándar:
 1. Inicia el envoltorio del servidor normalmente.
-2. En Discord, ejecuta `/config` > **Modelos** > **Parámetros y voces TTS**.
-3. Desactiva la opción **Modelo rápido de Chatterbox**.
+2. En Discord, ejecuta `/config` > `Modelos` > `Parámetros y voces TTS`.
+3. Desactiva la opción `Modelo rápido de Chatterbox`.
 4. En la siguiente generación, el envoltorio descarga y carga lentamente el modelo de 0.5B estándar en la memoria.
 
-Ambos valores son campos de texto en el modal **Editar parámetros**. Siempre son editables, y la página señala que se ignoran mientras el modelo rápido esté activado:
+Ambos valores son campos de texto en el modal `Editar parámetros`. Siempre son editables, y la página señala que se ignoran mientras el modelo rápido esté activado:
 - **`cfg_weight`** (predeterminado `0.5`): ajusta qué tan fielmente se adhiere el audio sintetizado al tempo de referencia y al estilo vocal.
 - **`exaggeration`** (predeterminado `0.5`): controla la intensidad emocional y la inflexión dramática de la entrega.
 
@@ -65,7 +65,7 @@ Ambos valores son campos de texto en el modal **Editar parámetros**. Siempre so
 
 Incluye `Chatterbox` en la etiqueta del punto de conexión o en el nombre del modelo. TomoriBot reconoce un endpoint de Chatterbox solo por ese nombre (o una URL del punto de conexión que lo contenga), por lo que la lista blanca de etiquetas de Turbo, la eliminación de etiquetas del modelo estándar y las opciones de Chatterbox en `/generate voice-message` se aplican solo cuando está presente.
 
-Ejecuta `/providers`, elige **Agregar nuevo punto de conexión personalizado** y usa la compatibilidad de API de voz:
+Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado` y usa la compatibilidad de API de voz:
 
 - Compatibilidad de API: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8011`

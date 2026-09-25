@@ -367,7 +367,7 @@ stores the presented values under the modal nonce and consumes that snapshot onc
 unchecked entry from an entry added concurrently after the modal opened. Lists above 50 entries must use a
 bounded fallback instead of silently truncating the modal.
 
-The `/moderation` **Personas** add modal combines a String Select for the configured persona with a native Channel
+The `/moderation` `Personas` add modal combines a String Select for the configured persona with a native Channel
 Select restricted to text channels. The server persona limit is below Discord's 25-option String Select limit.
 
 ---
@@ -557,7 +557,7 @@ const modal = await selection.openModal(async () => {
 
 The factory form immediately update-defers the persona button, replaces the picker with a
 localized loading state, and only then runs the factory. Because that button is now consumed,
-the workflow renders a fresh **Open Form** button for at most 25 choices or a range selector
+the workflow renders a fresh `Open Form` button for at most 25 choices or a range selector
 for more than 25. The fresh button opens the modal as its first acknowledgment.
 
 For larger sets, range buttons represent absolute slices of 25 (`1-25`, `26-50`, ...).
@@ -590,7 +590,7 @@ When a modal is editing an existing list of configured items, prefer Checkbox Gr
 - Pre-check every current entry and treat unchecked items as "remove" or "disable".
 - Use `min_values: 0` and `required: false` so users can submit with every item unchecked.
 - Chunk one category across multiple groups of 10 options, or split different entity types into separate groups.
-- Give the first group a domain title such as **Whitelisted Personas** and a short instruction such as
+- Give the first group a domain title such as `Whitelisted Personas` and a short instruction such as
   "Uncheck box then submit to remove whitelist." Name later groups **Continuation (1)**,
   **Continuation (2)**, and so on, without repeating the description.
 - Respect Discord's modal ceiling: 5 checkbox groups, 10 options each, 50 total entries.

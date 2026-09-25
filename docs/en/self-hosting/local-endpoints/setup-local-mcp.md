@@ -31,18 +31,18 @@ TomoriBot's own tooling expects **Node.js v20+** to be available for MCP tooling
 
 ## 2. Register it in Discord
 
-Open `/config` > Plugins > MCP Servers, choose **+ Add MCP**, point the **URL** field
-at your local server, and leave the required **Server Type** on its default **General Purpose** value:
+Open `/config` > Plugins > MCP Servers, choose `Add MCP`, point the **URL** field
+at your local server, and leave the required `Server Type` on its default `General Purpose` value:
 
 ```text
 http://localhost:3000/sse
 ```
 
-Leave the **Auth Token** field blank: no auth token is needed for local servers.
+Leave the `Auth Token` field blank: no auth token is needed for local servers.
 
 ## 3. Manage it
 
-- Open the Config page and choose **Remove** on the server's row. Confirming unregisters it,
+- Open the Config page and choose `Remove` on the server's row. Confirming unregisters it,
   immediately disconnects it, and frees a slot.
 
 ## Security

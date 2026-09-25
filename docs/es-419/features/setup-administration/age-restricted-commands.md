@@ -32,5 +32,5 @@ los ajustes de capacidad del servidor; no están controladas por la categoría d
 
 El contenido con restricción de edad es solo para usuarios adultos: úsalo con responsabilidad y
 sigue las [Normas de la comunidad](https://discord.com/guidelines) de Discord. En `/help`, elige
-**Comportamiento** y luego **Comandos con restricción de edad**, para ver el mismo recorrido en
+**Comportamiento** y luego `Comandos con restricción de edad`, para ver el mismo recorrido en
 Discord.

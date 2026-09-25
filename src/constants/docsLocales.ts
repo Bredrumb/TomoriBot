@@ -127,7 +127,7 @@ function defineDocsLocale(definition: DocsLocaleDefinition): DocsLocaleDefinitio
  * `docsTree: false` keeps a locale out of the published route set and out of bot URLs, so a planned
  * locale is safe to list here before its content exists.
  * Flipping the flag is what publishes the locale, and the flip must land in the same change as
- * the page tree plus the entries listed in docs/en/contributing/adding-locale/.
+ * the page tree plus the entries listed in docs/en/contributing/localization/docs-site.md.
  */
 export const DOCS_LOCALES = [
   defineDocsLocale({

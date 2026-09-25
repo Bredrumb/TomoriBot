@@ -132,11 +132,11 @@ Cualquier servidor MCP alojado públicamente con un endpoint HTTPS funciona. Com
 
 1. Crea una cuenta y genera una clave de API desde tu perfil.
 2. Abre un MCP en el catálogo y copia su **URL de conexión** (por ejemplo, `https://youtube.run.tools`).
-3. Abre `/config` > Plugins > Servidores MCP, elige **+ Añadir MCP**, pega la URL de conexión en
-   **URL**, pega tu clave de Smithery en **Token de autenticación** y elige el **Tipo de
+3. Abre `/config` > Plugins > Servidores MCP, elige `Agregar MCP`, pega la URL de conexión en
+   **URL**, pega tu clave de Smithery en `Token de autenticación` y elige el **Tipo de
    servidor** requerido. **Propósito general** está seleccionado por defecto.
 
-Si un servidor no necesita autenticación, deja vacío **Token de autenticación**. Tu token de
+Si un servidor no necesita autenticación, deja vacío `Token de autenticación`. Tu token de
 autenticación se cifra en reposo y nunca vuelve a mostrarse. Abre la misma página de Config para
 revisar el estado configurado, activar o desactivar un servidor, o eliminarlo con confirmación
 explícita. Eliminarlo lo desconecta de inmediato y libera un espacio. Cada fila guardada también
@@ -196,7 +196,7 @@ pequeños o locales respondan más rápido.
   herramienta.
 
 El modo de herramientas deliberado solo decide qué herramientas se *muestran* al modelo: el
-modelo aún debe elegir llamar a una. En `/help`, elige **Comportamiento** y luego **Modo de
+modelo aún debe elegir llamar a una. En `/help`, elige `Comportamiento` y luego **Modo de
 herramientas deliberado** para ver el resumen de Discord.
 
 :::note

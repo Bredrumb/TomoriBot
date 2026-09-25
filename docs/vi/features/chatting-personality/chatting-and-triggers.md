@@ -62,7 +62,7 @@ Ngữ cảnh này bao gồm:
   **phát trực tiếp** gì, **nghe** gì (ví dụ: bài hát và nghệ sĩ trên Spotify), **xem** gì, hoặc trạng thái tùy chỉnh của họ.
 
 Trạng thái hiện diện được kiểm soát bởi quyền riêng tư: trạng thái này chỉ được chia sẻ đối với người dùng ở mức
-riêng tư **Tối thiểu** (Minimal, mặc định: xem `/personal config`) và chỉ khi bot đã bật intent *Guild Presences*
+riêng tư `Tối thiểu` (Minimal, mặc định: xem `/personal config`) và chỉ khi bot đã bật intent *Guild Presences*
 của Discord. Những người dùng nâng cao mức độ riêng tư, hoặc các phiên bản self-host chạy không có intent đó,
 sẽ không để lộ hoạt động của mình cho bot.
 
@@ -104,10 +104,10 @@ Khi DTM bật:
   - **follow**: tuân theo cài đặt của máy chủ
   - **on**: luôn yêu cầu kích hoạt có chủ đích
 
-Trong `/help`, chọn **Behavior**, sau đó chọn **Deliberate Trigger Mode** để xem bản tóm tắt tương tự trong Discord.
+Trong `/help`, chọn `Hành vi`, sau đó chọn `Chế độ kích hoạt có chủ đích` để xem bản tóm tắt tương tự trong Discord.
 
 :::note
-Đừng nhầm lẫn **Chế độ kích hoạt có chủ đích** (trang này, kiểm soát *cách bot được kích hoạt*) với
+Đừng nhầm lẫn `Chế độ kích hoạt có chủ đích` (trang này, kiểm soát *cách bot được kích hoạt*) với
 **Chế độ công cụ có chủ đích**, vốn kiểm soát *công cụ nào được cung cấp cho model* trong một lượt hội
 thoại nhất định. Cả hai đều dùng chung từ viết tắt "DTM" nhưng không liên quan đến nhau. Xem
 [Công cụ & tiện ích mở rộng](/vi/features/capabilities/tools-and-extensions/#deliberate-tool-mode).

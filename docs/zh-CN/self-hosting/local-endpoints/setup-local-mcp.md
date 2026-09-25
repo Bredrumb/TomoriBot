@@ -6,7 +6,7 @@ sidebar:
 
 [MCP](https://modelcontextprotocol.io/) 服务器用外部工具扩展 TomoriBot。在线
 （HTTPS）的 MCP 服务器在任何实例上都能用；见
-[工具与扩展](/zh-CN/features/capabilities/tools-and-extensions/#本地-mcp-服务器)。**本地** MCP 服务器则
+[工具与扩展](/zh-CN/features/capabilities/tools-and-extensions/#本地-mcp-服务器)。`本地` MCP 服务器则
 不一样：
 
 :::caution[仅限自部署]
@@ -27,17 +27,17 @@ TomoriBot 自己的工具链要求主机上有 **Node.js v20+** 可供 MCP 工�
 
 ## 2. 在 Discord 里注册它
 
-打开 `/config` > 插件 > MCP 服务器，选择 **+ 添加 MCP**，把 **服务器 URL** 字段指向你的本地服务器，并把必填的 **服务器类型** 保留在默认的 **通用型** 值上：
+打开 `/config` > 插件 > MCP 服务器，选择 `添加 MCP`，把 `服务器 URL` 字段指向你的本地服务器，并把必填的 `服务器类型` 保留在默认的 `通用型` 值上：
 
 ```text
 http://localhost:3000/sse
 ```
 
-把 **认证令牌（可选）** 字段留空：本地服务器不需要认证令牌。
+把 `认证令牌（可选）` 字段留空：本地服务器不需要认证令牌。
 
 ## 3. 管理它
 
-- 打开配置页面，在服务器的行上选择 **移除**。确认后会注销该服务器，立即断开连接，并释放一个名额。
+- 打开配置页面，在服务器的行上选择 `移除`。确认后会注销该服务器，立即断开连接，并释放一个名额。
 
 ## 安全
 

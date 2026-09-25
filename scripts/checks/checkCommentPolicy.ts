@@ -1,11 +1,12 @@
 ﻿import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import * as ts from "typescript";
+import { auditDocProse, DOC_PROSE_DEFAULT_PATHS, DOC_PROSE_RULES_PATH } from "./lib/docProse";
 import { isVerboseOutput } from "./lib/gateOutput";
 
 const DEFAULT_PATHS = ["src", "scripts", "tests", "apps", "docs"];
 const DEFAULT_EXCEPTIONS_PATH = "scripts/checks/comment-policy-exceptions.json";
-const POLICY_DOC_PATH = "docs/en/contributing/comment-policy.md";
+const POLICY_DOC_PATH = "docs/en/contributing/policies/comments.md";
 const DASH_PATTERN = /—|–| -- /;
 const DASH_SCAN_PATTERN = /—|–| -- /g;
 const LOCALE_PATH_PATTERN = /(?:^|\/)src\/locales\//;
@@ -234,6 +235,7 @@ interface CommentBlock {
 interface ParsedArguments {
   auditNarration: boolean;
   baseRef?: string;
+  docProse: boolean;
   verboseOutput: boolean;
   paths: string[];
   staged: boolean;
@@ -1284,6 +1286,7 @@ async function collectChangedLines(
 function parseArguments(args: string[]): ParsedArguments {
   const parsed: ParsedArguments = {
     auditNarration: false,
+    docProse: false,
     verboseOutput: isVerboseOutput(),
     paths: [],
     staged: false,
@@ -1305,6 +1308,10 @@ function parseArguments(args: string[]): ParsedArguments {
       parsed.staged = true;
       continue;
     }
+    if (value === "--docs") {
+      parsed.docProse = true;
+      continue;
+    }
     if (value === "--base") {
       const baseRef = args[index + 1];
       if (!baseRef) {
@@ -1322,7 +1329,29 @@ function parseArguments(args: string[]): ParsedArguments {
   if (parsed.baseRef && parsed.staged) {
     throw new Error("Use either --base or --staged, not both");
   }
+  if (parsed.docProse && (parsed.baseRef || parsed.staged)) {
+    throw new Error("--docs scans whole files; it cannot be combined with --base or --staged");
+  }
   return parsed;
+}
+
+async function runDocProseAudit(repoRoot: string, paths: string[]): Promise<void> {
+  const result = await auditDocProse(repoRoot, paths.length ? paths : DOC_PROSE_DEFAULT_PATHS);
+  console.log(`Prose rules: ${DOC_PROSE_RULES_PATH}`);
+  if (!result.engineRan) {
+    console.log("uvx not found, so only the repository patterns ran. Install uv to run slop-guard as well.");
+  }
+  for (const finding of result.findings) {
+    const location = finding.line ? `${finding.file}:${finding.line}` : finding.file;
+    const rule = finding.ruleId ? `${finding.rule}, lint-prose ${finding.ruleId}` : finding.rule;
+    console.log(`WARN ${location} [${rule}] ${finding.match}${finding.advice ? ` ${finding.advice}` : ""}`);
+  }
+  if (result.findings.length > 0) {
+    console.error(`Doc prose audit: ${result.findings.length} finding(s) in ${result.filesChecked} file(s).`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`Doc prose audit passed: ${result.filesChecked} file(s).`);
 }
 
 function normalizePath(path: string): string {
@@ -1332,6 +1361,10 @@ function normalizePath(path: string): string {
 async function main(): Promise<void> {
   const repoRoot = process.cwd();
   const args = parseArguments(process.argv.slice(2));
+  if (args.docProse) {
+    await runDocProseAudit(repoRoot, args.paths);
+    return;
+  }
   const paths = args.paths.length ? args.paths : DEFAULT_PATHS;
   const changedLines =
     args.baseRef || args.staged

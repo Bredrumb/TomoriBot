@@ -97,9 +97,9 @@ Qualquer servidor MCP hospedado publicamente com um endpoint HTTPS funciona. Usa
 
 1. Crie uma conta e gere uma chave de API a partir do seu perfil.
 2. Abra um MCP no catálogo e copie a **URL de conexão** (por exemplo, `https://youtube.run.tools`).
-3. Abra `/config` > Plugins > MCP Servers, escolha **+ Add MCP**, cole a URL de conexão em **URL**, cole sua chave do Smithery em **Auth Token** e escolha o **Server Type** necessário. **General Purpose** fica selecionado por padrão.
+3. Abra `/config` > Plugins > MCP Servers, escolha `Adicionar MCP`, cole a URL de conexão em **URL**, cole sua chave do Smithery em `Token de Autenticação` e escolha o `Tipo de Servidor` necessário. `Propósito Geral` fica selecionado por padrão.
 
-Se um servidor não precisar de autenticação, deixe **Auth Token** em branco. Seu token de autenticação é criptografado em repouso e nunca é exibido novamente. Abra a mesma página de Configuração para inspecionar o estado configurado, ativar ou desativar um servidor, ou remover um com confirmação explícita. A remoção o desconecta imediatamente e libera um slot. Cada linha salva também mostra os nomes das ferramentas delimitadas de sua última descoberta bem-sucedida. **None discovered** é um resultado conhecido de zero ferramentas; **Discovery unknown** identifica uma linha legada ou um servidor que ainda não possui um snapshot bem-sucedido. Abrir a interface de gerenciamento de MCP apenas lê os metadados salvos e não entra em contato com o servidor remoto.
+Se um servidor não precisar de autenticação, deixe `Token de Autenticação` em branco. Seu token de autenticação é criptografado em repouso e nunca é exibido novamente. Abra a mesma página de Configuração para inspecionar o estado configurado, ativar ou desativar um servidor, ou remover um com confirmação explícita. A remoção o desconecta imediatamente e libera um slot. Cada linha salva também mostra os nomes das ferramentas delimitadas de sua última descoberta bem-sucedida. **None discovered** é um resultado conhecido de zero ferramentas; **Discovery unknown** identifica uma linha legada ou um servidor que ainda não possui um snapshot bem-sucedido. Abrir a interface de gerenciamento de MCP apenas lê os metadados salvos e não entra em contato com o servidor remoto.
 
 ### Servidores MCP Locais
 
@@ -112,7 +112,7 @@ Um servidor MCP malicioso pode **injetar prompts** nela com instruções ocultas
 ## Modo de Ferramenta Deliberada
 <!-- anchor: deliberate-tool-mode -->
 
-Cada ferramenta declarada aumenta o tamanho do prompt. O **Modo de Ferramenta Deliberada** mantém as declarações de ferramentas fora dos turnos normais de chat, a menos que a mensagem pareça realmente precisar de uma ferramenta; isso reduz o tamanho do prompt e ajuda modelos menores/locais a responderem mais rápido.
+Cada ferramenta declarada aumenta o tamanho do prompt. O `Modo de Ferramenta Deliberada` mantém as declarações de ferramentas fora dos turnos normais de chat, a menos que a mensagem pareça realmente precisar de uma ferramenta; isso reduz o tamanho do prompt e ajuda modelos menores/locais a responderem mais rápido.
 
 - Primeiro, ela verifica a mensagem quanto à **intenção de ferramenta**. Gatilhos integrados cobrem solicitações comuns (lembretes, pesquisa na web, atualizações de memória, mensagens entre canais, geração de imagem/vídeo/voz, análise de mídia, criação de tópicos, ações de mensagem). Perguntas sobre seu modelo atual, ferramentas, configurações ou por que uma capacidade está indisponível expõem a revisão de capacidades e o acesso à documentação oficial em conjunto. Expressões de acompanhamento também funcionam, como "faça isso de novo, mas com mais raiva" após um pedido de mensagem de voz.
 - Os administradores de servidores podem adicionar **frases de gatilho personalizadas** literais com `/server trigger add`: por exemplo, mapeando `pic`, `img` ou `pfp` para geração de imagem.
@@ -125,10 +125,10 @@ Cada ferramenta declarada aumenta o tamanho do prompt. O **Modo de Ferramenta De
 - `/personal config`: usuários substituem a configuração para si mesmos.
 - Com um canal de registros de pensamentos configurado (`/server thought-logs`), chamadas de ferramentas bem-sucedidas no modo deliberado são registradas lá junto com o gatilho que expôs a ferramenta.
 
-O Modo de Ferramenta Deliberada apenas decide quais ferramentas são *mostradas* ao modelo; o modelo ainda precisa escolher chamar uma. Em `/help`, escolha **Behavior** e depois **Deliberate Tool Mode** para o resumo no Discord.
+O Modo de Ferramenta Deliberada apenas decide quais ferramentas são *mostradas* ao modelo; o modelo ainda precisa escolher chamar uma. Em `/help`, escolha `Comportamento` e depois **Deliberate Tool Mode** para o resumo no Discord.
 
 :::note
-O **Modo de Ferramenta Deliberada** (esta seção) não tem relação com o **Modo de Gatilho Deliberado**, que controla como *ela* é acionada; veja [Conversas & Gatilhos](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Ambos são abreviados como "DTM" no Discord.
+O `Modo de Ferramenta Deliberada` (esta seção) não tem relação com o `Modo de Gatilho Deliberado`, que controla como *ela* é acionada; veja [Conversas & Gatilhos](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Ambos são abreviados como "DTM" no Discord.
 :::
 
 ## Atualizações Estruturadas de Informações do Usuário

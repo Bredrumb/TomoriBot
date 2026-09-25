@@ -39,7 +39,7 @@ Un endpoint VoxCPM2 puede manejar todos los modos de fuente de voz útiles de To
 
 VoxCPM2 representa el Diseño de voz y el control de estilo colocando una descripción en lenguaje natural entre paréntesis antes del texto a sintetizar. TomoriBot ya tiene un campo `instruct` para este propósito, por lo que el envoltorio realiza esa conversión automáticamente.
 
-Usa el Estilo de marcado del guion **Plano**. VoxCPM2 no requiere que TomoriBot conserve las etiquetas entre corchetes o la sintaxis de control de emoji, y no es necesario un nuevo modo de Estilo de marcado del guion.
+Usa el Estilo de marcado del guion `Plano`. VoxCPM2 no requiere que TomoriBot conserve las etiquetas entre corchetes o la sintaxis de control de emoji, y no es necesario un nuevo modo de Estilo de marcado del guion.
 
 ## Hardware y tiempo de ejecución
 
@@ -107,7 +107,7 @@ Después de la configuración, `bun run launch --voxcpm2` inicia el servidor jun
 
 ## Registro en TomoriBot
 
-Ejecuta `/providers`, elige **Agregar nuevo punto de conexión personalizado**, y configura el endpoint de Voz:
+Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado`, y configura el endpoint de Voz:
 
 - Capacidad: `Speech`
 - Compatibilidad de API: `tts-clone`

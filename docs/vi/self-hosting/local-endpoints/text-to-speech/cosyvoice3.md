@@ -108,7 +108,7 @@ Bản chạy Windows gốc được cung cấp theo khả năng tốt nhất:
 
 ## Đăng ký trong TomoriBot
 
-Chạy `/providers`, chọn **Add New Custom Endpoint**, và định cấu hình endpoint giọng nói:
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và định cấu hình endpoint giọng nói:
 
 - Capability: `Speech`
 - API Compatibility: `tts-clone`

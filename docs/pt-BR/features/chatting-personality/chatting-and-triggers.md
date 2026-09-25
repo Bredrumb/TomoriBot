@@ -64,7 +64,7 @@ apenas sobre o que foi dito. Esse contexto inclui:
   status personalizado.
 
 A presença é restringida por privacidade: só é compartilhada para usuários no nível de
-privacidade **Mínimo** (o padrão; veja `/personal config`) e somente quando o bot tem a intent
+privacidade `Mínimo` (o padrão; veja `/personal config`) e somente quando o bot tem a intent
 *Guild Presences* do Discord habilitada. Usuários que aumentam sua privacidade, ou instâncias
 de hospedagem própria executando sem essa intent, simplesmente não terão sua atividade
 revelada para ela.
@@ -107,10 +107,10 @@ Isso força uma invocação deliberada em vez de uma ativação acidental.
   - **follow**: usar a configuração do servidor
   - **on**: sempre exigir invocação deliberada
 
-Em `/help`, escolha **Behavior** e depois **Deliberate Trigger Mode** para o mesmo resumo no Discord.
+Em `/help`, escolha `Comportamento` e depois `Modo de Gatilho Deliberado` para o mesmo resumo no Discord.
 
 :::note
-Não confunda **Modo de Gatilho Deliberado** (esta página, controla *como ela é acionada*) com
+Não confunda `Modo de Gatilho Deliberado` (esta página, controla *como ela é acionada*) com
 **Modo de Ferramenta Deliberada**, que controla *quais ferramentas são expostas ao modelo* em um
 determinado turno. Eles compartilham a abreviação "DTM" mas não têm relação. Veja
 [Ferramentas & Extensões](/pt-BR/features/capabilities/tools-and-extensions/#deliberate-tool-mode).

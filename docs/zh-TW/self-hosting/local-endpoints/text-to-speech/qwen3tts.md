@@ -40,13 +40,13 @@ python servers\tts\qwen3tts\server.py --mode auto
 
 對大多數使用者而言，請註冊自動模式的伺服器，讓單一端點同時支援語音複製與 VoiceDesign 人格。
 
-執行 `/providers`，選擇 **新增自訂端點**，並使用語音 API 相容性：
+執行 `/providers`，選擇 `新增自訂端點`，並使用語音 API 相容性：
 
 - API Compatibility：`tts-clone`
 - `endpoint_url`：`http://127.0.0.1:8012`
 
 儲存連線之後，選取它並用它的模型下拉選單加入一個 Speech 模型。模型表單會
-詢問 **語音來源模式** 與 **腳本標記風格**；自動模式的伺服器請選 `自動` 與 `純文字`。
+詢問 `語音來源模式` 與 `腳本標記風格`；自動模式的伺服器請選 `自動` 與 `純文字`。
 
 端點註冊與模型設定請用 `/providers`。接著開啟 `/config` > 模型 > 切換模型，選取並啟用註冊好的端點。
 

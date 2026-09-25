@@ -62,7 +62,7 @@ what was said. This context includes:
   **streaming**, **listening to** (e.g. a Spotify track and artist), **watching**, or their
   custom status.
 
-Presence is privacy-gated: it's only shared for users at the **Minimal** privacy level (the
+Presence is privacy-gated: it's only shared for users at the `Minimal` privacy level (the
 default: see `/personal config`) and only when the bot has Discord's *Guild Presences*
 intent enabled. Users who raise their privacy, or self-hosts running without that intent,
 simply won't have their activity surfaced to her.
@@ -105,10 +105,10 @@ This forces deliberate invocation instead of accidental activation.
   - **follow**: use the server setting
   - **on**: always require deliberate invocation
 
-In `/help`, choose **Behavior**, then **Deliberate Trigger Mode**, for the same summary in Discord.
+In `/help`, choose `Behavior`, then `Deliberate Trigger Mode`, for the same summary in Discord.
 
 :::note
-Don't confuse **Deliberate Trigger Mode** (this page, which controls *how she's triggered*) with
+Don't confuse `Deliberate Trigger Mode` (this page, which controls *how she's triggered*) with
 **Deliberate Tool Mode**, which controls *which tools are exposed to the model* on a given
 turn. They share the "DTM" abbreviation but are unrelated. See
 [Tools & Extensions](/features/capabilities/tools-and-extensions/#deliberate-tool-mode).

@@ -19,7 +19,7 @@ and follow the self-hosting guides.
 ### ElevenLabs (cloud, easiest)
 
 1. Get an API key from [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Run `/providers`, choose **Add New Provider**, select **ElevenLabs**, and paste the key. This flow:
+2. Run `/providers`, choose `Add New Provider`, select **ElevenLabs**, and paste the key. This flow:
    - registers the ElevenLabs **speech** endpoint (and the **transcription** endpoint too),
    - selects them as active,
    - can assign a voice to one persona on the spot.
@@ -27,7 +27,7 @@ and follow the self-hosting guides.
    [ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library), where you can also
    clone your own.
 
-Select ElevenLabs in `/providers`, then choose **Edit Endpoint** anytime you need to update the key.
+Select ElevenLabs in `/providers`, then choose `Edit Endpoint` anytime you need to update the key.
 
 Notes:
 
@@ -39,7 +39,7 @@ Notes:
   voice assigned.
 - Persona > Voice in `/config` requires Manage Server in a guild and remains available to the owner in a DM-backed workspace.
 
-In `/help`, choose **Features**, then **Speech**, for the same walkthrough in Discord.
+In `/help`, choose `Features`, then `Speech`, for the same walkthrough in Discord.
 
 ### Local voice-cloning engines (self-hosted)
 
@@ -81,4 +81,4 @@ speech. Use `/providers` to pick between transcription endpoints.
 - [whisper.cpp](/self-hosting/local-endpoints/speech-to-text/whispercpp/).
 
 See the [Speech-to-Text](/self-hosting/local-endpoints/speech-to-text/) hub for the full list. For the
-Discord summary, run `/help`, then choose **Features** and **Transcription**.
+Discord summary, run `/help`, then choose `Features` and `Transcription`.

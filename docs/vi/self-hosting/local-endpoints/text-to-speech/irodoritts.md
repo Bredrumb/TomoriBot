@@ -77,7 +77,7 @@ Irodori hiện tại tải checkpoint cùng với bất kỳ tài nguyên tokeni
 
 ## Đăng ký trong TomoriBot
 
-Chạy `/providers`, chọn **Add New Custom Endpoint**, và sử dụng độ tương thích API giọng nói:
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng độ tương thích API giọng nói:
 
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`

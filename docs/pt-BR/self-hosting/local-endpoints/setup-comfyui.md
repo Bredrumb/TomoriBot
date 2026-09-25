@@ -12,7 +12,7 @@ o endpoint `/history` do ComfyUI continuamente até que a saída esteja pronta.
 
 Este guia cobre a instalação/execução do ComfyUI e como registrá-lo. Para **criar ou editar** 
 um fluxo de trabalho compatível com o TomoriBot (os marcadores `{TOMORI_*}`), use o aprofundamento 
-no Discord, abra `/help`, escolha **Features**, depois **Custom Endpoints**, e use o 
+no Discord, abra `/help`, escolha `Recursos`, depois `Endpoints Personalizados`, e use o 
 [README de fluxo de trabalho](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows) 
 no GitHub.
 
@@ -80,11 +80,11 @@ Baixe um fluxo de trabalho pronto para uso no **formato de API**. Exemplos podem
 Estes estão no **formato de API** (o JSON que o ComfyUI exporta via *Save (API Format)*), não no formato regular 
 salvo pela interface. Se você criar o seu próprio, ele deve conter os marcadores `{TOMORI_*}` 
 que o TomoriBot substitui (prompt, largura/altura, seed, imagens de referência, etc.). Veja o README 
-do fluxo de trabalho e a página **Custom Endpoints** sob **Providers** em `/help`.
+do fluxo de trabalho e a página `Endpoints Personalizados` sob **Providers** em `/help`.
 
 ## 3. Registre-o no Discord
 
-Execute **`/providers`** (ou `/personal providers`), escolha **Add New Custom Endpoint**, e insira:
+Execute **`/providers`** (ou `/personal providers`), escolha `Adicionar Novo Endpoint Personalizado`, e insira:
 
 | Campo | Valor para o ComfyUI |
 |-------|-------------------|
@@ -97,7 +97,7 @@ Após salvar a conexão, selecione-a e use o menu suspenso de modelos para adici
 Insira o nome de código exato do checkpoint e **faça upload do `.json` do fluxo de trabalho** que você baixou 
 no Passo 2. A capacidade do modelo deve corresponder ao fluxo de trabalho (fluxo de imagem → `image`, fluxo de vídeo → `video`).
 
-Um modelo de imagem também solicita as suas **Image Capabilities**: texto para imagem, imagem de referência, 
+Um modelo de imagem também solicita as suas `Capacidades de Imagem`: texto para imagem, imagem de referência, 
 inpainting, e prompt negativo. Marque apenas os modos que o seu fluxo de trabalho realmente implementa, porque a 
 Tomori oferece à ferramenta apenas os modos que você declarar. O inpainting aparece apenas para conexões do 
 ComfyUI, pois nenhuma outra compatibilidade de API aceita uma máscara. Editar o modelo mais tarde reabre o formulário 

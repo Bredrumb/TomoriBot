@@ -29,7 +29,7 @@ Por padrão, o ChatMock escuta em `http://127.0.0.1:8000/v1`
 
 No Discord, configure o provedor `custom` do TomoriBot e use:
 
-- **Endpoint URL**: `http://127.0.0.1:8000/v1`
+- **URL do Endpoint**: `http://127.0.0.1:8000/v1`
 - **Nome do modelo**: a string exata do modelo que o ChatMock deve receber, como `gpt-5.4` ou `gpt-5.3-codex`
 
 Um simples `http://127.0.0.1:8000` também funciona: o TomoriBot o normaliza para `/v1` antes de acrescentar `/chat/completions`.
@@ -38,6 +38,6 @@ Habilite estas flags de capacidade para o ChatMock:
 - **Function Calling / Tools**: Sim
 - **Image Understanding**: Sim
 - **Video Understanding**: Não
-- **Structured Output**: Sim
+- **Saída Estruturada**: Sim
 
 **Nota**: A Codex CLI não permite que você altere seu prompt `system`, então o prompt `system` do TomoriBot é transformado em um turno `user` no contexto como uma solução de contorno. Por favor, configure a variável de ambiente `.env` `CHATMOCK_PORT` para corresponder à sua porta atual do ChatMock para que esta solução de contorno funcione corretamente (o padrão é 8000).

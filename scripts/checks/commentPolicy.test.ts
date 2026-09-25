@@ -9,6 +9,7 @@ import {
   inspectCommentPolicySource,
   resolveAuditLimits,
 } from "./checkCommentPolicy";
+import { collectRepoPatternFindings, maskMarkdownCode } from "./lib/docProse";
 
 /**
  * The audit limits are a parameter now, but a maintainer recalibrating the corpus exports the
@@ -772,4 +773,28 @@ describe("audit command line", () => {
     expect(stdout).toMatch(/^at /m);
     expect(code).toBe(0);
   }, 180_000);
+});
+
+describe("doc prose repository patterns", () => {
+  it("reports filler on its own line and ignores code", () => {
+    const source = [
+      "Run `in order to` literally.",
+      "```ts",
+      "// utilize the cache",
+      "```",
+      "Call it in order to warm the cache.",
+    ].join("\n");
+
+    const findings = collectRepoPatternFindings("doc.md", source);
+
+    expect(findings.map(({ line, match, ruleId }) => ({ line, match, ruleId }))).toEqual([
+      { line: 5, match: "in order to", ruleId: 20 },
+    ]);
+  });
+
+  it("keeps offsets stable while masking", () => {
+    const source = "a `code` b\n```\nx\n```\nc";
+    expect(maskMarkdownCode(source).length).toBe(source.length);
+    expect(maskMarkdownCode(source).split("\n")).toHaveLength(source.split("\n").length);
+  });
 });

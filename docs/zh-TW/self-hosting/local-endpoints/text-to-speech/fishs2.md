@@ -6,7 +6,7 @@ Fish Audio S2 Pro 是多語言的 4B TTS 模型，專注於高保真度的語音
 
 TomoriBot 的預設設定使用官方 BF16 權重（`fishaudio/s2-pro`），以提供最高的合成保真度並避免量化不相容。對記憶體受限的消費級 GPU 使用者，可以透過環境變數覆寫來選用僅權重的 INT8 量化（`Imagilux/fishaudio-s2-pro`）。
 
-Fish S2 Pro 支援 `[whisper]`、`[excited]`、`[angry]` 這類方括號表情標籤。請以 **方括號標籤** 標記設定端點，讓 TomoriBot 在生成的語音腳本中保留這些控制。
+Fish S2 Pro 支援 `[whisper]`、`[excited]`、`[angry]` 這類方括號表情標籤。請以 `方括號標籤` 標記設定端點，讓 TomoriBot 在生成的語音腳本中保留這些控制。
 
 ## 授權條款
 
@@ -89,11 +89,11 @@ TomoriBot 會在 `TTS_SYNTHESIZE_TIMEOUT_MS`（預設 240000 ms）之後停止�
 >
 > 如果你上傳語音樣本卻沒有提供對應的參考逐字稿，Fish Speech 會**默默丟棄參考音訊 token**，退回隨機的零參考語音。TomoriBot 的 Fish 包裝會驗證並以 `400 Bad Request` 拒絕缺少參考文字的合成請求，以避免意外的無條件生成。
 
-在 `/config` 的 **模型 > TTS 參數與語音** 底下加入人格語音時，請務必在 **參考逐字稿** 欄位填入參考音訊片段中所說的逐字文字。
+在 `/config` 的 `模型 > TTS 參數與語音` 底下加入人格語音時，請務必在 `參考逐字稿` 欄位填入參考音訊片段中所說的逐字文字。
 
 ## 在 TomoriBot 中註冊
 
-在 `/providers` 中選擇 **新增自訂端點**，並設定：
+在 `/providers` 中選擇 `新增自訂端點`，並設定：
 
 - Capability：`Speech`
 - API Compatibility：`tts-clone`

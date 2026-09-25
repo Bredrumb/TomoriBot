@@ -60,7 +60,7 @@ ollama list
 
 ## 2. 在 Discord 註冊它
 
-執行 **`/providers`**（伺服器範圍）或 **`/personal providers`**（只有你自己），選擇 **新增自訂端點**，然後輸入：
+執行 **`/providers`**（伺服器範圍）或 **`/personal providers`**（只有你自己），選擇 `新增自訂端點`，然後輸入：
 
 | 欄位 | Ollama 的值 |
 |-------|------------------|
@@ -80,7 +80,7 @@ ollama list
 - **Model Name（確切的 API ID）：** `gemma4:12b`，也就是 `ollama list` 裡的確切標籤。
 - **Context Window Override：** 選填，**僅限 Ollama 與 KoboldCPP**。設定它（例如 `8192`、
   `16384`）以調高 Ollama 的預設 `num_ctx`，否則它小得足以截斷 TomoriBot 的長脈絡。留空則使用伺服器預設值。
-- **各種開關：** 如果模型支援函式呼叫就開啟 **Tools**；只有視覺模型才開啟 **Image
+- **各種開關：** 如果模型支援函式呼叫就開啟 `工具`；只有視覺模型才開啟 **Image
   Understanding**；模型能好好處理 JSON 結構描述時開啟 **Structured Output**。以我們的例子來說，Gemma 4 全都支援，所以全部勾選。
 
 TomoriBot 會在你儲存時驗證連線。如果它回報端點無法連線，常見原因是 `localhost` 與 Docker 不一致，或 `/v1` 缺少或多了（請看
@@ -104,7 +104,7 @@ pgvector。你可以看[手動設定](/zh-TW/self-hosting/manual-setup/)指南�
 
 - 啟動時開啟 OpenAI 相容（內建）。預設：`http://127.0.0.1:5001/v1`。
 - API Compatibility：`OpenAI-Compatible`。`endpoint_url`：`http://127.0.0.1:5001/v1`。
-- 與 Ollama 一樣支援 **Context Window Override**。
+- 與 Ollama 一樣支援 `脈絡視窗覆寫`。
 - 載入 GGUF 模型；Model Name 就是已載入模型回報的名稱（通常是檔名主幹），請檢查 KoboldCPP 的 `/v1/models` 回應。
 
 ### llama.cpp（`llama-server`）
@@ -114,7 +114,7 @@ pgvector。你可以看[手動設定](/zh-TW/self-hosting/manual-setup/)指南�
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - API Compatibility：`OpenAI-Compatible`。`endpoint_url`：`http://127.0.0.1:8080/v1`。
-- 在啟動時用 `-c` 設定脈絡視窗，那是表單的 **Context Window Override** 只支援 Ollama 與 KoboldCPP，在這裡沒有作用。
+- 在啟動時用 `-c` 設定脈絡視窗，那是表單的 `脈絡視窗覆寫` 只支援 Ollama 與 KoboldCPP，在這裡沒有作用。
 - Model Name 就是 `/v1/models` 回報的內容；用 `--alias my-model` 給它一個乾淨的名字。
 - 如果你用 `--api-key` 啟動它，請把該金鑰放進 `auth_token`。
 

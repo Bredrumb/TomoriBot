@@ -1,10 +1,12 @@
 ---
 title: "Testing with Bun Module Mocks"
+sidebar:
+  order: 30
 ---
 
-Bun's `mock.module()` registry is process-wide. `mock.restore()` restores function
-mocks and spies, but it does not restore a replaced module. A partial or behavioral
-module mock can therefore corrupt files that run later in a plain `bun test`.
+How to mock a module in a test without breaking other test files. Bun's `mock.module()` registry is
+process-wide, and `mock.restore()` restores function mocks and spies but not a replaced module, so a
+partial or behavioral module mock can break files that run later in a plain `bun test`.
 
 ## Required pattern
 

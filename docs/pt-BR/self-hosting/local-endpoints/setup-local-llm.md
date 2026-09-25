@@ -93,8 +93,8 @@ Preencha:
 - **Substituição da Janela de Contexto (Context Window Override):** opcional, **apenas Ollama / KoboldCPP**. Defina isso (ex. `8192`,
   `16384`) para aumentar o `num_ctx` padrão do Ollama, que de outra forma seria pequeno o suficiente para truncar
   o contexto longo do TomoriBot. Deixe em branco para usar o padrão do servidor.
-- **Alternadores (Toggles):** ative **Ferramentas** (Tools) se o modelo suportar chamadas de função; ative **Compreensão de Imagem**
-  (Image Understanding) apenas para um modelo de visão; **Saída Estruturada** (Structured Output) se o modelo lidar com esquemas JSON
+- **Alternadores (Toggles):** ative `Ferramentas` (Tools) se o modelo suportar chamadas de função; ative **Compreensão de Imagem**
+  (Image Understanding) apenas para um modelo de visão; `Saída Estruturada` (Structured Output) se o modelo lidar com esquemas JSON
   bem. Para nosso exemplo, o Gemma 4 suporta todos eles, então marque todos.
 
 O TomoriBot valida a conexão quando você a salva. Se ele relatar que o endpoint está inacessível, a

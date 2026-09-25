@@ -50,11 +50,11 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 
 要使用標準模型：
 1. 照常啟動伺服器包裝。
-2. 在 Discord 執行 `/config` > **模型** > **TTS 參數與語音**。
+2. 在 Discord 執行 `/config` > `模型` > `TTS 參數與語音`。
 3. 將 **快速模型（Turbo）** 選項切換為 **OFF**。
 4. 下一次生成時，包裝會延遲下載標準 0.5B 模型並載入記憶體。
 
-這兩個值都是 **編輯參數** 表單中的文字欄位。它們隨時可以編輯，而頁面會註明它們在快速模型啟用時會被忽略：
+這兩個值都是 `編輯參數` 表單中的文字欄位。它們隨時可以編輯，而頁面會註明它們在快速模型啟用時會被忽略：
 - **`cfg_weight`**（預設 `0.5`）：調整合成音訊貼近參考節奏與聲音風格的程度。
 - **`exaggeration`**（預設 `0.5`）：控制語氣的情緒強度與戲劇性起伏。
 
@@ -65,7 +65,7 @@ python -m pip install --no-deps --force-reinstall "git+https://github.com/resemb
 
 請在端點標籤或模型名稱中包含 `Chatterbox`。TomoriBot 只靠那個名稱（或包含它的端點 URL）辨識 Chatterbox 端點，所以 Turbo 的標籤白名單、標準模型的標籤移除，以及 `/generate voice-message` 中的 Chatterbox 選項，都只有在它存在時才適用。
 
-執行 `/providers`，選擇 **新增自訂端點**，並使用語音 API 相容性：
+執行 `/providers`，選擇 `新增自訂端點`，並使用語音 API 相容性：
 
 - API Compatibility：`tts-clone`
 - `endpoint_url`：`http://127.0.0.1:8011`

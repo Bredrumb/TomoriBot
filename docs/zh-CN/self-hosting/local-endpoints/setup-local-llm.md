@@ -60,7 +60,7 @@ ollama list
 
 ## 2. 在 Discord 里注册它
 
-运行 **`/providers`**（对整个服务器生效）或 **`/personal providers`**（只对你生效），选择 **添加新自定义端点**，然后填入：
+运行 **`/providers`**（对整个服务器生效）或 **`/personal providers`**（只对你生效），选择 `添加新自定义端点`，然后填入：
 
 | 字段 | Ollama 的取值 |
 |-------|------------------|
@@ -82,7 +82,7 @@ ollama list
 - **上下文窗口覆盖：** 可选，**仅 Ollama 与 KoboldCPP**。设置它（例如 `8192`、
   `16384`）可以调高 Ollama 默认的 `num_ctx`，否则那个值小到会截断
   TomoriBot 的长上下文。留空则使用服务器默认值。
-- **各项开关：** 如果模型支持函数调用就启用 **工具**；只有视觉模型才启用 **图像
+- **各项开关：** 如果模型支持函数调用就启用 `工具`；只有视觉模型才启用 **图像
   理解**；如果模型能很好地处理 JSON schema，就启用 **结构化输出**。在我们的例子里，Gemma 4 全都支持，所以把它们都勾上。
 
 TomoriBot 会在你保存时校验连接。如果它报告端点无法访问，常见原因是 `localhost` 与 Docker 不匹配，或者 `/v1` 少写或多写（见
@@ -106,7 +106,7 @@ pgvector。手动安装指南见[手动安装](/zh-CN/self-hosting/manual-setup/
 
 - 以启用 OpenAI 兼容的方式启动（内置）。默认：`http://127.0.0.1:5001/v1`。
 - API 兼容性：`OpenAI-Compatible`。`endpoint_url`：`http://127.0.0.1:5001/v1`。
-- 和 Ollama 一样支持 **上下文窗口覆盖**。
+- 和 Ollama 一样支持 `上下文窗口覆盖`。
 - 加载 GGUF 模型；模型名称是已加载模型自己报告的（通常是文件名主干），请查看 KoboldCPP 的 `/v1/models` 响应。
 
 ### llama.cpp（`llama-server`）
@@ -116,7 +116,7 @@ pgvector。手动安装指南见[手动安装](/zh-CN/self-hosting/manual-setup/
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - API 兼容性：`OpenAI-Compatible`。`endpoint_url`：`http://127.0.0.1:8080/v1`。
-- 在启动时用 `-c` 设置上下文窗口，而弹窗里的 **上下文窗口覆盖** 仅适用于 Ollama 与 KoboldCPP，在这里没有效果。
+- 在启动时用 `-c` 设置上下文窗口，而弹窗里的 `上下文窗口覆盖` 仅适用于 Ollama 与 KoboldCPP，在这里没有效果。
 - 模型名称是 `/v1/models` 报告的内容；用 `--alias my-model` 给它一个干净的名字。
 - 如果你用 `--api-key` 启动它，就把那个密钥填进 `auth_token`。
 

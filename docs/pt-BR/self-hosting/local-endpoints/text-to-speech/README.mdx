@@ -35,12 +35,12 @@ O TomoriBot trata a fala como uma capacidade de endpoint personalizado. Motores 
 ## Fluxo de Configuração
 
 1. Escolha um motor nos cartões acima e configure seu wrapper a partir de `servers/tts/`.
-2. Em `/providers`, escolha **Add New Custom Endpoint** e use a Compatibilidade de API `tts-clone`.
+2. Em `/providers`, escolha `Adicionar Novo Endpoint Personalizado` e use a Compatibilidade de API `tts-clone`.
 3. Selecione o endpoint salvo e use seu menu suspenso de modelo para adicionar seu modelo de Speech, Voice Source Mode e Script Markup.
 4. Abra `/config` > Models > Switch Models e selecione o modelo de Speech registrado.
 
 ## Acesso de rede
-<!-- anchor: network-access -->
+{/* anchor: network-access */}
 
 Todo servidor local de TTS faz bind em `127.0.0.1` por padrão, então apenas um bot na mesma máquina consegue alcançá-lo. Quando o TomoriBot roda no Docker ou em outra máquina, defina `TOMORI_TTS_HOST=0.0.0.0` para o servidor e registre o endpoint com o endereço do host, por exemplo `http://host.docker.internal:8015`.
 
@@ -63,9 +63,9 @@ O limite de tamanho do upload e o teto de duração são independentes, e a veri
 
 Para Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS ou VoxCPM2 VoiceDesign, pule a amostra de áudio e use Persona > Voice em `/config` para salvar uma descrição de voz em linguagem natural para a persona. O CosyVoice 3 usa o modo Clone com uma amostra de referência e aceita orientações de entrega pontuais através de `voice_instructions`.
 
-Os usuários do ElevenLabs devem escolher **Add New Provider** e **ElevenLabs** em `/providers`; isso registra os endpoints de fala e transcrição juntos.
+Os usuários do ElevenLabs devem escolher `Adicionar Novo Provedor` e **ElevenLabs** em `/providers`; isso registra os endpoints de fala e transcrição juntos.
 
-O TomoriBot remove a sintaxe de emoji personalizado do Discord, como `:pepega:` ou `<:pepega:123456789012345678>`, dos scripts de voz gerados antes da síntese. Emojis Unicode também são removidos a menos que o endpoint de fala use marcação de emoji, o que é destinado ao IrodoriTTS. As tags entre colchetes são preservadas para endpoints como Chatterbox Turbo e Fish S2 Pro quando o seu Script Markup está definido para **Bracket Tags**.
+O TomoriBot remove a sintaxe de emoji personalizado do Discord, como `:pepega:` ou `<:pepega:123456789012345678>`, dos scripts de voz gerados antes da síntese. Emojis Unicode também são removidos a menos que o endpoint de fala use marcação de emoji, o que é destinado ao IrodoriTTS. As tags entre colchetes são preservadas para endpoints como Chatterbox Turbo e Fish S2 Pro quando o seu Script Markup está definido para `Tags em Colchetes`.
 
 O VoxCPM2 usa **Plain** Script Markup. Seus controles de Voice Design e estilo de fala trafegam pelo campo `instruct` do TomoriBot, e o wrapper do VoxCPM2 os converte para a sintaxe de controle em linguagem natural nativa do modelo, entre parênteses.
 

@@ -32,7 +32,7 @@ Có hai phạm vi được áp dụng, và bạn nên nắm rõ sự khác biệ
 
 **Thiết lập:**
 
-1. `/personal providers` lưu một nhà cung cấp (khóa của bạn được mã hóa). Thao tác này cũng bật ngay tùy chỉnh **Văn bản** cá nhân của bạn, sử dụng model văn bản mặc định của nhà cung cấp đó.
+1. `/personal providers` lưu một nhà cung cấp (khóa của bạn được mã hóa). Thao tác này cũng bật ngay tùy chỉnh `Văn bản` cá nhân của bạn, sử dụng model văn bản mặc định của nhà cung cấp đó.
 2. `/personal config` cho phép chọn một model khác cho tùy chỉnh văn bản cá nhân của bạn. Việc chọn model tại đây vẫn duy trì trạng thái bật của Văn bản.
 3. Quay lại `/personal providers` bất cứ khi nào bạn cần cập nhật thông tin xác thực, quản lý các endpoint tùy chỉnh, hoặc thêm và chỉnh sửa các đăng ký model cá nhân.
 
@@ -76,4 +76,4 @@ Sau khi chọn persona, bạn có thể tùy chọn chọn một persona làm **
 - Tính năng này vẫn tuân thủ các giới hạn persona ở cấp máy chủ được cấu hình thông qua `/moderation`.
 - Chuỗi ủy nhiệm (proxy chains) bị chặn: nếu spotlight của bạn chỉ bao gồm Alice, phản hồi của Alice không thể chuyển tiếp sang Bob cho chuỗi tin nhắn của bạn.
 
-Xem lại hoặc xóa các mục bằng `/personal config` (bỏ chọn để xóa; spotlight có đặt thời gian sẽ tự hết hạn). Trong `/help`, chọn **Behavior**, rồi chọn **Personal Spotlight**, để xem bản tóm tắt trên Discord.
+Xem lại hoặc xóa các mục bằng `/personal config` (bỏ chọn để xóa; spotlight có đặt thời gian sẽ tự hết hạn). Trong `/help`, chọn `Hành vi`, rồi chọn `Spotlight cá nhân`, để xem bản tóm tắt trên Discord.

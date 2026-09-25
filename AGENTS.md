@@ -23,7 +23,7 @@ holds:
 2. Does the codebase already do it? Find the helper, registry, or pattern and extend it. A parallel
    module beside an existing pattern is a defect.
 3. Does Bun, discord.js, or an installed dependency do it? Use it. New dependencies follow
-   `docs/en/contributing/dependency-security-policy.md`.
+   `docs/en/contributing/policies/dependency-security.md`.
 4. Only then write the smallest complete change. Complete includes everything the rules below require
    to travel together: docs, migrations, cache invalidation, and English locale keys.
 
@@ -58,7 +58,7 @@ proposed follow-up's premise in source before suggesting it.
      `, so` when causal, parentheses for an aside, period or semicolon between independent clauses,
      plain hyphen for numeric ranges. In `ja`, use `：`, `。`, and `（）`. Enforced by `prose-dash`.
    - Skip `@param`/`@returns` that repeat the name or type; the signature already states it.
-   - Full policy: `docs/en/contributing/comment-policy.md`. Audit with `bun run audit-comments`.
+   - Full policy: `docs/en/contributing/policies/comments.md`. Audit with `bun run audit-comments`.
      For how prose reads, use the `lint-prose` skill.
 3. Keep real identities and meta-dates out of public prose.
    - Docs, code comments, tests, and locale strings ship publicly: use invented placeholder names
@@ -78,7 +78,7 @@ proposed follow-up's premise in source before suggesting it.
      - Choice labels: `{choice_value}_option` (e.g. `injection_option`, `enable_option`)
      - Do NOT use `{option_name}_option` for option descriptions; it silently fails auto-localization.
    - Panel text: write natural prose and let `buildPanelContainer()` wrap it at runtime. See
-     `docs/en/contributing/panel-prose-and-layout.md`.
+     `docs/en/contributing/policies/panel-prose-and-layout.md`.
 5. Respect Discord interaction timing.
    - Acknowledge interactions within 3 seconds (`reply`, `deferReply`, or modal).
    - Do not pre-defer before modal/pagination helpers.
@@ -96,7 +96,7 @@ proposed follow-up's premise in source before suggesting it.
      constants unless a concrete deployment use case proves otherwise.
    - One variable per setting: no engine-specific plus shared fallback pairs.
    - Settings a server or user changes at runtime belong in the database.
-   - Full test: `docs/en/contributing/adding-env-variable.md`.
+   - Full test: `docs/en/contributing/extending/env-variable.md`.
 9. Use safe DB and error patterns.
    - Use Bun SQL template literals for queries.
    - Use structured logging via `log` with metadata.
@@ -151,17 +151,17 @@ and the doc is fixed in the same change. `docs/README.md` indexes every page.
 
 | Task | Read first |
 |---|---|
-| Add a slash command | `docs/en/contributing/adding-slash-command.md` |
-| Add a DB column or table | `docs/en/contributing/adding-db-column.md` |
-| Add a built-in tool | `docs/en/contributing/adding-builtin-tool.md` |
-| Add a new AI provider | `docs/en/contributing/adding-new-provider.md` |
-| Add a feature flag tool | `docs/en/contributing/adding-feature-flag-tool.md` |
-| Add an event handler | `docs/en/contributing/adding-event-handler.md` |
-| Add an environment variable | `docs/en/contributing/adding-env-variable.md` |
-| Add a locale | `docs/en/contributing/adding-locale/` |
-| Localize the docs site or READMEs | `docs/en/contributing/docs-site-localization.md` |
-| Add a persona preset | `docs/en/contributing/adding-persona-preset.md` |
-| Write or edit panel text | `docs/en/contributing/panel-prose-and-layout.md` |
+| Add a slash command | `docs/en/contributing/extending/slash-command.md` |
+| Add a DB column or table | `docs/en/contributing/extending/db-column.md` |
+| Add a built-in tool | `docs/en/contributing/extending/builtin-tool.md` |
+| Add a new AI provider | `docs/en/contributing/extending/new-provider.md` |
+| Add a feature flag tool | `docs/en/contributing/extending/feature-flag-tool.md` |
+| Add an event handler | `docs/en/contributing/extending/event-handler.md` |
+| Add an environment variable | `docs/en/contributing/extending/env-variable.md` |
+| Add a locale | `docs/en/contributing/localization/new-locale.md` |
+| Localize the docs site or READMEs | `docs/en/contributing/localization/docs-site.md` |
+| Add a persona preset | `docs/en/contributing/extending/persona-preset.md` |
+| Write or edit panel text | `docs/en/contributing/policies/panel-prose-and-layout.md` |
 | Inspect production | `docs/en/wiki/cloud/azure/azure-production-inspection.md` on `release` |
 
 ## Branch Layout
@@ -194,7 +194,7 @@ When a change alters behavior, update docs in the same change:
    (`<gcp-project-id>`, `<resource-group>`); a literal value a reader would copy is a bug. Runbooks act
    on our production, so they go in `docs/en/wiki/` (hidden + `noindex`) and keep real names. Never
    write credentials, tenant IDs, or the production public IP into any page. Full rules:
-   `docs/en/contributing/docs-authoring.md` ("Audience: Guide or Runbook").
+   `docs/en/contributing/localization/docs-authoring.md` ("Audience: Guide or Runbook").
 
 ## Maintaining This File
 

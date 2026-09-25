@@ -12,7 +12,8 @@ const log = {
 };
 
 export const DOCS_HOST = "https://docs.tomoribot.app";
-const ANCHOR_COMMENT = /^\s*<!--\s*anchor:\s*([A-Za-z0-9_-]+)\s*-->\s*$/;
+// `<!-- anchor: slug -->` in Markdown, `{/* anchor: slug */}` in MDX, which rejects HTML comments.
+export const ANCHOR_COMMENT = /^\s*(?:<!--|\{\/\*)\s*anchor:\s*([A-Za-z0-9_-]+)\s*(?:-->|\*\/\})\s*$/;
 
 export interface LinkFinding {
   sourceFile: string;

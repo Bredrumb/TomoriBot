@@ -91,7 +91,7 @@ sent into would break every later chunk.
 #### Tip modals
 
 `createTipText(locale, tipKeys, tipVars?)` in `embedHelper.ts` builds the reusable markdown opened by
-the **What You Can Do** button below an error (e.g. in `stream/errorUi.ts` and `ui/interactionCore.ts`).
+the `What You Can Do` button below an error (e.g. in `stream/errorUi.ts` and `ui/interactionCore.ts`).
 
 - Each entry in `tipKeys` is an **atomic** locale key resolved independently and rendered as its own
   dashed bullet (`- item`). Keys live under `genai.tips.*` (see the Localization doc's

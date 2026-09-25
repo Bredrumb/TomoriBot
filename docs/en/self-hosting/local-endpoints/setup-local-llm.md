@@ -93,7 +93,7 @@ Fill in:
 - **Context Window Override:** optional, **Ollama / KoboldCPP only**. Set this (e.g. `8192`,
   `16384`) to raise Ollama's default `num_ctx`, which is otherwise small enough to truncate
   long TomoriBot context. Leave blank to use the server default.
-- **Toggles:** enable **Tools** if the model supports function calling; enable **Image
+- **Toggles:** enable `Tools` if the model supports function calling; enable **Image
   Understanding** only for a vision model; **Structured Output** if the model handles JSON
   schemas well. For our example, Gemma 4 supports all of them, so tick them all.
 
@@ -124,7 +124,7 @@ All of these use the same flow, only the URL and a couple of notes change.
 
 - Start with OpenAI-compat enabled (built in). Default: `http://127.0.0.1:5001/v1`.
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
-- Honors the **Context Window Override** like Ollama.
+- Honors the `Context Window Override` like Ollama.
 - Loads GGUF models; the Model Name is whatever the loaded model reports (often the file
   stem), check KoboldCPP's `/v1/models` response.
 
@@ -136,7 +136,7 @@ All of these use the same flow, only the URL and a couple of notes change.
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:8080/v1`.
-- Set the context window at launch with `-c` which is the modal's **Context Window Override** is
+- Set the context window at launch with `-c` which is the modal's `Context Window Override` is
   Ollama/KoboldCPP-only and has no effect here.
 - Model Name is whatever `/v1/models` reports; give it a clean one with `--alias my-model`.
 - If you started it with `--api-key`, put that key in `auth_token`.

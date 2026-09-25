@@ -6,7 +6,7 @@ Fish Audio S2 Pro 是一个多语言的 4B 语音合成模型，专注于高保�
 
 TomoriBot 的默认设置使用官方 BF16 权重（`fishaudio/s2-pro`），以提供最高的合成保真度并避免量化不兼容问题。对于显存受限的消费级 GPU 用户，可以通过环境变量覆盖来启用可选的 INT8 仅权重量化（`Imagilux/fishaudio-s2-pro`）。
 
-Fish S2 Pro 支持 `[whisper]`、`[excited]`、`[angry]` 这样的方括号表达标签。请把端点配置为 **Bracket Tags** 标记，这样 TomoriBot 会在生成的语音脚本里保留这些控制。
+Fish S2 Pro 支持 `[whisper]`、`[excited]`、`[angry]` 这样的方括号表达标签。请把端点配置为 `方括号标签` 标记，这样 TomoriBot 会在生成的语音脚本里保留这些控制。
 
 ## 许可证
 
@@ -86,11 +86,11 @@ PowerShell 安装程序默认面向 CUDA GPU 加速（`cu124`）。要在没有 
 >
 > 如果你上传了语音样本，却没有提供与之匹配的参考语音转写，Fish Speech 会**静默丢弃参考音频 token**，退回随机的零参考语音。为防止意外进行无条件生成，TomoriBot 的 Fish 封装程序会校验并拒绝缺少参考文本的合成请求，并返回 `400 Bad Request`。
 
-在 `/config` 的**模型 > TTS 参数与语音**下添加人格语音时，请始终在**参考文本**字段里填入你的参考音频片段中逐字说出的文本。
+在 `/config` 的`模型 > TTS 参数与语音`下添加人格语音时，请始终在`参考文本`字段里填入你的参考音频片段中逐字说出的文本。
 
 ## 在 TomoriBot 中注册
 
-在 `/providers` 中选择**添加新自定义端点**并配置：
+在 `/providers` 中选择`添加新自定义端点`并配置：
 
 - 功能：`Speech`
 - API 兼容性：`tts-clone`

@@ -7,7 +7,7 @@ O Fish Audio S2 Pro é um modelo de TTS 4B multilíngue focado em clonagem de vo
 
 A configuração padrão do TomoriBot usa os pesos BF16 oficiais (`fishaudio/s2-pro`) para oferecer a maior fidelidade de síntese e evitar incompatibilidades de quantização. Para usuários com GPUs de consumo com memória limitada, uma quantização opcional apenas de pesos em INT8 (`Imagilux/fishaudio-s2-pro`) é suportada por meio de variáveis de ambiente.
 
-O Fish S2 Pro suporta tags de expressão entre colchetes, como `[whisper]`, `[excited]` e `[angry]`. Configure o endpoint com a marcação **Tags de Colchetes** (Bracket Tags) para que o TomoriBot preserve esses controles nos scripts de voz gerados.
+O Fish S2 Pro suporta tags de expressão entre colchetes, como `[whisper]`, `[excited]` e `[angry]`. Configure o endpoint com a marcação `Tags em Colchetes` (Bracket Tags) para que o TomoriBot preserve esses controles nos scripts de voz gerados.
 
 ## Licença
 
@@ -92,11 +92,11 @@ O TomoriBot para de esperar por uma mensagem de voz após `TTS_SYNTHESIZE_TIMEOU
 >
 > Se você enviar uma amostra de voz sem a transcrição de referência correspondente, o Fish Speech **descarta silenciosamente os tokens do áudio de referência** e recorre a uma fala aleatória sem referência. O wrapper do Fish no TomoriBot valida e rejeita requisições de síntese sem texto de referência com um `400 Bad Request`, para evitar uma geração acidental sem condicionamento.
 
-Ao adicionar uma voz de persona em `/config` em **Models > TTS Parameters & Voices**, sempre preencha o campo **Reference transcript** com o texto exato falado no seu clipe de áudio de referência.
+Ao adicionar uma voz de persona em `/config` em `Modelos > Parâmetros de TTS e Vozes`, sempre preencha o campo `Transcrição de referência` com o texto exato falado no seu clipe de áudio de referência.
 
 ## Registrar no TomoriBot
 
-Em `/providers`, escolha **Add New Custom Endpoint** (Adicionar Novo Endpoint Personalizado) e configure:
+Em `/providers`, escolha `Adicionar Novo Endpoint Personalizado` (Adicionar Novo Endpoint Personalizado) e configure:
 
 - Capability (Capacidade): `Speech`
 - API Compatibility (Compatibilidade de API): `tts-clone`

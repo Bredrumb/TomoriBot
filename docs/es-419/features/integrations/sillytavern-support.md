@@ -99,6 +99,6 @@ Sorpresas comunes cuando un preajuste parece ser ignorado:
   completado de texto se importan mediante una ruta de mejor esfuerzo que descarta bloques
   exclusivos de ST (escenario, anclas, cadenas de parada, …).
 
-En `/help`, elige **Integraciones** y luego **Preajustes de SillyTavern**, para la referencia
+En `/help`, elige **Integraciones** y luego `Preajustes de SillyTavern`, para la referencia
 dentro de Discord. Para los detalles internos del motor de importación, consulta la
 [arquitectura del sistema de preajustes](/en/architecture/integrations/sillytavern/preset-system/).

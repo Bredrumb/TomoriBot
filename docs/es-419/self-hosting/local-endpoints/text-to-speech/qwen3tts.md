@@ -40,13 +40,13 @@ El modo automático inspecciona cada solicitud de `/synthesize`: las solicitudes
 
 Para la mayoría de los usuarios, registra el servidor en modo automático para que un solo endpoint pueda admitir tanto las personas de clonación de voz como las de Diseño de voz.
 
-Ejecuta `/providers`, elige **Agregar nuevo punto de conexión personalizado**, y usa la compatibilidad de API de voz:
+Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado`, y usa la compatibilidad de API de voz:
 
 - Compatibilidad de API: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8012`
 
 Después de guardar la conexión, selecciónala y usa su menú desplegable de modelos para agregar un modelo de Voz. El formulario del modelo
-pregunta por el **Modo de fuente de voz** y el **Estilo de marcado del guion**; elige `Auto` y `Plain` para el servidor de modo automático.
+pregunta por el `Modo de fuente de voz` y el `Estilo de marcado del guion`; elige `Auto` y `Plain` para el servidor de modo automático.
 
 Usa `/providers` para el registro del endpoint y la configuración del modelo. Luego abre `/config` > Modelos > Cambiar modelos para seleccionar y activar el endpoint registrado.
 

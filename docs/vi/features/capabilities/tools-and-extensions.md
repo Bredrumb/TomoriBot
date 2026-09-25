@@ -127,11 +127,11 @@ Bất kỳ máy chủ MCP nào được lưu trữ công khai với endpoint HTT
 
 1. Tạo một tài khoản và tạo một khóa API từ hồ sơ của bạn.
 2. Mở một MCP trong danh mục và sao chép **URL kết nối** của nó (ví dụ: `https://youtube.run.tools`).
-3. Mở `/config` > Plugins > MCP Servers, chọn **+ Add MCP**, dán URL kết nối vào ô **URL**, dán khóa
-   Smithery vào ô **Auth Token**, và chọn **Server Type** bắt buộc. Tùy chọn **General
+3. Mở `/config` > Plugins > MCP Servers, chọn `Thêm MCP`, dán URL kết nối vào ô **URL**, dán khóa
+   Smithery vào ô `Token xác thực`, và chọn `Loại máy chủ` bắt buộc. Tùy chọn **General
    Purpose** được chọn theo mặc định.
 
-Nếu máy chủ không yêu cầu xác thực, hãy để trống ô **Auth Token**. Mã xác thực của bạn được mã hóa ở trạng
+Nếu máy chủ không yêu cầu xác thực, hãy để trống ô `Token xác thực`. Mã xác thực của bạn được mã hóa ở trạng
 thái lưu trữ và không bao giờ hiển thị lại. Hãy mở cùng trang Config đó để kiểm tra trạng thái cấu hình, bật
 hoặc tắt máy chủ, hoặc xóa máy chủ với xác nhận rõ ràng. Việc xóa sẽ ngắt kết nối ngay lập tức và giải phóng
 một vị trí. Mỗi hàng đã lưu cũng hiển thị tên các công cụ có giới hạn từ lần phát hiện thành công gần nhất.
@@ -155,7 +155,7 @@ Luôn xem lại các công cụ được mô tả của một MCP trước khi t
 ## Chế độ công cụ có chủ đích
 <!-- anchor: deliberate-tool-mode -->
 
-Mỗi công cụ được khai báo đều làm tăng kích thước prompt. **Chế độ công cụ có chủ đích** (Deliberate Tool Mode)
+Mỗi công cụ được khai báo đều làm tăng kích thước prompt. `Chế độ công cụ có chủ đích` (Deliberate Tool Mode)
 giữ cho các khai báo công cụ không xuất hiện trong các lượt chat thông thường trừ khi tin nhắn có vẻ thực sự
 cần một công cụ; điều này giúp giảm kích thước prompt và giúp các model nhỏ hơn/cục bộ trả lời nhanh hơn.
 
@@ -182,11 +182,11 @@ cần một công cụ; điều này giúp giảm kích thước prompt và giú
   độ có chủ đích sẽ được ghi lại ở đó cùng với trigger đã kích hoạt công cụ.
 
 Chế độ công cụ có chủ đích chỉ quyết định công cụ nào được *hiển thị* cho model, nhưng model vẫn phải tự lựa
-chọn có gọi một công cụ hay không. Trong `/help`, chọn **Behavior**, sau đó chọn **Deliberate Tool Mode** để
+chọn có gọi một công cụ hay không. Trong `/help`, chọn `Hành vi`, sau đó chọn **Deliberate Tool Mode** để
 xem tóm tắt trên Discord.
 
 :::note
-**Chế độ công cụ có chủ đích** (mục này) không liên quan đến **Chế độ kích hoạt có chủ đích**, vốn kiểm soát
+**Chế độ công cụ có chủ đích** (mục này) không liên quan đến `Chế độ kích hoạt có chủ đích`, vốn kiểm soát
 cách *bot* được kích hoạt; xem
 [Trò chuyện & từ kích hoạt](/vi/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
 Cả hai đều được viết tắt là "DTM" trong Discord.

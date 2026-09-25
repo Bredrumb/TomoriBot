@@ -54,7 +54,7 @@ puede hablar de *dónde* y *cuándo* ocurre la conversación, no solo de lo que 
 - **Quién participa en la conversación**: nombres visibles, cómo mencionarlos, etiquetas de apariencia física y recordatorios pendientes.
 - **Qué está haciendo alguien (presencia)**: la actividad de Discord de un usuario: lo que está **jugando**, **transmitiendo**, **escuchando** (por ejemplo, una canción y artista de Spotify), **viendo** o su estado personalizado.
 
-La presencia depende de la privacidad: solo se comparte para usuarios con el nivel de privacidad **Mínimo**
+La presencia depende de la privacidad: solo se comparte para usuarios con el nivel de privacidad `Mínimo`
 (el valor predeterminado; consulta `/personal config`) y cuando el bot tiene activada la intención de Discord
 **Guild Presences**. Los usuarios que aumentan su privacidad o las instancias con autoalojamiento que no
 tienen esa intención simplemente no mostrarán su actividad.
@@ -96,7 +96,7 @@ Esto obliga a invocarla deliberadamente en lugar de activarla por accidente.
   - **follow**: usa la configuración del servidor
   - **on**: siempre exige una invocación deliberada
 
-En `/help`, elige **Comportamiento** y luego **Modo de activación deliberada** para ver el mismo resumen en Discord.
+En `/help`, elige `Comportamiento` y luego `Modo de activación deliberada` para ver el mismo resumen en Discord.
 
 :::note
 No confundas el **modo de activación deliberada** (esta página, controla *cómo se activa*) con el **modo de

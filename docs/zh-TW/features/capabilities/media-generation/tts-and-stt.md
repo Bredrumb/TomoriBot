@@ -17,13 +17,13 @@ TomoriBot 可以**說話**（文字轉語音），也可以**聆聽**（語音�
 ### ElevenLabs（雲端，最簡單）
 
 1. 從 [ElevenLabs](https://elevenlabs.io/app/settings/api-keys) 取得 API 金鑰。
-2. 執行 `/providers`，選擇 **+ 新增供應商**，選 **ElevenLabs**，然後貼上金鑰。這個流程會：
-   - 註冊 ElevenLabs 的**語音**端點（也會註冊**轉錄**端點），
+2. 執行 `/providers`，選擇 `新增供應商`，選 **ElevenLabs**，然後貼上金鑰。這個流程會：
+   - 註冊 ElevenLabs 的`語音`端點（也會註冊`轉錄`端點），
    - 把它們選為使用中，
    - 可以當場為某一個人格指派語音。
 3. 在 `/config` 的 人格 > 語音 底下為更多人格指派語音。在 [ElevenLabs 語音庫](https://elevenlabs.io/app/voice-library)瀏覽語音，在那裡你也可以複製自己的聲音。
 
-在 `/providers` 中選擇 ElevenLabs，之後需要更新金鑰時隨時選擇 **編輯端點**。
+在 `/providers` 中選擇 ElevenLabs，之後需要更新金鑰時隨時選擇 `編輯端點`。
 
 注意事項：
 
@@ -32,7 +32,7 @@ TomoriBot 可以**說話**（文字轉語音），也可以**聆聽**（語音�
 - 語音回覆由 `voice_message_enabled` 管制，而且需要生效中的人格已指派語音。
 - `/config` 的 人格 > 語音 在伺服器中需要管理伺服器權限，而在以私訊為基礎的工作區中，擁有者仍然可以使用。
 
-在 `/help` 中選擇 **功能**，然後選 **語音生成**，就能在 Discord 裡看到同樣的逐步說明。
+在 `/help` 中選擇 `功能`，然後選 `語音生成`，就能在 Discord 裡看到同樣的逐步說明。
 
 ### 本機語音複製引擎（自架）
 
@@ -62,4 +62,4 @@ TomoriBot 可以**說話**（文字轉語音），也可以**聆聽**（語音�
 - [KoboldCPP](/zh-TW/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：如果你的版本提供與 OpenAI 相容的轉錄端點就能使用。
 - [whisper.cpp](/zh-TW/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
 
-完整清單請看[語音轉文字](/zh-TW/self-hosting/local-endpoints/speech-to-text/)中樞。Discord 裡的摘要請執行 `/help`，然後選擇 **功能** 與 **轉錄**。
+完整清單請看[語音轉文字](/zh-TW/self-hosting/local-endpoints/speech-to-text/)中樞。Discord 裡的摘要請執行 `/help`，然後選擇 `功能` 與 `轉錄`。

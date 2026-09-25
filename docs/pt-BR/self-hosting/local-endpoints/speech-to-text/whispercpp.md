@@ -19,7 +19,7 @@ Se a sua versão do whisper.cpp expuser uma estrutura de endpoint diferente, col
 
 ## Registrar no TomoriBot
 
-Execute `/providers`, escolha **Add New Custom Endpoint** e use a compatibilidade da API de transcrição:
+Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado` e use a compatibilidade da API de transcrição:
 
 - API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: a raiz do servidor do seu whisper.cpp

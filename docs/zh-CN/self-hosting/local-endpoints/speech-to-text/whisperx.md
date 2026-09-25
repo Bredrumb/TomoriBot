@@ -36,7 +36,7 @@ python whisperx_server.py
 
 ## 在 TomoriBot 中注册
 
-运行 `/providers`，选择**添加新自定义端点**，并使用语音识别专用的 API 兼容性：
+运行 `/providers`，选择`添加新自定义端点`，并使用语音识别专用的 API 兼容性：
 
 - API 兼容性：`openai-compatible-transcription`
 - `endpoint_url`：`http://127.0.0.1:8021`

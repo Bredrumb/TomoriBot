@@ -1,182 +1,77 @@
 ---
 title: "Development Tasks"
+sidebar:
+  order: 3
 ---
 
-Quick navigation for common TomoriBot implementation tasks and coding conventions.
+Conventions and checks that apply to every change. The guide for each task is listed in the
+[Contributing overview](/contributing/).
 
-## Task Index
-
-Each guide below is self-contained with steps, notes, and a quality gate.
-
-| Task | Guide |
-|---|---|
-| Add a slash command | [`adding-slash-command.md`](/contributing/adding-slash-command/) |
-| Add an event handler | [`adding-event-handler.md`](/contributing/adding-event-handler/) |
-| Add a built-in tool | [`adding-builtin-tool.md`](/contributing/adding-builtin-tool/) |
-| Add a DB column | [`adding-db-column.md`](/contributing/adding-db-column/) |
-| Add a Full Install setup module | [`adding-setup-module.md`](/contributing/adding-setup-module/) |
-| Add a locale | [`adding-locale/`](/contributing/adding-locale/) |
-| Add a new AI provider | [`adding-new-provider.md`](/contributing/adding-new-provider/) |
-| Add a feature flag-controlled tool | [`adding-feature-flag-tool.md`](/contributing/adding-feature-flag-tool/) |
-| Add a persona preset | [`adding-persona-preset.md`](/contributing/adding-persona-preset/) |
-| Add an environment variable | [`adding-env-variable.md`](/contributing/adding-env-variable/) |
-| Add or move docs pages | [`docs-authoring.md`](/contributing/docs-authoring/) |
-| Localize the docs site or READMEs | [`docs-site-localization.md`](/contributing/docs-site-localization/) |
-| Write or review code comments | [`comment-policy.md`](/contributing/comment-policy/) |
-
-## Development Checklist
-
-Run these before merging any change:
+## Checks
 
 ```bash
-bun run check           # TypeScript strict mode
-bun run lint            # Biome lint/format
-bun run check-locales   # locale keys (when locale keys or command metadata changed); non-English parity is advisory
-bun run find-stale-translations --reason=unfollowed --base=origin/main  # branch follow-up, advisory
-bun run db:lifecycle    # schema lifecycle test (when schema.sql changed; needs local PostgreSQL)
+bun run check           # TypeScript strict
+bun run lint            # Biome; applies fixes in place
+bun run check-locales   # when locale keys or command metadata changed
+bun run find-stale-translations --reason=unfollowed --base=origin/main   # advisory translation follow-up
+bun run db:lifecycle    # when schema.sql changed
 ```
 
-`bun run lint` applies fixes in place, so it can leave your working tree changed after it reports
-success. Commit whatever it rewrites: CI runs `bun run lint:ci`, which is the same Biome check
-without `--fix`, and that one fails on formatting instead of silently correcting it.
+- `bun run lint` rewrites files, so commit what it changes. CI runs `bun run lint:ci`, which fails on
+  formatting instead of fixing it.
+- `bun run db:lifecycle` needs a local PostgreSQL user that can create and drop databases. It tests
+  fresh initialization, backup and restore, and the maintenance scripts in a temporary database.
+- `bun run test <path>` runs selected files through the same disposable-database setup.
 
-`bun run db:lifecycle` requires a local disposable PostgreSQL target with CREATE/DROP database
-permission. It creates and drops its own temporary database, then tests fresh initialization plus
-backup/restore and DB maintenance scripts.
-
-To run selected regression files through the same disposable-database harness, pass their paths to
-the test script:
-
-```bash
-bun run test tests/regression/db/llm.regression.test.ts
-```
-
-### One command for every gate
-
-`bun run vl` runs the whole check suite and prints one verdict per gate, so it is the fastest way to
-answer "is this branch green" without remembering each script name:
-
-```bash
-bun run vl
-```
-
-Its last line is machine readable, which matters when a wrapper or an agent reads the result rather
-than a person:
-
-```
-vl-status: PASS exit=0 pass=<n> warn=<n> fail=<n> skip=<n>
-```
-
-**Output is quiet by default.** No flag means quiet; `--verbose` is opt-in. A gate that passes prints
-nothing, and its row in the results block carries the verdict. A gate that fails always prints its full
-detail, so quiet mode can never hide a finding; it only removes the passing noise around one. Advisory
-detail, such as locale parity or the lockfile-wide `bun audit` listing, collapses to a count or to the
-entries that changed the verdict.
-
-Pass `--verbose` to restore every line each gate would otherwise print:
-
-```bash
-bun run vl --verbose
-```
-
-`--no-verbose` is the explicit spelling of the default rather than a mode of its own: it produces the
-same output as passing nothing. It exists so `vl` can force quiet onto the checks it invokes, and it
-wins over `--verbose` regardless of the order the two appear in. It is never required.
-
-Individual gates accept both flags, and `vl` forwards one to them. Redirect the output to a file
-if you want to keep the exit code while reading selectively, and never pipe a gate through `grep` or
-`tail`: the pipeline reports the filter's exit status instead of the gate's.
+**`bun run vl`** runs every gate and prints one verdict per gate. Its last line is for scripts:
+`vl-status: PASS exit=0 pass=<n> warn=<n> fail=<n> skip=<n>`. Passing gates are silent and failing
+gates print everything; `--verbose` prints all output. To keep the output, redirect it to a file
+instead of piping through `grep` or `tail`, which replaces the gate's exit code with the filter's:
 
 ```bash
 bun run vl > /tmp/vl.log 2>&1; echo "VL_EXIT=$?" >> /tmp/vl.log
 ```
 
----
+## Conventions
 
-## Coding Conventions
+- Two-space indentation and double quotes (Biome enforces both).
+- Strict TypeScript without `any`. Shared types go in `src/types/`. Validate untrusted input with Zod.
+- `camelCase` file names, `@/*` imports for `src/*`, and `node:` imports for Node built-ins.
+- Comments follow the [comment policy](/contributing/policies/comments/). JSDoc on exported functions
+  only where behavior is not obvious from the name and types.
+- Log with `log` from `src/utils/misc/logger.ts`, with context such as `errorType` and IDs. Handle
+  startup-critical failures differently from recoverable ones.
+- Slash commands only. Every user-facing string goes through `localizer()`. Follow the interaction
+  timing rules in [Command System](/architecture/subsystems/command-system/).
+- Query with Bun SQL template literals, and write idempotent migrations (`IF NOT EXISTS`, guarded
+  blocks). Schema reference: [Database Schema](/architecture/subsystems/database-schema/).
+- After a write that affects cached reads, invalidate the cache keys, and only after the write
+  succeeds. Never edit a cached object in place. See [Caching](/architecture/subsystems/caching/).
 
-These rules apply to all TomoriBot source code regardless of task type.
-
-### Formatting and Style
-
-- Use 2 spaces for indentation (Biome project setting).
-- Use double quotes for strings.
-- Write comments that explain rationale, constraints, or non-obvious behavior. See the
-  [`comment policy`](./comment-policy).
-- Run `bun run lint` after edits.
-
-### TypeScript and Validation
-
-- Keep TypeScript strict; avoid `any`.
-- Prefer explicit shared types under `src/types/`.
-- Use Zod/runtime validation for untrusted external input.
-- Add concise JSDoc for exported/public functions when behavior is non-obvious.
-
-### File Organization and Imports
-
-- Use `camelCase` file names.
-- Use `@/*` path aliases for `src/*` imports.
-- Use `node:` protocol for Node built-ins (`node:path`, `node:fs`, etc.).
-
-### Configuration and Magic Numbers
-
-- Give a magic number a name: a constant in the module that owns it, with a comment when the value
-  was measured or comes from an external limit.
-- Promote a value to an environment variable only when it is a deployment boundary: host resources,
-  network behavior, external service credentials or quotas, or an operator choice that reasonably
-  varies between installations. Internal probabilities, parser lookbacks, UI geometry, and algorithm
-  tuning stay constants unless a concrete deployment use case proves otherwise.
-- One variable per setting. Do not add an engine-specific variable plus a shared fallback for the
-  same value.
-- Settings a server or user changes at runtime belong in the database, not the environment.
-- See [`adding-env-variable.md`](./adding-env-variable) for placement and naming once a variable
-  passes this test.
-
-### Database and Migrations
-
-- Use Bun SQL template literals for queries.
-- Keep schema migrations idempotent (`IF NOT EXISTS`, helper functions, guarded blocks).
-- For DB model details, see [`docs/en/architecture/subsystems/database-schema.md`](../subsystems/database-schema).
-
-### Cache-Safe Write Pattern
-
-When a write affects cached reads:
-
-1. Perform the DB write successfully.
-2. Then invalidate affected cache key(s).
-
-Do not invalidate before failed writes, and do not manually mutate cached objects.
-See [`docs/en/architecture/subsystems/caching.md`](../subsystems/caching) for the cache map and invalidation APIs.
-
-### Logging and Error Handling
-
-- Use `log` from `src/utils/misc/logger.ts`.
-- Include useful context metadata (`errorType`, IDs, action context).
-- Treat startup-critical failures differently from recoverable runtime failures.
-
-### Discord Command Rules
-
-- Slash commands only (no legacy prefix command surface).
-- All user-facing text must be localized via `localizer()`.
-- Follow interaction timing patterns in [`docs/en/architecture/subsystems/command-system.md`](../subsystems/command-system).
-
----
+**Constants and environment variables.** Name every magic number as a constant in the module that
+owns it, with a comment when the value was measured or comes from an external limit. Make a value an
+environment variable only when it is a deployment choice: host resources, network behavior, external
+credentials or quotas, or an operator decision that differs between installations. Probabilities,
+lookbacks, UI geometry, and algorithm tuning stay constants. Use one variable per setting, never an
+engine-specific name plus a shared fallback. Settings that servers or users change at runtime go in
+the database. Placement and naming: [Adding an Environment Variable](/contributing/extending/env-variable/).
 
 ## Proportionality
 
-Every test, variable, CI job, abstraction, and comment has a maintenance cost. Add one when it
-prevents a named failure, not because a category of change usually has one.
+Every test, variable, CI job, abstraction, and comment costs maintenance. Add one only when you can
+name the failure it prevents.
 
 ### Reuse and abstraction
 
 - Search for an existing helper, registry, or pattern before writing a new one, and extend it.
-- Extract a shared helper when a second real caller exists, not for an anticipated one.
+- Extract a shared helper once a second real caller exists. An expected future caller does not count.
 - Fix a bug in the shared function after checking every caller.
 - Do not add compatibility shims, fallback paths, or options for states the code cannot reach.
   Validate at trust boundaries and trust typed internal values.
 - File size alone does not justify a split. Name the maintenance or correctness problem.
 
 ### Tests
+<!-- anchor: tests -->
 
 - Test behavior, regression risk, or an interface other code depends on (an exported API, a stored
   data shape, a Discord limit). A bug fix gets the regression test that would have caught it.

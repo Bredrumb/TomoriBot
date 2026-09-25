@@ -92,7 +92,7 @@ Sau khi lưu kết nối, chọn kết nối đó và chọn **+ Add new Text Mo
 - **Context Window Override:** tùy chọn, **chỉ dành cho Ollama / KoboldCPP**. Đặt giá trị này (ví dụ `8192`,
   `16384`) để tăng `num_ctx` mặc định của Ollama, vì mặc định khá nhỏ có thể cắt bớt
   ngữ cảnh dài của TomoriBot. Để trống để sử dụng mặc định của máy chủ.
-- **Các nút bật tắt:** bật **Tools** nếu model hỗ trợ function calling; chỉ bật **Image
+- **Các nút bật tắt:** bật `Công cụ` nếu model hỗ trợ function calling; chỉ bật **Image
   Understanding** cho model có khả năng nhìn; **Structured Output** nếu model xử lý JSON
   schema tốt. Đối với ví dụ của chúng ta, Gemma 4 hỗ trợ tất cả các tính năng đó, vì vậy hãy bật tất cả.
 
@@ -123,7 +123,7 @@ Tất cả các máy chủ này đều sử dụng cùng một quy trình, chỉ
 
 - Khởi động với chế độ tương thích OpenAI được bật (tích hợp sẵn). Mặc định: `http://127.0.0.1:5001/v1`.
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
-- Hỗ trợ **Context Window Override** tương tự như Ollama.
+- Hỗ trợ `Tùy chỉnh cửa sổ ngữ cảnh` tương tự như Ollama.
 - Nạp các model GGUF; Model Name là bất kỳ tên nào mà model đã nạp báo cáo (thường là tên
   tệp không có phần mở rộng), kiểm tra phản hồi từ `/v1/models` của KoboldCPP.
 
@@ -135,7 +135,7 @@ Tất cả các máy chủ này đều sử dụng cùng một quy trình, chỉ
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:8080/v1`.
-- Đặt kích thước cửa sổ ngữ cảnh khi khởi chạy bằng `-c`, vì tùy chọn **Context Window Override** trong modal chỉ
+- Đặt kích thước cửa sổ ngữ cảnh khi khởi chạy bằng `-c`, vì tùy chọn `Tùy chỉnh cửa sổ ngữ cảnh` trong modal chỉ
   dành cho Ollama/KoboldCPP và không có tác dụng ở đây.
 - Model Name là bất kỳ tên nào mà `/v1/models` báo cáo; bạn có thể đặt tên gọn gàng bằng `--alias my-model`.
 - Nếu bạn khởi động với `--api-key`, hãy nhập khóa đó vào `auth_token`.

@@ -108,7 +108,7 @@ bun run launch --cosyvoice3
 
 ## 在 TomoriBot 中注册
 
-运行 `/providers`，选择**添加新自定义端点**，并配置语音端点：
+运行 `/providers`，选择`添加新自定义端点`，并配置语音端点：
 
 - 功能：`Speech`
 - API 兼容性：`tts-clone`

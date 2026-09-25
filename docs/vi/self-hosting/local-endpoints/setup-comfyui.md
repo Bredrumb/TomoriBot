@@ -11,7 +11,7 @@ endpoint `/history` của ComfyUI cho đến khi kết quả đầu ra sẵn sà
 
 Hướng dẫn này bao gồm việc cài đặt/chạy ComfyUI và đăng ký dịch vụ. Để **tạo hoặc chỉnh sửa**
 quy trình làm việc tương thích với TomoriBot (các placeholder `{TOMORI_*}`), hãy sử dụng phần hướng dẫn chuyên sâu
-trong Discord bằng cách mở `/help`, chọn **Features**, rồi **Custom Endpoints**, và sử dụng
+trong Discord bằng cách mở `/help`, chọn `Tính năng`, rồi `Endpoint tùy chỉnh`, và sử dụng
 [README quy trình làm việc](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)
 trên GitHub.
 
@@ -77,11 +77,11 @@ Tải xuống quy trình làm việc **định dạng API** sẵn sàng sử d�
 Các tệp này ở **định dạng API** (JSON mà ComfyUI xuất thông qua *Save (API Format)*), không phải định dạng
 lưu giao diện thông thường. Nếu tự tạo quy trình riêng, tệp phải chứa các placeholder `{TOMORI_*}`
 mà TomoriBot sẽ thay thế (prompt, width/height, seed, ảnh tham chiếu, v.v.). Xem README quy trình
-làm việc và trang **Custom Endpoints** trong mục **Providers** tại `/help`.
+làm việc và trang `Endpoint tùy chỉnh` trong mục **Providers** tại `/help`.
 
 ## 3. Đăng ký trong Discord
 
-Chạy **`/providers`** (hoặc `/personal providers`), chọn **Add New Custom Endpoint**, và nhập:
+Chạy **`/providers`** (hoặc `/personal providers`), chọn `Thêm endpoint tùy chỉnh mới`, và nhập:
 
 | Trường | Giá trị cho ComfyUI |
 |-------|-------------------|
@@ -95,7 +95,7 @@ Nhập chính xác tên mã của checkpoint và **tải lên tệp `.json` quy 
 từ Bước 2. Tính năng của model phải khớp với quy trình làm việc (quy trình hình ảnh → `image`, quy trình
 video → `video`).
 
-Model hình ảnh cũng sẽ yêu cầu khai báo **Image Capabilities**: chuyển văn bản thành hình ảnh, hình ảnh tham chiếu,
+Model hình ảnh cũng sẽ yêu cầu khai báo `Tính năng hình ảnh`: chuyển văn bản thành hình ảnh, hình ảnh tham chiếu,
 inpainting và prompt phủ định. Chỉ đánh dấu các chế độ mà quy trình làm việc của bạn thực sự hỗ trợ, vì
 Tomori chỉ cung cấp cho công cụ các chế độ mà bạn đã khai báo. Inpainting chỉ xuất hiện cho các kết nối ComfyUI,
 vì không có khả năng tương thích API nào khác chấp nhận mặt nạ. Việc chỉnh sửa model sau này sẽ mở lại biểu mẫu

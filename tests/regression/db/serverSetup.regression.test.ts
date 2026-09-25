@@ -9,7 +9,7 @@
  * - Orphan recovery preserving alter personas and duplicate name suffixing
  * - Absence of cache invalidation during repository setup writes
  *
- * Requires: a local Postgres connection (see docs/en/contributing/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import type { Guild } from "discord.js";

@@ -36,7 +36,7 @@ Mantenha esse terminal aberto enquanto a TomoriBot estiver usando o WhisperX. O 
 
 ## Registrar na TomoriBot
 
-Execute `/providers`, escolha **Add New Custom Endpoint**, e use a compatibilidade da API de transcrição:
+Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado`, e use a compatibilidade da API de transcrição:
 
 - API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: `http://127.0.0.1:8021`

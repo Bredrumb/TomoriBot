@@ -17,7 +17,7 @@ KoboldCPP 有基于 Whisper 的语音识别支持，但端点形态会因构建�
 
 ## 在 TomoriBot 中注册
 
-运行 `/providers`，选择**添加新自定义端点**，并使用语音识别专用的 API 兼容性：
+运行 `/providers`，选择`添加新自定义端点`，并使用语音识别专用的 API 兼容性：
 
 - API 兼容性：`openai-compatible-transcription`
 - `endpoint_url`：你的 KoboldCPP 服务器根地址

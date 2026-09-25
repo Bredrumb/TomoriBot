@@ -8,7 +8,7 @@ TomoriBot 可以透過你自己的
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 執行個體生成圖片與影片。它透過提交一份已代入你的提示詞與尺寸的 **API 格式工作流程** 來驅動 ComfyUI，接著輪詢
 ComfyUI 的 `/history` 端點，直到輸出就緒。
 
-本指南涵蓋安裝、運行 ComfyUI 並註冊它。若想**撰寫或編輯** TomoriBot 相容的工作流程（那些 `{TOMORI_*}` 佔位符），請看 Discord 內的深入說明：開啟 `/help`，選擇 **功能**，再選 **自訂端點**，並參考 GitHub 上的
+本指南涵蓋安裝、運行 ComfyUI 並註冊它。若想**撰寫或編輯** TomoriBot 相容的工作流程（那些 `{TOMORI_*}` 佔位符），請看 Discord 內的深入說明：開啟 `/help`，選擇 `功能`，再選 `自訂端點`，並參考 GitHub 上的
 [工作流程 README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)。
 
 :::note[不需要環境變數]
@@ -65,11 +65,11 @@ curl http://127.0.0.1:8188/system_stats
 
 這些是 **API 格式**（ComfyUI 透過 *Save (API Format)* 匯出的 JSON），不是一般的
 介面儲存格式。如果你自己撰寫，它必須包含 TomoriBot 會代入的 `{TOMORI_*}` 佔位符（提示詞、寬高、種子、參考圖片等）。請看工作流程
-README，以及 `/help` 中 **供應商**底下的 **自訂端點**頁面。
+README，以及 `/help` 中 `供應商`底下的 `自訂端點`頁面。
 
 ## 3. 在 Discord 註冊它
 
-執行 **`/providers`**（或 `/personal providers`），選擇 **新增自訂端點**，然後輸入：
+執行 **`/providers`**（或 `/personal providers`），選擇 `新增自訂端點`，然後輸入：
 
 | 欄位 | ComfyUI 的值 |
 |-------|-------------------|
@@ -81,7 +81,7 @@ README，以及 `/help` 中 **供應商**底下的 **自訂端點**頁面。
 儲存連線之後，選取它並用它的模型下拉選單加入一個 Image 或 Video
 模型。輸入檢查點的確切代號，並**上傳你在步驟 2 下載的工作流程 `.json`**。模型功能必須與工作流程相符（圖片工作流程 → `image`，影片工作流程 → `video`）。
 
-圖片模型還會詢問它的 **Image Capabilities**：文字轉圖片、參考圖片、補圖與負向提示詞。只勾選你的工作流程真正實作的功能，因為 Tomori 只會提供你宣告的模式給工具。補圖只會為 ComfyUI 連線出現，因為其他 API 相容性都不接受遮罩。之後編輯模型會以你目前的選擇重新開啟表單，所以變更代號不會清掉它。
+圖片模型還會詢問它的 `圖片功能`：文字轉圖片、參考圖片、補圖與負向提示詞。只勾選你的工作流程真正實作的功能，因為 Tomori 只會提供你宣告的模式給工具。補圖只會為 ComfyUI 連線出現，因為其他 API 相容性都不接受遮罩。之後編輯模型會以你目前的選擇重新開啟表單，所以變更代號不會清掉它。
 
 加入模型會自動讓它成為作用中的 `image` 或 `video` 模型。在聊天中直接請 Tomori 生成即可觸發。如果它因為某些原因沒有生效，請執行 `/config` > 模型 > 切換模型，然後選取你註冊的 ComfyUI 端點。
 

@@ -51,8 +51,13 @@ English file layout, so a key lives at the same path in every tree.
 - Links: a route to a page that exists in the locale's tree takes the locale prefix
   (`/ja/features/knowledge/memory/`); a route to an English-only or untranslated page takes `/en/`.
   An unprefixed route in a translated page ejects the reader into English.
-- Keep every `<!-- anchor: english-slug -->` comment under its heading exactly as it is: it is the
-  English anchor that links in every locale target.
+- Keep every `<!-- anchor: english-slug -->` (in MDX, `{/* anchor: english-slug */}`) comment under
+  its heading exactly as it is: it is the English anchor that links in every locale target.
+- UI labels are the exception to "code spans stay verbatim". A code span that names something the
+  bot shows (`Finish Setup`, `Add MCP`) holds that locale's UI text, copied from the value of the same
+  key in `src/locales/<locale>/`, never your own translation and never the English with a gloss.
+  Search the English file for the label to find its key. Discord's own labels (`Manage Server`) use
+  the Discord client's wording in that language.
 
 ## Shared rules
 

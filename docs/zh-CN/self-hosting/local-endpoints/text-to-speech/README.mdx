@@ -34,12 +34,12 @@ TomoriBot 把语音当作一种自定义端点功能来处理。本地引擎在 
 ## 设置流程
 
 1. 从上面的卡片里挑一个引擎，按 `servers/tts/` 里的说明把它的封装程序搭起来。
-2. 在 `/providers` 里选择**添加新自定义端点**，并把 API 兼容性设为 `tts-clone`。
+2. 在 `/providers` 里选择`添加新自定义端点`，并把 API 兼容性设为 `tts-clone`。
 3. 选中已保存的端点，用它的模型下拉菜单添加语音合成模型、语音来源模式与脚本标记风格。
 4. 打开 `/config` > 模型 > 切换模型，选中已注册的语音合成模型。
 
 ## 网络访问
-<!-- anchor: network-access -->
+{/* anchor: network-access */}
 
 所有 TTS 本地服务器默认都绑定到 `127.0.0.1`，因此只有同一台机器上的 bot 能访问它们。当 TomoriBot 运行在 Docker 中或另一台机器上时，请为服务器设置 `TOMORI_TTS_HOST=0.0.0.0`，并用宿主机的地址注册端点，例如 `http://host.docker.internal:8015`。
 
@@ -62,9 +62,9 @@ TomoriBot 把语音当作一种自定义端点功能来处理。本地引擎在 
 
 对 Qwen3-TTS、MOSS-VoiceGenerator、IrodoriTTS 或 VoxCPM2 的 VoiceDesign，可以跳过音频样本，直接在 `/config` 的人格 > 语音里为这个人格保存一段自然语言的声音描述。CosyVoice 3 使用带参考样本的克隆模式，并可通过 `voice_instructions` 接受一次性的表达方式指令。
 
-用 ElevenLabs 的话，在 `/providers` 里选择**添加新提供方**和 **ElevenLabs**，它会一并注册语音与转写端点。
+用 ElevenLabs 的话，在 `/providers` 里选择`添加新提供方`和 **ElevenLabs**，它会一并注册语音与转写端点。
 
-合成之前，TomoriBot 会从生成的语音脚本里去掉 `:pepega:`、`<:pepega:123456789012345678>` 这类 Discord 自定义 emoji 写法。除非语音端点使用 emoji 标记（这是给 IrodoriTTS 用的），否则 Unicode emoji 也会被去掉。对 Chatterbox Turbo、Fish S2 Pro 这类端点，当它们的脚本标记风格设为 **Bracket Tags** 时，方括号标签会被保留。
+合成之前，TomoriBot 会从生成的语音脚本里去掉 `:pepega:`、`<:pepega:123456789012345678>` 这类 Discord 自定义 emoji 写法。除非语音端点使用 emoji 标记（这是给 IrodoriTTS 用的），否则 Unicode emoji 也会被去掉。对 Chatterbox Turbo、Fish S2 Pro 这类端点，当它们的脚本标记风格设为 `方括号标签` 时，方括号标签会被保留。
 
 VoxCPM2 使用 **Plain** 脚本标记风格。它的语音设计与说话风格控制通过 TomoriBot 的 `instruct` 字段传递，再由 VoxCPM2 的封装程序转换成模型原生的、用圆括号包起来的自然语言控制语法。
 

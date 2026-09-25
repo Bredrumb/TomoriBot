@@ -93,7 +93,7 @@ Completa:
 - **Anulación de la ventana de contexto:** opcional, **solo Ollama / KoboldCPP**. Configura esto (ej. `8192`,
   `16384`) para aumentar el `num_ctx` predeterminado de Ollama, que de lo contrario es lo suficientemente pequeño como para truncar
   el contexto largo de TomoriBot. Déjalo en blanco para usar el valor predeterminado del servidor.
-- **Interruptores:** habilita **Herramientas** si el modelo admite la llamada a funciones; habilita **Comprensión de
+- **Interruptores:** habilita `Herramientas` si el modelo admite la llamada a funciones; habilita **Comprensión de
   imágenes** solo para un modelo de visión; **Salida estructurada** si el modelo maneja bien los esquemas
   JSON. Para nuestro ejemplo, Gemma 4 los admite todos, así que márcalos todos.
 
@@ -124,7 +124,7 @@ Todos estos usan el mismo flujo, solo cambian la URL y un par de notas.
 
 - Inicia con OpenAI-compat habilitado (integrado). Predeterminado: `http://127.0.0.1:5001/v1`.
 - Compatibilidad de API: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
-- Respeta la **Anulación de la ventana de contexto** como Ollama.
+- Respeta la `Anulación de ventana de contexto` como Ollama.
 - Carga modelos GGUF; el Nombre del modelo es lo que reporte el modelo cargado (a menudo el tallo
   del archivo), verifica la respuesta de `/v1/models` de KoboldCPP.
 
@@ -136,7 +136,7 @@ Todos estos usan el mismo flujo, solo cambian la URL y un par de notas.
   llama-server -m model.gguf -c 16384 --host 0.0.0.0 --port 8080
   ```
 - Compatibilidad de API: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:8080/v1`.
-- Configura la ventana de contexto en el inicio con `-c`, la cual es la **Anulación de la ventana de contexto** del modal; es
+- Configura la ventana de contexto en el inicio con `-c`, la cual es la `Anulación de ventana de contexto` del modal; es
   solo para Ollama/KoboldCPP y no tiene efecto aquí.
 - El Nombre del modelo es lo que reporte `/v1/models`; dale uno limpio con `--alias my-model`.
 - Si lo iniciaste con `--api-key`, pon esa clave en `auth_token`.

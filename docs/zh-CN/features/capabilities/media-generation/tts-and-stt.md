@@ -19,15 +19,15 @@ TomoriBot 能**说**（文本转语音）也能**听**（语音转文字）：
 ### ElevenLabs（云端，最省事）
 
 1. 从 [ElevenLabs](https://elevenlabs.io/app/settings/api-keys) 获取 API 密钥。
-2. 运行 `/providers`，选择 **Add New Provider**，选 **ElevenLabs**，粘贴密钥。这个流程会：
-   - 登记 ElevenLabs 的**语音**端点（同时还有**转写**端点），
+2. 运行 `/providers`，选择 `添加新提供方`，选 **ElevenLabs**，粘贴密钥。这个流程会：
+   - 登记 ElevenLabs 的`语音`端点（同时还有`转写`端点），
    - 把它们选为当前生效，
    - 还可以当场给一个人格指定语音。
 3. 在 `/config` 的 人格 > 语音 里给更多人格指定语音。在
    [ElevenLabs 语音库](https://elevenlabs.io/app/voice-library) 浏览语音，那里也可以
    克隆你自己的声音。
 
-在 `/providers` 里选中 ElevenLabs，然后随时选 **Edit Endpoint** 更新密钥。
+在 `/providers` 里选中 ElevenLabs，然后随时选 `编辑端点` 更新密钥。
 
 注意事项：
 
@@ -39,7 +39,7 @@ TomoriBot 能**说**（文本转语音）也能**听**（语音转文字）：
   指定了语音。
 - 在服务器里，`/config` 的 人格 > 语音 需要管理服务器权限；在以私信为依托的工作区里，所有者仍可使用。
 
-在 `/help` 里选择 **功能**，再选 **语音生成**，可以看到 Discord 里的同一份讲解。
+在 `/help` 里选择 `功能`，再选 `语音生成`，可以看到 Discord 里的同一份讲解。
 
 ### 本地语音克隆引擎（自部署）
 
@@ -81,4 +81,4 @@ TomoriBot 能**说**（文本转语音）也能**听**（语音转文字）：
 - [whisper.cpp](/zh-CN/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
 
 完整清单见[语音转文字](/zh-CN/self-hosting/local-endpoints/speech-to-text/)汇总页。想看
-Discord 里的说明，运行 `/help`，然后选择 **功能** 和 **Transcription**。
+Discord 里的说明，运行 `/help`，然后选择 `功能` 和 `语音识别`。

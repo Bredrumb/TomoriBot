@@ -50,11 +50,11 @@ Model Chatterbox 0.5B gốc (`ChatterboxTTS`) được tích hợp trực tiếp
 
 Cách sử dụng model Tiêu chuẩn:
 1. Khởi động server wrapper như bình thường.
-2. Trong Discord, chạy `/config` > **Models** > **TTS Parameters & Voices**.
+2. Trong Discord, chạy `/config` > `Model` > `Tham số & Giọng đọc TTS`.
 3. Chuyển nút bật tắt tùy chọn **Fast Model (Turbo)** sang **TẮT**.
 4. Ở lần tạo tiếp theo, wrapper sẽ tải trễ và nạp model 0.5B tiêu chuẩn vào bộ nhớ.
 
-Cả hai giá trị đều là các trường văn bản trong cửa sổ tương tác **Edit Parameters**. Chúng luôn có thể chỉnh sửa được, và trang có lưu ý rằng chúng sẽ bị bỏ qua khi model nhanh được bật:
+Cả hai giá trị đều là các trường văn bản trong cửa sổ tương tác `Sửa tham số`. Chúng luôn có thể chỉnh sửa được, và trang có lưu ý rằng chúng sẽ bị bỏ qua khi model nhanh được bật:
 - **`cfg_weight`** (mặc định `0.5`): Điều chỉnh mức độ âm thanh tổng hợp bám sát theo nhịp độ và phong cách giọng nói tham chiếu.
 - **`exaggeration`** (mặc định `0.5`): Kiểm soát cường độ cảm xúc và ngữ điệu kịch tính khi truyền đạt.
 
@@ -65,7 +65,7 @@ Cả hai giá trị đều là các trường văn bản trong cửa sổ tươn
 
 Bao gồm `Chatterbox` trong nhãn endpoint hoặc tên model. TomoriBot chỉ nhận diện endpoint Chatterbox qua tên đó (hoặc URL endpoint chứa tên đó), vì vậy danh sách cho phép thẻ Turbo, việc loại bỏ thẻ của model tiêu chuẩn, và các tùy chọn Chatterbox trong `/generate voice-message` chỉ áp dụng khi có tên này.
 
-Chạy `/providers`, chọn **Add New Custom Endpoint**, và sử dụng độ tương thích API giọng nói:
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng độ tương thích API giọng nói:
 
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8011`

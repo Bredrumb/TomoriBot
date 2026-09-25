@@ -62,7 +62,7 @@ Hay dos alcances en juego, y vale la pena tenerlos claros:
 **Configuración:**
 
 1. `/personal providers` guarda un proveedor (tu clave se cifra). Esto también activa de
-   inmediato tu ajuste personal de **Texto**, usando el modelo de texto predeterminado de ese
+   inmediato tu ajuste personal de `Texto`, usando el modelo de texto predeterminado de ese
    proveedor.
 2. `/personal config` permite seleccionar un modelo distinto para tu ajuste personal de texto.
    Elegir un modelo aquí mantiene Texto activado.
@@ -138,5 +138,5 @@ Finalizar para omitir este paso.
   de Alice no puede pasar el turno a Bob en tu cadena de mensajes.
 
 Revisa o elimina entradas con `/personal config` (desmarca para eliminar; los focos con tiempo
-límite expiran por sí solos). En `/help`, elige **Comportamiento** y luego **Foco personal**,
+límite expiran por sí solos). En `/help`, elige `Comportamiento` y luego `Enfoque personal`,
 para ver el resumen de Discord.

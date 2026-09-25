@@ -5,7 +5,7 @@
      .github/README_<code>.md. Entries stay unlinked until then so the repository front page never
      carries a broken link. Labels are the endonyms from src/constants/docsLocales.ts.
      Planned: fr Français | ru Русский | ko 한국어
-     See docs/en/contributing/adding-locale/readme-and-repo.md. -->
+     See docs/en/contributing/localization/docs-site.md. -->
 
 > [!NOTE]
 > This README is a quick overview. For the full, up-to-date documentation (setup guides, feature walkthroughs, provider info, and more) visit **[docs.tomoribot.app](https://docs.tomoribot.app/)**.

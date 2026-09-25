@@ -102,7 +102,7 @@ the `REQUIRED_*_PROVIDERS` sets in `modelSeed.ts` in lockstep with `providerRequ
 
 ## Configuring a custom endpoint
 
-The two toggles appear under **Chat Completion Compatibilities** in the Text model modal opened from the
+The two toggles appear under `Chat Completion Compatibilities` in the Text model modal opened from the
 model dropdown on a `/providers` or `/personal providers` entry page. They are deliberately separate from
 **Text Capabilities**: tool calling, image input, and structured output describe the model, while these two
 describe the backend's message parser.

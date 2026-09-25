@@ -42,7 +42,7 @@ Para obtener la mejor calidad de clonación ordinaria, proporciona tanto el audi
 
 ### Estilo y controles de emoción
 
-Registra el endpoint con el marcado **Plano**. La directriz de entrega pertenece al campo global
+Registra el endpoint con el marcado `Plano`. La directriz de entrega pertenece al campo global
 `voice_instructions` del endpoint, no a etiquetas arbitrarias entre corchetes en línea. Esto preserva el significado de
 la instrucción para todo el enunciado y evita tratar un guion como `[happy] Hello.
 [sad] Goodbye.` como dos instrucciones globales contradictorias. El soporte nativo de `[breath]` y `[laughter]`
@@ -117,7 +117,7 @@ Para uso de GPU NVIDIA, **se recomienda WSL2**. Los requisitos upstream actuales
 
 ## Registro en TomoriBot
 
-Ejecuta `/providers`, elige **Agregar nuevo punto de conexión personalizado**, y configura el endpoint de voz:
+Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado`, y configura el endpoint de voz:
 
 - Capacidad: `Speech`
 - Compatibilidad de API: `tts-clone`

@@ -18,13 +18,13 @@ documentada por completo abajo). Si prefieres ejecutar la voz en tu propio hardw
 ### ElevenLabs (en la nube, opción más sencilla)
 
 1. Obtén una clave de API en [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Ejecuta `/providers`, elige **Añadir proveedor nuevo**, selecciona **ElevenLabs** y pega la clave. Este flujo:
+2. Ejecuta `/providers`, elige `Agregar nuevo proveedor`, selecciona **ElevenLabs** y pega la clave. Este flujo:
    - registra el endpoint de **voz** de ElevenLabs (y también el de **transcripción**),
    - los selecciona como activos,
    - puede asignar una voz a una persona de inmediato.
 3. Asigna voces a otras personas en `/config` > Persona > Voz. Explora voces en la [Biblioteca de voces de ElevenLabs](https://elevenlabs.io/app/voice-library), donde también puedes clonar la tuya.
 
-Selecciona ElevenLabs en `/providers` y elige **Editar endpoint** cuando necesites actualizar la clave.
+Selecciona ElevenLabs en `/providers` y elige `Editar punto de conexión` cuando necesites actualizar la clave.
 
 Notas:
 
@@ -33,7 +33,7 @@ Notas:
 - Las respuestas de voz dependen de `voice_message_enabled` y requieren que la persona activa tenga una voz asignada.
 - Persona > Voz en `/config` requiere Administrar servidor en un servidor y sigue disponible para el propietario en un espacio de trabajo basado en mensajes directos.
 
-En `/help`, elige **Funciones** y luego **Voz** para ver el mismo recorrido en Discord.
+En `/help`, elige `Funciones` y luego `Voz` para ver el mismo recorrido en Discord.
 
 ### Motores locales de clonación de voz (con autoalojamiento)
 
@@ -71,4 +71,4 @@ Usa `/providers` para elegir entre endpoints de transcripción.
 - [whisper.cpp](/es-419/self-hosting/local-endpoints/speech-to-text/whispercpp/).
 
 Consulta el centro de [Voz a texto](/es-419/self-hosting/local-endpoints/speech-to-text/) para ver la lista completa.
-Para el resumen de Discord, ejecuta `/help` y elige **Funciones** y luego **Transcripción**.
+Para el resumen de Discord, ejecuta `/help` y elige `Funciones` y luego `Transcripción`.

@@ -51,11 +51,11 @@ The original 0.5B base Chatterbox model (`ChatterboxTTS`) is built directly into
 
 To use the Standard model:
 1. Start the server wrapper as normal.
-2. In Discord, run `/config` > **Models** > **TTS Parameters & Voices**.
+2. In Discord, run `/config` > `Models` > `TTS Parameters & Voices`.
 3. Toggle **OFF** the **Fast Model (Turbo)** option.
 4. On the next generation, the wrapper lazily downloads and loads the standard 0.5B model into memory.
 
-Both values are text fields in the **Edit Parameters** modal. They are always editable, and the page notes that they are ignored while the fast model is enabled:
+Both values are text fields in the `Edit Parameters` modal. They are always editable, and the page notes that they are ignored while the fast model is enabled:
 - **`cfg_weight`** (default `0.5`): Adjusts how closely the synthesized audio adheres to the reference tempo and vocal style.
 - **`exaggeration`** (default `0.5`): Controls the emotional intensity and dramatic inflection of the delivery.
 
@@ -66,7 +66,7 @@ Both values are text fields in the **Edit Parameters** modal. They are always ed
 
 Include `Chatterbox` in the endpoint label or model name. TomoriBot recognizes a Chatterbox endpoint only by that name (or an endpoint URL containing it), so the Turbo tag whitelist, the standard-model tag stripping, and the Chatterbox options in `/generate voice-message` apply only when it is present.
 
-Run `/providers`, choose **Add New Custom Endpoint**, and use the speech API compatibility:
+Run `/providers`, choose `Add New Custom Endpoint`, and use the speech API compatibility:
 
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8011`

@@ -58,7 +58,7 @@ Dois escopos estão em jogo, e vale a pena diferenciá-los:
 **Configuração:**
 
 1. `/personal providers` salva um provedor (sua chave é criptografada). Isso também habilita sua
-   substituição pessoal de **Texto** imediatamente, usando o modelo de texto padrão daquele provedor.
+   substituição pessoal de `Texto` imediatamente, usando o modelo de texto padrão daquele provedor.
 2. `/personal config` permite selecionar um modelo diferente para sua substituição pessoal de texto.
    Escolher um modelo aqui mantém o Texto habilitado.
 3. Volte a `/personal providers` sempre que precisar atualizar credenciais, gerenciar endpoints
@@ -128,4 +128,4 @@ miram na persona que você chamou explicitamente. Pressione Finish para pular.
   passar para Bob na sua cadeia de mensagens.
 
 Revise ou remova entradas com `/personal config` (desmarque para remover; destaques
-com tempo definido expiram sozinhos). Em `/help`, escolha **Behavior**, depois **Personal Spotlight**, para o resumo no Discord.
+com tempo definido expiram sozinhos). Em `/help`, escolha `Comportamento`, depois `Destaque Pessoal`, para o resumo no Discord.

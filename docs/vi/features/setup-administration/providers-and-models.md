@@ -9,19 +9,19 @@ TomoriBot không tích hợp sẵn model AI nào, bạn cần kết nối model 
 ## API key
 <!-- anchor: api-keys -->
 
-Thêm key của nhà cung cấp trong lần thiết lập đầu tiên bằng lệnh `/setup`, hoặc sau này từ `/providers` bằng cách chọn **Add New Provider**. Các key được **mã hóa khi lưu trữ**, vì vậy không ai, kể cả quản trị viên máy chủ, có thể đọc lại được.
+Thêm key của nhà cung cấp trong lần thiết lập đầu tiên bằng lệnh `/setup`, hoặc sau này từ `/providers` bằng cách chọn `Thêm nhà cung cấp mới`. Các key được **mã hóa khi lưu trữ**, vì vậy không ai, kể cả quản trị viên máy chủ, có thể đọc lại được.
 
 Lệnh `/setup` sẽ hỏi cách chuyển câu trả lời đến model trước tiên, và câu trả lời sẽ quyết định những thông tin cần thu thập:
 
 | Chế độ | Thông tin thu thập |
 |---|---|
-| **AI Provider (Khuyến nghị)** | Một nhà cung cấp từ danh mục kèm theo API key, được xác thực và mã hóa dưới dạng bản nháp. |
-| **Custom Endpoint (Nâng cao)** | Kết nối của endpoint và một model văn bản, được đăng ký bên trong trình hướng dẫn. Xem [Endpoint tùy chỉnh](#endpoint-tuy-chinh). |
-| **User BYOK** (chỉ dành cho máy chủ) | Không có gì: không gian làm việc không giữ nhà cung cấp riêng nào, vì vậy các thành viên phải tự cung cấp nhà cung cấp cá nhân. |
+| **Nhà cung cấp AI (Khuyên dùng)** | Một nhà cung cấp từ danh mục kèm theo API key, được xác thực và mã hóa dưới dạng bản nháp. |
+| **Endpoint tùy chỉnh (Nâng cao)** | Kết nối của endpoint và một model văn bản, được đăng ký bên trong trình hướng dẫn. Xem [Endpoint tùy chỉnh](#endpoint-tuy-chinh). |
+| **BYOK người dùng** (chỉ dành cho máy chủ) | Không có gì: không gian làm việc không giữ nhà cung cấp riêng nào, vì vậy các thành viên phải tự cung cấp nhà cung cấp cá nhân. |
 
-Không có gì được ghi lại cho đến khi nhấn **Finish Setup**, vì vậy việc hủy bỏ hoặc để trình hướng dẫn hết hạn sẽ giữ nguyên các hàng nhà cung cấp hiện có của không gian làm việc. Để thay thế một key đã lưu, hãy sử dụng `/providers`, vì `/setup` từ chối chạy trên một không gian làm việc đã được cấu hình.
+Không có gì được ghi lại cho đến khi nhấn `Hoàn tất thiết lập`, vì vậy việc hủy bỏ hoặc để trình hướng dẫn hết hạn sẽ giữ nguyên các hàng nhà cung cấp hiện có của không gian làm việc. Để thay thế một key đã lưu, hãy sử dụng `/providers`, vì `/setup` từ chối chạy trên một không gian làm việc đã được cấu hình.
 
-Mỗi nhà cung cấp có các bước tạo key riêng. Hãy chạy **`/help`**, chọn **Setup**, sau đó chọn **Step 1: Get an API Key**, và chọn nhà cung cấp của bạn để xem hướng dẫn từng bước chính xác, hoặc sử dụng các điểm bắt đầu sau:
+Mỗi nhà cung cấp có các bước tạo key riêng. Hãy chạy **`/help`**, chọn `Thiết lập`, sau đó chọn **Step 1: Get an API Key**, và chọn nhà cung cấp của bạn để xem hướng dẫn từng bước chính xác, hoặc sử dụng các điểm bắt đầu sau:
 
 | Nhà cung cấp | Ghi chú | Lấy key |
 |---|---|---|
@@ -37,7 +37,7 @@ Mỗi nhà cung cấp có các bước tạo key riêng. Hãy chạy **`/help`**
 | **Custom** | Bất kỳ endpoint nào tương thích OpenAI (Ollama, vLLM, LiteLLM, …). | xem [Endpoint tùy chỉnh](#endpoint-tuy-chinh) |
 
 :::caution
-Không bao giờ chia sẻ API key của bạn với bất kỳ ai khác. Thêm hoặc thay thế mã thông báo xác thực Bearer của endpoint tùy chỉnh từ hành động **Edit Endpoint** trong `/providers`.
+Không bao giờ chia sẻ API key của bạn với bất kỳ ai khác. Thêm hoặc thay thế mã thông báo xác thực Bearer của endpoint tùy chỉnh từ hành động `Sửa endpoint` trong `/providers`.
 :::
 
 **Vertex AI** xác thực bằng Application Default Credentials (ADC) thay vì khóa bí mật được lưu trữ. Đối với host cục bộ, ADC có thể lấy từ `gcloud`; các bản triển khai trên dịch vụ lưu trữ nên sử dụng workload identity hoặc tài khoản dịch vụ (service account). Riêng API key của AI Studio không thể xác thực toàn bộ Vertex AI. Dự án được chọn phải bật thanh toán và Vertex AI API, đồng thời danh tính của máy chủ cần có quyền truy cập Vertex. Hướng dẫn thiết lập có sẵn từ mục **Google Vertex AI** trên trang **API Keys** trong `/help`.
@@ -52,7 +52,7 @@ Brave Search tách biệt với nhà cung cấp AI của bạn và chỉ tăng c
 
 Lệnh `/providers` quản lý thông tin xác thực của máy chủ, danh mục model và đăng ký endpoint, trong khi `/config` > Models > Switch Models chọn các chỉ định tính năng dùng chung mà mọi thành viên của máy chủ này sử dụng. Cả hai đều yêu cầu quyền cần thiết trong máy chủ. Các thành viên riêng lẻ quản lý thông tin xác thực và danh mục model của riêng mình bằng `/personal providers`, sau đó chọn model cá nhân trong `/personal config`. Cài đặt cá nhân đi theo họ trên mọi máy chủ mà họ sử dụng TomoriBot. Xem [Cá nhân hóa](/vi/features/knowledge/personalization/#your-own-providers) để biết thêm chi tiết.
 
-Các bảng điều khiển có tiêu đề **Server Providers** và **Personal Providers** để quyền sở hữu của chúng vẫn hiển thị rõ ràng sau khi tương tác lệnh mở ra.
+Các bảng điều khiển có tiêu đề `Nhà cung cấp của máy chủ` và `Nhà cung cấp cá nhân` để quyền sở hữu của chúng vẫn hiển thị rõ ràng sau khi tương tác lệnh mở ra.
 
 Sau khi thiết lập nhà cung cấp, hãy dùng `/config` > Models > Switch Models để chọn các chỉ định tính năng dùng chung. Sáu vị trí thông thường chọn các mục model từ danh mục của nhà cung cấp:
 
@@ -77,13 +77,13 @@ Các endpoint tùy chỉnh cho phép bạn đăng ký các dịch vụ tự host
 - **Phạm vi máy chủ:** mở `/providers` để đăng ký và chỉnh sửa endpoint của không gian làm việc.
 - **Phạm vi cá nhân:** mở `/personal providers` cho danh mục model cá nhân (chỉ riêng bạn: xem [Cá nhân hóa](/vi/features/knowledge/personalization/#your-own-providers)). Các endpoint giọng nói cá nhân không được chọn từ `/personal config`.
 
-Một **nhãn (label)** là tên menu hiển thị cho người dùng và gom nhóm các tính năng dưới một gói khi chúng dùng chung một URL endpoint. Nhãn không bao giờ được gửi đến endpoint từ xa. Các tính năng được phân phối từ các URL khác nhau cần có các nhãn riêng biệt. Chọn **Add New Custom Endpoint**, chọn tính tương thích API và lưu kết nối. Việc lưu sẽ chuẩn bị các tính năng được giao thức đó hỗ trợ mà không cần đăng ký bất kỳ model nào. Sau đó chọn endpoint mới và sử dụng menu thả xuống model của endpoint để đăng ký chính xác mã model và tính năng. Việc thêm một model sẽ kích hoạt model đó cho tính năng tương ứng. Sử dụng cùng một menu thả xuống để đính kèm thêm model hoặc chỉnh sửa đăng ký do không gian làm việc thêm vào. Các model văn bản tự khai báo tính năng của mình trong biểu mẫu đó, và các model hình ảnh khai báo chế độ yêu cầu mà chúng hỗ trợ.
+Một **nhãn (label)** là tên menu hiển thị cho người dùng và gom nhóm các tính năng dưới một gói khi chúng dùng chung một URL endpoint. Nhãn không bao giờ được gửi đến endpoint từ xa. Các tính năng được phân phối từ các URL khác nhau cần có các nhãn riêng biệt. Chọn `Thêm endpoint tùy chỉnh mới`, chọn tính tương thích API và lưu kết nối. Việc lưu sẽ chuẩn bị các tính năng được giao thức đó hỗ trợ mà không cần đăng ký bất kỳ model nào. Sau đó chọn endpoint mới và sử dụng menu thả xuống model của endpoint để đăng ký chính xác mã model và tính năng. Việc thêm một model sẽ kích hoạt model đó cho tính năng tương ứng. Sử dụng cùng một menu thả xuống để đính kèm thêm model hoặc chỉnh sửa đăng ký do không gian làm việc thêm vào. Các model văn bản tự khai báo tính năng của mình trong biểu mẫu đó, và các model hình ảnh khai báo chế độ yêu cầu mà chúng hỗ trợ.
 
 Đối với TTS và STT, hãy đăng ký endpoint và model của nó trong `/providers`, sau đó chọn và kích hoạt endpoint trong `/config` > Models > Switch Models. Các vị trí giọng nói đó chọn một endpoint thay vì một mục danh mục model. `/providers` vẫn là giao diện đăng ký endpoint, thiết lập model và chỉnh sửa.
 
 Tính tương thích API xác định đường dẫn yêu cầu và payload mà dịch vụ triển khai, do đó nó cũng xác định các vị trí tính năng mà kết nối chuẩn bị. Việc đăng ký model chính xác cho các vị trí đó là một bước riêng biệt, và giao thức không thể suy luận một cách đáng tin cậy từ URL endpoint.
 
-Chế độ **Custom Endpoint (Advanced)** của `/setup` thực hiện hai bước tương tự bên trong trình hướng dẫn: **Configure Connection** lưu tính tương thích API, nhãn, URL và mã thông báo xác thực tùy chọn phía sau bước kiểm tra khả năng tiếp cận, và **Configure Text Model** đăng ký model văn bản chính xác cùng các khai báo tính năng của nó. Nút model vẫn bị tắt cho đến khi kết nối được xác thực, và việc lưu lại kết nối sẽ xóa khai báo model vì các khai báo phụ thuộc vào tính tương thích API. Trình hướng dẫn tạo kết nối, nhà cung cấp đã lưu, model và các hàng model đang hoạt động cùng nhau khi bạn nhấn **Finish Setup**, vì vậy nó không bao giờ để lại một kết nối không có model văn bản khả dụng. Nó chỉ đăng ký model văn bản; các tính năng hình ảnh, video, TTS và STT vẫn được đăng ký trong `/providers`.
+Chế độ `Endpoint tùy chỉnh (Nâng cao)` của `/setup` thực hiện hai bước tương tự bên trong trình hướng dẫn: `Cấu hình kết nối` lưu tính tương thích API, nhãn, URL và mã thông báo xác thực tùy chọn phía sau bước kiểm tra khả năng tiếp cận, và `Cấu hình model văn bản` đăng ký model văn bản chính xác cùng các khai báo tính năng của nó. Nút model vẫn bị tắt cho đến khi kết nối được xác thực, và việc lưu lại kết nối sẽ xóa khai báo model vì các khai báo phụ thuộc vào tính tương thích API. Trình hướng dẫn tạo kết nối, nhà cung cấp đã lưu, model và các hàng model đang hoạt động cùng nhau khi bạn nhấn `Hoàn tất thiết lập`, vì vậy nó không bao giờ để lại một kết nối không có model văn bản khả dụng. Nó chỉ đăng ký model văn bản; các tính năng hình ảnh, video, TTS và STT vẫn được đăng ký trong `/providers`.
 
 Để xem hướng dẫn đầy đủ về cách chạy các máy chủ, hãy xem:
 

@@ -6,7 +6,7 @@ Fish Audio S2 Pro là một model TTS 4B đa ngôn ngữ tập trung vào việc
 
 Thiết lập mặc định của TomoriBot sử dụng các trọng số BF16 chính thức (`fishaudio/s2-pro`) để cung cấp độ trung thực tổng hợp cao nhất và tránh sự không tương thích do lượng tử hóa. Đối với người dùng có GPU tiêu dùng bị giới hạn bộ nhớ, lượng tử hóa chỉ tính trọng số INT8 tùy chọn (`Imagilux/fishaudio-s2-pro`) được hỗ trợ thông qua việc ghi đè biến môi trường.
 
-Fish S2 Pro hỗ trợ các thẻ biểu cảm trong ngoặc vuông như `[whisper]`, `[excited]`, và `[angry]`. Hãy cấu hình endpoint với markup **Bracket Tags** để TomoriBot giữ lại các tùy chọn điều khiển này trong kịch bản giọng nói được tạo.
+Fish S2 Pro hỗ trợ các thẻ biểu cảm trong ngoặc vuông như `[whisper]`, `[excited]`, và `[angry]`. Hãy cấu hình endpoint với markup `Thẻ trong ngoặc vuông` để TomoriBot giữ lại các tùy chọn điều khiển này trong kịch bản giọng nói được tạo.
 
 ## Giấy phép
 
@@ -86,11 +86,11 @@ TomoriBot dừng chờ tin nhắn thoại sau `TTS_SYNTHESIZE_TIMEOUT_MS` (mặc
 >
 > Nếu bạn tải lên một mẫu giọng nói mà không cung cấp bản phiên âm tham chiếu khớp, Fish Speech **sẽ âm thầm loại bỏ các token âm thanh tham chiếu** và rơi vào trạng thái tạo giọng nói ngẫu nhiên không có tham chiếu. Wrapper Fish của TomoriBot sẽ xác thực và từ chối các yêu cầu tổng hợp thiếu văn bản tham chiếu với lỗi `400 Bad Request` để ngăn chặn việc tạo giọng nói không được điều kiện hóa ngoài ý muốn.
 
-Khi thêm giọng nói persona trong `/config` dưới phần **Models > TTS Parameters & Voices**, hãy luôn điền vào trường **Reference transcript** văn bản chính xác từng từ được nói trong đoạn âm thanh tham chiếu của bạn.
+Khi thêm giọng nói persona trong `/config` dưới phần `Model > Tham số TTS & giọng nói`, hãy luôn điền vào trường `Bản chép lời tham chiếu` văn bản chính xác từng từ được nói trong đoạn âm thanh tham chiếu của bạn.
 
 ## Đăng ký trong TomoriBot
 
-Trong `/providers`, chọn **Add New Custom Endpoint** và cấu hình:
+Trong `/providers`, chọn `Thêm endpoint tùy chỉnh mới` và cấu hình:
 
 - Capability: `Speech`
 - API Compatibility: `tts-clone`
