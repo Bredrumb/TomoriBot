@@ -21,7 +21,8 @@ import {
   buildWhitelistRoleAddModal,
 } from "@/utils/discord/ui/moderationPanel";
 import type { ModerationScopeData } from "@/utils/moderation/moderationOperations";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -463,7 +464,7 @@ describe("moderationPanel UI rendering", () => {
     });
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Server Moderation");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.title"));
     expect(serialized).toContain("### Member Access Settings");
     expect(serialized).toContain(
       "### Member Access Settings\\nConfigure permissions for members without `Manage Server`.",
@@ -473,7 +474,7 @@ describe("moderationPanel UI rendering", () => {
     expect(serialized).toContain("> 🔴 Members cannot manage persona attributes.");
     expect(serialized).toContain("> 🟢 Members can manage persona sample dialogues.");
     expect(serialized).toContain("> 🔴 Members cannot create prompt snapshots.");
-    expect(serialized).toContain("Edit Permissions");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.edit_permissions"));
     expect(serialized).toContain('"customId":"moderation:v1:member-access-open:en-US"');
     expect(serialized).toContain('"disabled":false');
 
@@ -518,12 +519,12 @@ describe("moderationPanel UI rendering", () => {
     expect(allowedRow?.components).toHaveLength(2);
 
     const [allowedReqBtn, allowedAllowBtn] = allowedRow?.components ?? [];
-    expect(allowedReqBtn?.label).toBe("Personal Providers Required");
+    expect(allowedReqBtn?.label).toBe(localizer("en-US", "commands.moderation.model_access_personal_required_label"));
     expect(allowedReqBtn?.style).toBe(ButtonStyle.Secondary);
     expect(allowedReqBtn?.disabled).toBe(false);
     expect(allowedReqBtn?.customId).toBe("moderation:v1:model-access-set:en-US:require-personal");
 
-    expect(allowedAllowBtn?.label).toBe("Server Models Allowed");
+    expect(allowedAllowBtn?.label).toBe(localizer("en-US", "commands.moderation.model_access_allowed_label"));
     expect(allowedAllowBtn?.style).toBe(ButtonStyle.Primary);
     expect(allowedAllowBtn?.disabled).toBe(true);
     expect(allowedAllowBtn?.customId).toBe("moderation:v1:model-access-set:en-US:allow");
@@ -543,8 +544,8 @@ describe("moderationPanel UI rendering", () => {
     expect(decodedAllow).toEqual({ action: "model-access-set", locale: "en-US", allowServerModels: true });
 
     const allowedSerialized = JSON.stringify(allowedPayload);
-    expect(allowedSerialized).toContain("Server model access");
-    expect(allowedSerialized).toContain("Controls which models server members may use.");
+    expect(allowedSerialized).toContain(localizer("en-US", "commands.moderation.model_access_title"));
+    expect(allowedSerialized).toContain(localizer("en-US", "commands.moderation.model_access_description"));
     expect(allowedSerialized).toContain("> Server members may use this server's models.");
 
     const requiredPayload = buildModerationPanelPayload({
@@ -641,16 +642,16 @@ describe("moderationPanel UI rendering", () => {
     expect(serialized).toContain("### Blacklisted Members `(0)`");
     expect(serialized).toContain("**Personalization Blacklist**");
     expect(serialized).not.toContain("####");
-    expect(serialized).toContain("No members blacklisted from personalization.");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
     expect(serialized).not.toContain("> No members blacklisted");
-    expect(serialized).not.toContain("I do not load personal memories or saved names for these members:");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain("**Persona User Blocks**");
-    expect(serialized).toContain("No active persona user blocks.");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.persona_blocks_empty"));
     expect(serialized).not.toContain("> No active persona");
-    expect(serialized).not.toContain("The following members have persona-specific");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.persona_blocks_description"));
     expect(serialized).not.toContain("•");
-    expect(serialized).toContain("+ Add Blacklist");
-    expect(serialized).toContain("- Remove Blacklist");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.add_blacklist"));
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.remove_blacklist"));
   });
 
   it("renders both blacklist sections in a populated view with bold section labels and inline-code counter", () => {
@@ -682,19 +683,19 @@ describe("moderationPanel UI rendering", () => {
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(3)`");
     expect(serialized).toContain("**Personalization Blacklist**");
-    expect(serialized).toContain("I do not load personal memories or saved names for these members:");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).not.toContain("####");
     expect(serialized).toContain("> <@p-user-1>");
     expect(serialized).toContain("> <@p-user-2>");
     expect(serialized).not.toContain("(`p-user-1`)");
     expect(serialized).not.toContain("(`p-user-2`)");
     expect(serialized).toContain("**Persona User Blocks**");
-    expect(serialized).toContain("The following members have persona-specific");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.persona_blocks_description"));
     expect(serialized).toContain("> <@block-user-1> for **Tomori** (mute)");
     expect(serialized).not.toContain("(`block-user-1`)");
     expect(serialized).not.toContain("—");
-    expect(serialized).not.toContain("No members blacklisted from personalization.");
-    expect(serialized).not.toContain("No active persona user blocks.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.persona_blocks_empty"));
     expect(serialized).toContain("Tomori");
     expect(serialized).not.toContain("•");
   });
@@ -728,12 +729,12 @@ describe("moderationPanel UI rendering", () => {
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(1)`");
     expect(serialized).toContain("**Personalization Blacklist**");
-    expect(serialized).not.toContain("I do not load personal memories or saved names for these members:");
-    expect(serialized).toContain("No members blacklisted from personalization.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
     expect(serialized).toContain("**Persona User Blocks**");
-    expect(serialized).toContain("The following members have persona-specific");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.persona_blocks_description"));
     expect(serialized).toContain("> <@block-user-1> for **Tomori** (mute)");
-    expect(serialized).not.toContain("No active persona user blocks.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.persona_blocks_empty"));
   });
 
   it("renders user blacklist entries and range pagination when over budget with inline-code counter", () => {
@@ -753,14 +754,14 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(15)`");
-    expect(serialized).toContain("I do not load personal memories or saved names for these members:");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain("> <@user-1>");
     expect(serialized).toContain("> <@user-10>");
     expect(serialized).not.toContain("(`user-1`)");
     expect(serialized).not.toContain("(`user-10`)");
     expect(serialized).not.toContain("user-11");
-    expect(serialized).not.toContain("The following members have persona-specific");
-    expect(serialized).toContain("No active persona user blocks.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.persona_blocks_description"));
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.persona_blocks_empty"));
     expect(serialized).toContain("Page 1 of 2");
     expect(serialized).toContain("moderation:v1:range:en-US:user-blacklist:none:1");
     expect(serialized).not.toContain("•");
@@ -798,7 +799,7 @@ describe("moderationPanel UI rendering", () => {
     const page1Serialized = JSON.stringify(page1Payload);
     expect(page1Serialized).toContain("### Blacklisted Members `(13)`");
     expect(page1Serialized).toContain("**Personalization Blacklist**");
-    expect(page1Serialized).toContain("I do not load personal memories or saved names for these members:");
+    expect(page1Serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(page1Serialized).not.toContain("####");
     expect(page1Serialized).toContain("> <@p-user-1>");
     expect(page1Serialized).toContain("> <@p-user-10>");
@@ -808,9 +809,9 @@ describe("moderationPanel UI rendering", () => {
     expect(page1Serialized).not.toContain("p-user-12");
 
     expect(page1Serialized).toContain("**Persona User Blocks**");
-    expect(page1Serialized).toContain("The following members have persona-specific");
+    expect(page1Serialized).toMatch(localizedProse("en-US", "commands.moderation.persona_blocks_description"));
     expect(page1Serialized).not.toContain("<@block-user-1>");
-    expect(page1Serialized).not.toContain("No active persona user blocks.");
+    expect(page1Serialized).not.toContain(localizer("en-US", "commands.moderation.persona_blocks_empty"));
     expect(page1Serialized).toContain("Page 1 of 2");
     expect(page1Serialized).not.toContain("•");
 
@@ -825,16 +826,16 @@ describe("moderationPanel UI rendering", () => {
     const page2Serialized = JSON.stringify(page2Payload);
     expect(page2Serialized).toContain("### Blacklisted Members `(13)`");
     expect(page2Serialized).toContain("**Personalization Blacklist**");
-    expect(page2Serialized).toContain("I do not load personal memories or saved names for these members:");
+    expect(page2Serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(page2Serialized).toContain("> <@p-user-11>");
     expect(page2Serialized).toContain("> <@p-user-12>");
     expect(page2Serialized).not.toContain("(`p-user-11`)");
     expect(page2Serialized).not.toContain("(`p-user-12`)");
     expect(page2Serialized).not.toContain("p-user-10");
-    expect(page2Serialized).not.toContain("No members blacklisted from personalization.");
+    expect(page2Serialized).not.toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
 
     expect(page2Serialized).toContain("**Persona User Blocks**");
-    expect(page2Serialized).toContain("The following members have persona-specific");
+    expect(page2Serialized).toMatch(localizedProse("en-US", "commands.moderation.persona_blocks_description"));
     expect(page2Serialized).toContain("> <@block-user-1> for **Tomori** (mute)");
     expect(page2Serialized).not.toContain("(`block-user-1`)");
     expect(page2Serialized).not.toContain("—");
@@ -859,7 +860,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(1)`");
-    expect(serialized).toContain("I do not load personal memories or saved names for these members:");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain("> <@surviving-user>");
     expect(serialized).not.toContain("(`surviving-user`)");
     expect(serialized).not.toContain("•");
@@ -892,7 +893,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Whitelisted Channels `(1)`");
-    expect(serialized).toContain("I can only be triggered in the following channels:");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.whitelist_channels_description"));
     expect(serialized).toContain("> <#surviving-channel>");
     expect(serialized).not.toContain("(`surviving-channel`)");
     expect(serialized).toContain("> Inherited server global cooldown");
@@ -910,9 +911,9 @@ describe("moderationPanel UI rendering", () => {
 
     const emptySerialized = JSON.stringify(emptyPayload);
     expect(emptySerialized).toContain("### Whitelisted Channels `(0)`");
-    expect(emptySerialized).toContain("No channels are whitelisted.");
+    expect(emptySerialized).toMatch(localizedProse("en-US", "commands.moderation.whitelist_channels_empty"));
     expect(emptySerialized).not.toContain("> No channels are whitelisted.");
-    expect(emptySerialized).not.toContain("I can only be triggered in the following channels:");
+    expect(emptySerialized).not.toContain(localizer("en-US", "commands.moderation.whitelist_channels_description"));
 
     const populatedPayload = buildModerationPanelPayload({
       locale: "en-US",
@@ -956,14 +957,14 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(populatedPayload);
     expect(serialized).toContain("### Whitelisted Channels `(3)`");
-    expect(serialized).toContain("I can only be triggered in the following channels:");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.whitelist_channels_description"));
     expect(serialized).toContain("> <#ch-1>\\n> Inherited server global cooldown");
     expect(serialized).toContain("> <#ch-2>\\n> Cooldown: Per-User, 15s");
     expect(serialized).toContain("> <#ch-3>\\n> Cooldown: Off, Instant");
     expect(serialized).not.toContain("(`ch-1`)");
     expect(serialized).not.toContain("(`ch-2`)");
     expect(serialized).not.toContain("(`ch-3`)");
-    expect(serialized).not.toContain("No channels are whitelisted.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.whitelist_channels_empty"));
     expect(serialized).not.toContain("•");
   });
 
@@ -978,8 +979,10 @@ describe("moderationPanel UI rendering", () => {
 
     const emptySerialized = JSON.stringify(emptyPayload);
     expect(emptySerialized).toContain("### Personas `(0)`");
-    expect(emptySerialized).toContain("No persona channel restrictions configured.");
-    expect(emptySerialized).not.toContain("The following personas can only respond in their listed channels:");
+    expect(emptySerialized).toMatch(localizedProse("en-US", "commands.moderation.whitelist_persona_channels_empty"));
+    expect(emptySerialized).not.toContain(
+      localizer("en-US", "commands.moderation.whitelist_persona_channels_description"),
+    );
 
     const payload = buildModerationPanelPayload({
       locale: "en-US",
@@ -1001,9 +1004,9 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Personas `(1)`");
-    expect(serialized).toContain("The following personas can only respond in their listed channels:");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.whitelist_persona_channels_description"));
     expect(serialized).toContain("> **Tomori** restricted to: <#ch-a>, <#ch-b>");
-    expect(serialized).not.toContain("No persona channel restrictions configured.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.whitelist_persona_channels_empty"));
     expect(serialized).not.toContain("•");
   });
 
@@ -1018,8 +1021,8 @@ describe("moderationPanel UI rendering", () => {
 
     const emptySerialized = JSON.stringify(emptyPayload);
     expect(emptySerialized).toContain("### Whitelisted Roles `(0)`");
-    expect(emptySerialized).toContain("No roles are whitelisted.");
-    expect(emptySerialized).not.toContain("Only the following roles can trigger me:");
+    expect(emptySerialized).toContain(localizer("en-US", "commands.moderation.whitelist_roles_empty"));
+    expect(emptySerialized).not.toContain(localizer("en-US", "commands.moderation.whitelist_roles_description"));
 
     const payload = buildModerationPanelPayload({
       locale: "en-US",
@@ -1041,7 +1044,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Whitelisted Roles `(2)`");
-    expect(serialized).toContain("Only the following roles can trigger me:");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.whitelist_roles_description"));
     expect(serialized).toContain("> <@&role-1>");
     expect(serialized).toContain("> <@&role-2>");
     expect(serialized).toContain("moderation:v1:whitelist-role-remove-open:en-US");
@@ -1049,7 +1052,7 @@ describe("moderationPanel UI rendering", () => {
     expect(serialized).toContain("moderation:v1:whitelist-role-add-open:en-US");
     expect(serialized).not.toContain("(`role-1`)");
     expect(serialized).not.toContain("(`role-2`)");
-    expect(serialized).not.toContain("No roles are whitelisted.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.whitelist_roles_empty"));
     expect(serialized).not.toContain("•");
   });
 
@@ -1094,10 +1097,10 @@ describe("moderationPanel UI rendering", () => {
     });
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Moderation settings could not be loaded.");
+    expect(serialized).toContain(localizer("en-US", "commands.moderation.unavailable"));
     expect(serialized).toContain("Retry");
     expect(serialized).toContain("moderation:v1:retry:en-US:member-access:none");
-    expect(serialized).not.toContain("Members can manage server memories");
+    expect(serialized).not.toContain(localizer("en-US", "commands.moderation.member_access_servermemories_enabled"));
 
     const container = payload.components[payload.components.length - 1] as {
       type: number;
@@ -1127,7 +1130,7 @@ describe("moderationPanel UI rendering", () => {
     });
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Saved data may be out of date because the read failed.");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
     expect(serialized).toContain("> 🟢 Members can manage server memories and documents.");
     expect(serialized).toContain("> 🟢 Members can manage persona attributes.");
     expect(serialized).toContain("> 🔴 Members cannot manage persona sample dialogues.");
@@ -1330,13 +1333,15 @@ describe("moderationPanel UI rendering", () => {
 
     expect(modal.custom_id).toBe(`moderation:v1:member-access-submit:en-US:${nonce}`);
     expect(modal.custom_id.length).toBeLessThanOrEqual(100);
-    expect(modal.title).toBe("Server Member Permissions");
+    expect(modal.title).toBe(localizer("en-US", "commands.server.member-permissions.select_embed_title"));
     expect(modal.components).toHaveLength(1);
 
     const labelComponent = modal.components[0];
     expect(labelComponent.type).toBe(18);
-    expect(labelComponent.label).toBe("Select what members can do with me");
-    expect(labelComponent.description).toBe("Select which things non-admin members can do. Checked = allowed.");
+    expect(labelComponent.label).toBe(localizer("en-US", "commands.server.member-permissions.select_placeholder"));
+    expect(labelComponent.description).toBe(
+      localizer("en-US", "commands.server.member-permissions.select_embed_description"),
+    );
 
     const checkboxGroup = labelComponent.component as {
       type: number;
@@ -1387,13 +1392,13 @@ describe("moderationPanel UI rendering", () => {
 
     expect(modal.custom_id).toBe(`moderation:v1:user-blacklist-add-submit:en-US:${nonce}`);
     expect(modal.custom_id.length).toBeLessThanOrEqual(100);
-    expect(modal.title).toBe("Add Blacklist");
+    expect(modal.title).toBe(localizer("en-US", "commands.moderation.user_blacklist_add_title"));
     expect(modal.components).toHaveLength(1);
 
     const labelComponent = modal.components[0];
     expect(labelComponent.type).toBe(18);
     expect(labelComponent.label).toBe("Member");
-    expect(labelComponent.description).toBe("Choose a member to exclude from personalization.");
+    expect(labelComponent.description).toBe(localizer("en-US", "commands.moderation.user_blacklist_add_description"));
 
     const userSelect = labelComponent.component as {
       type: number;
@@ -1624,7 +1629,7 @@ describe("moderationPanel UI rendering", () => {
       expect(separators).toHaveLength(1);
 
       const serialized = JSON.stringify(payload);
-      expect(serialized).not.toContain("Saved data may be out of date");
+      expect(serialized).not.toContain(localizer("en-US", "commands.moderation.stale_warning"));
 
       const lastComp = inner[inner.length - 1];
       // Member Access ends on the server-model-access behavior sentence, which the state-control
@@ -1751,7 +1756,7 @@ describe("moderationPanel UI rendering", () => {
     expect(cancelBtn?.disabled).toBeFalsy();
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Saved data may be out of date");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
   });
 
   it("falls back to normal blacklist view if removeTarget is not present in data", () => {
@@ -1795,7 +1800,7 @@ describe("moderationPanel whitelist channels rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Whitelisted Channels `(0)`");
-    expect(serialized).toContain("No channels are whitelisted.");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.whitelist_channels_empty"));
     expect(serialized).toContain("moderation:v1:whitelist-channel-add-open:en-US");
 
     const outer = payload.components[0];
@@ -1932,7 +1937,7 @@ describe("moderationPanel whitelist channels rendering", () => {
     expect(addBtn?.disabled).toBe(true);
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Saved data may be out of date");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
   });
 });
 
@@ -1940,7 +1945,7 @@ describe("buildWhitelistChannelAddModal", () => {
   it("builds raw modal payload with type 8 channel select, type 3 cooldown type select, and type 4 length input", () => {
     const modal = buildWhitelistChannelAddModal("en-US", "nonce_abc");
     expect(modal.custom_id).toBe("moderation:v1:whitelist-channel-add-submit:en-US:nonce_abc");
-    expect(modal.title).toBe("Add or Edit Channel");
+    expect(modal.title).toBe(localizer("en-US", "commands.moderation.whitelist_channel_add_title"));
     expect(modal.components).toHaveLength(3);
 
     const [channelField, typeField, lengthField] = modal.components;
@@ -1952,14 +1957,14 @@ describe("buildWhitelistChannelAddModal", () => {
     expect(channelField.component?.required).toBe(true);
 
     expect(typeField.type).toBe(18);
-    expect(typeField.label).toBe("Cooldown Type");
+    expect(typeField.label).toBe(localizer("en-US", "commands.moderation.whitelist_channel_add_type_label"));
     expect(typeField.component?.type).toBe(3);
     expect(typeField.component?.custom_id).toBe("whitelist_channel_add_type_nonce_abc");
     expect(typeField.component?.options).toHaveLength(4);
     expect(typeField.component?.options?.map((o) => o.value)).toEqual(["0", "1", "2", "3"]);
 
     expect(lengthField.type).toBe(18);
-    expect(lengthField.label).toBe("Cooldown Length (Seconds)");
+    expect(lengthField.label).toBe(localizer("en-US", "commands.moderation.whitelist_channel_add_length_label"));
     expect(lengthField.component?.type).toBe(4);
     expect(lengthField.component?.custom_id).toBe("whitelist_channel_add_length_nonce_abc");
   });
@@ -1969,7 +1974,7 @@ describe("buildWhitelistRoleAddModal", () => {
   it("builds a nonce-bounded required native Role Select", () => {
     const modal = buildWhitelistRoleAddModal("en-US", "nonce_role");
     expect(modal.custom_id).toBe("moderation:v1:whitelist-role-add-submit:en-US:nonce_role");
-    expect(modal.title).toBe("Add Whitelisted Role");
+    expect(modal.title).toBe(localizer("en-US", "commands.moderation.whitelist_role_add_title"));
     expect(modal.components).toHaveLength(1);
     expect(modal.components[0]?.component?.type).toBe(6);
     expect(modal.components[0]?.component?.custom_id).toBe(buildWhitelistRoleAddModalFieldId("nonce_role"));
@@ -2196,7 +2201,7 @@ describe("moderationPanel Quotas surface and modals", () => {
     });
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Saved data may be out of date because the read failed");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
     expect(serialized).toContain('"customId":"moderation:v1:retry:en-US:quotas:none"');
     expect(serialized).toContain('"disabled":true');
   });
@@ -2210,7 +2215,7 @@ describe("moderationPanel Quotas surface and modals", () => {
     );
 
     expect(modal.custom_id).toBe("moderation:v1:quota-edit-submit:en-US:image:nonce_edit");
-    expect(modal.title).toBe("Edit Image Quotas");
+    expect(modal.title).toBe(localizer("en-US", "commands.moderation.quota_modal_image_title"));
     expect(modal.components).toHaveLength(3);
 
     const serialized = JSON.stringify(modal);

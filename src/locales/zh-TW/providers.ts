@@ -21,6 +21,7 @@ export default {
     fallback_used_failure_line: `{index}. {model} 發生錯誤：{error_detail}`,
     fallback_used_details_button: `備援使用情形`,
     fallback_used_hide_footer: `用 \`/config\` > 行為 > 通知隱藏這則訊息，並把詳細資料改送到思考紀錄`,
+    fallback_used_personal_opt_out_footer: `用 \`/personal config\` > 模型 > 備援停止讓伺服器模型代為處理你個人供應商的失敗`,
     markdown_table: {
       show_button: `顯示 Markdown`,
       source_expired: `那張表格的 Markdown 已經不在快取中，所以我沒辦法再顯示原始碼。`,

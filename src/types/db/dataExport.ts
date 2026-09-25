@@ -98,6 +98,7 @@ export const personalSettingsExportDataSchema = z.object({
   privacy_level: z.nativeEnum(PrivacyLevel).optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).optional(),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).optional(),
+  personal_server_fallback_enabled: z.boolean().optional(),
   shortterm_cache_crossserver_opt_in: z.boolean().optional(),
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(),
   prefix_override: z.string().max(100).nullable().optional(),
@@ -511,6 +512,7 @@ export const V1_CONFIG_FIELD_SECTION_OVERRIDES = {
     privacy_level: "privacy",
     personal_dtm: "response_modes",
     personal_deliberate_tool_mode: "response_modes",
+    personal_server_fallback_enabled: null,
     shortterm_cache_crossserver_opt_in: "privacy",
     timezone_offset: "profile",
     prefix_override: "profile",
@@ -545,6 +547,10 @@ export const V2_CONFIG_EXCLUSIONS = {
   model_randomizer_enabled: {
     sourceTable: "serverChat",
     reason: "The required fallback model pool is not portable.",
+  },
+  personal_server_fallback_enabled: {
+    sourceTable: "personalSettings",
+    reason: "The personal provider route it governs is not part of the personal config export.",
   },
 } as const;
 

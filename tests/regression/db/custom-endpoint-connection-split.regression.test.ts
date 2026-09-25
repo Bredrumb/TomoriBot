@@ -497,6 +497,12 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom Endpoint connection and model split
 
     const downPath = path.join(process.cwd(), "src", "db", "migrations", "068_custom_endpoint_connections.down.sql");
     const upPath = path.join(process.cwd(), "src", "db", "migrations", "068_custom_endpoint_connections.sql");
+    // 068 down drops the connections table and 068 up recreates it at its 068 shape, so every later
+    // migration that adds a connection column must be replayed too. The DB is shared across test
+    // files, and a missing column here fails unrelated repository reads in later files.
+    const laterConnectionMigrationPaths = [
+      path.join(process.cwd(), "src", "db", "migrations", "084_custom_endpoint_connection_behavior.sql"),
+    ];
 
     await executeTestSqlFile(downPath);
 
@@ -526,6 +532,9 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom Endpoint connection and model split
       expect(downRow.requires_auth).toBe(true);
     } finally {
       await executeTestSqlFile(upPath);
+      for (const laterPath of laterConnectionMigrationPaths) {
+        await executeTestSqlFile(laterPath);
+      }
     }
 
     try {

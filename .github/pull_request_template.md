@@ -1,4 +1,4 @@
-﻿## Summary
+## Summary
 _What does this change and why? Link to issues/discussions for deeper context if possible._
 
 Closes # <!-- Replace # with issue number, or remove this line if not applicable -->
@@ -18,7 +18,7 @@ a single-select classification, not a to-do. -->
 
 ### Only when relevant
 No need to mark if irrelevant
-- ( ) No magic numbers or string literals: new settings are either named constants in their module, or env vars if they vary between installations (see [`adding-env-variable.md`](../docs/en/contributing/adding-env-variable.md))
+- ( ) No magic numbers or string literals: new settings are either named constants in their module, or env vars if they vary between installations (see [`env-variable.md`](../docs/en/contributing/extending/env-variable.md))
 - ( ) Followed command patterns and conventions in [`docs/en/architecture/subsystems/command-system.md`](../docs/en/architecture/subsystems/command-system.md) (If adding or modifying a Discord Command)
 - ( ) Updated the matching [`docs/`](../docs/) page(s) (If behavior/flow/schema/config changed)
 - ( ) Used `localizer()` with an en-US key, not a hardcoded string (If adding or changing user-facing text, translating it into other languages is optional, [see Translations](./CONTRIBUTING.md#translations)).

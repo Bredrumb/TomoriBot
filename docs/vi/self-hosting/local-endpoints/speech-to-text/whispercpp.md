@@ -19,7 +19,7 @@ Nếu bản dựng whisper.cpp của bạn cung cấp một cấu trúc endpoint
 
 ## Đăng ký trong TomoriBot
 
-Chạy `/providers`, chọn **Add New Custom Endpoint**, và sử dụng độ tương thích API phiên âm:
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng độ tương thích API phiên âm:
 
 - API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: thư mục gốc máy chủ whisper.cpp của bạn

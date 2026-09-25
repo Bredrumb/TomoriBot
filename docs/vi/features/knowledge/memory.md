@@ -122,7 +122,7 @@ Phạm vi sẽ thu hẹp thông tin trước tiên: bộ nhớ máy chủ chỉ 
 - Thẻ kênh có thể kết hợp với thẻ từ khóa.
 - Nếu bạn sử dụng cơ sở tri thức tài liệu (RAG), thẻ kênh cũng áp dụng cho tài liệu và lịch sử đã trích xuất.
 
-Trong `/help`, chọn **Memory**, rồi chọn **Memory Tagging**, để xem bản tóm tắt tương tự trong Discord.
+Trong `/help`, chọn `Bộ nhớ`, rồi chọn `Gắn thẻ bộ nhớ`, để xem bản tóm tắt tương tự trong Discord.
 
 ## Bộ nhớ ngắn hạn (STM)
 <!-- anchor: short-term-memory-stm -->
@@ -167,17 +167,17 @@ Bất kỳ ai cũng có thể chạy `/config` > Persona > Memories, `/personal 
 
 ### Cấu hình STM
 
-Người quản lý không gian làm việc có thể tinh chỉnh bộ nhớ ngắn hạn từ `/config` → **Behavior** → **Memory & STM**. Các cài đặt này áp dụng cho các bản ghi STM đang hoạt động của không gian làm việc:
+Người quản lý không gian làm việc có thể tinh chỉnh bộ nhớ ngắn hạn từ `/config` → `Hành vi` → **Memory & STM**. Các cài đặt này áp dụng cho các bản ghi STM đang hoạt động của không gian làm việc:
 
-- **Nhịp độ làm mới (Refresh cadence)** kiểm soát số lượt tương tác của bot trôi qua giữa các lần nhắc làm mới. Phạm vi cho phép là 1-100.
-- **Chế độ kết xuất (Render mode)** chọn xem các giá trị danh mục có thay thế các lượt gần đây hay xuất hiện dưới dạng tóm tắt thô.
-- **Tin nhắn thô (Crude messages)** kiểm soát số lượng tin nhắn gần đây được giữ lại, từ 1 đến mức tối đa của kênh.
-- **Độ sâu nhắc nhở (Nudge depth)** đặt vị trí lời nhắc làm mới tính từ cuối ngữ cảnh được tập hợp, từ 0-20.
-- **Độ sâu nội dung (Content depth)** đặt vị trí nội dung STM tính từ cuối ngữ cảnh được tập hợp, từ −1-20.
+- **Nhịp làm mới** kiểm soát số lượt tương tác của bot trôi qua giữa các lần nhắc làm mới. Phạm vi cho phép là 1-100.
+- **Chế độ hiển thị** chọn xem các giá trị danh mục có thay thế các lượt gần đây hay xuất hiện dưới dạng tóm tắt thô.
+- **Tin nhắn thô** kiểm soát số lượng tin nhắn gần đây được giữ lại, từ 1 đến mức tối đa của kênh.
+- **Độ sâu lời nhắc** đặt vị trí lời nhắc làm mới tính từ cuối ngữ cảnh được tập hợp, từ 0-20.
+- **Độ sâu nội dung** đặt vị trí nội dung STM tính từ cuối ngữ cảnh được tập hợp, từ −1-20.
 
-**Danh mục STM (STM Categories)** thay thế trường Tóm tắt mặc định bằng tối đa năm trường có nhãn. Nhập từng trường theo định dạng `Nhãn: Mô tả`; để trống mọi trường sẽ khôi phục danh mục Tóm tắt mặc định. Việc lưu danh mục sẽ xóa STM của các kênh máy chủ đang hoạt động không tương thích, và bảng điều khiển sẽ thông báo các kênh bị ảnh hưởng trước khi lưu.
+**Danh mục STM** thay thế trường Tóm tắt mặc định bằng tối đa năm trường có nhãn. Nhập từng trường theo định dạng `Nhãn: Mô tả`; để trống mọi trường sẽ khôi phục danh mục Tóm tắt mặc định. Việc lưu danh mục sẽ xóa STM của các kênh máy chủ đang hoạt động không tương thích, và bảng điều khiển sẽ thông báo các kênh bị ảnh hưởng trước khi lưu.
 
-**Prompt STM (STM Prompt)** cho phép người quản lý tùy chỉnh ưu tiên mô tả công cụ và lời nhắc cập nhật. Để trống các mục tùy chỉnh sẽ khôi phục các giá trị mặc định hiệu dụng, bao gồm lời nhắc nhận biết danh mục khi các danh mục được bật.
+**Prompt STM** cho phép người quản lý tùy chỉnh ưu tiên mô tả công cụ và lời nhắc cập nhật. Để trống các mục tùy chỉnh sẽ khôi phục các giá trị mặc định hiệu dụng, bao gồm lời nhắc nhận biết danh mục khi các danh mục được bật.
 
 :::tip
 Các lệnh STM này chỉ dành cho người dùng nâng cao, bạn nên giữ nguyên các cài đặt mặc định, trừ khi bạn muốn cho phép bot nhớ bạn qua các máy chủ bằng `/personal config`

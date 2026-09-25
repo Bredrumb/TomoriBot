@@ -328,7 +328,7 @@ Do not silently ignore the feature without documenting the decision.
 
 See also:
 
-- [`contributing/adding-new-provider.md`](../../contributing/adding-new-provider)
+- [`contributing/extending/new-provider.md`](../../contributing/extending/new-provider)
 
 ## Official Source Links
 

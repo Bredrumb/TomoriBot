@@ -7,6 +7,7 @@
  * tools enabled (has_tools=true).
  */
 import { log } from "@/utils/misc/logger";
+import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import { executeTool } from "@/tools/toolRegistry";
 import type { ToolContext, ToolResult } from "@/types/tool/interfaces";
 import type { GeneratePresetParams, PresetGenerationResult } from "@/types/provider/featureInterfaces";
@@ -84,7 +85,7 @@ export async function generatePresetFromPromptDeepseek(
 
   while (true) {
     const body: Record<string, unknown> = {
-      model: options.model,
+      model: toDeepseekApiModelName(options.model),
       messages,
       max_tokens: maxOutputTokens,
       response_format: { type: "json_object" },

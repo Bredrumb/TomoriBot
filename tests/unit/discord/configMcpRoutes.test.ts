@@ -7,7 +7,7 @@ import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/inter
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -235,7 +235,7 @@ describe("Config-hosted MCP Servers", () => {
     expect(harness.operationCalls).toBe(0);
     expect(JSON.stringify(harness.edits.at(-1))).toContain("MCP Servers");
     expect(JSON.stringify(harness.edits.at(-1))).not.toContain("server-1");
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("Permission Required");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(localizer("en-US", "commands.config.panel.denied_heading"));
   });
 
   it("opens the add modal without deferring and keeps the Config route namespace", async () => {
@@ -272,7 +272,7 @@ describe("Config-hosted MCP Servers", () => {
       },
     });
     expect(harness.operationCalls).toBe(1);
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("MCP server was not added");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(localizer("en-US", "commands.mcps.add_failed"));
     expect(JSON.stringify(harness.edits.at(-1))).not.toContain("secret");
   });
 });

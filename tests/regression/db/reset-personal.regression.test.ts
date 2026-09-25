@@ -12,7 +12,7 @@
  * - Proves missing user_personalization_configs row is repaired with DDL defaults.
  * - Proves atomic rollback when a statement fails mid-transaction.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { resetRepository } from "@/utils/db/repositories/ResetRepository";

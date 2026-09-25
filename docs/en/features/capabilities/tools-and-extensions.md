@@ -125,11 +125,11 @@ Any publicly hosted MCP server with an HTTPS endpoint works. Using
 
 1. Create an account and generate an API key from your profile.
 2. Open an MCP in the catalog and copy its **connection URL** (e.g. `https://youtube.run.tools`).
-3. Open `/config` > Plugins > MCP Servers, choose **+ Add MCP**, paste the connection URL into **URL**, paste your
-   Smithery key into **Auth Token**, and choose the required **Server Type**. **General
+3. Open `/config` > Plugins > MCP Servers, choose `Add MCP`, paste the connection URL into **URL**, paste your
+   Smithery key into `Auth Token`, and choose the required `Server Type`. **General
    Purpose** is selected by default.
 
-If a server needs no auth, leave **Auth Token** blank. Your auth token is encrypted at rest
+If a server needs no auth, leave `Auth Token` blank. Your auth token is encrypted at rest
 and never shown again. Open the same Config page to inspect configured state, enable or disable a server,
 or remove one with explicit confirmation. Removal disconnects it immediately and frees a slot.
 Each saved row also shows the bounded tool names from its last successful discovery. **None
@@ -153,7 +153,7 @@ an MCP's described tools before adding it.
 ## Deliberate Tool Mode
 <!-- anchor: deliberate-tool-mode -->
 
-Every declared tool adds to the prompt. **Deliberate Tool Mode** keeps tool declarations out
+Every declared tool adds to the prompt. `Deliberate Tool Mode` keeps tool declarations out
 of ordinary chat turns unless the message looks like it actually needs a tool; this reduces
 prompt size and helps smaller/local models answer faster.
 
@@ -180,10 +180,10 @@ prompt size and helps smaller/local models answer faster.
   tool calls are logged there along with the trigger that exposed the tool.
 
 Deliberate Tool Mode only decides which tools are *shown* to the model, but the model still has
-to choose to call one. In `/help`, choose **Behavior**, then **Deliberate Tool Mode**, for the Discord summary.
+to choose to call one. In `/help`, choose `Behavior`, then `Deliberate Tool Mode`, for the Discord summary.
 
 :::note
-**Deliberate Tool Mode** (this section) is unrelated to **Deliberate Trigger Mode**, which
+**Deliberate Tool Mode** (this section) is unrelated to `Deliberate Trigger Mode`, which
 controls how *she* is triggered; see
 [Chatting & Triggers](/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode). Both are
 abbreviated "DTM" in Discord.

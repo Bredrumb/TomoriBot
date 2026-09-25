@@ -4,34 +4,23 @@ sidebar:
   order: 2
 ---
 
-This guide sets up TomoriBot locally with Bun + PostgreSQL.
+How to run TomoriBot locally with Bun and PostgreSQL for development.
 
 ## Prerequisites
 
-- Bun
-- PostgreSQL
-- A Discord bot application with:
-  - `bot` and `applications.commands` scopes
-  - Privileged intents enabled in Discord Developer Portal:
-    - `Server Members Intent`
-    - `Message Content Intent`
-  - `Presence Intent` is optional (used only outside production)
+- Bun and PostgreSQL.
+- A Discord application with the `bot` and `applications.commands` scopes, and the **Server Members**
+  and **Message Content** privileged intents enabled in the Developer Portal. `Presence` is optional
+  and only used outside production.
 
-## 1. Install Dependencies
+## Run the bot
 
 ```bash
 bun install --frozen-lockfile
-```
-
-## 2. Create Local Environment File
-
-```bash
 cp .env.example .env
 ```
 
-`.env.example` is intentionally minimal and only includes the required local setup values.
-
-Minimum required values for local development:
+Fill in the required values, and create the database and user they name:
 
 ```dotenv
 DISCORD_TOKEN=...
@@ -44,141 +33,62 @@ POSTGRES_DB=tomodb
 RUN_ENV=development
 ```
 
-Notes:
-
-- Runtime uses `RUN_ENV` (not `NODE_ENV`) for production/dev branching.
-- In production mode (`RUN_ENV=production`), secrets are fetched from AWS Secrets Manager (`tomoribot/production`) unless `TEST_PRODUCTION=true`.
-- Additional tuning and feature flags live in `.env.optional.example`. Copy only the values you actually want into `.env`.
-
-## 3. Prepare PostgreSQL
-
-Create a DB/user, then ensure `.env` credentials match.
-
-## 4. Start the Bot
+- The code branches on `RUN_ENV`, not `NODE_ENV`.
+- `RUN_ENV=production` reads secrets from AWS Secrets Manager unless `TEST_PRODUCTION=true`.
+- Optional settings are in `.env.optional.example`; copy only the ones you need.
 
 ```bash
 bun run dev
 ```
 
-Expected startup stages include:
+Startup loads secrets, the encryption key manager, the schema and seeds, the tool registry, locales,
+and caches, then sets up event handlers and logs in to Discord.
 
-- secrets loading
-- encryption key manager init
-- schema + seed verification
-- tool registry init
-- locale init
-- cache warmup
-- event handler setup
-- Discord login
+## Set up a test server
 
-## 5. First-Time Discord Setup
+Run `/setup` in your server. It needs **Manage Server** and opens a private checklist. Nothing is
+saved until `Finish Setup`: cancelling or restarting the bot discards the draft (drafts live in
+memory, up to 200 at a time).
 
-Run in your test server:
+With `RUN_ENV=development` the checklist has two steps:
 
-```text
-/setup
-```
+- **AI Provider**, one select with three modes:
+  - **AI Provider (Recommended)**: pick a provider and enter an API key, which is validated and
+    encrypted into the draft.
+  - **Custom Endpoint (Advanced)**: `Configure Connection`, then `Configure Text Model`, which is
+    enabled once the connection validates.
+  - **User BYOK** (servers only): members bring their own providers and the server keeps no text
+    provider.
+- **Starting Settings**, one modal: persona, reply style, timezone, and the default system prompt.
+  **Built-in Default (Recommended)** stores no prompt text, so it follows future changes to the
+  shipped default; a catalog preset stores its text when you finish.
 
-The command requires **Manage Server** and answers with a private checklist panel that only you can
-operate. Its items are a draft: **Finish Setup** is the only control that writes, so opening, editing,
-or cancelling leaves the database untouched. A draft is process-local, so a restart discards it too,
-and at most 200 drafts are held at once.
+`RUN_ENV=production` adds a `Policies` step that accepts the Terms of Service and Privacy Policy.
+Set `TEST_PRODUCTION=true` to see it locally. The same setting controls whether
+`/legal terms-of-service` and `/legal privacy-policy` are registered; `/legal license` always is.
 
-Under `RUN_ENV=development` the panel renders two steps:
+Afterwards, `/providers` adds and edits saved providers (`Add New Custom Endpoint` for a custom one,
+then register a model from its dropdown), and `/config` > Models > Switch Models changes the active
+provider or model.
 
-- **AI Provider** offers one String Select with three access modes. **AI Provider (Recommended)**
-  opens the provider catalog plus an API key field and validates the key before encrypting it into the
-  draft. **Custom Endpoint (Advanced)** repaints the panel with **Configure Connection** and
-  **Configure Text Model**, and the model button stays disabled until a connection validates; both
-  write nothing before **Finish Setup**, unlike the same registration in `/providers`.
-  **User BYOK** is offered in guilds only and confirms that members must supply their own personal
-  providers, so the workspace keeps no server-side text provider.
-- **Starting Settings** is one four-row modal: persona, reply style, timezone, and the workspace
-  default system prompt. **Built-in Default (Recommended)** stores no prompt text, so it keeps
-  tracking the shipped default, and a catalog preset stores that preset's text at commit time.
+Quick checks: `/ping`, `/status`, and mentioning the bot in chat. If commands do not appear, run
+`/refresh`.
 
-`RUN_ENV=production` adds a third step, **Policies**, which accepts the Terms of Service and the
-Privacy Policy in one modal; add `TEST_PRODUCTION=true` to exercise that layout locally without AWS
-Secrets Manager. The same switch decides whether `/legal terms-of-service` and
-`/legal privacy-policy` are registered, and `/legal license` is registered in every environment.
+## Commands
 
-To save and activate an additional provider afterward:
+| Command | Use |
+|---|---|
+| `bun run dev` / `build` / `start` | Run with reload, build, run the build |
+| `bun run check`, `bun run lint` | TypeScript and Biome |
+| `bun run vl` | Every gate, one verdict each (see [Development Tasks](/contributing/development-tasks/)) |
+| `bun run check-locales`, `bun run check-limits` | Locale keys and Discord limits |
+| `bun run check-runtime-imports` | Runtime dependencies load, and `bun.lock` keeps compatible transitive versions. Fatal in `vl` and CI |
+| `bun run check-media-size` | Fails on tracked media over 1 MiB in `src/db/seed/catalog/personas/**` and `assets/img/**` |
+| `bun run compress-media` | Fixes those files: lossless re-encode first, then a downscale to 768 px on the long edge if still too big. `--dry-run` previews; a path substring targets one file |
+| `bun run nuke-db`, `bun run backup` | Reset or back up the local database |
+| `bun run purge-commands` | Remove registered slash commands |
 
-```text
-/providers
-```
-
-Choose **Add New Custom Endpoint** to save its API compatibility and connection details, then select
-the saved entry and use its model dropdown to register and activate a model capability. Later changes
-to that registration can be done in place with `/providers`.
-
-Then use `/config` > Models > Switch Models whenever you want to switch to another saved provider or model later.
-
-Common saved providers:
-
-- `provider:openrouter`
-- `provider:novelai`
-
-The old inline `custom` provider path is deprecated. Use `/providers` instead.
-
-## Common Development Commands
-
-```bash
-bun run dev
-bun run build
-bun run start
-bun run lint
-bun run check
-bun run check-runtime-imports
-bun run vl
-bun run nuke-db
-bun run backup
-bun run purge-commands
-bun run check-locales
-bun run check-limits
-bun run check-media-size
-bun run compress-media
-```
-
-`bun run vl` runs every validation gate and prints one verdict per gate, ending with a machine
-readable `vl-status:` line. It is quiet by default: a passing gate prints no output, and a failing
-gate prints its full detail. Pass `--verbose` to see everything each gate would print on its own. See
-[`development-tasks.md`](./development-tasks) for the full behavior and for the redirect pattern that
-keeps the exit code intact.
-
-`bun run check-runtime-imports` verifies that critical runtime dependencies load and that
-`bun.lock` preserves their compatible transitive versions. It also runs as a fatal check in
-`bun run vl` and CI.
-
-`bun run check-media-size` (also bundled into `bun run vl`) rejects tracked media
-over a per-file budget (1 MiB). It scans
-`src/db/seed/catalog/personas/**` (Default Persona avatars/sprites that ship to
-Discord) and `assets/img/**`.
-
-`bun run compress-media` fixes offenders automatically: it re-encodes losslessly
-(max deflate, metadata stripped, so color stays Δ0) and only downscales a file when
-lossless alone cannot reach the budget, capping the long edge at
-768px. Use `--dry-run` to preview, or pass a path substring to target one file.
-Note: these PNGs are already near-optimally compressed, so lossless rarely fits 1 MiB on
-its own: downscaling (invisible at Discord's <=128px avatar render size) is the trade.
-
-`compress-media` also normalizes release cards under `.github/release/**` (not gate-scoped)
-to WebP quality 90 at full resolution, rewriting sibling
-`release-notes.md` references. Already-WebP cards are skipped (re-encoding lossy WebP each
-run would degrade it). That tree lives on the `release` branch only, so run this from a
-`release` checkout. During deployment, the release workflow rewrites the card URL to the immutable
-release tag and tags the deployed commit. After converting a card for an already-published release,
-you must still update its published body (`gh release edit`).
-
-## Quick Health Checks
-
-- `/ping`
-- `/status`
-- Mention the bot or use trigger words in chat
-
-## Troubleshooting
-
-- Command registration issues: run `/refresh`
-- Type errors: `bun run check`
-- Formatting/lint: `bun run lint`
-- Locales mismatch: `bun run check-locales`
+Persona PNGs are already well compressed, so meeting the budget usually needs the downscale; Discord
+shows avatars at 128 px or less. On a `release` checkout, `compress-media` also converts release cards
+in `.github/release/**` to WebP (quality 90) and rewrites `release-notes.md` references. For a release
+already published, update its body with `gh release edit` afterwards.

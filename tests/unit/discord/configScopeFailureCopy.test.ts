@@ -10,10 +10,15 @@ import {
 import { createConfigInteractionRoute, executeConfigCommand } from "@/utils/discord/interactions/configRoutes";
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
 const CLIENT = {} as Client;
+
+function outdatedPanelCopy(): string {
+  return localizedCopy("en-US", "commands.config.panel.outdated_panel", { command: "/config" });
+}
 const GUILD_ID = "guild-1";
 const USER_ID = "user-1";
 
@@ -165,7 +170,7 @@ describe("config scope failure copy", () => {
       getLastDbError: NO_RECORDED_FAILURE,
     });
 
-    expect(contentOf(harness.edits[0])).toContain("Run /setup first.");
+    expect(contentOf(harness.edits[0])).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
   });
 
   it("offers a retry rather than /setup when the workspace read failed", async () => {
@@ -177,7 +182,7 @@ describe("config scope failure copy", () => {
     });
 
     const rendered = contentOf(harness.edits[0]);
-    expect(rendered).toContain("Retry to try again.");
+    expect(rendered).toContain(localizedCopy("en-US", "commands.config.panel.unavailable"));
     expect(rendered).not.toContain("/setup");
   });
 
@@ -188,7 +193,7 @@ describe("config scope failure copy", () => {
 
     await dispatch(harness, makeInteraction({ customId: renameOpenRoute(55), harness }));
 
-    expect(contentOf(harness.replies[0])).toContain("Run /setup first.");
+    expect(contentOf(harness.replies[0])).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
   });
 
   it("routes a panel button on a failed read to the transient copy", async () => {
@@ -198,7 +203,7 @@ describe("config scope failure copy", () => {
 
     await dispatch(harness, makeInteraction({ customId: renameOpenRoute(55), harness }));
 
-    expect(contentOf(harness.replies[0])).toContain("Retry to try again.");
+    expect(contentOf(harness.replies[0])).toContain(localizedCopy("en-US", "commands.config.panel.unavailable"));
   });
 
   it("sends a write whose persona is gone to a re-run of /config, not to /setup", async () => {
@@ -209,8 +214,7 @@ describe("config scope failure copy", () => {
     await dispatch(harness, makeInteraction({ customId: renameOpenRoute(999), harness }));
 
     const rendered = contentOf(harness.replies[0]);
-    expect(rendered).toContain("This panel is out of date.");
-    expect(rendered).toContain("/config");
+    expect(rendered).toContain(outdatedPanelCopy());
     expect(rendered).not.toContain("/setup");
   });
 
@@ -229,7 +233,7 @@ describe("config scope failure copy", () => {
     );
 
     const rendered = contentOf(harness.edits.at(-1));
-    expect(rendered).toContain("This panel is out of date.");
+    expect(rendered).toContain(outdatedPanelCopy());
     expect(rendered).not.toContain("/setup");
   });
 
@@ -250,7 +254,7 @@ describe("config scope failure copy", () => {
       }),
     );
 
-    expect(contentOf(harness.replies[0])).toContain("This panel is out of date.");
+    expect(contentOf(harness.replies[0])).toContain(outdatedPanelCopy());
     expect(contentOf(harness.replies[0])).not.toContain("/setup");
   });
 
@@ -271,6 +275,6 @@ describe("config scope failure copy", () => {
       }),
     );
 
-    expect(contentOf(harness.replies[0])).toContain("Run /setup first.");
+    expect(contentOf(harness.replies[0])).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
   });
 });

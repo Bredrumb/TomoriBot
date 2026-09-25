@@ -843,7 +843,7 @@ async function main() {
       "Run `bun install --frozen-lockfile`, then `bun run check-runtime-imports`. Confirm bun.lock resolves gaxios to uuid@9.",
     Knip: "Run `bun run knip` and remove unused files, dependencies, or exports, or update scripts/knip.json for intentional entry points.",
     "Comment Audit":
-      "Run `bun run audit-comments` and review each finding against docs/en/contributing/comment-policy.md before editing.",
+      "Run `bun run audit-comments` and review each finding against docs/en/contributing/policies/comments.md before editing.",
     "Command Mentions":
       "A locale string names a slash path that is not registered. Update the prose to the new path, or add a documented entry to scripts/checks/command-mention-exceptions.json.",
     "Dependency Audit":

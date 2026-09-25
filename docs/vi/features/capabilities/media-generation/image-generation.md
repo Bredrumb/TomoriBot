@@ -35,7 +35,7 @@ tiết tại thời điểm tạo, bao gồm mọi người dùng hoặc persona
 Mọi nguồn thẻ tag ở trên đều có thể chỉnh sửa, mỗi nguồn ở một phạm vi khác nhau. Tất cả các tùy chọn này đều mở một
 cửa sổ modal được điền sẵn các thẻ hiện tại, giúp bạn chỉnh sửa trực tiếp:
 
-- **`/config` > Persona > Appearance**: các thẻ **Ngoại hình** (Physical Appearance) của persona đã chọn (cách *bot*
+- **`/config` > Persona > Appearance**: các thẻ `Ngoại hình` (Physical Appearance) của persona đã chọn (cách *bot*
   xuất hiện). Yêu cầu quyền Manage Server.
 - **`/personal config`**: các thẻ ngoại hình của *chính bạn*, được áp dụng khi một lượt tạo ảnh
   tham chiếu đến bạn. Thiết lập này theo bạn trên mọi máy chủ (xem

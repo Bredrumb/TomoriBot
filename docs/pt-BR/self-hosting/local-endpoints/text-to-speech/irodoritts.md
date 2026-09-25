@@ -78,7 +78,7 @@ O Irodori atual faz o download do checkpoint junto com quaisquer recursos do tok
 
 ## Registrar no TomoriBot
 
-Execute `/providers`, escolha **Add New Custom Endpoint**, e use a compatibilidade da API de fala:
+Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado`, e use a compatibilidade da API de fala:
 
 - Compatibilidade de API: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8013`

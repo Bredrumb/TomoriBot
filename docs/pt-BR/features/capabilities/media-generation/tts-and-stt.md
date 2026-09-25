@@ -19,7 +19,7 @@ e siga os guias de hospedagem própria.
 ### ElevenLabs (nuvem, mais fácil)
 
 1. Obtenha uma chave de API em [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Execute `/providers`, escolha **Add New Provider**, selecione **ElevenLabs** e cole a chave. Esse fluxo:
+2. Execute `/providers`, escolha `Adicionar Novo Provedor`, selecione **ElevenLabs** e cole a chave. Esse fluxo:
    - registra o endpoint de **fala** do ElevenLabs (e o endpoint de **transcrição** também),
    - seleciona-os como ativos,
    - pode atribuir uma voz a uma persona na hora.
@@ -27,7 +27,7 @@ e siga os guias de hospedagem própria.
    [Biblioteca de Vozes do ElevenLabs](https://elevenlabs.io/app/voice-library), onde você também pode
    clonar a sua própria.
 
-Selecione ElevenLabs em `/providers` e escolha **Edit Endpoint** sempre que precisar atualizar a chave.
+Selecione ElevenLabs em `/providers` e escolha `Editar Endpoint` sempre que precisar atualizar a chave.
 
 Observações:
 
@@ -39,7 +39,7 @@ Observações:
   voz atribuída.
 - Persona > Voice no `/config` requer Gerenciar Servidor em uma guilda e permanece disponível para o dono em um workspace baseado em DM.
 
-No `/help`, escolha **Features** e depois **Speech** para o mesmo passo a passo no Discord.
+No `/help`, escolha `Recursos` e depois **Speech** para o mesmo passo a passo no Discord.
 
 ### Motores locais de clonagem de voz (hospedagem própria)
 
@@ -81,4 +81,4 @@ fala. Use `/providers` para escolher entre endpoints de transcrição.
 - [whisper.cpp](/pt-BR/self-hosting/local-endpoints/speech-to-text/whispercpp/).
 
 Veja o hub de [Fala-para-Texto](/pt-BR/self-hosting/local-endpoints/speech-to-text/) para a lista completa. Para o
-resumo no Discord, execute `/help`, depois escolha **Features** e **Transcription**.
+resumo no Discord, execute `/help`, depois escolha `Recursos` e `Transcrição`.

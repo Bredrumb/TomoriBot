@@ -17,7 +17,7 @@ Keep KoboldCPP running while TomoriBot is using it. If your build only exposes `
 
 ## Register in TomoriBot
 
-Run `/providers`, choose **Add New Custom Endpoint**, and use the transcription API compatibility:
+Run `/providers`, choose `Add New Custom Endpoint`, and use the transcription API compatibility:
 
 - API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: your KoboldCPP server root

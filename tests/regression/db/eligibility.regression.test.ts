@@ -10,7 +10,7 @@
  * disposable Postgres fixture, so a genuine divergence between a batched query and
  * its loader (the exact bug class the filter exists to prevent) fails here.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md).
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md).
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import {

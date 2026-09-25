@@ -70,7 +70,7 @@ Khi bot đã trực tuyến, hãy chạy `/setup` trong Discord để kết nố
 ## Lệnh `/setup`
 <!-- anchor: the-setup-command -->
 
-Lệnh `/setup` mở một bảng danh sách kiểm tra tạm thời mà chỉ người thực hiện lệnh mới có thể thao tác. Trong máy chủ, lệnh yêu cầu quyền **Manage Server**; trong tin nhắn riêng (DM), lệnh khả dụng cho không gian làm việc của chính người đó. Mỗi hàng trên bảng là một giá trị nháp: **Finish Setup** là nút điều khiển duy nhất ghi dữ liệu, vì vậy việc mở, chỉnh sửa, hủy hoặc khởi động lại sẽ không làm thay đổi bất kỳ hàng nào trong cơ sở dữ liệu.
+Lệnh `/setup` mở một bảng danh sách kiểm tra tạm thời mà chỉ người thực hiện lệnh mới có thể thao tác. Trong máy chủ, lệnh yêu cầu quyền **Manage Server**; trong tin nhắn riêng (DM), lệnh khả dụng cho không gian làm việc của chính người đó. Mỗi hàng trên bảng là một giá trị nháp: `Hoàn tất thiết lập` là nút điều khiển duy nhất ghi dữ liệu, vì vậy việc mở, chỉnh sửa, hủy hoặc khởi động lại sẽ không làm thay đổi bất kỳ hàng nào trong cơ sở dữ liệu.
 
 | Bước | Xuất hiện khi | Thông tin thu thập |
 |---|---|---|
@@ -82,18 +82,18 @@ Mọi giá trị `RUN_ENV` khác đều hiển thị bố cục hai bước và 
 
 ### Chế độ truy cập nhà cung cấp
 
-- **AI Provider (Khuyến nghị)**: chọn một nhà cung cấp từ danh mục và dán khóa API tương ứng. Khóa được xác thực với nhà cung cấp và mã hóa vào bản nháp; bảng điều khiển chỉ hiển thị thông tin rằng khóa đã được lưu, không bao giờ hiển thị chính khóa đó. Hãy chạy `/help`, sau đó vào **Setup** > **Step 1: Get an API Key** để xem hướng dẫn từng bước cho từng nhà cung cấp.
-- **Custom Endpoint (Nâng cao)**: khu vực phụ gồm hai nút dành cho endpoint tự host hoặc proxy. **Configure Connection** thu thập khả năng tương thích API, nhãn, URL và token xác thực tùy chọn, đồng thời kiểm tra xem endpoint có phản hồi hay không. **Configure Text Model** thu thập mã model, kích thước ngữ cảnh và các khai báo tính năng của model, nút này sẽ bị vô hiệu hóa cho đến khi kết nối được xác thực thành công. Việc lưu lại kết nối một lần nữa sẽ xóa khai báo model, vì các khai báo này phụ thuộc vào khả năng tương thích API đã chọn. Đây chính là quy trình đăng ký mà `/providers` thực hiện, được tích hợp bên trong trình hướng dẫn và không tạo bất kỳ hàng nào trước khi nhấn **Finish Setup**.
-- **User BYOK** (chỉ dành cho guild, không áp dụng trong DM): không gian làm việc không giữ nhà cung cấp riêng và mọi phản hồi do thành viên kích hoạt sẽ sử dụng nhà cung cấp cá nhân của họ để xử lý. Hãy xác nhận điều này trong modal, sau đó yêu cầu các thành viên đăng ký nhà cung cấp của họ bằng `/personal providers`. Xem
+- **Nhà cung cấp AI (Khuyên dùng)**: chọn một nhà cung cấp từ danh mục và dán khóa API tương ứng. Khóa được xác thực với nhà cung cấp và mã hóa vào bản nháp; bảng điều khiển chỉ hiển thị thông tin rằng khóa đã được lưu, không bao giờ hiển thị chính khóa đó. Hãy chạy `/help`, sau đó vào `Thiết lập` > **Step 1: Get an API Key** để xem hướng dẫn từng bước cho từng nhà cung cấp.
+- **Endpoint tùy chỉnh (Nâng cao)**: khu vực phụ gồm hai nút dành cho endpoint tự host hoặc proxy. `Cấu hình kết nối` thu thập khả năng tương thích API, nhãn, URL và token xác thực tùy chọn, đồng thời kiểm tra xem endpoint có phản hồi hay không. `Cấu hình model văn bản` thu thập mã model, kích thước ngữ cảnh và các khai báo tính năng của model, nút này sẽ bị vô hiệu hóa cho đến khi kết nối được xác thực thành công. Việc lưu lại kết nối một lần nữa sẽ xóa khai báo model, vì các khai báo này phụ thuộc vào khả năng tương thích API đã chọn. Đây chính là quy trình đăng ký mà `/providers` thực hiện, được tích hợp bên trong trình hướng dẫn và không tạo bất kỳ hàng nào trước khi nhấn `Hoàn tất thiết lập`.
+- **BYOK người dùng** (chỉ dành cho guild, không áp dụng trong DM): không gian làm việc không giữ nhà cung cấp riêng và mọi phản hồi do thành viên kích hoạt sẽ sử dụng nhà cung cấp cá nhân của họ để xử lý. Hãy xác nhận điều này trong modal, sau đó yêu cầu các thành viên đăng ký nhà cung cấp của họ bằng `/personal providers`. Xem
   [Kiểm duyệt máy chủ](/vi/features/setup-administration/server-moderation/#user-byok-bring-your-own-key).
 
 ### Cài đặt ban đầu
 
-Một modal bốn hàng sẽ thu thập persona, phong cách phản hồi, độ lệch múi giờ và system prompt mặc định. Múi giờ là tùy chọn và mặc định là UTC. System prompt cung cấp lựa chọn **Built-in Default (Khuyến nghị)** cùng mọi preset có trong danh mục của không gian làm việc: lựa chọn mặc định tích hợp sẵn không lưu bất kỳ văn bản prompt nào, do đó luôn theo sát bản mặc định đi kèm bot, còn lựa chọn preset sẽ lưu văn bản của preset đó tại thời điểm xác nhận. Việc xóa một persona hoặc prompt đã lưu khỏi danh mục sẽ mở lại bước này cho đến khi chọn một mục khác.
+Một modal bốn hàng sẽ thu thập persona, phong cách phản hồi, độ lệch múi giờ và system prompt mặc định. Múi giờ là tùy chọn và mặc định là UTC. System prompt cung cấp lựa chọn `Mặc định tích hợp sẵn (Khuyên dùng)` cùng mọi preset có trong danh mục của không gian làm việc: lựa chọn mặc định tích hợp sẵn không lưu bất kỳ văn bản prompt nào, do đó luôn theo sát bản mặc định đi kèm bot, còn lựa chọn preset sẽ lưu văn bản của preset đó tại thời điểm xác nhận. Việc xóa một persona hoặc prompt đã lưu khỏi danh mục sẽ mở lại bước này cho đến khi chọn một mục khác.
 
 ### Hoàn tất và hủy
 
-Nút **Finish Setup** luôn bị vô hiệu hóa cho đến khi mọi bước hiển thị đã hoàn tất. Nút này sẽ xác thực lại các danh mục và trạng thái không gian làm việc, lưu toàn bộ bản nháp trong một transaction duy nhất và thay thế bảng điều khiển bằng biên nhận xác nhận. Nút **Cancel** sẽ hủy bỏ bản nháp và làm hết hạn mọi nút điều khiển trên bảng.
+Nút `Hoàn tất thiết lập` luôn bị vô hiệu hóa cho đến khi mọi bước hiển thị đã hoàn tất. Nút này sẽ xác thực lại các danh mục và trạng thái không gian làm việc, lưu toàn bộ bản nháp trong một transaction duy nhất và thay thế bảng điều khiển bằng biên nhận xác nhận. Nút `Hủy` sẽ hủy bỏ bản nháp và làm hết hạn mọi nút điều khiển trên bảng.
 
 Bản nháp tồn tại trong tiến trình bot chứ không nằm trong cơ sở dữ liệu, vì vậy nó chỉ kết thúc khi bị hủy, hoàn tất hoặc khi tiến trình khởi động lại. Tối đa 200 bản nháp được lưu giữ cùng lúc; bản nháp cũ nhất sẽ bị loại bỏ khi đạt giới hạn. Nút điều khiển của một phiên không còn tồn tại sẽ không ghi bất kỳ dữ liệu nào.
 

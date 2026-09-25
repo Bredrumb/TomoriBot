@@ -14,11 +14,11 @@ description: 規範官方託管 TomoriBot 執行個體使用的條款。
 為了清楚起見，本文件通篇使用這些詞彙：
 
 - **Server**：設定 TomoriBot 的 Discord 伺服器或社群
-- **Memories**：透過指令教導 TomoriBot 的事實或資訊，或透過 `remember_this_fact` 函式工具自我教導的內容
+- **記憶**：透過指令教導 TomoriBot 的事實或資訊，或透過 `remember_this_fact` 函式工具自我教導的內容
 - **Persona/Preset**：可設定的個性與行為設定檔，會改變 TomoriBot 回覆的方式
-- **Provider**：你設定 TomoriBot 使用的第三方 AI 或搜尋服務（例如 Google、NovelAI、OpenRouter、Brave Search）
+- **供應商**：你設定 TomoriBot 使用的第三方 AI 或搜尋服務（例如 Google、NovelAI、OpenRouter、Brave Search）
 - **Hosted Instance**：作為 Discord 公開 bot 維護的官方 TomoriBot 服務，相對於自架副本
-- **API Key**：你提供用來將 TomoriBot 連接到你所選 Provider 的驗證憑證
+- **API 金鑰**：你提供用來將 TomoriBot 連接到你所選 Provider 的驗證憑證
 - **Trigger**：讓 TomoriBot 使用你設定的 provider 在 Discord 文字頻道中產生回覆的事件，例如：標註 bot、回覆它的訊息、使用需要 AI 或搜尋處理的斜線指令，或在啟用自動回覆的頻道中傳送訊息。Trigger 會消耗你 provider 帳號的 API 額度或 token。
 - **Server Manager**：有權為某個 Server 設定 TomoriBot 的成員，例如執行 `/setup` 的成員
 

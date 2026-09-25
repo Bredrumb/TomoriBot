@@ -4,7 +4,7 @@ title: "06.3: Generation Turn"
 
 Drive the provider call with model fallback and API-key rotation.
 
-**File:** `src/utils/chat/generationTurn.ts:50-187`
+**File:** `src/utils/chat/generationTurn.ts:77-283` (`runGenerationTurn` and the attempt loop)
 
 ## Mission
 
@@ -40,7 +40,7 @@ a non-error result *and* the loop falls through (rare; defensive).
 
 ## Side effects
 
-**Per-attempt setup (`buildGenerationAttempts`, `createAttempt`):**
+**Per-attempt setup (`buildGenerationPlan`, `createAttempt`):**
 
 - Resolves the primary `TomoriState`: applies personal-provider selection
   (if BYOK), channel LLM override, and any `llmOverrideCodename` from the
@@ -57,8 +57,12 @@ a non-error result *and* the loop falls through (rare; defensive).
   endpoints use the server's saved custom provider, while personal endpoints use
   the owning user's saved provider and key. Personal fallback refs are isolated
   from the server chain and retain their configured order.
+- Returns a plan rather than a bare list: the attempts for the route the turn was
+  planned on, plus an optional extension thunk for the server route (below). The
+  thunk is **not** invoked here, so a turn that never leaves its planned route never
+  resolves server provider config or asks for the server's quota admission.
 
-**Per-turn model randomizer (`buildGenerationAttempts`):**
+**Per-turn model randomizer (`buildPlannedRouteAttempts`, `buildServerRouteAttempts`):**
 
 - When `config.model_randomizer_enabled` is `true` and the pool has ≥2 members,
   a random pool member is spliced to the front of the attempt list **per
@@ -81,8 +85,67 @@ a non-error result *and* the loop falls through (rare; defensive).
   suppresses a server `true`, and personal `true` applies under a server `false`. A row
   counts as the active Text route only when it has the `text` capability enabled **and**
   a configured text model, so a personal row whose model pointer went NULL leaves the
-  server value in place. The personal flag has no user-facing control yet, so today it is
-  written only through its repository setter.
+  server value in place. `/personal config` > Models > Fallbacks writes it through
+  `personalConfigOperations.setRandomizer`.
+- Each pool draws on its **own** state: the planned route's pool reads the overlaid
+  personal flag, and the server route's pool reads the unmodified server flag. A
+  personal randomizer therefore never reorders the server route, and vice versa.
+
+**Server route fallback (`resolveServerRouteExtension`, `buildServerRouteAttempts`):**
+
+- Exists only for a turn planned on personal text credentials outside user
+  impersonation. Every other turn's planned route already **is** the server route,
+  so there is nothing to extend with.
+- Is materialized once, and only after every planned attempt has failed on an
+  `error`/`timeout`. Until then nothing about the server route is resolved: no
+  server provider config, no server key, no admission. The extension runs from the
+  attempt loop, not from the plan builder.
+- Rebuilds its pool from the **unmodified** server state
+  (`resolveTomoriStateForRoute(context, "server")`: persona server model, channel
+  override, then `llmOverrideCodename`), so each attempt carries the server's
+  credentials even when both routes name models from one provider. Attempt numbering
+  continues from the planned route, so log labels stay unique.
+- Is withheld when the server sets `user_byok_mode`: the server does not lend its
+  models to member-triggered turns, so a failure on member credentials is the turn's
+  outcome rather than a reason to reach for them.
+- Is withheld when the account set `personal_server_fallback_enabled` to `false` in
+  `/personal config` > Models > Fallbacks. The column defaults to `true` and the
+  projection reports that default, so only an explicit opt-out withholds it.
+- Admits itself against the server's own rules before building any attempt
+  (`admitServerRoute`), because planning skipped both of them while the personal route
+  was paying. A refused admission contributes no attempts, so the personal failure
+  stays the outcome:
+  - **Message cooldown.** `admitServerRouteCooldown` runs the same
+    `enforceServerTriggerCooldownForAdmission` planning runs for a server-sourced turn,
+    under the same exemptions (stop responses, persona jobs, the bot's own messages).
+    Without it, a personal provider that fails on every message would buy a server reply
+    on every message for as long as the server's quota allows, and a server that leaves
+    quota off would never stop at all.
+  - **Text quota.** `admitServerRouteTextQuota` reuses `checkTextQuotaForAdmission` with
+    the applicability predicate planning uses (`shouldApplyServerTextQuota`). A refusal
+    is reported once per trigger: a refusal stores no quota state, so a reply that runs
+    several persona turns would otherwise take the check again and post one quota embed
+    per turn (`markTextQuotaRefused` / `hasTextQuotaBeenRefused`).
+- A granted quota admission arms `context.shouldApplyTextQuota` and
+  `context.textQuotaState`, which is what makes post-turn consumption charge the
+  server. Consumption itself stays in post-turn effects and still requires a reply,
+  so a server route that also fails costs the quota nothing.
+- Once it contributes an attempt, the turn's reported credential source switches to
+  `server` on both `ChatTurnContext` and `StreamingContext`. Everything downstream reads
+  that field as "who is answering": the thought-log attribution no longer credits the
+  user's personal provider, and a failing server attempt gets server-scoped recovery
+  tips instead of "switch your personal model".
+- A suppressed attempt holds its SDK-call timeout notice back while a fallback is still
+  pending (`StreamingContext.deferredTimeoutNotice`). If the server route then
+  contributes nothing, the terminal branch resends it, because no error result carries a
+  timeout and the turn would otherwise end in silence. The resend only happens on a turn
+  that surfaces user errors outside impersonation: the tool loop also defers on turns
+  that hide errors on purpose (auto-chat, random triggers), and those stay silent.
+- A success on this route is the only fallback that names an opt-out: the
+  `Fallback Used` details modal then points at `/personal config` > Models >
+  Fallbacks through `offerPersonalFallbackOptOut`. A personal-route success has no
+  such control to point at, and a model that is its route's own lead reports slot 1
+  rather than a fallback slot it does not hold.
 
 **Per-attempt context prep (`prepareProviderContextItems`):**
 
@@ -121,6 +184,9 @@ a non-error result *and* the loop falls through (rare; defensive).
   interrupt is pending for the channel.
 - On non-error or last attempt: emits only final error results, calls
   `responseSink.finalize(result)`, and returns.
+- A pending server route counts as a pending model, so the last planned attempt keeps its
+  errors suppressed while a server model may still answer. The terminal branch resets
+  suppression before emitting the error, and reports a held-back timeout notice.
 - On thrown error: calls `responseSink.emitError(error)` and finalizes with
   an `error` result, except under user impersonation, where `emitError`
   rethrows by design and neither the `error` result nor `finalize` is reached.
@@ -177,6 +243,12 @@ After this stage runs:
   status is `"skipped"`, which post-turn effects will distinguish).
 - Rotation-key bookkeeping (`recordKeySuccess`/`recordKeyError`) reflects
   the outcome of the key that was actually used for each attempt.
+- The server route never charges the server's text quota for a turn it did not
+  answer: consumption is armed only when the route is entered, and post-turn
+  consumption still requires a reply from the winning attempt.
+- An account that turned the server fallback off never has server provider config
+  resolved, and a server that requires member-provided providers never contributes a
+  server route.
 - No superseded attempt's partial output committed through the streaming send
   path (`recordSuccessfulSend`) remains in the channel: those messages are
   deleted, leaving only the surviving (or final) attempt's response. Artifacts
@@ -192,7 +264,7 @@ The stage is a coordinator over several plugin-relevant subsystems:
 | Provider dispatch | `ProviderFactory.getProviderByName`, `getProviderForTomori` | The provider plugin contract is the seam: see [provider pipeline](../../provider/) |
 | Tool execution | `runToolLoop` | See [tool-loop pipeline](../../tool-loop/) |
 | Key rotation | `selectApiKey`, `recordKeySuccess`, `recordKeyError`, `hasAvailableRotationKey` | Internal: rotation-key schema is core, not plugin-relevant |
-| Fallback chain | `createFallbackAttempt`, `applySavedProviderConfig` | The fallback-entry schema (`FallbackEntry` union: `model` or `custom_endpoint`) is the data-model seam |
+| Fallback chain | `createFallbackAttempt`, `applySavedProviderConfig`, `resolveServerRouteExtension` | The fallback-entry schema (`FallbackEntry` union: `model` or `custom_endpoint`) is the data-model seam |
 | Context truncation | `truncateDialogueHistory` | Per-provider token-limit table is the registration surface |
 | Personal-provider routing | `applyPersonalProviderSelectionsToTomoriState` | BYOK substitution; see [provider pipeline](../../provider/) |
 
@@ -201,7 +273,7 @@ The stage is a coordinator over several plugin-relevant subsystems:
 
 - **Add a new provider**: register it via the provider plugin contract.
 - **Change attempt-list construction** (e.g. add a probe attempt before the
-  primary): would extend `buildGenerationAttempts`. → plugin plan candidate.
+  primary): would extend `buildGenerationPlan`. → plugin plan candidate.
 - **Intercept stream results**: wrap the sink (per-turn stage 02), not this
   stage.
 

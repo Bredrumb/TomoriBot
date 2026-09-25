@@ -31,18 +31,18 @@ As próprias ferramentas do TomoriBot esperam que o **Node.js v20+** esteja disp
 
 ## 2. Registre-o no Discord
 
-Abra `/config` > Plugins > Servidores MCP, escolha **+ Add MCP**, aponte o campo **URL**
-para o seu servidor local e deixe o campo obrigatório **Server Type** em seu valor padrão **General Purpose**:
+Abra `/config` > Plugins > Servidores MCP, escolha `Adicionar MCP`, aponte o campo **URL**
+para o seu servidor local e deixe o campo obrigatório `Tipo de Servidor` em seu valor padrão `Propósito Geral`:
 
 ```text
 http://localhost:3000/sse
 ```
 
-Deixe o campo **Auth Token** em branco: nenhum token de autenticação é necessário para servidores locais.
+Deixe o campo `Token de Autenticação` em branco: nenhum token de autenticação é necessário para servidores locais.
 
 ## 3. Gerencie-o
 
-- Abra a página Config e escolha **Remove** na linha do servidor. A confirmação o cancela o registro,
+- Abra a página Config e escolha `Remover` na linha do servidor. A confirmação o cancela o registro,
   desconecta-o imediatamente e libera um espaço.
 
 ## Segurança

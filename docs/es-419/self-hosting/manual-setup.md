@@ -76,7 +76,7 @@ bun run dev
 
 Cuando veas `TomoriBot up and running!`, ve a Discord y ejecuta `/setup` en tu servidor para conectar un
 proveedor de IA e inicializar el bot. El comando abre un panel de lista de verificación guiada, y no se
-escribe nada hasta que presiones **Finalizar configuración**; consulta
+escribe nada hasta que presiones `Finalizar configuración`; consulta
 [El comando `/setup`](/es-419/self-hosting/setup-wizard/#el-comando-setup) para los pasos y la
 [Guía rápida](/es-419/introduction/quickstart/) para el lado dentro de Discord.
 

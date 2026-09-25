@@ -42,6 +42,7 @@ import {
   buildPersonalMemoriesPanelPayload,
 } from "@/utils/discord/ui/personalMemoriesPanel";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -1550,7 +1551,7 @@ describe("persona selector lineage identity", () => {
     // An unavailable avatar resolves to null, so the heading remains a plain TextDisplay.
     const withoutAvatar = JSON.stringify(buildPersonaPage(personas, undefined, null));
     expect(withoutAvatar).not.toContain('"type":11');
-    expect(withoutAvatar).toContain("Persona-Scoped Personal Memories");
+    expect(withoutAvatar).toContain(localizedCopy("en-US", "commands.personal.memories.persona_title"));
   });
 
   it("paginates all lineages without hidden-entry notices", () => {
@@ -1559,7 +1560,9 @@ describe("persona selector lineage identity", () => {
 
     const select = personaSelect(payload);
     expect(select?.options).toHaveLength(25);
-    expect(JSON.stringify(payload)).not.toContain("more personas are not listed here");
+    expect(JSON.stringify(payload)).not.toMatch(
+      localizedProse("en-US", "commands.personal.config.persona_select_truncated"),
+    );
     expect(JSON.stringify(payload)).toContain("personal-memories:v1:persona-page:en-US:persona:20000:1");
 
     const secondPage = buildPersonalMemoriesPanelPayload({
@@ -1695,7 +1698,7 @@ describe("persona selector lineage identity", () => {
     expect(serialized).toContain("Memory 48");
     const memorySelect = collectSelects(payload).find((select) => select.customId?.includes(":select:"));
     expect(memorySelect?.options?.some((option) => option.label === "Memory 49")).toBe(false);
-    expect(serialized).not.toContain("No memories saved yet.");
+    expect(serialized).not.toContain(localizedCopy("en-US", "commands.personal.memories.no_memories"));
   });
 });
 

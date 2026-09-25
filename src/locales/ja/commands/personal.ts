@@ -320,7 +320,7 @@ export default {
       fallback_none_desc: `このフォールバックスロットを空のままにします。`,
       randomizer_section_title: `モデルランダマイザー`,
       randomizer_section_desc:
-        "有効にすると、メインモデルとフォールバックモデルのプールから 返信ごとにランダムにモデルを選択します。 選択したモデルが失敗した場合は、再度ランダムに選択します。",
+        "返信ごとにメインモデルとフォールバックモデルからランダムに選択します。失敗時はプール内で続行します。",
       randomizer_effect_off: `最初にメインモデルを試します`,
       randomizer_effect_on: `最初にメインモデルとフォールバックからランダムなモデルを選択します`,
       fallbacks_updated_heading: `個人のフォールバックを更新しました`,
@@ -333,6 +333,16 @@ export default {
       randomizer_enabled_detail: `{provider} のモデルランダマイザーが有効になりました。`,
       randomizer_disabled_heading: `ランダマイザーを無効にしました`,
       randomizer_disabled_detail: `{provider} のモデルランダマイザーが無効になりました。`,
+      server_fallback_section_title: `サーバーモデルのフォールバック`,
+      server_fallback_section_desc:
+        "個人のプロバイダーがリクエストを完了できない場合は、このサーバーのモデルとテキストクォータを使用します。",
+      server_fallback_effect_on: `個人のプロバイダーが失敗したときは、このサーバーのモデルで応答します`,
+      server_fallback_effect_off: `このサーバーのモデルを借りずに停止します`,
+      server_fallback_byok_notice: `このサーバーはメンバー自身のプロバイダーを必須としているため、ここではサーバーのモデルを貸し出しません`,
+      server_fallback_enabled_heading: `サーバーモデルのフォールバックを有効にしました`,
+      server_fallback_enabled_detail: `個人のテキストプロバイダーが失敗したときは、サーバーモデルが応答するようになります。`,
+      server_fallback_disabled_heading: `サーバーモデルのフォールバックを無効にしました`,
+      server_fallback_disabled_detail: `個人のテキストプロバイダーの失敗がサーバーモデルにフォールバックされなくなります。`,
       no_text_providers_fallbacks:
         "保存された個人のテキストプロバイダーが見つかりません。 `/personal providers` で追加してください。",
       response_modes_title: `個人の応答モード`,

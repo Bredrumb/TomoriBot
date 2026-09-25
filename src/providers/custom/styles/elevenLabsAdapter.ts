@@ -10,6 +10,7 @@ export interface ElevenLabsAdapterRequest {
    * Omit entirely to keep the request body byte-identical to the provider defaults.
    */
   voiceSettings?: Record<string, unknown>;
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -24,5 +25,6 @@ export async function synthesizeSpeechViaElevenLabsAdapter(
     voiceId: request.voiceId,
     script: request.script,
     ...(request.voiceSettings ? { voiceSettings: request.voiceSettings } : {}),
+    ...(request.abortSignal ? { abortSignal: request.abortSignal } : {}),
   });
 }

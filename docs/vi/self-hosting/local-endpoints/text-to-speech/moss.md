@@ -40,7 +40,7 @@ Endpoint là `http://127.0.0.1:8018`, và `bun run launch --moss` khởi động
 
 ## Đăng ký trong TomoriBot
 
-Trong `/providers`, chọn **Add New Custom Endpoint**, đặt API Compatibility thành `tts-clone`, và sử dụng URL endpoint `http://127.0.0.1:8018`. Thêm một model Speech với **Voice Source Mode** là `Auto` và **Script Markup** là `Plain`. Sau đó kích hoạt model dưới phần `/config` > Models > Switch Models.
+Trong `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, đặt API Compatibility thành `tts-clone`, và sử dụng URL endpoint `http://127.0.0.1:8018`. Thêm một model Speech với **Voice Source Mode** là `Auto` và **Script Markup** là `Plain`. Sau đó kích hoạt model dưới phần `/config` > Models > Switch Models.
 
 Đối với sao chép, hãy tải lên một đoạn clip tham chiếu rõ ràng dưới phần `/config` > Models > TTS Parameters & Voices và gán đoạn clip đó dưới phần Persona > Voice. Thượng nguồn không ghi nhận độ dài tham chiếu được khuyến nghị nào cho MOSS-TTS và cũng không có giới hạn thời lượng trong runtime của nó, vì vậy độ dài clip do bạn tự điều chỉnh; những clip ngắn và rõ ràng hơn vẫn là lựa chọn mặc định an toàn hơn. Đối với thiết kế giọng nói, hãy lưu mô tả giọng nói bằng ngôn ngữ tự nhiên dưới phần Persona > Voice. MOSS-TTS sử dụng tham chiếu âm thanh; model này không sử dụng bản phiên âm tham chiếu tùy chọn của TomoriBot. MOSS-VoiceGenerator được tài liệu hóa cho tiếng Anh và tiếng Trung, không phải tiếng Nhật. Model sao chép 4B hỗ trợ tiếng Nhật, nhưng một thẻ ngôn ngữ đã biết sẽ cải thiện khả năng tổng hợp đa ngôn ngữ.
 

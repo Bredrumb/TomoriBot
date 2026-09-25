@@ -71,4 +71,4 @@ SillyTavern 的 Prompt Manager 預設集控制提示詞的**編排**。用 `/con
 - 歷史後與深度注入會合併進既有的對話紀錄項目，而不是變成獨立訊息；同一深度的多個節點會批次處理。
 - 不支援規則表達式後處理、預設集端的 temperature、top-p 或模型覆寫，以及分層預設集。舊式的文字補全預設集會走一條盡力而為的路徑匯入，並捨棄 ST 專屬的區塊（scenario、anchors、stop strings……）。
 
-在 `/help` 中選擇 **整合**，然後選 **SillyTavern 預設集**，就能看到 Discord 內的參考。匯入引擎的內部細節請看[預設集系統架構](/en/architecture/integrations/sillytavern/preset-system/)。
+在 `/help` 中選擇 **整合**，然後選 `SillyTavern 預設集`，就能看到 Discord 內的參考。匯入引擎的內部細節請看[預設集系統架構](/en/architecture/integrations/sillytavern/preset-system/)。

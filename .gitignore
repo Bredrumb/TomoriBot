@@ -7,6 +7,7 @@ temp_*
 # ISSUE_TEMPLATE/, and systemPrompts.ts (contains "temp" as "sys-temp-rompts").
 tmp-*/
 temp-*/
+temp/
 .tmp-*/
 
 # Root-level scratch .txt output/prompts (e.g. captured check-locales stdout). Root-scoped so it

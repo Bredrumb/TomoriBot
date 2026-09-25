@@ -89,7 +89,7 @@ provider answers instead, so this is the last step of every install path.
 
 `/setup` opens an ephemeral checklist panel that only the person who ran it can operate. In a server
 it requires **Manage Server**; in a DM it is available to that person's own workspace. Every row on
-the panel is a draft value: **Finish Setup** is the only control that writes anything, so opening,
+the panel is a draft value: `Finish Setup` is the only control that writes anything, so opening,
 editing, cancelling, or restarting leaves every database row untouched.
 
 | Step | Appears | What it collects |
@@ -106,15 +106,15 @@ beside `/legal license`; every other value registers only `/legal license`.
 
 - **AI Provider (Recommended)**: pick a provider from the catalog and paste its API key. The key is
   validated against the provider and encrypted into the draft; the panel shows only that a key is
-  stored, never the key itself. Run `/help`, then **Setup** > **Step 1: Get an API Key** for the
+  stored, never the key itself. Run `/help`, then `Setup` > **Step 1: Get an API Key** for the
   per-provider walkthrough.
 - **Custom Endpoint (Advanced)**: a two-button sub-area for a self-hosted or proxy endpoint.
   **Configure Connection** collects the API compatibility, a label, the URL, and an optional auth
-  token, and checks that the endpoint answers. **Configure Text Model** collects the model code, its
+  token, and checks that the endpoint answers. `Configure Text Model` collects the model code, its
   context size, and its capability declarations, and stays disabled until a connection validates.
   Saving the connection again clears the model declaration, because the declarations depend on the
   chosen API compatibility. This is the same registration `/providers` performs, done inside the
-  wizard, and it creates no rows before **Finish Setup**.
+  wizard, and it creates no rows before `Finish Setup`.
 - **User BYOK** (guilds only, never in a DM): the workspace keeps no provider of its own and every
   member-triggered reply resolves a personal provider instead. Confirm it in the modal, then have
   members register theirs with `/personal providers`. See
@@ -133,7 +133,7 @@ re-opens the step until another is chosen.
 
 **Finish Setup** stays disabled until every rendered step is complete. It revalidates the catalogs and
 the workspace state, commits the whole draft in one transaction, and replaces the panel with the
-receipt. **Cancel** discards the draft and expires every control on the panel.
+receipt. `Cancel` discards the draft and expires every control on the panel.
 
 A draft lives in the bot process, not in the database, so it ends only when it is cancelled,
 completed, or the process restarts. At most 200 drafts are held

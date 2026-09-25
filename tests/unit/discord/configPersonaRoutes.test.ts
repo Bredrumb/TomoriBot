@@ -1785,7 +1785,7 @@ describe("config Persona Memories routes", () => {
     );
 
     expect(deleteSpy).not.toHaveBeenCalled();
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("Panel Out Of Date");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(localizer("en-US", "commands.config.panel.stale_heading"));
     deleteSpy.mockRestore();
   });
 
@@ -1812,7 +1812,7 @@ describe("config Persona Memories routes", () => {
     );
 
     expect(deleteSpy).not.toHaveBeenCalled();
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("Panel Out Of Date");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(localizer("en-US", "commands.config.panel.stale_heading"));
     deleteSpy.mockRestore();
   });
 
@@ -3547,7 +3547,9 @@ describe("config Persona Advanced routes", () => {
     );
 
     expect(writes).toBe(0);
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("Please upload an image attachment");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(
+      localizer("en-US", "commands.novelai.character-reference.invalid_image_description"),
+    );
   });
 
   it("round-trips a prompt longer than 4000 characters through four modal parts", async () => {
@@ -3607,7 +3609,9 @@ describe("config Persona Advanced routes", () => {
     );
 
     expect(removeCalled).toBe(true);
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("No Persona Prompt");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(
+      localizer("en-US", "commands.forget.personaprompt.no_prompt_title"),
+    );
   });
 
   it("maps Humanizer Inherit to null and acknowledges before the write", async () => {
@@ -3634,7 +3638,7 @@ describe("config Persona Advanced routes", () => {
 
     expect(acknowledged).toBe(true);
     expect(selectedValue).toBeNull();
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("Persona Overrides");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(localizer("en-US", "commands.config.panel.overrides_title"));
   });
 
   it("opens Humanizer as a modal with the persona override selected", async () => {

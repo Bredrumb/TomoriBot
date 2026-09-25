@@ -19,7 +19,7 @@ cục bộ và làm theo các hướng dẫn self-hosting.
 ### ElevenLabs (đám mây, dễ nhất)
 
 1. Lấy khóa API từ [ElevenLabs](https://elevenlabs.io/app/settings/api-keys).
-2. Chạy lệnh `/providers`, chọn **Add New Provider**, chọn **ElevenLabs**, rồi dán khóa API. Quy trình này sẽ:
+2. Chạy lệnh `/providers`, chọn `Thêm nhà cung cấp mới`, chọn **ElevenLabs**, rồi dán khóa API. Quy trình này sẽ:
    - đăng ký endpoint **speech** của ElevenLabs (và cả endpoint **transcription**),
    - chọn chúng làm endpoint hoạt động,
    - có thể chỉ định ngay một giọng nói cho một persona.
@@ -27,7 +27,7 @@ cục bộ và làm theo các hướng dẫn self-hosting.
    [ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library), nơi bạn cũng có thể tự clone giọng
    nói của riêng mình.
 
-Chọn ElevenLabs trong `/providers`, sau đó chọn **Edit Endpoint** bất cứ khi nào bạn cần cập nhật khóa.
+Chọn ElevenLabs trong `/providers`, sau đó chọn `Sửa endpoint` bất cứ khi nào bạn cần cập nhật khóa.
 
 Lưu ý:
 
@@ -40,7 +40,7 @@ Lưu ý:
 - Mục Persona > Voice trong `/config` yêu cầu quyền Manage Server trong máy chủ và vẫn khả dụng cho chủ sở hữu
   trong không gian làm việc DM.
 
-Trong `/help`, chọn **Features**, sau đó chọn **Speech** để xem hướng dẫn tương tự trong Discord.
+Trong `/help`, chọn `Tính năng`, sau đó chọn `Giọng nói` để xem hướng dẫn tương tự trong Discord.
 
 ### Các engine clone giọng nói cục bộ (self-hosted)
 
@@ -82,4 +82,4 @@ giọng nói. Sử dụng `/providers` để chọn giữa các endpoint transcr
 - [whisper.cpp](/vi/self-hosting/local-endpoints/speech-to-text/whispercpp/).
 
 Xem trang tổng hợp [Speech-to-Text](/vi/self-hosting/local-endpoints/speech-to-text/) để biết danh sách đầy đủ. Để xem bản tóm
-tắt trên Discord, hãy chạy lệnh `/help`, sau đó chọn **Features** và **Transcription**.
+tắt trên Discord, hãy chạy lệnh `/help`, sau đó chọn `Tính năng` và `Chép lời`.

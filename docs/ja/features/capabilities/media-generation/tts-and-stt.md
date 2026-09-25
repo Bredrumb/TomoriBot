@@ -17,13 +17,13 @@ TomoriBotは、**話す**（テキスト読み上げ、TTS）ことと、**聞�
 ### ElevenLabs（クラウド、最も簡単）
 
 1. [ElevenLabs](https://elevenlabs.io/app/settings/api-keys)からAPIキーを取得します。
-2. `/providers` を実行し、**新しいプロバイダーを追加**（新しいプロバイダーを追加）を選び、**ElevenLabs** を選択してキーを貼り付けます。このフローで以下のことが行われます：
+2. `/providers` を実行し、`新しいプロバイダーを追加`（新しいプロバイダーを追加）を選び、**ElevenLabs** を選択してキーを貼り付けます。このフローで以下のことが行われます：
    - ElevenLabsの **speech** エンドポイント（および **transcription** エンドポイントも）を登録します。
    - それらをアクティブとして選択します。
    - その場で1つのペルソナに音声を割り当てることができます。
 3. `/config` の ペルソナ > 音声 で、追加のペルソナに音声を割り当てます。音声の閲覧は [ElevenLabs Voice Library](https://elevenlabs.io/app/voice-library) で行えます。ここから自身の音声をクローンすることもできます。
 
-キーを更新する必要がある場合は、いつでも `/providers` で ElevenLabs を選択し、**エンドポイントを編集**（エンドポイントを編集）を選んでください。
+キーを更新する必要がある場合は、いつでも `/providers` で ElevenLabs を選択し、`エンドポイントを編集`（エンドポイントを編集）を選んでください。
 
 注意事項：
 
@@ -32,7 +32,7 @@ TomoriBotは、**話す**（テキスト読み上げ、TTS）ことと、**聞�
 - 音声での返信は `voice_message_enabled` によって制限されており、アクティブなペルソナに音声が割り当てられている必要があります。
 - `/config` の ペルソナ > 音声 は、ギルド（サーバー）ではサーバー管理（Manage Server）権限を必要とし、DMバックアップのワークスペースではオーナーが引き続き利用できます。
 
-Discord上で同じ手順を確認するには、`/help` の **機能**（機能）から **音声**（音声生成）を開いてください。
+Discord上で同じ手順を確認するには、`/help` の `機能`（機能）から `音声`（音声生成）を開いてください。
 
 ### ローカルの音声クローンエンジン（セルフホスト）
 
@@ -63,4 +63,4 @@ Discord上で同じ手順を確認するには、`/help` の **機能**（機能
 - [KoboldCPP](/ja/self-hosting/local-endpoints/speech-to-text/koboldcpp/)：ご使用のビルドが OpenAI 互換の文字起こしエンドポイントを公開している場合に機能します。
 - [whisper.cpp](/ja/self-hosting/local-endpoints/speech-to-text/whispercpp/)。
 
-完全なリストについては、[音声認識（STT）](/ja/self-hosting/local-endpoints/speech-to-text/)ハブをご覧ください。Discordでの概要を確認するには、`/help` で **機能**（機能）を選び、次に **文字起こし**（文字起こし）を開いてください。
+完全なリストについては、[音声認識（STT）](/ja/self-hosting/local-endpoints/speech-to-text/)ハブをご覧ください。Discordでの概要を確認するには、`/help` で `機能`（機能）を選び、次に `文字起こし`（文字起こし）を開いてください。

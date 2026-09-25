@@ -19,7 +19,7 @@ If your whisper.cpp build exposes a different endpoint shape, place a thin wrapp
 
 ## Register in TomoriBot
 
-Run `/providers`, choose **Add New Custom Endpoint**, and use the transcription API compatibility:
+Run `/providers`, choose `Add New Custom Endpoint`, and use the transcription API compatibility:
 
 - API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: your whisper.cpp server root

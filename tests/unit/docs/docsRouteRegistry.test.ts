@@ -9,13 +9,13 @@ import {
   PUBLISHED_DOCS_LOCALES,
   buildLocalizedDocsPath,
 } from "@/constants/docsLocales";
+import { ANCHOR_COMMENT } from "../../../scripts/checks/checkLocaleLinks";
 
 const repoRoot = join(import.meta.dir, "..", "..", "..");
 const docsRoot = join(repoRoot, "docs");
 const defaultLocale = "en";
 
 const PAGE_EXTENSIONS = [".md", ".mdx"];
-const ANCHOR_COMMENT = /^\s*<!--\s*anchor:\s*([A-Za-z0-9_-]+)\s*-->\s*$/;
 
 /**
  * Resolves a docs route to its source file. A route that ends at a directory index has four

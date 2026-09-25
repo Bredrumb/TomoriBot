@@ -5,7 +5,7 @@
  * persona-agnostic sentinel, token accumulation + cost read, shutdown drain, the
  * documented crash window, and the read/aggregation layer.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { statRepository, userRepository } from "@/utils/db/repositories";

@@ -26,9 +26,9 @@ Hầu hết các lệnh đều hỗ trợ khung thời gian (**timeframe**), và
 
 Lệnh `/stats generate` tạo ra một thẻ hình ảnh chỉn chu mà bạn có thể gửi vào cuộc trò chuyện:
 
-- **Personal Wrapped**: hoạt động cá nhân của bạn, theo phong cách Spotify Wrapped.
-- **Persona Affinity**: số liệu thống kê của một persona trên máy chủ này.
-- **Server Leaderboard**: thứ hạng trên toàn máy chủ.
+- **Tổng kết cá nhân**: hoạt động cá nhân của bạn, theo phong cách Spotify Wrapped.
+- **Độ thân thiết persona**: số liệu thống kê của một persona trên máy chủ này.
+- **Bảng xếp hạng máy chủ**: thứ hạng trên toàn máy chủ.
 
 Người dùng ở chế độ hoàn toàn riêng tư (`/personal config`) không thể tạo thẻ cá nhân.
 

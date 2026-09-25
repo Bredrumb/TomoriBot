@@ -41,7 +41,7 @@ O modo automático inspeciona cada requisição `/synthesize`: requisições com
 
 Para a maioria dos usuários, registre o servidor no modo automático para que um único endpoint possa suportar as personas tanto para clone de voz quanto para VoiceDesign.
 
-Execute `/providers`, escolha **Add New Custom Endpoint** e use a compatibilidade da API de fala:
+Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado` e use a compatibilidade da API de fala:
 
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8012`

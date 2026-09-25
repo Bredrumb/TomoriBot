@@ -34,12 +34,12 @@ TomoriBot xem giọng nói là một tính năng endpoint tùy chỉnh. Các eng
 ## Quy trình cài đặt
 
 1. Chọn một engine từ các thẻ ở trên và thiết lập wrapper của nó từ `servers/tts/`.
-2. Trong `/providers`, chọn **Add New Custom Endpoint** và sử dụng API Compatibility `tts-clone`.
+2. Trong `/providers`, chọn `Thêm endpoint tùy chỉnh mới` và sử dụng API Compatibility `tts-clone`.
 3. Chọn endpoint đã lưu và sử dụng menu thả xuống model để thêm model Speech, Voice Source Mode, và Script Markup của nó.
 4. Mở `/config` > Models > Switch Models và chọn model Speech đã đăng ký.
 
 ## Truy cập mạng
-<!-- anchor: network-access -->
+{/* anchor: network-access */}
 
 Mọi máy chủ cục bộ TTS đều mặc định liên kết với `127.0.0.1`, nên chỉ bot trên cùng máy mới truy cập được. Khi TomoriBot chạy trong Docker hoặc trên một máy khác, hãy đặt `TOMORI_TTS_HOST=0.0.0.0` cho máy chủ và đăng ký endpoint bằng địa chỉ của máy chủ vật lý, ví dụ `http://host.docker.internal:8015`.
 
@@ -62,9 +62,9 @@ Giới hạn kích thước tải lên và giới hạn thời lượng là đ�
 
 Đối với Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS, hoặc VoxCPM2 VoiceDesign, hãy bỏ qua mẫu âm thanh và sử dụng Persona > Voice trong `/config` để lưu mô tả giọng nói bằng ngôn ngữ tự nhiên cho persona. CosyVoice 3 sử dụng chế độ Clone với một mẫu tham chiếu và chấp nhận hướng dẫn truyền đạt dùng một lần thông qua `voice_instructions`.
 
-Người dùng ElevenLabs nên chọn **Add New Provider** và **ElevenLabs** trong `/providers`; tùy chọn này đăng ký đồng thời cả endpoint giọng nói và phiên âm.
+Người dùng ElevenLabs nên chọn `Thêm nhà cung cấp mới` và **ElevenLabs** trong `/providers`; tùy chọn này đăng ký đồng thời cả endpoint giọng nói và phiên âm.
 
-TomoriBot loại bỏ cú pháp emoji tùy chỉnh của Discord chẳng hạn như `:pepega:` hoặc `<:pepega:123456789012345678>` khỏi các kịch bản giọng nói được tạo trước khi tổng hợp. Unicode emoji cũng bị loại bỏ trừ khi endpoint giọng nói sử dụng emoji markup, vốn dành cho IrodoriTTS. Các thẻ trong ngoặc vuông được giữ lại cho các endpoint như Chatterbox Turbo và Fish S2 Pro khi Script Markup của chúng được đặt thành **Bracket Tags**.
+TomoriBot loại bỏ cú pháp emoji tùy chỉnh của Discord chẳng hạn như `:pepega:` hoặc `<:pepega:123456789012345678>` khỏi các kịch bản giọng nói được tạo trước khi tổng hợp. Unicode emoji cũng bị loại bỏ trừ khi endpoint giọng nói sử dụng emoji markup, vốn dành cho IrodoriTTS. Các thẻ trong ngoặc vuông được giữ lại cho các endpoint như Chatterbox Turbo và Fish S2 Pro khi Script Markup của chúng được đặt thành `Thẻ trong ngoặc vuông`.
 
 VoxCPM2 sử dụng Script Markup **Plain**. Các tùy chọn Voice Design và phong cách nói của nó truyền qua trường `instruct` của TomoriBot, và wrapper VoxCPM2 sẽ chuyển đổi chúng sang cú pháp điều khiển bằng ngôn ngữ tự nhiên trong dấu ngoặc đơn gốc của model.
 

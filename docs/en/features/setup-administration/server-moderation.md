@@ -14,7 +14,7 @@ the **Manage Server** permission. This page covers the highlights; every command
 
 Generation costs money (yours or your members'). Quotas cap usage per user and server-wide:
 
-- `/moderation` → **Quotas**: configure daily per-user limits and resetting server-wide pools for text, image, and video generation.
+- `/moderation` → `Quotas`: configure daily per-user limits and resetting server-wide pools for text, image, and video generation.
 - `/quota reset`: manually reset a user or server pool.
 
 Set a per-user limit to `0` for unlimited. Server-wide pools reset on a configurable day
@@ -37,9 +37,9 @@ back to.
 
 ## Access Control: Whitelists
 
-- `/moderation` → **Whitelist** → **Channels**: choose triggering channels and optional cooldown overrides.
-- `/moderation` → **Whitelist** → **Personas**: limit which channels a specific persona can trigger in.
-- `/moderation` → **Whitelist** → **Roles**: restrict triggering to specific roles.
+- `/moderation` → `Whitelist` → `Channels`: choose triggering channels and optional cooldown overrides.
+- `/moderation` → `Whitelist` → `Personas`: limit which channels a specific persona can trigger in.
+- `/moderation` → `Whitelist` → `Roles`: restrict triggering to specific roles.
 - `/config` > Engine > Trigger: set the global cooldown between responses.
 
 Whitelisted channels inherit the global cooldown unless you set a channel-specific override.

@@ -31,18 +31,18 @@ Bộ công cụ của chính TomoriBot yêu cầu **Node.js v20+** khả dụng 
 
 ## 2. Đăng ký trong Discord
 
-Mở `/config` > Plugins > MCP Servers, chọn **+ Add MCP**, trỏ trường **URL**
-vào máy chủ cục bộ của bạn, và giữ nguyên trường bắt buộc **Server Type** ở giá trị mặc định **General Purpose**:
+Mở `/config` > Plugins > MCP Servers, chọn `Thêm MCP`, trỏ trường **URL**
+vào máy chủ cục bộ của bạn, và giữ nguyên trường bắt buộc `Loại máy chủ` ở giá trị mặc định `Mục đích chung`:
 
 ```text
 http://localhost:3000/sse
 ```
 
-Để trống trường **Auth Token**: không cần token xác thực cho các máy chủ cục bộ.
+Để trống trường `Token xác thực`: không cần token xác thực cho các máy chủ cục bộ.
 
 ## 3. Quản lý
 
-- Mở trang Cấu hình và chọn **Remove** trên hàng của máy chủ đó. Xác nhận thao tác sẽ hủy đăng ký,
+- Mở trang Cấu hình và chọn `Xóa` trên hàng của máy chủ đó. Xác nhận thao tác sẽ hủy đăng ký,
   ngắt kết nối ngay lập tức và giải phóng một vị trí trống.
 
 ## Bảo mật

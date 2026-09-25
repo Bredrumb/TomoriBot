@@ -834,7 +834,7 @@ the anchor message:
 
 When options require asynchronous loading, `openModal(async () => options)` first
 update-defers the persona button and displays an in-place loading state. For a small result it
-then displays a new **Open Form** button; for a large result it displays the range selector.
+then displays a new `Open Form` button; for a large result it displays the range selector.
 The fresh button performs `showModal()` as its first acknowledgment. The workflow never
 defers a button and then attempts to open a modal from that already-acknowledged interaction.
 
@@ -1115,6 +1115,9 @@ production branch substitutes a payload rather than propagating.
 
 ### Adding a panel
 
+The step-by-step guide is [Adding a Panel or Panel Button](/contributing/extending/panel/). This section
+covers the producer manifest it relies on.
+
 A new module that emits `MessageFlags.IsComponentsV2` must appear in the manifest in
 `tests/unit/discord/componentsV2ProducerManifest.test.ts`. The coverage assertion scans `src/` for that flag
 and compares the result against the manifest by module name in both directions, so an unregistered producer
@@ -1141,11 +1144,11 @@ already-issued version-one route resolves to the localized outdated-panel respon
 silent repaint. Receipts use their own top-level
 Container below the authoritative collection Container, keeping status color separate from the panel.
 Healthy views omit a routine refresh button because transactions reload and repaint automatically. Only stale or
-unavailable reads expose **Retry**, which performs a configuration read without testing or connecting
+unavailable reads expose `Retry`, which performs a configuration read without testing or connecting
 to the remote MCP endpoint.
 
 TomoriBot's `/moderation` Member Access editor is the first writable page in the moderation panel.
-Its `moderation:v1` routes handle category navigation and modal transactions. Clicking **Edit Permissions**
+Its `moderation:v1` routes handle category navigation and modal transactions. Clicking `Edit Permissions`
 reauthorizes and reads fresh server state before opening a globally routed Checkbox Group modal as the
 valid first interaction acknowledgment (`showRoutedRawModal`). The modal custom ID and component ID carry a nonce
 to bind submission lifecycle. Upon modal submit, the router immediately defers update, reauthorizes, reloads
@@ -1157,7 +1160,7 @@ top-level receipt container (`success`, `info`, or `error`), while retaining tru
 reload fails.
 
 The `/moderation` User Blacklist page manages personalization exclusions and persona interaction restrictions.
-One paired **Add Blacklist** and **Remove Blacklist** action row avoids consuming a component for every entry.
+One paired `Add Blacklist` and `Remove Blacklist` action row avoids consuming a component for every entry.
 Remove opens nonce-bound Checkbox Groups with every presented entry selected. Unchecking entries and submitting
 removes only those entries, with no second confirmation. The submit route reauthorizes, reloads current scope, and
 compares the submission with the short-lived presented snapshot, so entries added after the modal opened are not
@@ -1170,7 +1173,7 @@ Both lists expose one red bulk Remove action beside Add. Their unchecked-means-r
 reauthorization, fresh-read, and immediate-submit contract as User Blacklist. Duplicate additions and missing removal
 targets do not write or invalidate; successful changes invalidate the whitelist cache after the write.
 
-The **Personas** page uses paired **Add Persona** and **Remove Persona** actions. Add opens a modal with a String
+The `Personas` page uses paired `Add Persona` and `Remove Persona` actions. Add opens a modal with a String
 Select for the configured persona catalog and a native text Channel Select, adding one persona-channel mapping.
 The configured persona limit keeps the String Select within Discord's 25-option bound. Remove uses the same bulk
 checkbox contract as the other lists. Canonical full-set replacement preserves concurrent mappings, suppresses

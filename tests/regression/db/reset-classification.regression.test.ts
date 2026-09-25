@@ -7,7 +7,7 @@
  * migrations, which is the only view that includes columns added by later `ALTER` blocks such as
  * `users.privacy_level`.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { join } from "node:path";

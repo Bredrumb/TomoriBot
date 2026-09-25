@@ -70,7 +70,7 @@ bun run dev
 ```
 
 `TomoriBot up and running!` と表示されたら、Discordに移動してサーバーで `/setup` を実行し、AIプロバイダーを接続してボットを初期化します。
-このコマンドはガイド付きのチェックリストパネルを開き、**セットアップを完了**（Finish Setup）を押すまで何も書き込まれません。
+このコマンドはガイド付きのチェックリストパネルを開き、`セットアップを完了`（Finish Setup）を押すまで何も書き込まれません。
 手順については[`/setup` コマンド](/ja/self-hosting/setup-wizard/#setup-コマンド)を、Discord側の操作については[クイックスタート](/ja/introduction/quickstart/)を参照してください。
 
 オプションのローカルサーバー（SearXNG、Crawl4AI、ローカルTTS/STT）をボットと一緒に起動したい場合は、`bun run dev` の代わりに `bun run launch` を使用します。

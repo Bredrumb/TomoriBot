@@ -42,7 +42,7 @@ TomoriBot 預設使用官方 **`FunAudioLLM/Fun-CosyVoice3-0.5B-2512`** 檢查�
 
 ### 風格與情緒控制
 
-請以 **純文字** 標記註冊端點。語氣指示屬於端點的全局
+請以 `純文字` 標記註冊端點。語氣指示屬於端點的全局
 `voice_instructions` 欄位，不屬於任意的行內方括號標籤。這樣能保留指示對整段語句的意義，也避免把像
 `[happy] Hello. [sad] Goodbye.` 這樣的腳本當成兩個互相矛盾的全局指示。原生的 `[breath]` 與 `[laughter]`
 支援刻意延後，直到 TomoriBot 能宣告確切的供應商感知標籤能力。
@@ -114,7 +114,7 @@ bun run launch --cosyvoice3
 
 ## 在 TomoriBot 中註冊
 
-執行 `/providers`，選擇 **新增自訂端點**，並設定語音端點：
+執行 `/providers`，選擇 `新增自訂端點`，並設定語音端點：
 
 - Capability：`Speech`
 - API Compatibility：`tts-clone`

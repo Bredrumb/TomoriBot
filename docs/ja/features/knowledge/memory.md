@@ -126,7 +126,7 @@ Here are past things Tomori did that got punished for. Avoid doing them again:
 - チャンネルタグはキーワードタグと組み合わせることができます。
 - ドキュメント知識ベース（RAG）を使用している場合、チャンネルタグはドキュメントや抽出された履歴にも適用されます。
 
-Discordでは `/help` の **記憶** から **記憶のタグ付け** を選択すると、同じ概要を確認できます。
+Discordでは `/help` の `記憶` から `記憶のタグ付け` を選択すると、同じ概要を確認できます。
 
 ## 短期記憶（STM）
 <!-- anchor: short-term-memory-stm -->

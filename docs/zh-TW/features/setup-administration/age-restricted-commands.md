@@ -20,4 +20,4 @@ TomoriBot 把僅限成人的 `/nsfw` 指令分類放在 Discord 內建的年齡�
 
 圖片與影片生成由各自設定的供應商與伺服器的功能設定分別控制；它們不受 `/nsfw` 指令分類的限制。
 
-年齡限制內容僅限成人使用者，請負責任地使用，並遵守 Discord 的[社群守則](https://discord.com/guidelines)。在 `/help` 中選擇 **行為**，然後選 **年齡限制指令**，就能在 Discord 裡看到同樣的逐步說明。
+年齡限制內容僅限成人使用者，請負責任地使用，並遵守 Discord 的[社群守則](https://discord.com/guidelines)。在 `/help` 中選擇 `行為`，然後選 `年齡限制指令`，就能在 Discord 裡看到同樣的逐步說明。

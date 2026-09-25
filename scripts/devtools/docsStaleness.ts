@@ -11,7 +11,7 @@
  * since", not "reviewed since".
  */
 
-/** Sections that stay English by policy (see docs/en/contributing/docs-site-localization.md). */
+/** Sections that stay English by policy (see docs/en/contributing/localization/docs-site.md). */
 export const ENGLISH_ONLY_DOC_SECTIONS = ["architecture/", "contributing/", "wiki/"] as const;
 
 /**

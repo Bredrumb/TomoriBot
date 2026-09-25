@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import type { ProviderStructuredJsonRequest, StructuredOutputResult } from "@/types/provider/featureInterfaces";
 import { log } from "@/utils/misc/logger";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
@@ -183,7 +184,7 @@ export async function callDeepseekStructuredJSON<T>(
     ];
 
     const body: Record<string, unknown> = {
-      model: request.model,
+      model: toDeepseekApiModelName(request.model),
       messages,
       response_format: {
         type: "json_object",

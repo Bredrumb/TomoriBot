@@ -115,6 +115,7 @@ export async function generateGoogleNativeVideo(
     intervalMs: POLL_INTERVAL_MS,
     maxAttempts: MAX_POLL_ATTEMPTS,
     logLabel: "GoogleVideoGeneration",
+    abortSignal: request.abortSignal,
   });
 
   const generatedVideos = completedOp?.response?.generatedVideos;

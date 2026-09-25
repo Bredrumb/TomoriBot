@@ -30,13 +30,16 @@ type VoiceMode = "clone" | "voice-design" | "auto";
 let activeEndpoint: CustomEndpointRow | null = null;
 /** Sources the tool handed to the dispatcher, most recent last. */
 const dispatchedSources: ResolvedVoiceSource[] = [];
+const dispatchedSignals: Array<AbortSignal | undefined> = [];
+let deliveryCount = 0;
 
 const endpointResolverMock = mock(async () =>
   activeEndpoint ? { endpoint: activeEndpoint, apiKey: "endpoint-key" } : null,
 );
 
-const synthesizeMock = mock(async (request: { source: ResolvedVoiceSource }) => {
+const synthesizeMock = mock(async (request: { source: ResolvedVoiceSource; abortSignal?: AbortSignal }) => {
   dispatchedSources.push(request.source);
+  dispatchedSignals.push(request.abortSignal);
   return {
     success: true,
     backendKey: "tts-clone" as const,
@@ -74,7 +77,10 @@ scopedMock.module("@/utils/audio/voiceMessageMetadata", () => ({
 
 scopedMock.module("@/utils/discord/webhook/voiceMessageDelivery", () => ({
   ...realVoiceMessageDelivery,
-  deliverVoiceMessage: async () => "message-id",
+  deliverVoiceMessage: async () => {
+    deliveryCount += 1;
+    return "message-id";
+  },
   postVoiceTranscriptCaption: async () => undefined,
 }));
 
@@ -268,5 +274,38 @@ describe("GenerateVoiceMessageTool refusals", () => {
 
     expect(source).toBeNull();
     expect(error).toContain("cannot be used with the active speech endpoint");
+  });
+});
+
+describe("GenerateVoiceMessageTool /kill cancellation", () => {
+  it("forwards the turn abort signal and never delivers audio once the turn is killed", async () => {
+    activeEndpoint = makeEndpoint("clone");
+    dispatchedSignals.length = 0;
+    deliveryCount = 0;
+    const controller = new AbortController();
+    // The kill lands while synthesis is in flight, which is the window where the backend has
+    // already produced audio that nothing will await.
+    synthesizeMock.mockImplementationOnce(async (request) => {
+      dispatchedSignals.push(request.abortSignal);
+      controller.abort();
+      return {
+        success: true,
+        backendKey: "tts-clone" as const,
+        audioBuffer: Buffer.from("audio"),
+        contentType: "audio/wav",
+        extension: "wav",
+        cleanedCaptionText: "",
+      };
+    });
+
+    const result = await new GenerateVoiceMessageTool().execute({ title: "test", script: "Good morning" }, {
+      ...makeContext(SAMPLE),
+      abortSignal: controller.signal,
+    } as ToolContext);
+
+    expect(dispatchedSignals[0]).toBe(controller.signal);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("cancelled");
+    expect(deliveryCount).toBe(0);
   });
 });

@@ -16,7 +16,7 @@ cubre lo más destacado; cada comando está en la
 Generar contenido cuesta dinero (tuyo o de tus miembros). Las cuotas limitan el uso por usuario
 y a nivel de todo el servidor:
 
-- `/moderation` → **Cuotas**: configura límites diarios por usuario y fondos comunes de todo el
+- `/moderation` → `Cuotas`: configura límites diarios por usuario y fondos comunes de todo el
   servidor que se restablecen, para generación de texto, imagen y video.
 - `/quota reset`: restablece manualmente el fondo de un usuario o del servidor.
 
@@ -35,17 +35,17 @@ el gasto de API a los miembros. Los miembros configuran el suyo en
 [Personalización → Tus propios proveedores](/es-419/features/knowledge/personalization/#your-own-providers).
 
 También puedes arrancar un servidor sin **ningún** proveedor de texto del lado del servidor
-eligiendo **BYOK de usuario** durante `/setup`. Se ofrece en servidores en lugar de en mensajes
+eligiendo `BYOK de usuario` durante `/setup`. Se ofrece en servidores en lugar de en mensajes
 directos, y pide confirmación antes de completar el paso de proveedor, porque el espacio de
 trabajo se queda entonces sin proveedor de respaldo.
 
 ## Control de acceso: listas blancas
 
-- `/moderation` → **Lista blanca** → **Canales**: elige los canales de activación y anulaciones
+- `/moderation` → `Lista blanca` → `Canales`: elige los canales de activación y anulaciones
   de enfriamiento opcionales.
-- `/moderation` → **Lista blanca** → **Personas**: limita en qué canales puede activarse una
+- `/moderation` → `Lista blanca` → `Personas`: limita en qué canales puede activarse una
   persona específica.
-- `/moderation` → **Lista blanca** → **Roles**: restringe la activación a roles específicos.
+- `/moderation` → `Lista blanca` → `Roles`: restringe la activación a roles específicos.
 - `/config` > Motor > Activador: establece el enfriamiento global entre respuestas.
 
 Los canales en lista blanca heredan el enfriamiento global a menos que establezcas una
@@ -70,7 +70,7 @@ expuso una herramienta en el
 `/config` > Canales > Registros y bienvenida configura un saludo automático para nuevos miembros
 en un canal elegido. Por defecto, Tomori espera un minuto antes de saludarlos para que la
 incorporación del servidor pueda terminar.
-Usa el botón **Borrar bienvenida** en esa misma página
+Usa el botón `Borrar bienvenida` en esa misma página
 para detener los saludos.
 
 ## Expresiones

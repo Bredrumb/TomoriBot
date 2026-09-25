@@ -36,6 +36,7 @@ import { resolveProviderFeatureImplementation } from "@/utils/provider/providerI
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
 import { generateOpenRouterImage } from "@/providers/openrouter/openrouterImageGeneration";
+import { buildGeminiImagePromptParts } from "@/providers/utils/geminiImageParts";
 import { ZAI_CODING_IMAGES_GENERATIONS_URL, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
 import { getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
 import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
@@ -49,6 +50,7 @@ import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { extractImagesFromMessage } from "@/utils/image/imageExtractor";
+import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
@@ -1203,6 +1205,13 @@ export class GenerateImageTool extends BaseTool {
           : null;
 
       if (creds.customEndpoint) {
+        const handoff =
+          creds.customEndpoint.api_style === "comfyui"
+            ? await beginTextModelHandoffBeforeComfyUi({
+                tomoriState: context.tomoriState,
+                comfyUi: { endpointUrl: creds.customEndpoint.endpoint_url, apiKey },
+              })
+            : null;
         try {
           const result = await generateCustomImageViaEndpoint({
             endpoint: creds.customEndpoint,
@@ -1234,6 +1243,7 @@ export class GenerateImageTool extends BaseTool {
             inpaintExtendPixels: extendPixels,
             clothingMode,
             clothingSegmentCategories,
+            abortSignal: context.abortSignal,
           });
           generatedImageData = result.imageData;
           await this.sendDiagnosticImagesToThoughtLog(context, result.diagnosticImages, effectivePrompt);
@@ -1276,12 +1286,16 @@ export class GenerateImageTool extends BaseTool {
               inpaintExtendPixels: extendPixels,
               clothingMode,
               clothingSegmentCategories,
+              abortSignal: context.abortSignal,
             });
             generatedImageData = retryResult.imageData;
             await this.sendDiagnosticImagesToThoughtLog(context, retryResult.diagnosticImages, effectivePrompt);
           } else {
             throw err;
           }
+        } finally {
+          // Reload continues independently so Discord upload is never held behind text-model readiness.
+          void handoff?.restore();
         }
       } else if (nativeImageProvider) {
         const result = await nativeImageProvider.generateNativeImage({
@@ -1311,30 +1325,16 @@ export class GenerateImageTool extends BaseTool {
           model: modelCodename,
         });
 
-        const messagePayload: {
-          message: string;
-          media?: Array<{ mimeType: string; data: string }>;
-          config?: {
-            responseModalities: string[];
-            imageConfig: {
-              aspectRatio: string;
-            };
-          };
-        } = {
-          message: effectivePrompt,
+        const response = await chat.sendMessage({
+          message: buildGeminiImagePromptParts(effectivePrompt, providerReferenceImages),
           config: {
             responseModalities: ["IMAGE"],
             imageConfig: {
               aspectRatio: aspectRatio,
             },
+            ...(context.abortSignal ? { abortSignal: context.abortSignal } : {}),
           },
-        };
-
-        if (providerReferenceImages.length > 0) {
-          messagePayload.media = providerReferenceImages;
-        }
-
-        const response = await chat.sendMessage(messagePayload);
+        });
 
         if (response?.candidates && response.candidates.length > 0 && response.candidates[0]?.content?.parts) {
           for (const part of response.candidates[0].content.parts) {
@@ -1391,6 +1391,12 @@ export class GenerateImageTool extends BaseTool {
           success: false,
           error: "No image data received from API. The generation may have been blocked or failed.",
         };
+      }
+
+      // /kill stops awaiting this tool but cannot stop it, so a backend that ignores the signal
+      // still finishes here; posting now would deliver and charge for a reply the user killed.
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "Image generation was cancelled." };
       }
 
       const imageBuffer = Buffer.from(generatedImageData, "base64");
@@ -1450,6 +1456,9 @@ export class GenerateImageTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "Image generation was cancelled." };
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Localize errors, but fall back to readable defaults if the localizer

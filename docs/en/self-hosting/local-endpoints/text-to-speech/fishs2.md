@@ -7,7 +7,7 @@ Fish Audio S2 Pro is a multilingual 4B TTS model focused on high-fidelity voice 
 
 The default TomoriBot setup uses the official BF16 weights (`fishaudio/s2-pro`) to provide the highest synthesis fidelity and avoid quantization incompatibilities. For users with memory-constrained consumer GPUs, an optional INT8 weight-only quantization (`Imagilux/fishaudio-s2-pro`) is supported via environment overrides.
 
-Fish S2 Pro supports bracket expression tags such as `[whisper]`, `[excited]`, and `[angry]`. Configure the endpoint with **Bracket Tags** markup so TomoriBot preserves these controls in generated voice scripts.
+Fish S2 Pro supports bracket expression tags such as `[whisper]`, `[excited]`, and `[angry]`. Configure the endpoint with `Bracket Tags` markup so TomoriBot preserves these controls in generated voice scripts.
 
 ## License
 
@@ -92,11 +92,11 @@ is shorter than a native Windows clip takes. Raise it in TomoriBot's `.env` (for
 >
 > If you upload a voice sample without providing its matching reference transcript, Fish Speech **silently drops the reference audio tokens** and falls back to random zero-reference speech. The TomoriBot Fish wrapper validates and rejects synthesis requests that lack reference text with a `400 Bad Request` to prevent accidental unconditioned generation.
 
-When adding a persona voice in `/config` under **Models > TTS Parameters & Voices**, always fill in the **Reference transcript** field with the verbatim text spoken in your reference audio clip.
+When adding a persona voice in `/config` under `Models > TTS Parameters & Voices`, always fill in the `Reference transcript` field with the verbatim text spoken in your reference audio clip.
 
 ## Register in TomoriBot
 
-In `/providers`, choose **Add New Custom Endpoint** and configure:
+In `/providers`, choose `Add New Custom Endpoint` and configure:
 
 - Capability: `Speech`
 - API Compatibility: `tts-clone`

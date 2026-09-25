@@ -36,7 +36,7 @@ Giữ cửa sổ terminal đó mở trong khi TomoriBot đang sử dụng Whispe
 
 ## Đăng ký trong TomoriBot
 
-Chạy `/providers`, chọn **Add New Custom Endpoint**, và sử dụng độ tương thích API phiên âm:
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng độ tương thích API phiên âm:
 
 - API Compatibility: `openai-compatible-transcription`
 - `endpoint_url`: `http://127.0.0.1:8021`

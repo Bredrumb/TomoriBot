@@ -7,6 +7,7 @@ import type { StPresetNodeRow, StPresetRow } from "@/types/db/schema";
 import { stPresetOperations } from "@/utils/stPreset/stPresetOperations";
 import { buildStPresetsNodesModalFieldId } from "@/utils/discord/ui/stPresetsPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -210,7 +211,7 @@ describe("Config-hosted ST preset node routes", () => {
     await dispatchRetry(route, edits);
 
     const rendered = JSON.stringify(edits);
-    expect(rendered).toContain("This panel is out of date.");
+    expect(rendered).toContain(localizedCopy("en-US", "commands.config.panel.outdated_panel", { command: "/config" }));
     expect(rendered).not.toContain("/setup");
   });
 
@@ -224,6 +225,6 @@ describe("Config-hosted ST preset node routes", () => {
 
     await dispatchRetry(route, edits);
 
-    expect(JSON.stringify(edits)).toContain("Run /setup first.");
+    expect(JSON.stringify(edits)).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
   });
 });

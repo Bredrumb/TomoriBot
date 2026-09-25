@@ -30,6 +30,7 @@ import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
 import { isOpenRouterVideoCapabilityError } from "@/providers/openrouter/openrouterVideoRequest";
 import { resolveMessageImageUrls } from "@/utils/image/imageExtractor";
+import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
 /** Discord file size limit for non-boosted servers (25 MB) */
 const DISCORD_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
@@ -528,20 +529,33 @@ export class GenerateVideoTool extends BaseTool {
       const videoImplementation = resolveProviderFeatureImplementation(executionProvider, "videoGeneration");
 
       if (creds.customEndpoint) {
-        const result = await generateCustomVideoViaEndpoint({
-          endpoint: creds.customEndpoint,
-          apiKey,
-          prompt,
-          aspectRatio,
-          durationSeconds,
-          resolution,
-          referenceImages,
-          generateAudio,
-          audioPrompt,
-          loop,
-        });
-        videoData = result.videoData;
-        videoFilename = result.filename ?? videoFilename;
+        const handoff =
+          creds.customEndpoint.api_style === "comfyui"
+            ? await beginTextModelHandoffBeforeComfyUi({
+                tomoriState: context.tomoriState,
+                comfyUi: { endpointUrl: creds.customEndpoint.endpoint_url, apiKey },
+              })
+            : null;
+        try {
+          const result = await generateCustomVideoViaEndpoint({
+            endpoint: creds.customEndpoint,
+            apiKey,
+            prompt,
+            aspectRatio,
+            durationSeconds,
+            resolution,
+            referenceImages,
+            generateAudio,
+            audioPrompt,
+            loop,
+            abortSignal: context.abortSignal,
+          });
+          videoData = result.videoData;
+          videoFilename = result.filename ?? videoFilename;
+        } finally {
+          // Reload continues independently so Discord upload is never held behind text-model readiness.
+          void handoff?.restore();
+        }
       } else if (videoImplementation === "google") {
         const { generateGoogleNativeVideo } = await import("@/providers/google/googleVideoGeneration");
         const result = await generateGoogleNativeVideo({
@@ -555,6 +569,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
@@ -571,6 +586,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
@@ -587,6 +603,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
@@ -602,6 +619,12 @@ export class GenerateVideoTool extends BaseTool {
           success: false,
           error: "No video data received from API. The generation may have been blocked or failed.",
         };
+      }
+
+      // /kill stops awaiting this tool but cannot stop it, so a native provider that ignores the
+      // signal still finishes here; posting now would deliver and charge for a reply the user killed.
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "Video generation was cancelled." };
       }
 
       if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {
@@ -658,6 +681,9 @@ export class GenerateVideoTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "Video generation was cancelled." };
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.error("Video generation failed:", error as Error);
 

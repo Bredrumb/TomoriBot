@@ -1,5 +1,3 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType } from "discord.js";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
@@ -14,15 +12,11 @@ import {
   PROVIDERS_ENTRIES_PER_SELECTOR_PAGE,
   PROVIDERS_MODELS_PER_SELECTOR_PAGE,
 } from "@/utils/discord/ui/providersPanel";
-import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { BACKTICK_RUNS, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
-
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 
 const REALISTIC_RECEIPT: PanelReceipt = {
   tone: "success",
@@ -33,8 +27,6 @@ const REALISTIC_RECEIPT: PanelReceipt = {
 
 const READ_STATUSES: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
 const RECEIPTS: Array<PanelReceipt | undefined> = [undefined, REALISTIC_RECEIPT];
-const BACKTICK_RUNS = [3, 4, 5, 6, 8];
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
 const ALL_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "edit" | "activate" | "remove">([
   "add-provider",
   "add-endpoint",
@@ -43,38 +35,6 @@ const ALL_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "edit" |
   "activate",
   "remove",
 ]);
-
-function textDisplays(value: unknown): string[] {
-  const contents: string[] = [];
-  const visit = (current: unknown): void => {
-    if (Array.isArray(current)) {
-      for (const child of current) visit(child);
-      return;
-    }
-    if (!current || typeof current !== "object") return;
-    const record = current as Record<string, unknown>;
-    if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-      contents.push(record.content);
-    }
-    for (const child of Object.values(record)) visit(child);
-  };
-  visit(value);
-  return contents;
-}
-
-function assertSafePayload(payload: ReturnType<typeof buildProvidersPanelPayload>, label: string): void {
-  const result = validateComponentsV2MessageLimits(payload);
-  expect(result.valid, `${label} violations: ${JSON.stringify(result.violations)}`).toBe(true);
-  for (const content of textDisplays(payload)) {
-    expect(LONE_SURROGATE.test(content), `${label} contains a lone surrogate`).toBe(false);
-    const fenceStart = content.indexOf("```markdown\n");
-    if (fenceStart === -1) continue;
-    const bodyStart = fenceStart + "```markdown\n".length;
-    const closingFence = content.lastIndexOf("\n```");
-    if (closingFence <= bodyStart) continue;
-    expect(content.slice(bodyStart, closingFence), `${label} has an adjacent backtick in a fence`).not.toMatch(/``/u);
-  }
-}
 
 function model(id: number, codeName = `provider-model-${id}`, custom = true): ProviderPanelModel {
   return {
@@ -197,7 +157,7 @@ describe("Providers panel Components V2 limits", () => {
             for (const size of sizes) {
               const entries = Array.from({ length: size }, (_, index) => providerEntry(`provider-${index + 1}`));
               for (const page of pages) {
-                assertSafePayload(
+                expectSafePanelPayload(
                   buildProvidersPanelPayload({
                     locale,
                     entries,
@@ -232,7 +192,7 @@ describe("Providers panel Components V2 limits", () => {
     for (const size of sizes) {
       const models = Array.from({ length: size }, (_, index) => model(index + 1));
       for (const readStatus of READ_STATUSES) {
-        assertSafePayload(
+        expectSafePanelPayload(
           buildProvidersPanelPayload({
             locale: "en-US",
             entries: [providerEntry("provider-1", "Model-heavy provider", models)],
@@ -257,7 +217,7 @@ describe("Providers panel Components V2 limits", () => {
     ];
     for (const [index, value] of shapes.entries()) {
       const entry = providerEntry("provider-shaped", value, [model(1, value)]);
-      assertSafePayload(
+      expectSafePanelPayload(
         buildProvidersPanelPayload({
           locale: "en-US",
           entries: [entry],
@@ -270,7 +230,7 @@ describe("Providers panel Components V2 limits", () => {
         }),
         `provider shape ${index}`,
       );
-      assertSafePayload(
+      expectSafePanelPayload(
         buildProvidersPanelPayload({
           locale: "en-US",
           entries: [entry],
@@ -316,7 +276,7 @@ describe("Providers panel Components V2 limits", () => {
           { kind: "entry" as const, entryId: fullPageEntries[0]?.id },
           { kind: "remove" as const, entryId: fullPageEntries[0]?.id },
         ]) {
-          assertSafePayload(
+          expectSafePanelPayload(
             buildProvidersPanelPayload({
               locale,
               entries: fullPageEntries,
@@ -365,7 +325,7 @@ describe("Providers panel Components V2 limits", () => {
       { kind: "entry", entryId: "brave" } as const,
       { kind: "remove", entryId: "endpoint:1" } as const,
     ]) {
-      assertSafePayload(
+      expectSafePanelPayload(
         buildProvidersPanelPayload({
           locale: "en-US",
           entries,

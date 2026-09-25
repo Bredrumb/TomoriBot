@@ -120,7 +120,7 @@ For NVIDIA GPU use, **WSL2 is recommended**. The current upstream requirements i
 
 ## Register in TomoriBot
 
-Run `/providers`, choose **Add New Custom Endpoint**, and configure the speech endpoint:
+Run `/providers`, choose `Add New Custom Endpoint`, and configure the speech endpoint:
 
 - Capability: `Speech`
 - API Compatibility: `tts-clone`

@@ -8,7 +8,7 @@ Mỗi khi bạn kích hoạt TomoriBot, những thành phần sau sẽ được 
 
 | Khối | Tùy chọn? | Lệnh | Mô tả |
 |---|---|---|---|
-| [**Prompt hệ thống**](/vi/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > Engine > General | Các hướng dẫn cơ bản ở vị trí cao nhất của ngữ cảnh. |
+| [`Prompt hệ thống`](/vi/features/chatting-personality/behavior-tweaking/#system-prompt) | | `/config` > Engine > General | Các hướng dẫn cơ bản ở vị trí cao nhất của ngữ cảnh. |
 
 > **Nội dung prompt hệ thống mặc định** (chỉ dùng khi máy chủ chưa đặt prompt hệ thống):
 >
@@ -24,14 +24,14 @@ Mỗi khi bạn kích hoạt TomoriBot, những thành phần sau sẽ được 
 | **Prompt persona** | *(Tùy chọn)* | `/config` > Persona > Advanced | Một prompt được viết riêng cho persona đang hoạt động, tách biệt khỏi prompt hệ thống. |
 | [**Thuộc tính persona**](/vi/features/chatting-personality/multiple-personas/#attributes) | | `/config` > Persona > Identity & Personality | Các nét tính cách và phong cách nói chuyện của persona đang hoạt động. |
 | **Thông tin máy chủ** | | *(không có, lấy từ Discord)* | Tên máy chủ, mô tả và kênh bot đang hiện diện, được lấy trực tiếp từ Discord. |
-| [**Chặn người dùng theo persona**](/vi/features/capabilities/tools-and-extensions/#built-in-tools) | *(Tùy chọn)* | `/moderation` để xem/xóa; quản lý qua `/config` > Permissions (User Blocking) | Các hạn chế tắt tiếng/chặn đang hoạt động mà persona này áp dụng đối với người dùng cụ thể. |
-| [**Bộ nhớ máy chủ**](/vi/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | Các dữ kiện dài hạn được lưu cho máy chủ này. |
+| [`Chặn người dùng theo persona`](/vi/features/capabilities/tools-and-extensions/#built-in-tools) | *(Tùy chọn)* | `/moderation` để xem/xóa; quản lý qua `/config` > Permissions (User Blocking) | Các hạn chế tắt tiếng/chặn đang hoạt động mà persona này áp dụng đối với người dùng cụ thể. |
+| [`Bộ nhớ máy chủ`](/vi/features/knowledge/memory/#personal-vs-server-memories) | | `/memories` | Các dữ kiện dài hạn được lưu cho máy chủ này. |
 | [**Emoji máy chủ**](/vi/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Tùy chọn)* | `/config` > Permissions (Emoji Usage) (chỉ bật/tắt), khởi tạo bằng `/expressions initialize` | Các emoji tùy chỉnh hiện diện trong máy chủ. |
 | [**Sticker máy chủ**](/vi/features/chatting-personality/behavior-tweaking/#capabilities-what-shes-allowed-to-do) | *(Tùy chọn)* | `/config` > Permissions (Sticker Usage) (chỉ bật/tắt), khởi tạo bằng `/expressions initialize` | Các sticker tùy chỉnh hiện diện trong máy chủ. |
 | [**Sprite persona**](/vi/features/chatting-personality/multiple-personas/#sprites-emotion-avatars) | *(Tùy chọn)* | `/config` > Persona > Sprites | Các sprite biểu cảm có tên được cấu hình cho persona, nếu có. |
 | [**Người tham gia cuộc trò chuyện**](/vi/features/knowledge/memory/#personal-vs-server-memories) | *(Tùy chọn)* | `/personal memories` (quản lý qua `/config` > Permissions (Personalization)) | Những người trong cuộc trò chuyện, biệt danh và tên tag của họ, cùng bộ nhớ cá nhân được lưu về từng người. Được tải khi người đó có tin nhắn trong ngữ cảnh, hoặc khi tên/biệt hiệu của họ được nhắc đến. Khối này cũng mang theo kênh hiện tại và giờ địa phương ở phần chân trang, sử dụng `/config` > Engine > General. |
-| [**Bộ nhớ ngắn hạn**](/vi/features/knowledge/memory/#short-term-memory-stm) | | `/config` > Persona > Memories; `/memories` để xóa mục; quản lý qua `/config` > Permissions (Short-Term Memory) | Chứa phần tóm tắt và các tin nhắn gần đây từ các kênh khác nhau. |
-| [**Tài liệu**](/vi/features/knowledge/memory/#document-knowledge-base-rag) | *(Tùy chọn)* | `/memories` | Các đoạn dữ liệu liên quan được trích xuất từ cơ sở tri thức bằng RAG. |
+| [`Bộ nhớ ngắn hạn`](/vi/features/knowledge/memory/#short-term-memory-stm) | | `/config` > Persona > Memories; `/memories` để xóa mục; quản lý qua `/config` > Permissions (Short-Term Memory) | Chứa phần tóm tắt và các tin nhắn gần đây từ các kênh khác nhau. |
+| [`Tài liệu`](/vi/features/knowledge/memory/#document-knowledge-base-rag) | *(Tùy chọn)* | `/memories` | Các đoạn dữ liệu liên quan được trích xuất từ cơ sở tri thức bằng RAG. |
 | [**Điều hòa hành vi**](/vi/features/knowledge/memory/#conditioning) | *(Tùy chọn)* | `/reward <feed\|headpat\|hug\|kiss\|tickle>`, `/punish <bite\|bonk\|pinch\|spank\|squeeze>`, quản lý qua `/conditioning remove` | Các gợi ý điều chỉnh hành vi tích lũy cho persona này trong máy chủ này. |
 | [**Hội thoại mẫu**](/vi/features/chatting-personality/multiple-personas/#sample-dialogues) | *(Tùy chọn)* | `/config` > Persona > Identity & Personality | Các ví dụ về cách nói chuyện của persona này, nếu đã được cấu hình. |
 | [**Tin nhắn gần đây**](/vi/features/chatting-personality/behavior-tweaking/#generation-tuning) | | `/config` > Engine > General | Cuộc trò chuyện thực tế, tối đa số lượng tin nhắn này (mặc định 80). Ghi chú ngữ cảnh và ghi chú hội ngộ của bạn được chèn trực tiếp bên trong khối này ở độ sâu có thể cấu hình, thay vì đứng thành một khối riêng. |
@@ -55,8 +55,8 @@ Thứ tự sắp xếp này giải thích cho hầu hết mọi câu hỏi "tạ
 | Tình huống | Lý do |
 |---|---|
 | Bot quên điều gì đó từ lúc sớm hơn trong ngày | Nội dung đã cuộn vượt quá giới hạn tin nhắn. Nội dung đó trước giờ chỉ nằm trong **Tin nhắn gần đây**, nếu Tomori không lưu lại thành bộ nhớ dài hạn, nội dung sẽ bị quên khi nằm ngoài cửa sổ tin nhắn. |
-| Bot quên điều gì đó ở kênh khác | **Tin nhắn gần đây** hoạt động theo từng kênh. Chỉ có **Bộ nhớ máy chủ**, **Người tham gia cuộc trò chuyện** và **Bộ nhớ ngắn hạn** là xuyên kênh. Bộ nhớ ngắn hạn khắc phục điều này bằng cách tải các tin nhắn gần đây từ các kênh khác nhau, nhưng không đổ toàn bộ dữ liệu vào. |
-| `/refresh` làm cho bot quên | Lệnh refresh sẽ cắt đứt **Tin nhắn gần đây** và xóa **Bộ nhớ ngắn hạn** của kênh này, nhưng không xóa bộ nhớ dài hạn. Xóa embed refresh để hủy bỏ điểm ngắt. |
+| Bot quên điều gì đó ở kênh khác | **Tin nhắn gần đây** hoạt động theo từng kênh. Chỉ có `Bộ nhớ máy chủ`, **Người tham gia cuộc trò chuyện** và `Bộ nhớ ngắn hạn` là xuyên kênh. Bộ nhớ ngắn hạn khắc phục điều này bằng cách tải các tin nhắn gần đây từ các kênh khác nhau, nhưng không đổ toàn bộ dữ liệu vào. |
+| `/refresh` làm cho bot quên | Lệnh refresh sẽ cắt đứt **Tin nhắn gần đây** và xóa `Bộ nhớ ngắn hạn` của kênh này, nhưng không xóa bộ nhớ dài hạn. Xóa embed refresh để hủy bỏ điểm ngắt. |
 | Bot quên điều gì đó sau khi khởi động lại | **Tin nhắn gần đây** không bao giờ tồn tại qua các lần khởi động lại. |
 
 Nếu bạn muốn một thông tin tồn tại qua tất cả các trường hợp trên, thông tin đó phải trở thành **bộ nhớ dài hạn**. Xem [Bộ nhớ](/vi/features/knowledge/memory/#long-term-memory).
@@ -65,4 +65,4 @@ Nếu bạn muốn một thông tin tồn tại qua tất cả các trường h�
 
 - `/config` > Engine > General mở rộng cửa sổ hội thoại (20-100 tin nhắn). Nhiều ngữ cảnh hơn đồng nghĩa với nhiều token hơn cho mỗi câu trả lời.
 - `/config` > Engine > General chèn một lời nhắc ngắn ở độ sâu đã chọn. Vì nằm ở vị trí thấp trong gói ngữ cảnh, gần với các tin nhắn gần đây, bot sẽ có nhiều khả năng thực hiện theo lời nhắc đó hơn so với nội dung trong prompt hệ thống. Đây là nơi tốt nhất để nhắc bot lưu bộ nhớ thường xuyên hơn.
-- `/personal memories` và `/memories` ghi trực tiếp vào **Bộ nhớ máy chủ** và **Người tham gia cuộc trò chuyện**, đây là một trong những cách đảm bảo để giữ tri thức vĩnh viễn trong ngữ cảnh của TomoriBot.
+- `/personal memories` và `/memories` ghi trực tiếp vào `Bộ nhớ máy chủ` và **Người tham gia cuộc trò chuyện**, đây là một trong những cách đảm bảo để giữ tri thức vĩnh viễn trong ngữ cảnh của TomoriBot.

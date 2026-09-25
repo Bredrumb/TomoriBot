@@ -17,11 +17,8 @@ import { downloadImage } from "@/utils/image/avatarHelper";
 import { log } from "@/utils/misc/logger";
 import { decryptApiKey } from "@/utils/security/crypto";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
-import {
-  toZaiApiModelName,
-  ZAI_CODING_CHAT_COMPLETIONS_URL,
-  ZAI_GENERAL_CHAT_COMPLETIONS_URL,
-} from "@/providers/zai/zaiShared";
+import { resolveVisionApiModelName } from "@/utils/provider/visionCaption";
+import { ZAI_CODING_CHAT_COMPLETIONS_URL, ZAI_GENERAL_CHAT_COMPLETIONS_URL } from "@/providers/zai/zaiShared";
 import { WELCOME_DELAY_MS, waitForWelcomeDelay } from "@/events/guildMemberAdd/helpers/welcomeDelay";
 import { type WelcomeMembershipCheck, checkWelcomeMembership } from "@/events/guildMemberAdd/helpers/welcomeMembership";
 
@@ -134,8 +131,7 @@ async function getAvatarVisionDescription(member: GuildMember, persona: TomoriSt
   if (!apiKey) return null;
 
   const provider = visionLlm.llm_provider.toLowerCase();
-  const apiModelName =
-    provider === "zai" || provider === "zaicoding" ? toZaiApiModelName(visionLlm.llm_codename) : visionLlm.llm_codename;
+  const apiModelName = resolveVisionApiModelName(provider, visionLlm.llm_codename);
 
   log.info(`newUser: Delegating avatar analysis to vision model ${provider}/${apiModelName} for member ${member.id}`);
 

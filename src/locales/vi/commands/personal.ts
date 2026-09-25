@@ -325,7 +325,7 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       fallback_none_desc: `Để trống vị trí dự phòng này.`,
       randomizer_section_title: `Bộ ngẫu nhiên hóa model`,
       randomizer_section_desc:
-        "Khi bật, mỗi phản hồi sẽ chọn ngẫu nhiên một model từ nhóm gồm model văn bản chính và các model dự phòng. Nếu model được chọn thất bại, máy sẽ chọn ngẫu nhiên lại.",
+        "Chọn ngẫu nhiên từ model chính và các model dự phòng cho mỗi phản hồi. Lỗi sẽ tiếp tục thử trong nhóm đó.",
       randomizer_effect_off: `Mình thử model chính trước`,
       randomizer_effect_on: `Mình chọn ngẫu nhiên từ model chính và dự phòng trước`,
       fallbacks_updated_heading: `Đã cập nhật model dự phòng cá nhân`,
@@ -338,6 +338,16 @@ TomoriBot sẽ xem bạn như người dùng mới từ tin nhắn tiếp theo.`
       randomizer_enabled_detail: `Bộ ngẫu nhiên hóa model hiện đã được bật cho {provider}.`,
       randomizer_disabled_heading: `Đã tắt bộ ngẫu nhiên hóa`,
       randomizer_disabled_detail: `Bộ ngẫu nhiên hóa model hiện đã bị tắt cho {provider}.`,
+      server_fallback_section_title: `Dự phòng bằng model máy chủ`,
+      server_fallback_section_desc:
+        "Dùng model và hạn mức văn bản của máy chủ này khi nhà cung cấp cá nhân của bạn không thể hoàn thành yêu cầu.",
+      server_fallback_effect_on: `Mình dùng model của máy chủ này để trả lời khi nhà cung cấp riêng của bạn gặp lỗi`,
+      server_fallback_effect_off: `Mình dừng lại thay vì mượn model của máy chủ này`,
+      server_fallback_byok_notice: `Máy chủ này yêu cầu mọi người tự mang nhà cung cấp riêng, nên ở đây máy chủ không cho mượn model của mình`,
+      server_fallback_enabled_heading: `Đã bật dự phòng bằng model máy chủ`,
+      server_fallback_enabled_detail: `Mình sẽ dùng model của máy chủ để trả lời khi nhà cung cấp văn bản cá nhân của bạn gặp lỗi.`,
+      server_fallback_disabled_heading: `Đã tắt dự phòng bằng model máy chủ`,
+      server_fallback_disabled_detail: `Mình sẽ không còn dùng model của máy chủ làm phương án dự phòng khi nhà cung cấp văn bản cá nhân của bạn gặp lỗi nữa.`,
       no_text_providers_fallbacks:
         "Không tìm thấy nhà cung cấp văn bản cá nhân nào. Hãy thêm bằng `/personal providers`.",
       response_modes_title: `Chế độ phản hồi cá nhân`,

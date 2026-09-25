@@ -26,5 +26,5 @@ Image and video generation are controlled separately by their configured provide
 server's capability settings; they are not gated by the `/nsfw` command category.
 
 Age-restricted content is for adult users only, so use responsibly and follow Discord's
-[Community Guidelines](https://discord.com/guidelines). In `/help`, choose **Behavior**, then **Age-Restricted Commands**, for the same
+[Community Guidelines](https://discord.com/guidelines). In `/help`, choose `Behavior`, then `Age-Restricted Commands`, for the same
 walkthrough in Discord.

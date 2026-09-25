@@ -90,7 +90,7 @@ cada ruta de instalación.
 
 `/setup` abre un panel de lista de verificación efímero que solo puede operar la persona que lo ejecutó.
 En un servidor requiere **Administrar servidor**; en un mensaje directo está disponible para el espacio
-de trabajo de esa misma persona. Cada fila del panel es un valor en borrador: **Finalizar configuración**
+de trabajo de esa misma persona. Cada fila del panel es un valor en borrador: `Finalizar configuración`
 es el único control que escribe algo, así que abrir, editar, cancelar o reiniciar deja intacta cada fila
 de la base de datos.
 
@@ -98,7 +98,7 @@ de la base de datos.
 |---|---|---|
 | **Políticas** | Solo con `RUN_ENV=production` | Aceptación de los Términos de servicio y la Política de privacidad, ambos en un solo modal. |
 | **Proveedor de IA** | En todos los entornos | Cómo llegan las respuestas a un modelo. Uno de los tres modos de acceso siguientes. |
-| **Configuración inicial** | En todos los entornos | Persona inicial, estilo de respuesta, zona horaria y el prompt de sistema predeterminado del espacio de trabajo. |
+| **Ajustes iniciales** | En todos los entornos | Persona inicial, estilo de respuesta, zona horaria y el prompt de sistema predeterminado del espacio de trabajo. |
 
 Cualquier otro valor de `RUN_ENV` muestra el diseño de dos pasos y ningún texto de políticas. Una
 implementación que se ejecuta con `RUN_ENV=production` registra `/legal terms-of-service` y
@@ -108,15 +108,15 @@ implementación que se ejecuta con `RUN_ENV=production` registra `/legal terms-o
 
 - **Proveedor de IA (recomendado)**: elige un proveedor del catálogo y pega su clave de API. La clave se
   valida contra el proveedor y se cifra en el borrador; el panel solo muestra que hay una clave
-  almacenada, nunca la clave en sí. Ejecuta `/help`, luego **Configuración** > **Paso 1: Obtén una clave
+  almacenada, nunca la clave en sí. Ejecuta `/help`, luego `Configuración` > **Paso 1: Obtén una clave
   de API** para el recorrido específico de cada proveedor.
-- **Endpoint personalizado (avanzado)**: un área secundaria de dos botones para un endpoint autoalojado
-  o proxy. **Configurar conexión** recopila la compatibilidad de API, una etiqueta, la URL y un token de
-  autenticación opcional, y comprueba que el endpoint responda. **Configurar modelo de texto** recopila
+- **Punto de conexión personalizado (avanzado)**: un área secundaria de dos botones para un endpoint autoalojado
+  o proxy. `Configurar conexión` recopila la compatibilidad de API, una etiqueta, la URL y un token de
+  autenticación opcional, y comprueba que el endpoint responda. `Configurar modelo de texto` recopila
   el código del modelo, su tamaño de contexto y sus declaraciones de capacidad, y permanece deshabilitado
   hasta que una conexión se valide. Guardar la conexión de nuevo borra la declaración del modelo, porque
   las declaraciones dependen de la compatibilidad de API elegida. Este es el mismo registro que realiza
-  `/providers`, hecho dentro del asistente, y no crea ninguna fila antes de **Finalizar configuración**.
+  `/providers`, hecho dentro del asistente, y no crea ninguna fila antes de `Finalizar configuración`.
 - **BYOK de usuario** (solo servidores, nunca en un mensaje directo): el espacio de trabajo no conserva
   ningún proveedor propio y cada respuesta activada por un miembro resuelve en su lugar un proveedor
   personal. Confírmalo en el modal y luego haz que los miembros registren el suyo con
@@ -127,7 +127,7 @@ implementación que se ejecuta con `RUN_ENV=production` registra `/legal terms-o
 
 Un modal de cuatro filas recopila la persona, el estilo de respuesta, el desfase de zona horaria y el
 prompt de sistema predeterminado. La zona horaria es opcional y por defecto es UTC. El prompt de sistema
-ofrece **Predeterminado incorporado (recomendado)** más cada preajuste del catálogo del espacio de
+ofrece `Predeterminado incorporado (recomendado)` más cada preajuste del catálogo del espacio de
 trabajo: la opción incorporada no almacena ningún texto de prompt, así que sigue el predeterminado
 distribuido con el bot, y una opción de preajuste almacena el texto de ese preajuste tal como se lee en
 el momento del guardado. Eliminar una persona o un prompt almacenado del catálogo vuelve a abrir el paso
@@ -137,7 +137,7 @@ hasta que se elija otro.
 
 **Finalizar configuración** permanece deshabilitado hasta que cada paso mostrado esté completo. Revalida
 los catálogos y el estado del espacio de trabajo, confirma todo el borrador en una sola transacción y
-reemplaza el panel con el comprobante. **Cancelar** descarta el borrador y hace expirar cada control del
+reemplaza el panel con el comprobante. `Cancelar` descarta el borrador y hace expirar cada control del
 panel.
 
 Un borrador vive en el proceso del bot, no en la base de datos, así que solo termina cuando se cancela,

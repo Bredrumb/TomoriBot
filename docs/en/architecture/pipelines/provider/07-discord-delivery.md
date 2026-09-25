@@ -107,7 +107,7 @@ payload. It handles:
 `renderMarkdownTableToPng()` and sent as a PNG attachment, because Discord's Markdown dialect has
 no table support and raw pipe rows render as unaligned text.
 
-The message carries a single **Show Markdown** button (`createShowMarkdownButtonRow`,
+The message carries a single `Show Markdown` button (`createShowMarkdownButtonRow`,
 `src/utils/discord/markdownTableButton.ts`), following the same collector pattern as the
 `Fallback Used` notice:
 

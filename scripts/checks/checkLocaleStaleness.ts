@@ -24,7 +24,7 @@ import { isVerboseOutput, verboseOutputHint } from "./lib/gateOutput";
  * Git seam so branch-diff behavior can be tested without a second contributor-facing command.
  */
 
-export const STALENESS_DOC_PATH = "docs/en/contributing/adding-locale/verification.md";
+export const STALENESS_DOC_PATH = "docs/en/contributing/localization/new-locale.md";
 
 const DEFAULT_LOCALE = "en-US";
 // Forward slash is required, not cosmetic: this value is concatenated into a git treeish

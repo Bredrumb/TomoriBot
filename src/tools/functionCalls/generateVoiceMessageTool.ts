@@ -321,7 +321,14 @@ export class GenerateVoiceMessageTool extends BaseTool {
         cfgWeight: context.tomoriState.config.chatterbox_cfg_weight ?? 0.5,
         exaggeration: context.tomoriState.config.chatterbox_exaggeration ?? 0.5,
       },
+      ...(context.abortSignal ? { abortSignal: context.abortSignal } : {}),
     });
+
+    // /kill stops awaiting this tool but cannot stop it, so synthesis that finished before the abort
+    // landed still reaches here; delivering now would post a voice message the user killed.
+    if (context.abortSignal?.aborted) {
+      return { success: false, error: "Voice message generation was cancelled." };
+    }
 
     if (!synthesisResult.success || !synthesisResult.audioBuffer) {
       return {

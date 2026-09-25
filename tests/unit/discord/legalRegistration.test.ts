@@ -9,6 +9,7 @@ import * as realEmbedHelper from "@/utils/discord/embedHelper";
 import * as realServerRepositoryModule from "@/utils/db/repositories/ServerRepository";
 import * as realPersonaRepositoryModule from "@/utils/db/repositories/PersonaRepository";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 /**
  * The hosted-policy decision is one boolean read by four surfaces: the `/legal` registration
@@ -170,8 +171,8 @@ describe("hosted legal registration", () => {
     expect(selfHostedDescription).toBe(localizer("en-US", "commands.legal.license-only.description"));
     // The client renders this string beside a picker holding only `/legal license`, so naming
     // either policy document would advertise a leaf that is not there.
-    expect(selfHostedDescription).not.toContain("Privacy Policy");
-    expect(selfHostedDescription).not.toContain("terms of service");
+    expect(selfHostedDescription).not.toContain(localizedCopy("en-US", "commands.legal.privacy-policy.title"));
+    expect(selfHostedDescription).not.toContain(localizedCopy("en-US", "commands.legal.description"));
   });
 
   it("resolves legal descriptions in both locales, not as raw keys", async () => {
@@ -199,7 +200,7 @@ describe("hosted policy notices", () => {
     setHostedEnvironment(false);
     const selfHostedPayload = JSON.stringify(buildHelpDashboardPayload("en-US", "setup", "personal-profile"));
     expect(selfHostedPayload).not.toContain(setupAgreement);
-    expect(selfHostedPayload).not.toContain("legal terms-of-service");
+    expect(selfHostedPayload).not.toMatch(localizedProse("en-US", "general.legal.policy_reference"));
   });
 
   it("carries the guild welcome notice only when hosted", async () => {

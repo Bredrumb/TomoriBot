@@ -35,7 +35,7 @@ usuários ou personas referenciados.
 Cada fonte de tags acima é editável, cada uma em um escopo diferente. Todas abrem um modal
 pré-preenchido com as tags atuais, para que você edite no lugar:
 
-- **`/config` > Persona > Appearance**: as tags de **Aparência Física** da persona selecionada (como *ela*
+- **`/config` > Persona > Appearance**: as tags de `Aparência Física` da persona selecionada (como *ela*
   se parece). Requer a permissão Gerenciar Servidor.
 - **`/personal config`**: *suas próprias* tags de aparência, aplicadas quando uma geração
   faz referência a você. Seguem você em todos os servidores (veja

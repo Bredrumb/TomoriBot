@@ -30,4 +30,11 @@ describe("vision API model name resolution", () => {
     expect(resolveVisionApiModelName("zai", "zai/glm-4.6v", "ignored-by-zai")).toBe("glm-4.6v");
     expect(resolveVisionApiModelName("zaicoding", "glm-4.6v", "ignored-by-zai")).toBe("glm-4.6v");
   });
+
+  it("sends deprecated DeepSeek Flash codenames as deepseek-flash", () => {
+    expect(resolveVisionApiModelName("deepseek", "deepseek-v4-flash-vision")).toBe("deepseek-flash");
+    expect(resolveVisionApiModelName("deepseek", "deepseek-v4-flash-vision-exp")).toBe("deepseek-flash");
+    expect(resolveVisionApiModelName("deepseek", "deepseek-v4-flash")).toBe("deepseek-flash");
+    expect(resolveVisionApiModelName("deepseek", "deepseek-v4-pro")).toBe("deepseek-v4-pro");
+  });
 });

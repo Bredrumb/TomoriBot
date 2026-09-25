@@ -32,7 +32,7 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 
 **設定：**
 
-1. `/personal providers` 會儲存一個供應商（你的金鑰會加密）。這也會立刻啟用你的個人**文字**覆寫，使用該供應商的預設文字模型。
+1. `/personal providers` 會儲存一個供應商（你的金鑰會加密）。這也會立刻啟用你的個人`文字`覆寫，使用該供應商的預設文字模型。
 2. `/personal config` 可以為你的個人文字覆寫選擇不同的模型。在這裡挑選模型會讓「文字」保持啟用。
 3. 需要更新憑證、管理自訂端點，或新增與編輯個人模型註冊時，回到 `/personal providers`。
 
@@ -44,8 +44,10 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 
 如果使用你的個人供應商時請求失敗，錯誤訊息中「你可以怎麼做」的提示會指出真正能解決問題的個人指令（`/personal providers`、`/personal config`），而不是伺服器管理員的指令。
 
+當你個人文字路由上的每個模型都失敗時，TomoriBot 可以改用伺服器自己的文字模型回答，而不是讓那則訊息無人回答。那種回答會使用伺服器的憑證執行，並計入伺服器的文字額度，也會遵守伺服器的訊息冷卻，所以每個訊息都失敗的供應商不會變成每則訊息都有回覆。回報方式和其他模型備援相同：一顆**備援使用情形**按鈕，詳細資料會指出是哪個模型回答，以及先前發生過哪些失敗。想讓你供應商的失敗留在你這邊，就到 `/personal config` > 模型 > 備援 的**伺服器模型備援**區段把它關掉。這個設定屬於整個帳號，而且預設開啟，所以只要伺服器允許，它就會跟著你到每一個伺服器。
+
 :::note[需要 BYOK 的伺服器]
-伺服器可以用「使用者 BYOK」模式要求成員自備供應商（[伺服器管理](/zh-TW/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)）。開啟後，你觸發的訊息必須先有個人供應商，她才能回答。個人供應商會套用到你使用她的每一個伺服器。
+伺服器可以用「使用者 BYOK」模式要求成員自備供應商（[伺服器管理](/zh-TW/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)）。開啟後，你觸發的訊息必須先有個人供應商，她才能回答；而失敗的個人路由就是失敗：不開放自己的模型給成員的伺服器，不會借出模型當作備援。個人供應商會套用到你使用她的每一個伺服器。
 :::
 
 ## 其他個人設定
@@ -54,6 +56,7 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 - `/personal config`：你自己的外觀標籤（booru 風格），當一次[圖片生成](/zh-TW/features/capabilities/media-generation/image-generation/#標籤自訂)以你為參考時會用到。送出空白的內容即可清除它們。
 - `/personal config`：控制你在她眼中的可見度，最高可以**完全隱形**（完全退出記憶功能）。
 - `/personal config`：你對[明確觸發模式](/zh-TW/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)的個人覆寫。
+- `/personal config`：允許伺服器的文字模型接手失敗的個人文字路由，或關掉這個選項。
 - `/personal config`：選擇加入跨伺服器的短期記憶共享；`/personal memories` 會清除你的 STM。
 - `/personal config`：設定一段可重複使用的提示詞，供她透過 `/impersonate user` 模擬你時使用。
 
@@ -76,4 +79,4 @@ TomoriBot 可以透過 `/personal` 系列指令為**你個人**設定，這些�
 - 它仍然遵守透過 `/moderation` 設定的伺服器層級人格限制。
 - 代理鏈會被阻擋：如果你的聚光燈只包含 Alice，Alice 的回覆就不能在你的訊息鏈中轉交給 Bob。
 
-用 `/personal config` 檢視或移除項目（取消勾選即可移除；有期限的聚光燈會自行過期）。在 `/help` 中選擇 **行為**，然後選 **個人聚光燈**，就能看到 Discord 裡的摘要。
+用 `/personal config` 檢視或移除項目（取消勾選即可移除；有期限的聚光燈會自行過期）。在 `/help` 中選擇 `行為`，然後選 `個人聚光燈`，就能看到 Discord 裡的摘要。

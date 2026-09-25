@@ -1,5 +1,3 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType, type StringSelectMenuComponentData } from "discord.js";
 import type { ServerMemoryRow, TomoriState } from "@/types/db/schema";
@@ -18,13 +16,9 @@ import {
 } from "@/utils/discord/ui/memoriesPanel";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
-
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 
 const REALISTIC_RECEIPT: PanelReceipt = {
   tone: "success",

@@ -51,6 +51,7 @@ export const userSchema = z.object({
   shortterm_cache_crossserver_opt_in: z.boolean().default(false), // Short-term memory cross-server sharing
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"), // Added May 2026 - User-scoped deliberate tool mode tri-state
+  personal_server_fallback_enabled: z.boolean().default(true), // Whether a failed personal text route may fall back to the server's model
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(), // Added June 2026 - Personal UTC offset; NULL = not set / opt-out
   prefix_override: z.string().nullable().optional(),
   suffix_override: z.string().nullable().optional(),
@@ -297,6 +298,19 @@ export const customEndpointApiStyleSchema = z.enum([
 ]);
 export type CustomEndpointApiStyle = z.infer<typeof customEndpointApiStyleSchema>;
 
+const vramHandoffBackendSchema = z.enum(["koboldcpp", "ollama"]);
+export type VramHandoffBackend = z.infer<typeof vramHandoffBackendSchema>;
+
+/**
+ * Settings that describe the backend server behind a connection rather than any model it hosts.
+ * `vram_handoff` records the backend detected when the option was enabled, so the runtime runs a
+ * known unload strategy instead of guessing.
+ */
+export const endpointBehaviorSchema = z.object({
+  vram_handoff: vramHandoffBackendSchema.optional(),
+});
+export type EndpointBehavior = z.infer<typeof endpointBehaviorSchema>;
+
 export const customEndpointConnectionSchema = z.object({
   connection_id: z.number().int().positive(),
   server_id: z.number().nullable().optional(),
@@ -306,6 +320,9 @@ export const customEndpointConnectionSchema = z.object({
   api_style: customEndpointApiStyleSchema,
   endpoint_url: z.string(),
   requires_auth: z.boolean().default(false),
+  // No default: most endpoint reads JOIN this table without selecting the column, and a default
+  // would make "not loaded" indistinguishable from "no behavior configured".
+  behavior: endpointBehaviorSchema.optional(),
   created_at: z.coerce.date().optional(),
   updated_at: z.coerce.date().optional(),
 });
@@ -592,6 +609,7 @@ const userPersonalizationConfigsSchema = z.object({
   impersonation_prompt: z.string().nullable().optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"),
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"),
+  personal_server_fallback_enabled: z.boolean().default(true),
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(),
   prefix_override: z.string().nullable().optional(),
   suffix_override: z.string().nullable().optional(),

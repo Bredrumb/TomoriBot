@@ -1,6 +1,6 @@
 import type { Guild, Message } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
-import { CooldownType, PrivacyLevel } from "@/types/db/schema";
+import { PrivacyLevel } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedUserRow, getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
@@ -17,9 +17,10 @@ import {
 import {
   checkTextQuotaForAdmission,
   enforceGlobalRateLimit,
+  enforceServerTriggerCooldownForAdmission,
   evaluateChatAccess,
-  rejectOnMessageTriggerCooldown,
-  setMessageTriggerCooldownForAdmission,
+  resolveChannelScope,
+  shouldApplyServerTextQuota,
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
@@ -501,16 +502,6 @@ function isRealUserMessage(message: Message): boolean {
   return (!message.author.bot && !message.webhookId) || isMatrixRelayMessage(message);
 }
 
-function resolveChannelScope(message: Message): { effectiveChannelId: string; parentChannelId?: string } {
-  const isThread =
-    "isThread" in message.channel && typeof message.channel.isThread === "function" && message.channel.isThread();
-  const parentChannelId = isThread && "parent" in message.channel ? message.channel.parent?.id : undefined;
-  return {
-    effectiveChannelId: parentChannelId ?? message.channelId,
-    parentChannelId,
-  };
-}
-
 function getMatchLimit(tomoriState: TomoriState): number {
   const rawMatchLimit = tomoriState.config.match_limit ?? DEFAULT_MATCH_LIMIT;
   return Math.min(Math.max(rawMatchLimit, MIN_MATCH_LIMIT), MAX_MATCH_LIMIT);
@@ -771,31 +762,15 @@ async function enforceTurnGuards(
   }
 
   if (!incoming.isStopResponse && !incoming.isPersonaJob && !isSelfMessage && textCredentialSource !== "personal") {
-    const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
+    const cooldownAllowed = await enforceServerTriggerCooldownForAdmission({
       serverDiscId,
-      userDiscId: admission.cooldownUserDiscId ?? userDiscId,
-      channelId: message.channelId,
-      cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,
-      member: message.member,
-      isAutochatOverride: isAutochatOverrideChannel(
-        tomoriState.config,
-        resolveChannelScope(message).effectiveChannelId,
-      ),
-      author: message.author,
+      cooldownUserDiscId: admission.cooldownUserDiscId ?? userDiscId,
+      message,
+      tomoriState,
       locale: admission.locale,
-      botName: tomoriState.persona_nickname,
       notifyUser: shouldSurfaceUserErrors,
     });
-    if (rejectedByCooldown) return false;
-
-    await setMessageTriggerCooldownForAdmission({
-      serverDiscId,
-      userDiscId: admission.cooldownUserDiscId ?? userDiscId,
-      channelId: message.channelId,
-      cooldownType: tomoriState.config.cooldown_type ?? CooldownType.OFF,
-      cooldownLength: tomoriState.config.cooldown_length ?? 5,
-      member: message.member,
-    });
+    if (!cooldownAllowed) return false;
   }
 
   const cascadeLimit = Math.min(
@@ -828,13 +803,10 @@ async function prepareTextQuota(
   const incoming = lockedTurn.admission.incoming;
   const triggerKey = incoming.textQuotaTriggerKey ?? lockedTurn.admission.message.id;
   const shouldTreatAsQuotaSharedPersonaJob = incoming.isPersonaJob && !incoming.sceneTurn;
+  // A personal route spends the user's own credentials, so it never draws on the server's quota.
+  // The server route a personal turn can still fall back to admits itself, in generationTurn.
   const shouldApply =
-    incoming.textQuotaSource === "user" &&
-    !lockedTurn.admission.isDMChannel &&
-    !incoming.isStopResponse &&
-    !incoming.reminderRecipientID &&
-    !incoming.reminderData?.self_reminder &&
-    textCredentialSource !== "personal";
+    textCredentialSource === "server" && shouldApplyServerTextQuota(incoming, lockedTurn.admission.isDMChannel);
 
   const quota = await checkTextQuotaForAdmission({
     shouldApplyTextQuota: shouldApply,

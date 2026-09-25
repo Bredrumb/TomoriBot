@@ -341,6 +341,18 @@ export async function repaint(
     }
   }
 
+  // The Server Model Fallback section states the behavior that setting buys. A server that requires
+  // member-provided providers never delivers it, and the section has to say so where it is read.
+  let serverModelAccess: { userByokMode: boolean } | null = null;
+  if (category === "models" && page === "fallbacks" && scope.guildId) {
+    try {
+      const serverState = await dependencies.loadTomoriState(scope.guildId);
+      serverModelAccess = serverState ? { userByokMode: Boolean(serverState.config.user_byok_mode) } : null;
+    } catch {
+      serverModelAccess = null;
+    }
+  }
+
   await deliverGuardedPanel(
     interaction,
     withPersonaPanelAvatar(
@@ -371,6 +383,7 @@ export async function repaint(
         modelDisplayInfo,
         spotlightDisplayInfo,
         serverTriggerBehavior,
+        serverModelAccess,
         view,
       }),
       selectedPersonaAvatar,

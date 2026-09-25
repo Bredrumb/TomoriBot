@@ -24,6 +24,7 @@ import {
 import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { getDiscordTextLength } from "@/utils/text/discordTextLimits";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 function makeSample(index: number, overrides: Partial<VoiceSampleRow> = {}): VoiceSampleRow {
   return {
@@ -62,12 +63,12 @@ describe("configVoicesPanel", () => {
 
     expect(components[0].type).toBe(ComponentType.TextDisplay);
     const headingText = (components[0] as TextDisplayComponentData).content;
-    expect(headingText).toContain("Voice Cloning & Library");
+    expect(headingText).toContain(localizedCopy("en-US", "commands.config.panel.voices.page.title"));
 
     expect(components[1].type).toBe(ComponentType.TextDisplay);
     const paramsText = (components[1] as TextDisplayComponentData).content;
-    expect(paramsText).toContain("Chatterbox Parameters");
-    expect(paramsText).toContain("The fast model is disabled");
+    expect(paramsText).toContain(localizedCopy("en-US", "commands.config.panel.voices.page.parameters_title"));
+    expect(paramsText).toContain(localizedCopy("en-US", "commands.config.panel.voices.parameters.standard_notice"));
 
     expect(components[2].type).toBe(ComponentType.ActionRow);
     const editParamsRow = components[2] as ActionRowData<ButtonComponentData>;
@@ -77,7 +78,7 @@ describe("configVoicesPanel", () => {
 
     expect(components[3].type).toBe(ComponentType.TextDisplay);
     const libraryHeader = (components[3] as TextDisplayComponentData).content;
-    expect(libraryHeader).toContain("Voice Sample Library");
+    expect(libraryHeader).toContain(localizedCopy("en-US", "commands.config.panel.voices.page.library_header"));
 
     expect(components[4].type).toBe(ComponentType.ActionRow);
     const selectRow = components[4] as ActionRowData<StringSelectMenuComponentData>;
@@ -161,12 +162,12 @@ describe("configVoicesPanel", () => {
         (component as TextDisplayComponentData).content.includes("> 10.1s duration"),
     ) as TextDisplayComponentData;
 
-    expect(libraryHeader.content).toContain("Voice Sample Library");
+    expect(libraryHeader.content).toContain(localizedCopy("en-US", "commands.config.panel.voices.page.library_header"));
     expect(libraryText.content).toContain("> 10.1s duration");
     expect(libraryText.content).toContain("> *Reference transcript text for sample 1.*");
     expect(libraryText.content).not.toContain("Voice Sample 1");
     expect(libraryText.content).not.toContain("Other Sample");
-    expect(libraryText.content).not.toContain("more voice sample");
+    expect(libraryText.content).not.toMatch(localizedProse("en-US", "commands.config.panel.voices.page.hidden_count"));
 
     const selectRow = components.find(
       (component) =>
@@ -218,7 +219,7 @@ describe("configVoicesPanel", () => {
     ) as ActionRowData<StringSelectMenuComponentData>;
     expect(selectRow.components[0]?.options[0]).toMatchObject({ label: "Voice Sample 1", default: true });
     expect(text).not.toContain("Voice Sample 1");
-    expect(text).toContain("Audio preview is unavailable.");
+    expect(text).toContain(localizedCopy("en-US", "commands.config.panel.voices.page.audio_preview_unavailable"));
     expect(components.some((component) => component.type === ComponentType.File)).toBe(false);
   });
 
@@ -454,7 +455,9 @@ describe("configVoicesPanel", () => {
     // Confirm text display
     const confirmTextComp = components[3] as TextDisplayComponentData;
     expect(confirmTextComp.type).toBe(ComponentType.TextDisplay);
-    expect(confirmTextComp.content).toContain("Remove Voice Sample?");
+    expect(confirmTextComp.content).toContain(
+      localizedCopy("en-US", "commands.config.panel.voices.remove.confirm_title"),
+    );
     expect(confirmTextComp.content).toContain("3 persona(s)"); // Ref count is present
 
     // Confirm action row

@@ -40,7 +40,7 @@ The endpoint is `http://127.0.0.1:8018`, and `bun run launch --moss` starts the 
 
 ## Register in TomoriBot
 
-In `/providers`, choose **Add New Custom Endpoint**, set API Compatibility to `tts-clone`, and use endpoint URL `http://127.0.0.1:8018`. Add a Speech model with **Voice Source Mode** `Auto` and **Script Markup** `Plain`. Then activate it under `/config` > Models > Switch Models.
+In `/providers`, choose `Add New Custom Endpoint`, set API Compatibility to `tts-clone`, and use endpoint URL `http://127.0.0.1:8018`. Add a Speech model with `Voice Source Mode` `Auto` and **Script Markup** `Plain`. Then activate it under `/config` > Models > Switch Models.
 
 For cloning, upload a clean reference clip under `/config` > Models > TTS Parameters & Voices and assign it under Persona > Voice. Upstream documents no recommended reference length for MOSS-TTS and no duration cap in its runtime, so clip length is yours to tune; shorter clean clips remain the safer default. For voice design, save a natural-language voice description under Persona > Voice instead. MOSS-TTS uses the audio reference; it does not use TomoriBot's optional reference transcript. MOSS-VoiceGenerator is documented for English and Chinese, not Japanese. The 4B clone model supports Japanese, but a known language tag improves multilingual synthesis.
 

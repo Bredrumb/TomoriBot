@@ -36,7 +36,7 @@ Mantén esa terminal abierta mientras TomoriBot esté usando WhisperX. La URL de
 
 ## Registro en TomoriBot
 
-Ejecuta `/providers`, elige **Agregar nuevo punto de conexión personalizado** y usa la compatibilidad de API de transcripción:
+Ejecuta `/providers`, elige `Agregar nuevo punto de conexión personalizado` y usa la compatibilidad de API de transcripción:
 
 - Compatibilidad de API: `openai-compatible-transcription`
 - `endpoint_url`: `http://127.0.0.1:8021`

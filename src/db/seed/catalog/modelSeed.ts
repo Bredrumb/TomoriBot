@@ -280,8 +280,8 @@ const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
 ]);
 
 // Active first-party rows that legitimately have no published price yet (the provider has not shipped one).
-// Re-checked 2026-06-11. Remove a codename here once its official rate is filled into models.ts.
-const PRICING_PENDING_CODENAMES = new Set<string>(["gemini-3.5-pro"]);
+// Remove a codename here once its official rate is filled into models.ts or the row is deprecated.
+const PRICING_PENDING_CODENAMES = new Set<string>();
 
 /**
  * Enforce that every billable first-party llms row carries explicit per-million input/output prices.

@@ -5,7 +5,7 @@
  * `.trivyignore`.
  *
  * Every entry needs a justification and a retirement condition in
- * `docs/en/contributing/dependency-security-policy.md`. `bun audit --ignore` matches by advisory ID
+ * `docs/en/contributing/policies/dependency-security.md`. `bun audit --ignore` matches by advisory ID
  * across the WHOLE tree, not per dependency path, so an entry keeps hiding the advisory even if a
  * later dependency change puts the package on a reachable path.
  */

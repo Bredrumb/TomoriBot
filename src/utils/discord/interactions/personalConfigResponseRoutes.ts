@@ -209,6 +209,97 @@ export async function handlePersonalConfigResponseRoutes(context: PersonalConfig
     return true;
   }
 
+  if (route.action === "server-fallback-set") {
+    if (context.scope.readStatus !== "fresh") {
+      await repaint(interaction, {
+        locale: route.locale,
+        scope: context.scope,
+        category: "models",
+        page: "fallbacks",
+        panelReceipt: {
+          tone: "error",
+          heading: localizer(route.locale, "commands.personal.config.unavailable"),
+          detail: localizer(route.locale, "commands.personal.config.stale_warning"),
+        },
+        dependencies,
+      });
+      return true;
+    }
+
+    const action = await performPanelAction(
+      () =>
+        dependencies.operations.setServerModelFallback({
+          userId: context.scope.userId,
+          userDiscId: context.scope.userDiscId,
+          current: context.scope.user.personal_server_fallback_enabled,
+          enabled: route.enabled,
+        }),
+      () => dependencies.resolveScope(interaction, true),
+    );
+    const result = action.result;
+    context.scope = action.state ?? context.scope;
+
+    if (result.status === "no-changes") {
+      await repaint(interaction, {
+        locale: route.locale,
+        scope: context.scope,
+        category: "models",
+        page: "fallbacks",
+        panelReceipt: noChangesReceipt(route.locale),
+        dependencies,
+      });
+      return true;
+    }
+
+    if (result.status === "success") {
+      if (context.scope.internalServerId) {
+        dependencies.recordAction({
+          action: "personal-config.personal.server-fallback.set",
+          serverId: context.scope.internalServerId,
+          userDiscId: interaction.user.id,
+        });
+      }
+      const isEnabled = result.enabled;
+      await repaint(interaction, {
+        locale: route.locale,
+        scope: context.scope,
+        category: "models",
+        page: "fallbacks",
+        panelReceipt: {
+          tone: "success",
+          heading: localizer(
+            route.locale,
+            isEnabled
+              ? "commands.personal.config.server_fallback_enabled_heading"
+              : "commands.personal.config.server_fallback_disabled_heading",
+          ),
+          detail: localizer(
+            route.locale,
+            isEnabled
+              ? "commands.personal.config.server_fallback_enabled_detail"
+              : "commands.personal.config.server_fallback_disabled_detail",
+          ),
+        },
+        dependencies,
+      });
+      return true;
+    }
+
+    await repaint(interaction, {
+      locale: route.locale,
+      scope: context.scope,
+      category: "models",
+      page: "fallbacks",
+      panelReceipt: {
+        tone: "error",
+        heading: localizer(route.locale, "commands.personal.config.write_failed_heading"),
+        detail: localizer(route.locale, "commands.personal.config.write_failed_detail"),
+      },
+      dependencies,
+    });
+    return true;
+  }
+
   if (route.action === "trigger-mode-set") {
     if (context.scope.readStatus !== "fresh") {
       await repaint(interaction, {

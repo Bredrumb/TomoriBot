@@ -4,6 +4,7 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ProviderError, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 type SendMock = ReturnType<typeof mock>;
 
@@ -87,7 +88,7 @@ async function renderTips(
     components?: Array<{ toJSON(): { components: Array<{ label?: string }> } }>;
   };
   expect(payload.embeds).toHaveLength(1);
-  expect(payload.components?.[0]?.toJSON().components[0]?.label).toBe("What You Can Do");
+  expect(payload.components?.[0]?.toJSON().components[0]?.label).toBe(localizedCopy("en-US", "genai.tips.button"));
   return (
     modal?.components
       ?.map((component) => ("content" in component ? component.content : ""))
@@ -147,7 +148,7 @@ describe("provider error tips resolve against the credential source", () => {
     const tips = await renderTips(API_ERROR, "server");
 
     expect(tips).not.toContain("toggle-models");
-    expect(tips).toContain("Double-check this server's API key");
+    expect(tips).toContain(localizedCopy("en-US", "genai.tips.verify_api_key"));
   });
 
   it("suppresses the manager-only key-rotation tip on personal failures", async () => {

@@ -1,5 +1,3 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ButtonStyle, ComponentType, type Client } from "discord.js";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
@@ -20,11 +18,8 @@ import {
 } from "@/utils/metrics/status/statusPageRenderer";
 import { buildStatsDashboardPayload, type StatsTab } from "@/utils/stats/statsDashboard";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
 
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 const COMPONENT_BUDGET = 36;
 const COMPONENT_RESERVE = 4;
 

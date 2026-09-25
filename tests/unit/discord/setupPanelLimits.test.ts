@@ -150,8 +150,8 @@ describe("setupPanel Components V2 layout and limits", () => {
     const nonHostedJson = JSON.stringify(nonHostedPayload);
     expect(nonHostedJson).not.toContain("Policies");
     expect(nonHostedJson).not.toContain("policies");
-    expect(nonHostedJson).not.toContain("Terms of Service");
-    expect(nonHostedJson).not.toContain("Privacy Policy");
+    expect(nonHostedJson).not.toContain(localizer("en-US", "commands.legal.terms-of-service.title"));
+    expect(nonHostedJson).not.toContain(localizer("en-US", "commands.legal.privacy-policy.title"));
   });
 
   it("counts progress based only on rendered requirements", () => {

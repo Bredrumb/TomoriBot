@@ -15,7 +15,8 @@ import {
   buildStPresetsPanelPayload,
 } from "@/utils/discord/ui/stPresetsPanel";
 import { takeRawModalFileUpload } from "@/utils/discord/ui/modals";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -656,11 +657,11 @@ describe("ST Presets panel rendering", () => {
     });
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("None (no chat completion preset)");
+    expect(serialized).toContain(localizer("en-US", "commands.st-presets.select_none"));
     expect(serialized).toContain("Preset 1");
     expect(serialized).toContain("Preset 2");
-    expect(serialized).toContain("+ Add new Preset");
-    expect(serialized).toContain("**Select** or **add** a preset using the dropdown below.");
+    expect(serialized).toContain(localizer("en-US", "commands.st-presets.select_add"));
+    expect(serialized).toContain(localizer("en-US", "commands.st-presets.selector_guidance"));
 
     const nonePos = serialized.indexOf("None (no chat completion preset)");
     const p1Pos = serialized.indexOf("Preset 1");
@@ -767,7 +768,7 @@ describe("ST Presets panel rendering", () => {
       '"type":3,"customId":"config:v2:st-presets-select:en-US","placeholder":"Choose a preset or action...","options":[',
     );
     expect(serializedStale).toContain('"disabled":true');
-    expect(serializedStale).toContain("Saved data may be out of date");
+    expect(serializedStale).toMatch(localizedProse("en-US", "commands.st-presets.stale_warning"));
     expect(serializedStale).toContain('"customId":"config:v2:st-presets-retry:en-US","label":"Retry"');
 
     const unavailablePayload = buildStPresetsPanelPayload({
@@ -780,7 +781,7 @@ describe("ST Presets panel rendering", () => {
       routes: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER,
     });
     const serializedUnavailable = JSON.stringify(unavailablePayload);
-    expect(serializedUnavailable).toContain("Preset data could not be loaded. Retry to try again.");
+    expect(serializedUnavailable).toContain(localizer("en-US", "commands.st-presets.unavailable"));
     expect(serializedUnavailable).toContain('"customId":"config:v2:st-presets-retry:en-US","label":"Retry"');
   });
 
@@ -796,8 +797,8 @@ describe("ST Presets panel rendering", () => {
       routes: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER,
     });
     const serializedNoActive = JSON.stringify(noActivePayload);
-    expect(serializedNoActive).toContain("No Active Preset");
-    expect(serializedNoActive).toContain("Chat completion presets are currently disabled");
+    expect(serializedNoActive).toContain(localizer("en-US", "commands.st-presets.none_heading"));
+    expect(serializedNoActive).toMatch(localizedProse("en-US", "commands.st-presets.none_disabled_explanation"));
     expect(serializedNoActive).not.toContain("Disable Presets");
     expect(serializedNoActive).not.toContain("config:v2:st-presets-disable");
 
@@ -812,8 +813,8 @@ describe("ST Presets panel rendering", () => {
       routes: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER,
     });
     const serializedActive = JSON.stringify(activePayload);
-    expect(serializedActive).toContain("No Active Preset");
-    expect(serializedActive).toContain("Chat completion presets are currently disabled");
+    expect(serializedActive).toContain(localizer("en-US", "commands.st-presets.none_heading"));
+    expect(serializedActive).toMatch(localizedProse("en-US", "commands.st-presets.none_disabled_explanation"));
     expect(serializedActive).not.toContain("Disable Presets");
     expect(serializedActive).not.toContain("config:v2:st-presets-disable");
   });
@@ -998,7 +999,7 @@ describe("ST Presets panel rendering", () => {
     });
     const serialized = JSON.stringify(payload);
     expect(serialized).not.toContain("Select Page");
-    expect(serialized).toContain("Currently active preset");
+    expect(serialized).toContain(localizer("en-US", "commands.st-presets.currently_active"));
     expect(serialized).toContain("config:v2:st-presets-nodes-range-select:en-US:1");
     // Every range including the first is its own option, so no slice is stranded behind a
     // disabled control.
@@ -1101,7 +1102,7 @@ describe("Modal builders and raw modal transport", () => {
   it("builds the Add Preset modal with file upload and text inputs", () => {
     const modal = buildAddStPresetModal("en-US", "nonce123", CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER);
     expect(modal.custom_id).toBe("config:v2:st-presets-add-submit:en-US:nonce123");
-    expect(modal.title).toBe("Add New Preset");
+    expect(modal.title).toBe(localizer("en-US", "commands.st-presets.add_modal_title"));
     expect(modal.components).toHaveLength(3);
 
     const [fileComp, nameComp, descComp] = modal.components;

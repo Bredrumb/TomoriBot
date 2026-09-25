@@ -1,5 +1,3 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it, mock } from "bun:test";
 import type { Client } from "discord.js";
 import type { TomoriState, UserRow } from "@/types/db/schema";
@@ -14,6 +12,7 @@ import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import * as realDbClient from "@/utils/db/client";
 import * as realRepositories from "@/utils/db/repositories";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
 
 const emptyRows = async () => [];
 const quotaConfig = {
@@ -74,10 +73,6 @@ mock.module("@/utils/provider/speechEndpointResolver", () => ({
 }));
 mock.module("@/utils/provider/customEndpointService", () => ({ resolveCustomEndpointForProvider: async () => null }));
 mock.module("@/utils/metrics/dbStats", () => ({ loadVideoModelById: async () => null }));
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 const COMPONENT_BUDGET = 36;
 
 function normalizeSerializedPanelProse(value: string): string {

@@ -27,6 +27,22 @@ describe("remark heading ids", () => {
     expect(tree.children?.[0].children?.[0].value).toBe("トリガーワードの管理");
   });
 
+  it("reads the MDX expression comment form", () => {
+    const tree: TestNode = {
+      type: "root",
+      children: [
+        { type: "heading", children: [{ type: "text", value: "ネットワークアクセス" }] },
+        { type: "mdxFlowExpression", value: "/* anchor: network-access */" },
+      ],
+    };
+    const transform = remarkHeadingIds() as unknown as (node: TestNode) => void;
+
+    transform(tree);
+
+    expect(tree.children).toHaveLength(1);
+    expect(tree.children?.[0].data?.hProperties?.id).toBe("network-access");
+  });
+
   it("leaves an anchor comment that does not follow a heading untouched", () => {
     const tree: TestNode = {
       type: "root",

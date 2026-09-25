@@ -34,12 +34,12 @@ TomoriBot trata la voz como una capacidad de endpoint personalizado. Los motores
 ## Flujo de configuración
 
 1. Elige un motor de las tarjetas de arriba y configura su envoltorio desde `servers/tts/`.
-2. En `/providers`, elige **Agregar nuevo punto de conexión personalizado** y usa la compatibilidad de API `tts-clone`.
+2. En `/providers`, elige `Agregar nuevo punto de conexión personalizado` y usa la compatibilidad de API `tts-clone`.
 3. Selecciona el endpoint guardado y usa su menú desplegable de modelos para agregar su modelo de Voz, Modo de fuente de voz y Estilo de marcado del guion.
 4. Abre `/config` > Modelos > Cambiar modelos y selecciona el modelo de Voz registrado.
 
 ## Acceso de red
-<!-- anchor: network-access -->
+{/* anchor: network-access */}
 
 Todos los servidores locales de TTS se enlazan a `127.0.0.1` de forma predeterminada, así que solo un bot en la misma máquina puede alcanzarlos. Cuando TomoriBot se ejecuta en Docker o en otra máquina, configura `TOMORI_TTS_HOST=0.0.0.0` para el servidor y registra el punto de conexión con la dirección del host, por ejemplo `http://host.docker.internal:8015`.
 
@@ -62,13 +62,13 @@ El límite de tamaño de la subida y el techo de duración son independientes, y
 
 Para Qwen3-TTS, MOSS-VoiceGenerator, IrodoriTTS o VoxCPM2 VoiceDesign, omite la muestra de audio y usa Persona > Voz en `/config` para guardar una descripción de voz en lenguaje natural para la persona. CosyVoice 3 usa el modo Clon de voz con una muestra de referencia y acepta directrices de entrega únicas a través de `voice_instructions`.
 
-Los usuarios de ElevenLabs deben elegir **Agregar nuevo proveedor** y **ElevenLabs** en `/providers`; esto registra los endpoints de voz y transcripción juntos.
+Los usuarios de ElevenLabs deben elegir `Agregar nuevo proveedor` y **ElevenLabs** en `/providers`; esto registra los endpoints de voz y transcripción juntos.
 
-TomoriBot elimina la sintaxis de emoji personalizados de Discord como `:pepega:` o `<:pepega:123456789012345678>` de los guiones de voz generados antes de la síntesis. Los emojis Unicode también se eliminan a menos que el endpoint de voz use marcado de emoji, que está destinado para IrodoriTTS. Las etiquetas entre corchetes se conservan para endpoints como Chatterbox Turbo y Fish S2 Pro cuando su Estilo de marcado del guion está configurado en **Etiquetas entre corchetes**.
+TomoriBot elimina la sintaxis de emoji personalizados de Discord como `:pepega:` o `<:pepega:123456789012345678>` de los guiones de voz generados antes de la síntesis. Los emojis Unicode también se eliminan a menos que el endpoint de voz use marcado de emoji, que está destinado para IrodoriTTS. Las etiquetas entre corchetes se conservan para endpoints como Chatterbox Turbo y Fish S2 Pro cuando su Estilo de marcado del guion está configurado en `Etiquetas entre corchetes`.
 
-VoxCPM2 usa el Estilo de marcado del guion **Plano**. Su Diseño de voz y controles de estilo de habla viajan a través del campo `instruct` de TomoriBot, y el envoltorio de VoxCPM2 los convierte a la sintaxis de control en lenguaje natural entre paréntesis nativa del modelo.
+VoxCPM2 usa el Estilo de marcado del guion `Plano`. Su Diseño de voz y controles de estilo de habla viajan a través del campo `instruct` de TomoriBot, y el envoltorio de VoxCPM2 los convierte a la sintaxis de control en lenguaje natural entre paréntesis nativa del modelo.
 
-CosyVoice 3 también usa el Estilo de marcado del guion **Plano**. Asigna referencias respaldadas por transcripción a la clonación zero-shot, referencias sin transcripción a la clonación translingüe y `voice_instructions` a su ruta condicionada por instrucciones. Las etiquetas entre corchetes en línea se eliminan porque las instrucciones de CosyVoice se aplican a todo el enunciado.
+CosyVoice 3 también usa el Estilo de marcado del guion `Plano`. Asigna referencias respaldadas por transcripción a la clonación zero-shot, referencias sin transcripción a la clonación translingüe y `voice_instructions` a su ruta condicionada por instrucciones. Las etiquetas entre corchetes en línea se eliminan porque las instrucciones de CosyVoice se aplican a todo el enunciado.
 
 ## Comparación de motores
 

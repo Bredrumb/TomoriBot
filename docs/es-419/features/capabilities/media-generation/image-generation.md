@@ -32,7 +32,7 @@ galería de medios de Discord con detalles de generación, incluidos los usuario
 Cada fuente de etiquetas anterior se puede editar y tiene un alcance distinto. Todas abren un modal
 rellenado con las etiquetas actuales para que las edites directamente:
 
-- **`/config` > Persona > Apariencia**: etiquetas de **Apariencia física** de la persona seleccionada (cómo *se ve*). Requiere el permiso Administrar servidor.
+- **`/config` > Persona > Apariencia**: etiquetas de `Apariencia Física` de la persona seleccionada (cómo *se ve*). Requiere el permiso Administrar servidor.
 - **`/personal config`**: tus propias etiquetas de apariencia, aplicadas cuando una generación te referencia. Te siguen en todos los servidores (consulta [Personalización](/es-419/features/knowledge/personalization/)).
 - Etiquetas positivas y negativas predeterminadas en **`/config` > Modelos > Valores predeterminados de generación de imágenes**: etiquetas predeterminadas del servidor que se añaden a cada generación (o la orientan en sentido contrario). Las negativas solo tienen efecto cuando el backend admite prompts negativos. Enviar el modal con el cuadro vacío restablece esa lista a los valores predeterminados integrados.
 

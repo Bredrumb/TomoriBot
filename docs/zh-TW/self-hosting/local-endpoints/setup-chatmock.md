@@ -29,7 +29,7 @@ ChatMock 預設監聽 `http://127.0.0.1:8000/v1`
 
 在 Discord 中設定 TomoriBot 的 `custom` 供應商，並使用：
 
-- **Endpoint URL**：`http://127.0.0.1:8000/v1`
+- **端點 URL**：`http://127.0.0.1:8000/v1`
 - **Model Name**：ChatMock 應該收到的確切模型字串，例如 `gpt-5.4` 或 `gpt-5.3-codex`
 
 單純的 `http://127.0.0.1:8000` 也可以：TomoriBot 會將它正規化為 `/v1`，再附加 `/chat/completions`。
@@ -38,6 +38,6 @@ ChatMock 預設監聽 `http://127.0.0.1:8000/v1`
 - **Function Calling / Tools**：是
 - **Image Understanding**：是
 - **Video Understanding**：否
-- **Structured Output**：是
+- **結構化輸出**：是
 
 **注意**：Codex CLI 不允許你變更它的 `system` 提示詞，所以 TomoriBot 的 `system` 提示詞會以變通做法轉成脈絡中的 `user` 輪。請將 `CHATMOCK_PORT` 這個 `.env` 變數設為你實際的 ChatMock 連接埠，讓這個變通做法正常運作（預設為 8000）。

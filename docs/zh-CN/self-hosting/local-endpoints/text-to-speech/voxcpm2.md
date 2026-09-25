@@ -107,7 +107,7 @@ $env:VOXCPM2_PREFETCH = "0"
 
 ## 在 TomoriBot 中注册
 
-运行 `/providers`，选择**添加新自定义端点**，然后配置语音合成端点：
+运行 `/providers`，选择`添加新自定义端点`，然后配置语音合成端点：
 
 - 功能：`Speech`
 - API 兼容性：`tts-clone`

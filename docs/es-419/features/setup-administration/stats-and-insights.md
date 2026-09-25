@@ -34,9 +34,9 @@ diferir de tu factura real (caché de prompts, descuentos, cuotas de nivel gratu
 
 `/stats generate` genera una tarjeta de imagen pulida que puedes soltar en el chat:
 
-- **Resumen personal del año**: tu actividad personal, al estilo Spotify Wrapped.
-- **Afinidad de persona**: las estadísticas de una persona en este servidor.
-- **Tabla de clasificación del servidor**: posiciones a nivel de todo el servidor.
+- **Resumen Personal**: tu actividad personal, al estilo Spotify Wrapped.
+- **Afinidad de Persona**: las estadísticas de una persona en este servidor.
+- **Clasificación del Servidor**: posiciones a nivel de todo el servidor.
 
 Los usuarios con privacidad total (`/personal config`) no pueden generar tarjetas personales.
 

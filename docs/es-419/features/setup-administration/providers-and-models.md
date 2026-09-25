@@ -13,7 +13,7 @@ usarla.
 <!-- anchor: api-keys -->
 
 Añade una clave de proveedor durante la configuración inicial con `/setup`, o después desde
-`/providers` eligiendo **Añadir proveedor nuevo**. Las claves se **cifran en reposo**: nadie,
+`/providers` eligiendo `Agregar nuevo proveedor`. Las claves se **cifran en reposo**: nadie,
 ni siquiera los administradores del servidor, puede volver a leerlas.
 
 `/setup` pregunta primero cómo deberían llegar las respuestas a un modelo, y la respuesta
@@ -22,10 +22,10 @@ decide qué recopila:
 | Modo | Qué recopila |
 |---|---|
 | **Proveedor de IA (recomendado)** | Un proveedor del catálogo más su clave de API, validada y cifrada como borrador. |
-| **Endpoint personalizado (avanzado)** | La conexión del endpoint y un modelo de texto, registrados dentro del asistente. Consulta [Endpoints personalizados](#endpoints-personalizados). |
+| **Punto de conexión personalizado (avanzado)** | La conexión del endpoint y un modelo de texto, registrados dentro del asistente. Consulta [Endpoints personalizados](#endpoints-personalizados). |
 | **BYOK de usuario** (solo servidores) | Nada: el espacio de trabajo no conserva proveedor propio, así que los miembros deben aportar el suyo. |
 
-No se escribe nada hasta **Finalizar configuración**, así que un asistente abandonado o
+No se escribe nada hasta `Finalizar configuración`, así que un asistente abandonado o
 caducado deja intactas las filas de proveedor existentes del espacio de trabajo. Para
 reemplazar una clave ya guardada, usa `/providers`, porque `/setup` se niega a ejecutarse en un
 espacio de trabajo ya configurado.
@@ -49,7 +49,7 @@ recorrido exacto, o usa estos puntos de partida:
 
 :::caution
 Nunca compartas tu clave de API con nadie más. Añade o reemplaza el token de autenticación
-Bearer de un endpoint personalizado desde su acción **Editar endpoint** en `/providers`.
+Bearer de un endpoint personalizado desde su acción `Editar punto de conexión` en `/providers`.
 :::
 
 **Vertex AI** se autentica con Credenciales Predeterminadas de Aplicación en lugar de un
@@ -84,7 +84,7 @@ TomoriBot. Consulta
 [Personalización](/es-419/features/knowledge/personalization/#your-own-providers) para ese
 lado.
 
-Los paneles se titulan **Proveedores del servidor** y **Proveedores personales** para que su
+Los paneles se titulan `Proveedores del servidor` y `Proveedores personales` para que su
 titularidad siga siendo visible después de que se abre la interacción del comando.
 
 Después de establecer un proveedor, usa `/config` > Modelos > Cambiar modelos para elegir las
@@ -145,14 +145,14 @@ servicio, así que también determina qué espacios de capacidad prepara la cone
 modelos exactos para esos espacios es un paso separado, y el protocolo no se puede inferir de
 forma confiable a partir de la URL del endpoint.
 
-El modo **Endpoint personalizado (avanzado)** de `/setup` realiza los mismos dos pasos dentro
-del asistente: **Configurar conexión** guarda la compatibilidad de API, la etiqueta, la URL y
+El modo `Punto de conexión personalizado (avanzado)` de `/setup` realiza los mismos dos pasos dentro
+del asistente: `Configurar conexión` guarda la compatibilidad de API, la etiqueta, la URL y
 el token de autenticación opcional detrás de una verificación de accesibilidad, y **Configurar
 modelo de texto** registra el modelo de texto exacto y sus declaraciones de capacidad. El botón
 de modelo permanece desactivado hasta que una conexión se valida, y volver a guardar la
 conexión borra la declaración del modelo porque las declaraciones dependen de la compatibilidad
 de API. El asistente crea juntos la conexión, el proveedor guardado, el modelo y las filas de
-modelo activo cuando presionas **Finalizar configuración**, así que nunca deja una conexión sin
+modelo activo cuando presionas `Finalizar configuración`, así que nunca deja una conexión sin
 un modelo de texto utilizable. Solo registra modelos de texto; las capacidades de imagen, video,
 TTS y STT todavía se registran en `/providers`.
 

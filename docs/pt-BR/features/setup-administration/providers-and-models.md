@@ -12,7 +12,7 @@ modelo específico nesse provedor. Você precisa de pelo menos um provedor para 
 <!-- anchor: api-keys -->
 
 Adicione uma chave de provedor durante a configuração inicial com `/setup`, ou depois em `/providers` escolhendo
-**Add New Provider**. As chaves são **criptografadas em repouso**: ninguém, incluindo administradores do servidor, pode
+**Adicionar Novo Provedor**. As chaves são **criptografadas em repouso**: ninguém, incluindo administradores do servidor, pode
 lê-las de volta.
 
 `/setup` pergunta como as respostas devem chegar a um modelo antes de tudo, e a resposta decide o que ele
@@ -20,15 +20,15 @@ coleta:
 
 | Modo | O que é coletado |
 |---|---|
-| **AI Provider (Recommended)** | Um provedor do catálogo mais sua chave de API, validada e criptografada como rascunho. |
-| **Custom Endpoint (Advanced)** | A conexão do endpoint e um modelo de texto, registrados dentro do assistente. Veja [Endpoints Personalizados](#endpoints-personalizados). |
+| **Provedor de IA (Recomendado)** | Um provedor do catálogo mais sua chave de API, validada e criptografada como rascunho. |
+| **Endpoint Personalizado (Avançado)** | A conexão do endpoint e um modelo de texto, registrados dentro do assistente. Veja [Endpoints Personalizados](#endpoints-personalizados). |
 | **User BYOK** (apenas servidores) | Nada: o workspace não mantém nenhum provedor próprio, então os membros devem fornecer provedores pessoais. |
 
-Nada é gravado até o **Finish Setup**, então um assistente abandonado ou expirado não altera as
+Nada é gravado até o `Concluir Configuração`, então um assistente abandonado ou expirado não altera as
 linhas de provedor existentes do workspace. Para substituir uma chave já armazenada, use `/providers`, porque
 o `/setup` se recusa a executar em um workspace que já está configurado.
 
-Cada provedor tem suas próprias etapas de geração de chave. Execute **`/help`**, escolha **Setup**, depois **Step 1: Get an API Key**, e escolha seu
+Cada provedor tem suas próprias etapas de geração de chave. Execute **`/help`**, escolha `Configuração`, depois **Step 1: Get an API Key**, e escolha seu
 provedor para o passo a passo exato, ou use estes pontos de partida:
 
 | Provedor | Notas | Obter uma chave |
@@ -46,7 +46,7 @@ provedor para o passo a passo exato, ou use estes pontos de partida:
 
 :::caution
 Nunca compartilhe sua chave de API com ninguém. Adicione ou substitua o token de autenticação Bearer de um endpoint personalizado
-a partir da ação **Edit Endpoint** em `/providers`.
+a partir da ação `Editar Endpoint` em `/providers`.
 :::
 
 O **Vertex AI** se autentica com Application Default Credentials em vez de um segredo armazenado.
@@ -74,7 +74,7 @@ e catálogos de modelos com `/personal providers`, e selecionam modelos pessoais
 Configurações pessoais os acompanham em todos os servidores onde usam a TomoriBot. Veja
 [Personalização](/pt-BR/features/knowledge/personalization/#your-own-providers) para esse lado.
 
-Os painéis são intitulados **Server Providers** e **Personal Providers** para que sua propriedade permaneça visível após
+Os painéis são intitulados `Provedores do Servidor` e `Provedores Pessoais` para que sua propriedade permaneça visível após
 a interação do comando ser aberta.
 
 Após um provedor ser definido, use `/config` > Models > Switch Models para escolher as atribuições de capacidade compartilhadas.
@@ -110,7 +110,7 @@ LiteLLM, vLLM, ComfyUI, TTS/STT local; como **pacotes de provedores rotulados**.
 
 Um **rótulo** é o nome exibido no menu e agrupa capacidades sob um pacote quando compartilham
 uma URL de endpoint. Ele nunca é enviado ao endpoint remoto. Capacidades servidas de URLs diferentes
-precisam de rótulos distintos. Escolha **Add New Custom Endpoint**, selecione a
+precisam de rótulos distintos. Escolha `Adicionar Novo Endpoint Personalizado`, selecione a
 compatibilidade de API e salve a conexão. Salvar prepara as capacidades suportadas por aquele
 protocolo sem registrar nenhum modelo. Em seguida, selecione o novo endpoint e use seu menu suspenso de
 modelo para registrar um código de modelo exato e capacidade. Adicionar um modelo o ativa para aquela
@@ -126,13 +126,13 @@ A compatibilidade de API determina os caminhos de requisição e payloads que o 
 slots de capacidade a conexão prepara. Registrar modelos exatos para esses slots é uma etapa separada, e o
 protocolo não pode ser inferido de forma confiável a partir da URL do endpoint.
 
-O modo **Custom Endpoint (Advanced)** do `/setup` executa os mesmos dois passos dentro do assistente:
-**Configure Connection** salva a compatibilidade de API, rótulo, URL e token de autenticação opcional após
-uma verificação de acessibilidade, e **Configure Text Model** registra o modelo de texto exato e suas declarações de
+O modo `Endpoint Personalizado (Avançado)` do `/setup` executa os mesmos dois passos dentro do assistente:
+**Configurar Conexão** salva a compatibilidade de API, rótulo, URL e token de autenticação opcional após
+uma verificação de acessibilidade, e `Configurar Modelo de Texto` registra o modelo de texto exato e suas declarações de
 capacidade. O botão de modelo fica desabilitado até que uma conexão seja validada, e re-salvar a
 conexão limpa a declaração do modelo porque as declarações dependem da compatibilidade de API.
 O assistente cria a conexão, provedor salvo, modelo e linhas de modelo ativo juntos quando você
-pressiona **Finish Setup**, então ele nunca deixa uma conexão que não tem um modelo de texto utilizável. Ele registra
+pressiona `Concluir Configuração`, então ele nunca deixa uma conexão que não tem um modelo de texto utilizável. Ele registra
 apenas modelos de texto; capacidades de imagem, vídeo, TTS e STT ainda são registradas em `/providers`.
 
 Para guias completos de execução dos servidores, veja:

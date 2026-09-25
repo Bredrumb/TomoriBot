@@ -95,5 +95,5 @@ SillyTavern 的 Prompt Manager 预设集控制提示词的**排布**。用 `/con
   旧式文本补全预设集走的是一条尽力而为的导入路径，会
   丢掉只属于 ST 的区块（scenario、anchors、停止字符串……）。
 
-在 `/help` 里选择 **集成**，再选 **SillyTavern 预设集**，可以看到 Discord 内的参考。关于导入引擎的内部实现，见
+在 `/help` 里选择 **集成**，再选 `SillyTavern 预设集`，可以看到 Discord 内的参考。关于导入引擎的内部实现，见
 [预设集系统架构](/en/architecture/integrations/sillytavern/preset-system/)。

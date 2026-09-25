@@ -33,9 +33,9 @@ token，所以可能与你的实际账单不同（提示词缓存、折扣、
 
 `/stats generate` 会渲染一张可以直接发到聊天里的精美图片卡片：
 
-- **Personal Wrapped**：你的个人活动，Spotify Wrapped 风格。
-- **Persona Affinity**：某个人格在这个服务器上的统计。
-- **Server Leaderboard**：全服务器的排行。
+- **个人年度回顾**：你的个人活动，Spotify Wrapped 风格。
+- **人格亲和度**：某个人格在这个服务器上的统计。
+- **服务器排行榜**：全服务器的排行。
 
 完全私密的用户（`/personal config`）无法生成个人卡片。
 

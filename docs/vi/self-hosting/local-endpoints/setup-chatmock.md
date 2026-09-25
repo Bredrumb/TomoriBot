@@ -38,6 +38,6 @@ Bật các cờ tính năng sau cho ChatMock:
 - **Function Calling / Tools**: Có
 - **Image Understanding**: Có
 - **Video Understanding**: Không
-- **Structured Output**: Có
+- **Đầu ra có cấu trúc**: Có
 
 **Lưu ý**: Codex CLI không cho phép thay đổi prompt `system`, do đó prompt `system` của TomoriBot được chuyển thành lượt `user` trong ngữ cảnh như một giải pháp thay thế. Vui lòng cấu hình biến môi trường `CHATMOCK_PORT` trong `.env` để khớp với cổng ChatMock thực tế của bạn nhằm giúp giải pháp này hoạt động chính xác (mặc định là 8000).

@@ -66,14 +66,19 @@ describe("help dashboard", () => {
     }
   });
 
-  it("asserts exactly 4 categories, 15 sections, and 21 subsections across the catalog", () => {
+  it("keeps the four category tabs and unique section and subsection ids across the catalog", () => {
     expect(HELP_CATEGORIES.map((c) => c.id)).toEqual(["setup", "features", "moderation", "plugins"]);
 
-    const totalPages = HELP_CATEGORIES.flatMap((c) => c.pages);
-    expect(totalPages).toHaveLength(15);
-
-    const totalSubsections = totalPages.flatMap((p) => p.variants ?? []);
-    expect(totalSubsections).toHaveLength(21);
+    // Sections and subsections render as select options, and Discord rejects a select whose
+    // option values repeat.
+    for (const category of HELP_CATEGORIES) {
+      const pageIds = category.pages.map((page) => page.id);
+      expect(new Set(pageIds).size, `${category.id} section ids`).toBe(pageIds.length);
+      for (const page of category.pages) {
+        const variantIds = (page.variants ?? []).map((variant) => variant.id);
+        expect(new Set(variantIds).size, `${category.id}/${page.id} subsection ids`).toBe(variantIds.length);
+      }
+    }
 
     const container = getContainer("en-US", "setup", "personal-profile");
     const categoryRow = container.components[0];
@@ -119,11 +124,11 @@ describe("help dashboard", () => {
     expect(comfyFooter?.type).toBe(ComponentType.ActionRow);
     const comfyButtons = comfyFooter && "components" in comfyFooter ? comfyFooter.components : [];
     expect(comfyButtons).toHaveLength(2);
-    expect(JSON.stringify(comfyButtons)).toContain("Read the Web Version");
+    expect(JSON.stringify(comfyButtons)).toContain(localizer("en-US", "commands.help.dashboard.docs_link_label"));
     expect(JSON.stringify(comfyButtons)).toContain(
       "https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-comfyui/",
     );
-    expect(JSON.stringify(comfyButtons)).toContain("Get Technical Support");
+    expect(JSON.stringify(comfyButtons)).toContain(localizer("en-US", "commands.help.dashboard.support_link_label"));
     expect(JSON.stringify(comfyButtons)).toContain("discord.gg/bjCfHm9QsB");
 
     const personasPayload = buildHelpDashboardPayload("en-US", "features", "multiple-personas");
@@ -142,7 +147,7 @@ describe("help dashboard", () => {
 
     expect(comfyUi).toContain("ComfyUI");
     expect(comfyUi).toContain("/self-hosting/local-endpoints/setup-comfyui/");
-    expect(speech).toContain("Speech Generation");
+    expect(speech).toContain(localizer("en-US", "commands.help.dashboard.subsections.speech_generation"));
     expect(speech).toContain("help:v2:variant:en-US:features:media-generation");
   });
 

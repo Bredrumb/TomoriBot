@@ -3,8 +3,6 @@
  * asserts message-wide Text Display budgets at stored maxima, boundary Unicode handling,
  * and fence breakout immunity.
  */
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType } from "discord.js";
 import type { LlmRow, NaiPresetRow, SavedProviderConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
@@ -43,13 +41,10 @@ import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/mana
 import { withLinePrefix } from "@/utils/discord/ui/panel";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy } from "../../helpers/localeCases";
+import { BACKTICK_RUNS } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
-
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 
 const GUILD_MANAGER: ConfigActor = { workspaceKind: "guild", isManager: true };
 
@@ -663,17 +658,15 @@ describe("config page text budgeting at stored maxima", () => {
     },
   ];
 
-  for (const locale of RUNTIME_LOCALES) {
-    describe(`locale ${locale}`, () => {
+  it("keeps every page valid at stored maxima across locales and receipts", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
       for (const tc of testCases) {
         for (const receipt of [false, true]) {
-          it(`keeps ${tc.name} valid at stored maxima (receipt=${receipt})`, () => {
+          cases.check(`${tc.name} [${locale}] (receipt=${receipt})`, () => {
             const payload = tc.buildPayload(locale, receipt);
             const result = validateComponentsV2MessageLimits(payload);
-            expect(
-              result.valid,
-              `${tc.name} [${locale}] (receipt=${receipt}) violations: ${JSON.stringify(result.violations)}`,
-            ).toBe(true);
+            expect(result.valid, `violations: ${JSON.stringify(result.violations)}`).toBe(true);
 
             const displays = getTextDisplays(payload);
             let totalText = 0;
@@ -690,16 +683,14 @@ describe("config page text budgeting at stored maxima", () => {
                 /Showing \d+ of \d+ channels/.test(text),
             );
             if (isTruncated) {
-              expect(
-                slack,
-                `${tc.name} [${locale}] (receipt=${receipt}) slack ${slack} exceeds tolerance ${tc.maxTolerance}`,
-              ).toBeLessThanOrEqual(tc.maxTolerance);
+              expect(slack, `slack ${slack} exceeds tolerance ${tc.maxTolerance}`).toBeLessThanOrEqual(tc.maxTolerance);
             }
           });
         }
       }
-    });
-  }
+    }
+    cases.expectNoFailures();
+  });
 
   describe("fallback behavior for unknown locale tag", () => {
     for (const tc of testCases) {
@@ -750,140 +741,153 @@ describe("Plugins and Channel Rules component budgeting", () => {
     overrides: { selectedChannelId: null, prompt: null, contextNote: null, textModelOverride: null },
   };
 
-  for (const locale of RUNTIME_LOCALES) {
-    for (const receipt of [false, true]) {
-      for (const toolUseEnabled of [true, false]) {
-        it(`keeps Available Tools valid for ${locale}, toolUse=${toolUseEnabled}, receipt=${receipt}`, () => {
+  it("keeps Available Tools, Context Additions, and Channel Rules valid across locales and receipts", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      for (const receipt of [false, true]) {
+        for (const toolUseEnabled of [true, false]) {
+          cases.check(`Available Tools ${locale}, toolUse=${toolUseEnabled}, receipt=${receipt}`, () => {
+            const payload = buildConfigPanelPayload({
+              locale,
+              actor: GUILD_MANAGER,
+              category: "plugins",
+              page: "available-tools",
+              personas: [state],
+              selectedPersonaId: 55,
+              readStatus: "fresh",
+              permissionsView: {
+                ...permissionsView,
+                capabilities: { ...permissionsView.capabilities, toolUseEnabled },
+              },
+              receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
+            });
+            const validation = validateComponentsV2MessageLimits(payload);
+            expect(validation.valid, JSON.stringify(validation.violations)).toBe(true);
+            expect(countRenderedComponents(payload)).toBe(receipt ? 21 : 19);
+          });
+        }
+
+        cases.check(`Context Additions ${locale}, receipt=${receipt}`, () => {
           const payload = buildConfigPanelPayload({
             locale,
             actor: GUILD_MANAGER,
             category: "plugins",
-            page: "available-tools",
+            page: "context-additions",
             personas: [state],
             selectedPersonaId: 55,
             readStatus: "fresh",
-            permissionsView: {
-              ...permissionsView,
-              capabilities: { ...permissionsView.capabilities, toolUseEnabled },
-            },
+            permissionsView,
             receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
           });
           const validation = validateComponentsV2MessageLimits(payload);
           expect(validation.valid, JSON.stringify(validation.violations)).toBe(true);
           expect(countRenderedComponents(payload)).toBe(receipt ? 21 : 19);
         });
+
+        cases.check(`Channel Rules with Memory Privacy ${locale}, receipt=${receipt}`, () => {
+          const payload = buildConfigPanelPayload({
+            locale,
+            actor: GUILD_MANAGER,
+            category: "channels",
+            page: "rules",
+            personas: [state],
+            selectedPersonaId: 55,
+            readStatus: "fresh",
+            permissionsView,
+            channelsView,
+            receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
+          });
+          const validation = validateComponentsV2MessageLimits(payload);
+          expect(validation.valid, JSON.stringify(validation.violations)).toBe(true);
+          expect(countRenderedComponents(payload)).toBe(receipt ? 28 : 26);
+        });
       }
-
-      it(`keeps Context Additions valid for ${locale}, receipt=${receipt}`, () => {
-        const payload = buildConfigPanelPayload({
-          locale,
-          actor: GUILD_MANAGER,
-          category: "plugins",
-          page: "context-additions",
-          personas: [state],
-          selectedPersonaId: 55,
-          readStatus: "fresh",
-          permissionsView,
-          receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
-        });
-        const validation = validateComponentsV2MessageLimits(payload);
-        expect(validation.valid, JSON.stringify(validation.violations)).toBe(true);
-        expect(countRenderedComponents(payload)).toBe(receipt ? 21 : 19);
-      });
-
-      it(`keeps Channel Rules with Memory Privacy valid for ${locale}, receipt=${receipt}`, () => {
-        const payload = buildConfigPanelPayload({
-          locale,
-          actor: GUILD_MANAGER,
-          category: "channels",
-          page: "rules",
-          personas: [state],
-          selectedPersonaId: 55,
-          readStatus: "fresh",
-          permissionsView,
-          channelsView,
-          receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
-        });
-        const validation = validateComponentsV2MessageLimits(payload);
-        expect(validation.valid, JSON.stringify(validation.violations)).toBe(true);
-        expect(countRenderedComponents(payload)).toBe(receipt ? 28 : 26);
-      });
     }
-  }
+    cases.expectNoFailures();
+  });
 });
 
 describe("NovelAI preset Parameters budgeting", () => {
   const readStatuses: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
   const providerSets = [["novelai"], ["novelai", "google"]];
   const presetCounts = [0, 1, 24, 25, 26, 60];
-  const backtickRuns = [3, 4, 5, 6, 8];
   const stringProfiles = [
     { name: "stored-practical", oversized: false },
     { name: "oversized", oversized: true },
   ];
 
-  for (const locale of RUNTIME_LOCALES) {
-    for (const receipt of [false, true]) {
-      for (const readStatus of readStatuses) {
-        for (const providers of providerSets) {
-          for (const runLength of backtickRuns) {
-            for (const profile of stringProfiles) {
-              for (const presetCount of presetCounts) {
-                it(`keeps ${presetCount} ${profile.name} presets valid for ${providers.length} providers, ${readStatus}, and receipt=${receipt} (${locale}, backticks=${runLength})`, () => {
-                  const presets = makeNaiPresetCatalog(presetCount, runLength, profile.oversized);
-                  const pageStarts = Array.from(
-                    { length: Math.max(1, Math.ceil(presetCount / CONFIG_NAI_PRESET_PAGE_SIZE)) },
-                    (_unused, page) => page * CONFIG_NAI_PRESET_PAGE_SIZE,
-                  );
-                  const reachable = new Set<number>();
-                  let componentCeiling = 0;
+  // One test per preset count: the full matrix takes about 10 s, past Bun's 5 s default timeout.
+  for (const presetCount of presetCounts) {
+    it(`keeps every ${presetCount}-preset page valid across locales, receipts, reads, providers, and backtick runs`, () => {
+      const cases = collectCaseFailures();
+      for (const locale of RUNTIME_LOCALES) {
+        for (const receipt of [false, true]) {
+          for (const readStatus of readStatuses) {
+            for (const providers of providerSets) {
+              for (const runLength of BACKTICK_RUNS) {
+                for (const profile of stringProfiles) {
+                  cases.check(
+                    `${presetCount} ${profile.name} presets, ${providers.length} providers, ${readStatus}, receipt=${receipt} (${locale}, backticks=${runLength})`,
+                    () => {
+                      const presets = makeNaiPresetCatalog(presetCount, runLength, profile.oversized);
+                      const pageStarts = Array.from(
+                        { length: Math.max(1, Math.ceil(presetCount / CONFIG_NAI_PRESET_PAGE_SIZE)) },
+                        (_unused, page) => page * CONFIG_NAI_PRESET_PAGE_SIZE,
+                      );
+                      const reachable = new Set<number>();
+                      let componentCeiling = 0;
 
-                  for (const pageStart of pageStarts) {
-                    const payload = buildNaiParametersPayload(
-                      locale,
-                      readStatus,
-                      receipt,
-                      providers,
-                      presets,
-                      pageStart,
-                    );
-                    const validation = validateComponentsV2MessageLimits(payload);
-                    expect(
-                      validation.valid,
-                      `${locale} ${readStatus} providers=${providers.length} presets=${presetCount} ` +
-                        `page=${pageStart} receipt=${receipt}: ${JSON.stringify(validation.violations)}`,
-                    ).toBe(true);
-                    expect(getPayloadTextTotal(payload)).toBeLessThanOrEqual(DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX);
-                    componentCeiling = Math.max(componentCeiling, countRenderedComponents(payload));
+                      for (const pageStart of pageStarts) {
+                        const payload = buildNaiParametersPayload(
+                          locale,
+                          readStatus,
+                          receipt,
+                          providers,
+                          presets,
+                          pageStart,
+                        );
+                        const validation = validateComponentsV2MessageLimits(payload);
+                        expect(
+                          validation.valid,
+                          `${locale} ${readStatus} providers=${providers.length} presets=${presetCount} ` +
+                            `page=${pageStart} receipt=${receipt}: ${JSON.stringify(validation.violations)}`,
+                        ).toBe(true);
+                        expect(getPayloadTextTotal(payload)).toBeLessThanOrEqual(
+                          DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
+                        );
+                        componentCeiling = Math.max(componentCeiling, countRenderedComponents(payload));
 
-                    for (const menu of getStringSelectMenus(payload)) {
-                      const options = Array.isArray(menu.options) ? menu.options : [];
-                      expect(options.length).toBeLessThanOrEqual(25);
-                      if (typeof menu.customId === "string" && menu.customId.includes("nai-preset-select")) {
-                        for (const option of options) {
-                          if (typeof option !== "object" || option === null) continue;
-                          const value = (option as Record<string, unknown>).value;
-                          if (typeof value === "string" && /^\d+$/.test(value)) reachable.add(Number(value));
-                          const description = (option as Record<string, unknown>).description;
-                          if (typeof description === "string") {
-                            expect(getDiscordTextLength(description)).toBeLessThanOrEqual(100);
+                        for (const menu of getStringSelectMenus(payload)) {
+                          const options = Array.isArray(menu.options) ? menu.options : [];
+                          expect(options.length).toBeLessThanOrEqual(25);
+                          if (typeof menu.customId === "string" && menu.customId.includes("nai-preset-select")) {
+                            for (const option of options) {
+                              if (typeof option !== "object" || option === null) continue;
+                              const value = (option as Record<string, unknown>).value;
+                              if (typeof value === "string" && /^\d+$/.test(value)) reachable.add(Number(value));
+                              const description = (option as Record<string, unknown>).description;
+                              if (typeof description === "string") {
+                                expect(getDiscordTextLength(description)).toBeLessThanOrEqual(100);
+                              }
+                            }
                           }
                         }
                       }
-                    }
-                  }
 
-                  if (readStatus !== "unavailable") {
-                    expect([...reachable]).toEqual(Array.from({ length: presetCount }, (_unused, index) => index));
-                  }
-                  expect(componentCeiling).toBeGreaterThan(0);
-                });
+                      if (readStatus !== "unavailable") {
+                        expect([...reachable]).toEqual(Array.from({ length: presetCount }, (_unused, index) => index));
+                      }
+                      expect(componentCeiling).toBeGreaterThan(0);
+                    },
+                  );
+                }
               }
             }
           }
         }
       }
-    }
+      cases.expectNoFailures();
+    });
   }
 
   it("enforces the literal Parameters component ceiling and rejects an extra row", () => {
@@ -1087,74 +1091,77 @@ describe("Switch Models capability notice budgeting", () => {
       receipt: receipt ? { tone: "success", heading: "Saved", detail: "Configuration was saved." } : undefined,
     });
 
-  for (const locale of RUNTIME_LOCALES) {
-    describe(`locale ${locale}`, () => {
+  it("keeps every slot state valid with the matching capability notice across locales and flags", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
       for (const receipt of [false, true]) {
         for (const slotState of SWITCH_MODEL_SLOT_STATES) {
           for (const flags of flagCombinations) {
-            it(`keeps ${slotState.name} valid for ${
-              flags.imageGenerationEnabled ? "enabled" : "disabled"
-            } image and ${flags.videoGenerationEnabled ? "enabled" : "disabled"} video (receipt=${receipt})`, () => {
-              const payload = buildSwitchModelsPayload(
-                locale,
-                receipt,
-                flags.imageGenerationEnabled,
-                flags.videoGenerationEnabled,
-                slotState.isUsable,
-              );
-              const validation = validateComponentsV2MessageLimits(payload);
-              expect(validation.valid, `Violations: ${JSON.stringify(validation.violations)}`).toBe(true);
+            cases.check(
+              `${slotState.name} [${locale}] image=${flags.imageGenerationEnabled} video=${flags.videoGenerationEnabled} receipt=${receipt}`,
+              () => {
+                const payload = buildSwitchModelsPayload(
+                  locale,
+                  receipt,
+                  flags.imageGenerationEnabled,
+                  flags.videoGenerationEnabled,
+                  slotState.isUsable,
+                );
+                const validation = validateComponentsV2MessageLimits(payload);
+                expect(validation.valid, `Violations: ${JSON.stringify(validation.violations)}`).toBe(true);
 
-              const imageHasUsableModel = slotState.isUsable("image") || slotState.isUsable("nai-image");
-              const videoHasUsableModel = slotState.isUsable("video");
-              const imageHealthy = flags.imageGenerationEnabled && imageHasUsableModel;
-              const videoHealthy = flags.videoGenerationEnabled && videoHasUsableModel;
-              const expectedComponentCount = (receipt ? 27 : 25) + (imageHealthy && videoHealthy ? 0 : 1);
-              expect(countRenderedComponents(payload)).toBe(expectedComponentCount);
+                const imageHasUsableModel = slotState.isUsable("image") || slotState.isUsable("nai-image");
+                const videoHasUsableModel = slotState.isUsable("video");
+                const imageHealthy = flags.imageGenerationEnabled && imageHasUsableModel;
+                const videoHealthy = flags.videoGenerationEnabled && videoHasUsableModel;
+                const expectedComponentCount = (receipt ? 27 : 25) + (imageHealthy && videoHealthy ? 0 : 1);
+                expect(countRenderedComponents(payload)).toBe(expectedComponentCount);
 
-              const renderedText = getTextDisplays(payload).join("\n");
-              const expectedWarnings: string[] = [];
-              if (!imageHealthy) {
-                expectedWarnings.push(
-                  formatPanelProse(
-                    withLinePrefix(
-                      "-# ",
-                      localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled)),
+                const renderedText = getTextDisplays(payload).join("\n");
+                const expectedWarnings: string[] = [];
+                if (!imageHealthy) {
+                  expectedWarnings.push(
+                    formatPanelProse(
+                      withLinePrefix(
+                        "-# ",
+                        localizer(locale, getCapabilityWarningKey("image", flags.imageGenerationEnabled)),
+                      ),
                     ),
-                  ),
-                );
-              }
-              if (!videoHealthy) {
-                expectedWarnings.push(
-                  formatPanelProse(
-                    withLinePrefix(
-                      "-# ",
-                      localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled)),
+                  );
+                }
+                if (!videoHealthy) {
+                  expectedWarnings.push(
+                    formatPanelProse(
+                      withLinePrefix(
+                        "-# ",
+                        localizer(locale, getCapabilityWarningKey("video", flags.videoGenerationEnabled)),
+                      ),
                     ),
-                  ),
-                );
-              }
+                  );
+                }
 
-              for (const warning of expectedWarnings) {
-                expect(renderedText).toContain(warning);
-              }
-              if (imageHealthy && videoHealthy) {
-                const capabilityNotice = getTextDisplays(payload).find((text) =>
-                  [
-                    "commands.config.panel.image_generation_disabled_direction",
-                    "commands.config.panel.image_generation_missing_model",
-                    "commands.config.panel.video_generation_disabled_direction",
-                    "commands.config.panel.video_generation_missing_model",
-                  ].some((key) => text.includes(formatPanelProse(withLinePrefix("-# ", localizer(locale, key))))),
-                );
-                expect(capabilityNotice).toBeUndefined();
-              }
-            });
+                for (const warning of expectedWarnings) {
+                  expect(renderedText).toContain(warning);
+                }
+                if (imageHealthy && videoHealthy) {
+                  const capabilityNotice = getTextDisplays(payload).find((text) =>
+                    [
+                      "commands.config.panel.image_generation_disabled_direction",
+                      "commands.config.panel.image_generation_missing_model",
+                      "commands.config.panel.video_generation_disabled_direction",
+                      "commands.config.panel.video_generation_missing_model",
+                    ].some((key) => text.includes(formatPanelProse(withLinePrefix("-# ", localizer(locale, key))))),
+                  );
+                  expect(capabilityNotice).toBeUndefined();
+                }
+              },
+            );
           }
         }
       }
-    });
-  }
+    }
+    cases.expectNoFailures();
+  });
 
   it("keeps the worst unhealthy receipt payload at the 28-component ceiling", () => {
     const payload = buildSwitchModelsPayload("en-US", true, true, true, () => false);
@@ -1372,95 +1379,103 @@ describe("voices page text and component budgeting", () => {
     expect(countRenderedComponents(payload)).toBeLessThanOrEqual(29);
   };
 
-  for (const locale of RUNTIME_LOCALES) {
-    describe(`locale ${locale}`, () => {
+  const expectForEveryLocaleAndReceipt = (check: (locale: string, receipt: boolean) => void): void => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
       for (const receipt of [false, true]) {
-        it(`renders an empty library with one placeholder option (receipt=${receipt})`, () => {
-          const payload = buildVoicePayload(locale, receipt, [], 0, 0);
-          expectValidVoicePayload(payload);
-
-          const menu = getVoiceSelectMenu(payload);
-          const options = menu.options;
-          expect(Array.isArray(options)).toBe(true);
-          expect(options).toHaveLength(1);
-          const option = options?.[0] as Record<string, unknown>;
-          expect(option.value).toBe("none");
-        });
-
-        it(`renders a one-page library with 25 sample options (receipt=${receipt})`, () => {
-          const pageSamples = VOICE_SAMPLES.slice(0, 25);
-          const payload = buildVoicePayload(locale, receipt, pageSamples, pageSamples.length, 0);
-          expectValidVoicePayload(payload);
-
-          const menu = getVoiceSelectMenu(payload);
-          const options = menu.options;
-          expect(Array.isArray(options)).toBe(true);
-          expect(options).toHaveLength(25);
-          if (!Array.isArray(options)) return;
-
-          const firstOption = options[0] as Record<string, unknown>;
-          const secondOption = options[1] as Record<string, unknown>;
-          expect(firstOption.label).toBe("A".repeat(80));
-          expect(secondOption.label).toBe("B".repeat(81));
-          expect(typeof firstOption.description).toBe("string");
-          if (typeof firstOption.description === "string") {
-            expect(getDiscordTextLength(firstOption.description)).toBe(100);
-          }
-          const labels = options.flatMap((option) => {
-            const label = (option as Record<string, unknown>).label;
-            return typeof label === "string" ? [label] : [];
-          });
-          for (const runLength of VOICE_SAMPLE_RUNS) {
-            expect(labels.some((label) => label.includes("`".repeat(runLength)))).toBe(true);
-          }
-          expect(labels.some((label) => label.includes("🌸✨"))).toBe(true);
-        });
-
-        it(`covers every sample across deep library page slices (receipt=${receipt})`, () => {
-          const starts = [0, 25, 50];
-          const coveredIndices = new Set<number>();
-
-          for (const start of starts) {
-            const pageSamples = VOICE_SAMPLES.slice(start, start + 25);
-            const payload = buildVoicePayload(locale, receipt, pageSamples, VOICE_SAMPLES.length, start);
-            expectValidVoicePayload(payload);
-
-            const menu = getVoiceSelectMenu(payload);
-            const options = menu.options;
-            expect(Array.isArray(options)).toBe(true);
-            expect(options).toHaveLength(pageSamples.length);
-            if (!Array.isArray(options)) continue;
-
-            const pageIndices: number[] = [];
-            for (const option of options) {
-              const value = (option as Record<string, unknown>).value;
-              expect(typeof value).toBe("string");
-              if (typeof value !== "string") continue;
-              const separator = value.indexOf(":");
-              const index = Number.parseInt(value.slice(0, separator), 10);
-              pageIndices.push(index);
-              coveredIndices.add(index);
-            }
-            expect(pageIndices).toEqual(pageSamples.map((_sample, offset) => start + offset));
-          }
-
-          expect(coveredIndices).toEqual(new Set(VOICE_SAMPLES.map((_sample, index) => index)));
-        });
-
-        it(`reports 26 unsliced samples as an oversized select (receipt=${receipt})`, () => {
-          const payload = buildVoicePayload(locale, receipt, VOICE_SAMPLES.slice(0, 26), VOICE_SAMPLES.length, 0);
-          const validation = validateComponentsV2MessageLimits(payload);
-          expect(validation.valid).toBe(false);
-          expect(validation.violations).toContainEqual(
-            expect.objectContaining({
-              code: "SELECT_OPTIONS_OVERSIZED",
-              observed: 26,
-            }),
-          );
-        });
+        cases.check(`${locale} receipt=${receipt}`, () => check(locale, receipt));
       }
-    });
-  }
+    }
+    cases.expectNoFailures();
+  };
+
+  it("renders an empty library with one placeholder option", () =>
+    expectForEveryLocaleAndReceipt((locale, receipt) => {
+      const payload = buildVoicePayload(locale, receipt, [], 0, 0);
+      expectValidVoicePayload(payload);
+
+      const menu = getVoiceSelectMenu(payload);
+      const options = menu.options;
+      expect(Array.isArray(options)).toBe(true);
+      expect(options).toHaveLength(1);
+      const option = options?.[0] as Record<string, unknown>;
+      expect(option.value).toBe("none");
+    }));
+
+  it("renders a one-page library with 25 sample options", () =>
+    expectForEveryLocaleAndReceipt((locale, receipt) => {
+      const pageSamples = VOICE_SAMPLES.slice(0, 25);
+      const payload = buildVoicePayload(locale, receipt, pageSamples, pageSamples.length, 0);
+      expectValidVoicePayload(payload);
+
+      const menu = getVoiceSelectMenu(payload);
+      const options = menu.options;
+      expect(Array.isArray(options)).toBe(true);
+      expect(options).toHaveLength(25);
+      if (!Array.isArray(options)) return;
+
+      const firstOption = options[0] as Record<string, unknown>;
+      const secondOption = options[1] as Record<string, unknown>;
+      expect(firstOption.label).toBe("A".repeat(80));
+      expect(secondOption.label).toBe("B".repeat(81));
+      expect(typeof firstOption.description).toBe("string");
+      if (typeof firstOption.description === "string") {
+        expect(getDiscordTextLength(firstOption.description)).toBe(100);
+      }
+      const labels = options.flatMap((option) => {
+        const label = (option as Record<string, unknown>).label;
+        return typeof label === "string" ? [label] : [];
+      });
+      for (const runLength of VOICE_SAMPLE_RUNS) {
+        expect(labels.some((label) => label.includes("`".repeat(runLength)))).toBe(true);
+      }
+      expect(labels.some((label) => label.includes("🌸✨"))).toBe(true);
+    }));
+
+  it("covers every sample across deep library page slices", () =>
+    expectForEveryLocaleAndReceipt((locale, receipt) => {
+      const starts = [0, 25, 50];
+      const coveredIndices = new Set<number>();
+
+      for (const start of starts) {
+        const pageSamples = VOICE_SAMPLES.slice(start, start + 25);
+        const payload = buildVoicePayload(locale, receipt, pageSamples, VOICE_SAMPLES.length, start);
+        expectValidVoicePayload(payload);
+
+        const menu = getVoiceSelectMenu(payload);
+        const options = menu.options;
+        expect(Array.isArray(options)).toBe(true);
+        expect(options).toHaveLength(pageSamples.length);
+        if (!Array.isArray(options)) continue;
+
+        const pageIndices: number[] = [];
+        for (const option of options) {
+          const value = (option as Record<string, unknown>).value;
+          expect(typeof value).toBe("string");
+          if (typeof value !== "string") continue;
+          const separator = value.indexOf(":");
+          const index = Number.parseInt(value.slice(0, separator), 10);
+          pageIndices.push(index);
+          coveredIndices.add(index);
+        }
+        expect(pageIndices).toEqual(pageSamples.map((_sample, offset) => start + offset));
+      }
+
+      expect(coveredIndices).toEqual(new Set(VOICE_SAMPLES.map((_sample, index) => index)));
+    }));
+
+  it("reports 26 unsliced samples as an oversized select", () =>
+    expectForEveryLocaleAndReceipt((locale, receipt) => {
+      const payload = buildVoicePayload(locale, receipt, VOICE_SAMPLES.slice(0, 26), VOICE_SAMPLES.length, 0);
+      const validation = validateComponentsV2MessageLimits(payload);
+      expect(validation.valid).toBe(false);
+      expect(validation.violations).toContainEqual(
+        expect.objectContaining({
+          code: "SELECT_OPTIONS_OVERSIZED",
+          observed: 26,
+        }),
+      );
+    }));
 
   it("observes the 28-component receipt and deep-page ceiling from the rendered payload", () => {
     const payload = buildVoicePayload("en-US", true, VOICE_SAMPLES.slice(25, 50), VOICE_SAMPLES.length, 25);
@@ -1539,29 +1554,33 @@ describe("Persona Voice page text and component budgeting", () => {
     return Array.from(prompt).slice(0, length).join("");
   };
 
-  for (const locale of RUNTIME_LOCALES) {
-    for (const receipt of [false, true]) {
-      for (const avatarPresent of [false, true]) {
-        it(`pins clone Voice maximum (locale=${locale}, receipt=${receipt}, avatar=${avatarPresent})`, () => {
-          const payload = buildVoicePayload(locale, receipt, {
-            personas: maximumPersonaSet(makePrompt(DISCORD_TEXT_INPUT_MAX, 3)),
-            selectedPersonaId: 55,
-            selectedPersonaAvatarUrl: avatarPresent ? "https://cdn.example/avatar.png" : null,
-            receipt: receipt ? { tone: "success", heading: "Saved", detail: "Voice saved." } : undefined,
-          });
-          assertValid(payload, expectedLocalMaximum(receipt, avatarPresent));
+  it("pins the clone Voice maximum across locales, receipts, and avatars", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      for (const receipt of [false, true]) {
+        for (const avatarPresent of [false, true]) {
+          cases.check(`locale=${locale}, receipt=${receipt}, avatar=${avatarPresent}`, () => {
+            const payload = buildVoicePayload(locale, receipt, {
+              personas: maximumPersonaSet(makePrompt(DISCORD_TEXT_INPUT_MAX, 3)),
+              selectedPersonaId: 55,
+              selectedPersonaAvatarUrl: avatarPresent ? "https://cdn.example/avatar.png" : null,
+              receipt: receipt ? { tone: "success", heading: "Saved", detail: "Voice saved." } : undefined,
+            });
+            assertValid(payload, expectedLocalMaximum(receipt, avatarPresent));
 
-          const voiceSelector = getStringSelectMenus(payload).find((menu) =>
-            String(menu.customId).includes("voice-select"),
-          );
-          expect(voiceSelector).toBeDefined();
-          const options = voiceSelector?.options as unknown[];
-          expect(options).toHaveLength(25);
-          expect((options.at(-1) as Record<string, unknown>).value).toBe("page:24");
-        });
+            const voiceSelector = getStringSelectMenus(payload).find((menu) =>
+              String(menu.customId).includes("voice-select"),
+            );
+            expect(voiceSelector).toBeDefined();
+            const options = voiceSelector?.options as unknown[];
+            expect(options).toHaveLength(25);
+            expect((options.at(-1) as Record<string, unknown>).value).toBe("page:24");
+          });
+        }
       }
     }
-  }
+    cases.expectNoFailures();
+  });
 
   it("keeps the stored maximum and oversized prompts bounded for every fence run and astral emoji", () => {
     for (const promptSize of ["maximum", "oversized"] as const) {
@@ -1625,7 +1644,9 @@ describe("Persona Voice page text and component budgeting", () => {
       personaVoiceView: makePersonaVoiceView(null),
     });
     assertValid(missing);
-    expect(JSON.stringify(missing)).toContain("No speech endpoint");
+    expect(JSON.stringify(missing)).toContain(
+      localizedCopy("en-US", "commands.config.panel.voice_page_no_endpoint_title"),
+    );
     expect(JSON.stringify(missing)).toContain('"disabled":true');
   });
 
@@ -2005,10 +2026,11 @@ describe("channels collection bounds and truncation notices", () => {
     },
   ];
 
-  for (const locale of RUNTIME_LOCALES) {
-    describe(`locale ${locale}`, () => {
+  it("bounds every channel collection at sizes 0, 1, and 220 across locales", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
       for (const cc of collectionCases) {
-        it(`handles collection size 0 for ${cc.name}`, () => {
+        cases.check(`${cc.name} size 0 [${locale}]`, () => {
           const payload = cc.buildPayload(locale, 0);
           const validation = validateComponentsV2MessageLimits(payload);
           expect(validation.valid, `Violations: ${JSON.stringify(validation.violations)}`).toBe(true);
@@ -2024,7 +2046,7 @@ describe("channels collection bounds and truncation notices", () => {
           }
         });
 
-        it(`handles collection size 1 for ${cc.name}`, () => {
+        cases.check(`${cc.name} size 1 [${locale}]`, () => {
           const payload = cc.buildPayload(locale, 1);
           const validation = validateComponentsV2MessageLimits(payload);
           expect(validation.valid, `Violations: ${JSON.stringify(validation.violations)}`).toBe(true);
@@ -2038,7 +2060,7 @@ describe("channels collection bounds and truncation notices", () => {
           }
         });
 
-        it(`bounds large collection size 220 for ${cc.name}`, () => {
+        cases.check(`${cc.name} size 220 [${locale}]`, () => {
           const payload = cc.buildPayload(locale, 220);
           const validation = validateComponentsV2MessageLimits(payload);
           expect(validation.valid, `Violations: ${JSON.stringify(validation.violations)}`).toBe(true);
@@ -2064,8 +2086,14 @@ describe("channels collection bounds and truncation notices", () => {
           }
         });
       }
+    }
+    cases.expectNoFailures();
+  });
 
-      it("bounds all three Rules lists large simultaneously", () => {
+  it("bounds all three Rules lists large simultaneously across locales", () => {
+    const cases = collectCaseFailures();
+    for (const locale of RUNTIME_LOCALES) {
+      cases.check(locale, () => {
         const privateChannels = makeChannelList(220);
         const roleplayChannels = makeChannelList(220);
         const blocklistChannels = makeChannelList(220);
@@ -2109,8 +2137,9 @@ describe("channels collection bounds and truncation notices", () => {
           expect(blocklistDisplay).toMatch(/Showing (\d+) of 220 channels \((\d+) hidden\)\./);
         }
       });
-    });
-  }
+    }
+    cases.expectNoFailures();
+  });
 
   describe("channels collection bounds fallback rendering for unknown locale tag", () => {
     for (const cc of collectionCases) {

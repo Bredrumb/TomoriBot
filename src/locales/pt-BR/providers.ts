@@ -21,6 +21,7 @@ export default {
     fallback_used_failure_line: `{index}. {model} falhou com {error_detail}`,
     fallback_used_details_button: `Secundário Usado`,
     fallback_used_hide_footer: `Oculte isso e redirecione detalhes para os registros de pensamento em \`/config\` > Comportamento > Avisos`,
+    fallback_used_personal_opt_out_footer: `Impeça que o modelo do servidor cubra as falhas do seu provedor pessoal em \`/personal config\` > Modelos > Reservas`,
     markdown_table: {
       show_button: `Mostrar Markdown`,
       source_expired: `O markdown dessa tabela não está mais em cache, então não posso mais mostrar a fonte.`,

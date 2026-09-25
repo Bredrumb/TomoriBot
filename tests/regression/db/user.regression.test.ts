@@ -4,7 +4,7 @@
  * Covers: loadUserRow, registerUser, setPrivacyLevel, updateUser,
  * loadUserRowsByNormalizedNickname.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";

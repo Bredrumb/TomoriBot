@@ -14,7 +14,7 @@ a permissão **Gerenciar Servidor**. Esta página cobre os destaques; todos os c
 
 Gerar conteúdo custa dinheiro (seu ou dos seus membros). Cotas limitam o uso por usuário e em todo o servidor:
 
-- `/moderation` → **Quotas**: configure limites diários por usuário e pools redefiníveis em todo o servidor para geração de texto, imagem e vídeo.
+- `/moderation` → `Cotas`: configure limites diários por usuário e pools redefiníveis em todo o servidor para geração de texto, imagem e vídeo.
 - `/quota reset`: redefina manualmente o pool de um usuário ou do servidor.
 
 Defina um limite por usuário como `0` para ilimitado. Pools do servidor são redefinidos em um intervalo
@@ -37,9 +37,9 @@ recorrer.
 
 ## Controle de Acesso: Listas de Permissões
 
-- `/moderation` → **Whitelist** → **Channels**: escolha os canais de ativação e substituições opcionais de tempo de recarga.
-- `/moderation` → **Whitelist** → **Personas**: limite em quais canais uma persona específica pode ser ativada.
-- `/moderation` → **Whitelist** → **Roles**: restrinja a ativação a cargos específicos.
+- `/moderation` → `Lista Branca` → `Canais`: escolha os canais de ativação e substituições opcionais de tempo de recarga.
+- `/moderation` → `Lista Branca` → `Personas`: limite em quais canais uma persona específica pode ser ativada.
+- `/moderation` → `Lista Branca` → `Cargos`: restrinja a ativação a cargos específicos.
 - `/config` > Engine > Trigger: defina o tempo de recarga global entre respostas.
 
 Canais na lista de permissões herdam o tempo de recarga global, a menos que você defina uma substituição específica por canal.
@@ -62,7 +62,7 @@ são postados; útil para auditar o que ela está fazendo (incluindo qual gatilh
 `/config` > Channels > Logs & Welcome configura uma saudação automática para novos membros em um canal
 escolhido. Por padrão, a Tomori espera um minuto antes de cumprimentá-los para que o onboarding do servidor
 termine. Use o
-botão **Clear Welcome** na mesma página para parar as saudações.
+botão `Limpar Boas-vindas` na mesma página para parar as saudações.
 
 ## Expressões
 

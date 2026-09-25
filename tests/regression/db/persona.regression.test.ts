@@ -4,7 +4,7 @@
  * Covers: loadTomoriState, loadAllPersonasForServer, loadPersonaConfigRow,
  * updateTomori.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";

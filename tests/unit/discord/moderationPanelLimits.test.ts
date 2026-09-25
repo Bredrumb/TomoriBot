@@ -1,23 +1,16 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ComponentType } from "discord.js";
 import type { ChannelPersonaWhitelistRow, ChannelWhitelistRow, RoleWhitelistRow } from "@/types/db/schema";
 import { CooldownType } from "@/types/db/schema";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import { MODERATION_PANEL_RANGE_SIZE } from "@/utils/discord/interactions/panelController";
 import { PERSONA_NICKNAME_MAX_LENGTH } from "@/utils/discord/interactions/configPersonaOperations";
 import { buildModerationPanelPayload } from "@/utils/discord/ui/moderationPanel";
-import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import type { ModerationScopeData } from "@/utils/moderation/moderationOperations";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { BACKTICK_RUNS, collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
-
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 
 const REALISTIC_RECEIPT: PanelReceipt = {
   tone: "success",
@@ -28,40 +21,6 @@ const REALISTIC_RECEIPT: PanelReceipt = {
 
 const READ_STATUSES: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
 const RECEIPTS: Array<PanelReceipt | undefined> = [undefined, REALISTIC_RECEIPT];
-const BACKTICK_RUNS = [3, 4, 5, 6, 8];
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
-
-function rowTextDisplays(value: unknown): string[] {
-  const contents: string[] = [];
-  const visit = (current: unknown): void => {
-    if (Array.isArray(current)) {
-      for (const child of current) visit(child);
-      return;
-    }
-    if (!current || typeof current !== "object") return;
-    const record = current as Record<string, unknown>;
-    if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-      contents.push(record.content);
-    }
-    for (const child of Object.values(record)) visit(child);
-  };
-  visit(value);
-  return contents;
-}
-
-function assertSafePayload(payload: ReturnType<typeof buildModerationPanelPayload>, label: string): void {
-  const result = validateComponentsV2MessageLimits(payload);
-  expect(result.valid, `${label} violations: ${JSON.stringify(result.violations)}`).toBe(true);
-  for (const content of rowTextDisplays(payload)) {
-    expect(LONE_SURROGATE.test(content), `${label} contains a lone surrogate`).toBe(false);
-    const fenceStart = content.indexOf("```markdown\n");
-    if (fenceStart === -1) continue;
-    const bodyStart = fenceStart + "```markdown\n".length;
-    const closingFence = content.lastIndexOf("\n```");
-    if (closingFence <= bodyStart) continue;
-    expect(content.slice(bodyStart, closingFence), `${label} has an adjacent backtick in a fence`).not.toMatch(/``/u);
-  }
-}
 
 function makeChannel(id: number, overrides: Partial<ChannelWhitelistRow> = {}): ChannelWhitelistRow {
   return {
@@ -159,7 +118,7 @@ describe("Moderation panel Components V2 limits", () => {
               const payload = buildModerationPanelPayload(
                 buildInput(locale, category, whitelistPage, makeData(readStatus), receipt, 99),
               );
-              assertSafePayload(payload, `${locale}/${category}/${whitelistPage}/${readStatus}`);
+              expectSafePanelPayload(payload, `${locale}/${category}/${whitelistPage}/${readStatus}`);
             }
           }
         }
@@ -190,12 +149,12 @@ describe("Moderation panel Components V2 limits", () => {
               whitelist: { channels, personaChannels, roles, personaNames },
             });
             for (const whitelistPage of ["channels", "persona-channels", "roles"] as const) {
-              assertSafePayload(
+              expectSafePanelPayload(
                 buildModerationPanelPayload(buildInput(locale, "whitelist", whitelistPage, data, receipt, 2)),
                 `${locale}/${whitelistPage}/size-${size}`,
               );
             }
-            assertSafePayload(
+            expectSafePanelPayload(
               buildModerationPanelPayload(buildInput(locale, "user-blacklist", "channels", data, receipt, 2)),
               `${locale}/user-blacklist/size-${size}`,
             );
@@ -222,7 +181,7 @@ describe("Moderation panel Components V2 limits", () => {
       { category: "whitelist" as const, page: "roles" as const, roleRemoveTarget: "role-1" },
     ];
     for (const testCase of cases) {
-      assertSafePayload(
+      expectSafePanelPayload(
         buildModerationPanelPayload({
           locale: "en-US",
           category: testCase.category,
@@ -255,7 +214,7 @@ describe("Moderation panel Components V2 limits", () => {
           personaNames: new Map([[index + 1, value]]),
         },
       });
-      assertSafePayload(
+      expectSafePanelPayload(
         buildModerationPanelPayload({
           locale: "en-US",
           category: "user-blacklist",
@@ -266,7 +225,7 @@ describe("Moderation panel Components V2 limits", () => {
         }),
         `persona block shape ${index}`,
       );
-      assertSafePayload(
+      expectSafePanelPayload(
         buildModerationPanelPayload({
           locale: "en-US",
           category: "whitelist",
@@ -293,7 +252,7 @@ describe("Moderation panel Components V2 limits", () => {
     });
     for (const locale of RUNTIME_LOCALES) {
       for (const receipt of RECEIPTS) {
-        assertSafePayload(
+        expectSafePanelPayload(
           buildModerationPanelPayload({
             locale,
             category: "whitelist",
@@ -337,7 +296,7 @@ describe("Moderation panel Components V2 limits", () => {
           rangeIndex,
           data,
         });
-        values.push(...rowTextDisplays(payload));
+        values.push(...collectTextDisplays(payload));
       }
       return values.join("\n");
     };

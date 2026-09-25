@@ -21,6 +21,7 @@ export default {
     fallback_used_failure_line: `{index}. {model} gặp lỗi {error_detail}`,
     fallback_used_details_button: `Đã dùng dự phòng`,
     fallback_used_hide_footer: `Ẩn thông báo này và chuyển chi tiết vào nhật ký suy nghĩ bằng \`/config\` > Behavior > Notices`,
+    fallback_used_personal_opt_out_footer: `Ngừng để model của máy chủ trả lời thay khi nhà cung cấp cá nhân của bạn gặp lỗi trong \`/personal config\` > Model > Model dự phòng`,
     markdown_table: {
       show_button: `Hiện Markdown`,
       source_expired: `Markdown của bảng đó không còn được lưu trong bộ nhớ đệm, nên mình không thể hiển thị mã nguồn nữa.`,

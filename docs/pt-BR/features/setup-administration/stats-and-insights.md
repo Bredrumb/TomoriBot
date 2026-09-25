@@ -33,9 +33,9 @@ cotas de nível gratuito, etc.).
 
 `/stats generate` renderiza um cartão de imagem elegante que você pode enviar no chat:
 
-- **Personal Wrapped**: sua atividade pessoal, no estilo Spotify Wrapped.
-- **Persona Affinity**: estatísticas de uma persona neste servidor.
-- **Server Leaderboard**: classificações gerais do servidor.
+- **Retrospectiva Pessoal**: sua atividade pessoal, no estilo Spotify Wrapped.
+- **Afinidade da Persona**: estatísticas de uma persona neste servidor.
+- **Tabela de Classificação do Servidor**: classificações gerais do servidor.
 
 Usuários totalmente privados (`/personal config`) não podem gerar cartões pessoais.
 

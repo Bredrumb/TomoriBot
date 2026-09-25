@@ -34,12 +34,12 @@ This is distinct from [SillyTavern Card Import](/architecture/integrations/silly
 
 ## Commands
 
-For a user-facing explanation of behavior, surprises, and limitations in SillyTavern terms, open `/help`, choose **Integrations**, then **SillyTavern Presets**.
+For a user-facing explanation of behavior, surprises, and limitations in SillyTavern terms, open `/help`, choose **Integrations**, then `SillyTavern Presets`.
 
 ### `/config` > Plugins > SillyTavern Presets
 
 The `/config` > Plugins > SillyTavern Presets page opens an interactive collection panel for
-managing SillyTavern presets. The selector keeps **Add new Preset** first, followed by the
+managing SillyTavern presets. The selector keeps `Add new Preset` first, followed by the
 disable choice and imported presets.
 
 **Capabilities:**

@@ -77,7 +77,7 @@ IRODORI_TTS_CHECKPOINT="/path/to/custom_checkpoint.pt"
 
 ## 在 TomoriBot 中注册
 
-运行 `/providers`，选择**添加新自定义端点**，并使用语音合成的 API 兼容性：
+运行 `/providers`，选择`添加新自定义端点`，并使用语音合成的 API 兼容性：
 
 - API 兼容性：`tts-clone`
 - `endpoint_url`：`http://127.0.0.1:8013`

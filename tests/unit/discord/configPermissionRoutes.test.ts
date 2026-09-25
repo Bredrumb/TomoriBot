@@ -24,7 +24,7 @@ import {
 } from "@/utils/discord/ui/configBehaviorModals";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -638,7 +638,9 @@ describe("permissions routes", () => {
       expect(events).toEqual(["write", "invalidate"]);
       expect(updatePrivacy).toHaveBeenCalledWith(9, { stm_privacy_bypass: true });
       expect(JSON.stringify(manager.edits.at(-1))).toContain("rules");
-      expect(JSON.stringify(manager.edits.at(-1))).toContain("Memory Privacy");
+      expect(JSON.stringify(manager.edits.at(-1))).toContain(
+        localizer("en-US", "commands.config.panel.page_permissions_privacy"),
+      );
 
       for (const route of [
         { action: "permissions-tool-use-set", locale: "en-US", enabled: true },
@@ -780,7 +782,7 @@ describe("Plugins and Channel Rules panels", () => {
         channelsView,
       }),
     );
-    expect(privacySerialized).toContain("Memory Privacy");
+    expect(privacySerialized).toContain(localizer("en-US", "commands.config.panel.page_permissions_privacy"));
     expect(privacySerialized).toContain("/memories");
 
     const stalePayload = buildConfigPanelPayload({

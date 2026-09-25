@@ -109,7 +109,7 @@ Para o uso de GPU NVIDIA, **o WSL2 é recomendado**. Os requisitos atuais do ups
 
 ## Registrar no TomoriBot
 
-Execute `/providers`, escolha **Add New Custom Endpoint** (Adicionar Novo Endpoint Personalizado) e configure o endpoint de fala:
+Execute `/providers`, escolha `Adicionar Novo Endpoint Personalizado` (Adicionar Novo Endpoint Personalizado) e configure o endpoint de fala:
 
 - Capability: `Speech`
 - API Compatibility: `tts-clone`

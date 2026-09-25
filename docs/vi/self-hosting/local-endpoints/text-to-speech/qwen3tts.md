@@ -40,7 +40,7 @@ Chế độ tự động kiểm tra từng yêu cầu `/synthesize`: các yêu c
 
 Đối với hầu hết người dùng, hãy đăng ký máy chủ ở chế độ tự động để một endpoint có thể hỗ trợ cả persona sao chép giọng nói lẫn persona VoiceDesign.
 
-Chạy `/providers`, chọn **Add New Custom Endpoint**, và sử dụng độ tương thích API giọng nói:
+Chạy `/providers`, chọn `Thêm endpoint tùy chỉnh mới`, và sử dụng độ tương thích API giọng nói:
 
 - API Compatibility: `tts-clone`
 - `endpoint_url`: `http://127.0.0.1:8012`

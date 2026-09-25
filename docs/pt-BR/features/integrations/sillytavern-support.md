@@ -96,5 +96,5 @@ Surpresas comuns quando uma predefinição parece ser ignorada:
   não são suportados. Predefinições legadas de text-completion são importadas por um caminho de melhor esforço que
   descarta blocos exclusivos do ST (cenário, âncoras, stop strings, …).
 
-No `/help`, escolha **Integrations** e depois **SillyTavern Presets** para a referência dentro do Discord. Para os detalhes internos do motor de importação, veja a
+No `/help`, escolha **Integrations** e depois `Predefinições do SillyTavern` para a referência dentro do Discord. Para os detalhes internos do motor de importação, veja a
 [arquitetura do sistema de predefinições](/en/architecture/integrations/sillytavern/preset-system/).

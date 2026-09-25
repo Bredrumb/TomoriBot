@@ -59,6 +59,7 @@ import {
   type ComponentsV2MessagePayload,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -582,7 +583,10 @@ describe("config models switch page", () => {
           }),
         );
         expect(harness.telemetry).toContain("server-config.workspace.model.endpoint-select");
-        if (capability === "tts") expect(JSON.stringify(harness.edits.at(-1))).toContain("speech source changed");
+        if (capability === "tts")
+          expect(JSON.stringify(harness.edits.at(-1))).toMatch(
+            localizedProse("en-US", "commands.config.panel.endpoint_source_changed_direction"),
+          );
       }
     });
 
@@ -604,7 +608,9 @@ describe("config models switch page", () => {
         );
       }
       expect(activationSpy).not.toHaveBeenCalled();
-      expect(JSON.stringify(harness.edits.at(-1))).toContain("Panel Out Of Date");
+      expect(JSON.stringify(harness.edits.at(-1))).toContain(
+        localizedCopy("en-US", "commands.config.panel.stale_heading"),
+      );
     });
 
     it("stops a non-manager at the real route authorization gate", async () => {
@@ -1540,7 +1546,9 @@ describe("config models authorization", () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(naiUpdate).not.toHaveBeenCalled();
-    expect(renderedText(harness.edits.at(-1))).toContain("Permission Required");
+    expect(renderedText(harness.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.config.panel.denied_heading"),
+    );
     update.mockRestore();
     naiUpdate.mockRestore();
   });
@@ -1568,7 +1576,9 @@ describe("config models authorization", () => {
 
     expect(modelUpdate).not.toHaveBeenCalled();
     expect(naiUpdate).not.toHaveBeenCalled();
-    expect(renderedText(harness.edits.at(-1))).toContain("Permission Required");
+    expect(renderedText(harness.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.config.panel.denied_heading"),
+    );
     modelUpdate.mockRestore();
     naiUpdate.mockRestore();
   });
@@ -1592,7 +1602,9 @@ describe("config models authorization", () => {
     );
 
     expect(update).not.toHaveBeenCalled();
-    expect(renderedText(harness.edits.at(-1))).toContain("Permission Required");
+    expect(renderedText(harness.edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.config.panel.denied_heading"),
+    );
     update.mockRestore();
   });
 
@@ -1888,7 +1900,7 @@ describe("config models stop strings", () => {
     );
 
     expect(update).not.toHaveBeenCalled();
-    expect(renderedText(harness.edits.at(-1))).toContain("Panel Out Of Date");
+    expect(renderedText(harness.edits.at(-1))).toContain(localizedCopy("en-US", "commands.config.panel.stale_heading"));
     update.mockRestore();
   });
 });

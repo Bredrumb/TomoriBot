@@ -105,6 +105,11 @@ export interface StreamingContext {
    */
   textCredentialSource?: "server" | "personal";
   forceModelFallback?: boolean; // Force suppress errors regardless of key availability (model fallback retries)
+  /**
+   * Timeout notice an attempt held back because a model fallback might still answer. The
+   * generation-turn loop sends it when no later attempt materialized, and each attempt clears it.
+   */
+  deferredTimeoutNotice?: { providerName: string; sawStreamProgress: boolean };
   rotationKeyRetriesUsed?: boolean; // True if one or more rotation-key retries were attempted
   disableAllTools?: boolean; // Flag to disable all tool calling (e.g., during user impersonation)
   deliberateToolAllowedNames?: string[]; // Optional per-turn allowlist when deliberate tool mode detects scoped intent

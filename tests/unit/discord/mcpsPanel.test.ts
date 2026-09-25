@@ -9,6 +9,7 @@ import {
   validateComponentsV2MessageLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -43,7 +44,7 @@ describe("MCP collection panel", () => {
     });
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("Registered MCPs `(0/10)`");
-    expect(serialized).toContain("This server has no MCPs yet.");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.mcps.empty_guild"));
     expect(serialized).toContain(`"type":${ComponentType.Separator}`);
     expect(serialized).toContain(
       `"style":${ButtonStyle.Secondary},"customId":"config:v2:mcp-add-open:en-US","label":"+ Add MCP"`,
@@ -140,8 +141,8 @@ describe("MCP collection panel", () => {
         routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
-    expect(serialized).toContain("Tools: Discovery unknown");
-    expect(serialized).toContain("Tools: None discovered");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.mcps.tools_unknown"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.mcps.tools_empty"));
     expect(serialized).toContain("Tools: `read_wiki`, `'open' repo`");
     expect(serialized).not.toContain("`open`");
   });
@@ -277,10 +278,10 @@ describe("MCP collection panel", () => {
         routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
-    expect(unavailable).toContain("could not be loaded");
+    expect(unavailable).toContain(localizedCopy("en-US", "commands.mcps.unavailable"));
     expect(unavailable).toContain('"label":"Retry"');
     expect(unavailable).not.toContain('"label":"+ Add MCP"');
-    expect(empty).toContain("This DM workspace has no MCPs yet.");
+    expect(empty).toContain(localizedCopy("en-US", "commands.mcps.empty_dm"));
     expect(empty).toContain('"label":"+ Add MCP"');
     expect(empty).not.toContain('"label":"Retry"');
   });
@@ -296,11 +297,11 @@ describe("MCP collection panel", () => {
     );
     expect(serialized).toContain('"value":"none","label":"General Purpose"');
     expect(serialized).toContain('"default":true');
-    expect(serialized).toContain("No built-in tools will be disabled");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.mcps.type_general_description"));
     expect(serialized).toContain('"value":"web_search","label":"Web Search"');
-    expect(serialized).toContain("Disables built-in Brave and DuckDuckGo search tools");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.mcps.type_web_search_description"));
     expect(serialized).toContain('"value":"url_fetcher","label":"URL Fetcher"');
-    expect(serialized).toContain("Disables built-in URL fetch tool");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.mcps.type_url_fetcher_description"));
     expect(serialized).not.toContain('"label":"Server Type (Optional)"');
     expect(JSON.stringify(buildAddMcpModal("ja", "12345678", CONFIG_MCP_PANEL_ROUTE_ADAPTER))).not.toContain(
       '"label":"サーバータイプ（任意）"',
