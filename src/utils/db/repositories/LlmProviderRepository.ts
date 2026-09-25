@@ -27,7 +27,9 @@ import {
   type UserSavedProviderConfigRow,
   type UserSavedProviderConfigUpsert,
   type VideoGenerationModelRow,
+  type VramHandoffBackend,
 } from "@/types/db/schema";
+import type { SQL } from "bun";
 import { invalidateTomoriStateCache } from "@/utils/cache/tomoriStateCacheStore";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { sql, withTransientDbRetry } from "@/utils/db/client";
@@ -61,6 +63,27 @@ type UserSavedProviderConfigsReadResult =
 export type CustomEndpointConnectionsReadResult =
   | { status: "fresh"; connections: CustomEndpointConnectionRow[]; endpoints: CustomEndpointRow[] }
   | { status: "unavailable"; connections: []; endpoints: [] };
+
+/** Sets or clears the VRAM handoff on the text connections of a group being edited. */
+export interface VramHandoffChange {
+  connectionIds: number[];
+  backend: VramHandoffBackend | null;
+}
+
+async function applyVramHandoffChange(tx: SQL, change: VramHandoffChange | undefined): Promise<void> {
+  if (!change || change.connectionIds.length === 0) return;
+  // Merged rather than replaced so a behavior key this edit does not own survives it.
+  await tx`
+    UPDATE custom_endpoint_connections
+    SET
+      behavior = CASE
+        WHEN ${change.backend}::text IS NULL THEN behavior - 'vram_handoff'
+        ELSE behavior || jsonb_build_object('vram_handoff', ${change.backend}::text)
+      END,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE connection_id = ANY(${sql.array(change.connectionIds, "int4")})
+  `;
+}
 
 /**
  * LlmProviderRepository: saved provider configs, custom endpoints, and scoped model registrations.
@@ -660,7 +683,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const [connectionRows, endpointRows] = await Promise.all([
         sql<unknown[]>`
           SELECT connection_id, server_id, user_id, label, capability, api_style,
-                 endpoint_url, requires_auth, created_at, updated_at
+                 endpoint_url, requires_auth, behavior, created_at, updated_at
           FROM custom_endpoint_connections
           WHERE server_id = ${serverId}
             AND user_id IS NULL
@@ -732,7 +755,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
       const [connectionRows, endpointRows] = await Promise.all([
         sql<unknown[]>`
           SELECT connection_id, server_id, user_id, label, capability, api_style,
-                 endpoint_url, requires_auth, created_at, updated_at
+                 endpoint_url, requires_auth, behavior, created_at, updated_at
           FROM custom_endpoint_connections
           WHERE user_id = ${userId}
             AND server_id IS NULL
@@ -1278,8 +1301,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     endpointUrl?: string;
     encryptedApiKey?: Buffer;
     keyVersion?: number;
+    vramHandoff?: VramHandoffChange;
   }): Promise<boolean> {
     if (params.connectionIds.length === 0) return false;
+    if (params.vramHandoff?.connectionIds.some((id) => !params.connectionIds.includes(id))) return false;
     try {
       return await sql.begin(async (tx) => {
         const owned = await tx<Array<{ connection_id: number }>>`
@@ -1301,6 +1326,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
             updated_at = CURRENT_TIMESTAMP
           WHERE connection_id = ANY(${sql.array(params.connectionIds, "int4")})
         `;
+        await applyVramHandoffChange(tx, params.vramHandoff);
 
         if (params.encryptedApiKey) {
           const providerKeys = params.connectionIds.map((connectionId) => `custom:${connectionId}`);
@@ -1333,8 +1359,10 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
     endpointUrl?: string;
     encryptedApiKey?: Buffer;
     keyVersion?: number;
+    vramHandoff?: VramHandoffChange;
   }): Promise<boolean> {
     if (params.connectionIds.length === 0) return false;
+    if (params.vramHandoff?.connectionIds.some((id) => !params.connectionIds.includes(id))) return false;
     try {
       return await sql.begin(async (tx) => {
         const owned = await tx<Array<{ connection_id: number }>>`
@@ -1356,6 +1384,7 @@ class LlmProviderRepository implements IRepository<LlmProviderExportShape> {
             updated_at = CURRENT_TIMESTAMP
           WHERE connection_id = ANY(${sql.array(params.connectionIds, "int4")})
         `;
+        await applyVramHandoffChange(tx, params.vramHandoff);
 
         if (params.encryptedApiKey) {
           const providerKeys = params.connectionIds.map((connectionId) => `custom:${connectionId}`);

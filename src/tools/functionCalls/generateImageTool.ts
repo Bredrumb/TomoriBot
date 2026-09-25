@@ -49,6 +49,7 @@ import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { extractImagesFromMessage } from "@/utils/image/imageExtractor";
+import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
@@ -1203,6 +1204,13 @@ export class GenerateImageTool extends BaseTool {
           : null;
 
       if (creds.customEndpoint) {
+        const handoff =
+          creds.customEndpoint.api_style === "comfyui"
+            ? await beginTextModelHandoffBeforeComfyUi({
+                tomoriState: context.tomoriState,
+                comfyUi: { endpointUrl: creds.customEndpoint.endpoint_url, apiKey },
+              })
+            : null;
         try {
           const result = await generateCustomImageViaEndpoint({
             endpoint: creds.customEndpoint,
@@ -1282,6 +1290,9 @@ export class GenerateImageTool extends BaseTool {
           } else {
             throw err;
           }
+        } finally {
+          // Reload continues independently so Discord upload is never held behind text-model readiness.
+          void handoff?.restore();
         }
       } else if (nativeImageProvider) {
         const result = await nativeImageProvider.generateNativeImage({

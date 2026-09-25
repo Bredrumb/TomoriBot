@@ -271,9 +271,14 @@ export interface EditEndpointModalContext {
   endpointUrl: string;
   apiStyles: string[];
   isPreset: boolean;
+  /** Undefined when the group has no text connection, which is the only kind the option affects. */
+  vramHandoffEnabled?: boolean;
 }
 
-export type EditEndpointModalField = "label" | "url" | "auth-token";
+export type EditEndpointModalField = "label" | "url" | "auth-token" | "behavior";
+
+/** The single Endpoint Behavior option value; the group is a checkbox list so later options can join it. */
+export const UNLOAD_DURING_COMFYUI_BEHAVIOR = "unload-during-comfyui";
 
 export function buildEditEndpointModalFieldId(field: EditEndpointModalField, nonce: string): string {
   return `edit-${field}_${nonce}`;
@@ -339,6 +344,31 @@ export function buildEditEndpointModal(
       required: false,
     },
   });
+  if (!context.isPreset && context.vramHandoffEnabled !== undefined) {
+    components.push({
+      type: 18,
+      label: safeSelectOptionText(localizer(locale, "commands.providers.endpoint_behavior_label"), 45),
+      description: safeSelectOptionText(localizer(locale, "commands.providers.endpoint_behavior_description"), 100),
+      component: {
+        type: 22,
+        custom_id: buildEditEndpointModalFieldId("behavior", nonce),
+        min_values: 0,
+        max_values: 1,
+        required: false,
+        options: [
+          {
+            value: UNLOAD_DURING_COMFYUI_BEHAVIOR,
+            label: safeSelectOptionText(localizer(locale, "commands.providers.endpoint_behavior_unload_comfyui"), 100),
+            description: safeSelectOptionText(
+              localizer(locale, "commands.providers.endpoint_behavior_unload_comfyui_description"),
+              100,
+            ),
+            default: context.vramHandoffEnabled,
+          },
+        ],
+      },
+    });
+  }
   return {
     custom_id: buildProvidersRouteId(routeNamespace, {
       action: "edit-endpoint-submit",
