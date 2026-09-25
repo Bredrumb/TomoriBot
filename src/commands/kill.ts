@@ -3,6 +3,7 @@ import type { ChatInputCommandInteraction, Client } from "discord.js";
 import {
   clearChannelProcessingQueue,
   forceKillChannelStream,
+  getChannelActiveToolName,
   isChannelProcessingLocked,
 } from "@/utils/chat/channelQueue";
 import type { UserRow } from "@/types/db/schema";
@@ -10,6 +11,7 @@ import { replyInfoEmbed } from "@/utils/discord/interactionHelper";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
+import { MEDIA_GENERATION_TOOL_NAMES } from "@/utils/tools/deliberateToolMode";
 
 /**
  * Configure the /kill command
@@ -59,6 +61,10 @@ export async function execute(
     return;
   }
 
+  // Read before the kill: ending the tool race clears the active tool name.
+  const activeToolName = hasActiveStream ? getChannelActiveToolName(channelId) : undefined;
+  const killedMediaGeneration = activeToolName !== undefined && MEDIA_GENERATION_TOOL_NAMES.has(activeToolName);
+
   if (hasActiveStream) {
     StreamOrchestrator.requestStop(channelId, interaction.user.id);
     // Abort the underlying HTTP request and unblock Promise.race so the lock releases immediately.
@@ -66,7 +72,7 @@ export async function execute(
   }
 
   log.info(
-    `Stop/clear requested via /kill by user ${interaction.user.id} in channel ${channelId}. Active stream: ${hasActiveStream}. Cleared ${clearedQueueCount} queued message(s).`,
+    `Stop/clear requested via /kill by user ${interaction.user.id} in channel ${channelId}. Active stream: ${hasActiveStream}. Active tool: ${activeToolName ?? "none"}. Cleared ${clearedQueueCount} queued message(s).`,
   );
 
   await replyInfoEmbed(
@@ -76,6 +82,7 @@ export async function execute(
       titleKey: "commands.kill.success_title",
       descriptionKey: "commands.kill.success_description",
       color: ColorCode.SUCCESS,
+      ...(killedMediaGeneration ? { footerKey: "commands.kill.media_generation_billing_footer" } : {}),
     },
     MessageFlags.SuppressNotifications,
   );

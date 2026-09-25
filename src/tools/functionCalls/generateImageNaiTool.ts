@@ -1232,6 +1232,12 @@ export class GenerateImageNaiTool extends BaseTool {
         });
       }
 
+      // /kill stops awaiting this tool but cannot stop it (the inpaint path takes no signal), so
+      // posting now would deliver and charge for a reply the user killed.
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "NAI image generation was cancelled." };
+      }
+
       const filePrefix = isInpaintMode ? "nai_inpainted" : "nai_generated";
       const attachmentFilename = `${filePrefix}_${Date.now()}.png`;
       const attachment = new AttachmentBuilder(imageBuffer, {
@@ -1287,6 +1293,9 @@ export class GenerateImageNaiTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "NAI image generation was cancelled." };
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorKind = classifyNaiImageError(error);
 

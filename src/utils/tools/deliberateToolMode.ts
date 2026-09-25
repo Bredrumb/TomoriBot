@@ -205,6 +205,13 @@ const STICKER_TOOL_NAMES = ["select_sticker_for_response"];
 const USER_BLOCKING_TOOL_NAMES = ["block_user", "unblock_user"];
 const USER_INFO_TOOL_NAMES = ["update_user_info"];
 
+/** Tools whose backend job can outlive a killed turn and still bill. */
+export const MEDIA_GENERATION_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...IMAGE_GENERATION_TOOL_NAMES,
+  ...VIDEO_GENERATION_TOOL_NAMES,
+  ...VOICE_GENERATION_TOOL_NAMES,
+]);
+
 export const DELIBERATE_TOOL_TRIGGER_TARGETS = [
   { value: "image", label: "Image generation", toolNames: IMAGE_GENERATION_TOOL_NAMES },
   { value: "video", label: "Video generation", toolNames: VIDEO_GENERATION_TOOL_NAMES },

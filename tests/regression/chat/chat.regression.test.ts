@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import { TextChannel, type Client, type Message } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { evaluateAdmissionQueueAndTriggerGate } from "@/utils/chat/admissionQueue";
@@ -8,6 +8,7 @@ import {
   clearChannelProcessingQueue,
   enqueueBusyChannelMessage,
   forceKillChannelStream,
+  getChannelActiveToolName,
   getOrCreateChannelLockEntry,
   releaseChannelLockAndReplayQueue,
   setActiveChannelTurnState,
@@ -19,6 +20,7 @@ import { runToolLoop } from "@/utils/chat/toolLoop";
 import { determineMatchingPersonas, isSelfTriggerMessage } from "@/utils/chat/triggerProcessor";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { parseTriggerWordListInput } from "@/utils/text/triggerWords";
+import { ToolRegistry } from "@/tools/toolRegistry";
 import type { LLMProvider, StreamResult } from "@/types/provider/interfaces";
 
 type ProviderFixtureName = "google" | "openrouter" | "novelai";
@@ -938,6 +940,61 @@ describe("chat regression harness", () => {
 
     expect(result.status).toBe("stopped_by_user");
     expect(StreamOrchestrator.hasStopRequest(channelId)).toBe(false);
+  });
+
+  it("exposes the executing tool name to /kill and clears it once the tool call settles", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(fixture, client);
+    const tomoriState = makeTomoriState(fixture, {
+      id: 1001,
+      nickname: "Tomori",
+      isAlter: false,
+      triggers: ["tomori"],
+    });
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: message.id,
+      userDiscId: message.author.id,
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+    let toolNameDuringExecution: string | undefined;
+    const executeToolSpy = spyOn(ToolRegistry, "executeTool").mockImplementation(async () => {
+      toolNameDuringExecution = getChannelActiveToolName(channelId);
+      StreamOrchestrator.requestStop(channelId, message.author.id);
+      return { success: false, error: "killed" };
+    });
+    const provider = {
+      streamToDiscord: async (): Promise<StreamResult> =>
+        ({ status: "function_call", data: { name: "generate_image", args: {} } }) as StreamResult,
+      getInfo: () => ({ name: "google" }),
+    } as unknown as LLMProvider;
+    const context = {
+      turn: { lockedTurn: { channelId, admission: { incoming: {} } } },
+      client,
+      message,
+      channel: message.channel,
+      isFromQueue: false,
+      streamingContext: { suppressUserErrors: true },
+      currentPersona: tomoriState,
+      isUserImpersonation: false,
+    } as unknown as ChatTurnContext;
+
+    try {
+      const result = await runToolLoop({
+        context,
+        provider,
+        providerConfig: { model: "test", apiKey: "test", temperature: 0 },
+        tomoriState,
+      });
+
+      expect(result.status).toBe("stopped_by_user");
+      expect(toolNameDuringExecution).toBe("generate_image");
+      expect(getChannelActiveToolName(channelId)).toBeUndefined();
+    } finally {
+      executeToolSpy.mockRestore();
+    }
   });
 
   it("releaseChannelLockAndReplayQueue drops a stop request that has no stop context", () => {

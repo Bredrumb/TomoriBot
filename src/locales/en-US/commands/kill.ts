@@ -5,5 +5,6 @@ export default {
     success_description: `Stopped the active response stream (if any) and cleared queued responses in this channel.`,
     nothing_to_stop_title: `Nothing to Stop`,
     nothing_to_stop_description: `There is no active response stream or queued response to clear in this channel.`,
+    media_generation_billing_footer: `A media generation was in progress. The provider may still bill for it even though it was not posted.`,
   },
 };

@@ -17,6 +17,8 @@ export interface ElevenLabsTtsRequest {
   script: string;
   modelId?: string;
   voiceSettings?: Record<string, unknown>;
+  /** Turn-level cancellation from /kill, merged with the request timeout. */
+  abortSignal?: AbortSignal;
 }
 
 export interface ElevenLabsTtsResult {
@@ -107,7 +109,7 @@ export async function synthesizeSpeechWithElevenLabs(request: ElevenLabsTtsReque
           model_id: request.modelId ?? config.modelId,
           ...(request.voiceSettings ? { voice_settings: request.voiceSettings } : {}),
         }),
-        signal: controller.signal,
+        signal: request.abortSignal ? AbortSignal.any([controller.signal, request.abortSignal]) : controller.signal,
       },
     );
 
@@ -151,7 +153,7 @@ export async function synthesizeSpeechWithElevenLabs(request: ElevenLabsTtsReque
     };
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof Error && error.name === "AbortError" && !request.abortSignal?.aborted) {
       return {
         success: false,
         errorKind: "timeout",

@@ -15,6 +15,7 @@ import {
   incrementChannelFollowUpCount,
   queueStopResponseAtFront,
   resetChannelFollowUpCount,
+  setChannelActiveToolName,
   setChannelStreamKill,
   setChannelToolCallChainActive,
   runUnderWatchdog,
@@ -627,8 +628,9 @@ async function executeToolCall(
           allowedToolNames: deliberateAllowedSet ? [...deliberateAllowedSet] : [],
         },
       }
-    : await runUnderWatchdog(params.context.channel.id, () =>
-        Promise.race([
+    : await runUnderWatchdog(params.context.channel.id, () => {
+        setChannelActiveToolName(params.context.channel.id, functionName);
+        return Promise.race([
           ToolRegistry.executeTool(functionName, functionCall.args ?? {}, toolContext),
           new Promise<ToolResult>((resolve) =>
             setTimeout(
@@ -641,8 +643,8 @@ async function executeToolCall(
             ),
           ),
           ...(killPromise ? [killPromise] : []),
-        ]),
-      );
+        ]).finally(() => setChannelActiveToolName(params.context.channel.id, undefined));
+      });
 
   // If /kill fired, exit the turn immediately; don't feed the failed result back to the model.
   if (shouldAbortToolCallForStopRequest(params.context.channel.id)) {

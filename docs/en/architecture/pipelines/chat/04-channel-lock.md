@@ -150,6 +150,21 @@ timeouts because they do not have an active stop request.
 each provider call and cleared in `finally`. `activeTurnAbortController` is
 created in `acquireChannelLockForTurn` and cleared on release.
 
+The `killPromise` only stops the turn from awaiting the tool. The tool itself
+keeps running in the background, and tools that post their own output
+(image, video, voice) re-check `abortSignal.aborted` before posting so a killed
+generation is never delivered or charged against quota. Backends that honor the
+signal stop early (ComfyUI cancels the prompt; video polling stops at the next
+interval); most hosted providers cannot cancel an accepted job, so it still
+finishes remotely and may still bill.
+
+`activeToolName` records the tool currently inside `executeToolCall`'s race and
+is cleared when that race settles, as well as on acquire, release, and stale
+release. `/kill` reads it *before* calling `forceKillChannelStream`, because the
+kill settles the race and clears it. When it names a media generation tool
+(`MEDIA_GENERATION_TOOL_NAMES` in `deliberateToolMode.ts`), the `/kill` reply
+carries a footer warning that the provider may still bill for the job.
+
 ## Extension points
 
 **Internal: concurrency primitive.** The lock, queue, and typing-keepalive

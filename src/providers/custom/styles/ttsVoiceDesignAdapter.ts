@@ -27,6 +27,8 @@ export interface TtsVoiceDesignRequest {
   voiceInstructions?: string;
   /** Empty string for local endpoints that don't require auth. */
   apiKey: string;
+  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
+  abortSignal?: AbortSignal;
 }
 
 type TtsVoiceMode = "clone" | "voice-design" | "auto";
@@ -122,7 +124,7 @@ function prepareVoiceDesignText(
  * reference samples.
  */
 export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignRequest): Promise<TtsCloneResult> {
-  const { endpoint, script, designPrompt, voiceInstructions, apiKey } = request;
+  const { endpoint, script, designPrompt, voiceInstructions, apiKey, abortSignal } = request;
   const scriptMarkup = (endpoint.extra_config.script_markup as string | undefined) ?? "plain";
   const { processedScript, captionText } = prepareVoiceDesignText(script, scriptMarkup);
   const cleanedDesignPrompt = designPrompt.trim();
@@ -182,13 +184,13 @@ export async function synthesizeSpeechViaTtsVoiceDesign(request: TtsVoiceDesignR
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: abortController.signal,
+        signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
       });
     } finally {
       clearTimeout(timer);
     }
   } catch (error) {
-    const isTimeout = error instanceof Error && error.name === "AbortError";
+    const isTimeout = error instanceof Error && error.name === "AbortError" && !abortSignal?.aborted;
     const elapsedMs = Date.now() - requestStartedAt;
     log.warn(
       `[TtsVoiceDesign] Request to ${endpointUrl}/synthesize ${isTimeout ? "timed out" : "failed"} after ${elapsedMs}ms`,
