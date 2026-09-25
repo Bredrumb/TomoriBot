@@ -304,6 +304,8 @@ export type PersonalConfigPanelRoute =
   | { action: "fallbacks-submit"; locale: string; provider: string; nonce: string }
   | { action: "randomizer-toggle"; locale: string; provider: string }
   | { action: "randomizer-set"; locale: string; provider: string; enabled: boolean }
+  // Models - Fallbacks, account-wide
+  | { action: "server-fallback-set"; locale: string; enabled: boolean }
   // Advanced - Response Modes
   | { action: "trigger-mode-set"; locale: string; mode: "off" | "follow" | "on" }
   | { action: "tool-mode-set"; locale: string; mode: "off" | "follow" | "on" }
@@ -784,6 +786,10 @@ export const PERSONAL_CONFIG_ROUTE_CODECS: PersonalConfigRouteCodecs = {
   "randomizer-set": {
     wireToken: "randomizer-set",
     fields: [providerField, enabledField],
+  },
+  "server-fallback-set": {
+    wireToken: "server-fallback-set",
+    fields: [enabledField],
   },
   "trigger-mode-set": {
     wireToken: "trigger-mode-set",

@@ -15,6 +15,8 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { checkTextQuota } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
 import { isBaseTriggerWordMatch } from "@/utils/chat/errorVisibility";
+import { isAutochatOverrideChannel } from "@/utils/chat/triggerProcessor";
+import type { ChatIncoming } from "@/utils/chat/types";
 import {
   buildTextQuotaResetInfo,
   textQuotaTriggerStates,
@@ -167,6 +169,85 @@ export async function setMessageTriggerCooldownForAdmission(params: {
     params.cooldownType,
     params.cooldownLength,
     params.member,
+  );
+}
+
+/**
+ * The channel a message's channel-scoped configuration applies to.
+ *
+ * A thread's messages carry their parent's scope for settings such as the auto-chat override,
+ * while reads and writes keyed on the message itself keep the thread's own id.
+ */
+export function resolveChannelScope(message: Message): { effectiveChannelId: string; parentChannelId?: string } {
+  const isThread =
+    "isThread" in message.channel && typeof message.channel.isThread === "function" && message.channel.isThread();
+  const parentChannelId = isThread && "parent" in message.channel ? message.channel.parent?.id : undefined;
+  return { effectiveChannelId: parentChannelId ?? message.channelId, parentChannelId };
+}
+
+/**
+ * Applies the server's message-trigger cooldown to a turn that answers on the server's credentials.
+ *
+ * Planning runs this for a server-sourced turn. The server route a personal turn can fall back to
+ * has to run it as well, because the server is now the one paying: without it, a personal provider
+ * that fails on every message would buy a server reply on every message for as long as the server's
+ * quota allows, and a server that leaves quota off would never stop.
+ *
+ * @returns false when the caller must not proceed, the same answer planning gives a cooldown hit.
+ */
+export async function enforceServerTriggerCooldownForAdmission(params: {
+  serverDiscId: string;
+  cooldownUserDiscId: string;
+  message: Message;
+  tomoriState: TomoriState;
+  locale: string;
+  notifyUser?: boolean;
+}): Promise<boolean> {
+  const cooldownType = params.tomoriState.config.cooldown_type ?? CooldownType.OFF;
+  const rejectedByCooldown = await rejectOnMessageTriggerCooldown({
+    serverDiscId: params.serverDiscId,
+    userDiscId: params.cooldownUserDiscId,
+    channelId: params.message.channelId,
+    cooldownType,
+    member: params.message.member,
+    isAutochatOverride: isAutochatOverrideChannel(
+      params.tomoriState.config,
+      resolveChannelScope(params.message).effectiveChannelId,
+    ),
+    author: params.message.author,
+    locale: params.locale,
+    botName: params.tomoriState.persona_nickname,
+    notifyUser: params.notifyUser,
+  });
+  if (rejectedByCooldown) {
+    return false;
+  }
+
+  await setMessageTriggerCooldownForAdmission({
+    serverDiscId: params.serverDiscId,
+    userDiscId: params.cooldownUserDiscId,
+    channelId: params.message.channelId,
+    cooldownType,
+    cooldownLength: params.tomoriState.config.cooldown_length ?? 5,
+    member: params.message.member,
+  });
+  return true;
+}
+
+/**
+ * Whether this turn draws on a server's text quota once it runs on the server's credentials.
+ *
+ * Direct messages, system-initiated turns, reminder deliveries, and stop responses never count
+ * against a server's text quota. The caller decides the credential route separately, because a
+ * turn planned on personal credentials only reaches this quota if it falls back to the server.
+ */
+export function shouldApplyServerTextQuota(incoming: ChatIncoming, isDMChannel: boolean | undefined): boolean {
+  return (
+    incoming.textQuotaSource === "user" &&
+    !isDMChannel &&
+    !incoming.isStopResponse &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData?.self_reminder
   );
 }
 

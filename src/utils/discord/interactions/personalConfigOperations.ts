@@ -164,6 +164,12 @@ export interface PersonalConfigOperations {
     userDiscId: string;
     mode: "off" | "follow" | "on";
   }): Promise<{ status: "success" } | { status: "invalid-value" | "write-failed" }>;
+  setServerModelFallback(input: {
+    userId: number;
+    userDiscId: string;
+    current: boolean;
+    enabled: boolean;
+  }): Promise<{ status: "success"; enabled: boolean } | { status: "no-changes" | "write-failed" }>;
   setImpersonationPrompt(input: {
     userId: number;
     userDiscId: string;
@@ -658,6 +664,17 @@ export const personalConfigOperations: PersonalConfigOperations = {
     });
     if (!updated) return { status: "write-failed" };
     return { status: "success" };
+  },
+
+  async setServerModelFallback({ userId, userDiscId: _userDiscId, current, enabled }) {
+    if (current === enabled) {
+      return { status: "no-changes" };
+    }
+    const updated = await userRepository.update(userId, {
+      personal_server_fallback_enabled: enabled,
+    });
+    if (!updated) return { status: "write-failed" };
+    return { status: "success", enabled };
   },
 
   async setImpersonationPrompt({ userId, userDiscId, prompt }) {

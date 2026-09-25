@@ -906,7 +906,10 @@ describe("runToolLoop — contract tests", () => {
 
     expect(result.status).toBe("stopped_by_user");
     expect(toolExecuteCalls).toHaveLength(0);
-    expect(clearStopRequestCalls).toBe(0);
+    // The abort consumes the request: the stream's own stop check never ran on this path, and a
+    // request left behind would abort the channel's next turn at its pre-stream check.
+    expect(clearStopRequestCalls).toBe(1);
+    expect(hasStopRequest).toBe(false);
   });
 
   it("does not dispatch a tool whose arguments the provider truncated", async () => {

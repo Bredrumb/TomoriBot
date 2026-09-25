@@ -86,12 +86,24 @@ Si una solicitud falla mientras usas tu proveedor personal, los consejos de "Qu�
 del error nombran los comandos personales que realmente pueden arreglarlo (`/personal providers`,
 `/personal config`) en lugar de los de administrador del servidor.
 
+Cuando fallan todos los modelos de tu ruta de texto personal, TomoriBot puede responder con el
+modelo de texto del propio servidor en lugar de dejar el mensaje sin respuesta. Esa respuesta usa
+las credenciales del servidor y se descuenta de su cuota de texto, y respeta el tiempo de espera
+entre mensajes del servidor, así que un proveedor que falla en cada mensaje no se convierte en una
+respuesta por mensaje. Se reporta igual que cualquier
+otro respaldo de modelo: un botón **Respaldo utilizado** cuyos detalles nombran el modelo que
+respondió y las fallas anteriores. Puedes desactivarlo en `/personal config` > Modelos > Alternativas,
+en la sección **Respaldo al modelo del servidor**, para que las fallas de tu proveedor sigan siendo
+tuyas. La opción se aplica a toda la cuenta y está activada por defecto, así que te sigue a cada
+servidor que la permita.
+
 :::note[Servidores con BYOK obligatorio]
 Un servidor puede exigir proveedores provistos por los miembros con el modo BYOK de usuario
 ([Moderación del servidor](/es-419/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)).
 Cuando está activo, tus mensajes activados por usuario necesitan un proveedor personal antes de
-que pueda responder. Los proveedores personales se aplican en todos los servidores donde la
-uses.
+que pueda responder, y una ruta personal fallida sigue fallida: un servidor que no presta sus
+modelos a los miembros tampoco presta uno como respaldo. Los proveedores personales se aplican en
+todos los servidores donde la uses.
 :::
 
 ## Otros ajustes personales
@@ -104,6 +116,8 @@ uses.
   total** (optar por no participar de las funciones de memoria por completo).
 - `/personal config`: tu ajuste personal para el
   [Modo de activación deliberada](/es-419/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
+- `/personal config`: permite que el modelo de texto del servidor cubra una ruta de texto
+  personal fallida, o desactiva esa opción.
 - `/personal config`: activa el intercambio de memoria a corto plazo entre servidores;
   `/personal memories` borra tu STM.
 - `/personal config`: establece un prompt reutilizable para cuando te suplanta mediante

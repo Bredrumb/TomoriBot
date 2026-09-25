@@ -341,6 +341,16 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
       randomizer_enabled_detail: `O Randomizador de Modelos agora está ativado para {provider}.`,
       randomizer_disabled_heading: `Randomizador Desativado`,
       randomizer_disabled_detail: `O Randomizador de Modelos agora está desativado para {provider}.`,
+      server_fallback_section_title: `Fallback com o Modelo do Servidor`,
+      server_fallback_section_desc:
+        "Quando seu próprio provedor de texto falha, o modelo de texto deste servidor pode responder no lugar. Essa resposta usa as credenciais do servidor e a cota de texto dele, e um servidor que exige que todos tragam seu próprio provedor nunca empresta o modelo dele. Desative isso para que as falhas do seu provedor continuem sendo suas.",
+      server_fallback_effect_on: `Eu respondo com o modelo deste servidor quando seu próprio provedor falha`,
+      server_fallback_effect_off: `Eu paro em vez de pegar emprestado o modelo deste servidor`,
+      server_fallback_byok_notice: `Este servidor exige que os membros tragam o próprio provedor, então ele nunca empresta o modelo dele aqui`,
+      server_fallback_enabled_heading: `Fallback com o Modelo do Servidor Ativado`,
+      server_fallback_enabled_detail: `Um modelo do servidor responderá quando seu provedor de texto pessoal falhar.`,
+      server_fallback_disabled_heading: `Fallback com o Modelo do Servidor Desativado`,
+      server_fallback_disabled_detail: `As falhas do seu provedor de texto pessoal não vão mais usar um modelo do servidor como fallback.`,
       no_text_providers_fallbacks:
         "Nenhum provedor de texto pessoal salvo encontrado. Adicione um com `/personal providers`.",
       response_modes_title: `Modos de Resposta Pessoais`,

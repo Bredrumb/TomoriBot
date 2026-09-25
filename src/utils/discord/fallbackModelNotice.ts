@@ -22,6 +22,12 @@ interface SendFallbackModelUsageNoticeOptions {
   context: ToolContext;
   failures: FallbackNoticeAttempt[];
   successModel: LlmRow;
+  /**
+   * Names the account setting that turns this fallback off. Only a success on the server route of
+   * a turn that started on personal credentials has one, because every other route is either the
+   * server's own or a model the user configured themselves.
+   */
+  offerPersonalFallbackOptOut?: boolean;
 }
 
 // Characters reserved for the description text wrapping the failure list (slot/model prefix line),
@@ -44,7 +50,16 @@ function buildFailureList(locale: string, failures: FallbackNoticeAttempt[]): st
   return truncateForEmbedDescription(failureList, FAILURE_LIST_DESCRIPTION_RESERVE);
 }
 
-function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failures: FallbackNoticeAttempt[]): number {
+/**
+ * The fallback slot the receipt names for the model that answered.
+ *
+ * Both routes number their own configured slots, so a personal success names its personal slot and a
+ * server-route success names the server's. A model that is not in its route's fallback list is that
+ * route's own lead: it holds no slot, so the receipt reports the first model of the route that
+ * answered instead of borrowing a number from the failure count, which named a slot the reader
+ * cannot see anywhere on the page.
+ */
+export function resolveFallbackSlot(context: ToolContext, successModel: LlmRow): number {
   const configuredChainIndex = context.tomoriState.fallback_chain?.findIndex((entry) =>
     entry.kind === "llm"
       ? entry.model.llm_id === successModel.llm_id
@@ -61,15 +76,16 @@ function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failure
     return configuredFallbackIndex + 1;
   }
 
-  return Math.max(1, failures.length);
+  return 1;
 }
 
 export async function sendFallbackModelUsageNotice({
   context,
   failures,
   successModel,
+  offerPersonalFallbackOptOut = false,
 }: SendFallbackModelUsageNoticeOptions): Promise<void> {
-  const slot = resolveFallbackSlot(context, successModel, failures);
+  const slot = resolveFallbackSlot(context, successModel);
   const detailsOptions = {
     titleKey: "genai.fallback_used_title",
     descriptionKey: "genai.fallback_used_details_description",
@@ -87,11 +103,14 @@ export async function sendFallbackModelUsageNotice({
   }
 
   const modalTitle = localizer(context.locale, detailsOptions.titleKey);
+  const optOutFooter = offerPersonalFallbackOptOut
+    ? `\n-# ${localizer(context.locale, "genai.fallback_used_personal_opt_out_footer")}`
+    : "";
   const modalContent = `${localizer(
     context.locale,
     detailsOptions.descriptionKey,
     detailsOptions.descriptionVars,
-  )}\n\n-# ${localizer(context.locale, "genai.fallback_used_hide_footer")}`;
+  )}\n\n-# ${localizer(context.locale, "genai.fallback_used_hide_footer")}${optOutFooter}`;
 
   try {
     const buttonLabel = localizer(context.locale, "genai.fallback_used_details_button");

@@ -275,6 +275,7 @@ The v1 flat JSON shape described here survives only as compatibility input accep
 - `user_personalization_configs.impersonation_prompt` stores the global user-owned prompt used during `/impersonate user` user impersonation replies.
 - `user_personalization_configs.personal_dtm` stores the user-scoped deliberate trigger tri-state.
 - `user_personalization_configs.shortterm_cache_crossserver_opt_in` stores the cross-server short-term memory sharing opt-in.
+- `user_personalization_configs.personal_server_fallback_enabled` (BOOLEAN, default `true`, migration 085) is the account-wide answer to one question: may a failed personal text route fall back to the server's own text model. `false` withholds the server route entirely; the column is read from the cached user row at generation time, so the `/personal config` write invalidates that cache. A server that requires member-provided providers withholds its model regardless of this value.
 
 ### Personal spotlight routing
 

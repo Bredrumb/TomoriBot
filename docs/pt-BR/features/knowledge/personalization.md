@@ -80,11 +80,23 @@ Se uma solicitação falhar enquanto usa seu provedor pessoal, as dicas de "O qu
 os comandos pessoais que podem realmente corrigir o problema (`/personal providers`, `/personal config`)
 em vez dos comandos de gerente do servidor.
 
+Quando todos os modelos da sua rota de texto pessoal falham, a TomoriBot pode responder com o modelo
+de texto do próprio servidor em vez de deixar a mensagem sem resposta. Essa resposta usa as credenciais
+do servidor e é descontada da cota de texto dele, e respeita o cooldown de mensagens do servidor,
+então um provedor que falha em toda mensagem não vira uma resposta por mensagem. É relatada da mesma
+forma que qualquer outro
+fallback de modelo: um botão **Secundário Usado** cujos detalhes nomeiam o modelo que respondeu e as
+falhas que vieram antes. Desative isso em `/personal config` > Modelos > Reservas, na seção
+**Fallback com o Modelo do Servidor**, para que as falhas do seu provedor continuem sendo suas. A
+configuração vale para toda a conta e vem ativada por padrão, então ela acompanha você em todos os
+servidores que permitem isso.
+
 :::note[Servidores que exigem BYOK]
 Um servidor pode exigir provedores fornecidos pelos membros com o modo User BYOK
 ([Moderação do Servidor](/pt-BR/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)). Quando isso
-está ativado, suas mensagens acionadas por usuário precisam de um provedor pessoal antes que ela possa responder. Provedores
-pessoais se aplicam em todos os servidores em que você a usa.
+está ativado, suas mensagens acionadas por usuário precisam de um provedor pessoal antes que ela possa responder, e uma
+rota pessoal que falha continua falhando: um servidor que não cede seus modelos aos membros não empresta nenhum como
+fallback. Provedores pessoais se aplicam em todos os servidores em que você a usa.
 :::
 
 ## Outras Configurações Pessoais
@@ -97,6 +109,8 @@ pessoais se aplicam em todos os servidores em que você a usa.
   dos recursos de memória inteiramente).
 - `/personal config`: sua substituição pessoal para o
   [Modo de Gatilho Deliberado](/pt-BR/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
+- `/personal config`: permitir que o modelo de texto do servidor cubra uma rota de texto pessoal que
+  falhou, ou desativar isso.
 - `/personal config`: optar pela compartilhamento de memória de curto prazo entre servidores;
   `/personal memories` limpa sua STM.
 - `/personal config`: definir um prompt reutilizável para quando ela personifica você via

@@ -325,6 +325,42 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
   );
 }
 
+/**
+ * Sends the SDK-call timeout notice for an attempt.
+ *
+ * Usually sent while the attempt is still running. It is exported because a suppressed attempt
+ * defers it, and the generation-turn loop is the only caller that knows whether the model fallback
+ * it was suppressed for ever materialized.
+ */
+export async function sendStreamTimeoutNotice(params: {
+  channel: Parameters<typeof sendStandardEmbed>[0];
+  locale: string;
+  providerName: string;
+  textCredentialSource: "server" | "personal" | undefined;
+  sawStreamProgress: boolean;
+}): Promise<void> {
+  await sendStandardEmbed(params.channel, params.locale, {
+    titleKey: "genai.stream.inactivity_timeout_title",
+    descriptionKey: params.sawStreamProgress
+      ? "genai.stream.inactivity_timeout_description"
+      : "genai.stream.first_token_timeout_description",
+    color: ColorCode.WARN,
+    tipKeys:
+      params.providerName === "nvidia"
+        ? [
+            params.textCredentialSource === "personal"
+              ? "genai.tips.nvidia_register_free_model_personal"
+              : "genai.tips.nvidia_register_free_model",
+          ]
+        : undefined,
+  }).catch((embedError) => {
+    log.warn(
+      "Failed to send SDK call timeout embed",
+      embedError instanceof Error ? embedError : new Error(String(embedError)),
+    );
+  });
+}
+
 async function streamOnce(
   params: ToolLoopParams,
   accumulatedModelParts: Array<Record<string, unknown>>,
@@ -333,6 +369,8 @@ async function streamOnce(
   const channelId = params.context.channel.id;
   const abortController = new AbortController();
   params.context.streamingContext.abortSignal = abortController.signal;
+  // A notice held by an earlier attempt describes that attempt, not this one.
+  params.context.streamingContext.deferredTimeoutNotice = undefined;
   let timeoutId: NodeJS.Timeout | null = null;
 
   // Unified kill: aborts the HTTP request AND rejects the Promise.race.
@@ -419,30 +457,17 @@ async function streamOnce(
       await settleAbandonedStream(streamPromise);
 
       if (!params.context.streamingContext.suppressUserErrors) {
-        await sendStandardEmbed(
-          params.context.channel as Parameters<typeof sendStandardEmbed>[0],
-          params.context.locale,
-          {
-            titleKey: "genai.stream.inactivity_timeout_title",
-            descriptionKey: sawStreamProgress
-              ? "genai.stream.inactivity_timeout_description"
-              : "genai.stream.first_token_timeout_description",
-            color: ColorCode.WARN,
-            tipKeys:
-              providerName === "nvidia"
-                ? [
-                    params.context.streamingContext.textCredentialSource === "personal"
-                      ? "genai.tips.nvidia_register_free_model_personal"
-                      : "genai.tips.nvidia_register_free_model",
-                  ]
-                : undefined,
-          },
-        ).catch((embedError) => {
-          log.warn(
-            "Failed to send SDK call timeout embed",
-            embedError instanceof Error ? embedError : new Error(String(embedError)),
-          );
+        await sendStreamTimeoutNotice({
+          channel: params.context.channel as Parameters<typeof sendStandardEmbed>[0],
+          locale: params.context.locale,
+          providerName,
+          textCredentialSource: params.context.streamingContext.textCredentialSource,
+          sawStreamProgress,
         });
+      } else {
+        // The notice is held for the caller: this attempt was suppressed because a later model may
+        // still answer, and only the caller knows whether one did.
+        params.context.streamingContext.deferredTimeoutNotice = { providerName, sawStreamProgress };
       }
       return { status: "timeout", data: error };
     }
