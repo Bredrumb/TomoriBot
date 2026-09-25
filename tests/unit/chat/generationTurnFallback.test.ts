@@ -55,12 +55,23 @@ const fallbackNoticeCalls: Array<{
 const personalSavedConfigLoads: Array<{ userId: number; provider: string }> = [];
 // Records the server text quota admissions the fallback phase takes, so a test can tell an
 // admission that never happened from one that was granted.
-const textQuotaAdmissions: Array<{ triggerKey: string; isPersonaJob: boolean; userDiscId: string }> = [];
+const textQuotaAdmissions: Array<{
+  triggerKey: string;
+  isPersonaJob: boolean;
+  userDiscId: string;
+  notifyUser: boolean | undefined;
+}> = [];
 let textQuotaAdmissionResult: { allowed: boolean; state: TextQuotaTriggerState | null } = {
   allowed: true,
   state: null,
 };
 let textQuotaAdmissionFailure: Error | null = null;
+// Records the server cooldown admissions the fallback phase takes, and decides their answer.
+const cooldownAdmissions: Array<{ serverDiscId: string; cooldownUserDiscId: string; notifyUser: boolean | undefined }> =
+  [];
+let cooldownAdmissionResult = true;
+// Records the timeout notices the fallback phase resends for a suppressed attempt.
+const timeoutNotices: Array<{ providerName: string; sawStreamProgress: boolean }> = [];
 const testStopRequests = new Map<string, { type: "stop" | "follow_up"; stopContext?: TestStopContext }>();
 let personalOverlayState: TomoriState | null = null;
 
@@ -187,14 +198,30 @@ scopedMock.module("@/utils/chat/admissionGuards", () => ({
     isPersonaJob: boolean;
     userDiscId: string;
     shouldApplyTextQuota: boolean;
+    notifyUser?: boolean;
   }) => {
     textQuotaAdmissions.push({
       triggerKey: params.triggerKey,
       isPersonaJob: params.isPersonaJob,
       userDiscId: params.userDiscId,
+      notifyUser: params.notifyUser,
     });
     if (textQuotaAdmissionFailure) throw textQuotaAdmissionFailure;
     return textQuotaAdmissionResult;
+  },
+  // The real cooldown admission reads and writes cooldown rows; the phase's own decision to ask at
+  // all is what these tests are about, so the answer is supplied here.
+  enforceServerTriggerCooldownForAdmission: async (params: {
+    serverDiscId: string;
+    cooldownUserDiscId: string;
+    notifyUser?: boolean;
+  }) => {
+    cooldownAdmissions.push({
+      serverDiscId: params.serverDiscId,
+      cooldownUserDiscId: params.cooldownUserDiscId,
+      notifyUser: params.notifyUser,
+    });
+    return cooldownAdmissionResult;
   },
 }));
 
@@ -286,6 +313,9 @@ scopedMock.module("@/utils/chat/toolLoop", () => ({
     return families[providerName.toLowerCase()] === apiFamily;
   },
   runToolLoop: runToolLoopMock,
+  sendStreamTimeoutNotice: async (params: { providerName: string; sawStreamProgress: boolean }) => {
+    timeoutNotices.push({ providerName: params.providerName, sawStreamProgress: params.sawStreamProgress });
+  },
 }));
 
 // The verbatim schema dump resolves the offering tool set through the registry, which starts empty
@@ -331,6 +361,9 @@ type FunctionHistoryEntry = {
 
 async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnResult> {
   if (queuedResults.length > 0) {
+    // Mirrors the real tool loop's per-attempt bookkeeping: a notice an earlier attempt held back
+    // describes that attempt, not this one.
+    params.context.streamingContext.deferredTimeoutNotice = undefined;
     toolLoopCalls.push({
       model: params.tomoriState.llm.llm_codename,
       suppressUserErrors: params.context.streamingContext.suppressUserErrors,
@@ -348,6 +381,16 @@ async function runToolLoopMock(params: ToolLoopParams): Promise<GenerationTurnRe
     const next = queuedResults.shift();
     if (!next) {
       throw new Error("No queued generation result for test");
+    }
+    if (next.status === "timeout") {
+      // Mirrors the real tool loop: an SDK-call timeout sends its notice inline when the user can
+      // see errors, and otherwise leaves it for the caller that knows whether a fallback answered.
+      const notice = { providerName: params.tomoriState.llm.llm_provider, sawStreamProgress: true };
+      if (params.context.streamingContext.suppressUserErrors) {
+        params.context.streamingContext.deferredTimeoutNotice = notice;
+      } else {
+        timeoutNotices.push(notice);
+      }
     }
     return next;
   }
@@ -613,6 +656,7 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
 function makePersonalContext(serverPrimary: LlmRow, serverFallback: LlmRow, personalPrimary: LlmRow): ChatTurnContext {
   const context = makeContext(serverPrimary, serverFallback);
   context.textCredentialSource = "personal";
+  context.streamingContext.textCredentialSource = "personal";
   context.personalRoutingUserId = 4;
   context.personalTextProvider = "openrouter";
   personalOverlayState = {
@@ -685,6 +729,9 @@ describe("runGenerationTurn fallback behavior", () => {
       state: { serverId: 1, userDiscId: "user_1", consumed: false, createdAt: Date.now() },
     };
     textQuotaAdmissionFailure = null;
+    cooldownAdmissions.length = 0;
+    cooldownAdmissionResult = true;
+    timeoutNotices.length = 0;
     personalOverlayState = null;
 
     const { StreamOrchestrator } = await import("@/utils/discord/streamOrchestrator");
@@ -815,7 +862,9 @@ describe("runGenerationTurn fallback behavior", () => {
       { model: "server-fallback", apiKey: "server-key" },
     ]);
     // The server's model spends the server's text quota, and only a later success may consume it.
-    expect(textQuotaAdmissions).toEqual([{ triggerKey: "trigger_1", isPersonaJob: false, userDiscId: "user_1" }]);
+    expect(textQuotaAdmissions).toEqual([
+      { triggerKey: "trigger_1", isPersonaJob: false, userDiscId: "user_1", notifyUser: true },
+    ]);
     expect(context.shouldApplyTextQuota).toBe(true);
     expect(context.textQuotaState?.consumed).toBe(false);
     expect(fallbackNoticeCalls).toHaveLength(1);
@@ -973,6 +1022,167 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(context.textQuotaState?.consumed).toBe(false);
     expect(result.personaResponses).toHaveLength(0);
     expect(fallbackNoticeCalls).toHaveLength(0);
+  });
+
+  it("refuses the server model fallback while the server's message cooldown is active", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    cooldownAdmissionResult = false;
+    queuedResults.push(personalRouteFailure());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(cooldownAdmissions).toEqual([{ serverDiscId: "server_1", cooldownUserDiscId: "user_1", notifyUser: true }]);
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary"]);
+    // The refusal short-circuits the quota admission: nothing is answered, so nothing is charged.
+    expect(textQuotaAdmissions).toHaveLength(0);
+    expect(result.status).toBe("error");
+  });
+
+  it("admits the server route through the server's cooldown when it is clear", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(cooldownAdmissions).toHaveLength(1);
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary"]);
+  });
+
+  it("skips the server cooldown admission for a persona job that shares its group's", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.isPersonaJob = true;
+    context.turn.lockedTurn.admission.incoming.isPersonaJob = true;
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(cooldownAdmissions).toHaveLength(0);
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary"]);
+  });
+
+  it("hands the answering route to the rest of the turn once the server takes over", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    // The thought-log attribution and the error tips both read these: a server-paid reply must not
+    // keep reporting the user's own provider as the payer.
+    expect(context.textCredentialSource).toBe("server");
+    expect(context.streamingContext.textCredentialSource).toBe("server");
+  });
+
+  it("leaves the credential source alone when the personal route answered", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    queuedResults.push(successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(context.textCredentialSource).toBe("personal");
+    expect(context.streamingContext.textCredentialSource).toBe("personal");
+  });
+
+  it("resends a suppressed timeout notice when the server route contributes nothing", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    textQuotaAdmissionResult = { allowed: false, state: null };
+    queuedResults.push({
+      status: "timeout",
+      streamResults: [{ status: "timeout", data: new Error("SDK_CALL_TIMEOUT: provider call timed out.") }],
+      personaResponses: [],
+    });
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(result.status).toBe("timeout");
+    // Without this the turn ends in silence: no error result carries a timeout.
+    expect(timeoutNotices).toEqual([{ providerName: "google", sawStreamProgress: true }]);
+    expect(context.streamingContext.deferredTimeoutNotice).toBeUndefined();
+  });
+
+  it("keeps the deferred timeout notice for the attempt that the server route replaced", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    queuedResults.push(
+      {
+        status: "timeout",
+        streamResults: [{ status: "timeout", data: new Error("SDK_CALL_TIMEOUT: provider call timed out.") }],
+        personaResponses: [],
+      },
+      successfulReply(),
+    );
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(result.status).toBe("completed");
+    // The server answered, so the personal timeout is superseded rather than reported.
+    expect(timeoutNotices).toHaveLength(0);
+    expect(context.streamingContext.deferredTimeoutNotice).toBeUndefined();
+  });
+
+  it("reports one refused quota for a trigger that runs several persona turns", async () => {
+    textQuotaAdmissionResult = { allowed: false, state: null };
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+
+    const firstContext = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    firstContext.textQuotaTriggerKey = "trigger_dedupe";
+    queuedResults.push(personalRouteFailure());
+    await runGenerationTurn(firstContext, collectingSink());
+
+    const secondContext = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    secondContext.textQuotaTriggerKey = "trigger_dedupe";
+    queuedResults.push(personalRouteFailure());
+    await runGenerationTurn(secondContext, collectingSink());
+
+    expect(textQuotaAdmissions.map((admission) => admission.notifyUser)).toEqual([true, false]);
   });
 
   it("does not offer the personal fallback opt-out when a personal fallback answered", async () => {

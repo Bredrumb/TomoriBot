@@ -334,8 +334,9 @@ export default {
       server_fallback_section_title: `伺服器模型備援`,
       server_fallback_section_desc:
         "當你自己的文字供應商失敗時，這個伺服器的文字模型可以代為回覆。那次回覆會使用伺服器的憑證，也會消耗它的文字額度，而要求所有人自備供應商的伺服器永遠不會把模型借給成員。關掉這個選項，你供應商的失敗就留在你這邊。",
-      server_fallback_effect_on: `你自己的供應商失敗時，我會改用伺服器模型回覆`,
+      server_fallback_effect_on: `你自己的供應商失敗時，我會改用這個伺服器的模型回覆`,
       server_fallback_effect_off: `我會直接停下來，不借用這個伺服器的模型`,
+      server_fallback_byok_notice: `這個伺服器要求成員自備供應商，所以在這裡不會出借它的模型`,
       server_fallback_enabled_heading: `伺服器模型備援已啟用`,
       server_fallback_enabled_detail: `你的個人文字供應商失敗時，會由伺服器模型代為回覆。`,
       server_fallback_disabled_heading: `伺服器模型備援已停用`,

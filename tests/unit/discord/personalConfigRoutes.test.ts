@@ -8354,6 +8354,31 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           ).slice(1, -1),
         );
       });
+
+      it("says so when the current server never lends its model, whatever the setting reads", () => {
+        const buildPayload = (userByokMode: boolean) =>
+          buildPersonalConfigPanelPayload({
+            locale: "en-US",
+            category: "models",
+            page: "fallbacks",
+            user: makeUser(),
+            resolvedNickname: "Tester",
+            personas: [],
+            guildId: "guild-123",
+            memoryCount: 0,
+            stmCount: 0,
+            readStatus: "fresh",
+            serverModelAccess: { userByokMode },
+          });
+
+        // The runtime wrapper re-marks prose continuation lines, so the notice is matched as rendered.
+        const notice = JSON.stringify(
+          formatPanelProse(`-# ${localizedCopy("en-US", "commands.personal.config.server_fallback_byok_notice")}`),
+        ).slice(1, -1);
+
+        expect(JSON.stringify(buildPayload(true))).toContain(notice);
+        expect(JSON.stringify(buildPayload(false))).not.toContain(notice);
+      });
     });
 
     describe("Execution of crossserver-set and crossserver-toggle", () => {

@@ -88,7 +88,9 @@ del error nombran los comandos personales que realmente pueden arreglarlo (`/per
 
 Cuando fallan todos los modelos de tu ruta de texto personal, TomoriBot puede responder con el
 modelo de texto del propio servidor en lugar de dejar el mensaje sin respuesta. Esa respuesta usa
-las credenciales del servidor y se descuenta de su cuota de texto, y se reporta igual que cualquier
+las credenciales del servidor y se descuenta de su cuota de texto, y respeta el tiempo de espera
+entre mensajes del servidor, así que un proveedor que falla en cada mensaje no se convierte en una
+respuesta por mensaje. Se reporta igual que cualquier
 otro respaldo de modelo: un botón **Respaldo utilizado** cuyos detalles nombran el modelo que
 respondió y las fallas anteriores. Puedes desactivarlo en `/personal config` > Modelos > Alternativas,
 en la sección **Respaldo al modelo del servidor**, para que las fallas de tu proveedor sigan siendo

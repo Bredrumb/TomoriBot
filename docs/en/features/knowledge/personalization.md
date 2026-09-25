@@ -81,11 +81,12 @@ rather than the server-manager ones.
 
 When every model on your personal text route fails, TomoriBot can answer with the server's own
 text model instead of leaving the message unanswered. That answer runs on the server's
-credentials and counts against the server's text quota, and it is reported the same way as any
-other model fallback: a **Fallback Used** button whose details name the model that answered and
-the failures that came before it. Turn it off in `/personal config` > Models > Fallbacks, in the
-**Server Model Fallback** section, to keep your provider's failures yours. The setting is
-account-wide and on by default, so it follows you to every server that allows it.
+credentials, counts against the server's text quota, and respects the server's message cooldown,
+so a provider that fails on every message does not become a reply per message. It is reported the
+same way as any other model fallback: a **Fallback Used** button whose details name the model that
+answered and the failures that came before it. Turn it off in `/personal config` > Models >
+Fallbacks, in the **Server Model Fallback** section, to keep your provider's failures yours. The
+setting is account-wide and on by default, so it follows you to every server that allows it.
 
 :::note[BYOK-required servers]
 A server can require member-provided providers with User BYOK mode

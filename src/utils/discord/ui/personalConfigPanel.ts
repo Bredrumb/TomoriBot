@@ -164,6 +164,8 @@ export interface PersonalConfigPanelRenderInput {
   modelDisplayInfo?: PersonalConfigModelDisplayInfo;
   spotlightDisplayInfo?: PersonalConfigSpotlightDisplayInfo;
   serverTriggerBehavior?: { deliberate_trigger_mode: boolean; deliberate_tool_mode: boolean } | null;
+  /** Whether the current server lends its own models to member-triggered turns. */
+  serverModelAccess?: { userByokMode: boolean } | null;
   view?: PersonalConfigPanelView;
 }
 
@@ -1535,8 +1537,8 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
       // Account-wide rather than provider-scoped, so it renders with or without a saved personal
       // text provider: the fallback notice names this page as the place to turn it off, and a
       // pointer to a control that is not on screen is worse than one reporting nothing to act on.
-      // Only an explicit opt-out reads as Off, so a row written before the setting existed shows
-      // the fallback it still has.
+      // Only an explicit opt-out reads as Off: the column defaults to true and the projection
+      // reports that default for an account with no personalization row yet.
       const isServerFallbackOn = user.personal_server_fallback_enabled !== false;
 
       components.push(
@@ -1579,7 +1581,11 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
             isServerFallbackOn
               ? "commands.personal.config.server_fallback_effect_on"
               : "commands.personal.config.server_fallback_effect_off",
-          )}`,
+          )}${
+            input.serverModelAccess?.userByokMode
+              ? `\n-# ${localizer(locale, "commands.personal.config.server_fallback_byok_notice")}`
+              : ""
+          }`,
         },
       );
     }

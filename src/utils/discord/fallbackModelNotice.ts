@@ -50,7 +50,16 @@ function buildFailureList(locale: string, failures: FallbackNoticeAttempt[]): st
   return truncateForEmbedDescription(failureList, FAILURE_LIST_DESCRIPTION_RESERVE);
 }
 
-function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failures: FallbackNoticeAttempt[]): number {
+/**
+ * The fallback slot the receipt names for the model that answered.
+ *
+ * Both routes number their own configured slots, so a personal success names its personal slot and a
+ * server-route success names the server's. A model that is not in its route's fallback list is that
+ * route's own lead: it holds no slot, so the receipt reports the first model of the route that
+ * answered instead of borrowing a number from the failure count, which named a slot the reader
+ * cannot see anywhere on the page.
+ */
+export function resolveFallbackSlot(context: ToolContext, successModel: LlmRow): number {
   const configuredChainIndex = context.tomoriState.fallback_chain?.findIndex((entry) =>
     entry.kind === "llm"
       ? entry.model.llm_id === successModel.llm_id
@@ -67,7 +76,7 @@ function resolveFallbackSlot(context: ToolContext, successModel: LlmRow, failure
     return configuredFallbackIndex + 1;
   }
 
-  return Math.max(1, failures.length);
+  return 1;
 }
 
 export async function sendFallbackModelUsageNotice({
@@ -76,7 +85,7 @@ export async function sendFallbackModelUsageNotice({
   successModel,
   offerPersonalFallbackOptOut = false,
 }: SendFallbackModelUsageNoticeOptions): Promise<void> {
-  const slot = resolveFallbackSlot(context, successModel, failures);
+  const slot = resolveFallbackSlot(context, successModel);
   const detailsOptions = {
     titleKey: "genai.fallback_used_title",
     descriptionKey: "genai.fallback_used_details_description",

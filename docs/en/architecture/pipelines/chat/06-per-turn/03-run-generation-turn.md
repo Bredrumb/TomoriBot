@@ -4,7 +4,7 @@ title: "06.3: Generation Turn"
 
 Drive the provider call with model fallback and API-key rotation.
 
-**File:** `src/utils/chat/generationTurn.ts:76-200` (`runGenerationTurn` and the attempt loop)
+**File:** `src/utils/chat/generationTurn.ts:77-283` (`runGenerationTurn` and the attempt loop)
 
 ## Mission
 
@@ -98,31 +98,52 @@ a non-error result *and* the loop falls through (rare; defensive).
   so there is nothing to extend with.
 - Is materialized once, and only after every planned attempt has failed on an
   `error`/`timeout`. Until then nothing about the server route is resolved: no
-  server provider config, no server key, no quota admission.
+  server provider config, no server key, no admission. The extension runs from the
+  attempt loop, not from the plan builder.
 - Rebuilds its pool from the **unmodified** server state
-  (`resolveServerTomoriState`: persona server model, channel override, then
-  `llmOverrideCodename`), so each attempt carries the server's credentials and the
-  server's own randomizer draw even when both routes name models from one provider.
-  Attempt numbering continues from the planned route, so log labels stay unique.
+  (`resolveTomoriStateForRoute(context, "server")`: persona server model, channel
+  override, then `llmOverrideCodename`), so each attempt carries the server's
+  credentials even when both routes name models from one provider. Attempt numbering
+  continues from the planned route, so log labels stay unique.
 - Is withheld when the server sets `user_byok_mode`: the server does not lend its
   models to member-triggered turns, so a failure on member credentials is the turn's
   outcome rather than a reason to reach for them.
 - Is withheld when the account set `personal_server_fallback_enabled` to `false` in
-  `/personal config` > Models > Fallbacks. An unset value keeps the fallback.
-- Admits itself against the server's text quota before building any attempt.
-  `admitServerRouteTextQuota` reuses `checkTextQuotaForAdmission` with the same
-  applicability predicate planning uses (`shouldApplyServerTextQuota`). Planning
-  exempted this turn because personal credentials were paying; the server's model is
-  not exempt. A refused admission contributes no attempts, so the personal failure
-  stays the outcome, and the quota embed planning would have sent is sent here.
-- A granted admission arms `context.shouldApplyTextQuota` and
+  `/personal config` > Models > Fallbacks. The column defaults to `true` and the
+  projection reports that default, so only an explicit opt-out withholds it.
+- Admits itself against the server's own rules before building any attempt
+  (`admitServerRoute`), because planning skipped both of them while the personal route
+  was paying. A refused admission contributes no attempts, so the personal failure
+  stays the outcome:
+  - **Message cooldown.** `admitServerRouteCooldown` runs the same
+    `enforceServerTriggerCooldownForAdmission` planning runs for a server-sourced turn,
+    under the same exemptions (stop responses, persona jobs, the bot's own messages).
+    Without it, a personal provider that fails on every message would buy a server reply
+    on every message for as long as the server's quota allows, and a server that leaves
+    quota off would never stop at all.
+  - **Text quota.** `admitServerRouteTextQuota` reuses `checkTextQuotaForAdmission` with
+    the applicability predicate planning uses (`shouldApplyServerTextQuota`). A refusal
+    is reported once per trigger: a refusal stores no quota state, so a reply that runs
+    several persona turns would otherwise take the check again and post one quota embed
+    per turn (`markTextQuotaRefused` / `hasTextQuotaBeenRefused`).
+- A granted quota admission arms `context.shouldApplyTextQuota` and
   `context.textQuotaState`, which is what makes post-turn consumption charge the
   server. Consumption itself stays in post-turn effects and still requires a reply,
   so a server route that also fails costs the quota nothing.
+- Once it contributes an attempt, the turn's reported credential source switches to
+  `server` on both `ChatTurnContext` and `StreamingContext`. Everything downstream reads
+  that field as "who is answering": the thought-log attribution no longer credits the
+  user's personal provider, and a failing server attempt gets server-scoped recovery
+  tips instead of "switch your personal model".
+- A suppressed attempt holds its SDK-call timeout notice back while a fallback is still
+  pending (`StreamingContext.deferredTimeoutNotice`). If the server route then
+  contributes nothing, the terminal branch resends it, because no error result carries a
+  timeout and the turn would otherwise end in silence.
 - A success on this route is the only fallback that names an opt-out: the
   `Fallback Used` details modal then points at `/personal config` > Models >
   Fallbacks through `offerPersonalFallbackOptOut`. A personal-route success has no
-  such control to point at.
+  such control to point at, and a model that is its route's own lead reports slot 1
+  rather than a fallback slot it does not hold.
 
 **Per-attempt context prep (`prepareProviderContextItems`):**
 
@@ -161,11 +182,9 @@ a non-error result *and* the loop falls through (rare; defensive).
   interrupt is pending for the channel.
 - On non-error or last attempt: emits only final error results, calls
   `responseSink.finalize(result)`, and returns.
-- Reaching the last planned attempt with a retryable result is when the server route
-  extension is invoked. It counts as a pending model for that attempt, so the
-  attempt's errors stay suppressed while a server model may still answer; a refused
-  or empty extension leaves the attempt terminal, and the terminal branch resets
-  suppression before emitting the error.
+- A pending server route counts as a pending model, so the last planned attempt keeps its
+  errors suppressed while a server model may still answer. The terminal branch resets
+  suppression before emitting the error, and reports a held-back timeout notice.
 - On thrown error: calls `responseSink.emitError(error)` and finalizes with
   an `error` result, except under user impersonation, where `emitError`
   rethrows by design and neither the `error` result nor `finalize` is reached.

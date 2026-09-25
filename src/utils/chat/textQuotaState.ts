@@ -10,11 +10,33 @@ export interface TextQuotaTriggerState {
 }
 
 export const textQuotaTriggerStates = new Map<string, TextQuotaTriggerState>();
+
+/**
+ * Trigger keys whose server-side admission was refused, by the time it was refused.
+ *
+ * A refusal stores no quota state (nothing was granted), so without this a reply that runs several
+ * persona turns against one trigger would take the check again and post one quota embed per turn.
+ */
+const refusedTextQuotaTriggers = new Map<string, number>();
+
+export function markTextQuotaRefused(triggerKey: string): void {
+  refusedTextQuotaTriggers.set(triggerKey, Date.now());
+}
+
+export function hasTextQuotaBeenRefused(triggerKey: string): boolean {
+  return refusedTextQuotaTriggers.has(triggerKey);
+}
+
 export function cleanupTextQuotaTriggerStates(): void {
   const now = Date.now();
   for (const [triggerKey, state] of textQuotaTriggerStates.entries()) {
     if (now - state.createdAt >= TEXT_QUOTA_TRIGGER_TTL_MS) {
       textQuotaTriggerStates.delete(triggerKey);
+    }
+  }
+  for (const [triggerKey, refusedAt] of refusedTextQuotaTriggers.entries()) {
+    if (now - refusedAt >= TEXT_QUOTA_TRIGGER_TTL_MS) {
+      refusedTextQuotaTriggers.delete(triggerKey);
     }
   }
 }

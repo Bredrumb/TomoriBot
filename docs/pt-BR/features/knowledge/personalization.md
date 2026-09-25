@@ -82,7 +82,9 @@ em vez dos comandos de gerente do servidor.
 
 Quando todos os modelos da sua rota de texto pessoal falham, a TomoriBot pode responder com o modelo
 de texto do próprio servidor em vez de deixar a mensagem sem resposta. Essa resposta usa as credenciais
-do servidor e é descontada da cota de texto dele, e é relatada da mesma forma que qualquer outro
+do servidor e é descontada da cota de texto dele, e respeita o cooldown de mensagens do servidor,
+então um provedor que falha em toda mensagem não vira uma resposta por mensagem. É relatada da mesma
+forma que qualquer outro
 fallback de modelo: um botão **Secundário Usado** cujos detalhes nomeiam o modelo que respondeu e as
 falhas que vieram antes. Desative isso em `/personal config` > Modelos > Reservas, na seção
 **Fallback com o Modelo do Servidor**, para que as falhas do seu provedor continuem sendo suas. A

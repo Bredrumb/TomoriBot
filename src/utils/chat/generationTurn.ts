@@ -31,9 +31,14 @@ import {
 } from "@/utils/security/keyRotation";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import { buildVerbatimToolDefinitionsContextItem } from "@/utils/text/context/toolDefinitions";
-import { checkTextQuotaForAdmission, shouldApplyServerTextQuota } from "@/utils/chat/admissionGuards";
+import {
+  checkTextQuotaForAdmission,
+  enforceServerTriggerCooldownForAdmission,
+  shouldApplyServerTextQuota,
+} from "@/utils/chat/admissionGuards";
+import { hasTextQuotaBeenRefused, markTextQuotaRefused } from "@/utils/chat/textQuotaState";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
-import { providerIsApiFamily, runToolLoop } from "@/utils/chat/toolLoop";
+import { providerIsApiFamily, runToolLoop, sendStreamTimeoutNotice } from "@/utils/chat/toolLoop";
 import {
   VERBATIM_TOOL_CALLING_CONTEXT_DEPTH,
   VERBATIM_TOOL_CALLING_NUDGE,
@@ -215,6 +220,11 @@ async function runGenerationAttempts(
         if (serverAttempts.length > 0) {
           serverRouteStartIndex = attempts.length;
           attempts.push(...serverAttempts);
+          // The server is paying from here on, and everything downstream reads the credential source
+          // as "who is answering": the thought-log attribution and the error tips would otherwise
+          // keep naming the user's own provider for a reply the server produced.
+          context.textCredentialSource = "server";
+          context.streamingContext.textCredentialSource = "server";
         }
       }
 
@@ -227,6 +237,14 @@ async function runGenerationAttempts(
         }
         setStreamUserErrorSuppression(context, false);
         context.streamingContext.forceModelFallback = false;
+
+        // A timeout notice is normally sent while its attempt is still running, and it is held back
+        // when a later model may still answer. If the server route then contributed nothing, this is
+        // the only place left to report it: no error result carries a timeout, so the branch below
+        // would leave the user with silence.
+        if (result.status === "timeout") {
+          await sendDeferredTimeoutNoticeIfPending(context);
+        }
 
         if (result.status === "error") {
           await emitStreamErrors(responseSink, result.streamResults);
@@ -328,8 +346,9 @@ function resolveServerRouteExtension(
     );
     return null;
   }
-  // Only an explicit opt-out withholds the route. A row from before the setting existed carries no
-  // value at all, and that account keeps the fallback it already had.
+  // Only an explicit opt-out withholds the route. The column is NOT NULL DEFAULT true and the
+  // projection reports that default for an account with no personalization row yet, so an account
+  // that never touched the setting keeps the fallback it already had.
   if (context.turn.userRow.personal_server_fallback_enabled === false) {
     log.info(`Skipping the server model fallback for user ${context.userDiscId}: disabled in their personal config.`);
     return null;
@@ -339,7 +358,7 @@ function resolveServerRouteExtension(
 
 async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
-  const primaryState = await resolvePrimaryTomoriState(context);
+  const primaryState = await resolveTomoriStateForRoute(context, "planned");
   const fallbackEntries = resolveFallbackEntries(primaryState);
 
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
@@ -384,11 +403,11 @@ async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<Gene
  */
 async function buildServerRouteAttempts(context: ChatTurnContext, startIndex: number): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
-  if (!(await admitServerRouteTextQuota(context))) {
+  if (!(await admitServerRoute(context))) {
     return [];
   }
 
-  const serverState = await resolveServerTomoriState(context);
+  const serverState = await resolveTomoriStateForRoute(context, "server");
   const serverPool: FallbackEntry[] = [{ kind: "llm", model: serverState.llm }, ...resolveFallbackEntries(serverState)];
   applyModelRandomizer(serverPool, serverState.config.model_randomizer_enabled);
 
@@ -429,6 +448,50 @@ function applyModelRandomizer(pool: FallbackEntry[], enabled: boolean): void {
 }
 
 /**
+ * Applies the server's own admissions to the route a personal turn is about to borrow.
+ *
+ * Planning skipped both of them because the personal route was paying: the message-trigger
+ * cooldown and the text quota. The server's model is exempt from neither, and a refusal here
+ * contributes no attempts, so the personal failure stays the outcome.
+ */
+async function admitServerRoute(context: ChatTurnContext): Promise<boolean> {
+  if (!(await admitServerRouteCooldown(context))) {
+    return false;
+  }
+  return await admitServerRouteTextQuota(context);
+}
+
+/**
+ * Applies the server's message-trigger cooldown, which planning only runs for server-sourced turns.
+ *
+ * Without it a broken personal provider would buy a server reply on every message within reach of
+ * the server's quota, and a server that leaves quota off would never stop at all.
+ */
+async function admitServerRouteCooldown(context: ChatTurnContext): Promise<boolean> {
+  const incoming = context.turn.lockedTurn.admission.incoming;
+  // The exemptions planning applies: a stop response, a persona job that shares its group's
+  // admission, and the bot's own message (same predicate that produced `turn.isSelfMessage`).
+  if (incoming.isStopResponse || incoming.isPersonaJob || context.isSelfMessage) {
+    return true;
+  }
+
+  const allowed = await enforceServerTriggerCooldownForAdmission({
+    serverDiscId: context.serverDiscId,
+    cooldownUserDiscId: context.turn.lockedTurn.admission.cooldownUserDiscId ?? context.userDiscId,
+    message: context.message,
+    tomoriState: context.currentPersona,
+    locale: context.locale,
+    notifyUser: context.shouldSurfaceUserErrors,
+  });
+  if (!allowed) {
+    log.info(
+      `Refusing the server model fallback for user ${context.userDiscId}: the server's message cooldown is active.`,
+    );
+  }
+  return allowed;
+}
+
+/**
  * Admits the server route against the server's text quota and arms the post-turn consumption.
  *
  * Planning exempts a personal turn from server text quota because it spends the user's own
@@ -441,6 +504,10 @@ async function admitServerRouteTextQuota(context: ChatTurnContext): Promise<bool
     return true;
   }
 
+  // The embed is sent once for the trigger: a refusal grants nothing, so a later persona turn in
+  // the same reply would otherwise re-check and re-post the same notice.
+  const alreadyReported = hasTextQuotaBeenRefused(context.textQuotaTriggerKey);
+
   const quota = await checkTextQuotaForAdmission({
     shouldApplyTextQuota: true,
     // A persona job normally reuses its group's admission, but a group whose earlier turns all ran
@@ -452,10 +519,11 @@ async function admitServerRouteTextQuota(context: ChatTurnContext): Promise<bool
       incoming.textQuotaUserDiscId ?? context.turn.lockedTurn.admission.cooldownUserDiscId ?? context.userDiscId,
     channel: context.channel as SendableChannel,
     locale: context.locale,
-    notifyUser: context.shouldSurfaceUserErrors,
+    notifyUser: context.shouldSurfaceUserErrors && !alreadyReported,
   });
 
   if (!quota.allowed) {
+    markTextQuotaRefused(context.textQuotaTriggerKey);
     log.info(`Refusing the server model fallback for user ${context.userDiscId}: the server text quota is exhausted.`);
     return false;
   }
@@ -544,6 +612,28 @@ async function sendFallbackNoticeIfNeeded(
   });
 }
 
+/**
+ * Sends the timeout notice an attempt deferred while a model fallback was still pending.
+ *
+ * Only reaches the caller when nothing followed that attempt, which is exactly the case where the
+ * user would otherwise see no reason for the silence.
+ */
+async function sendDeferredTimeoutNoticeIfPending(context: ChatTurnContext): Promise<void> {
+  const notice = context.streamingContext.deferredTimeoutNotice;
+  if (!notice) {
+    return;
+  }
+  context.streamingContext.deferredTimeoutNotice = undefined;
+
+  await sendStreamTimeoutNotice({
+    channel: context.channel as SendableChannel,
+    locale: context.locale,
+    providerName: notice.providerName,
+    textCredentialSource: context.streamingContext.textCredentialSource,
+    sawStreamProgress: notice.sawStreamProgress,
+  });
+}
+
 function shouldSendFallbackNotice(context: ChatTurnContext, result: GenerationTurnResult): boolean {
   if (result.status !== "completed") {
     return false;
@@ -560,48 +650,35 @@ function shouldSendFallbackNotice(context: ChatTurnContext, result: GenerationTu
   return false;
 }
 
-async function resolvePrimaryTomoriState(context: ChatTurnContext): Promise<TomoriState> {
+/**
+ * Which routing rules a resolved state should draw on.
+ *
+ * `planned` is the route the turn was planned on: a personal text route applies the
+ * personal-provider overlay and ignores the channel override, and every other turn resolves the
+ * server route exactly as `server` does. `server` is the route a personal turn falls back to, which
+ * never applies the overlay.
+ */
+type TextRoute = "planned" | "server";
+
+async function resolveTomoriStateForRoute(context: ChatTurnContext, route: TextRoute): Promise<TomoriState> {
   const incoming = context.turn.lockedTurn.admission.incoming;
-  const personalBase =
-    context.textCredentialSource === "personal"
-      ? (await applyPersonalProviderSelectionsToTomoriState(context.currentPersona, context.personalRoutingUserId))
-          .tomoriState
-      : context.currentPersona;
+  const usePersonalRoute = route === "planned" && context.textCredentialSource === "personal";
+  const base = usePersonalRoute
+    ? (await applyPersonalProviderSelectionsToTomoriState(context.currentPersona, context.personalRoutingUserId))
+        .tomoriState
+    : context.currentPersona;
   const channelLlmOverride =
-    context.isUserImpersonation || context.textCredentialSource === "personal"
+    context.isUserImpersonation || usePersonalRoute
       ? null
       : await getCachedChannelLlm(context.currentPersona.server_id, context.channel.id);
   const effectiveLlm =
-    context.textCredentialSource === "personal" || context.isUserImpersonation
-      ? personalBase.llm
-      : (personalBase.persona_llm ?? channelLlmOverride ?? personalBase.llm);
+    usePersonalRoute || context.isUserImpersonation ? base.llm : (base.persona_llm ?? channelLlmOverride ?? base.llm);
   const overriddenLlm = incoming.llmOverrideCodename
     ? { ...effectiveLlm, llm_codename: incoming.llmOverrideCodename }
     : effectiveLlm;
-  let state: TomoriState = { ...personalBase, llm: overriddenLlm };
+  let state: TomoriState = { ...base, llm: overriddenLlm };
 
-  if (overriddenLlm.llm_provider.toLowerCase() !== personalBase.llm.llm_provider.toLowerCase()) {
-    state = await applySavedProviderConfig(state, overriddenLlm.llm_provider);
-  }
-
-  return state;
-}
-
-/** Resolves the server's normal text route without applying a personal-provider overlay. */
-async function resolveServerTomoriState(context: ChatTurnContext): Promise<TomoriState> {
-  const incoming = context.turn.lockedTurn.admission.incoming;
-  const channelLlmOverride = context.isUserImpersonation
-    ? null
-    : await getCachedChannelLlm(context.currentPersona.server_id, context.channel.id);
-  const effectiveLlm = context.isUserImpersonation
-    ? context.currentPersona.llm
-    : (context.currentPersona.persona_llm ?? channelLlmOverride ?? context.currentPersona.llm);
-  const overriddenLlm = incoming.llmOverrideCodename
-    ? { ...effectiveLlm, llm_codename: incoming.llmOverrideCodename }
-    : effectiveLlm;
-  let state: TomoriState = { ...context.currentPersona, llm: overriddenLlm };
-
-  if (overriddenLlm.llm_provider.toLowerCase() !== context.currentPersona.llm.llm_provider.toLowerCase()) {
+  if (overriddenLlm.llm_provider.toLowerCase() !== base.llm.llm_provider.toLowerCase()) {
     state = await applySavedProviderConfig(state, overriddenLlm.llm_provider);
   }
 
