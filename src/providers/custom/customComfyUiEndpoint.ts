@@ -2868,15 +2868,9 @@ async function generateWithComfyUi(
     })}`,
   );
 
-  let cancellation: Promise<void> | null = null;
-  const cancelPrompt = (): Promise<void> => {
-    cancellation ??= cancelComfyUiPrompt(endpoint, apiKey, promptId);
-    return cancellation;
-  };
-  const abortListener = () => {
-    log.info(`ComfyUI ${generationOptions.mode} cancellation requested for prompt ${promptPayload.prompt_id}.`);
-    void cancelPrompt();
-  };
+  // The listener owns the remote cancel so the loop can exit immediately; awaiting it there would
+  // let a stalled ComfyUI hold an already-cancelled turn open.
+  const abortListener = () => void cancelComfyUiPrompt(endpoint, apiKey, promptId);
   options.abortSignal?.addEventListener("abort", abortListener, { once: true });
   if (options.abortSignal?.aborted) abortListener();
 
@@ -2885,12 +2879,11 @@ async function generateWithComfyUi(
     let loggedHistoryWithoutFinal = false;
     while (Date.now() < timeoutAt) {
       if (options.abortSignal?.aborted) {
-        await cancelPrompt();
         throw new Error("ComfyUI generation was cancelled.");
       }
       const historyResponse = await fetchUserRemoteUrl(
         `${endpoint.endpoint_url.replace(/\/+$/, "")}/history/${encodeURIComponent(promptPayload.prompt_id)}`,
-        { headers: getHeaders },
+        { headers: getHeaders, signal: options.abortSignal },
       );
 
       if (historyResponse.ok) {
@@ -2922,7 +2915,6 @@ async function generateWithComfyUi(
             : files.filter((file) => file.mediaKind === "video" || file.mediaKind === "gif");
         if (finalFiles.length > 0) {
           if (options.abortSignal?.aborted) {
-            await cancelPrompt();
             throw new Error("ComfyUI generation was cancelled.");
           }
           return { files: generationOptions.mode === "video" ? finalFiles : files, seed };
@@ -2950,28 +2942,78 @@ async function generateWithComfyUi(
     }
 
     throw new Error("ComfyUI generation timed out.");
+  } catch (error) {
+    // An aborted history fetch surfaces as a DOMException AbortError; callers match on the
+    // cancellation message, not the transport error.
+    if (options.abortSignal?.aborted) {
+      throw new Error("ComfyUI generation was cancelled.", { cause: error });
+    }
+    throw error;
   } finally {
     options.abortSignal?.removeEventListener("abort", abortListener);
   }
 }
 
-async function cancelComfyUiPrompt(endpoint: CustomEndpointRow, apiKey: string, promptId: string): Promise<void> {
+/** Bounds each best-effort cancel request, because the ComfyUI being cancelled may be the thing that stalled. */
+const COMFYUI_CANCEL_REQUEST_TIMEOUT_MS = 5_000;
+
+/**
+ * Cancels one ComfyUI prompt without touching other prompts on a shared instance.
+ *
+ * Prefers the ID-scoped `/api/jobs/{id}/cancel` route. On servers that predate it, deletes the
+ * prompt from the queue and interrupts only when this exact prompt is the one executing, because
+ * a bodiless or legacy `/interrupt` aborts whatever is running, including another user's job.
+ * Never rejects.
+ *
+ * @internal Exported for focused cancellation regression tests.
+ */
+export async function cancelComfyUiPrompt(
+  endpoint: CustomEndpointRow,
+  apiKey: string,
+  promptId: string,
+): Promise<void> {
   const baseUrl = endpoint.endpoint_url.replace(/\/+$/, "");
   const headers = buildCustomHeaders(apiKey);
-  const [queueResult, interruptResult] = await Promise.allSettled([
-    fetchUserRemoteUrl(`${baseUrl}/queue`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ delete: [promptId] }),
-    }),
-    fetchUserRemoteUrl(`${baseUrl}/interrupt`, {
-      method: "POST",
-      headers,
-    }),
-  ]);
-  const queueStatus = queueResult.status === "fulfilled" ? queueResult.value.status : "request_failed";
-  const interruptStatus = interruptResult.status === "fulfilled" ? interruptResult.value.status : "request_failed";
-  log.info(`ComfyUI cancellation submitted ${JSON.stringify({ promptId, queueStatus, interruptStatus })}`);
+  const request = async (path: string, init: RequestInit = {}): Promise<Response | null> => {
+    try {
+      return await fetchUserRemoteUrl(`${baseUrl}${path}`, {
+        ...init,
+        headers,
+        signal: AbortSignal.timeout(COMFYUI_CANCEL_REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      return null;
+    }
+  };
+  const post = async (path: string, body: unknown): Promise<number | null> => {
+    const response = await request(path, { method: "POST", body: JSON.stringify(body) });
+    await response?.body?.cancel().catch(() => undefined);
+    return response?.status ?? null;
+  };
+
+  const scopedStatus = await post(`/api/jobs/${encodeURIComponent(promptId)}/cancel`, {});
+  if (scopedStatus !== null && scopedStatus >= 200 && scopedStatus < 300) {
+    log.metric("comfyui_cancel", { route: "scoped", interrupted: "n/a" });
+    return;
+  }
+
+  await post("/queue", { delete: [promptId] });
+  const running = await isComfyUiPromptRunning(await request("/queue"), promptId);
+  if (running) {
+    await post("/interrupt", { prompt_id: promptId });
+  }
+  log.metric("comfyui_cancel", { route: "legacy", interrupted: running ? "yes" : "no" });
+}
+
+async function isComfyUiPromptRunning(queueResponse: Response | null, promptId: string): Promise<boolean> {
+  if (!queueResponse?.ok) {
+    await queueResponse?.body?.cancel().catch(() => undefined);
+    return false;
+  }
+  const payload = (await queueResponse.json().catch(() => null)) as { queue_running?: unknown } | null;
+  const running = Array.isArray(payload?.queue_running) ? payload.queue_running : [];
+  // Queue entries are positional tuples: [number, prompt_id, prompt, extra_data, outputs_to_execute].
+  return running.some((entry) => Array.isArray(entry) && entry[1] === promptId);
 }
 
 async function downloadComfyUiAsset(endpoint: CustomEndpointRow, apiKey: string, asset: ComfyUiAsset): Promise<Buffer> {
