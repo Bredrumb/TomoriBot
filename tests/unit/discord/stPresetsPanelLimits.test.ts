@@ -1,5 +1,3 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType } from "discord.js";
 import type { StPresetRow } from "@/types/db/schema";
@@ -8,15 +6,11 @@ import { CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER } from "@/utils/discord/configPan
 import { MAX_NODES_PER_MODAL_PAGE, NODE_RANGE_OPTIONS_PER_PAGE } from "@/utils/discord/stPresetsPanelCatalog";
 import { MAX_PRESET_NAME_LENGTH } from "@/utils/stPreset/stPresetImportParser";
 import { buildStPresetsPanelPayload, MAX_PRESETS_PER_SELECTOR_PAGE } from "@/utils/discord/ui/stPresetsPanel";
-import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { BACKTICK_RUNS, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
-
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 
 const REALISTIC_RECEIPT: PanelReceipt = {
   tone: "success",
@@ -27,40 +21,6 @@ const REALISTIC_RECEIPT: PanelReceipt = {
 
 const READ_STATUSES: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
 const RECEIPTS: Array<PanelReceipt | undefined> = [undefined, REALISTIC_RECEIPT];
-const BACKTICK_RUNS = [3, 4, 5, 6, 8];
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
-
-function textDisplays(value: unknown): string[] {
-  const contents: string[] = [];
-  const visit = (current: unknown): void => {
-    if (Array.isArray(current)) {
-      for (const child of current) visit(child);
-      return;
-    }
-    if (!current || typeof current !== "object") return;
-    const record = current as Record<string, unknown>;
-    if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-      contents.push(record.content);
-    }
-    for (const child of Object.values(record)) visit(child);
-  };
-  visit(value);
-  return contents;
-}
-
-function assertSafePayload(payload: ReturnType<typeof buildStPresetsPanelPayload>, label: string): void {
-  const result = validateComponentsV2MessageLimits(payload);
-  expect(result.valid, `${label} violations: ${JSON.stringify(result.violations)}`).toBe(true);
-  for (const content of textDisplays(payload)) {
-    expect(LONE_SURROGATE.test(content), `${label} contains a lone surrogate`).toBe(false);
-    const fenceStart = content.indexOf("```markdown\n");
-    if (fenceStart === -1) continue;
-    const bodyStart = fenceStart + "```markdown\n".length;
-    const closingFence = content.lastIndexOf("\n```");
-    if (closingFence <= bodyStart) continue;
-    expect(content.slice(bodyStart, closingFence), `${label} has an adjacent backtick in a fence`).not.toMatch(/``/u);
-  }
-}
 
 function preset(id: number, overrides: Partial<StPresetRow> = {}): StPresetRow {
   return {
@@ -121,7 +81,7 @@ describe("SillyTavern presets panel Components V2 limits", () => {
                 { kind: "preset" as const, presetId: presets[0]?.preset_id, nodeRangeCount: 2, nodeTotalCount: 51 },
                 { kind: "delete" as const, presetId: presets[0]?.preset_id ?? 1 },
               ]) {
-                assertSafePayload(
+                expectSafePanelPayload(
                   buildStPresetsPanelPayload({
                     locale,
                     scope,
@@ -156,7 +116,7 @@ describe("SillyTavern presets panel Components V2 limits", () => {
     for (const nodeTotalCount of nodeCounts) {
       const nodeRangeCount = Math.max(1, Math.ceil(nodeTotalCount / MAX_NODES_PER_MODAL_PAGE));
       for (const nodeRangeIndex of [0, Math.max(0, nodeRangeCount - 1), nodeRangeCount + NODE_RANGE_OPTIONS_PER_PAGE]) {
-        assertSafePayload(
+        expectSafePanelPayload(
           buildStPresetsPanelPayload({
             locale: "en-US",
             scope: "guild",
@@ -189,7 +149,7 @@ describe("SillyTavern presets panel Components V2 limits", () => {
         { kind: "preset" as const, presetId: item.preset_id },
         { kind: "delete" as const, presetId: item.preset_id as number },
       ]) {
-        assertSafePayload(
+        expectSafePanelPayload(
           buildStPresetsPanelPayload({
             locale: "en-US",
             scope: "guild",
@@ -218,7 +178,7 @@ describe("SillyTavern presets panel Components V2 limits", () => {
           { kind: "preset" as const, presetId: fullPagePresets[0]?.preset_id },
           { kind: "delete" as const, presetId: fullPagePresets[0]?.preset_id as number },
         ]) {
-          assertSafePayload(
+          expectSafePanelPayload(
             buildStPresetsPanelPayload({
               locale,
               scope: "guild",

@@ -7,6 +7,7 @@ import {
   type StPresetsRouteDependencies,
 } from "@/utils/discord/interactions/stPresetsRoutes";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -353,7 +354,7 @@ describe("ST Presets interaction routes", () => {
 
     expect(calls).toEqual(["deferUpdate", "resolveScope", "deactivateAll", "resolveScope-fresh", "editReply"]);
     const serialized = JSON.stringify(editReplyPayload);
-    expect(serialized).toContain("Presets disabled");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.st-presets.disabled_receipt"));
   });
 
   it("selecting None with nothing active performs no write and shows no receipt", async () => {
@@ -395,7 +396,7 @@ describe("ST Presets interaction routes", () => {
     expect(calls).toEqual(["deferUpdate", "resolveScope", "editReply"]);
     expect(calls).not.toContain("deactivateAll");
     const serialized = JSON.stringify(editReplyPayload);
-    expect(serialized).not.toContain("Presets disabled");
+    expect(serialized).not.toContain(localizedCopy("en-US", "commands.st-presets.disabled_receipt"));
   });
 
   it("selecting None on stale read performs no write", async () => {
@@ -452,7 +453,7 @@ describe("ST Presets interaction routes", () => {
     });
 
     expect(calls).toEqual(["deferUpdate", "resolveScope", "deactivateAll", "resolveScope-fresh", "editReply"]);
-    expect(JSON.stringify(editReplyPayload)).toContain("Presets disabled");
+    expect(JSON.stringify(editReplyPayload)).toContain(localizedCopy("en-US", "commands.st-presets.disabled_receipt"));
 
     // Legacy none route action
     calls.length = 0;
@@ -540,7 +541,7 @@ describe("ST Presets interaction routes", () => {
 
     expect(calls).toEqual(["deferUpdate", "resolveScope", "editReply"]);
     let serialized = JSON.stringify(editReplyPayload);
-    expect(serialized).toContain("Preset list changed");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.st-presets.changed_receipt"));
     expect(serialized).toContain("Preset 1");
 
     // Case 2: Preset 99 selected (not found), and nothing is active -> lands on None page with changed receipt
@@ -581,8 +582,8 @@ describe("ST Presets interaction routes", () => {
 
     expect(calls).toEqual(["deferUpdate", "resolveScope", "editReply"]);
     serialized = JSON.stringify(editReplyPayload);
-    expect(serialized).toContain("Preset list changed");
-    expect(serialized).toContain("No Active Preset");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.st-presets.changed_receipt"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.st-presets.none_heading"));
   });
 
   it("selecting a preset activates it and repaints with receipt", async () => {
@@ -674,7 +675,7 @@ describe("ST Presets interaction routes", () => {
 
     expect(calls).toEqual(["resolveScope", "loadToggleableNodes:1", "deferUpdate", "editReply"]);
     const rendered = JSON.stringify(editReplyPayload);
-    expect(rendered).toContain("Currently active preset");
+    expect(rendered).toContain(localizedCopy("en-US", "commands.st-presets.currently_active"));
     expect(rendered).toContain("config:v2:st-presets-nodes-range-select:en-US:1");
     expect(rendered).toContain('"value":"0","label":"Nodes 1-50"');
     expect(rendered).toContain('"value":"1","label":"Nodes 51-60"');

@@ -56,7 +56,8 @@ import {
 } from "@/utils/discord/ui/configChannelModals";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -731,7 +732,9 @@ describe("Channels Destinations routes", () => {
 
     expect(update).not.toHaveBeenCalled();
     expect(recordAction).not.toHaveBeenCalled();
-    expect(JSON.stringify(interaction.editedReplies)).toContain("Not Configured");
+    expect(JSON.stringify(interaction.editedReplies)).toContain(
+      localizer("en-US", "commands.config.panel.channels_welcome_not_configured_heading"),
+    );
     update.mockRestore();
   });
 
@@ -820,8 +823,8 @@ describe("Channels Destinations panel", () => {
 
     expect(serialized).toContain("Logs & Welcome");
     expect(serialized).toContain("Logs");
-    expect(serialized).toContain("Welcome Messages");
-    expect(serialized).toContain("Reasoning, tool activity, attribution, and diagnostics are");
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_welcome_title"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.config.panel.channels_logs_description"));
     expect(serialized).toContain("Welcome aboard.");
     expect(serialized).toContain('"disabled":true');
   });
@@ -874,7 +877,7 @@ describe("Channels Destinations panel", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Logs & Welcome");
-    expect(serialized).not.toContain("Welcome Messages");
+    expect(serialized).not.toContain(localizer("en-US", "commands.config.panel.channels_welcome_title"));
   });
 });
 
@@ -940,11 +943,17 @@ describe("Channels Auto-Trigger routes", () => {
       [state],
     );
 
-    expect(JSON.stringify(payload)).toContain("Auto-Trigger Channels");
-    expect(JSON.stringify(payload)).toContain("Manage Channels");
+    expect(JSON.stringify(payload)).toContain(localizer("en-US", "commands.config.panel.channels_auto_trigger_title"));
+    expect(JSON.stringify(payload)).toContain(
+      localizer("en-US", "commands.config.panel.channels_auto_trigger_manage_button"),
+    );
     expect(JSON.stringify(payload)).not.toContain("Add Channels");
-    expect(JSON.stringify(payload)).toContain("Configure Channel");
-    expect(JSON.stringify(payload)).toContain("Edit Threshold");
+    expect(JSON.stringify(payload)).toContain(
+      localizer("en-US", "commands.config.panel.channels_auto_trigger_configure_button"),
+    );
+    expect(JSON.stringify(payload)).toContain(
+      localizer("en-US", "commands.config.panel.channels_auto_trigger_edit_threshold_button"),
+    );
     expect(modal.components[0]?.component?.type).toBe(22);
     expect(configureModal.components[0]?.component?.type).toBe(8);
     expect(
@@ -1532,13 +1541,13 @@ describe("Channels Rules", () => {
     });
     const serialized = JSON.stringify(payload);
 
-    expect(serialized).toContain("Channel Rules");
-    expect(serialized).toContain("Private Channels");
-    expect(serialized).toContain("Roleplay Channels");
-    expect(serialized).toContain("Cross-Channel Blocklist");
-    expect(serialized).toContain("Manage Private Channels");
-    expect(serialized).toContain("Manage Roleplay Channels");
-    expect(serialized).toContain("Manage Blocked Channels");
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.page_channels_rules"));
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_private_title"));
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_roleplay_title"));
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_blocklist_title"));
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_private_manage_button"));
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_roleplay_manage_button"));
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.channels_rules_blocklist_manage_button"));
     expect(serialized).not.toContain("Add Private Channels");
     expect(serialized).toContain(
       "https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#roleplay-channels",
@@ -1833,10 +1842,14 @@ describe("Channels Overrides", () => {
       ChannelType.PrivateThread,
       ChannelType.AnnouncementThread,
     ]);
-    expect(JSON.stringify(payload)).toContain("Channel Prompt");
-    expect(JSON.stringify(payload)).toContain("Context Note");
+    expect(JSON.stringify(payload)).toContain(
+      localizer("en-US", "commands.config.panel.channels_overrides_prompt_title"),
+    );
+    expect(JSON.stringify(payload)).toContain(
+      localizer("en-US", "commands.config.panel.channels_overrides_context_note_title"),
+    );
     expect(JSON.stringify(payload)).toContain("Text Model");
-    expect(JSON.stringify(payload)).not.toContain("Change Override");
+    expect(JSON.stringify(payload)).not.toContain(localizer("en-US", "commands.config.panel.change_override_button"));
   });
 
   it("carries a selected channel through the native selector without fetching the guild", async () => {
@@ -2168,7 +2181,9 @@ describe("Channels Overrides", () => {
     expect(contextInteraction.deferred).toBe(true);
     expect(contextInteraction.replied).toBe(false);
     expect(contextInteraction.editedReplies).toHaveLength(1);
-    expect(JSON.stringify(contextInteraction.editedReplies)).toContain("Context Note Updated");
+    expect(JSON.stringify(contextInteraction.editedReplies)).toContain(
+      localizer("en-US", "commands.config.panel.channels_overrides_context_note_updated_heading"),
+    );
     promptSet.mockRestore();
     contextSet.mockRestore();
   });
@@ -2316,7 +2331,7 @@ describe("Channels Overrides", () => {
       channelsSelectedChannelId: selectedChannelId,
     });
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Change Override");
+    expect(serialized).toContain(localizer("en-US", "commands.config.panel.change_override_button"));
     expect(serialized).not.toContain("Vision");
     expect(serialized).not.toContain("Embedding");
     expect(serialized).not.toContain("Image");

@@ -478,9 +478,11 @@ Use this as the last pass before you call a provider integration "done".
 - set `featureSupport.presetGeneration: true` in `providerInfo.ts`
 - if two providers share an endpoint family (e.g. ZAI and ZAI Coding), parameterize the generator by `endpointUrl?` and `toolAdapter?` so the secondary provider can delegate without code duplication
 
-## 12. Test the Integration
+## 12. Verify the Integration
 
-Minimum test checklist:
+Check each item by running the bot against the real provider. Add an automated test only for code with
+its own regression risk, such as a response parser or error mapping, following the Tests rules in
+[Development Tasks](./development-tasks.md#tests).
 
 - provider is auto-discovered at startup
 - aliases resolve correctly

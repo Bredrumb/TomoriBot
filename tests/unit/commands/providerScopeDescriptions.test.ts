@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { expectForEveryLocale } from "../../helpers/localeCases";
 
 const LOCALES = ["en-US", "ja"] as const;
 
@@ -30,19 +31,14 @@ describe("registered root and personal command descriptions", () => {
     await initializeLocalizer();
   });
 
-  for (const locale of LOCALES) {
-    it(`resolves every current root description in ${locale}`, () => {
+  it("resolves every current root description within Discord's limit", () =>
+    expectForEveryLocale((locale) => {
       for (const key of ROOT_KEYS) {
-        expect(localizer(locale, key)).not.toBe(key);
+        const description = localizer(locale, key);
+        expect(description).not.toBe(key);
+        expect(description.length).toBeLessThanOrEqual(DISCORD_DESCRIPTION_LIMIT);
       }
-    });
-
-    it(`keeps every root description within Discord's limit in ${locale}`, () => {
-      for (const key of ROOT_KEYS) {
-        expect(localizer(locale, key).length).toBeLessThanOrEqual(DISCORD_DESCRIPTION_LIMIT);
-      }
-    });
-  }
+    }, LOCALES));
 
   it("keeps every live personal destination scoped and within Discord's limit", () => {
     for (const key of PERSONAL_SCOPED_KEYS) {

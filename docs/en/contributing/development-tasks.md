@@ -182,7 +182,12 @@ prevents a named failure, not because a category of change usually has one.
   data shape, a Discord limit). A bug fix gets the regression test that would have caught it.
 - Do not test that wiring or a helper merely exists.
 - Loop locales or panels inside one test that collects every failure, instead of generating one test
-  per locale.
+  per locale. `expectForEveryLocale` and `collectCaseFailures` in `tests/helpers/localeCases.ts` do
+  the collecting.
+- Assert localized copy by key, never by quoting its English. Use `localizedCopy(locale, key)`, or
+  `localizedProse` when panel formatting may wrap the line. Both fail on an unknown key, so a copy
+  edit passes while a wrong or deleted key does not. Quote a literal only for an identifier, such
+  as a command name, or for text the test itself supplied.
 - Assert an exact count or a complete member list only when that exact count or list is what must
   not change. Otherwise assert stable IDs, uniqueness, or that the required members are present.
 - Optional local servers (`servers/`), installers, and devtools do not get dedicated test suites or

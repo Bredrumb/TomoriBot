@@ -58,6 +58,7 @@ import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import { getRegisterableLocales, initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import type { UserPersonaNamingPreference } from "@/types/personaNaming";
+import { localizedProse, localizedCopy } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -2421,8 +2422,8 @@ describe("personal config Appearance character reference", () => {
     });
 
     const json = JSON.stringify(payload);
-    expect(json).toContain("Edit Appearance Tags");
-    expect(json).toContain("NovelAI Character Reference");
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.edit_appearance_button"));
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.character_reference_modal_title"));
     expect(json).toContain("personal-config:v2:appearance-open:en-US");
     expect(json).toContain("personal-config:v2:character-reference-open:en-US");
     expect(json).toContain("personal-config:v2:character-reference-clear:en-US");
@@ -2684,11 +2685,11 @@ describe("Models panel rendering", () => {
     expect(payloadJson).toContain("Presence");
     expect(payloadJson).toContain("Max output");
     expect(payloadJson).toContain("Thinking");
-    expect(payloadJson).toContain("Edit Sampling");
-    expect(payloadJson).toContain("Edit Generation");
+    expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.edit_params_1_button"));
+    expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.edit_params_2_button"));
     expect(payloadJson).not.toContain("Edit Parameters 1-5");
     expect(payloadJson).not.toContain("Edit Parameters 6-8");
-    expect(payloadJson).not.toContain("Stop Strings");
+    expect(payloadJson).not.toContain(localizedCopy("en-US", "commands.config.panel.stop_strings_title"));
     expect(payloadJson).not.toContain("Logit Bias");
 
     const components = collectComponents(payload);
@@ -2728,7 +2729,7 @@ describe("Models panel rendering", () => {
 
     const zeroPayload = build([]);
     const zeroJson = JSON.stringify(zeroPayload);
-    expect(zeroJson).toContain("No saved personal text providers found.");
+    expect(zeroJson).toMatch(localizedProse("en-US", "commands.personal.config.no_text_providers"));
     expect(zeroJson).not.toContain(":parameters-provider-select:");
     expect(zeroJson).not.toContain(":parameters-1-open:");
     expect(zeroJson).not.toContain(":parameters-2-open:");
@@ -2828,7 +2829,7 @@ describe("Models panel rendering", () => {
 
     const payloadJson = JSON.stringify(payload);
     expect(payloadJson).toContain("Claude 3 Haiku");
-    expect(payloadJson).toContain("Model Randomizer");
+    expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.randomizer_section_title"));
     expect(payloadJson).toContain("personal-config:v2:randomizer-set:en-US:openrouter:off");
     expect(payloadJson).toContain("personal-config:v2:randomizer-set:en-US:openrouter:on");
 
@@ -2839,9 +2840,11 @@ describe("Models panel rendering", () => {
 
     // The provider select replaced the Edit button and is the only way into the fallback modal, so
     // it must render even though this fixture has a single provider.
-    expect(payloadJson).not.toContain("Edit Fallback Models");
+    expect(payloadJson).not.toContain(localizedCopy("en-US", "commands.personal.config.fallbacks_modal_title"));
     expect(payloadJson).toContain("personal-config:v2:fallbacks-provider-select:en-US");
-    expect(payloadJson).toContain("Choose provider for models");
+    expect(payloadJson).toContain(
+      localizedCopy("en-US", "commands.personal.config.fallbacks_provider_select_placeholder"),
+    );
 
     // Effective behavior quote sits directly under the buttons row.
     expect(payloadJson).toContain("> I try the primary model first");
@@ -3053,7 +3056,7 @@ describe("Model assignment writes on modal submit", () => {
     expect(calls.some((c) => c.startsWith("setCapabilityModel"))).toBe(false);
     expect(telemetry).toHaveLength(0);
     const json = JSON.stringify(repaintedView);
-    expect(json).toContain("No Changes Made");
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.no_changes_heading"));
   });
 
   it("fails closed on modal submit when the chosen model is no longer available", async () => {
@@ -3100,7 +3103,9 @@ describe("Model assignment writes on modal submit", () => {
 
     expect(calls.some((c) => c.startsWith("setCapabilityModel"))).toBe(false);
     expect(telemetry).toHaveLength(0);
-    expect(JSON.stringify(repaintedView)).toContain("Operation Failed");
+    expect(JSON.stringify(repaintedView)).toContain(
+      localizedCopy("en-US", "commands.personal.config.write_failed_heading"),
+    );
   });
 });
 
@@ -3143,7 +3148,7 @@ describe("Re-resolution and zero model guard", () => {
 
     expect(modalShown).toBe(false);
     const json = JSON.stringify(repaintedView);
-    expect(json).toContain("No Models Available");
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.no_models_available_heading"));
     expect(json).toContain("OpenRouter");
   });
 
@@ -3286,7 +3291,7 @@ describe("Range pagination workflow", () => {
     expect(moreOption?.label).toBe("More Text providers (page 1 of 2)");
 
     const json = JSON.stringify(page1Payload);
-    expect(json).toContain("Personal Model Routing");
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.models_title"));
     expect(calls).toEqual([]);
     expect(telemetry).toEqual([]);
   });
@@ -3328,7 +3333,7 @@ describe("Range pagination workflow", () => {
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    expect(JSON.stringify(repainted)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(repainted)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
     expect(calls).toEqual([]);
     expect(telemetry).toEqual([]);
   });
@@ -3389,7 +3394,9 @@ describe("Range pagination workflow", () => {
     expect(moreOption).toBeDefined();
     expect(moreOption?.label).toBe("More Text providers (page 1 of 2)");
 
-    expect(JSON.stringify(repaintedPayload)).not.toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(repaintedPayload)).not.toContain(
+      localizedCopy("en-US", "commands.personal.config.unavailable"),
+    );
     expect(calls).toEqual([]);
     expect(telemetry).toEqual([]);
   });
@@ -3468,7 +3475,7 @@ describe("Range pagination workflow", () => {
     // Expanding rewrites a closed selector, so the repaint has to say what changed.
     expect(textSelect?.placeholder).toBe("Text: choose a page of OpenRouter models");
     const rendered = JSON.stringify(repaintedPayload);
-    expect(rendered).toContain("Choose a Model Page");
+    expect(rendered).toContain(localizedCopy("en-US", "commands.personal.config.provider_paged_heading"));
     expect(rendered).toContain("OpenRouter has 30 models for Text");
   });
 
@@ -3745,7 +3752,7 @@ describe("Range pagination workflow", () => {
       expect(components.some((c) => c.customId?.includes(":fallbacks-range-open:"))).toBe(false);
       expect(providerSelect?.placeholder).toBe("Choose a page of OpenRouter models");
       const rendered = JSON.stringify(repaintedPayload);
-      expect(rendered).toContain("Choose a Fallback Page");
+      expect(rendered).toContain(localizedCopy("en-US", "commands.personal.config.fallbacks_paged_heading"));
       expect(rendered).toContain("OpenRouter has 30 fallback options");
     } finally {
       loadSpy.mockRestore();
@@ -4240,8 +4247,8 @@ describe("Quick-Toggle modal structure and routing copy", () => {
     ]);
 
     const modalJson = JSON.stringify(modal);
-    expect(modalJson).toContain("Toggle Personal Capabilities");
-    expect(modalJson).toContain("Checked capabilities are personal overrides in every server");
+    expect(modalJson).toContain(localizedCopy("en-US", "commands.personal.config.quick_toggle_modal_title"));
+    expect(modalJson).toContain(localizedCopy("en-US", "commands.personal.config.quick_toggle_group_description"));
 
     const component = modal.components[0]?.component;
     expect(component?.type).toBe(22);
@@ -4266,9 +4273,7 @@ describe("Quick-Toggle modal structure and routing copy", () => {
     // The group description is capped at 100 characters, so anything past that never reaches a client.
     const groupDescription = modal.components[0]?.description as string;
     expect(groupDescription.length).toBeLessThanOrEqual(100);
-    expect(groupDescription).toBe(
-      "Checked capabilities are personal overrides in every server. Unchecked use the server default.",
-    );
+    expect(groupDescription).toBe(localizedCopy("en-US", "commands.personal.config.quick_toggle_group_description"));
   });
 
   it("keeps naming the saved provider for a capability that is assigned but switched off", () => {
@@ -4298,7 +4303,7 @@ describe("Quick-Toggle modal structure and routing copy", () => {
 
     const visionOpt = component?.options.find((opt: { value: string }) => opt.value === "vision");
     expect(visionOpt?.default).toBe(false);
-    expect(visionOpt?.description).toBe("Server default (no model configured)");
+    expect(visionOpt?.description).toBe(localizedCopy("en-US", "commands.personal.config.quick_toggle_none_desc"));
   });
 
   it("carries the submitted capability set straight to the write with no confirmation step", async () => {
@@ -4362,7 +4367,7 @@ describe("Quick-Toggle modal structure and routing copy", () => {
     expect(telemetry).toContain("personal-config.personal.model-routing.set");
     const json = JSON.stringify(repaintedView);
     expect(json).not.toContain("quick-toggle-confirm");
-    expect(json).toContain("Personal Routing Updated");
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.routing_updated_heading"));
   });
 
   it("fails closed when a checked capability has no configured model", async () => {
@@ -4418,7 +4423,9 @@ describe("Quick-Toggle modal structure and routing copy", () => {
     // The guard that used to sit behind the confirmation still runs before any write.
     expect(calls.some((c) => c.startsWith("setQuickToggleRouting"))).toBe(false);
     expect(telemetry).toHaveLength(0);
-    expect(JSON.stringify(repaintedView)).toContain("Model Required");
+    expect(JSON.stringify(repaintedView)).toContain(
+      localizedCopy("en-US", "commands.personal.config.missing_model_heading"),
+    );
   });
 });
 
@@ -4611,7 +4618,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
 
     expect(calls.filter((c) => c.startsWith("setImpersonationPrompt"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.impersonation.set");
-    expect(JSON.stringify(replyPayload)).toContain("Prompt Required");
+    expect(JSON.stringify(replyPayload)).toContain(
+      localizedCopy("en-US", "commands.personal.config.impersonation_blank_refusal_heading"),
+    );
   });
 
   it("updates impersonation prompt and records telemetry", async () => {
@@ -4708,7 +4717,9 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    expect(JSON.stringify(replyPayload)).toContain("Personal Spotlight is only available in a server.");
+    expect(JSON.stringify(replyPayload)).toContain(
+      localizedCopy("en-US", "commands.personal.config.spotlight_guild_only_detail"),
+    );
   });
 
   it("handles spotlight set review, auto-trigger, and confirm", async () => {
@@ -4965,7 +4976,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
               "**[Deliberate Trigger Mode](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)**",
             );
             expect(dtmHeadingDisplay.content.replaceAll("\n", " ")).toContain(
-              "Controls when I reply without being addressed directly.",
+              localizedCopy("en-US", "commands.personal.config.dtm_description"),
             );
             expect(dtmHeadingDisplay.content).not.toContain(">");
 
@@ -4995,7 +5006,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(dtmOff.disabled).toBe(dtmMode === "off");
 
             expect(dtmFollow.customId).toBe("personal-config:v2:trigger-mode-set:en-US:follow");
-            expect(dtmFollow.label).toBe("Follow Server");
+            expect(dtmFollow.label).toBe(localizedCopy("en-US", "commands.personal.config.mode_follow"));
             expect(dtmFollow.style).toBe(dtmMode === "follow" ? ButtonStyle.Primary : ButtonStyle.Secondary);
             expect(dtmFollow.disabled).toBe(dtmMode === "follow");
 
@@ -5024,7 +5035,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
               "**[Deliberate Tool Mode](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/#deliberate-tool-mode)** (EXPERIMENTAL)",
             );
             expect(toolHeadingDisplay.content.replaceAll("\n", " ")).toContain(
-              "Controls whether tools are offered for every message or only when relevant.",
+              localizedCopy("en-US", "commands.personal.config.tool_mode_description"),
             );
             expect(toolHeadingDisplay.content).not.toContain(">");
 
@@ -5050,7 +5061,7 @@ describe("personalConfigRoutes Advanced interactions and telemetry", () => {
             expect(toolOff.disabled).toBe(toolMode === "off");
 
             expect(toolFollow.customId).toBe("personal-config:v2:tool-mode-set:en-US:follow");
-            expect(toolFollow.label).toBe("Follow Server");
+            expect(toolFollow.label).toBe(localizedCopy("en-US", "commands.personal.config.mode_follow"));
             expect(toolFollow.style).toBe(toolMode === "follow" ? ButtonStyle.Primary : ButtonStyle.Secondary);
             expect(toolFollow.disabled).toBe(toolMode === "follow");
 
@@ -5340,7 +5351,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayload)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
   });
 
   it("detects persona deleted before selected position and fails stale with zero writes or telemetry", async () => {
@@ -5386,7 +5397,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayload)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
   });
 
   it("fails stale on spotlight-set-submit when personas drift before modal submit", async () => {
@@ -5438,7 +5449,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telemetry).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayload)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
   });
 
   it("fails stale on spot-set-auto button click when personas drift", async () => {
@@ -5480,7 +5491,7 @@ describe("Stable spotlight identity and destructive safety", () => {
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(modalCalled).toBe(false);
-    expect(JSON.stringify(replyPayload)).toContain("This panel may be out of date.");
+    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
   });
 
   it("fails stale on spot-set-auto-sub modal submission when personas drift", async () => {
@@ -5523,7 +5534,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     await route.execute({} as Client, interaction, requireRoute(customId));
 
-    expect(JSON.stringify(editPayload)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
   });
 
   it("detects presented spotlight inserted, deleted, or expired between modal render and submit", async () => {
@@ -5589,7 +5600,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("removeSpotlights"))).toHaveLength(0);
     expect(telInserted).not.toContain("personal-config.personal.spotlight.remove");
-    expect(JSON.stringify(editPayload)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
 
     const expiredSpotlights = [initialSpotlights[1]];
     const { dependencies: depExpired, telemetry: telExpired } = makeDependencies(calls, {
@@ -5617,7 +5628,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("removeSpotlights"))).toHaveLength(0);
     expect(telExpired).not.toContain("personal-config.personal.spotlight.remove");
-    expect(JSON.stringify(editPayload)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayload)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
   });
 
   it("fails stale on spot-rem-range button click when active spotlights drift", async () => {
@@ -5658,7 +5669,7 @@ describe("Stable spotlight identity and destructive safety", () => {
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(modalCalled).toBe(false);
-    expect(JSON.stringify(replyPayload)).toContain("This panel may be out of date.");
+    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
   });
 
   it("executes a newly constructed route from transported fingerprint without setup or snapshot state", async () => {
@@ -5757,7 +5768,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telActor).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayloadActor)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayloadActor)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
 
     let editPayloadGuild: unknown;
     const guildInteraction = {
@@ -5794,7 +5805,7 @@ describe("Stable spotlight identity and destructive safety", () => {
 
     expect(calls.filter((c) => c.startsWith("setSpotlight"))).toHaveLength(0);
     expect(telGuild).not.toContain("personal-config.personal.spotlight.set");
-    expect(JSON.stringify(editPayloadGuild)).toContain("Personal configuration is currently unavailable.");
+    expect(JSON.stringify(editPayloadGuild)).toContain(localizedCopy("en-US", "commands.personal.config.unavailable"));
   });
 
   it("fails stale on old v1 controls through real global router with no mutation", async () => {
@@ -5892,7 +5903,9 @@ describe("Stable spotlight identity and destructive safety", () => {
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     expect(telemetry).not.toContain("personal-config.personal.spotlight.remove");
-    expect(JSON.stringify(editPayload)).toContain("Partial Removal");
+    expect(JSON.stringify(editPayload)).toContain(
+      localizedCopy("en-US", "commands.personal.config.spotlight_partial_removal_heading"),
+    );
   });
 
   it("asserts raw numeric component types across all touched spotlight modals", () => {
@@ -6502,7 +6515,7 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
     try {
       await route.execute({} as Client, modelInteraction, requireRoute(modelPageCustomId));
       const modelJson = JSON.stringify(repaintedPayload);
-      expect(modelJson).toContain("Personal Model Routing");
+      expect(modelJson).toContain(localizedCopy("en-US", "commands.personal.config.models_title"));
       const modelComponents = collectComponents(repaintedPayload);
       const modelSelect = modelComponents.find((c) => c.customId?.includes(":model-provider-select:en-US:text"));
       expect(modelSelect?.options?.map((option) => option.label)).toEqual([
@@ -6539,7 +6552,7 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
 
       await route.execute({} as Client, fallbackInteraction, requireRoute(fallbackPageCustomId));
       const fallbackJson = JSON.stringify(repaintedPayload);
-      expect(fallbackJson).toContain("Personal Text Fallbacks");
+      expect(fallbackJson).toContain(localizedCopy("en-US", "commands.personal.config.fallbacks_title"));
       const fallbackComponents = collectComponents(repaintedPayload);
       const fallbackSelect = fallbackComponents.find((c) => c.customId?.includes(":fallbacks-provider-select:en-US"));
       expect(fallbackSelect?.options).toHaveLength(7);
@@ -6589,7 +6602,7 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
 
     await route.execute({} as Client, interaction, requireRoute(removePageCustomId));
     const json = JSON.stringify(repaintedPayload);
-    expect(json).toContain("Select Spotlight Range");
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_remove_range_title"));
     expect(json).toContain("1251-1300");
     expect(json).toContain("1451-1500");
   });
@@ -6752,7 +6765,7 @@ describe("Personal Spotlight auto-trigger and range chooser", () => {
     await route.execute({} as Client, interaction, requireRoute(customId));
 
     const json = JSON.stringify(repaintedPayload);
-    expect(json).toContain("Partial Removal");
+    expect(json).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_partial_removal_heading"));
   });
 });
 
@@ -7261,7 +7274,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(overflowDeferred).toBe(true);
     expect(repaintedPayload).not.toBeNull();
     const payloadJson = JSON.stringify(repaintedPayload);
-    expect(payloadJson).toContain("Select Spotlight Range");
+    expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_remove_range_title"));
     expect(payloadJson).toContain("s-rem-s");
 
     const active5 = Array.from({ length: 5 }, (_, i) => ({
@@ -7578,7 +7591,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(deferred).toBe(true);
     expect(capturedPayload).not.toBeNull();
     const renderedText = JSON.stringify(capturedPayload);
-    expect(renderedText).toContain("Personal Parameters Updated");
+    expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.parameters_updated_heading"));
     expect(renderedText).toContain("Updated sampler parameters for Google Gemini");
   });
 
@@ -7672,7 +7685,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(deferred).toBe(true);
     expect(capturedPayload).not.toBeNull();
     const renderedText = JSON.stringify(capturedPayload);
-    expect(renderedText).toContain("Response Mode Updated");
+    expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.trigger_mode_updated_heading"));
     expect(renderedText).toContain("Your deliberate trigger mode preference has been set to On.");
     expect(renderedText).toContain("> Only an @mention, a reply, or /respond reaches me");
     expect(renderedText).not.toContain("> You can trigger me by saying my name");
@@ -7789,7 +7802,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
     expect(deferred).toBe(true);
     expect(capturedPayload).not.toBeNull();
     const renderedText = JSON.stringify(capturedPayload);
-    expect(renderedText).toContain("Personal Spotlight Saved");
+    expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.spotlight_saved_heading"));
     expect(renderedText).toContain("Your personal spotlight has been saved for <#123456789012345678>.");
   });
 
@@ -7977,7 +7990,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         const payloadJson = JSON.stringify(payload);
         expect(payloadJson).toContain("> I try the primary model first");
-        expect(payloadJson).not.toContain("Model Randomizer requires at least one configured fallback model.");
+        expect(payloadJson).not.toContain(
+          localizedCopy("en-US", "commands.personal.config.randomizer_requires_fallback_detail"),
+        );
       });
 
       it("renders Off as enabled Secondary and On as disabled Primary when randomizer is on and canEnableRandomizer is true", () => {
@@ -8223,7 +8238,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         expect(telemetry).toContain("personal-config.personal.crossserver-stm.set");
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
-        expect(renderedText).toContain("Cross-Server STM Enabled");
+        expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.crossserver_enabled_heading"));
       });
 
       it("performs no write when setting cross-server STM to already stored value", async () => {
@@ -8309,7 +8324,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         expect(telemetry).toContain("personal-config.personal.crossserver-stm.set");
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
-        expect(renderedText).toContain("Cross-Server STM Enabled");
+        expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.crossserver_enabled_heading"));
       });
     });
 
@@ -8374,7 +8389,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         expect(telemetry).toContain("personal-config.personal.randomizer.set");
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
-        expect(renderedText).toContain("Randomizer Enabled");
+        expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.randomizer_enabled_heading"));
       });
 
       it("performs no write when setting randomizer to already stored value", async () => {
@@ -8479,7 +8494,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         expect(telemetry).toContain("personal-config.personal.randomizer.set");
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
-        expect(renderedText).toContain("Randomizer Enabled");
+        expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.randomizer_enabled_heading"));
       });
     });
   });
@@ -8516,7 +8531,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
           c.customId?.includes(":s-blk-s:en-US:123456789012345678:24:a1b2c3d4"),
         );
         expect(blockSelect).toBeDefined();
-        expect(blockSelect?.placeholder).toBe("Choose a persona block...");
+        expect(blockSelect?.placeholder).toBe(
+          localizedCopy("en-US", "commands.personal.config.spotlight_personas_range_placeholder"),
+        );
         expect(blockSelect?.options).toEqual([
           { value: "0", label: "Personas 1-50" },
           { value: "1", label: "Personas 51-100" },
@@ -8622,7 +8639,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const components = collectComponents(payload);
         const autoSelect = components.find((c) => c.customId?.includes(":s-auto-s:"));
         expect(autoSelect).toBeDefined();
-        expect(autoSelect?.placeholder).toBe("Choose an auto-trigger block...");
+        expect(autoSelect?.placeholder).toBe(
+          localizedCopy("en-US", "commands.personal.config.spotlight_auto_range_placeholder"),
+        );
         expect(autoSelect?.options).toEqual([
           { value: "0", label: "Personas 1-24" },
           { value: "24", label: "Personas 25-48" },
@@ -8691,7 +8710,9 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         const components = collectComponents(payload);
         const remSelect = components.find((c) => c.customId?.includes(":s-rem-s:"));
         expect(remSelect).toBeDefined();
-        expect(remSelect?.placeholder).toBe("Choose a spotlight block to manage...");
+        expect(remSelect?.placeholder).toBe(
+          localizedCopy("en-US", "commands.personal.config.spotlight_remove_range_placeholder"),
+        );
         expect(remSelect?.options).toEqual([
           { value: "0", label: "Spotlights 1-50" },
           { value: "50", label: "Spotlights 51-100" },
@@ -8820,7 +8841,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         expect(modalOpened).toBe(false);
         const json = JSON.stringify(repaintedPayload);
-        expect(json).toContain("This panel may be out of date");
+        expect(json).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
       });
     });
 
@@ -8915,7 +8936,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         expect(modalOpened).toBe(false);
         const json = JSON.stringify(repaintedPayload);
-        expect(json).toContain("This panel may be out of date");
+        expect(json).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
       });
     });
 
@@ -9015,7 +9036,7 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
 
         expect(modalOpened).toBe(false);
         const json = JSON.stringify(repaintedPayload);
-        expect(json).toContain("This panel may be out of date");
+        expect(json).toContain(localizedCopy("en-US", "commands.personal.config.stale_warning"));
       });
     });
   });

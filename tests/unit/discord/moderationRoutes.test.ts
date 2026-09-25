@@ -41,6 +41,7 @@ import {
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { moderationOperations, type ModerationScopeData } from "@/utils/moderation/moderationOperations";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 function serializedPanelProse(markdown: string): string {
   return JSON.stringify(formatPanelProse(markdown)).slice(1, -1);
@@ -119,7 +120,7 @@ describe("moderation interaction routes", () => {
 
     expect(log).toEqual(["deferUpdate", "load", "editReply"]);
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("User Blacklist");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.category_user_blacklist"));
   });
 
   it("handles page select menu interactions", async () => {
@@ -151,7 +152,7 @@ describe("moderation interaction routes", () => {
     });
 
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("Whitelisted Roles");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.remove_whitelist_role_group_title"));
   });
 
   it("handles range navigation route", async () => {
@@ -310,7 +311,7 @@ describe("moderation interaction routes", () => {
     expect(scopeRead).toBe(0);
     expect(memberAccessRead).toBe(0);
     expect(modalShown).toBe(0);
-    expect(JSON.stringify(replyPayload)).toContain("You need `Manage Server` permission to use this moderation panel.");
+    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
   });
 
   it("rejects member-access-open when setup is missing or read is not fresh", async () => {
@@ -345,7 +346,7 @@ describe("moderation interaction routes", () => {
     });
 
     expect(modalShown).toBe(0);
-    expect(JSON.stringify(replyPayload)).toContain("TomoriBot is not set up in this server yet.");
+    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.not_setup"));
 
     const unavailableRoute = createModerationInteractionRoute({
       resolveMemberAccess: async () => ({
@@ -366,7 +367,7 @@ describe("moderation interaction routes", () => {
     });
 
     expect(modalShown).toBe(0);
-    expect(JSON.stringify(replyPayload)).toContain("Moderation settings could not be loaded. Retry to try again.");
+    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
 
     const staleRoute = createModerationInteractionRoute({
       resolveMemberAccess: async () => ({
@@ -387,7 +388,7 @@ describe("moderation interaction routes", () => {
     });
 
     expect(modalShown).toBe(0);
-    expect(JSON.stringify(replyPayload)).toContain("Moderation settings could not be loaded. Retry to try again.");
+    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
   });
 
   it("opens member-access modal with fresh state, nonce, and no pre-defer on valid button click without calling full scope resolver", async () => {
@@ -562,7 +563,9 @@ describe("moderation interaction routes", () => {
     });
 
     expect(writeCalls).toBe(0);
-    expect(JSON.stringify(editReplyCalls[0])).toContain("Server model access was not changed");
+    expect(JSON.stringify(editReplyCalls[0])).toContain(
+      localizedCopy("en-US", "commands.moderation.model_access_failed"),
+    );
   });
 
   it("denies member-access-submit on permission loss between open and submit before any write", async () => {
@@ -609,7 +612,7 @@ describe("moderation interaction routes", () => {
     expect(cleanedNonce).toBe("nonce123");
     expect(updateCalled).toBe(0);
     expect(JSON.stringify(editReplyCalls[0])).toContain(
-      "You need `Manage Server` permission to use this moderation panel.",
+      localizedCopy("en-US", "commands.moderation.permission_denied"),
     );
   });
 
@@ -652,7 +655,7 @@ describe("moderation interaction routes", () => {
 
     expect(updateCalled).toBe(0);
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("Member access could not be updated");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_failed"));
     expect(serialized).toContain(
       serializedPanelProse("> The modal submission could not be processed. Open the editor again to retry."),
     );
@@ -697,8 +700,8 @@ describe("moderation interaction routes", () => {
 
     expect(updateCalled).toBe(0);
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("Member access could not be updated");
-    expect(serialized).toContain("Saved data may be out of date because the read failed.");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_failed"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
   });
 
   it("filters unknown/malformed checkbox values and writes recognized definitions", async () => {
@@ -752,8 +755,8 @@ describe("moderation interaction routes", () => {
 
     expect(passedSelectedValues).toEqual(["servermemories", "promptsnapshot"]);
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("Member access updated");
-    expect(serialized).toContain("Updated member permissions for this server.");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_updated"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_updated_detail"));
   });
 
   it("handles unchanged submission with informational receipt and no DB write", async () => {
@@ -799,7 +802,7 @@ describe("moderation interaction routes", () => {
 
     expect(resolveCalls).toEqual([false, false]);
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("Member access was already current");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_unchanged"));
     expect(serialized).toContain(
       serializedPanelProse("> Member permissions already match the requested state. No write was needed."),
     );
@@ -848,7 +851,7 @@ describe("moderation interaction routes", () => {
 
     expect(resolveCalls).toEqual([false, false]);
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("Member access could not be updated");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_failed"));
     expect(serialized).toContain(
       serializedPanelProse("> The database write failed or permissions changed. Retry to refresh current settings."),
     );
@@ -908,8 +911,8 @@ describe("moderation interaction routes", () => {
 
     expect(resolveCalls).toEqual([false, false]);
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("Member access updated");
-    expect(serialized).toContain("Moderation settings could not be loaded. Retry to try again.");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_updated"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
   });
 
   it("handles retry route with force refresh", async () => {
@@ -971,7 +974,7 @@ describe("moderation interaction routes", () => {
     });
 
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("You need `Manage Server` permission to use this moderation panel.");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
   });
 
   it("handles missing setup gracefully", async () => {
@@ -1002,7 +1005,7 @@ describe("moderation interaction routes", () => {
     });
 
     const serialized = JSON.stringify(editReplyCalls[0]);
-    expect(serialized).toContain("TomoriBot is not set up in this server yet.");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.not_setup"));
   });
 
   it("handles stale route versions through router dispatch", async () => {
@@ -1020,7 +1023,7 @@ describe("moderation interaction routes", () => {
 
     const handled = await dispatchGlobalInteraction({} as Client, mockInteraction);
     expect(handled).toBe(true);
-    expect(JSON.stringify(replyPayload)).toContain("This moderation panel is outdated. Run /moderation again.");
+    expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.outdated_panel"));
   });
 
   it("rejects slash command execution outside guild", async () => {
@@ -1030,7 +1033,7 @@ describe("moderation interaction routes", () => {
     } as unknown as ChatInputCommandInteraction;
 
     const payload = await buildInitialModerationPanel(mockInteraction, "en-US");
-    expect(JSON.stringify(payload)).toContain("The moderation panel is only available in a server.");
+    expect(JSON.stringify(payload)).toContain(localizedCopy("en-US", "commands.moderation.guild_only"));
   });
 
   it("rejects slash command execution for non-managers", async () => {
@@ -1042,7 +1045,7 @@ describe("moderation interaction routes", () => {
     } as unknown as ChatInputCommandInteraction;
 
     const payload = await buildInitialModerationPanel(mockInteraction, "en-US");
-    expect(JSON.stringify(payload)).toContain("You need `Manage Server` permission to use this moderation panel.");
+    expect(JSON.stringify(payload)).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
   });
 
   it("renders initial panel on valid slash execution", async () => {
@@ -1058,8 +1061,8 @@ describe("moderation interaction routes", () => {
     });
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Server Moderation");
-    expect(serialized).toContain("Member Access Settings");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.title"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.member_access_title"));
   });
 
   it("executes moderation command with ephemeral deferReply", async () => {
@@ -1120,9 +1123,7 @@ describe("moderation interaction routes", () => {
 
       expect(resolveUserBlacklistAddCalled).toBe(0);
       expect(modalShown).toBe(0);
-      expect(JSON.stringify(replyPayload)).toContain(
-        "You need `Manage Server` permission to use this moderation panel.",
-      );
+      expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
     it("rejects user-blacklist-add-open when workspace is not setup", async () => {
@@ -1157,7 +1158,7 @@ describe("moderation interaction routes", () => {
       });
 
       expect(modalShown).toBe(0);
-      expect(JSON.stringify(replyPayload)).toContain("TomoriBot is not set up in this server yet.");
+      expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.not_setup"));
     });
 
     it("rejects user-blacklist-add-open when read is unavailable or stale", async () => {
@@ -1197,7 +1198,7 @@ describe("moderation interaction routes", () => {
       });
 
       expect(modalShown).toBe(0);
-      expect(JSON.stringify(replyPayload)).toContain("Moderation settings could not be loaded. Retry to try again.");
+      expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
     });
 
     it("rejects user-blacklist-add-open when personalization is disabled", async () => {
@@ -1237,7 +1238,9 @@ describe("moderation interaction routes", () => {
       });
 
       expect(modalShown).toBe(0);
-      expect(JSON.stringify(replyPayload)).toContain("Personalization is disabled for this server.");
+      expect(JSON.stringify(replyPayload)).toContain(
+        localizedCopy("en-US", "commands.moderation.user_blacklist_add_personalization_disabled_detail"),
+      );
     });
 
     it("opens User Blacklist Add raw modal with nonce without pre-deferral", async () => {
@@ -1328,7 +1331,7 @@ describe("moderation interaction routes", () => {
 
       expect(transportConsumed).toBe(1);
       expect(JSON.stringify(editReplyPayload)).toContain(
-        "You need `Manage Server` permission to use this moderation panel.",
+        localizedCopy("en-US", "commands.moderation.permission_denied"),
       );
     });
 
@@ -1364,7 +1367,7 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("The modal submission could not be processed.");
+      expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.member_access_invalid_input"));
     });
 
     it("repaints with invalid_user receipt when user fetch fails", async () => {
@@ -1438,7 +1441,9 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Cannot blacklist bot");
+      expect(serialized).toContain(
+        localizedCopy("en-US", "commands.moderation.user_blacklist_add_cannot_blacklist_bot"),
+      );
       expect(serialized).toContain("MusicBot");
     });
 
@@ -1505,7 +1510,7 @@ describe("moderation interaction routes", () => {
       });
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Member blacklisted");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_add_success"));
       expect(serialized).toContain("Added AnonMember to the personalization blacklist.");
       expect(serialized).toContain("Blacklisted Members `(2)`");
       expect(serialized).toContain("<@123456789012345678>");
@@ -1548,7 +1553,9 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Member already blacklisted");
+      expect(serialized).toContain(
+        localizedCopy("en-US", "commands.moderation.user_blacklist_add_already_blacklisted"),
+      );
       expect(serialized).toContain("ExistingMember is already on the personalization blacklist.");
     });
 
@@ -1614,7 +1621,7 @@ describe("moderation interaction routes", () => {
       expect(fetchedMemberId).toBe("123456789012345678");
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Member blacklisted");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_add_success"));
       expect(serialized).toContain("Added Mirri to the personalization blacklist.");
     });
 
@@ -1699,7 +1706,7 @@ describe("moderation interaction routes", () => {
       expect(resolveCalled).toBe(0);
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("You need `Manage Server` permission to use this moderation panel.");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
     it("rejects user-blacklist-remove-prompt when workspace is not setup", async () => {
@@ -1732,7 +1739,7 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("TomoriBot is not set up in this server yet. Run /setup first.");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.not_setup"));
     });
 
     it("repaints with changed_receipt when personalization target was already removed", async () => {
@@ -1772,8 +1779,8 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Blacklist state changed");
-      expect(serialized).toContain("That entry is no longer present in the blacklist.");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.changed_receipt"));
+      expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.changed_receipt_detail"));
     });
 
     it("renders confirmation view when personalization target exists", async () => {
@@ -1813,7 +1820,7 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Remove Blacklisted Member");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_title"));
       expect(serialized).toContain("Remove <@123456789012345678> from the personalization blacklist?");
       expect(serialized).toContain("user-blacklist-remove-confirm");
       expect(serialized).toContain("user-blacklist-remove-cancel");
@@ -1885,7 +1892,7 @@ describe("moderation interaction routes", () => {
       expect(writeCalled).toBe(0);
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("User Blacklist");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.category_user_blacklist"));
     });
   });
 
@@ -1931,7 +1938,7 @@ describe("moderation interaction routes", () => {
       expect(removeCalled).toBe(0);
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("You need `Manage Server` permission to use this moderation panel.");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
     it("rejects user-blacklist-remove-confirm when readStatus is stale", async () => {
@@ -1983,8 +1990,8 @@ describe("moderation interaction routes", () => {
       expect(removeCalled).toBe(0);
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Removal failed");
-      expect(serialized).toContain("Saved data may be out of date");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_failed"));
+      expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
     });
 
     it("returns changed_receipt without write when target disappeared before confirm", async () => {
@@ -2035,7 +2042,7 @@ describe("moderation interaction routes", () => {
       expect(removeCalled).toBe(0);
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Blacklist state changed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.changed_receipt"));
     });
 
     it("successfully removes personalization entry, verifies forceRefresh=false on reload, and renders receipt", async () => {
@@ -2090,7 +2097,7 @@ describe("moderation interaction routes", () => {
       expect(scopeLoadLog).toEqual([false, false]);
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Blacklist entry removed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_success"));
       expect(serialized).toContain("Removed alice from the personalization blacklist.");
     });
 
@@ -2160,7 +2167,7 @@ describe("moderation interaction routes", () => {
       expect(scopeLoadLog).toEqual([false, false]);
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Blacklist entry removed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_success"));
       expect(serialized).toContain("Removed bob's restriction on **Tomori**.");
     });
 
@@ -2211,8 +2218,8 @@ describe("moderation interaction routes", () => {
 
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
-      expect(serialized).toContain("Removal failed");
-      expect(serialized).toContain("The database write failed. Retry to refresh current settings.");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_failed"));
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_add_failed_detail"));
     });
   });
 
@@ -2367,7 +2374,7 @@ describe("moderation interaction routes", () => {
       });
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("Channel whitelist updated");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.whitelist_channel_add_success"));
       expect(serialized).toContain("Updated whitelist settings for #bot-lounge.");
     });
 
@@ -2470,7 +2477,7 @@ describe("moderation interaction routes", () => {
 
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("Channel whitelist already current");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.whitelist_channel_add_unchanged"));
       expect(serialized).toContain(
         serializedPanelProse(
           "> Whitelist settings for #bot-lounge already match the requested state. No write was needed.",
@@ -2526,7 +2533,7 @@ describe("moderation interaction routes", () => {
       });
 
       expect(upsertCalled).toBe(0);
-      expect(JSON.stringify(editReplies[0])).toContain("Moderation settings could not be loaded");
+      expect(JSON.stringify(editReplies[0])).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
 
       const staleRoute = createModerationInteractionRoute({
         resolveScope: async () => createScopeData(),
@@ -2559,7 +2566,7 @@ describe("moderation interaction routes", () => {
       });
 
       expect(upsertCalled).toBe(0);
-      expect(JSON.stringify(editReplies[1])).toContain("Saved data may be out of date");
+      expect(JSON.stringify(editReplies[1])).toMatch(localizedProse("en-US", "commands.moderation.stale_warning"));
     });
 
     it("rejects add submit without upsert when resolveWhitelistChannelAdd has mismatched guild or server identity", async () => {
@@ -2615,7 +2622,7 @@ describe("moderation interaction routes", () => {
       });
 
       expect(upsertCalled).toBe(0);
-      expect(JSON.stringify(editReplies[0])).toContain("Moderation settings could not be loaded");
+      expect(JSON.stringify(editReplies[0])).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
     });
   });
 
@@ -2719,7 +2726,7 @@ describe("moderation interaction routes", () => {
 
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("Whitelist state changed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.whitelist_changed_receipt"));
       expect(serialized).not.toContain("### Remove Whitelisted Channel");
       expect(serialized).not.toContain("whitelist-channel-remove-confirm");
     });
@@ -2771,7 +2778,7 @@ describe("moderation interaction routes", () => {
 
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("Whitelist state changed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.whitelist_changed_receipt"));
       expect(serialized).not.toContain("### Remove Whitelisted Channel");
       expect(serialized).not.toContain("whitelist-channel-remove-confirm");
     });
@@ -2879,7 +2886,7 @@ describe("moderation interaction routes", () => {
       });
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("Channel removed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.whitelist_channel_remove_success"));
       expect(serialized).toContain("Removed #bot-lounge from the whitelist.");
     });
 
@@ -2949,7 +2956,7 @@ describe("moderation interaction routes", () => {
       expect(removeCalled).toBe(0);
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("Whitelist state changed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.whitelist_changed_receipt"));
     });
 
     it("renders changed-state receipt and does not call remove operation when resolved channel is not GuildText immediately before confirm", async () => {
@@ -3018,7 +3025,7 @@ describe("moderation interaction routes", () => {
       expect(removeCalled).toBe(0);
       expect(editReplies).toHaveLength(1);
       const serialized = JSON.stringify(editReplies[0]);
-      expect(serialized).toContain("Whitelist state changed");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.whitelist_changed_receipt"));
     });
   });
 
@@ -3360,7 +3367,9 @@ describe("moderation whitelist role routes", () => {
       segments: ["whitelist-role-add-submit", "en-US", "nonce123"],
     });
     expect(writes).toEqual(["123456789012345678"]);
-    expect(JSON.stringify(edits.at(-1))).toContain("Role added to whitelist");
+    expect(JSON.stringify(edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.moderation.whitelist_role_add_success"),
+    );
 
     const everyoneRoute = createModerationInteractionRoute({
       resolveScope: async () => createScopeData({ guildId: "123456789012345678" }),
@@ -3385,7 +3394,9 @@ describe("moderation whitelist role routes", () => {
       segments: ["whitelist-role-add-submit", "en-US", "nonce123"],
     });
     expect(writes).toHaveLength(1);
-    expect(JSON.stringify(edits.at(-1))).toContain("everyone role cannot be whitelisted");
+    expect(JSON.stringify(edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.moderation.whitelist_role_add_everyone"),
+    );
   });
 
   it("re-resolves a whitelisted role before prompt and again before the confirmed write", async () => {
@@ -3441,7 +3452,9 @@ describe("moderation whitelist role routes", () => {
     });
     expect(resolves).toBe(2);
     expect(removes).toBe(1);
-    expect(JSON.stringify(edits.at(-1))).toContain("Role removed from whitelist");
+    expect(JSON.stringify(edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.moderation.whitelist_role_remove_success"),
+    );
   });
 
   it("uses the current guild role manager and does not write when the selected role disappeared", async () => {
@@ -3494,7 +3507,9 @@ describe("moderation whitelist role routes", () => {
 
     expect(fetches).toBe(1);
     expect(writes).toBe(0);
-    expect(JSON.stringify(edits.at(-1))).toContain("selected role is invalid");
+    expect(JSON.stringify(edits.at(-1))).toContain(
+      localizedCopy("en-US", "commands.moderation.whitelist_role_add_invalid_input"),
+    );
   });
 
   describe("quota interaction routes", () => {
@@ -3525,7 +3540,7 @@ describe("moderation whitelist role routes", () => {
       });
 
       expect(modalOpened).toBe(false);
-      expect(JSON.stringify(replies[0])).toContain("You need `Manage Server` permission");
+      expect(JSON.stringify(replies[0])).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
     it("quota-edit-open refuses non-fresh read status", async () => {
@@ -3556,7 +3571,7 @@ describe("moderation whitelist role routes", () => {
       });
 
       expect(modalOpened).toBe(false);
-      expect(JSON.stringify(replies[0])).toContain("Moderation settings could not be loaded");
+      expect(JSON.stringify(replies[0])).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
     });
 
     it("quota-edit-open opens modal with prefilled current quota values", async () => {
@@ -3645,7 +3660,7 @@ describe("moderation whitelist role routes", () => {
       });
 
       expect(writes).toBe(0);
-      expect(JSON.stringify(edits[0])).toContain("You need `Manage Server` permission");
+      expect(JSON.stringify(edits[0])).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
     it("quota-edit-submit validates bounds and refuses write on invalid values", async () => {
@@ -3702,7 +3717,9 @@ describe("moderation whitelist role routes", () => {
         });
 
         expect(writes).toBe(0);
-        expect(JSON.stringify(edits.at(-1))).toContain("submitted quota values are invalid");
+        expect(JSON.stringify(edits.at(-1))).toMatch(
+          localizedProse("en-US", "commands.moderation.quota_edit_invalid_input"),
+        );
       }
     });
 
@@ -3755,8 +3772,10 @@ describe("moderation whitelist role routes", () => {
       });
 
       expect(writes).toBe(0);
-      expect(JSON.stringify(edits.at(-1))).toContain("quotas already current");
-      expect(JSON.stringify(edits.at(-1))).toContain("No write was needed");
+      expect(JSON.stringify(edits.at(-1))).toMatch(localizedProse("en-US", "commands.moderation.quota_edit_unchanged"));
+      expect(JSON.stringify(edits.at(-1))).toMatch(
+        localizedProse("en-US", "commands.moderation.quota_edit_unchanged_detail"),
+      );
     });
 
     it("quota-edit-submit calls updateQuotaSettings with parsed numbers and repaints success receipt", async () => {

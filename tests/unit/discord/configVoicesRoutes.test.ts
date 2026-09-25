@@ -22,7 +22,7 @@ import {
   CONFIG_TTS_TURBO_FIELD,
 } from "@/utils/discord/ui/configModals";
 import { addVoiceSample, type VoiceSampleAddDependencies } from "@/utils/speech/voiceSampleAddOperation";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -412,7 +412,9 @@ describe("config voice sample routes", () => {
 
     const payload = harness.edits.at(-1) as { components: unknown[]; files: unknown[] };
     expect(JSON.stringify(payload.components)).toContain("sample-01");
-    expect(JSON.stringify(payload.components)).toContain("Audio preview is unavailable.");
+    expect(JSON.stringify(payload.components)).toContain(
+      localizer("en-US", "commands.config.panel.voices.page.audio_preview_unavailable"),
+    );
     expect(JSON.stringify(payload.components)).not.toContain(`"type":13`);
     expect(payload.files).toEqual([]);
     reader.mockRestore();
@@ -442,7 +444,9 @@ describe("config voice sample routes", () => {
     expect(firstPayload.files).toHaveLength(1);
     expect(secondPayload.files).toEqual([]);
     expect(JSON.stringify(secondPayload.components)).not.toContain(`"type":13`);
-    expect(JSON.stringify(secondPayload.components)).toContain("Audio preview is unavailable.");
+    expect(JSON.stringify(secondPayload.components)).toContain(
+      localizer("en-US", "commands.config.panel.voices.page.audio_preview_unavailable"),
+    );
     reader.mockRestore();
   });
 
@@ -828,7 +832,7 @@ describe("config voice sample routes", () => {
       }),
     );
     expect(removeSpy).not.toHaveBeenCalled();
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("Panel Out Of Date");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(localizer("en-US", "commands.config.panel.stale_heading"));
     removeSpy.mockRestore();
   });
 
@@ -868,7 +872,9 @@ describe("config voice sample routes", () => {
         filePath: "data/voice-samples/sample-2.wav",
       },
     ]);
-    expect(JSON.stringify(harness.edits.at(-1))).toContain("Voice Sample Removed");
+    expect(JSON.stringify(harness.edits.at(-1))).toContain(
+      localizer("en-US", "commands.config.panel.voices.remove.success_title"),
+    );
     removeSpy.mockRestore();
   });
 
@@ -921,7 +927,9 @@ describe("config voice sample routes", () => {
     expect(harness.deferredAtDownload).toEqual([true]);
     expect(harness.operationCalls).toEqual(["insert", "store", "update"]);
     expect(harness.edits).toHaveLength(1);
-    expect(JSON.stringify(harness.edits[0])).toContain("Select a sample to inspect.");
+    expect(JSON.stringify(harness.edits[0])).toContain(
+      localizer("en-US", "commands.config.panel.voices.page.select_sample_prompt"),
+    );
   });
 
   it("rejects format and size before the first download", async () => {
@@ -986,7 +994,9 @@ describe("config voice sample routes", () => {
     await dispatch(harness, interaction);
 
     expect(harness.edits).toHaveLength(1);
-    expect(JSON.stringify(harness.edits[0])).toContain("Update Failed");
+    expect(JSON.stringify(harness.edits[0])).toContain(
+      localizer("en-US", "commands.config.panel.write_failed_heading"),
+    );
   });
 
   it("compensates the inserted row when storage fails", async () => {

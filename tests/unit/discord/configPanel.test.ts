@@ -26,6 +26,7 @@ import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configB
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -354,10 +355,9 @@ describe("config panel shell", () => {
       const customIds = walk(payload)
         .map((component) => component.customId)
         .filter((customId): customId is string => customId !== undefined);
-      expect(serialized).toContain("NSFW Content");
+      expect(serialized).toContain(localizedCopy("en-US", "commands.config.panel.page_plugins_nsfw_jailbreaks"));
       expect(serialized).toContain("`/nsfw`");
-      expect(serialized).toContain("NSFW-marked channels");
-      expect(serialized).toContain("users of legal age");
+      expect(serialized).toMatch(localizedProse("en-US", "commands.config.panel.plugins_nsfw_jailbreaks_description"));
       expect(serialized).toContain(
         "https://docs.tomoribot.app/en/features/setup-administration/age-restricted-commands/",
       );
@@ -369,7 +369,9 @@ describe("config panel shell", () => {
       expect(serialized).not.toContain("st-presets:v1");
       expect(() => validateComponentsV2MessageLimits(payload)).not.toThrow();
     }
-    expect(JSON.stringify(build(GUILD_MEMBER))).not.toContain("NSFW Content");
+    expect(JSON.stringify(build(GUILD_MEMBER))).not.toContain(
+      localizedCopy("en-US", "commands.config.panel.page_plugins_nsfw_jailbreaks"),
+    );
   });
 
   it("embeds the ST panel with config routes and stays within the Components V2 budget", () => {
@@ -1217,7 +1219,7 @@ describe("config Persona Memories body", () => {
     expect(text).toContain("Rewarded 23 times:");
     // Ranked by count, so the larger total leads regardless of the order the rows arrived in.
     expect(text.indexOf("18 Kisses")).toBeLessThan(text.indexOf("5 Headpats"));
-    expect(text).toContain("Punished once:");
+    expect(text).toContain(localizedCopy("en-US", "commands.config.panel.conditioning_punish_summary_one"));
     expect(text).toContain("1 Bonk");
   });
 
@@ -1342,7 +1344,9 @@ describe("config Persona Appearance and Advanced bodies", () => {
     expect(
       buttonFor(payload, { action: "character-reference-clear-view", locale: "en-US", personaId: 55 })?.style,
     ).toBe(4);
-    expect(JSON.stringify(payload)).toContain("Uploaded and Saved");
+    expect(JSON.stringify(payload)).toContain(
+      localizedCopy("en-US", "commands.config.panel.character_reference_uploaded"),
+    );
     expect(JSON.stringify(payload)).not.toContain("data/charreferences");
   });
 
@@ -1544,7 +1548,7 @@ describe("config Persona Sprites page", () => {
     expect(
       buttonFor(payload, { action: "sprite-remove-view", locale: "en-US", personaId: 55, index: 0, fp })?.style,
     ).toBe(4);
-    expect(selector?.options?.[0]?.label).toBe("+ Add Sprite");
+    expect(selector?.options?.[0]?.label).toBe(localizedCopy("en-US", "commands.config.panel.sprite_add_option"));
     expect(buttonFor(payload, { action: "sprite-import-open", locale: "en-US", personaId: 55 })?.disabled).toBe(false);
     expect(buttonFor(payload, { action: "sprite-export", locale: "en-US", personaId: 55 })?.disabled).toBe(false);
 

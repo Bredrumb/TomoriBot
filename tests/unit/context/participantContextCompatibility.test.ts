@@ -1,3 +1,4 @@
+import { localizer } from "@/utils/text/localizer";
 import { describe, expect, it } from "bun:test";
 import { PrivacyLevel } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
@@ -218,7 +219,7 @@ describe("participant context compatibility matrix", () => {
       });
       const text = getText(item);
 
-      expect(text).not.toContain("Physical Appearance");
+      expect(text).not.toContain(localizer("en-US", "commands.status.field_physical_appearance_tags"));
       expect(text).toContain("Alice likes archival maps.");
       expect(text).not.toContain("Pending Tasks Assigned to You:");
       expect(text).not.toContain("(This is you!)");

@@ -1,20 +1,13 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ComponentType } from "discord.js";
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import { buildMcpsPanelPayload, MAX_MCP_PANEL_PAGE_SIZE } from "@/utils/discord/ui/mcpsPanel";
 import { CONFIG_MCP_PANEL_ROUTE_ADAPTER } from "@/utils/discord/configPanelCatalog";
-import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { BACKTICK_RUNS, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
-
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 
 const REALISTIC_RECEIPT: PanelReceipt = {
   tone: "success",
@@ -25,40 +18,6 @@ const REALISTIC_RECEIPT: PanelReceipt = {
 
 const READ_STATUSES: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
 const RECEIPTS: Array<PanelReceipt | undefined> = [undefined, REALISTIC_RECEIPT];
-const BACKTICK_RUNS = [3, 4, 5, 6, 8];
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
-
-function textDisplays(value: unknown): string[] {
-  const contents: string[] = [];
-  const visit = (current: unknown): void => {
-    if (Array.isArray(current)) {
-      for (const child of current) visit(child);
-      return;
-    }
-    if (!current || typeof current !== "object") return;
-    const record = current as Record<string, unknown>;
-    if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-      contents.push(record.content);
-    }
-    for (const child of Object.values(record)) visit(child);
-  };
-  visit(value);
-  return contents;
-}
-
-function assertSafePayload(payload: ReturnType<typeof buildMcpsPanelPayload>, label: string): void {
-  const result = validateComponentsV2MessageLimits(payload);
-  expect(result.valid, `${label} violations: ${JSON.stringify(result.violations)}`).toBe(true);
-  for (const content of textDisplays(payload)) {
-    expect(LONE_SURROGATE.test(content), `${label} contains a lone surrogate`).toBe(false);
-    const fenceStart = content.indexOf("```markdown\n");
-    if (fenceStart === -1) continue;
-    const bodyStart = fenceStart + "```markdown\n".length;
-    const closingFence = content.lastIndexOf("\n```");
-    if (closingFence <= bodyStart) continue;
-    expect(content.slice(bodyStart, closingFence), `${label} has an adjacent backtick in a fence`).not.toMatch(/``/u);
-  }
-}
 
 function row(id: number, overrides: Partial<GuildMcpServerRow> = {}): GuildMcpServerRow {
   return {
@@ -112,7 +71,7 @@ describe("MCP panel Components V2 limits", () => {
                 { kind: "collection" as const, rangeIndex: 2, selectedId: configs[0]?.guild_mcp_id },
                 { kind: "remove" as const, entityId: configs[0]?.guild_mcp_id ?? 1 },
               ]) {
-                assertSafePayload(
+                expectSafePanelPayload(
                   buildMcpsPanelPayload({
                     locale,
                     scope,
@@ -151,7 +110,7 @@ describe("MCP panel Components V2 limits", () => {
         { kind: "collection" as const, rangeIndex: 0 },
         { kind: "remove" as const, entityId: index + 1 },
       ]) {
-        assertSafePayload(
+        expectSafePanelPayload(
           buildMcpsPanelPayload({
             locale: "en-US",
             scope: "guild",
@@ -179,7 +138,7 @@ describe("MCP panel Components V2 limits", () => {
           { kind: "collection" as const, rangeIndex: 0 },
           { kind: "remove" as const, entityId: fullPageConfigs[0]?.guild_mcp_id as number },
         ]) {
-          assertSafePayload(
+          expectSafePanelPayload(
             buildMcpsPanelPayload({
               locale,
               scope: "guild",

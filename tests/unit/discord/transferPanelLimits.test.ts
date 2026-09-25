@@ -1,5 +1,3 @@
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ButtonStyle, ComponentType } from "discord.js";
 import {
@@ -24,19 +22,15 @@ import { withLinePrefix } from "@/utils/discord/ui/panel";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { ColorCode } from "@/utils/misc/logger";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { RUNTIME_LOCALES, localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { BACKTICK_RUNS, LONE_SURROGATE } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
 
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 const SECTION_NAMES = {
   workspace_config: Object.keys(workspaceConfigExportDataSchema.shape),
   personal_config: Object.keys(personalConfigExportDataSchema.shape),
 };
-const BACKTICK_RUNS = [3, 4, 5, 6, 8];
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
 
 function visitComponents(value: unknown, visit: (record: Record<string, unknown>) => void): void {
   if (Array.isArray(value)) {
@@ -811,7 +805,7 @@ describe("transfer panel Components V2 limits", () => {
     const previewText = textDisplays(preview).join("\n");
     expect(previewText).toContain("Bucket 0");
     expect(previewText).toContain("Bucket 1");
-    expect(previewText).toContain("Documents and personas are excluded.");
+    expect(previewText).toContain(localizedCopy("en-US", "commands.transfer.memory_preview_exclusions"));
 
     const confirmation = buildMemoryReplaceConfirmationPayload({
       locale: "en-US",
@@ -823,6 +817,6 @@ describe("transfer panel Components V2 limits", () => {
     const confirmationText = textDisplays(confirmation).join("\n");
     expect(confirmationText).toContain("Persona 0");
     expect(confirmationText).toContain("Bucket 1");
-    expect(confirmationText).toContain("will not be imported");
+    expect(confirmationText).toMatch(localizedProse("en-US", "commands.transfer.memory_skip_confirmation_line"));
   });
 });

@@ -106,6 +106,8 @@ proposed follow-up's premise in source before suggesting it.
       it. No tests that only prove wiring or a helper exists, and no dedicated test suites or CI jobs
       for optional local servers (`servers/`), installers, or devtools.
     - Loop locales inside one test that reports every failure, not one test per locale.
+    - Assert localized copy by key (`localizedCopy` or `localizedProse` from
+      `tests/helpers/localeCases.ts`), never by quoting its English text.
     - Assert an exact count or a complete member list only when that exact count or list is what must
       not change.
     - Code kept alive only by a test import is dead code.

@@ -26,7 +26,7 @@ import {
   buildProvidersPanelPayload,
   type ProvidersPanelRenderInput,
 } from "@/utils/discord/ui/providersPanel";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -1461,7 +1461,7 @@ describe("providers routes", () => {
     await route.execute({} as Client, interaction as never, parsed(customId));
 
     expect(calls).toEqual(["reply"]);
-    expect(JSON.stringify(replies[0])).toContain("Provider data could not be loaded");
+    expect(JSON.stringify(replies[0])).toContain(localizer("en-US", "commands.providers.unavailable"));
   });
 
   it("pages model ranges on the entry page itself without writing or changing provider", async () => {
@@ -1539,7 +1539,7 @@ describe("providers routes", () => {
     expect(rendered).toContain('"default":true');
     expect(rendered).toContain("edit:text:20");
     expect(rendered).not.toContain('edit:text:1"');
-    expect(rendered).toContain("Remove Provider");
+    expect(rendered).toContain(localizer("en-US", "commands.providers.remove_provider"));
   });
 
   it("routes oversized collections through the shared in-place row", async () => {
@@ -1596,7 +1596,7 @@ describe("providers routes", () => {
     expect(JSON.stringify(payloads[1])).toContain(
       '"value":"provider:p23","description":"Saved provider","default":true',
     );
-    expect(JSON.stringify(payloads[1])).toContain("No models are registered here yet.");
+    expect(JSON.stringify(payloads[1])).toContain(localizer("en-US", "commands.providers.entry_no_models"));
     expect(JSON.stringify(payloads[1])).not.toContain("Select Page");
     expect(JSON.stringify(payloads[2])).toContain('"label":"Page 2 of 2"');
     expect(JSON.stringify(payloads[2])).not.toContain("Select Page");

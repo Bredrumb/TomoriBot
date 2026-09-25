@@ -15,6 +15,7 @@ import {
   buildProvidersPanelPayload,
 } from "@/utils/discord/ui/providersPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -74,7 +75,7 @@ describe("providers panel rendering", () => {
     expect(modal.custom_id).toBe("providers:v1:add-submit:en-US:abcdefgh");
     expect(serialized).toContain("Google Gemini");
     expect(serialized).toContain("ElevenLabs");
-    expect(serialized).toContain("Brave Search");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.provider_brave"));
     expect(serialized).not.toContain('"value":"custom"');
     expect(modal.components).toHaveLength(2);
   });
@@ -101,14 +102,14 @@ describe("providers panel rendering", () => {
     });
 
     expect(addModal.custom_id).toStartWith("personal-providers:v1:");
-    expect(JSON.stringify(addModal)).not.toContain("Brave Search");
+    expect(JSON.stringify(addModal)).not.toContain(localizedCopy("en-US", "commands.providers.provider_brave"));
     expect(editModal.components).toHaveLength(1);
     expect(JSON.stringify(editModal)).not.toContain("rotation-key");
     expect(JSON.stringify(panel)).toContain("personal-providers:v1:");
     expect(JSON.stringify(panel)).not.toContain('"customId":"providers:v1:');
     expect(JSON.stringify(panel)).toContain("## Personal Providers");
     expect(JSON.stringify(panel)).not.toContain("## Server Providers");
-    expect(JSON.stringify(panel)).toContain("`/personal config` > Models");
+    expect(JSON.stringify(panel)).toMatch(localizedProse("en-US", "commands.providers.personal_routing_hint"));
   });
 
   it("offers every API compatibility in one valid modal", () => {
@@ -119,13 +120,13 @@ describe("providers panel rendering", () => {
     );
 
     expect(modal.custom_id).toBe("providers:v1:endpoint-submit:en-US:abcdefgh");
-    expect(serialized).toContain("Endpoint Label");
-    expect(serialized).toContain("It is not sent to the service.");
-    expect(serialized).toContain("API Compatibility");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.endpoint_label_label"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.endpoint_label_description"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.endpoint_api_style_label"));
     expect(serialized).toContain("e.g. ollama, koboldcpp, vllm, comfyui");
-    expect(serialized).toContain("Base URL including version prefix (e.g., /v1)");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.endpoint_url_description"));
     expect(serialized).toContain("https://models.example.com/v1");
-    expect(serialized).toContain("Use the bare Ollama root");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.api_style_descriptions.ollama-native"));
     expect(serialized).toContain("openai-compatible");
     expect(serialized).toContain("ollama-native");
     expect(serialized).toContain("comfyui");
@@ -147,10 +148,10 @@ describe("providers panel rendering", () => {
 
     expect(serialized).toContain("## Server Providers");
     expect(serialized).not.toContain("## Personal Providers");
-    expect(serialized).toContain("No Saved Providers");
-    expect(serialized).toContain("**Select** or **add** a provider or endpoint");
-    expect(serialized).toContain("+ Add New Provider");
-    expect(serialized).toContain("+ Add New Custom Endpoint");
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.empty_heading"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.selector_guidance"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.select_add_provider"));
+    expect(serialized).toContain(localizedCopy("en-US", "commands.providers.select_add_endpoint"));
     expect(serialized.replaceAll("\\n-# ", " ")).toContain("`/config` > Models");
     expect((select?.options as unknown[])?.length).toBe(2);
   });
@@ -189,18 +190,20 @@ describe("providers panel rendering", () => {
     const body = textDisplays.find((component) => String(component.content).includes("**Text**"));
     const actions = collectComponents(payload).filter((component) => component.type === ComponentType.Button);
 
-    expect(String(body?.content)).toContain("currently active");
-    expect(String(body?.content)).toContain("provider fallback");
-    expect(String(body?.content)).toContain("custom registration");
-    expect(String(body?.content)).toContain("Use the dropdown below to add or edit a model capability:");
+    expect(String(body?.content)).toContain(localizedCopy("en-US", "commands.providers.marker_workspace_active"));
+    expect(String(body?.content)).toContain(localizedCopy("en-US", "commands.providers.marker_provider_fallback"));
+    expect(String(body?.content)).toContain(localizedCopy("en-US", "commands.providers.marker_custom_registration"));
+    expect(String(body?.content)).toContain(localizedCopy("en-US", "commands.providers.model_selector_guidance"));
     expect(String(body?.content)).not.toContain("**Image**");
     expect(String(body?.content)).not.toContain("**Transcription**");
-    expect(String(body?.content)).not.toContain("No models are registered");
+    expect(String(body?.content)).not.toContain(localizedCopy("en-US", "commands.providers.entry_no_models"));
     expect(String(body?.content)).not.toContain("unverified");
     expect(String(body?.content)).not.toContain("Workspace ID");
     expect(String(body?.content)).not.toContain("### Google");
     expect(actions.filter((action) => action.label !== "Retry").every((action) => action.disabled === true)).toBe(true);
-    expect(actions.map((action) => action.label)).toContain("Remove Provider");
+    expect(actions.map((action) => action.label)).toContain(
+      localizedCopy("en-US", "commands.providers.remove_provider"),
+    );
   });
 
   it("states absence once when an entry has no registered models at all", () => {
@@ -221,7 +224,7 @@ describe("providers panel rendering", () => {
     expect(body).toBeDefined();
     expect(String(body?.content)).not.toContain("**Text**");
     expect(String(body?.content).match(/No models are registered/g)).toHaveLength(1);
-    expect(String(body?.content)).toContain("Use the dropdown below to add or edit a model capability:");
+    expect(String(body?.content)).toContain(localizedCopy("en-US", "commands.providers.model_selector_guidance"));
   });
 
   it("renders endpoint and Brave pages without exposing endpoint internals", () => {
@@ -285,11 +288,11 @@ describe("providers panel rendering", () => {
     expect(endpointPayload).not.toContain("connectionIds");
     expect(endpointPayload).not.toContain("custom:41");
     expect(endpointPayload).not.toContain("### juno");
-    expect(endpointPayload).toContain("Remove Endpoint");
-    expect(bravePayload).toContain("API key configured");
+    expect(endpointPayload).toContain(localizedCopy("en-US", "commands.providers.remove_endpoint"));
+    expect(bravePayload).toContain(localizedCopy("en-US", "commands.providers.brave_configured"));
     expect(bravePayload).toContain("Remove Key");
     expect(bravePayload).not.toContain("model-select");
-    expect(bravePayload).not.toContain("Use the dropdown below to add or edit a model capability:");
+    expect(bravePayload).not.toContain(localizedCopy("en-US", "commands.providers.model_selector_guidance"));
     expect(bravePayload).not.toContain("### Brave Search");
   });
 
@@ -307,7 +310,7 @@ describe("providers panel rendering", () => {
 
     expect(select?.disabled).toBe(true);
     expect(serialized).toContain("Retry");
-    expect(serialized).toContain("Saved data may be out of date");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.providers.stale_warning"));
   });
 
   it("pages saved entries at 23 so the two add actions always fit", () => {
@@ -615,11 +618,13 @@ describe("providers panel rendering", () => {
 
     expect(capabilities?.options?.map((option) => option.value)).toEqual(["tools", "images", "structured"]);
     expect(compat?.options?.map((option) => option.value)).toEqual(["strict-roles", "prefix", "verbatim-tools"]);
-    expect(JSON.stringify(endpointModal)).toContain("Chat Completion Compatibilities");
+    expect(JSON.stringify(endpointModal)).toContain(localizedCopy("en-US", "commands.providers.model_compat_label"));
     // Every option says what it does and when to tick it.
     expect(compat?.options?.every((option) => (option.description?.length ?? 0) > 0)).toBe(true);
     expect(capabilities?.options?.every((option) => (option.description?.length ?? 0) > 0)).toBe(true);
-    expect(JSON.stringify(endpointModal)).toContain("a proxy fronting Claude");
+    expect(JSON.stringify(endpointModal)).toContain(
+      localizedCopy("en-US", "commands.providers.model_flag_descriptions.strict-roles"),
+    );
   });
 
   it("defaults the verbatim tool-calling compat to the model's stored value", () => {
@@ -666,7 +671,7 @@ describe("providers panel rendering", () => {
     const json = JSON.stringify(buildProviderModelModal("en-US", "provider", "openrouter", "text", null, "abcdefgh"));
     expect(json).toContain("flags_abcdefgh");
     expect(json).not.toContain("compat_abcdefgh");
-    expect(json).not.toContain("Chat Completion Compatibilities");
+    expect(json).not.toContain(localizedCopy("en-US", "commands.providers.model_compat_label"));
   });
 
   it("asks a clone server for its voice mode, markup, and instruct support", () => {
@@ -690,8 +695,8 @@ describe("providers panel rendering", () => {
     expect(field("supports-instruct_abcdefgh")?.options?.[0]?.default).toBe(true);
 
     // Every choice explains when to pick it, which is the whole point of splitting these out.
-    expect(json).toContain("Pick this for --mode auto.");
-    expect(json).toContain("Strip every cue.");
+    expect(json).toContain(localizedCopy("en-US", "commands.providers.voice_mode_descriptions.auto"));
+    expect(json).toContain(localizedCopy("en-US", "commands.providers.script_markup_descriptions.plain"));
     expect(json).toContain("/config");
   });
 
@@ -797,8 +802,8 @@ describe("providers panel rendering", () => {
 
     expect(json).toContain('"value":"juno"');
     expect(json).toContain('"value":"https://models.example.com/v1"');
-    expect(json).toContain("Endpoint Label");
-    expect(json).toContain("It is not sent to the service.");
+    expect(json).toContain(localizedCopy("en-US", "commands.providers.endpoint_label_label"));
+    expect(json).toContain(localizedCopy("en-US", "commands.providers.endpoint_label_description"));
     expect(modal.components[1]?.component?.required).toBe(true);
     expect(json).toContain("edit-auth-token_abcdefgh");
     expect(json).not.toContain("stored-secret");
@@ -839,10 +844,10 @@ describe("providers panel rendering", () => {
     });
     const json = JSON.stringify(payload);
 
-    expect(json).toContain("Remove saved entry?");
+    expect(json).toContain(localizedCopy("en-US", "commands.providers.remove_title"));
     expect(json).toContain("Google");
-    expect(json).toContain("encrypted credential");
-    expect(json).toContain("Continue and Remove");
+    expect(json).toMatch(localizedProse("en-US", "commands.providers.remove_impact_provider"));
+    expect(json).toContain(localizedCopy("en-US", "commands.providers.remove_confirm"));
     expect(json).toContain("remove-confirm:en-US:provider:google");
     expect(json).toContain("remove-cancel:en-US:provider:google");
   });

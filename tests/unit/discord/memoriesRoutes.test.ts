@@ -399,7 +399,7 @@ describe("memories modals and tag parser", () => {
 
   it("builds edit modal with prefilled values", () => {
     const modal = buildEditServerMemoryModal("en-US", 1770, 42, "Existing content", ["tag1", "tag2"], "nonce123");
-    expect(modal.title).toBe("Edit Server Memory");
+    expect(modal.title).toBe(localizer("en-US", "commands.memories.edit_modal_title"));
     const contentField = modal.components.find((c) => c.component?.custom_id?.startsWith("content_"));
     expect(contentField?.component?.value).toBe("Existing content");
     const tagsField = modal.components.find((c) => c.component?.custom_id?.startsWith("tags_"));
@@ -764,7 +764,7 @@ describe("memories permissions and scoping", () => {
     const values = personaSelect?.options?.map((o) => o.value) ?? [];
     expect(values).toEqual(["100", "200"]);
     // Option label uses the representative (main persona)
-    expect(personaSelect?.options?.[0]?.label).toBe("Main Persona");
+    expect(personaSelect?.options?.[0]?.label).toBe(localizer("en-US", "commands.export.memories.scope_choice_main"));
 
     const components = (JSON.parse(JSON.stringify(payload)).components[0].components ?? []) as unknown[];
     const personaSelectorIndex = components.findIndex((component) =>
@@ -976,7 +976,7 @@ describe("memories permissions and scoping", () => {
 
     expect(serialized).toContain("Page 2 of 2");
     expect(serialized).toContain("Memory 25");
-    expect(serialized).not.toContain("No server memories taught for this persona yet.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.memories.no_memories"));
   });
 
   it("keeps the final server-memory page populated after the confirmed deletion", async () => {
@@ -1022,7 +1022,7 @@ describe("memories permissions and scoping", () => {
     expect(serialized).toContain("Memory 48");
     const memorySelect = collectSelects(payload).find((select) => select.customId?.includes(":select:"));
     expect(memorySelect?.options?.some((option) => option.label === "Memory 49")).toBe(false);
-    expect(serialized).not.toContain("No server memories taught for this persona yet.");
+    expect(serialized).not.toContain(localizer("en-US", "commands.memories.no_memories"));
   });
 
   it("keeps the final document page populated after the confirmed deletion", async () => {
@@ -1181,12 +1181,12 @@ describe("memories permissions and scoping", () => {
     const [swBtn1, personaBtn1] = serverwideButtons;
 
     expect(swBtn1.customId).toBe("memories:v1:document-scope:en-US:0");
-    expect(swBtn1.label).toBe("Serverwide Scope");
+    expect(swBtn1.label).toBe(localizer("en-US", "commands.memories.document_scope_serverwide"));
     expect(swBtn1.style).toBe(ButtonStyle.Primary);
     expect(swBtn1.disabled).toBe(true);
 
     expect(personaBtn1.customId).toBe("memories:v1:document-scope:en-US:10");
-    expect(personaBtn1.label).toBe("Persona Scope");
+    expect(personaBtn1.label).toBe(localizer("en-US", "commands.memories.document_scope_persona"));
     expect(personaBtn1.style).toBe(ButtonStyle.Secondary);
     expect(personaBtn1.disabled).toBe(false);
 

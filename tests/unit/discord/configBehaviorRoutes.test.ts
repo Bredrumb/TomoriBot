@@ -48,6 +48,7 @@ import {
 } from "@/utils/discord/ui/configBehaviorModals";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -982,7 +983,9 @@ describe("config Behavior routes", () => {
     );
     expect(insert).not.toHaveBeenCalled();
     expect(upsert).not.toHaveBeenCalled();
-    expect(JSON.stringify(harness.edits)).toContain("Enter valid comma-separated timing values.");
+    expect(JSON.stringify(harness.edits)).toContain(
+      localizedCopy("en-US", "commands.config.panel.random_trigger_settings_invalid_detail"),
+    );
     insert.mockRestore();
     upsert.mockRestore();
   });
@@ -1329,6 +1332,6 @@ describe("config Behavior routes", () => {
     expect(ordinary).toContain(buildConfigRouteId({ action: "behavior-random-add-open", locale: "en-US" }));
     expect(ordinary).not.toContain(buildConfigRouteId({ action: "behavior-random-remove-select", locale: "en-US" }));
     // Cancel lands back on the first schedule page, where the summary still reports the overflow.
-    expect(ordinary).toContain("more trigger(s) are on later pages.");
+    expect(ordinary).toMatch(localizedProse("en-US", "commands.config.panel.random_trigger_more"));
   });
 });

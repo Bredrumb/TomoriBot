@@ -14,7 +14,7 @@ import {
 } from "@/utils/discord/statusDashboardCatalog";
 import { createStatusInteractionRoute } from "@/utils/discord/interactions/statusRoutes";
 import type { StatusPageCategory } from "@/utils/metrics/status/statusPageRenderer";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -148,7 +148,7 @@ describe("persistent status interaction route", () => {
     expect(events).toEqual(["user", "state", "pages"]);
     expect(interaction.deferred).toBe(true);
     expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain("Server Status: Models and Sampling");
+    expect(JSON.stringify(replies[0])).toContain(localizer("en-US", "commands.status.server_page4_title"));
   });
 
   it("routes a page selector with a bounded value and uses editReply rather than update", async () => {

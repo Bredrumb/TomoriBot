@@ -7,8 +7,6 @@
  * These cases drive builders across all runtime locales, roster sizes, and catalog-growth boundaries.
  */
 
-import { readdirSync } from "node:fs";
-import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { TomoriState } from "@/types/db/schema";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
@@ -49,16 +47,12 @@ import {
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import type { ToolNoticeDefinition, ToolNoticeKey } from "@/constants/toolNotices";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
 
 const STRING_SELECT = 3;
 const LABEL = 18;
 const RADIO_GROUP = 21;
 const CHECKBOX_GROUP = 22;
-
-const localesDir = join(process.cwd(), "src", "locales");
-const RUNTIME_LOCALES = readdirSync(localesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name);
 
 function makePersona(personaId: number, nickname = `Persona ${personaId}`): TomoriState {
   return {

@@ -7,7 +7,7 @@ import {
   type ProviderParameterBlockCopy,
   type ProviderParameterBlockInput,
 } from "@/utils/discord/ui/personalConfigParameterControls";
-import { initializeLocalizer } from "@/utils/text/localizer";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 
 await initializeLocalizer();
 
@@ -153,7 +153,7 @@ describe("personal provider parameter controls", () => {
     } as unknown as UserSavedProviderConfigRow;
 
     const sampling = buildParameters1Modal("en-US", "nonce123456", "openrouter", currentConfig);
-    expect(sampling.title).toBe("Edit Sampling");
+    expect(sampling.title).toBe(localizer("en-US", "commands.personal.config.edit_params_1_button"));
     expect(sampling.components).toHaveLength(4);
     expect(sampling.components.every((component) => component.type === 18)).toBe(true);
     expect(sampling.components.map((component) => component.component?.type)).toEqual([4, 4, 4, 4]);
@@ -165,7 +165,7 @@ describe("personal provider parameter controls", () => {
     ]);
 
     const generation = buildParameters2Modal("en-US", "nonce123456", "openrouter", currentConfig);
-    expect(generation.title).toBe("Edit Generation");
+    expect(generation.title).toBe(localizer("en-US", "commands.personal.config.edit_params_2_button"));
     expect(generation.components).toHaveLength(4);
     expect(generation.components.every((component) => component.type === 18)).toBe(true);
     expect(generation.components.map((component) => component.component?.type)).toEqual([4, 4, 4, 21]);
