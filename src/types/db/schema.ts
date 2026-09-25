@@ -3,6 +3,12 @@ import { z } from "zod";
 import { SUPPORTED_PARAM_VALUES, isSupportedParamValue, type SupportedParamValue } from "@/constants/supportedParams";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_VALUES } from "@/constants/thinkingLevels";
 import { TOOL_NOTICE_KEYS, isToolNoticeKey, type ToolNoticeKey } from "@/constants/toolNotices";
+import {
+  addressingStyleSchema,
+  EMPTY_PERSONA_NAMING_CONFIG,
+  personaNamingConfigSchema,
+  type PersonaNamingConfig,
+} from "@/types/personaNaming";
 import { DEFAULT_IMAGE_NEGATIVE_TAGS, DEFAULT_IMAGE_POSITIVE_TAGS } from "@/utils/image/tagDefaults";
 import { logitBiasEntrySchema, normalizeLogitBiasEntries } from "@/types/provider/logitBias";
 
@@ -34,7 +40,7 @@ export type ConditioningType = z.infer<typeof conditioningTypeSchema>;
 export const userSchema = z.object({
   user_id: z.number().optional(),
   user_disc_id: z.string(),
-  user_nickname: z.string(),
+  user_nickname: z.string().nullable(),
   language_pref: z.string().default("en-US"),
   registration_locale: z.string().nullable(), // Static locale captured at registration
   privacy_level: z.nativeEnum(PrivacyLevel).default(PrivacyLevel.MINIMAL),
@@ -46,6 +52,11 @@ export const userSchema = z.object({
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"), // Added April 2026 - User-scoped DTM tri-state: 'off' (always disabled), 'follow' (server setting), 'on' (always enabled)
   personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"), // Added May 2026 - User-scoped deliberate tool mode tri-state
   timezone_offset: z.number().int().min(-12).max(14).nullable().optional(), // Added June 2026 - Personal UTC offset; NULL = not set / opt-out
+  prefix_override: z.string().nullable().optional(),
+  suffix_override: z.string().nullable().optional(),
+  gender_identity: z.string().nullable().optional(),
+  pronouns: z.string().nullable().optional(),
+  addressing_style: addressingStyleSchema.nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -142,10 +153,6 @@ export const personaSpriteSchema = z.object({
 });
 export type PersonaSpriteRow = z.infer<typeof personaSpriteSchema>;
 
-// Shared official preset sprites, resolved live by pointer personas. Keyed by
-// the preset identity (preset_lineage_id, preset_language) and seeded from the
-// catalog; the avatar_url is a shared object-storage reference used by every
-// server's pointer persona. See docs/subsystems/persona-presets.md.
 /**
  * Maps a webhook-delivered sprite message to the sprite label it rendered with.
  * Sprite messages display a clean persona name in Discord; context rebuilding
@@ -191,7 +198,7 @@ export const llmSchema = z.object({
   llm_id: z.number().optional(),
   llm_provider: z.string(),
   llm_codename: z.string(),
-  is_scoped_registration: z.boolean().default(false), // Scoped OpenRouter registration; exclude from global provider pickers unless explicitly joined for the owner
+  is_scoped_registration: z.boolean().default(false), // Shared-provider registration; exclude from global pickers unless joined for the owner
   is_smartest: z.boolean().default(false),
   is_default: z.boolean().default(false),
   is_reasoning: z.boolean().default(false),
@@ -208,8 +215,11 @@ export const llmSchema = z.object({
   // supports_prefix_completion: allow `prefix: true` on the trailing assistant prefill turn.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  // verbatim_tool_calling: the model has no native tool channel, so schemas travel in-band and
+  // the assistant's text is scanned for calls. Only the custom adapter runs that parser.
+  verbatim_tool_calling: z.boolean().default(false),
   llm_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
+  descriptions: z.record(z.string(), z.string()).nullable().optional(),
   // Official per-model pricing (USD per million tokens, uncached standard rate). Null for
   // free/non-metered providers. OpenRouter rows are not seeded with a price but are refreshed
   // from the live API at startup, so SQL-computed cost surfaces can price them; the live cache
@@ -225,13 +235,19 @@ export const diffusionModelSchema = z.object({
   diffusion_model_id: z.number().optional(),
   provider: z.string(),
   codename: z.string(),
-  is_scoped_registration: z.boolean().default(false), // Scoped OpenRouter registration; exclude from global image pickers unless explicitly joined for the owner
+  is_scoped_registration: z.boolean().default(false), // Shared-provider registration; exclude from global image pickers unless joined for the owner
   model_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
+  descriptions: z.record(z.string(), z.string()).nullable().optional(),
   is_default: z.boolean().default(false),
   is_deprecated: z.boolean().default(false),
   is_free: z.boolean().default(false),
   is_uncensored: z.boolean().default(false),
+  // Null means the model follows its provider's built-in image defaults, so these must stay nullable
+  // rather than gaining a `.default()` that would freeze an undeclared model against today's defaults.
+  supports_txt2img: z.boolean().nullable().optional(),
+  supports_img2img: z.boolean().nullable().optional(),
+  supports_inpaint: z.boolean().nullable().optional(),
+  supports_negative_prompt: z.boolean().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -241,9 +257,9 @@ export const videoGenerationModelSchema = z.object({
   video_model_id: z.number().optional(),
   provider: z.string(),
   codename: z.string(),
-  is_scoped_registration: z.boolean().default(false), // Scoped OpenRouter registration; exclude from global video pickers unless explicitly joined for the owner
+  is_scoped_registration: z.boolean().default(false), // Shared-provider registration; exclude from global video pickers unless joined for the owner
   model_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
+  descriptions: z.record(z.string(), z.string()).nullable().optional(),
   is_default: z.boolean().default(false),
   is_deprecated: z.boolean().default(false),
   is_free: z.boolean().default(false),
@@ -257,9 +273,9 @@ export const embeddingModelSchema = z.object({
   provider: z.string(),
   codename: z.string(),
   model_family: z.string(),
-  is_scoped_registration: z.boolean().default(false), // Scoped OpenRouter registration; exclude from global embedding pickers unless explicitly joined for the owner
+  is_scoped_registration: z.boolean().default(false), // Shared-provider registration; exclude from global embedding pickers unless joined for the owner
   model_description: z.string().nullable().optional(),
-  ja_description: z.string().nullable().optional(),
+  descriptions: z.record(z.string(), z.string()).nullable().optional(),
   is_default: z.boolean().default(false),
   is_deprecated: z.boolean().default(false),
   created_at: z.date().optional(),
@@ -270,7 +286,7 @@ export type EmbeddingModelRow = z.infer<typeof embeddingModelSchema>;
 const customEndpointCapabilitySchema = z.enum(["text", "embedding", "image", "video", "speech", "transcription"]);
 export type CustomEndpointCapability = z.infer<typeof customEndpointCapabilitySchema>;
 
-const customEndpointApiStyleSchema = z.enum([
+export const customEndpointApiStyleSchema = z.enum([
   "openai-compatible",
   "comfyui",
   "ollama-native",
@@ -281,23 +297,45 @@ const customEndpointApiStyleSchema = z.enum([
 ]);
 export type CustomEndpointApiStyle = z.infer<typeof customEndpointApiStyleSchema>;
 
-export const customEndpointSchema = z.object({
-  custom_endpoint_id: z.number().optional(),
+const vramHandoffBackendSchema = z.enum(["koboldcpp", "ollama"]);
+export type VramHandoffBackend = z.infer<typeof vramHandoffBackendSchema>;
+
+/**
+ * Settings that describe the backend server behind a connection rather than any model it hosts.
+ * `vram_handoff` records the backend detected when the option was enabled, so the runtime runs a
+ * known unload strategy instead of guessing.
+ */
+export const endpointBehaviorSchema = z.object({
+  vram_handoff: vramHandoffBackendSchema.optional(),
+});
+export type EndpointBehavior = z.infer<typeof endpointBehaviorSchema>;
+
+export const customEndpointConnectionSchema = z.object({
+  connection_id: z.number().int().positive(),
   server_id: z.number().nullable().optional(),
   user_id: z.number().nullable().optional(),
   label: z.string(),
   capability: customEndpointCapabilitySchema,
   api_style: customEndpointApiStyleSchema,
   endpoint_url: z.string(),
+  requires_auth: z.boolean().default(false),
+  // No default: most endpoint reads JOIN this table without selecting the column, and a default
+  // would make "not loaded" indistinguishable from "no behavior configured".
+  behavior: endpointBehaviorSchema.optional(),
+  created_at: z.coerce.date().optional(),
+  updated_at: z.coerce.date().optional(),
+});
+export type CustomEndpointConnectionRow = z.infer<typeof customEndpointConnectionSchema>;
+
+export const customEndpointSchema = customEndpointConnectionSchema.extend({
+  custom_endpoint_id: z.number().optional(),
   model_name: z.string().nullable().optional(),
   // Links this endpoint row to the synthetic model row it owns (llms / embedding_models /
   // image_diffusion_models / video_generation_models, disambiguated by `capability`). Lets the
   // runtime resolve the specific selected model back to its endpoint when several models share a
-  // label+capability. Null for legacy rows until backfilled and for speech/transcription.
+  // connection. Null for legacy rows until backfilled and for speech/transcription.
   model_ref_id: z.number().int().nullable().optional(),
-  display_name: z.string(),
   num_ctx: z.number().int().min(512).nullable().optional(),
-  requires_auth: z.boolean().default(false),
   extra_config: z.preprocess((value) => {
     if (typeof value === "string") {
       try {
@@ -316,9 +354,10 @@ export const customEndpointSchema = z.object({
   // endpoint's synthetic llms row so the runtime resolves them uniformly with built-in providers.
   strict_role_alternation: z.boolean().default(false),
   supports_prefix_completion: z.boolean().default(false),
+  // Per model like the strict flags, and for a sharper reason: one connection can host both a
+  // native-tool-calling model and a text-only one that needs the in-band schema dump and its parser.
+  verbatim_tool_calling: z.boolean().default(false),
   is_default: z.boolean().default(false),
-  created_at: z.coerce.date().optional(),
-  updated_at: z.coerce.date().optional(),
 });
 export type CustomEndpointRow = z.infer<typeof customEndpointSchema>;
 
@@ -562,11 +601,19 @@ export type AutochatPersonaOverride = z.infer<typeof autochatPersonaOverrideSche
 
 const userPersonalizationConfigsSchema = z.object({
   user_id: z.number().int(),
+  user_nickname: z.string().nullable(),
   shortterm_cache_crossserver_opt_in: z.boolean().default(false),
   physical_appearance_tags: z.array(z.string()).default([]),
   nai_char_ref_url: z.string().nullable().optional(),
   impersonation_prompt: z.string().nullable().optional(),
   personal_dtm: z.enum(["off", "follow", "on"]).default("follow"),
+  personal_deliberate_tool_mode: z.enum(["off", "follow", "on"]).default("follow"),
+  timezone_offset: z.number().int().min(-12).max(14).nullable().optional(),
+  prefix_override: z.string().nullable().optional(),
+  suffix_override: z.string().nullable().optional(),
+  gender_identity: z.string().nullable().optional(),
+  pronouns: z.string().nullable().optional(),
+  addressing_style: addressingStyleSchema.nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -636,7 +683,7 @@ export type ServerChatConfigRow = z.infer<typeof serverChatConfigSchema>;
 
 const serverMemberPermissionsConfigSchema = z.object({
   server_id: z.number().int(),
-  server_memteaching_enabled: z.boolean().default(true),
+  server_memteaching_enabled: z.boolean().default(false),
   attribute_memteaching_enabled: z.boolean().default(false),
   sampledialogue_memteaching_enabled: z.boolean().default(false),
   self_teaching_enabled: z.boolean().default(true),
@@ -664,7 +711,7 @@ const serverCapabilitiesConfigSchema = z.object({
   // Master switch for the short-term memory subsystem (tool + context injection).
   // Default true keeps existing servers unchanged; see migration 054.
   short_term_memory_enabled: z.boolean().default(true),
-  verbatim_tool_calling_enabled: z.boolean().default(false),
+  user_info_updates_enabled: z.boolean().default(true),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -912,7 +959,7 @@ export const naiPresetSchema = z.object({
   model_target: z.string(), // "kayra" or "erato"
   is_default: z.boolean(),
   preset_desc: z.string(), // EN human-readable description
-  ja_preset_desc: z.string(), // JA human-readable description
+  descriptions: z.record(z.string(), z.string()).nullable().optional(),
   parameters: z.record(z.string(), z.unknown()),
   created_at: z.date().optional(),
 });
@@ -960,6 +1007,14 @@ const tomoriPresetSchema = z.object({
   preset_avatar_shared_url: z.string().nullable().optional(),
   preset_avatar_hash: z.string().nullable().optional(),
   preset_trigger_words: z.array(z.string()).default([]),
+  preset_naming_config: z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }, personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG)),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -969,7 +1024,7 @@ const systemPromptPresetSchema = z.object({
   system_prompt_preset_id: z.number(),
   system_prompt_preset_name: z.string(),
   system_prompt_preset_desc: z.string(),
-  ja_description: z.string().nullable().optional(),
+  descriptions: z.record(z.string(), z.string()).nullable().optional(),
   preset_prompt_text: z.string(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
@@ -1384,6 +1439,7 @@ export type TomoriState = TomoriRow &
     llm: LlmRow; // Added LLM information
     trigger_words: string[]; // Persona-scoped trigger words from persona_configs
     persona_prompt: string | null; // Optional persona-specific prompt appended after system prompt
+    naming_config: PersonaNamingConfig;
     persona_attributes: PersonaAttributeRow[]; // Ordered persona attributes with public/private visibility
     reward_conditioning_enabled: boolean; // Persona-scoped reward conditioning injection toggle
     punish_conditioning_enabled: boolean; // Persona-scoped punish conditioning injection toggle
@@ -1408,6 +1464,7 @@ export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSche
   llm: llmSchema, // Added LLM schema validation
   trigger_words: z.array(z.string()).default([]),
   persona_prompt: z.string().nullable().default(null),
+  naming_config: personaNamingConfigSchema.default(EMPTY_PERSONA_NAMING_CONFIG),
   persona_attributes: z.array(personaAttributeSchema).default([]),
   reward_conditioning_enabled: z.boolean().default(true),
   punish_conditioning_enabled: z.boolean().default(true),
@@ -1432,32 +1489,87 @@ export const tomoriStateSchema = tomoriSchema.merge(personaScopedConfigStateSche
 });
 
 /**
+ * Discriminated provider access input for server setup.
+ */
+const setupProviderAccessCatalogSchema = z
+  .object({
+    mode: z.literal("catalog"),
+    provider: z.string(),
+    encryptedApiKey: z.instanceof(Buffer),
+    keyVersion: z.number().int().default(1),
+  })
+  .strict();
+/**
+ * Capability tokens the setup transaction maps onto `llms` capability columns.
+ *
+ * Enumerated rather than free strings because the mapping is by exact token: an unrecognized spelling would
+ * otherwise validate, insert, and register the model with that capability silently switched off, surfacing much
+ * later as the endpoint ignoring images or tools.
+ */
+export const setupCustomEndpointCapabilitySchema = z.enum([
+  "tools",
+  "vision",
+  "video",
+  "structured_output",
+  "json",
+  "strict_role_alternation",
+  "prefix_completion",
+]);
+export type SetupCustomEndpointCapability = z.infer<typeof setupCustomEndpointCapabilitySchema>;
+
+const setupProviderAccessCustomEndpointSchema = z
+  .object({
+    mode: z.literal("custom-endpoint"),
+    connection: z
+      .object({
+        label: z.string(),
+        apiStyle: customEndpointApiStyleSchema,
+        endpointUrl: z.string(),
+        encryptedAuthToken: z.instanceof(Buffer).nullable(),
+        keyVersion: z.number().int().default(1),
+      })
+      .strict(),
+    textModel: z
+      .object({
+        modelCode: z.string(),
+        numCtx: z.number().int().nullable().optional(),
+        capabilities: z.array(setupCustomEndpointCapabilitySchema).optional(),
+      })
+      .strict(),
+  })
+  .strict();
+const setupProviderAccessUserByokSchema = z
+  .object({
+    mode: z.literal("user-byok"),
+  })
+  .strict();
+const setupProviderAccessSchema = z.discriminatedUnion("mode", [
+  setupProviderAccessCatalogSchema,
+  setupProviderAccessCustomEndpointSchema,
+  setupProviderAccessUserByokSchema,
+]);
+export type SetupProviderAccess = z.infer<typeof setupProviderAccessSchema>;
+
+/**
  * Configuration data needed for server setup
  */
 export const setupConfigSchema = z
   .object({
     serverId: z.string(),
-    encryptedApiKey: z.instanceof(Buffer).nullable(),
-    keyVersion: z.number().int().default(1), // Encryption key version
-    provider: z.string().nullable(), // Null when bootstrapping without an immediate server text provider
     presetId: z.number(),
     humanizer: z.number().default(1),
     tomoriName: z.string(),
     timezoneOffset: z.number().int().min(-12).max(14).default(0), // Timezone offset in hours
     locale: z.string(),
     registrationLocale: z.string().nullable(), // Analytics-only locale captured at setup; not used for functionality
-    userByokMode: z.boolean().default(false),
-    deferredCustomEndpointSetup: z.boolean().default(false),
+    // The sole provider-selection field, and the only place a credential and its key version live.
+    // The legacy `provider`, `encryptedApiKey`, `keyVersion`, `userByokMode`, and
+    // `deferredCustomEndpointSetup` fields are gone with the pre-wizard `/setup` modal: the booleans
+    // could describe contradictory provider states, and the union cannot.
+    providerAccess: setupProviderAccessSchema,
+    systemPrompt: z.string().nullable().optional(),
   })
-  .superRefine((value, ctx) => {
-    if (!value.userByokMode && !value.deferredCustomEndpointSetup && (!value.provider || !value.encryptedApiKey)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Standard setup requires both provider and encrypted API key.",
-        path: ["provider"],
-      });
-    }
-  });
+  .strict();
 export type SetupConfig = z.infer<typeof setupConfigSchema>;
 
 /**
@@ -1473,7 +1585,8 @@ export type SetupResult = z.infer<typeof setupResultSchema>;
 
 /**
  * Guild MCP Server : per-guild remote MCP server registration.
- * Stored in guild_mcp_servers table; auth_token is PGP-encrypted BYTEA.
+ * Stored in guild_mcp_servers table; auth_token is PGP-encrypted BYTEA and
+ * last_discovered_tool_names is display-only metadata, never an invocation source.
  */
 const guildMcpServerSchema = z.object({
   guild_mcp_id: z.number().optional(),
@@ -1484,6 +1597,7 @@ const guildMcpServerSchema = z.object({
   key_version: z.number().int().default(1),
   is_enabled: z.boolean().default(true),
   server_type: z.string().nullable().optional(),
+  last_discovered_tool_names: z.array(z.string()).nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });
@@ -1537,7 +1651,7 @@ export type SavedProviderConfigRow = z.infer<typeof savedProviderConfigSchema>;
  */
 export type SavedProviderConfigUpsert = Omit<SavedProviderConfigRow, "saved_config_id" | "saved_at" | "updated_at">;
 
-export const personalProviderCapabilitySchema = z.enum(["text", "embedding", "image", "video", "vision"]);
+export const personalProviderCapabilitySchema = z.enum(["text", "embedding", "image", "image_nai", "video", "vision"]);
 export type PersonalProviderCapability = z.infer<typeof personalProviderCapabilitySchema>;
 
 /**
@@ -1573,6 +1687,7 @@ export const userSavedProviderConfigSchema = z.object({
     z.array(logitBiasEntrySchema).default([]),
   ),
   thinking_level: z.enum(THINKING_LEVEL_VALUES).default(DEFAULT_THINKING_LEVEL),
+  model_randomizer_enabled: z.boolean().default(false),
   // Which of this row's assigned capabilities are currently switched on.
   // Always a subset of assigned_capabilities; see migration 060 for why the two are separate.
   enabled_capabilities: z.preprocess(
@@ -1614,6 +1729,7 @@ const stPresetSchema = z.object({
   preset_name: z.string(),
   raw_json: z.unknown(),
   is_active: z.boolean().default(false),
+  description: z.string().nullable().optional(),
   created_at: z.date().optional(),
   updated_at: z.date().optional(),
 });

@@ -1,4 +1,4 @@
-﻿---
+---
 title: "06.2: Response Sink"
 ---
 
@@ -23,7 +23,7 @@ resolved `responseTarget` on the carried context.
 
 ## Output
 
-`ChatResponseSink` — see `src/utils/chat/types.ts:223-228`:
+`ChatResponseSink`: see `src/utils/chat/types.ts:223-228`:
 
 ```ts
 interface ChatResponseSink {
@@ -38,11 +38,11 @@ interface ChatResponseSink {
 The `ChatResponseTarget` returned by `prepare` (see
 `src/utils/chat/types.ts:214-221`) carries:
 
-- `webhook` / `temporaryWebhook` — Discord webhook for delivery (if any)
-- `personaUsername`, `personaAvatarUrl` — display identity
-- `prefixStrippingName` — for impersonation, strip this prefix from emitted
+- `webhook` / `temporaryWebhook`: Discord webhook for delivery (if any)
+- `personaUsername`, `personaAvatarUrl`: display identity
+- `prefixStrippingName`: for impersonation, strip this prefix from emitted
   text
-- `webhookTargetChannel` — parent channel for thread-scoped webhooks
+- `webhookTargetChannel`: parent channel for thread-scoped webhooks
 
 `undefined` target means "fall back to `channel.send` as the bot account."
 
@@ -68,7 +68,7 @@ The `ChatResponseTarget` returned by `prepare` (see
 
 - No-ops if `result.status !== "error"`.
 - If `result.data` is a `ProviderError` (has `type` + `retryable`), returns
-  immediately — the state machine's `StreamErrorUi.handleProviderError` already
+  immediately; the state machine's `StreamErrorUi.handleProviderError` already
   sent the specific embed (e.g. "🔴️ Provider Content Filter"). Sending again
   here would double-send.
 - Otherwise (unexpected non-`ProviderError` data), logs and renders the generic
@@ -98,8 +98,8 @@ After `prepare()` runs:
 
 After `finalize()` *or* `cleanup()` runs:
 
-- Any temporary webhook created during `prepare` has been deleted (best-effort
-  — failures are logged, not thrown).
+- Any temporary webhook created during `prepare` has been deleted (best-effort;
+  failures are logged, not thrown).
 
 `finalize` alone is not sufficient to guarantee this. `emitGenerationError`
 rethrows for user impersonation, so the generation stage's own error handler
@@ -114,12 +114,12 @@ is constructed *per turn* and the same interface contract is consumed by
 both the stream orchestrator (writes chunks) and the generation stage (calls
 `prepare`/`finalize`). A plugin wanting to:
 
-- **Intercept emitted text** (filter, transform, redact) — wrap the sink's
+- **Intercept emitted text** (filter, transform, redact): wrap the sink's
   emit pathway. → plugin plan candidate; today there's no registration
   mechanism.
-- **Add a new delivery target type** (e.g. Matrix relay, embedded reply) —
+- **Add a new delivery target type** (e.g. Matrix relay, embedded reply):
   extend `resolveResponseTarget` with a new target-kind branch.
-- **Customize webhook identity** — `resolvePersonaWebhookIdentity` and
+- **Customize webhook identity**: `resolvePersonaWebhookIdentity` and
   `resolveImpersonatedIdentity` are the named seams.
 
 **Related but non-sink extensibility:**
@@ -131,9 +131,9 @@ both the stream orchestrator (writes chunks) and the generation stage (calls
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `WEBHOOK_ERROR_COOLDOWN_MS` | `600000` | Per-channel cooldown between webhook-error embeds |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Constant (`responseEmitter.ts`) | `WEBHOOK_ERROR_COOLDOWN_MS` | `600000` | Per-channel cooldown between webhook-error embeds |
 
 ## Related docs
 

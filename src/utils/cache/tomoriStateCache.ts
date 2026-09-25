@@ -1,5 +1,6 @@
 import type { TomoriState } from "@/types/db/schema";
 import { DatabaseUnavailableError } from "@/types/errors";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 import { personaRepository } from "@/utils/db/repositories";
 import { cache, lastDbError, invalidateTomoriStateCache } from "./tomoriStateCacheStore";
 import { log } from "../misc/logger";
@@ -17,12 +18,6 @@ export { invalidateTomoriStateCache };
 const DB_ERROR_STALENESS_MS = 2 * 60 * 1000;
 
 /**
- * Cache duration: configurable via env, default 10 minutes.
- * Longer TTL than emoji cache since config changes are less frequent.
- */
-const TOMORI_STATE_CACHE_DURATION_MS = (Number(process.env.TOMORI_STATE_CACHE_TTL_MINUTES) || 10) * 60 * 1000;
-
-/**
  * Cache statistics for monitoring
  */
 let cacheHits = 0;
@@ -38,28 +33,11 @@ let cacheMisses = 0;
  */
 const botStartTimestamp = Date.now();
 
-/**
- * How long after process start to treat empty persona results as "updating"
- * rather than "not set up". Configurable via env (default 3 minutes).
- */
-const STARTUP_GRACE_PERIOD_MS = (Number(process.env.STARTUP_GRACE_PERIOD_MINUTES) || 3) * 60 * 1000;
+/** How long after process start to treat empty persona results as "updating" rather than "not set up". */
+const STARTUP_GRACE_PERIOD_MS = 3 * 60 * 1000;
 
-/**
- * Checks whether the current "not set up" state is likely a transient
- * deployment artifact rather than a genuinely unconfigured server.
- *
- * Returns a synthetic error entry when:
- * - A real DB error was recently recorded for this server, OR
- * - The bot is still within the startup grace period (fresh container start)
- *
- * Used by the UI layer (replyInfoEmbed / sendStandardEmbed) to swap
- * "Initial Setup Required" for "Currently Updating..." when appropriate.
- *
- * @param serverDiscId - Discord server ID (or user ID for DMs)
- * @returns The error entry if fresh (within staleness threshold) or within
- *          startup grace period, or null if this is genuinely "not set up"
- */
-export function getLastDbError(serverDiscId: string): { message: string; timestamp: number } | null {
+/** Returns only a recent database failure recorded for this workspace. */
+export function getRecordedDbError(serverDiscId: string): { message: string; timestamp: number } | null {
   const entry = lastDbError.get(serverDiscId);
   if (entry) {
     if (Date.now() - entry.timestamp > DB_ERROR_STALENESS_MS) {
@@ -68,6 +46,17 @@ export function getLastDbError(serverDiscId: string): { message: string; timesta
       return entry;
     }
   }
+
+  return null;
+}
+
+/**
+ * Returns a recent database failure or a startup-grace marker for an empty workspace read.
+ * The synthetic startup marker must not be used to downgrade successfully loaded data.
+ */
+export function getLastDbError(serverDiscId: string): { message: string; timestamp: number } | null {
+  const entry = getRecordedDbError(serverDiscId);
+  if (entry) return entry;
 
   // During startup grace period, treat empty results as "updating"
   //    so users don't see "Initial Setup Required" on servers that ARE
@@ -103,7 +92,7 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
   if (cachedEntry) {
     // Check if cache is still fresh (< 10 minutes old)
     const cacheAge = now - cachedEntry.cachedAt;
-    if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
+    if (cacheAge < TOMORI_STATE_CACHE_TTL_MS) {
       cacheHits++;
       return cachedEntry.personas;
     }
@@ -128,6 +117,9 @@ export async function getCachedAllPersonas(serverDiscId: string): Promise<Tomori
 
       // Apply tool-use master toggle: when tool_use_enabled is false, artificially
       // override has_tools to false on every persona so all providers see no tools.
+      // The narrowed flag also carries the toggle into context synthesis, but it is not the
+      // enforcement point: a provider holding a live capability catalog can raise it again, so
+      // `resolveToolsEnabled` re-reads tool_use_enabled at every gate.
       const effectivePersonas = personas.map((p) =>
         p.config.tool_use_enabled ? p : { ...p, llm: { ...p.llm, has_tools: false } },
       );
@@ -178,7 +170,7 @@ export async function getCachedMainPersona(serverDiscId: string): Promise<Tomori
   const cachedEntry = cache.get(serverDiscId);
   if (cachedEntry) {
     const cacheAge = Date.now() - cachedEntry.cachedAt;
-    if (cacheAge < TOMORI_STATE_CACHE_DURATION_MS) {
+    if (cacheAge < TOMORI_STATE_CACHE_TTL_MS) {
       cacheHits++;
       return cachedEntry.mainPersona;
     }

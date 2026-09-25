@@ -85,7 +85,7 @@ self-task assigned to the active persona, even when its creator is not a
 conversation participant. Close with channel name +
 current time-of-day (timezone-aware).
 
-The output is *one* context item — all participants live in a single
+The output is *one* context item; all participants live in a single
 `[System: The following users are having a conversation: ...]` block.
 
 ## Input
@@ -96,7 +96,7 @@ seeds, Matrix and synthetic identities, public persona profiles,
 reference-only rows and IDs, and aggregate diagnostics. The hydration facade additionally
 receives:
 
-- `participantSeeds: readonly ParticipantSeed[]` — collision-safe identities, inclusion
+- `participantSeeds: readonly ParticipantSeed[]`: collision-safe identities, inclusion
   reasons, purpose-aware aliases, and first-seen order from the prepared discovery plan
 - `triggererName`, `botName`, `personaLineageId`
 - `ActivePersonaScope` is derived at the hydration boundary from the active persona ID,
@@ -105,16 +105,16 @@ receives:
   `timezone_offset`)
 - `isDMChannel`, `isUserImpersonation`, `impersonatedUserId`,
   `impersonatedIdentityName`
-- `conversationCorpus` — for personal-memory tag filtering
+- `conversationCorpus`: for personal-memory tag filtering
 - `snapshot`, `convertMentions`
 
 ## Output
 
-`Promise<StructuredContextItem | null>` — `null` if the prepared discovery plan has no seeds,
+`Promise<StructuredContextItem | null>`: `null` if the prepared discovery plan has no seeds,
 otherwise one `user`-role item tagged `KNOWLEDGE_USERS_IN_CONVERSATION`.
 
 Also populates `conversationUsers: ConversationUserReference[]` on the
-context item — the provider-safe projection used by existing downstream mention resolution.
+context item; the provider-safe projection used by existing downstream mention resolution.
 It is derived from the hidden
 `ParticipantTargetIndex`; new participant-aware consumers use the index's typed keys and
 purpose-specific aliases directly.
@@ -162,7 +162,7 @@ filter independently of those profile-field decisions. Persona self-tasks are hy
 independently of human participant membership.
 
 - **DB / cache reads (per user)**:
-  - `userRepository.loadByDiscordId(userId)` — load or `null`
+  - `userRepository.loadByDiscordId(userId)`: load or `null`
   - If missing and the user is in the guild: `userRepository.register(...)`
     auto-registers them
   - `userRepository.isBlacklisted` (cached via `userCache`)
@@ -179,37 +179,37 @@ independently of human participant membership.
   - `client.users.fetch(userId)` fallback for users not in guild
   - `getUserPresenceDetails` for online status + activities (requires
     `GuildPresences` intent)
-- **Reference discovery (upstream)** — `contextReferences.ts` scans the complete
+- **Reference discovery (upstream)**: `contextReferences.ts` scans the complete
   sanitized fetched window. Persona triggers use normal trigger matching even
   when Deliberate Trigger Mode is active, but this affects context only and
   never schedules a response.
-- **User reference candidates (upstream)** — one repository read combines real
+- **User reference candidates (upstream)**: one repository read combines real
   Discord mentions, cached guild members, users with `message_sent` or
   `command_used` activity on this server, and eligible saved nicknames found in
   the history. Uncached database candidates are individually verified as
   current guild members; the pipeline never fetches the guild's entire member
   list.
-- **Candidate policy and membership (upstream)** — repository rows carry the evidence for
+- **Candidate policy and membership (upstream)**: repository rows carry the evidence for
   explicitly versioned eligibility policy v1. The pure policy runs before one deduplicated,
   targeted member lookup per eligible Discord ID. Cached members are used first; uncached
   members use `guild.members.fetch(id)`, and the no-argument full-list fetch is never called.
-- **Discovery diagnostics (upstream)** — the typed plan aggregates ineligible-state, bot,
+- **Discovery diagnostics (upstream)**: the typed plan aggregates ineligible-state, bot,
   non-member, ambiguous-alias, existing-participant, blocked-source, and missing-guild
   rejections. Production paths do not log candidate IDs, aliases, or message content.
-- **Preparation diagnostics are not logged** — the typed preparation and hydration
+- **Preparation diagnostics are not logged**: the typed preparation and hydration
   diagnostics stay in-process for tests and callers. No per-generation metric line is
   emitted, so participant preparation adds nothing to production log volume.
-- **Alias catalog construction** — saved nicknames, guild display names and nicknames,
+- **Alias catalog construction**: saved nicknames, guild display names and nicknames,
   global names, usernames, persona nicknames and triggers, Matrix display names, webhook
   display names, and impersonated identities use source-owned builders. Each alias records
   its owner, normalized value, purpose set, exposure, and priority.
-- **Matrix alias exposure** — a Matrix display name remains a lookup-only tool target and
+- **Matrix alias exposure**: a Matrix display name remains a lookup-only tool target and
   output-mention collision claimant. It is never rendered as a Discord ping handle, but a
   human participant cannot be offered the same ambiguous handle.
-- **Pure alias discovery** — eligibility and guild membership are resolved before the pure
+- **Pure alias discovery**: eligibility and guild membership are resolved before the pure
   matcher receives `ParticipantAlias[]`. Its diagnostics expose only aggregate accepted,
   ambiguous, and unmatched counts, never raw alias text.
-- **Final mention conversion** — assembled text passes through
+- **Final mention conversion**: assembled text passes through
   `convertMentions` after pure rendering.
 
 `ParticipantHydrationDependencies` is the fakeable I/O boundary used by focused tests.
@@ -240,13 +240,31 @@ After this stage runs:
   `output_mention`, `tool_target`, and `copied_identity` purposes. Guild display names are
   likewise lookup-only input aliases unless another visible source supplies the same value.
 - Each entry's `aliases` (server nickname, global name, username, custom
-  nickname) plus its `displayLabel` are emitted as `conversationUsers` metadata
-  for tool-side user resolution (`resolveUserTarget`). The conversation stage of
-  that resolver matches input against the full alias set, but breaks ties by
+  nickname, the persona-relative effective nickname, and the composed
+  `formattedName`) plus its `displayLabel` are emitted as `conversationUsers`
+  metadata for tool-side user resolution (`resolveUserTarget`). The conversation
+  stage of that resolver matches input against the full alias set, but breaks ties by
   preferring a single candidate whose `displayLabel` (primary name) equals the
-  input over candidates that only matched a secondary alias — so one user's
+  input over candidates that only matched a secondary alias; so one user's
   server-nickname alias colliding with another user's actual name no longer
   forces a needless clarify round-trip.
+- When the conversation stage finds nothing, the resolver walks a guild ladder against
+  the same normalized input: guild display name, persona-scoped nickname
+  (`user_persona_naming_preferences` rows for the active `persona_lineage_id`), global
+  saved nickname (`user_personalization_configs.user_nickname`), global name, then
+  username. Persona names outrank the global nickname because both are user-authored,
+  but only the persona one was rendered to the model in this conversation.
+- A composed label such as "Master Mirri" exists as an alias only while its owner sits
+  in the participant context, so two fallbacks run once the ladder misses. The resolver
+  first peels one persona-configured prefix and suffix off the input (every addressing
+  variant, longest first, since the target's own style is unknown until the account
+  resolves) and walks the ladder again; that reaches accounts carrying no stored nickname
+  at all. It then asks `findComposedNameCandidates()` for accounts whose stored nickname
+  appears somewhere inside the input, rebuilds each candidate's name through
+  `resolveEffectiveUserNaming()`, and accepts only an exact match. The second pass is what
+  covers affixes a user set for themselves (`prefix_override` / `suffix_override`), which
+  the persona-only strip cannot see. Both fallbacks preserve the ladder's ambiguity
+  behavior: two surviving candidates still return `ambiguous`.
 - Personal memories are filtered by privacy (`PrivacyLevel.MINIMAL`
   required) AND blacklist AND `personal_memories_enabled` AND
   conversation-corpus tag match (if `memory_tagging_enabled`).
@@ -263,8 +281,7 @@ After this stage runs:
 - Eligibility requires `message_sent`/`command_used` activity or meaningful
   state: personal memories, pending reminders/tasks, non-default
   personalization/image settings, timezone, privacy, or a deliberate-mode
-  preference. Registration language, the initial nickname, and default rows
-  alone do not qualify.
+  preference. Registration language and default rows alone do not qualify.
 - Visible authors, historical synthetic identities, bridges, real mentions, textual aliases,
   persona triggers, historical personas, and co-responders are isolated source functions.
   Repeated sources merge by typed key while preserving every reason and earliest seen order.
@@ -308,6 +325,45 @@ After this stage runs:
 
 ## Configuration
 
+## Persona-relative naming and identity
+
+Participant identity remains the typed Discord user ID. Display headings are a projection for
+the receiving persona: persona-lineage override, global nickname, then live Discord name, with
+prefix and suffix resolved independently. Stable Discord-derived mention handles remain
+separate from display labels; exact plain and formatted names are additional collision-aware
+aliases, never reparsed to discover a target.
+
+Registration leaves the global nickname null, so an uncustomized user continues to follow
+their live Discord display name. Saving a global nickname opts into a stable custom value;
+clearing it restores the live fallback.
+
+`{user}` is the plain effective nickname, `{user_formatted}` is the deterministic formatted
+name, and `{user_term}` is a persona-authored standalone address term. Single- and
+double-brace forms are supported. Address terms are expanded in persona prompts, attributes,
+and sample dialogue, not participant fields.
+
+Dialogue user labels use the receiving persona's projection. A real mention in a historical
+persona-authored message uses that proven author persona's lineage; unproven or user-authored
+content falls back to the plain nickname. Required user-lineage preferences are batch-loaded.
+Gender identity and pronouns are sparse independent fields visible only at Minimal privacy.
+Timezone is omitted when unset and during user impersonation.
+
+The `naming` field names each resolved affix separately from the nickname, using the tool's own
+field words, and is emitted only when a prefix or suffix actually resolves:
+
+```text
+- Nerine calls Mirri "Master Mirri-san" (prefix "Master", suffix "-san")
+```
+
+A joined display name gives a model no way to tell an affix from the nickname, so a request to
+drop a title degrades into a nickname rewrite that re-composes the same string. The line does
+not state which precedence layer supplied an affix: `none` suppresses at any layer, and
+`update_user_info` closes the one case where a global `none` would be outranked, so the origin
+never has to reach the prompt.
+
+Adding a core field kind requires an entry in both `hydrateDiscordUser` and
+`CORE_FIELD_ENRICHERS`; a kind present in only one is dropped silently.
+
 | Source | Field | Effect |
 |---|---|---|
 | `tomoriConfig` | `personal_memories_enabled` | Master switch for per-user memories + nickname usage |
@@ -316,8 +372,8 @@ After this stage runs:
 | Client intent | `GuildPresences` | Required for online/activity status; without it, only static info is shown |
 | User row | `personal_dtm`, `privacy_level` | Reference eligibility and per-field privacy behavior; authored messages from `FULL` users are removed upstream |
 | User row | `physical_appearance_tags` | Public physical appearance image tags |
-| Environment | `PARTICIPANT_SOURCE_TIMEOUT_MS` | Abort timeout for each participant source; default 1500 ms |
-| Environment | `PARTICIPANT_ENRICHER_TIMEOUT_MS` | Abort timeout for each profile enricher; default 1500 ms |
+| Constant (`sources.ts`) | `SOURCE_TIMEOUT_MS` | Abort timeout for each participant source: 1500 ms |
+| Constant (`profileEnrichers.ts`) | `ENRICHER_TIMEOUT_MS` | Abort timeout for each profile enricher: 1500 ms |
 
 ## Extension points
 
@@ -332,7 +388,7 @@ cannot replace profiles or core fields and receive no DB/client service bag. The
 `ContextContributor` registry has not landed, so this entire participant slice remains one
 adapter-ready boundary without claiming modularization Batch 4A completion.
 
-See [Adding a Participant Source or Profile Enricher](/contributing/adding-participant-extension/)
+See [Adding a Participant Source or Profile Enricher](/contributing/extending/participant-extension/)
 for contracts, registration, security rules, and required tests.
 
 ## Related docs

@@ -596,9 +596,23 @@ When sent in a message, pingable mentions (@user, @role, etc) present in this co
 
 ### TomoriBot convention: container titles
 
-TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H3 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine) — do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
+TomoriBot renders the leading "title" line of every Components V2 container (status, confirmation, persona picker, persona results, memory/task notices) as a Markdown **H3 heading** via the shared `formatContainerTitle` helper in `src/utils/discord/ui/interactionCore.ts`. Keep title locale strings **plain text** (an emoji prefix is fine); do not embed `###` or `**` in them, or the heading will double up. Body text, section sub-headings, and footers are unaffected.
 
 Memory and scheduled-task notices use `buildNoticeContainer` in `src/utils/discord/ui/interactionCore.ts`. The old embed title maps to the H3 title, the old embed description maps to a Text Display, and the old embed footer maps to muted `-#` subtext after a separator. When the memory/task body is truncated, the Secondary "Expand" button is rendered as an Action Row inside the same container; the ephemeral full-content reveal remains a separate classic embed reply.
+
+### TomoriBot convention: panel text hierarchy
+
+Persistent and categorized control panels follow a standardized four-tier text hierarchy to maintain consistent structure across desktop and mobile clients:
+
+- **Page and Major-Section Headings (`###`)**: Used for page titles, category headers, and major section counts (for example `### Whitelisted Channels \`(3)\``). Heading depth does not exceed `###`.
+- **Nested Subsection Labels (`**Bold**`)**: Used for named sub-sections within a page where additional heading tags would create excessive vertical spacing or hit Discord client heading limitations.
+- **Plain Text Prose**: Used for section descriptions, guidance explanations, populated-section semantic descriptions, and empty-state copy. Explanatory prose is never quoted, keeping it distinct from configured values. Populated list sections explain what their entries mean before rendering quote rows. Avoid prose em dashes in panel copy; use parentheticals where compact metadata is useful.
+- **Quote Rows (`>`)**: Used for current configuration values, semantic status lines (such as `> 🟢 ...`), and populated entity rows (such as channels, users, or roles) instead of bulleted lists. Because Discord mentions (`<@id>`, `<#id>`, `<@&id>`) already encode snowflake IDs, entity rows omit redundant raw IDs beside mentions. Metadata such as persona interaction restrictions uses parentheticals (for example `(mute)` or `(block)`) instead of em dashes. Multi-line entity details (such as per-channel cooldown settings) remain inside the same quote block on subsequent lines.
+
+Persistent categorized control panels place a real divider separator (`{ type: ComponentType.Separator, divider: true, spacing: 1 }`) immediately after the top category-button action row and before the selected page title or body to clearly separate navigation controls from content. When a read fails and cached state is displayed, stale-read warnings appear as the bottommost footer element, preceded by a separate real divider separator and formatted as subdued subtext (`-# ...`).
+The startup grace marker used to disambiguate an empty workspace read is not a failed-read signal when panel data loaded successfully. Only a recorded database failure or an unavailable panel repository read disables write actions. Stale panels keep writes disabled but expose an enabled Retry action that forces a state refresh; the warning remains the bottommost footer.
+
+A workspace scope that never resolves has no panel to render, so the interaction answers in one line instead. That reply separates the two causes rather than reporting one generic failure: an empty workspace read prompts the admin to run `/setup`, while a recorded read failure, including the startup grace window where an empty read is not yet trustworthy, reports the transient fault and asks for a retry. A scope that did resolve never produces setup copy, so a route whose named persona has left the workspace reports a stale panel and the command to re-run, and a write that cannot attribute itself to a persona on a configured workspace is never answered with setup guidance.
 
 ---
 
@@ -739,7 +753,18 @@ Implementation notes:
 - Attachments on Components V2 messages do not render unless they are referenced by a component.
 - Webhook sends and edits through discord.js must also pass `withComponents: true`.
 - Image delivery should fall back to the legacy `files`-only payload if the Components V2 send fails.
-- Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds — the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
+- Re-fetching a generated image by message/media ID (for image-to-image, inpaint, or vision analysis) must scan `message.components` for `MediaGallery`/`Thumbnail`/`File` media, not just top-level attachments/embeds; the generated file is referenced only inside the component. This discovery is centralized in `collectImageUrlsFromMessage` (`src/utils/image/imageExtractor.ts`), which reuses `appendComponentMediaFromMessage` from `src/utils/chat/contextMedia.ts`. `generate_image`, `generate_image_nai`, and `analyze_image` all go through it, so a Components V2 image found in context can also be reloaded by any tool that accepts a media reference.
+
+### Persistent panels and bounded workflows
+
+Components V2 does not determine interaction lifetime. TomoriBot supports two ownership models:
+
+- Bounded anchor workflows use collectors and deliberately reach a timeout or terminal state.
+- Persistent panels use the versioned global interaction router, so each click or select is handled as a new `interactionCreate` event without an invocation-owned collector.
+
+The `/help` panel is the first persistent panel. Its four category buttons, section select, subsection select, navigation buttons, and provider modal IDs use the `help:v2:*` namespace and carry the panel locale as harmless render state. The original message stays Components V2 for every repaint. The section select doubles as the section heading: a closed select renders its default option's label, so a separate title line above it would repeat the active section's name, and the section description follows the select instead. Every page places a separate top-level Action Row below the content Container for its web-documentation and support-server link buttons. The text provider select acknowledges its interaction only with `showModal()`, never with a preceding defer. Submitting the text-only modal receives a silent `deferUpdate()`; dismissing it emits no event and requires no cleanup.
+
+Persistent routing does not make Discord messages permanent. Message deletion, access changes, and client presentation remain outside the router's control. It only removes TomoriBot's in-memory collector timeout as the control-lifetime boundary.
 
 ### Anchor message workflow: one message
 
@@ -791,8 +816,8 @@ button and compacts the anchor private picker. The returned phase can then creat
 one public follow-up. Its public payload type forbids the ephemeral option, and a second
 `reply()` call fails with `public-reply-already-sent`.
 
-This policy is used by intentionally public results such as `/stats persona` and persona
-`/stats generate`. A private workflow must use the default `replace-picker` policy instead.
+This policy is used by intentionally public results such as persona `/stats generate`.
+A private workflow must use the default `replace-picker` policy instead.
 
 #### In-place modal range bridge
 
@@ -809,7 +834,7 @@ the anchor message:
 
 When options require asynchronous loading, `openModal(async () => options)` first
 update-defers the persona button and displays an in-place loading state. For a small result it
-then displays a new **Open Form** button; for a large result it displays the range selector.
+then displays a new `Open Form` button; for a large result it displays the range selector.
 The fresh button performs `showModal()` as its first acknowledgment. The workflow never
 defers a button and then attempts to open a modal from that already-acknowledged interaction.
 
@@ -820,7 +845,7 @@ When modernizing an embed workflow to Components V2, migrate the complete reply 
 - Initial deferred reply edits, "processing" messages, success messages, timeout messages, cancellation messages, and post-processing errors should all use Components V2 components with `MessageFlags.IsComponentsV2`.
 - Files attached to V2 messages must be referenced by `MediaGallery`, `Thumbnail`, or `File`; an unreferenced attachment is not displayed.
 - Shared helpers such as status containers are preferred for repeated states. Local builders are acceptable for command-specific payloads, but do not mix them with legacy embeds on the same original interaction reply after the V2 state has been sent.
-- Persona-picker commands must use `runPersonaPickerWorkflow(...)`; direct use of the low-level persona renderer is mechanically rejected by `tests/unit/checks/personaWorkflowBoundary.test.ts`.
+- Commands that need an interactive persona picker must use `runPersonaPickerWorkflow(...)`; direct use of the low-level persona renderer is mechanically rejected by `tests/unit/checks/personaWorkflowBoundary.test.ts`.
 
 ---
 
@@ -1022,7 +1047,137 @@ All other fields will be automatically populated by Discord.
 
 To upload a file with your message, you'll need to send your payload as `multipart/form-data` (rather than `application/json`) and include your file with a valid filename in your payload. Details and examples for uploading files can be found in the Discord API Reference.
 
+## Message limits and guarded delivery
+
+Discord rejects an oversized or grammatically invalid Components V2 message with a 400 at the REST boundary.
+The payload builds fine, passes every unit test that only inspects it, and then fails against the live API, so
+these bounds are enforced in code rather than left to authoring discipline.
+
+`src/utils/discord/ui/componentsV2Limits.ts` owns the constants and the validators. Import the constants; never
+retype the numbers.
+
+### The bounds TomoriBot enforces
+
+| Bound | Value | Notes |
+|---|---|---|
+| Total components | **40** | Counted **recursively**: top-level layout components, nested children, and Section accessories all count. Top-level array length is not the measure. |
+| Text Display total | **4,000 codepoints** | Summed across every `TextDisplay.content` in the message. Button labels and select placeholders do **not** count toward it; they have their own per-slot ceilings. |
+| Action Row | one select, or at most **5** buttons | Never a mixture. |
+| Section | 1 to 3 Text Displays, exactly one accessory | The accessory must be a supported Button or Thumbnail. |
+| String Select | 1 to 25 options | Option label, value, and description at most 100; placeholder at most 150; `minValues`/`maxValues` coherent with the option count. |
+| Button | label at most 80 | Interactive `custom_id` 1 to 100 and unique within the message; link URL at most 512. |
+| Media description | at most 1,024 | Where TomoriBot emits one. |
+
+Length is measured in **Unicode codepoints**, matching Discord's backend, not in UTF-16 code units. Use
+`getDiscordTextLength` and `truncateDiscordText` from `@/utils/text/discordTextLimits`, which is deliberately
+free of any discord.js import so tool execution paths can budget text without loading the Discord client
+runtime. `truncateDiscordText` walks grapheme clusters, so it never splits a surrogate pair or a combining
+sequence. A `.length` comparison or a `.slice()` on user content is a defect: it is wrong for CJK and emoji and
+can emit a lone surrogate.
+
+### Validation is separate from fitting
+
+`validateComponentsV2MessageLimits(payload)` is pure. It never mutates or silently truncates: it returns
+`{ valid, violations }`, where each violation names the payload path, the component type, the observed value,
+the limit, and a stable low-cardinality reason code. Builders do the fitting, by paginating a collection or
+rendering a bounded preview with a localized hidden or truncated count, while the complete stored value stays
+reachable through its existing editor, export, or detail flow.
+
+**Never satisfy a bound by lowering a stored limit, removing an action, or clipping a collection without a
+hidden count.** The transport budget is a presentation constraint, not a data constraint.
+
+### Page budgets are measured, not guessed
+
+A page derives its dynamic text budget by subtracting its **measured** fixed chrome from the message
+allowance, rather than subtracting a hand-tuned constant. A guessed reserve cannot be distinguished from a
+correct one by a validity test, since both pass, and it rots silently the moment a line of prose is added or a
+locale's wording grows. `tests/unit/discord/configPanelTextBudget.test.ts` asserts that each page at stored
+maxima is either untruncated or within a small named tolerance of the cap, so an over-generous reserve fails.
+
+### Guarded delivery
+
+Every panel transport goes through `deliverGuardedPanel` in `src/utils/discord/ui/interactionCore.ts`: initial
+reply, `editReply`, component `update`, anchor replacement, and the attachment-bearing avatar path. Terminal
+notice payloads are validated at construction instead, through `validateAndFallbackPanelPayload`, so a notice
+is checked once wherever it is delivered from.
+
+Behavior differs by environment on purpose:
+
+- Outside production the guard **throws** `ComponentsV2LimitError` carrying the violations, so a broken panel
+  fails loudly in tests and development.
+- In production it logs a **redacted** structured diagnostic and delivers a minimal localized Components V2
+  error payload in place of the invalid one. The diagnostic carries the path, component type, observed value,
+  limit, and code. It never carries stored prompt, tag, memory, receipt, or endpoint text.
+
+The guard must never throw after a successful database write and leave an acknowledged interaction
+unrepainted: an operation that already committed still has to produce a visible result, which is why the
+production branch substitutes a payload rather than propagating.
+
+### Adding a panel
+
+The step-by-step guide is [Adding a Panel or Panel Button](/contributing/extending/panel/). This section
+covers the producer manifest it relies on.
+
+A new module that emits `MessageFlags.IsComponentsV2` must appear in the manifest in
+`tests/unit/discord/componentsV2ProducerManifest.test.ts`. The coverage assertion scans `src/` for that flag
+and compares the result against the manifest by module name in both directions, so an unregistered producer
+fails with a name rather than an arithmetic mismatch. An entry is either `suite`, naming boundary fixtures that
+drive its builder, or `delivery`, meaning its payload is built inline with no exported builder a fixture can
+drive and is validated at construction instead.
+
+Boundary fixtures sweep every runtime locale discovered from `src/locales/`, receipts on and off, each read
+status and page or view kind, and collection sizes around the page-size boundary. They must also vary **content
+shape**, not only collection size: a sweep in which every record carries the same short body passed 1,659
+combinations while a fence breakout and an unbounded body both went undetected.
+
 ## Legacy Message Component Behavior
+
+TomoriBot's `/config` > Plugins > MCP Servers page is a persistent-routing example. It uses `config:v2`
+custom IDs. The route family carries only locale, navigation state, stable row IDs, and bounded enum
+values. Each interaction reloads the
+current workspace and durable registration state when it needs panel state; the Add opener performs
+only its permission check before showing the form, and the globally routed submit performs the full
+reload. Names, endpoints, credentials, and permission bits are never trusted from the route. The panel
+renders the complete supported collection in deterministic order, with stable-ID Enable/Disable and
+Remove actions on each row. The structural rewrite registered no `config:v1` decoder, so an
+already-issued version-one route resolves to the localized outdated-panel response instead of a
+silent repaint. Receipts use their own top-level
+Container below the authoritative collection Container, keeping status color separate from the panel.
+Healthy views omit a routine refresh button because transactions reload and repaint automatically. Only stale or
+unavailable reads expose `Retry`, which performs a configuration read without testing or connecting
+to the remote MCP endpoint.
+
+TomoriBot's `/moderation` Member Access editor is the first writable page in the moderation panel.
+Its `moderation:v1` routes handle category navigation and modal transactions. Clicking `Edit Permissions`
+reauthorizes and reads fresh server state before opening a globally routed Checkbox Group modal as the
+valid first interaction acknowledgment (`showRoutedRawModal`). The modal custom ID and component ID carry a nonce
+to bind submission lifecycle. Upon modal submit, the router immediately defers update, reauthorizes, reloads
+current state, consumes the stored checkbox-group array once (`takeRawModalCheckboxGroupValues`), filters
+against recognized permission definitions, and suppresses writes if the refreshed scope is stale or unavailable.
+On changed input, a single repository update is performed, followed by a single cache invalidation on success.
+The panel then reloads authoritative state and repaints with updated semantic status rows and a separate
+top-level receipt container (`success`, `info`, or `error`), while retaining truthful receipts if a post-write
+reload fails.
+
+The `/moderation` User Blacklist page manages personalization exclusions and persona interaction restrictions.
+One paired `Add Blacklist` and `Remove Blacklist` action row avoids consuming a component for every entry.
+Remove opens nonce-bound Checkbox Groups with every presented entry selected. Unchecking entries and submitting
+removes only those entries, with no second confirmation. The submit route reauthorizes, reloads current scope, and
+compares the submission with the short-lived presented snapshot, so entries added after the modal opened are not
+removed. Canonical operations precisely invalidate affected personalization and persona-block caches after successful
+writes.
+
+The Whitelist pages use the same transaction pattern. Channel additions use a native Channel Select and retain
+the existing cooldown inheritance rules. Role additions use a native Role Select and reject the everyone role.
+Both lists expose one red bulk Remove action beside Add. Their unchecked-means-remove modals use the same snapshot,
+reauthorization, fresh-read, and immediate-submit contract as User Blacklist. Duplicate additions and missing removal
+targets do not write or invalidate; successful changes invalidate the whitelist cache after the write.
+
+The `Personas` page uses paired `Add Persona` and `Remove Persona` actions. Add opens a modal with a String
+Select for the configured persona catalog and a native text Channel Select, adding one persona-channel mapping.
+The configured persona limit keeps the String Select within Discord's 25-option bound. Remove uses the same bulk
+checkbox contract as the other lists. Canonical full-set replacement preserves concurrent mappings, suppresses
+unchanged writes, and invalidates the whitelist cache only after a successful transaction.
 
 Before the introduction of the `IS_COMPONENTS_V2` flag, message components were sent in conjunction with message content. This means that you could send a message using a subset of the available components without setting the `IS_COMPONENTS_V2` flag, and the components would be included in the message content along with `content` and `embeds`.
 

@@ -33,6 +33,16 @@ class HealthTracker {
   private readonly maxPingLatency: number = 5000;
 
   /**
+   * Failed gateway connection attempts since the last established session
+   */
+  private gatewayFailureCount: number = 0;
+
+  /**
+   * When the most recent gateway connection attempt failed
+   */
+  private lastGatewayFailureAt: number | null = null;
+
+  /**
    * Initialize the health tracker with a Discord client
    */
   initialize(client: Client): void {
@@ -92,21 +102,15 @@ class HealthTracker {
       };
     }
 
-    // Activity timeout check (DISABLED)
-    // Kept off to prevent false positives during quiet hours. The "Lonely Bot" problem: during
-    // periods of low activity (e.g. 3 AM) no Discord events arrive, so the bot reports "unhealthy"
-    // while perfectly functional, which on a platform that restarts unhealthy containers becomes a
-    // restart loop.
+    // Activity timeout check (DISABLED). Quiet hours produce no Discord events, so the bot would
+    // report "unhealthy" while idle and a restart policy would loop it.
     //
-    // An earlier version of this comment justified the omission by claiming that "if the event loop
-    // were frozen, the HTTP health check request itself would timeout". **That is false**, and it
-    // is why a starved main thread went unnoticed for hours: a loop that yields between chunks of
-    // work still answers a short health probe in milliseconds while multi-step handlers behind it
-    // make no progress. Liveness and progress are different properties. `eventLoopMonitor` measures
-    // the second one and exposes it on the same endpoint.
+    // Activity is not liveness: a loop that yields between chunks still answers a short health
+    // probe while the handlers behind it make no progress, which is how a starved main thread went
+    // unnoticed. `eventLoopMonitor` measures that progress on the same endpoint.
     //
-    // If you want to re-enable this check, ensure you're listening to 'raw' events via
-    // client.on('raw', () => healthTracker.recordActivity()) to catch all Discord activity.
+    // Re-enabling this needs `client.on('raw', ...)` rather than typed events, and a progress
+    // signal that does not depend on activity.
     /*
 		if (timeSinceLastActivity > this.activityTimeout) {
 			return {
@@ -137,10 +141,48 @@ class HealthTracker {
   }
 
   /**
+   * Records a failed gateway connection attempt.
+   *
+   * A gateway incident otherwise leaves no durable trace once the log rows are rate-limited, so
+   * the count and the timestamp of the latest attempt are what separate "discord.js is retrying
+   * and will recover" from "this process has never connected".
+   */
+  recordGatewayFailure(): void {
+    this.gatewayFailureCount++;
+    this.lastGatewayFailureAt = Date.now();
+  }
+
+  /** Clears the failure streak once a session is established or resumed. */
+  recordGatewayConnected(): void {
+    this.gatewayFailureCount = 0;
+    this.lastGatewayFailureAt = null;
+  }
+
+  /**
    * Get WebSocket ping latency in milliseconds
    */
   getWebSocketPing(): number {
     return this.client?.ws.ping ?? -1;
+  }
+
+  /**
+   * Reports connection progress for the health endpoint.
+   *
+   * These are counters rather than a verdict, so they deliberately do not feed `healthy`: a
+   * reconnecting gateway is expected to recover.
+   *
+   * Login is absent by design. A failed login exits the process, so any state recorded for it
+   * would be unreadable by the probe that is meant to report it; the exit code and the log line
+   * are what carry that outcome.
+   */
+  getConnectionState(): {
+    gatewayFailureCount: number;
+    lastGatewayFailureAt: string | null;
+  } {
+    return {
+      gatewayFailureCount: this.gatewayFailureCount,
+      lastGatewayFailureAt: this.lastGatewayFailureAt ? new Date(this.lastGatewayFailureAt).toISOString() : null,
+    };
   }
 }
 

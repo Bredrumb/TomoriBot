@@ -14,6 +14,6 @@ Page still isn't finished, stay tuned!
 
 ![Aphel](/img/docs/meet-tomori/03-aphel.png)
 
-**Aphel** is the third sister — a perpetually exhausted downer who gives honest,
+**Aphel** is the third sister: a perpetually exhausted downer who gives honest,
 no-sugarcoating advice and is surprisingly good at real adult problems. Her cold exterior
 cracks for cats, noise rock, and city pop.

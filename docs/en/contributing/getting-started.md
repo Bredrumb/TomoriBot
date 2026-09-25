@@ -4,34 +4,23 @@ sidebar:
   order: 2
 ---
 
-This guide sets up TomoriBot locally with Bun + PostgreSQL.
+How to run TomoriBot locally with Bun and PostgreSQL for development.
 
 ## Prerequisites
 
-- Bun
-- PostgreSQL
-- A Discord bot application with:
-  - `bot` and `applications.commands` scopes
-  - Privileged intents enabled in Discord Developer Portal:
-    - `Server Members Intent`
-    - `Message Content Intent`
-  - `Presence Intent` is optional (used only outside production)
+- Bun and PostgreSQL.
+- A Discord application with the `bot` and `applications.commands` scopes, and the **Server Members**
+  and **Message Content** privileged intents enabled in the Developer Portal. `Presence` is optional
+  and only used outside production.
 
-## 1. Install Dependencies
+## Run the bot
 
 ```bash
 bun install --frozen-lockfile
-```
-
-## 2. Create Local Environment File
-
-```bash
 cp .env.example .env
 ```
 
-`.env.example` is intentionally minimal and only includes the required local setup values.
-
-Minimum required values for local development:
+Fill in the required values, and create the database and user they name:
 
 ```dotenv
 DISCORD_TOKEN=...
@@ -44,119 +33,62 @@ POSTGRES_DB=tomodb
 RUN_ENV=development
 ```
 
-Notes:
-
-- Runtime uses `RUN_ENV` (not `NODE_ENV`) for production/dev branching.
-- In production mode (`RUN_ENV=production`), secrets are fetched from AWS Secrets Manager (`tomoribot/production`) unless `TEST_PRODUCTION=true`.
-- Additional tuning and feature flags live in `.env.optional.example`. Copy only the values you actually want into `.env`.
-
-## 3. Prepare PostgreSQL
-
-Create a DB/user, then ensure `.env` credentials match.
-
-## 4. Start the Bot
+- The code branches on `RUN_ENV`, not `NODE_ENV`.
+- `RUN_ENV=production` reads secrets from AWS Secrets Manager unless `TEST_PRODUCTION=true`.
+- Optional settings are in `.env.optional.example`; copy only the ones you need.
 
 ```bash
 bun run dev
 ```
 
-Expected startup stages include:
+Startup loads secrets, the encryption key manager, the schema and seeds, the tool registry, locales,
+and caches, then sets up event handlers and logs in to Discord.
 
-- secrets loading
-- encryption key manager init
-- schema + seed verification
-- tool registry init
-- locale init
-- cache warmup
-- event handler setup
-- Discord login
+## Set up a test server
 
-## 5. First-Time Discord Setup
+Run `/setup` in your server. It needs **Manage Server** and opens a private checklist. Nothing is
+saved until `Finish Setup`: cancelling or restarting the bot discards the draft (drafts live in
+memory, up to 200 at a time).
 
-Run in your test server:
+With `RUN_ENV=development` the checklist has two steps:
 
-```text
-/config setup
-```
+- **AI Provider**, one select with three modes:
+  - **AI Provider (Recommended)**: pick a provider and enter an API key, which is validated and
+    encrypted into the draft.
+  - **Custom Endpoint (Advanced)**: `Configure Connection`, then `Configure Text Model`, which is
+    enabled once the connection validates.
+  - **User BYOK** (servers only): members bring their own providers and the server keeps no text
+    provider.
+- **Starting Settings**, one modal: persona, reply style, timezone, and the default system prompt.
+  **Built-in Default (Recommended)** stores no prompt text, so it follows future changes to the
+  shipped default; a catalog preset stores its text when you finish.
 
-`/config setup` normally captures your initial provider credentials.
+`RUN_ENV=production` adds a `Policies` step that accepts the Terms of Service and Privacy Policy.
+Set `TEST_PRODUCTION=true` to see it locally. The same setting controls whether
+`/legal terms-of-service` and `/legal privacy-policy` are registered; `/legal license` always is.
 
-If you are testing a server that should start in member-funded mode, `/config setup` also exposes a `None (User BYOK)` option. That bootstraps the server with no server-side text provider and immediately enables member BYOK, so users must configure their own personal providers.
+Afterwards, `/providers` adds and edits saved providers (`Add New Custom Endpoint` for a custom one,
+then register a model from its dropdown), and `/config` > Models > Switch Models changes the active
+provider or model.
 
-If you want to use only a self-hosted or proxy-backed custom endpoint, `/config setup` now also exposes `Custom Endpoint (finish after setup)`. That bootstraps the server without enabling BYOK, then you finish the provider setup with:
+Quick checks: `/ping`, `/status`, and mentioning the bot in chat. If commands do not appear, run
+`/refresh`.
 
-```text
-/provider custom-endpoint add
-```
+## Commands
 
-The add command registers the endpoint and makes it the current model for the selected capability.
-Later changes to that registration can be done in place with `/provider custom-endpoint edit`.
+| Command | Use |
+|---|---|
+| `bun run dev` / `build` / `start` | Run with reload, build, run the build |
+| `bun run check`, `bun run lint` | TypeScript and Biome |
+| `bun run vl` | Every gate, one verdict each (see [Development Tasks](/contributing/development-tasks/)) |
+| `bun run check-locales`, `bun run check-limits` | Locale keys and Discord limits |
+| `bun run check-runtime-imports` | Runtime dependencies load, and `bun.lock` keeps compatible transitive versions. Fatal in `vl` and CI |
+| `bun run check-media-size` | Fails on tracked media over 1 MiB in `src/db/seed/catalog/personas/**` and `assets/img/**` |
+| `bun run compress-media` | Fixes those files: lossless re-encode first, then a downscale to 768 px on the long edge if still too big. `--dry-run` previews; a path substring targets one file |
+| `bun run nuke-db`, `bun run backup` | Reset or back up the local database |
+| `bun run purge-commands` | Remove registered slash commands |
 
-If you want to save and activate an additional provider afterward:
-
-```text
-/provider add
-```
-
-Then use `/model text` whenever you want to switch to another saved provider or model later.
-
-Common saved providers:
-
-- `provider:openrouter`
-- `provider:novelai`
-
-The old inline `custom` provider path is deprecated. Use `/provider custom-endpoint add` instead.
-
-## Common Development Commands
-
-```bash
-bun run dev
-bun run build
-bun run start
-bun run lint
-bun run check
-bun run check-runtime-imports
-bun run vl
-bun run nuke-db
-bun run backup
-bun run purge-commands
-bun run check-locales
-bun run check-limits
-bun run check-media-size
-bun run compress-media
-```
-
-`bun run check-runtime-imports` verifies that critical runtime dependencies load and that
-`bun.lock` preserves their compatible transitive versions. It also runs as a fatal check in
-`bun run vl` and CI.
-
-`bun run check-media-size` (also bundled into `bun run vl`) rejects tracked media
-over a per-file budget (default 1 MiB, set via `MEDIA_SIZE_LIMIT_BYTES`). It scans
-`src/db/seed/catalog/personas/**` (Default Persona avatars/sprites that ship to
-Discord) and `assets/img/**`.
-
-`bun run compress-media` fixes offenders automatically: it re-encodes losslessly
-(max deflate, metadata stripped — color stays Δ0) and only downscales a file when
-lossless alone cannot reach the budget, capping the long edge at `MEDIA_MAX_DIMENSION`
-(default 768px). Use `--dry-run` to preview, or pass a path substring to target one file.
-Note: these PNGs are already near-optimally compressed, so lossless rarely fits 1 MiB on
-its own — downscaling (invisible at Discord's <=128px avatar render size) is the trade.
-
-`compress-media` also normalizes release cards under `.github/release/**` (not gate-scoped)
-to WebP q`RELEASE_CARD_WEBP_QUALITY` (default 90) at full resolution, rewriting sibling
-`release-notes.md` references. Already-WebP cards are skipped (re-encoding lossy WebP each
-run would degrade it). Published GitHub release bodies hotlink `raw/main`, so after converting
-a card you must update the published body (`gh release edit`) — the command prints the reminder.
-
-## Quick Health Checks
-
-- `/tool ping`
-- `/tool status`
-- Mention the bot or use trigger words in chat
-
-## Troubleshooting
-
-- Command registration issues: run `/tool refresh`
-- Type errors: `bun run check`
-- Formatting/lint: `bun run lint`
-- Locales mismatch: `bun run check-locales`
+Persona PNGs are already well compressed, so meeting the budget usually needs the downscale; Discord
+shows avatars at 128 px or less. On a `release` checkout, `compress-media` also converts release cards
+in `.github/release/**` to WebP (quality 90) and rewrites `release-notes.md` references. For a release
+already published, update its body with `gh release edit` afterwards.

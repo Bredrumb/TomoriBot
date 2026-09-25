@@ -14,12 +14,7 @@ const whitelistCache = new Map<string, { result: WhitelistCheckResult; expiresAt
 let cacheHits = 0;
 let cacheMisses = 0;
 
-/**
- * Cache TTL in milliseconds (configurable via CHANNEL_WHITELIST_CACHE_TTL_MINUTES)
- * Default: 5 minutes
- */
-const CACHE_TTL_MINUTES = Number.parseInt(process.env.CHANNEL_WHITELIST_CACHE_TTL_MINUTES || "5", 10);
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Generate cache key from server and channel Discord IDs

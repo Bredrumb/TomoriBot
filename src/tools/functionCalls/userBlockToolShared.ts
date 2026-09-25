@@ -9,6 +9,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { formatTimeWithOffset, formatUTCOffset } from "@/utils/text/timezoneHelper";
 
+/** One week, the ceiling a persona may block a user for in a single tool call. */
 export const DEFAULT_BLOCK_USER_MAX_DURATION_HOURS = 168;
 
 export type ParsedBlockUserArgs =
@@ -48,14 +49,9 @@ export type ResolvedBlockTarget =
       candidates?: string[];
     };
 
-export function getBlockUserMaxDurationHours(): number {
-  const parsed = Number.parseInt(process.env.BLOCK_USER_MAX_DURATION_HOURS ?? "", 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_BLOCK_USER_MAX_DURATION_HOURS;
-}
-
 export function parseBlockUserArgs(
   args: Record<string, unknown>,
-  maxDurationHours = getBlockUserMaxDurationHours(),
+  maxDurationHours = DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
 ): ParsedBlockUserArgs {
   const blockedUserArg = args.blocked_user;
   if (typeof blockedUserArg !== "string" || blockedUserArg.trim().length === 0) {
@@ -199,14 +195,19 @@ export function formatBlockedUserNoticeContent(displayName: string, expiresAt: D
   return `[System: ${displayName} sent a message but is currently blocked by you for ${hoursRemaining} more ${hourLabel}. Use \`unblock_user\` to unblock if needed]`;
 }
 
-function formatExpiry(expiresAt: Date, timezoneOffset: number): string {
-  return `${formatTimeWithOffset(expiresAt, timezoneOffset, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })} (${formatUTCOffset(timezoneOffset)})`;
+function formatExpiry(expiresAt: Date, timezoneOffset: number, locale: string): string {
+  return `${formatTimeWithOffset(
+    expiresAt,
+    timezoneOffset,
+    {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+    locale,
+  )} (${formatUTCOffset(timezoneOffset)})`;
 }
 
 export function getBlockTypeLabel(locale: string, blockType: PersonaUserBlockType): string {
@@ -254,7 +255,7 @@ export async function sendUserBlockedEmbed(params: {
         block_type: getBlockTypeLabel(locale, params.blockType),
         effect: getBlockEffectText(locale, params.blockType),
         duration_hours: params.durationHours,
-        expires_at: formatExpiry(params.expiresAt, timezoneOffset),
+        expires_at: formatExpiry(params.expiresAt, timezoneOffset, locale),
       },
       footerKey: "tools.user_block.block_footer",
       color: params.blockType === "mute" ? ColorCode.WARN : ColorCode.ERROR,

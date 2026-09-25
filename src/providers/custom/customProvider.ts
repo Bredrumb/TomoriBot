@@ -79,8 +79,10 @@ import {
 import { getCustomToolAdapter } from "./customToolAdapter";
 import { customProviderInfo } from "./providerInfo";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
+import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /**
  * Default model name placeholder for custom provider
@@ -94,6 +96,8 @@ const DEFAULT_CUSTOM_MODEL = "custom/default";
 export interface CustomProviderConfig extends ProviderConfig {
   /** Custom endpoint URL (e.g., http://localhost:11434/v1) */
   endpointUrl: string;
+  /** The backend server's connection, which keys its ComfyUI VRAM handoff. */
+  customConnectionId?: number | null;
   /** Whether the model supports image inputs (user-declared) */
   seesImages?: boolean;
   /** Whether the model supports video inputs (user-declared) */
@@ -207,8 +211,10 @@ export class CustomProvider
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
     // Only return tools if the model supports them (user-declared capability)
-    if (!tomoriState.llm.has_tools) {
-      log.info("Custom provider: Model does not support tools (user-declared capability)");
+    if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
+      log.info(
+        `Custom provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
+      );
       return [];
     }
 
@@ -242,6 +248,7 @@ export class CustomProvider
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };
@@ -366,6 +373,7 @@ export class CustomProvider
         videogen_enabled: false,
         voice_message_enabled: false,
         user_blocking_enabled: false,
+        user_info_updates_enabled: false,
         thread_creation_enabled: false,
       },
     };
@@ -429,14 +437,10 @@ export class CustomProvider
 
     if (!endpointUrl) {
       throw new Error(
-        "Custom endpoint URL not configured. Register it with /provider custom-endpoint add or /personal custom-endpoint add, then select it again.",
+        "Custom endpoint URL not configured. Register it with /providers or /personal providers, then select it again.",
       );
     }
 
-    // Determine which model name to use:
-    // If custom_model_name is set, use it (for Ollama, etc. that require exact model names)
-    // Fall back to the endpoint's registered model_name hint (set during /provider custom-endpoint add)
-    // Last resort: llm_codename (for KoboldCpp, etc. that don't care about model selection)
     const modelName = tomoriState.config.custom_model_name || endpointModelNameHint || tomoriState.llm.llm_codename;
 
     log.info(`Custom provider: Using endpoint URL: ${endpointUrl}`);
@@ -456,6 +460,7 @@ export class CustomProvider
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
       maxOutputTokens: tomoriState.config.llm_max_output_tokens ?? 4096,
       endpointUrl: endpointUrl,
+      customConnectionId: parseCustomProvider(tomoriState.llm.llm_provider)?.connectionId ?? null,
       seesImages: tomoriState.llm.sees_images,
       seesVideos: tomoriState.llm.sees_videos,
       ...samplingParams,
@@ -463,7 +468,7 @@ export class CustomProvider
       numCtx: tomoriState.config.custom_num_ctx ?? endpointNumCtxHint ?? null,
     };
 
-    if (tomoriState.llm.has_tools) {
+    if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }
 
@@ -517,12 +522,12 @@ export class CustomProvider
         isManuallyTriggered: streamingContext?.isManuallyTriggered,
       };
 
-      if (streamingContext && tomoriState.llm.has_tools) {
+      if (streamingContext && resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("CustomProvider: Reloading tools with streaming context for context-aware availability");
         const contextAwareTools = await this.getTools(tomoriState, streamingContext);
         streamConfig.tools = contextAwareTools;
         log.info(`Context-aware tools loaded: ${contextAwareTools.length} tools`);
-      } else if (streamingContext && !tomoriState.llm.has_tools) {
+      } else if (streamingContext && !resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("Skipping context-aware tool reload - model doesn't support tools");
       }
 

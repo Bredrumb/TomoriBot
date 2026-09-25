@@ -1,0 +1,80 @@
+---
+title: "Como eu uso a TomoriBot?"
+head:
+  - tag: title
+    content: "TomoriBot | Adicione um Bot de IA ao Seu Servidor do Discord"
+description: "Use hospedagem própria para sua própria instância ou convide a versão implantada para o seu servidor do Discord, conecte uma chave de API de IA e comece a conversar."
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside } from "@astrojs/starlight/components";
+
+Este guia leva você do zero à sua primeira mensagem com a TomoriBot. O caminho mais fácil é convidar a instância pública pronta (veja a [Política de Privacidade](/pt-BR/legal/privacy-policy/)). Se você preferir usar hospedagem própria para sua própria instância, pule para [Hospedagem própria](#hospedagem-própria) no final.
+
+## Use o Bot Hospedado
+
+### Passo 1: Convide-a
+
+Convide a instância pública com o botão abaixo e escolha o servidor no qual você a quer.
+Você precisa da permissão **Gerenciar Servidor** para adicionar um bot.
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **Convidar TomoriBot**
+  </LinkButton>
+</div>
+
+Você também pode enviar uma DM para ela diretamente. As etapas de configuração são as mesmas.
+
+### Passo 2: Obtenha uma chave de API
+
+A TomoriBot não vem com um cérebro de IA próprio; você conecta um de um **provedor** por meio de uma **chave de API**. Ela suporta muitos provedores e você só precisa de um para começar. A seguir estão alguns provedores que ela suporta atualmente:
+
+- **Google Gemini**: propósito geral, tem um nível gratuito, executa todos os recursos. Recomendado para sua primeira configuração.
+- **OpenRouter**: uma chave, acesso a todos os modelos mais recentes de texto, vídeo, imagem e incorporação.
+- **NovelAI**: baseado em assinatura, imagens sem censura, roleplay e contação de histórias.
+- **DeepSeek**, **NVIDIA NIM**, **Anthropic**, **Vertex AI**, **Z.ai**, ou qualquer endpoint `Personalizado` compatível com OpenAI.
+
+Execute `/help` no Discord, escolha `Configuração`, depois **Step 1: Get an API Key** e escolha seu provedor para ver como obter sua chave de API, ou veja [Provedores & Modelos](/pt-BR/features/setup-administration/providers-and-models/#api-keys) para a lista completa.
+
+<Aside type="caution">
+**Nunca compartilhe sua chave de API com ninguém**. Apenas forneça-a por meio dos comandos slash da TomoriBot, que a armazenam e criptografam com segurança.
+</Aside>
+
+### Passo 3: Execute a Configuração
+
+Execute `/setup`. Ele abre um painel de lista de verificação privado que só você pode operar. Trabalhe nos seus itens e, em seguida, pressione `Concluir Configuração`:
+
+- **Provedor de IA**: escolha `Provedor de IA (Recomendado)`, escolha seu provedor e cole a chave lá. Hosters avançados podem escolher `Endpoint Personalizado (Avançado)` e registrar a conexão do seu endpoint e o modelo de texto aqui em vez disso, e um servidor pode ser executado com **User BYOK** (em um servidor, não em uma DM) para que cada membro forneça seu próprio provedor pessoal.
+- **Configurações Iniciais**: escolha uma persona inicial, um estilo de resposta, um fuso horário e o prompt de sistema padrão.
+- **Políticas** (apenas instâncias hospedadas): aceite os Termos de Serviço e a Política de Privacidade em um único modal.
+
+Nada é salvo enquanto você trabalha: o painel é um rascunho, `Concluir Configuração` é o que criptografa a chave, inicializa a configuração dela para o servidor e a deixa pronta para falar. `Cancelar` discarta o rascunho e um painel intocado expira por conta própria. Cada servidor mantém sua própria configuração independente.
+
+**Recomendado:** execute `/expressions initialize` depois para que ela possa usar os emojis personalizados e figurinhas do seu servidor com precisão.
+
+### Passo 4: Comece a conversar
+
+Apenas **mencione-a** ou **responda** a uma de suas mensagens:
+
+```text
+@TomoriBot ei, tudo bem?
+```
+
+A partir daqui, você pode moldar como ela é acionada e como se comporta:
+- Dê a ela uma personalidade com `/persona`: veja [Múltiplas Personas](/pt-BR/features/chatting-personality/multiple-personas/).
+- Ensine a ela com `/memories`: veja [Memória](/pt-BR/features/knowledge/memory/).
+- Explore outras opções de personalização: veja [Referência de Comandos](/pt-BR/features/command-reference/) ou [Recursos](/pt-BR/features/)
+
+Na instância hospedada, configurar a TomoriBot significa que você e os membros do seu servidor concordam com os avisos `/legal terms-of-service` e `/legal privacy-policy` dela; a configuração guiada pede que você aceite ambos. Esses dois comandos e a etapa de Políticas que os carrega, pertencem à implantação hospedada. Uma instância com hospedagem própria registra a `/legal license` em todos os ambientes e a política dois apenas sob `RUN_ENV=production`.
+
+## Hospedagem própria
+
+Quer controle total sobre seus dados, modelos e chaves de API? Você pode executar sua própria instância da TomoriBot no seu próprio hardware. O caminho recomendado é o assistente de configuração guiado.
+
+<div class="button-row">
+  <LinkButton href="/pt-BR/self-hosting/" variant="secondary">
+    **Hospedagem Própria da TomoriBot**
+  </LinkButton>
+</div>

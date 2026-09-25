@@ -1,4 +1,11 @@
-## English | [日本語](.github/README_ja.md)
+### English | [日本語](.github/README_ja.md) | [繁體中文](.github/README_zh-TW.md) | [简体中文](.github/README_zh-CN.md) | [Español](.github/README_es-419.md) | [Português (Brasil)](.github/README_pt-BR.md) | [Tiếng Việt](.github/README_vi.md)
+
+<!-- Language switcher slots for the language-expansion target locales.
+     Each entry joins the switcher row above when its translated README lands as
+     .github/README_<code>.md. Entries stay unlinked until then so the repository front page never
+     carries a broken link. Labels are the endonyms from src/constants/docsLocales.ts.
+     Planned: fr Français | ru Русский | ko 한국어
+     See docs/en/contributing/localization/docs-site.md. -->
 
 > [!NOTE]
 > This README is a quick overview. For the full, up-to-date documentation (setup guides, feature walkthroughs, provider info, and more) visit **[docs.tomoribot.app](https://docs.tomoribot.app/)**.
@@ -15,7 +22,7 @@
 A self-hosted and customizable personal AI assistant/role-playing system for Discord with memory, multiple personas, tool calling, multimodality, and API/local model support.
 
 <p align="center">
-  <strong><a href="https://docs.tomoribot.app/">Official Website</a></strong>
+  <strong><a href="https://tomoribot.app/">Official Website</a></strong>
   &middot;
   <strong><a href="https://discord.com/oauth2/authorize?client_id=841644102059556915">Invite TomoriBot</a></strong>
   &middot;
@@ -61,7 +68,7 @@ TomoriBot supports long-term memory, multi-persona behavior, web and MCP tools, 
 
 You can [invite the public TomoriBot](https://discord.com/oauth2/authorize?client_id=841644102059556915) to your Discord server, or [self-host your own instance](#self-hosting) if you prefer full control over your privacy and API keys. TomoriBot uses best security practices and encryption that keeps data safe, but self-hosting ensures that all data remain entirely on your device. 
 
-After adding her to your server through either method above, run the `/config setup` command for instructions. Then you can simply say her name (or @ mention her) in order to get a response. 
+After adding her to your server through either method above, run the `/setup` command for instructions. Then you can simply say her name (or @ mention her) in order to get a response. 
 
 ## Feature Showcase
 
@@ -105,41 +112,11 @@ After adding her to your server through either method above, run the `/config se
 
 ## Useful Resources
 
-### [Full List of Supported Providers](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/#supported-providers)
-TomoriBot supports a wide range of LLM providers, image generation APIs, voice services, and search tools out of the box.
-
-### [How to run Local Models](https://docs.tomoribot.app/en/self-hosting/local-endpoints/)
-
-TomoriBot supports local LLMs (via KoboldCPP, LM Studio, vLLM, etc.), local image/video generation via ComfyUI, local TTS and STT endpoints, as well as local SearXNG and Browser web fetch Docker sidecars.
-
-### [Security & Threat Models](https://docs.tomoribot.app/en/wiki/threat-models/)
-
-TomoriBot employs encryption and security best practices to keep data and API keys completely safe, both for local setups as well as for those using the public deploy.
-
-### [Tool Macros for Prompt Customization](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/)
-
-TomoriBot comes with a variety of built-in tools (such as web search, memory management, image generation, cross-channel messaging, and more), which you can directly refer to in your prompts with macros, here are some silly examples:
-
-#### 1. Wellness Checker
-```text
-Every few hours, do a mandatory wellness check on @Bredrumb. 
-Ask them how they feel right now and if they've taken a break from coding recently. 
-Track their emotional state over time with {memory_tool} and/or {memory_update_tool} to report back to them later.
-```
-#### 2. Weekly ~~Current Events~~ Yuri News 
-```text
-Every Friday, compile the week's notable yuri manga chapters, anime episodes, and community fanart drops using {web_search_tool}. 
-Present findings with {voice_message_tool} in a seductive ASMR voice.
-```
-#### 3. Sleep Police
-```text
-If you notice through {message_metadata_tool} that someone is chatting past 2 AM, use {voice_message_tool} to send them a threateningly calm ASMR lullaby telling them to go to bed. 
-If they keep talking 10 minutes later, use {manage_message_tool} to delete their message for their own good and remind them that sleep deprivation is a leading cause of their issues.
-```
-### [Official TomoriBot Roadmap](https://github.com/users/Bredrumb/projects/1/views/1) 
-
-Stay in the loop for TomoriBot's planned features as well as all known issues.
-
+- [Full List of Supported Providers](https://docs.tomoribot.app/en/features/setup-administration/providers-and-models/#supported-providers)
+- [How to run Local Models](https://docs.tomoribot.app/en/self-hosting/local-endpoints/)
+- [Security & Threat Models](https://docs.tomoribot.app/en/wiki/threat-models/)
+- [Official TomoriBot Roadmap](https://github.com/users/Bredrumb/projects/1/views/1)
+- [Tool Macros for Prompt Customization](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/)
 
 <!-- GETTING STARTED -->
 ## Self-Hosting
@@ -169,7 +146,7 @@ The recommended path for most self-hosters is the local Bun setup wizard. Its de
     bun run dev
     ```
 
-Once you see `TomoriBot up and running!`, run `/config setup` in Discord.
+Once you see `TomoriBot up and running!`, run `/setup` in Discord.
 
 ### B. Docker Compose Setup
 
@@ -189,28 +166,30 @@ docker compose up --build
 
 For later starts, `docker compose up` is enough unless you changed code or dependencies.
 
-### C. Optional Sidecars & Servers
+### C. Optional Local Servers
 
-TomoriBot supports opt-in sidecar/server services alongside either setup path to enhance her tools and add local monitoring: SearXNG for web search, Crawl4AI for browser-rendered page fetches, and local TTS/STT voice servers.
+TomoriBot supports opt-in local servers alongside either setup path to enhance her tools and add local monitoring: SearXNG for web search, Crawl4AI for browser-rendered page fetches, and local TTS/STT voice servers.
 
 **With the local Bun setup (A)**, use `bun run launch` instead of `bun run dev`, example runs:
 
 ```sh
-# With SearXNG and Crawl4AI Docker sidecars
+# With the SearXNG and Crawl4AI Docker containers
 bun run launch --searxng --crawl4ai
 
 # With a local TTS server after following the voice setup docs
 bun run launch --qwen3tts
+bun run launch --voxcpm2
+bun run launch --cosyvoice3
 
 # See all available flags
 bun run launch --help
 ```
 
-Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--whisperx`, `--help`
+Available flags: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`, `--help`
 
-**Ctrl+C** stops the bot and any Python sidecar processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running, stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
+**Ctrl+C** stops the bot and any Python server processes. Docker containers (`--searxng`, `--crawl4ai`) are intentionally left running, stop them manually with `docker stop searxng` / `docker stop crawl4ai` when you're done.
 
-**With Docker Compose (B)**, sidecars are opt-in via Compose profiles instead:
+**With Docker Compose (B)**, local servers are opt-in via Compose profiles instead:
 
 ```sh
 # + SearXNG web search (self-hosted metasearch)
@@ -225,8 +204,8 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 
 See the guides below for full setup details:
 
-- **[SearXNG Web Search Sidecar](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
-- **[Crawl4AI Sidecar](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-crawl4ai/)** - A browser-rendering sidecar to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
+- **[SearXNG Web Search](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-searxng/)** - A self-hosted metasearch instance to bypass single-engine API limits for the `web_search` tool.
+- **[Crawl4AI](https://docs.tomoribot.app/en/self-hosting/local-endpoints/setup-crawl4ai/)** - A browser-rendering server to fetch and process JavaScript-heavy webpages for the `fetch_url` tool.
 - **[Text-to-Speech](https://docs.tomoribot.app/en/self-hosting/local-endpoints/text-to-speech/)** / **[Speech-to-Text](https://docs.tomoribot.app/en/self-hosting/local-endpoints/speech-to-text/)** - Python voice servers for TomoriBot's voice messages; their venv must be set up once beforehand.
 
 ### Updating TomoriBot
@@ -261,11 +240,11 @@ See the full **[Maintenance Documentation](https://docs.tomoribot.app/en/feature
 
 #### Basic Commands
 
-- `/config setup` - Initial bot setup for your server
+- `/setup` - Initial bot setup for your server
 - `/config` - Multiple ways to tweak TomoriBot
-- `/memory personal add` / `/memory personal remove` - Add / remove your personal memories
-- `/memory server add` / `/memory server remove` - Add / remove server-wide memories
-- `/server whitelist` / `/server user-blacklist` - Add / remove permissions from TomoriBot
+- `/personal memories` - Manage your personal memories
+- `/memories` - Manage server memories, documents, and short-term memory
+- `/moderation` - Manage member access, user blacklist, channel, persona, and role restrictions
 
 See the full **[Command Reference](https://docs.tomoribot.app/en/features/command-reference/)** for every slash command.
 
@@ -293,7 +272,7 @@ Contributions to TomoriBot are greatly appreciated! Please review the following 
 - **[Terms of Service](https://docs.tomoribot.app/en/legal/terms-of-service/)** - Rules and guidelines for using the bot
 - **[Privacy Policy](https://docs.tomoribot.app/en/legal/privacy-policy/)** - How we handle your data
 
-These documents are also accessible within Discord using `/legal terms` and `/legal privacy` commands.
+These documents are also accessible within Discord using `/legal terms-of-service` and `/legal privacy-policy` commands.
 
 ### For users self-hosting or using forks
 You control your own data and are responsible for your deployment's compliance under the [**GNU Affero General Public License v3.0**](https://github.com/Bredrumb/TomoriBot/blob/main/LICENSE).
@@ -301,7 +280,7 @@ You control your own data and are responsible for your deployment's compliance u
 <!-- CONTACT -->
 ## Contact & Links
 
-**Official Website**: [https://docs.tomoribot.app](https://docs.tomoribot.app/)
+**Official Website**: [https://tomoribot.app](https://tomoribot.app/)
 
 **Project Link**: [https://github.com/Bredrumb/TomoriBot](https://github.com/Bredrumb/TomoriBot)
 

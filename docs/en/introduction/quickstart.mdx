@@ -5,10 +5,10 @@ title: "How do I use TomoriBot?"
 # plain title.
 head:
   - tag: title
-    content: "TomoriBot | Add an AI Bot to Your Discord Server in Minutes"
+    content: "TomoriBot | Add an AI Bot to Your Discord Server"
 # Hand-written search snippet; overrides the auto-derived description from
 # routeData.ts middleware.
-description: "Set up TomoriBot in minutes: invite the free bot to your Discord server, connect an AI API key, and start chatting. Or self-host your own instance."
+description: "Self-host your own instance or invite the deployed version to your Discord server, connect an AI API key, and start chatting."
 aiGenerated: false
 sidebar:
   order: 1
@@ -46,7 +46,7 @@ providers, and you only need one to get started. The following are some provider
 - **DeepSeek**, **NVIDIA NIM**, **Anthropic**, **Vertex AI**, **Z.ai**, or any
   OpenAI-compatible **Custom** endpoint.
 
-Run `/help api-key` in Discord and pick your provider to see how to get their API key, or
+Run `/help` in Discord, choose `Setup`, then **Step 1: Get an API Key**, and pick your provider to see how to get its API key, or
 see [Providers & Models](/features/setup-administration/providers-and-models/#api-keys) for the full list.
 
 <Aside type="caution">
@@ -55,11 +55,24 @@ see [Providers & Models](/features/setup-administration/providers-and-models/#ap
 
 ### Step 3: Run Setup
 
-Run `/config setup` and paste in your API key. This encrypts the key, initializes her
-configuration for the server, and gets her ready to talk. Each server keeps its own
-independent configuration.
+Run `/setup`. It opens a private checklist panel that only you can operate. Work through its items,
+then press `Finish Setup`:
 
-**Recommended:** run `/server expressions initialize` afterward so she can use your
+- **AI Provider**: choose `AI Provider (Recommended)`, pick your provider, and paste the key in.
+  Advanced self-hosters can pick `Custom Endpoint (Advanced)` and register their endpoint's
+  connection and text model here instead, and a server can run with `User BYOK` (in a server, not a
+  DM) so every member supplies their own personal provider.
+- **Starting Settings**: pick a starting persona, a reply style, a timezone, and the default system
+  prompt.
+- **Policies** (hosted instances only): accept the Terms of Service and the Privacy Policy in one
+  modal.
+
+Nothing is saved while you work: the panel is a draft, `Finish Setup` is what encrypts the key,
+initializes her configuration for the server, and gets her ready to talk. `Cancel` discards the
+draft, and an untouched panel expires on its own. Each server keeps its own independent
+configuration.
+
+**Recommended:** run `/expressions initialize` afterward so she can use your
 server's custom emojis and stickers accurately.
 
 ### Step 4: Start chatting
@@ -72,11 +85,14 @@ Just **mention** her or **reply** to one of her messages:
 
 From here you can shape how she gets triggered and how she behaves:
 - Give her a personality with `/persona`: see [Multiple Personas](/features/chatting-personality/multiple-personas/).
-- Teach her with `/memory`: see [Memory](/features/knowledge/memory/).
+- Teach her with `/memories`: see [Memory](/features/knowledge/memory/).
 - Explore other customization options: see [Command Reference](/features/command-reference/) or [Features](/features/)
 
-Setting up TomoriBot means you and your server members agree to her `/legal terms` and
-`/legal privacy` notices.
+On the hosted instance, setting up TomoriBot means you and your server members agree to her
+`/legal terms-of-service` and `/legal privacy-policy` notices; the guided setup asks you to accept
+both. Those two commands, and the Policies step that carries them, belong to the hosted deployment.
+A self-hosted instance registers `/legal license` in every environment and the policy two only under
+`RUN_ENV=production`.
 
 ## Self-hosting
 
@@ -88,4 +104,3 @@ instance on your own hardware. The recommended path is the guided setup wizard.
     **Self-Host TomoriBot**
   </LinkButton>
 </div>
-

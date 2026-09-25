@@ -6,7 +6,9 @@ import type { ProcessedChunk, RawStreamChunk, StreamConfig, StreamContext } from
 import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 import { log } from "@/utils/misc/logger";
 import { buildCustomThinkingRequest } from "@/utils/provider/thinkingControl";
+import { acquireTextModelLease } from "@/utils/provider/textModelComfyUiHandoff";
 import { VerbatimToolCallParser, getVerbatimToolCallMaxBufferChars } from "@/utils/tools/verbatimToolCallParser";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /**
  * When true, the stream adapter scans `delta.content` for Gemma 4's hallucinated
@@ -19,6 +21,7 @@ const GEMMA_TOOL_PARSER_ENABLED = (process.env.CUSTOM_GEMMA_TOOL_PARSER_ENABLED 
 
 export interface CustomStreamConfig extends OpenAICompatibleStreamConfig {
   endpointUrl: string;
+  customConnectionId?: number | null;
   /** Optional context window override sent as options.num_ctx (Ollama extension) */
   numCtx?: number | null;
 }
@@ -101,10 +104,18 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     config: StreamConfig,
     context: StreamContext,
   ): AsyncGenerator<RawStreamChunk, void, unknown> {
+    // Held for the whole stream, and taken per tool round, so a ComfyUI job never unloads the model
+    // mid-reply. The `finally` also runs when the consumer returns early on a function call, which
+    // releases the lease before that tool (possibly the ComfyUI job itself) executes.
+    const releaseModel = await acquireTextModelLease(
+      (config as CustomStreamConfig).customConnectionId,
+      context.abortSignal,
+    );
     this.configureVerbatimToolCallParser(config, context);
     try {
       yield* super.startStream(config, context);
     } finally {
+      releaseModel();
       this.verbatimParser = null;
     }
   }
@@ -201,7 +212,9 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
 
     const tools = Array.isArray(config.tools) ? config.tools : [];
     const enabled = Boolean(
-      context.tomoriState.config.verbatim_tool_calling_enabled && context.tomoriState.llm.has_tools && tools.length > 0,
+      context.tomoriState.llm.verbatim_tool_calling &&
+        resolveToolsEnabled(context.tomoriState, context.tomoriState.llm.has_tools) &&
+        tools.length > 0,
     );
     if (!enabled) {
       return;

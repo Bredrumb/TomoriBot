@@ -8,14 +8,68 @@
 # Rules must match the request path exactly, so each old URL is listed both
 # with and without its trailing slash.
 
-# Site root is handled by functions/_middleware.ts (Accept-Language based
-# redirect to /en/introduction/ or /ja/introduction/), which runs before
-# these rules and never falls through to them for "/" — no rule needed here.
+# The product landing page owns language discovery, while the documentation root opens the default
+# locale directly. Keep this server-side redirect aligned with the Astro redirect map, which provides
+# a meta-refresh fallback for hosts that do not process this file.
+/ /en/introduction/ 301
+#
+# Locale roots: one 301 for the slashless form plus one 200 rewrite that serves
+# the locale's introduction page at its own root. Rules are static, so each new
+# locale listed with `docsTree: true` in src/constants/docsLocales.ts needs its
+# own pair here; the Astro redirect map is generated from that table and this
+# file is not. See docs/en/contributing/localization/docs-site.md.
+#
+# Every target locale is listed here ahead of its page tree, so a translation
+# lane never edits this file. Until that locale's `docsTree` flag flips, the
+# rewrite target does not exist and the root serves a 404, which is the honest
+# answer for a URL with no content behind it.
 
-# Japanese locale root: same rewrite. The slashless /ja form first normalizes
-# to the canonical trailing-slash URL, then the rewrite serves the content.
+# Japanese locale root
 /ja /ja/ 301
 /ja/ /ja/introduction/ 200
+
+# Target locale roots, staged for the language-expansion translation lanes
+/pt-BR /pt-BR/ 301
+/pt-BR/ /pt-BR/introduction/ 200
+/es-419 /es-419/ 301
+/es-419/ /es-419/introduction/ 200
+/fr /fr/ 301
+/fr/ /fr/introduction/ 200
+/zh-TW /zh-TW/ 301
+/zh-TW/ /zh-TW/introduction/ 200
+/zh-CN /zh-CN/ 301
+/zh-CN/ /zh-CN/introduction/ 200
+/vi /vi/ 301
+/vi/ /vi/introduction/ 200
+/ru /ru/ 301
+/ru/ /ru/introduction/ 200
+/ko /ko/ 301
+/ko/ /ko/introduction/ 200
+
+# Bare old-style routes (no locale prefix) for pages that only exist under /en/.
+# Cloudflare evaluates these before static assets, so a real page keeps serving
+# and only a path with no file behind it is redirected. An Astro redirect key
+# cannot express this: Astro writes dist/<key>/index.html for every redirect,
+# which replaces the generated page when the same path is also a content route.
+# See docs/en/contributing/localization/docs-authoring.md.
+/contributing/adding-locale /en/contributing/localization/new-locale/ 301
+/contributing/adding-locale/ /en/contributing/localization/new-locale/ 301
+/contributing/docs-site-localization /en/contributing/localization/docs-site/ 301
+/contributing/docs-site-localization/ /en/contributing/localization/docs-site/ 301
+
+# The adding-locale subpages merged into two pages.
+/en/contributing/adding-locale/locale-codes /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/locale-codes/ /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/ui-strings /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/ui-strings/ /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/seed-catalog /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/seed-catalog/ /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/verification /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/verification/ /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/documentation /en/contributing/localization/docs-site/ 301
+/en/contributing/adding-locale/documentation/ /en/contributing/localization/docs-site/ 301
+/en/contributing/adding-locale/readme-and-repo /en/contributing/localization/docs-site/ 301
+/en/contributing/adding-locale/readme-and-repo/ /en/contributing/localization/docs-site/ 301
 
 # /features/ restructure: flat pages moved into task-based sub-categories,
 # then the whole English tree moved under /en/ (Language Split). Destinations
@@ -56,5 +110,55 @@
 /features/matrix-bridge/ /en/features/integrations/matrix-bridge/ 301
 /features/sillytavern-support /en/features/integrations/sillytavern-support/ 301
 /features/sillytavern-support/ /en/features/integrations/sillytavern-support/ 301
-/architecture/cloud/azure-terraform-state-recovery /en/wiki/azure-terraform-state-recovery/ 301
-/architecture/cloud/azure-terraform-state-recovery/ /en/wiki/azure-terraform-state-recovery/ 301
+# Cloud deployment pages moved to the release branch (docs/en/wiki/cloud/azure/), so the whole
+# subtree is absent from the built site. A splat rather than paired entries because this removes a
+# subtree rather than moving pages one-to-one, and it also covers the old
+# azure-terraform-state-recovery rule whose destination is now gone too.
+/architecture/cloud /en/architecture/ 301
+/architecture/cloud/ /en/architecture/ 301
+/architecture/cloud/* /en/architecture/ 301
+/en/architecture/cloud /en/architecture/ 301
+/en/architecture/cloud/ /en/architecture/ 301
+/en/architecture/cloud/* /en/architecture/ 301
+
+# Contributing pages moved into extending/, localization/, testing/, and policies/.
+/en/contributing/adding-slash-command /en/contributing/extending/slash-command/ 301
+/en/contributing/adding-slash-command/ /en/contributing/extending/slash-command/ 301
+/en/contributing/adding-event-handler /en/contributing/extending/event-handler/ 301
+/en/contributing/adding-event-handler/ /en/contributing/extending/event-handler/ 301
+/en/contributing/adding-builtin-tool /en/contributing/extending/builtin-tool/ 301
+/en/contributing/adding-builtin-tool/ /en/contributing/extending/builtin-tool/ 301
+/en/contributing/adding-feature-flag-tool /en/contributing/extending/feature-flag-tool/ 301
+/en/contributing/adding-feature-flag-tool/ /en/contributing/extending/feature-flag-tool/ 301
+/en/contributing/adding-db-column /en/contributing/extending/db-column/ 301
+/en/contributing/adding-db-column/ /en/contributing/extending/db-column/ 301
+/en/contributing/adding-setup-module /en/contributing/extending/setup-module/ 301
+/en/contributing/adding-setup-module/ /en/contributing/extending/setup-module/ 301
+/en/contributing/adding-new-provider /en/contributing/extending/new-provider/ 301
+/en/contributing/adding-new-provider/ /en/contributing/extending/new-provider/ 301
+/en/contributing/adding-persona-preset /en/contributing/extending/persona-preset/ 301
+/en/contributing/adding-persona-preset/ /en/contributing/extending/persona-preset/ 301
+/en/contributing/adding-participant-extension /en/contributing/extending/participant-extension/ 301
+/en/contributing/adding-participant-extension/ /en/contributing/extending/participant-extension/ 301
+/en/contributing/adding-env-variable /en/contributing/extending/env-variable/ 301
+/en/contributing/adding-env-variable/ /en/contributing/extending/env-variable/ 301
+/en/contributing/adding-locale /en/contributing/localization/new-locale/ 301
+/en/contributing/adding-locale/ /en/contributing/localization/new-locale/ 301
+/en/contributing/docs-site-localization /en/contributing/localization/docs-site/ 301
+/en/contributing/docs-site-localization/ /en/contributing/localization/docs-site/ 301
+/en/contributing/docs-authoring /en/contributing/localization/docs-authoring/ 301
+/en/contributing/docs-authoring/ /en/contributing/localization/docs-authoring/ 301
+/en/contributing/testing-db-changes /en/contributing/testing/db-changes/ 301
+/en/contributing/testing-db-changes/ /en/contributing/testing/db-changes/ 301
+/en/contributing/testing-chat-changes /en/contributing/testing/chat-changes/ 301
+/en/contributing/testing-chat-changes/ /en/contributing/testing/chat-changes/ 301
+/en/contributing/testing-module-mocks /en/contributing/testing/module-mocks/ 301
+/en/contributing/testing-module-mocks/ /en/contributing/testing/module-mocks/ 301
+/en/contributing/comment-policy /en/contributing/policies/comments/ 301
+/en/contributing/comment-policy/ /en/contributing/policies/comments/ 301
+/en/contributing/panel-prose-and-layout /en/contributing/policies/panel-prose-and-layout/ 301
+/en/contributing/panel-prose-and-layout/ /en/contributing/policies/panel-prose-and-layout/ 301
+/en/contributing/raw-sql-boundary /en/contributing/policies/raw-sql/ 301
+/en/contributing/raw-sql-boundary/ /en/contributing/policies/raw-sql/ 301
+/en/contributing/dependency-security-policy /en/contributing/policies/dependency-security/ 301
+/en/contributing/dependency-security-policy/ /en/contributing/policies/dependency-security/ 301

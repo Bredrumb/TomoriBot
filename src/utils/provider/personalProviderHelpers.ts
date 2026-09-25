@@ -4,13 +4,8 @@ import type {
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
 } from "@/types/db/schema";
-import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
+import { llmProviderRepo } from "@/utils/db/repositories";
 import { prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
-
-export interface ProviderModelSelection {
-  model: string;
-  provider: string;
-}
 
 function sortProviderRows(rows: UserSavedProviderConfigRow[]): UserSavedProviderConfigRow[] {
   return [...rows].sort((left, right) => left.provider.localeCompare(right.provider));
@@ -26,7 +21,9 @@ export function hasConfiguredPersonalModel(
     case "embedding":
       return row.embedding_model_id !== null;
     case "image":
-      return row.diffusion_model_id !== null || row.nai_diffusion_model_id !== null;
+      return row.diffusion_model_id !== null;
+    case "image_nai":
+      return row.nai_diffusion_model_id !== null;
     case "video":
       return row.video_model_id !== null;
     case "vision":
@@ -80,32 +77,14 @@ export function getStoredPersonalProviderForCapability(
 
 /**
  * Whether writing a model for `capability` would newly move it off the server default and onto a
- * personal override.
- *
- * A personal override follows the user into every server, so that transition is the one operation
- * worth confirming before the write. Switching models or providers inside an override that is
- * already active changes nothing about scope and must not prompt again.
+ * personal override. Switching models or providers inside an override that is already active
+ * changes nothing about scope either way.
  */
 export function activatesNewPersonalOverride(
   rows: UserSavedProviderConfigRow[],
   capability: PersonalProviderCapability,
 ): boolean {
   return getActivePersonalProviderForCapability(rows, capability) === null;
-}
-
-/**
- * The capabilities a `toggle-models` submission moves from the server default onto a personal
- * override. Capabilities being switched off are deliberately excluded: unchecking already
- * expresses that intent through the submitted modal.
- */
-export function findNewlyEnabledPersonalCapabilities(
-  rows: UserSavedProviderConfigRow[],
-  selected: ReadonlySet<PersonalProviderCapability>,
-  capabilities: readonly PersonalProviderCapability[],
-): PersonalProviderCapability[] {
-  return capabilities.filter(
-    (capability) => selected.has(capability) && activatesNewPersonalOverride(rows, capability),
-  );
 }
 
 /**
@@ -116,46 +95,11 @@ export function isPersonalTextCredentialRotation(rows: UserSavedProviderConfigRo
   return getActivePersonalProviderForCapability(rows, "text")?.provider.toLowerCase() === provider.toLowerCase();
 }
 
-/** Resolves the active personal model/provider pair(s) for a capability. */
-export async function resolveActivePersonalProviderModelSelections(
-  rows: UserSavedProviderConfigRow[],
-  capability: PersonalProviderCapability,
-): Promise<ProviderModelSelection[]> {
-  const row = getActivePersonalProviderForCapability(rows, capability);
-  if (!row) return [];
-
-  switch (capability) {
-    case "text": {
-      const model = row.llm_id ? await llmModelRepo.loadById(row.llm_id) : null;
-      return model ? [{ model: model.llm_codename, provider: row.provider }] : [];
-    }
-    case "embedding": {
-      const model = row.embedding_model_id ? await llmModelRepo.loadEmbeddingModelById(row.embedding_model_id) : null;
-      return model ? [{ model: model.codename, provider: row.provider }] : [];
-    }
-    case "image": {
-      const modelIds = [row.diffusion_model_id, row.nai_diffusion_model_id].filter(
-        (modelId): modelId is number => typeof modelId === "number",
-      );
-      const models = await Promise.all(modelIds.map((modelId) => llmModelRepo.loadDiffusionModelById(modelId)));
-      return models.flatMap((model) => (model ? [{ model: model.codename, provider: row.provider }] : []));
-    }
-    case "video": {
-      const model = row.video_model_id ? await llmModelRepo.loadVideoGenerationModelById(row.video_model_id) : null;
-      return model ? [{ model: model.codename, provider: row.provider }] : [];
-    }
-    case "vision": {
-      const model = row.vision_llm_id ? await llmModelRepo.loadById(row.vision_llm_id) : null;
-      return model ? [{ model: model.llm_codename, provider: row.provider }] : [];
-    }
-  }
-}
-
 /**
  * Builds the upsert payload that promotes a text model to personal primary.
  *
  * The promoted model is pruned from the saved fallback chain: a fallback identical to the primary
- * can never run, and leaving it there makes `/personal model fallback` reject every later edit,
+ * can never run, and leaving it there makes personal fallback configuration reject every later edit,
  * since untouched slots resubmit the stale ref.
  */
 export function withPersonalTextPrimary(
@@ -210,6 +154,31 @@ function claimsCapability(row: UserSavedProviderConfigRow, capability: PersonalP
   return row.enabled_capabilities.includes(capability) || row.assigned_capabilities.includes(capability);
 }
 
+/**
+ * Clears `capability` from one non-target row, covering the assignment as well as the on/off state.
+ *
+ * Ownership is exclusive, so the losing rows give up the assignment too; otherwise two rows would
+ * claim the same capability. A row that is already the target, or that never claimed the
+ * capability, needs no write.
+ *
+ * @returns `false` when the release write failed, leaving ownership partly transferred
+ */
+async function releaseCapabilityFromProvider(
+  userId: number,
+  row: UserSavedProviderConfigRow,
+  provider: string,
+  capability: PersonalProviderCapability,
+): Promise<boolean> {
+  if (row.provider.toLowerCase() === provider.toLowerCase()) {
+    return true;
+  }
+  if (!claimsCapability(row, capability)) {
+    return true;
+  }
+
+  return await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityUnassigned(row, capability));
+}
+
 export async function assignPersonalCapabilityToProvider(
   userId: number,
   provider: string,
@@ -225,19 +194,18 @@ export async function assignPersonalCapabilityToProvider(
   for (const row of rows) {
     if (row.provider.toLowerCase() === provider.toLowerCase()) {
       const nextRow = updater(row);
-      await llmProviderRepo.upsertUserSavedProviderConfig(userId, {
+      const ok = await llmProviderRepo.upsertUserSavedProviderConfig(userId, {
         ...nextRow,
         enabled_capabilities: Array.from(new Set([...nextRow.enabled_capabilities, capability])),
         assigned_capabilities: Array.from(new Set([...nextRow.assigned_capabilities, capability])),
       });
+      if (!ok) return false;
       updated = true;
       continue;
     }
 
-    // Ownership is exclusive, so the losing rows give up the assignment as well as
-    // the on/off state; otherwise two rows would claim the same capability.
-    if (claimsCapability(row, capability)) {
-      await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityUnassigned(row, capability));
+    if (!(await releaseCapabilityFromProvider(userId, row, provider, capability))) {
+      return false;
     }
   }
 
@@ -249,6 +217,9 @@ export async function assignPersonalCapabilityToProvider(
  *
  * Re-enabling resolves the target through the stored assignment, so it returns to
  * the provider that was serving the capability before it was switched off.
+ *
+ * @returns `false` only when the request could not be satisfied: a failed upsert, or an
+ *   enable with no provider able to serve `capability`.
  */
 export async function setPersonalCapabilityEnabled(
   userId: number,
@@ -256,42 +227,46 @@ export async function setPersonalCapabilityEnabled(
   enabled: boolean,
 ): Promise<boolean> {
   const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
+
+  if (!enabled) {
+    // Disabling needs no target row: a capability no provider serves is already off, so the
+    // request is satisfied. The quick-toggle modal submits all six capabilities at once and
+    // ANDs the results, so treating an unconfigured capability as a failure reported
+    // "Operation Failed" over the successful write the user actually asked for.
+    // Disabling also never reassigns, so every row keeps its assignment and only the on/off
+    // state is cleared.
+    for (const row of rows) {
+      if (!row.enabled_capabilities.includes(capability)) {
+        continue;
+      }
+      const ok = await llmProviderRepo.upsertUserSavedProviderConfig(
+        userId,
+        withCapabilityEnabled(row, capability, false),
+      );
+      if (!ok) return false;
+    }
+    return true;
+  }
+
   const targetRow = getStoredPersonalProviderForCapability(rows, capability);
   if (!targetRow) {
     return false;
   }
 
   for (const row of rows) {
-    // Disabling never reassigns, so every row keeps its assignment and only the
-    // on/off state is cleared.
-    if (!enabled) {
-      if (row.enabled_capabilities.includes(capability)) {
-        await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, false));
-      }
-      continue;
-    }
-
     if (row.provider.toLowerCase() === targetRow.provider.toLowerCase()) {
-      await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityEnabled(row, capability, true));
+      const ok = await llmProviderRepo.upsertUserSavedProviderConfig(
+        userId,
+        withCapabilityEnabled(row, capability, true),
+      );
+      if (!ok) return false;
       continue;
     }
 
-    if (claimsCapability(row, capability)) {
-      await llmProviderRepo.upsertUserSavedProviderConfig(userId, withCapabilityUnassigned(row, capability));
+    if (!(await releaseCapabilityFromProvider(userId, row, targetRow.provider, capability))) {
+      return false;
     }
   }
 
   return true;
-}
-
-export async function loadActivePersonalTextProvider(userId: number): Promise<UserSavedProviderConfigRow | null> {
-  const rows = await llmProviderRepo.loadUserSavedProviderConfigs(userId);
-  return getActivePersonalProviderForCapability(rows, "text");
-}
-
-export async function loadPersonalProviderOrNull(
-  userId: number,
-  provider: string,
-): Promise<UserSavedProviderConfigRow | null> {
-  return await llmProviderRepo.loadUserSavedProviderConfig(userId, provider);
 }

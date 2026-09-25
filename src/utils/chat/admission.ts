@@ -9,8 +9,9 @@ import { transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentT
 import { extractBridgeUserId } from "@/utils/bridges";
 import { createStandardEmbed, sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { sendUserTranscriptViaWebhook } from "@/utils/discord/webhook/webhookCore";
+import { getBlockedSendReason } from "@/utils/discord/stream/sendFailureCache";
 import { ColorCode, log } from "@/utils/misc/logger";
-import { escapeRegExp, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
+import { escapeRegExp, isUnspacedScriptText, wrapWithWordBoundary } from "@/utils/text/processors/regexUtils";
 import { doesMessageMatchTrigger, isMatrixRelayMessage, isRealUserLikeMessage } from "@/utils/chat/triggerProcessor";
 import { isActiveNaturalStopTurn, selfReplySuppressionUntil } from "@/utils/chat/channelQueue";
 import { cleanupTextQuotaTriggerStates } from "@/utils/chat/textQuotaState";
@@ -22,6 +23,27 @@ import {
 } from "@/utils/chat/selfReplyState";
 import type { ChatAdmission, ChatIncoming, NonRunnableChatAdmission, TomoriChatInput } from "@/utils/chat/types";
 import type { Message } from "discord.js";
+
+/**
+ * Whether a moderator has timed the bot out in this guild.
+ *
+ * Reads the cached member only. Fetching would turn a per-turn gate into a Discord round trip,
+ * and a stale answer is self-correcting: the send path still classifies the resulting 50013.
+ */
+function isBotTimedOut(guild: Guild, client: ChatIncoming["client"]): boolean {
+  if (!client.user) return false;
+  const botMember = guild.members.cache.get(client.user.id);
+  return botMember?.isCommunicationDisabled() ?? false;
+}
+
+/**
+ * Admission runs before the trigger user is loaded or registered, so their stored language
+ * preference is unavailable; the invoker's client locale and then the guild locale are the best
+ * signals at this depth.
+ */
+function resolveAdmissionNoticeLocale(incoming: ChatIncoming): string {
+  return incoming.manualTriggerInvoker?.locale ?? incoming.message.guild?.preferredLocale ?? "en-US";
+}
 
 export function normalizeChatInvocation(input: TomoriChatInput): ChatIncoming {
   return {
@@ -228,6 +250,20 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
     if (!canSend) {
       return blocked("cannot_send_in_channel");
     }
+
+    // A timed-out member keeps every permission bit, so the check above passes while Discord
+    // rejects the send with 50013 regardless. Nothing in the bitfield expresses this, so it
+    // has to be read from the member rather than inferred from permissions.
+    if (isBotTimedOut(channel.guild, client)) {
+      return blocked("bot_timed_out_in_guild");
+    }
+
+    // Backstop for whatever the two checks above cannot see. They both reason about state that
+    // should predict a refusal; this one reacts to a refusal that actually happened, so it holds
+    // for causes not yet identified. Cleared the moment a send lands.
+    if (getBlockedSendReason(channel.id)) {
+      return blocked("recent_send_refused");
+    }
   }
 
   const { earlyTomoriState, earlyAllPersonas } = await loadEarlyTomoriState(channelScope.serverDiscId, channel.id);
@@ -350,11 +386,15 @@ async function evaluateAudioTranscriptionAdmission(args: {
       transcriptionResult.failureReason !== "no_endpoint" &&
       transcriptionResult.failureReason !== "missing_api_key"
     ) {
-      await sendStandardEmbed(message.channel as Parameters<typeof sendStandardEmbed>[0], "en-US", {
-        color: ColorCode.WARN,
-        titleKey: "general.errors.voice_transcription_failed_title",
-        descriptionKey: "general.errors.voice_transcription_failed_description",
-      });
+      await sendStandardEmbed(
+        message.channel as Parameters<typeof sendStandardEmbed>[0],
+        resolveAdmissionNoticeLocale(incoming),
+        {
+          color: ColorCode.WARN,
+          titleKey: "general.errors.voice_transcription_failed_title",
+          descriptionKey: "general.errors.voice_transcription_failed_description",
+        },
+      );
     }
     return {
       incoming,
@@ -498,7 +538,7 @@ export async function resolveAdmissionChannelScope(
     Boolean(incoming.manualTriggerInvoker || incoming.reminderRecipientID || incoming.reminderData?.self_reminder);
   if (!hasExplicitErrorVisibility && !shouldShowError && message.content) {
     shouldShowError = BASE_TRIGGER_WORDS.some((baseWord) => {
-      if (/[\u3040-\u30FF\u4E00-\u9FFF]/.test(baseWord)) {
+      if (isUnspacedScriptText(baseWord)) {
         return message.content.includes(baseWord);
       }
       return new RegExp(wrapWithWordBoundary(escapeRegExp(baseWord)), "iu").test(message.content);
@@ -517,7 +557,7 @@ export async function resolveAdmissionChannelScope(
   }
 
   if (shouldShowError && "send" in channel && message.author.id !== client.user?.id) {
-    const errorEmbed = createStandardEmbed("en-US", {
+    const errorEmbed = createStandardEmbed(resolveAdmissionNoticeLocale(incoming), {
       color: ColorCode.ERROR,
       titleKey: "general.errors.channel_not_supported_title",
       descriptionKey: "general.errors.channel_not_supported_description",

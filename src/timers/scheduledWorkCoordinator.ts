@@ -10,7 +10,7 @@ import {
 } from "./scheduledWorkSignals";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
-const DEFAULT_RECONCILE_INTERVAL_MS = 60_000;
+const SCHEDULED_WORK_RECONCILE_INTERVAL_MS = 60_000;
 
 export type ScheduledWorkStatus = {
   isRunning: boolean;
@@ -19,12 +19,6 @@ export type ScheduledWorkStatus = {
   nextWakeAt: Date | null;
   lastRunAt: Date | null;
 };
-
-function parseReconcileIntervalMs(): number {
-  const rawValue = process.env.SCHEDULED_WORK_RECONCILE_INTERVAL_MS;
-  const parsedValue = Number.parseInt(rawValue || `${DEFAULT_RECONCILE_INTERVAL_MS}`, 10);
-  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : DEFAULT_RECONCILE_INTERVAL_MS;
-}
 
 export class ScheduledWorkCoordinator {
   private readonly reminderProcessor: ReminderProcessor;
@@ -38,7 +32,7 @@ export class ScheduledWorkCoordinator {
   private nextWakeAt: Date | null = null;
   private lastRunAt: Date | null = null;
 
-  constructor(client: Client, reconcileIntervalMs = parseReconcileIntervalMs()) {
+  constructor(client: Client, reconcileIntervalMs = SCHEDULED_WORK_RECONCILE_INTERVAL_MS) {
     this.reconcileIntervalMs = reconcileIntervalMs;
     this.reminderProcessor = new ReminderProcessor(client);
     this.randomTriggerProcessor = new RandomTriggerProcessor(client);

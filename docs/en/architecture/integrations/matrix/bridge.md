@@ -2,7 +2,7 @@
 title: "Matrix Bridge & Bridge Utilities"
 ---
 
-This document describes TomoriBot's Matrix bridge implementation — what it does, why it was built the way it was, and how the codebase is organized to keep bridge concerns cleanly separated from core Discord logic.
+This document describes TomoriBot's Matrix bridge implementation: what it does, why it was built the way it was, and how the codebase is organized to keep bridge concerns cleanly separated from core Discord logic.
 
 ## Table of Contents
 
@@ -16,9 +16,9 @@ This document describes TomoriBot's Matrix bridge implementation — what it doe
   - [Data Flow](#data-flow)
   - [Loop Prevention](#loop-prevention)
 - [Key Components](#key-components)
-  - [src/utils/bridges/ — Generic Bridge Utilities](#srcutilsbridges--generic-bridge-utilities)
-  - [src/utils/bridges/matrix/ — Matrix Appservice](#srcutilsbridgesmatrix--matrix-appservice)
-  - [src/events/messageCreate/matrixRelay.ts — Discord→Matrix Relay](#srceventsmessagecreatemayrixrelayts--discordmatrix-relay)
+  - [src/utils/bridges/: Generic Bridge Utilities](#srcutilsbridges-generic-bridge-utilities)
+  - [src/utils/bridges/matrix/: Matrix Appservice](#srcutilsbridgesmatrix-matrix-appservice)
+  - [src/events/messageCreate/matrixRelay.ts: Discord→Matrix Relay](#srceventsmessagecreatemayrixrelayts--discordmatrix-relay)
 - [Webhook Username Format](#webhook-username-format)
 - [Virtual Persona Users](#virtual-persona-users)
 - [Matrix Mentions](#matrix-mentions)
@@ -41,7 +41,7 @@ TomoriBot includes a built-in [Matrix](https://matrix.org/) appservice bridge th
 - TomoriBot's AI responses are relayed back to the Matrix room, appearing under the persona's own Matrix virtual user identity (e.g., `@_tomori_lilya:yourdomain.com`).
 - The room receives short onboarding notices when the bot is invited and when the bridge is linked, so Matrix-side users see the remaining setup steps and current limitations in-context.
 
-The bridge is entirely optional — if Matrix credentials are not configured, TomoriBot starts normally with no Matrix functionality.
+The bridge is entirely optional: if Matrix credentials are not configured, TomoriBot starts normally with no Matrix functionality.
 
 ---
 
@@ -60,7 +60,7 @@ This table reflects the current state of feature support for Matrix users compar
 | Image generation | Image is generated and relayed as a Matrix media event |
 | Short-term memory | Cross-channel conversation summaries work passively |
 | Typing indicator | Shown under the persona's virtual Matrix user and explicitly cleared on stream completion/interrupt |
-| Media relay | Bidirectional — images, video, and files |
+| Media relay | Bidirectional: images, video, and files |
 | `/refresh` (text command) | Resets conversation history and clears short-term memory |
 | `/kill` (text command) | Stops active stream, clears queued responses, and clears Matrix typing indicators |
 | Matrix per-user cooldowns | Per-user cooldown keying uses extracted Matrix user IDs, so users no longer share one webhook cooldown bucket |
@@ -71,7 +71,7 @@ This table reflects the current state of feature support for Matrix users compar
 |---|---|---|
 | **Personal memories** | Downgraded to attributed server memory | Matrix users have no `users` table row, so `target_user` scope is forced to `server_wide`. During downgrade, `{user}` is replaced with the resolved Matrix display name before save so attribution is preserved. |
 | **User language preference** | No-op | Stored in the `users` table; Matrix users have no row. Server locale is used as fallback. |
-| **User timezone** | No-op | Same — reminders use the server timezone as fallback. |
+| **User timezone** | No-op | Same; reminders use the server timezone as fallback. |
 | **Profile picture peek tool** | Discord users only | The tool looks up a Discord snowflake for avatar URL; Matrix user IDs cannot be resolved through the Discord API. |
 | **Pin message tool** | Meaningless | Pins a Discord message; has no effect visible to Matrix users. |
 
@@ -88,10 +88,10 @@ Remaining degraded features are listed in the table above. Current parity work f
 Setting up the bridge requires **two steps**:
 1. Invite `@tomoribot:yourdomain.com` to a Matrix room.
    - TomoriBot auto-accepts the invite and posts a short setup hint in the Matrix room telling users to finish the link from Discord, where to find the Internal Room ID, and that the room must stay unencrypted.
-2. Run `/server matrix link` in the Discord channel to link them.
+2. Run `/matrix link` in the Discord channel to link them.
    - On a successful link, TomoriBot posts a second Matrix-side onboarding note summarizing the usable Matrix commands (`/kill`, `/refresh`) and the main Matrix-specific limitations.
 
-That's it. The homeserver infrastructure is invisible to server admins — the same way Discord server admins don't think about Discord's servers when they add a bot.
+That's it. The homeserver infrastructure is invisible to server admins; the same way Discord server admins don't think about Discord's servers when they add a bot.
 
 ### From the operator's perspective (you)
 
@@ -101,7 +101,7 @@ The homeserver and appservice are set up **once**, centrally. All server admins 
 
 ## Why Not Mautrix or an Existing Bridge?
 
-Existing bridges like [mautrix-discord](https://github.com/mautrix/discord) and [Heisenbridge](https://github.com/hifi/heisenbridge) are **general-purpose room-mirroring bridges**. Their goal is to replicate an entire community across platforms — every user gets a puppet, every room gets bridged.
+Existing bridges like [mautrix-discord](https://github.com/mautrix/discord) and [Heisenbridge](https://github.com/hifi/heisenbridge) are **general-purpose room-mirroring bridges**. Their goal is to replicate an entire community across platforms: every user gets a puppet, every room gets bridged.
 
 TomoriBot's use case is fundamentally different:
 
@@ -117,7 +117,7 @@ Using mautrix would bring all the puppet/mirroring infrastructure without solvin
 
 ### What about users running their own mautrix-discord?
 
-A power user who already has mautrix-discord running could technically bridge their server. mautrix would relay Matrix users' messages into Discord as webhook messages. However, TomoriBot **ignores webhook messages by default** (to prevent echo loops from its own alter persona webhooks). The only missing piece would be a carve-out to allow webhook triggers in Matrix-linked channels — this could be added in the future as an "external bridge mode" flag. TomoriBot's responses would be picked up and relayed to Matrix by the external bridge automatically.
+A power user who already has mautrix-discord running could technically bridge their server. mautrix would relay Matrix users' messages into Discord as webhook messages. However, TomoriBot **ignores webhook messages by default** (to prevent echo loops from its own alter persona webhooks). The only missing piece would be a carve-out to allow webhook triggers in Matrix-linked channels; this could be added in the future as an "external bridge mode" flag. TomoriBot's responses would be picked up and relayed to Matrix by the external bridge automatically.
 
 ---
 
@@ -143,15 +143,15 @@ src/utils/bridges/matrix/
 src/events/messageCreate/
   matrixRelay.ts        ← Watches for TomoriBot's own Discord messages and relays them to Matrix
 
-src/commands/server/matrix/
-  link.ts               ← /server matrix link command
-  unlink.ts             ← /server matrix unlink command
+src/commands/matrix/
+  link.ts               ← /matrix link command
+  unlink.ts             ← /matrix unlink command
 ```
 
 The split under `utils/bridges/` is intentional:
 
-- `utils/bridges/` contains **pure string utilities** with no runtime dependencies — ID format detection, webhook username parsing. These work for any bridge protocol.
-- `utils/bridges/matrix/` contains **stateful Matrix operations** — the appservice HTTP server, session-scoped display name maps, Matrix API calls.
+- `utils/bridges/` contains **pure string utilities** with no runtime dependencies: ID format detection, webhook username parsing. These work for any bridge protocol.
+- `utils/bridges/matrix/` contains **stateful Matrix operations**: the appservice HTTP server, session-scoped display name maps, Matrix API calls.
 
 This means a file like `reminderProcessor.ts` imports from `utils/bridges` for the ID check, not `utils/bridges/matrix`, making it clear the bridge support is a general concern rather than Matrix-specific logic scattered everywhere.
 
@@ -196,13 +196,13 @@ Two separate guards prevent message echo loops:
 
 **Matrix → Discord direction:** `onEvent` in `client.ts` filters out any event where `sender === botUserId` OR `sender` starts with `@_tomori_` and ends with `:${serverName}`. The domain suffix check prevents a remote user named `@_tomori_*:evil.org` from bypassing the guard.
 
-**Discord → Matrix direction:** `matrixRelay.ts` only relays messages where `isSelfTriggerMessage()` returns true — i.e., messages from TomoriBot's own bot account or alter persona webhooks. Regular user messages and Matrix relay webhooks are never relayed back.
+**Discord → Matrix direction:** `matrixRelay.ts` only relays messages where `isSelfTriggerMessage()` returns true; i.e., messages from TomoriBot's own bot account or alter persona webhooks. Regular user messages and Matrix relay webhooks are never relayed back.
 
 ---
 
 ## Key Components
 
-### `src/utils/bridges/` — Generic Bridge Utilities
+### `src/utils/bridges/`: Generic Bridge Utilities
 
 Three pure, stateless utility functions covering all bridge-related string operations:
 
@@ -212,9 +212,9 @@ Three pure, stateless utility functions covering all bridge-related string opera
 | `stripBridgePrefix(username)` | Strips the `[BridgeName\|userId] ` prefix from a bridge webhook username, returning just the display name. |
 | `extractBridgeUserId(username)` | Extracts the userId portion from a bridge webhook username (the part between `\|` and `]`). |
 
-These functions are format-agnostic by design. The `[BridgeName|userId] DisplayName` webhook username convention is TomoriBot's own format — a future IRC bridge would use `[IRC|user@host] DisplayName` and these functions would handle it without any changes.
+These functions are format-agnostic by design. The `[BridgeName|userId] DisplayName` webhook username convention is TomoriBot's own format; a future IRC bridge would use `[IRC|user@host] DisplayName` and these functions would handle it without any changes.
 
-### `src/utils/bridges/matrix/` — Matrix Appservice
+### `src/utils/bridges/matrix/`: Matrix Appservice
 
 The public Matrix surface is grouped by responsibility and exported through `index.ts`:
 
@@ -228,7 +228,7 @@ The public Matrix surface is grouped by responsibility and exported through `ind
 
 New code should import from the responsibility module or from `@/utils/bridges/matrix`.
 
-### `src/events/messageCreate/matrixRelay.ts` — Discord→Matrix Relay
+### `src/events/messageCreate/matrixRelay.ts`: Discord→Matrix Relay
 
 Auto-discovered by the event handler system and invoked on every `messageCreate` event. Exits immediately (fast path) if:
 1. Matrix bridge is not configured
@@ -240,7 +240,7 @@ When relaying, it:
 - Identifies which persona sent the message (main bot account or alter webhook) to select the correct Matrix virtual user
 - Resolves `<@discordId>` and `@{name}` mention placeholders to proper Matrix mention anchor tags (`<a href="https://matrix.to/#/@user:host">Name</a>`) with MSC3952 `m.mentions` fields
 - Serializes every Discord embed into plain text and relays it (author/title/description/fields/footer/URLs)
-- Splits oversized serialized embeds into numbered chunks using `MATRIX_EMBED_CHUNK_MAX_CHARS` (default: `3500`) so relay remains deterministic
+- Splits oversized serialized embeds into numbered chunks at `MATRIX_EMBED_CHUNK_MAX_CHARS` (3500, a constant in `matrixRelay.ts`) so relay remains deterministic
 
 ---
 
@@ -252,16 +252,16 @@ Bridge relay messages in Discord use a structured webhook username format:
 [Matrix|@user:host] DisplayName
 ```
 
-Example: `[Matrix|@bred:localhost] bred`
+Example: `[Matrix|@obonya:localhost] obonya`
 
 This format serves three purposes:
-1. `startsWith("[Matrix|")` — fast detection of Matrix relay messages in `tomoriChat.ts`
-2. `extractBridgeUserId()` — extracts `@bred:localhost` for the `matrixUserMap` (used by `contextBuilder.ts` to inject Matrix users into the AI's context)
-3. `stripBridgePrefix()` — extracts `bred` as the display name for history formatting and persona matching
+1. `startsWith("[Matrix|")`: fast detection of Matrix relay messages in `tomoriChat.ts`
+2. `extractBridgeUserId()`: extracts `@obonya:localhost` for the `matrixUserMap` (used by `contextBuilder.ts` to inject Matrix users into the AI's context)
+3. `stripBridgePrefix()`: extracts `obonya` as the display name for history formatting and persona matching
 
 When building context, Matrix users are listed with both display name and bridge ID (`User ID: @user:host`) so memory/reminder tools can target them using an explicit identifier.
 
-The outer bracket format `[BridgeName|userId]` is designed to be extensible — future bridges follow the same convention.
+The outer bracket format `[BridgeName|userId]` is designed to be extensible; future bridges follow the same convention.
 
 ---
 
@@ -278,34 +278,34 @@ Example: `@_tomori_lilya:yourdomain.com`
 The appservice registration claims **exclusive** control over the `@_tomori_.*:{serverName}` namespace, meaning no other user can register an account matching that pattern on the homeserver.
 
 On first use per bot session, the virtual user is:
-1. Registered on the homeserver (idempotent — safe to call repeatedly)
+1. Registered on the homeserver (idempotent; safe to call repeatedly)
 2. Given the persona's display name
 3. Given the persona's avatar (downloaded from Discord CDN, uploaded to the homeserver)
 
-An in-memory cache (`provisionedIntents`) prevents redundant provisioning API calls within a session. If the avatar URL changes (e.g., after `/persona swap`), the cache entry is invalidated on next restart.
+An in-memory cache (`provisionedIntents`) prevents redundant provisioning API calls within a session. If the avatar URL changes (for example, after `/config` > Persona > Identity & Personality), the cache entry is invalidated on next restart.
 
 ---
 
 ## Matrix Mentions
 
-TomoriBot's AI uses the `@{displayName}` placeholder format for mentioning users in responses (e.g., `@{bred}`). When relaying to Matrix, `matrixRelay.ts` resolves these placeholders to proper Matrix mention links:
+TomoriBot's AI uses the `@{displayName}` placeholder format for mentioning users in responses (e.g., `@{obonya}`). When relaying to Matrix, `matrixRelay.ts` resolves these placeholders to proper Matrix mention links:
 
 **Plain text body:**
 ```
-@bred:localhost
+@obonya:localhost
 ```
 
 **Formatted HTML body:**
 ```html
-<a href="https://matrix.to/#/@bred:localhost">bred</a>
+<a href="https://matrix.to/#/@obonya:localhost">obonya</a>
 ```
 
 **MSC3952 m.mentions field:**
 ```json
-{ "user_ids": ["@bred:localhost"] }
+{ "user_ids": ["@obonya:localhost"] }
 ```
 
-The `m.mentions` field tells the homeserver to notify the mentioned user even if the client doesn't parse HTML — a more reliable notification mechanism than content-based detection.
+The `m.mentions` field tells the homeserver to notify the mentioned user even if the client doesn't parse HTML: a more reliable notification mechanism than content-based detection.
 
 The display name → Matrix ID mapping is maintained in a session-scoped `matrixDisplayNameToId` map in `state.ts`, populated through `userMapping.ts` whenever a Matrix user sends a message in a linked channel.
 
@@ -332,7 +332,7 @@ Discord embeds cannot be rendered natively in Matrix. Instead, `matrixRelay.ts` 
 - Image/thumbnail/video URLs
 - Timestamp/footer text/footer icon URL
 
-If the serialized text exceeds `MATRIX_EMBED_CHUNK_MAX_CHARS` (default: `3500`), it is split into numbered chunks (`[1/N]`, `[2/N]`, ...), each sent as its own Matrix message.
+If the serialized text exceeds `MATRIX_EMBED_CHUNK_MAX_CHARS` (3500), it is split into numbered chunks (`[1/N]`, `[2/N]`, ...), each sent as its own Matrix message.
 
 This removed the old whitelist-title matching model and prevents silent drops when new embed formats are introduced.
 
@@ -374,9 +374,9 @@ LLMs occasionally mangle Matrix user IDs. `resolveBridgeUserId()` in `userMappin
 
 | Failure mode | Example | Recovery |
 |---|---|---|
-| Dropped `@` prefix | `bred:localhost` | Prepend `@`, re-validate |
-| Plain display name | `bred` | Look up in `matrixDisplayNameToId` session map |
-| Valid ID | `@bred:localhost` | No-op, returned unchanged |
+| Dropped `@` prefix | `obonya:localhost` | Prepend `@`, re-validate |
+| Plain display name | `obonya` | Look up in `matrixDisplayNameToId` session map |
+| Valid ID | `@obonya:localhost` | No-op, returned unchanged |
 | Discord snowflake | `123456789012345678` | No-op, returned unchanged |
 
 This function is called by both `reminderTool.ts` and `memoryTool.ts` before any ID-dependent logic runs.
@@ -390,20 +390,19 @@ All configuration is via environment variables. The bridge is silently disabled 
 | Variable | Required | Description |
 |---|---|---|
 | `MATRIX_HOMESERVER_URL` | Yes | e.g., `http://localhost:8448` |
-| `MATRIX_ACCESS_TOKEN` | Yes | `as_token` — appservice → homeserver auth |
-| `MATRIX_HS_TOKEN` | Yes | `hs_token` — homeserver → appservice auth |
+| `MATRIX_ACCESS_TOKEN` | Yes | `as_token`: appservice → homeserver auth |
+| `MATRIX_HS_TOKEN` | Yes | `hs_token`: homeserver → appservice auth |
 | `MATRIX_BOT_USER_ID` | Yes | e.g., `@tomoribot:yourdomain.com` |
 | `MATRIX_SERVER_NAME` | Yes | Domain portion, e.g., `yourdomain.com` |
 | `MATRIX_APPSERVICE_PUBLIC_URL` | No | Homeserver-facing callback URL in appservice registration. Use this when the homeserver cannot reach `localhost` on the bot host. Non-local endpoints must use `https://` (`http://` is only accepted for localhost dev). |
 | `MATRIX_APPSERVICE_PORT` | No | HTTP listen port (default: `9993`) |
 | `MATRIX_MAX_ATTACHMENT_MB` | No | Max file size to relay in either direction (default: `8`) |
 | `MATRIX_MEDIA_TIMEOUT_MS` | No | Timeout for media download/upload requests (default: `15000`) |
-| `MATRIX_EMBED_CHUNK_MAX_CHARS` | No | Max characters per relayed embed message chunk before splitting (default: `3500`) |
-| `MATRIX_TYPING_TIMEOUT_MS` | No | Typing indicator auto-clear timeout (default: `60000`) |
-| `MATRIX_LINK_CACHE_TTL_MINUTES` | No | TTL for channel↔room link cache (default: `5`) |
-| `MATRIX_MAX_TRACKED_SENT_EVENTS` | No | Max event IDs tracked for reply detection (default: `500`) |
 
-The homeserver's `registration.yaml` is generated programmatically from these environment variables — there is no separate registration file to maintain.
+Typing-indicator auto-clear (`MATRIX_TYPING_TIMEOUT_MS`, 60s) and the tracked-event cap
+(`MATRIX_MAX_TRACKED_SENT_EVENTS`, 500) are code constants in `utils/bridges/matrix/state.ts`.
+
+The homeserver's `registration.yaml` is generated programmatically from these environment variables; there is no separate registration file to maintain.
 
 ---
 
@@ -429,7 +428,7 @@ To support rooms hosted on `matrix.org` or other custom homeservers:
 
 ### Encryption limitation (unchanged)
 
-Bridged rooms must remain non-encrypted. `/server matrix link` intentionally blocks rooms with `m.room.encryption` enabled because E2EE cannot be disabled once turned on in Matrix rooms.
+Bridged rooms must remain non-encrypted. `/matrix link` intentionally blocks rooms with `m.room.encryption` enabled because E2EE cannot be disabled once turned on in Matrix rooms.
 
 ---
 
@@ -438,8 +437,8 @@ Bridged rooms must remain non-encrypted. `/server matrix link` intentionally blo
 ### Why generic bridge utilities live outside `bridges/matrix/`
 
 The pure string utilities (`isBridgeUserId`, `stripBridgePrefix`, `extractBridgeUserId`) have no dependency on the Matrix appservice runtime. Keeping them in `utils/bridges/` means:
-- Files like `reminderProcessor.ts` import from `utils/bridges`, not `utils/bridges/matrix` — making it clear the dependency is on the concept of bridged users, not the Matrix implementation.
-- Adding a second bridge (IRC, XMPP) only requires extending `utils/bridges/` functions — no changes to `utils/bridges/matrix/`.
+- Files like `reminderProcessor.ts` import from `utils/bridges`, not `utils/bridges/matrix`, making it clear the dependency is on the concept of bridged users, not the Matrix implementation.
+- Adding a second bridge (IRC, XMPP) only requires extending `utils/bridges/` functions; no changes to `utils/bridges/matrix/`.
 
 ### Why not store Matrix user IDs in the `users` table
 
@@ -447,11 +446,11 @@ The `users` table uses `BIGINT` for `user_id` (Discord snowflakes are purely num
 
 ### Why persona identities appear as separate Matrix users
 
-Using Intent objects (one per persona) rather than a single bot account gives Matrix users a richer experience — each persona appears with its own display name and avatar, matching what Discord users see. It also avoids the need to prefix messages with the persona name, keeping the Matrix conversation clean.
+Using Intent objects (one per persona) rather than a single bot account gives Matrix users a richer experience: each persona appears with its own display name and avatar, matching what Discord users see. It also avoids the need to prefix messages with the persona name, keeping the Matrix conversation clean.
 
 ### Why `resolveBridgeUserId` lives in `utils/bridges/matrix/` rather than `utils/bridges/`
 
-The resolution function needs access to `matrixDisplayNameToId` — a session-scoped Map populated by the Matrix appservice event handler. This is inherently runtime state tied to the Matrix connection. Moving it to `utils/bridges/` would either require passing the map as a parameter (awkward for a utility function) or creating a circular dependency. The function is named `resolveBridgeUserId` (not `resolveMatrixUserId`) to signal that it's a general concept even though its current implementation details are Matrix-specific.
+The resolution function needs access to `matrixDisplayNameToId` (a session-scoped Map populated by the Matrix appservice event handler. This is inherently runtime state tied to the Matrix connection. Moving it to `utils/bridges/` would either require passing the map as a parameter (awkward for a utility function) or creating a circular dependency. The function is named `resolveBridgeUserId` (not `resolveMatrixUserId`) to signal that it's a general concept even though its current implementation details are Matrix-specific.
 
 ### Why the `[BridgeName|userId] DisplayName` webhook username format
 

@@ -46,7 +46,7 @@ Tomori refreshes tokenizer caches when the effective text model changes or when 
 
 - `/config logit-bias add`
 - `/config logit-bias upload`
-- `/model text`
+- `/config` > Models > Switch Models
 - `/config provider switch` when it changes or restores `llm_id`
 
 Saved provider snapshots also preserve `llm_logit_biases`, so switching away and back keeps both the raw text and any previously-cached tokenizer data.
@@ -101,11 +101,11 @@ Tokenization support and request-parameter support are separate concerns.
 
 Tomori sends `logit_bias` on the following providers when active entries exist:
 
-- **OpenRouter** — gated on the model's `supported_parameters` capability flag
-- **DeepSeek** — sent unconditionally when entries are present
-- **Z.ai** — sent unconditionally when entries are present
-- **Z.ai Coding** — sent unconditionally when entries are present
-- **NVIDIA NIM** — sent unconditionally when entries are present
+- **OpenRouter**: gated on the model's `supported_parameters` capability flag
+- **DeepSeek**: sent unconditionally when entries are present
+- **Z.ai**: sent unconditionally when entries are present
+- **Z.ai Coding**: sent unconditionally when entries are present
+- **NVIDIA NIM**: sent unconditionally when entries are present
 
 Custom, NovelAI, and Google providers do not currently send `logit_bias`.
 

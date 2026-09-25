@@ -74,7 +74,6 @@ export type ServerCapabilitiesConfigsRow = {
   user_blocking_enabled: boolean;
   time_awareness_enabled: boolean;
   tool_use_enabled: boolean;
-  verbatim_tool_calling_enabled: boolean;
 };
 
 /** Row shape for server_novelai_imagegen_configs (Phase 6). */
@@ -883,13 +882,34 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
 
   /**
    * Delete every config-table row owned by this server across the 13 split tables.
-   * Used by `/config setup` to recover from the orphaned-alters state.
+   * Used by `/setup` to recover from the orphaned-alters state.
    * Wiping all configs frees the constraint without touching `personas` rows, so
    * alters survive the reset.
    *
    * @param serverId - Internal server DB ID
+   * @param txClient - Optional transaction SQL client
    */
-  async resetAllServerConfigs(serverId: number): Promise<void> {
+  async resetAllServerConfigs(serverId: number, txClient?: SQL): Promise<void> {
+    if (txClient) {
+      // Bun SQL transactions operate over a single dedicated database connection.
+      // Issuing concurrent statements via Promise.all on one transaction connection
+      // can interleave or corrupt protocol frames, so queries must run sequentially.
+      await txClient`DELETE FROM server_model_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_member_permissions_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_capabilities_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_notice_embeds_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_nsfw_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_speech_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_auto_trigger_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_channel_scope_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_trigger_behavior_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_byok_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_novelai_imagegen_configs WHERE server_id = ${serverId}`;
+      await txClient`DELETE FROM server_memory_configs WHERE server_id = ${serverId}`;
+      return;
+    }
+
     await Promise.all([
       sql`DELETE FROM server_model_configs WHERE server_id = ${serverId}`,
       sql`DELETE FROM server_chat_configs WHERE server_id = ${serverId}`,
@@ -1066,8 +1086,7 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         SELECT emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
                manage_message_enabled, thread_creation_enabled, imagegen_enabled,
                videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
-               tool_use_enabled,
-               verbatim_tool_calling_enabled
+               tool_use_enabled
         FROM server_capabilities_configs
         WHERE server_id = ${serverId}
       `;
@@ -1142,14 +1161,12 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         server_id, emoji_usage_enabled, sticker_usage_enabled, web_search_enabled,
         manage_message_enabled, thread_creation_enabled, imagegen_enabled,
         videogen_enabled, voice_message_enabled, user_blocking_enabled, time_awareness_enabled,
-        tool_use_enabled,
-        verbatim_tool_calling_enabled
+        tool_use_enabled
       ) VALUES (
         ${serverId}, ${row.emoji_usage_enabled}, ${row.sticker_usage_enabled},
         ${row.web_search_enabled}, ${row.manage_message_enabled}, ${row.thread_creation_enabled},
         ${row.imagegen_enabled}, ${row.videogen_enabled}, ${row.voice_message_enabled},
-        ${row.user_blocking_enabled}, ${row.time_awareness_enabled}, ${row.tool_use_enabled},
-        ${row.verbatim_tool_calling_enabled ?? false}
+        ${row.user_blocking_enabled}, ${row.time_awareness_enabled}, ${row.tool_use_enabled}
       )
       ON CONFLICT (server_id) DO UPDATE SET
         emoji_usage_enabled    = EXCLUDED.emoji_usage_enabled,
@@ -1163,7 +1180,6 @@ export class ConfigRepository implements IRepository<ConfigExportShape> {
         user_blocking_enabled  = EXCLUDED.user_blocking_enabled,
         time_awareness_enabled = EXCLUDED.time_awareness_enabled,
         tool_use_enabled       = EXCLUDED.tool_use_enabled,
-        verbatim_tool_calling_enabled = EXCLUDED.verbatim_tool_calling_enabled,
         updated_at             = NOW()
     `;
   }

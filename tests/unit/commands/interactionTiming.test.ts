@@ -30,7 +30,7 @@ import * as realLocalizer from "@/utils/text/localizer";
 // They must appear before the first dynamic import() of any command module.
 //
 // Key design choice: mock @/utils/discord/ui/interactionCore rather than the
-// individual barrel re-exports (ui/modals, ui/embeds, ui/buttons, etc.).
+// individual barrel re-exports (ui/modals, ui/embeds, etc.).
 // The barrels just re-export from interactionCore, so mocking the source once
 // keeps all import paths consistent and avoids "ambiguous multiple bindings"
 // errors that arise when two barrels independently re-export the same name
@@ -75,7 +75,7 @@ scopedMock.module("@/utils/text/localizer", () => ({
 
 /**
  * interactionCore mock: the single source that all UI barrels re-export from.
- * Mocking here ensures ui/modals, ui/embeds, ui/buttons, etc. all see the same
+ * Mocking here ensures ui/modals, ui/embeds, etc. all see the same
  * stub without creating duplicate-binding conflicts in the barrel chain.
  *
  * replyInfoEmbed faithfully replicates state-based routing so reply() / editReply()
@@ -127,14 +127,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   acknowledgeModalSubmitForRefresh: async () => undefined,
   promptWithConfirmation: async () => ({ confirmed: false }),
   promptWithUnacknowledgedConfirmation: async () => ({ confirmed: false }),
-  promptWithModal: async (
-    interaction: { showModal: (...a: unknown[]) => Promise<void> },
-    _locale: string,
-    _options: unknown,
-  ) => {
-    await interaction.showModal({});
-    return { outcome: "timeout" as const };
-  },
   replyPaginatedChoices: async () => ({ outcome: "timeout" }),
   replyPaginatedPersonaChoicesV2: async () => ({ outcome: "timeout", reason: "timeout" }),
   replyPaginatedStatusPages: async () => undefined,
@@ -168,8 +160,8 @@ scopedMock.module("@/utils/cache/tomoriStateCache", () => ({
  *
  * Commands under test:
  *   /nsfw jailbreaks : imports configRepository (never calls it in our paths)
- *   /tool ping       : no repository imports
- *   /tool comment    : no repository imports
+ *   /ping            : no repository imports
+ *   /comment         : no repository imports
  */
 scopedMock.module("@/utils/db/repositories", () => ({
   ...realRepositories,
@@ -299,11 +291,11 @@ describe("Contract 1: modal command /nsfw jailbreaks", () => {
 // All async work (fetchReply, latency measurement) happens after the deferral.
 // The final response goes through editReply(), not reply().
 
-describe("Contract 2: async defer command /tool ping", () => {
+describe("Contract 2: async defer command /ping", () => {
   it("calls deferReply() as the first acknowledgement", async () => {
     const { interaction, calls } = makeFakeInteraction();
 
-    const { execute } = await import("@/commands/tool/ping");
+    const { execute } = await import("@/commands/ping");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     expect(calls[0]?.method).toBe("deferReply");
@@ -312,7 +304,7 @@ describe("Contract 2: async defer command /tool ping", () => {
   it("follows deferReply() with editReply() — not a second reply()", async () => {
     const { interaction, calls } = makeFakeInteraction();
 
-    const { execute } = await import("@/commands/tool/ping");
+    const { execute } = await import("@/commands/ping");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
@@ -326,20 +318,20 @@ describe("Contract 2: async defer command /tool ping", () => {
   it("produces exactly two acknowledgement calls: deferReply then editReply", async () => {
     const { interaction, calls } = makeFakeInteraction();
 
-    const { execute } = await import("@/commands/tool/ping");
+    const { execute } = await import("@/commands/ping");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     expect(callMethods(calls)).toEqual(["deferReply", "editReply"]);
   });
 });
 
-// ─── Contract 3: Guard-path no-double-ack: /tool comment ─────────────────────
+// ─── Contract 3: Guard-path no-double-ack: /comment ─────────────────────
 //
 // Pattern 1 / Pattern 5 (command-system.md): fast validation paths that exit
 // early must use a single reply(). The normal async path must defer first and
 // never double-acknowledge the same interaction.
 
-describe("Contract 3: /tool comment acknowledgement ordering", () => {
+describe("Contract 3: /comment acknowledgement ordering", () => {
   it("non-guild early-exit: sends exactly one reply() with no prior deferReply()", async () => {
     // Arrange: no guild → command hits the guild-only guard and returns after replyInfoEmbed
     const { interaction, calls } = makeFakeInteraction({
@@ -347,7 +339,7 @@ describe("Contract 3: /tool comment acknowledgement ordering", () => {
       channel: null,
     });
 
-    const { execute } = await import("@/commands/tool/comment");
+    const { execute } = await import("@/commands/comment");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
@@ -363,7 +355,7 @@ describe("Contract 3: /tool comment acknowledgement ordering", () => {
       channel: null,
     });
 
-    const { execute } = await import("@/commands/tool/comment");
+    const { execute } = await import("@/commands/comment");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
@@ -396,7 +388,7 @@ describe("Contract 3: /tool comment acknowledgement ordering", () => {
       },
     });
 
-    const { execute } = await import("@/commands/tool/comment");
+    const { execute } = await import("@/commands/comment");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);
@@ -433,7 +425,7 @@ describe("Contract 3: /tool comment acknowledgement ordering", () => {
       },
     });
 
-    const { execute } = await import("@/commands/tool/comment");
+    const { execute } = await import("@/commands/comment");
     await execute(makeClient(), interaction as never, makeUserData(), "en-US");
 
     const methods = callMethods(calls);

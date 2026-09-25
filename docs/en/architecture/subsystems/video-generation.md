@@ -7,10 +7,11 @@ This document summarizes the current video generation stack.
 ## Command Surface
 
 - User-facing generation entrypoint: `src/commands/generate/video.ts`
-- Admin model selection: `src/commands/model/video.ts`
+- Admin model selection: `src/utils/discord/interactions/configModelRoutes.ts` (`/config` > Models > Switch Models)
 - Admin quota controls:
-  - `src/commands/server/quota/video-generation.ts`
-  - `src/commands/server/quota/reset.ts`
+  - `src/commands/moderation.ts`
+  - `src/commands/quota/reset/global.ts`
+  - `src/commands/quota/reset/user.ts`
 - Capability/help exposure:
   - `src/commands/help/features.ts`
   - `src/tools/functionCalls/reviewCapabilities.ts`
@@ -68,7 +69,7 @@ submitted and return a localized explanation.
 
 OpenRouter's API sits behind Cloudflare, which uses TLS fingerprinting (JA3/JA4) and HTTP/2 fingerprinting (SETTINGS frames, ALPN negotiation) to identify HTTP clients. Bun's BoringSSL stack produces a non-standard fingerprint that Cloudflare serves a cached HTML page to (HTTP 200 with HTML body) instead of routing to the API origin. Both `fetch()` and Bun's `node:https` compatibility shim share this same fingerprint.
 
-To work around this, `openrouterVideoGeneration.ts` uses `externalHttpRequest()` — a platform-aware dispatcher that spawns an external process for HTTP requests:
+To work around this, `openrouterVideoGeneration.ts` uses `externalHttpRequest()`: a platform-aware dispatcher that spawns an external process for HTTP requests:
 
 - **Windows (development)**: PowerShell 7 (`pwsh`) with `Invoke-WebRequest`. Uses .NET's Schannel TLS with proper HTTP/2 negotiation. Request data is piped via stdin as JSON; response body is base64-encoded for binary safety. Windows system curl lacks HTTP/2 support, so it cannot be used.
 - **Linux / Docker (production)**: `curl` with HTTP/2 via `nghttp2` (standard on Alpine/Debian). Response headers and body are parsed from curl's `-i` output. Key flags: `--proto =https` (protocol restriction), `--data-raw` (no `@filename` expansion), `-H "Expect:"` (suppresses 100-Continue).
@@ -137,8 +138,8 @@ Defaults:
 
 Management commands:
 
-- `/server quota video-generation`
-- `/server quota reset`
+- `/moderation` (Quotas page)
+- `/quota reset`
 
 Reset behavior supports both:
 

@@ -30,6 +30,7 @@ import {
   type TomoriState,
 } from "@/types/db/schema";
 import type { PersonaAutochRuntimeStateRow } from "@/types/db/schema";
+import { EMPTY_PERSONA_NAMING_CONFIG, type PersonaNamingConfig } from "@/types/personaNaming";
 import type { SqlParameterArray } from "@/types/db/sqlOperations";
 import { DatabaseUnavailableError } from "@/types/errors";
 import { getCachedLLM } from "@/utils/cache/llmCache";
@@ -38,10 +39,11 @@ import { sql, withTransientDbRetry } from "@/utils/db/client";
 import { validateTomoriFields } from "@/utils/db/sqlSecurity";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
 import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
+import { userNamingRepository } from "@/utils/db/repositories/UserNamingRepository";
 import { type MemoryValidationResult, getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { getUnconfiguredLlm } from "@/utils/provider/unconfiguredLlm";
 import { log } from "@/utils/misc/logger";
-import { getBaseTriggerWords } from "@/utils/text/localizer";
+import { getAllBaseTriggerWords, getBaseTriggerWords } from "@/utils/text/localizer";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
 import type { IRepository } from "./IRepository";
 
@@ -1190,7 +1192,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
   /**
    * Records that a server's main persona guild avatar is now in sync with its
    * preset; call this immediately after a SUCCESSFUL guild-avatar PATCH at an
-   * apply site (`/config setup`, `/persona default`). It stamps
+   * apply site (`/setup`, `/persona default`). It stamps
    * `applied_avatar_hash = preset_avatar_hash` so the background fan-out
    * reconciler skips this persona until the catalog art actually changes again
    * (preventing a redundant re-PATCH on the next boot).
@@ -1935,8 +1937,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
-        scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
-        scaps.short_term_memory_enabled,
+        scaps.tool_use_enabled,
+        scaps.short_term_memory_enabled, scaps.user_info_updates_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,
         -- 6. server_nsfw_configs
@@ -2040,8 +2042,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         scaps.manage_message_enabled, scaps.thread_creation_enabled, scaps.imagegen_enabled,
         scaps.videogen_enabled, scaps.voice_message_enabled, scaps.user_blocking_enabled,
         scaps.time_awareness_enabled,
-        scaps.tool_use_enabled, scaps.verbatim_tool_calling_enabled,
-        scaps.short_term_memory_enabled,
+        scaps.tool_use_enabled,
+        scaps.short_term_memory_enabled, scaps.user_info_updates_enabled,
         -- 5. server_notice_embeds_configs
         snec.tool_notice_hidden_keys,
         -- 6. server_nsfw_configs
@@ -2121,6 +2123,20 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
     }
   }
 
+  async updateNamingConfig(personaId: number, config: PersonaNamingConfig): Promise<boolean> {
+    try {
+      return await sql.transaction(async (tx) => {
+        const materialized = await this.materializeIfPointerWithClient(personaId, tx);
+        if (!materialized) return false;
+        await userNamingRepository.savePersonaConfig(personaId, config, tx);
+        return true;
+      });
+    } catch (error) {
+      log.error(`Error updating naming config for persona ${personaId}:`, error);
+      return false;
+    }
+  }
+
   private async materializeIfPointerWithClient(personaId: number, client: SQL): Promise<boolean> {
     const [personaRow] = await client<
       Array<{
@@ -2176,6 +2192,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       resolvePresetTriggerWords(preset),
       resolvePresetPersonaPrompt(preset),
     );
+    await userNamingRepository.savePersonaConfig(personaId, preset.preset_naming_config, client);
     // Copy the shared preset sprites into this persona's own rows, reusing the
     // shared image URL (no byte duplication). The persona stops resolving sprites
     // live once materialized, so this freezes its current default sprite set.
@@ -2454,6 +2471,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       const serverId = tomoriData.server_id;
       const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows([tomoriData]);
       const pointerPreset = pointerPresetsByPersonaId.get(personaId);
+      const personaNamingConfigs = await userNamingRepository.loadPersonaConfigs([personaId]);
       let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
 
       // Backward compatibility: fall back to persona_id if server_id config missing
@@ -2555,6 +2573,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         FROM api_key_rotation akr
         LEFT JOIN api_key_rotation_runtime_state rs USING (rotation_key_id)
         WHERE akr.server_id = ${tomoriData.server_id}
+          AND akr.provider = ${llmData.llm_provider.toLowerCase()}
         ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
       `;
 
@@ -2660,6 +2679,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       const personaPrompt = pointerPreset
         ? resolvePresetPersonaPrompt(pointerPreset)
         : (personaConfig?.persona_prompt ?? null);
+      const namingConfig = pointerPreset
+        ? pointerPreset.preset_naming_config
+        : (personaNamingConfigs.get(personaId) ?? EMPTY_PERSONA_NAMING_CONFIG);
 
       // Per-persona humanizer override: overlay onto a copy of the server config at
       // load time so every runtime consumer of config.humanizer_degree (providers,
@@ -2679,6 +2701,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         llm: llmData,
         trigger_words: triggerWords,
         persona_prompt: personaPrompt,
+        naming_config: namingConfig,
         reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
         punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
         humanizer_degree_override: humanizerOverride,
@@ -2745,6 +2768,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         );
         const serverId = typedTomoriRows[0].server_id;
         const pointerPresetsByPersonaId = await this.loadPointerPresetsForRows(typedTomoriRows);
+        const personaNamingConfigs = await userNamingRepository.loadPersonaConfigs(
+          typedTomoriRows.flatMap((row) => (typeof row.persona_id === "number" ? [row.persona_id] : [])),
+        );
 
         // Load server-scoped config once (fallback to main persona config)
         let configData = await this.sqlLoadTomoriConfigByServerId(serverId);
@@ -2840,6 +2866,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
             FROM api_key_rotation akr
             LEFT JOIN api_key_rotation_runtime_state rs USING (rotation_key_id)
             WHERE akr.server_id = ${serverId}
+              AND akr.provider = ${llmData.llm_provider.toLowerCase()}
             ORDER BY COALESCE(rs.usage_count, 0) ASC, akr.rotation_key_id ASC
           `;
 
@@ -3025,6 +3052,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
           const personaPrompt = pointerPreset
             ? resolvePresetPersonaPrompt(pointerPreset)
             : (personaConfig?.persona_prompt ?? null);
+          const namingConfig = pointerPreset
+            ? pointerPreset.preset_naming_config
+            : (personaNamingConfigs.get(personaId) ?? EMPTY_PERSONA_NAMING_CONFIG);
 
           // Per-persona humanizer override: overlay onto a copy of the shared server
           // config so only this persona's state sees the overridden degree. Each
@@ -3043,6 +3073,7 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
             llm: llmData,
             trigger_words: triggerWords,
             persona_prompt: personaPrompt,
+            naming_config: namingConfig,
             reward_conditioning_enabled: personaConfig?.reward_conditioning_enabled ?? true,
             punish_conditioning_enabled: personaConfig?.punish_conditioning_enabled ?? true,
             humanizer_degree_override: humanizerOverride,
@@ -3115,10 +3146,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
    * @param personas - Assembled persona states for one server.
    */
   private applyTriggerWordOwnership(personas: TomoriState[]): void {
-    // Seed the claimed set with base trigger words for both shipped locales so
-    //    the main persona implicitly owns the bot's name in any language.
+    // Seeding from every authored locale lets the main persona own the bot's name in any language.
     const claimedTriggerKeys = new Set<string>();
-    for (const baseWord of [...getBaseTriggerWords("en-US"), ...getBaseTriggerWords("ja")]) {
+    for (const baseWord of getAllBaseTriggerWords()) {
       const normalizedBaseWord = normalizeTriggerWord(baseWord);
       if (normalizedBaseWord.length > 0) {
         claimedTriggerKeys.add(normalizedBaseWord);
@@ -3180,13 +3210,11 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async updateTomori(personaId: number, tomoriData: Partial<TomoriRow>): Promise<TomoriRow | null> {
     try {
-      // Validate the partial data with Zod (Rule #7)
       const validTomoriData = tomoriSchema.partial().parse(tomoriData);
 
-      // Extract field names and values for the SQL query.
-      // Filter to only keys present in the original input, because Zod injects defaults
-      // for all schema fields with .default(), which would incorrectly expand the
-      // SET clause (e.g. attribute_list: [] would overwrite existing data).
+      // Filter to only keys present in the original input: Zod injects defaults for every
+      // schema field with .default(), which would expand the SET clause and overwrite existing
+      // data (e.g. attribute_list: []).
       const fields = Object.keys(validTomoriData).filter((key) => key !== "persona_id" && key in tomoriData);
 
       if (fields.length === 0) {

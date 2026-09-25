@@ -4,8 +4,8 @@ title: "03: Chunk Normalization"
 
 Converts a provider-native `RawStreamChunk` into the uniform `ProcessedChunk` shape the orchestrator routes.
 
-**Contract:** `BaseStreamAdapter.processChunk` — `src/types/stream/interfaces.ts:247`
-**Canonical implementation:** `GoogleStreamAdapter.processChunk` — `src/providers/google/googleStreamAdapter.ts:649-760`
+**Contract:** `BaseStreamAdapter.processChunk`: `src/types/stream/interfaces.ts:247`
+**Canonical implementation:** `GoogleStreamAdapter.processChunk`: `src/providers/google/googleStreamAdapter.ts:649-760`
 
 ## Mission
 
@@ -24,9 +24,9 @@ interface ProcessedChunk {
 }
 ```
 
-The method also handles two additional responsibilities:
+The method also handles three additional responsibilities:
 
-- **Error normalisation** — raw SDK errors (HTTP status codes, provider-specific error objects)
+- **Error normalisation**: raw SDK errors (HTTP status codes, provider-specific error objects)
   are converted to the shared `ProviderError` shape via `handleProviderError()`. This includes
   classifying the error type (`api_error`, `rate_limit`, `content_blocked`, `timeout`,
   `provider_overloaded`, `model_error`) and setting `retryable` so the stage 04 orchestrator and
@@ -35,25 +35,25 @@ The method also handles two additional responsibilities:
   model-availability failures such as "unsupported model" or "model not found"; the stream UI
   surfaces the provider's raw supported-model details instead of hiding them behind a generic 400.
 
-- **Thought log extraction** — for providers that emit reasoning fields, thought summaries, or
+- **Thought log extraction**: for providers that emit reasoning fields, thought summaries, or
   thought signatures (for example Google/Gemini `part.thought`, `thoughtSummary`, and
   `thoughtSignature` fields), these are extracted into `ThoughtLogEntry[]` on the returned chunk
   so the orchestrator can accumulate them into `state.thoughtSummarySegments` /
   `state.thoughtRawSegments` independently of visible text. For OpenRouter, the upstream serving
   backend (the chunk-level `provider` field, e.g. `minimax-cn`) is also carried on
   `ProcessedChunk.servingProvider`, recorded into `state.servingProvider` (first non-empty wins), and
-  rendered in the thought-log footer as `Provider: openrouter via <backend>` — so a backend that
+  rendered in the thought-log footer as `Provider: openrouter via <backend>`; a backend that
   bleeds reasoning into content can be identified and pinned/avoided.
 
-- **Leaked reasoning-tag guardrails** — the clean path is the provider (or OpenRouter) returning
+- **Leaked reasoning-tag guardrails**: the clean path is the provider (or OpenRouter) returning
   reasoning in a dedicated field. When a backend instead leaks reasoning into `delta.content`,
   OpenAI-compatible adapters (`openrouter`, `openaiCompatible`) run two worst-case guards over the
-  text delta: `ThinkBlockContentStripper` (reroutes `<think>…</think>` blocks — including stray
-  closers split across chunks — into `delta.reasoning`) and `ReasoningContentSpillGuard` (catches a
-  *tagless* reasoning tail glued to the first visible delta — e.g. `must do.Hello!`). The spill guard
+  text delta: `ThinkBlockContentStripper` (reroutes `<think>…</think>` blocks, including stray
+  closers split across chunks, into `delta.reasoning`) and `ReasoningContentSpillGuard` (catches a
+  *tagless* reasoning tail glued to the first visible delta: e.g., `must do.Hello!`). The spill guard
   only fires on the first visible content after reasoning, when that content starts lowercase and a
   sentence boundary is **glued** (no following whitespace). It strips when EITHER the text after the
-  boundary looks like an answer start (uppercase / caseless letter, emoji, or quote/bracket — catches
+  boundary looks like an answer start (uppercase / caseless letter, emoji, or quote/bracket: catches
   `wait.Actually`) OR the fragment before the boundary is a multi-word clause (catches a casual
   lowercase reply glued onto a reasoning tail, e.g. `g it out.hey master 👋`, where capitalization is
   blind because the real reply is also lowercase). A *spaced* boundary is treated as the model's own
@@ -72,30 +72,48 @@ The method also handles two additional responsibilities:
   strings (`stopStrings.ts`) are matched literally by the provider, so namespaced close tags must be
   added per model rule explicitly rather than via the shared pattern.
 
-- **Custom verbatim tool-call fallback** — when
-  `server_capabilities_configs.verbatim_tool_calling_enabled` is true, the active Custom text model
+- **Custom verbatim tool-call fallback**: when the active model has
+  `llms.verbatim_tool_calling` set (a per-model opt-in under `/providers`), uses a `custom` provider,
   has tools, and the request includes OpenAI-compatible tool schemas, `CustomStreamAdapter` runs
   `VerbatimToolCallParser` over visible `delta.content` after existing Custom/Gemma cleanup. It scans
-  the stream for an anchor `<knownToolName>(` — only names from the exposed tool set trigger — then
+  the stream for an anchor `<knownToolName>(`, only names from the exposed tool set trigger, then
   accumulates from that name until the parentheses balance (quote-aware, so a `)` inside a JSON string
   does not close early) and parses the `name(...)` body. The call may be **bare** or wrapped in an
   inline code span / fenced block, and **prose before it is allowed** (chat models narrate before they
   act): leading narration is emitted as normal text and the call is recovered after it, e.g.
   `` Fine. `generate_image({"prompt":"a cat","mode":"txt2img"})` `` or the same call with no backticks.
-  The parse step is the false-positive guard — a tool name merely *mentioned* in prose
+  The parse step is the false-positive guard: a tool name merely *mentioned* in prose
   (`generate_image (it makes art)`) fails JSON/arity validation and is released as text. Successful
   parses are emitted as `type: "function_call"` before the literal text reaches Discord; rejected or
   incomplete text is released normally. Because the stream adapter drops `visibleText` whenever a
   `functionCall` is present, the parser emits any preceding prose first (call unresolved) and resolves
   the call on a later chunk or at stream flush.
 
+- **Truncated tool-call recovery**: every adapter that receives tool arguments as a stream of
+  text deltas faces the same failure. A proxy timeout, a socket reset, or one dropped delta can
+  end the payload mid-token, and `JSON.parse` then rejects it whole, which would discard every
+  argument key the model had already emitted in full. The openai-compatible adapter
+  (`openaiCompatibleStreamAdapter`, which the Custom endpoint also extends), the OpenRouter
+  adapter, and the Anthropic adapter each fall back to `tryRepairIncompleteJson`
+  (`src/utils/text/jsonRepair.ts`) when the parse throws. The repair is structural: it removes
+  the incomplete trailing fragment and closes the containers still open, then proves the result
+  with its own `JSON.parse` probe. It never fabricates content, never edits a complete token,
+  and refuses a payload that is malformed rather than truncated, so a caller keeps the original
+  failure path. A value cut mid-token is dropped rather than closed, and that covers numbers as
+  well as strings: `12345` cut out of `123456` parses as a different number and reads as exact,
+  so a number ending the payload goes with the entry that carried it. A repaired call is marked
+  `FunctionCall.argumentsTruncated`, because the recovered keys are a subset of what the model
+  was writing rather than the call it intended. The tool loop refuses to dispatch such a call
+  (see [tool-loop stage 02](../tool-loop/02-execute-tool-call.md)), and each recovery emits a
+  `tool_arguments_truncated` metric: `log.warn` is filtered out whenever `RUN_ENV=production`.
+
 ## Input
 
-`chunk: RawStreamChunk` — the provider-native envelope yielded by stage 02.
+`chunk: RawStreamChunk`: the provider-native envelope yielded by stage 02.
 
 ## Output
 
-`ProcessedChunk` — one of four variants:
+`ProcessedChunk`: one of four variants:
 
 | `type` | Carries | Orchestrator action |
 |---|---|---|
@@ -109,7 +127,7 @@ reasoning content in-band.
 
 ## Side effects
 
-- None. `processChunk` is a pure transformation — it does not mutate `StreamState`, call Discord
+- None. `processChunk` is a pure transformation; it does not mutate `StreamState`, call Discord
   APIs, or trigger any timer. All side effects are owned by the orchestrator and downstream stages.
 
 ## Invariants
@@ -121,6 +139,9 @@ After this stage:
   `retryable`, and `code` set. `originalError` preserves the raw SDK error for logging.
 - If `type === "function_call"`, `chunk.functionCall` is a provider-agnostic `FunctionCall`
   `{ name, args, thoughtSignature? }`.
+- `chunk.functionCall.argumentsTruncated` is true only when the provider delivered an
+  incomplete argument payload and the repair recovered part of it. The flag is never set for a
+  payload that parsed directly, so its absence means `args` is exactly what the model produced.
 - Content-blocked responses (e.g., Gemini `promptFeedback.blockReason`, safety
   `finishReason`) are normalised to `type: "error"` with `error.type === "content_blocked"` and
   `retryable: false`.
@@ -137,6 +158,17 @@ re-classifies a normalized `ProviderError` by matching its message text (and `or
 | `isAccountBalanceExhaustedError` | zero spendable balance (DeepSeek 402 `Insufficient Balance`, Z.ai `no resource package`) | No request of any size can succeed, so trimming tips are useless |
 | `isCreditAffordabilityError` | affordability ceiling (OpenRouter 402 `can only afford N`) | A smaller `max_tokens` still fits the remaining credit |
 | `isContextLengthError` | hard context-window overflow | Trimming history genuinely resolves it |
+| `isNvidiaCredentialRejected` | NVIDIA `403` on the credential itself | Expiry is a cause the key check alone does not name |
+
+`isNvidiaCredentialRejected` matches the provider name and status code rather than message text,
+because NIM reports a mistyped key, an expired key, and a key without inference access with the
+same `403 {"detail":"Authorization failed"}` body. Nothing in that payload distinguishes them, so
+the classification drives an added possibility rather than a verdict, and it stays NVIDIA-scoped:
+the same status means a different thing elsewhere. A key without the `nvapi-` prefix gets `401`
+instead and is left to the plain key check.
+
+NIM's model-availability failures are model errors through `MODEL_ERROR_PATTERNS`: a retired model
+answers `410 "has reached its end of life"` and an unreachable one `404 "Not found for account"`.
 
 The two credit classifiers must stay mutually exclusive. They map to opposite advice: an exhausted
 balance needs a top-up, an affordability ceiling needs fewer output tokens. Ordering in
@@ -181,7 +213,7 @@ server-scoped form, which is the correct default for configuration a member does
 | `BaseStreamAdapter.processChunk()` abstract method | **A new provider adapter implements this to map its SDK chunk shapes to `ProcessedChunk`.** The contract is at `src/types/stream/interfaces.ts:184`. The implementation must be synchronous. |
 | `BaseStreamAdapter.handleProviderError()` abstract method | **A new provider adapter implements this to classify its SDK errors.** The `ProviderError.retryable` flag is consumed by the key-rotation loop in `runGenerationTurn`; the `type` field drives user-facing error embed formatting. Model-name and model-availability failures should become `model_error` or carry a message that the shared model-error classifier can recognize. Contract at `src/types/stream/interfaces.ts:201`. |
 | `BaseStreamAdapter.createErrorDescription()` abstract method | **A new provider adapter implements this to produce localized, provider-specific error text** for the error embed shown in Discord when `retryable: false` and user errors are not suppressed. For `model_error`, preserve the provider's actionable details, such as supported model IDs. Contract at `src/types/stream/interfaces.ts:207`. |
-| `FunctionCall` shape (`name`, `args`, `thoughtSignature`) | The provider-agnostic function call format — `src/types/provider/interfaces.ts:145`. Fields like `thoughtSignature`, `reasoning_details`, and `deepseekReasoningContent` are provider-specific optional fields that must be preserved when passing tool results back to the provider in stage 01. |
+| `FunctionCall` shape (`name`, `args`, `thoughtSignature`) | The provider-agnostic function call format, at `src/types/provider/interfaces.ts:167`. Fields like `thoughtSignature`, `reasoning_details`, and `deepseekReasoningContent` are provider-specific optional fields that must be preserved when passing tool results back to the provider in stage 01. `argumentsTruncated` is a core field: any adapter that recovers arguments from an incomplete payload must set it, because the tool loop uses it to refuse the dispatch. |
 
 ## Related docs
 
@@ -189,5 +221,5 @@ server-scoped form, which is the correct default for configuration a member does
 - Stage 04 (routes the `ProcessedChunk` produced here): → [`04-orchestrator-state-machine.md`](04-orchestrator-state-machine.md)
 - `ProcessedChunk` type: `src/types/stream/interfaces.ts:36`
 - `ProviderError` type: `src/types/stream/interfaces.ts:47`
-- `FunctionCall` type: `src/types/provider/interfaces.ts:145`
+- `FunctionCall` type: `src/types/provider/interfaces.ts:167`
 - Error embed formatting: `src/utils/discord/stream/errorUi.ts`

@@ -1,0 +1,99 @@
+---
+title: "Làm thế nào để sử dụng TomoriBot?"
+head:
+  - tag: title
+    content: "TomoriBot | Thêm bot AI vào máy chủ Discord của bạn"
+description: "Tự host instance riêng hoặc mời phiên bản có sẵn vào máy chủ Discord của bạn, kết nối khóa API AI và bắt đầu trò chuyện."
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside } from "@astrojs/starlight/components";
+
+Hướng dẫn này sẽ dẫn dắt bạn từ bước đầu tiên đến tin nhắn đầu tiên cùng TomoriBot. Cách đơn giản nhất là mời phiên bản công khai có sẵn (xem [Chính sách quyền riêng tư](/vi/legal/privacy-policy/)). Nếu muốn tự chạy instance của riêng mình, bạn hãy chuyển đến phần [Self-hosting](#self-hosting) ở phía dưới.
+
+## Sử dụng bot có sẵn
+
+### Bước 1: Mời bot
+
+Mời phiên bản công khai bằng nút bên dưới, sau đó chọn máy chủ bạn muốn thêm bot vào.
+Bạn cần có quyền **Quản lý máy chủ** (Manage Server) để thêm bot.
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **Mời TomoriBot**
+  </LinkButton>
+</div>
+
+Bạn cũng có thể nhắn tin trực tiếp (DM) cho bot. Các bước thiết lập hoàn toàn tương tự.
+
+### Bước 2: Lấy khóa API
+
+TomoriBot không đi kèm bộ não AI riêng; bạn sẽ kết nối bộ não từ một **nhà cung cấp** thông qua **khóa API**. Bot hỗ trợ nhiều
+nhà cung cấp và bạn chỉ cần một khóa để bắt đầu. Dưới đây là một số nhà cung cấp hiện được hỗ trợ:
+
+- **Google Gemini**: đa mục đích, có gói miễn phí, chạy được mọi tính năng. Khuyên dùng
+  cho lần thiết lập đầu tiên của bạn.
+- **OpenRouter**: một khóa duy nhất, truy cập mọi model văn bản, video, hình ảnh và embedding mới nhất.
+- **NovelAI**: hình thức đăng ký thuê bao, tạo hình ảnh không kiểm duyệt, nhập vai và kể chuyện.
+- **DeepSeek**, **NVIDIA NIM**, **Anthropic**, **Vertex AI**, **Z.ai**, hoặc bất kỳ
+  endpoint **Custom** nào tương thích với OpenAI.
+
+Chạy lệnh `/help` trong Discord, chọn `Thiết lập`, sau đó chọn **Step 1: Get an API Key**, rồi chọn nhà cung cấp để xem cách lấy khóa API, hoặc
+xem [Nhà cung cấp & Model](/vi/features/setup-administration/providers-and-models/#api-keys) để có danh sách đầy đủ.
+
+<Aside type="caution">
+**Không bao giờ chia sẻ khóa API của bạn với bất kỳ ai**. Chỉ cung cấp khóa qua các lệnh slash của TomoriBot vì bot sẽ lưu trữ và mã hóa an toàn.
+</Aside>
+
+### Bước 3: Chạy thiết lập
+
+Chạy lệnh `/setup`. Lệnh này sẽ mở một bảng danh sách riêng tư mà chỉ bạn mới thao tác được. Hãy hoàn thành các mục trong bảng,
+sau đó nhấn `Hoàn tất thiết lập`:
+
+- **Nhà cung cấp AI**: chọn `Nhà cung cấp AI (Khuyên dùng)`, chọn nhà cung cấp của bạn và dán khóa vào.
+  Người dùng self-hosting nâng cao có thể chọn `Endpoint tùy chỉnh (Nâng cao)` để đăng ký kết nối và model
+  văn bản của endpoint tại đây, máy chủ cũng có thể hoạt động với `BYOK người dùng` (trong máy chủ, không phải
+  DM) để từng thành viên tự cung cấp nhà cung cấp cá nhân của riêng họ.
+- **Cài đặt ban đầu**: chọn một persona khởi đầu, phong cách phản hồi, múi giờ và system
+  prompt mặc định.
+- **Chính sách** (chỉ dành cho instance có sẵn): chấp nhận Điều khoản dịch vụ và Chính sách quyền riêng tư trong cùng
+  một hộp thoại.
+
+Không có gì được lưu trong khi bạn thao tác: bảng này chỉ là bản nháp, nút `Hoàn tất thiết lập` mới là thao tác mã hóa khóa,
+khởi tạo cấu hình bot cho máy chủ và chuẩn bị để bot sẵn sàng trò chuyện. `Hủy` sẽ hủy bản
+nháp, và bảng không được chạm vào sẽ tự động hết hạn. Mỗi máy chủ duy trì cấu hình
+độc lập của riêng mình.
+
+**Khuyên dùng:** chạy lệnh `/expressions initialize` sau đó để bot có thể sử dụng emoji và
+sticker tùy chỉnh của máy chủ một cách chính xác.
+
+### Bước 4: Bắt đầu trò chuyện
+
+Chỉ cần **tag (mention)** bot hoặc **trả lời (reply)** một trong các tin nhắn của bot:
+
+```text
+@TomoriBot yo, what's up?
+```
+
+Từ đây, bạn có thể tùy chỉnh cách bot được kích hoạt cũng như cách bot hành xử:
+- Tạo tính cách cho bot với `/persona`: xem [Nhiều persona](/vi/features/chatting-personality/multiple-personas/).
+- Dạy bot với `/memories`: xem [Bộ nhớ](/vi/features/knowledge/memory/).
+- Khám phá các tùy chọn tùy chỉnh khác: xem [Danh mục lệnh](/vi/features/command-reference/) hoặc [Tính năng](/vi/features/).
+
+Trên instance có sẵn, việc thiết lập TomoriBot đồng nghĩa với việc bạn và các thành viên trong máy chủ đồng ý với các
+thông báo `/legal terms-of-service` và `/legal privacy-policy`; trình hướng dẫn thiết lập sẽ yêu cầu bạn chấp nhận
+cả hai. Hai lệnh này cùng bước Policies chứa chúng thuộc về bản triển khai có sẵn.
+Một instance self-hosted sẽ đăng ký `/legal license` trong mọi môi trường và chỉ đăng ký hai lệnh chính sách khi chạy dưới
+`RUN_ENV=production`.
+
+## Self-hosting
+
+Bạn muốn toàn quyền kiểm soát dữ liệu, model và khóa API của mình? Bạn có thể tự chạy
+instance TomoriBot trên phần cứng của riêng bạn. Lựa chọn khuyên dùng là sử dụng trình hướng dẫn thiết lập (setup wizard).
+
+<div class="button-row">
+  <LinkButton href="/vi/self-hosting/" variant="secondary">
+    **Self-host TomoriBot**
+  </LinkButton>
+</div>

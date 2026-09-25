@@ -1,39 +1,75 @@
-import { MessageFlags, type ChatInputCommandInteraction, type Client, type Interaction } from "discord.js";
+import {
+  MessageFlags,
+  type ChatInputCommandInteraction,
+  type Client,
+  type Interaction,
+  type AutocompleteInteraction,
+} from "discord.js";
 import { enrichErrorContext, runWithErrorContext } from "@/utils/misc/errorContextStore";
 import { replyInfoEmbed } from "../../utils/discord/interactionHelper";
 import { ColorCode, log } from "../../utils/misc/logger";
 import type { UserRow, ErrorContext } from "../../types/db/schema";
+import { DatabaseUnavailableError } from "@/types/errors";
 import { cooldownRepository, serverRepository, statRepository, userRepository } from "@/utils/db/repositories";
 import {
   loadCommandData,
   ROOT_COMMAND_EXECUTION_KEY,
   type CommandExecutionMap,
   type CommandCooldownMap,
+  type CommandAutocompleteMap,
 } from "../../utils/discord/commandLoader";
 import { resolvePreferredDiscordDisplayName } from "../../utils/discord/displayName";
+import { dispatchGlobalInteraction, isGlobalRoutableInteraction } from "@/utils/discord/interactions/router";
 
-// Define constants at the top (Rule #20)
-const DEFAULT_COOLDOWN = Number.parseInt(process.env.DEFAULT_COMMAND_COOLDOWN || "1600", 10); // Default cooldown for all commands in milliseconds
+// Cooldown for any command whose category is listed below, in milliseconds.
+const DEFAULT_COOLDOWN_MS = 1_600;
+
+// Every category except `persona` shares this window: the retired per-category overrides
+// (COOLDOWN_CONFIG, COOLDOWN_MEMORY, COOLDOWN_TEACH, COOLDOWN_FORGET, COOLDOWN_SERVER,
+// COOLDOWN_PERSONAL, COOLDOWN_CONDITIONING) all resolved to the same 3000 ms in practice.
+const CATEGORY_COOLDOWN_MS = 3_000;
+const COOLDOWN_PERSONA_MS = 10_000;
+
+/**
+ * Operators tune every cooldown with one unitless multiplier instead of per-category
+ * milliseconds, so `/persona` stays proportionally longer than the rest whatever the scale.
+ * 0 disables cooldowns; an unset or invalid value keeps the windows above unchanged.
+ */
+function parseCooldownScale(raw: string | undefined): number {
+  const trimmed = raw?.trim();
+  if (!trimmed) return 1;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1;
+}
+
+const COMMAND_COOLDOWN_SCALE = parseCooldownScale(process.env.COMMAND_COOLDOWN_SCALE);
 
 const COOLDOWN_MAP = new Map<string, number>([
-  ["config", Number.parseInt(process.env.COOLDOWN_CONFIG || "3000", 10)],
-  ["persona", Number.parseInt(process.env.COOLDOWN_PERSONA || "10000", 10)],
-  [
-    "memory",
-    Number.parseInt(
-      process.env.COOLDOWN_MEMORY || process.env.COOLDOWN_TEACH || process.env.COOLDOWN_FORGET || "3000",
-      10,
-    ),
-  ],
-  ["server", Number.parseInt(process.env.COOLDOWN_SERVER || "3000", 10)],
-  ["personal", Number.parseInt(process.env.COOLDOWN_PERSONAL || "3000", 10)],
-  ["scheduled-task", Number.parseInt(process.env.COOLDOWN_PERSONAL || "3000", 10)],
-  ["conditioning", Number.parseInt(process.env.COOLDOWN_CONDITIONING || process.env.COOLDOWN_SERVER || "3000", 10)],
+  ["config", CATEGORY_COOLDOWN_MS],
+  ["persona", COOLDOWN_PERSONA_MS],
+  ["memory", CATEGORY_COOLDOWN_MS],
+  ["learn", CATEGORY_COOLDOWN_MS],
+  ["server", CATEGORY_COOLDOWN_MS],
+  ["personal", CATEGORY_COOLDOWN_MS],
+  ["scheduled-task", CATEGORY_COOLDOWN_MS],
+  ["conditioning", CATEGORY_COOLDOWN_MS],
+  ["punish", CATEGORY_COOLDOWN_MS],
+  ["reward", CATEGORY_COOLDOWN_MS],
+  ["nuke", CATEGORY_COOLDOWN_MS],
+  ["setup", CATEGORY_COOLDOWN_MS],
 ]);
+
+type LoadedCommandMaps = {
+  executionMap: CommandExecutionMap;
+  cooldownMap: CommandCooldownMap;
+  autocompleteMap: CommandAutocompleteMap;
+};
 
 // Cache for command execution maps - stored at module level
 let executionMap: CommandExecutionMap | null = null;
 let cooldownMap: CommandCooldownMap | null = null;
+
+let autocompleteMap: CommandAutocompleteMap | null = null;
 
 async function checkCooldown(userId: string, category: string): Promise<boolean> {
   return cooldownRepository.hasCommandCategoryCooldown(userId, category);
@@ -48,61 +84,109 @@ async function setCooldown(userId: string, category: string, duration: number): 
 }
 
 const handler = async (client: Client, interaction: Interaction): Promise<void> => {
-  if (!interaction.isChatInputCommand()) return;
+  if (interaction.isAutocomplete()) {
+    await runWithErrorContext(
+      {
+        source: "command_autocomplete",
+        sourceDetail: interaction.commandName,
+        userDiscId: interaction.user.id,
+        serverDiscId: interaction.guildId ?? undefined,
+        channelDiscId: interaction.channelId ?? undefined,
+      },
+      () => runAutocompleteCommand(client, interaction),
+    );
+    return;
+  }
 
-  await runWithErrorContext(
-    {
-      source: "command",
-      sourceDetail: interaction.commandName,
-      userDiscId: interaction.user.id,
-      serverDiscId: interaction.guildId,
-      channelDiscId: interaction.channelId,
-    },
-    () => runChatInputCommand(client, interaction),
-  );
+  if (interaction.isChatInputCommand()) {
+    await runWithErrorContext(
+      {
+        source: "command",
+        sourceDetail: interaction.commandName,
+        userDiscId: interaction.user.id,
+        serverDiscId: interaction.guildId,
+        channelDiscId: interaction.channelId,
+      },
+      () => runChatInputCommand(client, interaction),
+    );
+    return;
+  }
+
+  if (isGlobalRoutableInteraction(interaction)) {
+    await runWithErrorContext(
+      {
+        source: "interaction",
+        sourceDetail: interaction.customId,
+        userDiscId: interaction.user.id,
+        serverDiscId: interaction.guildId,
+        channelDiscId: interaction.channelId,
+      },
+      () => dispatchGlobalInteraction(client, interaction),
+    );
+  }
 };
+
+/**
+ * Returns the three lookup maps rather than a boolean so callers get non-null locals. A boolean
+ * cannot narrow the module-level caches, and both dispatch branches index them immediately.
+ */
+async function ensureCommandsLoaded(): Promise<LoadedCommandMaps | null> {
+  if (executionMap && cooldownMap && autocompleteMap) {
+    return { executionMap, cooldownMap, autocompleteMap };
+  }
+
+  log.info("Initializing command execution maps...");
+  const loadedData = await loadCommandData();
+
+  if (loadedData.executionMap.size === 0) {
+    return null;
+  }
+
+  executionMap = loadedData.executionMap;
+  cooldownMap = loadedData.cooldownMap;
+  autocompleteMap = loadedData.autocompleteMap;
+
+  // No command module exports a cooldown today, so the loader map arrives empty and the
+  // module-level defaults are the only source of per-root durations.
+  if (cooldownMap.size === 0) {
+    for (const [category, duration] of COOLDOWN_MAP.entries()) {
+      cooldownMap.set(category, duration);
+    }
+  }
+
+  log.success("Command execution maps initialized.");
+  return { executionMap, cooldownMap, autocompleteMap };
+}
+
+/**
+ * @param commandName - Root command name, which doubles as its cooldown category
+ * @param scale - Multiplier applied to the base window; defaults to `COMMAND_COOLDOWN_SCALE`
+ * @returns Cooldown in milliseconds; 0 means the command has no cooldown
+ */
+export function resolveCommandCooldown(commandName: string, scale = COMMAND_COOLDOWN_SCALE): number {
+  const baseMs = cooldownMap?.get(commandName) ?? COOLDOWN_MAP.get(commandName) ?? DEFAULT_COOLDOWN_MS;
+  return Math.round(baseMs * scale);
+}
 
 const runChatInputCommand = async (client: Client, interaction: ChatInputCommandInteraction): Promise<void> => {
   // Determine locale early for potential error messages
   const initialLocale = interaction.locale ?? interaction.guildLocale ?? "en-US";
 
   try {
-    // loadCommandData() is single-flight, so an interaction arriving during
-    // startup awaits the shared load instead of racing it and triggering module
-    // Temporal Dead Zone failures.
-    if (!executionMap || !cooldownMap) {
-      log.info("Initializing command execution maps...");
-      const loadedData = await loadCommandData();
-
-      // Only commit the maps to the module-level cache when the load actually
-      // produced commands. An empty execution map signals a catastrophic load
-      // failure; caching it would permanently brick every command, so we leave
-      // the cache empty and let a subsequent interaction retry the load.
-      if (loadedData.executionMap.size > 0) {
-        executionMap = loadedData.executionMap;
-        cooldownMap = loadedData.cooldownMap;
-
-        if (cooldownMap.size === 0) {
-          for (const [category, duration] of COOLDOWN_MAP.entries()) {
-            cooldownMap.set(category, duration);
-          }
-        }
-
-        log.success("Command execution maps initialized.");
-      } else {
-        log.warn("Command load produced no commands; will retry on next interaction.");
-        await replyInfoEmbed(
-          interaction,
-          initialLocale,
-          {
-            titleKey: "general.errors.unknown_error_title",
-            descriptionKey: "general.errors.unknown_error_description",
-            color: ColorCode.ERROR,
-          },
-          MessageFlags.Ephemeral,
-        );
-        return;
-      }
+    const maps = await ensureCommandsLoaded();
+    if (!maps) {
+      log.warn("Command load produced no commands; will retry on next interaction.");
+      await replyInfoEmbed(
+        interaction,
+        initialLocale,
+        {
+          titleKey: "general.errors.unknown_error_title",
+          descriptionKey: "general.errors.unknown_error_description",
+          color: ColorCode.ERROR,
+        },
+        MessageFlags.Ephemeral,
+      );
+      return;
     }
 
     const commandName = interaction.commandName; // The top-level command (category)
@@ -112,7 +196,7 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
     // Guild-only subcommand restrictions are now handled at the Discord registration level
     // Commands in guild-only categories (like "server") are automatically restricted to guilds
 
-    const subcommandMap = executionMap.get(commandName);
+    const subcommandMap = maps.executionMap.get(commandName);
     if (!subcommandMap) {
       log.warn(`Command category not found: ${commandName}`);
       await replyInfoEmbed(
@@ -156,11 +240,9 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
     }
 
     const mainLogicPromise = async () => {
-      const cooldownDuration =
-        // biome-ignore lint/style/noNonNullAssertion: We've checked it's not null before entering this block
-        cooldownMap!.get(commandName) ?? DEFAULT_COOLDOWN;
+      const cooldownDuration = resolveCommandCooldown(commandName);
 
-      const isOnCooldown = await checkCooldown(interaction.user.id, commandName);
+      const isOnCooldown = cooldownDuration > 0 && (await checkCooldown(interaction.user.id, commandName));
       if (isOnCooldown) {
         const remainingSeconds = await getRemainingCooldown(interaction.user.id, commandName);
         await replyInfoEmbed(
@@ -180,7 +262,9 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
         return;
       }
 
-      await setCooldown(interaction.user.id, commandName, cooldownDuration);
+      if (cooldownDuration > 0) {
+        await setCooldown(interaction.user.id, commandName, cooldownDuration);
+      }
 
       let userData: UserRow | undefined;
       const existingUser = await userRepository.loadByDiscordId(interaction.user.id);
@@ -230,7 +314,7 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
           const guildId = interaction.guildId;
           // Record the full command path (category + optional group + subcommand,
           // space-joined) so stats distinguish subcommands like "config humanizer"
-          // from "config message-fetch-limit", so top-level alone is too coarse for
+          // from "config message-fetch-limit"; top-level alone is too coarse for
           // underused-command detection.
           const fullCommandName = groupName
             ? `${commandName} ${groupName} ${subcommandName}`
@@ -291,10 +375,18 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
     // Reply to user with enhanced defensive error handling
     // The improved replyInfoEmbed function can now handle various interaction states more robustly
     try {
+      // A pool retirement now reaches here as a typed error rather than as a plausible-looking
+      // wrong answer, so the reply can say the run is worth repeating instead of implying the
+      // command itself is broken.
+      const isDatabaseUnavailable = error instanceof DatabaseUnavailableError;
       // Always attempt to use the helper function - it will handle the interaction state internally
       await replyInfoEmbed(interaction, initialLocale, {
-        titleKey: "general.errors.unknown_error_title",
-        descriptionKey: "general.errors.unknown_error_description",
+        titleKey: isDatabaseUnavailable
+          ? "general.errors.database_unavailable_title"
+          : "general.errors.unknown_error_title",
+        descriptionKey: isDatabaseUnavailable
+          ? "general.errors.database_unavailable_description"
+          : "general.errors.unknown_error_description",
         color: ColorCode.ERROR,
       });
     } catch (replyError) {
@@ -313,6 +405,60 @@ const runChatInputCommand = async (client: Client, interaction: ChatInputCommand
         },
         context,
       );
+    }
+  }
+};
+
+const runAutocompleteCommand = async (client: Client, interaction: AutocompleteInteraction): Promise<void> => {
+  try {
+    const maps = await ensureCommandsLoaded();
+    if (!maps) {
+      await interaction.respond([]);
+      return;
+    }
+
+    const commandName = interaction.commandName;
+    const groupName = interaction.options.getSubcommandGroup(false);
+    const subcommandName = interaction.options.getSubcommand(false);
+
+    const subcommandMap = maps.autocompleteMap.get(commandName);
+    if (!subcommandMap) {
+      await interaction.respond([]);
+      return;
+    }
+
+    const executionKey = subcommandName
+      ? groupName
+        ? `${groupName}.${subcommandName}`
+        : subcommandName
+      : ROOT_COMMAND_EXECUTION_KEY;
+
+    const autocompleteHandler = subcommandMap.get(executionKey);
+    if (!autocompleteHandler) {
+      await interaction.respond([]);
+      return;
+    }
+
+    await autocompleteHandler(client, interaction);
+  } catch (error) {
+    const context: ErrorContext = {
+      errorType: "AutocompleteHandlingError",
+      metadata: {
+        commandName: interaction.commandName,
+        groupName: interaction.options.getSubcommandGroup(false) ?? "none",
+        subcommandName: interaction.options.getSubcommand(false),
+        userDiscordId: interaction.user.id,
+        guildDiscordId: interaction.guild?.id ?? "DM",
+      },
+    };
+    await log.error(`Error in autocomplete handler for: ${interaction.commandName}`, error, context);
+
+    try {
+      if (!interaction.responded) {
+        await interaction.respond([]);
+      }
+    } catch {
+      // The interaction is already gone or acknowledged; there is nothing further to answer with.
     }
   }
 };

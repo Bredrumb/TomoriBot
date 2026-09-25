@@ -45,6 +45,8 @@ import {
 import { buildProviderStopStrings } from "@/providers/utils/stopStrings";
 import { isParamDisabled } from "@/utils/provider/samplingControl";
 import { getNovelAiThinkingDirective } from "@/utils/provider/thinkingControl";
+import { NAI_KAYRA_CHARS_PER_TOKEN, NAI_KAYRA_CONTEXT_LIMIT } from "@/utils/cache/novelaiCapabilityCache";
+import { getCachedContextTokens } from "@/utils/cache/novelaiSubscriptionCache";
 
 /**
  * Whether to include the bot's persona name as a "{char}:" prefix in GLM 4.6 assistant turns.
@@ -70,41 +72,30 @@ const NAI_GLM_CHAR_PREFIX_ENABLED = (process.env.NAI_GLM_CHAR_PREFIX_ENABLED ?? 
  * re-estimate token usage from the final assembled prompt (which includes formatting
  * overhead not present in the raw context items seen by the truncator).
  *
- * Configured via NAI_GLM_CHARS_PER_TOKEN env var (default: "2.5").
  * Lower values = more conservative, more clamping; higher values = less clamping.
  */
-const NAI_GLM_CHARS_PER_TOKEN = Number.parseFloat(process.env.NAI_GLM_CHARS_PER_TOKEN ?? "2.5");
+const NAI_GLM_CHARS_PER_TOKEN = 2.5;
 
 /**
  * Hard context window ceiling (input + output tokens combined) for GLM 4.6.
  *
  * Matches the real NovelAI API limit. The dynamic max_length cap uses this to compute
  * how many output tokens remain after accounting for estimated input token usage.
- *
- * Configured via NAI_GLM_CONTEXT_LIMIT env var (default: "12288").
  */
-/**
- * Characters-per-token ratio for Kayra/Erato context estimation.
- *
- * Kayra tokenizes at ~3.0-3.5 chars/token, denser than the 4 chars/token assumed by
- * contextTruncator. This drives the secondary dynamic max_length cap below.
- *
- * Configured via NAI_KAYRA_CHARS_PER_TOKEN env var (default: "3.5").
- */
-const NAI_KAYRA_CHARS_PER_TOKEN = Number.parseFloat(process.env.NAI_KAYRA_CHARS_PER_TOKEN ?? "3.5");
+const NAI_GLM_CONTEXT_LIMIT = 12288;
 
 /**
- * Hard context window ceiling (input + output tokens combined) for Kayra/Erato.
+ * Resolves the Kayra context ceiling for the turn's guild from the subscription cache, which
+ * `generationTurn` warms before the stream starts. The cache is keyed like the turn itself: the
+ * guild id, or the user id for a DM.
  *
- * Matches the user's NovelAI subscription tier limit:
- *   Tablet: 4096, Scroll: 8192, Opus: varies
- *
- * Configured via NAI_KAYRA_CONTEXT_LIMIT env var (default: "8192" for Scroll tier).
- * Tablet users must set this to 4096. Used by the dynamic max_length cap below.
+ * @param channel - Channel the turn streams into
+ * @returns The subscription tier's limit, or the Scroll-tier fallback when the cache is cold
  */
-const NAI_KAYRA_CONTEXT_LIMIT = Number.parseInt(process.env.NAI_KAYRA_CONTEXT_LIMIT ?? "8192", 10);
-
-const NAI_GLM_CONTEXT_LIMIT = Number.parseInt(process.env.NAI_GLM_CONTEXT_LIMIT ?? "12288", 10);
+export function resolveKayraContextLimit(channel: StreamContext["channel"]): number {
+  const cacheKey = channel.isDMBased() ? channel.recipientId : channel.guildId;
+  return getCachedContextTokens(cacheKey) ?? NAI_KAYRA_CONTEXT_LIMIT;
+}
 
 /**
  * Extracts non-schema preset parameters from a raw preset parameters record.
@@ -150,18 +141,6 @@ interface NormalizedToolDefinition {
   name: string;
   description?: string;
   parameters?: ToolParameterSchema;
-}
-
-/**
- * NovelAI-specific stream configuration
- */
-export interface NovelaiStreamConfig extends StreamConfig {
-  /**
-   * Kayra context limit in tokens derived from the guild's subscription tier.
-   * When present, overrides the NAI_KAYRA_CONTEXT_LIMIT env var in the secondary
-   * dynamic max_length safety cap so Tablet users (4096) are protected correctly.
-   */
-  kayraContextLimit?: number;
 }
 
 /**
@@ -347,7 +326,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         messageIdMap: context.messageIdMap,
       });
       // Append bot name to signal it should generate the bot's response, unless
-      // /bot respond already injected a final assistant prefill turn as the tail.
+      // /respond already injected a final assistant prefill turn as the tail.
       // In that case, adding another "{botName}:" creates an extra empty turn and
       // breaks true continuation for Kayra/Erato.
       const outputPrefillTail = context.outputPrefill?.trim() ?? "";
@@ -418,50 +397,38 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
         parameters.max_length = clampedMaxLength;
       }
     } else {
-      // Dynamic max_length safety cap for Kayra/Erato.
-      //
-      // contextTruncator runs earlier using 4 chars/token. Kayra tokenizes at
-      // ~3.0-3.5 chars/token, so the assembled prompt may still overshoot the
-      // tier's token ceiling. We re-estimate here and:
-      //   - Clamp max_length when input fits but input+output would exceed the limit.
-      //   - Log a warning when the input alone already exceeds the limit (can't fix
-      //     with output clamping; the subscription cache should prevent this via
-      //     accurate contextTruncator budgeting, but this is a last-resort guard).
-      //
-      // Prefer the subscription-derived limit threaded in from tomoriChat.ts; fall back
-      // to the NAI_KAYRA_CONTEXT_LIMIT env var so the guard fires even when no cached
-      // value is present (e.g. key set but bot restarted before first message).
-      const effectiveKayraLimit = (config as NovelaiStreamConfig).kayraContextLimit ?? NAI_KAYRA_CONTEXT_LIMIT;
+      // Dynamic max_length safety cap for Kayra/Erato. contextTruncator budgets at 4 chars/token,
+      // but Kayra tokenizes at roughly 3.0-3.5, so the assembled prompt can still overshoot the
+      // tier ceiling. Re-estimating here clamps max_length when the output would overflow, and
+      // warns when the input alone already does, which output clamping cannot fix.
+      const kayraContextLimit = resolveKayraContextLimit(context.channel);
       const estimatedInputTokens = Math.ceil(prompt.length / NAI_KAYRA_CHARS_PER_TOKEN);
-      const maxAllowedOutput = effectiveKayraLimit - estimatedInputTokens;
+      const maxAllowedOutput = kayraContextLimit - estimatedInputTokens;
       const currentMaxLength = parameters.max_length ?? 0;
       if (maxAllowedOutput <= 0) {
         log.warn(
           `NovelAI Kayra: Prompt likely exceeds context limit — ` +
             `prompt ${prompt.length} chars ≈ ${estimatedInputTokens} tokens, ` +
-            `limit: ${effectiveKayraLimit}. ` +
-            `Check your subscription tier or set NAI_KAYRA_CONTEXT_LIMIT explicitly.`,
+            `limit: ${kayraContextLimit}. Shorten the prompt.`,
         );
       } else if (maxAllowedOutput < currentMaxLength) {
         const clampedMaxLength = Math.max(1, maxAllowedOutput);
         log.warn(
           `NovelAI Kayra: Clamping max_length ${currentMaxLength} → ${clampedMaxLength} ` +
             `(prompt ${prompt.length} chars ≈ ${estimatedInputTokens} tokens, ` +
-            `context limit: ${effectiveKayraLimit})`,
+            `context limit: ${kayraContextLimit})`,
         );
         parameters.max_length = clampedMaxLength;
       }
     }
 
-    // Collect unique user speaker names from DIALOGUE_HISTORY items.
-    // These are stored in this.knownSpeakers so processVisibleText() can use them
-    // to detect turn boundaries even when the model omits the colon (story format).
-    // DIALOGUE_HISTORY is the only tag guaranteeing the "AuthorName: message" prefix.
-    // NOTE: logit_bias_exp is intentionally NOT used here despite use_string=true,
-    // logit_bias_exp[].sequence is interpreted as Kayra token IDs, not UTF-8 bytes.
-    // Passing byte values as token IDs produces garbage special tokens at generation
-    // start (e.g. <|reserved5|>, <|maskend|>). Turn stopping is handled entirely by
-    // the speaker-detection regex in processVisibleText() instead.
+    // Collect unique user speaker names from DIALOGUE_HISTORY items, which is the only
+    // tag guaranteeing the "AuthorName: message" prefix. These feed this.knownSpeakers
+    // so processVisibleText() can detect turn boundaries even when the model omits the
+    // colon (story format). Speaker stopping is text-based only: logit_bias_exp looks
+    // like the natural tool because it takes sequences, but its sequence entries are
+    // Kayra token IDs rather than UTF-8 bytes, so passing text there produces garbage
+    // special tokens at generation start (for example <|reserved5|>, <|maskend|>).
     this.speakerStopPatternEnabled = context.tomoriState.config.llm_stop_speaker_pattern_enabled ?? false;
     if (!isGlm && this.speakerStopPatternEnabled) {
       const speakerSet = new Set<string>();
@@ -508,7 +475,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       // - GLM 4.6: sentence-boundary buffering drops incomplete trailing fragments
       yield* this.streamSinglePass(request, config);
     } catch (error) {
-      yield this.createProviderErrorChunk(error);
+      yield this.createProviderErrorChunk(error, context);
     }
   }
 
@@ -769,18 +736,12 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       }
       this.generationBuffer = "";
     } else {
-      // Detect speaker transitions: the model is generating another character's turn.
-      // Both Kayra and GLM 4.6 need this: Kayra has no API stop sequences, and GLM
-      // doesn't emit <|user|> tokens in completions mode (it just starts "Username: ...")
-      //
-      // Three stop conditions checked in order:
-      // Dinkus (\n***): Kayra uses *** as a scene break between narrative zones.
-      //    When the model generates \n*** it considers its turn complete. Only triggered
-      //    after \n so ****-style censored words at response start are not clipped.
-      // Generic colon-form (\nName:): any speaker label with a colon.
-      // Known-name no-colon (\nName<space>): story-format turns where the model
-      //    writes "Name text" instead of "Name: text". Only fires for known speakers
-      //    from this.knownSpeakers to avoid false positives on mid-sentence proper nouns.
+      // Detect speaker transitions: the model has started another character's turn. Kayra has no
+      // API stop sequences, and GLM 4.6 does not emit <|user|> in completions mode, so both are
+      // caught from the text. Three conditions, checked in order: a dinkus scene break, only
+      // matched after a newline so a censored word at the response start survives; a generic
+      // `\nName:` label; and a `\nName ` turn, restricted to known speakers so mid-sentence proper
+      // nouns do not trip it.
       const markdownCodeRanges = findMarkdownCodeRanges(this.generationBuffer);
       let speakerMatch =
         this.findFirstMarkdownSafeMatch(
@@ -1334,10 +1295,9 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     // Normalize to ASCII before parsing to ensure the regex matches.
     let normalizedInner = this.normalizeXmlBrackets(inner);
 
-    // Fix truncated closing tags because the stream frequently cuts off right before
-    // the final ">" of the last </arg_value> or </arg_key> tag.
-    // e.g., "</arg_value" (missing ">") → "</arg_value>"
-    // The >? makes this idempotent: already-complete tags are left unchanged.
+    // Truncated closing tags are the common case: the stream frequently cuts off right
+    // before the final ">" of the last </arg_value> or </arg_key>. The >? keeps the
+    // substitution idempotent, so an already-complete tag is left unchanged.
     normalizedInner = normalizedInner
       .replace(/<\/arg_value>?\s*$/, "</arg_value>")
       .replace(/<\/arg_key>?\s*$/, "</arg_key>");
@@ -1629,9 +1589,9 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     }
 
     // Levenshtein distance: catch severely garbled names like "ave_wuery" → "query".
-    //    Accept if edit distance is ≤60% of the longer name's length. High tolerance is safe
-    //    because the param namespace is small (typically 3-8 params per tool), so false
-    //    positives are unlikely. Also requires the best match to be clearly better than runner-up.
+    //    The wide tolerance is safe only because the param namespace is small (typically
+    //    3-8 params per tool), so a false positive needs a near-tie that the
+    //    runner-up check below rejects.
     let bestLevMatch = "";
     let bestLevDistance = Number.POSITIVE_INFINITY;
     let secondBestDistance = Number.POSITIVE_INFINITY;

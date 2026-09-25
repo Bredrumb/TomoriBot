@@ -3,9 +3,11 @@
  * Handles UTC offset-based timezone conversions for TomoriBot
  */
 
+import { resolveSupportedLocale } from "@/utils/text/localizer";
+
 /**
  * Valid UTC offset bounds (UTC-12 through UTC+14, matching real-world timezones
- * and the /server timezone and /personal timezone command ranges)
+ * and the /server timezone and /personal config command ranges)
  */
 export const UTC_OFFSET_MIN = -12;
 export const UTC_OFFSET_MAX = 14;
@@ -139,6 +141,8 @@ function getDayOfWeek(date: Date): string {
  * @param date - The Date object to format
  * @param offsetHours - The UTC offset in hours to apply
  * @param options - Optional Intl.DateTimeFormatOptions for custom formatting
+ * @param locale - Resolved through the authored-locale chain so the date's language matches the
+ *   localized sentence around it. Model-facing callers omit it and keep English.
  *
  * @example
  * ```ts
@@ -146,7 +150,12 @@ function getDayOfWeek(date: Date): string {
  * formatTimeWithOffset(date, 8);  // Custom formatting in UTC+8
  * ```
  */
-export function formatTimeWithOffset(date: Date, offsetHours: number, options?: Intl.DateTimeFormatOptions): string {
+export function formatTimeWithOffset(
+  date: Date,
+  offsetHours: number,
+  options?: Intl.DateTimeFormatOptions,
+  locale = "en-US",
+): string {
   const utcTime = date.getTime();
   const offsetTime = new Date(utcTime + offsetHours * MILLISECONDS_PER_HOUR);
 
@@ -160,7 +169,7 @@ export function formatTimeWithOffset(date: Date, offsetHours: number, options?: 
     ...options,
   };
 
-  return offsetTime.toLocaleString("en-US", defaultOptions);
+  return offsetTime.toLocaleString(resolveSupportedLocale(locale), defaultOptions);
 }
 
 /**

@@ -37,7 +37,7 @@ services:
     # - Using a managed database service with pg_cron support
     # - TomoriBot includes app-level cooldown cleanup as fallback
 
-  # SearXNG metasearch sidecar - Tomori's library research assistant
+  # SearXNG metasearch server - Tomori's library research assistant
   # Self-hosted JSON aggregator that fronts Google/Bing/DDG/Brave/Wikipedia.
   # Enable with: docker compose --profile searxng up
   # Set SEARXNG_BASE_URL=http://searxng:8080/ in .env (already set in tomoribot service below).
@@ -63,7 +63,7 @@ services:
     networks:
       - tomori-network
 
-  # Crawl4AI URL-fetch sidecar - optional browser-rendered markdown fetcher.
+  # Crawl4AI URL-fetch server - optional browser-rendered markdown fetcher.
   # Enable with: docker compose --profile fetch-crawl4ai up
   # Set CRAWL4AI_BASE_URL=http://crawl4ai:11235/ in .env to let TomoriBot use it.
   crawl4ai:
@@ -109,7 +109,7 @@ services:
       # Override RUN_ENV to 'development' for local compose to disable SSL verification
       # Production deployments to AWS ECS will use RUN_ENV=production automatically
       RUN_ENV: development
-      # Web-search SearXNG sidecar (resolved via compose DNS)
+      # Web-search SearXNG container (resolved via compose DNS)
       SEARXNG_BASE_URL: http://searxng:8080/
     restart: unless-stopped
     networks:

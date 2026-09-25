@@ -19,6 +19,7 @@ import { getCachedPresetAvatar, getPresetAvatarBuffer } from "../../utils/image/
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { deletePersonaAvatarFromStorage, deletePersonaSpriteFromStorage } from "../../utils/storage/avatarStorage";
 import { dedupeTriggerWords, normalizeTriggerWord, selectUnclaimedTriggerWords } from "@/utils/text/triggerWords";
+import { orderPersonaPresetChoices } from "@/utils/persona/presetOrdering";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -37,7 +38,6 @@ export const PRESET_LINEAGE_BY_AVATAR: Record<string, number> = {
 };
 
 type PersonaDefaultTargetType = "default" | "alter";
-const DEFAULT_TARGET_TYPE: PersonaDefaultTargetType = "default";
 
 function normalizeForComparison(value: string): string {
   return normalizeTriggerWord(value);
@@ -136,7 +136,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
       option
         .setName("type")
         .setDescription(localizer("en-US", "commands.persona.default.type_description"))
-        .setRequired(false)
+        .setRequired(true)
         .addChoices(
           {
             name: localizer("en-US", "commands.persona.default.type_choice_default"),
@@ -151,7 +151,7 @@ export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =
 
 /**
  * Applies a preset personality configuration to Tomori.
- * - type=default (default): updates the main persona.
+ * - type=default: updates the main persona.
  * - type=alter: creates an alter persona from the selected preset.
  *
  * Preset trigger words come from persona_presets.preset_trigger_words,
@@ -175,7 +175,7 @@ export async function execute(
     return;
   }
 
-  const targetType = (interaction.options.getString("type") as PersonaDefaultTargetType | null) ?? DEFAULT_TARGET_TYPE;
+  const targetType = interaction.options.getString("type", true) as PersonaDefaultTargetType;
 
   if (targetType === "alter" && !interaction.guild) {
     await replyInfoEmbed(interaction, locale, {
@@ -226,7 +226,9 @@ export async function execute(
       return;
     }
 
-    const presetSelectOptions: SelectOption[] = presets.map((preset: TomoriPresetRow) => ({
+    const sortedPresets = orderPersonaPresetChoices(presets);
+
+    const presetSelectOptions: SelectOption[] = sortedPresets.map((preset: TomoriPresetRow) => ({
       label: safeSelectOptionText(preset.persona_preset_name),
       value: safeSelectOptionText(preset.persona_preset_name),
       description: safeSelectOptionText(preset.persona_preset_desc),

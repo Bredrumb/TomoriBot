@@ -246,14 +246,19 @@ function buildFailureResult(
   };
 }
 
-function formatReminderTime(reminderTime: Date, timezoneOffset: number): string {
-  return `${formatTimeWithOffset(reminderTime, timezoneOffset, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })} (${formatUTCOffset(timezoneOffset)})`;
+function formatReminderTime(reminderTime: Date, timezoneOffset: number, locale: string): string {
+  return `${formatTimeWithOffset(
+    reminderTime,
+    timezoneOffset,
+    {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+    locale,
+  )} (${formatUTCOffset(timezoneOffset)})`;
 }
 
 function formatRepeatText(locale: string, repetitionIntervalHours: number | null | undefined): string {
@@ -489,7 +494,7 @@ export class UpdateTaskTool extends BaseTool {
       context.personaUsername || tomoriState.persona_nickname || context.client.user?.username || "TomoriBot";
     const reminderPurposeText = truncateReminderPurpose(parsedArgs.newPurpose);
 
-    // Show both clocks when the target user has a personal timezone (/personal timezone)
+    // Show both clocks when the target user has a personal timezone (/personal config)
     // differing from the server's, so lets the user spot a mislabeled/misconverted time.
     // Self tasks target the bot, which has no personal timezone.
     let targetPersonalOffset: number | null = null;
@@ -500,25 +505,35 @@ export class UpdateTaskTool extends BaseTool {
     const reminderTimeText =
       targetPersonalOffset != null && targetPersonalOffset !== timezoneOffset
         ? localizer(context.locale, "reminders.dual_time_display", {
-            server_time: formatTimeWithOffset(finalReminderTime, timezoneOffset, {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            server_time: formatTimeWithOffset(
+              finalReminderTime,
+              timezoneOffset,
+              {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              },
+              context.locale,
+            ),
             server_offset: formatUTCOffset(timezoneOffset),
-            user_time: formatTimeWithOffset(finalReminderTime, targetPersonalOffset, {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            user_time: formatTimeWithOffset(
+              finalReminderTime,
+              targetPersonalOffset,
+              {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              },
+              context.locale,
+            ),
             user_offset: formatUTCOffset(targetPersonalOffset),
             user_nickname: existingReminder.user_nickname,
           })
-        : formatReminderTime(finalReminderTime, timezoneOffset);
+        : formatReminderTime(finalReminderTime, timezoneOffset, context.locale);
     const repeatText = formatRepeatText(context.locale, finalRepetitionIntervalHours);
 
     await sendTaskEmbedWithExpand(

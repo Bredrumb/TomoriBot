@@ -15,7 +15,7 @@ import {
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { buildParticipantContextItem } from "@/utils/text/context/participants";
 import { isEligibleContextReferenceUserV1, userRepository } from "@/utils/db/repositories/UserRepository";
-import { serverScheduleRepository } from "@/utils/db/repositories";
+import { serverScheduleRepository, userNamingRepository } from "@/utils/db/repositories";
 import { buildParticipantDiscoveryPlan, type ParticipantDiscoveryPlan } from "@/utils/text/participants/discoveryPlan";
 import { createDiscordUserKey, createPersonaKey, type ParticipantSeed } from "@/utils/text/participants/identity";
 import { buildDiscordUserAliases } from "@/utils/text/participants/aliases";
@@ -549,7 +549,11 @@ describe("persona task context", () => {
       timezone_offset: 0,
       personal_memories_enabled: false,
     } as AssembledServerConfig;
+    const originalLoadByDiscordId = userRepository.loadByDiscordId;
     const originalGetPendingReminders = serverScheduleRepository.getPendingRemindersForUser;
+    const originalLoadNamingPreferences = userNamingRepository.loadPreferences;
+    userRepository.loadByDiscordId = async (discordId) => (discordId === "100" ? user : null);
+    userNamingRepository.loadPreferences = async () => new Map();
     const calls: Array<[string, string | undefined, number | undefined, boolean | undefined]> = [];
     serverScheduleRepository.getPendingRemindersForUser = async (...args) => {
       calls.push(args);
@@ -601,6 +605,8 @@ describe("persona task context", () => {
       expect(text).toContain('ID:41 "Take meds"');
       expect(text).not.toContain("Pending Tasks Assigned to You:");
     } finally {
+      userRepository.loadByDiscordId = originalLoadByDiscordId;
+      userNamingRepository.loadPreferences = originalLoadNamingPreferences;
       serverScheduleRepository.getPendingRemindersForUser = originalGetPendingReminders;
     }
   });

@@ -11,28 +11,28 @@ emission (nudges) for the LLM to create and maintain short-term memory.
 
 Surface two kinds of short-term memory to the LLM:
 
-1. **Other-channel memories** — recent conversation summaries (or category
+1. **Other-channel memories**: recent conversation summaries (or category
    blocks) from other channels in the same server (or cross-server if the
    user opted in).
-2. **Same-channel memory** — the running summary or category block for the
+2. **Same-channel memory**: the running summary or category block for the
    current channel (if one exists).
 
 Separately, the contributor emits a single **unified nudge** (`nudgeItem`)
 for the `update_short_term_memory` tool, gated by the cadence counter. The
-same nudge covers BOTH cases — "no STM yet, please create one" and "STM
-exists, please refresh it" — so there is no longer a distinct create vs.
+same nudge covers BOTH cases ("no STM yet, please create one" and "STM
+exists, please refresh it" and so there is no longer a distinct create vs.
 update nudge. The nudge is returned out-of-band (not inside `memoryItems`)
 so the pipeline can inject it at a configurable dialogue depth.
 
 ## Categories
 
-Servers can configure up to `STM_MAX_CATEGORIES` (default 5) categories via
-`/server stm categories-edit`. Each category has a `label`, `description`,
+Servers can configure up to `STM_MAX_CATEGORIES` (5) categories via
+`/config` > Engine > Memory & STM. Each category has a `label`, `description`,
 and `position`. The tool schema dynamically builds one string property per
 category slug.
 
 When only the default `summary` category exists, the system operates in
-**single-summary fallback mode** — identical to pre-category behavior.
+**single-summary fallback mode**: identical to pre-category behavior.
 
 When additional categories are present, the system enters **category mode**.
 Category-mode nudges support the `{category_labels}` placeholder, which is
@@ -57,7 +57,7 @@ The default became `crude_summary` in migration 055, which also rewrote existing
 rows. Servers with no `server_stm_configs` row (the common case, since the table is
 not seeded at setup) get the same default from the runtime fallback in `memories.ts`.
 
-The render mode is set per-server via `/server stm parameters` and stored in
+The render mode is set per-server via `/config` > Engine > Memory & STM and stored in
 `server_stm_configs.render_mode`.
 
 ## Cadence gating
@@ -65,11 +65,11 @@ The render mode is set per-server via `/server stm parameters` and stored in
 A `turnsSinceRefresh` counter on each live STM row tracks
 bot-participation cycles (not raw inbound messages). The counter is
 incremented unconditionally by `incrementStmTurnCounter()` in post-turn
-effects after each bot turn — it advances whether or not the bot actually
-created/updated an STM — and is reset to `0` only when the bot calls
+effects after each bot turn; it advances whether or not the bot actually
+created/updated an STM; and is reset to `0` only when the bot calls
 `update_short_term_memory` (`resetStmTurnCounter()`).
 
-- **Unified nudge** — fires when `turnsSinceRefresh >= refreshCadence`
+- **Unified nudge**: fires when `turnsSinceRefresh >= refreshCadence`
   (from `stmConfig`, default `5`). The same gate applies to both the
   create case (no STM yet) and the update case (existing STM). Because the
   counter keeps climbing until the bot uses the tool, the nudge re-appears
@@ -87,11 +87,11 @@ The nudge is injected positionally by the chat pipeline
 TURNS from the bottom (a user turn and a bot turn are separate turns, **not**
 pairs):
 
-- `0` — tail, after every dialogue turn (literal last position)
-- `1` — before the final turn
-- `2` — before the latest user/bot pair (**default**; mirrors the legacy
+- `0`: tail, after every dialogue turn (literal last position)
+- `1`: before the final turn
+- `2`: before the latest user/bot pair (**default**; mirrors the legacy
   create-nudge placement)
-- `N` — before the Nth turn from the bottom (clamps to the earliest dialogue
+- `N`: before the Nth turn from the bottom (clamps to the earliest dialogue
   turn when fewer than N exist, rather than jumping to tail)
 
 Only `DIALOGUE_HISTORY` items are counted; `DIALOGUE_SAMPLE` example
@@ -101,27 +101,27 @@ dialogues are excluded from the walk.
 
 By default the same/other-channel STM memory **content block** (`memoryItems`)
 is pushed inline near the top of context (above sample dialogues and dialogue
-history) as ambient knowledge — and, under a SillyTavern preset, flushed at the
+history) as ambient knowledge; and, under a SillyTavern preset, flushed at the
 `chatHistory`/`dialogueExamples` anchor. `server_stm_configs.content_injection_depth`
 optionally moves that block to a dialogue depth instead, reusing the same
 `insertAtDialogueDepth` walk as the nudge:
 
-- `-1` — **default**: keep the block anchored near the top (legacy behavior); the
+- `-1`: **default**: keep the block anchored near the top (legacy behavior); the
   block stays inline in `contextItems` and is NOT deferred.
-- `0` — tail (the "last dialogue item"), after every dialogue turn.
-- `N` — before the Nth dialogue turn from the bottom (same clamp semantics as the
+- `0`: tail (the "last dialogue item"), after every dialogue turn.
+- `N`: before the Nth dialogue turn from the bottom (same clamp semantics as the
   nudge).
 
 When `content_injection_depth >= 0`, the builder withholds `memoryItems` from
 `contextItems` and returns them out-of-band (`memoryInjectionItems` +
 `memoryInjectionDepth`) so the pipeline can splice them positionally **after**
-dialogue assembly — identical plumbing to the nudge, and correct under both native
+dialogue assembly; identical plumbing to the nudge, and correct under both native
 and preset assembly.
 
 **Content block vs. nudge ordering:** the pipeline injects the content block
 *first*, then the nudge. When both depths are equal, each is spliced before the
 same Nth dialogue turn, so the block (inserted first, in order) ends up directly
-above the later-inserted nudge — i.e. the nudge always sits just below the block.
+above the later-inserted nudge, i.e. the nudge always sits just below the block.
 
 ### Freshness override
 
@@ -131,8 +131,8 @@ but once the channel has gone quiet the same placement presents stale content as
 current.
 
 So the resolved depth is not always the configured one. When the same-channel STM
-entry is younger than `STM_FRESH_WINDOW_MINUTES` (default 60), the content block is
-injected at `STM_FRESH_INJECTION_DEPTH` (default `2`) instead. Once the entry ages past
+entry is younger than `STM_FRESH_WINDOW_MS` (60 minutes), the content block is
+injected at `STM_FRESH_INJECTION_DEPTH` (2) instead. Once the entry ages past
 the window, the block snaps back to `content_injection_depth`.
 
 `STM_FRESH_INJECTION_DEPTH` is a **ceiling, not a replacement**: the override may only
@@ -169,7 +169,7 @@ All overrides go through `sanitizeUnknownTemplatePlaceholders` after macro
 expansion via `toolPromptMacroResolver.expand(...)`. In category mode,
 `{category_labels}` is resolved before sanitization.
 
-Configurable via `/server stm prompt-edit`.
+Configurable via `/config` > Engine > Memory & STM.
 
 ## DB persistence
 
@@ -177,9 +177,9 @@ STM is backed by the `short_term_memories` table with write-through cache:
 
 | Column | Purpose |
 |---|---|
-| `scope_kind` | `server` or `user` — determines scoping |
-| `categories` | JSONB — keyed by slug, values are category text |
-| `summary` | TEXT — single-blob summary (fallback mode) |
+| `scope_kind` | `server` or `user`: determines scoping |
+| `categories` | JSONB: keyed by slug, values are category text |
+| `summary` | TEXT: single-blob summary (fallback mode) |
 | `turns_since_refresh` | Counter for cadence gating |
 
 Every STM tool write updates both the in-memory cache and the durable DB
@@ -193,7 +193,7 @@ STM rows for channels/servers that are no longer active.
 
 ## Input
 
-Substantial — see signature in `memories.ts:190-203`. Notable:
+Substantial: see signature in `memories.ts:190-203`. Notable:
 
 - `triggeringUserId`, `currentChannelId`, `currentServerId`
 - `tomoriState` (provides `persona_lineage_id`, `persona_id`,
@@ -201,9 +201,9 @@ Substantial — see signature in `memories.ts:190-203`. Notable:
 - `triggererName`, `botName`
 - `personalMemoriesEnabled` (passed to `convertMentions`)
 - `isUserImpersonation`
-- `explicitLongTermMemoryIntent` — when true, suppresses the STM-tool hint
+- `explicitLongTermMemoryIntent`: when true, suppresses the STM-tool hint
   (the user is asking for a long-term action, not short-term)
-- `currentParentChannelId` — for private-channel inheritance in threads
+- `currentParentChannelId`: for private-channel inheritance in threads
 - `toolPromptMacroResolver`, `convertMentions`
 
 ## Output
@@ -234,26 +234,26 @@ depth after dialogue history is assembled.
 
 ## Side effects
 
-- **STM config + category load** — `getStmConfig(serverId)` and
+- **STM config + category load**: `getStmConfig(serverId)` and
   `getStmCategories(serverId)` for render mode, cadence, nudge overrides,
   and category definitions.
 - **STM cache reads**:
-  - `getShortTermMemoriesForUser(userId, channelId, lineageId)` — for DMs
+  - `getShortTermMemoriesForUser(userId, channelId, lineageId)`: for DMs
     or cross-server flow
-  - `getShortTermMemoriesForServer(serverId, channelId, lineageId)` —
+  - `getShortTermMemoriesForServer(serverId, channelId, lineageId)`
     server-scoped
   - `getShortTermMemoryForUserChannel` / `getShortTermMemoryForServerChannel`
-    — current-channel summary/categories
-- **User row read** — `getCachedUserRow` for `shortterm_cache_crossserver_opt_in`.
-- **Private-channel filtering** — if the current channel is *not* private
+   : current-channel summary/categories
+- **User row read**: `getCachedUserRow` for `shortterm_cache_crossserver_opt_in`.
+- **Private-channel filtering**: if the current channel is *not* private
   and `stm_privacy_bypass` is false, drops STM entries whose
   `channelId` or `parentChannelId` is in `private_channel_ids`.
-- **Cross-server folding** — when the user opted in *and* we're in a
+- **Cross-server folding**: when the user opted in *and* we're in a
   guild (not DM), other-server STM entries are folded into the
   "other-channel memories" list alongside same-server ones.
-- **Tool-hint expansion** — `toolPromptMacroResolver.expand(...)` resolves
+- **Tool-hint expansion**: `toolPromptMacroResolver.expand(...)` resolves
   `{short_term_memory_tool}` etc. for the active provider.
-- **Nudge sanitization** — `sanitizeUnknownTemplatePlaceholders` strips
+- **Nudge sanitization**: `sanitizeUnknownTemplatePlaceholders` strips
   unresolved `{placeholder}` tokens after macro expansion.
 - **Mention conversion** on every emitted memory text.
 
@@ -281,16 +281,16 @@ After this stage runs:
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `SHORT_TERM_MEMORY_DEFAULT_CRUDE_MESSAGE_COUNT` | `6` | Fallback crude-message render depth when a server has no `crude_message_count` set |
-| `SHORT_TERM_MEMORY_MAX_OTHER_CHANNELS` | `3` | Cap on other-channel memory items |
-| `SHORT_TERM_MEMORY_TTL_HOURS` | `12` | TTL for crude conversation entries in cache |
-| `SHORT_TERM_MEMORY_SUMMARY_TTL_HOURS` | `24` | TTL for summary entries in cache |
-| `SHORT_TERM_MEMORY_MAX_SUMMARY_LENGTH` | `1500` | Max length of a single summary/category value |
-| `SHORT_TERM_MEMORY_MAX_MESSAGES_PER_CHANNEL` | `10` | Max crude messages stored per channel |
-| `STM_MAX_CATEGORIES` | `5` | Maximum number of categories per server |
-| `STM_JANITOR_RETENTION_DAYS` | `90` | Days before orphaned STM rows are purged |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Constant (`memories.ts`) | `DEFAULT_CRUDE_MESSAGE_COUNT` | `6` | Fallback crude-message render depth when a server has no `crude_message_count` set |
+| Constant (`memories.ts`) | `MAX_OTHER_CHANNEL_MEMORIES` | `3` | Cap on other-channel memory items |
+| Constant (`shortTermMemoryCache.ts`) | `CRUDE_CONVERSATION_TTL_HOURS` | `12` | TTL for crude conversation entries in cache |
+| Constant (`shortTermMemoryCache.ts`) | `SUMMARY_TTL_HOURS` | `24` | TTL for summary entries in cache |
+| Constant (`shortTermMemoryCache.ts`) | `MAX_SUMMARY_LENGTH` | `1500` | Max length of a single summary/category value |
+| Constant (`shortTermMemoryCache.ts`) | `MAX_MESSAGES_PER_CHANNEL` | `10` | Max crude messages stored per channel |
+| Constant (`shortTermMemoryCache.ts`) | `STM_MAX_CATEGORIES` | `5` | Maximum number of categories per server |
+| Env var | `STM_JANITOR_RETENTION_DAYS` | `90` | Days before orphaned STM rows are purged |
 
 > [!NOTE]
 > The default cadence of `5` and the default `nudge_injection_depth` of `2`
@@ -310,29 +310,29 @@ After this stage runs:
 
 | Command | Purpose |
 |---|---|
-| `/server stm parameters` | Configure cadence, render mode, crude message count, nudge depth, content depth |
-| `/server stm prompt-edit` | Set tool description and the unified nudge override |
-| `/server stm categories-edit` | Define category labels and descriptions |
-| `/persona stm edit` | Hand-edit live STM for a persona in the current channel (Manage Server) |
-| `/persona stm view` | Read-only inspect the live STM for a persona in the current channel (open to all members) |
-| `/capabilities manage` | "Short-Term Memory" toggle — turns OFF the bot's automatic STM management (write tool + cadence nudge) while leaving STM content visible |
-| `/help stm` | In-Discord guide to the STM customization surface |
+| `/config` > Engine > Memory & STM | Configure cadence, render mode, crude message count, nudge depth, content depth |
+| `/config` > Engine > Memory & STM | Set tool description and the unified nudge override |
+| `/config` > Engine > Memory & STM | Define category labels and descriptions |
+| `/config` > Persona > Memories | Hand-edit live STM for a persona in the current channel (Manage Server) |
+| `/config` > Persona > Memories | Read-only inspect the live STM for a persona in the current channel (open to all members) |
+| `/config` > Permissions | "Short-Term Memory" toggle: turns OFF the bot's automatic STM management (write tool + cadence nudge) while leaving STM content visible |
+| `/help`, then Memory and Short-Term Memory | In-Discord guide to the STM customization surface |
 
 > **Disabling STM:** the `short_term_memory_enabled` capability flag
 > (`server_capabilities_configs`, migration 054, default `true`) controls the bot's
-> *automatic* STM management — not whether STM appears at all. When off, two gates fire:
+> *automatic* STM management; not whether STM appears at all. When off, two gates fire:
 > (1) `UpdateShortTermMemoryTool.isAvailableForContext` returns `false` so the write tool
 > is never offered, and (2) the cadence nudge is suppressed inside
-> `buildShortTermMemoryContext` — `isStmToolAvailable` now folds in the same flag, so the
+> `buildShortTermMemoryContext`; `isStmToolAvailable` now folds in the same flag, so the
 > nudge tracks the tool. **Memory content still renders:** `nativeBuilder.ts` always calls
 > `buildShortTermMemoryContext`, so the same-channel block and other-channel recall keep
-> surfacing. This lets admins curate STM by hand via `/persona stm edit` (and keep crude
+> surfacing. This lets admins curate STM by hand via `/config` > Persona > Memories (and keep crude
 > messages visible) with the bot's auto-updates and nudges turned off. Stored
 > `short_term_memories` rows are NOT deleted; the `/server stm …` and `/persona stm …`
 > commands stay fully usable.
 
-> **Scope note:** both `/persona stm edit` and `/persona stm view` resolve the exact row
-> that gets injected — the **server-shared** row (`serverId, channelId, personaId`) in a
+> **Scope note:** both the view and edit actions on `/config` > Persona > Memories resolve the exact row
+> that gets injected; the **server-shared** row (`serverId, channelId, personaId`) in a
 > guild, or the **user-scoped** row (`userId, channelId, personaId`) in a DM. There is no
 > per-user STM inside a guild, so every member sees/edits the same shared blob.
 
@@ -343,7 +343,7 @@ After this stage runs:
 | STM storage adapter (`shortTermMemoryCache.ts`, `ShortTermMemoryRepository.ts`) | Now DB-backed with write-through cache. Extension point is a custom storage adapter replacing the repository layer. |
 | Same-channel summary/category format | Coupled to `update_short_term_memory` tool output; changing the format changes both. |
 | Per-provider hint format | Nudge text is now server-configurable via overrides. Extension point shifts to per-provider hint formatting (e.g. different phrasing for different LLM providers). → plugin plan candidate. |
-| Cross-server opt-in policy | Coupled to `user_personalization_configs.shortterm_cache_crossserver_opt_in`; user-facing toggle is `/personal stm` (defined in `personal/cache.ts`). |
+| Cross-server opt-in policy | Coupled to `user_personalization_configs.shortterm_cache_crossserver_opt_in`; user-facing toggle is `/personal config` (defined in `personal/config.ts`). |
 | Provider-specific STM-tool availability | `llm_provider === "novelai"` hardcoded; a plugin adding a provider that doesn't support STM tools would extend this gate. AC-2 (name-switch purge) lists this as a violation to eliminate. → plugin plan candidate. |
 
 ## Related docs

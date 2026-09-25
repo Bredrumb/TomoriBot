@@ -1,6 +1,7 @@
 /**
  * Image Generation Command
  * Allows users to generate AI images using the configured provider
+ * Supports manual prompting and automatic scene visualization
  * Supports text-to-image and image-to-image generation with up to 3 reference images
  * (Discord modal limit: 5 components total)
  */
@@ -33,9 +34,12 @@ import {
   resolveCapabilityCredentials,
 } from "@/utils/provider/credentialResolver";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
-import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
+import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
+import { generateOpenRouterImage } from "@/providers/openrouter/openrouterImageGeneration";
+import { buildGeminiImagePromptParts } from "@/providers/utils/geminiImageParts";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
+import { executeAutoImageCommand } from "@/utils/image/autoImageCommand";
 
 const MODAL_CUSTOM_ID = "generate_image_modal";
 const PROMPT_INPUT_ID = "prompt_input";
@@ -46,7 +50,19 @@ const REFERENCE_IMAGE_INPUT_IDS = ["image_upload_1", "image_upload_2", "image_up
  * Configure the subcommand
  */
 export const configureSubcommand = (subcommand: SlashCommandSubcommandBuilder) =>
-  subcommand.setName("image").setDescription(localizer("en-US", "commands.generate.image.description"));
+  subcommand
+    .setName("image")
+    .setDescription(localizer("en-US", "commands.generate.image.description"))
+    .addStringOption((option) =>
+      option
+        .setName("mode")
+        .setDescription(localizer("en-US", "commands.generate.image.mode_description"))
+        .setRequired(true)
+        .addChoices(
+          { name: localizer("en-US", "commands.generate.image.mode_choice_manual"), value: "manual" },
+          { name: localizer("en-US", "commands.generate.image.mode_choice_auto"), value: "auto" },
+        ),
+    );
 
 /**
  * @param diffusionModelId - Database ID of the diffusion model
@@ -90,137 +106,20 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
 }
 
 /**
- * Generate image using OpenRouter API
- * @param aspectRatio - Aspect ratio (e.g., "16:9")
- * @param referenceImages - Optional array of reference images for img2img
- * @returns Promise resolving to generated image data and mimeType
- */
-async function generateImageWithOpenRouter(
-  apiKey: string,
-  modelCodename: string,
-  prompt: string,
-  aspectRatio: string,
-  referenceImages?: Array<{ mimeType: string; data: string }>,
-): Promise<{ imageData: string | null; mimeType: string | null }> {
-  log.info(
-    `[OpenRouter] Sending image request to model "${modelCodename}" (aspect ratio: ${aspectRatio}, refs: ${referenceImages?.length ?? 0})`,
-  );
-
-  // Build content array with text prompt first (OpenRouter recommendation)
-  const contentParts: Array<{
-    type: string;
-    text?: string;
-    image_url?: { url: string };
-  }> = [{ type: "text", text: prompt }];
-
-  if (referenceImages && referenceImages.length > 0) {
-    for (const img of referenceImages) {
-      contentParts.push({
-        type: "image_url",
-        image_url: {
-          url: `data:${img.mimeType};base64,${img.data}`,
-        },
-      });
-    }
-    log.info(`[OpenRouter] Added ${referenceImages.length} reference image(s) to content array`);
-  }
-
-  const requestPayload = {
-    model: modelCodename,
-    messages: [
-      {
-        role: "user",
-        content: contentParts,
-      },
-    ],
-    modalities: ["image", "text"],
-    image_config: {
-      aspect_ratio: aspectRatio,
-    },
-  };
-
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestPayload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    const bodySnippet = errorText.slice(0, 500);
-
-    let parsedMessage = "";
-    try {
-      const parsed = JSON.parse(errorText);
-      parsedMessage = (parsed?.error?.message as string | undefined) || (parsed?.message as string | undefined) || "";
-    } catch {}
-
-    const friendlyMessage = parsedMessage || bodySnippet || `${response.status} ${response.statusText}`.trim();
-
-    throw new Error(`OpenRouter API request failed (${response.status} ${response.statusText}): ${friendlyMessage}`);
-  }
-
-  const result = await response.json();
-
-  // Extract image from response.
-  // OpenRouter may return images either in `message.images` or embedded in `message.content` parts.
-  const message = result.choices?.[0]?.message;
-
-  let imageUrl: string | null = null;
-
-  if (message?.images?.[0]) {
-    const firstImage = message.images[0];
-    // OpenRouter may return either snake_case (image_url) or camelCase (imageUrl)
-    imageUrl = firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
-  } else if (Array.isArray(message?.content)) {
-    const firstImagePart = message.content.find(
-      (part: unknown) =>
-        typeof part === "object" && part !== null && "type" in part && (part as { type?: string }).type === "image_url",
-    ) as { image_url?: { url?: string } } | undefined;
-
-    imageUrl = firstImagePart?.image_url?.url || null;
-  }
-
-  if (imageUrl) {
-    // OpenRouter may return data URLs like "data:image/png;base64,..." OR a normal URL.
-    const dataUrlMatches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (dataUrlMatches) {
-      return {
-        imageData: dataUrlMatches[2],
-        mimeType: dataUrlMatches[1],
-      };
-    }
-
-    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-      const imageResponse = await safeDownload(imageUrl, {
-        maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
-        timeoutMs: 15_000,
-      });
-      if (imageResponse.success && imageResponse.buffer) {
-        const mimeType = imageResponse.contentType?.split(";")[0] || null;
-        return {
-          imageData: imageResponse.buffer.toString("base64"),
-          mimeType,
-        };
-      }
-    }
-  }
-
-  return { imageData: null, mimeType: null };
-}
-
-/**
  * Execute the image generation command
  */
 export async function execute(
-  _client: Client,
+  client: Client,
   interaction: ChatInputCommandInteraction,
   userData: UserRow,
   locale: string,
 ): Promise<void> {
+  const mode = interaction.options.getString("mode", true);
+  if (mode === "auto") {
+    await executeAutoImageCommand(client, interaction, userData, locale);
+    return;
+  }
+
   if (!interaction.channel) {
     await replyInfoEmbed(interaction, locale, {
       titleKey: "general.errors.channel_only_title",
@@ -263,6 +162,14 @@ export async function execute(
     });
   } catch (error) {
     if (error instanceof PersonalProviderRequiredError) {
+      log.warn(`[Generate Image] Personal provider required for image generation`, error, {
+        userId: userData.user_id,
+        serverId: tomoriState.server_id,
+        personaId: tomoriState.persona_id,
+        metadata: {
+          command: "generate image",
+        },
+      });
       await replyInfoEmbed(interaction, locale, {
         titleKey: "general.errors.personal_provider_required_title",
         descriptionKey: "general.errors.personal_provider_required_description",
@@ -273,6 +180,20 @@ export async function execute(
     }
 
     if (error instanceof CredentialUnavailableError) {
+      log.warn(
+        `[Generate Image] Image credentials unavailable: source=${error.source}, reason=${error.reason}`,
+        error,
+        {
+          userId: userData.user_id,
+          serverId: tomoriState.server_id,
+          personaId: tomoriState.persona_id,
+          metadata: {
+            command: "generate image",
+            source: error.source,
+            reason: error.reason,
+          },
+        },
+      );
       if (error.source === "personal") {
         await replyInfoEmbed(interaction, locale, {
           titleKey: "general.errors.personal_provider_credentials_error_title",
@@ -308,6 +229,14 @@ export async function execute(
   const diffusionModelId =
     getResolvedCapabilityModelId(imageCreds, "image-standard") ?? tomoriState.config.diffusion_model_id;
   if (!diffusionModelId) {
+    log.warn(`[Generate Image] No diffusion model configured for server ${tomoriState.server_id}`, undefined, {
+      userId: userData.user_id,
+      serverId: tomoriState.server_id,
+      personaId: tomoriState.persona_id,
+      metadata: {
+        command: "generate image",
+      },
+    });
     await replyInfoEmbed(interaction, locale, {
       titleKey: "commands.generate.image.no_diffusion_model_title",
       descriptionKey: "commands.generate.image.no_diffusion_model_description",
@@ -483,7 +412,7 @@ export async function execute(
 
     const modelCodename = await getDiffusionModelCodename(diffusionModelId);
     const displayModelName = imageCreds.customEndpoint
-      ? formatCustomEndpointModelDisplay(imageCreds.customEndpoint)
+      ? formatCustomModelDisplay(imageCreds.customEndpoint)
       : modelCodename;
 
     log.info(
@@ -521,13 +450,13 @@ export async function execute(
       generatedImageData = result.imageData;
       generatedImageMimeType = result.mimeType;
     } else if (imageGenerationImplementation === "openrouter") {
-      const result = await generateImageWithOpenRouter(
+      const result = await generateOpenRouterImage({
         apiKey,
         modelCodename,
         prompt,
         aspectRatio,
-        referenceImages.length > 0 ? referenceImages : undefined,
-      );
+        ...(referenceImages.length > 0 ? { referenceImages } : {}),
+      });
       generatedImageData = result.imageData;
       generatedImageMimeType = result.mimeType;
     } else if (imageGenerationImplementation === "google") {
@@ -536,13 +465,7 @@ export async function execute(
         model: modelCodename,
       });
 
-      // Build parts: reference images (as inlineData) followed by the text prompt.
-      // SendMessageParameters.message is PartListUnion: inline images must be
-      // passed as inlineData parts, not via a non-existent "media" field.
-      const messageParts: Array<{ inlineData: { mimeType: string; data: string } } | string> = [
-        ...referenceImages.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } })),
-        prompt,
-      ];
+      const messageParts = buildGeminiImagePromptParts(prompt, referenceImages);
 
       const response = await chat.sendMessage({
         message: messageParts,

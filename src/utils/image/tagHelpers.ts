@@ -1,5 +1,5 @@
-export const MAX_TAGS = Number.parseInt(process.env.IMAGE_TAG_MAX_TAGS || "100", 10);
-export const MAX_TAG_LENGTH = Number.parseInt(process.env.IMAGE_TAG_MAX_TAG_LENGTH || "200", 10);
+export const MAX_TAGS = 100;
+export const MAX_TAG_LENGTH = 200;
 export const TAGS_MODAL_MAX_LENGTH = 4000;
 
 export type ImageTagValidationResult =

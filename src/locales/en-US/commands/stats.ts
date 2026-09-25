@@ -9,11 +9,12 @@ export default {
     },
     persona: {
       description: `View a persona's usage statistics on this server.`,
+      persona_description: `The persona to view statistics for.`,
       timeframe_description: `The time window to summarize.`,
-      picker_title: `Pick a Persona`,
-      picker_description: `Select a persona to view its statistics.`,
       no_personas_title: `No Personas`,
       no_personas_description: `This server has no personas to show statistics for yet.`,
+      not_found_title: `Persona Not Found`,
+      not_found_description: `The selected persona could not be found on this server.`,
       chosen_title: `{name} has been selected`,
     },
     server: {
@@ -112,11 +113,9 @@ export default {
     },
 
     // Standalone "days" unit used by the streak block on cards (no leading number).
-    days_unit: `days`,
 
     // Labels used only on the rendered infographic cards (not the text dashboard).
     infographic: {
-      personal_title: `Wrapped`,
       no_data: `No stats yet`,
       server_title: `Server Leaderboard`,
       server_subtitle: `{personas} Personas serving {members} Members`,
@@ -137,12 +136,7 @@ export default {
       persona_affinity_footer: `PERSONA AFFINITY ({timeframe})`,
       personal_total_tokens: `Total Tokens`,
       favorite_model: `Favorite Model`,
-      weekly_activity: `Weekly Activity`,
-      hourly_activity: `Hourly Activity`,
       top_personas: `Top Personas`,
-      top_humans: `Top Humans`,
-      top_model: `Top Model`,
-      top_persona_emojis: `Top Persona Emojis`,
       most_active_members: `Most Active Members`,
       top_models: `Top Models`,
       model_tokens_cost: `{count} tokens | {cost}`,

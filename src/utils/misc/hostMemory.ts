@@ -112,11 +112,18 @@ function addPressureFields(fields: HostMemoryFields, resource: "mem" | "io", tex
  */
 function addSwapDeviceFields(fields: HostMemoryFields, text: string): void {
   for (const line of text.split("\n").slice(1)) {
-    const [filename, , , used] = line.trim().split(/\s+/);
+    const [filename, , size, used] = line.trim().split(/\s+/);
     const usedKb = Number(used);
     if (!filename || !Number.isFinite(usedKb)) continue;
-    if (filename.includes("zram")) fields.zram_used_mb = round(usedKb / KB_PER_MB);
-    else fields.swapfile_used_mb = round(usedKb / KB_PER_MB);
+    if (filename.includes("zram")) {
+      fields.zram_used_mb = round(usedKb / KB_PER_MB);
+      // Saturation is judged against this rather than a constant, so resizing the device does not
+      // silently move every "time to saturation" reading.
+      const sizeKb = Number(size);
+      if (Number.isFinite(sizeKb) && sizeKb > 0) fields.zram_size_mb = round(sizeKb / KB_PER_MB);
+    } else {
+      fields.swapfile_used_mb = round(usedKb / KB_PER_MB);
+    }
   }
 }
 

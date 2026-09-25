@@ -23,21 +23,23 @@ import { getEmojiStickerCacheStats } from "@/utils/cache/emojiStickerCache";
 import { getGuildMcpConfigCacheStats } from "@/utils/cache/guildMcpConfigCache";
 import { getLLMCacheSize } from "@/utils/cache/llmCache";
 import { getNovelaiSubscriptionCacheSize } from "@/utils/cache/novelaiSubscriptionCache";
-import {
-  getOpenRouterCapabilityCacheSize,
-  getOpenRouterOnDemandCapabilityCacheSize,
-} from "@/utils/cache/openrouterCapabilityCache";
+import { getOpenRouterCapabilityCacheSize } from "@/utils/cache/openrouterCapabilityCache";
+import { getOpenRouterEmbeddingModelCacheSize } from "@/utils/cache/openrouterEmbeddingModelCache";
+import { getOpenRouterImageModelCacheSize } from "@/utils/cache/openrouterImageModelCache";
+import { getOpenRouterVideoModelCacheSize } from "@/utils/cache/openrouterVideoModelCache";
 import { getPersonalSpotlightCacheStats } from "@/utils/cache/personalSpotlightCache";
 import { getShortTermMemoryCacheStats } from "@/utils/cache/shortTermMemoryCache";
 import { getStPresetCacheStats } from "@/utils/cache/stPresetCache";
 import { getTomoriStateCacheStats } from "@/utils/cache/tomoriStateCache";
 import { getUserCacheStats } from "@/utils/cache/userCache";
 import { getWebhookIdentityCacheSize } from "@/utils/chat/webhookIdentity";
+import { drainPoolEventCounters } from "@/utils/db/poolEvents";
 import { metricSampleRepository } from "@/utils/db/repositories/MetricSampleRepository";
 import { getWebhookCacheSizes } from "@/utils/discord/webhook/cache";
 import { getPresetAvatarCacheSize } from "@/utils/image/avatarHelper";
 import { eventLoopMonitor } from "@/utils/misc/eventLoopMonitor";
 import { collectHostMemorySnapshot } from "@/utils/misc/hostMemory";
+import { drainMemoryPressureCounters, installMemoryPressureListener } from "@/utils/misc/memoryPressureEvents";
 import {
   evaluatePressure,
   initialPressureState,
@@ -157,7 +159,9 @@ export function collectCacheMetricsSnapshot(client: Client): Record<string, numb
     personaSpriteMessage: getPersonaSpriteMessageCacheSize(),
     llmCache: getLLMCacheSize(),
     openrouterCapability: getOpenRouterCapabilityCacheSize(),
-    openrouterOnDemandCapability: getOpenRouterOnDemandCapabilityCacheSize(),
+    openrouterEmbeddingCatalog: getOpenRouterEmbeddingModelCacheSize(),
+    openrouterImageCatalog: getOpenRouterImageModelCacheSize(),
+    openrouterVideoCatalog: getOpenRouterVideoModelCacheSize(),
     novelaiSubscription: getNovelaiSubscriptionCacheSize(),
 
     // Webhook manager (no TTL, watch for unbounded growth)
@@ -250,9 +254,14 @@ async function emitHostSnapshot(): Promise<void> {
       );
     }
 
+    // Pool retirements ride this sample rather than a series of their own so a cascade can be
+    // read against swap, PSI and event-loop lag on one time axis. Cross-tabbing those by hand
+    // from separate sources is what turned the last diagnosis into an afternoon.
     await metricSampleRepository.recordSample("host_memory", {
       ...snapshot,
       ...pressureVerdictFields(verdict, armed),
+      ...drainPoolEventCounters(),
+      ...drainMemoryPressureCounters(),
     });
   } catch (error) {
     log.error("Failed to emit host memory snapshot", error, {
@@ -282,6 +291,8 @@ export function initializeCacheMetricsLogger(client: Client, intervalMs?: number
   // Resolve interval from explicit argument, env var, or fallback default
   const resolved = intervalMs ?? Number.parseInt(process.env.CACHE_METRICS_INTERVAL_MS || "", 10);
   const finalInterval = Number.isFinite(resolved) && resolved > 0 ? resolved : DEFAULT_INTERVAL_MS;
+
+  installMemoryPressureListener();
 
   // Emit an immediate sample so CloudWatch has a baseline right after boot
   emitSnapshot(client);

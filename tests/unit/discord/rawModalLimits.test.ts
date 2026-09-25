@@ -1,0 +1,629 @@
+/**
+ * Structural limit tests for the raw modal payloads the `/config` panel sends.
+ *
+ * Discord validates a modal as a whole: one out-of-range control rejects the entire payload with
+ * a 400, so the button appears to do nothing. The builders that map an unbounded collection onto
+ * a String Select or Checkbox Group are the ones that can drift past a limit as a workspace grows.
+ * These cases drive builders across all runtime locales, roster sizes, and catalog-growth boundaries.
+ */
+
+import { beforeAll, describe, expect, it } from "bun:test";
+import type { TomoriState } from "@/types/db/schema";
+import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
+import type { RawModalPayload } from "@/utils/discord/ui/configModals";
+import {
+  SELECT_OPTION_LIMIT as AUTO_TRIGGER_PERSONA_PAGE_SIZE,
+  buildConfigAutoTriggerConfigureModal,
+  buildConfigWelcomeModal,
+  WELCOME_PERSONA_PAGE_SIZE,
+} from "@/utils/discord/ui/configChannelModals";
+import {
+  BEHAVIOR_RANDOM_SETTINGS_FIELD,
+  buildBehaviorNoticeVisibilityModal,
+  buildBehaviorRandomAddModal,
+  RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE,
+} from "@/utils/discord/ui/configBehaviorModals";
+import {
+  DISCORD_CHECKBOX_GROUP_OPTIONS_MAX,
+  DISCORD_CHECKBOX_GROUP_OPTIONS_MIN,
+  DISCORD_CUSTOM_ID_MAX,
+  DISCORD_CUSTOM_ID_MIN,
+  DISCORD_MODAL_COMPONENTS_MAX,
+  DISCORD_MODAL_COMPONENTS_MIN,
+  DISCORD_MODAL_FIELD_DESCRIPTION_MAX,
+  DISCORD_MODAL_FIELD_LABEL_MAX,
+  DISCORD_MODAL_TITLE_MAX,
+  DISCORD_RADIO_GROUP_OPTIONS_MAX,
+  DISCORD_RADIO_GROUP_OPTIONS_MIN,
+  DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
+  DISCORD_SELECT_OPTION_LABEL_MAX,
+  DISCORD_SELECT_OPTION_VALUE_MAX,
+  DISCORD_SELECT_OPTIONS_MAX,
+  DISCORD_SELECT_OPTIONS_MIN,
+  assertRawModalLimits,
+  getDiscordTextLength,
+  validateRawModalLimits,
+} from "@/utils/discord/ui/componentsV2Limits";
+import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
+import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import type { ToolNoticeDefinition, ToolNoticeKey } from "@/constants/toolNotices";
+import { RUNTIME_LOCALES } from "../../helpers/localeCases";
+
+const STRING_SELECT = 3;
+const LABEL = 18;
+const RADIO_GROUP = 21;
+const CHECKBOX_GROUP = 22;
+
+function makePersona(personaId: number, nickname = `Persona ${personaId}`): TomoriState {
+  return {
+    server_id: 9,
+    persona_id: personaId,
+    persona_nickname: nickname,
+    is_alter: personaId !== 1,
+    trigger_words: [],
+    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
+    config: {},
+  } as unknown as TomoriState;
+}
+
+function makePersonas(count: number): TomoriState[] {
+  return Array.from({ length: count }, (_unused, index) => makePersona(index + 1));
+}
+
+function makeNoticeDefinitions(count: number): ToolNoticeDefinition[] {
+  return Array.from({ length: count }, (_unused, index) => ({
+    key: `notice_${index + 1}` as ToolNoticeKey,
+    labelKey: "commands.config.notice-embeds.visibility.notice_web_search_label",
+    descriptionKey: "commands.config.notice-embeds.visibility.notice_web_search_description",
+  }));
+}
+
+/** Walks a payload's component tree, since selects sit inside Label wrappers. */
+function eachComponent(components: readonly RawDiscordComponent[], visit: (c: RawDiscordComponent) => void): void {
+  for (const component of components) {
+    visit(component);
+    if (component.component) eachComponent([component.component], visit);
+    if (component.components) eachComponent(component.components, visit);
+  }
+}
+
+function assertWithinDiscordLimits(payload: RawModalPayload, label: string): void {
+  assertRawModalLimits(payload);
+
+  expect(getDiscordTextLength(payload.title), `${label}: title length`).toBeLessThanOrEqual(DISCORD_MODAL_TITLE_MAX);
+  expect(payload.components.length, `${label}: component count`).toBeGreaterThanOrEqual(DISCORD_MODAL_COMPONENTS_MIN);
+  expect(payload.components.length, `${label}: component count`).toBeLessThanOrEqual(DISCORD_MODAL_COMPONENTS_MAX);
+
+  const customIds = new Set<string>();
+  eachComponent(payload.components, (component) => {
+    if (component.custom_id !== undefined) {
+      const cidLen = getDiscordTextLength(component.custom_id);
+      expect(cidLen, `${label}: custom_id min length`).toBeGreaterThanOrEqual(DISCORD_CUSTOM_ID_MIN);
+      expect(cidLen, `${label}: custom_id max length`).toBeLessThanOrEqual(DISCORD_CUSTOM_ID_MAX);
+      expect(customIds.has(component.custom_id), `${label}: duplicate custom_id ${component.custom_id}`).toBe(false);
+      customIds.add(component.custom_id);
+    }
+
+    if (component.type === LABEL) {
+      if (component.label !== undefined) {
+        expect(getDiscordTextLength(component.label), `${label}: label length`).toBeLessThanOrEqual(
+          DISCORD_MODAL_FIELD_LABEL_MAX,
+        );
+      }
+      if (component.description !== undefined) {
+        expect(getDiscordTextLength(component.description), `${label}: description length`).toBeLessThanOrEqual(
+          DISCORD_MODAL_FIELD_DESCRIPTION_MAX,
+        );
+      }
+    }
+
+    if (component.type === STRING_SELECT) {
+      const options = component.options ?? [];
+      expect(options.length, `${label}: ${component.custom_id} option count`).toBeGreaterThanOrEqual(
+        DISCORD_SELECT_OPTIONS_MIN,
+      );
+      expect(options.length, `${label}: ${component.custom_id} option count`).toBeLessThanOrEqual(
+        DISCORD_SELECT_OPTIONS_MAX,
+      );
+      for (const option of options) {
+        expect(getDiscordTextLength(option.label), `${label}: option label`).toBeLessThanOrEqual(
+          DISCORD_SELECT_OPTION_LABEL_MAX,
+        );
+        expect(getDiscordTextLength(option.value), `${label}: option value`).toBeLessThanOrEqual(
+          DISCORD_SELECT_OPTION_VALUE_MAX,
+        );
+        expect(getDiscordTextLength(option.description ?? ""), `${label}: option description`).toBeLessThanOrEqual(
+          DISCORD_SELECT_OPTION_DESCRIPTION_MAX,
+        );
+      }
+    }
+
+    if (component.type === CHECKBOX_GROUP) {
+      const options = component.options ?? [];
+      expect(options.length, `${label}: ${component.custom_id} checkbox count`).toBeGreaterThanOrEqual(
+        DISCORD_CHECKBOX_GROUP_OPTIONS_MIN,
+      );
+      expect(options.length, `${label}: ${component.custom_id} checkbox count`).toBeLessThanOrEqual(
+        DISCORD_CHECKBOX_GROUP_OPTIONS_MAX,
+      );
+      for (const option of options) {
+        expect(getDiscordTextLength(option.label), `${label}: checkbox label`).toBeLessThanOrEqual(
+          DISCORD_SELECT_OPTION_LABEL_MAX,
+        );
+        expect(getDiscordTextLength(option.value), `${label}: checkbox value`).toBeLessThanOrEqual(
+          DISCORD_SELECT_OPTION_VALUE_MAX,
+        );
+      }
+    }
+
+    if (component.type === RADIO_GROUP) {
+      const options = component.options ?? [];
+      expect(options.length, `${label}: ${component.custom_id} radio count`).toBeGreaterThanOrEqual(
+        DISCORD_RADIO_GROUP_OPTIONS_MIN,
+      );
+      expect(options.length, `${label}: ${component.custom_id} radio count`).toBeLessThanOrEqual(
+        DISCORD_RADIO_GROUP_OPTIONS_MAX,
+      );
+      for (const option of options) {
+        expect(getDiscordTextLength(option.label), `${label}: radio label`).toBeLessThanOrEqual(
+          DISCORD_SELECT_OPTION_LABEL_MAX,
+        );
+        expect(getDiscordTextLength(option.value), `${label}: radio value`).toBeLessThanOrEqual(
+          DISCORD_SELECT_OPTION_VALUE_MAX,
+        );
+      }
+    }
+  });
+}
+
+/** Roster sizes spanning both sides of the 25-option ceiling, including its exact boundary. */
+const ROSTER_SIZES = [1, 2, 23, 24, 25, 26, 60, 200];
+
+describe("raw config modal limits", () => {
+  beforeAll(async () => {
+    await initializeLocalizer();
+  });
+
+  it("discovers all runtime locales dynamically", () => {
+    expect(RUNTIME_LOCALES.length).toBeGreaterThanOrEqual(2);
+    expect(RUNTIME_LOCALES).toContain("en-US");
+    expect(RUNTIME_LOCALES).toContain("ja");
+  });
+
+  it("keeps the Welcome modal within Discord limits across all runtime locales and roster sizes", () => {
+    for (const locale of RUNTIME_LOCALES) {
+      for (const size of ROSTER_SIZES) {
+        const personas = makePersonas(size);
+        for (const selected of [null, 1, size]) {
+          const payload = buildConfigWelcomeModal(locale, "nonce", personas, "Say hi", selected);
+          assertWithinDiscordLimits(payload, `welcome/${locale}/${size}/${selected}`);
+        }
+      }
+    }
+  });
+
+  it("keeps the Auto-Trigger configure modal within Discord limits across all runtime locales and roster sizes", () => {
+    for (const locale of RUNTIME_LOCALES) {
+      for (const size of ROSTER_SIZES) {
+        const personas = makePersonas(size);
+        for (const selected of [null, 1, size]) {
+          const payload = buildConfigAutoTriggerConfigureModal(
+            locale,
+            "nonce",
+            "fp",
+            personas,
+            "chan-1",
+            true,
+            selected,
+          );
+          assertWithinDiscordLimits(payload, `auto-trigger/${locale}/${size}/${selected}`);
+        }
+      }
+    }
+  });
+
+  it("keeps the Notice Visibility modal within Discord limits across all runtime locales", () => {
+    for (const locale of RUNTIME_LOCALES) {
+      const payload = buildBehaviorNoticeVisibilityModal(locale, "nonce", []);
+      assertWithinDiscordLimits(payload, `notices/${locale}`);
+    }
+  });
+
+  it("keeps the Random Trigger Add modal within Discord limits across all runtime locales and roster sizes", () => {
+    for (const locale of RUNTIME_LOCALES) {
+      for (const size of ROSTER_SIZES) {
+        for (const start of [0, size]) {
+          const payload = buildBehaviorRandomAddModal(locale, "nonce", makePersonas(size), start);
+          assertWithinDiscordLimits(payload, `random-add/${locale}/${size}/@${start}`);
+        }
+      }
+    }
+  });
+
+  it("names the Random Trigger channel picker and keeps the timing example a non-submitted placeholder", () => {
+    for (const locale of RUNTIME_LOCALES) {
+      const payload = buildBehaviorRandomAddModal(locale, "nonce", [makePersona(55)]);
+      const channelWrapper = payload.components[0];
+      const channelInner = channelWrapper.component as { type: number } | undefined;
+      expect(channelWrapper.type).toBe(LABEL);
+      expect(channelInner?.type).toBe(8); // Channel Select
+      expect(channelWrapper.label).toBe(localizer(locale, "commands.config.random-trigger.add.channel_label"));
+      expect(channelWrapper.description).toBe(
+        localizer(locale, "commands.config.random-trigger.add.channel_description"),
+      );
+
+      const settingsWrapper = payload.components.find(
+        (component) =>
+          component.component?.custom_id === buildConfigModalFieldId(BEHAVIOR_RANDOM_SETTINGS_FIELD, "nonce"),
+      );
+      expect(settingsWrapper).toBeDefined();
+      const settingsInput = settingsWrapper?.component as
+        | { type: number; value?: string; placeholder?: string }
+        | undefined;
+      expect(settingsInput?.type).toBe(4); // Text Input
+      expect(settingsWrapper?.description).toBe(
+        localizer(locale, "commands.config.panel.random_trigger_settings_description"),
+      );
+      expect(settingsWrapper?.description).toContain("/help");
+      expect(getDiscordTextLength(settingsWrapper?.description ?? "")).toBeLessThanOrEqual(
+        DISCORD_MODAL_FIELD_DESCRIPTION_MAX,
+      );
+      // The old opaque `1,100,,,` prefill must not resubmit as a real value.
+      expect(settingsInput?.value).toBeUndefined();
+      expect(settingsInput?.placeholder).toBe(
+        localizer(locale, "commands.config.panel.random_trigger_settings_placeholder"),
+      );
+      expect(getDiscordTextLength(settingsInput?.placeholder ?? "")).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("chunks the Notice Visibility catalog at 10, 11, and 50 entries without exceeding modal limits", () => {
+    for (const locale of RUNTIME_LOCALES) {
+      // 10 entries fit into exactly one Checkbox Group
+      const modal10 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(10));
+      assertWithinDiscordLimits(modal10, `notices-10/${locale}`);
+      expect(modal10.components.length).toBe(1);
+
+      // 11 entries chunk into two Checkbox Groups
+      const modal11 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(11));
+      assertWithinDiscordLimits(modal11, `notices-11/${locale}`);
+      expect(modal11.components.length).toBe(2);
+
+      // 50 entries chunk into exactly five Checkbox Groups (the 5-component modal boundary)
+      const modal50 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(50));
+      assertWithinDiscordLimits(modal50, `notices-50/${locale}`);
+      expect(modal50.components.length).toBe(5);
+
+      // 51 entries produce 6 groups, which violates the 5-component modal boundary
+      const modal51 = buildBehaviorNoticeVisibilityModal(locale, "nonce", [], makeNoticeDefinitions(51));
+      const result51 = validateRawModalLimits(modal51);
+      expect(result51.valid).toBe(false);
+      expect(result51.violations.some((v) => v.code === "MODAL_COMPONENTS_OVERSIZED")).toBe(true);
+    }
+  });
+
+  it("adversarially rejects title, component, and option boundary violations", () => {
+    // Title: 45 accepted, 46 rejected
+    const validTitlePayload: RawModalPayload = {
+      title: "a".repeat(45),
+      custom_id: "modal_title_test",
+      components: [
+        {
+          type: LABEL,
+          label: "Field",
+          component: {
+            type: 4,
+            custom_id: "input_1",
+          },
+        },
+      ],
+    };
+    expect(validateRawModalLimits(validTitlePayload).valid).toBe(true);
+
+    const invalidTitlePayload: RawModalPayload = {
+      ...validTitlePayload,
+      title: "a".repeat(46),
+    };
+    const titleResult = validateRawModalLimits(invalidTitlePayload);
+    expect(titleResult.valid).toBe(false);
+    expect(titleResult.violations.some((v) => v.code === "MODAL_TITLE_OVERSIZED")).toBe(true);
+
+    // Modal components: 0 rejected, 6 rejected
+    const emptyComponentsPayload: RawModalPayload = {
+      title: "Test",
+      custom_id: "modal_comp_empty",
+      components: [],
+    };
+    const emptyResult = validateRawModalLimits(emptyComponentsPayload);
+    expect(emptyResult.valid).toBe(false);
+    expect(emptyResult.violations.some((v) => v.code === "MODAL_COMPONENTS_EMPTY")).toBe(true);
+
+    // Checkbox Group: 10 options accepted, 11 rejected
+    const tenCheckboxPayload: RawModalPayload = {
+      title: "Checkboxes",
+      custom_id: "modal_check_10",
+      components: [
+        {
+          type: LABEL,
+          label: "Group",
+          component: {
+            type: CHECKBOX_GROUP,
+            custom_id: "check_group",
+            options: Array.from({ length: 10 }, (_, i) => ({
+              label: `Opt ${i + 1}`,
+              value: `val_${i + 1}`,
+            })),
+          },
+        },
+      ],
+    };
+    expect(validateRawModalLimits(tenCheckboxPayload).valid).toBe(true);
+
+    const elevenCheckboxPayload: RawModalPayload = {
+      title: "Checkboxes",
+      custom_id: "modal_check_11",
+      components: [
+        {
+          type: LABEL,
+          label: "Group",
+          component: {
+            type: CHECKBOX_GROUP,
+            custom_id: "check_group",
+            options: Array.from({ length: 11 }, (_, i) => ({
+              label: `Opt ${i + 1}`,
+              value: `val_${i + 1}`,
+            })),
+          },
+        },
+      ],
+    };
+    const check11Result = validateRawModalLimits(elevenCheckboxPayload);
+    expect(check11Result.valid).toBe(false);
+    expect(check11Result.violations.some((v) => v.code === "MODAL_OPTION_COUNT_INVALID")).toBe(true);
+
+    // Radio Group: 10 options accepted, 11 rejected
+    const elevenRadioPayload: RawModalPayload = {
+      title: "Radio",
+      custom_id: "modal_radio_11",
+      components: [
+        {
+          type: LABEL,
+          label: "Group",
+          component: {
+            type: RADIO_GROUP,
+            custom_id: "radio_group",
+            options: Array.from({ length: 11 }, (_, i) => ({
+              label: `Opt ${i + 1}`,
+              value: `val_${i + 1}`,
+            })),
+          },
+        },
+      ],
+    };
+    const radio11Result = validateRawModalLimits(elevenRadioPayload);
+    expect(radio11Result.valid).toBe(false);
+    expect(radio11Result.violations.some((v) => v.code === "MODAL_OPTION_COUNT_INVALID")).toBe(true);
+
+    // String Select: 25 options accepted, 26 rejected
+    const twentySixSelectPayload: RawModalPayload = {
+      title: "Select",
+      custom_id: "modal_sel_26",
+      components: [
+        {
+          type: LABEL,
+          label: "Group",
+          component: {
+            type: STRING_SELECT,
+            custom_id: "select_group",
+            options: Array.from({ length: 26 }, (_, i) => ({
+              label: `Opt ${i + 1}`,
+              value: `val_${i + 1}`,
+            })),
+          },
+        },
+      ],
+    };
+    const sel26Result = validateRawModalLimits(twentySixSelectPayload);
+    expect(sel26Result.valid).toBe(false);
+    expect(sel26Result.violations.some((v) => v.code === "MODAL_OPTION_COUNT_INVALID")).toBe(true);
+
+    // Duplicate custom_id
+    const duplicateIdPayload: RawModalPayload = {
+      title: "Duplicate",
+      custom_id: "modal_dup",
+      components: [
+        {
+          type: LABEL,
+          label: "One",
+          component: { type: 4, custom_id: "same_id" },
+        },
+        {
+          type: LABEL,
+          label: "Two",
+          component: { type: 4, custom_id: "same_id" },
+        },
+      ],
+    };
+    const dupResult = validateRawModalLimits(duplicateIdPayload);
+    expect(dupResult.valid).toBe(false);
+    expect(dupResult.violations.some((v) => v.code === "CUSTOM_ID_DUPLICATE")).toBe(true);
+
+    // Label length: 45 accepted, 46 rejected
+    const overlongLabelPayload: RawModalPayload = {
+      title: "Field Label",
+      custom_id: "modal_lbl",
+      components: [
+        {
+          type: LABEL,
+          label: "a".repeat(46),
+          component: { type: 4, custom_id: "inp_lbl" },
+        },
+      ],
+    };
+    const lblResult = validateRawModalLimits(overlongLabelPayload);
+    expect(lblResult.valid).toBe(false);
+    expect(lblResult.violations.some((v) => v.code === "MODAL_FIELD_LABEL_OVERSIZED")).toBe(true);
+
+    // Description length: 100 accepted, 101 rejected
+    const overlongDescPayload: RawModalPayload = {
+      title: "Field Desc",
+      custom_id: "modal_desc",
+      components: [
+        {
+          type: LABEL,
+          label: "Field",
+          description: "d".repeat(101),
+          component: { type: 4, custom_id: "inp_desc" },
+        },
+      ],
+    };
+    const descResult = validateRawModalLimits(overlongDescPayload);
+    expect(descResult.valid).toBe(false);
+    expect(descResult.violations.some((v) => v.code === "MODAL_FIELD_DESCRIPTION_OVERSIZED")).toBe(true);
+
+    // Checkbox Group option description: 100 accepted, 101 rejected
+    const checkboxDesc100Payload: RawModalPayload = {
+      title: "Checkboxes",
+      custom_id: "modal_cb_desc_ok",
+      components: [
+        {
+          type: LABEL,
+          label: "Group",
+          component: {
+            type: CHECKBOX_GROUP,
+            custom_id: "check_group_desc",
+            options: [{ label: "Opt", value: "val", description: "d".repeat(100) }],
+          },
+        },
+      ],
+    };
+    expect(validateRawModalLimits(checkboxDesc100Payload).valid).toBe(true);
+
+    const checkboxDesc101Payload: RawModalPayload = {
+      title: "Checkboxes",
+      custom_id: "modal_cb_desc_bad",
+      components: [
+        {
+          type: LABEL,
+          label: "Group",
+          component: {
+            type: CHECKBOX_GROUP,
+            custom_id: "check_group_desc",
+            options: [{ label: "Opt", value: "val", description: "d".repeat(101) }],
+          },
+        },
+      ],
+    };
+    const checkboxDescResult = validateRawModalLimits(checkboxDesc101Payload);
+    expect(checkboxDescResult.valid).toBe(false);
+    expect(checkboxDescResult.violations.some((v) => v.code === "SELECT_OPTION_DESCRIPTION_OVERSIZED")).toBe(true);
+
+    // Radio Group option description: 100 accepted, 101 rejected
+    const radioDesc101Payload: RawModalPayload = {
+      title: "Radio",
+      custom_id: "modal_rd_desc",
+      components: [
+        {
+          type: LABEL,
+          label: "Group",
+          component: {
+            type: RADIO_GROUP,
+            custom_id: "radio_group_desc",
+            options: [{ label: "Opt", value: "val", description: "d".repeat(101) }],
+          },
+        },
+      ],
+    };
+    const radioDescResult = validateRawModalLimits(radioDesc101Payload);
+    expect(radioDescResult.valid).toBe(false);
+    expect(radioDescResult.violations.some((v) => v.code === "SELECT_OPTION_DESCRIPTION_OVERSIZED")).toBe(true);
+  });
+
+  it("reaches every persona across the ranges the panel offers", () => {
+    const roster = 60;
+    const personas = makePersonas(roster);
+    const pages: Array<[string, number, (start: number) => RawModalPayload]> = [
+      [
+        "welcome",
+        WELCOME_PERSONA_PAGE_SIZE,
+        (start) => buildConfigWelcomeModal("en-US", "nonce", personas, "Say hi", null, start),
+      ],
+      [
+        "auto-trigger",
+        AUTO_TRIGGER_PERSONA_PAGE_SIZE,
+        (start) => buildConfigAutoTriggerConfigureModal("en-US", "nonce", "fp", personas, "chan-1", true, null, start),
+      ],
+      [
+        "random-add",
+        RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE,
+        (start) => buildBehaviorRandomAddModal("en-US", "nonce", personas, start),
+      ],
+    ];
+
+    for (const [label, pageSize, build] of pages) {
+      const reachable = new Set<string>();
+      for (let start = 0; start < roster; start += pageSize) {
+        const payload = build(start);
+        assertWithinDiscordLimits(payload, `${label}/page@${start}`);
+        eachComponent(payload.components, (component) => {
+          if (component.type !== STRING_SELECT) return;
+          for (const option of component.options ?? []) {
+            // Random repeats on every Random-Add page and is not a roster entry.
+            if (option.value !== "random") reachable.add(option.value);
+          }
+        });
+      }
+      for (let personaId = 1; personaId <= roster; personaId += 1) {
+        expect(reachable.has(String(personaId)), `${label}: persona ${personaId} reachable`).toBe(true);
+      }
+    }
+  });
+
+  it("pages Random Trigger Add over selectable personas only, so undefined IDs do not consume a slot", () => {
+    const roster = Array.from({ length: 30 }, (_unused, index) =>
+      index >= 27 ? { ...makePersona(index + 1), persona_id: undefined } : makePersona(index + 1),
+    );
+    const pageTwo = buildBehaviorRandomAddModal("en-US", "nonce", roster, RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE);
+    const pageTwoOptions: Array<{ value: string }> = [];
+    eachComponent(pageTwo.components, (component) => {
+      if (component.type !== STRING_SELECT) return;
+      pageTwoOptions.push(...(component.options ?? []));
+    });
+    // 27 selectable personas form two pages of 24 and 3; the three undefined-ID rows are not part
+    // of the roster that pages are cut from.
+    expect(pageTwoOptions.map((option) => option.value)).toEqual(["random", "25", "26", "27"]);
+    assertWithinDiscordLimits(pageTwo, "random-add/undefined-ids/page@24");
+  });
+
+  it("marks the stored persona only on the page that holds it", () => {
+    const personas = makePersonas(60);
+    const defaultsAt = (start: number): string[] => {
+      const payload = buildConfigWelcomeModal("en-US", "nonce", personas, "Say hi", 47, start);
+      const found: string[] = [];
+      eachComponent(payload.components, (component) => {
+        if (component.type !== STRING_SELECT) return;
+        found.push(...(component.options ?? []).filter((option) => option.default).map((option) => option.value));
+      });
+      return found;
+    };
+
+    expect(defaultsAt(24)).toEqual(["47"]);
+    expect(defaultsAt(0)).toEqual([]);
+  });
+
+  it("marks Random as the Welcome default only when no persona is stored", () => {
+    const personas = makePersonas(60);
+    const randomDefaulted = (selected: number | null): boolean => {
+      const payload = buildConfigWelcomeModal("en-US", "nonce", personas, "Say hi", selected);
+      let isDefault = false;
+      eachComponent(payload.components, (component) => {
+        if (component.type !== STRING_SELECT) return;
+        isDefault = (component.options ?? []).some((o) => o.value === "random" && o.default === true);
+      });
+      return isDefault;
+    };
+
+    expect(randomDefaulted(null)).toBe(true);
+    expect(randomDefaulted(3)).toBe(false);
+  });
+});

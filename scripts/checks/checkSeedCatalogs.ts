@@ -48,7 +48,9 @@ function validateStartupSeedOrder(): string[] {
   }
 
   if (initializeDatabaseSource.includes("executeSqlDirectory(")) {
-    errors.push("initializeDatabase: SQL seed-directory loading should stay removed; seed catalogs own startup seeding");
+    errors.push(
+      "initializeDatabase: SQL seed-directory loading should stay removed; seed catalogs own startup seeding",
+    );
   }
 
   return errors;

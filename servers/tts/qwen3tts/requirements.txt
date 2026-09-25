@@ -15,8 +15,8 @@
 # Compiles from C++ source — takes 20-40 min on Windows. Skip during initial setup.
 # The server runs fine without it, falling back to standard PyTorch attention.
 #
-# NOTE: generation can take 30-90s on first run or on CPU. Set TTS_CLONE_TIMEOUT_MS=120000
-# (or higher) in TomoriBot's .env if requests abort before audio is returned.
+# NOTE: generation can take 30-90s on first run or on CPU. Raise TTS_SYNTHESIZE_TIMEOUT_MS
+# (default 240000) in TomoriBot's .env if requests abort before audio is returned.
 --index-url https://download.pytorch.org/whl/cu124
 --extra-index-url https://pypi.org/simple
 fastapi>=0.115.0

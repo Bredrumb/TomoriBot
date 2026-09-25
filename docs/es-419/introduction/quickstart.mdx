@@ -1,0 +1,81 @@
+---
+title: "¿Cómo uso TomoriBot?"
+head:
+  - tag: title
+    content: "TomoriBot | Agrega un bot de IA a tu servidor de Discord"
+description: "Autoalojar tu propia instancia o invitar la versión desplegada a tu servidor de Discord, conectar una clave de API de IA y comenzar a chatear."
+aiGenerated: true
+sidebar:
+  order: 1
+---
+
+import { LinkButton, Aside } from "@astrojs/starlight/components";
+
+Esta guía te lleva desde cero hasta tu primer mensaje con TomoriBot. La forma más sencilla es invitar a la instancia pública lista para usar (consulta la [Política de privacidad](/es-419/legal/privacy-policy/)). Si prefieres ejecutar tu propia instancia, ve a [Autoalojamiento](#autoalojamiento) al final.
+
+## Usar el bot alojado
+
+### Paso 1: Invítala
+
+Invita a la instancia pública con el botón de abajo y luego elige el servidor donde la quieres.
+Necesitas el permiso **Administrar servidor** para añadir un bot.
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **Invitar a TomoriBot**
+  </LinkButton>
+</div>
+
+También puedes enviarle un mensaje directo. Los pasos de configuración son los mismos.
+
+### Paso 2: Obtén una clave de API
+
+TomoriBot no incluye un cerebro de IA propio. Conectas uno de un **proveedor** mediante una **clave de API**. Es compatible con muchos proveedores y solo necesitas uno para comenzar. Estos son algunos de los proveedores compatibles actualmente:
+
+- **Google Gemini**: de propósito general, tiene un nivel gratuito y ejecuta todas las funciones. Recomendado para tu primera configuración.
+- **OpenRouter**: una clave para acceder a los modelos más recientes de texto, video, imagen y embeddings.
+- **NovelAI**: basado en suscripción, con imágenes sin censura, rol y narrativa.
+- **DeepSeek**, **NVIDIA NIM**, **Anthropic**, **Vertex AI**, **Z.ai** o cualquier endpoint **Custom** compatible con OpenAI.
+
+Ejecuta `/help` en Discord, elige `Configuración`, luego **Paso 1: Obtener una clave de API** y selecciona tu proveedor para saber cómo obtener su clave de API, o consulta [Proveedores y modelos](/es-419/features/setup-administration/providers-and-models/#api-keys) para ver la lista completa.
+
+<Aside type="caution">
+**Nunca compartas tu clave de API con nadie**. Proporciónala únicamente mediante los comandos de barra de TomoriBot, que la almacenan y cifran de forma segura.
+</Aside>
+
+### Paso 3: Ejecuta la configuración
+
+Ejecuta `/setup`. Se abre un panel privado con una lista de verificación que solo tú puedes usar. Completa sus elementos y luego presiona `Finalizar configuración`:
+
+- **Proveedor de IA**: elige `Proveedor de IA (recomendado)`, selecciona tu proveedor y pega la clave. Si tienes experiencia con autoalojamiento, puedes elegir `Punto de conexión personalizado (avanzado)` y registrar aquí la conexión y el modelo de texto de tu endpoint. Un servidor también puede usar `BYOK de usuario` (en un servidor, no en un mensaje directo), para que cada miembro proporcione su propio proveedor personal.
+- **Ajustes iniciales**: elige una persona inicial, un estilo de respuesta, una zona horaria y el prompt de sistema predeterminado.
+- **Políticas** (solo instancias alojadas): acepta los Términos de servicio y la Política de privacidad en un modal.
+
+No se guarda nada mientras trabajas: el panel es un borrador. `Finalizar configuración` cifra la clave, inicializa la configuración del servidor y la prepara para conversar. `Cancelar` descarta el borrador, y un panel intacto vence por sí solo. Cada servidor conserva su propia configuración independiente.
+
+**Recomendado:** ejecuta `/expressions initialize` después para que pueda usar correctamente los emojis y stickers personalizados de tu servidor.
+
+### Paso 4: Comienza a chatear
+
+Solo **menciónala** o **responde** a uno de sus mensajes:
+
+```text
+@TomoriBot hola, ¿qué tal?
+```
+
+Desde aquí puedes definir cómo se activa y cómo se comporta:
+- Dale una personalidad con `/persona`: consulta [Múltiples personas](/es-419/features/chatting-personality/multiple-personas/).
+- Enséñale con `/memories`: consulta [Memoria](/es-419/features/knowledge/memory/).
+- Explora otras opciones de personalización: consulta [Referencia de comandos](/es-419/features/command-reference/) o [Funciones](/es-419/features/).
+
+En la instancia alojada, configurar TomoriBot significa que tú y los miembros de tu servidor aceptan sus avisos de `/legal terms-of-service` y `/legal privacy-policy`. La configuración guiada te pide aceptar ambos. Esos dos comandos y el paso Políticas que los contiene pertenecen al despliegue alojado. Una instancia autoalojada registra `/legal license` en todos los entornos y las dos políticas solo bajo `RUN_ENV=production`.
+
+## Autoalojamiento
+
+¿Quieres tener control total sobre tus datos, modelos y claves de API? Puedes ejecutar tu propia instancia de TomoriBot en tu propio hardware. La ruta recomendada es el asistente de configuración guiada.
+
+<div class="button-row">
+  <LinkButton href="/es-419/self-hosting/" variant="secondary">
+    **Autoalojar TomoriBot**
+  </LinkButton>
+</div>

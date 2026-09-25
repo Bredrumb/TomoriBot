@@ -1,0 +1,73 @@
+---
+title: "功能介绍"
+sidebar:
+  label: "总览"
+  groupLabel: "功能介绍"
+  order: 2
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBot 能做的一切，按你想达成的事情分组。每张卡片都指向一份完整指南。更想在 Discord 里看？运行 `/help`，然后在 `设置` 下打开 `功能` 查看实时功能清单，或者用 `/help` 浏览全部指令。
+
+## 聊天与人格
+
+<CardGrid>
+  <LinkCard title="聊天与触发" href="/zh-CN/features/chatting-personality/chatting-and-triggers/"
+    description="提及、触发词、自动触发与明确触发模式：她如何决定什么时候回复。" />
+  <LinkCard title="多个人格" href="/zh-CN/features/chatting-personality/multiple-personas/"
+    description="创建、生成与切换人格；副人格可以有自己的触发设置和 Webhook 头像。" />
+  <LinkCard title="行为调整" href="/zh-CN/features/chatting-personality/behavior-tweaking/"
+    description="功能与高价值配置：TomoriBot 被允许做什么，以及她如何生成内容。" />
+</CardGrid>
+
+## 知识
+
+<CardGrid>
+  <LinkCard title="记忆" href="/zh-CN/features/knowledge/memory/"
+    description="个人记忆与服务器记忆、标签、短期记忆，以及文档知识库。" />
+  <LinkCard title="个性化" href="/zh-CN/features/knowledge/personalization/"
+    description="你自己的提供方（BYOK）、时区、提示词、个人聚光灯与隐私。" />
+  <LinkCard title="数据处理" href="/zh-CN/features/knowledge/data-handling/"
+    description="导出、导入与删除你的数据，以及她到底存了些什么。" />
+</CardGrid>
+
+## 功能
+
+<CardGrid>
+  <LinkCard title="工具与扩展" href="/zh-CN/features/capabilities/tools-and-extensions/"
+    description="内置代理工具、网页搜索、MCP 服务器与明确工具模式。" />
+  <LinkCard title="定时任务" href="/zh-CN/features/capabilities/scheduled-tasks/"
+    description="一次性与重复提醒，以及自我任务（直接问她就行）。" />
+  <LinkCard title="媒体生成" href="/zh-CN/features/capabilities/media-generation/"
+    description="直接在聊天里生成图像、短视频和语音消息。" />
+</CardGrid>
+
+## 设置与管理
+
+<CardGrid>
+  <LinkCard title="提供方与模型" href="/zh-CN/features/setup-administration/providers-and-models/"
+    description="各提供方的 API 密钥、自定义端点，以及完整的支持提供方对照表。" />
+  <LinkCard title="服务器管理" href="/zh-CN/features/setup-administration/server-moderation/"
+    description="思考日志、配额、白名单与要求 BYOK 模式：给管理员的成本与安全控制。" />
+  <LinkCard title="年龄限制指令" href="/zh-CN/features/setup-administration/age-restricted-commands/"
+    description="藏在 Discord 年龄门槛后面的 /nsfw 指令分类：怎么开通，在哪里能用。" />
+  <LinkCard title="统计与洞察" href="/zh-CN/features/setup-administration/stats-and-insights/"
+    description="用量追踪与可分享的信息图卡片。" />
+</CardGrid>
+
+## 集成
+
+<CardGrid>
+  <LinkCard title="Matrix 桥接" href="/zh-CN/features/integrations/matrix-bridge/"
+    description="把 Matrix 房间接到 Discord 频道，两边都能聊天。" />
+  <LinkCard title="SillyTavern 支持" href="/zh-CN/features/integrations/sillytavern-support/"
+    description="导入 SillyTavern 提示词预设集与角色卡。" />
+</CardGrid>
+
+## 参考
+
+<CardGrid>
+  <LinkCard title="指令参考" href="/zh-CN/features/command-reference/"
+    description="所有斜杠指令汇总在一张分组、可搜索的表里。" />
+</CardGrid>

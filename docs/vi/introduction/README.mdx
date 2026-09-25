@@ -1,0 +1,92 @@
+---
+title: "TomoriBot là gì?"
+head:
+  - tag: title
+    content: "TomoriBot | Agent AI và bot nhập vai mã nguồn mở cho Discord"
+  - tag: script
+    attrs:
+      type: "application/ld+json"
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TomoriBot",
+        "url": "https://docs.tomoribot.app/",
+        "image": "https://docs.tomoribot.app/img/social-banner.png",
+        "description": "Free and open-source AI agent and roleplaying system for Discord, with persistent memory, multiple personas, media generation, and multi-provider LLM support.",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Web",
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "sameAs": [
+          "https://github.com/Bredrumb/TomoriBot",
+          "https://discord.gg/bjCfHm9QsB"
+        ]
+      }
+sidebar:
+  groupLabel: "Giới thiệu"
+  order: 1
+---
+
+import { LinkButton } from "@astrojs/starlight/components";
+import FeatureCard from "/src/components/FeatureCard.astro";
+
+**TomoriBot** là một hệ thống nhập vai và agent AI mã nguồn mở miễn phí dành cho Discord. Dự án hướng tới việc mang những người bạn đồng hành AI cá nhân và các nhân vật nhập vai vào thẳng các máy chủ Discord, lấy cảm hứng từ SillyTavern cùng Clyde đã ngừng hoạt động của Discord. Nói một cách đơn giản, bot là khung tích hợp agentic và nhập vai dành cho AI trên Discord:
+
+![Tomori Formula](/img/docs/intro/00-tomori-formula.png)
+<small style={{ display: 'block', textAlign: 'center', fontStyle: 'italic', color: 'var(--sl-color-gray-3)' }}>Tựa như bộ ba kết hợp giữa Discord, SillyTavern và OpenClaw</small>
+
+Được đọc là Tomo(友)-Ri(里), tạm dịch là "Mái nhà của những người bạn", Tomori là ngôi nhà cho những trợ lý hữu ích, những người bạn đồng hành tùy chỉnh hoặc bạn nhập vai của riêng bạn trong tin nhắn trực tiếp (DM) hoặc cho tất cả mọi người trong máy chủ Discord của bạn. Bot cũng được xây dựng hướng đến người mới bắt đầu, giúp những ai mới làm quen với agent AI đều có thể học hỏi cùng bot.
+
+Bạn có thể mời phiên bản công khai ngay bây giờ hoặc tự self-host instance riêng để toàn quyền kiểm soát dữ liệu của mình (thông tin chi tiết tại [Bắt đầu nhanh](/vi/introduction/quickstart/)):
+
+<div class="button-row">
+  <LinkButton href="https://discord.com/oauth2/authorize?client_id=841644102059556915" variant="primary">
+    **Mời TomoriBot**
+  </LinkButton>
+  <LinkButton href="/vi/self-hosting/" variant="secondary">
+    **Self-host TomoriBot**
+  </LinkButton>
+</div>
+
+## TomoriBot có thể làm gì?
+
+<div class="feature-grid">
+  <FeatureCard title="Nhiều persona" img="/img/docs/intro/01-multiple-personas.png" href="/vi/features/chatting-personality/multiple-personas/">
+    Chạy nhiều nhân vật tùy chỉnh trong một máy chủ, mỗi nhân vật có cài đặt, bộ nhớ và avatar riêng. Hãy xem họ phối hợp (hoặc trêu chọc) lẫn nhau!
+  </FeatureCard>
+  <FeatureCard title="Bộ nhớ dài hạn" img="/img/docs/intro/02-memory.png" href="/vi/features/knowledge/memory/">
+    Giúp Tomori của bạn hoàn thiện hơn bằng cách dạy bot các thông tin về mọi người và máy chủ của bạn. Bot ghi nhớ xuyên suốt các cuộc trò chuyện, và bộ nhớ cá nhân sẽ đồng hành cùng bạn giữa các máy chủ.
+  </FeatureCard>
+  <FeatureCard title="Tạo phương tiện truyền thông" img="/img/docs/intro/03-media-generation.png" href="/vi/features/capabilities/media-generation/">
+    Tạo hoặc chỉnh sửa hình ảnh, video ngắn và tin nhắn thoại bằng giọng nói ngay trong đoạn chat từ câu lệnh hoặc qua tài liệu tham chiếu.
+  </FeatureCard>
+  <FeatureCard title="Công cụ agent" img="/img/docs/intro/04-agentic-tools.png" href="/vi/features/capabilities/tools-and-extensions/">
+    TomoriBot có thể tự động tìm kiếm web, lên lịch nhắc nhở, chặn người dùng, sử dụng các công cụ MCP tùy chỉnh cùng nhiều tính năng khác.
+  </FeatureCard>
+  <FeatureCard title="Thiết lập hoàn toàn cục bộ" img="/img/docs/intro/05-fully-local-setup.png" href="/vi/self-hosting/local-endpoints/">
+    Tạo thiết lập riêng tư của bạn với LLM cục bộ, ComfyUI, SearXNG, máy chủ giọng nói cục bộ và MCP.
+  </FeatureCard>
+  <FeatureCard title="Kiểm duyệt máy chủ" img="/img/docs/intro/06-server-moderation.png" href="/vi/features/setup-administration/server-moderation/">
+    Thêm các quyền kiểm soát của quản trị viên về chi phí và an toàn: hạn mức, danh sách cho phép theo kênh và vai trò, nhật ký suy nghĩ và yêu cầu BYOK.
+  </FeatureCard>
+  <FeatureCard title="Hơn 200 lệnh" img="/img/docs/intro/07-command-reference.png" href="/vi/features/command-reference/">
+    Hàng trăm lệnh slash gốc trên Discord để tùy chỉnh sâu hơn, từ prompt sử dụng cho đến các quyền được cấp.
+  </FeatureCard>
+  <FeatureCard title="Hỗ trợ SillyTavern" img="/img/docs/intro/08-sillytavern-support.png" href="/vi/features/integrations/sillytavern-support/">
+    Nhập các preset prompt và thẻ nhân vật từ SillyTavern để mang các chỉ dẫn cùng nhân vật có sẵn vào thẳng Discord.
+  </FeatureCard>
+</div>
+
+## Điểm đến tiếp theo
+
+- **Bạn muốn sử dụng bot ngay bây giờ?** Xem [Bắt đầu nhanh](/vi/introduction/quickstart/), sau đó
+  dạo qua phần giới thiệu [Tính năng](/vi/features/).
+- **Bạn muốn tự chạy instance TomoriBot của riêng mình?** Chuyển đến phần [Self-hosting](/vi/self-hosting/).
+- **Bạn muốn đóng góp mã nguồn?** Xem tổng quan về [Architecture](/en/architecture/)
+  và các hướng dẫn [Contributing](/en/contributing/).
+- **Bạn muốn giúp dự án tiếp tục duy trì?** Hãy tặng sao cho repository của bot trên [GitHub](https://github.com/Bredrumb/TomoriBot), quyên góp qua [Ko-Fi](https://ko-fi.com/bredrumb) của Bredrumb, hoặc tuyệt vời hơn nữa là chia sẻ bot với bạn bè bằng liên kết của trang này! Mọi sự ủng hộ đều rất đáng quý.

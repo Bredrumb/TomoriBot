@@ -25,7 +25,7 @@ import {
   type ThinkingConfig,
 } from "@google/genai";
 import type { FunctionCall, ThoughtLogEntry } from "../../types/provider/interfaces";
-import { ContextItemTag, type StructuredContextItem } from "../../types/misc/context";
+import type { StructuredContextItem } from "../../types/misc/context";
 import { log } from "../../utils/misc/logger";
 import { localizer } from "../../utils/text/localizer";
 import { truncateBeforeGenericSpeakerLine } from "@/utils/text/processors/llmOutputProcessor";
@@ -35,7 +35,13 @@ import {
 } from "@/utils/discord/renderModifierParser";
 import { collectPersonaNameAliases } from "@/utils/discord/stream/textConfig";
 import { safeDownload } from "@/utils/security/safeDownload";
-import { relocateAssistantMediaContextItems, unseenToolImageNotice } from "@/providers/utils/strictChatCompat";
+import {
+  buildGifToolHint,
+  buildGifUrlPlaceholder,
+  buildInlineGifPlaceholder,
+} from "@/providers/utils/gifContextPlaceholders";
+import { buildGeminiToolMediaParts } from "@/providers/utils/geminiToolMediaParts";
+import { isSystemInstructionContextItem, relocateAssistantMediaContextItems } from "@/providers/utils/strictChatCompat";
 import { buildProviderStopStrings } from "../utils/stopStrings";
 import { BaseStreamAdapter } from "../../types/stream/interfaces";
 import type {
@@ -96,15 +102,6 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
   private static readonly SPEAKER_GUARD_HOLDBACK_CHARS = 32;
   private static readonly STREAM_TEXT_TAIL_CHARS = 4096;
   private static readonly STREAM_TEXT_MIN_DEDUP_CHARS = 8;
-  public static readonly SYSTEM_INSTRUCTION_TAGS: ContextItemTag[] = [
-    ContextItemTag.SYSTEM_HUMANIZER_RULES,
-    ContextItemTag.SYSTEM_PERSONA_PROMPT,
-    ContextItemTag.SYSTEM_PERSONALITY,
-    ContextItemTag.KNOWLEDGE_SERVER_INFO,
-    ContextItemTag.KNOWLEDGE_SERVER_EMOJIS,
-    ContextItemTag.KNOWLEDGE_SERVER_STICKERS,
-    ContextItemTag.KNOWLEDGE_SERVER_MEMORIES,
-  ];
   private speakerGuardPendingTail = "";
   private streamedTextTail = "";
   private speakerGuardEnabled = false;
@@ -290,46 +287,12 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
           parts: [item.functionResponse as Part],
         });
 
-        const toolMediaParts: Part[] = [];
-
-        if (item.imageMetadata?.imageUrls?.length) {
-          if (context.tomoriState.llm.sees_images) {
-            log.info(`Adding ${item.imageMetadata.imageUrls.length} image(s) to function response for LLM visibility`);
-
-            for (const imageInfo of item.imageMetadata.imageUrls) {
-              try {
-                const optimized = await fetchAndOptimizeImage(imageInfo.url, imageInfo.mimeType || "image/jpeg");
-
-                toolMediaParts.push({
-                  inlineData: {
-                    mimeType: optimized.mimeType,
-                    data: optimized.data,
-                  },
-                });
-
-                log.success(`Successfully added image to function response: ${imageInfo.url}`);
-              } catch (imgErr) {
-                log.warn(`Error processing image for function response: ${imageInfo.url}`, {
-                  error: imgErr instanceof Error ? imgErr.message : String(imgErr),
-                });
-              }
-            }
-          } else {
-            // The tool response already told the model it delivered images, so dropping them
-            // silently invites it to describe pictures it never received.
-            toolMediaParts.push({
-              text: unseenToolImageNotice(item.imageMetadata.imageUrls.length),
-            });
-            log.info("VertexStreamAdapter: Skipping tool images (model does not support images)");
-          }
-        }
-
-        // Surface Discord message IDs for image references
-        if (item.imageMetadata?.messageIds && item.imageMetadata.messageIds.length > 0) {
-          toolMediaParts.push({
-            text: `[System: Images were sent to Discord in message ID(s): ${item.imageMetadata.messageIds.map((id) => context.messageIdMap?.register(id, "media") ?? id).join(", ")}]`,
-          });
-        }
+        const toolMediaParts = await buildGeminiToolMediaParts({
+          adapterName: "VertexStreamAdapter",
+          imageMetadata: item.imageMetadata,
+          seesImages: context.tomoriState.llm.sees_images,
+          messageIdMap: context.messageIdMap,
+        });
 
         if (toolMediaParts.length > 0) {
           finalContents.push({
@@ -431,7 +394,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
         }
       }
 
-      yield this.createProviderErrorChunk(error, undefined, this.providerName);
+      yield this.createProviderErrorChunk(error, context, undefined, this.providerName);
     }
   }
 
@@ -1062,12 +1025,7 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
           .join("\n");
       }
 
-      if (
-        item.role === "system" ||
-        (item.role === "user" &&
-          item.metadataTag &&
-          VertexStreamAdapter.SYSTEM_INSTRUCTION_TAGS.includes(item.metadataTag))
-      ) {
+      if (isSystemInstructionContextItem(item)) {
         if (itemTextContent) systemInstructionParts.push(itemTextContent);
       } else if (item.role === "user" || item.role === "model") {
         const geminiParts: Part[] = [];
@@ -1087,23 +1045,15 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
             try {
               if (part.mimeType === "image/gif") {
                 // GIF handling: same environment-based logic as Google
-                const isProduction = process.env.RUN_ENV === "production";
-                if (isProduction) {
-                  if (part.uri.includes("tenor.com")) {
-                    geminiParts.push({
-                      text: `[System: This message contains a GIF from Tenor: ${part.uri}. GIF processing disabled in production.]`,
-                    });
-                  } else {
-                    geminiParts.push({
-                      text: "[System: This message contains a GIF. GIF processing disabled in production.]",
-                    });
-                  }
+                if (process.env.RUN_ENV === "production") {
+                  geminiParts.push({ text: buildGifUrlPlaceholder(part.uri) });
                 } else {
-                  const mediaMessageId = item.messageId
-                    ? (messageIdMap?.register(item.messageId, "media") ?? item.messageId)
-                    : "unknown";
                   geminiParts.push({
-                    text: `[System: This message (ID: ${mediaMessageId}) contains a GIF. Use process_gif tool with this message ID to process it if needed for context.]`,
+                    text: buildGifToolHint({
+                      messageId: item.messageId,
+                      messageIdMap,
+                      subject: "a GIF",
+                    }),
                   });
                 }
               } else {
@@ -1140,11 +1090,8 @@ export class VertexStreamAdapter extends BaseStreamAdapter {
             };
             if (typeof inlineData === "object" && inlineData.mimeType && inlineData.data) {
               if (inlineData.mimeType === "image/gif") {
-                const isProduction = process.env.RUN_ENV === "production";
-                if (isProduction) {
-                  geminiParts.push({
-                    text: "[System: This context contains inline GIF data. GIF processing disabled in production.]",
-                  });
+                if (process.env.RUN_ENV === "production") {
+                  geminiParts.push({ text: buildInlineGifPlaceholder() });
                 } else {
                   // Dev mode: skip GIF processing to keep code manageable
                   geminiParts.push({

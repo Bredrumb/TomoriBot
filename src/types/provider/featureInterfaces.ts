@@ -59,22 +59,41 @@ export interface GeneratePresetParams {
   modelName?: string;
   /** Serialized existing card/preset data extracted from the uploaded image, used as AI reference context */
   existingPresetContext?: string;
+  /**
+   * Visual appearance text a vision model produced from the uploaded avatar.
+   *
+   * Kept separate from `existingPresetContext` because the two are different kinds of input:
+   * that field carries a structured character card the user uploaded, while this carries a
+   * description of an image the primary model cannot see. The prompt labels them separately
+   * so the model does not read a caption as extracted card data.
+   */
+  appearanceDescription?: string;
+  /**
+   * Output-token budget for this request, already resolved by the caller.
+   *
+   * Passed through rather than re-derived in each provider so the server's configured ceiling
+   * and a known model limit apply once, and every provider asks for the same budget.
+   */
+  maxOutputTokens?: number;
 }
+
+/** Failure classes a provider reports to the command layer, which maps each to its own copy. */
+export type PresetGenerationErrorType =
+  | "RATE_LIMIT"
+  | "BLOCKED_CONTENT"
+  | "API_KEY"
+  | "CONNECTION"
+  | "MODEL_ERROR"
+  | "TIMEOUT"
+  | "EMPTY_RESPONSE"
+  | "INVALID_JSON"
+  | "VALIDATION_ERROR"
+  | "UNKNOWN";
 
 export interface PresetGenerationResult {
   preset?: PresetExportData;
   error?: string;
-  errorType?:
-    | "RATE_LIMIT"
-    | "BLOCKED_CONTENT"
-    | "API_KEY"
-    | "CONNECTION"
-    | "MODEL_ERROR"
-    | "TIMEOUT"
-    | "EMPTY_RESPONSE"
-    | "INVALID_JSON"
-    | "VALIDATION_ERROR"
-    | "UNKNOWN";
+  errorType?: PresetGenerationErrorType;
 }
 
 export interface ProviderPresetGenerationRequest {

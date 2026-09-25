@@ -17,7 +17,6 @@ import {
   createTypingSimulationConfig,
   VisibleDeliveryMode,
 } from "@/types/stream/types";
-import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { StreamBufferFlusher } from "@/utils/discord/stream/bufferFlusher";
 import { StreamErrorUi } from "@/utils/discord/stream/errorUi";
 import { StreamMessageDelivery } from "@/utils/discord/stream/messageDelivery";
@@ -41,7 +40,7 @@ import { isUserImpersonationStreamContext, StreamUiUpdater } from "@/utils/disco
 import { createStreamTextProcessingConfig } from "@/utils/discord/stream/textConfig";
 import { normalizeProviderUsage } from "@/utils/text/tokenEstimate";
 import { appendChunkThoughts, buildThoughtLogPayload, wasEmptyStreamResponse } from "@/utils/discord/stream/thoughtLog";
-import { ColorCode, log } from "@/utils/misc/logger";
+import { log } from "@/utils/misc/logger";
 
 /**
  * Coordinates provider streaming as a state machine while delegating buffer, stop, UI, and error responsibilities.
@@ -131,35 +130,25 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     let lastError: Error | undefined;
 
     try {
-      this.setupInactivityTimer(state, config, context);
       await this.segmentProcessor.prepareOutputPrefill(context, textConfig, state);
 
       const streamGenerator = provider.startStream(config, context);
       const preStreamStop = await this.tryResolvePreStreamStop(context);
       if (preStreamStop) {
-        this.clearInactivityTimer(state);
         return preStreamStop;
       }
 
       for await (const rawChunk of streamGenerator) {
         const stopResult = await this.tryResolveLoopStop(state, config, context, textConfig, metrics);
         if (stopResult) {
-          this.clearInactivityTimer(state);
           return stopResult;
         }
 
         if (context.abortSignal?.aborted) {
           log.warn(`Stream loop breaking due to external abort signal for channel ${context.channel.id}.`);
-          this.clearInactivityTimer(state);
           return { status: "error", data: new Error("Stream aborted by SDK call timeout") };
         }
 
-        if (this.isStreamTimedOut(state)) {
-          log.warn(`Stream loop breaking due to timeout for channel ${context.channel.id}.`);
-          break;
-        }
-
-        this.resetInactivityTimer(state, config, context);
         this.notifyStreamProgress(context);
         metrics.totalChunks++;
 
@@ -195,7 +184,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         );
 
         if (result.status !== "continue") {
-          this.clearInactivityTimer(state);
           return result;
         }
 
@@ -204,7 +192,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         // that the provider would keep generating tokens for.
         const deliveryStopResult = await this.tryResolveLoopStop(state, config, context, textConfig, metrics);
         if (deliveryStopResult) {
-          this.clearInactivityTimer(state);
           return deliveryStopResult;
         }
       }
@@ -218,7 +205,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
         terminalDoneMetadata,
       );
     } catch (error) {
-      this.clearInactivityTimer(state);
       lastError = error as Error;
       clearStopRequest(context.channel.id);
       log.error(`Stream orchestrator failed: ${lastError.message}`, lastError, {
@@ -280,8 +266,17 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     log.info(`Stream loop breaking due to stop request for channel ${context.channel.id}.`);
     const stopRequest = peekStopRequest(context.channel.id);
     const stopReason = getStopReason(stopRequest);
+    // A stop raised by the delivery layer has no reason to flush at all, and flushing is not
+    // harmless: the clear below runs first, so by the time the flush reaches the send path there is
+    // no stop left to consult and the text goes to Discord as a real call. For a destination the
+    // bot cannot post into that means a second rejected send and a re-registered stop that outlives
+    // the stream. The two caps below already skip for the same reason.
     const shouldSkipBufferFlush =
-      (stopRequest?.requesterId === "flush_limit" || stopRequest?.requesterId === "speaker_guard") &&
+      (stopRequest?.requesterId === "flush_limit" ||
+        stopRequest?.requesterId === "speaker_guard" ||
+        stopRequest?.requesterId === "channel_deleted" ||
+        stopRequest?.requesterId === "missing_access" ||
+        stopRequest?.requesterId === "send_message_limit") &&
       !stopRequest?.stopContext;
 
     clearStopRequest(context.channel.id);
@@ -426,24 +421,6 @@ export class StreamOrchestrator implements IStreamOrchestrator {
     metrics: StreamMetrics,
     terminalDoneMetadata: Record<string, unknown> | undefined,
   ): Promise<StreamResult & { messageSentCount?: number }> {
-    this.clearInactivityTimer(state);
-    if (this.isStreamTimedOut(state)) {
-      if (!context.suppressUserErrors && !isUserImpersonationStreamContext(context)) {
-        await sendStandardEmbed(context.channel, context.locale, {
-          titleKey: "genai.stream.inactivity_timeout_title",
-          descriptionKey: "genai.stream.inactivity_timeout_description",
-          color: ColorCode.WARN,
-        }).catch((embedError) => {
-          log.warn(
-            "Failed to send inactivity timeout embed",
-            embedError instanceof Error ? embedError : new Error(String(embedError)),
-          );
-        });
-      }
-
-      return { status: "timeout", data: new Error("Stream timed out due to inactivity.") };
-    }
-
     await this.bufferFlusher.flushFinalBuffer(state, textConfig, typingConfig, context);
     // The final flush can itself trip a delivery cap, and this path returns "completed", which no
     // downstream consumer treats as a stop. An uncleared internal request would survive the turn
@@ -472,32 +449,5 @@ export class StreamOrchestrator implements IStreamOrchestrator {
 
   private notifyStreamProgress(context: StreamContext): void {
     context.onStreamProgress?.();
-  }
-
-  private setupInactivityTimer(state: StreamState, config: StreamConfig, context: StreamContext): void {
-    this.resetInactivityTimer(state, config, context);
-  }
-
-  private resetInactivityTimer(state: StreamState, config: StreamConfig, context: StreamContext): void {
-    state.lastChunkTime = Date.now();
-    state.timedOut = false;
-    if (state.inactivityTimer) clearTimeout(state.inactivityTimer);
-
-    state.inactivityTimer = setTimeout(() => {
-      log.warn(`Stream to ${context.channel.id} timed out due to inactivity.`);
-      state.timedOut = true;
-      state.inactivityTimer = null;
-    }, config.inactivityTimeoutMs);
-  }
-
-  private clearInactivityTimer(state: StreamState): void {
-    if (state.inactivityTimer) {
-      clearTimeout(state.inactivityTimer);
-      state.inactivityTimer = null;
-    }
-  }
-
-  private isStreamTimedOut(state: StreamState): boolean {
-    return state.timedOut;
   }
 }

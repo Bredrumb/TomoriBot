@@ -9,166 +9,161 @@ sidebar:
   Run `bun run generate-command-reference` from the repository root.
 -->
 
-TomoriBotによって現在登録されているすべてのスラッシュコマンドです。Discordの登録に使用されるものと同じコマンドビルダーと英語ロケールの説明から生成されています。
+TomoriBotに現在登録されているすべてのスラッシュコマンドです。Discordへの登録に使われるものと同じコマンド定義と日本語の説明文から生成しています（未翻訳の説明は英語で表示されます）。
 
-最上位のコマンドグループ：**27**。実行可能なスラッシュコマンド：**231**。
+トップレベルのコマンドグループ：**39**。実行できるスラッシュコマンド：**81**。
 
-## `/bot`
+## `/comment`
 
-Botコマンドです。
-
-| コマンド | 概要 |
-|---|---|
-| `/bot generate image` | 進行中のチャンネルの文脈から、短いシーンの画像を生成します。 |
-| `/bot generate scene` | 選択したペルソナ間で短いスクリプト化されたテキストシーンを生成します。 |
-| `/bot impersonate` | ペルソナやユーザーになりすましたり、システムプロンプトを挿入したりします。 |
-| `/bot kill` | 現在のストリームを直ちに停止し、このチャンネルでキューに入れられている応答をクリアします。 |
-| `/bot respond` | このチャンネルの最新のメッセージに対する応答を手動でトリガーします。 |
-
-## `/capabilities`
-
-ツールの使用と特定の機能を管理します。
+チャットに表示されるが、コンテキストには表示されないコメントを送信します。
 
 | コマンド | 概要 |
 |---|---|
-| `/capabilities manage` | このサーバーでトモリが使用できる特定のツールを設定します。 |
-| `/capabilities toggle` | トモリがツールと関数呼び出しを使用できるかどうかを切り替えます。 |
+| `/comment` | チャットに表示されるが、コンテキストには表示されないコメントを送信します。 |
+
+## `/compact`
+
+最近の会話をコンパクトなシステム要約にまとめます。
+
+| コマンド | 概要 |
+|---|---|
+| `/compact` | 最近の会話をコンパクトなシステム要約にまとめます。 |
 
 ## `/conditioning`
 
-永続的な報酬と罰の条件付けメモリーを管理します。
+ご褒美・おしおきの条件付け記憶を管理します。
 
 | コマンド | 概要 |
 |---|---|
-| `/conditioning manage` | このサーバーのすべてのペルソナ間で、挿入された条件付け履歴を管理します。 |
-| `/conditioning punish bite` | 遊び心のある噛みつきを与えます！ |
-| `/conditioning punish bonk` | 頭をコツンと叩きます！ |
-| `/conditioning punish pinch` | つねります！ |
-| `/conditioning punish spank` | 遊び心のあるお尻叩きをします！ |
-| `/conditioning punish squeeze` | ぎゅっと絞ります！ |
-| `/conditioning reward feed` | 美味しいおやつを与えます！ |
-| `/conditioning reward headpat` | 頭をなでます！ |
-| `/conditioning reward hug` | ハグします！ |
-| `/conditioning reward kiss` | キスします！ |
-| `/conditioning reward tickle` | くすぐります！ |
+| `/conditioning manage` | このサーバー内の全ペルソナに注入対象の条件付け履歴を管理します。 |
+| `/conditioning remove` | このサーバー内の全ペルソナにわたる条件付けエントリを削除します。 |
 
 ## `/config`
 
-設定コマンドです。
+ペルソナ、エンジン、チャンネル、権限、およびモデルの設定を行います。
 
 | コマンド | 概要 |
 |---|---|
-| `/config context-note set` | 会話履歴の特定の深さに挿入される短いリマインダーを設定します。 |
-| `/config humanizer` | トモリの応答をどれくらい「人間らしく」するかを設定します。カスタムプロンプトを使用するには、`/config system-prompt set`を使用してください。 |
-| `/config image-tags default-negative` | 望ましくない外観の詳細やアーティファクトに対するデフォルトのネガティブ画像タグを設定します。 |
-| `/config image-tags default-positive` | 画像生成プロンプトに追加されるデフォルトのポジティブな外観・スタイルの画像タグを設定します。 |
-| `/config message-fetch-limit` | コンテキストのために取得する最近のメッセージの数を設定します（20〜100、デフォルト：80）。 |
-| `/config model-randomizer` | 各応答を主導するモデルをランダムに選択するかどうかを切り替えます（反復防止）。 |
-| `/config notice-embeds visibility` | どの通知埋め込みをチャットに表示したままにするかを選択します。 |
-| `/config random-trigger add` | チャンネルに確率的なタイマーベースの自動トリガーを追加します。 |
-| `/config random-trigger remove` | このサーバーから既存のランダムトリガーを削除します。 |
-| `/config self-debug` | トモリ自身の診断用の埋め込みをコンテキストに読み込むかどうかを切り替えます。 |
-| `/config send-limit` | 1回の応答につきトモリが送信するメッセージ数の上限を設定します（デフォルト：0 ＝ 無制限）。 |
-| `/config setup` | 初期セットアッププロセスを開始します。AIプロバイダーと性格を設定します。 |
-| `/config system-prompt preset` | プリセットのシステムプロンプトを適用します。 |
-| `/config system-prompt remove` | カスタムシステムプロンプトを削除し、デフォルトのプロンプトを使用します。 |
-| `/config system-prompt set` | トモリの行動を導くカスタムシステムプロンプトを設定します。 |
-| `/config trigger-cascade-limit` | 最初のトリガーの後に許可される追加のペルソナトリガーの数を管理します（デフォルト：3）。 |
-| `/config trigger-match-limit` | 1つのメッセージに一致できるペルソナの数を管理します（デフォルト：3）。 |
-| `/config workarounds` | 実験的な互換性のための回避策を設定します。 |
+| `/config` | ペルソナ、エンジン、チャンネル、権限、およびモデルの設定を行います。 |
 
 ## `/contribute`
 
-コントリビュートコマンドです。
+TomoriBotのソースコードと貢献方法を確認します。
 
 | コマンド | 概要 |
 |---|---|
-| `/contribute github` | GitHubリポジトリのリンクを取得し、TomoriBotへの貢献方法について学びます。 |
+| `/contribute github` | GitHubリポジトリのリンクを取得し、TomoriBotへの貢献方法を学びます。 |
 
 ## `/donate`
 
-寄付コマンドです。
+TomoriBotの開発とホスティング費用を支援します。
 
 | コマンド | 概要 |
 |---|---|
-| `/donate kofi` | Ko-fiの寄付を通じてTomoriBotの開発をサポートします。 |
+| `/donate kofi` | Ko-fiを通じてTomoriBotの開発を支援します。 |
+
+## `/export`
+
+設定または記憶をファイルとしてエクスポートします。
+
+| コマンド | 概要 |
+|---|---|
+| `/export config` | このサーバーの設定をファイルとしてエクスポートします。 |
+| `/export memories` | 記憶をファイルとしてエクスポートします。 |
+| `/export personal config` | 個人設定をファイルとしてエクスポートします。 |
+| `/export personal memories` | 自分のアカウントが所有する記憶をファイルとしてエクスポートします。 |
+
+## `/expressions`
+
+このサーバーのカスタム絵文字やスタンプをいつ使うか、TomoriBotに教えます。
+
+| コマンド | 概要 |
+|---|---|
+| `/expressions edit` | 単一の絵文字またはスタンプの感情と使用方法を編集します |
+| `/expressions initialize` | AIビジョンを使用してすべてのカスタム絵文字とスタンプを分析・分類します |
 
 ## `/generate`
 
-生成コマンドです。
+AI 画像・動画・ボイスメッセージを生成します。
 
 | コマンド | 概要 |
 |---|---|
-| `/generate image` | Google GeminiまたはOpenRouterを使用してAI画像を生成します。 |
-| `/generate video` | Google Veo、OpenRouter、またはZ.aiを使用してAI動画を生成します。 |
+| `/generate image` | 自分で入力したプロンプトまたは現在のチャンネルのシーンからAI画像を生成します |
+| `/generate scene` | 選択したペルソナ同士の短いテキストシーンを生成します。 |
+| `/generate video` | Google Veo、OpenRouter、またはZ.aiを使用してAI動画を生成します |
+| `/generate voice-message` | 選んだ声でメッセージを読み上げます |
 
 ## `/help`
 
-ヘルプコマンドです。
+セットアップ、機能、プロバイダー、メモリ、動作、ツール、メディア、連携のガイドを表示します。
 
 | コマンド | 概要 |
 |---|---|
-| `/help api-key` | AIプロバイダーのAPIキーの設定方法について学びます。 |
-| `/help custom-endpoint` | カスタムエンドポイントの仕組みについて学びます。 |
-| `/help customization` | TomoriBotの性格と行動をカスタマイズする方法について学びます。 |
-| `/help data` | データ管理とプライバシーについて学びます。 |
-| `/help deliberate-tool-mode` | 意図的なツールモードがツールの可用性をどのように変更するかについて学びます。 |
-| `/help deliberate-trigger-mode` | 意図的なトリガーモードがメッセージのトリガーをどのように変更するかについて学びます。 |
-| `/help features` | TomoriBotができることを表示します。 |
-| `/help matrix` | Matrixブリッジのセットアップと使用方法について学びます。 |
-| `/help mcp` | MCPツールサーバーの追加と管理方法について学びます。 |
-| `/help memory` | TomoriBotのメモリーシステムについて学びます。 |
-| `/help memory-tagging` | メモリーのキーワードおよびチャンネルタグ付けの仕組みについて学びます。 |
-| `/help nsfw` | 年齢制限（NSFW）コマンドを有効にする方法について学びます。 |
-| `/help personal-provider` | 個人プロバイダーの仕組みについて学びます。 |
-| `/help setup` | TomoriBotの初回セットアップ方法について学びます。 |
-| `/help speech` | 音声生成の仕組みについて学びます。 |
-| `/help spotlight` | 個人スポットライトの機能と使用方法について学びます。 |
-| `/help st-preset` | SillyTavernのプリセットがここでどのように機能するかについて学びます。 |
-| `/help transcription` | 音声の文字起こしの仕組みについて学びます。 |
+| `/help` | セットアップ、機能、プロバイダー、メモリ、動作、ツール、メディア、連携のガイドを表示します。 |
+
+## `/impersonate`
+
+ペルソナ、ユーザー、またはシステムプロンプトになりすます。
+
+| コマンド | 概要 |
+|---|---|
+| `/impersonate persona` | このサーバーのペルソナの一人としてメッセージを送信します。 |
+| `/impersonate system` | 会話コンテキストにシステムメッセージを注入します。 |
+| `/impersonate user` | ボットがそのメンバーになりきってメッセージを作成し、送信します。 |
+
+## `/import`
+
+設定または記憶をファイルからインポートします。
+
+| コマンド | 概要 |
+|---|---|
+| `/import config` | サーバー設定ファイルをインポートします。 |
+| `/import memories` | サーバーの記憶ファイルをインポートします。 |
+| `/import personal config` | 個人設定ファイルをインポートします。 |
+| `/import personal memories` | 個人の記憶ファイルをインポートします。 |
+
+## `/kill`
+
+このチャンネルで現在のストリーム応答を停止し、キュー済み応答をすべてクリアします。
+
+| コマンド | 概要 |
+|---|---|
+| `/kill` | このチャンネルで現在のストリーム応答を停止し、キュー済み応答をすべてクリアします。 |
+
+## `/learn`
+
+会話履歴から知識を抽出し、記憶として取り込みます。
+
+| コマンド | 概要 |
+|---|---|
+| `/learn history` | AIを使ってこのチャンネルのメッセージ履歴から知識を抽出します。 |
 
 ## `/legal`
 
-法的コマンドです。
+TomoriBotの利用規約、プライバシーポリシー、ライセンスを表示します。
 
 | コマンド | 概要 |
 |---|---|
-| `/legal license` | TomoriBotのオープンソースライセンスを表示します。 |
-| `/legal privacy` | TomoriBotのプライバシーポリシーを表示します。 |
-| `/legal terms` | TomoriBotの利用規約を表示します。 |
+| `/legal license` | TomoriBotのオープンソースライセンスを表示 |
+| `/legal privacy-policy` | TomoriBotのプライバシーポリシーを表示 |
+| `/legal terms-of-service` | TomoriBotの利用規約を表示 |
 
-## `/mcp`
+## `/matrix`
 
-リモートのMCP（Model Context Protocol）ツールサーバーを管理します。
-
-| コマンド | 概要 |
-|---|---|
-| `/mcp add` | このサーバー用の新しいリモートMCPサーバーを登録します。セットアップガイドについては`/help mcp`を使用してください。 |
-| `/mcp list` | このサーバーに登録されているすべてのMCPサーバーを一覧表示します。 |
-| `/mcp remove` | 登録されたMCPサーバーをこのサーバーから削除します。 |
-| `/mcp toggle` | 登録されたMCPサーバーを有効または無効にします。 |
-
-## `/memory`
-
-保存されたメモリーとドキュメントを管理します。
+Discordチャンネルを双方向リレーでMatrixルームにリンクします。
 
 | コマンド | 概要 |
 |---|---|
-| `/memory document add` | メモリーにドキュメントを追加します。 |
-| `/memory document remove` | メモリーからドキュメントを削除します。 |
-| `/memory history import` | AIを使用して、このチャンネルのメッセージ履歴から知識を抽出します。 |
-| `/memory history remove` | 履歴から抽出されたドキュメントをメモリーから削除します。 |
-| `/memory personal add` | 個人メモリーを追加します。 |
-| `/memory personal edit` | 個人メモリーを編集します。 |
-| `/memory personal export` | 個人メモリーをJSONにエクスポートします。 |
-| `/memory personal import` | JSONから個人メモリーをインポートします。 |
-| `/memory personal remove` | 個人メモリーを削除します。 |
-| `/memory server add` | サーバーメモリーを追加します。 |
-| `/memory server edit` | サーバーメモリーを編集します。 |
-| `/memory server export` | サーバーメモリーをJSONにエクスポートします。 |
-| `/memory server import` | JSONからサーバーメモリーをインポートします。 |
-| `/memory server remove` | サーバーメモリーを削除します。 |
-| `/memory tagging set` | タグ付けメモリーモードに切り替えます。 |
+| `/matrix link` | DiscordチャンネルをMatrixルームに双方向リレーでリンクします |
+| `/matrix unlink` | DiscordチャンネルからMatrixブリッジリンクを削除します |
+
+## `/memories`
+
+サーバーの記憶、ドキュメント、短期記憶を確認・管理します。
+
+| コマンド | 概要 |
+|---|---|
+| `/memories` | サーバーの記憶、ドキュメント、短期記憶を確認・管理します。 |
 
 ## `/model`
 
@@ -176,33 +171,24 @@ Botコマンドです。
 
 | コマンド | 概要 |
 |---|---|
-| `/model embedding` | このサーバーで文書検索に使う埋め込みモデルを変更します。 |
-| `/model fallback` | このサーバーのバックアップテキストモデルを設定し、なしで各スロットをクリアできます。 |
-| `/model image` | このサーバーの画像生成モデルを変更します。 |
-| `/model logit-bias add` | 共有のバイアス値を1つ持つ、カンマ区切りのロジットバイアスエントリを追加します。 |
-| `/model logit-bias remove` | 保存されたロジットバイアスエントリを削除します。 |
-| `/model logit-bias upload` | SillyTavernスタイルのロジットバイアスJSONエントリをアップロードします。 |
-| `/model override remove` | チャンネルおよびペルソナのモデルオーバーライドを削除します。 |
-| `/model parameters` | このサーバーのプロバイダーごとの保存済みサンプラー設定を更新します。 |
-| `/model speech` | このサーバーの音声生成エンドポイントを選択します。 |
-| `/model stop-strings add` | サーバー全体の中止文字列を追加します。 |
-| `/model stop-strings manage` | サーバー全体の中止文字列と、話者パターンの停止動作を管理します。 |
-| `/model text` | このサーバーの既定テキストモデルを変更します。 |
-| `/model transcription` | このサーバーの文字起こしエンドポイントを選択します。 |
-| `/model video` | このサーバーの動画生成モデルを変更します。 |
-| `/model vision` | チャットモデルが画像を見られない場合に使うこのサーバーのビジョンモデルを設定します。 |
+| `/model override remove` | チャンネルとペルソナのモデル上書きを削除します。 |
 
-## `/novelai`
+## `/moderation`
 
-NovelAIコマンドです。
+メンバー権限、ブラックリスト、チャンネル・ロールのホワイトリスト、クォータ設定を管理します。
 
 | コマンド | 概要 |
 |---|---|
-| `/novelai attg` | NovelAIのKayraおよびEratoプロンプトの著者（Author）/タイトル（Title）/タグ（Tags）/ジャンル（Genre）/星（Stars）のメタデータを設定します。 |
-| `/novelai character-reference` | あなたやペルソナのために、NovelAIキャラクターリファレンス画像をアップロードまたはクリアします。 |
-| `/novelai image generate` | 画像掲示板スタイルのタグと、オプションでキャラクターリファレンスを使用して、NovelAIの画像を生成します。 |
-| `/novelai image parameters` | このサーバーにおけるNovelAI画像生成のサンプラーと品質設定をオーバーライドします。 |
-| `/novelai preset text` | このサーバーのテキスト生成設定にNovelAIのサンプリングプリセットを適用します。 |
+| `/moderation` | メンバー権限、ブラックリスト、チャンネル・ロールのホワイトリスト、クォータ設定を管理します。 |
+
+## `/novelai`
+
+このサーバーのNovelAIテキスト・画像生成を設定します。
+
+| コマンド | 概要 |
+|---|---|
+| `/novelai generate image` | 画像掲示板タグ形式のプロンプトと任意のキャラクター参照画像でNovelAI画像を生成します。 |
+| `/novelai usage` | このサーバーのNovelAI Opus生成利用状況メーターを表示します（サーバー管理権限が必要です）。 |
 
 ## `/nsfw`
 
@@ -210,225 +196,173 @@ NovelAIコマンドです。
 
 | コマンド | 概要 |
 |---|---|
-| `/nsfw jailbreaks` | このサーバーでのトモリのプロンプトに対するオプションのジェイルブレイク動作を管理します。 |
+| `/nsfw jailbreaks` | このサーバーでの任意のjailbreak機能を管理します。 |
 
-## `/openrouter`
+## `/nuke`
 
-OpenRouter固有のモデルと設定を管理します。
-
-| コマンド | 概要 |
-|---|---|
-| `/openrouter model add` | このサーバーにOpenRouterモデルのコードネームを登録します。 |
-| `/openrouter model remove` | 登録されたOpenRouterモデルをこのサーバーから削除します。 |
-
-## `/optional-key`
-
-オプションサービスのAPIキーを管理します。
+サーバーのすべてのデータを完全に消去します。実行後は再度 /setup の実行が必要です。
 
 | コマンド | 概要 |
 |---|---|
-| `/optional-key brave remove` | 現在設定されているBrave SearchのAPIキーを削除します。 |
-| `/optional-key brave set` | このサーバーにBrave SearchのAPIキーを設定します。 |
+| `/nuke` | サーバーのすべてのデータを完全に消去します。実行後は再度 /setup の実行が必要です。 |
 
 ## `/persona`
 
-性格プリセットを管理します。
+人格プリセットを管理する
 
 | コマンド | 概要 |
 |---|---|
-| `/persona attribute add` | ペルソナに属性を追加します。 |
-| `/persona attribute edit` | ペルソナの属性を編集します。 |
-| `/persona attribute remove` | ペルソナから属性を削除します。 |
-| `/persona avatar` | このサーバーの選択したペルソナのアバターを設定または削除します。 |
-| `/persona create` | シンプルな性格プリセットを手動で作成します。 |
-| `/persona default` | プリセットの性格設定を適用します。 |
-| `/persona export` | 現在の性格を共有可能なPNGファイルとしてエクスポートします。 |
-| `/persona generate` | AIによる性格生成を行います（互換性のあるプロバイダーが必要です）。 |
-| `/persona image-tags` | 画像生成を支援するために、ペルソナの身体的な外観を表すカンマ区切りの画像タグを設定します。 |
-| `/persona import` | PNGまたはJSONファイルからペルソナをインポートします。 |
-| `/persona prompt remove` | ペルソナのプロンプトを削除します。 |
-| `/persona prompt set` | ペルソナのプロンプトを設定します。 |
-| `/persona remove` | アルターペルソナをサーバーから削除します。 |
-| `/persona rename` | このサーバーでのトモリの名前を変更します。 |
-| `/persona sample-dialogue add` | トモリがどのように応答すべきかの例として、ユーザーとBotのサンプル会話のペアを追加します。 |
-| `/persona sample-dialogue edit` | ユーザーとBotのサンプル会話のペアを編集します。 |
-| `/persona sample-dialogue remove` | トモリのメモリーからユーザーとBotのサンプル会話のペアを削除します。 |
-| `/persona sprites add` | ペルソナのスプライトアバターを追加または置換します。 |
-| `/persona sprites edit` | ペルソナスプライトの名前、画像、指示、またはアイデンティティを編集します。 |
-| `/persona sprites export` | ペルソナのスプライトを共有可能な.zipファイルとしてエクスポートします。 |
-| `/persona sprites import` | .zipファイルからペルソナのスプライトをインポートします。 |
-| `/persona sprites remove` | ペルソナのスプライトアバターを削除します。 |
-| `/persona swap` | メインペルソナとアルターペルソナを切り替えます。 |
-| `/persona trigger add` | ペルソナのトリガーワードを追加します。 |
-| `/persona trigger remove` | 言及されたときにトモリが反応するトリガーワードを削除します。 |
+| `/persona create` | シンプルな人格プリセットを手動で作成 |
+| `/persona default` | 人格設定のペルソナを適用します |
+| `/persona export` | 現在の人格を共有可能なPNGファイルとしてエクスポートする |
+| `/persona generate` | AIによる人格生成（対応プロバイダーが必要） |
+| `/persona import` | PNG、JSON、またはCHARXファイルからペルソナをインポートする |
+| `/persona remove` | サーバーからオルタペルソナを削除する |
 
 ## `/personal`
 
-個人設定を管理します。
+あなたの個人設定を管理します
 
 | コマンド | 概要 |
 |---|---|
-| `/personal config export` | サーバー設定、ペルソナ、メモリーを除外して、個人設定をエクスポートします。 |
-| `/personal config import` | 個人設定のみをインポートします。サーバー設定やメモリーはインポートしません。 |
-| `/personal config remove` | 個人設定をリセットします。 |
-| `/personal custom-endpoint add` | 個人カスタムエンドポイントのラベルの下にモデルを登録します（ラベルを再利用してさらに追加できます）。 |
-| `/personal custom-endpoint edit` | 登録された個人カスタムエンドポイントのフィールドを編集します。 |
-| `/personal custom-endpoint remove` | 個人カスタムエンドポイントから選択した機能を削除します。 |
-| `/personal deliberate-tool-mode` | 個人の意図的なツールモードの設定を行います。 |
-| `/personal deliberate-trigger-mode` | 個人の意図的なトリガーモード（DTM）の設定を行います。 |
-| `/personal image-tags` | 画像生成を支援するために、あなたの身体的な外観を表すカンマ区切りの画像タグを設定します。 |
-| `/personal impersonate prompt` | トモリがどのようにあなたになりすますべきかを指示する、再利用可能なプロンプトを設定します。 |
-| `/personal language` | トモリのインターフェースの優先言語を設定します。 |
-| `/personal model fallback` | 個人テキスト上書きのフォールバックモデルを設定し、なしで各スロットをクリアできます。 |
-| `/personal nickname` | トモリがあなたを呼ぶときの名前を変更します。 |
-| `/personal openrouter-model add` | 個人プロバイダーリストにOpenRouterモデルのコードネームを登録します。 |
-| `/personal openrouter-model remove` | 個人プロバイダーリストから登録されたOpenRouterモデルを削除します。 |
-| `/personal parameters` | このサーバーではなく、個人プロバイダーのサンプラー設定を調整します。 |
-| `/personal privacy` | 個人メモリーの保存とプライバシー設定を制御します。 |
-| `/personal provider add` | APIキーを保存し、既定の個人テキストモデルを全サーバーで有効化します。 |
-| `/personal provider model-embedding` | 全サーバーで使う個人埋め込みモデルを選択して有効化します。 |
-| `/personal provider model-image` | 全サーバーで使う個人画像モデルを選択して有効化します。 |
-| `/personal provider model-text` | 全サーバーで使う個人テキストモデルを選択して有効化します。 |
-| `/personal provider model-video` | 全サーバーで使う個人動画モデルを選択して有効化します。 |
-| `/personal provider model-vision` | 全サーバーで使う個人ビジョンモデルを選択して有効化します。 |
-| `/personal provider remove` | 全サーバー共通の個人プロバイダー設定を削除します。 |
-| `/personal provider toggle-models` | どの機能でサーバー既定ではなく個人プロバイダーを使うか選択します。 |
-| `/personal spotlight manage` | アクティブな個人スポットライトを削除します。詳細については`/help spotlight`を使用してください。 |
-| `/personal spotlight set` | 1つのチャンネルに個人のペルソナスポットライトを設定します。詳細については`/help spotlight`を使用してください。 |
-| `/personal stm` | STM（短期記憶）設定を構成します。 |
-| `/personal timezone` | 個人のUTCからのタイムゾーンオフセットを設定します。 |
+| `/personal config` | 個人の設定、プライバシー、モデル、プロフィールを管理します。 |
+| `/personal language` | TomoriBotがあなたに話しかける言語を選びます。 |
+| `/personal memories` | 個人の長期記憶や短期間の会話コンテキストを管理します。 |
+| `/personal nuke` | TomoriBotが保存しているあなたの情報を、すべてのサーバーから消去します。 |
+| `/personal providers` | 個人のプロバイダー認証情報、エンドポイント、モデルカタログを管理します。 |
 
-## `/provider`
+## `/ping`
 
-このサーバー共通のAIプロバイダーを管理します。
+ボットの遅延を確認します
 
 | コマンド | 概要 |
 |---|---|
-| `/provider add` | このサーバー用の認証情報を保存し、保存済みテキストモデルを有効化します。 |
-| `/provider api-key rotation` | 負荷分散とフェイルオーバーのためにAPIキーのローテーションを管理します。 |
-| `/provider custom-endpoint add` | カスタムエンドポイントのラベルの下にモデルを登録します（ラベルを再利用してさらに追加できます）。 |
-| `/provider custom-endpoint edit` | 登録されたカスタムエンドポイントのフィールドを編集します。 |
-| `/provider custom-endpoint remove` | ラベル付けされたカスタムエンドポイントから選択した機能を削除します。 |
-| `/provider remove` | このサーバーから保存済みプロバイダー設定を削除します。 |
+| `/ping` | ボットの遅延を確認します |
+
+## `/providers`
+
+プロバイダーの認証情報、エンドポイント、モデルカタログの追加・表示・編集・削除を行います。
+
+| コマンド | 概要 |
+|---|---|
+| `/providers` | プロバイダーの認証情報、エンドポイント、モデルカタログの追加・表示・編集・削除を行います。 |
+
+## `/punish`
+
+私をおしおきして応答をトリガーします。
+
+| コマンド | 概要 |
+|---|---|
+| `/punish bite` | 甘噛みして応答をトリガーします。 |
+| `/punish bonk` | ポカッとして応答をトリガーします。 |
+| `/punish pinch` | つねって応答をトリガーします。 |
+| `/punish spank` | ぺしっとして応答をトリガーします。 |
+| `/punish squeeze` | ぎゅっとして応答をトリガーします。 |
+
+## `/quota`
+
+生成クォータのリセットを管理します。
+
+| コマンド | 概要 |
+|---|---|
+| `/quota reset global` | サーバー全体の生成クォータプールをリセットします。 |
+| `/quota reset user` | ユーザーの日次クォータ使用量をリセットします。 |
+
+## `/refresh`
+
+会話履歴をクリアします（このチャンネルのみ）。
+
+| コマンド | 概要 |
+|---|---|
+| `/refresh` | 会話履歴をクリアします（このチャンネルのみ）。 |
+
+## `/reset`
+
+サーバーまたは個人設定を既定値に戻します。
+
+| コマンド | 概要 |
+|---|---|
+| `/reset config` | このサーバーの設定をデータベースの既定値に戻します。 |
+| `/reset personal config` | 個人設定をデータベースの既定値に戻します。 |
+
+## `/respond`
+
+このチャンネルの最新メッセージに手動で応答をトリガーします。
+
+| コマンド | 概要 |
+|---|---|
+| `/respond` | このチャンネルの最新メッセージに手動で応答をトリガーします。 |
+
+## `/reward`
+
+私へのご褒美インタラクション。
+
+| コマンド | 概要 |
+|---|---|
+| `/reward feed` | 美味しいものを食べさせて応答をトリガーします。 |
+| `/reward headpat` | ヘッドパットして応答をトリガーします。 |
+| `/reward hug` | ハグして応答をトリガーします。 |
+| `/reward kiss` | キスして応答をトリガーします。 |
+| `/reward tickle` | くすぐって応答をトリガーします。 |
 
 ## `/scheduled-task`
 
-スケジュールされたタスクとリマインダーを管理します。
+スケジュール済みタスクとリマインダーを管理します。
 
 | コマンド | 概要 |
 |---|---|
-| `/scheduled-task edit` | スケジュールされたタスクまたはリマインダーを編集します。 |
-| `/scheduled-task remove` | スケジュールされたタスクまたはリマインダーを削除します。 |
+| `/scheduled-task edit` | スケジュール済みタスクまたはリマインダーを編集します。 |
+| `/scheduled-task remove` | スケジュール済みタスクまたはリマインダーを削除します。 |
 
-## `/server`
+## `/setup`
 
-サーバーコマンドです。
-
-| コマンド | 概要 |
-|---|---|
-| `/server always-reply` | メインペルソナの常時応答モードを切り替えます。 |
-| `/server auto-trigger channels` | 自動トリガーチャンネルと、オプションのチャンネルごとのペルソナ割り当てを管理します。 |
-| `/server auto-trigger threshold` | 設定された自動チャットチャンネルの、共有される自動チャット間隔を設定します。 |
-| `/server channel-prompt` | 1つのチャンネルにスコープされたシステムプロンプトを設定します（そこにあるサーバープロンプトに追加または置換します）。 |
-| `/server config export` | メモリー、ペルソナ、および個人設定を除外して、このサーバーの設定をエクスポートします。 |
-| `/server config import` | サーバー設定をインポートします。メモリー、ペルソナ、個人設定はインポートしません。 |
-| `/server config remove` | このサーバーの設定をリセットします。 |
-| `/server cooldown triggers` | トリガーおよび`/bot`のクールダウンの種類と期間を設定します（デフォルト：オフ、5秒）。 |
-| `/server crosschannel-blocklist` | ツール駆動のクロスチャンネルメッセージ用のチャンネルブロックリストを管理します。 |
-| `/server deliberate-tool-context` | 最近使用したツールを引き続き使用可能にする、後続のターンの回数を設定します。 |
-| `/server deliberate-tool-mode` | このサーバーの意図的なツールモードを切り替えます。 |
-| `/server deliberate-tool-trigger` | 意図的なツールモードのカスタムトリガーフレーズを管理します。 |
-| `/server deliberate-trigger-mode` | このサーバーの意図的なトリガーモード（DTM）を切り替えます。 |
-| `/server expressions edit` | 1つの絵文字またはステッカーの感情と使用方法の指示を編集します。 |
-| `/server expressions initialize` | AIビジョンを使用して、すべてのカスタム絵文字とステッカーを分析および分類します。 |
-| `/server matrix link` | 双方向の中継のためにDiscordチャンネルをMatrixルームにリンクします。 |
-| `/server matrix unlink` | DiscordチャンネルからMatrixブリッジのリンクを削除します。 |
-| `/server member-permissions` | 管理者以外のメンバーがトモリに教えることができる内容を設定します。 |
-| `/server nuke` | サーバーのすべてのデータを完全に消去します。後で`/setup`を再実行する必要があります。 |
-| `/server private-channels` | STMが隔離され、思考ログが抑制されるプライベートチャンネルを管理します。 |
-| `/server quota image-generation` | このサーバーの1日あたりの画像生成クォータを設定します。 |
-| `/server quota reset` | 画像、テキスト、または動画生成のクォータプールをリセットします。 |
-| `/server quota text-generation` | このサーバーのテキスト生成のトリガークォータを設定します。 |
-| `/server quota video-generation` | このサーバーの動画生成クォータを設定します。 |
-| `/server rp-channels` | 絵文字とステッカーが常に抑制され、`/delete turn`が使用できるチャンネルを管理します。 |
-| `/server stm manage` | ペルソナ間でアクティブな、サーバー共有のSTMを確認およびクリアします。 |
-| `/server stm privacy-bypass` | プライベートチャンネルのSTMが非プライベートチャンネルに漏れる可能性があるかどうかを切り替えます。 |
-| `/server thought-logs-channel` | サーバーの思考ログチャンネルを設定またはクリアします。 |
-| `/server timezone` | サーバーのUTCからのタイムゾーンオフセットを設定します（デフォルト：0 / UTC）。 |
-| `/server user-blacklist add` | パーソナライズのブラックリストにメンバーを追加します。 |
-| `/server user-blacklist remove` | ユーザーのブラックリストエントリとペルソナのブロックを確認します。エントリのチェックを外すと削除されます。 |
-| `/server user-byok toggle` | ユーザーがトリガーしたメッセージに、メンバーの個人プロバイダーが必要かどうかを切り替えます。 |
-| `/server welcome-channel remove` | 設定されたウェルカムチャンネルを削除し、自動の挨拶を停止します。 |
-| `/server welcome-channel set` | 自動のウェルカムの挨拶に使用されるチャンネルを設定します。 |
-| `/server whitelist channel` | ホワイトリストにチャンネルを追加します。必要に応じてグローバルクールダウンをオーバーライドします。 |
-| `/server whitelist persona` | ペルソナがトリガーできるチャンネルを制限します。 |
-| `/server whitelist remove` | ホワイトリストからペルソナ、チャンネル、またはロールを削除します。 |
-| `/server whitelist role` | トモリをトリガーできるホワイトリストに登録されたロールを追加または削除します。 |
-
-## `/speech`
-
-音声の声とサンプルを管理します。
+初期設定プロセスを開始します。AIプロバイダーとパーソナリティを設定します。
 
 | コマンド | 概要 |
 |---|---|
-| `/speech chatterbox parameters` | Chatterbox Turboおよび標準モデルの音声生成を調整します。 |
-| `/speech elevenlabs` | ElevenLabsの音声と文字起こしを接続します。 |
-| `/speech transcripts` | ボイスメッセージの表示される文字起こしの投稿を切り替えます。 |
-| `/speech voice-add` | ローカルのTTSリファレンス音声サンプルをアップロードします。 |
-| `/speech voice-assign` | ペルソナに音声を割り当てます。 |
-| `/speech voice-design remove` | ペルソナの音声デザインプロンプトを削除します。 |
-| `/speech voice-design set` | ペルソナの音声デザインプロンプトを設定します。 |
-| `/speech voice-remove` | このサーバーからローカルのTTS音声サンプルを削除します。 |
-
-## `/st-preset`
-
-SillyTavernのプリセットを管理します。`/help st-preset`を使用してください。
-
-| コマンド | 概要 |
-|---|---|
-| `/st-preset import` | SillyTavernのプリセットJSONファイルをインポートします。`/help st-preset`を使用してください。 |
-| `/st-preset node toggle` | プリセットのプロンプトノードのオン/オフを切り替えます。 |
-| `/st-preset remove` | インポートされたSillyTavernのプリセットを削除します。 |
-| `/st-preset switch` | アクティブなSillyTavernプリセットを切り替えます。 |
+| `/setup` | 初期設定プロセスを開始します。AIプロバイダーとパーソナリティを設定します。 |
 
 ## `/stats`
 
-使用統計を表示します。
+使用統計を表示します
 
 | コマンド | 概要 |
 |---|---|
-| `/stats generate` | 共有可能な統計画像カードを生成します。 |
+| `/stats generate` | シェアできる統計画像カードを生成します。 |
 | `/stats persona` | このサーバーでのペルソナの使用統計を表示します。 |
-| `/stats personal` | あなた自身の使用統計を表示します。 |
+| `/stats personal` | 自分の使用統計を表示します。 |
 | `/stats server` | サーバー全体の使用統計を表示します。 |
+
+## `/status`
+
+現在の個人、サーバー、またはペルソナのステータスを表示します。
+
+| コマンド | 概要 |
+|---|---|
+| `/status` | 現在の個人、サーバー、またはペルソナのステータスを表示します。 |
 
 ## `/support`
 
-サポートコマンドです。
+ヘルプの取得、バグ報告、TomoriBotコミュニティへの参加ができます。
 
 | コマンド | 概要 |
 |---|---|
-| `/support discord` | バグレポート、フィードバック、およびコミュニティチャットのための、公式Discordサーバーのリンクを取得します。 |
+| `/support discord` | バグ報告、フィードバック、コミュニティチャットのための公式Discordサーバーリンクを取得します。 |
 
 ## `/tool`
 
-ツールコマンドです。
+会話のコンテキスト、プロンプト、診断のためのユーティリティアクション。
 
 | コマンド | 概要 |
 |---|---|
-| `/tool comment` | チャットには表示されるがコンテキストでは非表示になる、コメントの埋め込みを送信します。 |
-| `/tool compact` | 最近の会話をコンパクトなシステムメモリーに要約します。 |
 | `/tool delete turn` | チャンネルから最後のペルソナのターンを削除します。 |
-| `/tool estimate cost` | 有料AIプロバイダーのAPIコストを見積もります。 |
-| `/tool ping` | トモリのレイテンシを確認します。 |
-| `/tool prompt snapshot` | デバッグのために、ペルソナの正確なLLMプロンプトをファイルにダンプします。 |
-| `/tool refresh` | 最近の会話履歴をクリアします。 |
-| `/tool status` | 現在の個人、サーバー、またはペルソナのステータスを表示します。 |
+| `/tool estimate cost` | 有料AIプロバイダーのAPI費用を見積もる |
+| `/tool prompt snapshot` | デバッグ用に、ペルソナのLLMプロンプトをファイルに出力します。 |
 
 ## `/update`
 
-TomoriBotの最新のリリースノートを表示します。
+TomoriBotの最新リリース情報を表示
 
 | コマンド | 概要 |
 |---|---|
-| `/update` | TomoriBotの最新のリリースノートを表示します。 |
+| `/update` | TomoriBotの最新リリース情報を表示 |

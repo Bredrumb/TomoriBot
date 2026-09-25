@@ -1,140 +1,31 @@
 /**
  * Shared embed classification and link-preview extraction utilities.
  *
- * Mirrors the local helpers in `src/events/messageCreate/tomoriChat.ts`
- * (`checkTargetEmbedTitle`, `processLinkEmbed`, `formatSystemProducedEmbedHint`)
- * so they can be reused by offline/debug consumers like `/tool prompt snapshot`
- * without duplicating the locale-scanning logic.
- *
- * The canonical runtime usage still lives inline in tomoriChat.ts: these
- * helpers are feature-parity copies of that behavior.
+ * The title-only entry point supports historical and Components V2 notices.
+ * Full embeds use the persisted marker before falling back to a legacy title.
  */
 
 import type { Embed } from "discord.js";
-import { localizer, getSupportedLocales, getLocaleSubKeys } from "@/utils/text/localizer";
-import { escapeRegExp } from "@/utils/text/processors/regexUtils";
-
-/** Target embed classifications recognized by the chat pipeline. */
-type TargetEmbedType =
-  | "memory_learning"
-  | "reset"
-  | "reminder_set"
-  | "system_injection"
-  | "scene_directive"
-  | "compact_summary"
-  | "compact_refresh"
-  | "reward"
-  | "punish";
+import {
+  classifyProtocolEmbed,
+  classifyProtocolTitle,
+  isTargetProtocolKind,
+  type TargetEmbedType,
+} from "./embedProtocol";
 
 export type TargetEmbedCheck = { isTarget: true; type: TargetEmbedType } | { isTarget: false; type: null };
 
 /**
- * Returns true when the localized template matches the given title literally,
- * or (when the template contains `{placeholder}` slots) when the title matches
- * the regex form of the template. Used for reminder titles which embed names.
- */
-function matchesLocalizedTitleTemplate(template: string, actualTitle: string): boolean {
-  if (!template.includes("{")) {
-    return actualTitle === template;
-  }
-  const pattern = new RegExp(`^${escapeRegExp(template).replace(/\\\{[^}]+\\\}/g, ".+?")}$`);
-  return pattern.test(actualTitle);
-}
-
-/**
- * Classifies an embed title against the set of bot-produced titles (memory
- * learning, reset, reminder-set, system injection, compact summary/refresh,
- * reward, punish). Scans across ALL supported locales so cross-locale servers
- * still detect bot-produced embeds correctly.
- *
- * @returns An object with isTarget and the matched type
+ * Classifies a title-only notice using the lookup built during locale initialization.
  */
 export function checkTargetEmbedTitle(embedTitle: string | null | undefined): TargetEmbedCheck {
-  if (!embedTitle) return { isTarget: false, type: null };
+  const kind = classifyProtocolTitle(embedTitle);
+  return isTargetProtocolKind(kind) ? { isTarget: true, type: kind } : { isTarget: false, type: null };
+}
 
-  for (const supportedLocale of getSupportedLocales()) {
-    // Memory learning titles (server + personal, all CRUD variants)
-    const memoryLearningTitles = [
-      localizer(supportedLocale, "genai.self_teach.server_memory_learned_title"),
-      localizer(supportedLocale, "genai.self_teach.server_memory_updated_title"),
-      localizer(supportedLocale, "genai.self_teach.server_memory_deleted_title"),
-      localizer(supportedLocale, "genai.self_teach.personal_memory_learned_title"),
-      localizer(supportedLocale, "genai.self_teach.personal_memory_updated_title"),
-      localizer(supportedLocale, "genai.self_teach.personal_memory_deleted_title"),
-    ];
-
-    const reminderSetTitles = [
-      localizer(supportedLocale, "reminders.reminder_set_title"),
-      localizer(supportedLocale, "reminders.recurring_task_set_title"),
-      localizer(supportedLocale, "reminders.task_set_title"),
-    ];
-
-    if (memoryLearningTitles.some((t) => matchesLocalizedTitleTemplate(t, embedTitle))) {
-      return { isTarget: true, type: "memory_learning" };
-    }
-
-    // Reset and system-injection titles
-    if (embedTitle === localizer(supportedLocale, "commands.tool.refresh.title")) {
-      return { isTarget: true, type: "reset" };
-    }
-    if (embedTitle === localizer(supportedLocale, "commands.bot.impersonate.system_title")) {
-      return { isTarget: true, type: "system_injection" };
-    }
-
-    // Scene-generation status embed: surfaced to the LLM so it knows a scripted
-    //     scene is underway and can read the speaking order / instructions as context.
-    if (embedTitle === localizer(supportedLocale, "commands.bot.generate.scene.success_title")) {
-      return { isTarget: true, type: "scene_directive" };
-    }
-
-    // Reward/punish titles: dynamically discovered from locale sub-keys
-    //    so new reward/punish commands are automatically recognized
-    const rewardNames = getLocaleSubKeys(supportedLocale, "commands.reward");
-    const rewardTitles = rewardNames
-      .map((name) => localizer(supportedLocale, `commands.reward.${name}.embed_title`))
-      .filter((t) => !t.includes("."));
-    if (rewardTitles.some((t) => embedTitle === t)) {
-      return { isTarget: true, type: "reward" };
-    }
-
-    const punishNames = getLocaleSubKeys(supportedLocale, "commands.punish");
-    const punishTitles = punishNames
-      .map((name) => localizer(supportedLocale, `commands.punish.${name}.embed_title`))
-      .filter((t) => !t.includes("."));
-    if (punishTitles.some((t) => embedTitle === t)) {
-      return { isTarget: true, type: "punish" };
-    }
-
-    // Compact summary (conversation + scene + manual) and compact refresh variants
-    const compactSummaryTitle = localizer(supportedLocale, "commands.tool.compact.summary_title");
-    const compactSummaryRefreshed = localizer(supportedLocale, "commands.tool.compact.summary_title_refreshed");
-    const compactSceneTitle = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title");
-    const compactSceneRefreshed = localizer(supportedLocale, "commands.tool.compact.roleplay_scene_title_refreshed");
-    const compactManualTitle = localizer(supportedLocale, "commands.tool.compact.manual_entry_title");
-    const compactManualRefreshed = localizer(supportedLocale, "commands.tool.compact.manual_entry_title_refreshed");
-    const compactCharacterPrefix = localizer(supportedLocale, "commands.tool.compact.roleplay_character_title_prefix");
-
-    if (embedTitle === compactSummaryTitle || embedTitle === compactSceneTitle || embedTitle === compactManualTitle) {
-      return { isTarget: true, type: "compact_summary" };
-    }
-    if (
-      embedTitle === compactSummaryRefreshed ||
-      embedTitle === compactSceneRefreshed ||
-      embedTitle === compactManualRefreshed
-    ) {
-      return { isTarget: true, type: "compact_refresh" };
-    }
-    if (compactCharacterPrefix && embedTitle.startsWith(compactCharacterPrefix)) {
-      return { isTarget: true, type: "compact_summary" };
-    }
-
-    // Reminder/task set confirmations
-    if (reminderSetTitles.some((t) => matchesLocalizedTitleTemplate(t, embedTitle))) {
-      return { isTarget: true, type: "reminder_set" };
-    }
-  }
-
-  return { isTarget: false, type: null };
+export function checkTargetEmbed(embed: Pick<Embed, "title" | "footer">): TargetEmbedCheck {
+  const kind = classifyProtocolEmbed(embed);
+  return isTargetProtocolKind(kind) ? { isTarget: true, type: kind } : { isTarget: false, type: null };
 }
 
 type LinkPreviewImageInfo = {
@@ -168,7 +59,7 @@ export function processLinkEmbed(embed: Embed): LinkPreviewResult {
   }
 
   // Skip bot-produced system embeds because those are handled separately
-  const embedCheck = checkTargetEmbedTitle(embed.title);
+  const embedCheck = checkTargetEmbed(embed);
   if (embedCheck.isTarget) {
     return { isLinkPreview: false, textContent: null, imageInfo: null, thumbnailInfo: null };
   }

@@ -31,6 +31,26 @@
 export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
 /**
+ * Fallback for preset generation (`/persona generate`), deliberately independent of
+ * `DEFAULT_MAX_OUTPUT_TOKENS` and never resolved with `config.llm_max_output_tokens`.
+ *
+ * That config value is a per-persona chat-reply-length knob; coupling preset generation
+ * to it would let a user who capped chat replies short for brevity silently truncate
+ * every persona they generate, with nothing connecting the two settings from their side.
+ * Preset generation is a one-off structured-output task the schema itself sizes up to
+ * 16 string fields (`PRESET_MAX_STRING_LENGTH` each), so its budget is set by this
+ * constant alone.
+ */
+export const DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS = 16384;
+
+/**
+ * Fallback for one vision caption call, which describes an image rather than answering a
+ * conversation turn. Sized for a few paragraphs of appearance detail; the analysis tool's
+ * historical literal of 1024 was small enough to clip a detailed character description.
+ */
+const DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS = 2048;
+
+/**
  * Parses a positive integer from a raw env string.
  *
  * @param raw - Raw env value (may be undefined/empty/non-numeric).
@@ -70,4 +90,52 @@ export function resolveMaxOutputTokens(params: {
     return Math.max(1, Math.min(providerReportedMax, desired));
   }
   return Math.max(1, desired);
+}
+
+/**
+ * Resolves the output-token budget for a preset-generation request (`/persona generate`).
+ *
+ * The preset default is deliberately larger than a chat reply's, because the schema sizes the
+ * payload up to 16 string fields. It is not larger than the server's explicit
+ * `config.llm_max_output_tokens`, though: a user who capped output there chose a ceiling, and a
+ * preset request that exceeds it either gets rejected or bills past what they allowed.
+ *
+ * @param params.modelCeiling - The model's reported max completion tokens when known, which
+ *                             clamps the result so the request is never over the model's limit.
+ */
+export function resolvePresetGenerationMaxOutputTokens(params?: {
+  configured?: number | null;
+  modelCeiling?: number;
+}): number {
+  const configured = params?.configured;
+
+  // A configured ceiling wins only when it is lower; otherwise the preset default applies.
+  const desired =
+    typeof configured === "number" && configured > 0
+      ? Math.min(configured, DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS)
+      : DEFAULT_PRESET_GENERATION_MAX_OUTPUT_TOKENS;
+
+  return resolveMaxOutputTokens({
+    configured: desired,
+    envRaw: undefined,
+    fallback: desired,
+    providerReportedMax: params?.modelCeiling,
+  });
+}
+
+/**
+ * Resolves the output-token budget for one vision caption call.
+ *
+ * A caption answers a single question about one image, so it needs a chat reply's worth of
+ * room rather than a structured persona's. Deliberately omits `configured`: a user who capped
+ * chat replies short for brevity would otherwise truncate the appearance description that the
+ * persona generation depends on, and they would see the loss as a bad persona, not a short reply.
+ */
+export function resolveVisionCaptionMaxOutputTokens(providerReportedMax?: number): number {
+  return resolveMaxOutputTokens({
+    configured: undefined,
+    envRaw: undefined,
+    fallback: DEFAULT_VISION_CAPTION_MAX_OUTPUT_TOKENS,
+    providerReportedMax,
+  });
 }

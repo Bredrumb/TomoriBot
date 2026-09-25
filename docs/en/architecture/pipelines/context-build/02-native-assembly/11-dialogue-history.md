@@ -15,9 +15,9 @@ same-author pure-text messages within the same server-calendar day** into single
 entries; Better Time Awareness keeps cross-day messages separate) and append one or more
 context items per message with three orthogonal concerns interleaved:
 
-1. **Role mapping** — persona-authored → `model`; user impersonation flips
+1. **Role mapping**; persona-authored → `model`; user impersonation flips
    the impersonated user → `model`; everyone else → `user`.
-2. **Media descriptor emission** — decide only context budget: whether media
+2. **Media descriptor emission**: decide only context budget: whether media
    is inside the media window, whether counted images fit
    `MEDIA_IMAGE_MESSAGE_LIMIT`, and whether duplicate images should be dropped.
    The builder records capability-neutral `mediaDescriptors` instead of
@@ -25,38 +25,38 @@ context items per message with three orthogonal concerns interleaved:
    per-attempt resolver (`mediaResolver.ts`) later turns descriptors into
    final image/video parts, `{image_analysis_tool}` notices, plain blind-model
    notices, or out-of-window notices.
-3. **Context-note injection** — if `context_note` is configured, inject
+3. **Context-note injection**: if `context_note` is configured, inject
    `[System: ${note}]` at `context_note_depth` messages from the end of
    history. The default-off verbatim tool-calling workaround adds a separate
    depth-3 system note when enabled and the effective LLM has tools.
-4. **Better Time Awareness** — when enabled, inject a reunion note at
+4. **Better Time Awareness**: when enabled, inject a reunion note at
    `TIME_AWARENESS_NOTE_DEPTH` for the returning direct triggerer and date
    separators at server-calendar-day boundaries.
 
 ## Input
 
-Substantial — see signature in `dialogueHistory.ts:25-44`. Notable:
+Substantial: see signature in `dialogueHistory.ts:25-44`. Notable:
 
-- `contextItems: StructuredContextItem[]` — the in-progress list (mutated
+- `contextItems: StructuredContextItem[]`: the in-progress list (mutated
   in place; this is the only contributor that doesn't return new items)
 - `simplifiedMessageHistory: SimplifiedMessageForContext[]`
 - `tomoriConfig` (provides `message_fetch_limit`, `humanizer_degree`,
   `context_note`, `context_note_depth`)
 - `tomoriState` (provides `context_note` and `context_note_depth`; media
   capability is intentionally not read here)
-- `mediaContextWindow: number | undefined` — override; falls back to
+- `mediaContextWindow: number | undefined`: override; falls back to
   `memoryGuard.getMediaWindow()`
 - `isUserImpersonation`, `impersonatedUserId`
-- `messageIdMap` — compact ID ↔ Discord message ID, populated as media
+- `messageIdMap`: compact ID ↔ Discord message ID, populated as media
   hints emit
 - `uncensorInputOptions`, `convertMentions`
-- `reunionNote: string | null` — raw one-shot note body precomputed by the chat
+- `reunionNote: string | null`: raw one-shot note body precomputed by the chat
   pipeline; this stage wraps it in `[System: ...]` like every other note
-- `dateSpacerTemplate` — pre-expanded once by `nativeBuilder`; `null` disables spacers
+- `dateSpacerTemplate`: pre-expanded once by `nativeBuilder`; `null` disables spacers
 
 ## Output
 
-`Promise<void>` — appends to `contextItems` in place. Each appended item
+`Promise<void>`: appends to `contextItems` in place. Each appended item
 is tagged `DIALOGUE_HISTORY` (default in `pushDialogueHistoryContextItem`)
 or `CONTEXT_NOTE_INJECTION` for the injected note.
 
@@ -74,7 +74,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   from tool-intent scanning, voice transcription, and sprite priming
   (`visibleRawMessages`). Memories, reminders, documents, and generic
   references from other users are not redacted.
-- **Media-window calculation** — `effectiveMediaWindow = min(requested,
+- **Media-window calculation**: `effectiveMediaWindow = min(requested,
   message_fetch_limit)`; `mediaWindowCutoff = totalMessages - effectiveMediaWindow`.
 - **Media descriptor emission**:
   - Filters `MEDIA_IMAGE_MESSAGE_LIMIT` (env, default 3) most-recent
@@ -110,7 +110,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
     widens the window: `increase_media_context` was removed in favor of the
     reply path, which re-fetches the referenced message directly and copies its
     media onto the reply (always in-window), so it works at any history depth.
-- **Media attribution hint** — `[System: These images (Media IDs: X, Y) were
+- **Media attribution hint**: `[System: These images (Media IDs: X, Y) were
   sent by Z]`, with dedicated wording for reply-referenced media ("included in
   the message being replied to") and forwarded media ("attached to the
   forwarded message described above"). Reply media registers the referenced
@@ -119,7 +119,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   source channel, so only the wrapper ID is resolvable by media-ID tools
   fetching from the current channel (the shared image extractor scans the
   wrapper's `messageSnapshots` to find the media).
-- **Nested forwards (a forward of a forward)** — Discord's `message_snapshots`
+- **Nested forwards (a forward of a forward)**: Discord's `message_snapshots`
   payload is non-recursive, so re-forwarding an already-forwarded message
   delivers an *empty* snapshot: no text, no attachments, no embeds. The wrapper's
   own `reference` survives and points at the intermediate forward, so
@@ -127,16 +127,26 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   to reach the next snapshot level, repeating up to `FORWARD_CHAIN_MAX_DEPTH`
   hops (default 3, each hop costing one message fetch). An empty snapshot is a
   reliable nested-forward signal because Discord rejects genuinely empty
-  messages. When the origin cannot be re-fetched — unreadable channel, deleted
-  message, depth exhausted — the block degrades to an explicit "was itself a
+  messages. When the origin cannot be re-fetched: unreadable channel, deleted
+  message, depth exhausted: the block degrades to an explicit "was itself a
   forward … contents cannot be seen" notice and registers no media ID, rather
   than emitting an empty forward block that would invite the model to invent one.
   Both `buildForwardContext` and the shared image extractor resolve the chain, so
   a registered media ID always re-resolves to the same bytes.
-- **Text part assembly** — `${authorName}: ${content}` prefix, mention
+- **Text part assembly**: `${authorName}: ${content}` prefix, mention
   conversion, humanizer transform (model items at HEAVY+), uncensor
   input transforms.
-- **Identity macros are preserved in message bodies** — this stage is the only
+- **Humanizer transform is deterministic here**: at HEAVY, `content` (the
+  message's real, already-delivered text) is re-passed through
+  `humanizeString()` with `suppressPunctuationNoise: true`. Only casing and
+  semicolon stripping apply, with no randomized comma/emphasis remove-or-flush
+  roll, so every comma in `content` survives. `content` already reflects whatever noise live delivery rolled when
+  the message was originally sent, so re-rolling it independently on every
+  context build would just re-randomize already-final output without adding
+  fidelity, and would defeat provider-side prompt-prefix caching for every
+  turn after it (the same historical turn would render differently build to
+  build). See `src/utils/text/processors/formatters.ts`.
+- **Identity macros are preserved in message bodies**: this stage is the only
   `convertMentions` caller that handles raw prose it did not author, so it splits
   the conversion in two: the **author label** is converted with
   `identityMacroMode: "resolve"` (it names the turn's owner), and the **joined
@@ -145,7 +155,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   `{user}` stay literal. Two reasons:
   - On a model-role line `authorName` *is* the persona label and `botName` *is*
     the persona nickname, so resolving would collapse **both** macros onto the
-    same persona name — turning `{bot} greets {user}` into `Tomori greets Tomori`.
+    same persona name; turning `{bot} greets {user}` into `Tomori greets Tomori`.
   - A message body legitimately contains macros whenever a user asks the persona
     to draft a preset or system prompt; rewriting them corrupts the draft the
     user is iterating on.
@@ -154,19 +164,19 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   emojis/stickers, participants, sample dialogues, preset nodes, and the
   memory/thread/cross-channel tools) authors its own text and keeps the default
   `"resolve"` mode.
-- **Copied-render webhook reconstruction** — webhook usernames formatted as
+- **Copied-render webhook reconstruction**: webhook usernames formatted as
   `SourcePersona (target)` are attributed to `SourcePersona` for role mapping,
   self-reply ownership, and reply routing, while `authorName` preserves the full
   visible label. The resulting dialogue line stays reversible as
   `SourcePersona (target): content`, so the model can repeat the same syntax.
-- **Sender metadata** — dialogue items carry hidden `sender` metadata
+- **Sender metadata**: dialogue items carry hidden `sender` metadata
   (`personaName` when available, otherwise `authorName`) so strict-chat
   media relocation can attribute model-role images without parsing the
   visible `{Name}:` text prefix.
-- **Detached system parts** — system hints that should not be merged with
+- **Detached system parts**: system hints that should not be merged with
   the message text are split into a separate `user`-role item via
   `pushDialogueHistoryContextItem`.
-- **Date spacers** — before a message whose server-calendar day differs from
+- **Date spacers**: before a message whose server-calendar day differs from
   the preceding timestamped message, emits an absolute-date `[System: ...]`
   separator. Messages without `createdAt` neither create nor advance a boundary.
   The `{message_metadata_tool}` macro is expanded once before this loop, so the
@@ -179,7 +189,8 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
 - Injects `[System: ${context_note}]` as a `user`-role item with tag
   `CONTEXT_NOTE_INJECTION` at the target index (or at the end if the
   history is shorter than the depth).
-- If `tomoriConfig.verbatim_tool_calling_enabled` is true and
+- If the active model opted into verbatim tool calling
+  (`tomoriState.llm.verbatim_tool_calling`, a `custom` provider) and
   `tomoriState.llm.has_tools` is true, injects one additional
   `CONTEXT_NOTE_INJECTION` at depth 3. This nudge tells Custom endpoint models
   how to emit the strict code-span/fenced verbatim tool-call syntax. The
@@ -187,7 +198,7 @@ or `CONTEXT_NOTE_INJECTION` for the injected note.
   ([`07b-verbatim-tool-definitions.md`](/architecture/pipelines/context-build/02-native-assembly/07b-verbatim-tool-definitions/)),
   gated by the same predicate.
 - The producer-supplied reunion note reuses the same `activeNotes` mechanism at
-  `TIME_AWARENESS_NOTE_DEPTH` (default 3). The chat pipeline omits it for user
+  `TIME_AWARENESS_NOTE_DEPTH` (3 messages). The chat pipeline omits it for user
   impersonation and when the direct triggerer has no internal user id.
 
 **Only the direct triggerer gets a note.** Passive authors in the channel history
@@ -208,12 +219,14 @@ leaderboard correctness.
    turns release immediately; eligible turns carry the claim in the
    `ReunionPresenceScope` on `ChatTurnContext.reunionPresence`.
 2. `recordReunionPresence` at **post-turn** immediately persists `presence_seen`
-   after a response lands, then releases the claim. Empty and failed turns release
-   without writing. A concurrent turn suppressed by an active claim also does not
-   write, so a failed claimant cannot make the user lose the pending reunion.
+   after a response lands, then releases the claim. A direct-delivery tool such as
+   voice generation also counts when it confirms that its message reached Discord,
+   even if the model emits no separate text. Empty and failed turns release without
+   writing. A concurrent turn suppressed by an active claim also does not write, so
+   a failed claimant cannot make the user lose the pending reunion.
 
 The claim prevents separate channel locks from building the same reunion context at
-the same time. `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` releases abandoned claims after
+the same time. `REUNION_CLAIM_TTL_MS` (240000) releases abandoned claims after
 an interrupted turn. Empty-response retries finalize the old claim before rebuilding
 context, allowing the retry to claim the note itself.
 
@@ -241,14 +254,14 @@ After this stage runs:
   - One combined item when the role is `user` and media/text both exist
   - Two separated items (`user` system parts + `role` real parts) when
     the role is `model` and detached system parts exist
-- Counted images respect `MEDIA_IMAGE_MESSAGE_LIMIT` — older counted
+- Counted images respect `MEDIA_IMAGE_MESSAGE_LIMIT`; older counted
   images get a budget note instead of descriptors.
 - Duplicate images don't appear twice; the *last* occurrence in the
   window is the one that renders.
 - `mediaDescriptors` remain capability-neutral. They are not provider-ready
   image/video parts until `resolveMediaForModel(...)` runs for a concrete
   attempt model.
-- Context note injects exactly once per build — either at the depth
+- Context note injects exactly once per build; either at the depth
   target or at the very end if history is shorter.
 - Verbatim tool-calling nudge injection is opt-in and independent of
   persona/channel/global context notes; adding the workaround must not suppress
@@ -263,21 +276,20 @@ After this stage runs:
 
 ## Configuration
 
-| Env var | Default | Purpose |
-|---|---|---|
-| `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
-| `PERSONA_USER_BLOCK_CACHE_TTL_SECONDS` | `60` | TTL for active persona user block lookups |
-| `TIME_AWARENESS_REUNION_DAYS` | `7` | Minimum personal-calendar-day reunion gap |
-| `TIME_AWARENESS_NOTE_DEPTH` | `3` | Messages from the end where reunion notes inject |
-| `TIME_AWARENESS_REUNION_CLAIM_TTL_MS` | `240000` | Safety expiry for an abandoned process-local Reunion claim |
-| `STAT_TRACKING_ENABLED` | `true` | Write side of the presence clock; `false` disables reunion notes |
+| Source | Key | Value | Purpose |
+|---|---|---|---|
+| Env var | `MEDIA_IMAGE_MESSAGE_LIMIT` | `3` | Max in-window messages that render counted images |
+| Constant (`personaUserBlockCache.ts`) | `CACHE_TTL_MS` | `60` | TTL for active persona user block lookups |
+| Constant (`timeAwareness.ts`) | `TIME_AWARENESS_REUNION_DAYS` | `7` | Minimum personal-calendar-day reunion gap |
+| Constant (`reunionPresence.ts`) | `REUNION_CLAIM_TTL_MS` | `240000` | Safety expiry for an abandoned process-local Reunion claim |
+| Env var | `STAT_TRACKING_ENABLED` | `true` | Write side of the presence clock; `false` disables reunion notes |
 
 | Source | Field | Effect |
 |---|---|---|
 | `tomoriConfig` | `message_fetch_limit` | Caps media window |
 | `tomoriConfig` | `humanizer_degree` | HEAVY+ applies humanizer to model items |
 | `tomoriConfig` | `context_note`, `context_note_depth` | Context-note injection |
-| `tomoriConfig` | `verbatim_tool_calling_enabled` | Enables the depth-3 verbatim tool-calling nudge when the effective LLM has tools |
+| `tomoriState.llm` | `verbatim_tool_calling` | Enables the depth-3 verbatim tool-calling nudge when the model is a tool-capable `custom` provider |
 | `tomoriConfig` | `time_awareness_enabled` | Opt-out gate for reunion notes and date spacers |
 | `tomoriConfig` | `timezone_offset` | Server-calendar boundary for date spacers |
 | `tomoriConfig` | `uncensor_unicode_space_enabled`, `uncensor_sanitize_enabled` | Drives uncensor transforms |
@@ -296,7 +308,7 @@ plugin-relevant seams:
 | `MEDIA_IMAGE_MESSAGE_LIMIT` policy | Hardcoded env var; a plugin adding "per-persona media limit" would extend the resolution. |
 | Image-attribution hint format | Hardcoded English; localization would extend. → plugin plan candidate. |
 | Humanizer + uncensor integration | Shared with sample dialogues (stage 10). |
-| Context-note injection depth | Tomori-state can override tomoriConfig — a plugin adding "per-channel context note" would extend the resolution. → plugin plan candidate. |
+| Context-note injection depth | Tomori-state can override tomoriConfig: a plugin adding "per-channel context note" would extend the resolution. → plugin plan candidate. |
 | `pushDialogueHistoryContextItem` (the only contributor that uses it) | The push utility wraps tag defaulting; if a plugin emits its own dialogue items it would use the same helper to stay consistent. |
 
 **A plugin extension for "alternate history rendering"** (e.g.

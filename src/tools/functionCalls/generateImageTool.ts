@@ -35,9 +35,11 @@ import { statRepository } from "@/utils/db/repositories";
 import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
+import { generateOpenRouterImage } from "@/providers/openrouter/openrouterImageGeneration";
 import { ZAI_CODING_IMAGES_GENERATIONS_URL, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
-import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { formatCustomEndpointModelDisplay } from "@/utils/provider/customProviderUtils";
+import { getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
+import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
+import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { MEDIA_LIMITS } from "@/utils/security/rateLimiter";
 import { safeDownload } from "@/utils/security/safeDownload";
 import { llmModelRepo } from "@/utils/db/repositories/LlmModelRepository";
@@ -47,11 +49,11 @@ import { optimizeImageBuffer } from "@/utils/image/imageProcessor";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { readImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import { extractImagesFromMessage } from "@/utils/image/imageExtractor";
-import { isOpenRouterGeminiModelCodename } from "@/utils/provider/openrouterModelCapabilities";
+import { beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 
 const IMAGE_REFERENCE_MAX_COUNT = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_COUNT ?? "3", 10);
 const IMAGE_REFERENCE_MAX_TOTAL_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_TOTAL_BYTES ?? "6291456", 10);
-const IMAGE_REFERENCE_TINY_MAX_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_TINY_MAX_BYTES ?? "950000", 10);
+const IMAGE_REFERENCE_TINY_MAX_BYTES = 950_000;
 const IMAGE_REFERENCE_MAX_SINGLE_BYTES = Number.parseInt(process.env.IMAGE_REFERENCE_MAX_SINGLE_BYTES ?? "2097152", 10);
 
 type ImageReference = {
@@ -808,180 +810,6 @@ export class GenerateImageTool extends BaseTool {
   }
 
   /**
-   * Generate image using OpenRouter API
-   * @param modelCodename - Model codename (e.g., "google/gemini-2.5-flash-image")
-   * @param aspectRatio - Aspect ratio (e.g., "16:9")
-   * @param referenceImages - Optional array of reference images for img2img
-   * @returns Promise resolving to generated image data and mimeType
-   */
-  private async generateImageWithOpenRouter(
-    apiKey: string,
-    modelCodename: string,
-    prompt: string,
-    aspectRatio: string,
-    referenceImages?: Array<{ mimeType: string; data: string }>,
-    abortSignal?: AbortSignal,
-  ): Promise<{ imageData: string | null; mimeType: string | null }> {
-    // Helpful debug log for provider/model combo
-    log.info(
-      `[OpenRouter] Sending image request to model "${modelCodename}" (aspect ratio: ${aspectRatio}, refs: ${referenceImages?.length ?? 0})`,
-    );
-
-    const messages: Array<{
-      role: string;
-      content: Array<{
-        type: string;
-        text?: string;
-        image_url?: { url: string };
-      }>;
-    }> = [];
-
-    // Build content array with text prompt first (OpenRouter recommendation)
-    const contentParts: Array<{
-      type: string;
-      text?: string;
-      image_url?: { url: string };
-    }> = [{ type: "text", text: prompt }];
-
-    if (referenceImages && referenceImages.length > 0) {
-      for (const img of referenceImages) {
-        contentParts.push({
-          type: "image_url",
-          image_url: {
-            url: `data:${img.mimeType};base64,${img.data}`,
-          },
-        });
-      }
-      log.info(
-        `[OpenRouter] Added ${referenceImages.length} reference image(s) to content array. Total content parts: ${contentParts.length}`,
-      );
-    }
-
-    messages.push({
-      role: "user",
-      content: contentParts,
-    });
-
-    const requestPayload = {
-      model: modelCodename,
-      messages: messages,
-      modalities: isOpenRouterGeminiModelCodename(modelCodename) ? ["image", "text"] : ["image"],
-      image_config: {
-        aspect_ratio: aspectRatio,
-      },
-    };
-
-    // Log request structure (without full base64 data to avoid log clutter)
-    log.info(
-      `[OpenRouter] Request payload structure: ${JSON.stringify(
-        {
-          model: requestPayload.model,
-          messageCount: requestPayload.messages.length,
-          message: {
-            role: messages[0]?.role,
-            contentParts: contentParts.map((part) => ({
-              type: part.type,
-              hasImageUrl: part.type === "image_url",
-              hasText: part.type === "text",
-              imageDataPreview: part.image_url?.url.substring(0, 100),
-              textPreview: part.text?.substring(0, 50),
-            })),
-          },
-          modalities: requestPayload.modalities,
-          image_config: requestPayload.image_config,
-        },
-        null,
-        2,
-      )}`,
-    );
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestPayload),
-      signal: abortSignal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      const bodySnippet = errorText.slice(0, 500);
-      log.warn(
-        `[OpenRouter] Image request failed (${response.status} ${response.statusText}) for model "${modelCodename}". Body: ${bodySnippet}`,
-      );
-
-      let parsedMessage = "";
-      try {
-        const parsed = JSON.parse(errorText);
-        parsedMessage = (parsed?.error?.message as string | undefined) || (parsed?.message as string | undefined) || "";
-      } catch {
-        // ignore JSON parse errors; fall back to raw snippet
-      }
-
-      const friendlyMessage = parsedMessage || bodySnippet || `${response.status} ${response.statusText}`.trim();
-
-      throw new Error(
-        `OpenRouter API request failed (${response.status} ${response.statusText}) for model "${modelCodename}": ${friendlyMessage}`,
-      );
-    }
-
-    const result = await response.json();
-
-    // Extract image from response.
-    // OpenRouter may return images either in `message.images` or embedded in `message.content` parts.
-    const message = result.choices?.[0]?.message;
-
-    let imageUrl: string | null = null;
-
-    if (message?.images?.[0]) {
-      const firstImage = message.images[0];
-      // OpenRouter may return either snake_case (image_url) or camelCase (imageUrl)
-      imageUrl = firstImage?.image_url?.url || firstImage?.imageUrl?.url || null;
-    } else if (Array.isArray(message?.content)) {
-      const firstImagePart = message.content.find(
-        (part: unknown) =>
-          typeof part === "object" &&
-          part !== null &&
-          "type" in part &&
-          (part as { type?: string }).type === "image_url",
-      ) as { image_url?: { url?: string } } | undefined;
-
-      imageUrl = firstImagePart?.image_url?.url || null;
-    }
-
-    if (imageUrl) {
-      // OpenRouter may return data URLs like "data:image/png;base64,..." OR a normal URL.
-      const dataUrlMatches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (dataUrlMatches) {
-        return {
-          imageData: dataUrlMatches[2],
-          mimeType: dataUrlMatches[1],
-        };
-      }
-
-      // Fallback: fetch remote URL and convert to base64.
-      if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-        const imageResponse = await safeDownload(imageUrl, {
-          maxSizeMB: MEDIA_LIMITS.MAX_MEDIA_SIZE_MB,
-          timeoutMs: 15_000,
-          externalSignal: abortSignal,
-        });
-        if (imageResponse.success && imageResponse.buffer) {
-          const mimeType = imageResponse.contentType?.split(";")[0] || null;
-          return {
-            imageData: imageResponse.buffer.toString("base64"),
-            mimeType,
-          };
-        }
-      }
-    }
-
-    return { imageData: null, mimeType: null };
-  }
-
-  /**
    * Execute image generation
    * @param args - Arguments containing prompt, optional media_id, and optional aspect_ratio
    * @returns Promise resolving to tool result with generated image
@@ -1093,15 +921,15 @@ export class GenerateImageTool extends BaseTool {
     let quotaCheck: QuotaCheckResult = { allowed: true };
 
     try {
-      // Resolve credentials first so we can skip server quota for personal BYOK users
-      const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-standard", {
-        userId: context.internalUserId ?? null,
-      });
-
-      // Personal BYOK users bring their own API quota, so bypass server quota entirely
-      if (creds.source === "server") {
-        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
+        context.tomoriState.server_id,
+        "image-standard",
+        context.internalUserId ?? null,
+        checkImageQuota,
+        userDiscId,
+        quotaCheck,
+      );
+      quotaCheck = serverQuotaCheck;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -1155,9 +983,7 @@ export class GenerateImageTool extends BaseTool {
       }
 
       const modelCodename = await this.getDiffusionModelCodename(diffusionModelId);
-      const displayModelName = creds.customEndpoint
-        ? formatCustomEndpointModelDisplay(creds.customEndpoint)
-        : modelCodename;
+      const displayModelName = creds.customEndpoint ? formatCustomModelDisplay(creds.customEndpoint) : modelCodename;
 
       log.info(`Using diffusion model: ${modelCodename} for image generation`);
 
@@ -1378,6 +1204,13 @@ export class GenerateImageTool extends BaseTool {
           : null;
 
       if (creds.customEndpoint) {
+        const handoff =
+          creds.customEndpoint.api_style === "comfyui"
+            ? await beginTextModelHandoffBeforeComfyUi({
+                tomoriState: context.tomoriState,
+                comfyUi: { endpointUrl: creds.customEndpoint.endpoint_url, apiKey },
+              })
+            : null;
         try {
           const result = await generateCustomImageViaEndpoint({
             endpoint: creds.customEndpoint,
@@ -1457,6 +1290,9 @@ export class GenerateImageTool extends BaseTool {
           } else {
             throw err;
           }
+        } finally {
+          // Reload continues independently so Discord upload is never held behind text-model readiness.
+          void handoff?.restore();
         }
       } else if (nativeImageProvider) {
         const result = await nativeImageProvider.generateNativeImage({
@@ -1470,14 +1306,14 @@ export class GenerateImageTool extends BaseTool {
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "openrouter") {
         // Use OpenRouter API
-        const result = await this.generateImageWithOpenRouter(
+        const result = await generateOpenRouterImage({
           apiKey,
           modelCodename,
-          effectivePrompt,
+          prompt: effectivePrompt,
           aspectRatio,
-          providerReferenceImages.length > 0 ? providerReferenceImages : undefined,
-          context.abortSignal,
-        );
+          ...(providerReferenceImages.length > 0 ? { referenceImages: providerReferenceImages } : {}),
+          ...(context.abortSignal ? { abortSignal: context.abortSignal } : {}),
+        });
         generatedImageData = result.imageData;
       } else if (imageGenerationImplementation === "google") {
         // Use Google Gemini API
@@ -1599,11 +1435,9 @@ export class GenerateImageTool extends BaseTool {
         });
       }
 
-      // Note: We intentionally DO NOT include imageMetadata for generated images
-      // because Discord CDN URLs are protected and cannot be fetched by external
-      // servers (like OpenRouter). The model doesn't need to see its own generated
-      // output - it just needs confirmation that the generation succeeded.
-      // The text message includes the Discord message ID for reference.
+      // Generated images omit imageMetadata: Discord CDN URLs are protected and cannot be
+      // fetched by external servers such as OpenRouter. The model needs only confirmation
+      // that generation succeeded, and the text message carries the Discord message ID.
 
       let successMessage = `Successfully generated and sent image to Discord (message ID: ${sentMessage.id}). The image has been created based on your prompt${
         referenceImagesUsed ? " and the reference image(s)" : ""

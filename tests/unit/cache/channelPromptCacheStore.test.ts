@@ -7,9 +7,9 @@ import {
   invalidateChannelPromptCache,
   setChannelPromptCache,
 } from "@/utils/cache/channelPromptCacheStore";
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
 
-// Default TTL is TOMORI_STATE_CACHE_TTL_MINUTES (10 min) unless overridden in env.
-const TTL_MS = Number.parseInt(process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10", 10) * 60 * 1000;
+const TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
 
 afterEach(() => {
   setSystemTime();

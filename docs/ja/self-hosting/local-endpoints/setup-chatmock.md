@@ -29,15 +29,15 @@ chatmock serve
 
 DiscordでTomoriBotの`custom`プロバイダーを構成し、以下を使用します。
 
-- **Endpoint URL**: `http://127.0.0.1:8000/v1`
-- **Model Name**: `gpt-5.4`や`gpt-5.3-codex`など、ChatMockが受信すべき正確なモデル文字列。
+- **エンドポイントURL**：`http://127.0.0.1:8000/v1`
+- **モデル名（正確なAPI ID）**：`gpt-5.4`や`gpt-5.3-codex`など、ChatMockが受信すべき正確なモデル文字列。
 
-TomoriBotは構成されたベースURLに`/chat/completions`を追加するため、末尾のパスがない`http://127.0.0.1:8000`は使用**しないでください**。
+末尾のパスがない`http://127.0.0.1:8000`も使用できます。TomoriBotは`/chat/completions`を追加する前に`/v1`へ正規化します。
 
 ChatMockの以下の機能フラグを有効にします。
-- **Function Calling / Tools**: Yes
-- **Image Understanding**: Yes
-- **Video Understanding**: No
-- **Structured Output**: Yes
+- **ツール呼び出し**：はい
+- **画像入力**：はい
+- **動画入力**：いいえ
+- **構造化出力**：はい
 
 **注意**: Codex CLIでは`system`プロンプトを変更できないため、回避策としてTomoriBotの`system`プロンプトはコンテキスト内の`user`のターンに変換されます。この回避策が適切に機能するように、`.env`変数の`CHATMOCK_PORT`を実際のChatMockのポート（デフォルトは8000）と一致するように構成してください。

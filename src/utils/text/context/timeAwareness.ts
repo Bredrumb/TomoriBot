@@ -1,13 +1,6 @@
 import { formatDateWithOffset, getCalendarDayWithOffset, isValidUtcOffset } from "@/utils/text/timezoneHelper";
 
-function readIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
-const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7);
+const TIME_AWARENESS_REUNION_DAYS = 7;
 
 /**
  * How many messages deep the reunion note is injected. Depth 1 (the original
@@ -15,7 +8,7 @@ const TIME_AWARENESS_REUNION_DAYS = readIntEnv("TIME_AWARENESS_REUNION_DAYS", 7)
  * user's actual prompt for the model's attention; depth 3 matches the verbatim
  * tool-calling nudge and keeps it advisory rather than imperative.
  */
-export const TIME_AWARENESS_NOTE_DEPTH = readIntEnv("TIME_AWARENESS_NOTE_DEPTH", 3);
+export const TIME_AWARENESS_NOTE_DEPTH = 3;
 
 export const SPACER_TEMPLATE =
   "[System: The messages above were sent on {date} ({relative}, server time). Use the {message_metadata_tool} tool to learn the exact times of each message, if needed.]";
@@ -43,7 +36,7 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
   const offsetHours = resolvePersonalTimezoneOffset(args.personalOffset, args.serverOffset);
 
   if (args.lastPreviousDayAt === null) {
-    return `${args.displayName} is talking to you for the very first time! Welcome them naturally and ask something friendly to get to know them.`;
+    return `${args.displayName} is talking to you directly for the very first time! Welcome them naturally and ask something friendly to get to know them.`;
   }
 
   const nowMs = args.nowMs ?? Date.now();
@@ -53,7 +46,7 @@ export function buildReunionNote(args: BuildReunionNoteArgs): string | null {
   if (dayGap < reunionDays) return null;
 
   const lastDate = formatDateWithOffset(args.lastPreviousDayAt.getTime(), offsetHours);
-  return `${args.displayName} is talking to you again for the first time since ${lastDate}. It's been ${dayGap} days! Acknowledge their return naturally and ask what they've been up to.`;
+  return `${args.displayName} hasn't interacted with you specifically since ${lastDate} (${dayGap} days ago), though they may have been around the server. Acknowledge them interacting with you again.`;
 }
 
 /**

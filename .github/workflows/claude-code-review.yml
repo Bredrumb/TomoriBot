@@ -158,7 +158,7 @@ jobs:
             1. Raw-SQL boundary — raw `sql`…`` / `tx`…`` tagged template literals may ONLY live in
                src/utils/db/repositories/ (plus the allow-listed plumbing in sqlAudit.ts). Any `sql`…``
                in a command, event, tool, util, cache, or context builder is a violation; it must be a
-               repository method call instead. (docs/en/contributing/raw-sql-boundary.md)
+               repository method call instead. (docs/en/contributing/policies/raw-sql.md)
             2. Cache-after-write ordering — invalidate caches AFTER a successful DB write, in the SAME
                code path, never before the write and never on a failed write. Do not manually mutate
                cached objects. Prefer repository-owned invalidation. Flag caller-side invalidation that

@@ -38,15 +38,12 @@ import {
   NAI_DEFAULT_NEGATIVE_PROMPT,
   classifyNaiImageError,
   generateNovelAiImage,
-  isNaiV4Model,
+  usesNaiStructuredPromptFormat,
   type NaiGenerationCharacterPayload,
 } from "@/utils/image/naiImageGeneration";
 import { loadCharRefAsBase64 } from "@/utils/storage/charrefStorage";
-import {
-  CredentialUnavailableError,
-  getResolvedCapabilityModelId,
-  resolveCapabilityCredentials,
-} from "@/utils/provider/credentialResolver";
+import { CredentialUnavailableError, getResolvedCapabilityModelId } from "@/utils/provider/credentialResolver";
+import { resolveCredentialsWithMediaQuota } from "@/utils/quota/mediaQuotaGate";
 
 // Disabled by default because the suggest-tags endpoint is currently unstable and
 // can hurt generation reliability; enable again once the API is consistently healthy.
@@ -56,7 +53,7 @@ const NAI_IMAGE_ENABLE_TAG_RESOLUTION =
 // 1.0 fully redraws the masked area from the prompt with no original pixel bleed-through.
 // Lower values preserve more of the original structure but cause color blending artifacts
 // when the edit changes colors (e.g. white hair → red hair at 0.7 produces grey).
-const NAI_INPAINT_STRENGTH = Number.parseFloat(process.env.NAI_INPAINT_STRENGTH || "1.0");
+const NAI_INPAINT_STRENGTH = 1.0;
 const NAI_ENABLE_CHAR_REFERENCES = (process.env.NAI_ENABLE_CHAR_REFERENCES || "true").toLowerCase() === "true";
 // Intentionally disabled: profile-driven autofill can conflict with inline tags the
 // LLM picks from context. The LLM reads Physical Appearance tags from context and writes them
@@ -728,7 +725,7 @@ export class GenerateImageNaiTool extends BaseTool {
 
     let requestPayload: Record<string, unknown>;
 
-    if (isNaiV4Model(model)) {
+    if (usesNaiStructuredPromptFormat(model)) {
       requestPayload = {
         action: "infill",
         input: prompt,
@@ -915,15 +912,15 @@ export class GenerateImageNaiTool extends BaseTool {
     let quotaCheck: QuotaCheckResult = { allowed: true };
 
     try {
-      // Resolve credentials first so we can skip server quota for personal BYOK users
-      const creds = await resolveCapabilityCredentials(context.tomoriState.server_id, "image-nai", {
-        userId: context.internalUserId ?? null,
-      });
-
-      // Personal BYOK users bring their own API quota, so bypass server quota entirely
-      if (creds.source === "server") {
-        quotaCheck = await checkImageQuota(context.tomoriState.server_id, userDiscId);
-      }
+      const { credentials: creds, quotaCheck: serverQuotaCheck } = await resolveCredentialsWithMediaQuota(
+        context.tomoriState.server_id,
+        "image-nai",
+        context.internalUserId ?? null,
+        checkImageQuota,
+        userDiscId,
+        quotaCheck,
+      );
+      quotaCheck = serverQuotaCheck;
 
       if (!quotaCheck.allowed) {
         let errorMessage = "";
@@ -985,7 +982,7 @@ export class GenerateImageNaiTool extends BaseTool {
         `Using NAI diffusion model: ${baseModelCodename} (source: ${resolvedModel.source}) for ${isInpaintMode ? "inpainting" : "image generation"}`,
       );
 
-      if (characters.length > 0 && !isNaiV4Model(baseModelCodename)) {
+      if (characters.length > 0 && !usesNaiStructuredPromptFormat(baseModelCodename)) {
         return {
           success: false,
           error: localizer(context.locale, "tools.generate_image_nai.characters_require_v4"),
@@ -1167,7 +1164,7 @@ export class GenerateImageNaiTool extends BaseTool {
           sourceImage.mimeType,
           editTarget,
           googleApiKey,
-          isNaiV4Model(baseModelCodename),
+          usesNaiStructuredPromptFormat(baseModelCodename),
         );
 
         log.info(

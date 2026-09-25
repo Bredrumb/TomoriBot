@@ -1,6 +1,22 @@
 nul
 temp_*
 .venv*
+
+# Temp/scratch folders dropped in the repo root by local tooling (e.g. ollama scratch dirs).
+# Scoped to a tmp-/temp- prefix, not a bare substring: "*temp*/" would also match template.ts,
+# ISSUE_TEMPLATE/, and systemPrompts.ts (contains "temp" as "sys-temp-rompts").
+tmp-*/
+temp-*/
+temp/
+.tmp-*/
+
+# Root-level scratch .txt output/prompts (e.g. captured check-locales stdout). Root-scoped so it
+# doesn't hide apps/docs/public/robots.txt or servers/*/requirements.txt.
+/*.txt
+# Root-level throwaway .mjs/.cjs scripts (e.g. locale comparison helpers). Root-scoped so it
+# doesn't hide real modules in subdirectories.
+/*.mjs
+/*.cjs
 # Throwaway output from the /stats infographic render harnesses (scripts/devtools/)
 .spike-output/
 .spike-output-docker/
@@ -12,6 +28,7 @@ __pycache__/
 
 # Script outputs
 backups/*
+scripts/maintenance/stale-translations.json
 
 # DB migration rehearsal working dir (contains prod/dev data dumps & snapshots)
 rehearsal/
@@ -47,6 +64,7 @@ docker-npm-cache/
 characterDrafts.md
 backups/
 references/
+!.agents/skills/*/references/
 security-review/
 
 # Proompting
@@ -66,7 +84,6 @@ crash*/
 .antigravitycli/
 ACTIVECONTEXT.md
 GEMINI.md
-AGENTS.md
 
 # Logs
 logs
@@ -223,3 +240,7 @@ terraform.tfvars
 !terraform/azure/.terraform.lock.hcl
 *.tfplan
 *.tfplan.*
+
+# Throwaway baseline written inside the repo by checkCommandMentions.test.ts. It is removed in a
+# finally block, but the name carries Date.now(), so a `git add` racing a test run would commit it.
+tests/unit/checks/tmp-baseline-*.json

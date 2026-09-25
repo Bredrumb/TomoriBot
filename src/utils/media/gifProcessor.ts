@@ -14,16 +14,10 @@ import { safeDownload } from "@/utils/security/safeDownload";
 const MAX_KEYFRAME_WIDTH = 800;
 
 /** JPEG compression quality (0-100) for extracted GIF keyframes. Higher = better quality, larger payload. */
-const JPEG_QUALITY = (() => {
-  const parsed = Number.parseInt(process.env.GIF_JPEG_QUALITY || "80", 10);
-  return Number.isFinite(parsed) ? Math.min(100, Math.max(1, parsed)) : 80;
-})();
+const GIF_JPEG_QUALITY = 80;
 
 /** Maximum number of keyframes to extract from a GIF. Prevents extremely long GIFs from overwhelming context. */
-const MAX_KEYFRAMES = (() => {
-  const parsed = Number.parseInt(process.env.GIF_MAX_KEYFRAMES || "10", 10);
-  return Number.isFinite(parsed) ? Math.max(1, parsed) : 10;
-})();
+const GIF_MAX_KEYFRAMES = 10;
 
 /**
  * Extract every Nth frame as a keyframe.
@@ -71,8 +65,8 @@ export interface GifProcessorConfig {
 
 const DEFAULT_CONFIG: Required<GifProcessorConfig> = {
   maxWidth: MAX_KEYFRAME_WIDTH,
-  jpegQuality: JPEG_QUALITY,
-  maxKeyframes: MAX_KEYFRAMES,
+  jpegQuality: GIF_JPEG_QUALITY,
+  maxKeyframes: GIF_MAX_KEYFRAMES,
   frameInterval: FRAME_INTERVAL,
   timeoutMs: PROCESSING_TIMEOUT_MS,
 };

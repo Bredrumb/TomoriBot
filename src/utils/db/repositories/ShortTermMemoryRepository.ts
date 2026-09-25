@@ -23,6 +23,7 @@ import {
   getShortTermMemoryForUserChannel,
   getShortTermMemoryForServerChannel,
   updateShortTermMemorySummary,
+  clearShortTermMemorySummary,
   updateShortTermMemoryCategories,
   incrementStmTurnCounter,
   resetStmTurnCounter,
@@ -37,7 +38,7 @@ import type { IRepository } from "./IRepository";
 
 /**
  * Exported shape for STM config (config only: per-channel state is excluded).
- * Consumed by the Phase 6 export pipeline and `/server config export`.
+ * Consumed by the Phase 6 export pipeline and `/export config`.
  */
 type ShortTermMemoryExportShape = {
   stm_config: {
@@ -132,6 +133,15 @@ class ShortTermMemoryRepository implements IRepository<ShortTermMemoryExportShap
     ...args: Parameters<typeof updateShortTermMemoryCategories>
   ): ReturnType<typeof updateShortTermMemoryCategories> {
     return updateShortTermMemoryCategories(...args);
+  }
+
+  /**
+   * Clears the summary for an STM entry and persists that empty state.
+   */
+  clearSummary(
+    ...args: Parameters<typeof clearShortTermMemorySummary>
+  ): ReturnType<typeof clearShortTermMemorySummary> {
+    return clearShortTermMemorySummary(...args);
   }
 
   /**

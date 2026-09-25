@@ -51,14 +51,14 @@ import {
   appendSupportedMediaFromMessage,
   extractEmojiImageAttachments,
 } from "@/utils/chat/contextMedia";
-import { normalizeRenderModifierName, resolveRenderModifierSourcePersona } from "@/utils/discord/renderModifierParser";
-import { resolveSpriteMessageDisplayName } from "@/utils/discord/spriteMessageLabel";
+import { normalizeRenderModifierName } from "@/utils/discord/renderModifierParser";
+import { resolveWebhookPersonaAuthor } from "@/utils/discord/webhookPersonaAuthor";
 import { llmSections } from "@/db/seed/catalog/models";
 
-// Char-per-token ratios and the primitive estimators (charsToTokensText/Json,
-// estimateContextItemsTokens) now live in @/utils/text/tokenEstimate so this command
-// and the post-turn stat recorder share one source of truth. The higher-level,
-// cost-specific helpers below still live here.
+// Char-per-token ratios and the primitive estimators live in @/utils/text/tokenEstimate
+// so this command and the post-turn stat recorder share one source of truth. The
+// higher-level, cost-specific helpers below stay here because only this command
+// needs them.
 
 /**
  * Rough per-message overhead for chat-format wrappers (role markers, separators, etc.).
@@ -81,15 +81,14 @@ const MENTION_PING_RULE_CHARS_EST = 300;
 const EMOJI_USAGE_RULES_CHARS_EST = 340;
 const STICKER_USAGE_RULES_CHARS_EST = 270; // header + footer, excluding per-sticker lines
 
-const EST_OUTPUT_SHORT = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_SHORT, 80, 1);
-const EST_OUTPUT_TYPICAL = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_TYPICAL, 220, 1);
-const EST_OUTPUT_LONG = parseIntegerEnv(process.env.HELP_COST_EST_OUTPUT_LONG, 500, 1);
+/** Assumed reply lengths the cost estimate reports side by side, in tokens. */
+const EST_OUTPUT_SHORT = 80;
+const EST_OUTPUT_TYPICAL = 220;
+const EST_OUTPUT_LONG = 500;
 
-// Per-model prices now live on the `llms` catalog rows (input_price_per_million /
-// output_price_per_million), resolved at runtime by resolveModelPricing(). The old
-// HELP_COST_*_PRICE_PER_MILLION env constants and the Anthropic codename-sniffing tier
-// guess have been removed: a first-party model with no catalog price now reports "pricing
-// unavailable" rather than billing against a coarse provider-wide fallback.
+// First-party pricing is read from the `llms` catalog columns, so a model with no
+// catalog price reports "pricing unavailable" instead of billing against a
+// provider-wide guess. See resolveModelPricing() below for the precedence order.
 
 const YOUTUBE_URL_PATTERNS = [
   /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
@@ -316,6 +315,7 @@ function estimateToolSchemaTokens(): number {
         videogen_enabled: true,
         voice_message_enabled: true,
         user_blocking_enabled: true,
+        user_info_updates_enabled: true,
         thread_creation_enabled: true,
       },
     };
@@ -720,27 +720,15 @@ async function buildRuntimeParityContext(
       personaName = authorName;
     } else if (message.webhookId) {
       const webhookName = message.author.username?.trim();
-      const renderModifierSource = webhookName
-        ? resolveRenderModifierSourcePersona(webhookName, personaByNickname)
+      const resolvedPersona = webhookName
+        ? await resolveWebhookPersonaAuthor(message.id, webhookName, personaByNickname)
         : null;
-      const matchedPersona = webhookName
-        ? (renderModifierSource?.persona ?? personaByNickname.get(normalizeRenderModifierName(webhookName)))
-        : undefined;
 
-      if (matchedPersona) {
-        // Mirror the real pipeline: recover the decorated "Name (sprite)" label
-        // for clean-named sprite messages from the persisted mapping.
-        const spriteDisplayName = renderModifierSource
-          ? null
-          : await resolveSpriteMessageDisplayName(
-              message.id,
-              matchedPersona.persona_id,
-              matchedPersona.persona_nickname,
-            );
-        authorName = renderModifierSource?.displayName ?? spriteDisplayName ?? matchedPersona.persona_nickname;
+      if (resolvedPersona) {
+        authorName = resolvedPersona.displayName;
         authorType = "persona";
-        personaName = matchedPersona.persona_nickname;
-        effectiveAuthorId = `persona:${matchedPersona.persona_id ?? matchedPersona.persona_nickname}`;
+        personaName = resolvedPersona.persona.persona_nickname;
+        effectiveAuthorId = `persona:${resolvedPersona.persona.persona_id ?? resolvedPersona.persona.persona_nickname}`;
       } else if (webhookName) {
         authorName = webhookName;
       }
@@ -802,9 +790,9 @@ async function buildRuntimeParityContext(
       hasLocalMedia && (imageAttachments.length > 0 || videoAttachments.length > 0) ? [message.id] : undefined;
 
     // Merge consecutive same-author messages, mirroring the real context path
-    // (buildSimplifiedHistory): collapse only when both sides are pure text if
-    // either side carries media, keep separate turns so per-message media IDs stay
-    // unambiguous.
+    // (buildSimplifiedHistory): collapsing here is only correct while both sides are
+    // pure text, because a merged turn would leave the two messages' media
+    // indistinguishable.
     const previousMessage = simplifiedMessages[simplifiedMessages.length - 1];
     const currentHasMedia =
       imageAttachments.length > 0 || videoAttachments.length > 0 || (mediaSourceMessageIds?.length ?? 0) > 0;
@@ -869,6 +857,7 @@ async function buildRuntimeParityContext(
     matrixUsers: new Map(),
   });
 
+  const triggererName = getTriggererName(interaction);
   const contextBuild = await buildContext({
     guildId: serverDiscId,
     serverName,
@@ -879,7 +868,9 @@ async function buildRuntimeParityContext(
     channelName,
     channelId: interaction.channelId,
     client,
-    triggererName: getTriggererName(interaction),
+    triggererName,
+    triggererFormattedName: triggererName,
+    triggererAddressTerm: "",
     tomoriNickname: tomoriState.persona_nickname ?? process.env.DEFAULT_BOTNAME ?? "Tomori",
     tomoriAttributes: tomoriState.attribute_list,
     tomoriConfig: tomoriState.config,
@@ -1183,10 +1174,10 @@ async function measureOpenRouterInputTokens(
     throw new Error("OpenRouter model pricing unavailable for other-model");
   }
 
-  // OpenRouter pricing is authoritative from the live API cache and auto-updates with OpenRouter's
-  // rates, so it wins here. The catalog row's price is only a cache-miss safety net: if the live cache
-  // has no entry for this model, fall back to the DB price (seeded, or mirrored from the live rates at
-  // startup by syncOpenrouterCatalogPricing) before giving up.
+  // The live OpenRouter cache wins because it tracks OpenRouter's rate changes; the DB price
+  // is only the fallback, seeded from the catalog or mirrored from the live rates at startup
+  // by syncOpenrouterCatalogPricing. Do not invert this order: a stale catalog row would
+  // silently under- or over-report the cost users see.
   const livePricing = getOpenRouterPricing(providerConfig.model);
   const pricing = livePricing
     ? { input: livePricing.promptPricePerMillion, output: livePricing.completionPricePerMillion }

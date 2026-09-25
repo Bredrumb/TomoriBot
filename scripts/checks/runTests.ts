@@ -13,7 +13,9 @@
  * Test files are grouped into LANES that run concurrently: see {@link planLanes}
  * for the grouping rules and why they are safe.
  *
- * Invoke via `bun run test` (package.json): not `bun test tests/` directly.
+ * Invoke via `bun run test` (package.json), optionally followed by explicit test
+ * files for a focused disposable-database run. Do not call `bun test tests/`
+ * directly when database coverage is required.
  */
 
 import type { SQL } from "bun";
@@ -37,6 +39,17 @@ config({ quiet: true });
  * to `describe`.
  */
 const TEST_TIMEOUT_MS = process.env.TOMORI_TEST_TIMEOUT_MS ?? "30000";
+
+const DATABASE_ENV_KEYS = [
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_HOST",
+  "POSTGRES_PORT",
+  "POSTGRES_USER",
+  "POSTGRES_PASSWORD",
+  "POSTGRES_DB",
+  "TEST_DB_READY",
+] as const;
 
 /** Unique suffix for the disposable database created per run. */
 const runId = `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -242,7 +255,12 @@ interface LaneResult {
  * because lanes run concurrently and interleaved test output is unreadable; the
  * caller replays each lane's buffer in lane order once everything settles.
  */
-async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOutfile?: string): Promise<LaneResult> {
+async function runLane(
+  lane: Lane,
+  extraEnv: Record<string, string>,
+  requestedOutfile?: string,
+  omitDatabaseEnv = false,
+): Promise<LaneResult> {
   const junitOutfiles: string[] = [];
   const chunks: string[] = [];
   let exitCode = 0;
@@ -256,14 +274,27 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
     }
 
     // Spawn the batch and track it so signal-driven cleanup can terminate it.
-    const proc = Bun.spawn(["bun", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs], {
-      env: { ...process.env, ...extraEnv },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const streamOutput = process.env.TOMORI_TEST_STREAM_OUTPUT === "true";
+    const childEnv = { ...process.env, ...extraEnv };
+    if (omitDatabaseEnv) {
+      for (const key of DATABASE_ENV_KEYS) delete childEnv[key];
+    }
+
+    // The wrapper owns environment loading and database selection. Prevent a child from loading a
+    // more specific local env file and silently undoing the disposable-database or skip decision.
+    const proc = Bun.spawn(
+      ["bun", "--no-env-file", "test", "--timeout", TEST_TIMEOUT_MS, ...batch.files, ...reporterArgs],
+      {
+        env: childEnv,
+        stdout: streamOutput ? "inherit" : "pipe",
+        stderr: streamOutput ? "inherit" : "pipe",
+      },
+    );
     liveProcesses.add(proc);
 
-    const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+    const [stdout, stderr] = streamOutput
+      ? ["", ""]
+      : await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = (await proc.exited) ?? 1;
     liveProcesses.delete(proc);
 
@@ -282,17 +313,25 @@ async function runLane(lane: Lane, extraEnv: Record<string, string>, requestedOu
  * then merged into that requested path.
  *
  */
-async function runTestFiles(files: string[], extraEnv: Record<string, string> = {}): Promise<number> {
+async function runTestFiles(
+  files: string[],
+  extraEnv: Record<string, string> = {},
+  omitDatabaseEnv = false,
+): Promise<number> {
   const requestedOutfile = process.env.BUN_TEST_JUNIT_OUTFILE;
   const lanes = await planLanes(files);
 
-  const results = await Promise.all(lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile)));
+  const results = await Promise.all(lanes.map((lane) => runLane(lane, extraEnv, requestedOutfile, omitDatabaseEnv)));
 
   // Replay buffered output in fixed lane order so concurrent runs stay readable.
-  for (const result of results) {
-    const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
-    process.stdout.write(`\n──── lane: ${result.lane.id} (${fileCount} files) ────\n`);
-    process.stdout.write(result.output);
+  // TOMORI_TEST_QUIET is set by `vl` on the full-suite run, where it re-reports each
+  // failing file through the JUnit results instead of replaying every lane's output.
+  if (process.env.TOMORI_TEST_QUIET !== "true") {
+    for (const result of results) {
+      const fileCount = result.lane.batches.reduce((total, batch) => total + batch.files.length, 0);
+      process.stdout.write(`\n──── lane: ${result.lane.id} (${fileCount} files) ────\n`);
+      process.stdout.write(result.output);
+    }
   }
 
   const allOutfiles = results.flatMap((result) => result.junitOutfiles);
@@ -308,9 +347,15 @@ async function main(): Promise<void> {
     throw new Error("[test-runner] Refusing to run with RUN_ENV=production.");
   }
 
-  const testFiles = await discoverTestFiles();
+  const requestedFiles = process.argv.slice(2).filter((argument) => !argument.startsWith("--"));
+  const testFiles = requestedFiles.length > 0 ? requestedFiles : await discoverTestFiles();
+  if (requestedFiles.length > 0) process.env.TOMORI_TEST_STREAM_OUTPUT = "true";
   if (testFiles.length === 0) {
     console.error("[test-runner] No test files found under tests/.");
+    process.exit(1);
+  }
+  if (testFiles.some((file) => !file.replaceAll("\\", "/").startsWith("tests/") || !file.endsWith(".test.ts"))) {
+    console.error("[test-runner] Focused test paths must be .test.ts files under tests/.");
     process.exit(1);
   }
 
@@ -318,7 +363,7 @@ async function main(): Promise<void> {
 
   if (!params) {
     console.log("[test-runner] No Postgres credentials found. DB regression tests will be skipped.");
-    process.exit(await runTestFiles(testFiles));
+    process.exit(await runTestFiles(testFiles, {}, true));
   }
 
   // Non-local host detected, so fall back to skip mode to avoid touching remote DBs.
@@ -327,7 +372,7 @@ async function main(): Promise<void> {
       `[test-runner] Postgres host "${params.host}" is not local. Skipping DB provisioning.\n` +
         "Set TOMORI_TESTS_ALLOW_NONLOCAL_DB=true to override.",
     );
-    process.exit(await runTestFiles(testFiles));
+    process.exit(await runTestFiles(testFiles, {}, true));
   }
 
   const adminUrl = buildUrl(params, params.maintenanceDb);
@@ -370,7 +415,7 @@ async function main(): Promise<void> {
     console.log("[test-runner] Could not reach Postgres. DB regression tests will be skipped.");
     await adminSql?.close({ timeout: 1 }).catch(() => undefined);
     adminSql = null;
-    process.exit(await runTestFiles(testFiles));
+    process.exit(await runTestFiles(testFiles, {}, true));
   }
 
   let exitCode = 1;

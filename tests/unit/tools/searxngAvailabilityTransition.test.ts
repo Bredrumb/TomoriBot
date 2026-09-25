@@ -52,7 +52,7 @@ describe("SearXNG availability transition logging", () => {
     expect(errorTypes).toEqual(["SearxngUnavailable", "SearxngRecovered"]);
   });
 
-  it("stays silent when no sidecar is configured", async () => {
+  it("stays silent when no SearXNG server is configured", async () => {
     const before = errorTypes.length;
     delete process.env[BASE_URL_ENV];
 

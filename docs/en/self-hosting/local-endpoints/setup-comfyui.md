@@ -12,7 +12,7 @@ ComfyUI's `/history` endpoint until the output is ready.
 
 This guide covers installing/running ComfyUI and registering it. For **authoring or editing**
 a TomoriBot-compatible workflow (the `{TOMORI_*}` placeholders), use the in-Discord deep
-dive: `/help custom-endpoint endpoint:comfyui` (4 pages), plus the
+dive, open `/help`, choose `Features`, then `Custom Endpoints`, and use the
 [workflow README](https://github.com/Bredrumb/TomoriBot/tree/main/assets/comfyui-workflows)
 on GitHub.
 
@@ -30,7 +30,7 @@ both modern, heavier-than-SDXL models:
 
 | Bundled workflow | Base model | Practical VRAM | Notes |
 |---|---|---|---|
-| **Anima v1** (image) | Qwen-Image (~20B), fp8 | ~16 GB floor · 24 GB comfortable | Text encoder + VAE add ~8–10 GB of overhead. Below 16 GB, use a GGUF build + `--lowvram`. |
+| **Anima v1** (image) | Qwen-Image (~20B), fp8 | ~16 GB floor · 24 GB comfortable | Text encoder + VAE add ~8-10 GB of overhead. Below 16 GB, use a GGUF build + `--lowvram`. |
 | **WAN i2v loop** (video) | Wan 2.2 14B, fp8 + 4-step LightX2V LoRAs | ~16 GB workable · 24 GB+ comfortable | Heaviest option expect **minutes per clip**. Offload the UMT5 text encoder to RAM (`t5_cpu`, needs 24 GB+ system RAM) on smaller cards. |
 
 Both bundled checkpoints are already **fp8-quantized** to fit consumer cards. If you have less
@@ -58,7 +58,7 @@ listens on the network:
 python main.py --listen 0.0.0.0 --port 8188
 ```
 
-`--listen 0.0.0.0` matters if TomoriBot runs in Docker or on a different machine — the
+`--listen 0.0.0.0` matters if TomoriBot runs in Docker or on a different machine: the
 default binds to loopback only. Confirm reachability **from the machine the bot runs on**:
 
 ```sh
@@ -81,25 +81,31 @@ Download a ready-to-use **API-format** workflow. Examples can be found in the re
 These are **API format** (the JSON ComfyUI exports via *Save (API Format)*), not the regular
 UI-save format. If you author your own, it must contain the `{TOMORI_*}` placeholders
 TomoriBot substitutes (prompt, width/height, seed, reference images, etc.). See the workflow
-README and `/help custom-endpoint endpoint:comfyui`.
+README and the `Custom Endpoints` page under **Providers** in `/help`.
 
 ## 3. Register it in Discord
 
-Run **`/provider custom-endpoint add`** (or `/personal custom-endpoint add`) with:
+Run **`/providers`** (or `/personal providers`), choose `Add New Custom Endpoint`, and enter:
 
 | Field | Value for ComfyUI |
 |-------|-------------------|
 | `endpoint_label` | A name you choose, e.g. `home-comfy` |
-| `capability` | `image` (or `video`) |
-| `api_style` | `ComfyUI` |
+| API Compatibility | `ComfyUI` |
 | `endpoint_url` | `http://127.0.0.1:8188` (root, **no** `/v1`) |
 | `auth_token` | *(leave blank unless your ComfyUI is behind auth)* |
 
-In the modal that follows, **upload the workflow `.json`** you downloaded from Step 2 and select the support modes that
-match how you want it used (`txt2img` / `img2img` / `inpaint` for images). The capability you
-chose must match the workflow (image workflow → `image`, video workflow → `video`).
+After saving the connection, select it and use its model dropdown to add an Image or Video
+model. Enter the checkpoint's exact code name and **upload the workflow `.json`** you downloaded
+from Step 2. The model capability must match the workflow (image workflow → `image`, video
+workflow → `video`).
 
-Registering it makes it the active `image`/`video` model automatically. Trigger generation by asking Tomori directly in chat. If it isn't active for some reason, run `/model image` (or `/model video`)
+An image model also asks for its `Image Capabilities`: text to image, reference image,
+inpainting, and negative prompt. Tick only the modes your workflow actually implements, because
+Tomori offers the tool only the modes you declare. Inpainting appears for ComfyUI connections
+only, since no other API compatibility accepts a mask. Editing the model later reopens the form
+with your current selection, so changing a code name will not clear it.
+
+Adding the model makes it the active `image`/`video` model automatically. Trigger generation by asking Tomori directly in chat. If it isn't active for some reason, run `/config` > Models > Switch Models
 and select your registered ComfyUI endpoint.
 
 ## Troubleshooting

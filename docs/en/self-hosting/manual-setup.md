@@ -41,9 +41,9 @@ cp .env.example .env
 
 Required:
 
-- `DISCORD_TOKEN` — your Discord bot token (enable the `GuildMembers`, `MessageContent`, and
+- `DISCORD_TOKEN`: your Discord bot token (enable the `GuildMembers`, `MessageContent`, and
   `GuildPresences` privileged intents).
-- `CRYPTO_SECRET` — a 32-character encryption key (used to encrypt stored API keys).
+- `CRYPTO_SECRET`: a 32-character encryption key (used to encrypt stored API keys).
 - PostgreSQL connection: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`,
   `POSTGRES_PASSWORD`, `POSTGRES_DB`.
 
@@ -64,7 +64,7 @@ still runs on host Bun. For a fully containerized bot and database, use
 :::
 
 Optional tuning lives in `.env.optional.example`. Copy over any values you want to
-customize (limits, timeouts, feature toggles, sidecar URLs, etc.).
+customize (limits, timeouts, feature toggles, local server URLs, etc.).
 
 ## 3. Run
 
@@ -72,11 +72,13 @@ customize (limits, timeouts, feature toggles, sidecar URLs, etc.).
 bun run dev
 ```
 
-When you see `TomoriBot up and running!`, go to Discord and run `/config setup` in your
-server to add your AI provider key and initialize the bot. See the
+When you see `TomoriBot up and running!`, go to Discord and run `/setup` in your
+server to connect an AI provider and initialize the bot. The command opens a guided
+checklist panel, and nothing is written until you press `Finish Setup`; see
+[The `/setup` command](/self-hosting/setup-wizard/#the-setup-command) for the steps and the
 [Quickstart](/introduction/quickstart/) for the in-Discord side.
 
-Use `bun run launch` instead of `bun run dev` if you want optional sidecars (SearXNG, Crawl4AI, local TTS/STT) launched alongside the bot:
+Use `bun run launch` instead of `bun run dev` if you want optional local servers (SearXNG, Crawl4AI, local TTS/STT) launched alongside the bot:
 
 ```sh
 bun run launch --searxng --crawl4ai
@@ -84,6 +86,7 @@ bun run launch --help        # see all flags
 ```
 
 ## Optional extras (the manual "Full Install")
+<!-- anchor: optional-extras-the-manual-full-install -->
 
 The [setup wizard](/self-hosting/setup-wizard/)'s **Full Install** path layers four lightweight extras on
 top of the base install. None are required to run the bot, but each unlocks a feature. If
@@ -101,7 +104,7 @@ sudo apt-get install -y postgresql-16-pgvector
 ```
 
 Then enable it once on your database. Connect with `psql` using the `POSTGRES_*` values from
-your `.env` — it prompts for `POSTGRES_PASSWORD`:
+your `.env`: it prompts for `POSTGRES_PASSWORD`:
 
 :::note[Windows]
 There is no prebuilt pgvector package for native Windows PostgreSQL. Installing it means
@@ -145,7 +148,7 @@ For a self-managed PostgreSQL, find your active config file:
 SHOW config_file;
 ```
 
-Enable the extension in `postgresql.conf` — append to `shared_preload_libraries` if it
+Enable the extension in `postgresql.conf`: append to `shared_preload_libraries` if it
 already lists other libraries:
 
 ```ini

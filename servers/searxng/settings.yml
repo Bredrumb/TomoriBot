@@ -20,7 +20,7 @@ general:
 server:
   # Substituted from the SEARXNG_SECRET env var by entrypoint.sh.
   secret_key: "${SEARXNG_SECRET}"
-  # No rate limiter: only TomoriBot on the private network talks to this sidecar.
+  # No rate limiter: only TomoriBot on the private network talks to this container.
   limiter: false
   # No public UI; we only need the JSON API.
   public_instance: false

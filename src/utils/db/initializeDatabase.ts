@@ -349,8 +349,14 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
 
       // Preset sprites are seeded after personas (they share the preset lineage)
       // and upload their shared images once to the immutable `presets/` prefix.
-      await seedPersonaSpritesFromCatalog(client);
-      log.success("PostgreSQL preset sprite catalog seeded");
+      // The seeder logs its own zero-seed error, so this line carries the counts that separate a
+      // healthy boot from a damaged one. Each count is per preset variant, because every authored
+      // locale declares the full sprite set.
+      const spriteSeed = await seedPersonaSpritesFromCatalog(client);
+      log.success(
+        `PostgreSQL preset sprite catalog seeded (${spriteSeed.seeded}/${spriteSeed.declarations} declarations seeded, ` +
+          `${spriteSeed.failed} failed, ${spriteSeed.removed} removed, ${spriteSeed.presets} preset variants)`,
+      );
 
       // Preset avatars follow the same shared-upload model: each persona's avatar
       // is uploaded once and its URL + content hash recorded on the preset row,

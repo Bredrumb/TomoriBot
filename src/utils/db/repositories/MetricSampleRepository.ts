@@ -106,6 +106,13 @@ export class MetricSampleRepository {
    * Logs a failure only when the previous write succeeded, so a pool-wide retirement does not
    * add its own log storm to the incident that caused it. The logger import is deferred to
    * keep this repository out of `logger.ts`'s import cycle, matching `ErrorLogRepository`.
+   *
+   * Emitted through `log.metric` for two reasons that both rule out the obvious alternatives.
+   * Production pins pino at level `error`, so the `log.warn` this used to call was dropped
+   * before either sink: a 26-minute gap in `metric_samples` during a live outage left no trace
+   * anywhere, which is the one artifact that would have named the cause. And `log.error` would
+   * attempt an `error_logs` insert down the same pool that just failed, adding load to the
+   * incident it is reporting.
    */
   private async warnOnce(message: string, error: unknown): Promise<void> {
     if (this.hasWarnedSinceSuccess) return;
@@ -113,7 +120,10 @@ export class MetricSampleRepository {
 
     try {
       const { log } = await import("@/utils/misc/logger");
-      log.warn(`${message}: ${error instanceof Error ? error.message : String(error)}`);
+      log.metric("metric_sink_failure", {
+        reason: message,
+        error: error instanceof Error ? error.message : String(error),
+      });
     } catch {
       // Reporting a telemetry failure must not itself become one, so the "never rejects"
       // contract of recordSample() holds even if the logger module fails to resolve.

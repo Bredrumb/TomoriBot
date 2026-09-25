@@ -6,7 +6,7 @@
 import { log } from "../../utils/misc/logger";
 import { BaseTool, type ToolContext, type ToolResult, type ToolParameterSchema } from "../../types/tool/interfaces";
 import { validateFutureTime } from "@/utils/text/processors/timeUtils";
-import { formatTimeRemaining } from "@/utils/text/processors/formatters";
+import { formatLocalizedDuration, formatTimeRemaining } from "@/utils/text/processors/formatters";
 import {
   parseTimeWithOffset,
   formatUTCOffset,
@@ -333,10 +333,10 @@ export class ReminderTool extends BaseTool {
     const timezoneOffset = tomoriState.config.timezone_offset ?? 0;
 
     if (reminderTimeArg && typeof reminderTimeArg === "string" && reminderTimeArg.trim()) {
-      // Method 1: Absolute time provided - parse in the offset the model labeled
-      // the time with (utc_offset), falling back to the server's configured timezone.
-      // The model passes wall-clock time as spoken and labels the frame instead of
-      // converting it, so deterministic code does the offset arithmetic here.
+      // Absolute time: parse in the offset the model labeled the time with (utc_offset),
+      // falling back to the server's configured timezone. The model passes wall-clock time as
+      // spoken and labels the frame instead of converting it, so deterministic code does the
+      // offset arithmetic here.
       timeCalculationMethod = "absolute";
 
       // Validate utc_offset only when it will actually be used (absolute path)
@@ -432,7 +432,7 @@ export class ReminderTool extends BaseTool {
       let actualNicknameInDB = requestedTargetUser || "Tomori";
       let resolvedTargetUserId = "";
       let resolvedTargetUserLabel = actualNicknameInDB;
-      // Target's personal timezone offset (/personal timezone): used only for the
+      // Target's personal timezone offset (/personal config): used only for the
       // dual-clock confirmation display, never for time interpretation
       let targetPersonalOffset: number | null = null;
 
@@ -494,7 +494,7 @@ export class ReminderTool extends BaseTool {
             };
           }
 
-          actualNicknameInDB = targetUserRow.user_nickname;
+          actualNicknameInDB = resolvedTargetUserLabel ?? targetUserRow.user_nickname ?? targetUserRow.user_disc_id;
           targetPersonalOffset = targetUserRow.timezone_offset ?? null;
         }
       }
@@ -518,7 +518,9 @@ export class ReminderTool extends BaseTool {
         );
 
         const timeRemainingMs = finalReminderTime.getTime() - Date.now();
+        // The tool result feeds model context, which stays English; only the embed follows the locale.
         const timeRemainingStr = formatTimeRemaining(timeRemainingMs);
+        const localizedTimeRemaining = formatLocalizedDuration(timeRemainingMs, context.locale);
 
         // Format the reminder time in the server's configured timezone
         const timeFormatOptions: Intl.DateTimeFormatOptions = {
@@ -528,7 +530,12 @@ export class ReminderTool extends BaseTool {
           hour: "2-digit",
           minute: "2-digit",
         };
-        const formattedReminderTime = formatTimeWithOffset(finalReminderTime, timezoneOffset, timeFormatOptions);
+        const formattedReminderTime = formatTimeWithOffset(
+          finalReminderTime,
+          timezoneOffset,
+          timeFormatOptions,
+          context.locale,
+        );
 
         const useRecurringTaskEmbed = isSelfReminder && repetitionIntervalHours !== null;
         const useOneTimeTaskEmbed = isSelfReminder && repetitionIntervalHours === null;
@@ -541,7 +548,12 @@ export class ReminderTool extends BaseTool {
             ? localizer(context.locale, "reminders.dual_time_display", {
                 server_time: formattedReminderTime,
                 server_offset: formatUTCOffset(timezoneOffset),
-                user_time: formatTimeWithOffset(finalReminderTime, targetPersonalOffset, timeFormatOptions),
+                user_time: formatTimeWithOffset(
+                  finalReminderTime,
+                  targetPersonalOffset,
+                  timeFormatOptions,
+                  context.locale,
+                ),
                 user_offset: formatUTCOffset(targetPersonalOffset),
                 user_nickname: actualNicknameInDB,
               })
@@ -588,11 +600,11 @@ export class ReminderTool extends BaseTool {
                   : "reminders.reminder_set_footer",
             footerVars: repetitionIntervalHours
               ? {
-                  time_remaining: timeRemainingStr,
+                  time_remaining: localizedTimeRemaining,
                   repetition_interval_hours: repetitionIntervalHours,
                 }
               : {
-                  time_remaining: timeRemainingStr,
+                  time_remaining: localizedTimeRemaining,
                 },
           },
           reminderPurpose,

@@ -1,0 +1,1758 @@
+import {
+  ButtonStyle,
+  ComponentType,
+  MessageFlags,
+  type ActionRowData,
+  type ButtonComponentData,
+  type ComponentInContainerData,
+  type SelectMenuComponentOptionData,
+  type StringSelectMenuComponentData,
+  type TextDisplayComponentData,
+  type TopLevelComponentData,
+} from "discord.js";
+import { PrivacyLevel, type UserRow, type TomoriState, type UserSavedProviderConfigRow } from "@/types/db/schema";
+import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
+import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
+import type { UserPersonaNamingPreference } from "@/types/personaNaming";
+import {
+  buildPersonalConfigRouteId,
+  buildPersonalConfigRouteSegments,
+  DEFAULT_PAGE_FOR_CATEGORY,
+  PERSONAL_CONFIG_ROUTE_NAMESPACE,
+  PERSONAL_CONFIG_ROUTE_VERSION,
+  PERSONAL_FALLBACK_PAGE_SIZE,
+  PERSONAL_MODEL_PAGE_SIZE,
+  PERSONAL_PROVIDER_DIRECT_LIMIT,
+  QUICK_TOGGLE_CAPABILITIES,
+  ROUTING_CAPABILITY_LOCALE_KEYS,
+  SPOTLIGHT_AUTO_TRIGGER_PAGE_SIZE,
+  SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE,
+  SPOTLIGHT_PERSONA_PAGE_SIZE,
+  SPOTLIGHT_REMOVE_PAGE_SIZE,
+  encodeProviderPageValue,
+  encodeProviderParam,
+  encodeProviderRangeValue,
+  type PersonalConfigCategory,
+  type PersonalConfigManagedCapability,
+  type PersonalConfigPage,
+} from "@/utils/discord/personalConfigPanelCatalog";
+import {
+  buildCategoryButtonRow,
+  buildOptionalThumbnailSection,
+  buildPaginationRow,
+  buildPanelContainer,
+  buildPanelReceiptContainer,
+  buildStateControlRow,
+  withLinePrefix,
+} from "@/utils/discord/ui/panel";
+import { safeSelectOptionText } from "@/utils/discord/ui/modals";
+import { buildModelRoutingControl, buildProviderPageEntries } from "@/utils/discord/ui/modelRoutingControls";
+import { buildProviderSelectWindow } from "@/utils/discord/ui/providerSelectWindow";
+import {
+  buildProviderParameterBlock,
+  formatStoredParameterValue,
+} from "@/utils/discord/ui/personalConfigParameterControls";
+import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
+import { truncateDiscordText } from "@/utils/text/discordTextLimits";
+import { formatUTCOffset } from "@/utils/text/timezoneHelper";
+import { getLocaleEndonym, localizer } from "@/utils/text/localizer";
+import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
+
+/** Discord rejects a String Select carrying more than 25 options. */
+const PERSONA_SELECT_MAX_OPTIONS = 25;
+
+export interface PersonalConfigPanelPayload {
+  components: TopLevelComponentData[];
+  flags: MessageFlags.IsComponentsV2;
+}
+
+export type PersonalConfigPanelView =
+  | { kind: "main" }
+  | { kind: "impersonation-clear-confirm"; nonce: string }
+  | {
+      kind: "spotlight-set-review";
+      channelId: string;
+      hours: number;
+      blockIdx: number;
+      selectedPersonaIds: number[];
+      autoTriggerPersonaId: number | null;
+      autoIdx: number;
+      mask: string;
+      fp: string;
+      nonce: string;
+    }
+  | {
+      kind: "spotlight-persona-select";
+      channelId: string;
+      hours: number;
+      fp: string;
+      totalPersonas: number;
+      chooserPage: number;
+    }
+  | {
+      kind: "spotlight-auto-range";
+      channelId: string;
+      hours: number;
+      blockIdx: number;
+      mask: string;
+      fp: string;
+      rangePage: number;
+      totalOptions: number;
+    }
+  | {
+      kind: "spotlight-remove-range";
+      rangePage: number;
+      totalOptions: number;
+      fp: string;
+    };
+
+export interface PersonalConfigRoutingRow {
+  capability: PersonalConfigManagedCapability;
+  activeModelName: string | null;
+  storedProvider: string | null;
+  storedModelName: string | null;
+}
+
+export interface PersonalConfigFallbackDisplaySlot {
+  slot: number;
+  modelName: string | null;
+}
+
+export interface PersonalConfigModelDisplayInfo {
+  routingRows: Record<PersonalConfigManagedCapability, PersonalConfigRoutingRow>;
+  availableCapabilities: PersonalConfigManagedCapability[];
+  eligibleProvidersForCapability: Record<PersonalConfigManagedCapability, string[]>;
+  parametersProviders: string[];
+  selectedParametersConfig?: UserSavedProviderConfigRow | null;
+  fallbacksProviders: string[];
+  selectedFallbacksConfig?: UserSavedProviderConfigRow | null;
+  primaryModelName?: string | null;
+  fallbackSlots: PersonalConfigFallbackDisplaySlot[];
+  randomizerEnabled: boolean;
+  canEnableRandomizer: boolean;
+}
+
+export interface PersonalConfigSpotlightDisplayInfo {
+  activeSpotlights: PersonalSpotlightStatus[];
+  personas: Array<{ id: number; name: string; isAlter: boolean }>;
+}
+
+export interface PersonalConfigPanelRenderInput {
+  locale: string;
+  category: PersonalConfigCategory;
+  page: PersonalConfigPage;
+  user: UserRow;
+  resolvedNickname: string;
+  personas: TomoriState[];
+  guildId: string | null;
+  selectedLineageId?: number;
+  selectedPersonaAvatarUrl?: string | null;
+  personaNamingPreference?: UserPersonaNamingPreference | null;
+  memoryCount: number;
+  stmCount: number;
+  readStatus: PanelReadStatus;
+  receipt?: PanelReceipt;
+  savedProviders?: UserSavedProviderConfigRow[];
+  selectedCapability?: PersonalConfigManagedCapability;
+  selectedParametersProvider?: string;
+  selectedFallbacksProvider?: string;
+  selectedModelProvider?: string;
+  providerStart?: number;
+  modelTotalCount?: number;
+  fallbackEntryStart?: number;
+  fallbackOptionCount?: number;
+  modelDisplayInfo?: PersonalConfigModelDisplayInfo;
+  spotlightDisplayInfo?: PersonalConfigSpotlightDisplayInfo;
+  serverTriggerBehavior?: { deliberate_trigger_mode: boolean; deliberate_tool_mode: boolean } | null;
+  view?: PersonalConfigPanelView;
+}
+
+function buildRetryRow(
+  locale: string,
+  category: PersonalConfigCategory,
+  page: PersonalConfigPage,
+  lineageId?: number,
+): ActionRowData<ButtonComponentData> {
+  return {
+    type: ComponentType.ActionRow,
+    components: [
+      {
+        type: ComponentType.Button,
+        style: ButtonStyle.Secondary,
+        customId: buildPersonalConfigRouteId({
+          action: "retry",
+          locale,
+          category,
+          page,
+          ...(lineageId !== undefined ? { lineageId } : {}),
+        }),
+        label: localizer(locale, "commands.personal.config.retry"),
+      },
+    ],
+  };
+}
+
+function buildPayload(components: ComponentInContainerData[], receipt?: PanelReceipt): PersonalConfigPanelPayload {
+  return {
+    components: [buildPanelContainer(components), ...(receipt ? [buildPanelReceiptContainer(receipt)] : [])],
+    flags: MessageFlags.IsComponentsV2,
+  };
+}
+
+export const PERSONAL_CATEGORY_LOCALE_KEYS: Record<PersonalConfigCategory, string> = {
+  profile: "commands.personal.config.category_profile",
+  privacy: "commands.personal.config.category_privacy",
+  models: "commands.personal.config.category_models",
+  advanced: "commands.personal.config.category_advanced",
+};
+
+export const PERSONAL_PAGE_LOCALE_KEYS: Record<PersonalConfigCategory, Record<string, string>> = {
+  profile: {
+    general: "commands.personal.config.page_general",
+    persona: "commands.personal.config.page_persona",
+    appearance: "commands.personal.config.page_appearance",
+  },
+  privacy: {
+    controls: "commands.personal.config.page_privacy_controls",
+  },
+  models: {
+    switch: "commands.personal.config.page_switch_models",
+    parameters: "commands.personal.config.page_parameters",
+    fallbacks: "commands.personal.config.page_fallbacks",
+  },
+  advanced: {
+    "response-modes": "commands.personal.config.page_response_modes",
+    impersonation: "commands.personal.config.page_impersonation",
+    spotlight: "commands.personal.config.page_spotlight",
+  },
+};
+
+function getPageOptionsForCategory(
+  locale: string,
+  category: PersonalConfigCategory,
+  currentPage: PersonalConfigPage,
+  guildId: string | null,
+): SelectMenuComponentOptionData[] {
+  switch (category) {
+    case "profile":
+      return [
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.profile.general), 100),
+          value: "general",
+          default: currentPage === "general",
+        },
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.profile.persona), 100),
+          value: "persona",
+          default: currentPage === "persona",
+        },
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.profile.appearance), 100),
+          value: "appearance",
+          default: currentPage === "appearance",
+        },
+      ];
+    case "privacy":
+      return [
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.privacy.controls), 100),
+          value: "controls",
+          default: currentPage === "controls",
+        },
+      ];
+    case "models":
+      return [
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.models.switch), 100),
+          value: "switch",
+          default: currentPage === "switch",
+        },
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.models.parameters), 100),
+          value: "parameters",
+          default: currentPage === "parameters",
+        },
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.models.fallbacks), 100),
+          value: "fallbacks",
+          default: currentPage === "fallbacks",
+        },
+      ];
+    case "advanced": {
+      const options: SelectMenuComponentOptionData[] = [
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.advanced["response-modes"]), 100),
+          value: "response-modes",
+          default: currentPage === "response-modes",
+        },
+        {
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.advanced.impersonation), 100),
+          value: "impersonation",
+          default: currentPage === "impersonation",
+        },
+      ];
+      if (guildId !== null) {
+        options.push({
+          label: safeSelectOptionText(localizer(locale, PERSONAL_PAGE_LOCALE_KEYS.advanced.spotlight), 100),
+          value: "spotlight",
+          default: currentPage === "spotlight",
+        });
+      }
+      return options;
+    }
+  }
+}
+
+function renderPanelView(
+  input: PersonalConfigPanelRenderInput,
+  view: Exclude<PersonalConfigPanelView, { kind: "main" }>,
+): ComponentInContainerData[] {
+  const locale = input.locale;
+  const writesDisabled = input.readStatus !== "fresh";
+  switch (view.kind) {
+    case "impersonation-clear-confirm": {
+      return [
+        {
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.impersonation_clear_confirm_title")}
+${localizer(locale, "commands.personal.config.impersonation_clear_confirm_desc")}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Danger,
+              customId: buildPersonalConfigRouteId({
+                action: "impersonation-clear-confirm",
+                locale,
+                nonce: view.nonce,
+              }),
+              label: localizer(locale, "commands.personal.config.impersonation_clear_button"),
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "impersonation-clear-cancel", locale }),
+              label: localizer(locale, "commands.personal.config.cancel"),
+            },
+          ],
+        },
+      ];
+    }
+    case "spotlight-set-review": {
+      const personas = input.spotlightDisplayInfo?.personas ?? [];
+      const personaMap = new Map(personas.map((p) => [p.id, p.name]));
+      const selectedPersonas = personas.filter((p) => view.selectedPersonaIds.includes(p.id));
+      const durationText =
+        view.hours === 0
+          ? localizer(locale, "commands.personal.config.spotlight_duration_permanent")
+          : localizer(locale, "commands.personal.config.spotlight_duration_hours", {
+              hours: view.hours,
+            });
+      const personaNamesList = selectedPersonas.map((p) => `**${p.name}**`).join(", ");
+      const autoTriggerName = view.autoTriggerPersonaId
+        ? (personaMap.get(view.autoTriggerPersonaId) ?? String(view.autoTriggerPersonaId))
+        : localizer(locale, "commands.personal.config.spotlight_auto_none");
+      return [
+        {
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.spotlight_review_title")}
+
+> Channel: <#${view.channelId}>
+> Duration: ${durationText}
+> Personas: ${personaNamesList}
+> Auto-trigger: ${autoTriggerName}
+
+${localizer(locale, "commands.personal.config.spotlight_review_prompt")}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({
+                action: "spot-set-cf",
+                locale,
+                channelId: view.channelId,
+                hours: view.hours,
+                autoIdx: view.autoIdx,
+                blockIdx: view.blockIdx,
+                mask: view.mask,
+                fp: view.fp,
+                nonce: view.nonce,
+              }),
+              label: localizer(locale, "commands.personal.config.spotlight_save_button"),
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({
+                action: "spot-set-auto",
+                locale,
+                channelId: view.channelId,
+                hours: view.hours,
+                blockIdx: view.blockIdx,
+                mask: view.mask,
+                fp: view.fp,
+                nonce: view.nonce,
+              }),
+              label: localizer(locale, "commands.personal.config.spotlight_auto_button"),
+              disabled: selectedPersonas.length === 0,
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "spotlight-set-cancel", locale }),
+              label: localizer(locale, "commands.personal.config.cancel"),
+            },
+          ],
+        },
+      ];
+    }
+    case "spotlight-persona-select": {
+      const header = {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.config.spotlight_personas_label")}
+${localizer(locale, "commands.personal.config.spotlight_personas_desc")}`,
+      } satisfies ComponentInContainerData;
+
+      // At or below one block every persona fits in a single submit, so a chooser would add a step
+      // that can only ever have one answer.
+      if (view.totalPersonas <= SPOTLIGHT_PERSONA_PAGE_SIZE) {
+        return [
+          header,
+          {
+            type: ComponentType.ActionRow,
+            components: [
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                customId: buildPersonalConfigRouteId({
+                  action: "spotlight-set-block",
+                  locale,
+                  channelId: view.channelId,
+                  hours: view.hours,
+                  fp: view.fp,
+                  blockIdx: 0,
+                }),
+                label: localizer(locale, "commands.personal.config.spotlight_personas_label"),
+              },
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                customId: buildPersonalConfigRouteId({ action: "spotlight-set-cancel", locale }),
+                label: localizer(locale, "commands.personal.config.cancel"),
+              },
+            ],
+          },
+        ];
+      }
+
+      const blockCount = Math.ceil(view.totalPersonas / SPOTLIGHT_PERSONA_PAGE_SIZE);
+      const chooserPage = view.chooserPage ?? 0;
+      const blockStart = chooserPage * SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE;
+      const visibleBlocks = Math.min(SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE, blockCount - blockStart);
+
+      const selectRow: ActionRowData<StringSelectMenuComponentData> = {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.StringSelect,
+            customId: buildPersonalConfigRouteId({
+              action: "spotlight-set-block-select",
+              locale,
+              channelId: view.channelId,
+              hours: view.hours,
+              fp: view.fp,
+            }),
+            placeholder: safeSelectOptionText(
+              localizer(locale, "commands.personal.config.spotlight_personas_range_placeholder"),
+              150,
+            ),
+            options: Array.from({ length: visibleBlocks }, (_, offset) => {
+              const blockIdx = blockStart + offset;
+              const first = blockIdx * SPOTLIGHT_PERSONA_PAGE_SIZE;
+              return {
+                value: String(blockIdx),
+                label: safeSelectOptionText(
+                  localizer(locale, "commands.personal.config.spotlight_personas_range_option", {
+                    start: first + 1,
+                    end: Math.min(first + SPOTLIGHT_PERSONA_PAGE_SIZE, view.totalPersonas),
+                  }),
+                  100,
+                ),
+              } satisfies SelectMenuComponentOptionData;
+            }),
+            disabled: writesDisabled,
+          },
+        ],
+      };
+
+      const cancelRow: ActionRowData<ButtonComponentData> = {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            style: ButtonStyle.Secondary,
+            customId: buildPersonalConfigRouteId({ action: "spotlight-set-cancel", locale }),
+            label: localizer(locale, "commands.personal.config.cancel"),
+          },
+        ],
+      };
+
+      const viewComponents: ComponentInContainerData[] = [header, selectRow, cancelRow];
+
+      if (blockCount > SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE) {
+        const paginationRow = buildPaginationRow({
+          locale,
+          rangeIndex: chooserPage,
+          rangeCount: Math.ceil(blockCount / SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE),
+          namespace: PERSONAL_CONFIG_ROUTE_NAMESPACE,
+          version: PERSONAL_CONFIG_ROUTE_VERSION,
+          disabled: writesDisabled,
+          buildSegments: {
+            page: (targetPage) =>
+              buildPersonalConfigRouteSegments({
+                action: "spotlight-set-block-page",
+                locale,
+                channelId: view.channelId,
+                hours: view.hours,
+                fp: view.fp,
+                chooserPage: targetPage,
+              }),
+          },
+        });
+        if (paginationRow) {
+          viewComponents.push(paginationRow);
+        }
+      }
+
+      return viewComponents;
+    }
+    case "spotlight-auto-range": {
+      const header = {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.config.spotlight_auto_modal_title")}
+${localizer(locale, "commands.personal.config.spotlight_auto_select_desc")}`,
+      } satisfies ComponentInContainerData;
+
+      const blockCount = Math.ceil(view.totalOptions / SPOTLIGHT_AUTO_TRIGGER_PAGE_SIZE);
+      const rangePage = view.rangePage ?? 0;
+      const blockStart = rangePage * SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE;
+      const visibleBlocks = Math.min(SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE, blockCount - blockStart);
+
+      const selectRow: ActionRowData<StringSelectMenuComponentData> = {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.StringSelect,
+            customId: buildPersonalConfigRouteId({
+              action: "spot-set-auto-select",
+              locale,
+              channelId: view.channelId,
+              hours: view.hours,
+              blockIdx: view.blockIdx,
+              mask: view.mask,
+              fp: view.fp,
+            }),
+            placeholder: safeSelectOptionText(
+              localizer(locale, "commands.personal.config.spotlight_auto_range_placeholder"),
+              150,
+            ),
+            options: Array.from({ length: visibleBlocks }, (_, offset) => {
+              const blockOffset = blockStart + offset;
+              const start = blockOffset * SPOTLIGHT_AUTO_TRIGGER_PAGE_SIZE;
+              return {
+                value: String(start),
+                label: safeSelectOptionText(
+                  localizer(locale, "commands.personal.config.spotlight_auto_range_option", {
+                    start: start + 1,
+                    end: Math.min(start + SPOTLIGHT_AUTO_TRIGGER_PAGE_SIZE, view.totalOptions),
+                  }),
+                  100,
+                ),
+              } satisfies SelectMenuComponentOptionData;
+            }),
+            disabled: writesDisabled,
+          },
+        ],
+      };
+
+      const cancelRow: ActionRowData<ButtonComponentData> = {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            style: ButtonStyle.Secondary,
+            customId: buildPersonalConfigRouteId({
+              action: "spot-set-auto-cancel",
+              locale,
+              channelId: view.channelId,
+              hours: view.hours,
+              blockIdx: view.blockIdx,
+              mask: view.mask,
+              fp: view.fp,
+            }),
+            label: localizer(locale, "commands.personal.config.cancel"),
+          },
+        ],
+      };
+
+      const viewComponents: ComponentInContainerData[] = [header, selectRow, cancelRow];
+
+      if (blockCount > SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE) {
+        const paginationRow = buildPaginationRow({
+          locale,
+          rangeIndex: rangePage,
+          rangeCount: Math.ceil(blockCount / SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE),
+          namespace: PERSONAL_CONFIG_ROUTE_NAMESPACE,
+          version: PERSONAL_CONFIG_ROUTE_VERSION,
+          disabled: writesDisabled,
+          buildSegments: {
+            page: (targetPage) =>
+              buildPersonalConfigRouteSegments({
+                action: "spot-set-auto-page",
+                locale,
+                channelId: view.channelId,
+                hours: view.hours,
+                blockIdx: view.blockIdx,
+                mask: view.mask,
+                fp: view.fp,
+                chooserPage: targetPage,
+              }),
+          },
+        });
+        if (paginationRow) {
+          viewComponents.push(paginationRow);
+        }
+      }
+
+      return viewComponents;
+    }
+    case "spotlight-remove-range": {
+      const header = {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.config.spotlight_remove_range_title")}
+${localizer(locale, "commands.personal.config.spotlight_remove_range_desc")}`,
+      } satisfies ComponentInContainerData;
+
+      const blockCount = Math.ceil(view.totalOptions / SPOTLIGHT_REMOVE_PAGE_SIZE);
+      const rangePage = view.rangePage ?? 0;
+      const blockStart = rangePage * SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE;
+      const visibleBlocks = Math.min(SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE, blockCount - blockStart);
+
+      const selectRow: ActionRowData<StringSelectMenuComponentData> = {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.StringSelect,
+            customId: buildPersonalConfigRouteId({
+              action: "spotlight-remove-select",
+              locale,
+              fp: view.fp,
+            }),
+            placeholder: safeSelectOptionText(
+              localizer(locale, "commands.personal.config.spotlight_remove_range_placeholder"),
+              150,
+            ),
+            options: Array.from({ length: visibleBlocks }, (_, offset) => {
+              const blockOffset = blockStart + offset;
+              const start = blockOffset * SPOTLIGHT_REMOVE_PAGE_SIZE;
+              return {
+                value: String(start),
+                label: safeSelectOptionText(
+                  localizer(locale, "commands.personal.config.spotlight_remove_range_option", {
+                    start: start + 1,
+                    end: Math.min(start + SPOTLIGHT_REMOVE_PAGE_SIZE, view.totalOptions),
+                  }),
+                  100,
+                ),
+              } satisfies SelectMenuComponentOptionData;
+            }),
+            disabled: writesDisabled,
+          },
+        ],
+      };
+
+      const cancelRow: ActionRowData<ButtonComponentData> = {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            style: ButtonStyle.Secondary,
+            customId: buildPersonalConfigRouteId({ action: "spotlight-remove-cancel", locale }),
+            label: localizer(locale, "commands.personal.config.cancel"),
+          },
+        ],
+      };
+
+      const viewComponents: ComponentInContainerData[] = [header, selectRow, cancelRow];
+
+      if (blockCount > SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE) {
+        const paginationRow = buildPaginationRow({
+          locale,
+          rangeIndex: rangePage,
+          rangeCount: Math.ceil(blockCount / SPOTLIGHT_BLOCK_OPTIONS_PER_PAGE),
+          namespace: PERSONAL_CONFIG_ROUTE_NAMESPACE,
+          version: PERSONAL_CONFIG_ROUTE_VERSION,
+          disabled: writesDisabled,
+          buildSegments: {
+            page: (targetPage) =>
+              buildPersonalConfigRouteSegments({
+                action: "spotlight-remove-page",
+                locale,
+                chooserPage: targetPage,
+                fp: view.fp,
+              }),
+          },
+        });
+        if (paginationRow) {
+          viewComponents.push(paginationRow);
+        }
+      }
+
+      return viewComponents;
+    }
+  }
+}
+
+export function buildPersonalConfigPanelPayload(input: PersonalConfigPanelRenderInput): PersonalConfigPanelPayload {
+  const {
+    locale,
+    category,
+    page,
+    user,
+    resolvedNickname,
+    personas,
+    selectedLineageId,
+    personaNamingPreference,
+    memoryCount,
+    stmCount,
+    readStatus,
+    receipt,
+  } = input;
+  const writesDisabled = readStatus !== "fresh";
+
+  const categoryButtons = buildCategoryButtonRow<PersonalConfigCategory>(
+    [
+      {
+        id: "profile",
+        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.profile),
+        customId: buildPersonalConfigRouteId({
+          action: "category",
+          locale,
+          category: "profile",
+          page: DEFAULT_PAGE_FOR_CATEGORY.profile,
+        }),
+      },
+      {
+        id: "privacy",
+        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.privacy),
+        customId: buildPersonalConfigRouteId({
+          action: "category",
+          locale,
+          category: "privacy",
+          page: DEFAULT_PAGE_FOR_CATEGORY.privacy,
+        }),
+      },
+      {
+        id: "advanced",
+        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.advanced),
+        customId: buildPersonalConfigRouteId({
+          action: "category",
+          locale,
+          category: "advanced",
+          page: DEFAULT_PAGE_FOR_CATEGORY.advanced,
+        }),
+      },
+      {
+        id: "models",
+        label: localizer(locale, PERSONAL_CATEGORY_LOCALE_KEYS.models),
+        customId: buildPersonalConfigRouteId({
+          action: "category",
+          locale,
+          category: "models",
+          page: DEFAULT_PAGE_FOR_CATEGORY.models,
+        }),
+      },
+    ],
+    category,
+    readStatus === "unavailable",
+  );
+
+  const pageOptions = getPageOptionsForCategory(locale, category, page, input.guildId);
+  const pageSelectorRow: ActionRowData<StringSelectMenuComponentData> = {
+    type: ComponentType.ActionRow,
+    components: [
+      {
+        type: ComponentType.StringSelect,
+        customId: buildPersonalConfigRouteId({ action: "page", locale, category, page }),
+        placeholder: localizer(locale, "commands.personal.config.page_select_placeholder"),
+        options: pageOptions,
+        disabled: writesDisabled,
+      },
+    ],
+  };
+
+  const components: ComponentInContainerData[] = [
+    categoryButtons,
+    { type: ComponentType.Separator, divider: true, spacing: 1 },
+    pageSelectorRow,
+  ];
+
+  if (readStatus === "unavailable") {
+    components.push(
+      {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.config.unavailable")}`,
+      },
+      buildRetryRow(locale, category, page, selectedLineageId),
+    );
+    return buildPayload(components, receipt);
+  }
+
+  // Render subview or body based on active category and page
+  if (input.view && input.view.kind !== "main") {
+    components.push(...renderPanelView(input, input.view));
+  } else if (category === "profile") {
+    if (page === "general") {
+      const languageLabel = escapeDiscordMarkdown(getLocaleEndonym(user.language_pref));
+      const timezoneLabel =
+        user.timezone_offset !== null && user.timezone_offset !== undefined
+          ? formatUTCOffset(user.timezone_offset)
+          : localizer(locale, "commands.personal.config.timezone_server_default");
+
+      const prefixLabel = user.prefix_override
+        ? `\`${escapeDiscordMarkdown(user.prefix_override)}\``
+        : localizer(locale, "commands.personal.config.general_naming_inherited");
+      const suffixLabel = user.suffix_override
+        ? `\`${escapeDiscordMarkdown(user.suffix_override)}\``
+        : localizer(locale, "commands.personal.config.general_naming_inherited");
+
+      const genderLabel = user.gender_identity
+        ? escapeDiscordMarkdown(user.gender_identity)
+        : localizer(locale, "commands.personal.config.not_set_label");
+      const pronounsLabel = user.pronouns
+        ? escapeDiscordMarkdown(user.pronouns)
+        : localizer(locale, "commands.personal.config.not_set_label");
+      const styleLabel =
+        user.addressing_style === "masculine"
+          ? localizer(locale, "commands.personal.config.style_masculine")
+          : user.addressing_style === "feminine"
+            ? localizer(locale, "commands.personal.config.style_feminine")
+            : localizer(locale, "commands.personal.config.style_neutral");
+
+      components.push(
+        {
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.preferences_title")}
+${localizer(locale, "commands.personal.config.preferences_description")}
+
+**${localizer(locale, "commands.personal.config.interface_section")}**
+${localizer(locale, "commands.personal.config.interface_description")}
+> ${localizer(locale, "commands.personal.config.language_label")}: ${languageLabel}
+> ${localizer(locale, "commands.personal.config.timezone_label")}: ${timezoneLabel}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "language-open", locale }),
+              label: localizer(locale, "commands.personal.config.change_language_button"),
+              disabled: writesDisabled,
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "timezone-open", locale }),
+              label: localizer(locale, "commands.personal.config.set_timezone_button"),
+              disabled: writesDisabled,
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "timezone-server", locale }),
+              label: localizer(locale, "commands.personal.config.use_server_timezone_button"),
+              disabled: writesDisabled || user.timezone_offset === null,
+            },
+          ],
+        },
+        {
+          type: ComponentType.TextDisplay,
+          content: `**${localizer(locale, "commands.personal.config.naming_section")}**
+${localizer(locale, "commands.personal.config.naming_description")}
+> ${localizer(locale, "commands.personal.config.nickname_label")}: \`${escapeDiscordMarkdown(resolvedNickname)}\`
+> ${localizer(locale, "commands.personal.config.prefix_label")}: ${prefixLabel}
+> ${localizer(locale, "commands.personal.config.suffix_label")}: ${suffixLabel}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "naming-open", locale }),
+              label: localizer(locale, "commands.personal.config.edit_naming_button"),
+              disabled: writesDisabled,
+            },
+          ],
+        },
+        {
+          type: ComponentType.TextDisplay,
+          content: `**${localizer(locale, "commands.personal.config.about_section")}**
+${localizer(locale, "commands.personal.config.about_description")}
+> ${localizer(locale, "commands.personal.config.gender_label")}: ${genderLabel}
+> ${localizer(locale, "commands.personal.config.pronouns_label")}: ${pronounsLabel}
+> ${localizer(locale, "commands.personal.config.style_label")}: ${styleLabel}
+-# ${localizer(locale, "commands.personal.config.teach_persona_hint").split("\n").join("\n-# ")}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "about-open", locale }),
+              label: localizer(locale, "commands.personal.config.edit_about_button"),
+              disabled: writesDisabled,
+            },
+          ],
+        },
+      );
+    } else if (page === "persona") {
+      const personaHeading: TextDisplayComponentData = {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.config.persona_naming_title")}
+${localizer(locale, "commands.personal.config.persona_naming_description")}`,
+      };
+      const personaHeadingSection = buildOptionalThumbnailSection(personaHeading, input.selectedPersonaAvatarUrl);
+      if (personas.length === 0) {
+        components.push(personaHeadingSection, {
+          type: ComponentType.TextDisplay,
+          content: localizer(locale, "commands.personal.config.no_personas"),
+        });
+      } else {
+        const currentLineage = selectedLineageId ?? personas[0]?.persona_lineage_id ?? 0;
+
+        // Naming preferences are keyed by lineage, not by persona, and two personas in one server can
+        // share a lineage. Emitting one option per persona then repeats an option value, which Discord
+        // rejects outright with COMPONENT_OPTION_VALUE_DUPLICATED.
+        const personasByLineage = new Map<number, TomoriState[]>();
+        for (const p of personas) {
+          const lineage = p.persona_lineage_id;
+          if (lineage === undefined || lineage === null) continue;
+          const bucket = personasByLineage.get(lineage);
+          if (bucket) bucket.push(p);
+          else personasByLineage.set(lineage, [p]);
+        }
+
+        const lineageEntries = [...personasByLineage.entries()];
+        const visibleLineages = lineageEntries.slice(0, PERSONA_SELECT_MAX_OPTIONS);
+        const hiddenLineageCount = lineageEntries.length - visibleLineages.length;
+
+        const personaOptions: SelectMenuComponentOptionData[] = visibleLineages.map(([lineage, sharing]) => {
+          const first = sharing[0];
+          return {
+            label: safeSelectOptionText(
+              first?.persona_nickname || localizer(locale, "commands.personal.config.persona_default_name"),
+              100,
+            ),
+            value: String(lineage),
+            description: safeSelectOptionText(
+              sharing.length > 1
+                ? localizer(locale, "commands.personal.config.persona_shared_lineage_description", {
+                    count: sharing.length,
+                  })
+                : localizer(
+                    locale,
+                    first?.is_alter
+                      ? "commands.personal.config.persona_alter_description"
+                      : "commands.personal.config.persona_main_description",
+                  ),
+              100,
+            ),
+            default: lineage === currentLineage,
+          };
+        });
+
+        components.push({
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.StringSelect,
+              customId: buildPersonalConfigRouteId({
+                action: "persona-select",
+                locale,
+                lineageId: currentLineage,
+              }),
+              placeholder: localizer(locale, "commands.personal.config.persona_select_placeholder"),
+              options: personaOptions,
+              disabled: writesDisabled,
+            },
+          ],
+        });
+
+        if (hiddenLineageCount > 0) {
+          components.push({
+            type: ComponentType.TextDisplay,
+            content: `-# ${localizer(locale, "commands.personal.config.persona_select_truncated", {
+              count: hiddenLineageCount,
+            })}`,
+          });
+        }
+
+        components.push(personaHeadingSection);
+
+        const nicknameOverrideLabel = personaNamingPreference?.nickname_override
+          ? `\`${escapeDiscordMarkdown(personaNamingPreference.nickname_override)}\``
+          : localizer(locale, "commands.personal.config.persona_naming_inherited");
+        const prefixOverrideLabel = personaNamingPreference?.prefix_override
+          ? `\`${escapeDiscordMarkdown(personaNamingPreference.prefix_override)}\``
+          : localizer(locale, "commands.personal.config.persona_naming_inherited");
+        const suffixOverrideLabel = personaNamingPreference?.suffix_override
+          ? `\`${escapeDiscordMarkdown(personaNamingPreference.suffix_override)}\``
+          : localizer(locale, "commands.personal.config.persona_naming_inherited");
+
+        components.push(
+          {
+            type: ComponentType.TextDisplay,
+            content: `> ${localizer(locale, "commands.personal.config.nickname_label")} override: ${nicknameOverrideLabel}
+> ${localizer(locale, "commands.personal.config.prefix_label")} override: ${prefixOverrideLabel}
+> ${localizer(locale, "commands.personal.config.suffix_label")} override: ${suffixOverrideLabel}
+-# ${localizer(locale, "commands.personal.config.teach_persona_hint").split("\n").join("\n-# ")}`,
+          },
+          {
+            type: ComponentType.ActionRow,
+            components: [
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                customId: buildPersonalConfigRouteId({
+                  action: "persona-naming-open",
+                  locale,
+                  lineageId: currentLineage,
+                }),
+                label: localizer(locale, "commands.personal.config.edit_persona_naming_button"),
+                disabled: writesDisabled,
+              },
+            ],
+          },
+        );
+      }
+    } else if (page === "appearance") {
+      const tagsText =
+        user.physical_appearance_tags && user.physical_appearance_tags.length > 0
+          ? `\`${escapeDiscordMarkdown(user.physical_appearance_tags.join(", "))}\``
+          : localizer(locale, "commands.personal.config.not_set_label");
+
+      components.push(
+        {
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.appearance_title")}
+${localizer(locale, "commands.personal.config.appearance_description")}
+> ${localizer(locale, "commands.personal.config.tags_label")}: ${tagsText}
+-# ${localizer(locale, "commands.personal.config.teach_persona_hint").split("\n").join("\n-# ")}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "appearance-open", locale }),
+              label: localizer(locale, "commands.personal.config.edit_appearance_button"),
+              disabled: writesDisabled,
+            },
+          ],
+        },
+        {
+          type: ComponentType.TextDisplay,
+          content: `**${localizer(locale, "commands.personal.config.character_reference_label")}**
+> ${localizer(locale, "commands.personal.config.character_reference_image_label")}: ${user.nai_char_ref_url ? localizer(locale, "commands.personal.config.character_reference_uploaded") : localizer(locale, "commands.personal.config.not_set_label")}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "character-reference-open", locale }),
+              label: localizer(locale, "commands.personal.config.upload_character_reference_button"),
+              disabled: writesDisabled,
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "character-reference-clear", locale }),
+              label: localizer(locale, "commands.personal.config.clear_character_reference_button"),
+              disabled: writesDisabled || !user.nai_char_ref_url,
+            },
+          ],
+        },
+      );
+    }
+  } else if (category === "privacy") {
+    const privacyLevel = user.privacy_level ?? PrivacyLevel.MINIMAL;
+    const levelLabel =
+      privacyLevel === PrivacyLevel.FULL
+        ? localizer(locale, "commands.personal.config.privacy_level_full")
+        : privacyLevel === PrivacyLevel.PARTIAL
+          ? localizer(locale, "commands.personal.config.privacy_level_partial")
+          : localizer(locale, "commands.personal.config.privacy_level_minimal");
+
+    const yesLabel = localizer(locale, "commands.personal.config.yes");
+    const noLabel = localizer(locale, "commands.personal.config.no");
+
+    const msgVisible = privacyLevel === PrivacyLevel.FULL ? noLabel : yesLabel;
+    const memoriesVisible = privacyLevel === PrivacyLevel.MINIMAL ? yesLabel : noLabel;
+    const statusVisible = privacyLevel === PrivacyLevel.MINIMAL ? yesLabel : noLabel;
+    const canTrigger = privacyLevel === PrivacyLevel.FULL ? noLabel : yesLabel;
+
+    const isCrossServerOn = Boolean(user.shortterm_cache_crossserver_opt_in);
+
+    components.push(
+      {
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.config.privacy_title")}
+${localizer(locale, "commands.personal.config.privacy_description")}
+> ${localizer(locale, "commands.personal.config.privacy_level_label")}: ${levelLabel}
+> ${localizer(locale, "commands.personal.config.privacy_msg_visible")}: ${msgVisible}
+> ${localizer(locale, "commands.personal.config.privacy_memories_visible")}: ${memoriesVisible}
+> ${localizer(locale, "commands.personal.config.privacy_status_visible")}: ${statusVisible}
+> ${localizer(locale, "commands.personal.config.privacy_can_trigger")}: ${canTrigger}`,
+      },
+      {
+        type: ComponentType.ActionRow,
+        components: [
+          {
+            type: ComponentType.Button,
+            style: ButtonStyle.Secondary,
+            customId: buildPersonalConfigRouteId({ action: "privacy-level-open", locale }),
+            label: localizer(locale, "commands.personal.config.change_privacy_level_button"),
+            disabled: writesDisabled,
+          },
+        ],
+      },
+      {
+        type: ComponentType.TextDisplay,
+        content: `**${localizer(locale, "commands.personal.config.your_data_section")}**
+${localizer(locale, "commands.personal.config.memories_count_label", { count: memoryCount })}
+-# ${localizer(locale, "commands.personal.config.memories_manage_hint")}
+${localizer(locale, "commands.personal.config.stm_count_label", { count: stmCount })}
+-# ${localizer(locale, "commands.personal.config.stm_clear_hint")}`,
+      },
+      {
+        type: ComponentType.TextDisplay,
+        content: `**${localizer(locale, "commands.personal.config.crossserver_section_title")}**
+-# ${localizer(locale, "commands.personal.config.crossserver_stm_footer")}`,
+      },
+      buildStateControlRow(
+        [
+          {
+            value: false,
+            label: localizer(locale, "commands.personal.config.mode_off"),
+            customId: buildPersonalConfigRouteId({
+              action: "crossserver-set",
+              locale,
+              enabled: false,
+            }),
+          },
+          {
+            value: true,
+            label: localizer(locale, "commands.personal.config.mode_on"),
+            customId: buildPersonalConfigRouteId({
+              action: "crossserver-set",
+              locale,
+              enabled: true,
+            }),
+          },
+        ],
+        isCrossServerOn,
+        writesDisabled,
+      ),
+      {
+        type: ComponentType.TextDisplay,
+        content: withLinePrefix(
+          "> ",
+          isCrossServerOn
+            ? localizer(locale, "commands.personal.config.crossserver_stm_on")
+            : localizer(locale, "commands.personal.config.crossserver_stm_off"),
+        ),
+      },
+    );
+  } else if (category === "models") {
+    if (page === "switch") {
+      const info = input.modelDisplayInfo;
+      const routing = info?.routingRows;
+
+      components.push({
+        type: ComponentType.TextDisplay,
+        content: `### ${localizer(locale, "commands.personal.config.models_title")}
+${localizer(locale, "commands.personal.config.models_description")}`,
+      });
+
+      for (const capability of QUICK_TOGGLE_CAPABILITIES) {
+        const row = routing?.[capability];
+        const providers = info?.eligibleProvidersForCapability[capability] ?? [];
+        const isSelectedCapability = input.selectedCapability === capability;
+        const expandedProvider = isSelectedCapability ? (input.selectedModelProvider ?? null) : null;
+        const { entries, expandedStartIndex, expandedPageCount } = buildProviderPageEntries({
+          providers,
+          expandedProvider,
+          expandedOptionCount: isSelectedCapability ? (input.modelTotalCount ?? 0) : 0,
+          pageSize: PERSONAL_MODEL_PAGE_SIZE,
+          locale,
+          pageLabelKey: "commands.personal.config.provider_page_label",
+          encodeProviderValue: encodeProviderParam,
+          encodePageValue: encodeProviderPageValue,
+        });
+        // Defaulting to the expansion's own offset keeps a freshly expanded provider on screen; a
+        // caller-supplied start means the reader paged deliberately and outranks it.
+        const providerStart = isSelectedCapability ? (input.providerStart ?? expandedStartIndex) : 0;
+        const capabilityLabel = localizer(locale, ROUTING_CAPABILITY_LOCALE_KEYS[capability]);
+        const routingWindow = buildProviderSelectWindow({
+          entries,
+          entryStart: providerStart,
+          directLimit: PERSONAL_PROVIDER_DIRECT_LIMIT,
+          expandedProvider,
+          expandedPageCount,
+          locale,
+          capabilityLabel,
+          pagePlaceholderKey: "commands.personal.config.provider_page_placeholder",
+          encodeAdvanceValue: encodeProviderRangeValue,
+        });
+        const providerEntries = routingWindow.advanceEntry
+          ? [...routingWindow.visibleEntries, routingWindow.advanceEntry]
+          : routingWindow.visibleEntries;
+
+        components.push(
+          buildModelRoutingControl({
+            capabilityLabel,
+            activeModelName: row?.activeModelName ?? null,
+            activeProvider: row?.storedProvider ?? null,
+            placeholderOverride: routingWindow.placeholderOverride,
+            providerEntries,
+            customId: buildPersonalConfigRouteId({
+              action: "model-provider-select",
+              locale,
+              capability,
+            }),
+            serverDefaultValue: "__server_default__",
+            serverDefaultLabel: localizer(locale, "commands.personal.config.override_status_server_default"),
+            serverDefaultDisplay: localizer(locale, "commands.personal.config.override_status_server_default"),
+            disabled: writesDisabled,
+          }),
+        );
+      }
+
+      components.push(
+        {
+          type: ComponentType.TextDisplay,
+          content: `-# ${localizer(locale, "commands.personal.config.speech_workspace_scope_direction")}`,
+        },
+        {
+          type: ComponentType.TextDisplay,
+          content: `-# ${localizer(locale, "commands.personal.config.manage_providers_hint")}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "quick-toggle-open", locale }),
+              label: localizer(locale, "commands.personal.config.quick_toggle_button"),
+              disabled: writesDisabled,
+            },
+          ],
+        },
+      );
+    } else if (page === "parameters") {
+      const selectedProvider = input.selectedParametersProvider ?? input.modelDisplayInfo?.parametersProviders[0] ?? "";
+      const config = input.modelDisplayInfo?.selectedParametersConfig;
+      const parameterProviders = input.modelDisplayInfo?.parametersProviders ?? [];
+
+      if (parameterProviders.length === 0 || !selectedProvider || !config) {
+        components.push({
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.parameters_title")}
+${localizer(locale, "commands.personal.config.no_text_providers")}`,
+        });
+      } else {
+        components.push({
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.parameters_title")}
+${localizer(locale, "commands.personal.config.parameters_description")}`,
+        });
+
+        const tempStr =
+          config.llm_temperature !== null && config.llm_temperature !== undefined
+            ? formatStoredParameterValue(config.llm_temperature)
+            : "0.7";
+        const minPStr =
+          config.llm_min_p !== null && config.llm_min_p !== undefined
+            ? formatStoredParameterValue(config.llm_min_p)
+            : "0.05";
+        const topPStr =
+          config.llm_top_p !== null && config.llm_top_p !== undefined
+            ? formatStoredParameterValue(config.llm_top_p)
+            : "0.95";
+        const topKStr = config.llm_top_k !== null && config.llm_top_k !== undefined ? String(config.llm_top_k) : "0";
+        const freqStr =
+          config.llm_frequency_penalty !== null && config.llm_frequency_penalty !== undefined
+            ? formatStoredParameterValue(config.llm_frequency_penalty)
+            : "0";
+        const presStr =
+          config.llm_presence_penalty !== null && config.llm_presence_penalty !== undefined
+            ? formatStoredParameterValue(config.llm_presence_penalty)
+            : "0";
+        const maxTokStr =
+          config.llm_max_output_tokens !== null && config.llm_max_output_tokens !== undefined
+            ? String(config.llm_max_output_tokens)
+            : "None (provider default)";
+        const thinkStr = config.thinking_level ?? "auto";
+
+        components.push(
+          ...buildProviderParameterBlock({
+            providerOptions: parameterProviders.map((provider) => ({
+              value: encodeProviderParam(provider),
+              label: getProviderDisplayName(provider),
+              default: provider.toLowerCase() === selectedProvider.toLowerCase(),
+            })),
+            copy: {
+              providerLabel: localizer(locale, "commands.personal.config.provider_label"),
+              providerSelectPlaceholder: localizer(locale, "commands.personal.config.provider_select_placeholder"),
+              samplingLabel: localizer(locale, "commands.personal.config.sampling_label"),
+              temperatureLabel: localizer(locale, "commands.personal.config.param_temperature"),
+              minPLabel: localizer(locale, "commands.personal.config.param_min_p"),
+              topPLabel: localizer(locale, "commands.personal.config.param_top_p"),
+              topKLabel: localizer(locale, "commands.personal.config.param_top_k"),
+              generationLabel: localizer(locale, "commands.personal.config.generation_label"),
+              frequencyLabel: localizer(locale, "commands.personal.config.param_frequency_penalty"),
+              presenceLabel: localizer(locale, "commands.personal.config.param_presence_penalty"),
+              maxOutputLabel: localizer(locale, "commands.personal.config.param_max_output_tokens"),
+              thinkingLabel: localizer(locale, "commands.personal.config.param_thinking_level"),
+              editSamplingLabel: localizer(locale, "commands.personal.config.edit_params_1_button"),
+              editGenerationLabel: localizer(locale, "commands.personal.config.edit_params_2_button"),
+            },
+            values: {
+              providerDisplayName: getProviderDisplayName(selectedProvider),
+              temperature: tempStr,
+              minP: minPStr,
+              topP: topPStr,
+              topK: topKStr,
+              frequency: freqStr,
+              presence: presStr,
+              maxOutput: maxTokStr,
+              thinking: thinkStr,
+            },
+            routes: {
+              providerSelect: buildPersonalConfigRouteId({ action: "parameters-provider-select", locale }),
+              editSampling: buildPersonalConfigRouteId({
+                action: "parameters-1-open",
+                locale,
+                provider: selectedProvider,
+              }),
+              editGeneration: buildPersonalConfigRouteId({
+                action: "parameters-2-open",
+                locale,
+                provider: selectedProvider,
+              }),
+            },
+            writesDisabled,
+          }),
+        );
+      }
+    } else if (page === "fallbacks") {
+      const selectedProvider = input.selectedFallbacksProvider ?? input.modelDisplayInfo?.fallbacksProviders[0] ?? "";
+      const config = input.modelDisplayInfo?.selectedFallbacksConfig;
+
+      if (!selectedProvider || !config) {
+        components.push({
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.fallbacks_title")}
+${localizer(locale, "commands.personal.config.no_text_providers_fallbacks")}`,
+        });
+      } else {
+        components.push({
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.fallbacks_title")}
+${localizer(locale, "commands.personal.config.fallbacks_description")}`,
+        });
+
+        const slots = input.modelDisplayInfo?.fallbackSlots ?? [];
+        const slotLines = slots
+          .map(
+            (s) =>
+              `> ${s.slot}. \`${s.modelName ?? localizer(locale, "commands.personal.config.saved_assignment_none")}\``,
+          )
+          .join("\n");
+
+        const {
+          entries: fallbackEntries,
+          expandedStartIndex: fallbackExpandedStart,
+          expandedPageCount: fallbackPageCount,
+        } = buildProviderPageEntries({
+          providers: input.modelDisplayInfo?.fallbacksProviders ?? [],
+          expandedProvider: selectedProvider,
+          expandedOptionCount: input.fallbackOptionCount ?? 0,
+          pageSize: PERSONAL_FALLBACK_PAGE_SIZE,
+          locale,
+          pageLabelKey: "commands.personal.config.provider_page_label",
+          encodeProviderValue: encodeProviderParam,
+          encodePageValue: encodeProviderPageValue,
+        });
+        const fallbackEntryStart = input.fallbackEntryStart ?? fallbackExpandedStart;
+        const fallbackRangeCount = Math.ceil(fallbackEntries.length / PERSONAL_PROVIDER_DIRECT_LIMIT);
+        const fallbackRangeIndex = Math.min(
+          Math.max(0, Math.floor(fallbackEntryStart / PERSONAL_PROVIDER_DIRECT_LIMIT)),
+          Math.max(0, fallbackRangeCount - 1),
+        );
+        const slicedFallbackEntries = fallbackEntries.slice(
+          fallbackRangeIndex * PERSONAL_PROVIDER_DIRECT_LIMIT,
+          fallbackRangeIndex * PERSONAL_PROVIDER_DIRECT_LIMIT + PERSONAL_PROVIDER_DIRECT_LIMIT,
+        );
+        const selectedProviderValue = encodeProviderParam(selectedProvider);
+
+        // The select is the only way into the fallback modal, so it renders even for a single
+        // provider. The primary model is chosen on Switch Models, and repeating it here would give
+        // it a second, non-authoritative home.
+        components.push(
+          {
+            type: ComponentType.TextDisplay,
+            // The prompt also guarantees non-empty content: a provider with no slots yet would
+            // otherwise send an empty TextDisplay, which Discord rejects with BASE_TYPE_BAD_LENGTH.
+            content: slotLines
+              ? `${slotLines}\n${localizer(locale, "commands.personal.config.fallbacks_select_prompt")}`
+              : localizer(locale, "commands.personal.config.fallbacks_select_prompt"),
+          },
+          {
+            type: ComponentType.ActionRow,
+            components: [
+              {
+                type: ComponentType.StringSelect,
+                customId: buildPersonalConfigRouteId({
+                  action: "fallbacks-provider-select",
+                  locale,
+                }),
+                placeholder: safeSelectOptionText(
+                  fallbackPageCount > 0
+                    ? localizer(locale, "commands.personal.config.fallbacks_page_placeholder", {
+                        provider: getProviderDisplayName(selectedProvider),
+                      })
+                    : localizer(locale, "commands.personal.config.fallbacks_provider_select_placeholder"),
+                  100,
+                ),
+                options: slicedFallbackEntries.map((entry) => ({
+                  value: entry.value,
+                  label: safeSelectOptionText(entry.label, 100),
+                  default: entry.value === selectedProviderValue,
+                })),
+                disabled: writesDisabled,
+              },
+            ],
+          },
+        );
+
+        const fallbackPaginationRow = buildPaginationRow({
+          locale,
+          rangeIndex: fallbackRangeIndex,
+          rangeCount: fallbackRangeCount,
+          namespace: PERSONAL_CONFIG_ROUTE_NAMESPACE,
+          version: PERSONAL_CONFIG_ROUTE_VERSION,
+          buildSegments: {
+            page: (targetRangeIndex) =>
+              buildPersonalConfigRouteSegments({
+                action: "fallbacks-page",
+                locale,
+                provider: selectedProvider,
+                start: targetRangeIndex * PERSONAL_PROVIDER_DIRECT_LIMIT,
+              }),
+          },
+        });
+        if (fallbackPaginationRow) {
+          components.push(fallbackPaginationRow);
+        }
+
+        components.push({ type: ComponentType.Separator, divider: true, spacing: 1 });
+
+        const canEnableRandomizer = Boolean(input.modelDisplayInfo?.canEnableRandomizer);
+        // Clearing every fallback slot leaves the stored flag on, so the selection tracks the stored
+        // value while the behavior sentence below tracks the effective one. Collapsing the two here
+        // would show Off for a user whose randomizer resumes the moment they add a fallback back.
+        const isRandomizerOn = Boolean(input.modelDisplayInfo?.randomizerEnabled);
+        const isRandomizerActive = isRandomizerOn && canEnableRandomizer;
+
+        const randomizerDesc = canEnableRandomizer
+          ? localizer(locale, "commands.personal.config.randomizer_section_desc")
+          : `${localizer(locale, "commands.personal.config.randomizer_section_desc")}\n-# ${localizer(locale, "commands.personal.config.randomizer_requires_fallback_detail")}`;
+
+        const randomizerChoices = [
+          {
+            value: false,
+            label: localizer(locale, "commands.personal.config.mode_off"),
+            customId: buildPersonalConfigRouteId({
+              action: "randomizer-set",
+              locale,
+              provider: selectedProvider,
+              enabled: false,
+            }),
+          },
+          {
+            value: true,
+            label: localizer(locale, "commands.personal.config.mode_on"),
+            customId: buildPersonalConfigRouteId({
+              action: "randomizer-set",
+              locale,
+              provider: selectedProvider,
+              enabled: true,
+            }),
+            available: canEnableRandomizer,
+          },
+        ] as const;
+
+        const randomizerEffect = isRandomizerActive
+          ? localizer(locale, "commands.personal.config.randomizer_effect_on")
+          : localizer(locale, "commands.personal.config.randomizer_effect_off");
+
+        components.push(
+          {
+            type: ComponentType.TextDisplay,
+            content: `**${localizer(locale, "commands.personal.config.randomizer_section_title")}**\n${randomizerDesc}`,
+          },
+          buildStateControlRow(randomizerChoices, isRandomizerOn, writesDisabled),
+          {
+            type: ComponentType.TextDisplay,
+            content: `> ${randomizerEffect}`,
+          },
+        );
+      }
+    }
+  } else if (category === "advanced") {
+    if (page === "response-modes") {
+      const dtmMode = user.personal_dtm ?? "follow";
+      const toolMode = user.personal_deliberate_tool_mode ?? "follow";
+      const isGuild = input.guildId !== null;
+
+      const serverDtm = input.serverTriggerBehavior?.deliberate_trigger_mode ?? false;
+      const serverToolMode = input.serverTriggerBehavior?.deliberate_tool_mode ?? false;
+
+      let dtmEffectText: string;
+      if (!isGuild) {
+        dtmEffectText = localizer(locale, "commands.personal.config.dtm_effect_dm");
+      } else {
+        const isDtmActive = dtmMode === "on" || (dtmMode === "follow" && serverDtm);
+        dtmEffectText = isDtmActive
+          ? localizer(locale, "commands.personal.config.dtm_effect_active")
+          : localizer(locale, "commands.personal.config.dtm_effect_inactive");
+      }
+
+      const isToolModeActive = toolMode === "on" || (toolMode === "follow" && (isGuild ? serverToolMode : false));
+      const toolEffectText = isToolModeActive
+        ? localizer(locale, "commands.personal.config.tool_mode_effect_active")
+        : localizer(locale, "commands.personal.config.tool_mode_effect_inactive");
+
+      const dtmChoices = [
+        {
+          value: "off" as const,
+          label: localizer(locale, "commands.personal.config.mode_off"),
+          customId: buildPersonalConfigRouteId({
+            action: "trigger-mode-set",
+            locale,
+            mode: "off",
+          }),
+        },
+        {
+          value: "follow" as const,
+          label: localizer(locale, "commands.personal.config.mode_follow"),
+          customId: buildPersonalConfigRouteId({
+            action: "trigger-mode-set",
+            locale,
+            mode: "follow",
+          }),
+        },
+        {
+          value: "on" as const,
+          label: localizer(locale, "commands.personal.config.mode_on"),
+          customId: buildPersonalConfigRouteId({
+            action: "trigger-mode-set",
+            locale,
+            mode: "on",
+          }),
+        },
+      ] as const;
+
+      const toolModeChoices = [
+        {
+          value: "off" as const,
+          label: localizer(locale, "commands.personal.config.mode_off"),
+          customId: buildPersonalConfigRouteId({
+            action: "tool-mode-set",
+            locale,
+            mode: "off",
+          }),
+        },
+        {
+          value: "follow" as const,
+          label: localizer(locale, "commands.personal.config.mode_follow"),
+          customId: buildPersonalConfigRouteId({
+            action: "tool-mode-set",
+            locale,
+            mode: "follow",
+          }),
+        },
+        {
+          value: "on" as const,
+          label: localizer(locale, "commands.personal.config.mode_on"),
+          customId: buildPersonalConfigRouteId({
+            action: "tool-mode-set",
+            locale,
+            mode: "on",
+          }),
+        },
+      ] as const;
+
+      components.push(
+        {
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.response_modes_title")}`,
+        },
+        {
+          type: ComponentType.TextDisplay,
+          content: `**[${localizer(locale, "commands.personal.config.dtm_section_title")}](https://docs.tomoribot.app/en/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode)**\n${localizer(locale, "commands.personal.config.dtm_description")}`,
+        },
+        buildStateControlRow(dtmChoices, dtmMode, writesDisabled),
+        {
+          type: ComponentType.TextDisplay,
+          content: `> ${dtmEffectText}`,
+        },
+        { type: ComponentType.Separator, divider: true, spacing: 1 },
+        {
+          type: ComponentType.TextDisplay,
+          content: `**[${localizer(locale, "commands.personal.config.tool_mode_section_title")}](https://docs.tomoribot.app/en/features/capabilities/tools-and-extensions/#deliberate-tool-mode)** (EXPERIMENTAL)\n${localizer(locale, "commands.personal.config.tool_mode_description")}`,
+        },
+        buildStateControlRow(toolModeChoices, toolMode, writesDisabled),
+        {
+          type: ComponentType.TextDisplay,
+          content: `> ${toolEffectText}`,
+        },
+      );
+    } else if (page === "impersonation") {
+      const prompt = user.impersonation_prompt?.trim();
+      let previewText: string;
+      if (!prompt) {
+        previewText = localizer(locale, "commands.personal.config.impersonation_no_prompt");
+      } else {
+        const truncated = prompt.length > 200 ? `${prompt.slice(0, 197)}...` : prompt;
+        previewText = escapeDiscordMarkdown(truncated);
+      }
+
+      components.push(
+        {
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.impersonation_title")}\n${localizer(locale, "commands.personal.config.impersonation_description")}\n> ${previewText}`,
+        },
+        {
+          type: ComponentType.ActionRow,
+          components: [
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Secondary,
+              customId: buildPersonalConfigRouteId({ action: "impersonation-open", locale }),
+              label: localizer(locale, "commands.personal.config.impersonation_edit_button"),
+              disabled: writesDisabled,
+            },
+            {
+              type: ComponentType.Button,
+              style: ButtonStyle.Danger,
+              customId: buildPersonalConfigRouteId({ action: "impersonation-clear-view", locale }),
+              label: localizer(locale, "commands.personal.config.impersonation_clear_button"),
+              disabled: writesDisabled || !prompt,
+            },
+          ],
+        },
+      );
+    } else if (page === "spotlight") {
+      if (input.guildId === null) {
+        components.push({
+          type: ComponentType.TextDisplay,
+          content: `### ${localizer(locale, "commands.personal.config.spotlight_title")}\n${localizer(locale, "commands.personal.config.spotlight_guild_only_detail")}`,
+        });
+      } else {
+        const activeSpotlights = input.spotlightDisplayInfo?.activeSpotlights ?? [];
+        const personas = input.spotlightDisplayInfo?.personas ?? [];
+        const personaMap = new Map(personas.map((p) => [p.id, p.name]));
+
+        let spotlightRowsText = "";
+        if (activeSpotlights.length === 0) {
+          spotlightRowsText = `> ${localizer(locale, "commands.personal.config.spotlight_none_active")}`;
+        } else {
+          const rows = activeSpotlights.map((entry) => {
+            const durationStr =
+              entry.expiresAt === null
+                ? localizer(locale, "commands.personal.config.spotlight_duration_permanent")
+                : localizer(locale, "commands.personal.config.spotlight_duration_until", {
+                    expires_at: `<t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>`,
+                  });
+            const countStr = localizer(locale, "commands.personal.config.spotlight_persona_count", {
+              count: entry.personaIds.length,
+            });
+            const autoStr =
+              entry.autoTriggerPersonaId !== null
+                ? (personaMap.get(entry.autoTriggerPersonaId) ?? String(entry.autoTriggerPersonaId))
+                : localizer(locale, "commands.personal.config.spotlight_auto_none");
+            const autoLabel = localizer(locale, "commands.personal.config.spotlight_auto_label");
+            return `> <#${entry.channelDiscId}> · ${durationStr} · ${countStr} · ${autoLabel}: ${autoStr}`;
+          });
+          spotlightRowsText = rows.join("\n");
+        }
+
+        const header = `### ${localizer(locale, "commands.personal.config.spotlight_title")}\n${localizer(locale, "commands.personal.config.spotlight_description")}\n`;
+        const content = truncateDiscordText(`${header}${spotlightRowsText}`, 3200, "\n> ...");
+
+        components.push(
+          {
+            type: ComponentType.TextDisplay,
+            content,
+          },
+          {
+            type: ComponentType.ActionRow,
+            components: [
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Secondary,
+                customId: buildPersonalConfigRouteId({ action: "spotlight-set-open", locale }),
+                label: localizer(locale, "commands.personal.config.spotlight_set_button"),
+                disabled: writesDisabled,
+              },
+              {
+                type: ComponentType.Button,
+                style: ButtonStyle.Danger,
+                customId: buildPersonalConfigRouteId({ action: "spotlight-remove-open", locale }),
+                label: localizer(locale, "commands.personal.config.spotlight_remove_button"),
+                disabled: writesDisabled || activeSpotlights.length === 0,
+              },
+            ],
+          },
+        );
+      }
+    }
+  }
+
+  if (readStatus === "stale") {
+    components.push(
+      buildRetryRow(locale, category, page, selectedLineageId),
+      { type: ComponentType.Separator, divider: true, spacing: 1 },
+      {
+        type: ComponentType.TextDisplay,
+        content: `-# ${localizer(locale, "commands.personal.config.stale_warning")}`,
+      },
+    );
+  }
+
+  return buildPayload(components, receipt);
+}

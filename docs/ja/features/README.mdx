@@ -8,15 +8,15 @@ sidebar:
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-TomoriBotにできることを、達成したい目的別にまとめています。各カードから詳細なガイドにアクセスできます。Discord上で直接確認したい場合は、`/help features`を実行して現在の機能リストを見るか、`/help`ですべてのコマンドを閲覧してください。
+TomoriBotができることを、達成したい目的別にまとめています。各カードは詳細なガイドへのリンクになっています。Discord上で直接確認したい場合は、`/help`を実行して`セットアップ`の`機能`を開き、ライブ機能リストを見るか、`/help`からすべてのコマンドを閲覧してください。
 
 ## チャットと性格
 
 <CardGrid>
   <LinkCard title="チャットとトリガー" href="/ja/features/chatting-personality/chatting-and-triggers/"
-    description="メンション、トリガーワード、自動トリガー、意図的トリガーモードなど、返信するタイミングの決定方法について。" />
+    description="メンション、トリガーワード、自動トリガー、明示的トリガーモード：返信するタイミングの決定方法について。" />
   <LinkCard title="複数のペルソナ" href="/ja/features/chatting-personality/multiple-personas/"
-    description="ペルソナの作成、生成、切り替え。独自のトリガーとWebhookアバターを持つアルターペルソナ。" />
+    description="ペルソナの作成、生成、切り替え。独自のトリガーとWebhookアバターを持つオルタペルソナ。" />
   <LinkCard title="振る舞いの調整" href="/ja/features/chatting-personality/behavior-tweaking/"
     description="機能と重要な設定。TomoriBotに許可されていることと、生成の仕組みについて。" />
 </CardGrid>
@@ -24,19 +24,19 @@ TomoriBotにできることを、達成したい目的別にまとめていま�
 ## 知識
 
 <CardGrid>
-  <LinkCard title="メモリー" href="/ja/features/knowledge/memory/"
-    description="個人とサーバーのメモリー、タグ付け、短期メモリー、ドキュメントのナレッジベース。" />
+  <LinkCard title="記憶" href="/ja/features/knowledge/memory/"
+    description="個人の記憶とサーバーの記憶、タグ付け、短期記憶、ドキュメントのナレッジベース。" />
   <LinkCard title="パーソナライズ" href="/ja/features/knowledge/personalization/"
     description="自身のプロバイダー（BYOK）、タイムゾーン、プロンプト、パーソナルスポットライト、プライバシー。" />
   <LinkCard title="データ処理" href="/ja/features/knowledge/data-handling/"
     description="データのエクスポート、インポート、削除、および保存されるデータの詳細。" />
 </CardGrid>
 
-## 拡張機能
+## 機能
 
 <CardGrid>
   <LinkCard title="ツールと拡張" href="/ja/features/capabilities/tools-and-extensions/"
-    description="組み込みの自律エージェントツール、ウェブ検索、MCPサーバー、意図的ツールモード。" />
+    description="組み込みのエージェントツール、ウェブ検索、MCPサーバー、明示的ツールモード。" />
   <LinkCard title="スケジュール済みタスク" href="/ja/features/capabilities/scheduled-tasks/"
     description="1回限りや繰り返しのリマインダーやセルフタスクを、チャットで頼むだけで設定できます。" />
   <LinkCard title="メディア生成" href="/ja/features/capabilities/media-generation/"
@@ -49,9 +49,9 @@ TomoriBotにできることを、達成したい目的別にまとめていま�
   <LinkCard title="プロバイダーとモデル" href="/ja/features/setup-administration/providers-and-models/"
     description="プロバイダーごとのAPIキー、カスタムエンドポイント、サポートされているプロバイダーの全一覧。" />
   <LinkCard title="サーバーのモデレーション" href="/ja/features/setup-administration/server-moderation/"
-    description="思考ログ、クォータ、ホワイトリスト、BYOK必須モードなど、管理者のためのコストと安全の制御。" />
+    description="思考ログ、クォータ、ホワイトリスト、BYOK必須モード：管理者のためのコストと安全の制御。" />
   <LinkCard title="年齢制限のあるコマンド" href="/ja/features/setup-administration/age-restricted-commands/"
-    description="Discordの年齢制限に基づく無検閲出力や成人向けメディアのオプトイン方法と機能する場所。" />
+    description="Discordの年齢制限の背後にある /nsfw コマンドカテゴリ：オプトイン方法と機能する場所。" />
   <LinkCard title="統計とインサイト" href="/ja/features/setup-administration/stats-and-insights/"
     description="使用状況のトラッキングと、共有可能なインフォグラフィックカード。" />
 </CardGrid>

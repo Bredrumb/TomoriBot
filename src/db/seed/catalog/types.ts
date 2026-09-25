@@ -1,3 +1,5 @@
+import type { LocaleCode } from "@/constants/locales";
+
 // Input types for the human-authored seed catalogs (`*.ts`).
 //
 // These are deliberately *narrower* than the DB row schemas in
@@ -27,8 +29,8 @@ interface CommonInput {
   codename: string;
   /** English description; `null` emits SQL `NULL`. */
   desc: string | null;
-  /** Japanese description; `null` emits SQL `NULL`. */
-  ja: string | null;
+  /** Optional localized descriptions; English comes from `desc`. */
+  i18n?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
   /** Marks the provider's default model. Exactly one per provider (see validator). */
   isDefault?: boolean;
   /** Hides the model from selection; deprecated rows are split into a separate INSERT. */
@@ -110,6 +112,7 @@ export interface PersonaInput {
   avatarPath: string;
   triggerWords: string[];
   lineageId: number;
+  namingConfig: import("@/types/personaNaming").PersonaNamingConfig;
   /**
    * Optional official sprite set for this preset. Seeded into `preset_sprites`
    * and resolved live by pointer personas. Omit (or leave empty) and the persona
@@ -122,7 +125,7 @@ export interface PersonaInput {
 export interface SystemPromptInput {
   name: string;
   desc: string;
-  jaDescription: string;
+  i18n?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
   promptText: string;
 }
 
@@ -158,6 +161,6 @@ export interface NaiPresetInput {
   modelTarget: NaiModelTarget;
   isDefault?: boolean;
   desc: string;
-  jaDesc: string;
+  i18n?: Partial<Record<Exclude<LocaleCode, "en-US">, string>>;
   parameters: NaiSamplingParameters;
 }

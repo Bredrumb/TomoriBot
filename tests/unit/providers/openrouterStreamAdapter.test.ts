@@ -54,6 +54,19 @@ async function collectRawChunks(adapter: OpenrouterStreamAdapter): Promise<RawSt
 }
 
 /**
+ * Consumes a stream to completion and discards the chunks.
+ *
+ * Request assembly and provider-side processing run inside the generator, so a test that asserts on
+ * what the adapter sent has to pull every chunk first. Use `collectRawChunks` when the chunks
+ * themselves are what the test is about.
+ */
+async function drainStream(stream: AsyncIterable<unknown>): Promise<void> {
+  for await (const _chunk of stream) {
+    // Discarded: the assertion reads state the generator wrote while producing them.
+  }
+}
+
+/**
  * Builds a RawStreamChunk wrapping an OpenRouter-shaped data object.
  * chunk.data is typed as unknown so no type assertion is needed in the fixture.
  */
@@ -352,13 +365,58 @@ describe("OpenrouterStreamAdapter tool history", () => {
       },
     ];
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context)) {
-      // Drain the stream so the request body is fully assembled and processed.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
 
     const messages = requestBody?.messages as Array<Record<string, unknown>>;
     expect(messages.map((message) => message.role)).toEqual(["assistant", "tool"]);
     expect(String(messages[1]?.content)).toContain("Fetched page content");
+  });
+
+  it("replays a tool-returned image as inline data", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (input, init) => {
+      if (String(input).startsWith("data:")) {
+        return await originalFetch(input, init);
+      }
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return makeSseResponse(["[DONE]"]);
+    }) as typeof fetch;
+
+    const pngBytes = Buffer.from("89504e470d0a1a0a00000000", "hex");
+    const context = makeStreamContext();
+    context.functionInteractionHistory = [
+      {
+        functionCall: { name: "web_search", args: { query: "birds" } },
+        functionResponse: {
+          functionResponse: { name: "web_search", response: { result: "sent" } },
+        },
+        imageMetadata: {
+          imageUrls: [
+            {
+              url: `data:image/jpeg;base64,${pngBytes.toString("base64")}`,
+              mimeType: "image/jpeg",
+              originalUrl: "https://media.discordapp.net/proxy-image.jpg",
+            },
+          ],
+          totalSent: 1,
+          totalValidated: 1,
+        },
+      },
+    ];
+    const config = { ...makeStreamConfig(), seesImages: true };
+
+    await drainStream(new OpenrouterStreamAdapter().startStream(config, context));
+
+    const messages = requestBody?.messages as Array<Record<string, unknown>>;
+    expect(messages[2]).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "image_url",
+          image_url: { url: `data:image/png;base64,${pngBytes.toString("base64")}` },
+        },
+      ],
+    });
   });
 });
 
@@ -504,10 +562,207 @@ describe("OpenrouterStreamAdapter response body teardown", () => {
         headers: { "Content-Type": "text/event-stream" },
       })) as typeof fetch;
 
-    for await (const _chunk of new OpenrouterStreamAdapter().startStream(makeStreamConfig(), makeStreamContext())) {
-      // Drain fully so the stream reaches its natural end.
-    }
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), makeStreamContext()));
 
     expect(cancelled).toBe(false);
+  });
+});
+
+describe("OpenrouterStreamAdapter strict chat-completion compatibility", () => {
+  it("leaves representative same-role history unchanged when strict alternation is off by default", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return makeSseResponse(["[DONE]"]);
+    }) as typeof fetch;
+
+    const context = makeStreamContext();
+    context.contextItems = [
+      { role: "user", parts: [{ type: "text", text: "First user message" }] },
+      { role: "user", parts: [{ type: "text", text: "Second user message" }] },
+      { role: "model", parts: [{ type: "text", text: "First model response" }] },
+      { role: "model", parts: [{ type: "text", text: "Second model response" }] },
+    ];
+
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
+
+    const messages = requestBody?.messages as Array<Record<string, unknown>>;
+    expect(messages).toEqual([
+      { role: "user", content: "First user message" },
+      { role: "user", content: "Second user message" },
+      { role: "assistant", content: "First model response" },
+      { role: "assistant", content: "Second model response" },
+    ]);
+  });
+
+  it("merges ordinary same-role turns and inserts leading user turn while preserving tool-call/tool-result wiring", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return makeSseResponse(["[DONE]"]);
+    }) as typeof fetch;
+
+    const context = makeStreamContext();
+    context.tomoriState.llm = {
+      strict_role_alternation: true,
+    } as unknown as import("@/types/db/schema").LlmRow;
+    context.contextItems = [
+      { role: "model", parts: [{ type: "text", text: "Hello! How can I help?" }] },
+      { role: "user", parts: [{ type: "text", text: "Check this" }] },
+      { role: "user", parts: [{ type: "text", text: "And that" }] },
+    ];
+    context.functionInteractionHistory = [
+      {
+        functionCall: { name: "lookup_data", args: { key: "abc" } },
+        functionResponse: {
+          functionResponse: {
+            name: "lookup_data",
+            response: { result: "found" },
+          },
+        },
+      },
+    ];
+
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
+
+    const messages = requestBody?.messages as Array<Record<string, unknown>>;
+    expect(messages[0]).toEqual({ role: "user", content: "[System: Conversation start]" });
+    expect(messages[1]).toEqual({ role: "assistant", content: "Hello! How can I help?" });
+    expect(messages[2]).toEqual({ role: "user", content: "Check this\nAnd that" });
+    expect(messages[3]?.role).toBe("assistant");
+    expect(Array.isArray(messages[3]?.tool_calls)).toBe(true);
+    expect(messages[4]?.role).toBe("tool");
+    expect(messages[4]?.tool_call_id).toBe((messages[3]?.tool_calls as Array<{ id: string }>)[0]?.id);
+    expect(messages).toHaveLength(5);
+  });
+
+  it("omits prefix when supports_prefix_completion is false and includes prefix only on matching trailing assistant prefill when true", async () => {
+    const drainAndCapture = async (
+      supportsPrefix: boolean,
+      currentTurnParts: Array<Record<string, unknown>>,
+      outputPrefill?: string,
+    ): Promise<Record<string, unknown> | undefined> => {
+      let capturedBody: Record<string, unknown> | undefined;
+      globalThis.fetch = (async (_input, init) => {
+        capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return makeSseResponse(["[DONE]"]);
+      }) as typeof fetch;
+
+      const context = makeStreamContext();
+      context.tomoriState.llm = {
+        supports_prefix_completion: supportsPrefix,
+      } as unknown as import("@/types/db/schema").LlmRow;
+      context.contextItems = [{ role: "user", parts: [{ type: "text", text: "Tell me a story" }] }];
+      context.currentTurnModelParts = currentTurnParts;
+      context.outputPrefill = outputPrefill;
+
+      await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
+      return capturedBody;
+    };
+
+    const bodyOff = await drainAndCapture(false, [{ text: "Once upon a time" }], "Once upon a time");
+    const messagesOff = bodyOff?.messages as Array<Record<string, unknown>>;
+    expect(messagesOff.at(-1)).toEqual({ role: "assistant", content: "Once upon a time" });
+    expect(messagesOff.at(-1)?.prefix).toBeUndefined();
+
+    const bodyMismatched = await drainAndCapture(true, [{ text: "Once upon a time" }], "Different prefill");
+    const messagesMismatched = bodyMismatched?.messages as Array<Record<string, unknown>>;
+    expect(messagesMismatched.at(-1)?.prefix).toBeUndefined();
+
+    const bodyOn = await drainAndCapture(true, [{ text: "Once upon a time" }], "Once upon a time");
+    const messagesOn = bodyOn?.messages as Array<Record<string, unknown>>;
+    expect(messagesOn.at(-1)).toEqual({ role: "assistant", content: "Once upon a time", prefix: true });
+  });
+
+  it("composes strict role alternation and assistant prefix completion", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    globalThis.fetch = (async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return makeSseResponse(["[DONE]"]);
+    }) as typeof fetch;
+
+    const context = makeStreamContext();
+    context.tomoriState.llm = {
+      strict_role_alternation: true,
+      supports_prefix_completion: true,
+    } as unknown as import("@/types/db/schema").LlmRow;
+    context.contextItems = [
+      { role: "model", parts: [{ type: "text", text: "Opening line" }] },
+      { role: "user", parts: [{ type: "text", text: "First question" }] },
+      { role: "user", parts: [{ type: "text", text: "Second question" }] },
+    ];
+    context.currentTurnModelParts = [{ text: "Let me explain:" }];
+    context.outputPrefill = "Let me explain:";
+
+    await drainStream(new OpenrouterStreamAdapter().startStream(makeStreamConfig(), context));
+
+    const messages = requestBody?.messages as Array<Record<string, unknown>>;
+    expect(messages).toEqual([
+      { role: "user", content: "[System: Conversation start]" },
+      { role: "assistant", content: "Opening line" },
+      { role: "user", content: "First question\nSecond question" },
+      { role: "assistant", content: "Let me explain:", prefix: true },
+    ]);
+  });
+});
+
+/**
+ * Streams OpenRouter's queue keepalive comments for `keepaliveMs`, then the given data events.
+ * `contentFirst` sends one content chunk before the keepalives instead, to model a stall mid-reply.
+ */
+function makeQueuedSseResponse(keepaliveMs: number, contentFirst: boolean): Response {
+  const encoder = new TextEncoder();
+  const content = (text: string) =>
+    encoder.encode(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: text } }] })}\n\n`);
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      if (contentFirst) controller.enqueue(content("Hello"));
+      const until = Date.now() + keepaliveMs;
+      while (Date.now() < until) {
+        controller.enqueue(encoder.encode(": OPENROUTER PROCESSING\n\n"));
+        await Bun.sleep(10);
+      }
+      controller.enqueue(content(" world"));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+}
+
+async function collectWithIdleBudget(response: Response, inactivityTimeoutMs: number): Promise<RawStreamChunk[]> {
+  globalThis.fetch = (async () => response) as unknown as typeof fetch;
+  const chunks: RawStreamChunk[] = [];
+  const config = { ...makeStreamConfig(), inactivityTimeoutMs };
+  for await (const chunk of new OpenrouterStreamAdapter().startStream(config, makeStreamContext())) {
+    chunks.push(chunk);
+  }
+  return chunks;
+}
+
+function streamedText(chunks: RawStreamChunk[]): string {
+  return chunks
+    .map((chunk) => {
+      const data = chunk.data as { choices?: Array<{ delta?: { content?: string } }> };
+      return data.choices?.[0]?.delta?.content ?? "";
+    })
+    .join("");
+}
+
+describe("OpenrouterStreamAdapter first-token budget", () => {
+  it("waits out a queue of keepalives longer than the idle budget before the first token", async () => {
+    // A queued free model sends only keepalives; judging that wait by the idle budget cut the
+    // request off before the model ever started.
+    const chunks = await collectWithIdleBudget(makeQueuedSseResponse(150, false), 40);
+
+    expect(streamedText(chunks)).toBe(" world");
+  });
+
+  it("still enforces the idle budget once the first token has arrived", async () => {
+    const chunks = await collectWithIdleBudget(makeQueuedSseResponse(150, true), 40);
+    const errors = chunks.map((chunk) => (chunk.data as { error?: { message?: string } }).error?.message);
+
+    expect(streamedText(chunks)).toBe("Hello");
+    expect(errors).toContainEqual(expect.stringContaining("timed out due to inactivity"));
   });
 });

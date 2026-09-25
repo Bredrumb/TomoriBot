@@ -8,10 +8,202 @@
  * tool adapter integration, and response format negotiation.
  */
 import type { ToolResult } from "@/types/tool/interfaces";
+import type { GeneratePresetParams, PresetGenerationErrorType } from "@/types/provider/featureInterfaces";
 import { PRESET_MAX_STRING_LENGTH } from "@/types/preset/presetExport";
+import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
 
 /** A text or image_url content part in an OpenAI-compatible message. */
 export type PresetContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+
+/**
+ * Shape the preset generation prompt asks the model to return.
+ *
+ * Every field is optional because this describes untrusted model output: the prompt
+ * states the counts, and {@link validatePresetGenerationFields} is what holds the model
+ * to them. Lists are mutable because the accepted result is handed straight into
+ * `PresetExportData`.
+ */
+export interface PresetGenerationFields {
+  attribute_list?: string[];
+  sample_dialogues_in?: string[];
+  sample_dialogues_out?: string[];
+}
+
+/** Attributes every generated preset must carry, matching the order the prompt specifies. */
+export const PRESET_ATTRIBUTE_COUNT = 6;
+/** Dialogue pairs every generated preset must carry, matching the 3 guided + 2 free structure. */
+export const PRESET_DIALOGUE_PAIR_COUNT = 5;
+
+/**
+ * Why a generated payload cannot become a preset.
+ *
+ * `UNPARSABLE` and `PARSE_FAILED` mean no usable object came back; `INCOMPLETE` and the
+ * per-field codes mean the object arrived but the model did not follow the schema. Callers
+ * need the distinction because it decides `errorType` (`INVALID_JSON` or
+ * `VALIDATION_ERROR`) and whether the raw provider error is worth showing.
+ */
+export type PresetFieldFailureCode =
+  | "UNPARSABLE"
+  | "PARSE_FAILED"
+  | "INCOMPLETE"
+  | "ATTRIBUTE_LIST"
+  | "DIALOGUES_IN"
+  | "DIALOGUES_OUT";
+
+/**
+ * The failures where the payload arrived intact but broke the contract, as opposed to a
+ * response nothing could read. Exported as data so a provider can branch on the class
+ * without re-listing the per-field codes.
+ */
+export const PRESET_SCHEMA_MISS_CODES: readonly PresetFieldFailureCode[] = [
+  "ATTRIBUTE_LIST",
+  "DIALOGUES_IN",
+  "DIALOGUES_OUT",
+];
+
+export interface PresetFieldFailure {
+  code: PresetFieldFailureCode;
+  /** Count the offending list actually held, when the list arrived but was the wrong length. */
+  received?: number;
+}
+
+export type PresetFieldsResult =
+  | { ok: true; preset: Required<PresetGenerationFields> }
+  | { ok: false; failure: PresetFieldFailure };
+
+/**
+ * Sanitize sample dialogue by removing speaker prefixes
+ * Removes patterns like "User:", "Character:", "{{char}}:", etc.
+ *
+ */
+export function sanitizeSampleDialogueText(dialogue: string): string {
+  if (!dialogue) return "";
+
+  const cleaned = dialogue
+    .replace(/^{{char}}:\s*/i, "") // Remove {{char}}: prefix
+    .replace(/^{{character}}:\s*/i, "") // Remove {{character}}: prefix
+    .replace(/^{user}:\s*/i, "") // Remove {user}: prefix
+    .replace(/^User:\s*/i, "") // Remove User: prefix
+    .replace(/^Character:\s*/i, "") // Remove Character: prefix
+    .replace(/^[^:]+:\s*/, ""); // Remove any "Name:" style prefix
+
+  return cleaned.trim();
+}
+
+/**
+ * Check a candidate payload against the preset contract, sanitizing the dialogues it accepts.
+ *
+ * This is the one place the 6-attribute and 5-pair counts are enforced for generated
+ * presets: the schema in {@link buildPresetResponseSchema} and the prompt in
+ * {@link buildPresetPrompt} state them, and a provider that ignored them has to be caught
+ * here before the preset reaches the export schema.
+ *
+ * A repaired payload is expected to be missing fields: a response the token ceiling cut
+ * short loses whatever followed the cut, so only an intact leading section can pass.
+ */
+export function validatePresetGenerationFields(candidate: unknown): PresetFieldsResult {
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
+    return { ok: false, failure: { code: "UNPARSABLE" } };
+  }
+
+  const fields = candidate as PresetGenerationFields;
+  if (!fields.attribute_list || !fields.sample_dialogues_in || !fields.sample_dialogues_out) {
+    return { ok: false, failure: { code: "INCOMPLETE" } };
+  }
+
+  if (!Array.isArray(fields.attribute_list) || fields.attribute_list.length !== PRESET_ATTRIBUTE_COUNT) {
+    return { ok: false, failure: { code: "ATTRIBUTE_LIST", received: fields.attribute_list.length } };
+  }
+
+  if (!Array.isArray(fields.sample_dialogues_in) || fields.sample_dialogues_in.length !== PRESET_DIALOGUE_PAIR_COUNT) {
+    return { ok: false, failure: { code: "DIALOGUES_IN", received: fields.sample_dialogues_in.length } };
+  }
+
+  if (
+    !Array.isArray(fields.sample_dialogues_out) ||
+    fields.sample_dialogues_out.length !== PRESET_DIALOGUE_PAIR_COUNT
+  ) {
+    return { ok: false, failure: { code: "DIALOGUES_OUT", received: fields.sample_dialogues_out.length } };
+  }
+
+  return {
+    ok: true,
+    preset: {
+      attribute_list: fields.attribute_list,
+      sample_dialogues_in: fields.sample_dialogues_in.map(sanitizeSampleDialogueText),
+      sample_dialogues_out: fields.sample_dialogues_out.map(sanitizeSampleDialogueText),
+    },
+  };
+}
+
+/**
+ * Turn a raw preset generation response into validated preset fields.
+ *
+ * A response no parser could read is retried with {@link tryRepairIncompleteJson}, because
+ * an output-token ceiling can cut the payload off mid-object: the fields that did finish are
+ * still usable, and whether enough of them survived is what
+ * {@link validatePresetGenerationFields} decides.
+ *
+ * @param parse - Parser for this provider's response format, applied to the response text.
+ * @param logFailure - Receives the parser's own message when it threw. The failure code
+ *                     cannot carry the reason a provider rejected the payload, and that
+ *                     reason is what separates a vendor quirk from a truncation.
+ */
+export function extractPresetGenerationFields(
+  raw: string,
+  parse: (raw: string) => unknown,
+  logFailure: (detail: string) => void,
+): PresetFieldsResult {
+  let candidate: unknown;
+  try {
+    candidate = parse(raw);
+  } catch (parseError) {
+    logFailure(parseError instanceof Error ? parseError.message : String(parseError));
+    candidate = tryRepairIncompleteJson(raw);
+  }
+
+  if (candidate === null || candidate === undefined) {
+    return { ok: false, failure: { code: "PARSE_FAILED" } };
+  }
+
+  return validatePresetGenerationFields(candidate);
+}
+
+/**
+ * The rephrase-only message a failed payload produces, for providers whose error text the
+ * user sees verbatim.
+ *
+ * The mixed causes are deliberate: an unreadable response, a payload the token ceiling cut
+ * short, and a schema the model ignored all reach the user as one instruction to retry,
+ * because nothing the user can change would separate them.
+ */
+export function presetGenerationFailureMessage(failure: PresetFieldFailure): string {
+  switch (failure.code) {
+    case "ATTRIBUTE_LIST":
+      return `Generated attribute list must contain exactly ${PRESET_ATTRIBUTE_COUNT} items. Please try again.`;
+    case "DIALOGUES_IN":
+      return "Generated sample dialogues must contain exactly 5 user inputs.";
+    case "DIALOGUES_OUT":
+      return "Generated sample dialogues must contain exactly 5 character responses.";
+    default:
+      return "Generated character data is incomplete. Please try again.";
+  }
+}
+
+/**
+ * Whether a failure is a validation miss (`VALIDATION_ERROR`) or a payload nothing could
+ * read (`INVALID_JSON`), which is the `errorType` every provider reports.
+ */
+export function presetGenerationFailureErrorType(failure: PresetFieldFailure): PresetGenerationErrorType {
+  switch (failure.code) {
+    case "ATTRIBUTE_LIST":
+    case "DIALOGUES_IN":
+    case "DIALOGUES_OUT":
+      return "VALIDATION_ERROR";
+    default:
+      return "INVALID_JSON";
+  }
+}
 
 /** Message shape used inside the preset generation tool-calling loop. */
 export type PresetMessage =
@@ -78,18 +270,22 @@ export function buildPresetResponseSchema() {
  *
  * This is the canonical prompt used by all providers. It includes detailed guidance
  * for the 3 guided + 2 free dialogue structure, character limit reminders, and
- * optional sections for web search, existing preset context, and additional instructions.
+ * optional sections for an upload-derived appearance description, web search, existing
+ * preset context, and additional instructions.
+ *
+ * Takes `GeneratePresetParams` itself rather than a hand-copied subset, so a new input
+ * cannot silently fail to reach the prompt.
  */
-export function buildPresetPrompt(params: {
-  characterName: string;
-  characterDescription: string;
-  speechExamples: string;
-  additionalInstructions?: string;
-  imageBase64?: string;
-  imageMimeType?: string;
-  useWebSearch?: boolean;
-  existingPresetContext?: string;
-}): string {
+export function buildPresetPrompt(
+  params: GeneratePresetParams,
+  options?: {
+    /**
+     * True when the caller has already run search and appends the results itself, so the
+     * prompt must not also tell the model to call web search tools it was not given.
+     */
+    webSearchResultsProvided?: boolean;
+  },
+): string {
   const maxStringLength = PRESET_MAX_STRING_LENGTH;
   let prompt = `You are an expert character creator for a Discord chatbot. Create a detailed character profile based on the following information.
 
@@ -105,8 +301,9 @@ Instructions:
 - Create a rich, detailed character profile in the structured JSON format
 - The character should be interesting and engaging for conversation
 - Do NOT prepend the sample dialogues with character names or "User:"/"Character:" prefixes - the chat application will handle that
-- Use "{user}" as a placeholder when referring to other people or the conversation partner in dialogues
-- Use "{bot}" as a placeholder when referring to the character themselves
+- Use "{user}" ONLY where you would write the conversation partner's name (NOT for the pronoun "you"). Keep "you" as "you"
+- Use "{bot}" ONLY where you would write the character's own name (NOT for the pronouns "I"/"me"). Keep "I" as "I" and "I'm" as "I'm"
+- Default dialogue voice is FIRST PERSON. Use normal first-person pronouns (I, me, my) in the character's speech. Only use {bot} where the character would literally say their own name, such as a self-introduction. The only exception is characters who canonically refer to themselves in third person (e.g., young children, certain anime archetypes)
 - Ensure exactly 5 sample dialogue pairs (sample_dialogues_in paired with sample_dialogues_out)
 
 The attribute_list MUST contain exactly 6 items in this exact order:
@@ -156,7 +353,14 @@ Use this as reference material to transform, refine, or expand upon according to
 ${params.existingPresetContext.trim()}`;
   }
 
-  if (params.useWebSearch) {
+  if (params.appearanceDescription?.trim()) {
+    prompt += `\n\nAppearance Observed In The Uploaded Image:
+A vision model described the character's avatar, which is the source of truth for their physical appearance. Write the Appearance attribute from this description, and do not contradict or embellish it with details it does not mention.
+
+${params.appearanceDescription.trim()}`;
+  }
+
+  if (params.useWebSearch && !options?.webSearchResultsProvided) {
     prompt += `\n\nWeb Search Instructions:
 - Use the available web search tools to gather accurate, up-to-date details when helpful
 - If you cannot find reliable information, treat the character as original and rely on the user's description and image
@@ -175,8 +379,8 @@ ${params.existingPresetContext.trim()}`;
 - sample_dialogues_in: Keep user messages concise (1-3 sentences, MAX ${maxStringLength} characters each)
 - sample_dialogues_out: Character responses can be longer and more detailed to showcase personality (MAX ${maxStringLength} characters each)
 - No speaker name prefixes in any dialogue (no "User:", "Character:", "{user}:", "{bot}:", etc.)
-- Use "{user}" placeholder when character refers to other people in their responses
-- Use "{bot}" placeholder when character refers to themselves in their responses
+- "{user}" and "{bot}" are NAME placeholders, never pronoun replacements: use "{user}" only in place of the conversation partner's name and "{bot}" only in place of the character's own name
+- NEVER replace pronouns: write "you", "I", "me", "I'm" literally (e.g. write "I'm {bot}", never "{bot}'m {bot}")
 - All string lengths must not exceed ${maxStringLength} characters per item`;
 
   return prompt;

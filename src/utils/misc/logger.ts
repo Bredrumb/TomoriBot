@@ -162,6 +162,21 @@ const pinoLogger = pino(
 );
 
 /**
+ * The custom level methods `customLevels` above registers. Pino attaches them to the logger
+ * instance at runtime, so the base `Logger` type does not declare them. One cast names the whole
+ * boundary here instead of an `any` at every call site, and the signatures stay enforced.
+ */
+interface CustomLevelLogger extends pino.Logger {
+  success(message: string): void;
+  section(message: string): void;
+  metric(payload: Record<string, number | string>, message: string): void;
+  rateLimit(payload: Record<string, unknown>, message: string): void;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: Pino adds the custom level methods at runtime
+const customLevels = pinoLogger as any as CustomLevelLogger;
+
+/**
  * ANSI color codes for terminal output
  */
 const colors = {
@@ -183,14 +198,48 @@ function normalizeSensitiveKey(key: string): string {
 
 const SENSITIVE_NORMALIZED_KEYS = new Set(SENSITIVE_LOG_KEYS.map(normalizeSensitiveKey));
 
+// Base64 data URIs can reach over 100 KB (e.g. avatar uploads) and split Docker json-file
+// driver log lines past 16 KB. Collapsing base64 payloads keeps logs intact while avoiding
+// blunt truncation of normal prompts, memories, or stack traces.
+// LOG_MAX_STRING_LENGTH is optional; when unset, text strings are never truncated.
+function getLogMaxStringLength(): number | undefined {
+  const envVal = process.env.LOG_MAX_STRING_LENGTH;
+  if (!envVal) return undefined;
+  const parsed = Number.parseInt(envVal, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+// Redaction runs this far past the cap before the tail is dropped, so a credential straddling the cut
+// is matched whole; cutting first could leave a password that lost its trailing `@` unredacted.
+const REDACTION_OVERLAP_CHARS = 512;
+
 function sanitizeLogString(value: string): string {
+  const maxStringLength = getLogMaxStringLength();
+  if (!maxStringLength || value.length <= maxStringLength) {
+    return redactLogString(value);
+  }
+  const redactedHead = redactLogString(value.slice(0, maxStringLength + REDACTION_OVERLAP_CHARS));
+  const truncatedSuffix = `...[TRUNCATED ${value.length - maxStringLength} chars]`;
+  const truncatedText = `${redactedHead.slice(0, maxStringLength)}${truncatedSuffix}`;
+  return value.includes("\x1b[") ? `${truncatedText}${colors.reset}` : truncatedText;
+}
+
+function redactLogString(value: string): string {
   return value
+    .replace(/(data:[a-z0-9/._\\+-]+;base64,)[A-Za-z0-9+/=]{80,}/gi, `$1...[BASE64 TRUNCATED]`)
     .replace(/((?:https?|postgres(?:ql)?):\/\/[^:\s/@]+:)[^@\s/]+@/gi, `$1${REDACTED}@`)
     .replace(/\b(Bearer|Basic)\s+[^\s,;]+/gi, `$1 ${REDACTED}`)
     .replace(
       /([?&](?:access_token|refresh_token|token|api[_-]?key|key|signature|sig|x-amz-signature)=)[^&#\s]+/gi,
       `$1${REDACTED}`,
     )
+    .replace(
+      /((?:\\?["'])?(?:api[_-]?key|apikey|token|secret|authorization|password|passwd|client[_-]?secret)(?:\\?["'])?\s*[:=]\s*(?:\\?["'])?)[^\s,"'\\]+/gi,
+      `$1${REDACTED}`,
+    )
+    .replace(/\b(sk-(?:proj-|ant-|or-)?(?:live-)?[a-zA-Z0-9_-]{20,})\b/gi, REDACTED)
+    .replace(/\b(AIza[0-9A-Za-z\-_]{30,40})\b/g, REDACTED)
+    .replace(/\b(nvapi-[a-zA-Z0-9_-]{20,})\b/gi, REDACTED)
     .replace(/(https:\/\/(?:canary\.)?discord(?:app)?\.com\/api\/webhooks\/[^/\s]+\/)[^/?\s]+/gi, `$1${REDACTED}`);
 }
 
@@ -237,16 +286,16 @@ export const log = {
    * Logs informational messages (hidden in production).
    */
   info: (msg: string) => {
-    pinoLogger.info(shouldHideLogs ? msg : `${colors.cyan}${msg}${colors.reset}`);
+    const sanitizedMsg = sanitizeLogString(msg);
+    pinoLogger.info(shouldHideLogs ? sanitizedMsg : `${colors.cyan}${sanitizedMsg}${colors.reset}`);
   },
 
   /**
    * Logs success messages (hidden in production).
    */
   success: (msg: string) => {
-    // Pino adds custom level methods at runtime, but TypeScript doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    (pinoLogger as any).success(shouldHideLogs ? `✓ ${msg}` : `${colors.green}✓ ${msg}${colors.reset}`);
+    const sanitizedMsg = sanitizeLogString(msg);
+    customLevels.success(shouldHideLogs ? `✓ ${sanitizedMsg}` : `${colors.green}✓ ${sanitizedMsg}${colors.reset}`);
   },
 
   /**
@@ -254,12 +303,15 @@ export const log = {
    * @param err - Optional error object to include.
    */
   warn: (msg: string, err?: unknown, context?: ErrorContext) => {
-    const coloredMsg = shouldHideLogs ? msg : `${colors.yellow}${msg}${colors.reset}`;
+    const sanitizedPlainMsg = sanitizeLogString(msg);
+    const coloredMsg = shouldHideLogs ? sanitizedPlainMsg : `${colors.yellow}${sanitizedPlainMsg}${colors.reset}`;
     const resolvedContext = resolveErrorContext(context);
-    if (err) {
-      pinoLogger.warn({ err: toLoggableError(err), context: sanitizeLogPayload(resolvedContext) }, coloredMsg);
+    const sanitizedContext = sanitizeLogPayload(resolvedContext);
+    const sanitizedError = err ? toLoggableError(err) : undefined;
+    if (sanitizedError) {
+      pinoLogger.warn({ err: sanitizedError, context: sanitizedContext }, coloredMsg);
     } else {
-      pinoLogger.warn({ context: sanitizeLogPayload(resolvedContext) }, coloredMsg);
+      pinoLogger.warn({ context: sanitizedContext }, coloredMsg);
     }
   },
 
@@ -269,14 +321,12 @@ export const log = {
    * @param metadata - Optional metadata object with rate limit details.
    */
   rateLimit: (msg: string, metadata?: Record<string, unknown>) => {
-    const coloredMsg = shouldHideLogs ? msg : `${colors.brightYellow}${msg}${colors.reset}`;
-    // Pino adds custom level methods at runtime, but TypeScript doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    const logger = pinoLogger as any;
+    const sanitizedMsg = sanitizeLogString(msg);
+    const coloredMsg = shouldHideLogs ? sanitizedMsg : `${colors.brightYellow}${sanitizedMsg}${colors.reset}`;
     if (metadata) {
-      logger.rateLimit({ metadata: sanitizeLogPayload(metadata) }, coloredMsg);
+      customLevels.rateLimit({ metadata: sanitizeLogPayload(metadata) }, coloredMsg);
     } else {
-      logger.rateLimit(coloredMsg);
+      customLevels.rateLimit({}, coloredMsg);
     }
   },
 
@@ -290,9 +340,7 @@ export const log = {
    */
   metric: (name: string, fields: Record<string, number | string>) => {
     const payload = { metric: name, ...fields };
-    // Pino adds custom level methods at runtime; TS doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    (pinoLogger as any).metric(payload, `metric:${name}`);
+    customLevels.metric(payload, `metric:${name}`);
   },
 
   /**
@@ -302,23 +350,23 @@ export const log = {
    * @param context - Optional context containing IDs and metadata for DB logging.
    */
   error: async (msg: string, err?: unknown, context?: ErrorContext): Promise<void> => {
-    const coloredMsg = shouldHideLogs ? msg : `${colors.red}${msg}${colors.reset}`;
+    const sanitizedPlainMsg = sanitizeLogString(msg);
+    const coloredMsg = shouldHideLogs ? sanitizedPlainMsg : `${colors.red}${sanitizedPlainMsg}${colors.reset}`;
     const resolvedContext = resolveErrorContext(context);
+    const sanitizedContext = sanitizeLogPayload(resolvedContext) as ErrorContext | undefined;
+    const sanitizedError = err ? toLoggableError(err) : undefined;
 
-    if (err) {
-      pinoLogger.error(
-        { err: toLoggableError(err), context: sanitizeLogPayload(resolvedContext) },
-        sanitizeLogString(coloredMsg),
-      );
+    if (sanitizedError) {
+      pinoLogger.error({ err: sanitizedError, context: sanitizedContext }, coloredMsg);
     } else {
-      pinoLogger.error({ context: sanitizeLogPayload(resolvedContext) }, sanitizeLogString(coloredMsg));
+      pinoLogger.error({ context: sanitizedContext }, coloredMsg);
     }
 
     if (!isErrorDbLoggingEnabled()) {
       return;
     }
 
-    const dbPayload = buildErrorLogPayload(msg, err, resolvedContext);
+    const dbPayload = buildErrorLogPayload(sanitizedPlainMsg, sanitizedError, sanitizedContext);
 
     // insertErrorLog never throws and reports a skip separately from a failure. Neither is
     // logged here: the record above already reached the durable host file, and emitting a
@@ -334,9 +382,12 @@ export const log = {
    * Logs section dividers for grouping related logs (hidden in production).
    */
   section: (msg: string) => {
-    const coloredMsg = shouldHideLogs ? `\n=== ${msg} ===` : `${colors.magenta}\n=== ${msg} ===${colors.reset}`;
-    // Pino adds custom level methods at runtime, but TypeScript doesn't know about them
-    // biome-ignore lint/suspicious/noExplicitAny: Custom Pino level added at runtime
-    (pinoLogger as any).section(coloredMsg);
+    if (!shouldHideLogs) {
+      const sanitizedMsg = sanitizeLogString(msg);
+      const coloredMsg = shouldHideLogs
+        ? `\n=== ${sanitizedMsg} ===`
+        : `${colors.magenta}\n=== ${sanitizedMsg} ===${colors.reset}`;
+      customLevels.section(coloredMsg);
+    }
   },
 };

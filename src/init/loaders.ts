@@ -58,6 +58,12 @@ async function syncOpenrouterCatalogPricing(): Promise<void> {
  *
  */
 export async function initLoaders(client: Client): Promise<void> {
+  const { initializeRawModalInterception } = await import("@/utils/discord/ui/modals");
+  initializeRawModalInterception(client);
+
+  log.section("Initializing Locales...");
+  await initializeLocalizer();
+
   log.section("Initializing Tool Registry...");
   try {
     const { initializeTools } = await import("@/tools/toolInitializer");
@@ -67,9 +73,6 @@ export async function initLoaders(client: Client): Promise<void> {
     log.error("Failed to initialize tool registry", error as Error);
     process.exit(1);
   }
-
-  log.section("Initializing Locales...");
-  await initializeLocalizer();
 
   log.section("Initializing LLM Configuration Cache...");
   try {
@@ -95,12 +98,24 @@ export async function initLoaders(client: Client): Promise<void> {
   log.section("Syncing OpenRouter Pricing to Catalog...");
   await syncOpenrouterCatalogPricing();
 
-  log.section("Initializing OpenRouter Video Model Cache...");
+  log.section("Initializing OpenRouter Modality Catalogs...");
   try {
-    const { initializeOpenRouterVideoModelCache } = await import("@/utils/cache/openrouterVideoModelCache");
-    await initializeOpenRouterVideoModelCache();
+    const [
+      { initializeOpenRouterVideoModelCache },
+      { initializeOpenRouterImageModelCache },
+      { initializeOpenRouterEmbeddingModelCache },
+    ] = await Promise.all([
+      import("@/utils/cache/openrouterVideoModelCache"),
+      import("@/utils/cache/openrouterImageModelCache"),
+      import("@/utils/cache/openrouterEmbeddingModelCache"),
+    ]);
+    await Promise.all([
+      initializeOpenRouterVideoModelCache(),
+      initializeOpenRouterImageModelCache(),
+      initializeOpenRouterEmbeddingModelCache(),
+    ]);
   } catch (error) {
-    log.warn("Failed to initialize OpenRouter video model cache (non-critical)", error);
+    log.warn("Failed to initialize OpenRouter modality catalogs (non-critical)", error);
   }
 
   log.section("Initializing Preset Avatar Cache...");

@@ -8,14 +8,7 @@ import type { ChatTurn, GenerationTurnResult } from "@/utils/chat/types";
 import { statRepository } from "@/utils/db/repositories/StatRepository";
 import { buildReunionNote } from "@/utils/text/context/timeAwareness";
 
-function readPositiveIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name]?.trim();
-  if (!raw) return fallback;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-const REUNION_CLAIM_TTL_MS = readPositiveIntEnv("TIME_AWARENESS_REUNION_CLAIM_TTL_MS", 240000);
+const REUNION_CLAIM_TTL_MS = 4 * 60_000;
 
 export interface ReunionClaimHandle {
   key: string;
@@ -160,7 +153,7 @@ export async function recordReunionPresence(
 ): Promise<void> {
   if (!presence) return;
 
-  if (result.personaResponses.length === 0) {
+  if (result.personaResponses.length === 0 && result.toolResponseDelivered !== true) {
     if (presence.mode === "claimed") reunionClaims.release(presence.claim);
     return;
   }

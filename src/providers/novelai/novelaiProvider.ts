@@ -20,8 +20,8 @@ import type {
 } from "discord.js";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { buildStreamContext } from "@/utils/provider/streamContext";
-import { NovelaiStreamAdapter, type NovelaiStreamConfig } from "./novelaiStreamAdapter";
-import type { ProviderError, StreamContext } from "@/types/stream/interfaces";
+import { NovelaiStreamAdapter } from "./novelaiStreamAdapter";
+import type { ProviderError, StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import { DISCORD_STREAMING_CONSTANTS } from "@/types/stream/types";
 import type { StreamingContext } from "@/types/tool/interfaces";
 import type { TomoriState } from "@/types/db/schema";
@@ -45,6 +45,7 @@ import { usesOpenAIEndpoint, validateNovelAIApiKey } from "./novelaiService";
 import { novelaiProviderInfo } from "./providerInfo";
 import { getActiveTemperature } from "@/utils/provider/samplingControl";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 /**
  * Gets the default NovelAI model with a robust fallback chain:
@@ -172,8 +173,10 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
       return [];
     }
 
-    if (!tomoriState.llm.has_tools) {
-      log.info("NovelAI provider: Model does not support tools (db flag has_tools=false)");
+    if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
+      log.info(
+        `NovelAI provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
+      );
       return [];
     }
 
@@ -212,6 +215,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };
@@ -308,7 +312,7 @@ export class NovelaiProvider extends BaseLLMProvider implements LLMProvider {
     log.info(`NovelAIProvider: Starting streaming for server ${tomoriState.server_id}, model ${config.model}`);
 
     try {
-      const streamConfig: NovelaiStreamConfig = {
+      const streamConfig: StreamConfig = {
         ...config,
         maxMessageLength: DISCORD_STREAMING_CONSTANTS.MAX_SINGLE_MESSAGE_LENGTH,
         flushBufferSize: DISCORD_STREAMING_CONSTANTS.FLUSH_BUFFER_SIZE_REGULAR,

@@ -1,0 +1,39 @@
+---
+title: "语音识别（本地引擎）"
+sidebar:
+  label: "总览"
+  groupLabel: "语音识别"
+  order: 8
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBot 把语音识别当作 `transcription` 这一自定义端点功能来处理。只要有一个处于激活状态的转写端点，音频附件就会在后台被转写，并被加入对话上下文。
+
+转写内容的公开显示是另一回事。`/config` > 行为 > 提示这一项只控制语音消息的转写是否会发到聊天里；它不会启用或停用后台的语音识别。
+
+## 可用引擎
+
+<CardGrid>
+  <LinkCard title="WhisperX" href="/zh-CN/self-hosting/local-endpoints/speech-to-text/whisperx/"
+    description="适合初学者的本地转写方案，使用 servers/stt 下的参考 WhisperX 服务器。" />
+  <LinkCard title="whisper.cpp" href="/zh-CN/self-hosting/local-endpoints/speech-to-text/whispercpp/"
+    description="当轻量的 whisper.cpp HTTP 服务器暴露 OpenAI 兼容的转写端点时，就可以使用它。" />
+  <LinkCard title="KoboldCPP" href="/zh-CN/self-hosting/local-endpoints/speech-to-text/koboldcpp/"
+    description="当你的构建暴露 OpenAI 兼容的音频转写时，可以使用 KoboldCPP 基于 Whisper 的语音识别功能。" />
+</CardGrid>
+
+## 设置流程
+
+1. 从上面的引擎指南里启动一个语音识别服务器。
+2. 在 `/providers` 里选择`添加新自定义端点`，并把 API 兼容性设为 `openai-compatible-transcription`。
+3. 选中已保存的端点，用它的模型下拉菜单添加服务器上报的模型代码。
+4. 打开 `/config` > 模型 > 切换模型，选中并激活已注册的端点。
+
+## 转写流程
+
+当转写端点处于激活状态时，TomoriBot 会在后台读取受支持的音频附件，并把转写内容加入聊天上下文。不需要指派任何人格。
+
+只有当你还想把这些转写内容公开发到聊天里时，才需要用到 `/config` > 行为 > 提示。
+
+使用 ElevenLabs 的话，在 `/providers` 里选择`添加新提供方`和 **ElevenLabs**；它会在注册语音的同时一并注册转写。

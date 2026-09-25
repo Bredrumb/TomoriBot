@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it, mock } from "bun:test";
 import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postTurnEffects";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 const emptyResponseResult: GenerationTurnResult = {
   status: "empty_response",
@@ -98,7 +99,7 @@ describe("empty-response post-turn handling", () => {
           embeds?: Array<{ toJSON: () => { title?: string } }>;
         }
       | undefined;
-    expect(payload?.embeds?.[0]?.toJSON().title).toBe("Empty Response");
+    expect(payload?.embeds?.[0]?.toJSON().title).toBe(localizedCopy("en-US", "genai.empty_response_title"));
   });
 
   it("keeps terminal exhaustion silent for a passive turn", async () => {

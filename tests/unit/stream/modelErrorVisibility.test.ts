@@ -4,6 +4,7 @@ import { HumanizerDegree, type TomoriState } from "@/types/db/schema";
 import type { StreamConfig, StreamContext, StreamProvider } from "@/types/stream/interfaces";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { localizedCopy } from "../../helpers/localeCases";
 
 function makeConfig(): StreamConfig {
   return {
@@ -100,7 +101,7 @@ describe("StreamOrchestrator model-error visibility", () => {
     expect(result.status).toBe("error");
     expect(send).toHaveBeenCalledTimes(1);
     const payload = send.mock.calls[0]?.[0] as { embeds?: Array<{ data?: { title?: string; description?: string } }> };
-    expect(payload.embeds?.[0]?.data?.title).toContain("Model Configuration Error");
+    expect(payload.embeds?.[0]?.data?.title).toContain(localizedCopy("en-US", "genai.stream.model_error_title"));
     expect(payload.embeds?.[0]?.data?.description).toContain("Unsupported model `Deepseek`");
   });
 

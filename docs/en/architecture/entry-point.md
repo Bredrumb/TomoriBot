@@ -8,22 +8,22 @@ sidebar:
 
 ## Files
 
-- `src/index.ts` — orchestrator (calls init modules in order)
-- `src/init/backup.ts` — non-production automatic data backup gate
-- `src/init/healthServer.ts` — health HTTP server
-- `src/init/secrets.ts` — secrets loading + key manager init
-- `src/init/discord.ts` — Discord client construction + error handlers
-- `src/init/database.ts` — DB init, cooldown cleanup, pg_cron setup
-- `src/init/loaders.ts` — tool registry, localizer, caches, event handler
-- `src/init/bridges.ts` — Matrix bridge (optional)
-- `src/init/timers.ts` — health tracker, scheduled work, memory monitor, cache metrics, quota cleanup
-- `src/types/config.ts` — `AppConfig` interface + `resolveEnvironment()`
+- `src/index.ts`: orchestrator (calls init modules in order)
+- `src/init/backup.ts`: non-production automatic data backup gate
+- `src/init/healthServer.ts`: health HTTP server
+- `src/init/secrets.ts`: secrets loading + key manager init
+- `src/init/discord.ts`: Discord client construction + error handlers
+- `src/init/database.ts`: DB init, cooldown cleanup, pg_cron setup
+- `src/init/loaders.ts`: tool registry, localizer, caches, event handler
+- `src/init/bridges.ts`: Matrix bridge (optional)
+- `src/init/timers.ts`: health tracker, scheduled work, memory monitor, cache metrics, quota cleanup
+- `src/types/config.ts`: `AppConfig` interface + `resolveEnvironment()`
 
 ## Startup Sequence
 
 1. Load `.env` (`dotenv`); resolve `AppEnvironment`.
 2. In non-production: run the automatic data backup gate before secrets, Discord, or database initialization. It creates a full `backupData.ts`-compatible bundle when the latest data backup was made by another bot version or is older than `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (default 24). Only automatic bundles count toward `TOMORI_AUTO_BACKUP_MAX` retention (default 5); manual `bun run backup` bundles are never pruned by this gate.
-3. In production: bind health HTTP server on `$PORT` (default 8080) — returns 503 until Discord ready.
+3. In production: bind health HTTP server on `$PORT` (default 8080); returns 503 until Discord ready.
 4. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
 5. Construct Discord client with intents + sweepers; register process/client error handlers.
 6. Initialize database:
@@ -32,7 +32,7 @@ sidebar:
    - run `src/db/schema.sql`
    - run `src/db/schema_rag.sql` only when pgvector is detected
      - Detection (`detectRagAvailability`) is probed once per initialization attempt rather than once above the retry loop, and only a probe that completed is cached. A probe that could not reach the server proves nothing about pgvector, so caching that as "absent" would gate every RAG command until the next restart: `isRagAvailable()` reads a process-lifetime flag with no invalidation path. Production hit exactly that, answering `/teach document` with "Document RAG Disabled" against a database carrying pgvector 0.8.2.
-     - While no probe has completed, `isRagAvailable()` returns `false`, which is the honest answer for an unknown state. `isRagAvailable()` stays synchronous and side-effect free because the context builder consults it on every chat turn; recovery is owned by `ragAvailabilityMonitor` (registered in `src/init/timers.ts`), which re-probes every `RAG_AVAILABILITY_REPROBE_INTERVAL_MS` (default 5 minutes) and stops on the first success. A startup probe that *completed* starts no timer, so a database genuinely without pgvector is never polled.
+     - While no probe has completed, `isRagAvailable()` returns `false`, which is the honest answer for an unknown state. `isRagAvailable()` stays synchronous and side-effect free because the context builder consults it on every chat turn; recovery is owned by `ragAvailabilityMonitor` (registered in `src/init/timers.ts`), which re-probes every `DEFAULT_INTERVAL_MS` (5 minutes) and stops on the first success. A startup probe that *completed* starts no timer, so a database genuinely without pgvector is never polled.
      - The monitor's re-probe additionally requires `document_chunks` to exist, because the same failure that skipped detection also skipped `schema_rag.sql`, and flipping the flag on the extension alone would expose commands to missing tables. `getRagAvailabilityState()` exposes the `null` (undetermined) vs `false` (probed, absent) distinction that `isRagAvailable()` collapses.
    - run `src/db/schema_stpreset.sql`
    - run typed seed catalogs in order: models, personas, system prompts, NovelAI presets
@@ -40,11 +40,14 @@ sidebar:
      - Because `schema.sql` is applied *before* the migration runner, a legacy untracked production database (still carrying `tomori_configs`, never seen by the runner) reaches the historical "expand + backfill" migrations with the split tables already in their final post-migration shape. The data-mover backfills that copy out of the god table (`002`, `003`, `004`, `007`) therefore detect whether the destination still has the pre-`021` image-tag columns (`nai_style_tags`/`nai_tags`/`nai_char_tags`) or the post-`021` ones (`image_default_positive_tags`/`physical_appearance_tags`) and write the matching column set. Without this guard the backfill fails with `column "nai_style_tags" of relation "server_novelai_imagegen_configs" does not exist` (42703). Migration `021` reconciles the rename afterwards, so no tag data is lost.
 7. Cleanup expired cooldown rows at startup (`cleanupExpiredCooldowns`).
 8. Attempt optional `pg_cron` registration for hourly cooldown cleanup job.
-9. Initialize tool registry (`initializeTools`).
-10. Initialize localization (`initializeLocalizer`).
+9. Initialize localization (`initializeLocalizer`). Its runtime state is shared across duplicate
+   module identities so watch-mode and dynamically imported graphs observe the same loaded trees.
+10. Initialize tool registry (`initializeTools`).
 11. Initialize model caches:
     - LLM cache (`initializeLLMCache`)
-    - OpenRouter capability cache (`initializeOpenRouterCapabilityCache`)
+    - OpenRouter text catalog (`initializeOpenRouterCapabilityCache`)
+    - OpenRouter modality catalogs, in parallel (`initializeOpenRouterVideoModelCache`, `initializeOpenRouterImageModelCache`, `initializeOpenRouterEmbeddingModelCache`)
+    - A failed catalog fetch here is non-fatal and non-permanent: lookups refresh on a miss and the background refresher retries on the TTL, so the bot recovers without a restart.
 12. Preload preset avatar cache from DB presets.
 13. Initialize Matrix bridge (optional; non-fatal on failure).
 14. Attach all event listeners (`eventHandler(client)`).
@@ -53,8 +56,9 @@ sidebar:
     - scheduled work coordinator init (reminders + random triggers)
     - memory monitor init
     - cache metrics logger init
+    - OpenRouter catalog refresher init
 16. Initialize upload quota cleanup scheduler.
-17. `await client.login(DISCORD_TOKEN)` inside a try/catch — a `DisallowedIntents` rejection (privileged intent requested without approval) is logged as an actionable misconfiguration and exits, rather than leaving the process alive but disconnected.
+17. `await client.login(DISCORD_TOKEN)`. Any failure exits the process, and the container restart policy retries with a fresh process. In-process retrying is not available: `Client#login` awaits `client.destroy()` on failure, which sets `ws.destroyed` permanently (initialized false in the WebSocket manager constructor and only ever set true in `destroy()`), drops `client.token`, and never restarts the cache sweepers. A second `login()` therefore leaves `isReady()` false for the life of the process, which the health endpoint reports as 503 and the runtime reads as a dead container. Rebuilding the client instead is not an option because the Matrix bridge closes over the instance it was handed. `isTransientGatewayError()` in `src/init/discord.ts` only chooses the message, because a transient gateway failure and a misconfiguration need different operator responses even though both exit. The failure is carried by the exit code and the log line rather than by `/health`: a failed login ends the process, so nothing recorded for it could be read by the probe that is meant to report it.
 
 ## Error Criticality
 
@@ -62,7 +66,7 @@ sidebar:
   - due automatic startup backup failure in non-production
   - database init failure
   - tool registry init failure
-  - Discord login failure (including `DisallowedIntents` for an unapproved privileged intent)
+  - Discord login failure of any kind, including a transient gateway failure (the runtime restarts the process, which is the only path to a client that can report ready)
 - Non-fatal (warn and continue):
   - cache warmup failures
   - pg_cron setup failures
@@ -72,9 +76,10 @@ sidebar:
 
 ## Discord Client Configuration Notes
 
-- `GuildPresences` is a privileged intent resolved by `resolvePresenceIntentEnabled()` in `src/init/discord.ts`. Before the client is built, it probes `GET /applications/@me` and includes the intent only when Discord reports it as enabled (`ApplicationFlags.GatewayPresence` or `GatewayPresenceLimited`). This is self-resolving: the intent turns on automatically on the next restart once Discord approves it — no code or env change. If the probe fails (e.g. network error), it falls back to the legacy default: enabled outside production, disabled in production.
+- `GuildPresences` is a privileged intent resolved by `resolvePresenceIntentEnabled()` in `src/init/discord.ts`. Before the client is built, it probes `GET /applications/@me` and includes the intent only when Discord reports it as enabled (`ApplicationFlags.GatewayPresence` or `GatewayPresenceLimited`). This is self-resolving: the intent turns on automatically on the next restart once Discord approves it (no code or env change). If the probe fails (e.g. network error), it falls back to the legacy default: enabled outside production, disabled in production.
 - Consumers detect the intent at runtime via `client.options.intents.has(GatewayIntentBits.GuildPresences)` (see the participants context builder) and omit presence/status lines when it is absent, so toggling it needs no other code changes.
 - Sweeper configuration is enabled for message/user cache pressure control.
+- Gateway session lifecycle is logged at the rate-limit level for `shardReady`, `shardResume`, `shardDisconnect`, `shardReconnecting`, and `invalidated`, so a resumed session (which replays missed dispatches) is distinguishable from a fresh identify. `shardError` reports at error level once per shard per episode and at warn level for the repeats, because discord.js retries the handshake itself and one outage otherwise writes an identical `error_logs` row per attempt. The per-shard episode is cleared only on `shardReady` or `shardResume`: clearing it on a disconnect would re-arm error level for the next attempt of the same outage, which is exactly the repetition being absorbed.
 
 ## clientReady Event Work
 

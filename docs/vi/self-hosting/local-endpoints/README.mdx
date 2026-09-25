@@ -1,0 +1,82 @@
+---
+title: "Endpoint cục bộ và self-host"
+sidebar:
+  label: "Tổng quan"
+  groupLabel: "Endpoint cục bộ và self-host"
+  order: 4
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+Hoàn toàn có thể vận hành một bản cài đặt TomoriBot với mọi thứ đều chạy cục bộ, từ sinh văn bản cho đến các tiện ích MCP. Mọi
+endpoint dưới đây đều tương thích với OpenAI hoặc là một trình bao bọc tham chiếu nhỏ, được đăng ký thông qua các lệnh
+`/providers` và được lưu trữ mã hóa trong cơ sở dữ liệu (không cần đến `.env`).
+Hãy chọn một tính năng để thiết lập:
+
+## Văn bản và vector nhúng
+
+<CardGrid>
+  <LinkCard title="LLM cục bộ" href="/vi/self-hosting/local-endpoints/setup-local-llm/"
+    description="Bất kỳ máy chủ tương thích OpenAI nào như Ollama, KoboldCPP, LM Studio, vLLM hoặc LiteLLM để sinh văn bản và vector nhúng." />
+  <LinkCard title="Codex CLI qua ChatMock" href="/vi/self-hosting/local-endpoints/setup-chatmock/"
+    description="Cầu nối tương thích OpenAI cục bộ cho phép TomoriBot sử dụng các model Codex CLI." />
+</CardGrid>
+
+## Hình ảnh và video
+
+<CardGrid>
+  <LinkCard title="ComfyUI" href="/vi/self-hosting/local-endpoints/setup-comfyui/"
+    description="Tạo hình ảnh và video ngắn thông qua phiên bản ComfyUI của riêng bạn bằng quy trình làm việc định dạng API." />
+</CardGrid>
+
+## Giọng nói
+
+<CardGrid>
+  <LinkCard title="Chuyển văn bản thành giọng nói" href="/vi/self-hosting/local-endpoints/text-to-speech/"
+    description="Các công cụ TTS cục bộ (Chatterbox, Qwen3-TTS, IrodoriTTS, Fish S2 Pro, VoxCPM2, CosyVoice 3) cho tin nhắn thoại Discord gốc, sao chép giọng nói và VoiceDesign." />
+  <LinkCard title="Chuyển giọng nói thành văn bản" href="/vi/self-hosting/local-endpoints/speech-to-text/"
+    description="Chuyển âm thanh đính kèm thành văn bản cục bộ bằng WhisperX, whisper.cpp hoặc KoboldCPP." />
+</CardGrid>
+
+## Tìm kiếm web và thu thập dữ liệu
+
+<CardGrid>
+  <LinkCard title="SearXNG" href="/vi/self-hosting/local-endpoints/setup-searxng/"
+    description="Proxy siêu tìm kiếm tôn trọng quyền riêng tư đóng vai trò công cụ web_search cục bộ nhằm tránh giới hạn tần suất công khai." />
+  <LinkCard title="Crawl4AI" href="/vi/self-hosting/local-endpoints/setup-crawl4ai/"
+    description="Trích xuất markdown kết xuất từ trình duyệt cho các trang web nhiều JS, hỗ trợ công cụ fetch_url." />
+</CardGrid>
+
+## Công cụ tùy chỉnh
+
+<CardGrid>
+  <LinkCard title="Máy chủ MCP cục bộ" href="/vi/self-hosting/local-endpoints/setup-local-mcp/"
+    description="Chạy máy chủ MCP cục bộ để mở rộng TomoriBot bằng các công cụ của riêng bạn (chỉ dành cho phiên bản self-host)." />
+</CardGrid>
+
+## Khởi động các máy chủ cục bộ bằng `bun run launch`
+
+Thay vì khởi động các máy chủ cục bộ một cách thủ công, hãy sử dụng `bun run launch` để khởi động các máy chủ được yêu cầu, đợi chúng sẵn sàng, sau đó tự động chạy bot ở chế độ theo dõi:
+
+```sh
+# Chỉ bot, giống hệt bun run dev
+bun run launch
+
+# Đi kèm các container Docker SearXNG và Crawl4AI
+bun run launch --searxng --crawl4ai
+
+# Đi kèm máy chủ TTS cục bộ (trước tiên phải thiết lập venv, xem hướng dẫn Chuyển văn bản thành giọng nói bên dưới)
+bun run launch --qwen3tts
+bun run launch --fishs2
+bun run launch --voxcpm2
+bun run launch --cosyvoice3
+
+# Xem tất cả các cờ khả dụng
+bun run launch --help
+```
+
+Các cờ khả dụng: `--searxng`, `--crawl4ai`, `--qwen3tts`, `--chatterbox`, `--irodoritts`, `--voxcpm2`, `--fishs2`, `--cosyvoice3`, `--moss`, `--whisperx`
+
+Các máy chủ dựa trên Docker (`--searxng`, `--crawl4ai`) được tạo trong lần chạy đầu tiên và được tái sử dụng trong các lần chạy tiếp theo. Các máy chủ TTS/STT Python yêu cầu môi trường ảo venv phải được thiết lập một lần từ trước; xem các hướng dẫn thiết lập riêng lẻ trong [Chuyển văn bản thành giọng nói](/vi/self-hosting/local-endpoints/text-to-speech/) và [Chuyển giọng nói thành văn bản](/vi/self-hosting/local-endpoints/speech-to-text/).
+
+**Ctrl+C** sẽ dừng bot và mọi tiến trình máy chủ Python. Các Docker container được giữ chạy có chủ đích. Hãy dừng chúng thủ công bằng `docker stop searxng` / `docker stop crawl4ai` khi hoàn tất.

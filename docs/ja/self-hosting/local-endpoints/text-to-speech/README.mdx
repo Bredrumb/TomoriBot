@@ -2,55 +2,74 @@
 title: "Text-to-Speech（ローカルエンジン）"
 sidebar:
   label: "概要"
-  groupLabel: "Text-to-Speech"
+  groupLabel: "TTS"
   order: 7
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-TomoriBotは、speechをカスタムエンドポイント機能として扱います。ローカルエンジンはボットの外部でHTTPサーバーとして動作し、`POST /synthesize`を実装します。ほとんどのクローンエンジンは、テキストに加えて設定された参照音声サンプルを受信します。
+TomoriBotは、音声合成をカスタムエンドポイント機能として扱います。ローカルエンジンはボットの外部でHTTPサーバーとして動作し`POST /synthesize`を実装します。クローンエンジンはテキストに加えて設定済みの参照音声サンプルを受信し、ボイスデザイン対応のエンジンは自然言語による指示も受信できます。
 
 ## 利用可能なエンジン
 
 <CardGrid>
   <LinkCard title="Chatterbox TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/chatterbox/"
-    description="Chatterbox-Turboによる高速なローカルボイスクローニングです。表現豊かな音声のためのブラケット配信タグをサポートしています。" />
+    description="イベントタグに対応した英語の音声クローンです。Turboが既定で、NanoとStandardは任意の代替です。" />
   <LinkCard title="Qwen3-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/qwen3tts/"
-    description="クローンモードとVoiceDesignモードを備えた多言語ローカルTTSです。最大サイズですが最高の品質を誇ります。" />
+    description="クローンモードとボイスデザインモードを備えた多言語ローカルTTSです。" />
+  <LinkCard title="MOSS-TTS" href="/ja/self-hosting/local-endpoints/text-to-speech/moss/"
+    description="試用向けのAutoエンドポイントです。4Bの多言語音声クローン、またはテキストで説明する英語・中国語の音声設計を選べます。" />
   <LinkCard title="IrodoriTTS" href="/ja/self-hosting/local-endpoints/text-to-speech/irodoritts/"
-    description="感情制御のためにUnicode絵文字マークアップを保持する、日本語に特化したボイスクローニングです。" />
+    description="感情制御のためのUnicode絵文字マークアップを備えた、日本語に特化した音声クローンとボイスデザインです。" />
+  <LinkCard title="Fish Audio S2 Pro" href="/ja/self-hosting/local-endpoints/text-to-speech/fishs2/"
+    description="細かな角括弧表現制御を備えた高品質な多言語音声クローンです。既定は公式のBF16重みで、より小さいGPU向けの任意のINT8チェックポイントもあります。" />
+  <LinkCard title="VoxCPM2" href="/ja/self-hosting/local-endpoints/text-to-speech/voxcpm2/"
+    description="ボイスデザイン、参照音声によるクローン、文字起こし支援のUltimate Cloning、自然言語による発話制御を備えた30言語対応のTTSです。" />
+  <LinkCard title="CosyVoice 3" href="/ja/self-hosting/local-endpoints/text-to-speech/cosyvoice3/"
+    description="自然言語による発話指示を備えた0.5Bの多言語ゼロショット・クロスリンガルクローンです。" />
+  <LinkCard title="TTSエンジンの比較" href="/ja/self-hosting/local-endpoints/text-to-speech/comparison/"
+    description="全7エンジンにわたる実測の合成時間、音声サンプルプレーヤー、速度比較です。" />
 </CardGrid>
 
-## セットアップ手順
+## セットアップの流れ
 
-1. 上記のカードからエンジンを1つ選び、`servers/tts/`からそのラッパーを起動します。
-2. `/provider custom-endpoint add`を実行し、capabilityに`speech`を、api styleに`tts-clone`を使用して登録します。
-3. 登録モーダルで、そのエンジンのガイドに記載されている音声ソースモード（voice source mode）とスクリプトマークアップ（script markup）を選択します。
+1. 上記のカードからエンジンを1つ選び、`servers/tts/`にあるそのラッパーをセットアップします。
+2. `/providers`で`新しいカスタムエンドポイントを追加`を選び、API互換性に`tts-clone`を使用します。
+3. 保存したエンドポイントを選択し、モデルのドロップダウンを使ってその音声モデル、音声ソースモード、スクリプトマークアップ形式を追加します。
+4. `/config` > モデル > モデルの切り替えを開き、登録済みの音声モデルを選択します。
 
-登録すると、エンドポイントはすぐに有効になります。今後、登録済みのTTSエンドポイントを切り替える場合にのみ`/model speech`を使用します。
+## ネットワークアクセス
+{/* anchor: network-access */}
+
+TTSローカルサーバーはすべて既定で`127.0.0.1`にバインドするため、同じマシン上のボットからしか接続できません。TomoriBotをDockerや別のマシンで実行する場合は、サーバー側で`TOMORI_TTS_HOST=0.0.0.0`を設定し、ホストのアドレス（例：`http://host.docker.internal:8015`）でエンドポイントを登録してください。
+
+サーバーには認証がありません。ポートに到達できる人は誰でも、あなたのGPUで合成を実行できます。ループバック以外へのバインドは信頼できるネットワーク内に限り、それより外へ公開するサーバーには認証付きのリバースプロキシを前段に置いてください。
+
+各サーバーは専用のポート変数（`CHATTERBOX_PORT`、`QWEN3TTS_PORT`、`IRODORI_TTS_PORT`、`FISH_S2_PORT`、`VOXCPM2_PORT`、`COSYVOICE3_PORT`、`MOSS_TTS_PORT`）を読み込むため、1つの`.env`で複数のサーバーを同時に実行できます。`bun run launch`は起動するサーバーに`.env`を渡しますが、手動で起動したサーバーはシェルの環境変数だけを読み込みます。
 
 ## ペルソナ音声の流れ
 
 クローンエンジンの場合、ペルソナごとに1つの音声サンプルを追加して割り当てます。
 
-1. 背景音楽のない、1人の話者による10〜20秒のクリアなクリップを準備します。
-2. `/speech voice-add`を実行してサンプルをアップロードします。任意の音声形式を使用できます。TomoriBotはそれをモノラルのWAVに変換します。
-3. `/speech voice-assign`を実行し、ペルソナと音声サンプルを選択します。
+1. 背景音楽のない、1人の話者によるクリアなクリップを準備します。最適な長さは各エンジンがそれぞれ明記しており、モデルによって3〜30秒と幅があります。具体的な数値は以下のエンジン別ガイドに記載されています。
+2. `/config`でモデル > TTSパラメーターと音声を開き、サンプルをアップロードします。任意の音声形式を使用できます。TomoriBotはそれをモノラルのWAVに変換します（最大130秒）。
+3. エンジンにとって有用な場合は、対応する文字起こしを提供します。Fish S2 Proは保存された参照文字起こしをクローンリクエストに転送し、VoxCPM2はより高忠実度なUltimate Cloningのためにこれを使用します。
+4. `/config`でペルソナ > 音声を開き、ペルソナと音声サンプルを選択します。
 
-Qwen3-TTSのVoiceDesignの場合、音声サンプルはスキップし、代わりに各ペルソナに対して`/speech voice-design set`を実行します。
+130秒というアップロード上限はTomoriBot側のものであり、どのエンジンのものでもありません。クリップが送信される際、各エンジンは独自の参照音声上限を適用します。その上限はエンジンごとに大きく異なるため、あるエンジンに適したクリップが別のエンジンでは拒否されたり、一部しか使われなかったりすることがあります。長いクリップをアップロードする前に、そのエンジンのガイドを確認してください。
 
-ElevenLabsのユーザーは`/speech elevenlabs`を使用する必要があります。これにより、speechとtranscriptionのエンドポイントが一緒に登録されます。
+アップロードのサイズ上限と長さの上限はそれぞれ独立しており、サイズの確認が先に実行されます。非圧縮のWAVはステレオ44.1 kHzで1分あたり約10 MBを消費するため、DAWからエクスポートした130秒のクリップは約22 MBになり、長さが問題ないのに大きすぎるとして拒否されることがあります。一方、同じクリップを圧縮してエクスポートすれば楽に収まります。`SPEECH_SAMPLE_MAX_MB`を使うとこのサイズ上限を引き上げられます（既定は10 MB）。長い参照クリップの場合は、WAVではなくFLAC、MP3、OGGでエクスポートしてください。TomoriBotは受け付けたどの形式も、保存する前に22.05 kHzのモノラルWAVへ変換するため、圧縮してアップロードしても音質はまったく損なわれません。
 
-TomoriBotは、生成する前に音声スクリプトからDiscordのカスタム絵文字構文（`:pepega:`や`<:pepega:123456789012345678>`など）を削除します。speechエンドポイントがIrodoriTTS向けに意図された絵文字マークアップを使用しない限り、Unicode絵文字も削除されます。
+Qwen3-TTS、MOSS-VoiceGenerator、IrodoriTTS、またはVoxCPM2のボイスデザインの場合は、音声サンプルを使わず、`/config`のペルソナ > 音声を使ってペルソナのための自然言語による声の説明を保存してください。CosyVoice 3は参照サンプルを使ったCloneモードを採用しており、`voice_instructions`を通じてその場限りの発話方向にも対応します。
 
-## ハードウェア要件
+ElevenLabsのユーザーは、`/providers`で`新しいプロバイダーを追加`と**ElevenLabs**を選んでください。これにより、音声と文字起こしのエンドポイントが一緒に登録されます。
 
-ローカルのTTSエンジンは**LLMよりもはるかに軽量**です。これらは小さなモデル（約0.5B〜1.7Bパラメーター）です。一般的なNVIDIA GPU（数GBのVRAMで十分です）でも、これらのいずれかを快適に実行し、合成を高速に保つことができます。音声クリップは短いため、速度は落ちますが**CPU**でも動作します。
+TomoriBotは、合成の前に生成する音声スクリプトから`:pepega:`や`<:pepega:123456789012345678>`のようなDiscordのカスタム絵文字構文を取り除きます。Unicode絵文字も、音声エンドポイントが絵文字マークアップを使用しない限り取り除かれます。この絵文字マークアップはIrodoriTTS向けに意図されたものです。角括弧タグは、Chatterbox TurboやFish S2 Proのようなエンドポイントでスクリプトマークアップ形式が`ブラケットタグ`に設定されている場合に保持されます。
 
-| エンジン | モデルサイズ | 備考 |
-|---|---|---|
-| Chatterbox | 約0.5B (Turbo) | 現在最も高速なオプションです。 |
-| Qwen3-TTS | 1.7B (12 Hz) | 個別のクローン + VoiceDesignモデル。一度に1つだけ読み込まれます。 |
-| IrodoriTTS | 500M (v2) | 日本語に特化。GPUでは`bf16`、CPUでは`fp32`。 |
+VoxCPM2は`プレーン`のスクリプトマークアップ形式を使用します。そのボイスデザインと話し方の制御は、TomoriBotの`instruct`フィールドを経由し、VoxCPM2ラッパーがそれをモデル固有の括弧付き自然言語制御構文に変換します。
 
-起動後（またはQwen3-TTSがオートモードでモデルを入れ替えた後）の最初の合成は、モデルがメモリに読み込まれるため遅くなりますが、それ以降のリクエストは高速になります。TomoriBotは各レスポンスを最大`TTS_SYNTHESIZE_TIMEOUT_MS`（デフォルトは240000ミリ秒）待機します。
+CosyVoice 3も`プレーン`のスクリプトマークアップ形式を使用します。文字起こし付きの参照はゼロショットクローンに、文字起こしなしの参照はクロスリンガルクローンに、`voice_instructions`は指示条件付けの経路にそれぞれ対応付けられます。CosyVoiceの指示は発話全体に適用されるため、インラインの角括弧タグは取り除かれます。
+
+## エンジン比較
+
+対応するすべてのエンジンにわたる実測のレイテンシベンチマーク、音声サンプルの再生、詳細な機能マトリックスによる比較を並べて確認するには、**[TTSエンジンの比較](/ja/self-hosting/local-endpoints/text-to-speech/comparison/)**を参照してください。

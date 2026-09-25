@@ -1,4 +1,5 @@
 import type { Embed, Message, MessageReaction } from "discord.js";
+import { MessageType } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import type { ForcedMention } from "@/types/discord/mentions";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
@@ -11,27 +12,15 @@ import { log } from "@/utils/misc/logger";
 import { compactWhitespace, normalizeTailDirective } from "@/utils/chat/contextDirectives";
 import type { SimplifiedMessageForContext } from "@/utils/text/contextBuilder";
 import { formatTimestampInline } from "@/utils/text/contextBuilder";
-import { getSupportedLocales, localizer } from "@/utils/text/localizer";
+import { matchesProtocolTemplateKey, classifyProtocolEmbed } from "@/utils/discord/embedProtocol";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import type { MessageIdMap } from "@/utils/text/messageIdMap";
 import { normalizeTriggerWord } from "@/utils/text/triggerWords";
 
 const REACTION_CONTEXT_ENABLED = parseBooleanEnvFlag(process.env.REACTION_CONTEXT_ENABLED, true);
-const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_API_CALLS_PER_TURN,
-  20,
-  0,
-);
-const REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE,
-  4,
-  1,
-);
-const REACTION_CONTEXT_MAX_USERS_PER_REACTION = parseIntegerEnvFlag(
-  process.env.REACTION_CONTEXT_MAX_USERS_PER_REACTION,
-  5,
-  0,
-);
+const REACTION_CONTEXT_MAX_API_CALLS_PER_TURN = 20;
+const REACTION_CONTEXT_MAX_REACTIONS_PER_MESSAGE = 4;
+const REACTION_CONTEXT_MAX_USERS_PER_REACTION = 5;
 const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/mp4",
   "video/mpeg",
@@ -44,8 +33,6 @@ const SUPPORTED_VIDEO_MIME_TYPES = [
   "video/3gpp",
 ];
 const DISCORD_MESSAGE_LINK_PATTERN = /discord(?:app)?\.com\/channels\/(?:@me|\d+)\/(\d+)\/(\d+)/;
-const REPLY_CONTEXT_URL_SENTINEL = "https://discord.com/channels/0/0";
-const REPLY_CONTEXT_USER_SENTINEL = "__tomori_user__";
 
 export type ReactionContextBudgetState = {
   callsUsed: number;
@@ -209,7 +196,7 @@ export function insertBeforeLatestDialoguePair(
  * (sample/example dialogues) are intentionally excluded from the depth walk
  * so they don't interfere with nudge positioning in real conversation history.
  *
- * If fewer DIALOGUE_HISTORY items exist than requested depth, clamps to the
+ * If fewer real dialogue turns exist than requested depth, clamps to the
  * earliest available position (just before the first real dialogue turn) rather
  * than jumping to tail, keeping the nudge within the conversation area.
  */
@@ -260,26 +247,15 @@ function extractReplyContextTargetFromEmbed(embed: Embed): { channelId: string; 
   const description = embed.description?.trim() ?? "";
   const authorName = embed.author?.name?.trim() ?? "";
   const footerText = embed.footer?.text?.trim() ?? "";
-  const hasReplyDescription = matchesLocalizedReplyContextTemplate(
-    description,
+  const hasReplyMarker = classifyProtocolEmbed(embed) === "reply_context";
+  const hasReplyDescription = matchesProtocolTemplateKey(
     "genai.message_interaction.reply_context_description",
-    { message_url: REPLY_CONTEXT_URL_SENTINEL },
+    description,
   );
-  const hasReplyAuthor = matchesLocalizedReplyContextTemplate(
-    authorName,
-    "genai.message_interaction.reply_context_author",
-    { user: REPLY_CONTEXT_USER_SENTINEL },
-  );
-  const hasReplyFooter = matchesLocalizedReplyContextTemplate(
-    footerText,
-    "genai.message_interaction.reply_context_footer",
-    {
-      user: REPLY_CONTEXT_USER_SENTINEL,
-      message_url: REPLY_CONTEXT_URL_SENTINEL,
-    },
-  );
+  const hasReplyAuthor = matchesProtocolTemplateKey("genai.message_interaction.reply_context_author", authorName);
+  const hasReplyFooter = matchesProtocolTemplateKey("genai.message_interaction.reply_context_footer", footerText);
 
-  if (!hasReplyDescription && !hasReplyAuthor && !hasReplyFooter) {
+  if (!hasReplyMarker && !hasReplyDescription && !hasReplyAuthor && !hasReplyFooter) {
     return null;
   }
 
@@ -292,24 +268,6 @@ function extractReplyContextTargetFromEmbed(embed: Embed): { channelId: string; 
     channelId: match[1],
     messageId: match[2],
   };
-}
-
-function matchesLocalizedReplyContextTemplate(
-  text: string,
-  templateKey: string,
-  placeholderValues: Record<string, string>,
-): boolean {
-  for (const locale of getSupportedLocales()) {
-    const template = localizer(locale, templateKey, placeholderValues);
-    let pattern = escapeRegExp(template);
-    for (const placeholderValue of Object.values(placeholderValues)) {
-      pattern = pattern.replaceAll(escapeRegExp(placeholderValue), ".+?");
-    }
-    if (new RegExp(`^${pattern}$`).test(text)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export function annotateRecentMessageMetadataInContext(params: {
@@ -439,8 +397,13 @@ export async function buildReplyReferenceContextAnnotation(params: {
 
   const replyRef = params.messageIdMap.register(params.replyMessage.id, "ref");
   const referencedRef = params.messageIdMap.register(params.referencedMessage.id, "ref");
+  const referencedSummary = `${formatInlineSystemContent(params.referencedMessage.content)}${buildReplyReferenceAttachmentInfo(params.referencedMessage)}`;
 
-  return `[System: This message (ID: ${replyRef}) by ${replyAuthorName} is referring to a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${formatInlineSystemContent(params.referencedMessage.content)}${buildReplyReferenceAttachmentInfo(params.referencedMessage)}]`;
+  if (params.replyMessage.type === MessageType.ChannelPinnedMessage) {
+    return `[System: ${replyAuthorName} pinned a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${referencedSummary}]`;
+  }
+
+  return `[System: This message (ID: ${replyRef}) by ${replyAuthorName} is referring to a previous message (ID: ${referencedRef}) by ${referencedAuthorName} saying: ${referencedSummary}]`;
 }
 
 export async function buildReactionContextAnnotation(
@@ -529,13 +492,6 @@ function parseBooleanEnvFlag(value: string | undefined, defaultValue: boolean): 
   return defaultValue;
 }
 
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
-}
-
 function buildRecentMessageMetadataInline(createdAt: number): string {
   return `sent ${formatTimestampInline(createdAt)}`;
 }
@@ -585,8 +541,6 @@ async function resolveMessageAuthorDisplayName(params: {
     return params.botDisplayName || "Bot";
   }
 
-  // Clean-named sprite messages carry no "(sprite)" suffix in the webhook name;
-  // recover the decorated label from the persisted mapping.
   const spriteDisplayName =
     !renderModifierSource && matchedPersona
       ? await resolveSpriteMessageDisplayName(

@@ -21,11 +21,6 @@ import type { TomoriState } from "@/types/db/schema";
 import type { ToolResult } from "@/types/tool/interfaces";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
 
-// Set env vars before any lazy import so module-level constants pick them up.
-process.env.BOT_MAX_FUNCTION_CALL_ITERATIONS = "100";
-process.env.BOT_MAX_CONSECUTIVE_TOOL_ERRORS = "5";
-process.env.NAI_TOOL_FAILURE_RETRY_THRESHOLD = "3";
-
 let toolExecuteCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 let toolExecuteQueue: ToolResult[] = [];
 let requiresFollowUp = false;
@@ -34,6 +29,7 @@ let hasStopRequest = false;
 let isFollowUpRequest = false;
 let clearStopRequestCalls = 0;
 let standardEmbedCalls: Array<{ titleKey?: string; descriptionKey?: string }> = [];
+let hiddenToolNotices: string[] = [];
 
 // Module mocks: all must appear before the first lazy import of toolLoop.ts
 
@@ -72,7 +68,9 @@ scopedMock.module("@/utils/discord/embedHelper", () => ({
 
 scopedMock.module("@/utils/discord/toolProgressNotice", () => ({
   ...realToolProgressNotice,
-  routeHiddenToolNotice: async () => undefined,
+  routeHiddenToolNotice: async (_context: unknown, embed: { description?: string }) => {
+    hiddenToolNotices.push(embed.description ?? "");
+  },
 }));
 
 scopedMock.module("@/utils/discord/streamOrchestrator", () => ({
@@ -330,6 +328,7 @@ describe("runToolLoop — contract tests", () => {
     isFollowUpRequest = false;
     clearStopRequestCalls = 0;
     standardEmbedCalls = [];
+    hiddenToolNotices = [];
   });
 
   it("executes tool with correct args and delivers result to next provider call", async () => {
@@ -372,6 +371,18 @@ describe("runToolLoop — contract tests", () => {
     expect(result.streamResults).toHaveLength(2);
   });
 
+  it("preserves direct tool delivery when the tool ends without streamed text", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { provider } = makeProvider([makeFunctionCallResult("voice_tool")]);
+    toolExecuteQueue.push({ success: true, responseDelivered: true, endTurn: true });
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.status).toBe("completed");
+    expect(result.personaResponses).toHaveLength(0);
+    expect(result.toolResponseDelivered).toBe(true);
+  });
+
   it("tool failure: error is represented in the history entry and the loop continues", async () => {
     const { runToolLoop } = await import("@/utils/chat/toolLoop");
 
@@ -405,7 +416,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   it("consecutive tool errors: loop exits with 'error' after MAX_CONSECUTIVE_TOOL_ERRORS failures", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { runToolLoop, MAX_CONSECUTIVE_TOOL_ERRORS } = await import("@/utils/chat/toolLoop");
 
     const { provider } = makeProvider(Array.from({ length: 20 }, () => makeFunctionCallResult("fail_tool", {})));
     for (let i = 0; i < 20; i++) {
@@ -415,9 +426,8 @@ describe("runToolLoop — contract tests", () => {
     const context = makeContext();
     const result = await runToolLoop(makeParams(context, provider));
 
-    // Cap is BOT_MAX_CONSECUTIVE_TOOL_ERRORS = 5 (set at the top of this file).
     expect(result.status).toBe("error");
-    expect(toolExecuteCalls).toHaveLength(5);
+    expect(toolExecuteCalls).toHaveLength(MAX_CONSECUTIVE_TOOL_ERRORS);
 
     expect(result.personaResponses).toHaveLength(0);
   });
@@ -463,14 +473,13 @@ describe("runToolLoop — contract tests", () => {
   });
 
   it("loop bound: exits with 'timeout' after MAX_FUNCTION_CALL_ITERATIONS with no final answer", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { runToolLoop, MAX_FUNCTION_CALL_ITERATIONS } = await import("@/utils/chat/toolLoop");
 
     // Provider never produces a terminal result, always requests another tool.
-    const limit = 100; // matches the production default and the test override above
     const { provider } = makeProvider(
-      Array.from({ length: limit + 5 }, () => makeFunctionCallResult("infinite_tool", {})),
+      Array.from({ length: MAX_FUNCTION_CALL_ITERATIONS + 5 }, () => makeFunctionCallResult("infinite_tool", {})),
     );
-    for (let i = 0; i < limit + 5; i++) {
+    for (let i = 0; i < MAX_FUNCTION_CALL_ITERATIONS + 5; i++) {
       toolExecuteQueue.push({ success: true, data: { ok: true } });
     }
 
@@ -478,9 +487,9 @@ describe("runToolLoop — contract tests", () => {
     const result = await runToolLoop(makeParams(context, provider));
 
     expect(result.status).toBe("timeout");
-    // Exactly limit iterations ran (one tool call per iteration).
-    expect(toolExecuteCalls).toHaveLength(limit);
-    expect(result.streamResults).toHaveLength(limit);
+    // Exactly one tool call per iteration, and no more iterations than the loop allows.
+    expect(toolExecuteCalls).toHaveLength(MAX_FUNCTION_CALL_ITERATIONS);
+    expect(result.streamResults).toHaveLength(MAX_FUNCTION_CALL_ITERATIONS);
   });
 
   it("malformed function-call (missing name) aborts with 'error' without dispatching any tool", async () => {
@@ -832,7 +841,7 @@ describe("runToolLoop — contract tests", () => {
   });
 
   it("NovelAI ends with the localized retry-exhausted embed at the configured threshold", async () => {
-    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+    const { runToolLoop, NAI_TOOL_FAILURE_RETRY_THRESHOLD } = await import("@/utils/chat/toolLoop");
     const { provider, capturedHistories } = makeProvider(
       Array.from({ length: 4 }, () => makeFunctionCallResult("web_search", {}, "Still trying.")),
       "novelai",
@@ -844,8 +853,8 @@ describe("runToolLoop — contract tests", () => {
     const result = await runToolLoop(makeParams(makeContext(), provider));
 
     expect(result.status).toBe("completed");
-    expect(capturedHistories).toHaveLength(3);
-    expect(toolExecuteCalls).toHaveLength(3);
+    expect(capturedHistories).toHaveLength(NAI_TOOL_FAILURE_RETRY_THRESHOLD);
+    expect(toolExecuteCalls).toHaveLength(NAI_TOOL_FAILURE_RETRY_THRESHOLD);
     expect(standardEmbedCalls).toContainEqual({
       titleKey: "genai.nai_tool_retry_exhausted_title",
       descriptionKey: "genai.nai_tool_retry_exhausted_description",
@@ -898,5 +907,90 @@ describe("runToolLoop — contract tests", () => {
     expect(result.status).toBe("stopped_by_user");
     expect(toolExecuteCalls).toHaveLength(0);
     expect(clearStopRequestCalls).toBe(0);
+  });
+
+  it("does not dispatch a tool whose arguments the provider truncated", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+
+    // A tool whose arguments replace stored state would write only the recovered keys and
+    // silently drop the rest, so the call is refused outright.
+    const truncatedCall: StreamResult = {
+      status: "function_call",
+      data: { name: "update_short_term_memory", args: { scene_state: "bedroom" }, argumentsTruncated: true },
+    };
+    const { provider, capturedHistories } = makeProvider([
+      truncatedCall,
+      { status: "completed", accumulatedText: "retried" },
+    ]);
+    toolExecuteQueue.push({ success: true, data: { saved: true } });
+
+    const context = makeContext();
+    const result = await runToolLoop(makeParams(context, provider));
+
+    expect(toolExecuteCalls).toHaveLength(0);
+    expect(result.status).toBe("completed");
+
+    const history = capturedHistories[1] as Array<{
+      functionCall: { name: string; args?: Record<string, unknown> };
+      functionResponse: {
+        functionResponse: { response: { result: { status: string; tool_name: string; reason: string } } };
+      };
+    }>;
+    expect(history).toHaveLength(1);
+    expect(history[0]?.functionCall?.name).toBe("update_short_term_memory");
+    // The recovered subset is dropped, so the model is not shown a call it did not make.
+    expect(history[0]?.functionCall?.args).toBeUndefined();
+    const synthetic = history[0]?.functionResponse?.functionResponse?.response?.result;
+    expect(synthetic?.status).toBe("tool_execution_failed");
+    expect(synthetic?.tool_name).toBe("update_short_term_memory");
+    expect(synthetic?.reason).toContain("truncated");
+
+    // The ordinary failure path emits a thought-log notice, so the refusal has to as well or
+    // the truncation leaves no trace a user can see.
+    expect(hiddenToolNotices).toHaveLength(1);
+    expect(hiddenToolNotices[0]).toContain("truncated");
+  });
+
+  it("refuses a truncated call before the deliberate-mode allowlist can report it", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+
+    // Both gates would fire here. The refusal runs first, so the model is told the payload was
+    // cut short rather than that deliberate mode hid the tool, which is the actionable cause.
+    const truncatedCall: StreamResult = {
+      status: "function_call",
+      data: { name: "hidden_tool", args: {}, argumentsTruncated: true },
+    };
+    const { provider, capturedHistories } = makeProvider([
+      truncatedCall,
+      { status: "completed", accumulatedText: "retried" },
+    ]);
+
+    const context = makeContext();
+    context.deliberateToolModeActive = true;
+    context.streamingContext.deliberateToolAllowedNames = ["allowed_tool"];
+    await runToolLoop(makeParams(context, provider));
+
+    const history = capturedHistories[1] as Array<{
+      functionResponse: { functionResponse: { response: { result: { reason: string } } } };
+    }>;
+    const reason = history[0]?.functionResponse?.functionResponse?.response?.result?.reason ?? "";
+    expect(reason).toContain("truncated");
+    expect(reason).not.toContain("not exposed");
+  });
+
+  it("counts a refused truncated call toward the consecutive tool error cap", async () => {
+    const { runToolLoop } = await import("@/utils/chat/toolLoop");
+
+    // A model that keeps reissuing a truncated call must not loop forever.
+    const truncatedCall: StreamResult = {
+      status: "function_call",
+      data: { name: "update_short_term_memory", args: {}, argumentsTruncated: true },
+    };
+    const { provider } = makeProvider(Array.from({ length: 10 }, () => truncatedCall));
+
+    const result = await runToolLoop(makeParams(makeContext(), provider));
+
+    expect(result.status).toBe("error");
+    expect(toolExecuteCalls).toHaveLength(0);
   });
 });

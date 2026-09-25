@@ -112,6 +112,12 @@ export interface StreamingContext {
   outputPrefill?: string; // Optional prefill to output before streaming (hybrid prefix)
   outputPrefillState?: { sent: boolean }; // Tracks if prefill was already output (avoid duplicates on retry)
   replyNoticeState?: { attempted: boolean; sent: boolean }; // Tracks the standalone alter reply notice across tool-call stream retries
+  /**
+   * True once the turn has logged its generation failure. One failed turn reaches the emitter
+   * twice (the stream result carries the error, and the turn's catch block reports it again), and
+   * a second row for the same message id reads as a second failure.
+   */
+  generationErrorReported?: boolean;
   forcedMentions?: Array<{
     handle: string;
     userId: string;
@@ -138,6 +144,13 @@ export interface StreamingContext {
   endTurnAfterTools?: string[];
 
   messageIdMap?: MessageIdMap;
+
+  /**
+   * Internal `users` FK of whoever triggered this turn, carried so the streaming layer can scope
+   * telemetry without a DB lookup on a hot path. Absent for turns with no resolved triggerer
+   * (scheduler-driven jobs, some manual flows), which simply record nothing.
+   */
+  triggererUserId?: number;
 
   /**
    * Shared, mutable sink of messages the streaming layer has committed to Discord this turn.
@@ -177,12 +190,12 @@ export interface ToolContext {
   isUserImpersonation?: boolean; // True when the active turn is a user impersonation session
   impersonatedUserId?: string; // Discord user ID currently being impersonated, if any
   suppressProgressNotices?: boolean; // Skip public "working..." embeds for fire-and-forget flows
-  showKillHint?: boolean; // When true, tool notice footers include the /bot kill hint (set after SOFT_WARN_ITERATION_THRESHOLD)
+  showKillHint?: boolean; // When true, tool notice footers include the /kill hint (set after SOFT_WARN_ITERATION_THRESHOLD)
   contextItems?: StructuredContextItem[]; // Current LLM context for tools that need hidden resolution metadata
 
   messageIdMap?: MessageIdMap;
 
-  /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /bot kill. */
+  /** Turn-level AbortSignal. Tools should forward this to their fetch/HTTP calls for true cancellation on /kill. */
   abortSignal?: AbortSignal;
 }
 
@@ -195,6 +208,8 @@ export interface ToolResult {
   error?: string;
   message?: string;
   imageMetadata?: FunctionResponseImageMetadata;
+  /** True when the tool successfully delivered the persona's response directly to the user. */
+  responseDelivered?: boolean;
   /** When true, the streaming loop should end the LLM's turn immediately after processing
    *  this tool result. Used by tools that trigger async follow-up work (e.g., boomerang). */
   endTurn?: boolean;
@@ -239,6 +254,10 @@ export interface ToolAssemblyState {
     videogen_enabled: boolean;
     voice_message_enabled: boolean;
     user_blocking_enabled: boolean;
+    // Required, not optional: every construction site copies these fields by hand, and an
+    // optional flag here silently reads as enabled through the mapper's fallback, leaving
+    // the capability toggle with no effect and no compile error.
+    user_info_updates_enabled: boolean;
     thread_creation_enabled: boolean;
   };
 }

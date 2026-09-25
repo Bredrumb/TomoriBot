@@ -11,6 +11,11 @@ const MODEL_ERROR_PATTERNS: RegExp[] = [
   // "Grok 4.1 Fast is deprecated"), so present it as a model error and steer the user to
   // pick a different model rather than showing the generic API-error copy.
   /\bdeprecated\b/i,
+  // NVIDIA NIM answers a retired model with 410 "has reached its end of life" and a model the
+  // account cannot reach with 404 "Function '<uuid>': Not found for account"; neither names the
+  // model in a shape the patterns above match, so both fell through to API-key advice.
+  /\breached\s+its\s+end\s+of\s+life\b/i,
+  /\bnot\s+found\s+for\s+account\b/i,
 ];
 
 export function isProviderModelError(error: ProviderError): boolean {
@@ -44,10 +49,9 @@ const CREDIT_AFFORDABILITY_ERROR_PATTERNS: RegExp[] = [
 ];
 
 // The account has no spendable balance at all, so no request of any size can succeed.
-// Distinct from the affordability ceiling above: there, a smaller max_tokens still fits
-// the remaining credit. Example (DeepSeek 402): "Insufficient Balance". Matching these
-// against the affordability patterns would hand the user a `reduce_output_tokens` tip
-// that cannot possibly work.
+// Separate from the affordability ceiling above, where a smaller max_tokens still fits the
+// remaining credit. Matching these against the affordability patterns would hand the user a
+// `reduce_output_tokens` tip that cannot possibly work.
 const ACCOUNT_BALANCE_EXHAUSTED_PATTERNS: RegExp[] = [
   /\binsufficient\s+balance\b/i,
   /\bbalance\s+is\s+insufficient\b/i,
@@ -69,6 +73,17 @@ export function isAccountBalanceExhaustedError(error: ProviderError): boolean {
   return collectProviderErrorMessages(error).some((message) =>
     matchesAnyPattern(message, ACCOUNT_BALANCE_EXHAUSTED_PATTERNS),
   );
+}
+
+/**
+ * Detects NVIDIA NIM refusing the credential itself.
+ *
+ * NIM answers a mistyped key, an expired key, and a key without inference access with the same
+ * `403 {"detail":"Authorization failed"}`, so expiry can only be offered as a possibility. Scoped
+ * to NVIDIA because expiry is not a known cause of the same status on other providers.
+ */
+export function isNvidiaCredentialRejected(providerName: string, error: ProviderError): boolean {
+  return providerName === "nvidia" && error.type === "api_error" && error.code === "403";
 }
 
 /**

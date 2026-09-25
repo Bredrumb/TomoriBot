@@ -1,0 +1,28 @@
+---
+title: "Geração de Mídia"
+sidebar:
+  label: "Visão Geral"
+  groupLabel: "Geração de Mídia"
+  order: 3
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+A TomoriBot pode criar mídia diretamente no chat: **imagens, vídeos curtos e mensagens de voz
+falada**. Peça a ela em linguagem natural ("desenhe para mim um...", "envie isso como mensagem de voz") ou
+use os comandos `/generate`. Quais capacidades estão disponíveis depende do seu provedor
+configurado; veja [Provedores & Modelos](/pt-BR/features/setup-administration/providers-and-models/).
+
+<CardGrid>
+  <LinkCard title="Geração de Imagens" href="/pt-BR/features/capabilities/media-generation/image-generation/"
+    description="Texto-para-imagem e imagem-para-imagem, com imagens de referência a partir de anexos, avatares, figurinhas e emojis." />
+  <LinkCard title="Geração de Vídeos" href="/pt-BR/features/capabilities/media-generation/video-generation/"
+    description="Clipes curtos de texto-para-vídeo e imagem-para-vídeo com proporções de aspecto personalizáveis." />
+  <LinkCard title="Voz: TTS & STT" href="/pt-BR/features/capabilities/media-generation/tts-and-stt/"
+    description="Mensagens de voz nativas do Discord (texto-para-fala) e transcrição de áudio (fala-para-texto)." />
+</CardGrid>
+
+:::note
+Nem todo provedor suporta todas as capacidades. Geração local (ComfyUI, servidores de voz
+locais) está disponível em instâncias de hospedagem própria; veja [Hospedagem Própria](/pt-BR/self-hosting/).
+:::

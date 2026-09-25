@@ -42,24 +42,27 @@ export interface CustomThinkingRequest {
   reasoning_effort?: "none" | "low" | "medium" | "high";
 }
 
+export interface NvidiaThinkingRequest {
+  chat_template_kwargs?: {
+    enable_thinking: boolean;
+    thinking: boolean;
+  };
+  reasoning_effort?: "low" | "medium" | "high";
+}
+
 type ProviderEffortLevel = "low" | "medium" | "high";
 type ProviderReasoningEffortLevel = "none" | ProviderEffortLevel;
-
-function parseBudgetEnv(name: string, fallback: number): number {
-  const raw = Number.parseInt(process.env[name] ?? String(fallback), 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
-}
 
 function getLevelBudget(level: Exclude<ThinkingLevelValue, "auto" | "none">): number {
   switch (level) {
     case "minimal":
       return 1;
     case "low":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_LOW_TOKENS", DEFAULT_LOW_BUDGET_TOKENS);
+      return DEFAULT_LOW_BUDGET_TOKENS;
     case "medium":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_MEDIUM_TOKENS", DEFAULT_MEDIUM_BUDGET_TOKENS);
+      return DEFAULT_MEDIUM_BUDGET_TOKENS;
     case "high":
-      return parseBudgetEnv("THINKING_LEVEL_BUDGET_HIGH_TOKENS", DEFAULT_HIGH_BUDGET_TOKENS);
+      return DEFAULT_HIGH_BUDGET_TOKENS;
   }
 }
 
@@ -186,13 +189,17 @@ export function buildGoogleThinkingConfig(
   }
 
   if (effectiveLevel === "none") {
+    const isMinimalSupported = isGeminiFlashModel(model) && !model.includes("3.7");
     return {
-      thinkingLevel: isGeminiFlashModel(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW,
+      thinkingLevel: isMinimalSupported ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW,
     };
   }
 
   if (effectiveLevel === "minimal") {
-    return { thinkingLevel: ThinkingLevel.MINIMAL };
+    const isMinimalSupported = !model.includes("3.7");
+    return {
+      thinkingLevel: isMinimalSupported ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW,
+    };
   }
 
   if (effectiveLevel === "low") {
@@ -328,6 +335,39 @@ export function buildCustomThinkingRequest(
 
   // Non-Ollama OpenAI-compatible servers (vLLM, etc.) may support reasoning_effort.
   return { reasoning_effort: toProviderReasoningEffortLevel(effectiveLevel) };
+}
+
+/**
+ * Maps `thinking_level` onto NVIDIA NIM, which serves many model families behind one endpoint and
+ * each family reads a different switch, so every level other than `auto` sends all of them:
+ * `enable_thinking` (Nemotron) and `thinking` (DeepSeek) are chat-template kwargs that other
+ * templates ignore, and `reasoning_effort` is the only control GLM and gpt-oss honor.
+ *
+ * `none` still sends effort `"low"`: NIM validates `reasoning_effort` against low/medium/high on
+ * gpt-oss and Llama and returns 400 for `"none"`, and GLM ignores both template switches, so low
+ * effort is the closest it gets to off. Levels map to effort rather than a token budget because
+ * NIM's V2 model runner rejects `reasoning_budget`.
+ */
+export function buildNvidiaThinkingRequest(
+  configuredLevel: string | null | undefined,
+  forceReason?: boolean,
+): NvidiaThinkingRequest {
+  const effectiveLevel = resolveEffectiveThinkingLevel(configuredLevel, forceReason);
+  if (effectiveLevel === "auto") {
+    return {};
+  }
+
+  if (effectiveLevel === "none") {
+    return {
+      chat_template_kwargs: { enable_thinking: false, thinking: false },
+      reasoning_effort: "low",
+    };
+  }
+
+  return {
+    chat_template_kwargs: { enable_thinking: true, thinking: true },
+    reasoning_effort: toProviderEffortLevel(effectiveLevel),
+  };
 }
 
 export function getNovelAiThinkingDirective(

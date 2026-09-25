@@ -4,8 +4,8 @@ title: "NovelAI Provider Limitations"
 
 This document catalogs every feature, tool, and context block that is deliberately disabled or reduced for the NovelAI provider compared to Google Gemini and OpenRouter. All exclusions fall into one of two root causes:
 
-1. **Text-only model** — GLM 4.6 has no vision or image understanding capability.
-2. **Token budget** — NovelAI's API has a hard token cap that creates a practical quality threshold around ~2800 tokens of system prompt. Exceeding it degrades output quality noticeably.
+1. **Text-only model**: GLM 4.6 has no vision or image understanding capability.
+2. **Token budget**: NovelAI's API has a hard token cap that creates a practical quality threshold around ~2800 tokens of system prompt. Exceeding it degrades output quality noticeably.
 
 See also: [`tool-calling.md`](/architecture/integrations/novelai/tool-calling/) for how prompt-based tool calling itself works.
 
@@ -19,7 +19,7 @@ filter because NovelAI models have `sees_images = false`.
 
 | Tool | File | Reason |
 |------|------|--------|
-| `select_sticker_for_response` | `src/tools/functionCalls/stickerTool.ts:144` | GLM 4.6 cannot reliably generate CJK/Japanese sticker names as tool arguments — token-level instability causes garbled output. |
+| `select_sticker_for_response` | `src/tools/functionCalls/stickerTool.ts:144` | GLM 4.6 cannot reliably generate CJK/Japanese sticker names as tool arguments: token-level instability causes garbled output. |
 | `update_short_term_memory` | `src/tools/functionCalls/updateShortTermMemoryTool.ts:56` | Token budget too constrained; the tool definition and invocation overhead is not worth the benefit at GLM's prompt size. |
 | `fetch_url` | `src/tools/fetchUrl/fetchUrlTool.ts` | Token budget too constrained for fetched-page payloads; disabled until realistic URL-fetch prompt/tool history behavior is validated. |
 | `peek_profile_picture` | `src/tools/functionCalls/peekProfilePictureTool.ts` | Requires `requiredModelCapabilities = { sees_images: true }`; NovelAI models are text-only. |
@@ -78,7 +78,7 @@ When `isStmToolAvailable` is `false`:
 - The hint message `"[System: Use the update_short_term_memory tool...]"` is never injected after short-term memory summaries.
 - The nudge prompt that encourages the model to call the tool when a conversation goes stale is also suppressed.
 
-The short-term memory **data itself** (summaries and recent messages) is still included in context when available — only the tool-use instructions around it are removed.
+The short-term memory **data itself** (summaries and recent messages) is still included in context when available; only the tool-use instructions around it are removed.
 
 ---
 
@@ -109,7 +109,7 @@ if (context.provider === "novelai" && typeof repetitionIntervalHoursArg !== "num
 }
 ```
 
-Other providers do **not** get this fallback — they must explicitly set the field so the model is "conscious" of whether the reminder is one-time or recurring.
+Other providers do **not** get this fallback; they must explicitly set the field so the model is "conscious" of whether the reminder is one-time or recurring.
 
 ---
 

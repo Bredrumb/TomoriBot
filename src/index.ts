@@ -4,7 +4,7 @@ import { startHealthServer } from "@/init/healthServer";
 import { registerHeapSnapshotHandler } from "@/init/heapSnapshot";
 import { loadSecrets } from "@/init/secrets";
 import { initStartupBackup } from "@/init/backup";
-import { createDiscordClient, resolvePresenceIntentEnabled } from "@/init/discord";
+import { createDiscordClient, isTransientGatewayError, resolvePresenceIntentEnabled } from "@/init/discord";
 import { initDatabase } from "@/init/database";
 import { initLoaders } from "@/init/loaders";
 import { initBridges } from "@/init/bridges";
@@ -49,8 +49,8 @@ registerHeapSnapshotHandler();
 initMediaProcessing();
 
 // Probe Discord for Presence Intent approval (or honor an explicit override) before
-// building the client, so we request the privileged intent only when it is actually
-// enabled, so self-resolving the moment Discord grants approval, with no failed
+// building the client, so the privileged intent is requested only when it is actually
+// enabled. Approval is then picked up the moment Discord grants it, with no failed
 // gateway handshake and no manual env change.
 const includePresences = await resolvePresenceIntentEnabled(environment);
 const client = createDiscordClient(includePresences);
@@ -63,27 +63,40 @@ await initBridges(client);
 
 initTimers(client);
 
-// Login, so triggers clientReady which starts all deferred timers.
-// Awaited inside a try/catch as a defensive net: resolvePresenceIntentEnabled
-// already prevents requesting an unapproved privileged intent, so a
-// DisallowedIntents rejection here is a rare edge (e.g. the Presence Intent was
-// revoked between the approval probe and login). We exit loudly rather than
-// re-wiring the client in place (which would duplicate one-time init like the
-// Matrix bridge and quota-cleanup interval); the probe on the next restart
-// self-heals by booting without the privileged intent.
+// Login triggers clientReady, which starts the deferred timers.
+//
+// A failure here has to exit rather than retry: `Client#login` awaits `client.destroy()`, which
+// leaves `ws.destroyed` set (discord.js clears it only in the WebSocket manager constructor),
+// drops `client.token`, and stops the cache sweepers. A second `login()` in the same process
+// never reports ready, which the health endpoint reads as 503 and the runtime reads as a dead
+// container. A rebuilt client is not an option either, because the Matrix bridge closes over the
+// instance it was handed. The restart policy is the only path that yields a usable client.
+//
+// Exiting also keeps a transient gateway failure distinguishable from a misconfiguration.
 try {
   await client.login(process.env.DISCORD_TOKEN);
 } catch (error) {
   if (isDisallowedIntentsError(error)) {
     log.error(
       "Discord rejected login: a requested privileged intent is not approved for this bot. " +
-        "This is unexpected because approval is probed before connecting — check whether the " +
+        "This is unexpected because approval is probed before connecting. Check whether the " +
         "Presence Intent was revoked. Restarting will re-probe and boot without the intent " +
         "(presence context degrades gracefully).",
       error as Error,
     );
     process.exit(1);
   }
-  log.error("Discord login failed", error as Error);
+
+  const transient = isTransientGatewayError(error);
+  log.error(
+    transient
+      ? "Discord login failed because the gateway is unreachable. The process will exit so the " +
+          "container runtime restarts it with backoff; no action is needed if Discord recovers."
+      : "Discord login failed",
+    error as Error,
+  );
+  // Best effort: the handshake already failed, so this only avoids leaving a half-open socket and
+  // a session Discord would hold until it times out.
+  await client.destroy().catch(() => undefined);
   process.exit(1);
 }

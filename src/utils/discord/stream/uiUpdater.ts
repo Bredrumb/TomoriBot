@@ -1,13 +1,23 @@
-import type { BaseGuildTextChannel, Message } from "discord.js";
+import type { BaseGuildTextChannel, Message, ReplyOptions } from "discord.js";
 import type { StreamContext } from "@/types/stream/interfaces";
 import type { SpriteMessageRecordInfo, StreamState } from "@/types/stream/types";
 import { recordPersonaSpriteMessage } from "@/utils/cache/personaSpriteMessageCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
+import {
+  isChannelGoneError,
+  isMissingChannelAccessError,
+  MissingChannelAccessError,
+  resolveSendableChannel,
+  resolveReplyChannel,
+  type ChannelUnreachableReason,
+  type SendableChannel,
+} from "@/utils/discord/resolveSendableChannel";
 import { getOrCreateWebhook } from "@/utils/discord/webhook/lifecycle";
 import { invalidateWebhookCache } from "@/utils/discord/webhook/cache";
 import { sendWebhookMessageWithIdentity } from "@/utils/discord/webhook/personaDispatch";
 import type { ResolvedWebhookIdentity } from "@/utils/discord/webhook/identity";
 import { sendWebhookReplyNotice } from "@/utils/discord/webhookReply";
+import { classifySendFailure, clearSendFailure, noteSendFailure } from "@/utils/discord/stream/sendFailureCache";
 import {
   recordChannelDeliveredBotMessage,
   recordChannelDeliveredWebhookIdentity,
@@ -65,6 +75,119 @@ function resolveWebhookThreadId(channel: StreamContext["channel"]): string | und
   return "isThread" in channel && typeof channel.isThread === "function" && channel.isThread() ? channel.id : undefined;
 }
 
+/**
+ * Signals that the destination channel cannot be reached, raised before a send is attempted.
+ *
+ * A deleted channel is not retryable and no fallback can rescue it, so this carries the same code
+ * a REST 10003 would report and takes the quiet teardown path in the send catch rather than the
+ * error path.
+ */
+class ChannelGoneError extends Error {
+  public readonly code = 10003;
+
+  public constructor(channelId: string | undefined) {
+    super(`Destination channel ${channelId ?? "unknown"} is gone`);
+    this.name = "ChannelGoneError";
+  }
+}
+
+/**
+ * Names the condition behind a failure, so the stop reason and the log agree.
+ *
+ * The code decides rather than the error class: the same 50001 arrives from a REST send and from
+ * this file's own resolver, and only one of those is an instance of the local error.
+ */
+function unreachableReasonFor(error: unknown): ChannelUnreachableReason {
+  return isMissingChannelAccessError(error) ? "missing_access" : "channel_deleted";
+}
+
+/**
+ * Raises the failure that matches why the destination could not be reached.
+ *
+ * Both reasons stop the stream, but they are different operator problems, so the stop reason and
+ * the log have to name the one that happened. A revoked access grant reported as a deletion sends
+ * an operator looking for a channel that still exists.
+ */
+function unreachableChannelError(
+  reason: ChannelUnreachableReason,
+  channelId: string | undefined,
+): ChannelGoneError | MissingChannelAccessError {
+  return reason === "missing_access"
+    ? new MissingChannelAccessError(channelId ?? "unknown")
+    : new ChannelGoneError(channelId);
+}
+
+/**
+ * Stops a stream whose destination cannot receive anything, naming the condition that caused it.
+ *
+ * The two reasons are terminal for the same reason: no retry, key rotation, or fallback model
+ * reaches a channel the bot cannot post into, so both tear down quietly rather than producing an
+ * error row per remaining arm.
+ */
+function stopForUnreachableChannel(
+  deps: StreamUiUpdaterDependencies,
+  channelId: string,
+  reason: ChannelUnreachableReason,
+  cause: unknown,
+): void {
+  const described = reason === "missing_access" ? "is not accessible to the bot" : "is gone";
+  log.warn(`Stream Send: destination channel ${channelId} ${described}, stopping the stream`, cause);
+  deps.requestStop(channelId, reason);
+}
+
+/**
+ * Picks the channel that will receive the next stream message, and the reply reference when the
+ * turn is answering a source message.
+ *
+ * `replyToMessage.reply()` cannot be used here: discord.js resolves `message.channel` from the
+ * cache at call time and throws `ChannelNotCached` when the entry is absent, which a turn that
+ * streams for minutes can outlive. This resolves the destination by id instead, and the reply is
+ * carried as an explicit reference, which is the same payload `Message#reply` would build.
+ *
+ * A restored channel is written back onto the context because one stream sends many chunks and
+ * only the first consults this helper. Leaving the context pointing at a channel that cannot be
+ * sent into would break every later chunk, which takes the `context.channel.send` branch once
+ * `hasRepliedToOriginalMessage` is set.
+ *
+ * @param context - Turn context, whose channel was captured at admission
+ * @returns The destination channel and reply reference, or the reason it is unreachable
+ */
+async function resolveReplyTarget(
+  context: StreamContext,
+): Promise<
+  | { channel: SendableChannel; reply: ReplyOptions | undefined; failed?: undefined }
+  | { channel?: undefined; reply?: undefined; failed: ChannelUnreachableReason }
+> {
+  // The channel captured at admission is an object, so it survives cache eviction and needs no
+  // lookup. A partial entry is the one case where it cannot be sent into, and that is what falls
+  // through to the REST lookup that separates "never cached" from "deleted".
+  const captured = context.channel;
+  if (typeof (captured as { send?: unknown }).send === "function") {
+    return { channel: captured as SendableChannel, reply: buildReplyReference(context, captured.id) };
+  }
+
+  const resolved = await resolveReplyChannel(context.client, context.replyToMessage, captured.id);
+  if (!resolved.channel) return { failed: resolved.failed };
+
+  context.channel = resolved.channel;
+  return { channel: resolved.channel, reply: buildReplyReference(context, resolved.channel.id) };
+}
+
+/**
+ * Builds the reply reference, or omits it when the reference would point out of the target channel.
+ *
+ * Discord rejects a reference whose message lives in another channel, so a turn whose source
+ * channel is unreachable has to post a plain message into the reachable one rather than a reply
+ * that cannot be delivered. Without this the send fails with 10008 from a path that already
+ * decided the destination was usable.
+ */
+function buildReplyReference(context: StreamContext, targetChannelId: string): ReplyOptions | undefined {
+  const source = context.replyToMessage;
+  if (!source || source.channelId !== targetChannelId) return undefined;
+
+  return { messageReference: source.id, failIfNotExists: false };
+}
+
 export function isUserImpersonationStreamContext(context: StreamContext): boolean {
   return Boolean(context.personaUsername && !context.tomoriState.is_alter);
 }
@@ -106,9 +229,9 @@ export class StreamUiUpdater {
         `Send message limit reached: ${state.messageSentCount} messages sent (server limit: ${sendMessageLimit})`,
       );
       // Deliberate operator config, not a failure, and never reached before the first send
-      // (messageSentCount only increments after one lands). User impersonation used to throw
-      // here, which surfaced as `status: "error"` and made generationTurn retry across every
-      // fallback key and model, each burning tokens on a limit that can never pass.
+      // (messageSentCount only increments after one lands). Treating it as an error would make
+      // generationTurn retry across every fallback key and model, each burning tokens on a
+      // limit that can never pass.
       this.deps.requestStop(context.channel.id, "send_message_limit");
       return null;
     }
@@ -155,6 +278,33 @@ export class StreamUiUpdater {
         Boolean(identityOverride && webhookForIdentity) || Boolean(context.webhook && context.personaUsername);
 
       if (shouldUseWebhook && webhookForIdentity) {
+        // A partial channel cannot be sent into, and the chunks after the first one send through
+        // `context.channel` regardless of which branch delivered this one. Resolving it here keeps
+        // a webhook-delivered first chunk from leaving every later chunk on an unusable object.
+        //
+        // The captured channel is the one resolved, not the reply source: this send is not a reply,
+        // so retargeting the stream to another channel to satisfy a reference that is not being
+        // built would move later chunks as well.
+        if (typeof (context.channel as { send?: unknown }).send !== "function") {
+          try {
+            const resolvedChannel = await resolveSendableChannel(context.client, context.channel.id);
+            if (resolvedChannel.channel) {
+              context.channel = resolvedChannel.channel;
+            } else {
+              stopForUnreachableChannel(this.deps, context.channel.id, resolvedChannel.failed, undefined);
+              return null;
+            }
+          } catch (resolveError) {
+            // A transient failure here is not a reason to drop the message: this resolution only
+            // upgrades what the later chunks can use, and the webhook below is what actually
+            // delivers this one. Killing the send would turn a rate limit into a lost reply.
+            log.warn(
+              `Stream Send: could not resolve channel ${context.channel.id} before a webhook send; continuing with the captured channel`,
+              resolveError as Error,
+            );
+          }
+        }
+
         const identity =
           identityOverride ??
           ({
@@ -221,12 +371,17 @@ export class StreamUiUpdater {
         deliveredWebhookIdentity = identity;
         state.hasRepliedToOriginalMessage = true;
       } else if (!state.hasRepliedToOriginalMessage && context.replyToMessage) {
-        sentMessage = await context.replyToMessage.reply({
+        const target = await resolveReplyTarget(context);
+        if (!target.channel) {
+          throw unreachableChannelError(target.failed, context.replyToMessage.channelId);
+        }
+
+        sentMessage = await target.channel.send({
           ...(discordPayload.content !== undefined ? { content: discordPayload.content } : {}),
           ...(discordPayload.files?.length ? { files: discordPayload.files } : {}),
           ...(discordPayload.components?.length ? { components: discordPayload.components } : {}),
+          ...(target.reply ? { reply: target.reply } : {}),
           allowedMentions: regularAllowedMentions,
-          failIfNotExists: false,
         });
         state.hasRepliedToOriginalMessage = true;
       } else {
@@ -238,9 +393,21 @@ export class StreamUiUpdater {
         });
       }
 
+      // Clears any cached refusal so a lifted timeout or a granted permission takes effect at
+      // once, rather than after the remainder of the TTL.
+      clearSendFailure(context.channel.id);
       this.recordSuccessfulSend(payload, textForAccumulation, context, state, sentMessage, deliveredWebhookIdentity);
       return sentMessage;
     } catch (discordError) {
+      // An unreachable destination is final: nothing can be posted, and neither webhook recovery
+      // nor the bot fallback can change that. Tearing the stream down quietly is the same treatment
+      // the deterministic limits above get, and it keeps one deletion from producing a burst of
+      // error rows across the orchestrator, the generation turn, and the queue.
+      if (isChannelGoneError(discordError)) {
+        stopForUnreachableChannel(this.deps, context.channel.id, unreachableReasonFor(discordError), discordError);
+        return null;
+      }
+
       const recoveredMessage = await this.tryRecoverWebhookSend(
         discordError,
         payload,
@@ -282,7 +449,15 @@ export class StreamUiUpdater {
         );
       }
 
-      log.error("Stream Send: Discord API error when sending message", discordError, {
+      // A refused send is cached so the admission gate can stop generating for this channel.
+      // Only the first refusal of an episode is logged at error level: the rest are the same
+      // fact repeated, and at error level they crowd out unrelated signal.
+      const sendFailureReason = classifySendFailure(discordError);
+      const isFirstOfEpisode = sendFailureReason
+        ? noteSendFailure(context.channel.id, sendFailureReason).isFirstOfEpisode
+        : true;
+
+      const sendErrorMetadata = {
         serverId: context.tomoriState?.server_id,
         errorType: "StreamOrchestrator",
         metadata: {
@@ -290,8 +465,18 @@ export class StreamUiUpdater {
           contentLength: textForAccumulation.length,
           contentPreview: textForAccumulation.substring(0, 200),
           usingWebhook: !!context.webhook || !!identityOverride,
+          ...(sendFailureReason ? { sendFailureReason } : {}),
         },
-      });
+      };
+
+      if (isFirstOfEpisode) {
+        log.error("Stream Send: Discord API error when sending message", discordError, sendErrorMetadata);
+      } else {
+        log.warn(
+          `Stream Send: suppressed repeat ${sendFailureReason} for channel ${context.channel.id}`,
+          discordError as Error,
+        );
+      }
 
       throw new Error(
         `Discord send failed: ${discordError instanceof Error ? discordError.message : String(discordError)}`,
@@ -478,26 +663,33 @@ export class StreamUiUpdater {
         });
       }
 
-      const fallbackMessage = context.replyToMessage
-        ? await context.replyToMessage.reply({
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
-            ...(payload.components?.length ? { components: payload.components } : {}),
-            allowedMentions: regularAllowedMentions,
-            failIfNotExists: false,
-          })
-        : await context.channel.send({
-            ...(payload.content !== undefined ? { content: payload.content } : {}),
-            ...(payload.files?.length ? { files: payload.files } : {}),
-            ...(payload.components?.length ? { components: payload.components } : {}),
-            allowedMentions: regularAllowedMentions,
-          });
+      const target = await resolveReplyTarget(context);
+      if (!target.channel) {
+        throw unreachableChannelError(target.failed, context.replyToMessage?.channelId ?? context.channel.id);
+      }
+
+      const fallbackMessage = await target.channel.send({
+        ...(payload.content !== undefined ? { content: payload.content } : {}),
+        ...(payload.files?.length ? { files: payload.files } : {}),
+        ...(payload.components?.length ? { components: payload.components } : {}),
+        ...(target.reply ? { reply: target.reply } : {}),
+        allowedMentions: regularAllowedMentions,
+      });
 
       state.hasRepliedToOriginalMessage = true;
       this.recordSuccessfulSend(payload, textForState, context, state, fallbackMessage);
       log.info("Stream Send: Successfully sent message via fallback after webhook failure");
       return fallbackMessage;
     } catch (fallbackError) {
+      // This path is a retry of a send that already failed, so an unreachable channel reaches it
+      // whenever the webhook was the first thing to notice it. Returning null lets the caller's
+      // own handler stop the stream; treating it as a plain failure here would log an error and
+      // leave generation running against a channel that cannot receive anything.
+      if (isChannelGoneError(fallbackError)) {
+        stopForUnreachableChannel(this.deps, context.channel.id, unreachableReasonFor(fallbackError), fallbackError);
+        return null;
+      }
+
       log.error("Stream Send: Both webhook and fallback failed", fallbackError, {
         serverId: context.tomoriState?.server_id,
         errorType: "StreamOrchestrator",

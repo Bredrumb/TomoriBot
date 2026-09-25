@@ -1,0 +1,28 @@
+---
+title: "Tạo phương tiện"
+sidebar:
+  label: "Overview"
+  groupLabel: "Media Generation"
+  order: 3
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+TomoriBot có thể tạo phương tiện truyền thông ngay trong đoạn chat: **hình ảnh, video ngắn và tin nhắn thoại
+bằng giọng nói**. Hãy yêu cầu bot bằng ngôn ngữ tự nhiên ("vẽ cho mình một...", "gửi nội dung đó dưới dạng tin nhắn thoại") hoặc
+sử dụng các lệnh `/generate`. Những tính năng nào khả dụng phụ thuộc vào nhà cung cấp bạn đã cấu hình;
+xem [Nhà cung cấp & model](/vi/features/setup-administration/providers-and-models/).
+
+<CardGrid>
+  <LinkCard title="Tạo hình ảnh" href="/vi/features/capabilities/media-generation/image-generation/"
+    description="Text-to-image và image-to-image, sử dụng ảnh tham chiếu từ tệp đính kèm, avatar, sticker và emoji." />
+  <LinkCard title="Tạo video" href="/vi/features/capabilities/media-generation/video-generation/"
+    description="Các đoạn clip ngắn text-to-video và image-to-video với tỷ lệ khung hình có thể tùy chỉnh." />
+  <LinkCard title="Giọng nói: TTS & STT" href="/vi/features/capabilities/media-generation/tts-and-stt/"
+    description="Tin nhắn thoại Discord nguyên bản (text-to-speech) và chuyển âm thanh thành văn bản (speech-to-text)." />
+</CardGrid>
+
+:::note
+Không phải mọi nhà cung cấp đều hỗ trợ tất cả tính năng. Khả năng tạo cục bộ (ComfyUI, máy chủ giọng nói
+cục bộ) khả dụng trên các phiên bản self-hosted; xem [Self-Hosting](/vi/self-hosting/).
+:::

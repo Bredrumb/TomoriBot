@@ -8,14 +8,14 @@ The prompt-snapshot command produces a runtime-faithful dump of the exact prompt
 
 1. Takes a snapshot of the channel's recent message history (respecting the persona's `message_fetch_limit`).
 2. Resolves the target persona (main or alter) via a modal picker.
-3. Assembles the full context using the same `buildContext()` pipeline the live chat uses — preset routing, `/context-note` depth injection, conditioning logs, memories, documents, presence, everything.
+3. Assembles the full context using the same `buildContext()` pipeline the live chat uses: preset routing, `/context-note` depth injection, conditioning logs, memories, documents, presence, everything.
 4. Serializes the result to either a human-readable **text** format or a provider-native **JSON** format.
 5. Sends the file to the invoking user via DM (or as an ephemeral attachment if DMs are closed).
 6. Posts sampling / request config alongside the snapshot so users can reproduce the call parameters.
 
 ## Permission model
 
-- Guild-only (cannot be used in DMs — no server context).
+- Guild-only (cannot be used in DMs; no server context).
 - `ManageGuild` always bypasses the gate.
 - Non-admin access depends on `server_member_permissions_configs.prompt_snapshot_enabled` (default off).
 
@@ -25,8 +25,8 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 
 | Aspect | Respected? | Notes |
 | --- | --- | --- |
-| `/refresh` reset marker | ✅ | Uses `sliceMessagesAtResetMarker()` — history starts **after** the marker. |
-| `/compact_refresh` marker | ✅ | Same slicer — history starts **at** the marker (compact summary becomes the new opener). |
+| `/refresh` reset marker | ✅ | Uses `sliceMessagesAtResetMarker()`: history starts **after** the marker. |
+| `/compact_refresh` marker | ✅ | Same slicer: history starts **at** the marker (compact summary becomes the new opener). |
 | `FULL` privacy users filtered | ✅ | Skipped from history, matching `tomoriChat.ts`. |
 | Reference-driven profiles | ✅ | Calls the same `prepareParticipantContext()` API as live chat. Equivalent sanitized visible authors, persona triggers, eligible user aliases/mentions, synthetic identities, and bridges produce the same ordered discovery plan and rendered participant item without changing response routing. Profiles are hydrated through the same required active-persona scope, including lineage memories, main/alter reminder filters, persona self-tasks, exposure policy, and triggerer snapshot fast paths. Snapshot keeps an independent request scope because it builds one selected persona. |
 | Webhook persona attribution | ✅ | Webhooks whose username matches an alter persona are re-attributed. |
@@ -36,10 +36,10 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 | YouTube URLs in message text | ✅ | Converted to video attachments. |
 | SillyTavern preset routing | ✅ | `buildContext()` handles preset-aware reordering internally. |
 | Random prompt macros | ✅ | Resolved by `buildContext()` before serialization, so snapshots show the rolled value the provider receives. |
-| `/context-note` depth injection | ✅ | Applied by `buildContext()` — snapshot output carries the injected item inline. |
-| Self-debug / Tomori-authored diagnostic embeds | ❌ | Not included — these are debug UI, not LLM prompt input. |
+| `/context-note` depth injection | ✅ | Applied by `buildContext()`: snapshot output carries the injected item inline. |
+| Self-debug / Tomori-authored diagnostic embeds | ❌ | Not included: these are debug UI, not LLM prompt input. |
 | Forwarded-message inline expansion | ⚠️ | Basic text is captured; full forwarded-body expansion used by tomoriChat is NOT replicated. |
-| Reply-reference context annotation | ⚠️ | Reply threading isn't re-assembled — only the raw reply chain's content is visible. |
+| Reply-reference context annotation | ⚠️ | Reply threading isn't re-assembled; only the raw reply chain's content is visible. |
 | Output prefill / speaker-guard stop strings | ✅ | Present in the sampling/config block for providers that use them. |
 | Media capability resolution | ✅ | `buildContext()` emits capability-neutral `mediaDescriptors`; snapshot resolves them after context assembly with the routed answering model, including personal text-provider routing, before TXT serialization or provider-native JSON probe serialization. |
 
@@ -50,13 +50,13 @@ The snapshot mirrors the real `messageCreate → tomoriChat` pipeline as closely
 Flat-text, annotation-heavy. Each context block is prefixed with a locator header so a human reader can see which config command governs it:
 
 ```
-=== Persona Attributes (`/persona attribute`) ===
+=== Persona Attributes (`/config` > Persona > Identity & Personality) ===
 ...attribute list...
 
-=== Channel Prompt (`/server channel-prompt`) ===
+=== Channel Prompt (`/config` > Channels > Channel Overrides) ===
 ...per-channel append-mode prompt (only present when an append override applies to this channel)...
 
-=== Server Memories (`/memory server`) ===
+=== Server Memories (`/memories`) ===
 ...server memory lines...
 
 === Conversation History (system-managed) ===
@@ -65,9 +65,9 @@ Flat-text, annotation-heavy. Each context block is prefixed with a locator heade
 
 Sub-section markers (`== Subtitle ==`) appear inside composite blocks like `KNOWLEDGE_USERS_IN_CONVERSATION` that pull from multiple sources.
 
-> **Important:** The `=== === ` and `== ==` markers are annotations — they are NOT part of the prompt actually sent to the LLM. The DM body that ships with the file explicitly states this.
+> **Important:** The `=== === ` and `== ==` markers are annotations: they are NOT part of the prompt actually sent to the LLM. The DM body that ships with the file explicitly states this.
 
-Tools are **omitted** from the TXT format — users are directed to re-run with `format: JSON` if they need them.
+Tools are **omitted** from the TXT format: users are directed to re-run with `format: JSON` if they need them.
 
 ### JSON (`format: JSON`)
 
@@ -88,7 +88,7 @@ OpenAI-compatible APIs accept only one `role: "system"` message, so the custom f
 
 ## Sampling / request config block
 
-A provider-specific sampling block is shown in the DM body (both formats) and baked into the JSON file's top level (JSON format only). The values come UNFILTERED from the persona's config — the snapshot does not probe OpenRouter's `supportedParameters` list, so params the model may reject at runtime are still shown.
+A provider-specific sampling block is shown in the DM body (both formats) and baked into the JSON file's top level (JSON format only). The values come UNFILTERED from the persona's config; the snapshot does not probe OpenRouter's `supportedParameters` list, so params the model may reject at runtime are still shown.
 
 | Provider | Keys included |
 | --- | --- |
@@ -105,11 +105,11 @@ Passing `fetch_tools: true` appends a top-level `tools` array to the JSON file c
 
 Internally this mirrors the tool-list assembly that each `<Provider>Provider.getTools` does, minus the `streamingContext` filter (which requires a live Discord channel not available for a snapshot). Behind the scenes:
 
-1. `getAvailableToolsWithMCP(providerName, toolStateForContext)` — feature-flag gates built-in tools and surfaces MCP function names.
-2. `selectToolAdapter(providerName)` — routes to the correct `MCPCapableToolAdapter`.
-3. `adapter.getAllToolsInProviderFormat(builtInTools, serverId, mcpFunctionNames)` — returns the provider's native shape (OpenAI function spec, Gemini schema, Anthropic tool schema, etc.).
+1. `getAvailableToolsWithMCP(providerName, toolStateForContext)`: feature-flag gates built-in tools and surfaces MCP function names.
+2. `selectToolAdapter(providerName)`: routes to the correct `MCPCapableToolAdapter`.
+3. `adapter.getAllToolsInProviderFormat(builtInTools, serverId, mcpFunctionNames)`: returns the provider's native shape (OpenAI function spec, Gemini schema, Anthropic tool schema, etc.).
 
-The `fetch_tools` option is intentionally ignored in the TXT format — a note in the DM body tells users to re-run as JSON if they need the tool list.
+The `fetch_tools` option is intentionally ignored in the TXT format: a note in the DM body tells users to re-run as JSON if they need the tool list.
 
 ## Design decisions
 
@@ -121,9 +121,9 @@ The file shouldn't contain anything that isn't faithful to what the LLM sees. Me
 
 The live chat pipeline in `tomoriChat.ts` has inline helpers for these. Rather than duplicate them (and risk drift), the shared primitives live in:
 
-- `src/utils/discord/embedClassifier.ts` — `checkTargetEmbedTitle`, `processLinkEmbed`, `formatSystemProducedEmbedHint`
-- `src/utils/discord/embedDetection.ts` — `classifyRefreshMarkerEmbed`, `sliceMessagesAtResetMarker`, `isRefreshMarkerEmbed`, `messageContainsRefreshMarker`
-- `src/utils/discord/componentNoticeReader.ts` — `extractNoticeTextFromComponents`, which recovers `{title, description, footer}` from a Components V2 container
+- `src/utils/discord/embedClassifier.ts`: `checkTargetEmbedTitle`, `processLinkEmbed`, `formatSystemProducedEmbedHint`
+- `src/utils/discord/embedDetection.ts`: `classifyRefreshMarkerEmbed`, `sliceMessagesAtResetMarker`, `isRefreshMarkerEmbed`, `messageContainsRefreshMarker`
+- `src/utils/discord/componentNoticeReader.ts`: `extractNoticeTextFromComponents`, which recovers `{title, description, footer}` from a Components V2 container
 
 The CV2 reader is required for snapshot fidelity: memory-learning and
 scheduled-task notices are sent as Components V2 containers with an **empty
@@ -134,9 +134,9 @@ silently omit notices that live chat does include.
 
 ## Related docs
 
-- [`pipelines/context-build/`](../pipelines/context-build/) — how `buildContext()` orders, tags, and injects context items
-- [`sillytavern/preset-system.md`](../integrations/sillytavern/preset-system) — preset-based reordering respected by snapshot
-- [`tool-system.md`](/architecture/subsystems/tool-system/) — how tool registry + MCP integration feed `fetch_tools`
+- [`pipelines/context-build/`](../pipelines/context-build/): how `buildContext()` orders, tags, and injects context items
+- [`sillytavern/preset-system.md`](../integrations/sillytavern/preset-system): preset-based reordering respected by snapshot
+- [`tool-system.md`](/architecture/subsystems/tool-system/): how tool registry + MCP integration feed `fetch_tools`
 
 ## Source
 

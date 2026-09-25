@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Utils and Helpers"
 ---
 
@@ -51,30 +51,64 @@ This is a current map of shared utility modules under `src/utils/`.
 - `interactionHelper.ts`: compatibility barrel for grouped UI helpers in `utils/discord/ui/`; new code imports the owned UI module directly
 - `streamOrchestrator.ts`: public stream orchestration entry point backed by responsibility modules in `utils/discord/stream/`
 - `webhookManager.ts`: compatibility barrel for grouped webhook helpers in `utils/discord/webhook/`; new code imports the owned webhook module directly
-- `embedHelper.ts`: shared embed builders (`createStandardEmbed`, `createSummaryEmbed`, `createTipEmbed`, `sendStandardEmbed`) — see [Tip embeds](#tip-embeds) below
+- `embedHelper.ts`: shared embed builders and senders (`createStandardEmbed`, `createSummaryEmbed`, `createTipText`, `sendStandardEmbed`); see [Tip modals](#tip-modals) below
+- `textDisplayModal.ts`: reusable read-only text modal, trigger button, and collector wiring
+- `resolveSendableChannel.ts`: cache-first, REST-fallback channel resolution for send paths, plus `isChannelGoneError` for the deleted-channel and lost-access cases
 - `historyFetcher.ts`, `historyFormatter.ts`
+- `importFileIntake.ts`, `transferExportDelivery.ts`: the upload intake and DM delivery the portable transfer leaves share, so no leaf re-implements either sequence
+- `reminderSelectOptions.ts`: resolves one reminder row into the option caption both `/scheduled-task` selectors render, taking the repeat and creator locale keys from its caller
 
-#### Tip embeds
+#### Sending into a channel the cache no longer holds
 
-`createTipEmbed(locale, tipKeys, tipVars?)` in `embedHelper.ts` builds the reusable green **💡 Tip**
-embed shown alongside an error/info embed (e.g. by `stream/errorUi.ts` and `ui/interactionCore.ts`).
+`resolveSendableChannel(client, channelId)` returns the channel or the reason it could not be
+reached, and reports a transient failure by throwing rather than flattening it into that reason.
+`Message#channel` and `Message#reply` resolve through the client cache only, so discord.js raises
+`ChannelNotCached` once an entry is gone. That happens both for a deleted channel and for one that
+was never populated, and only a REST fetch separates them, so a long streaming turn re-resolves its
+destination by id instead of trusting the `Message` it captured at admission.
+
+Only two answers are terminal, and they are kept apart because they are different operator
+problems: `10003` is a deleted channel, and `50001` (Missing Access) is one the bot can no longer
+see. A rate limit, a 5xx, a timeout, or an abort is none of those and keeps its own error, so it
+stays an ordinary send failure with its retry arms intact instead of stopping the stream.
+
+`isChannelGoneError(error)` recognises both terminal answers, since a stopped stream is the same
+verdict for each. The client-side `ChannelNotCached` is deliberately outside it: that says only
+that the channel was absent from the local cache, which an uncached thread or an evicted DM entry
+also produces, and the send path resolves that case with a fetch rather than reading it as a
+deletion. `classifySendFailure` excludes it for the same reason, while still caching the
+REST-confirmed `10003` as `channel_gone` for the admission gate.
+
+Each terminal answer carries its own stop reason, so the log and the persisted `StreamResult` name
+the condition that actually happened: a revoked grant reported as a deletion would send an operator
+looking for a channel that still exists. Both stop reasons are internal requester ids, so they are
+reaped at the end of the stream rather than aborting the next turn's pre-stream check.
+
+The resolved channel is written back onto the stream context. One stream sends many chunks, and
+only the first consults the reply target, so a context left pointing at a channel that cannot be
+sent into would break every later chunk.
+
+#### Tip modals
+
+`createTipText(locale, tipKeys, tipVars?)` in `embedHelper.ts` builds the reusable markdown opened by
+the `What You Can Do` button below an error (e.g. in `stream/errorUi.ts` and `ui/interactionCore.ts`).
 
 - Each entry in `tipKeys` is an **atomic** locale key resolved independently and rendered as its own
   dashed bullet (`- item`). Keys live under `genai.tips.*` (see the Localization doc's
   [Tip-item keys](./localization.md#tip-item-keys-genaitips) convention).
-- Tips render as an embed **description**, not a footer, so markdown and hyperlinks render — that is
-  the reason tips moved out of error-embed footers.
+- Tips render in a read-only Discord text-display modal, so markdown and hyperlinks remain usable
+  without adding another embed or ephemeral reply to the channel.
 - **Conditional tips are the caller's job**: include or omit a key inline (e.g. an OpenRouter-only
   item) instead of maintaining whole-paragraph tip strings per branch. Items that resolve to empty
   text are dropped, and the function returns `null` when nothing resolves, so the caller can skip
-  attaching a tip embed entirely.
+  attaching a tip button entirely.
 - **The Official Support Server link is automatic**: `genai.tips.support_server` (exported as
-  `SUPPORT_SERVER_TIP_KEY`) is appended as the last bullet of every rendered tip embed. Callers must
-  not list it in `tipKeys` — it is filtered out if they do, so it can never be duplicated or
-  reordered. It is appended *after* the empty check, so a tip embed with no caller-supplied items
+  `SUPPORT_SERVER_TIP_KEY`) is appended as the last bullet of every rendered tip modal. Callers must
+  not list it in `tipKeys`; it is filtered out if they do, so it can never be duplicated or
+  reordered. It is appended *after* the empty check, so a tip modal with no caller-supplied items
   still returns `null` rather than degrading into a support-link-only embed.
-- Colored `ColorCode.SUCCESS` (green) to read as "helpful" and stay visibly distinct from the
-  red/yellow error embed above it; the description is truncated to Discord's embed-description limit.
+- The button is disabled after `TIP_BUTTON_TIMEOUT_MS` (24 hours). The generic
+  `textDisplayModal.ts` builder is also available to read-only legal and help surfaces.
 
 ### `utils/text`
 
@@ -100,7 +134,8 @@ embed shown alongside an error/info embed (e.g. by `stream/errorUi.ts` and `ui/i
 - `channelWhitelistCache.ts`
 - `shortTermMemoryCache.ts`
 - `llmCache.ts`
-- `openrouterCapabilityCache.ts`
+- `openrouterCatalog.ts`: shared refresh machinery for the OpenRouter model catalogs
+- `openrouterCapabilityCache.ts`, `openrouterEmbeddingModelCache.ts`, `openrouterImageModelCache.ts`, `openrouterVideoModelCache.ts`
 - `geminiCapabilityCache.ts`
 - `novelaiCapabilityCache.ts`
 - `emergencyCacheClearer.ts`: critical-memory cleanup for recoverable caches

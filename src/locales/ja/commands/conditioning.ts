@@ -1,45 +1,43 @@
 export default {
   conditioning: {
     description: `ご褒美・おしおきの条件付け記憶を管理します。`,
-    reward: {
-      description: `ご褒美のふれあいで私を褒めます。`,
-    },
-    punish: {
-      description: `しつけのふれあいで私を叱ります。`,
-    },
     shared: {
       select_persona_title: `管理するペルソナを選択`,
       reason_line: `理由: \`\`{reason}\`\``,
-      reward_footer: `❤️ {bot}はこれを覚えておきます。管理は /conditioning manage を使用してください。`,
-      punish_footer: `💀 {bot}はこれを覚えておきます。管理は /conditioning manage を使用してください。`,
+      reward_footer: `❤️ {bot}はこれを覚えておきます。管理は /conditioning remove を使用してください。`,
+      punish_footer: `💀 {bot}はこれを覚えておきます。管理は /conditioning remove を使用してください。`,
       persona_access_blocked_title: `利用できるペルソナがありません`,
       persona_access_blocked_description: `現在のホワイトリスト権限と個人スポットライト設定では、このチャンネルでこの操作に使えるペルソナがありません。`,
-    },
-    manage: {
-      description: `このサーバー内の全ペルソナに注入対象の条件付け履歴を管理します。`,
       marker_reward: `❤️`,
       marker_punish: `💀`,
-      none_title: `管理する条件付けはありません`,
-      none_description: `このサーバーには管理できる注入対象の条件付け履歴がありません。`,
-      too_many_title: `項目が多すぎます`,
-      too_many_description: `{total_entries} 件の項目が見つかりました（{total_pages} ページ）。現在は最大 {max_pages} ページまで対応しています。`,
-      select_page_title: `条件付けページを選択`,
-      select_page_description: `管理したい注入対象の条件付け項目のページを選択してください。
-項目数: {total_entries}
-ページ数: {total_pages}
-各項目にはペルソナ名とご褒美/おしおき種別が表示されます。`,
-      checkbox_label: `条件付け項目`,
-      checkbox_label_continued: `条件付け項目（続き）`,
-      checkbox_description: `チェックを残すと保持されます。チェックを外すと、その注入対象の条件付けグループが削除されます。`,
       option_reason_description: `合計 {count} 回 • 理由: 「{reason}」`,
       option_reason_description_single: `理由: 「{reason}」`,
       option_label: `{type_marker} {persona_name} • {action}`,
-      modal_title: `条件付けを管理`,
-      done_button: `完了`,
-      no_changes_title: `変更はありません`,
-      no_changes_description: `すべてチェックされたままだったため、削除は行われませんでした。`,
-      success_title: `条件付けを更新しました`,
-      success_description: `{persona_count} 個のペルソナにまたがるご褒美グループ {reward_groups} 件、おしおきグループ {punish_groups} 件を削除しました（保存行 {deleted_rows} 件を削除）。`,
+    },
+    manage: {
+      description: `このサーバー内の全ペルソナに注入対象の条件付け履歴を管理します。`,
+    },
+    remove: {
+      description: `このサーバー内の全ペルソナにわたる条件付けエントリを削除します。`,
+      empty_title: `条件付け記憶がありません`,
+      empty_description: `このサーバーには管理できる永続的な条件付けエントリがありません。`,
+      page_select_prompt: `{total}件の条件付けエントリが見つかりました。削除するバッチを選択してください：`,
+      page_select_prompt_capped: `{total}件の条件付けエントリが見つかりました。直近の{shown}件を
+以下に表示しています。残りを表示するには、いくつか削除してください。`,
+    },
+    panel: {
+      remove_modal_title: `条件付けを削除`,
+      remove_checkbox_label: `条件付けエントリ`,
+      remove_checkbox_label_continued: `条件付けエントリ（続き）`,
+      remove_checkbox_description: `削除したい条件付けエントリのチェックを外してください。`,
+      stale_heading: `パネルが古くなっています`,
+      stale_detail: `条件付けエントリが変更されたため、パネルを更新しました。`,
+      no_changes_heading: `変更はありません`,
+      no_changes_detail: `条件付けエントリのチェックは外されませんでした。`,
+      success_heading: `条件付けを削除しました`,
+      success_detail: `{count}件の条件付けエントリを削除しました。`,
+      write_failed_heading: `更新に失敗しました`,
+      write_failed_detail: `変更を保存できませんでした。もう一度お試しください。`,
     },
   },
 };

@@ -7,7 +7,7 @@
  * LLM rows come from the typed catalog (src/db/seed/catalog/models.ts), seeded by
  * initializeDatabase: no fixture insertion needed.
  *
- * Requires: a local Postgres connection (see docs/guides/testing-db-changes.md)
+ * Requires: a local Postgres connection (see docs/en/contributing/testing/db-changes.md)
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { llmModelRepo } from "@/utils/db/repositories";
@@ -102,7 +102,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
     };
 
     it("upsertScopedLlm persists the rate it was registered with", async () => {
-      const id = await llmModelRepo.upsertScopedLlm(SCOPED_CODENAME, caps, {
+      const id = await llmModelRepo.upsertScopedLlm(SCOPED_CODENAME, caps, "openrouter", {
         inputPerMillion: 0.25,
         outputPerMillion: 0.75,
       });
@@ -114,7 +114,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
     });
 
     it("re-registering without a rate keeps the stored price", async () => {
-      await llmModelRepo.upsertScopedLlm(SCOPED_CODENAME, caps, null);
+      await llmModelRepo.upsertScopedLlm(SCOPED_CODENAME, caps, "openrouter", null);
 
       const row = await llmModelRepo.loadByProviderAndCodename("openrouter", SCOPED_CODENAME);
       expect(row?.input_price_per_million).toBe(0.25);

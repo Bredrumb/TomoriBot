@@ -1,7 +1,6 @@
 export default {
   update: {
     description: `View the latest TomoriBot release notes`,
-    title: `TomoriBot {version} Released!`,
     no_notes: `No release notes available for this version.`,
     footer: `Updates may be outdated. Check \`/support discord\` for the latest releases and updates.`,
     fetch_error_title: `Unable to Fetch Latest Release`,

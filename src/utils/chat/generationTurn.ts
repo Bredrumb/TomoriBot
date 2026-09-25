@@ -11,9 +11,10 @@ import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/ut
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
-import { buildServerCustomProviderName, buildUserCustomProviderName } from "@/utils/provider/customProviderUtils";
+import { buildCustomProviderName } from "@/utils/provider/customProviderUtils";
 import { getProviderForTomori, ProviderFactory } from "@/utils/provider/providerFactory";
 import { getProviderErrorDetail } from "@/utils/provider/providerErrorClassification";
 import { DEFAULT_MAX_OUTPUT_TOKENS, resolveMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
@@ -28,9 +29,14 @@ import {
   selectApiKey,
 } from "@/utils/security/keyRotation";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
+import { buildVerbatimToolDefinitionsContextItem } from "@/utils/text/context/toolDefinitions";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop } from "@/utils/chat/toolLoop";
-import { VERBATIM_TOOL_CALLING_NUDGE, shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
+import {
+  VERBATIM_TOOL_CALLING_CONTEXT_DEPTH,
+  VERBATIM_TOOL_CALLING_NUDGE,
+  shouldInjectVerbatimToolCallingNudge,
+} from "@/utils/tools/verbatimToolCalling";
 
 interface GenerationAttempt {
   label: string;
@@ -42,11 +48,12 @@ interface GenerationAttempt {
   rotationKeyId: number | null;
 }
 
-const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = parseIntegerEnvFlag(
-  process.env.OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS,
-  2,
-  1,
-);
+/**
+ * How many of the oldest history exchange pairs each retry drops when OpenRouter stopped a
+ * reply on `length` with no content. Scaling by `retryCount` widens the trim on every retry,
+ * so a reply that overflowed once keeps losing context until it fits.
+ */
+const OPENROUTER_LENGTH_EMPTY_RETRY_DROP_PAIRS = 2;
 
 export async function runGenerationTurn(
   context: ChatTurnContext,
@@ -153,7 +160,18 @@ async function runGenerationAttempts(
         );
       }
 
-      const isRetryableStatus = result.status === "error" || result.status === "timeout";
+      // A destination the bot cannot post into fails for every key and every model alike, whether
+      // the channel was deleted or access to it was revoked. Retrying would burn a full generation
+      // per fallback arm and then discard it at the same send, so this attempt is terminal: the
+      // status it returns is a stop, which `isRetryableStatus` below already excludes, and this
+      // break keeps the model fallback loop from picking it up.
+      if (isUnreachableDestinationResult(result)) {
+        log.warn(`Abandoning ${attempt.label}: the destination channel cannot receive messages.`);
+        break;
+      }
+
+      const isRetryableStatus =
+        (result.status === "error" || result.status === "timeout") && !isUnreachableDestinationResult(result);
       if (!isRetryableStatus || index === attempts.length - 1) {
         if (index > 0 && shouldSendFallbackNotice(context, result)) {
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
@@ -244,9 +262,9 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
   const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...personalFallbackEntries];
 
   // Model randomizer: when enabled, splice a random pool member to the front so a different model
-  //    leads each turn. The remainder keeps its relative order as the failover tail. This is a pure
-  //    reordering , so every model (including the original primary) stays in the chain, so failover
-  //    semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
+  // leads each turn. The remainder keeps its relative order as the failover tail, and because the
+  // reorder is a splice rather than a replacement, every model stays in the chain, so failover
+  // semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
   if (primaryState.config.model_randomizer_enabled && pool.length > 1) {
     const leadIdx = Math.floor(Math.random() * pool.length);
     pool.unshift(...pool.splice(leadIdx, 1));
@@ -315,6 +333,32 @@ function getRetryExcludedKeyIds(excludedKeyIds: Set<number>, rotationKeyId: numb
     ids.add(rotationKeyId);
   }
   return [...ids];
+}
+
+/**
+ * A destination the bot cannot post into fails for every key and every model alike, whether the
+ * channel was deleted or access to it was revoked.
+ *
+ * Retrying would burn a full generation per fallback arm and then discard it at the same send.
+ * The classifier is shared with the send path so the "retrying cannot help" set has one
+ * definition. A refused send after a permission change or a timeout is deliberately excluded: it
+ * can clear on its own, so it keeps its fallback arms.
+ *
+ * The reason arrives as a stop more often than as an error, because the send path raises the stop
+ * itself, so both routes are read here rather than depending on the status alone. An error-level
+ * result keeps its fallback arms unless this says otherwise, and a 50001 that reached the turn as
+ * data would otherwise be retried across every arm.
+ */
+function isUnreachableDestinationResult(result: GenerationTurnResult): boolean {
+  return result.streamResults.some((streamResult) => {
+    const classified = classifySendFailure(streamResult.data);
+    return (
+      classified === "channel_gone" ||
+      classified === "missing_access" ||
+      streamResult.stopReason === "channel_deleted" ||
+      streamResult.stopReason === "missing_access"
+    );
+  });
 }
 
 async function emitStreamErrors(responseSink: ChatResponseSink, streamResults: StreamResult[]): Promise<void> {
@@ -422,18 +466,12 @@ async function createFallbackAttempt(
   disableAllTools: boolean,
 ): Promise<GenerationAttempt | null> {
   if (entry.kind === "custom_endpoint") {
-    const endpointUserId = entry.endpoint.user_id ?? null;
-    const endpointServerId = entry.endpoint.server_id ?? null;
-    const customProviderName = endpointUserId
-      ? buildUserCustomProviderName(endpointUserId, entry.endpoint.label)
-      : endpointServerId === primaryState.server_id
-        ? buildServerCustomProviderName(endpointServerId, entry.endpoint.label)
-        : null;
-    if (!customProviderName) {
-      log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: invalid owner scope.`);
+    if (!entry.endpoint.connection_id) {
+      log.warn(`Skipping custom endpoint fallback ${entry.endpoint.label}: missing connection_id.`);
       return null;
     }
-
+    const customProviderName = buildCustomProviderName(entry.endpoint.connection_id);
+    const endpointUserId = entry.endpoint.user_id ?? null;
     const savedConfig = endpointUserId
       ? await llmProviderRepo.loadUserSavedProviderConfig(endpointUserId, customProviderName)
       : await llmProviderRepo.loadSavedProviderConfig(primaryState.server_id, customProviderName);
@@ -462,6 +500,7 @@ async function createFallbackAttempt(
         supports_structoutput: entry.endpoint.supports_structoutput,
         strict_role_alternation: entry.endpoint.strict_role_alternation,
         supports_prefix_completion: entry.endpoint.supports_prefix_completion,
+        verbatim_tool_calling: entry.endpoint.verbatim_tool_calling,
       },
     };
     return await createAttempt(`fallback ${fallbackIndex}: ${entry.endpoint.label}`, state, "custom", disableAllTools);
@@ -601,13 +640,33 @@ async function prepareProviderContextItems(args: {
 }): Promise<StructuredContextItem[]> {
   let contextItems = await resolveMediaForModel(args.contextItems, args.tomoriState);
 
-  // The verbatim tool-calling nudge is baked into the base context from the PRIMARY
-  // model. On a fallback to an attempt that will not run the verbatim parser (any
-  // non-custom provider, or a custom endpoint without tools), strip it: the nudge is
-  // useless noise there and can steer native tool-callers toward unparseable
-  // text-form calls. `filter` produces a new array, leaving the shared base intact.
-  if (!shouldInjectVerbatimToolCallingNudge(args.tomoriState.config, args.tomoriState)) {
-    contextItems = stripVerbatimNudgeItems(contextItems);
+  // Verbatim prompt scaffolding is decided once, against the primary model, but every attempt
+  // carries its own provider and parser. Adapt the shared base per attempt so a fallback in either
+  // direction gets the shape its own adapter understands. `filter` and the spread helpers below
+  // produce new arrays, leaving the shared base intact for the other attempts.
+  //
+  // Each half is checked and applied independently: the schema dump is dropped when no tools resolve
+  // (or resolution throws), so a context can carry the nudge without it. Keying the whole decision on
+  // the dump alone would then leave the nudge on a native attempt, or inject a second copy of it.
+  const attemptNeedsVerbatim = shouldInjectVerbatimToolCallingNudge(args.tomoriState);
+  if (attemptNeedsVerbatim) {
+    // A verbatim attempt needs both halves. The native-primary -> custom-fallback case reaches here
+    // with neither: without them the custom model receives no tool schemas and no calling-format
+    // instructions, so every tool (voice messages included) fails.
+    if (!contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS)) {
+      const toolItem = await buildVerbatimToolDefinitionsContextItem({ tomoriState: args.tomoriState });
+      if (toolItem) {
+        contextItems = injectVerbatimToolDefinitionsItem(contextItems, toolItem);
+      }
+    }
+    if (!contextItems.some(isVerbatimNudgeItem)) {
+      contextItems = injectVerbatimNudgeItem(contextItems);
+    }
+  } else if (contextItems.some(isAnyVerbatimItem)) {
+    // Verbatim-primary -> native-fallback. Both halves must go: the schema dump alone would leave
+    // conflicting text-form instructions beside the native tool payload, and this provider has no
+    // verbatim parser to execute whatever the model then writes into chat.
+    contextItems = stripAllVerbatimItems(contextItems);
   }
 
   contextItems = await applyProviderContextTruncation(contextItems, args.tomoriState, args.serverDiscId);
@@ -634,15 +693,69 @@ async function prepareProviderContextItems(args: {
  */
 const VERBATIM_NUDGE_CONTEXT_TEXT = `[System: ${VERBATIM_TOOL_CALLING_NUDGE}]`;
 
-/** Returns a new array with the verbatim tool-calling nudge note removed, if present. */
-function stripVerbatimNudgeItems(items: StructuredContextItem[]): StructuredContextItem[] {
-  return items.filter((item) => {
-    if (item.metadataTag !== ContextItemTag.CONTEXT_NOTE_INJECTION) {
-      return true;
+function isVerbatimNudgeItem(item: StructuredContextItem): boolean {
+  if (item.metadataTag !== ContextItemTag.CONTEXT_NOTE_INJECTION) {
+    return false;
+  }
+  const text = item.parts.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
+  return text === VERBATIM_NUDGE_CONTEXT_TEXT;
+}
+
+/** Either half of the verbatim scaffolding, which are toggled together across the fallback chain. */
+function isAnyVerbatimItem(item: StructuredContextItem): boolean {
+  return item.metadataTag === ContextItemTag.KNOWLEDGE_VERBATIM_TOOL_DEFINITIONS || isVerbatimNudgeItem(item);
+}
+
+/** Returns a new array with both verbatim halves removed: the schema dump and the nudge note. */
+function stripAllVerbatimItems(items: StructuredContextItem[]): StructuredContextItem[] {
+  return items.filter((item) => !isAnyVerbatimItem(item));
+}
+
+/**
+ * Inserts the schema dump ahead of the first dialogue item, the same side of the dialogue boundary
+ * that stage 07b occupies in a natively-built context. It lands later than that stage's own slot
+ * (which sits ahead of server documents) because the pre-dialogue region cannot be re-derived here.
+ */
+function injectVerbatimToolDefinitionsItem(
+  items: StructuredContextItem[],
+  toolItem: StructuredContextItem,
+): StructuredContextItem[] {
+  const firstDialogueIndex = items.findIndex((item) => item.metadataTag === ContextItemTag.DIALOGUE_HISTORY);
+  const insertionIndex = firstDialogueIndex >= 0 ? firstDialogueIndex : items.length;
+  return [...items.slice(0, insertionIndex), toolItem, ...items.slice(insertionIndex)];
+}
+
+/**
+ * Inserts the nudge note near the dialogue tail, `VERBATIM_TOOL_CALLING_CONTEXT_DEPTH` dialogue items
+ * from the end.
+ *
+ * This counts `DIALOGUE_HISTORY` items, not messages, so date spacers and detached system parts
+ * inflate the count and pull the note slightly earlier than the message-indexed placement stage 11
+ * uses. The note only has to sit near the tail to steer the next call; exact index parity is not
+ * load-bearing, and the count is the only one recoverable from an already-assembled context.
+ */
+function injectVerbatimNudgeItem(items: StructuredContextItem[]): StructuredContextItem[] {
+  const nudgeItem: StructuredContextItem = {
+    role: "user",
+    parts: [{ type: "text", text: VERBATIM_NUDGE_CONTEXT_TEXT }],
+    metadataTag: ContextItemTag.CONTEXT_NOTE_INJECTION,
+  };
+  const dialogueItemCount = items.filter((item) => item.metadataTag === ContextItemTag.DIALOGUE_HISTORY).length;
+  const targetDialogueIndex = Math.max(0, dialogueItemCount - VERBATIM_TOOL_CALLING_CONTEXT_DEPTH);
+
+  let dialogueSeen = 0;
+  let insertionIndex = items.length;
+  for (const [index, item] of items.entries()) {
+    if (item.metadataTag !== ContextItemTag.DIALOGUE_HISTORY) {
+      continue;
     }
-    const text = item.parts.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
-    return text !== VERBATIM_NUDGE_CONTEXT_TEXT;
-  });
+    if (dialogueSeen === targetDialogueIndex) {
+      insertionIndex = index;
+      break;
+    }
+    dialogueSeen += 1;
+  }
+  return [...items.slice(0, insertionIndex), nudgeItem, ...items.slice(insertionIndex)];
 }
 
 function dropOldestHistoryExchangePairs(
@@ -786,11 +899,4 @@ function shouldApplyLengthEmptyRetryTrim(
   retryCount: number,
 ): boolean {
   return emptyResponseFinishReason === "length" && retryCount > 0 && providerIsApiFamily(providerName, "openrouter");
-}
-
-function parseIntegerEnvFlag(value: string | undefined, defaultValue: number, minimum: number): number {
-  if (typeof value !== "string") return defaultValue;
-  const parsed = Number.parseInt(value, 10);
-  if (Number.isNaN(parsed)) return defaultValue;
-  return Math.max(minimum, parsed);
 }

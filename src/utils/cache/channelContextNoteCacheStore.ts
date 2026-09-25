@@ -1,3 +1,5 @@
+import { TOMORI_STATE_CACHE_TTL_MS } from "@/constants/cacheTtl";
+
 /**
  * Resolved per-channel context note.
  * `null` (cached) means the channel has no note : a negative-cache hit.
@@ -13,8 +15,7 @@ export type ChannelContextNote = {
  */
 const channelContextNoteCache = new Map<string, { entry: ChannelContextNote | null; expiresAt: number }>();
 
-const CACHE_TTL_MINUTES = Number.parseInt(process.env.TOMORI_STATE_CACHE_TTL_MINUTES || "10", 10);
-const CACHE_TTL_MS = CACHE_TTL_MINUTES * 60 * 1000;
+const CACHE_TTL_MS = TOMORI_STATE_CACHE_TTL_MS;
 
 function getCacheKey(serverId: number, channelDiscId: string): string {
   return `${serverId}:${channelDiscId}`;
@@ -49,4 +50,14 @@ export function setChannelContextNoteCache(
 
 export function invalidateChannelContextNoteCache(serverId: number, channelDiscId: string): void {
   channelContextNoteCache.delete(getCacheKey(serverId, channelDiscId));
+}
+
+/** Removes every cached context-note result for one server without flushing other servers. */
+export function invalidateAllChannelContextNoteCacheForServer(serverId: number): void {
+  const prefix = `${serverId}:`;
+  for (const key of channelContextNoteCache.keys()) {
+    if (key.startsWith(prefix)) {
+      channelContextNoteCache.delete(key);
+    }
+  }
 }

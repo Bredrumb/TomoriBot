@@ -59,6 +59,7 @@ const requiredTables = [
   "personal_memories",
   "saved_provider_configs",
   "user_saved_provider_configs",
+  "custom_endpoint_connections",
   "custom_endpoints",
   "nai_presets",
   "st_presets",
@@ -217,7 +218,7 @@ function writeValidationEnv(databaseUrl: string, baseUrl: URL): void {
   );
 }
 
-function buildCommandEnv(databaseUrl: string, baseUrl: URL): Bun.Env {
+function buildCommandEnv(databaseUrl: string, baseUrl: URL): Record<string, string | undefined> {
   return {
     ...process.env,
     DATABASE_URL: databaseUrl,
@@ -236,7 +237,7 @@ function buildCommandEnv(databaseUrl: string, baseUrl: URL): Bun.Env {
   };
 }
 
-async function runCommand(name: string, command: string[], env: Bun.Env): Promise<void> {
+async function runCommand(name: string, command: string[], env: Record<string, string | undefined>): Promise<void> {
   console.log(`\n$ ${command.join(" ")}`);
   const subprocess = Bun.spawn(command, {
     cwd: rootDir,

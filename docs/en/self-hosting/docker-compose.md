@@ -6,7 +6,7 @@ sidebar:
 
 Docker Compose builds and runs TomoriBot **plus** PostgreSQL as containers. It's the
 third install path alongside the [setup wizard](/self-hosting/setup-wizard/) and
-[manual setup](/self-hosting/manual-setup/) — pick it when you'd rather run everything in Docker than
+[manual setup](/self-hosting/manual-setup/): pick it when you'd rather run everything in Docker than
 install Bun and PostgreSQL on the host. It does **not** use the setup wizard; the database
 connection is auto-configured for you.
 
@@ -40,13 +40,13 @@ Then set at minimum:
 | `CRYPTO_SECRET` | A 32-character encryption key used to encrypt stored API keys. |
 | `POSTGRES_PASSWORD` | The database password. Every other `POSTGRES_*` value is auto-configured. |
 
-Unlike the setup wizard, Compose won't generate `CRYPTO_SECRET` for you — set it yourself
+Unlike the setup wizard, Compose won't generate `CRYPTO_SECRET` for you, so set it yourself
 (any 32-character string). Optional tuning values can be copied from
 `.env.optional.example`.
 
 :::note[Database connection is automatic]
 The Compose PostgreSQL service runs in development mode (no SSL) on the internal Docker
-network, and the bundled image already has `pgvector` and `pg_cron` configured — so
+network, and the bundled image already has `pgvector` and `pg_cron` configured, so
 document/RAG memory and scheduled cleanup work out of the box. Don't set `POSTGRES_HOST`,
 `POSTGRES_PORT`, `POSTGRES_USER`, or `POSTGRES_DB` for Compose; they're managed for you.
 :::
@@ -59,12 +59,12 @@ docker compose up      # bot + database
 ```
 
 For later starts, `docker compose up` alone is enough unless you changed code or
-dependencies. When the bot is online, run `/config setup` in Discord to add your AI
-provider key — see the [Quickstart](/introduction/quickstart/) for the in-Discord side.
+dependencies. When the bot is online, run `/setup` in Discord to add your AI
+provider key: see the [Quickstart](/introduction/quickstart/) for the in-Discord side.
 
-## 4. Optional sidecars (Compose profiles)
+## 4. Optional local servers (Compose profiles)
 
-Sidecars are opt-in via Compose profiles, so you only run what you need:
+Local servers are opt-in via Compose profiles, so you only run what you need:
 
 ```sh
 # SearXNG (private web search) + Crawl4AI (browser-rendered fetch)
@@ -72,7 +72,7 @@ docker compose --profile searxng --profile fetch-crawl4ai up
 ```
 
 See [SearXNG](/self-hosting/local-endpoints/setup-searxng/), [Crawl4AI](/self-hosting/local-endpoints/setup-crawl4ai/),
-and [Local Monitoring](/self-hosting/local-monitoring/) for per-sidecar details.
+and [Local Monitoring](/self-hosting/local-monitoring/) for per-server details.
 
 ## Maintenance, updating & backups
 

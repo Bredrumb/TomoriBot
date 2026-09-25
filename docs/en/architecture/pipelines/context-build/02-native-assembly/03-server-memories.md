@@ -20,13 +20,13 @@ ID for the memory-update tools.
 - `guildId`, `serverName`, `botName`
 - `isDMChannel`
 - `personalMemoriesEnabled` (passed to `convertMentions`)
-- `conversationCorpus` — joined lowercased history text, used for tag
+- `conversationCorpus`: joined lowercased history text, used for tag
   filtering (`null` if `memory_tagging_enabled` is off)
 - `client`, `convertMentions`
 
 ## Output
 
-`Promise<StructuredContextItem | null>` — `null` if no memories survive
+`Promise<StructuredContextItem | null>`: `null` if no memories survive
 filtering, otherwise one `system`-role item tagged
 `KNOWLEDGE_SERVER_MEMORIES`.
 
@@ -37,16 +37,16 @@ Content header:
 
 ## Side effects
 
-- **DB query** — direct `sql` template literal against `server_memories`
+- **DB query**: direct `sql` template literal against `server_memories`
   filtered by `server_id` and `persona_lineage_id`, ordered by
-  `created_at DESC`. *Not* via the repository pattern in this case — see
+  `created_at DESC`. *Not* via the repository pattern in this case; see
   Extension points below.
-- **DB query fallback** — on query failure, falls back to the in-memory
+- **DB query fallback**: on query failure, falls back to the in-memory
   `tomoriState.server_memories` array (without per-memory IDs / tags).
-- **Tag filtering** — when `conversationCorpus` is non-null, drops rows
+- **Tag filtering**: when `conversationCorpus` is non-null, drops rows
   whose tags don't appear in the conversation text (after stripping
   surrounding quotes and lowercasing).
-- **Mention conversion** — the assembled memory block passes through
+- **Mention conversion**: the assembled memory block passes through
   `convertMentions`.
 
 ## Invariants
@@ -55,7 +55,7 @@ After this stage runs:
 
 - Returns `null` if `tomoriState.server_memories` is empty or all rows are
   filtered out.
-- Memory IDs are stable across builds — they come from the
+- Memory IDs are stable across builds: they come from the
   `server_memory_id` primary key, not array indices.
 - Skipped *upstream* in `nativeBuilder.ts` when `isUserImpersonation` is
   true (the contributor isn't even called).
@@ -83,8 +83,8 @@ seam:
 
 | Surface | Plugin-relevance |
 |---|---|
-| Direct SQL via `sql` template literal | Not via `serverMemoryRepository` because the contributor needs row IDs *and* tags together — the repo returns memory text only. → plugin plan candidate to add a repo method that returns both. |
-| `formatMemoryWithId` | Format is shared with personal memories in stage 06 — a plugin adding new memory kinds should reuse this formatter to keep ID references consistent. |
+| Direct SQL via `sql` template literal | Not via `serverMemoryRepository` because the contributor needs row IDs *and* tags together; the repo returns memory text only. → plugin plan candidate to add a repo method that returns both. |
+| `formatMemoryWithId` | Format is shared with personal memories in stage 06; a plugin adding new memory kinds should reuse this formatter to keep ID references consistent. |
 | Channel-tag filter | The conversation corpus is *built once* in `nativeBuilder.ts` and shared across contributors that filter on tags (this one + personal memories in stage 06). |
 
 ## Related docs

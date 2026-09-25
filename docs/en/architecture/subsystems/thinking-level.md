@@ -15,9 +15,9 @@ Use this page to verify:
 
 `thinking_level` is a **provider-scoped saved preference** controlled by:
 
-- `/model parameters thinking_level:<value>` — for a server saved provider (you pick which
+- `/model parameters thinking_level:<value>`: for a server saved provider (you pick which
   saved provider via the interactive picker after running the command)
-- `/personal parameters thinking_level:<value>` — for your personal saved provider
+- `/personal config`: for your personal saved provider
 
 Current values:
 
@@ -38,7 +38,7 @@ Storage:
 
 That means the active value is:
 
-- visible in `/tool status`
+- visible in `/status`
 - reflected in `/tool prompt snapshot`
 - preserved in provider snapshots and restored by `/config provider switch`
 
@@ -73,11 +73,11 @@ Current implementation rule:
 
 ## Numeric Budget Defaults
 
-When a provider accepts a numeric reasoning budget, Tomori maps `low` / `medium` / `high` using these env vars:
+When a provider accepts a numeric reasoning budget, Tomori maps `low` / `medium` / `high` using these constants in `src/utils/provider/thinkingControl.ts`:
 
-- `THINKING_LEVEL_BUDGET_LOW_TOKENS=1024`
-- `THINKING_LEVEL_BUDGET_MEDIUM_TOKENS=4096`
-- `THINKING_LEVEL_BUDGET_HIGH_TOKENS=8192`
+- `DEFAULT_LOW_BUDGET_TOKENS = 1024`
+- `DEFAULT_MEDIUM_BUDGET_TOKENS = 4096`
+- `DEFAULT_HIGH_BUDGET_TOKENS = 8192`
 
 These are Tomori defaults, not vendor defaults.
 
@@ -241,7 +241,7 @@ Tomori behavior for detected Ollama endpoints:
 
 #### Gemma 4 thinking on KoboldCPP
 
-Tomori's `thinking_level` has **no effect** on Gemma 4 thinking over a custom endpoint. Thinking activation is controlled entirely at the KoboldCPP launch level — not at the request level via the OpenAI-compatible API.
+Tomori's `thinking_level` has **no effect** on Gemma 4 thinking over a custom endpoint. Thinking activation is controlled entirely at the KoboldCPP launch level, not at the request level via the OpenAI-compatible API.
 
 **To enable Gemma 4 thinking in KoboldCPP:**
 
@@ -253,11 +253,42 @@ Tomori's `thinking_level` has **no effect** on Gemma 4 thinking over a custom en
 
 KoboldCPP v1.111.2+ automatically converts Gemma 4's `<|channel>thought…<channel|>` thinking tokens into the standard `reasoning_content` field for pure-text responses. Tomori's base adapter reads `reasoning_content` and routes it to the thought log channel automatically.
 
-When a tool call immediately follows the thinking block, KoboldCPP does not split the chunk and the raw tokens appear in `delta.content` instead. Tomori's `GemmaThinkingParser` (`src/providers/custom/customGemmaThinkingParser.ts`) handles this case — it strips the thinking block and routes it to thoughts before `GemmaToolCallParser` processes the tool call. Set `CUSTOM_GEMMA_THINKING_PARSER_ENABLED=false` to disable if a non-Gemma model unexpectedly produces similar token strings.
+When a tool call immediately follows the thinking block, KoboldCPP does not split the chunk and the raw tokens appear in `delta.content` instead. Tomori's `GemmaThinkingParser` (`src/providers/custom/customGemmaThinkingParser.ts`) handles this case: it strips the thinking block and routes it to thoughts before `GemmaToolCallParser` processes the tool call. Set `CUSTOM_GEMMA_THINKING_PARSER_ENABLED=false` to disable if a non-Gemma model unexpectedly produces similar token strings.
 
 **Thought log suppression:**
 
-Thought logs are suppressed for private channels (channels listed under `/server private-channels`) regardless of model or provider. Test thought log routing in a non-private channel.
+Thought logs are suppressed for private channels (channels listed under `/config` > Channels > Channel Rules) regardless of model or provider. Test thought log routing in a non-private channel.
+
+### NVIDIA NIM
+
+NIM serves many model families behind one endpoint, and each family reads a different switch, so
+every level other than `auto` sends all of them:
+
+| Level | NIM request |
+| --- | --- |
+| `auto` | omit all thinking keys; the model's own default applies |
+| `none` | `chat_template_kwargs: { enable_thinking: false, thinking: false }` + `reasoning_effort: "low"` |
+| `minimal` / `low` | `chat_template_kwargs: { enable_thinking: true, thinking: true }` + `reasoning_effort: "low"` |
+| `medium` | same switches on + `reasoning_effort: "medium"` |
+| `high` | same switches on + `reasoning_effort: "high"` |
+
+Verified per family by sending each key on its own:
+
+| Family | `enable_thinking` | `thinking` | `reasoning_effort` |
+| --- | --- | --- | --- |
+| DeepSeek | toggles | toggles | scales |
+| Nemotron | toggles | toggles | scales |
+| GLM | ignored | ignored | `low` nearly removes thinking |
+| gpt-oss | not measurable (timed out) | not measurable | scales; cannot be turned off |
+| Llama (non-reasoning) | ignored | ignored | accepted |
+
+`none` sends effort `"low"` rather than `"none"` because NIM validates `reasoning_effort` against
+low/medium/high on gpt-oss and Llama and returns 400 for `"none"`. For GLM and gpt-oss, `none`
+therefore means minimal thinking, not zero.
+
+Levels map to effort rather than a token budget because NIM's V2 model runner rejects
+`reasoning_budget`. Both thinking keys are droppable in the degradation ladder, so a model that
+rejects one falls back to its own default instead of failing the reply.
 
 ### NovelAI GLM
 
@@ -281,7 +312,7 @@ Tomori intentionally does **not** auto-send a generic request-side thinking cont
 
 Reason:
 
-- These backends expose thinking via startup flags, Jinja template variables, or GUI settings — not via a stable, universally-supported OpenAI-compatible request field.
+- These backends expose thinking via startup flags, Jinja template variables, or GUI settings, not via a stable, universally-supported OpenAI-compatible request field.
 - Injecting unrecognised fields into the request body can cause 400/422 errors on servers that validate strictly.
 
 So the current implementation is conservative: configure thinking at the server level, not from Tomori's `thinking_level` preference.
@@ -297,7 +328,7 @@ Do not silently ignore the feature without documenting the decision.
 
 See also:
 
-- [`contributing/adding-new-provider.md`](../../contributing/adding-new-provider)
+- [`contributing/extending/new-provider.md`](../../contributing/extending/new-provider)
 
 ## Official Source Links
 
@@ -313,6 +344,7 @@ These are the vendor docs used for the current mapping:
 - Ollama OpenAI compatibility: <https://docs.ollama.com/openai>
 - Ollama thinking: <https://docs.ollama.com/capabilities/thinking>
 - vLLM reasoning outputs: <https://docs.vllm.ai/en/latest/features/reasoning_outputs.html>
+- NVIDIA NIM: no vendor doc covers these keys across families; the NIM mapping above is verified by live probes
 
 ## Notes on Inference
 

@@ -14,7 +14,7 @@ import type {
   ParticipantProfileFieldKind,
 } from "@/utils/text/participants/hydration";
 
-const DEFAULT_ENRICHER_TIMEOUT_MS = 1_500;
+const ENRICHER_TIMEOUT_MS = 1_500;
 
 type HydratedParticipantBase = Omit<HydratedParticipantProfile, "fields">;
 
@@ -60,11 +60,6 @@ export interface ParticipantProfileEnrichmentResult {
   diagnostics: readonly ContributionExecutionDiagnostic[];
 }
 
-function enricherTimeoutMs(): number {
-  const configured = Number.parseInt(process.env.PARTICIPANT_ENRICHER_TIMEOUT_MS ?? "", 10);
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_ENRICHER_TIMEOUT_MS;
-}
-
 function coreFieldEnricher(
   id: string,
   kind: ParticipantProfileFieldKind,
@@ -88,7 +83,9 @@ function coreFieldEnricher(
 const CORE_FIELD_ENRICHERS: readonly ParticipantProfileEnricher[] = [
   coreFieldEnricher("core.status", "status", 100),
   coreFieldEnricher("core.physical-appearance", "physical_appearance", 110, "core.status"),
-  coreFieldEnricher("core.timezone", "timezone", 120, "core.physical-appearance"),
+  coreFieldEnricher("core.naming", "naming", 112, "core.physical-appearance"),
+  coreFieldEnricher("core.identity", "identity", 115, "core.naming"),
+  coreFieldEnricher("core.timezone", "timezone", 120, "core.identity"),
   coreFieldEnricher("core.presence", "presence", 130, "core.timezone"),
   coreFieldEnricher("core.roles", "roles", 140, "core.presence"),
   coreFieldEnricher("core.personal-memories", "personal_memories", 150, "core.roles"),
@@ -175,7 +172,7 @@ export async function applyParticipantProfileEnrichers(params: {
     for (const registration of registry.ordered) {
       const executed = await executeContribution<readonly ParticipantProfileFieldContribution[]>({
         descriptor: registration,
-        timeoutMs: enricherTimeoutMs(),
+        timeoutMs: ENRICHER_TIMEOUT_MS,
         outputCount: (output) => output.length,
         run: async (signal) => {
           if (!registration.enricher.supports(participant)) return [];

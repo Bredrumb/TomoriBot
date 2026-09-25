@@ -2,12 +2,12 @@ import type * as MatrixAppserviceBridge from "matrix-appservice-bridge";
 
 export const MATRIX_TEXT_MSG_TYPE = "m.room" + ".message";
 export const MATRIX_MEMBER_EVENT_TYPE = "m.room" + ".member";
-export const MATRIX_LINK_CACHE_TTL_MS = Number.parseInt(process.env.MATRIX_LINK_CACHE_TTL_MINUTES || "5", 10) * 60_000;
+export const MATRIX_LINK_CACHE_TTL_MS = 5 * 60_000;
 export const MATRIX_MAX_ATTACHMENT_BYTES =
   Number.parseInt(process.env.MATRIX_MAX_ATTACHMENT_MB || "8", 10) * 1024 * 1024;
 export const MATRIX_MEDIA_TIMEOUT_MS = Number.parseInt(process.env.MATRIX_MEDIA_TIMEOUT_MS || "15000", 10);
-export const MATRIX_TYPING_TIMEOUT_MS = Number.parseInt(process.env.MATRIX_TYPING_TIMEOUT_MS || "60000", 10);
-export const MATRIX_MAX_TRACKED_SENT_EVENTS = Number.parseInt(process.env.MATRIX_MAX_TRACKED_SENT_EVENTS || "500", 10);
+export const MATRIX_TYPING_TIMEOUT_MS = 60000;
+export const MATRIX_MAX_TRACKED_SENT_EVENTS = 500;
 
 export type SentPersonaReplyEvent = {
   personaName: string;

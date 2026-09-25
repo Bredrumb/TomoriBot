@@ -50,12 +50,12 @@ image is unavailable or undecodable.
   palette from the invoking user's avatar. Long-term memory is hidden outside
   the all-time view.
 - Server Leaderboard: a top header row (server icon + name + timeframe subtitle)
-  followed by three consistent horizontal bar charts — "Top Personas" (≤5, by
+  followed by three consistent horizontal bar charts: "Top Personas" (≤5, by
   total tokens; `{tokens} | {cost}` inside, persona avatar + name at the tip, bar
   tinted to the persona avatar's accent), "Most Active Members" (≤3, by triggers;
   `{count} triggers made` inside, member avatar + name at the tip, bar tinted to
   the member avatar's accent), and "Top Models" (≤3, by total tokens;
-  `{tokens} | {cost}` inside, model name at the tip — no avatar, bar uses
+  `{tokens} | {cost}` inside, model name at the tip; no avatar, bar uses
   `palette.accentSecondary`); then the server-wide total tokens and total spend.
   Its light-mode palette is derived from the server icon, mirroring how Personal
   Wrapped derives its palette from the #1 persona avatar.
@@ -84,19 +84,19 @@ single visual narrative that remains legible in Discord's inline preview.
 
 The card is a `9:16` portrait image with four intentional zones, in order:
 
-1. **Hero** — the #1 (highest-token) persona avatar takes most of the upper card.
+1. **Hero**: the #1 (highest-token) persona avatar takes most of the upper card.
    The invoking user's avatar and vertically set, truncated name appear in a
    narrow rail that ends with the hero, not the whole card.
-2. **Ranked table** — the lower content width is unrestricted by the user rail.
+2. **Ranked table**: the lower content width is unrestricted by the user rail.
    It presents at most five text-only persona rows with `Favorite Personas`,
    `Tokens`, and `Spent` columns, **ranked by total tokens (descending)** so the
    row order matches the visible Tokens column. The whole persona population is
    ranked before the top five are taken, so a heavy-token persona is never
    dropped for having fewer message triggers. Columns are aligned through fixed
    widths and flexible name space rather than visible vertical rules.
-3. **Summary** — favorite model is a single row, followed by the two large
+3. **Summary**: favorite model is a single row, followed by the two large
    aggregate values: `Total Tokens` and `Total Spent`.
-4. **Signature** — the contrast-tinted Tomoricon and localized
+4. **Signature**: the contrast-tinted Tomoricon and localized
    `PERSONAL WRAPPED (TIMEFRAME)` footer share one centered row at the bottom.
 
 Use large source typography. At the default 1080px width, table labels are at
@@ -111,7 +111,7 @@ The palette + image helpers live in the shared gather-layer module
 `loadTomoriconDataUri`). Personal Wrapped feeds it the #1 persona avatar; Persona
 Affinity feeds it the selected persona avatar (or the invoking user's avatar when
 that is unavailable); Server Leaderboard feeds it the server icon. The renderer
-never imports it — it stays pure. `personalCardGatherer.ts` re-exports
+never imports it; it stays pure. `personalCardGatherer.ts` re-exports
 `extractPersonalCardPalette` as a backward-compatible alias of
 `extractCardPalette`.
 
@@ -138,12 +138,12 @@ appropriate only when the original vector artwork is available.
 
 Personal Wrapped's hero is a **three-layer stacked-card silhouette** that floats
 directly on the card background (no surface panel or border): three squares, each
-the same size as the #1 avatar, staggered up-left — `palette.accent` (back) →
+the same size as the #1 avatar, staggered up-left: `palette.accent` (back) →
 `palette.accentSecondary` (mid) → the avatar (front). The stagger goes up-left
 because the avatar is anchored bottom-right and bleeds off, keeping the stack
 clear of the lower zones.
 
-The randomized `PersonalHeroDecor` hero-variant background has been **retired** —
+The randomized `PersonalHeroDecor` hero-variant background has been **retired**;
 no card uses it. Personal Wrapped now uses the deterministic stacked-square hero
 above; Server Leaderboard uses no decorative backdrop. There is no `heroVariant`
 field on any card data struct.
@@ -214,16 +214,16 @@ gatherXxxCardData()   ← DB + Discord API (async, sole touch-point)
 ```
 
 **Key constraints:**
-- satori 0.26 cannot parse `conic-gradient()` — the `Donut` primitive embeds an SVG arc string as a `data:image/svg+xml;base64,…` `<img>` data URI instead; resvg rasterizes it fine.
+- satori 0.26 cannot parse `conic-gradient()`: the `Donut` primitive embeds an SVG arc string as a `data:image/svg+xml;base64,…` `<img>` data URI instead; resvg rasterizes it fine.
 - Fonts (`VF`-format crashes satori) are loaded once at module init as static instances via `readFileSync`. See `cardRenderer.ts`.
 - Renderer and caller use the same `getXxxCardHeight(data)` helper. The footer
   follows the final section instead of being pushed to the canvas bottom.
-- Layout dimensions and typography scale with `STATS_CARD_W`; changing the
+- Layout dimensions and typography scale with `CARD_W`; changing the
   output resolution retains the same visual proportions.
 
 ## Gather / render split
 
-All DB access is isolated to the gatherer layer. The renderer functions are pure functions of their data struct (`PersonalCardData`, `PersonaCardData`, `ServerCardData`) — no async, no DB, no Discord API. This split makes the renderers unit-testable without DB mocks.
+All DB access is isolated to the gatherer layer. The renderer functions are pure functions of their data struct (`PersonalCardData`, `PersonaCardData`, `ServerCardData`); no async, no DB, no Discord API. This split makes the renderers unit-testable without DB mocks.
 
 ## Privacy gate
 
@@ -245,13 +245,13 @@ read into the card renderer, while the public response attaches only the finishe
 PNG. Compacting the private picker clears its no-longer-referenced avatar
 attachments.
 
-## Env config
+## Card geometry and theme
 
-All card dimensions and theme colors are configurable. See `.env.optional.example` for the full list:
+Card dimensions and theme colors are constants in `src/utils/stats/statsInfographic.tsx`:
 
-| Var | Default | Description |
+| Constant | Value | Description |
 |---|---|---|
-| `STATS_CARD_W` | `1080` | Logical card width; typography, spacing, and data-dependent height scale with it |
-| `STATS_CARD_THEME_BG` | `#1d100e` | Deep espresso card background |
-| `STATS_CARD_THEME_SURFACE` | `#2c1815` | Dark espresso secondary surface |
-| `STATS_CARD_THEME_ACCENT` | `#e7322a` | Primary red accent |
+| `CARD_W` | `1080` | Logical card width; typography, spacing, and data-dependent height scale with it |
+| `CARD_THEME.bg` | `#1d100e` | Deep espresso card background |
+| `CARD_THEME.surface` | `#2c1815` | Dark espresso secondary surface |
+| `CARD_THEME.red` | `#e7322a` | Primary red accent |

@@ -1,7 +1,7 @@
 import { BaseTool, type ToolContext, type ToolParameterSchema, type ToolResult } from "@/types/tool/interfaces";
 import {
   buildFailureResult,
-  getBlockUserMaxDurationHours,
+  DEFAULT_BLOCK_USER_MAX_DURATION_HOURS,
   parseBlockUserArgs,
   resolveDiscordBlockTarget,
   sendUserBlockedEmbed,
@@ -31,7 +31,7 @@ export class BlockUserTool extends BaseTool {
       },
       block_duration_hours: {
         type: "number",
-        description: `Positive integer duration in hours. Maximum is ${getBlockUserMaxDurationHours()} hours unless server config changes.`,
+        description: `Positive integer duration in hours. Maximum is ${DEFAULT_BLOCK_USER_MAX_DURATION_HOURS} hours.`,
       },
       block_reason: {
         type: "string",

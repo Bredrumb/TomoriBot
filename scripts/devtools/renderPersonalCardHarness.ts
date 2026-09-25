@@ -5,7 +5,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
-import type { PersonaCardData, PersonalCardData, PersonalCardPalette, ServerCardData } from "@/utils/stats/statsInfographic";
+import type {
+  PersonaCardData,
+  PersonalCardData,
+  PersonalCardPalette,
+  ServerCardData,
+} from "@/utils/stats/statsInfographic";
 import {
   CARD_W,
   DEFAULT_PERSONAL_CARD_PALETTE,
@@ -126,6 +131,8 @@ const SERVER_EN: ServerCardData = {
   totalTokens: 96_618,
   estimatedCost: 4.27,
   totalTriggers: 8_230,
+  totalPersonas: 12,
+  serverUserCount: 348,
 };
 
 const SERVER_JA: ServerCardData = {

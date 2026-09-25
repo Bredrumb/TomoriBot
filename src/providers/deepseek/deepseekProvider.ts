@@ -58,10 +58,17 @@ import { applyStreamContextAvailability } from "@/tools/availability";
 import { log } from "@/utils/misc/logger";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
+import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
 const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_BETA_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/beta/chat/completions";
+
+/**
+ * Expressions/emojis classified per structured-output call during `/expressions initialize`.
+ * One call keeps the whole batch inside a single response.
+ */
+export const DEEPSEEK_EXPRESSION_BATCH_SIZE = 20;
 
 export interface DeepseekProviderConfig extends ProviderConfig {
   endpointUrl: string;
@@ -122,12 +129,24 @@ export class DeepseekProvider
     return await callDeepseekStructuredJSON(request, responseSchema, zodSchema);
   }
 
+  /**
+   * @param batchSizeOverride - Sizes the batch differently from the provider default; callers
+   *                           that do not pass one get `DEEPSEEK_EXPRESSION_BATCH_SIZE`.
+   */
+  getExpressionInitializationBatchSize(batchSizeOverride?: number): number {
+    return typeof batchSizeOverride === "number" && batchSizeOverride > 0
+      ? batchSizeOverride
+      : DEEPSEEK_EXPRESSION_BATCH_SIZE;
+  }
+
   async getTools(
     tomoriState: TomoriState,
     streamingContext?: StreamingContext,
   ): Promise<Array<Record<string, unknown>>> {
-    if (!tomoriState.llm.has_tools) {
-      log.info("DeepSeek provider: Model does not support tools (seeded capability)");
+    if (!resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
+      log.info(
+        `DeepSeek provider: Tools unavailable (tool_use_enabled=${tomoriState.config.tool_use_enabled}, has_tools=${tomoriState.llm.has_tools})`,
+      );
       return [];
     }
 
@@ -161,6 +180,7 @@ export class DeepseekProvider
           videogen_enabled: tomoriState.config.videogen_enabled,
           voice_message_enabled: tomoriState.config.voice_message_enabled,
           user_blocking_enabled: tomoriState.config.user_blocking_enabled,
+          user_info_updates_enabled: tomoriState.config.user_info_updates_enabled,
           thread_creation_enabled: tomoriState.config.thread_creation_enabled,
         },
       };
@@ -228,7 +248,7 @@ export class DeepseekProvider
       config.logitBias = runtimeLogitBias;
     }
 
-    if (tomoriState.llm.has_tools) {
+    if (resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
       config.tools = await this.getTools(tomoriState);
     }
 
@@ -282,7 +302,7 @@ export class DeepseekProvider
         log.info("DeepseekProvider: Using beta endpoint for assistant prefix completion");
       }
 
-      if (streamingContext && tomoriState.llm.has_tools) {
+      if (streamingContext && resolveToolsEnabled(tomoriState, tomoriState.llm.has_tools)) {
         log.info("DeepseekProvider: Reloading tools with streaming context for context-aware availability");
         streamConfig.tools = await this.getTools(tomoriState, streamingContext);
       }
@@ -376,6 +396,7 @@ export class DeepseekProvider
         videogen_enabled: false,
         voice_message_enabled: false,
         user_blocking_enabled: false,
+        user_info_updates_enabled: false,
         thread_creation_enabled: false,
       },
     };

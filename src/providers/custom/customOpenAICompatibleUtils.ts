@@ -4,6 +4,7 @@ import type { ProviderImageInput } from "@/types/provider/featureInterfaces";
 import { fetchAndOptimizeImage } from "@/utils/image/imageProcessor";
 import { log } from "@/utils/misc/logger";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
+import { tryRepairIncompleteJson } from "@/utils/text/jsonRepair";
 
 type CustomContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
 
@@ -283,19 +284,37 @@ export function parseCustomJsonResponse(text: string): unknown {
 
   const fencedMatch = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fencedMatch?.[1]) {
-    return JSON.parse(fencedMatch[1]);
+    // Not every candidate below is valid JSON, so each is tried in turn rather than
+    // returning (and throwing past the remaining candidates) on the first match.
+    try {
+      return JSON.parse(fencedMatch[1]);
+    } catch {}
   }
 
   const firstBracket = cleanedText.indexOf("[");
   const lastBracket = cleanedText.lastIndexOf("]");
   if (firstBracket !== -1 && lastBracket > firstBracket) {
-    return JSON.parse(cleanedText.slice(firstBracket, lastBracket + 1));
+    try {
+      return JSON.parse(cleanedText.slice(firstBracket, lastBracket + 1));
+    } catch {}
   }
 
   const firstBrace = cleanedText.indexOf("{");
   const lastBrace = cleanedText.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
-    return JSON.parse(cleanedText.slice(firstBrace, lastBrace + 1));
+    try {
+      return JSON.parse(cleanedText.slice(firstBrace, lastBrace + 1));
+    } catch {}
+  }
+
+  // A response cut off by max_tokens never reaches a closing brace, so every attempt
+  // above fails. Repairing the tail from the first brace recovers whatever fields
+  // finished instead of discarding an otherwise-complete object.
+  if (firstBrace !== -1) {
+    const repaired = tryRepairIncompleteJson(cleanedText.slice(firstBrace));
+    if (repaired) {
+      return repaired;
+    }
   }
 
   throw new Error("Invalid JSON response from custom endpoint.");

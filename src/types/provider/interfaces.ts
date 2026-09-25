@@ -65,6 +65,8 @@ export type StreamStopReason =
   | "speaker_guard"
   | "send_message_limit"
   | "flush_limit"
+  | "channel_deleted"
+  | "missing_access"
   | "unknown";
 
 type ThoughtLogKind = "summary" | "raw";
@@ -167,6 +169,12 @@ export interface ProviderInfo {
 export interface FunctionCall {
   name: string;
   args?: Record<string, unknown>;
+  /**
+   * True when the provider's argument payload was truncated and the arguments here were
+   * recovered from an incomplete stream. They hold only the keys that arrived whole, so a
+   * dispatcher must not treat them as the call the model intended to make.
+   */
+  argumentsTruncated?: boolean;
   /**
    * Optional thought signature for providers that require it (e.g., Gemini).
    * Encoded as base64 when present.
