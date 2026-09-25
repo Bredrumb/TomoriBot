@@ -328,7 +328,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
       fallback_none_desc: `Deixe este espaço de fallback vazio.`,
       randomizer_section_title: `Randomizador de Modelos`,
       randomizer_section_desc:
-        "Quando ativado, cada resposta escolhe aleatoriamente um modelo de um grupo composto pelo seu modelo de texto primário e modelos de fallback. Se o modelo escolhido falhar, ele escolherá aleatoriamente novamente.",
+        "Escolha aleatoriamente entre seu modelo primário e modelos de fallback para cada resposta. Falhas continuam por esse grupo.",
       randomizer_effect_off: `Eu tento o modelo primário primeiro`,
       randomizer_effect_on: `Eu escolho um modelo aleatório do meu primário e fallbacks primeiro`,
       fallbacks_updated_heading: `Fallbacks Pessoais Atualizados`,
@@ -343,7 +343,7 @@ O TomoriBot o tratará como um novo usuário a partir de sua próxima mensagem.`
       randomizer_disabled_detail: `O Randomizador de Modelos agora está desativado para {provider}.`,
       server_fallback_section_title: `Fallback com o Modelo do Servidor`,
       server_fallback_section_desc:
-        "Quando seu próprio provedor de texto falha, o modelo de texto deste servidor pode responder no lugar. Essa resposta usa as credenciais do servidor e a cota de texto dele, e um servidor que exige que todos tragam seu próprio provedor nunca empresta o modelo dele. Desative isso para que as falhas do seu provedor continuem sendo suas.",
+        "Use o modelo e a cota de texto deste servidor quando seu provedor pessoal não conseguir concluir uma solicitação.",
       server_fallback_effect_on: `Eu respondo com o modelo deste servidor quando seu próprio provedor falha`,
       server_fallback_effect_off: `Eu paro em vez de pegar emprestado o modelo deste servidor`,
       server_fallback_byok_notice: `Este servidor exige que os membros tragam o próprio provedor, então ele nunca empresta o modelo dele aqui`,

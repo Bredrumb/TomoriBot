@@ -317,8 +317,7 @@ export default {
       fallback_none_option: `無（清空這個順位）`,
       fallback_none_desc: `讓這個備援順位保持空白。`,
       randomizer_section_title: `模型隨機化`,
-      randomizer_section_desc:
-        "啟用後，每次回覆都會從你的主要文字模型與 備援模型組成的池中隨機選擇模型。 如果選到的模型失敗，會再隨機重選。",
+      randomizer_section_desc: "每次回覆都從你的主要模型與備援模型中隨機選擇。失敗時繼續嘗試池中的其他模型。",
       randomizer_effect_off: `我會先嘗試主要模型`,
       randomizer_effect_on: `我會先從主要模型與備援中隨機挑一個`,
       fallbacks_updated_heading: `個人備援已更新`,
@@ -332,8 +331,7 @@ export default {
       randomizer_disabled_heading: `隨機化已停用`,
       randomizer_disabled_detail: `{provider} 的模型隨機化已停用。`,
       server_fallback_section_title: `伺服器模型備援`,
-      server_fallback_section_desc:
-        "當你自己的文字供應商失敗時，這個伺服器的文字模型可以代為回覆。那次回覆會使用伺服器的憑證，也會消耗它的文字額度，而要求所有人自備供應商的伺服器永遠不會把模型借給成員。關掉這個選項，你供應商的失敗就留在你這邊。",
+      server_fallback_section_desc: "當你的個人供應商無法完成請求時，使用這個伺服器的模型與文字額度。",
       server_fallback_effect_on: `你自己的供應商失敗時，我會改用這個伺服器的模型回覆`,
       server_fallback_effect_off: `我會直接停下來，不借用這個伺服器的模型`,
       server_fallback_byok_notice: `這個伺服器要求成員自備供應商，所以在這裡不會出借它的模型`,

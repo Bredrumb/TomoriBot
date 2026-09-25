@@ -317,8 +317,7 @@ export default {
       fallback_none_option: `无（清空这个位置）`,
       fallback_none_desc: `让这个备用模型位留空。`,
       randomizer_section_title: `模型随机`,
-      randomizer_section_desc:
-        "开启后，每次回复都会从你的主文本模型 和备用模型组成的池子里随机选一个。 如果选中的模型失败，会再随机选一次。",
+      randomizer_section_desc: "每条回复都从你的主模型和备用模型中随机选择。失败时继续沿该模型池尝试。",
       randomizer_effect_off: `我先尝试主模型`,
       randomizer_effect_on: `我先从主模型和备用模型里随机挑一个`,
       fallbacks_updated_heading: `个人备用模型已更新`,
@@ -332,7 +331,7 @@ export default {
       randomizer_disabled_heading: `模型随机已关闭`,
       randomizer_disabled_detail: `已为 {provider} 关闭模型随机。`,
       server_fallback_section_title: `服务器模型备用`,
-      server_fallback_section_desc: `你自己的文本提供方失败时，这个服务器的文本模型可以代替它来回答。这个回答走的是服务器的凭据，也计入服务器的文本配额，而要求所有人自备提供方的服务器绝不会出借自己的模型。关掉它，你提供方的失败就只留在你这边。`,
+      server_fallback_section_desc: "当你的个人提供方无法完成请求时，使用该服务器的模型和文本配额。",
       server_fallback_effect_on: `你自己的提供方失败时，我会借用这个服务器的模型来回答`,
       server_fallback_effect_off: `我直接停下，不借用这个服务器的模型`,
       server_fallback_byok_notice: `这个服务器要求成员自备提供方，所以在这里不会出借它的模型`,
