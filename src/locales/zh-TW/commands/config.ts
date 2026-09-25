@@ -1256,7 +1256,7 @@ CFG 權重：**{cfg_weight}**
         image_workflow_edit_title: `編輯圖片工作流`,
         video_workflow_edit_title: `編輯影片工作流`,
         model_name_label: `模型名稱（完整 API ID）`,
-        model_name_placeholder: `API 請求中送出的完整 ID，例如 deepseek-v4-flash、qwen-chat、gemma3:latest`,
+        model_name_placeholder: `API 請求中送出的完整 ID，例如 deepseek-flash、qwen-chat、gemma3:latest`,
         num_ctx_label: `脈絡視窗覆寫`,
         num_ctx_placeholder: `例如 8192（留空則採用端點預設）`,
         text_capabilities_label: `已啟用的功能`,

@@ -1246,7 +1246,7 @@ export default {
         image_workflow_edit_title: `编辑图像工作流`,
         video_workflow_edit_title: `编辑视频工作流`,
         model_name_label: `模型名称（准确的 API ID）`,
-        model_name_placeholder: `API 请求中发送的准确 ID，例如 deepseek-v4-flash、qwen-chat、gemma3:latest`,
+        model_name_placeholder: `API 请求中发送的准确 ID，例如 deepseek-flash、qwen-chat、gemma3:latest`,
         num_ctx_label: `上下文窗口覆盖`,
         num_ctx_placeholder: `例如 8192（留空则用端点默认值）`,
         text_capabilities_label: `已启用的能力`,

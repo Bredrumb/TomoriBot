@@ -56,11 +56,12 @@ import type { StreamingContext } from "@/types/tool/interfaces";
 import { type ToolStateForContext, getAvailableToolsWithMCP } from "@/tools/toolRegistry";
 import { applyStreamContextAvailability } from "@/tools/availability";
 import { log } from "@/utils/misc/logger";
+import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import { buildRuntimeLogitBiasMapForLlm } from "@/utils/provider/logitBiasResolver";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
-const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
+const DEFAULT_DEEPSEEK_MODEL = "deepseek-flash";
 const DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_BETA_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/beta/chat/completions";
 
@@ -232,7 +233,7 @@ export class DeepseekProvider
   async createConfig(tomoriState: TomoriState, apiKey: string): Promise<DeepseekProviderConfig> {
     const samplingParams = buildActiveSamplingParams(tomoriState.config);
     const config: DeepseekProviderConfig = {
-      model: tomoriState.llm.llm_codename,
+      model: toDeepseekApiModelName(tomoriState.llm.llm_codename),
       apiKey,
       temperature: tomoriState.config.llm_temperature,
       disabledParams: tomoriState.config.llm_disabled_params ?? [],

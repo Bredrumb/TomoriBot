@@ -7,6 +7,7 @@
  *   which handles json_object mode + Zod validation.
  */
 import { log } from "@/utils/misc/logger";
+import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import type {
   CompactConversationResult,
   CompactRoleplayResult,
@@ -77,7 +78,7 @@ export async function generateConversationSummaryDeepseek(
     messages.push({ role: "user", content: userContent });
 
     const body: Record<string, unknown> = {
-      model: request.model,
+      model: toDeepseekApiModelName(request.model),
       messages,
       max_tokens: 4096,
       stream: false,

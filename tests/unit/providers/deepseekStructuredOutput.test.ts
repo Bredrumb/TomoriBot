@@ -73,6 +73,7 @@ describe("DeepSeek structured output", () => {
 
     expect(capturedRequestBody).not.toBeNull();
     if (!capturedRequestBody) throw new Error("Expected captured request body");
+    expect(capturedRequestBody.model).toBe("deepseek-flash");
     const messages = capturedRequestBody.messages as Array<{ role: string; content: unknown }>;
     expect(messages).toHaveLength(2);
     expect(messages[0].role).toBe("system");
@@ -170,7 +171,7 @@ describe("DeepSeek structured output", () => {
 
     const result = await generateConversationSummaryDeepseek({
       apiKey: "deepseek-api-key-12345",
-      model: "deepseek-v4-flash-vision",
+      model: "deepseek-flash",
       endpointUrl: "https://custom.deepseek.proxy/v1/chat/completions",
       systemPrompt: "System instruction",
       userPrompt: "Compact these messages",
@@ -218,7 +219,7 @@ describe("DeepSeek structured output", () => {
 
     const result = await generateRoleplaySummaryDeepseek({
       apiKey: "deepseek-api-key-12345",
-      model: "deepseek-v4-flash-vision",
+      model: "deepseek-flash",
       endpointUrl: "https://proxy.deepseek.local/chat/completions",
       systemPrompt: "RP system",
       userPrompt: "RP user",

@@ -9,16 +9,18 @@ import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } f
 // ── Per-model pricing sources (USD per million tokens, uncached/base input + output) ──────────────
 // inputPricePerMillion / outputPricePerMillion below are the official standard rates, verified 2026-06-10:
 //   - Google Gemini : https://ai.google.dev/gemini-api/docs/pricing (Pro tiers use the ≤200k-context rate;
-//                     TomoriBot contexts sit well under 200k). gemini-3.5-pro had not shipped pricing at
-//                     verification time, and Gemma is an open model with no paid tier → both left undefined.
+//                     TomoriBot contexts sit well under 200k). Gemma is an open model with no
+//                     paid tier → left undefined.
 //                     Vertex / Vertex Express reuse the same Gemini SKU prices.
 //   - Anthropic     : https://platform.claude.com/docs/en/about-claude/pricing
 //                     Claude Fable 5, Opus 4.8, and Sonnet 5 rates re-verified 2026-07-21.
-//   - DeepSeek      : https://api-docs.deepseek.com/quick_start/pricing (deepseek-chat/-reasoner share the
-//                     deepseek-v4-flash rate per the docs)
+//   - DeepSeek      : https://api-docs.deepseek.com/quick_start/pricing, re-verified 2026-09-25. Rows carry
+//                     the off-peak rate; peak hours (weekday 01:00-04:00 and 06:00-10:00 UTC) bill double.
+//                     Every legacy Flash name (deepseek-chat/-reasoner, deepseek-v4-flash*) is served
+//                     and billed as deepseek-flash.
 //   - Z.ai          : https://docs.z.ai/guides/overview/pricing (direct-API rates; *-flash variants are free)
-// gemini-3.5-pro and gemini-3-flash were re-checked 2026-06-11 and still have no published rate → left
-// undefined (they resolve to "pricing unavailable" until Google ships pricing).
+// gemini-3.5-pro and gemini-3-flash were deprecated without Google ever publishing a rate, so they stay
+// undefined and resolve to "pricing unavailable".
 // gemini-3.7-flash carries an introductory rate that expires: 0.75/3.75 through December 31, 2026,
 // then 1.50/7.50 (its sibling gemini-3.6-flash rate) from January 1, 2027. Update the three rows
 // before that date or every cost read on the model under-reports by half.
@@ -317,14 +319,16 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesVideos: true,
         seesYoutube: true,
         supportsStructoutput: true,
-        desc: "Advanced Gemini 3.5 Pro model for complex reasoning and analysis",
+        isDeprecated: true,
+        desc: "Advanced Gemini 3.5 Pro model for complex reasoning and analysis (deprecated, use gemini-3.1-pro)",
         i18n: {
-          ja: "複雑な推論と分析向けの高度なGemini 3.5 Proモデル",
-          "pt-BR": "Modelo avançado Gemini 3.5 Pro para raciocínio complexo e análise",
-          "es-419": "Modelo avanzado Gemini 3.5 Pro para razonamiento y análisis complejos",
-          "zh-TW": "適合複雜推理與分析的進階 Gemini 3.5 Pro 模型",
-          vi: "Model Gemini 3.5 Pro nâng cao cho suy luận và phân tích phức tạp",
-          "zh-CN": "进阶 Gemini 3.5 Pro 模型，适合复杂推理与分析",
+          ja: "複雑な推論と分析向けの高度なGemini 3.5 Proモデル（非推奨、gemini-3.1-proを使用）",
+          "pt-BR": "Modelo avançado Gemini 3.5 Pro para raciocínio complexo e análise (obsoleto, use gemini-3.1-pro)",
+          "es-419":
+            "Modelo avanzado Gemini 3.5 Pro para razonamiento y análisis complejos (obsoleto, usa gemini-3.1-pro)",
+          "zh-TW": "適合複雜推理與分析的進階 Gemini 3.5 Pro 模型（已淘汰，請改用 gemini-3.1-pro）",
+          vi: "Model Gemini 3.5 Pro nâng cao cho suy luận và phân tích phức tạp (đã lỗi thời, hãy dùng gemini-3.1-pro)",
+          "zh-CN": "进阶 Gemini 3.5 Pro 模型，适合复杂推理与分析（已淘汰，请改用 gemini-3.1-pro）",
         },
       },
       {
@@ -675,14 +679,17 @@ export const llmSections: ModelSection<LlmInput>[] = [
         seesVideos: true,
         seesYoutube: true,
         supportsStructoutput: true,
-        desc: "Advanced Gemini 3.5 Pro model for complex reasoning and analysis via Vertex AI",
+        isDeprecated: true,
+        desc: "Advanced Gemini 3.5 Pro model for complex reasoning and analysis via Vertex AI (deprecated, use gemini-3.1-pro)",
         i18n: {
-          ja: "Vertex AI経由の複雑な推論と分析向けの高度なGemini 3.5 Proモデル",
-          "pt-BR": "Gemini 3.5 Pro avançado para raciocínio complexo e análise via Vertex AI",
-          "es-419": "Gemini 3.5 Pro avanzado para razonamiento y análisis complejos vía Vertex AI",
-          "zh-TW": "經由 Vertex AI、適合複雜推理與分析的進階 Gemini 3.5 Pro 模型",
-          vi: "Model Gemini 3.5 Pro nâng cao cho suy luận và phân tích phức tạp qua Vertex AI",
-          "zh-CN": "经由 Vertex AI 的进阶 Gemini 3.5 Pro 模型，适合复杂推理与分析",
+          ja: "Vertex AI経由の複雑な推論と分析向けの高度なGemini 3.5 Proモデル（非推奨、gemini-3.1-proを使用）",
+          "pt-BR":
+            "Gemini 3.5 Pro avançado para raciocínio complexo e análise via Vertex AI (obsoleto, use gemini-3.1-pro)",
+          "es-419":
+            "Gemini 3.5 Pro avanzado para razonamiento y análisis complejos vía Vertex AI (obsoleto, usa gemini-3.1-pro)",
+          "zh-TW": "經由 Vertex AI、適合複雜推理與分析的進階 Gemini 3.5 Pro 模型（已淘汰，請改用 gemini-3.1-pro）",
+          vi: "Model Gemini 3.5 Pro nâng cao cho suy luận và phân tích phức tạp qua Vertex AI (đã lỗi thời, hãy dùng gemini-3.1-pro)",
+          "zh-CN": "经由 Vertex AI 的进阶 Gemini 3.5 Pro 模型，适合复杂推理与分析（已淘汰，请改用 gemini-3.1-pro）",
         },
       },
       {
@@ -2126,62 +2133,84 @@ export const llmSections: ModelSection<LlmInput>[] = [
     rows: [
       {
         provider: "deepseek",
-        codename: "deepseek-v4-flash",
-        inputPricePerMillion: 0.22,
-        outputPricePerMillion: 0.66,
+        codename: "deepseek-flash",
+        inputPricePerMillion: 0.15,
+        outputPricePerMillion: 0.6,
         supportsPrefixCompletion: true,
         isDefault: true,
+        seesImages: true,
         hasTools: true,
         supportsStructoutput: true,
-        desc: "Fast and cost-efficient default DeepSeek v4 model with tool support and structured output",
+        desc: "Fast and cost-efficient default DeepSeek Flash model with image vision, tool support, and structured output",
         i18n: {
-          ja: "ツール利用と構造化出力に対応した、高速でコスト効率の良いデフォルトのDeepSeek v4モデル",
-          "pt-BR": "Modelo padrão DeepSeek v4 rápido e econômico com ferramentas",
-          "es-419": "Modelo predeterminado DeepSeek v4, rápido y económico, con herramientas y salida estructurada",
-          "zh-TW": "支援工具與結構化輸出、快速且高成本效益的 DeepSeek v4 預設模型",
-          vi: "Model DeepSeek v4 mặc định nhanh, giá rẻ hỗ trợ công cụ và xuất có cấu trúc",
-          "zh-CN": "支持工具与结构化输出、快速且高成本效益的 DeepSeek v4 默认模型",
+          ja: "画像認識、ツール利用、構造化出力に対応した、高速でコスト効率の良いデフォルトのDeepSeek Flashモデル",
+          "pt-BR": "Modelo padrão DeepSeek Flash rápido e econômico com visão e ferramentas",
+          "es-419":
+            "Modelo predeterminado DeepSeek Flash, rápido y económico, con visión de imágenes, herramientas y salida estructurada",
+          "zh-TW": "支援圖像視覺、工具與結構化輸出、快速且高成本效益的 DeepSeek Flash 預設模型",
+          vi: "Model DeepSeek Flash mặc định nhanh, giá rẻ, có thị giác hình ảnh, công cụ và xuất có cấu trúc",
+          "zh-CN": "支持图像视觉、工具与结构化输出、快速且高成本效益的 DeepSeek Flash 默认模型",
+        },
+      },
+      {
+        provider: "deepseek",
+        codename: "deepseek-v4-flash",
+        inputPricePerMillion: 0.15,
+        outputPricePerMillion: 0.6,
+        supportsPrefixCompletion: true,
+        hasTools: true,
+        supportsStructoutput: true,
+        isDeprecated: true,
+        desc: "Fast and cost-efficient DeepSeek v4 model with tool support and structured output (deprecated, use deepseek-flash)",
+        i18n: {
+          ja: "ツール利用と構造化出力に対応した、高速でコスト効率の良いDeepSeek v4モデル（非推奨、deepseek-flashを使用）",
+          "pt-BR": "Modelo DeepSeek v4 rápido e econômico com ferramentas (obsoleto, use deepseek-flash)",
+          "es-419":
+            "Modelo DeepSeek v4, rápido y económico, con herramientas y salida estructurada (obsoleto, use deepseek-flash)",
+          "zh-TW": "支援工具與結構化輸出、快速且高成本效益的 DeepSeek v4 模型（已淘汰，請改用 deepseek-flash）",
+          vi: "Model DeepSeek v4 nhanh, giá rẻ hỗ trợ công cụ và xuất có cấu trúc (đã lỗi thời, hãy dùng deepseek-flash)",
+          "zh-CN": "支持工具与结构化输出、快速且高成本效益的 DeepSeek v4 模型（已淘汰，请改用 deepseek-flash）",
         },
       },
       {
         provider: "deepseek",
         codename: "deepseek-v4-flash-vision",
-        inputPricePerMillion: 0.22,
-        outputPricePerMillion: 0.66,
-        supportsPrefixCompletion: true,
-        seesImages: true,
-        hasTools: true,
-        supportsStructoutput: true,
-        desc: "DeepSeek v4 Flash model with image vision capabilities",
-        i18n: {
-          ja: "画像認識機能を持つDeepSeek v4 Flashモデル",
-          "pt-BR": "Modelo DeepSeek v4 Flash com capacidade de visão",
-          "es-419": "Modelo DeepSeek v4 Flash con capacidad de visión de imágenes",
-          "zh-TW": "具備圖像視覺能力的 DeepSeek v4 Flash 模型",
-          vi: "Model DeepSeek v4 Flash có khả năng thị giác hình ảnh",
-          "zh-CN": "具备图像视觉能力的 DeepSeek v4 Flash 模型",
-        },
-      },
-      {
-        provider: "deepseek",
-        codename: "deepseek-v4-flash-vision-exp",
-        inputPricePerMillion: 0.22,
-        outputPricePerMillion: 0.66,
+        inputPricePerMillion: 0.15,
+        outputPricePerMillion: 0.6,
         supportsPrefixCompletion: true,
         seesImages: true,
         hasTools: true,
         supportsStructoutput: true,
         isDeprecated: true,
-        desc: "Experimental DeepSeek v4 Flash model with image vision capabilities (deprecated, use deepseek-v4-flash-vision)",
+        desc: "DeepSeek v4 Flash model with image vision capabilities (deprecated, use deepseek-flash)",
         i18n: {
-          ja: "画像認識機能を持つ実験的なDeepSeek v4 Flashモデル（非推奨、deepseek-v4-flash-visionを使用）",
-          "pt-BR":
-            "Modelo experimental DeepSeek v4 Flash com capacidade de visão (obsoleto, use deepseek-v4-flash-vision)",
+          ja: "画像認識機能を持つDeepSeek v4 Flashモデル（非推奨、deepseek-flashを使用）",
+          "pt-BR": "Modelo DeepSeek v4 Flash com capacidade de visão (obsoleto, use deepseek-flash)",
+          "es-419": "Modelo DeepSeek v4 Flash con capacidad de visión de imágenes (obsoleto, use deepseek-flash)",
+          "zh-TW": "具備圖像視覺能力的 DeepSeek v4 Flash 模型（已淘汰，請改用 deepseek-flash）",
+          vi: "Model DeepSeek v4 Flash có khả năng thị giác hình ảnh (đã lỗi thời, hãy dùng deepseek-flash)",
+          "zh-CN": "具备图像视觉能力的 DeepSeek v4 Flash 模型（已淘汰，请改用 deepseek-flash）",
+        },
+      },
+      {
+        provider: "deepseek",
+        codename: "deepseek-v4-flash-vision-exp",
+        inputPricePerMillion: 0.15,
+        outputPricePerMillion: 0.6,
+        supportsPrefixCompletion: true,
+        seesImages: true,
+        hasTools: true,
+        supportsStructoutput: true,
+        isDeprecated: true,
+        desc: "Experimental DeepSeek v4 Flash model with image vision capabilities (deprecated, use deepseek-flash)",
+        i18n: {
+          ja: "画像認識機能を持つ実験的なDeepSeek v4 Flashモデル（非推奨、deepseek-flashを使用）",
+          "pt-BR": "Modelo experimental DeepSeek v4 Flash com capacidade de visão (obsoleto, use deepseek-flash)",
           "es-419":
-            "Modelo experimental DeepSeek v4 Flash con capacidad de visión de imágenes (obsoleto, use deepseek-v4-flash-vision)",
-          "zh-TW": "具備圖像視覺能力的實驗性 DeepSeek v4 Flash 模型（已淘汰，請改用 deepseek-v4-flash-vision）",
-          vi: "Model thử nghiệm DeepSeek v4 Flash có khả năng thị giác hình ảnh (đã lỗi thời, hãy dùng deepseek-v4-flash-vision)",
-          "zh-CN": "具备图像视觉能力的实验性 DeepSeek v4 Flash 模型（已淘汰，请改用 deepseek-v4-flash-vision）",
+            "Modelo experimental DeepSeek v4 Flash con capacidad de visión de imágenes (obsoleto, use deepseek-flash)",
+          "zh-TW": "具備圖像視覺能力的實驗性 DeepSeek v4 Flash 模型（已淘汰，請改用 deepseek-flash）",
+          vi: "Model thử nghiệm DeepSeek v4 Flash có khả năng thị giác hình ảnh (đã lỗi thời, hãy dùng deepseek-flash)",
+          "zh-CN": "具备图像视觉能力的实验性 DeepSeek v4 Flash 模型（已淘汰，请改用 deepseek-flash）",
         },
       },
       {
@@ -2206,41 +2235,41 @@ export const llmSections: ModelSection<LlmInput>[] = [
       {
         provider: "deepseek",
         codename: "deepseek-chat",
-        inputPricePerMillion: 0.22,
-        outputPricePerMillion: 0.66,
+        inputPricePerMillion: 0.15,
+        outputPricePerMillion: 0.6,
         supportsPrefixCompletion: true,
         hasTools: true,
         supportsStructoutput: true,
         isDeprecated: true,
-        desc: "DeepSeek chat model for general text generation, seeded tool use, and JSON structured output (deprecated, use deepseek-v4-flash)",
+        desc: "DeepSeek chat model for general text generation, seeded tool use, and JSON structured output (deprecated, use deepseek-flash)",
         i18n: {
-          ja: "汎用テキスト生成、シード済みツール利用、JSON構造化出力に対応したDeepSeekチャットモデル（非推奨、deepseek-v4-flashを使用）",
+          ja: "汎用テキスト生成、シード済みツール利用、JSON構造化出力に対応したDeepSeekチャットモデル（非推奨、deepseek-flashを使用）",
           "zh-TW":
-            "適合一般文字生成、內建工具使用與 JSON 結構化輸出的 DeepSeek 聊天模型（已淘汰，請改用 deepseek-v4-flash）",
-          vi: "Model chat DeepSeek đa năng (đã lỗi thời, hãy dùng deepseek-v4-flash)",
+            "適合一般文字生成、內建工具使用與 JSON 結構化輸出的 DeepSeek 聊天模型（已淘汰，請改用 deepseek-flash）",
+          vi: "Model chat DeepSeek đa năng (đã lỗi thời, hãy dùng deepseek-flash)",
           "zh-CN":
-            "适合一般文本生成、内置工具使用与 JSON 结构化输出的 DeepSeek 聊天模型（已淘汰，请改用 deepseek-v4-flash）",
+            "适合一般文本生成、内置工具使用与 JSON 结构化输出的 DeepSeek 聊天模型（已淘汰，请改用 deepseek-flash）",
         },
       },
       {
         provider: "deepseek",
         codename: "deepseek-reasoner",
-        inputPricePerMillion: 0.22,
-        outputPricePerMillion: 0.66,
+        inputPricePerMillion: 0.15,
+        outputPricePerMillion: 0.6,
         supportsPrefixCompletion: true,
         isSmartest: true,
         isReasoning: true,
         hasTools: true,
         supportsStructoutput: true,
         isDeprecated: true,
-        desc: "Reasoning-focused DeepSeek model with thinking mode, seeded tool use, and JSON structured output (deprecated, use deepseek-v4-flash)",
+        desc: "Reasoning-focused DeepSeek model with thinking mode, seeded tool use, and JSON structured output (deprecated, use deepseek-flash)",
         i18n: {
-          ja: "シンキングモード、シード済みツール利用、JSON構造化出力に対応した、推論特化のDeepSeekモデル（非推奨、deepseek-v4-flashを使用）",
+          ja: "シンキングモード、シード済みツール利用、JSON構造化出力に対応した、推論特化のDeepSeekモデル（非推奨、deepseek-flashを使用）",
           "zh-TW":
-            "具備思考模式、內建工具使用與 JSON 結構化輸出、專注推理的 DeepSeek 模型（已淘汰，請改用 deepseek-v4-flash）",
-          vi: "Model DeepSeek chuyên suy luận có công cụ, JSON (đã lỗi thời, hãy dùng deepseek-v4-flash)",
+            "具備思考模式、內建工具使用與 JSON 結構化輸出、專注推理的 DeepSeek 模型（已淘汰，請改用 deepseek-flash）",
+          vi: "Model DeepSeek chuyên suy luận có công cụ, JSON (đã lỗi thời, hãy dùng deepseek-flash)",
           "zh-CN":
-            "具备思考模式、内置工具使用与 JSON 结构化输出、专注推理的 DeepSeek 模型（已淘汰，请改用 deepseek-v4-flash）",
+            "具备思考模式、内置工具使用与 JSON 结构化输出、专注推理的 DeepSeek 模型（已淘汰，请改用 deepseek-flash）",
         },
       },
     ],

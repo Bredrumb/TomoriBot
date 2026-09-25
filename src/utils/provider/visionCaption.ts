@@ -21,6 +21,7 @@ import { log } from "@/utils/misc/logger";
 import { getResolvedCapabilityModelId, resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
 import { normalizeProviderName } from "@/utils/provider/providerInfoRegistry";
+import { toDeepseekApiModelName } from "@/providers/deepseek/deepseekShared";
 import { resolveVisionCaptionMaxOutputTokens } from "@/utils/provider/maxOutputTokens";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import {
@@ -120,6 +121,10 @@ export function resolveVisionApiModelName(
 
   if (normalized === "zai" || normalized === "zaicoding") {
     return toZaiApiModelName(llmCodename);
+  }
+
+  if (normalized === "deepseek") {
+    return toDeepseekApiModelName(llmCodename);
   }
 
   return customEndpointModelName?.trim() || llmCodename;
