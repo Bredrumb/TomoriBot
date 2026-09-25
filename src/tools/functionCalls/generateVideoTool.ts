@@ -539,6 +539,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
@@ -658,6 +659,9 @@ export class GenerateVideoTool extends BaseTool {
         endTurn: context.streamContext?.endTurnAfterTools?.includes(this.name) ?? false,
       };
     } catch (error) {
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "Video generation was cancelled." };
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.error("Video generation failed:", error as Error);
 
