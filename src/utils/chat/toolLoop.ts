@@ -182,6 +182,12 @@ export async function runToolLoop(params: ToolLoopParams): Promise<GenerationTur
           continue;
         }
         if (toolOutcome.kind === "abort") {
+          if (toolOutcome.status === "stopped_by_user") {
+            // A /kill that exits here was never consumed by the stream's own stop check, and an
+            // unconsumed request aborts the channel's next turn at its pre-stream check.
+            queueStopResponseIfPresent(params.context);
+            resetChannelFollowUpCount(params.context.channel.id);
+          }
           return buildResult(
             toolOutcome.status,
             params.context,

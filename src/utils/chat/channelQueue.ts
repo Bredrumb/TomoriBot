@@ -615,6 +615,10 @@ export function releaseChannelLockAndReplayQueue(args: {
         log.error("Failed to generate stop response after lock release:", error);
       }
     });
+  } else {
+    // A stop request without a stopContext belongs to the turn that just ended; one left behind by
+    // an exit path that skipped its stop check would abort the next turn at its pre-stream check.
+    StreamOrchestrator.clearStopRequest(args.channelId);
   }
 
   const nextMessageData = args.lockEntry.messageQueue.shift();

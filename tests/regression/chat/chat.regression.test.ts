@@ -882,6 +882,85 @@ describe("chat regression harness", () => {
     expect(StreamOrchestrator.hasStopRequest(channelId)).toBe(false);
   });
 
+  it("clears a /kill that aborts the turn at a tool call so the next turn is not pre-stream aborted", async () => {
+    const client = makeClient();
+    const fixture = conversations[0];
+    const message = makeMessage(fixture, client);
+    const tomoriState = makeTomoriState(fixture, {
+      id: 1001,
+      nickname: "Tomori",
+      isAlter: false,
+      triggers: ["tomori"],
+    });
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: message.id,
+      userDiscId: message.author.id,
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+    const provider = {
+      streamToDiscord: async (): Promise<StreamResult> => {
+        StreamOrchestrator.requestStop(channelId, message.author.id);
+        return { status: "function_call", data: { name: "generate_image", args: {} } } as StreamResult;
+      },
+    } as unknown as LLMProvider;
+    const context = {
+      turn: {
+        lockedTurn: {
+          channelId,
+          admission: {
+            incoming: {},
+          },
+        },
+      },
+      client,
+      message,
+      channel: message.channel,
+      isFromQueue: false,
+      streamingContext: {
+        suppressUserErrors: true,
+      },
+      currentPersona: tomoriState,
+      isUserImpersonation: false,
+    } as unknown as ChatTurnContext;
+
+    const result = await runToolLoop({
+      context,
+      provider,
+      providerConfig: {
+        model: "test",
+        apiKey: "test",
+        temperature: 0,
+      },
+      tomoriState,
+    });
+
+    expect(result.status).toBe("stopped_by_user");
+    expect(StreamOrchestrator.hasStopRequest(channelId)).toBe(false);
+  });
+
+  it("releaseChannelLockAndReplayQueue drops a stop request that has no stop context", () => {
+    const lockEntry = getOrCreateChannelLockEntry(channelId, guildId);
+    acquireChannelLockForTurn(lockEntry, {
+      messageId: "stale_stop_msg",
+      userDiscId: "user_stale_stop",
+      isPersonaJob: false,
+      isCommandTriggered: false,
+    });
+    StreamOrchestrator.requestStop(channelId, "user_stale_stop");
+
+    releaseChannelLockAndReplayQueue({
+      channelId,
+      lockEntry,
+      completedMessageId: "stale_stop_msg",
+      handleStopResponse: async () => {},
+      processQueuedMessage: async () => {},
+    });
+
+    expect(StreamOrchestrator.hasStopRequest(channelId)).toBe(false);
+  });
+
   it("pre-lock admission ignores non-triggering messages without locking the channel", async () => {
     const client = makeClient();
     const fixture = conversations[0];
