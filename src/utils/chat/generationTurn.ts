@@ -624,6 +624,12 @@ async function sendDeferredTimeoutNoticeIfPending(context: ChatTurnContext): Pro
     return;
   }
   context.streamingContext.deferredTimeoutNotice = undefined;
+  // The tool loop also defers on turns that suppress errors on purpose, such as auto-chat and
+  // random triggers nobody addressed directly, and a bot-authored embed breaks an impersonation.
+  // Those turns stayed silent before deferral existed and must stay silent here.
+  if (context.isUserImpersonation || !context.shouldSurfaceUserErrors) {
+    return;
+  }
 
   await sendStreamTimeoutNotice({
     channel: context.channel as SendableChannel,

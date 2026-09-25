@@ -138,7 +138,9 @@ a non-error result *and* the loop falls through (rare; defensive).
 - A suppressed attempt holds its SDK-call timeout notice back while a fallback is still
   pending (`StreamingContext.deferredTimeoutNotice`). If the server route then
   contributes nothing, the terminal branch resends it, because no error result carries a
-  timeout and the turn would otherwise end in silence.
+  timeout and the turn would otherwise end in silence. The resend only happens on a turn
+  that surfaces user errors outside impersonation: the tool loop also defers on turns
+  that hide errors on purpose (auto-chat, random triggers), and those stay silent.
 - A success on this route is the only fallback that names an opt-out: the
   `Fallback Used` details modal then points at `/personal config` > Models >
   Fallbacks through `offerPersonalFallbackOptOut`. A personal-route success has no

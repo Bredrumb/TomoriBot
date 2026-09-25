@@ -1135,6 +1135,47 @@ describe("runGenerationTurn fallback behavior", () => {
     expect(context.streamingContext.deferredTimeoutNotice).toBeUndefined();
   });
 
+  it("keeps a timeout silent on a server turn that hides its errors", async () => {
+    const context = makeContext(makeLlm(1, "server-primary"), makeLlm(2, "server-fallback"));
+    context.shouldSurfaceUserErrors = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      queuedResults.push({
+        status: "timeout",
+        streamResults: [{ status: "timeout", data: new Error("SDK_CALL_TIMEOUT: provider call timed out.") }],
+        personaResponses: [],
+      });
+    }
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, collectingSink());
+
+    expect(result.status).toBe("timeout");
+    expect(timeoutNotices).toHaveLength(0);
+    expect(context.streamingContext.deferredTimeoutNotice).toBeUndefined();
+  });
+
+  it("keeps a timeout silent on a personal turn that hides its errors when the server route refuses", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.shouldSurfaceUserErrors = false;
+    textQuotaAdmissionResult = { allowed: false, state: null };
+    queuedResults.push({
+      status: "timeout",
+      streamResults: [{ status: "timeout", data: new Error("SDK_CALL_TIMEOUT: provider call timed out.") }],
+      personaResponses: [],
+    });
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, collectingSink());
+
+    expect(result.status).toBe("timeout");
+    expect(timeoutNotices).toHaveLength(0);
+    expect(context.streamingContext.deferredTimeoutNotice).toBeUndefined();
+  });
+
   it("keeps the deferred timeout notice for the attempt that the server route replaced", async () => {
     const context = makePersonalContext(
       makeLlm(1, "server-primary"),
