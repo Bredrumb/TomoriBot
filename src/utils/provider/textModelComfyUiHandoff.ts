@@ -1,5 +1,6 @@
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
-import type { CustomEndpointRow, TomoriState } from "@/types/db/schema";
+import type { CustomEndpointApiStyle, CustomEndpointRow, TomoriState, VramHandoffBackend } from "@/types/db/schema";
+import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import { log } from "@/utils/misc/logger";
 import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
@@ -71,9 +72,51 @@ export async function waitForTextModelHandoffBeforeTextRequest(endpointId?: numb
   await unavailable;
 }
 
-function readHandoffStrategy(endpoint: CustomEndpointRow): TextModelHandoffStrategy {
-  const value = (endpoint.extra_config as Record<string, unknown>).handoff_strategy;
-  return value === "koboldcpp" || value === "ollama" ? value : "none";
+/**
+ * Reads the handoff from the connection row, not the model row: the setting describes the server,
+ * and the JOINed endpoint row does not carry the connection's `behavior` column.
+ */
+async function readHandoffStrategy(endpoint: CustomEndpointRow): Promise<TextModelHandoffStrategy> {
+  const connection = await llmProviderRepo.loadCustomEndpointConnectionById(endpoint.connection_id);
+  return connection?.behavior?.vram_handoff ?? "none";
+}
+
+const BACKEND_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * Identifies which model unload API the server behind a text connection supports.
+ *
+ * @returns `null` for any other server, since generic OpenAI-compatible servers share no
+ *   unload or reload API.
+ */
+export async function detectVramHandoffBackend(params: {
+  apiStyle: CustomEndpointApiStyle;
+  endpointUrl: string;
+  apiKey?: string | null;
+}): Promise<VramHandoffBackend | null> {
+  if (params.apiStyle === "ollama-native") return "ollama";
+  const headers = buildCustomHeaders(params.apiKey ?? "");
+  const probe = async (pathname: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const response = await fetchUserRemoteUrl(replaceEndpointPath(params.endpointUrl, pathname), {
+        headers,
+        signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        return null;
+      }
+      const payload: unknown = await response.json().catch(() => null);
+      return payload !== null && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  // KoboldCpp is probed first because its reply names itself; Ollama's only carries a version.
+  const kobold = await probe("/api/extra/version");
+  if (kobold?.result === "KoboldCpp") return "koboldcpp";
+  const ollama = await probe("/api/version");
+  return typeof ollama?.version === "string" ? "ollama" : null;
 }
 
 function endpointKey(endpoint: CustomEndpointRow): string | null {
@@ -216,7 +259,7 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
   if (!isCustomProvider(provider)) return NO_HANDOFF;
   const endpoint = await resolveCustomEndpointForProvider(provider, "text", params.tomoriState.llm.llm_id ?? null);
   if (!endpoint) return NO_HANDOFF;
-  const strategy = readHandoffStrategy(endpoint);
+  const strategy = await readHandoffStrategy(endpoint);
   const key = endpointKey(endpoint);
   if (strategy === "none" || !key) return NO_HANDOFF;
 

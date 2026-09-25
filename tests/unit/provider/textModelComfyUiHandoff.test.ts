@@ -1,11 +1,11 @@
-import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
-import type { CustomEndpointRow, TomoriState } from "@/types/db/schema";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import type { CustomEndpointConnectionRow, CustomEndpointRow, TomoriState } from "@/types/db/schema";
+import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import * as realEndpointService from "@/utils/provider/customEndpointService";
 import * as realCredentialResolver from "@/utils/provider/credentialResolver";
 import * as realCustomProviderUtils from "@/utils/provider/customProviderUtils";
 import * as realRemoteFetch from "@/utils/security/userRemoteFetch";
-import * as realLogger from "@/utils/misc/logger";
-import { createScopedModuleMocker } from "../../helpers/mockSurface";
+import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
 
 const resolveEndpointMock = mock(async () => currentEndpoint);
 const resolveCredentialsMock = mock(async () => ({ provider: "custom-test", apiKey: "admin-token" }));
@@ -17,7 +17,6 @@ const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/provider/credentialResolver": realCredentialResolver,
   "@/utils/provider/customProviderUtils": realCustomProviderUtils,
   "@/utils/security/userRemoteFetch": realRemoteFetch,
-  "@/utils/misc/logger": realLogger,
 });
 
 scopedMock.module("@/utils/provider/customEndpointService", () => ({
@@ -36,14 +35,19 @@ scopedMock.module("@/utils/security/userRemoteFetch", () => ({
   ...realRemoteFetch,
   fetchUserRemoteUrl: remoteFetchMock,
 }));
-scopedMock.module("@/utils/misc/logger", () => ({
-  ...realLogger,
-  log: { ...realLogger.log, info: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
-}));
+stubLogMembers({ info: () => {}, warn: () => {}, error: async () => {} });
+
+// The strategy lives on the connection row, which the module loads by the endpoint's connection_id.
+const connectionSpy = spyOn(llmProviderRepo, "loadCustomEndpointConnectionById").mockImplementation(
+  async (connectionId) =>
+    ({ connection_id: connectionId, behavior: { vram_handoff: currentStrategy } }) as CustomEndpointConnectionRow,
+);
+afterAll(() => connectionSpy.mockRestore());
 
 let beginTextModelHandoffBeforeComfyUi: typeof import("@/utils/provider/textModelComfyUiHandoff").beginTextModelHandoffBeforeComfyUi;
 let waitForTextModelHandoffBeforeTextRequest: typeof import("@/utils/provider/textModelComfyUiHandoff").waitForTextModelHandoffBeforeTextRequest;
 let currentEndpoint: CustomEndpointRow | null = null;
+let currentStrategy: "koboldcpp" | "ollama" = "ollama";
 
 beforeAll(async () => {
   ({ beginTextModelHandoffBeforeComfyUi, waitForTextModelHandoffBeforeTextRequest } = await import(
@@ -58,11 +62,13 @@ beforeEach(() => {
 });
 
 function endpoint(id: number, strategy: "koboldcpp" | "ollama"): CustomEndpointRow {
+  currentStrategy = strategy;
   return {
     custom_endpoint_id: id,
+    connection_id: id,
     endpoint_url: "http://127.0.0.1:11434/v1",
     model_name: "test-model",
-    extra_config: { handoff_strategy: strategy },
+    extra_config: {},
   } as CustomEndpointRow;
 }
 

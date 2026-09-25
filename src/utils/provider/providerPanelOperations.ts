@@ -10,6 +10,7 @@ import type {
   TomoriState,
   UserSavedProviderConfigRow,
   UserSavedProviderConfigUpsert,
+  VramHandoffBackend,
 } from "@/types/db/schema";
 import {
   PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
@@ -32,7 +33,9 @@ import {
   llmProviderRepo,
   type CustomEndpointConnectionsReadResult,
   type SavedProviderConfigsReadResult,
+  type VramHandoffChange,
 } from "@/utils/db/repositories/LlmProviderRepository";
+import { detectVramHandoffBackend } from "@/utils/provider/textModelComfyUiHandoff";
 import { toolRepository, type BraveApiKeyStatusReadResult } from "@/utils/db/repositories/ToolRepository";
 import { ELEVENLABS_SERVICE_NAME } from "@/utils/audio/elevenLabsAccount";
 import { validateElevenLabsApiKey } from "@/utils/audio/elevenLabsAccount";
@@ -225,7 +228,7 @@ export type EditEndpointResult =
   | { status: "success"; entryId: string; label: string }
   | { status: "unchanged"; entryId: string }
   | { status: "unreachable"; reason: string }
-  | { status: "invalid-label" | "not-found" | "write-failed" };
+  | { status: "invalid-label" | "not-found" | "write-failed" | "handoff-unsupported" };
 
 interface EditEndpointInput {
   serverDiscId: string;
@@ -236,6 +239,8 @@ interface EditEndpointInput {
   label: string;
   endpointUrl: string;
   authToken: string;
+  /** Undefined when the modal did not offer the option, which leaves the stored value untouched. */
+  unloadDuringComfyUi?: boolean;
 }
 
 export type RemoveProviderEntryResult =
@@ -573,6 +578,8 @@ function buildEndpointEntries(
         connectionId: connection.connection_id,
         endpointUrl: connection.endpoint_url,
         apiStyle: connection.api_style,
+        capability: connection.capability,
+        vramHandoff: connection.behavior?.vram_handoff ?? null,
       })),
       capabilities: buildEndpointCapabilities(sortedConnections, endpoints, savedConfigs, context),
     };
@@ -1524,7 +1531,17 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
   const nextLabel = isPreset ? representative.label : requestedLabel;
   const changesUrl = !isPreset && endpointUrl && group.some((connection) => connection.endpoint_url !== endpointUrl);
   const changesLabel = nextLabel !== representative.label;
-  if (!changesUrl && !changesLabel && !authToken) return { status: "unchanged", entryId: input.entryId };
+  const textConnections = group.filter((connection) => connection.capability === "text");
+  const handoffEnabled = textConnections.some((connection) => connection.behavior?.vram_handoff);
+  // A URL change re-detects too: the stored backend describes the old server, and running its
+  // unload API against a different one would fail on every media job.
+  const changesHandoff =
+    input.unloadDuringComfyUi !== undefined &&
+    textConnections.length > 0 &&
+    (input.unloadDuringComfyUi !== handoffEnabled || (input.unloadDuringComfyUi && Boolean(changesUrl)));
+  if (!changesUrl && !changesLabel && !authToken && !changesHandoff) {
+    return { status: "unchanged", entryId: input.entryId };
+  }
 
   if (changesUrl) {
     for (const connection of group) {
@@ -1548,6 +1565,24 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
     }
   }
 
+  let vramHandoff: VramHandoffChange | undefined;
+  if (changesHandoff) {
+    let backend: VramHandoffBackend | null = null;
+    if (input.unloadDuringComfyUi) {
+      // Detected against the URL being saved, so enabling the option and moving the endpoint to a
+      // different server in one submit still records the new server's backend.
+      const [textConnection] = textConnections;
+      if (!textConnection) return { status: "handoff-unsupported" };
+      backend = await detectVramHandoffBackend({
+        apiStyle: textConnection.api_style,
+        endpointUrl: changesUrl ? endpointUrl : textConnection.endpoint_url,
+        apiKey: authToken || (await loadConnectionCredential(textConnection)),
+      });
+      if (!backend) return { status: "handoff-unsupported" };
+    }
+    vramHandoff = { connectionIds: textConnections.map((connection) => connection.connection_id), backend };
+  }
+
   const encryption = authToken ? await encryptApiKey(authToken) : null;
   const update = {
     connectionIds: group.map((connection) => connection.connection_id),
@@ -1555,6 +1590,7 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
     endpointUrl: changesUrl ? endpointUrl : undefined,
     encryptedApiKey: encryption?.encrypted ?? undefined,
     keyVersion: encryption?.version,
+    vramHandoff,
   };
   const updated = userId
     ? await llmProviderRepo.updateUserCustomEndpointConnectionGroup({ userId, ...update })

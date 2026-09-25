@@ -297,6 +297,19 @@ export const customEndpointApiStyleSchema = z.enum([
 ]);
 export type CustomEndpointApiStyle = z.infer<typeof customEndpointApiStyleSchema>;
 
+export const vramHandoffBackendSchema = z.enum(["koboldcpp", "ollama"]);
+export type VramHandoffBackend = z.infer<typeof vramHandoffBackendSchema>;
+
+/**
+ * Settings that describe the backend server behind a connection rather than any model it hosts.
+ * `vram_handoff` records the backend detected when the option was enabled, so the runtime runs a
+ * known unload strategy instead of guessing.
+ */
+export const endpointBehaviorSchema = z.object({
+  vram_handoff: vramHandoffBackendSchema.optional(),
+});
+export type EndpointBehavior = z.infer<typeof endpointBehaviorSchema>;
+
 export const customEndpointConnectionSchema = z.object({
   connection_id: z.number().int().positive(),
   server_id: z.number().nullable().optional(),
@@ -306,6 +319,9 @@ export const customEndpointConnectionSchema = z.object({
   api_style: customEndpointApiStyleSchema,
   endpoint_url: z.string(),
   requires_auth: z.boolean().default(false),
+  // No default: most endpoint reads JOIN this table without selecting the column, and a default
+  // would make "not loaded" indistinguishable from "no behavior configured".
+  behavior: endpointBehaviorSchema.optional(),
   created_at: z.coerce.date().optional(),
   updated_at: z.coerce.date().optional(),
 });

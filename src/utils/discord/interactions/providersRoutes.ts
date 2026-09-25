@@ -9,7 +9,11 @@ import {
 } from "discord.js";
 import type { CustomEndpointCapability } from "@/types/db/schema";
 import type { PanelReceipt } from "@/types/discord/panel";
-import type { ProviderPanelCapabilitySection, ProviderPanelModel } from "@/types/discord/providerPanel";
+import type {
+  EndpointProviderPanelEntry,
+  ProviderPanelCapabilitySection,
+  ProviderPanelModel,
+} from "@/types/discord/providerPanel";
 import type { GlobalInteractionRoute, GlobalRoutableInteraction } from "@/utils/discord/interactions/routeRegistry";
 import {
   beginPanelInteraction,
@@ -46,6 +50,7 @@ import {
   type EditEndpointModalContext,
   type ProviderModelModalDefaults,
   type ProvidersPanelPage,
+  UNLOAD_DURING_COMFYUI_BEHAVIOR,
 } from "@/utils/discord/ui/providersPanel";
 import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import { getDefaultImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
@@ -124,6 +129,7 @@ export interface ProvidersRouteDependencies {
     context: EditEndpointModalContext,
     nonce: string,
   ): Promise<void>;
+  takeEndpointBehavior(interactionId: string, nonce: string): string[] | undefined;
   takeDeleteRotation(interactionId: string, nonce: string): string | undefined;
 }
 
@@ -379,6 +385,7 @@ function endpointEditReceipt(
     "invalid-label": "commands.providers.endpoint_invalid_label",
     "not-found": "commands.providers.model_not_found",
     "write-failed": "commands.providers.write_failed",
+    "handoff-unsupported": "commands.providers.endpoint_behavior_unsupported",
   };
   return {
     tone: "error",
@@ -447,7 +454,15 @@ function endpointEditContext(scope: LoadedProviderPanelScope, connectionId: numb
     endpointUrl: entry.connectionDetails[0]?.endpointUrl ?? "",
     apiStyles: [...new Set(entry.connectionDetails.map((detail) => detail.apiStyle))],
     isPreset: entry.isPreset,
+    vramHandoffEnabled: endpointVramHandoffState(entry),
   };
+}
+
+/** Undefined when the group has no text connection, matching when the edit modal offers the option. */
+function endpointVramHandoffState(entry: EndpointProviderPanelEntry): boolean | undefined {
+  const textDetails = entry.connectionDetails.filter((detail) => detail.capability === "text");
+  if (entry.isPreset || textDetails.length === 0) return undefined;
+  return textDetails.some((detail) => detail.vramHandoff !== null);
 }
 
 async function loadWorkflowJson(url: string): Promise<Record<string, unknown> | null> {
@@ -554,6 +569,8 @@ export function createProvidersInteractionRoute(
       takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("image-supports", nonce)),
     takeCompatFlags: (interactionId, nonce) =>
       takeRawModalCheckboxGroupValues(interactionId, buildProviderModelModalFieldId("compat", nonce)),
+    takeEndpointBehavior: (interactionId, nonce) =>
+      takeRawModalCheckboxGroupValues(interactionId, buildEditEndpointModalFieldId("behavior", nonce)),
     takeVoiceMode: (interactionId, nonce) =>
       takeRawModalSelectValue(interactionId, buildProviderModelModalFieldId("voice-mode", nonce)),
     takeScriptMarkup: (interactionId, nonce) =>
@@ -761,6 +778,10 @@ export function createProvidersInteractionRoute(
         route.action === "model-submit" ? dependencies.takeSupportsInstruct(interaction.id, route.nonce) : undefined;
       const workflowAttachment =
         route.action === "model-submit" ? dependencies.takeWorkflow(interaction.id, route.nonce) : undefined;
+      const selectedEndpointBehavior =
+        route.action === "edit-endpoint-submit"
+          ? (dependencies.takeEndpointBehavior(interaction.id, route.nonce) ?? [])
+          : [];
       const deleteRotation =
         route.action === "edit-provider-submit"
           ? dependencies.takeDeleteRotation(interaction.id, route.nonce) === "delete"
@@ -995,6 +1016,12 @@ export function createProvidersInteractionRoute(
                 ? ""
                 : modal.fields.getTextInputValue(buildEditEndpointModalFieldId("url", route.nonce)),
               authToken: modal.fields.getTextInputValue(buildEditEndpointModalFieldId("auth-token", route.nonce)),
+              // Re-derived from the entry rather than the submission: a group that gained or lost its
+              // text connection since the modal opened must not have its stored value rewritten.
+              unloadDuringComfyUi:
+                endpointVramHandoffState(entry) === undefined
+                  ? undefined
+                  : selectedEndpointBehavior.includes(UNLOAD_DURING_COMFYUI_BEHAVIOR),
             }),
           () => dependencies.resolveScope(interaction, true),
         );

@@ -1,4 +1,4 @@
-import type { CustomEndpointApiStyle, CustomEndpointCapability } from "@/types/db/schema";
+import type { CustomEndpointApiStyle, CustomEndpointCapability, VramHandoffBackend } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
 import type { ImageEndpointSupports } from "@/utils/provider/customImageEndpointSupport";
 import type { SpeechEndpointSettings } from "@/utils/provider/customSpeechEndpointSettings";
@@ -55,6 +55,8 @@ export interface EndpointProviderPanelEntry extends ProviderPanelEntryBase {
     connectionId: number;
     endpointUrl: string;
     apiStyle: CustomEndpointApiStyle;
+    capability: CustomEndpointCapability;
+    vramHandoff: VramHandoffBackend | null;
   }>;
   capabilities: ProviderPanelCapabilitySection[];
 }

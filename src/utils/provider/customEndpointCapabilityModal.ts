@@ -33,7 +33,6 @@ export const ModalFieldId = {
   supports_instruct: "supports_instruct",
   transcription_model: "transcription_model",
   transcription_language: "transcription_language",
-  handoff_strategy: "handoff_strategy",
   endpoint_url: "endpoint_url",
   auth_token: "auth_token",
 } as const;
@@ -61,7 +60,6 @@ export interface ParsedCapabilityModalFields {
   supportsInstruct: boolean;
   transcriptionModel: string | null;
   transcriptionLanguage: string | null;
-  handoffStrategy: "none" | "koboldcpp" | "ollama";
 }
 
 /**
@@ -87,7 +85,6 @@ export function parseCapabilityModalFields(
     supportsInstruct: false,
     transcriptionModel: null,
     transcriptionLanguage: null,
-    handoffStrategy: "none",
   };
 
   switch (capability) {
@@ -100,9 +97,6 @@ export function parseCapabilityModalFields(
       result.supportsStructOutput = selectedCaps.has("structoutput");
       result.strictRoleAlternation = selectedCaps.has("rolealt");
       result.supportsPrefixCompletion = selectedCaps.has("prefixcompletion");
-      const handoffStrategy = values[ModalFieldId.handoff_strategy];
-      result.handoffStrategy =
-        handoffStrategy === "koboldcpp" || handoffStrategy === "ollama" ? handoffStrategy : "none";
       break;
     }
     case "embedding": {
@@ -210,44 +204,6 @@ export function buildCapabilityAddModalComponents(
           ],
           minValues: 0,
           required: false,
-        },
-        {
-          kind: "radioGroup" as const,
-          customId: ModalFieldId.handoff_strategy,
-          labelKey: "commands.config.custom_models.capability_modal.handoff_strategy_label",
-          descriptionKey: "commands.config.custom_models.capability_modal.handoff_strategy_description",
-          options: [
-            {
-              value: "none",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_none"),
-              default: true,
-            },
-            {
-              value: "koboldcpp",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_koboldcpp"),
-              description: localizer(
-                locale,
-                "commands.config.custom_models.capability_modal.handoff_koboldcpp_description",
-              ),
-            },
-            {
-              value: "ollama",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_ollama"),
-              description: localizer(
-                locale,
-                "commands.config.custom_models.capability_modal.handoff_ollama_description",
-              ),
-            },
-            {
-              value: "other",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_other"),
-              description: localizer(
-                locale,
-                "commands.config.custom_models.capability_modal.handoff_other_description",
-              ),
-            },
-          ],
-          required: true,
         },
       ];
 
@@ -403,7 +359,6 @@ export interface EditModalExistingValues {
   supportsInstruct?: boolean;
   transcriptionModel?: string | null;
   transcriptionLanguage?: string | null;
-  handoffStrategy?: string | null;
 }
 
 /**
@@ -502,46 +457,6 @@ export function buildCapabilityEditModalComponents(
           required: false,
         },
         urlComponent,
-        {
-          kind: "radioGroup" as const,
-          customId: ModalFieldId.handoff_strategy,
-          labelKey: "commands.config.custom_models.capability_modal.handoff_strategy_label",
-          descriptionKey: "commands.config.custom_models.capability_modal.handoff_strategy_description",
-          options: [
-            {
-              value: "none",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_none"),
-              default: !existing.handoffStrategy || existing.handoffStrategy === "none",
-            },
-            {
-              value: "koboldcpp",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_koboldcpp"),
-              description: localizer(
-                locale,
-                "commands.config.custom_models.capability_modal.handoff_koboldcpp_description",
-              ),
-              default: existing.handoffStrategy === "koboldcpp",
-            },
-            {
-              value: "ollama",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_ollama"),
-              description: localizer(
-                locale,
-                "commands.config.custom_models.capability_modal.handoff_ollama_description",
-              ),
-              default: existing.handoffStrategy === "ollama",
-            },
-            {
-              value: "other",
-              label: localizer(locale, "commands.config.custom_models.capability_modal.handoff_other"),
-              description: localizer(
-                locale,
-                "commands.config.custom_models.capability_modal.handoff_other_description",
-              ),
-            },
-          ],
-          required: true,
-        },
       ];
 
     case "embedding":

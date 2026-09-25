@@ -97,23 +97,6 @@ Fill in:
   Understanding** only for a vision model; **Structured Output** if the model handles JSON
   schemas well. For our example, Gemma 4 supports all of them, so tick them all.
 
-### Optional VRAM handoff for ComfyUI
-
-If the text model and ComfyUI share a GPU, enable exactly one VRAM handoff option in the text
-endpoint's **Enabled Capabilities** list. TomoriBot unloads the text model before a ComfyUI image
-or video job and makes later text requests wait until the GPU is ready again.
-
-- **Ollama:** select **Ollama VRAM Handoff**. The configured URL must expose Ollama's native
-  `/api/generate` route (the normal local Ollama service does); TomoriBot sends `keep_alive: 0`
-  before the media job, and Ollama reloads the model on the next text request.
-- **KoboldCpp:** select **KoboldCpp VRAM Handoff**, start KoboldCpp with `--admin` and
-  `--admindir`, and configure the endpoint's `auth_token` with the password accepted by its admin
-  reload API. TomoriBot uses that API to unload the model and restore the configured initial model.
-
-Do not enable a handoff for remote/proxy-backed text endpoints or select both strategies.
-For **Other Local Endpoint**, TomoriBot does not attempt automatic model unloading because there
-is no shared unload/reload API for generic OpenAI-compatible servers.
-
 TomoriBot validates the connection when you save it. If it reports the endpoint is unreachable, the
 usual cause is a `localhost`/Docker mismatch or a missing/extra `/v1` (see
 [gotchas](#notes--gotchas)).
@@ -133,6 +116,24 @@ Select the saved endpoint and use its model dropdown to add an Embedding model (
 `ollama pull nomic-embed-text`, Model Name `nomic-embed-text:latest`). RAG features also need
 pgvector installed in Postgres. You can see the [manual setup](/self-hosting/manual-setup/) guide here.
 
+## 4. (Optional) Share one GPU with ComfyUI
+
+If the text model and ComfyUI run on the same GPU, TomoriBot can unload the text model while a
+ComfyUI image or video job runs. Text replies that arrive during the job wait until the GPU is
+free again.
+
+Open the saved endpoint, press **Edit Endpoint**, and tick **Unload model during ComfyUI jobs**
+under **Endpoint Behavior**. TomoriBot checks which server is at the URL when you save:
+
+- **Ollama:** works as installed. TomoriBot asks Ollama to unload the model before the job, and
+  Ollama reloads it on the next text request.
+- **KoboldCpp:** start KoboldCpp with `--admin` and `--admindir`, and set the endpoint's auth
+  token to the admin password. TomoriBot uses KoboldCpp's admin reload API to unload the model
+  and load it again afterwards.
+
+Any other server is refused when you save, because generic OpenAI-compatible servers have no
+shared way to unload a model.
+
 ## Other servers
 
 All of these use the same flow, only the URL and a couple of notes change.
@@ -142,8 +143,8 @@ All of these use the same flow, only the URL and a couple of notes change.
 - Start with OpenAI-compat enabled (built in). Default: `http://127.0.0.1:5001/v1`.
 - API Compatibility: `OpenAI-Compatible`. `endpoint_url`: `http://127.0.0.1:5001/v1`.
 - Honors the `Context Window Override` like Ollama.
-- For **KoboldCpp VRAM Handoff**, also launch with `--admin` and `--admindir`; the endpoint token
-  must authenticate the `/api/admin/reload_config` requests used to unload and reload the model.
+- To unload the model during ComfyUI jobs, also launch with `--admin` and `--admindir` (see
+  [Share one GPU with ComfyUI](#4-optional-share-one-gpu-with-comfyui)).
 - Loads GGUF models; the Model Name is whatever the loaded model reports (often the file
   stem), check KoboldCPP's `/v1/models` response.
 
