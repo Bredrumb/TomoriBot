@@ -56,7 +56,7 @@ import {
 import { getProviderDisplayName } from "@/utils/provider/providerInfoRegistry";
 import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { ProviderFactory } from "@/utils/provider/providerFactory";
-import { decryptApiKey, deleteOptApiKey, encryptApiKey, storeOptApiKey } from "@/utils/security/crypto";
+import { deleteOptApiKey, encryptApiKey, storeOptApiKey } from "@/utils/security/crypto";
 import {
   buildSavedProviderConfigFromExistingOrDefaults,
   buildUserSavedProviderConfigFromExistingOrDefaults,
@@ -65,7 +65,11 @@ import {
   activatePersonalProviderTextModel,
   activateServerTextModelFromSavedConfig,
 } from "@/utils/provider/providerActivation";
-import { registerCustomEndpoint, setActiveCustomEndpoint } from "@/utils/provider/customEndpointService";
+import {
+  loadCustomConnectionCredential,
+  registerCustomEndpoint,
+  setActiveCustomEndpoint,
+} from "@/utils/provider/customEndpointService";
 import {
   normalizeCustomEndpointUrlForStorage,
   validateCustomEndpointReachability,
@@ -1491,23 +1495,6 @@ async function editServerProvider(input: EditProviderInput): Promise<EditProvide
   return changed.length > 0 ? { status: "success", entryId, changed } : { status: "unchanged", entryId };
 }
 
-async function loadConnectionCredential(connection: CustomEndpointConnectionRow): Promise<string | null> {
-  if (!connection.requires_auth) return null;
-  const provider = buildCustomProviderName(connection.connection_id);
-  const config =
-    connection.server_id != null
-      ? await llmProviderRepo.loadSavedProviderConfig(connection.server_id, provider)
-      : connection.user_id != null
-        ? await llmProviderRepo.loadUserSavedProviderConfig(connection.user_id, provider)
-        : null;
-  if (!config?.api_key) return null;
-  try {
-    return await decryptApiKey(config.api_key, config.key_version ?? 1);
-  } catch {
-    return null;
-  }
-}
-
 async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpointResult> {
   const userId = personalOwnerId(input);
   const representativeId = Number(input.entryId.slice("endpoint:".length));
@@ -1545,7 +1532,7 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
 
   if (changesUrl) {
     for (const connection of group) {
-      const credential = authToken || (await loadConnectionCredential(connection));
+      const credential = authToken || (await loadCustomConnectionCredential(connection));
       const reachable = await validateCustomEndpointReachability({
         apiStyle: connection.api_style,
         endpointUrl,
@@ -1576,7 +1563,7 @@ async function editServerEndpoint(input: EditEndpointInput): Promise<EditEndpoin
       backend = await detectVramHandoffBackend({
         apiStyle: textConnection.api_style,
         endpointUrl: changesUrl ? endpointUrl : textConnection.endpoint_url,
-        apiKey: authToken || (await loadConnectionCredential(textConnection)),
+        apiKey: authToken || (await loadCustomConnectionCredential(textConnection)),
       });
       if (!backend) return { status: "handoff-unsupported" };
     }

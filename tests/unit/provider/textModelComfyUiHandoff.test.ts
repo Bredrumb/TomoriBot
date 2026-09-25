@@ -1,129 +1,175 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import type { CustomEndpointConnectionRow, CustomEndpointRow, TomoriState } from "@/types/db/schema";
+import { afterAll, afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import type { CustomEndpointConnectionRow, TomoriState, VramHandoffBackend } from "@/types/db/schema";
 import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
-import * as realEndpointService from "@/utils/provider/customEndpointService";
-import * as realCredentialResolver from "@/utils/provider/credentialResolver";
-import * as realCustomProviderUtils from "@/utils/provider/customProviderUtils";
-import * as realRemoteFetch from "@/utils/security/userRemoteFetch";
-import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
+import { acquireTextModelLease, beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
+import { stubLogMembers } from "../../helpers/mockSurface";
 
-const resolveEndpointMock = mock(async () => currentEndpoint);
-const resolveCredentialsMock = mock(async () => ({ provider: "custom-test", apiKey: "admin-token" }));
-const isCustomProviderMock = mock(() => true);
-const remoteFetchMock = mock(async () => new Response("{}", { status: 200 }));
+stubLogMembers({ metric: () => {}, error: async () => {} });
 
-const scopedMock = createScopedModuleMocker(mock, {
-  "@/utils/provider/customEndpointService": realEndpointService,
-  "@/utils/provider/credentialResolver": realCredentialResolver,
-  "@/utils/provider/customProviderUtils": realCustomProviderUtils,
-  "@/utils/security/userRemoteFetch": realRemoteFetch,
-});
+// An IP literal skips DNS in the SSRF gate, so the stubbed global fetch is the only network hop.
+const ENDPOINT_URL = "https://8.8.8.8:5001/v1";
 
-scopedMock.module("@/utils/provider/customEndpointService", () => ({
-  ...realEndpointService,
-  resolveCustomEndpointForProvider: resolveEndpointMock,
-}));
-scopedMock.module("@/utils/provider/credentialResolver", () => ({
-  ...realCredentialResolver,
-  resolveCapabilityCredentials: resolveCredentialsMock,
-}));
-scopedMock.module("@/utils/provider/customProviderUtils", () => ({
-  ...realCustomProviderUtils,
-  isCustomProvider: isCustomProviderMock,
-}));
-scopedMock.module("@/utils/security/userRemoteFetch", () => ({
-  ...realRemoteFetch,
-  fetchUserRemoteUrl: remoteFetchMock,
-}));
-stubLogMembers({ info: () => {}, warn: () => {}, error: async () => {} });
+let backend: VramHandoffBackend = "ollama";
+let nextConnectionId = 1;
+let connectionId = 0;
 
-// The strategy lives on the connection row, which the module loads by the endpoint's connection_id.
 const connectionSpy = spyOn(llmProviderRepo, "loadCustomEndpointConnectionById").mockImplementation(
-  async (connectionId) =>
-    ({ connection_id: connectionId, behavior: { vram_handoff: currentStrategy } }) as CustomEndpointConnectionRow,
+  async (id) =>
+    ({
+      connection_id: id,
+      endpoint_url: ENDPOINT_URL,
+      requires_auth: false,
+      behavior: { vram_handoff: backend },
+    }) as CustomEndpointConnectionRow,
 );
-afterAll(() => connectionSpy.mockRestore());
-
-let beginTextModelHandoffBeforeComfyUi: typeof import("@/utils/provider/textModelComfyUiHandoff").beginTextModelHandoffBeforeComfyUi;
-let waitForTextModelHandoffBeforeTextRequest: typeof import("@/utils/provider/textModelComfyUiHandoff").waitForTextModelHandoffBeforeTextRequest;
-let currentEndpoint: CustomEndpointRow | null = null;
-let currentStrategy: "koboldcpp" | "ollama" = "ollama";
-
-beforeAll(async () => {
-  ({ beginTextModelHandoffBeforeComfyUi, waitForTextModelHandoffBeforeTextRequest } = await import(
-    "@/utils/provider/textModelComfyUiHandoff"
-  ));
+const endpointSpy = spyOn(llmProviderRepo, "loadCustomEndpointByConnection").mockImplementation(async () => null);
+afterAll(() => {
+  connectionSpy.mockRestore();
+  endpointSpy.mockRestore();
 });
 
-beforeEach(() => {
-  resolveEndpointMock.mockClear();
-  resolveCredentialsMock.mockClear();
-  remoteFetchMock.mockClear();
-});
+interface KoboldBehavior {
+  unload?: "accept" | "reject" | "throw";
+}
 
-function endpoint(id: number, strategy: "koboldcpp" | "ollama"): CustomEndpointRow {
-  currentStrategy = strategy;
-  return {
-    custom_endpoint_id: id,
-    connection_id: id,
-    endpoint_url: "http://127.0.0.1:11434/v1",
-    model_name: "test-model",
-    extra_config: {},
-  } as CustomEndpointRow;
+/** A fake backend that records control calls and tracks whether its model is loaded. */
+function stubBackend(kobold: KoboldBehavior = {}) {
+  const calls: string[] = [];
+  let loaded = true;
+  const spy = spyOn(globalThis, "fetch").mockImplementation(async (input: unknown, init?: RequestInit) => {
+    const { pathname } = new URL(String(input instanceof Request ? input.url : input));
+    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+    if (pathname === "/api/generate") {
+      calls.push(`ollama keep_alive=${body.keep_alive}`);
+      return Response.json({});
+    }
+    if (pathname === "/api/admin/reload_config") {
+      calls.push(`kobold ${body.filename}`);
+      if (body.filename === "unload_model") {
+        if (kobold.unload === "throw") {
+          loaded = false;
+          throw new Error("timed out after applying");
+        }
+        if (kobold.unload === "reject") return new Response("unauthorized", { status: 401 });
+        loaded = false;
+      } else {
+        loaded = true;
+      }
+      return Response.json({ success: true });
+    }
+    if (pathname === "/api/extra/version") return Response.json({ result: "KoboldCpp", llm: loaded });
+    return new Response("not found", { status: 404 });
+  });
+  return { calls, spy, isLoaded: () => loaded };
 }
 
 function state(): TomoriState {
   return {
     server_id: 1,
-    llm: { llm_provider: "custom-test", llm_id: 1, llm_codename: "test-model" },
+    llm: { llm_provider: `custom:${connectionId}`, llm_id: 1, llm_codename: "test-model" },
     config: { custom_model_name: null },
-  } as TomoriState;
+  } as unknown as TomoriState;
 }
 
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const restore: Array<{ mockRestore: () => void }> = [];
+beforeEach(() => {
+  // A fresh connection per test keeps the module's per-connection gates independent.
+  connectionId = nextConnectionId++;
+});
+afterEach(() => {
+  for (const spy of restore.splice(0)) spy.mockRestore();
+});
+
 describe("local text-model ComfyUI handoff", () => {
-  it("evicts Ollama, holds text requests during the media lease, then releases them", async () => {
-    currentEndpoint = endpoint(101, "ollama");
-    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), generationKind: "image" });
+  it("unloads Ollama, holds new text requests during the job, and releases them after", async () => {
+    backend = "ollama";
+    const server = stubBackend();
+    restore.push(server.spy);
 
-    expect(remoteFetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:11434/api/generate",
-      expect.objectContaining({ body: JSON.stringify({ model: "test-model", keep_alive: 0, stream: false }) }),
-    );
+    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    expect(server.calls).toEqual(["ollama keep_alive=0"]);
 
-    let textRequestReleased = false;
-    const waitingTextRequest = waitForTextModelHandoffBeforeTextRequest(101).then(() => {
-      textRequestReleased = true;
+    let textStarted = false;
+    const pendingText = acquireTextModelLease(connectionId).then((release) => {
+      textStarted = true;
+      return release;
     });
-    await Promise.resolve();
-    expect(textRequestReleased).toBe(false);
+    await flush();
+    expect(textStarted).toBe(false);
 
     await lease.restore();
-    await waitingTextRequest;
-    expect(textRequestReleased).toBe(true);
+    (await pendingText)();
+    expect(textStarted).toBe(true);
   });
 
-  it("unloads and reloads KoboldCpp only after the final lease releases", async () => {
-    currentEndpoint = endpoint(102, "koboldcpp");
-    let loaded = true;
-    const reloads: string[] = [];
-    remoteFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.endsWith("/api/admin/reload_config")) {
-        const filename = JSON.parse(String(init?.body)).filename as string;
-        reloads.push(filename);
-        loaded = filename === "initial_model";
-        return new Response(JSON.stringify({ success: true }));
-      }
-      return new Response(JSON.stringify({ llm: loaded }));
-    });
+  it("waits for a reply already streaming before unloading the model", async () => {
+    backend = "ollama";
+    const server = stubBackend();
+    restore.push(server.spy);
 
-    const first = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), generationKind: "video" });
-    const second = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), generationKind: "video" });
-    expect(reloads).toEqual(["unload_model"]);
+    const releaseText = await acquireTextModelLease(connectionId);
+    const pendingLease = beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    await flush();
+    expect(server.calls).toEqual([]);
+
+    releaseText();
+    const lease = await pendingLease;
+    expect(server.calls).toEqual(["ollama keep_alive=0"]);
+    await lease.restore();
+  });
+
+  it("reloads KoboldCpp only after the last concurrent ComfyUI job finishes", async () => {
+    backend = "koboldcpp";
+    const server = stubBackend({ unload: "accept" });
+    restore.push(server.spy);
+
+    const first = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    const second = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    expect(server.calls).toEqual(["kobold unload_model"]);
 
     await first.restore();
-    expect(reloads).toEqual(["unload_model"]);
+    expect(server.isLoaded()).toBe(false);
     await second.restore();
-    await waitForTextModelHandoffBeforeTextRequest(102);
-    expect(reloads).toEqual(["unload_model", "initial_model"]);
+    expect(server.calls).toEqual(["kobold unload_model", "kobold initial_model"]);
+    expect(server.isLoaded()).toBe(true);
+  });
+
+  it("rolls back a KoboldCpp unload whose outcome is unknown and reopens text requests", async () => {
+    backend = "koboldcpp";
+    const server = stubBackend({ unload: "throw" });
+    restore.push(server.spy);
+
+    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    expect(server.calls).toEqual(["kobold unload_model", "kobold initial_model"]);
+    expect(server.isLoaded()).toBe(true);
+
+    (await acquireTextModelLease(connectionId))();
+    await lease.restore();
+    expect(server.calls).toHaveLength(2);
+  });
+
+  it("does not roll back when KoboldCpp explicitly refuses the unload", async () => {
+    backend = "koboldcpp";
+    const server = stubBackend({ unload: "reject" });
+    restore.push(server.spy);
+
+    await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    expect(server.calls).toEqual(["kobold unload_model"]);
+    (await acquireTextModelLease(connectionId))();
+  });
+
+  it("lets an aborted text request stop waiting for the handoff", async () => {
+    backend = "ollama";
+    const server = stubBackend();
+    restore.push(server.spy);
+
+    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    const controller = new AbortController();
+    const pendingText = acquireTextModelLease(connectionId, controller.signal);
+    controller.abort(new Error("killed"));
+    await expect(pendingText).rejects.toThrow("killed");
+    await lease.restore();
   });
 });

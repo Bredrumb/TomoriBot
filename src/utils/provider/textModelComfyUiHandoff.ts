@@ -1,87 +1,170 @@
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
-import type { CustomEndpointApiStyle, CustomEndpointRow, TomoriState, VramHandoffBackend } from "@/types/db/schema";
+import type {
+  CustomEndpointApiStyle,
+  CustomEndpointConnectionRow,
+  TomoriState,
+  VramHandoffBackend,
+} from "@/types/db/schema";
 import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import { log } from "@/utils/misc/logger";
-import { resolveCapabilityCredentials } from "@/utils/provider/credentialResolver";
-import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
-import { isCustomProvider } from "@/utils/provider/customProviderUtils";
+import {
+  loadCustomConnectionCredential,
+  resolveCustomEndpointForProvider,
+} from "@/utils/provider/customEndpointService";
+import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
-
-type ComfyUiGenerationKind = "image" | "video";
-export type TextModelHandoffStrategy = "none" | "koboldcpp" | "ollama";
 
 export interface TextModelHandoffLease {
   restore(): Promise<void>;
 }
 
-type HandoffState = {
-  activeLeases: number;
-  unavailable: Promise<void> | null;
-  resolveUnavailable: (() => void) | null;
+/**
+ * One gate per backend connection, shaped as a readers/writer lock: text streams are readers that
+ * may overlap, and a ComfyUI job is the writer that unloads the model. The writer closes the gate
+ * before waiting for readers, so a steady flow of new text requests cannot postpone the unload
+ * forever.
+ */
+type ConnectionGate = {
+  readers: number;
+  onReadersDrained: (() => void) | null;
+  mediaLeases: number;
+  closed: Promise<void> | null;
+  open: (() => void) | null;
 };
 
-const handoffs = new Map<string, HandoffState>();
-const locks = new Map<string, Promise<void>>();
+const gates = new Map<number, ConnectionGate>();
+const writerQueues = new Map<number, Promise<void>>();
 
 const NO_HANDOFF: TextModelHandoffLease = { restore: async () => {} };
 
-async function withLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
-  const previous = locks.get(key) ?? Promise.resolve();
+/** Bounds each control request, because a stalled backend must not hold media jobs or text replies. */
+const CONTROL_REQUEST_TIMEOUT_MS = 15_000;
+const BACKEND_PROBE_TIMEOUT_MS = 5_000;
+/** How long a media job waits for in-flight replies before it gives up on unloading for this job. */
+const READER_DRAIN_TIMEOUT_MS = 120_000;
+const KOBOLDCPP_UNLOAD_CONFIRM_MS = 30_000;
+const KOBOLDCPP_RELOAD_CONFIRM_MS = 60_000;
+
+function getGate(connectionId: number): ConnectionGate {
+  const existing = gates.get(connectionId);
+  if (existing) return existing;
+  const created: ConnectionGate = { readers: 0, onReadersDrained: null, mediaLeases: 0, closed: null, open: null };
+  gates.set(connectionId, created);
+  return created;
+}
+
+function closeGate(gate: ConnectionGate): void {
+  if (gate.closed) return;
+  gate.closed = new Promise<void>((resolve) => {
+    gate.open = resolve;
+  });
+}
+
+function openGate(connectionId: number, gate: ConnectionGate): void {
+  gate.open?.();
+  gate.closed = null;
+  gate.open = null;
+  if (gate.readers === 0 && gate.mediaLeases === 0) gates.delete(connectionId);
+}
+
+/** Serializes writers per connection so two media jobs never unload or reload concurrently. */
+async function withWriterQueue<T>(connectionId: number, operation: () => Promise<T>): Promise<T> {
+  const previous = writerQueues.get(connectionId) ?? Promise.resolve();
   let release!: () => void;
   const current = new Promise<void>((resolve) => {
     release = resolve;
   });
   const queued = previous.then(() => current);
-  locks.set(key, queued);
+  writerQueues.set(connectionId, queued);
   await previous;
   try {
     return await operation();
   } finally {
     release();
-    if (locks.get(key) === queued) locks.delete(key);
+    if (writerQueues.get(connectionId) === queued) writerQueues.delete(connectionId);
   }
 }
 
-function getState(key: string): HandoffState {
-  const existing = handoffs.get(key);
-  if (existing) return existing;
-  const created: HandoffState = { activeLeases: 0, unavailable: null, resolveUnavailable: null };
-  handoffs.set(key, created);
-  return created;
-}
-
-function markUnavailable(state: HandoffState): void {
-  if (state.unavailable) return;
-  state.unavailable = new Promise<void>((resolve) => {
-    state.resolveUnavailable = resolve;
+function waitForReadersToDrain(gate: ConnectionGate): Promise<boolean> {
+  if (gate.readers === 0) return Promise.resolve(true);
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      gate.onReadersDrained = null;
+      resolve(false);
+    }, READER_DRAIN_TIMEOUT_MS);
+    gate.onReadersDrained = () => {
+      clearTimeout(timer);
+      gate.onReadersDrained = null;
+      resolve(true);
+    };
   });
 }
 
-function markAvailable(key: string, state: HandoffState): void {
-  state.resolveUnavailable?.();
-  state.unavailable = null;
-  state.resolveUnavailable = null;
-  if (state.activeLeases === 0) handoffs.delete(key);
-}
-
-export async function waitForTextModelHandoffBeforeTextRequest(endpointId?: number | null): Promise<void> {
-  if (endpointId == null) return;
-  const unavailable = handoffs.get(String(endpointId))?.unavailable;
-  if (!unavailable) return;
-  log.info("Text request queued while its local model is handed off to ComfyUI.");
-  await unavailable;
+function abortableWait(promise: Promise<void>, signal?: AbortSignal): Promise<void> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      () => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 /**
- * Reads the handoff from the connection row, not the model row: the setting describes the server,
- * and the JOINed endpoint row does not carry the connection's `behavior` column.
+ * Holds a text stream's claim on its local model for the stream's whole lifetime.
+ *
+ * Waits while the model is handed off to ComfyUI, then counts the stream as a reader so a media job
+ * that starts afterwards waits for it instead of unloading the model mid-reply. The returned release
+ * is idempotent and must run when the stream ends for any reason.
  */
-async function readHandoffStrategy(endpoint: CustomEndpointRow): Promise<TextModelHandoffStrategy> {
-  const connection = await llmProviderRepo.loadCustomEndpointConnectionById(endpoint.connection_id);
-  return connection?.behavior?.vram_handoff ?? "none";
+export async function acquireTextModelLease(
+  connectionId: number | null | undefined,
+  signal?: AbortSignal,
+): Promise<() => void> {
+  if (connectionId == null) return () => {};
+  let gate = getGate(connectionId);
+  while (gate.closed) {
+    await abortableWait(gate.closed, signal);
+    gate = getGate(connectionId);
+  }
+  gate.readers += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    gate.readers -= 1;
+    if (gate.readers === 0) {
+      gate.onReadersDrained?.();
+      if (!gate.closed && gate.mediaLeases === 0) gates.delete(connectionId);
+    }
+  };
 }
 
-const BACKEND_PROBE_TIMEOUT_MS = 5_000;
+function replaceEndpointPath(endpointUrl: string, pathname: string): string {
+  const url = new URL(endpointUrl);
+  url.pathname = pathname;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+async function readJson(response: Response): Promise<Record<string, unknown> | null> {
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  return payload !== null && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+}
 
 /**
  * Identifies which model unload API the server behind a text connection supports.
@@ -98,16 +181,12 @@ export async function detectVramHandoffBackend(params: {
   const headers = buildCustomHeaders(params.apiKey ?? "");
   const probe = async (pathname: string): Promise<Record<string, unknown> | null> => {
     try {
-      const response = await fetchUserRemoteUrl(replaceEndpointPath(params.endpointUrl, pathname), {
-        headers,
-        signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        await response.body?.cancel().catch(() => undefined);
-        return null;
-      }
-      const payload: unknown = await response.json().catch(() => null);
-      return payload !== null && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+      return await readJson(
+        await fetchUserRemoteUrl(replaceEndpointPath(params.endpointUrl, pathname), {
+          headers,
+          signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
+        }),
+      );
     } catch {
       return null;
     }
@@ -119,28 +198,16 @@ export async function detectVramHandoffBackend(params: {
   return typeof ollama?.version === "string" ? "ollama" : null;
 }
 
-function endpointKey(endpoint: CustomEndpointRow): string | null {
-  return endpoint.custom_endpoint_id == null ? null : String(endpoint.custom_endpoint_id);
-}
-
-function replaceEndpointPath(endpointUrl: string, pathname: string): string {
-  const url = new URL(endpointUrl);
-  url.pathname = pathname;
-  url.search = "";
-  url.hash = "";
-  return url.toString();
-}
-
-async function waitForKoboldCppLlmState(
-  endpointUrl: string,
-  expectedLoaded: boolean,
-  timeoutMs: number,
-): Promise<boolean> {
+async function waitForKoboldCppLlmState(endpointUrl: string, expectedLoaded: boolean, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const response = await fetchUserRemoteUrl(replaceEndpointPath(endpointUrl, "/api/extra/version"));
-      if (response.ok && ((await response.json()) as { llm?: boolean }).llm === expectedLoaded) return true;
+      const payload = await readJson(
+        await fetchUserRemoteUrl(replaceEndpointPath(endpointUrl, "/api/extra/version"), {
+          signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
+        }),
+      );
+      if (payload?.llm === expectedLoaded) return true;
     } catch {
       // KoboldCpp can briefly drop connections while replacing its worker process.
     }
@@ -154,150 +221,156 @@ async function requestKoboldCppModelState(params: {
   apiKey: string;
   filename: "initial_model" | "unload_model";
 }): Promise<boolean> {
-  const response = await fetchUserRemoteUrl(replaceEndpointPath(params.endpointUrl, "/api/admin/reload_config"), {
-    method: "POST",
-    headers: buildCustomHeaders(params.apiKey),
-    body: JSON.stringify({ filename: params.filename }),
-  });
-  if (!response.ok) return false;
-  return ((await response.json()) as { success?: boolean }).success === true;
+  const payload = await readJson(
+    await fetchUserRemoteUrl(replaceEndpointPath(params.endpointUrl, "/api/admin/reload_config"), {
+      method: "POST",
+      headers: buildCustomHeaders(params.apiKey),
+      body: JSON.stringify({ filename: params.filename }),
+      signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
+    }),
+  );
+  return payload?.success === true;
 }
 
-async function prepareKoboldCpp(
-  endpoint: CustomEndpointRow,
-  apiKey: string,
-  kind: ComfyUiGenerationKind,
-): Promise<boolean> {
-  log.info(`KoboldCpp unload requested before ComfyUI ${kind} generation.`);
-  const accepted = await requestKoboldCppModelState({
-    endpointUrl: endpoint.endpoint_url,
-    apiKey,
-    filename: "unload_model",
-  });
-  if (!accepted || !(await waitForKoboldCppLlmState(endpoint.endpoint_url, false, 30_000))) {
-    log.warn(`KoboldCpp did not confirm its text-model unload before ComfyUI ${kind} generation.`);
-    return false;
-  }
-  return true;
-}
-
-async function restoreKoboldCpp(
-  endpoint: CustomEndpointRow,
-  apiKey: string,
-  kind: ComfyUiGenerationKind,
-): Promise<void> {
+async function restoreKoboldCpp(endpointUrl: string, apiKey: string): Promise<boolean> {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      log.info(`KoboldCpp reload started after ComfyUI ${kind} generation (attempt ${attempt}/3).`);
-      const accepted = await requestKoboldCppModelState({
-        endpointUrl: endpoint.endpoint_url,
-        apiKey,
-        filename: "initial_model",
-      });
-      if (accepted && (await waitForKoboldCppLlmState(endpoint.endpoint_url, true, 60_000))) return;
-    } catch (error) {
-      log.warn(`KoboldCpp reload attempt ${attempt}/3 failed after ComfyUI ${kind} generation`, error);
+      const accepted = await requestKoboldCppModelState({ endpointUrl, apiKey, filename: "initial_model" });
+      if (accepted && (await waitForKoboldCppLlmState(endpointUrl, true, KOBOLDCPP_RELOAD_CONFIRM_MS))) return true;
+    } catch {
+      // Retried below; the final outcome is reported once by the caller.
     }
     if (attempt < 3) await Bun.sleep(2_000);
   }
-  log.error(`KoboldCpp reload failed after ComfyUI ${kind} generation; allowing normal text requests to retry it.`);
+  return false;
 }
 
-async function prepareOllama(
-  endpoint: CustomEndpointRow,
-  apiKey: string,
-  model: string,
-  kind: ComfyUiGenerationKind,
-): Promise<boolean> {
-  const response = await fetchUserRemoteUrl(replaceEndpointPath(endpoint.endpoint_url, "/api/generate"), {
-    method: "POST",
-    headers: buildCustomHeaders(apiKey),
-    body: JSON.stringify({ model, keep_alive: 0, stream: false }),
-  });
-  if (!response.ok) {
-    log.warn(`Ollama model unload before ComfyUI ${kind} failed: ${response.status}.`);
+/**
+ * Unloads the KoboldCpp model and confirms it. An unconfirmed unload is rolled back, because a
+ * request that timed out may still have been applied, and releasing text requests against an
+ * unloaded model would fail every reply until someone reloads it by hand.
+ */
+async function prepareKoboldCpp(endpointUrl: string, apiKey: string): Promise<boolean> {
+  let outcome: "accepted" | "rejected" | "unknown";
+  try {
+    outcome = (await requestKoboldCppModelState({ endpointUrl, apiKey, filename: "unload_model" }))
+      ? "accepted"
+      : "rejected";
+  } catch {
+    outcome = "unknown";
+  }
+  // An explicit refusal (bad admin password, admin mode off) changed nothing, so there is nothing to roll back.
+  if (outcome === "rejected") return false;
+  if (outcome === "accepted" && (await waitForKoboldCppLlmState(endpointUrl, false, KOBOLDCPP_UNLOAD_CONFIRM_MS))) {
+    return true;
+  }
+  if (!(await restoreKoboldCpp(endpointUrl, apiKey))) {
+    log.error("KoboldCpp unload was not confirmed and its rollback reload also failed.");
+  }
+  return false;
+}
+
+async function prepareOllama(endpointUrl: string, apiKey: string, model: string): Promise<boolean> {
+  try {
+    const response = await fetchUserRemoteUrl(replaceEndpointPath(endpointUrl, "/api/generate"), {
+      method: "POST",
+      headers: buildCustomHeaders(apiKey),
+      body: JSON.stringify({ model, keep_alive: 0, stream: false }),
+      signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
+    });
+    await response.body?.cancel().catch(() => undefined);
+    return response.ok;
+  } catch {
     return false;
   }
-  return true;
 }
 
-function createLease(params: {
-  key: string;
-  state: HandoffState;
-  endpoint: CustomEndpointRow;
+function recordHandoff(backend: VramHandoffBackend, outcome: string): void {
+  log.metric("comfyui_vram_handoff", { backend, outcome });
+}
+
+function createMediaLease(params: {
+  connectionId: number;
+  gate: ConnectionGate;
+  connection: CustomEndpointConnectionRow;
   apiKey: string;
-  strategy: Exclude<TextModelHandoffStrategy, "none">;
-  kind: ComfyUiGenerationKind;
+  backend: VramHandoffBackend;
 }): TextModelHandoffLease {
   let released = false;
   return {
-    restore: async () => {
-      await withLock(params.key, async () => {
+    restore: () =>
+      withWriterQueue(params.connectionId, async () => {
         if (released) return;
         released = true;
-        params.state.activeLeases = Math.max(0, params.state.activeLeases - 1);
-        if (params.state.activeLeases > 0) return;
-        if (params.strategy === "ollama") {
-          markAvailable(params.key, params.state);
-          return;
+        params.gate.mediaLeases -= 1;
+        if (params.gate.mediaLeases > 0) return;
+        // Ollama reloads lazily on the next request, so only KoboldCpp needs an explicit reload.
+        if (params.backend === "koboldcpp") {
+          const restored = await restoreKoboldCpp(params.connection.endpoint_url, params.apiKey);
+          if (!restored) {
+            log.error("KoboldCpp reload failed after a ComfyUI job; text replies will fail until it is reloaded.");
+            recordHandoff(params.backend, "restore_failed");
+          }
         }
-        void restoreKoboldCpp(params.endpoint, params.apiKey, params.kind).finally(() => {
-          markAvailable(params.key, params.state);
-        });
-      });
-    },
+        openGate(params.connectionId, params.gate);
+      }),
   };
 }
 
-/** Begin an explicit local text-model VRAM handoff before a ComfyUI job. */
+/**
+ * Unloads the active local text model before a ComfyUI job when its connection opted in.
+ *
+ * Never throws and never unloads under an in-flight reply: when replies do not finish in time, or
+ * the backend does not confirm, the job runs without a handoff.
+ */
 export async function beginTextModelHandoffBeforeComfyUi(params: {
   tomoriState: TomoriState;
-  generationKind: ComfyUiGenerationKind;
-  userId?: number | null;
 }): Promise<TextModelHandoffLease> {
-  const provider = params.tomoriState.llm.llm_provider;
-  if (!isCustomProvider(provider)) return NO_HANDOFF;
-  const endpoint = await resolveCustomEndpointForProvider(provider, "text", params.tomoriState.llm.llm_id ?? null);
-  if (!endpoint) return NO_HANDOFF;
-  const strategy = await readHandoffStrategy(endpoint);
-  const key = endpointKey(endpoint);
-  if (strategy === "none" || !key) return NO_HANDOFF;
+  const connectionId = parseCustomProvider(params.tomoriState.llm.llm_provider)?.connectionId;
+  if (connectionId == null) return NO_HANDOFF;
+  const connection = await llmProviderRepo.loadCustomEndpointConnectionById(connectionId);
+  const backend = connection?.behavior?.vram_handoff;
+  if (!connection || !backend) return NO_HANDOFF;
+  const apiKey = (await loadCustomConnectionCredential(connection)) ?? "";
 
-  let apiKey = "";
-  try {
-    const credentials = await resolveCapabilityCredentials(params.tomoriState.server_id, "text", {
-      userId: params.userId ?? null,
-    });
-    if (credentials.provider === provider) apiKey = credentials.apiKey;
-  } catch {
-    // Unauthenticated local endpoints are supported.
-  }
-
-  return withLock(key, async () => {
-    const state = getState(key);
-    if (state.activeLeases > 0) {
-      state.activeLeases += 1;
-      return createLease({ key, state, endpoint, apiKey, strategy, kind: params.generationKind });
+  return withWriterQueue(connectionId, async () => {
+    const gate = getGate(connectionId);
+    if (gate.mediaLeases > 0) {
+      gate.mediaLeases += 1;
+      return createMediaLease({ connectionId, gate, connection, apiKey, backend });
     }
-    if (state.unavailable) await state.unavailable;
 
-    markUnavailable(state);
+    closeGate(gate);
     try {
-      const model =
-        params.tomoriState.config.custom_model_name || endpoint.model_name || params.tomoriState.llm.llm_codename;
-      const prepared =
-        strategy === "koboldcpp"
-          ? await prepareKoboldCpp(endpoint, apiKey, params.generationKind)
-          : await prepareOllama(endpoint, apiKey, model, params.generationKind);
-      if (!prepared) {
-        markAvailable(key, state);
+      if (!(await waitForReadersToDrain(gate))) {
+        recordHandoff(backend, "skipped_busy");
+        openGate(connectionId, gate);
         return NO_HANDOFF;
       }
-      state.activeLeases = 1;
-      return createLease({ key, state, endpoint, apiKey, strategy, kind: params.generationKind });
+      let prepared: boolean;
+      if (backend === "koboldcpp") {
+        prepared = await prepareKoboldCpp(connection.endpoint_url, apiKey);
+      } else {
+        const endpoint = await resolveCustomEndpointForProvider(
+          params.tomoriState.llm.llm_provider,
+          "text",
+          params.tomoriState.llm.llm_id ?? null,
+        );
+        const model =
+          params.tomoriState.config.custom_model_name || endpoint?.model_name || params.tomoriState.llm.llm_codename;
+        prepared = await prepareOllama(connection.endpoint_url, apiKey, model);
+      }
+      if (!prepared) {
+        recordHandoff(backend, "unload_failed");
+        openGate(connectionId, gate);
+        return NO_HANDOFF;
+      }
+      gate.mediaLeases = 1;
+      recordHandoff(backend, "unloaded");
+      return createMediaLease({ connectionId, gate, connection, apiKey, backend });
     } catch (error) {
-      log.warn(`Text-model handoff before ComfyUI ${params.generationKind} generation failed`, error);
-      markAvailable(key, state);
+      log.error("Text-model handoff before a ComfyUI job failed unexpectedly", error as Error);
+      openGate(connectionId, gate);
       return NO_HANDOFF;
     }
   });

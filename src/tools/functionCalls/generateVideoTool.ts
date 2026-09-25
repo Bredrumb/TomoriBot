@@ -531,11 +531,7 @@ export class GenerateVideoTool extends BaseTool {
       if (creds.customEndpoint) {
         const handoff =
           creds.customEndpoint.api_style === "comfyui"
-            ? await beginTextModelHandoffBeforeComfyUi({
-                tomoriState: context.tomoriState,
-                generationKind: "video",
-                userId: context.internalUserId ?? null,
-              })
+            ? await beginTextModelHandoffBeforeComfyUi({ tomoriState: context.tomoriState })
             : null;
         try {
           const result = await generateCustomVideoViaEndpoint({

@@ -6,7 +6,7 @@ import type { ProcessedChunk, RawStreamChunk, StreamConfig, StreamContext } from
 import type { ThoughtLogEntry } from "@/types/provider/interfaces";
 import { log } from "@/utils/misc/logger";
 import { buildCustomThinkingRequest } from "@/utils/provider/thinkingControl";
-import { waitForTextModelHandoffBeforeTextRequest } from "@/utils/provider/textModelComfyUiHandoff";
+import { acquireTextModelLease } from "@/utils/provider/textModelComfyUiHandoff";
 import { VerbatimToolCallParser, getVerbatimToolCallMaxBufferChars } from "@/utils/tools/verbatimToolCallParser";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
 
@@ -21,7 +21,7 @@ const GEMMA_TOOL_PARSER_ENABLED = (process.env.CUSTOM_GEMMA_TOOL_PARSER_ENABLED 
 
 export interface CustomStreamConfig extends OpenAICompatibleStreamConfig {
   endpointUrl: string;
-  customEndpointId?: number | null;
+  customConnectionId?: number | null;
   /** Optional context window override sent as options.num_ctx (Ollama extension) */
   numCtx?: number | null;
 }
@@ -104,13 +104,18 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
     config: StreamConfig,
     context: StreamContext,
   ): AsyncGenerator<RawStreamChunk, void, unknown> {
-    // This runs for every orchestrator tool round, not just the initial provider stream.
-    // It prevents every stream round from reaching a local model while its endpoint is handed off.
-    await waitForTextModelHandoffBeforeTextRequest((config as CustomStreamConfig).customEndpointId);
+    // Held for the whole stream, and taken per tool round, so a ComfyUI job never unloads the model
+    // mid-reply. The `finally` also runs when the consumer returns early on a function call, which
+    // releases the lease before that tool (possibly the ComfyUI job itself) executes.
+    const releaseModel = await acquireTextModelLease(
+      (config as CustomStreamConfig).customConnectionId,
+      context.abortSignal,
+    );
     this.configureVerbatimToolCallParser(config, context);
     try {
       yield* super.startStream(config, context);
     } finally {
+      releaseModel();
       this.verbatimParser = null;
     }
   }

@@ -297,7 +297,7 @@ export const customEndpointApiStyleSchema = z.enum([
 ]);
 export type CustomEndpointApiStyle = z.infer<typeof customEndpointApiStyleSchema>;
 
-export const vramHandoffBackendSchema = z.enum(["koboldcpp", "ollama"]);
+const vramHandoffBackendSchema = z.enum(["koboldcpp", "ollama"]);
 export type VramHandoffBackend = z.infer<typeof vramHandoffBackendSchema>;
 
 /**
