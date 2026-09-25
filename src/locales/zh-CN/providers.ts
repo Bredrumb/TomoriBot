@@ -21,6 +21,7 @@ export default {
     fallback_used_failure_line: `{index}. {model} 报错：{error_detail}`,
     fallback_used_details_button: `已用备用模型`,
     fallback_used_hide_footer: `用 \`/config\` > 行为 > 提示 隐藏它，并把细节转到思考日志`,
+    fallback_used_personal_opt_out_footer: `用 \`/personal config\` > 模型 > 备用模型 关掉服务器模型替你个人提供方兜底`,
     markdown_table: {
       show_button: `显示 Markdown`,
       source_expired: `那张表格的 Markdown 已经不在缓存里了，所以我没办法再显示源码。`,

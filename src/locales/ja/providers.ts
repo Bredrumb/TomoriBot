@@ -21,6 +21,7 @@ export default {
     fallback_used_failure_line: `{index}. {model} は {error_detail} で失敗しました`,
     fallback_used_details_button: `フォールバック使用`,
     fallback_used_hide_footer: `\`/config\` > 動作 > 通知動作 でこれを非表示にし、詳細を思考ログへ回せます`,
+    fallback_used_personal_opt_out_footer: `\`/personal config\` > モデル > フォールバック で、サーバーモデルが個人のプロバイダーの失敗を補うのを止められます`,
     markdown_table: {
       show_button: `マークダウンを表示`,
       source_expired: `この表のマークダウンはキャッシュから消えているため、ソースを表示できません。`,

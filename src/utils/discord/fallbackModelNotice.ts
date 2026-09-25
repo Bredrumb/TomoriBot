@@ -22,6 +22,12 @@ interface SendFallbackModelUsageNoticeOptions {
   context: ToolContext;
   failures: FallbackNoticeAttempt[];
   successModel: LlmRow;
+  /**
+   * Names the account setting that turns this fallback off. Only a success on the server route of
+   * a turn that started on personal credentials has one, because every other route is either the
+   * server's own or a model the user configured themselves.
+   */
+  offerPersonalFallbackOptOut?: boolean;
 }
 
 // Characters reserved for the description text wrapping the failure list (slot/model prefix line),
@@ -68,6 +74,7 @@ export async function sendFallbackModelUsageNotice({
   context,
   failures,
   successModel,
+  offerPersonalFallbackOptOut = false,
 }: SendFallbackModelUsageNoticeOptions): Promise<void> {
   const slot = resolveFallbackSlot(context, successModel, failures);
   const detailsOptions = {
@@ -87,11 +94,14 @@ export async function sendFallbackModelUsageNotice({
   }
 
   const modalTitle = localizer(context.locale, detailsOptions.titleKey);
+  const optOutFooter = offerPersonalFallbackOptOut
+    ? `\n-# ${localizer(context.locale, "genai.fallback_used_personal_opt_out_footer")}`
+    : "";
   const modalContent = `${localizer(
     context.locale,
     detailsOptions.descriptionKey,
     detailsOptions.descriptionVars,
-  )}\n\n-# ${localizer(context.locale, "genai.fallback_used_hide_footer")}`;
+  )}\n\n-# ${localizer(context.locale, "genai.fallback_used_hide_footer")}${optOutFooter}`;
 
   try {
     const buttonLabel = localizer(context.locale, "genai.fallback_used_details_button");

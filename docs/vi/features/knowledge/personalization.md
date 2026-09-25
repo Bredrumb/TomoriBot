@@ -44,8 +44,10 @@ Nhật ký suy nghĩ sẽ ghi nhận các lượt tương tác đó cho bạn, v
 
 Nếu một yêu cầu không thành công trong khi sử dụng nhà cung cấp cá nhân của bạn, mẹo "Những gì bạn có thể làm" trong thông báo lỗi sẽ nêu tên các lệnh cá nhân thực sự có thể khắc phục được (`/personal providers`, `/personal config`) thay vì các lệnh dành cho người quản lý máy chủ.
 
+Khi mọi model trên tuyến văn bản cá nhân của bạn đều gặp lỗi, TomoriBot có thể trả lời bằng model văn bản của chính máy chủ thay vì để tin nhắn không có phản hồi. Câu trả lời đó dùng thông tin xác thực của máy chủ và tính vào hạn mức văn bản của máy chủ, và được thông báo theo cùng cách như mọi lần dự phòng model khác: một nút **Đã dùng dự phòng** với phần chi tiết nêu tên model đã trả lời và những lỗi xảy ra trước đó. Tắt tùy chọn này trong `/personal config` > Model > Model dự phòng, ở mục **Dự phòng bằng model máy chủ**, để lỗi từ nhà cung cấp của bạn vẫn thuộc về bạn. Cài đặt này có hiệu lực toàn tài khoản và được bật mặc định, nên nó đi theo bạn tới mọi máy chủ cho phép bật tùy chọn này.
+
 :::note[Máy chủ yêu cầu BYOK]
-Một máy chủ có thể yêu cầu nhà cung cấp do thành viên tự cung cấp bằng chế độ User BYOK ([Kiểm duyệt máy chủ](/vi/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)). Khi chế độ đó bật, các tin nhắn do bạn kích hoạt cần có nhà cung cấp cá nhân trước khi bot có thể phản hồi. Các nhà cung cấp cá nhân áp dụng trên mọi máy chủ mà bạn sử dụng bot.
+Một máy chủ có thể yêu cầu nhà cung cấp do thành viên tự cung cấp bằng chế độ User BYOK ([Kiểm duyệt máy chủ](/vi/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)). Khi chế độ đó bật, các tin nhắn do bạn kích hoạt cần có nhà cung cấp cá nhân trước khi bot có thể phản hồi, và một tuyến cá nhân đã thất bại thì vẫn thất bại: máy chủ không cấp model của mình cho thành viên sẽ không cho mượn model nào làm phương án dự phòng. Các nhà cung cấp cá nhân áp dụng trên mọi máy chủ mà bạn sử dụng bot.
 :::
 
 ## Các cài đặt cá nhân khác
@@ -54,6 +56,7 @@ Một máy chủ có thể yêu cầu nhà cung cấp do thành viên tự cung 
 - `/personal config`: các thẻ ngoại hình của riêng bạn (kiểu booru), được sử dụng khi [tạo ảnh](/vi/features/capabilities/media-generation/image-generation/#tag-customization) có tham chiếu đến bạn. Gửi một ô trống để xóa chúng.
 - `/personal config`: kiểm soát khả năng hiển thị của bạn đối với bot, lên đến mức **hoàn toàn vô hình** (từ chối hoàn toàn các tính năng bộ nhớ).
 - `/personal config`: tùy chỉnh cá nhân cho [Chế độ kích hoạt có chủ đích](/vi/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
+- `/personal config`: cho phép model văn bản của máy chủ trả lời thay khi tuyến văn bản cá nhân gặp lỗi, hoặc tắt tùy chọn đó.
 - `/personal config`: chọn tham gia chia sẻ bộ nhớ ngắn hạn liên máy chủ; `/personal memories` sẽ xóa STM của bạn.
 - `/personal config`: đặt một prompt có thể tái sử dụng khi bot mạo danh bạn thông qua `/impersonate user`.
 

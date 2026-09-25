@@ -79,11 +79,20 @@ If a request fails while using your personal provider, the error's "What you can
 the personal commands that can actually fix it (`/personal providers`, `/personal config`)
 rather than the server-manager ones.
 
+When every model on your personal text route fails, TomoriBot can answer with the server's own
+text model instead of leaving the message unanswered. That answer runs on the server's
+credentials and counts against the server's text quota, and it is reported the same way as any
+other model fallback: a **Fallback Used** button whose details name the model that answered and
+the failures that came before it. Turn it off in `/personal config` > Models > Fallbacks, in the
+**Server Model Fallback** section, to keep your provider's failures yours. The setting is
+account-wide and on by default, so it follows you to every server that allows it.
+
 :::note[BYOK-required servers]
 A server can require member-provided providers with User BYOK mode
 ([Server Moderation](/features/setup-administration/server-moderation/#user-byok-bring-your-own-key)). When that's
-on, your user-triggered messages need a personal provider before she can answer. Personal
-providers apply across every server you use her in.
+on, your user-triggered messages need a personal provider before she can answer, and a failed
+personal route stays failed: a server that withholds its models from members does not lend one as
+a fallback. Personal providers apply across every server you use her in.
 :::
 
 ## Other Personal Settings
@@ -96,6 +105,8 @@ providers apply across every server you use her in.
   of memory features entirely).
 - `/personal config`: your personal override for
   [Deliberate Trigger Mode](/features/chatting-personality/chatting-and-triggers/#deliberate-trigger-mode).
+- `/personal config`: allow the server's text model to cover a failed personal text route,
+  or turn that off.
 - `/personal config`: opt into cross-server short-term memory sharing;
   `/personal memories` wipes your STM.
 - `/personal config`: set a reusable prompt for when she impersonates you via

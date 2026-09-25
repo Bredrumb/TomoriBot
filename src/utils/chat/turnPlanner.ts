@@ -20,6 +20,7 @@ import {
   evaluateChatAccess,
   rejectOnMessageTriggerCooldown,
   setMessageTriggerCooldownForAdmission,
+  shouldApplyServerTextQuota,
   validateDirectChatTrigger,
 } from "@/utils/chat/admissionGuards";
 import { channelLocks, queueScenePersonaJobsAtFront, setActiveChannelTurnState } from "@/utils/chat/channelQueue";
@@ -828,13 +829,10 @@ async function prepareTextQuota(
   const incoming = lockedTurn.admission.incoming;
   const triggerKey = incoming.textQuotaTriggerKey ?? lockedTurn.admission.message.id;
   const shouldTreatAsQuotaSharedPersonaJob = incoming.isPersonaJob && !incoming.sceneTurn;
+  // A personal route spends the user's own credentials, so it never draws on the server's quota.
+  // The server route a personal turn can still fall back to admits itself, in generationTurn.
   const shouldApply =
-    incoming.textQuotaSource === "user" &&
-    !lockedTurn.admission.isDMChannel &&
-    !incoming.isStopResponse &&
-    !incoming.reminderRecipientID &&
-    !incoming.reminderData?.self_reminder &&
-    textCredentialSource !== "personal";
+    textCredentialSource === "server" && shouldApplyServerTextQuota(incoming, lockedTurn.admission.isDMChannel);
 
   const quota = await checkTextQuotaForAdmission({
     shouldApplyTextQuota: shouldApply,

@@ -333,6 +333,15 @@ export default {
       randomizer_enabled_detail: `{provider} のモデルランダマイザーが有効になりました。`,
       randomizer_disabled_heading: `ランダマイザーを無効にしました`,
       randomizer_disabled_detail: `{provider} のモデルランダマイザーが無効になりました。`,
+      server_fallback_section_title: `サーバーモデルのフォールバック`,
+      server_fallback_section_desc:
+        "個人のテキストプロバイダーが失敗すると、代わりにこのサーバーのテキストモデルが応答できます。その応答はサーバーの認証情報とテキストクォータを使用し、全員が自分自身のプロバイダーを持参することを必須とするサーバーは、自身のモデルを貸し出すことはありません。オフにすると、プロバイダーの失敗はあなた自身のもののままになります。",
+      server_fallback_effect_on: `個人のプロバイダーが失敗したときはサーバーモデルが応答します`,
+      server_fallback_effect_off: `このサーバーのモデルを借りずに停止します`,
+      server_fallback_enabled_heading: `サーバーモデルのフォールバックを有効にしました`,
+      server_fallback_enabled_detail: `個人のテキストプロバイダーが失敗したときは、サーバーモデルが応答するようになります。`,
+      server_fallback_disabled_heading: `サーバーモデルのフォールバックを無効にしました`,
+      server_fallback_disabled_detail: `個人のテキストプロバイダーの失敗がサーバーモデルにフォールバックされなくなります。`,
       no_text_providers_fallbacks:
         "保存された個人のテキストプロバイダーが見つかりません。 `/personal providers` で追加してください。",
       response_modes_title: `個人の応答モード`,

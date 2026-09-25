@@ -308,6 +308,11 @@ function makeDependencies(
       user.personal_deliberate_tool_mode = input.mode;
       return { status: "success" };
     },
+    setServerModelFallback: async (input) => {
+      calls.push(`setServerModelFallback:${input.current}:${input.enabled}`);
+      user.personal_server_fallback_enabled = input.enabled;
+      return { status: "success", enabled: input.enabled };
+    },
     setImpersonationPrompt: async (input) => {
       calls.push(`setImpersonationPrompt:${input.prompt}`);
       user.impersonation_prompt = input.prompt;
@@ -1073,6 +1078,10 @@ describe("personalConfigPanelCatalog", () => {
       { action: "randomizer-set", locale: "en-US", provider: "openrouter", enabled: true },
     ],
     [
+      "personal-config:v2:server-fallback-set:en-US:on",
+      { action: "server-fallback-set", locale: "en-US", enabled: true },
+    ],
+    [
       "personal-config:v2:fallbacks-page:en-US:openrouter:24",
       { action: "fallbacks-page", locale: "en-US", provider: "openrouter", start: 24 },
     ],
@@ -1305,6 +1314,8 @@ describe("personalConfigPanelCatalog", () => {
         return [{ action, locale, mode }];
       case "crossserver-set":
         return [{ action, locale, enabled: !isWorstCase }];
+      case "server-fallback-set":
+        return [{ action, locale, enabled: !isWorstCase }];
       case "randomizer-set":
         return [{ action, locale, provider, enabled: !isWorstCase }];
       case "spotlight-set-block":
@@ -1350,7 +1361,7 @@ describe("personalConfigPanelCatalog", () => {
 
   it("round-trips every action in the codec table", () => {
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(75);
+    expect(actions.length).toBe(76);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, false);
@@ -1386,7 +1397,7 @@ describe("personalConfigPanelCatalog", () => {
     // - page: "response-modes" (14 chars) is the longest PersonalConfigPage.
     // - mode: "follow" (6 chars) is the longest deliberate trigger/tool mode.
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(75);
+    expect(actions.length).toBe(76);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, true);
@@ -1420,15 +1431,15 @@ describe("personalConfigPanelCatalog", () => {
       handlerSources.flatMap((source) => [...source.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1])),
     );
 
-    expect(tableActions.size).toBe(75);
-    expect(handlerActions.size).toBe(75);
+    expect(tableActions.size).toBe(76);
+    expect(handlerActions.size).toBe(76);
     expect([...tableActions].filter((a) => !handlerActions.has(a))).toEqual([]);
     expect([...handlerActions].filter((a) => !tableActions.has(a))).toEqual([]);
   });
 
   it("fails closed when dropping or appending a segment for every action in the table", () => {
     const actions = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS) as PersonalConfigAction[];
-    expect(actions.length).toBe(75);
+    expect(actions.length).toBe(76);
 
     for (const action of actions) {
       const routes = buildRoutesForAction(action, false);
@@ -4102,6 +4113,45 @@ describe("Models-page cache invalidation invariants", () => {
     loadConfigsSpy.mockRestore();
     loadEndpointsSpy.mockRestore();
     availableModelsSpy.mockRestore();
+  });
+
+  it("writes the server model fallback preference through the self-invalidating user update", async () => {
+    const updateSpy = spyOn(userRepository, "update").mockImplementation(
+      async () => ({ user_disc_id: "user-123" }) as unknown as UserRow,
+    );
+
+    try {
+      const result = await personalConfigOperations.setServerModelFallback({
+        userId: 1,
+        userDiscId: "user-123",
+        current: true,
+        enabled: false,
+      });
+
+      expect(result).toEqual({ status: "success", enabled: false });
+      // `userRepository.update` owns the cache invalidation, so the operation must not evict twice.
+      expect(updateSpy).toHaveBeenCalledWith(1, { personal_server_fallback_enabled: false });
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+
+  it("performs no write when the server model fallback preference already matches", async () => {
+    const updateSpy = spyOn(userRepository, "update").mockImplementation(async () => null);
+
+    try {
+      const result = await personalConfigOperations.setServerModelFallback({
+        userId: 1,
+        userDiscId: "user-123",
+        current: false,
+        enabled: false,
+      });
+
+      expect(result).toEqual({ status: "no-changes" });
+      expect(updateSpy).not.toHaveBeenCalled();
+    } finally {
+      updateSpy.mockRestore();
+    }
   });
 });
 
@@ -8187,6 +8237,125 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
       });
     });
 
+    describe("Server Model Fallback state control rendering and custom IDs", () => {
+      /** The section's own control row, told apart from the randomizer row that shares the page. */
+      function findServerFallbackRow(payload: unknown): {
+        components: { customId: string; style: number; disabled: boolean; label: string }[];
+      } {
+        const container = (payload as { components: { components: unknown[] }[] }).components[0];
+        const buttonRow = container.components.find(
+          (
+            r,
+          ): r is {
+            type: number;
+            components: { customId: string; style: number; disabled: boolean; label: string }[];
+          } =>
+            (r as { type: number }).type === ComponentType.ActionRow &&
+            Boolean(
+              (r as { components?: { customId?: string }[] }).components?.some((c) =>
+                c.customId?.includes("server-fallback-set"),
+              ),
+            ),
+        );
+        if (!buttonRow) throw new Error("Server Model Fallback control row is missing from the page");
+        return buttonRow;
+      }
+
+      it("renders the section with On selected and the enabled behavior line for a default account", () => {
+        const payload = buildPersonalConfigPanelPayload({
+          locale: "en-US",
+          category: "models",
+          page: "fallbacks",
+          user: makeUser(),
+          resolvedNickname: "Tester",
+          personas: [],
+          guildId: "guild-123",
+          memoryCount: 0,
+          stmCount: 0,
+          readStatus: "fresh",
+        });
+
+        const buttonRow = findServerFallbackRow(payload);
+        const offButton = buttonRow.components.find((b) => b.label === "Off");
+        const onButton = buttonRow.components.find((b) => b.label === "On");
+
+        expect(onButton?.style).toBe(ButtonStyle.Primary);
+        expect(onButton?.disabled).toBe(true);
+        expect(offButton?.style).toBe(ButtonStyle.Secondary);
+        expect(offButton?.disabled).toBe(false);
+
+        expect(parsePersonalConfigPanelRoute(requireRoute(offButton?.customId ?? ""))).toEqual({
+          action: "server-fallback-set",
+          locale: "en-US",
+          enabled: false,
+        });
+
+        const payloadJson = JSON.stringify(payload);
+        expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.server_fallback_section_title"));
+        expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.server_fallback_effect_on"));
+        expect(payloadJson).not.toContain(
+          localizedCopy("en-US", "commands.personal.config.server_fallback_effect_off"),
+        );
+      });
+
+      it("renders Off selected and the disabled behavior line for an opted-out account", () => {
+        const payload = buildPersonalConfigPanelPayload({
+          locale: "en-US",
+          category: "models",
+          page: "fallbacks",
+          user: makeUser({ personal_server_fallback_enabled: false }),
+          resolvedNickname: "Tester",
+          personas: [],
+          guildId: "guild-123",
+          memoryCount: 0,
+          stmCount: 0,
+          readStatus: "fresh",
+        });
+
+        const buttonRow = findServerFallbackRow(payload);
+        const offButton = buttonRow.components.find((b) => b.label === "Off");
+        const onButton = buttonRow.components.find((b) => b.label === "On");
+
+        expect(offButton?.style).toBe(ButtonStyle.Primary);
+        expect(offButton?.disabled).toBe(true);
+        expect(onButton?.style).toBe(ButtonStyle.Secondary);
+        expect(onButton?.disabled).toBe(false);
+
+        const payloadJson = JSON.stringify(payload);
+        expect(payloadJson).toContain(localizedCopy("en-US", "commands.personal.config.server_fallback_effect_off"));
+      });
+
+      it("renders the section on a page with no personal text provider to point at", () => {
+        // The fallback notice names this page as the opt-out, so the control must not depend on a
+        // saved personal provider being there to fall back from.
+        const payload = buildPersonalConfigPanelPayload({
+          locale: "en-US",
+          category: "models",
+          page: "fallbacks",
+          user: makeUser(),
+          resolvedNickname: "Tester",
+          personas: [],
+          guildId: "guild-123",
+          memoryCount: 0,
+          stmCount: 0,
+          readStatus: "fresh",
+          modelDisplayInfo: {
+            fallbacksProviders: [],
+            fallbackSlots: [],
+            randomizerEnabled: false,
+            canEnableRandomizer: false,
+          },
+        });
+
+        expect(findServerFallbackRow(payload)).toBeDefined();
+        expect(JSON.stringify(payload)).toContain(
+          JSON.stringify(
+            formatPanelProse(localizedCopy("en-US", "commands.personal.config.no_text_providers_fallbacks")),
+          ).slice(1, -1),
+        );
+      });
+    });
+
     describe("Execution of crossserver-set and crossserver-toggle", () => {
       it("acknowledges interaction before database write and sets cross-server STM to on", async () => {
         const calls: string[] = [];
@@ -8495,6 +8664,91 @@ describe("Pre-defer dispatch, fall-throughs, and acknowledgement timing", () => 
         expect(capturedPayload).not.toBeNull();
         const renderedText = JSON.stringify(capturedPayload);
         expect(renderedText).toContain(localizedCopy("en-US", "commands.personal.config.randomizer_enabled_heading"));
+      });
+    });
+
+    describe("Execution of server-fallback-set", () => {
+      function makeButtonInteraction(customId: string): {
+        interaction: ButtonInteraction;
+        capturedPayload: () => unknown;
+      } {
+        let deferred = false;
+        let capturedPayload: unknown = null;
+        const interaction = {
+          isButton: () => true,
+          isStringSelectMenu: () => false,
+          isModalSubmit: () => false,
+          customId,
+          user: { id: "user-123", username: "tester", displayName: "Tester" },
+          guildId: "guild-123",
+          get deferred() {
+            return deferred;
+          },
+          get replied() {
+            return false;
+          },
+          deferUpdate: async () => {
+            deferred = true;
+          },
+          editReply: async (payload: unknown) => {
+            capturedPayload = payload;
+          },
+        } as unknown as ButtonInteraction;
+        return { interaction, capturedPayload: () => capturedPayload };
+      }
+
+      it("acknowledges the interaction before the write and reports the account opt-out", async () => {
+        const calls: string[] = [];
+        let acknowledgedDuringWrite = false;
+        const { dependencies, telemetry, user } = makeDependencies(calls);
+        user.personal_server_fallback_enabled = true;
+
+        dependencies.operations.setServerModelFallback = async (input) => {
+          acknowledgedDuringWrite = interaction.deferred || interaction.replied;
+          calls.push(`setServerModelFallback:${input.current}:${input.enabled}`);
+          user.personal_server_fallback_enabled = input.enabled;
+          return { status: "success", enabled: input.enabled };
+        };
+
+        const route = createPersonalConfigInteractionRoute(dependencies);
+        const customId = buildPersonalConfigRouteId({
+          action: "server-fallback-set",
+          locale: "en-US",
+          enabled: false,
+        });
+        const { interaction, capturedPayload } = makeButtonInteraction(customId);
+
+        await route.execute({} as Client, interaction, requireRoute(customId));
+
+        expect(acknowledgedDuringWrite).toBe(true);
+        expect(calls).toContain("setServerModelFallback:true:false");
+        expect(telemetry).toContain("personal-config.personal.server-fallback.set");
+        expect(JSON.stringify(capturedPayload())).toContain(
+          localizedCopy("en-US", "commands.personal.config.server_fallback_disabled_heading"),
+        );
+      });
+
+      it("reports no changes when the stored value already matches", async () => {
+        const calls: string[] = [];
+        const { dependencies, telemetry, user } = makeDependencies(calls);
+        user.personal_server_fallback_enabled = false;
+
+        dependencies.operations.setServerModelFallback = async () => ({ status: "no-changes" });
+
+        const route = createPersonalConfigInteractionRoute(dependencies);
+        const customId = buildPersonalConfigRouteId({
+          action: "server-fallback-set",
+          locale: "en-US",
+          enabled: false,
+        });
+        const { interaction, capturedPayload } = makeButtonInteraction(customId);
+
+        await route.execute({} as Client, interaction, requireRoute(customId));
+
+        expect(telemetry).not.toContain("personal-config.personal.server-fallback.set");
+        expect(JSON.stringify(capturedPayload())).toContain(
+          localizedCopy("en-US", "commands.personal.config.no_changes_heading"),
+        );
       });
     });
   });

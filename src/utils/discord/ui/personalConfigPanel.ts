@@ -1531,6 +1531,57 @@ ${localizer(locale, "commands.personal.config.fallbacks_description")}`,
           },
         );
       }
+
+      // Account-wide rather than provider-scoped, so it renders with or without a saved personal
+      // text provider: the fallback notice names this page as the place to turn it off, and a
+      // pointer to a control that is not on screen is worse than one reporting nothing to act on.
+      // Only an explicit opt-out reads as Off, so a row written before the setting existed shows
+      // the fallback it still has.
+      const isServerFallbackOn = user.personal_server_fallback_enabled !== false;
+
+      components.push(
+        { type: ComponentType.Separator, divider: true, spacing: 1 },
+        {
+          type: ComponentType.TextDisplay,
+          content: `**${localizer(locale, "commands.personal.config.server_fallback_section_title")}**\n${localizer(
+            locale,
+            "commands.personal.config.server_fallback_section_desc",
+          )}`,
+        },
+        buildStateControlRow(
+          [
+            {
+              value: false,
+              label: localizer(locale, "commands.personal.config.mode_off"),
+              customId: buildPersonalConfigRouteId({
+                action: "server-fallback-set",
+                locale,
+                enabled: false,
+              }),
+            },
+            {
+              value: true,
+              label: localizer(locale, "commands.personal.config.mode_on"),
+              customId: buildPersonalConfigRouteId({
+                action: "server-fallback-set",
+                locale,
+                enabled: true,
+              }),
+            },
+          ] as const,
+          isServerFallbackOn,
+          writesDisabled,
+        ),
+        {
+          type: ComponentType.TextDisplay,
+          content: `> ${localizer(
+            locale,
+            isServerFallbackOn
+              ? "commands.personal.config.server_fallback_effect_on"
+              : "commands.personal.config.server_fallback_effect_off",
+          )}`,
+        },
+      );
     }
   } else if (category === "advanced") {
     if (page === "response-modes") {

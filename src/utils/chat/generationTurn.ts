@@ -11,6 +11,7 @@ import { getOpenRouterTokenLimits, isOpenRouterCapabilityCacheReady } from "@/ut
 import { llmProviderRepo } from "@/utils/db/repositories";
 import { type FallbackNoticeAttempt, sendFallbackModelUsageNotice } from "@/utils/discord/fallbackModelNotice";
 import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
+import type { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { classifySendFailure } from "@/utils/discord/stream/sendFailureCache";
 import { deleteSupersededStreamMessages } from "@/utils/discord/stream/supersededMessageCleanup";
 import { log } from "@/utils/misc/logger";
@@ -30,6 +31,7 @@ import {
 } from "@/utils/security/keyRotation";
 import { truncateDialogueHistory } from "@/utils/text/contextTruncator";
 import { buildVerbatimToolDefinitionsContextItem } from "@/utils/text/context/toolDefinitions";
+import { checkTextQuotaForAdmission, shouldApplyServerTextQuota } from "@/utils/chat/admissionGuards";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { providerIsApiFamily, runToolLoop } from "@/utils/chat/toolLoop";
 import {
@@ -37,6 +39,9 @@ import {
   VERBATIM_TOOL_CALLING_NUDGE,
   shouldInjectVerbatimToolCallingNudge,
 } from "@/utils/tools/verbatimToolCalling";
+
+/** The channel shape quota notices are sent through, matching the admission path's own alias. */
+type SendableChannel = Parameters<typeof sendStandardEmbed>[0];
 
 interface GenerationAttempt {
   label: string;
@@ -46,6 +51,19 @@ interface GenerationAttempt {
   successModel: LlmRow;
   /** Rotation key ID used for this attempt; null when rotation pool is inactive. */
   rotationKeyId: number | null;
+}
+
+/** The route a turn was planned on, plus the server route it may still reach. */
+interface GenerationPlan {
+  attempts: GenerationAttempt[];
+  /**
+   * Materializes the server route's attempts, or null when this turn owns no server fallback.
+   *
+   * Resolution is deferred until every attempt so far has failed, because building the pool eagerly
+   * prepares server provider config and spends the server's text quota admission on turns that
+   * never leave their planned route.
+   */
+  extendWithServerRoute: ((startIndex: number) => Promise<GenerationAttempt[]>) | null;
 }
 
 /**
@@ -81,7 +99,8 @@ async function runGenerationAttempts(
   responseSink: ChatResponseSink,
 ): Promise<GenerationTurnResult> {
   try {
-    const attempts = await buildGenerationAttempts(context);
+    const plan = await buildGenerationPlan(context);
+    const attempts = plan.attempts;
     const failures: FallbackNoticeAttempt[] = [];
     const baseContextItems = context.contextItems;
 
@@ -89,9 +108,16 @@ async function runGenerationAttempts(
     // so a superseded attempt's partial output can be deleted when a later attempt supersedes it.
     context.streamingContext.deliveredMessageRefs ??= [];
     const deliveredMessageRefs = context.streamingContext.deliveredMessageRefs;
+    // Index the server route's attempts start at, null until that route contributes any. Only the
+    // receipt needs it: a success on the server route of a personal turn has an opt-out to name.
+    let serverRouteStartIndex: number | null = null;
 
-    for (const [index, attempt] of attempts.entries()) {
-      const hasPendingModelFallback = index < attempts.length - 1;
+    for (let index = 0; index < attempts.length; index++) {
+      const attempt = attempts[index];
+      if (!attempt) continue;
+      // A server route that has not been built yet still counts as a pending model, so the last
+      // planned attempt keeps its errors suppressed while a later model may yet answer.
+      const hasPendingModelFallback = index < attempts.length - 1 || plan.extendWithServerRoute !== null;
       context.tomoriState = attempt.tomoriState;
       context.contextItems = await prepareProviderContextItems({
         contextItems: baseContextItems,
@@ -172,10 +198,32 @@ async function runGenerationAttempts(
 
       const isRetryableStatus =
         (result.status === "error" || result.status === "timeout") && !isUnreachableDestinationResult(result);
+
+      // The planned route is exhausted. Extend once with the server route, which admits itself and
+      // may refuse, so this is also the point a fallback the server does not owe the user stops.
+      if (isRetryableStatus && index === attempts.length - 1 && plan.extendWithServerRoute) {
+        const extendWithServerRoute = plan.extendWithServerRoute;
+        plan.extendWithServerRoute = null;
+        let serverAttempts: GenerationAttempt[] = [];
+        try {
+          serverAttempts = await extendWithServerRoute(attempts.length);
+        } catch (error) {
+          // Preparing the server route is best effort, like each pool entry: a failure here leaves
+          // the planned route's own failure as the turn's outcome instead of replacing it.
+          log.warn("Failed to prepare the server model fallback route.", error as Error);
+        }
+        if (serverAttempts.length > 0) {
+          serverRouteStartIndex = attempts.length;
+          attempts.push(...serverAttempts);
+        }
+      }
+
       if (!isRetryableStatus || index === attempts.length - 1) {
         if (index > 0 && shouldSendFallbackNotice(context, result)) {
           log.info(`Fallback generation succeeded with ${attempt.label} after ${failures.length} failed attempt(s).`);
-          await sendFallbackNoticeIfNeeded(context, attempt, failures);
+          await sendFallbackNoticeIfNeeded(context, attempt, failures, {
+            offerPersonalFallbackOptOut: serverRouteStartIndex !== null && index >= serverRouteStartIndex,
+          });
         }
         setStreamUserErrorSuppression(context, false);
         context.streamingContext.forceModelFallback = false;
@@ -253,22 +301,52 @@ async function purgeSupersededDeliveries(
   });
 }
 
-async function buildGenerationAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
+async function buildGenerationPlan(context: ChatTurnContext): Promise<GenerationPlan> {
+  return {
+    attempts: await buildPlannedRouteAttempts(context),
+    extendWithServerRoute: resolveServerRouteExtension(context),
+  };
+}
+
+/**
+ * The server route a personal text turn can still reach, or null when this turn owns none.
+ *
+ * A personal route spends the user's own credentials, so a server model is a separate phase with
+ * its own admission rather than another member of the personal pool. Two policies withhold it
+ * outright: a server that requires members to bring their own provider never lends its models to a
+ * member-triggered turn, and the account-wide setting below is the user's own refusal.
+ */
+function resolveServerRouteExtension(
+  context: ChatTurnContext,
+): ((startIndex: number) => Promise<GenerationAttempt[]>) | null {
+  if (context.textCredentialSource !== "personal" || context.isUserImpersonation) {
+    return null;
+  }
+  if (context.currentPersona.config.user_byok_mode) {
+    log.info(
+      `Withholding the server model fallback for user ${context.userDiscId}: server ${context.serverDiscId} requires personal providers.`,
+    );
+    return null;
+  }
+  // Only an explicit opt-out withholds the route. A row from before the setting existed carries no
+  // value at all, and that account keeps the fallback it already had.
+  if (context.turn.userRow.personal_server_fallback_enabled === false) {
+    log.info(`Skipping the server model fallback for user ${context.userDiscId}: disabled in their personal config.`);
+    return null;
+  }
+  return (startIndex) => buildServerRouteAttempts(context, startIndex);
+}
+
+async function buildPlannedRouteAttempts(context: ChatTurnContext): Promise<GenerationAttempt[]> {
   const disableAllTools = !!context.streamingContext.disableAllTools;
   const primaryState = await resolvePrimaryTomoriState(context);
-  const personalFallbackEntries =
-    primaryState.fallback_chain ?? primaryState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
+  const fallbackEntries = resolveFallbackEntries(primaryState);
 
-  const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...personalFallbackEntries];
+  const pool: FallbackEntry[] = [{ kind: "llm", model: primaryState.llm }, ...fallbackEntries];
 
   // Model randomizer: when enabled, splice a random pool member to the front so a different model
-  // leads each turn. The remainder keeps its relative order as the failover tail, and because the
-  // reorder is a splice rather than a replacement, every model stays in the chain, so failover
-  // semantics are preserved. When disabled, the pool order is unchanged from the legacy behavior.
-  if (primaryState.config.model_randomizer_enabled && pool.length > 1) {
-    const leadIdx = Math.floor(Math.random() * pool.length);
-    pool.unshift(...pool.splice(leadIdx, 1));
-  }
+  // leads each turn. When disabled, the pool order is unchanged from the legacy behavior.
+  applyModelRandomizer(pool, primaryState.config.model_randomizer_enabled);
 
   // Materialize attempts from the (possibly reordered) pool. Reusing createFallbackAttempt for the
   //    primary's own llm entry yields a state equivalent to primaryState (provider matches, no config
@@ -293,29 +371,98 @@ async function buildGenerationAttempts(context: ChatTurnContext): Promise<Genera
     }
   }
 
-  // A personal text route owns its primary and explicitly configured fallbacks, but a failed
-  // personal provider must not make an otherwise configured server model unreachable. Build the
-  // server attempts from the unmodified server state so they use the server's credentials even
-  // when the personal and server models belong to the same provider.
-  if (context.textCredentialSource === "personal" && !context.isUserImpersonation) {
-    const serverState = await resolveServerTomoriState(context);
-    const serverFallbackEntries =
-      serverState.fallback_chain ?? serverState.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
-    const serverPool: FallbackEntry[] = [{ kind: "llm", model: serverState.llm }, ...serverFallbackEntries];
+  return attempts;
+}
 
-    for (const entry of serverPool) {
-      try {
-        const attempt = await createFallbackAttempt(serverState, entry, attempts.length, disableAllTools);
-        if (attempt) {
-          attempts.push(attempt);
-        }
-      } catch (error) {
-        log.warn(`Skipping server fallback pool entry ${attempts.length}: failed to prepare provider config.`, error as Error);
+/**
+ * Builds the server's own text route, reached only after every personal attempt has failed.
+ *
+ * The pool comes from the unmodified server state rather than from the personal overlay, so each
+ * attempt carries the server's credentials and draws on the server's own randomizer setting even
+ * when the two routes name models from one provider. A refused quota admission yields no attempts,
+ * which leaves the personal failure as the turn's outcome.
+ */
+async function buildServerRouteAttempts(context: ChatTurnContext, startIndex: number): Promise<GenerationAttempt[]> {
+  const disableAllTools = !!context.streamingContext.disableAllTools;
+  if (!(await admitServerRouteTextQuota(context))) {
+    return [];
+  }
+
+  const serverState = await resolveServerTomoriState(context);
+  const serverPool: FallbackEntry[] = [{ kind: "llm", model: serverState.llm }, ...resolveFallbackEntries(serverState)];
+  applyModelRandomizer(serverPool, serverState.config.model_randomizer_enabled);
+
+  const attempts: GenerationAttempt[] = [];
+  for (const entry of serverPool) {
+    const fallbackIndex = startIndex + attempts.length;
+    try {
+      const attempt = await createFallbackAttempt(serverState, entry, fallbackIndex, disableAllTools);
+      if (attempt) {
+        attempts.push(attempt);
       }
+    } catch (error) {
+      log.warn(
+        `Skipping server fallback pool entry ${fallbackIndex}: failed to prepare provider config.`,
+        error as Error,
+      );
     }
   }
 
   return attempts;
+}
+
+function resolveFallbackEntries(state: TomoriState): FallbackEntry[] {
+  return state.fallback_chain ?? state.fallback_llms?.map((model) => ({ kind: "llm" as const, model })) ?? [];
+}
+
+/**
+ * Splices a random pool member to the front so a different model leads each turn. The remainder
+ * keeps its relative order as the failover tail, and because the reorder is a splice rather than a
+ * replacement, every model stays in the chain, so failover semantics are preserved.
+ */
+function applyModelRandomizer(pool: FallbackEntry[], enabled: boolean): void {
+  if (!enabled || pool.length <= 1) {
+    return;
+  }
+  const leadIdx = Math.floor(Math.random() * pool.length);
+  pool.unshift(...pool.splice(leadIdx, 1));
+}
+
+/**
+ * Admits the server route against the server's text quota and arms the post-turn consumption.
+ *
+ * Planning exempts a personal turn from server text quota because it spends the user's own
+ * credentials, so this turn arrives unadmitted. The server's model is not exempt: without this the
+ * fallback would answer on quota nobody checked and nobody paid.
+ */
+async function admitServerRouteTextQuota(context: ChatTurnContext): Promise<boolean> {
+  const incoming = context.turn.lockedTurn.admission.incoming;
+  if (!shouldApplyServerTextQuota(incoming, context.isDMChannel)) {
+    return true;
+  }
+
+  const quota = await checkTextQuotaForAdmission({
+    shouldApplyTextQuota: true,
+    // A persona job normally reuses its group's admission, but a group whose earlier turns all ran
+    // on personal credentials has none yet, so this turn has to take the check itself.
+    isPersonaJob: false,
+    triggerKey: context.textQuotaTriggerKey,
+    serverId: context.currentPersona.server_id,
+    userDiscId:
+      incoming.textQuotaUserDiscId ?? context.turn.lockedTurn.admission.cooldownUserDiscId ?? context.userDiscId,
+    channel: context.channel as SendableChannel,
+    locale: context.locale,
+    notifyUser: context.shouldSurfaceUserErrors,
+  });
+
+  if (!quota.allowed) {
+    log.info(`Refusing the server model fallback for user ${context.userDiscId}: the server text quota is exhausted.`);
+    return false;
+  }
+
+  context.shouldApplyTextQuota = true;
+  context.textQuotaState = quota.state;
+  return true;
 }
 
 // Must run before provider.createConfig : providers eagerly attach the full tool
@@ -373,6 +520,7 @@ async function sendFallbackNoticeIfNeeded(
   context: ChatTurnContext,
   attempt: GenerationAttempt,
   failures: FallbackNoticeAttempt[],
+  options: { offerPersonalFallbackOptOut: boolean },
 ): Promise<void> {
   if (context.isUserImpersonation || failures.length === 0 || !context.shouldSurfaceUserErrors) {
     return;
@@ -392,6 +540,7 @@ async function sendFallbackNoticeIfNeeded(
     },
     failures,
     successModel: attempt.successModel,
+    offerPersonalFallbackOptOut: options.offerPersonalFallbackOptOut,
   });
 }
 

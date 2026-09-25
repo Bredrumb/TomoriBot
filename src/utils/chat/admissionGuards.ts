@@ -15,6 +15,7 @@ import { ColorCode, log } from "@/utils/misc/logger";
 import { checkTextQuota } from "@/utils/quota/textQuotaManager";
 import { checkServerRateLimit, checkUserRateLimit } from "@/utils/security/rateLimiter";
 import { isBaseTriggerWordMatch } from "@/utils/chat/errorVisibility";
+import type { ChatIncoming } from "@/utils/chat/types";
 import {
   buildTextQuotaResetInfo,
   textQuotaTriggerStates,
@@ -167,6 +168,23 @@ export async function setMessageTriggerCooldownForAdmission(params: {
     params.cooldownType,
     params.cooldownLength,
     params.member,
+  );
+}
+
+/**
+ * Whether this turn draws on a server's text quota once it runs on the server's credentials.
+ *
+ * Direct messages, system-initiated turns, reminder deliveries, and stop responses never count
+ * against a server's text quota. The caller decides the credential route separately, because a
+ * turn planned on personal credentials only reaches this quota if it falls back to the server.
+ */
+export function shouldApplyServerTextQuota(incoming: ChatIncoming, isDMChannel: boolean | undefined): boolean {
+  return (
+    incoming.textQuotaSource === "user" &&
+    !isDMChannel &&
+    !incoming.isStopResponse &&
+    !incoming.reminderRecipientID &&
+    !incoming.reminderData?.self_reminder
   );
 }
 

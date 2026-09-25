@@ -6,6 +6,7 @@ import type { ProviderConfig, StreamResult } from "@/types/provider/interfaces";
 import type { FallbackNoticeAttempt } from "@/utils/discord/fallbackModelNotice";
 import type { ChatResponseSink, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import type { ToolLoopParams } from "@/utils/chat/toolLoop";
+import type { TextQuotaTriggerState } from "@/utils/chat/textQuotaState";
 // Capture the REAL repository barrel before the mock below replaces it. Importing
 // it is side-effect-free (the DB client connects lazily, not at import), and
 // `mock.module` runs in source order (not hoisted), so this static import resolves
@@ -19,6 +20,7 @@ import * as realRepositories from "@/utils/db/repositories";
 // reason: a partial factory leaks for the rest of the run and breaks files
 // loaded later. Spreading the real namespace keeps each mock full-surface.
 import * as realChannelLlmCache from "@/utils/cache/channelLlmCache";
+import * as realAdmissionGuards from "@/utils/chat/admissionGuards";
 import * as realGeminiCapabilityCache from "@/utils/cache/geminiCapabilityCache";
 import * as realNovelaiCapabilityCache from "@/utils/cache/novelaiCapabilityCache";
 import * as realNovelaiSubscriptionCache from "@/utils/cache/novelaiSubscriptionCache";
@@ -45,8 +47,20 @@ const toolLoopCalls: Array<{
   contextItems: ToolLoopParams["context"]["contextItems"];
 }> = [];
 const providerConfigCalls: Array<{ model: string; apiKey: string }> = [];
-const fallbackNoticeCalls: Array<{ failures: FallbackNoticeAttempt[]; successModel: LlmRow }> = [];
+const fallbackNoticeCalls: Array<{
+  failures: FallbackNoticeAttempt[];
+  successModel: LlmRow;
+  offerPersonalFallbackOptOut: boolean | undefined;
+}> = [];
 const personalSavedConfigLoads: Array<{ userId: number; provider: string }> = [];
+// Records the server text quota admissions the fallback phase takes, so a test can tell an
+// admission that never happened from one that was granted.
+const textQuotaAdmissions: Array<{ triggerKey: string; isPersonaJob: boolean; userDiscId: string }> = [];
+let textQuotaAdmissionResult: { allowed: boolean; state: TextQuotaTriggerState | null } = {
+  allowed: true,
+  state: null,
+};
+let textQuotaAdmissionFailure: Error | null = null;
 const testStopRequests = new Map<string, { type: "stop" | "follow_up"; stopContext?: TestStopContext }>();
 let personalOverlayState: TomoriState | null = null;
 
@@ -60,6 +74,7 @@ type TestStopContext = {
 // does ColorCode.ERROR.replace("#", "")). Only `log` is silenced.
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/cache/channelLlmCache": realChannelLlmCache,
+  "@/utils/chat/admissionGuards": realAdmissionGuards,
   "@/utils/cache/geminiCapabilityCache": realGeminiCapabilityCache,
   "@/utils/cache/novelaiCapabilityCache": realNovelaiCapabilityCache,
   "@/utils/cache/novelaiSubscriptionCache": realNovelaiSubscriptionCache,
@@ -150,8 +165,36 @@ scopedMock.module("@/utils/db/repositories", () => ({
 
 scopedMock.module("@/utils/discord/fallbackModelNotice", () => ({
   ...realFallbackModelNotice,
-  sendFallbackModelUsageNotice: async (args: { failures: FallbackNoticeAttempt[]; successModel: LlmRow }) => {
-    fallbackNoticeCalls.push({ failures: args.failures, successModel: args.successModel });
+  sendFallbackModelUsageNotice: async (args: {
+    failures: FallbackNoticeAttempt[];
+    successModel: LlmRow;
+    offerPersonalFallbackOptOut?: boolean;
+  }) => {
+    fallbackNoticeCalls.push({
+      failures: args.failures,
+      successModel: args.successModel,
+      offerPersonalFallbackOptOut: args.offerPersonalFallbackOptOut,
+    });
+  },
+}));
+
+// The admission itself reads quota usage from the database and notifies the user through Discord;
+// this file only needs to observe that the server fallback phase asked, and to decide the answer.
+scopedMock.module("@/utils/chat/admissionGuards", () => ({
+  ...realAdmissionGuards,
+  checkTextQuotaForAdmission: async (params: {
+    triggerKey: string;
+    isPersonaJob: boolean;
+    userDiscId: string;
+    shouldApplyTextQuota: boolean;
+  }) => {
+    textQuotaAdmissions.push({
+      triggerKey: params.triggerKey,
+      isPersonaJob: params.isPersonaJob,
+      userDiscId: params.userDiscId,
+    });
+    if (textQuotaAdmissionFailure) throw textQuotaAdmissionFailure;
+    return textQuotaAdmissionResult;
   },
 }));
 
@@ -508,6 +551,7 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
       llm_temperature: 0.7,
       private_channel_ids: [],
       tool_notice_hidden_keys: [],
+      user_byok_mode: false,
     },
   } as unknown as TomoriState;
 
@@ -548,16 +592,83 @@ function makeContext(primaryModel: LlmRow, fallbackModel: LlmRow): ChatTurnConte
         admission: {
           incoming: {
             retryCount: 0,
+            textQuotaSource: "user",
           },
+          cooldownUserDiscId: "user_1",
         },
         channelId: "channel_1",
         lockedAt: Date.now(),
         queueDepth: 0,
         skipLock: false,
       },
+      // The account preference the server fallback guard reads, on the same cached row the turn
+      // planner took the personal routing decision from.
+      userRow: { user_id: 4, user_disc_id: "user_1", personal_server_fallback_enabled: true },
     },
     userDiscId: "user_1",
   } as unknown as ChatTurnContext;
+}
+
+/** Turns the fixture into a user-triggered turn that runs on the user's own text provider. */
+function makePersonalContext(serverPrimary: LlmRow, serverFallback: LlmRow, personalPrimary: LlmRow): ChatTurnContext {
+  const context = makeContext(serverPrimary, serverFallback);
+  context.textCredentialSource = "personal";
+  context.personalRoutingUserId = 4;
+  context.personalTextProvider = "openrouter";
+  personalOverlayState = {
+    ...context.currentPersona,
+    llm: personalPrimary,
+    fallback_chain: undefined,
+    fallback_llms: undefined,
+    config: { ...context.currentPersona.config, api_key: "personal-encrypted-key" },
+  } as TomoriState;
+  return context;
+}
+
+/** The error the personal route returns before every server route attempt in these tests. */
+function personalRouteFailure(): GenerationTurnResult {
+  return {
+    status: "error",
+    streamResults: [{ status: "error", data: { type: "rate_limit", code: "429", message: "rate limited" } }],
+    personaResponses: [],
+  };
+}
+
+function successfulReply(text = "ok"): GenerationTurnResult {
+  return {
+    status: "completed",
+    streamResults: [{ status: "completed", accumulatedText: text }],
+    personaResponses: [{ personaName: "Tomori", text, personaId: 10, personaLineageId: 100 }],
+  };
+}
+
+function collectingSink(): ChatResponseSink & { emittedErrors: unknown[]; finalizedResults: GenerationTurnResult[] } {
+  const emittedErrors: unknown[] = [];
+  const finalizedResults: GenerationTurnResult[] = [];
+  return {
+    emittedErrors,
+    finalizedResults,
+    emitStreamResult: async (result) => {
+      emittedErrors.push(result);
+    },
+    emitError: async (error) => {
+      emittedErrors.push(error);
+    },
+    finalize: async (result) => {
+      finalizedResults.push(result);
+    },
+  };
+}
+
+/** Pins the model-randomizer draw so a pool's lead model is decided by the test, not by chance. */
+async function runWithFixedRandom(leadFraction: number, run: () => Promise<void>): Promise<void> {
+  const originalRandom = Math.random;
+  Math.random = () => leadFraction;
+  try {
+    await run();
+  } finally {
+    Math.random = originalRandom;
+  }
 }
 
 describe("runGenerationTurn fallback behavior", () => {
@@ -568,6 +679,12 @@ describe("runGenerationTurn fallback behavior", () => {
     providerConfigCalls.length = 0;
     fallbackNoticeCalls.length = 0;
     personalSavedConfigLoads.length = 0;
+    textQuotaAdmissions.length = 0;
+    textQuotaAdmissionResult = {
+      allowed: true,
+      state: { serverId: 1, userDiscId: "user_1", consumed: false, createdAt: Date.now() },
+    };
+    textQuotaAdmissionFailure = null;
     personalOverlayState = null;
 
     const { StreamOrchestrator } = await import("@/utils/discord/streamOrchestrator");
@@ -678,47 +795,244 @@ describe("runGenerationTurn fallback behavior", () => {
   });
 
   it("falls back from a failed personal text model to the configured server model", async () => {
-    const serverPrimary = makeLlm(1, "server-primary");
-    const serverFallback = makeLlm(2, "server-fallback");
-    const personalPrimary = makeLlm(3, "personal-primary");
-    const context = makeContext(serverPrimary, serverFallback);
-    context.textCredentialSource = "personal";
-    context.personalRoutingUserId = 4;
-    context.personalTextProvider = "openrouter";
-    personalOverlayState = {
-      ...context.currentPersona,
-      llm: personalPrimary,
-      fallback_chain: undefined,
-      fallback_llms: undefined,
-      config: { ...context.currentPersona.config, api_key: "personal-encrypted-key" },
-    } as TomoriState;
-    queuedResults.push(
-      {
-        status: "error",
-        streamResults: [{ status: "error", data: { type: "rate_limit", code: "429", message: "rate limited" } }],
-        personaResponses: [],
-      },
-      {
-        status: "completed",
-        streamResults: [{ status: "completed", accumulatedText: "ok" }],
-        personaResponses: [{ personaName: "Tomori", text: "ok", personaId: 10, personaLineageId: 100 }],
-      },
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
     );
-    const sink: ChatResponseSink = {
-      emitStreamResult: async () => undefined,
-      emitError: async () => undefined,
-      finalize: async () => undefined,
-    };
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
 
     const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
     await runGenerationTurn(context, sink);
 
     expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary"]);
+    // The server route keeps the server's own credentials and the server's whole failover tail,
+    // even though both routes name models from the same provider.
     expect(providerConfigCalls).toEqual([
       { model: "personal-primary", apiKey: "personal-key" },
       { model: "server-primary", apiKey: "server-key" },
       { model: "server-fallback", apiKey: "server-key" },
     ]);
+    // The server's model spends the server's text quota, and only a later success may consume it.
+    expect(textQuotaAdmissions).toEqual([{ triggerKey: "trigger_1", isPersonaJob: false, userDiscId: "user_1" }]);
+    expect(context.shouldApplyTextQuota).toBe(true);
+    expect(context.textQuotaState?.consumed).toBe(false);
+    expect(fallbackNoticeCalls).toHaveLength(1);
+    expect(fallbackNoticeCalls[0]?.offerPersonalFallbackOptOut).toBe(true);
+    expect(fallbackNoticeCalls[0]?.failures).toEqual([
+      { modelCodename: "personal-primary", errorDetail: "rate limited" },
+    ]);
+  });
+
+  it("keeps a successful personal text turn on its own route", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    queuedResults.push(successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    // Building the server pool eagerly would resolve server provider config and take the server's
+    // quota admission for a turn that never leaves the personal route.
+    expect(providerConfigCalls).toEqual([{ model: "personal-primary", apiKey: "personal-key" }]);
+    expect(textQuotaAdmissions).toHaveLength(0);
+    expect(context.shouldApplyTextQuota).toBe(false);
+    expect(context.textQuotaState).toBeNull();
+    expect(fallbackNoticeCalls).toHaveLength(0);
+  });
+
+  it("resolves the server route from the persona's server model rather than the personal overlay", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.currentPersona.persona_llm = makeLlm(9, "persona-server-model");
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "persona-server-model"]);
+  });
+
+  it("withholds the server model fallback when the server requires personal providers", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.currentPersona.config.user_byok_mode = true;
+    queuedResults.push(personalRouteFailure());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary"]);
+    expect(toolLoopCalls[0]?.suppressUserErrors).toBe(false);
+    expect(textQuotaAdmissions).toHaveLength(0);
+    expect(result.status).toBe("error");
+    expect(sink.finalizedResults).toEqual([result]);
+  });
+
+  it("skips the server model fallback for an account that turned it off", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.turn.userRow.personal_server_fallback_enabled = false;
+    queuedResults.push(personalRouteFailure());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary"]);
+    expect(providerConfigCalls).toEqual([{ model: "personal-primary", apiKey: "personal-key" }]);
+    expect(textQuotaAdmissions).toHaveLength(0);
+    expect(context.shouldApplyTextQuota).toBe(false);
+    expect(result.status).toBe("error");
+  });
+
+  it("keeps the fallback for an account whose preference was never stored", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.turn.userRow.personal_server_fallback_enabled = undefined as unknown as boolean;
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary"]);
+  });
+
+  it("refuses the server model fallback when the server's text quota is exhausted", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    textQuotaAdmissionResult = { allowed: false, state: null };
+    queuedResults.push(personalRouteFailure());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(textQuotaAdmissions).toHaveLength(1);
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary"]);
+    expect(context.shouldApplyTextQuota).toBe(false);
+    expect(result.status).toBe("error");
+  });
+
+  it("leaves the personal failure as the outcome when the server route cannot be prepared", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    // A failing quota lookup must not replace the user's own provider error with its own.
+    textQuotaAdmissionFailure = new Error("quota lookup unavailable");
+    queuedResults.push(personalRouteFailure());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary"]);
+    expect(result.status).toBe("error");
+    expect(sink.finalizedResults).toEqual([result]);
+  });
+
+  it("consumes no quota when the server model fails too", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    queuedResults.push(personalRouteFailure(), personalRouteFailure(), personalRouteFailure());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    const result = await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary", "server-fallback"]);
+    expect(context.shouldApplyTextQuota).toBe(true);
+    expect(context.textQuotaState?.consumed).toBe(false);
+    expect(result.personaResponses).toHaveLength(0);
+    expect(fallbackNoticeCalls).toHaveLength(0);
+  });
+
+  it("does not offer the personal fallback opt-out when a personal fallback answered", async () => {
+    const primaryModel = makeLlm(1, "personal-primary");
+    const fallbackModel = makeLlm(2, "personal-fallback");
+    const context = makeContext(primaryModel, fallbackModel);
+    context.textCredentialSource = "personal";
+    context.personalRoutingUserId = 4;
+    personalOverlayState = context.currentPersona;
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+    await runGenerationTurn(context, sink);
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "personal-fallback"]);
+    expect(fallbackNoticeCalls).toHaveLength(1);
+    expect(fallbackNoticeCalls[0]?.offerPersonalFallbackOptOut).toBe(false);
+  });
+
+  it("keeps the server route's model order when only the personal randomizer is on", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    // The personal overlay carries the personal route's own randomizer flag; the server's stays off.
+    personalOverlayState = {
+      ...(personalOverlayState as TomoriState),
+      config: { ...(personalOverlayState as TomoriState).config, model_randomizer_enabled: true },
+    } as TomoriState;
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    // The stub would send the server fallback first if the personal flag reached the server pool.
+    await runWithFixedRandom(0.999, async () => {
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      await runGenerationTurn(context, sink);
+    });
+
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-primary"]);
+  });
+
+  it("draws the server route's leading model from the server's randomizer setting", async () => {
+    const context = makePersonalContext(
+      makeLlm(1, "server-primary"),
+      makeLlm(2, "server-fallback"),
+      makeLlm(3, "personal-primary"),
+    );
+    context.currentPersona.config.model_randomizer_enabled = true;
+    queuedResults.push(personalRouteFailure(), successfulReply());
+    const sink = collectingSink();
+
+    await runWithFixedRandom(0.999, async () => {
+      const { runGenerationTurn } = await import("@/utils/chat/generationTurn");
+      await runGenerationTurn(context, sink);
+    });
+
+    // The draw lands on the last pool member, so only the server's own flag can reorder this pool.
+    expect(toolLoopCalls.map((call) => call.model)).toEqual(["personal-primary", "server-fallback"]);
   });
 
   it("deletes the timed-out primary's partial message when a fallback succeeds", async () => {
