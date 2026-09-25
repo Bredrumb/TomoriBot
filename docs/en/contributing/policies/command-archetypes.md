@@ -119,7 +119,7 @@ open work.
 - Open a modal only for input too long or too structured for slash options.
 - Check context and permissions quickly, then defer before any database, provider, or history work.
 - Add confirmation only where the consequence calls for it.
-- When a command is renamed, keep the established verb (`/kill` over `/stop`) and mention the old
+- When a command is renamed, keep the established verb (`/kill` over `stop`) and mention the old
   wording in the description and `/help`.
 
 ## Visibility and authorization
