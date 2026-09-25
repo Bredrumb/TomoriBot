@@ -15,6 +15,7 @@ your task.
 | Task | Guide |
 |---|---|
 | Add a slash command | [`slash-command.md`](./extending/slash-command) |
+| Add a panel, or a button to one | [`panel.md`](./extending/panel) |
 | Add an event handler | [`event-handler.md`](./extending/event-handler) |
 | Add a built-in tool | [`builtin-tool.md`](./extending/builtin-tool) |
 | Add a feature-flagged tool | [`feature-flag-tool.md`](./extending/feature-flag-tool) |
@@ -44,6 +45,7 @@ your task.
 **Policies** (`policies/`)
 
 - [`comments.md`](./policies/comments): what a comment may say, dashes, and the comment and prose audits
+- [`command-archetypes.md`](./policies/command-archetypes): which kind of command or panel to build, with reference commands
 - [`panel-prose-and-layout.md`](./policies/panel-prose-and-layout): text and components inside a panel
 - [`raw-sql.md`](./policies/raw-sql): raw SQL stays in the repository layer
 - [`dependency-security.md`](./policies/dependency-security): overrides, patches, and audit exceptions

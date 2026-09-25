@@ -81,6 +81,8 @@ task index and coding conventions, and
 Per-task guides:
 
 - [`contributing/extending/slash-command.md`](./en/contributing/extending/slash-command)
+- [`contributing/policies/command-archetypes.md`](./en/contributing/policies/command-archetypes): which kind of command or panel to build
+- [`contributing/extending/panel.md`](./en/contributing/extending/panel): building a panel, or adding a button or select to one
 - [`contributing/extending/event-handler.md`](./en/contributing/extending/event-handler)
 - [`contributing/extending/builtin-tool.md`](./en/contributing/extending/builtin-tool)
 - [`contributing/extending/feature-flag-tool.md`](./en/contributing/extending/feature-flag-tool)

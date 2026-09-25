@@ -35,6 +35,9 @@ export const isCommandEnabled = () =>
   process.env.TOMORI_SUPPORTER_BILLING_ENABLED === "true";
 ```
 
+Before building, pick the command's archetype (panel, wizard, direct family, immediate or destructive
+action) in [Command Archetypes](/contributing/policies/command-archetypes/).
+
 ## Naming
 
 Name commands with the words users see in Discord:

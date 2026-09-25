@@ -103,7 +103,36 @@ Keep the `/en/` segment, as every docs link in `src/locales/en-US/` does.
   and `>` read as operators, and `◀`/`▶` can render as coloured emoji.
 - Keep the selection and the page body while paging. Do not swap the body for a range chooser.
 
+## Modals
+
+- Prefer native User, Channel, and Role selects for Discord-owned lists. A String Select fits only an
+  application list whose maximum stays within 25 options.
+- Open an add modal straight from its select option when one modal captures the whole resource. Choosing
+  an add option writes nothing until the modal is submitted, so it is not a navigation write.
+- Show user entries as the server display name followed by the username in parentheses when they differ:
+  `Mika (mika_draws)`.
+- A modal holds five top-level components. Text inputs reopen with the stored value; selects and checkbox
+  groups cannot be prefilled and reopen empty.
+
+**Removal checklists.** For a list where unchecking removes an entry, every current entry starts checked
+and submitting is the write, with no second confirmation. A checkbox group holds 10 options, so one modal
+holds 50 entries. Title the first group with the list (`Blacklisted Members`) plus one sentence on what
+unchecking does, and the rest `Continuation (1)`, `Continuation (2)`. Bind the presented entries to a
+single-use nonce; on submit, re-authorize, reload, and remove only presented entries that are unchecked
+and still current, so entries added meanwhile survive.
+
+**Longer lists.** Past one modal's capacity (50 for checkbox groups, 25 for a String Select), replace the
+page body with a range chooser inside the panel, keeping the category row and separator. Choosing a range
+opens that range's modal, and every path returns to the previous page. `Previous` and `Next` appear only
+when the chooser has several pages; `Cancel` always appears. Keep at most 10 ranges per chooser page,
+because the chooser shares the panel's 40-component budget. Reuse the `general.pagination.*` keys for its
+wording.
+
 ## Buttons
+
+- Collection actions pair `+ Add ...` with a red `- Remove ...`, and Remove is disabled while the list
+  is empty.
+- `Retry` and the subdued stale-read warning go at the bottom of the page.
 
 - A label names the object acted on (`Remove Document`), not the internal category it came from and
   never its own colour (`Danger: Remove`).

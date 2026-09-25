@@ -152,6 +152,8 @@ and the doc is fixed in the same change. `docs/README.md` indexes every page.
 | Task | Read first |
 |---|---|
 | Add a slash command | `docs/en/contributing/extending/slash-command.md` |
+| Choose what kind of command or panel to build | `docs/en/contributing/policies/command-archetypes.md` |
+| Add a panel or panel button | `docs/en/contributing/extending/panel.md` |
 | Add a DB column or table | `docs/en/contributing/extending/db-column.md` |
 | Add a built-in tool | `docs/en/contributing/extending/builtin-tool.md` |
 | Add a new AI provider | `docs/en/contributing/extending/new-provider.md` |

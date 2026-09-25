@@ -1115,6 +1115,9 @@ production branch substitutes a payload rather than propagating.
 
 ### Adding a panel
 
+The step-by-step guide is [Adding a Panel or Panel Button](/contributing/extending/panel/). This section
+covers the producer manifest it relies on.
+
 A new module that emits `MessageFlags.IsComponentsV2` must appear in the manifest in
 `tests/unit/discord/componentsV2ProducerManifest.test.ts`. The coverage assertion scans `src/` for that flag
 and compares the result against the manifest by module name in both directions, so an unregistered producer
