@@ -28,6 +28,8 @@ type ConnectionGate = {
   readers: number;
   onReadersDrained: (() => void) | null;
   mediaLeases: number;
+  /** ComfyUI servers used during this handoff, keyed by URL; each must release VRAM before the reload. */
+  comfyUiTargets: Map<string, string>;
   closed: Promise<void> | null;
   open: (() => void) | null;
 };
@@ -44,11 +46,19 @@ const BACKEND_PROBE_TIMEOUT_MS = 5_000;
 const READER_DRAIN_TIMEOUT_MS = 120_000;
 const KOBOLDCPP_UNLOAD_CONFIRM_MS = 30_000;
 const KOBOLDCPP_RELOAD_CONFIRM_MS = 60_000;
+const COMFYUI_FREE_CONFIRM_MS = 10_000;
 
 function getGate(connectionId: number): ConnectionGate {
   const existing = gates.get(connectionId);
   if (existing) return existing;
-  const created: ConnectionGate = { readers: 0, onReadersDrained: null, mediaLeases: 0, closed: null, open: null };
+  const created: ConnectionGate = {
+    readers: 0,
+    onReadersDrained: null,
+    mediaLeases: 0,
+    comfyUiTargets: new Map(),
+    closed: null,
+    open: null,
+  };
   gates.set(connectionId, created);
   return created;
 }
@@ -285,6 +295,52 @@ async function prepareOllama(endpointUrl: string, apiKey: string, model: string)
   }
 }
 
+async function readComfyUiFreeVram(endpointUrl: string, apiKey: string): Promise<number | null> {
+  try {
+    const stats = await readJson(
+      await fetchUserRemoteUrl(`${endpointUrl.replace(/\/+$/, "")}/system_stats`, {
+        headers: buildCustomHeaders(apiKey),
+        signal: AbortSignal.timeout(BACKEND_PROBE_TIMEOUT_MS),
+      }),
+    );
+    const [device] = Array.isArray(stats?.devices) ? (stats.devices as Array<{ vram_free?: unknown }>) : [];
+    return typeof device?.vram_free === "number" ? device.vram_free : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Asks ComfyUI to drop its cached models and waits until the VRAM actually comes back.
+ *
+ * `/free` only sets a flag that ComfyUI's worker applies between prompts, so the request returns
+ * before anything is released; reloading the text model on that response alone would race the
+ * unload. It never interrupts a running prompt, which keeps it safe on a shared instance. The wait
+ * is bounded because a server with nothing cached never reports a rise.
+ */
+async function releaseComfyUiVram(endpointUrl: string, apiKey: string): Promise<void> {
+  const before = await readComfyUiFreeVram(endpointUrl, apiKey);
+  try {
+    const response = await fetchUserRemoteUrl(`${endpointUrl.replace(/\/+$/, "")}/free`, {
+      method: "POST",
+      headers: buildCustomHeaders(apiKey),
+      body: JSON.stringify({ unload_models: true, free_memory: true }),
+      signal: AbortSignal.timeout(CONTROL_REQUEST_TIMEOUT_MS),
+    });
+    await response.body?.cancel().catch(() => undefined);
+    if (!response.ok) return;
+  } catch {
+    return;
+  }
+  if (before === null) return;
+  const deadline = Date.now() + COMFYUI_FREE_CONFIRM_MS;
+  while (Date.now() < deadline) {
+    await Bun.sleep(500);
+    const now = await readComfyUiFreeVram(endpointUrl, apiKey);
+    if (now !== null && now > before) return;
+  }
+}
+
 function recordHandoff(backend: VramHandoffBackend, outcome: string): void {
   log.metric("comfyui_vram_handoff", { backend, outcome });
 }
@@ -304,6 +360,12 @@ function createMediaLease(params: {
         released = true;
         params.gate.mediaLeases -= 1;
         if (params.gate.mediaLeases > 0) return;
+        // Runs for failed and cancelled jobs too, which the success-only unload in the ComfyUI
+        // client never covers; otherwise ComfyUI keeps the VRAM the text model needs back.
+        for (const [endpointUrl, comfyUiKey] of params.gate.comfyUiTargets) {
+          await releaseComfyUiVram(endpointUrl, comfyUiKey);
+        }
+        params.gate.comfyUiTargets.clear();
         // Ollama reloads lazily on the next request, so only KoboldCpp needs an explicit reload.
         if (params.backend === "koboldcpp") {
           const restored = await restoreKoboldCpp(params.connection.endpoint_url, params.apiKey);
@@ -325,6 +387,8 @@ function createMediaLease(params: {
  */
 export async function beginTextModelHandoffBeforeComfyUi(params: {
   tomoriState: TomoriState;
+  /** The ComfyUI server running the job, which is asked to release its VRAM before the text model reloads. */
+  comfyUi: { endpointUrl: string; apiKey: string };
 }): Promise<TextModelHandoffLease> {
   const connectionId = parseCustomProvider(params.tomoriState.llm.llm_provider)?.connectionId;
   if (connectionId == null) return NO_HANDOFF;
@@ -337,6 +401,7 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
     const gate = getGate(connectionId);
     if (gate.mediaLeases > 0) {
       gate.mediaLeases += 1;
+      gate.comfyUiTargets.set(params.comfyUi.endpointUrl, params.comfyUi.apiKey);
       return createMediaLease({ connectionId, gate, connection, apiKey, backend });
     }
 
@@ -366,6 +431,7 @@ export async function beginTextModelHandoffBeforeComfyUi(params: {
         return NO_HANDOFF;
       }
       gate.mediaLeases = 1;
+      gate.comfyUiTargets.set(params.comfyUi.endpointUrl, params.comfyUi.apiKey);
       recordHandoff(backend, "unloaded");
       return createMediaLease({ connectionId, gate, connection, apiKey, backend });
     } catch (error) {

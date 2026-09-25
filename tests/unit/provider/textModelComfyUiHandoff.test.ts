@@ -8,6 +8,7 @@ stubLogMembers({ metric: () => {}, error: async () => {} });
 
 // An IP literal skips DNS in the SSRF gate, so the stubbed global fetch is the only network hop.
 const ENDPOINT_URL = "https://8.8.8.8:5001/v1";
+const COMFYUI = { endpointUrl: "https://8.8.8.8:8188", apiKey: "" };
 
 let backend: VramHandoffBackend = "ollama";
 let nextConnectionId = 1;
@@ -36,9 +37,16 @@ interface KoboldBehavior {
 function stubBackend(kobold: KoboldBehavior = {}) {
   const calls: string[] = [];
   let loaded = true;
+  let comfyUiVramFree = 2_000;
   const spy = spyOn(globalThis, "fetch").mockImplementation(async (input: unknown, init?: RequestInit) => {
     const { pathname } = new URL(String(input instanceof Request ? input.url : input));
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+    if (pathname === "/free") {
+      calls.push("comfyui free");
+      comfyUiVramFree = 20_000;
+      return new Response(null, { status: 200 });
+    }
+    if (pathname === "/system_stats") return Response.json({ devices: [{ vram_free: comfyUiVramFree }] });
     if (pathname === "/api/generate") {
       calls.push(`ollama keep_alive=${body.keep_alive}`);
       return Response.json({});
@@ -88,7 +96,7 @@ describe("local text-model ComfyUI handoff", () => {
     const server = stubBackend();
     restore.push(server.spy);
 
-    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), comfyUi: COMFYUI });
     expect(server.calls).toEqual(["ollama keep_alive=0"]);
 
     let textStarted = false;
@@ -110,7 +118,7 @@ describe("local text-model ComfyUI handoff", () => {
     restore.push(server.spy);
 
     const releaseText = await acquireTextModelLease(connectionId);
-    const pendingLease = beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    const pendingLease = beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), comfyUi: COMFYUI });
     await flush();
     expect(server.calls).toEqual([]);
 
@@ -125,14 +133,15 @@ describe("local text-model ComfyUI handoff", () => {
     const server = stubBackend({ unload: "accept" });
     restore.push(server.spy);
 
-    const first = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
-    const second = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    const first = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), comfyUi: COMFYUI });
+    const second = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), comfyUi: COMFYUI });
     expect(server.calls).toEqual(["kobold unload_model"]);
 
     await first.restore();
     expect(server.isLoaded()).toBe(false);
     await second.restore();
-    expect(server.calls).toEqual(["kobold unload_model", "kobold initial_model"]);
+    // ComfyUI must hand its VRAM back before the text model reloads into it.
+    expect(server.calls).toEqual(["kobold unload_model", "comfyui free", "kobold initial_model"]);
     expect(server.isLoaded()).toBe(true);
   });
 
@@ -141,7 +150,7 @@ describe("local text-model ComfyUI handoff", () => {
     const server = stubBackend({ unload: "throw" });
     restore.push(server.spy);
 
-    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), comfyUi: COMFYUI });
     expect(server.calls).toEqual(["kobold unload_model", "kobold initial_model"]);
     expect(server.isLoaded()).toBe(true);
 
@@ -155,7 +164,7 @@ describe("local text-model ComfyUI handoff", () => {
     const server = stubBackend({ unload: "reject" });
     restore.push(server.spy);
 
-    await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), comfyUi: COMFYUI });
     expect(server.calls).toEqual(["kobold unload_model"]);
     (await acquireTextModelLease(connectionId))();
   });
@@ -165,7 +174,7 @@ describe("local text-model ComfyUI handoff", () => {
     const server = stubBackend();
     restore.push(server.spy);
 
-    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state() });
+    const lease = await beginTextModelHandoffBeforeComfyUi({ tomoriState: state(), comfyUi: COMFYUI });
     const controller = new AbortController();
     const pendingText = acquireTextModelLease(connectionId, controller.signal);
     controller.abort(new Error("killed"));

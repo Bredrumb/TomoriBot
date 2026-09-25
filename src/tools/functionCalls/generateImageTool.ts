@@ -1206,7 +1206,10 @@ export class GenerateImageTool extends BaseTool {
       if (creds.customEndpoint) {
         const handoff =
           creds.customEndpoint.api_style === "comfyui"
-            ? await beginTextModelHandoffBeforeComfyUi({ tomoriState: context.tomoriState })
+            ? await beginTextModelHandoffBeforeComfyUi({
+                tomoriState: context.tomoriState,
+                comfyUi: { endpointUrl: creds.customEndpoint.endpoint_url, apiKey },
+              })
             : null;
         try {
           const result = await generateCustomImageViaEndpoint({
