@@ -79,6 +79,7 @@ import {
 import { getCustomToolAdapter } from "./customToolAdapter";
 import { customProviderInfo } from "./providerInfo";
 import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpointService";
+import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { buildCustomHeaders } from "@/providers/custom/customOpenAICompatibleUtils";
 import { applyDeliberateToolAllowlist } from "@/utils/tools/deliberateToolMode";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
@@ -95,6 +96,8 @@ const DEFAULT_CUSTOM_MODEL = "custom/default";
 export interface CustomProviderConfig extends ProviderConfig {
   /** Custom endpoint URL (e.g., http://localhost:11434/v1) */
   endpointUrl: string;
+  /** The backend server's connection, which keys its ComfyUI VRAM handoff. */
+  customConnectionId?: number | null;
   /** Whether the model supports image inputs (user-declared) */
   seesImages?: boolean;
   /** Whether the model supports video inputs (user-declared) */
@@ -457,6 +460,7 @@ export class CustomProvider
       disabledParams: tomoriState.config.llm_disabled_params ?? [],
       maxOutputTokens: tomoriState.config.llm_max_output_tokens ?? 4096,
       endpointUrl: endpointUrl,
+      customConnectionId: parseCustomProvider(tomoriState.llm.llm_provider)?.connectionId ?? null,
       seesImages: tomoriState.llm.sees_images,
       seesVideos: tomoriState.llm.sees_videos,
       ...samplingParams,

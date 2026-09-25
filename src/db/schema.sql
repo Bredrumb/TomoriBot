@@ -2230,12 +2230,24 @@ CREATE TABLE IF NOT EXISTS custom_endpoint_connections (
   api_style TEXT NOT NULL,
   endpoint_url TEXT NOT NULL,
   requires_auth BOOLEAN NOT NULL DEFAULT false,
+  behavior JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   CHECK ((server_id IS NULL) <> (user_id IS NULL))
 );
+
+SELECT add_column_if_not_exists('custom_endpoint_connections', 'behavior', 'JSONB', '''{}''::jsonb', 'NOT NULL');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'custom_endpoint_connections_behavior_object'
+  ) THEN
+    ALTER TABLE custom_endpoint_connections
+      ADD CONSTRAINT custom_endpoint_connections_behavior_object CHECK (jsonb_typeof(behavior) = 'object');
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_custom_endpoint_connections_server ON custom_endpoint_connections(server_id);
 CREATE INDEX IF NOT EXISTS idx_custom_endpoint_connections_user ON custom_endpoint_connections(user_id);

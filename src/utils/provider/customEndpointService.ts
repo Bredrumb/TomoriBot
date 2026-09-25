@@ -1,6 +1,7 @@
 import type {
   CustomEndpointApiStyle,
   CustomEndpointCapability,
+  CustomEndpointConnectionRow,
   CustomEndpointRow,
   PersonalProviderCapability,
   SavedProviderConfigUpsert,
@@ -26,7 +27,7 @@ import {
 import { buildFallbackModelPersistence, prunePrimaryFallbackRefs } from "@/utils/provider/fallbackModelIdentity";
 import { assignPersonalCapabilityToProvider, withPersonalTextPrimary } from "@/utils/provider/personalProviderHelpers";
 import { resolveLogitBiasEntriesForLlm } from "@/utils/provider/logitBiasResolver";
-import { encryptApiKey } from "@/utils/security/crypto";
+import { decryptApiKey, encryptApiKey } from "@/utils/security/crypto";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
 type RegistrationScope =
@@ -758,4 +759,28 @@ export function normalizeCustomEndpointUrlForStorage(apiStyle: CustomEndpointApi
   }
 
   return trimmed;
+}
+
+/**
+ * Decrypts the credential saved for one connection, looked up under that connection's own owner.
+ * Capability-level resolution would instead return whichever text credential wins the workspace
+ * policy, which can belong to a different provider entirely.
+ *
+ * @returns `null` when the connection has no stored credential or it cannot be decrypted.
+ */
+export async function loadCustomConnectionCredential(connection: CustomEndpointConnectionRow): Promise<string | null> {
+  if (!connection.requires_auth) return null;
+  const provider = buildCustomProviderName(connection.connection_id);
+  const config =
+    connection.server_id != null
+      ? await llmProviderRepo.loadSavedProviderConfig(connection.server_id, provider)
+      : connection.user_id != null
+        ? await llmProviderRepo.loadUserSavedProviderConfig(connection.user_id, provider)
+        : null;
+  if (!config?.api_key) return null;
+  try {
+    return await decryptApiKey(config.api_key, config.key_version ?? 1);
+  } catch {
+    return null;
+  }
 }
