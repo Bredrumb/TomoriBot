@@ -569,6 +569,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
@@ -585,6 +586,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
@@ -601,6 +603,7 @@ export class GenerateVideoTool extends BaseTool {
           generateAudio,
           audioPrompt,
           loop,
+          abortSignal: context.abortSignal,
         });
         videoData = result.videoData;
         videoFilename = result.filename ?? videoFilename;
@@ -616,6 +619,12 @@ export class GenerateVideoTool extends BaseTool {
           success: false,
           error: "No video data received from API. The generation may have been blocked or failed.",
         };
+      }
+
+      // /kill stops awaiting this tool but cannot stop it, so a native provider that ignores the
+      // signal still finishes here; posting now would deliver and charge for a reply the user killed.
+      if (context.abortSignal?.aborted) {
+        return { success: false, error: "Video generation was cancelled." };
       }
 
       if (videoData.length > DISCORD_FILE_SIZE_LIMIT) {

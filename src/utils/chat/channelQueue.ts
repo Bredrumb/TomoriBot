@@ -73,6 +73,8 @@ export interface ChannelLockEntry {
   activeImpersonatedUserId?: string;
   followUpEligible?: boolean;
   isInToolCallChain?: boolean;
+  /** Tool currently executing for this turn, read by /kill to warn when a paid media job was in flight. */
+  activeToolName?: string;
   isCommandTriggered?: boolean;
   typingKeepaliveTimer: NodeJS.Timeout | null;
   followUpCount: number;
@@ -253,6 +255,7 @@ export function releaseStaleChannelLockIfExpired(channelId: string, lockEntry: C
   lockEntry.activeImpersonatedUserId = undefined;
   lockEntry.followUpEligible = false;
   lockEntry.isInToolCallChain = false;
+  lockEntry.activeToolName = undefined;
   lockEntry.isCommandTriggered = false;
   discardQueuedMessages(lockEntry.messageQueue, "stale_lock_release");
   lockEntry.messageQueue = [];
@@ -283,6 +286,7 @@ export function acquireChannelLockForTurn(
   lockEntry.activeImpersonatedUserId = undefined;
   lockEntry.followUpEligible = false;
   lockEntry.isInToolCallChain = false;
+  lockEntry.activeToolName = undefined;
   lockEntry.isCommandTriggered = args.isCommandTriggered;
   lockEntry.activeTurnAbortController?.abort();
   lockEntry.activeTurnAbortController = new AbortController();
@@ -323,6 +327,17 @@ export function setChannelToolCallChainActive(lockEntry: ChannelLockEntry | unde
   if (lockEntry) {
     lockEntry.isInToolCallChain = isActive;
   }
+}
+
+export function setChannelActiveToolName(channelId: string, toolName: string | undefined): void {
+  const lockEntry = channelLocks.get(channelId);
+  if (lockEntry) {
+    lockEntry.activeToolName = toolName;
+  }
+}
+
+export function getChannelActiveToolName(channelId: string): string | undefined {
+  return channelLocks.get(channelId)?.activeToolName;
 }
 
 export function queuePersonaJobsAtFront(args: {
@@ -597,6 +612,7 @@ export function releaseChannelLockAndReplayQueue(args: {
   args.lockEntry.activeImpersonatedUserId = undefined;
   args.lockEntry.followUpEligible = false;
   args.lockEntry.isInToolCallChain = false;
+  args.lockEntry.activeToolName = undefined;
   args.lockEntry.isCommandTriggered = false;
   args.lockEntry.activeStreamKill = null;
   args.lockEntry.activeTurnAbortController?.abort();

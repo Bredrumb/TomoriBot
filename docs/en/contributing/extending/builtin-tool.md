@@ -18,6 +18,12 @@ startup, so there is no registration step.
 4. Pass `context.abortSignal` to every HTTP call: `signal` for `fetch`, `externalSignal` for
    `safeDownload`, and any helper option that takes an `AbortSignal`. Otherwise `/kill` stops the turn
    but the request keeps running.
+5. If the tool posts its own output (an attachment, a webhook message), check
+   `context.abortSignal?.aborted` immediately before posting and return a failure instead. `/kill` stops
+   the tool loop from awaiting the tool, not the tool itself, and not every backend honors the signal,
+   so without this check a killed tool can still post. If it generates billable media, also add its name
+   to the matching image, video, or voice group in `src/utils/tools/deliberateToolMode.ts`; those groups
+   feed `MEDIA_GENERATION_TOOL_NAMES`, which is how `/kill` knows to warn about the leftover job.
 
 ## Verify
 

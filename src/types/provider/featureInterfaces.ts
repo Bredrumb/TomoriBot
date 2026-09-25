@@ -242,6 +242,8 @@ export interface ProviderNativeVideoGenerationRequest {
   audioPrompt?: string;
   /** Whether image-to-video generation should reuse the start image as the end frame for a loop. Defaults to false. */
   loop?: boolean;
+  /** Turn-level cancellation from /kill. Stops local polling; hosted jobs keep running and may still bill. */
+  abortSignal?: AbortSignal;
 }
 
 /** Result of a native video generation operation */

@@ -3112,6 +3112,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
   inpaintExtendPadding?: number | null;
   clothingMode?: boolean | null;
   clothingSegmentCategories?: string[] | null;
+  abortSignal?: AbortSignal;
 }): Promise<ProviderNativeImageGenerationResult> {
   const {
     endpoint,
@@ -3148,6 +3149,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
     inpaintExtendPadding,
     clothingMode,
     clothingSegmentCategories,
+    abortSignal,
   } = params;
 
   const imageGenerationOptions = {
@@ -3184,6 +3186,7 @@ export async function generateComfyUiImageViaEndpoint(params: {
     inpaintExtendPadding,
     clothingMode,
     clothingSegmentCategories,
+    abortSignal,
   } satisfies ComfyUiGenerationOptions;
   let comfyUiResult: ComfyUiGenerationResponse;
   try {

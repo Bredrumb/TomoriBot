@@ -70,6 +70,8 @@ export interface VoiceMessageSynthesisRequest {
   };
   /** ElevenLabs voice settings for this invocation, `elevenlabs` sources only. */
   elevenLabsVoiceSettings?: Record<string, unknown>;
+  /** Turn-level cancellation from /kill, forwarded to whichever backend runs. */
+  abortSignal?: AbortSignal;
 }
 
 function failure(
@@ -91,7 +93,7 @@ function failure(
 export async function synthesizeVoiceMessage(
   request: VoiceMessageSynthesisRequest,
 ): Promise<VoiceMessageSynthesisResult> {
-  const { endpoint, endpointApiKey, elevenLabsApiKey, source, script, chatterbox } = request;
+  const { endpoint, endpointApiKey, elevenLabsApiKey, source, script, chatterbox, abortSignal } = request;
   // Single source of truth for which request shapes the endpoint takes, shared with the modal's
   // source table so the two can never disagree about what an `auto` endpoint accepts.
   const capabilities = resolveVoiceSourceCapabilities(endpoint);
@@ -117,6 +119,7 @@ export async function synthesizeVoiceMessage(
       designPrompt: source.designPrompt,
       voiceInstructions: request.voiceInstructions,
       apiKey: endpointApiKey,
+      ...(abortSignal ? { abortSignal } : {}),
     });
     return {
       success: result.success,
@@ -157,6 +160,7 @@ export async function synthesizeVoiceMessage(
             apiKey: endpointApiKey,
             ...(request.voiceInstructions ? { voiceInstructions: request.voiceInstructions } : {}),
             ...(chatterbox ? { chatterbox } : {}),
+            ...(abortSignal ? { abortSignal } : {}),
           })
         : await synthesizeSpeechViaTtsCloneBuffer({
             endpoint,
@@ -166,6 +170,7 @@ export async function synthesizeVoiceMessage(
             apiKey: endpointApiKey,
             ...(request.voiceInstructions ? { voiceInstructions: request.voiceInstructions } : {}),
             ...(chatterbox ? { chatterbox } : {}),
+            ...(abortSignal ? { abortSignal } : {}),
           });
 
     return {
@@ -192,6 +197,7 @@ export async function synthesizeVoiceMessage(
     voiceId: source.voiceId,
     script,
     ...(request.elevenLabsVoiceSettings ? { voiceSettings: request.elevenLabsVoiceSettings } : {}),
+    ...(abortSignal ? { abortSignal } : {}),
   });
 
   return {

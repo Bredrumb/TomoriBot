@@ -215,6 +215,7 @@ export async function generateZaiNativeVideo(
     intervalMs: POLL_INTERVAL_MS,
     maxAttempts: MAX_POLL_ATTEMPTS,
     logLabel: "ZaiVideoGeneration",
+    abortSignal: request.abortSignal,
   });
 
   const videoUrl = completedResult.video_result?.[0]?.url;

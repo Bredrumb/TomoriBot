@@ -57,6 +57,8 @@ export interface TtsCloneRequest {
     cfgWeight: number;
     exaggeration: number;
   };
+  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
+  abortSignal?: AbortSignal;
 }
 
 function resolveExtensionFromContentType(contentType: string): string {
@@ -143,6 +145,8 @@ export interface TtsCloneBufferRequest {
     cfgWeight: number;
     exaggeration: number;
   };
+  /** Turn-level cancellation from /kill, merged with the synthesis timeout. */
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -156,7 +160,7 @@ export interface TtsCloneBufferRequest {
  * 3. Returns the raw audio buffer and content-type.
  */
 export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferRequest): Promise<TtsCloneResult> {
-  const { endpoint, refAudio, refText, script, apiKey, voiceInstructions, chatterbox } = request;
+  const { endpoint, refAudio, refText, script, apiKey, voiceInstructions, chatterbox, abortSignal } = request;
 
   const scriptMarkup = (endpoint.extra_config.script_markup as string | undefined) ?? "plain";
   const supportsInstruct = Boolean(endpoint.extra_config.supports_instruct);
@@ -227,13 +231,13 @@ export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferR
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: abortController.signal,
+        signal: abortSignal ? AbortSignal.any([abortController.signal, abortSignal]) : abortController.signal,
       });
     } finally {
       clearTimeout(timer);
     }
   } catch (error) {
-    const isTimeout = error instanceof Error && error.name === "AbortError";
+    const isTimeout = error instanceof Error && error.name === "AbortError" && !abortSignal?.aborted;
     log.warn(`[TtsClone] Request to ${endpointUrl}/synthesize ${isTimeout ? "timed out" : "failed"}`, error);
     return {
       success: false,
@@ -290,7 +294,7 @@ export async function synthesizeSpeechViaTtsCloneBuffer(request: TtsCloneBufferR
  * 5. Returns the raw audio buffer and content-type.
  */
 export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Promise<TtsCloneResult> {
-  const { endpoint, voiceSampleId, script, apiKey, voiceInstructions, chatterbox } = request;
+  const { endpoint, voiceSampleId, script, apiKey, voiceInstructions, chatterbox, abortSignal } = request;
 
   const voiceSample = await loadVoiceSampleById(voiceSampleId);
 
@@ -323,5 +327,6 @@ export async function synthesizeSpeechViaTtsClone(request: TtsCloneRequest): Pro
     apiKey,
     ...(voiceInstructions ? { voiceInstructions } : {}),
     ...(chatterbox ? { chatterbox } : {}),
+    ...(abortSignal ? { abortSignal } : {}),
   });
 }

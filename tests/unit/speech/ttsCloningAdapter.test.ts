@@ -6,6 +6,9 @@ import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 let requestBody: Record<string, unknown> | null = null;
 const fetchMock = mock(async (_input: unknown, init?: RequestInit) => {
+  if (init?.signal?.aborted) {
+    throw new DOMException("The operation was aborted.", "AbortError");
+  }
   requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
   return new Response(Buffer.from("audio"), { headers: { "content-type": "audio/wav" } });
 });
@@ -107,5 +110,24 @@ describe("bracket tag handling", () => {
     });
 
     expect(requestBody).toMatchObject({ text: "Keep your voice down." });
+  });
+});
+
+describe("turn cancellation", () => {
+  it("aborts the synthesis request on /kill and does not report it as a timeout", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await synthesizeSpeechViaTtsCloneBuffer({
+      endpoint: COSYVOICE3_ENDPOINT,
+      refAudio: Buffer.from("reference-audio"),
+      refText: null,
+      script: "Hello there",
+      apiKey: "",
+      abortSignal: controller.signal,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errorKind).toBe("request_failed");
   });
 });

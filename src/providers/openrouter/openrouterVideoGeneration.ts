@@ -397,6 +397,7 @@ export async function generateOpenRouterNativeVideo(
     intervalMs: POLL_INTERVAL_MS,
     maxAttempts: MAX_POLL_ATTEMPTS,
     logLabel: "OpenRouterVideoGeneration",
+    abortSignal: request.abortSignal,
   });
 
   // Download the video
