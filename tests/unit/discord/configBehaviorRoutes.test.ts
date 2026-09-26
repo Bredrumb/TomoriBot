@@ -6,7 +6,7 @@
  * acknowledgement assertions on the actual wiring.
  */
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { ComponentType, PermissionsBitField, type Client } from "discord.js";
+import { ChannelType, ComponentType, type Client } from "discord.js";
 import type { RandomTriggerRow, TomoriState } from "@/types/db/schema";
 import * as shortTermMemoryCache from "@/utils/cache/shortTermMemoryCache";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
@@ -22,7 +22,11 @@ import {
 } from "@/utils/discord/configPanelCatalog";
 import { createConfigInteractionRoute } from "@/utils/discord/interactions/configRoutes";
 import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/interactions/configRouteContext";
-import { InteractionRouteRegistry, parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import {
+  InteractionRouteRegistry,
+  parseInteractionRoute,
+  type GlobalRoutableInteraction,
+} from "@/utils/discord/interactions/routeRegistry";
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import { buildConfigModalFieldId, CONFIG_PERSONA_PROMPT_PART_FIELDS } from "@/utils/discord/ui/configModals";
 import {
@@ -49,10 +53,13 @@ import {
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
 const CLIENT = {} as Client;
+
+type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
 
 function makeState(): TomoriState {
   return {
@@ -103,13 +110,17 @@ function makeRandomTrigger(): RandomTriggerRow & { trigger_id: number } {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   scope: ConfigScope;
-  edits: unknown[];
-  replies: unknown[];
+  /** Payloads every interaction in this harness has edited, oldest first. */
+  readonly edits: unknown[];
+  /** Payloads every interaction in this harness has replied or followed up with, oldest first. */
+  readonly replies: unknown[];
   modals: unknown[];
   deferredAtWrite: boolean[];
   telemetry: string[];
   /** Values the intercepted modal store holds, keyed by interaction id then field id. */
   selectValues: Map<string, Map<string, string>>;
+  /** Files the newest interaction's arrays behind the running `edits`/`replies` views. */
+  record: (interaction: RouteInteraction) => void;
 }
 
 function makeHarness(inGuild = true): Harness {
@@ -123,10 +134,19 @@ function makeHarness(inGuild = true): Harness {
     personas: [state],
     readStatus: "fresh",
   };
+  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
+  // the interactions it built and exposes their arrays in order.
+  const previousEdits: unknown[][] = [];
+  const previousReplies: unknown[][] = [];
+  let current: RouteInteraction | undefined;
   const harness: Harness = {
     scope,
-    edits: [],
-    replies: [],
+    get edits() {
+      return [...previousEdits, current?.edits ?? []].flat();
+    },
+    get replies() {
+      return [...previousReplies, current?.replies ?? []].flat();
+    },
     modals: [],
     deferredAtWrite: [],
     telemetry: [],
@@ -170,6 +190,13 @@ function makeHarness(inGuild = true): Harness {
         privacy: { stmPrivacyBypass: false },
       }),
     },
+    record: (interaction) => {
+      if (current) {
+        previousEdits.push(current.edits);
+        previousReplies.push(current.replies);
+      }
+      current = interaction;
+    },
   };
   return harness;
 }
@@ -189,70 +216,52 @@ function makeInteraction(
     inGuild?: boolean;
     onFollowUp?: () => void;
   } = {},
-) {
-  let deferred = false;
+): RouteInteraction {
   const kind = options.kind ?? "button";
-  const inGuild = options.inGuild ?? true;
   const interactionId = "interaction-1";
   harness.selectValues.set(interactionId, new Map(Object.entries(options.selectValues ?? {})));
 
-  return {
-    id: interactionId,
+  const interaction = createRouteInteraction({
     customId,
-    user: { id: "user-1", username: "Mirri" },
-    channelId: "channel-1",
-    channel: { name: "lounge" },
-    guildId: inGuild ? "guild-1" : null,
-    guild: inGuild ? { id: "guild-1", channels: { cache: new Map([["channel-1", { type: 0 }]]) } } : null,
-    client: { user: null },
-    createdTimestamp: Date.now(),
-    memberPermissions: {
-      has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-    },
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => kind === "select",
-    isModalSubmit: () => kind === "modal",
-    get deferred() {
-      return deferred;
-    },
-    get replied() {
-      return false;
-    },
-    deferUpdate: async () => {
-      deferred = true;
-    },
-    editReply: async (payload: unknown) => {
-      harness.edits.push(payload);
-      return payload;
-    },
-    reply: async (payload: unknown) => {
-      harness.replies.push(payload);
-      return payload;
-    },
-    followUp: async (payload: unknown) => {
-      options.onFollowUp?.();
-      return payload;
-    },
-    fields: {
-      // Components carry their type because the reader checks it: discord.js keys every submitted
-      // component by custom id whatever its type, so a field read as text must actually be a text
-      // input. Defaulting to TextInput keeps the common case short while letting a test model a
-      // radio or select field with `componentTypes`.
-      fields: new Map(
-        Object.entries(options.fields ?? {}).map(([fieldId, value]) => [
-          fieldId,
-          { customId: fieldId, type: options.componentTypes?.[fieldId] ?? ComponentType.TextInput, value },
-        ]),
-      ),
-      getTextInputValue: (fieldId: string) => options.fields?.[fieldId] ?? "",
-    },
+    kind: kind === "select" ? "string-select" : kind,
+    guildId: options.inGuild === false ? null : "guild-1",
+    isManager: options.isManager ?? true,
     values: options.values ?? [],
-  } as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
+    overrides: { id: interactionId },
+  });
+  // Routes that resolve a chosen channel look it up in the guild cache, so the lounge the routes
+  // repaint from has to be present there.
+  interaction.guild?.channels.cache.set("channel-1", { type: ChannelType.GuildText, name: "lounge" });
+
+  // The route's text reader checks the submitted component's type before reading it, because
+  // discord.js keys every submitted component by custom id whatever its kind. The shared factory's
+  // presence map cannot carry a type, so the richer one is attached here.
+  const submittedFields = options.fields ?? {};
+  const fieldRows = new Map(
+    Object.entries(submittedFields).map(([fieldId, value]) => [
+      fieldId,
+      { customId: fieldId, type: options.componentTypes?.[fieldId] ?? ComponentType.TextInput, value },
+    ]),
+  );
+  interaction.fields = {
+    fields: fieldRows as unknown as RouteInteraction["fields"]["fields"],
+    getTextInputValue: (fieldId: string) => submittedFields[fieldId] ?? "",
+  };
+  if (options.onFollowUp) {
+    const recordFollowUp = interaction.followUp;
+    interaction.followUp = async (payload?: unknown) => {
+      options.onFollowUp?.();
+      return recordFollowUp(payload);
+    };
+  }
+
+  harness.record(interaction);
+  return interaction;
 }
 
-async function dispatch(harness: Harness, interaction: ReturnType<typeof makeInteraction>): Promise<void> {
+async function dispatch(harness: Harness, interaction: RouteInteraction): Promise<void> {
   const registry = new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]);
-  await registry.dispatch(CLIENT, interaction);
+  await registry.dispatch(CLIENT, interaction as unknown as ConfigInteraction);
 }
 
 function collectRawComponentTypes(value: unknown): number[] {
@@ -362,7 +371,7 @@ describe("config Behavior routes", () => {
     const harness = makeHarness();
     const staleInteraction = makeInteraction(harness, "config:v1:beh-prompt-open:en-US");
 
-    await dispatchGlobalInteraction(CLIENT, staleInteraction);
+    await dispatchGlobalInteraction(CLIENT, staleInteraction as unknown as GlobalRoutableInteraction);
 
     expect(harness.replies).toHaveLength(1);
     expect((harness.replies[0] as { content?: string }).content).toContain("out of date");
@@ -474,7 +483,7 @@ describe("config Behavior routes", () => {
     for (const [action, contract] of Object.entries(expected)) {
       const codec = CONFIG_ROUTE_CODECS[action as keyof typeof CONFIG_ROUTE_CODECS];
       expect(codec.wireToken).toBe(contract.wireToken);
-      expect(codec.fields.map((field) => field.key)).toEqual(contract.fields);
+      expect<string[]>(codec.fields.map((field) => field.key)).toEqual(contract.fields);
     }
   });
 

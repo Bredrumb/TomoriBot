@@ -18,7 +18,8 @@ beforeAll(() => {
     errorTypes.push((context?.errorType as string) ?? "");
   });
   // Only /healthz is probed here, so the stub can ignore the request entirely.
-  globalThis.fetch = (async () => new Response(null, { status: healthy ? 200 : 503 })) as typeof fetch;
+  globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) =>
+    new Response(null, { status: healthy ? 200 : 503 })) as typeof fetch;
 });
 
 afterAll(() => {

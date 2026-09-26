@@ -21,11 +21,10 @@ import {
   buildModerationRouteId,
   buildModerationRouteSegments,
   buildQuotaModalFieldId,
-  listModerationPanelActions,
   parseModerationPanelRoute,
   type ModerationPanelRoute,
 } from "@/utils/discord/moderationPanelCatalog";
-import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
+import { parseInteractionRoute, type ParsedInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { dispatchGlobalInteraction } from "@/utils/discord/interactions/router";
 import {
   buildMemberAccessModal,
@@ -64,7 +63,6 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     userBlacklist: {
       personalizationUserIds: ["u1"],
       personaBlocks: [],
-      personalMemoriesEnabled: true,
     },
     whitelist: {
       channels: [],
@@ -104,7 +102,7 @@ describe("moderation interaction routes", () => {
       },
     } as unknown as ButtonInteraction;
 
-    const deps: ModerationRouteDependencies = {
+    const deps: Partial<ModerationRouteDependencies> = {
       resolveScope: async (_interaction, forceRefresh) => {
         log.push(forceRefresh ? "load-refresh" : "load");
         return createScopeData();
@@ -230,6 +228,7 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData(),
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -394,7 +393,7 @@ describe("moderation interaction routes", () => {
   it("opens member-access modal with fresh state, nonce, and no pre-defer on valid button click without calling full scope resolver", async () => {
     const log: string[] = [];
     let modalState: unknown = null;
-    let modalNonce: string | null = null;
+    let modalNonce = "";
     let scopeCalls = 0;
 
     const mockInteraction = {
@@ -451,7 +450,7 @@ describe("moderation interaction routes", () => {
   });
 
   it("acknowledges the model-access write before it runs, not after", async () => {
-    let acknowledgedAtWrite: boolean | null = null;
+    let acknowledgedAtWrite = false;
     const interaction = {
       id: "int-byok",
       isButton: () => true,
@@ -472,13 +471,14 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData(),
       operations: {
+        ...moderationOperations,
         // Sampled from inside the write: ordering is invisible in *what* was called, and Discord
         // drops an interaction that is not acknowledged within three seconds.
         updateServerModelAccess: async () => {
           acknowledgedAtWrite = interaction.deferred || interaction.replied;
           return { status: "success", allowServerModels: false };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, {
@@ -511,11 +511,12 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData(),
       operations: {
+        ...moderationOperations,
         updateServerModelAccess: async () => {
           writeCalls += 1;
           return { status: "success", allowServerModels: false };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, {
@@ -549,11 +550,12 @@ describe("moderation interaction routes", () => {
     const route = createModerationInteractionRoute({
       resolveScope: async () => createScopeData({ readStatus: "stale" }),
       operations: {
+        ...moderationOperations,
         updateServerModelAccess: async () => {
           writeCalls += 1;
           return { status: "success", allowServerModels: true };
         },
-      } as never,
+      },
     });
 
     await route.execute({} as Client, interaction as never, {
@@ -570,7 +572,7 @@ describe("moderation interaction routes", () => {
 
   it("denies member-access-submit on permission loss between open and submit before any write", async () => {
     let updateCalled = 0;
-    let cleanedNonce: string | null = null;
+    let cleanedNonce = "";
     const editReplyCalls: unknown[] = [];
 
     const mockInteraction = {
@@ -596,6 +598,7 @@ describe("moderation interaction routes", () => {
         return ["servermemories"];
       },
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -640,6 +643,7 @@ describe("moderation interaction routes", () => {
       resolveScope: async () => createScopeData(),
       takeCheckboxValues: () => undefined,
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -685,6 +689,7 @@ describe("moderation interaction routes", () => {
       resolveScope: async () => ({ ...createScopeData(), readStatus: "stale" }),
       takeCheckboxValues: () => ["servermemories"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => {
           updateCalled++;
           return { status: "success", changes: [], patch: {} };
@@ -728,17 +733,17 @@ describe("moderation interaction routes", () => {
       resolveScope: async () => createScopeData(),
       takeCheckboxValues: () => ["servermemories", "malicious_payload", "promptsnapshot", "unknown_option"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async (input) => {
           passedSelectedValues = input.selectedValues;
           return {
             status: "success",
             changes: [
               {
-                setting: "prompt_snapshot_enabled",
+                dbColumn: "prompt_snapshot_enabled",
                 isEnabled: true,
                 value: "promptsnapshot",
                 labelKey: "commands.server.member-permissions.promptsnapshot_label",
-                descKey: "commands.server.member-permissions.promptsnapshot_desc",
               },
             ],
             patch: { prompt_snapshot_enabled: true },
@@ -786,6 +791,7 @@ describe("moderation interaction routes", () => {
       },
       takeCheckboxValues: () => ["servermemories", "sampledialogues"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => ({
           status: "unchanged",
           changes: [],
@@ -835,6 +841,7 @@ describe("moderation interaction routes", () => {
       },
       takeCheckboxValues: () => [],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => ({
           status: "failure",
           changes: [],
@@ -887,15 +894,15 @@ describe("moderation interaction routes", () => {
       },
       takeCheckboxValues: () => ["attributelist"],
       operations: {
+        ...moderationOperations,
         updateMemberPermissions: async () => ({
           status: "success",
           changes: [
             {
-              setting: "attribute_memteaching_enabled",
+              dbColumn: "attribute_memteaching_enabled",
               isEnabled: true,
               value: "attributelist",
               labelKey: "commands.server.member-permissions.attributelist_label",
-              descKey: "commands.server.member-permissions.attributelist_desc",
             },
           ],
           patch: { attribute_memteaching_enabled: true },
@@ -1108,7 +1115,7 @@ describe("moderation interaction routes", () => {
       const route = createModerationInteractionRoute({
         resolveUserBlacklistAdd: async () => {
           resolveUserBlacklistAddCalled++;
-          return { guildId: "guild-1", serverId: 1, readStatus: "fresh", personalMemoriesEnabled: true };
+          return { guildId: "guild-1", serverId: 1, readStatus: "fresh" };
         },
         showUserBlacklistAddModal: async () => {
           modalShown++;
@@ -1184,7 +1191,6 @@ describe("moderation interaction routes", () => {
           guildId: "guild-1",
           serverId: 1,
           readStatus: "unavailable",
-          personalMemoriesEnabled: true,
         }),
         showUserBlacklistAddModal: async () => {
           modalShown++;
@@ -1201,7 +1207,7 @@ describe("moderation interaction routes", () => {
       expect(JSON.stringify(replyPayload)).toContain(localizedCopy("en-US", "commands.moderation.unavailable"));
     });
 
-    it("rejects user-blacklist-add-open when personalization is disabled", async () => {
+    it("opens user-blacklist-add without requiring server personalization", async () => {
       let modalShown = 0;
       let replyPayload: unknown = null;
 
@@ -1224,7 +1230,6 @@ describe("moderation interaction routes", () => {
           guildId: "guild-1",
           serverId: 1,
           readStatus: "fresh",
-          personalMemoriesEnabled: false,
         }),
         showUserBlacklistAddModal: async () => {
           modalShown++;
@@ -1237,14 +1242,12 @@ describe("moderation interaction routes", () => {
         segments: ["user-blacklist-add-open", "en-US"],
       });
 
-      expect(modalShown).toBe(0);
-      expect(JSON.stringify(replyPayload)).toContain(
-        localizedCopy("en-US", "commands.moderation.user_blacklist_add_personalization_disabled_detail"),
-      );
+      expect(modalShown).toBe(1);
+      expect(replyPayload).toBeNull();
     });
 
     it("opens User Blacklist Add raw modal with nonce without pre-deferral", async () => {
-      let modalShownNonce: string | null = null;
+      let modalShownNonce = "";
       let replyCalled = 0;
       let deferCalled = 0;
 
@@ -1274,7 +1277,6 @@ describe("moderation interaction routes", () => {
           guildId: "guild-1",
           serverId: 1,
           readStatus: "fresh",
-          personalMemoriesEnabled: true,
         }),
         showUserBlacklistAddModal: async (_interaction, _locale, nonce) => {
           modalShownNonce = nonce;
@@ -1474,7 +1476,6 @@ describe("moderation interaction routes", () => {
         userBlacklist: {
           personalizationUserIds: ["u1", "123456789012345678"],
           personaBlocks: [],
-          personalMemoriesEnabled: true,
         },
       };
 
@@ -1486,6 +1487,7 @@ describe("moderation interaction routes", () => {
         takeUserSelectValue: () => "123456789012345678",
         resolveUser: async () => ({ id: "123456789012345678", username: "AnonMember", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "unchanged", changes: [], patch: {} }),
           addUserToBlacklist: async (input) => {
             addOperationInput = input;
@@ -1506,12 +1508,11 @@ describe("moderation interaction routes", () => {
         serverId: 1,
         targetUserId: "123456789012345678",
         isBot: false,
-        personalMemoriesEnabled: true,
       });
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_add_success"));
-      expect(serialized).toContain("Added AnonMember to the personalization blacklist.");
+      expect(serialized).toContain("Added AnonMember to the blacklist.");
       expect(serialized).toContain("Blacklisted Members `(2)`");
       expect(serialized).toContain("<@123456789012345678>");
     });
@@ -1540,6 +1541,7 @@ describe("moderation interaction routes", () => {
         takeUserSelectValue: () => "123456789012345678",
         resolveUser: async () => ({ id: "123456789012345678", username: "ExistingMember", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "unchanged", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "already_blacklisted", targetUserId: "123456789012345678" }),
         },
@@ -1556,11 +1558,11 @@ describe("moderation interaction routes", () => {
       expect(serialized).toContain(
         localizedCopy("en-US", "commands.moderation.user_blacklist_add_already_blacklisted"),
       );
-      expect(serialized).toContain("ExistingMember is already on the personalization blacklist.");
+      expect(serialized).toContain("ExistingMember is already on the blacklist.");
     });
 
     it("resolves member through current guild membership using default user resolver", async () => {
-      let fetchedMemberId: string | null = null;
+      let fetchedMemberId = "";
       const editReplyCalls: unknown[] = [];
 
       const mockInteraction = {
@@ -1595,7 +1597,6 @@ describe("moderation interaction routes", () => {
         userBlacklist: {
           personalizationUserIds: ["u1", "123456789012345678"],
           personaBlocks: [],
-          personalMemoriesEnabled: true,
         },
       };
 
@@ -1607,6 +1608,7 @@ describe("moderation interaction routes", () => {
         },
         takeUserSelectValue: () => "123456789012345678",
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "unchanged", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "123456789012345678" }),
         },
@@ -1622,7 +1624,7 @@ describe("moderation interaction routes", () => {
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_add_success"));
-      expect(serialized).toContain("Added Mirri to the personalization blacklist.");
+      expect(serialized).toContain("Added Mirri to the blacklist.");
     });
 
     it("repaints with invalid_user receipt when default user resolver member fetch fails or outside guild", async () => {
@@ -1766,7 +1768,6 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["other-user"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
       });
@@ -1807,7 +1808,6 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
       });
@@ -1821,7 +1821,7 @@ describe("moderation interaction routes", () => {
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_title"));
-      expect(serialized).toContain("Remove <@123456789012345678> from the personalization blacklist?");
+      expect(serialized).toContain("Remove <@123456789012345678> from the blacklist?");
       expect(serialized).toContain("user-blacklist-remove-confirm");
       expect(serialized).toContain("user-blacklist-remove-cancel");
     });
@@ -1850,6 +1850,7 @@ describe("moderation interaction routes", () => {
       const route = createModerationInteractionRoute({
         resolveScope: async () => createScopeData(),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => {
             writeCalled++;
             return { status: "success", changes: [], patch: {} };
@@ -1919,6 +1920,7 @@ describe("moderation interaction routes", () => {
       const route = createModerationInteractionRoute({
         resolveScope: async () => createScopeData(),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => {
@@ -1967,10 +1969,10 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => {
@@ -2019,10 +2021,10 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: [],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => {
@@ -2072,12 +2074,12 @@ describe("moderation interaction routes", () => {
             userBlacklist: {
               personalizationUserIds: scopeLoadLog.length === 1 ? ["123456789012345678"] : [],
               personaBlocks: [],
-              personalMemoriesEnabled: true,
             },
           };
         },
         resolveUser: async () => ({ id: "123456789012345678", username: "alice", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async ({ targetUserId }) => ({
@@ -2098,7 +2100,7 @@ describe("moderation interaction routes", () => {
       expect(editReplyCalls).toHaveLength(1);
       const serialized = JSON.stringify(editReplyCalls[0]);
       expect(serialized).toContain(localizedCopy("en-US", "commands.moderation.user_blacklist_remove_success"));
-      expect(serialized).toContain("Removed alice from the personalization blacklist.");
+      expect(serialized).toContain("Removed alice from the blacklist.");
     });
 
     it("successfully removes persona block entry, verifies forceRefresh=false on reload, and renders receipt with persona name", async () => {
@@ -2140,12 +2142,12 @@ describe("moderation interaction routes", () => {
             userBlacklist: {
               personalizationUserIds: [],
               personaBlocks: scopeLoadLog.length === 1 ? [mockBlock] : [],
-              personalMemoriesEnabled: true,
             },
           };
         },
         resolveUser: async () => ({ id: "123456789012345678", username: "bob", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "not_found", targetUserId: "u" }),
@@ -2195,11 +2197,11 @@ describe("moderation interaction routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
         resolveUser: async () => ({ id: "123456789012345678", username: "alice", bot: false }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({
@@ -2263,7 +2265,7 @@ describe("moderation interaction routes", () => {
     });
 
     it("opens whitelist channel add modal with nonce on fresh scope", async () => {
-      let shownModalNonce: string | null = null;
+      let shownModalNonce = "";
       const mockInteraction = {
         isButton: () => true,
         isStringSelectMenu: () => false,
@@ -2339,17 +2341,30 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async (args) => {
             upsertArgs = args;
             return {
               status: "success",
               channelId: args.channelId,
-              cooldownType: args.requestedCooldownType,
-              cooldownLength: args.requestedCooldownLength,
+              cooldownType: args.requestedCooldownType ?? null,
+              cooldownLength: args.requestedCooldownLength ?? null,
               isUpdate: false,
             };
           },
@@ -2455,10 +2470,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async (args) => ({
             status: "unchanged",
             channelId: args.channelId,
@@ -2514,10 +2542,23 @@ describe("moderation interaction routes", () => {
         resolveChannel: async (_i, id) => ({ id, name: "bot-lounge", type: ChannelType.GuildText }),
         resolveWhitelistChannelAdd: async () => null,
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -2547,10 +2588,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -2603,10 +2657,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -2855,10 +2922,23 @@ describe("moderation interaction routes", () => {
         }),
         resolveChannel: async (_i, id) => ({ id, name: "bot-lounge", type: ChannelType.GuildText }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -2929,10 +3009,23 @@ describe("moderation interaction routes", () => {
         }),
         resolveChannel: async () => null,
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -2998,10 +3091,23 @@ describe("moderation interaction routes", () => {
         }),
         resolveChannel: async (_i, id) => ({ id, name: "stage-channel", type: ChannelType.GuildStageVoice }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -3060,13 +3166,26 @@ describe("moderation interaction routes", () => {
         resolveScope: async () => createScopeData(),
         takeUserSelectValue: () => "123456789012345678",
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => {
             addCalled++;
             return { status: "success", targetUserId: "123456789012345678" };
           },
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => ({
             status: "success",
             channelId: "c",
@@ -3148,10 +3267,23 @@ describe("moderation interaction routes", () => {
           config: { cooldown_type: null, cooldown_length: null },
         }),
         operations: {
+          ...moderationOperations,
           updateMemberPermissions: async () => ({ status: "success", changes: [], patch: {} }),
           addUserToBlacklist: async () => ({ status: "success", targetUserId: "u" }),
           removeUserFromBlacklist: async () => ({ status: "success", targetUserId: "u" }),
-          removePersonaUserBlock: async () => ({ status: "success", personaId: 1, targetUserId: "u" }),
+          removePersonaUserBlock: async () => ({
+            status: "success",
+            personaId: 1,
+            targetUserId: "u",
+            block: {
+              server_id: 1,
+              persona_id: 1,
+              user_disc_id: "u",
+              block_type: "mute",
+              reason: "",
+              expires_at: new Date(),
+            },
+          }),
           upsertWhitelistChannel: async () => {
             upsertCalled++;
             return { status: "success", channelId: "c", cooldownType: null, cooldownLength: null, isUpdate: false };
@@ -3218,7 +3350,6 @@ describe("moderation bulk removal routes", () => {
           userBlacklist: {
             personalizationUserIds: ["123456789012345678"],
             personaBlocks: [],
-            personalMemoriesEnabled: true,
           },
         }),
       resolveUser: async () => ({
@@ -3247,7 +3378,6 @@ describe("moderation bulk removal routes", () => {
       userBlacklist: {
         personalizationUserIds: ["123456789012345678", "223456789012345678"],
         personaBlocks: [],
-        personalMemoriesEnabled: true,
       },
     });
     const interaction = {
@@ -3663,64 +3793,73 @@ describe("moderation whitelist role routes", () => {
       expect(JSON.stringify(edits[0])).toContain(localizedCopy("en-US", "commands.moderation.permission_denied"));
     });
 
-    it("quota-edit-submit validates bounds and refuses write on invalid values", async () => {
-      const testCases = [
-        { daily: "-1", serverwide: "100", resets: "30" },
-        { daily: "101", serverwide: "100", resets: "30" },
-        { daily: "10.5", serverwide: "100", resets: "30" },
-        { daily: "abc", serverwide: "100", resets: "30" },
-        { daily: "10", serverwide: "-5", resets: "30" },
-        { daily: "10", serverwide: "100000", resets: "30" },
-        { daily: "10", serverwide: "100", resets: "0" },
-        { daily: "10", serverwide: "100", resets: "366" },
-      ];
+    /** One submitted triple per bound the quota modal must refuse, with the field it violates. */
+    const INVALID_QUOTA_VALUES: ReadonlyArray<readonly [string, string, string, string]> = [
+      ["a daily quota below zero", "-1", "100", "30"],
+      ["a daily quota above its cap", "101", "100", "30"],
+      ["a fractional daily quota", "10.5", "100", "30"],
+      ["a non-numeric daily quota", "abc", "100", "30"],
+      ["a serverwide quota below zero", "10", "-5", "30"],
+      ["a serverwide quota above its cap", "10", "100000", "30"],
+      ["a reset window of zero days", "10", "100", "0"],
+      ["a reset window beyond a year", "10", "100", "366"],
+    ];
 
-      for (const testCase of testCases) {
-        let writes = 0;
-        const edits: unknown[] = [];
-        const interaction = {
-          id: "modal-val",
-          isButton: () => false,
-          isStringSelectMenu: () => false,
-          isModalSubmit: () => true,
-          guildId: "guild-1",
-          memberPermissions: { has: () => true },
-          deferUpdate: async () => undefined,
-          editReply: async (payload: unknown) => {
-            edits.push(payload);
+    /** The quota modal submit the table drives, carrying one submitted triple and its edit sink. */
+    function quotaSubmitInteraction(
+      daily: string,
+      serverwide: string,
+      resets: string,
+      edits: unknown[],
+    ): ModalSubmitInteraction {
+      return {
+        id: "modal-val",
+        isButton: () => false,
+        isStringSelectMenu: () => false,
+        isModalSubmit: () => true,
+        guildId: "guild-1",
+        memberPermissions: { has: () => true },
+        deferUpdate: async () => undefined,
+        editReply: async (payload: unknown) => {
+          edits.push(payload);
+        },
+        fields: {
+          getTextInputValue: (fieldId: string) => {
+            if (fieldId === buildQuotaModalFieldId("nonce_val", "daily_user_quota")) return daily;
+            if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota")) return serverwide;
+            if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota_resets_in")) return resets;
+            return "";
           },
-          fields: {
-            getTextInputValue: (fieldId: string) => {
-              if (fieldId === buildQuotaModalFieldId("nonce_val", "daily_user_quota")) return testCase.daily;
-              if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota")) return testCase.serverwide;
-              if (fieldId === buildQuotaModalFieldId("nonce_val", "serverwide_quota_resets_in")) return testCase.resets;
-              return "";
-            },
+        },
+      } as unknown as ModalSubmitInteraction;
+    }
+
+    it.each(
+      INVALID_QUOTA_VALUES,
+    )("quota-edit-submit refuses the write for %s", async (_label, daily, serverwide, resets) => {
+      let writes = 0;
+      const edits: unknown[] = [];
+      const route = createModerationInteractionRoute({
+        resolveScope: async () => createScopeData(),
+        operations: {
+          ...moderationOperations,
+          updateQuotaSettings: async () => {
+            writes++;
+            return { status: "success", quotaType: "image", appliedFields: [] };
           },
-        } as unknown as ModalSubmitInteraction;
+        },
+      });
 
-        const route = createModerationInteractionRoute({
-          resolveScope: async () => createScopeData(),
-          operations: {
-            ...moderationOperations,
-            updateQuotaSettings: async () => {
-              writes++;
-              return { status: "success", quotaType: "image", appliedFields: [] };
-            },
-          },
-        });
+      await route.execute({} as Client, quotaSubmitInteraction(daily, serverwide, resets, edits), {
+        namespace: "moderation",
+        version: "v1",
+        segments: ["quota-edit-submit", "en-US", "image", "nonce_val"],
+      });
 
-        await route.execute({} as Client, interaction, {
-          namespace: "moderation",
-          version: "v1",
-          segments: ["quota-edit-submit", "en-US", "image", "nonce_val"],
-        });
-
-        expect(writes).toBe(0);
-        expect(JSON.stringify(edits.at(-1))).toMatch(
-          localizedProse("en-US", "commands.moderation.quota_edit_invalid_input"),
-        );
-      }
+      expect(writes).toBe(0);
+      expect(JSON.stringify(edits.at(-1))).toMatch(
+        localizedProse("en-US", "commands.moderation.quota_edit_invalid_input"),
+      );
     });
 
     it("quota-edit-submit performs no write and repaints unchanged receipt when submitted values match stored values", async () => {
@@ -3848,20 +3987,32 @@ describe("moderation whitelist role routes", () => {
       expect(JSON.stringify(edits.at(-1))).toContain("Image Generation quotas updated");
     });
 
-    it("records panel_action telemetry across all moderation operations", async () => {
+    /**
+     * A `recordAction` that flattens each recorded action, so one case asserts exactly the one
+     * panel_action its own route writes rather than a shared transcript of three routes.
+     */
+    function collectPanelActions(): {
+      recorded: string[];
+      recordAction: (input: { action: string; serverId: number; userDiscId: string }) => void;
+    } {
       const recorded: string[] = [];
-      const recordAction = (input: { action: string; serverId: number; userDiscId: string }) => {
-        recorded.push(`${input.action}:${input.serverId}:${input.userDiscId}`);
+      return {
+        recorded,
+        recordAction: (input) => {
+          recorded.push(`${input.action}:${input.serverId}:${input.userDiscId}`);
+        },
       };
+    }
 
-      // user-blacklist-add-submit
+    it("records panel_action telemetry for a user blacklist add", async () => {
+      const { recorded, recordAction } = collectPanelActions();
       const addRoute = createModerationInteractionRoute({
         resolveScope: async () => createScopeData({ serverId: 55 }),
         resolveUser: async () => ({ id: "123456789012345678", username: "target", bot: false }) as never,
         takeUserSelectValue: () => "123456789012345678",
         operations: {
           ...moderationOperations,
-          addUserToBlacklist: async () => ({ status: "success" }),
+          addUserToBlacklist: async () => ({ status: "success", targetUserId: "123456789012345678" }),
         },
         recordAction,
       });
@@ -3877,14 +4028,18 @@ describe("moderation whitelist role routes", () => {
         editReply: async () => {},
         fields: { getTextInputValue: () => "123456789012345678" },
       } as unknown as ModalSubmitInteraction;
+
       await addRoute.execute({} as Client, addInteraction, {
         namespace: "moderation",
         version: "v1",
         segments: ["user-blacklist-add-submit", "en-US", "nonce12345678"],
       });
-      expect(recorded).toContain("moderation.workspace.user-blacklist.add:55:mod-1");
 
-      // model-access-set
+      expect(recorded).toContain("moderation.workspace.user-blacklist.add:55:mod-1");
+    });
+
+    it("records panel_action telemetry for a model access set", async () => {
+      const { recorded, recordAction } = collectPanelActions();
       const modelRoute = createModerationInteractionRoute({
         resolveScope: async () => createScopeData({ serverId: 55 }),
         operations: {
@@ -3904,14 +4059,18 @@ describe("moderation whitelist role routes", () => {
         deferUpdate: async () => {},
         editReply: async () => {},
       } as unknown as ButtonInteraction;
+
       await modelRoute.execute({} as Client, modelInteraction, {
         namespace: "moderation",
         version: "v1",
         segments: ["model-access-set", "en-US", "allow"],
       });
-      expect(recorded).toContain("moderation.workspace.model-access.set:55:mod-1");
 
-      // quota-edit-submit
+      expect(recorded).toContain("moderation.workspace.model-access.set:55:mod-1");
+    });
+
+    it("records panel_action telemetry for a quota edit", async () => {
+      const { recorded, recordAction } = collectPanelActions();
       const quotaRoute = createModerationInteractionRoute({
         resolveScope: async () => createScopeData({ serverId: 55 }),
         operations: {
@@ -3943,11 +4102,13 @@ describe("moderation whitelist role routes", () => {
           },
         },
       } as unknown as ModalSubmitInteraction;
+
       await quotaRoute.execute({} as Client, quotaInteraction, {
         namespace: "moderation",
         version: "v1",
         segments: ["quota-edit-submit", "en-US", "text", "nonce1234"],
       });
+
       expect(recorded).toContain("moderation.workspace.quota.set:55:mod-1");
     });
   });
@@ -4085,70 +4246,56 @@ function parsedRoute(customId: string) {
   return route;
 }
 
+const ACCEPTED_35_ACTIONS: readonly ModerationPanelRoute["action"][] = [
+  "category",
+  "member-access-open",
+  "member-access-submit",
+  "model-access-set",
+  "page",
+  "persona-channel-add-open",
+  "persona-channel-add-submit",
+  "persona-channel-remove-open",
+  "persona-channel-remove-submit",
+  "quota-edit-open",
+  "quota-edit-submit",
+  "range",
+  "retry",
+  "select-page",
+  "user-blacklist-add-open",
+  "user-blacklist-add-submit",
+  "user-blacklist-remove-cancel",
+  "user-blacklist-remove-confirm",
+  "user-blacklist-remove-open",
+  "user-blacklist-remove-prompt",
+  "user-blacklist-remove-submit",
+  "whitelist-channel-add-open",
+  "whitelist-channel-add-submit",
+  "whitelist-channel-remove-cancel",
+  "whitelist-channel-remove-confirm",
+  "whitelist-channel-remove-open",
+  "whitelist-channel-remove-prompt",
+  "whitelist-channel-remove-submit",
+  "whitelist-role-add-open",
+  "whitelist-role-add-submit",
+  "whitelist-role-remove-cancel",
+  "whitelist-role-remove-confirm",
+  "whitelist-role-remove-open",
+  "whitelist-role-remove-prompt",
+  "whitelist-role-remove-submit",
+];
+
 describe("moderation route codec wire contract, exhaustiveness, and producer coverage", () => {
-  it("decodes every literal v1 wire string to its exact route object", () => {
-    for (const [customId, expected] of WIRE_CONTRACT_V1) {
-      expect(parseModerationPanelRoute(parsedRoute(customId))).toEqual(expected);
-    }
+  it.each(WIRE_CONTRACT_V1)("decodes the pinned wire string %s to its exact route object", (customId, expected) => {
+    expect(parseModerationPanelRoute(parsedRoute(customId))).toEqual(expected);
   });
 
-  it("encodes every canonical typed route to exact literal wire bytes", () => {
-    for (const [customId, expected] of WIRE_CONTRACT_V1) {
-      expect(buildModerationRouteId(expected)).toBe(customId);
-      const expectedSegments = customId.split(":").slice(2);
-      expect(buildModerationRouteSegments(expected)).toEqual(expectedSegments);
-    }
+  it.each(WIRE_CONTRACT_V1)("encodes %s to its exact literal wire bytes", (customId, expected) => {
+    expect(buildModerationRouteId(expected)).toBe(customId);
+    expect(buildModerationRouteSegments(expected)).toEqual(customId.split(":").slice(2));
   });
 
-  it("round trips parse and build for all canonical actions", () => {
-    for (const [, expected] of WIRE_CONTRACT_V1) {
-      const generatedId = buildModerationRouteId(expected);
-      const parsed = parseModerationPanelRoute(parsedRoute(generatedId));
-      expect(parsed).toEqual(expected);
-    }
-  });
-
-  it("guarantees 35-action exhaustiveness across catalog, accepted actions, wire contract, and route handler comparisons", () => {
-    const ACCEPTED_35_ACTIONS: readonly ModerationAction[] = [
-      "category",
-      "member-access-open",
-      "member-access-submit",
-      "model-access-set",
-      "page",
-      "persona-channel-add-open",
-      "persona-channel-add-submit",
-      "persona-channel-remove-open",
-      "persona-channel-remove-submit",
-      "quota-edit-open",
-      "quota-edit-submit",
-      "range",
-      "retry",
-      "select-page",
-      "user-blacklist-add-open",
-      "user-blacklist-add-submit",
-      "user-blacklist-remove-cancel",
-      "user-blacklist-remove-confirm",
-      "user-blacklist-remove-open",
-      "user-blacklist-remove-prompt",
-      "user-blacklist-remove-submit",
-      "whitelist-channel-add-open",
-      "whitelist-channel-add-submit",
-      "whitelist-channel-remove-cancel",
-      "whitelist-channel-remove-confirm",
-      "whitelist-channel-remove-open",
-      "whitelist-channel-remove-prompt",
-      "whitelist-channel-remove-submit",
-      "whitelist-role-add-open",
-      "whitelist-role-add-submit",
-      "whitelist-role-remove-cancel",
-      "whitelist-role-remove-confirm",
-      "whitelist-role-remove-open",
-      "whitelist-role-remove-prompt",
-      "whitelist-role-remove-submit",
-    ];
-
+  it("guarantees 35-action exhaustiveness across accepted actions, wire contract, codecs, and route handlers", () => {
     const sortedAccepted = [...ACCEPTED_35_ACTIONS].sort();
-    const catalogActions = listModerationPanelActions().sort();
     const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
 
     const fixedCodecActions = Object.keys(MODERATION_ROUTE_CODECS);
@@ -4164,7 +4311,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     );
     const handlerActions = new Set([...routesSource.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1]));
 
-    expect(catalogActions).toEqual(sortedAccepted);
     expect(wireActions).toEqual(sortedAccepted);
     expect(allCodecActions).toEqual(sortedAccepted);
 
@@ -4172,16 +4318,20 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     expect([...handlerActions].sort()).toEqual(sortedAccepted);
   });
 
-  it("guarantees producer coverage against production UI and modal surfaces with explicit allowlist for compatibility actions", () => {
-    const PRODUCERLESS_ACTIONS = [
-      "page",
-      "user-blacklist-remove-prompt",
-      "whitelist-channel-remove-prompt",
-      "whitelist-role-remove-prompt",
-    ] as const;
+  /** Actions a compatibility surface renders no button for; the allowlist the union check closes over. */
+  const PRODUCERLESS_ACTIONS = [
+    "page",
+    "user-blacklist-remove-prompt",
+    "whitelist-channel-remove-prompt",
+    "whitelist-role-remove-prompt",
+  ] as const;
 
-    const ACCEPTED_35_ACTIONS = listModerationPanelActions().sort();
-
+  /**
+   * Every custom ID the production modal builders and panel renderers emit, collected from the modal
+   * surfaces and from one panel payload per category, page, and removal state. The cases below share
+   * this collection so a new surface is still added in one place.
+   */
+  function collectPanelSurfaceCustomIds(): string[] {
     const customIds: string[] = [];
 
     customIds.push(
@@ -4271,7 +4421,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
             persona_name: "Tomori",
           },
         ],
-        personalMemoriesEnabled: true,
       },
     });
 
@@ -4396,20 +4545,47 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
       extractCustomIds(payload);
     }
 
+    return customIds;
+  }
+
+  /** The actions the collected custom IDs decode to, ignoring the pagination indicator's own ID. */
+  function collectedProducedActions(customIds: string[]): Set<string> {
     const producedActions = new Set<string>();
     for (const id of customIds) {
       if (id.startsWith("pagination-indicator-")) continue;
       const parsed = parseModerationPanelRoute(parsedRoute(id));
-      expect(parsed).not.toBeNull();
       if (parsed) producedActions.add(parsed.action);
     }
+    return producedActions;
+  }
+
+  it("surfaces only custom IDs the moderation codec can decode", () => {
+    const customIds = collectPanelSurfaceCustomIds();
+
+    let routable = 0;
+    for (const id of customIds) {
+      if (id.startsWith("pagination-indicator-")) continue;
+      expect(parseModerationPanelRoute(parsedRoute(id))).not.toBeNull();
+      routable += 1;
+    }
+    // Without this the loop would pass over an empty collection, hiding a renderer that silently
+    // stopped emitting custom IDs at all.
+    expect(routable).toBeGreaterThan(0);
+  });
+
+  it("leaves the compatibility actions without a rendered producer", () => {
+    const producedActions = collectedProducedActions(collectPanelSurfaceCustomIds());
 
     for (const producerless of PRODUCERLESS_ACTIONS) {
       expect(producedActions.has(producerless)).toBe(false);
     }
+  });
+
+  it("unions the rendered producers and the compatibility allowlist to every accepted action", () => {
+    const producedActions = collectedProducedActions(collectPanelSurfaceCustomIds());
 
     const unionedActions = [...new Set([...producedActions, ...PRODUCERLESS_ACTIONS])].sort();
-    expect(unionedActions).toEqual(ACCEPTED_35_ACTIONS);
+    expect(unionedActions).toEqual([...ACCEPTED_35_ACTIONS].sort());
   });
 
   it("enforces exact 97-character bound for the maximum persona-block removal route and all IDs under 100", () => {
@@ -4443,61 +4619,57 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     }
   });
 
-  it("rejects malformed, empty, wrong namespace/version, or invalid-enum route segments", () => {
-    expect(
-      parseModerationPanelRoute({
-        namespace: "wrong",
-        version: "v1",
-        segments: ["category", "en-US", "member-access"],
-      }),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute({
-        namespace: "moderation",
-        version: "v2",
-        segments: ["category", "en-US", "member-access"],
-      }),
-    ).toBeNull();
+  /** Route objects the router would accept but the panel codec must refuse on identity alone. */
+  const REJECTED_ROUTE_OBJECTS: Array<{ label: string; route: ParsedInteractionRoute }> = [
+    {
+      label: "a foreign namespace",
+      route: { namespace: "wrong", version: "v1", segments: ["category", "en-US", "member-access"] },
+    },
+    {
+      label: "a future version",
+      route: { namespace: "moderation", version: "v2", segments: ["category", "en-US", "member-access"] },
+    },
+  ];
 
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:category:invalid-locale:member-access"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:unknown-action:en-US"))).toBeNull();
+  /**
+   * Every string the router parses into segments but the panel codec must still refuse, paired with
+   * the field that makes it invalid. Each row is one arity or enum case: a new action adds one row.
+   */
+  const REJECTED_WIRE_STRINGS: ReadonlyArray<readonly [string, string]> = [
+    ["moderation:v1:category:invalid-locale:member-access", "an unknown locale"],
+    ["moderation:v1:unknown-action:en-US", "an action no codec declares"],
+    ["moderation:v1:category:en-US:invalid-category", "a category outside the accepted set"],
+    ["moderation:v1:page:en-US:invalid-page", "a whitelist page outside the accepted set"],
+    ["moderation:v1:quota-edit-open:en-US:invalid-quota", "a quota type outside the accepted set"],
+    ["moderation:v1:model-access-set:en-US:invalid-choice", "a model-access choice outside the accepted set"],
+    ["moderation:v1:range:en-US:whitelist:channels:-1", "a negative range index"],
+    ["moderation:v1:range:en-US:whitelist:channels:abc", "a non-numeric range index"],
+    ["moderation:v1:whitelist-channel-remove-confirm:en-US:not-a-snowflake", "a channel id that is not a snowflake"],
+    ["moderation:v1:whitelist-role-remove-confirm:en-US:short", "a role id that is too short to be a snowflake"],
+    [
+      "moderation:v1:user-blacklist-remove-prompt:en-US:unknown-source:123456789012345678",
+      "a removal source outside the accepted set",
+    ],
+    [
+      "moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:-1:123456789012345678",
+      "a negative persona id in a persona-block target",
+    ],
+    [
+      "moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:0:123456789012345678",
+      "a zero persona id in a persona-block target",
+    ],
+    ["moderation:v1:member-access-submit:en-US:bad!nonce#", "a nonce carrying characters a custom ID cannot hold"],
+    ["moderation:v1:user-blacklist-add-submit:en-US:short", "a nonce shorter than the declared minimum"],
+    ["moderation:v1:select-page:en-US:extra-segment", "a trailing segment the action does not declare"],
+    ["moderation:v1:member-access-open:en-US:extra", "a trailing segment the action does not declare"],
+    ["moderation:v1:user-blacklist-remove-cancel:en-US:extra", "a trailing segment the action does not declare"],
+  ];
 
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:category:en-US:invalid-category"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:page:en-US:invalid-page"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:quota-edit-open:en-US:invalid-quota"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:model-access-set:en-US:invalid-choice"))).toBeNull();
+  it.each(REJECTED_ROUTE_OBJECTS)("rejects a route object carrying $label", (entry) => {
+    expect(parseModerationPanelRoute(entry.route)).toBeNull();
+  });
 
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:range:en-US:whitelist:channels:-1"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:range:en-US:whitelist:channels:abc"))).toBeNull();
-
-    expect(
-      parseModerationPanelRoute(parsedRoute("moderation:v1:whitelist-channel-remove-confirm:en-US:not-a-snowflake")),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute(parsedRoute("moderation:v1:whitelist-role-remove-confirm:en-US:short")),
-    ).toBeNull();
-
-    expect(
-      parseModerationPanelRoute(
-        parsedRoute("moderation:v1:user-blacklist-remove-prompt:en-US:unknown-source:123456789012345678"),
-      ),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute(
-        parsedRoute("moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:-1:123456789012345678"),
-      ),
-    ).toBeNull();
-    expect(
-      parseModerationPanelRoute(
-        parsedRoute("moderation:v1:user-blacklist-remove-prompt:en-US:persona-block:0:123456789012345678"),
-      ),
-    ).toBeNull();
-
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:member-access-submit:en-US:bad!nonce#"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:user-blacklist-add-submit:en-US:short"))).toBeNull();
-
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:select-page:en-US:extra-segment"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:member-access-open:en-US:extra"))).toBeNull();
-    expect(parseModerationPanelRoute(parsedRoute("moderation:v1:user-blacklist-remove-cancel:en-US:extra"))).toBeNull();
+  it.each(REJECTED_WIRE_STRINGS)("rejects the malformed custom ID %s (%s)", (customId, _reason) => {
+    expect(parseModerationPanelRoute(parsedRoute(customId))).toBeNull();
   });
 });

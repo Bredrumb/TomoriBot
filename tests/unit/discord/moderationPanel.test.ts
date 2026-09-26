@@ -1,5 +1,15 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { type ActionRowData, type ButtonComponentData, ButtonStyle, ChannelType, ComponentType } from "discord.js";
+import {
+  type ActionRowData,
+  type ButtonComponentData,
+  ButtonStyle,
+  ChannelType,
+  type ComponentInContainerData,
+  ComponentType,
+  type ContainerComponentData,
+  type InteractionButtonComponentData,
+  type TextDisplayComponentData,
+} from "discord.js";
 import { CooldownType } from "@/types/db/schema";
 import {
   buildMemberAccessModalFieldId,
@@ -41,7 +51,6 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     userBlacklist: {
       personalizationUserIds: [],
       personaBlocks: [],
-      personalMemoriesEnabled: true,
     },
     whitelist: {
       channels: [],
@@ -503,15 +512,15 @@ describe("moderationPanel UI rendering", () => {
       data: createScopeData({ serverModelAccess: { allowServerModels: true } }),
     });
 
-    const allowedContainer = allowedPayload.components[0] as { components: unknown[] };
+    const allowedContainer = allowedPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     const allowedRow = allowedContainer.components.find(
-      (c): c is ActionRowData<ButtonComponentData> =>
+      (c): c is ActionRowData<InteractionButtonComponentData> =>
         typeof c === "object" &&
         c !== null &&
         "type" in c &&
         (c as { type: number }).type === ComponentType.ActionRow &&
-        Array.isArray((c as { components: unknown[] }).components) &&
-        (c as { components: Array<{ customId?: string }> }).components.some((b) =>
+        Array.isArray((c as { type: number; components?: unknown[] }).components) &&
+        (c as { type: number; components: Array<{ customId?: string }> }).components.some((b) =>
           b.customId?.includes("model-access-set"),
         ),
     );
@@ -556,15 +565,15 @@ describe("moderationPanel UI rendering", () => {
       data: createScopeData({ serverModelAccess: { allowServerModels: false } }),
     });
 
-    const requiredContainer = requiredPayload.components[0] as { components: unknown[] };
+    const requiredContainer = requiredPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     const requiredRow = requiredContainer.components.find(
-      (c): c is ActionRowData<ButtonComponentData> =>
+      (c): c is ActionRowData<InteractionButtonComponentData> =>
         typeof c === "object" &&
         c !== null &&
         "type" in c &&
         (c as { type: number }).type === ComponentType.ActionRow &&
-        Array.isArray((c as { components: unknown[] }).components) &&
-        (c as { components: Array<{ customId?: string }> }).components.some((b) =>
+        Array.isArray((c as { type: number; components?: unknown[] }).components) &&
+        (c as { type: number; components: Array<{ customId?: string }> }).components.some((b) =>
           b.customId?.includes("model-access-set"),
         ),
     );
@@ -588,15 +597,15 @@ describe("moderationPanel UI rendering", () => {
         serverModelAccess: { allowServerModels: true },
       }),
     });
-    const staleContainer = stalePayload.components[0] as { components: unknown[] };
+    const staleContainer = stalePayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     const staleRow = staleContainer.components.find(
-      (c): c is ActionRowData<ButtonComponentData> =>
+      (c): c is ActionRowData<InteractionButtonComponentData> =>
         typeof c === "object" &&
         c !== null &&
         "type" in c &&
         (c as { type: number }).type === ComponentType.ActionRow &&
-        Array.isArray((c as { components: unknown[] }).components) &&
-        (c as { components: Array<{ customId?: string }> }).components.some((b) =>
+        Array.isArray((c as { type: number; components?: unknown[] }).components) &&
+        (c as { type: number; components: Array<{ customId?: string }> }).components.some((b) =>
           b.customId?.includes("model-access-set"),
         ),
     );
@@ -640,7 +649,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(0)`");
-    expect(serialized).toContain("**Personalization Blacklist**");
+    expect(serialized).toContain("**Server Blacklist**");
     expect(serialized).not.toContain("####");
     expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
     expect(serialized).not.toContain("> No members blacklisted");
@@ -682,11 +691,17 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(3)`");
-    expect(serialized).toContain("**Personalization Blacklist**");
-    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(serialized).toContain("**Server Blacklist**");
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).not.toContain("####");
     expect(serialized).toContain("> <@p-user-1>");
     expect(serialized).toContain("> <@p-user-2>");
+    const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
+    const personalizationComponent = container.components.find(
+      (c): c is TextDisplayComponentData =>
+        c.type === ComponentType.TextDisplay && "content" in c && c.content.includes("<@p-user-1>"),
+    );
+    expect(personalizationComponent?.content).toBe("> <@p-user-1>\n> <@p-user-2>");
     expect(serialized).not.toContain("(`p-user-1`)");
     expect(serialized).not.toContain("(`p-user-2`)");
     expect(serialized).toContain("**Persona User Blocks**");
@@ -728,7 +743,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(1)`");
-    expect(serialized).toContain("**Personalization Blacklist**");
+    expect(serialized).toContain("**Server Blacklist**");
     expect(serialized).not.toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_empty"));
     expect(serialized).toContain("**Persona User Blocks**");
@@ -754,7 +769,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(15)`");
-    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain("> <@user-1>");
     expect(serialized).toContain("> <@user-10>");
     expect(serialized).not.toContain("(`user-1`)");
@@ -798,8 +813,10 @@ describe("moderationPanel UI rendering", () => {
 
     const page1Serialized = JSON.stringify(page1Payload);
     expect(page1Serialized).toContain("### Blacklisted Members `(13)`");
-    expect(page1Serialized).toContain("**Personalization Blacklist**");
-    expect(page1Serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(page1Serialized).toContain("**Server Blacklist**");
+    expect(page1Serialized).toMatch(
+      localizedProse("en-US", "commands.moderation.personalization_blacklist_description"),
+    );
     expect(page1Serialized).not.toContain("####");
     expect(page1Serialized).toContain("> <@p-user-1>");
     expect(page1Serialized).toContain("> <@p-user-10>");
@@ -825,8 +842,10 @@ describe("moderationPanel UI rendering", () => {
 
     const page2Serialized = JSON.stringify(page2Payload);
     expect(page2Serialized).toContain("### Blacklisted Members `(13)`");
-    expect(page2Serialized).toContain("**Personalization Blacklist**");
-    expect(page2Serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(page2Serialized).toContain("**Server Blacklist**");
+    expect(page2Serialized).toMatch(
+      localizedProse("en-US", "commands.moderation.personalization_blacklist_description"),
+    );
     expect(page2Serialized).toContain("> <@p-user-11>");
     expect(page2Serialized).toContain("> <@p-user-12>");
     expect(page2Serialized).not.toContain("(`p-user-11`)");
@@ -860,7 +879,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Blacklisted Members `(1)`");
-    expect(serialized).toContain(localizer("en-US", "commands.moderation.personalization_blacklist_description"));
+    expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.personalization_blacklist_description"));
     expect(serialized).toContain("> <@surviving-user>");
     expect(serialized).not.toContain("(`surviving-user`)");
     expect(serialized).not.toContain("•");
@@ -1047,6 +1066,12 @@ describe("moderationPanel UI rendering", () => {
     expect(serialized).toContain(localizer("en-US", "commands.moderation.whitelist_roles_description"));
     expect(serialized).toContain("> <@&role-1>");
     expect(serialized).toContain("> <@&role-2>");
+    const roleContainer = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
+    const roleComponent = roleContainer.components.find(
+      (c): c is TextDisplayComponentData =>
+        c.type === ComponentType.TextDisplay && "content" in c && c.content.includes("<@&role-1>"),
+    );
+    expect(roleComponent?.content).toBe("> <@&role-1>\n> <@&role-2>");
     expect(serialized).toContain("moderation:v1:whitelist-role-remove-open:en-US");
     expect(serialized).not.toContain("whitelist-role-remove-prompt");
     expect(serialized).toContain("moderation:v1:whitelist-role-add-open:en-US");
@@ -1202,7 +1227,7 @@ describe("moderationPanel UI rendering", () => {
         comp.components.some((btn) => "label" in btn && btn.label === "+ Add Blacklist"),
     );
     const freshBlacklistButton = freshBlacklistRow?.components.find(
-      (btn): btn is ButtonComponentData => "label" in btn && btn.label === "+ Add Blacklist",
+      (btn): btn is InteractionButtonComponentData => "label" in btn && btn.label === "+ Add Blacklist",
     );
     expect(freshBlacklistButton).toBeDefined();
     expect(freshBlacklistButton?.disabled).toBe(false);
@@ -1249,7 +1274,7 @@ describe("moderationPanel UI rendering", () => {
         comp.components.some((btn) => "label" in btn && btn.label === "+ Add or Edit Channel"),
     );
     const freshChannelButton = freshChannelRow?.components.find(
-      (btn): btn is ButtonComponentData => "label" in btn && btn.label === "+ Add or Edit Channel",
+      (btn): btn is InteractionButtonComponentData => "label" in btn && btn.label === "+ Add or Edit Channel",
     );
     expect(freshChannelButton).toBeDefined();
     expect(freshChannelButton?.disabled).toBe(false);
@@ -1309,7 +1334,7 @@ describe("moderationPanel UI rendering", () => {
 
         expect(actionRowWithButton).toBeDefined();
         const button = actionRowWithButton?.components.find(
-          (btn): btn is ButtonComponentData => "label" in btn && btn.label === view.actionLabel,
+          (btn): btn is InteractionButtonComponentData => "label" in btn && btn.label === view.actionLabel,
         );
         expect(button).toBeDefined();
         expect(button?.disabled).toBe(readStatus !== "fresh");
@@ -1688,7 +1713,7 @@ describe("moderationPanel UI rendering", () => {
 
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("### Remove Blacklisted Member");
-    expect(serialized).toContain("Remove <@p-user-1> from the personalization blacklist?");
+    expect(serialized).toContain("Remove <@p-user-1> from the blacklist?");
     expect(serialized).toContain("moderation:v1:user-blacklist-remove-confirm:en-US:personalization:p-user-1");
     expect(serialized).toContain("moderation:v1:user-blacklist-remove-cancel:en-US");
     expect(serialized).not.toContain("### Blacklisted Members");
@@ -1744,10 +1769,18 @@ describe("moderationPanel UI rendering", () => {
       removeTarget: { source: "personalization", userId: "p-user-1" },
     });
 
-    const outer = payload.components[0];
+    const outer = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
     const inner = outer.components ?? [];
     const actionRow = inner.find(
-      (c) => c.type === ComponentType.ActionRow && c.components?.some((b) => b.customId?.includes("confirm")),
+      (c): c is ActionRowData<InteractionButtonComponentData> =>
+        typeof c === "object" &&
+        c !== null &&
+        "type" in c &&
+        (c as { type: number }).type === ComponentType.ActionRow &&
+        Array.isArray((c as { type: number; components?: unknown[] }).components) &&
+        (c as { type: number; components: Array<{ customId?: string }> }).components.some((b) =>
+          b.customId?.includes("confirm"),
+        ),
     );
     expect(actionRow).toBeDefined();
     const confirmBtn = actionRow?.components?.find((b) => b.customId?.includes("confirm"));
@@ -1803,12 +1836,18 @@ describe("moderationPanel whitelist channels rendering", () => {
     expect(serialized).toMatch(localizedProse("en-US", "commands.moderation.whitelist_channels_empty"));
     expect(serialized).toContain("moderation:v1:whitelist-channel-add-open:en-US");
 
-    const outer = payload.components[0];
+    const outer = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
     const inner = outer.components ?? [];
     const addRow = inner.find(
-      (c) =>
-        c.type === ComponentType.ActionRow &&
-        c.components?.some((b) => b.customId?.includes("whitelist-channel-add-open")),
+      (c): c is ActionRowData<InteractionButtonComponentData> =>
+        typeof c === "object" &&
+        c !== null &&
+        "type" in c &&
+        (c as { type: number }).type === ComponentType.ActionRow &&
+        Array.isArray((c as { type: number; components?: unknown[] }).components) &&
+        (c as { type: number; components: Array<{ customId?: string }> }).components.some((b) =>
+          b.customId?.includes("whitelist-channel-add-open"),
+        ),
     );
     expect(addRow).toBeDefined();
     const addBtn = addRow?.components?.find((b) => b.customId?.includes("whitelist-channel-add-open"));
@@ -1918,19 +1957,33 @@ describe("moderationPanel whitelist channels rendering", () => {
       }),
     });
 
-    const outer = payload.components[0];
+    const outer = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
     const inner = outer.components ?? [];
     const removeRow = inner.find(
-      (c) => c.type === ComponentType.ActionRow && c.components?.some((b) => b.customId?.includes("remove-open")),
+      (c): c is ActionRowData<InteractionButtonComponentData> =>
+        typeof c === "object" &&
+        c !== null &&
+        "type" in c &&
+        (c as { type: number }).type === ComponentType.ActionRow &&
+        Array.isArray((c as { type: number; components?: unknown[] }).components) &&
+        (c as { type: number; components: Array<{ customId?: string }> }).components.some((b) =>
+          b.customId?.includes("remove-open"),
+        ),
     );
     expect(removeRow).toBeDefined();
     const removeBtn = removeRow?.components?.find((b) => b.customId?.includes("remove-open"));
     expect(removeBtn?.disabled).toBe(true);
 
     const addRow = inner.find(
-      (c) =>
-        c.type === ComponentType.ActionRow &&
-        c.components?.some((b) => b.customId?.includes("whitelist-channel-add-open")),
+      (c): c is ActionRowData<InteractionButtonComponentData> =>
+        typeof c === "object" &&
+        c !== null &&
+        "type" in c &&
+        (c as { type: number }).type === ComponentType.ActionRow &&
+        Array.isArray((c as { type: number; components?: unknown[] }).components) &&
+        (c as { type: number; components: Array<{ customId?: string }> }).components.some((b) =>
+          b.customId?.includes("whitelist-channel-add-open"),
+        ),
     );
     expect(addRow).toBeDefined();
     const addBtn = addRow?.components?.find((b) => b.customId?.includes("whitelist-channel-add-open"));

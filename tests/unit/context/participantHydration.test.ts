@@ -56,6 +56,7 @@ function createUserRow(overrides: Partial<UserRow> = {}): UserRow {
     shortterm_cache_crossserver_opt_in: false,
     personal_dtm: "follow",
     personal_deliberate_tool_mode: "follow",
+    personal_server_fallback_enabled: true,
     timezone_offset: 8,
     ...overrides,
   };
@@ -94,6 +95,7 @@ function createReminder(id: number, selfReminder: boolean): ReminderRow {
     reminder_time: new Date("2026-08-02T01:00:00.000Z"),
     repetition_interval_hours: null,
     self_reminder: selfReminder,
+    delivery_retry_count: 0,
     created_by_user_id: 41,
     persona_id: 7,
   };

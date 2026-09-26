@@ -3,12 +3,18 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { TomoriState } from "@/types/db/schema";
 import { resolveToolsEnabled } from "@/utils/tools/toolUseGate";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 function makeState(toolUseEnabled: boolean, hasTools: boolean): TomoriState {
-  return {
-    llm: { llm_id: 1, llm_provider: "openrouter", llm_codename: "deepseek/deepseek-v4-flash", has_tools: hasTools },
+  return createPersona({
+    llm: createLlmRow({
+      llm_id: 1,
+      llm_provider: "openrouter",
+      llm_codename: "deepseek/deepseek-v4-flash",
+      has_tools: hasTools,
+    }),
     config: { tool_use_enabled: toolUseEnabled },
-  } as TomoriState;
+  });
 }
 
 describe("resolveToolsEnabled", () => {
@@ -33,7 +39,9 @@ describe("resolveToolsEnabled", () => {
   });
 
   it("treats an unset master toggle as enabled", () => {
-    const state = { llm: { has_tools: true }, config: {} } as TomoriState;
+    // An explicit undefined stands in for the absent key, which is how a hand-assembled state
+    // reaches the gate without ever reading the master toggle.
+    const state = createPersona({ config: { tool_use_enabled: undefined } });
 
     expect(resolveToolsEnabled(state, true)).toBe(true);
   });

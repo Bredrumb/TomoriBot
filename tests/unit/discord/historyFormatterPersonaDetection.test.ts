@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { MessageType } from "discord.js";
 import type { Message } from "discord.js";
-import type { TomoriState } from "@/types/db/schema";
 import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
+import { createPersona } from "../../helpers/fixtures";
 
 /**
  * Regression guard for `/memory history import` automatic scope.
@@ -14,15 +14,6 @@ import { formatMessagesForExtraction } from "@/utils/discord/historyFormatter";
  */
 
 const BOT_USER_ID = "900000000000000001";
-
-/** Minimal persona row carrying only the fields detection reads. */
-function makePersona(personaId: number, nickname: string, isAlter: boolean): TomoriState {
-  return {
-    persona_id: personaId,
-    persona_nickname: nickname,
-    is_alter: isAlter,
-  } as unknown as TomoriState;
-}
 
 /** Minimal Discord message stand-in for the formatter's read surface. */
 function makeMessage(options: { content: string; authorId: string; username: string; webhookId?: string }): Message {
@@ -40,7 +31,10 @@ function makeMessage(options: { content: string; authorId: string; username: str
 }
 
 describe("formatMessagesForExtraction persona detection", () => {
-  const personas = [makePersona(11, "Tomori", false), makePersona(22, "Locke", true)];
+  const personas = [
+    createPersona({ persona_id: 11, persona_nickname: "Tomori", is_alter: false }),
+    createPersona({ persona_id: 22, persona_nickname: "Locke", is_alter: true }),
+  ];
 
   test("detects the main persona from messages the bot posted directly", () => {
     const messages = [

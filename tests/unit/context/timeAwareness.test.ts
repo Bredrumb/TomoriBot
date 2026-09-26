@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
 import { HumanizerDegree, type AssembledServerConfig } from "@/types/db/schema";
+import type { StructuredContextItem } from "@/types/misc/context";
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import { buildDateSpacer, buildReunionNote, SPACER_TEMPLATE } from "@/utils/text/context/timeAwareness";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
@@ -153,7 +154,7 @@ describe("buildDateSpacer", () => {
 
 describe("appendDialogueHistoryContext — time-awareness injections", () => {
   it("injects the producer-supplied reunion note above the newest messages", async () => {
-    const contextItems = [];
+    const contextItems: StructuredContextItem[] = [];
     await appendDialogueHistoryContext({
       contextItems,
       client: {} as Client,
@@ -171,6 +172,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
       reunionNote: "Alice is talking to you directly for the very first time!",
       includeTimestamps: false,
       isUserImpersonation: false,
+      triggererFormattedName: "Alice",
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
       convertMentions: async (text) => text,
     });
@@ -187,7 +189,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
   });
 
   it("emits exactly one spacer per boundary across a multi-day history", async () => {
-    const contextItems = [];
+    const contextItems: StructuredContextItem[] = [];
     await appendDialogueHistoryContext({
       contextItems,
       client: {} as Client,
@@ -204,6 +206,7 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
       dateSpacerTemplate: EXPANDED_TEMPLATE,
       includeTimestamps: false,
       isUserImpersonation: false,
+      triggererFormattedName: "Alice",
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
       convertMentions: async (text) => text,
     });
@@ -222,22 +225,18 @@ describe("appendDialogueHistoryContext — time-awareness injections", () => {
     expect(nativeBuilder).toContain("dateSpacerTemplate,");
   });
 
-  it("keeps both phases of the reunion presence protocol wired", async () => {
-    // The clock only works if phase 1 (resolve, at context build) and phase 2
-    // (commit, post-turn) both run. They live in one module so they stay in sync;
-    // this guards the two call sites that drain it.
+  it("keeps the context-build phase of the reunion presence protocol wired", async () => {
+    // The clock only works if phase 1 (resolve, at context build) and phase 2 (commit, post-turn)
+    // both run. Phase 2's call site and its response gate are proven by behavior in
+    // postTurnEffects.test.ts and reunionPresence.test.ts; building a whole turn context to prove
+    // phase 1 the same way would cost more than this scan.
     const producer = await Bun.file("src/utils/chat/contextPipeline.ts").text();
-    const postTurn = await Bun.file("src/utils/chat/postTurnEffects.ts").text();
     const presence = await Bun.file("src/utils/chat/reunionPresence.ts").text();
 
     expect(producer).toContain("resolveReunionNote");
     expect(producer).toContain("reunionPresence,");
-    expect(postTurn).toContain("recordReunionPresence(context.reunionPresence, result)");
-
-    // Phase 2 must stay response-gated: a turn that never answered delivered no
-    // acknowledgment, so it must not consume the reunion.
-    expect(presence).toContain("result.personaResponses.length === 0");
-    // ...and must NOT inherit recordUsageStats' DM exclusion.
+    // The protocol must NOT inherit recordUsageStats' DM exclusion, and its inputs carry no
+    // channel type a behavioral test could vary.
     expect(presence).not.toContain("isDMChannel");
   });
 });

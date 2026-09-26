@@ -36,7 +36,6 @@ import support from "./commands/support";
 import contribute from "./commands/contribute";
 import donate from "./commands/donate";
 import nsfw from "./commands/nsfw";
-import openrouter from "./commands/openrouter";
 import optionalKey from "./commands/optional-key";
 import scheduledTask from "./commands/scheduled-task";
 import memory from "./commands/memory";
@@ -93,7 +92,6 @@ export default {
     ...contribute,
     ...donate,
     ...nsfw,
-    ...openrouter,
     ...optionalKey,
     ...scheduledTask,
     ...memory,

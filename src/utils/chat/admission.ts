@@ -2,7 +2,7 @@ import type { AnyThreadChannel, Guild } from "discord.js";
 import { BaseGuildTextChannel, ChannelType, DMChannel, EmbedBuilder } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { PrivacyLevel } from "@/types/db/schema";
-import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { getCachedAllPersonas } from "@/utils/cache/tomoriStateCache";
 import { setCachedVoiceTranscript } from "@/utils/audio/voiceTranscriptCache";
 import { transcribeMessageAudioAttachment } from "@/utils/audio/audioAttachmentTranscription";
@@ -238,6 +238,16 @@ export async function evaluateChatAdmission(incoming: ChatIncoming): Promise<Cha
   }
 
   incoming.isManuallyTriggered = channelScope.isManuallyTriggered;
+
+  // Rejected here rather than in the trigger gate because audio admission below spends STT quota
+  // and can echo the transcript through a webhook before the trigger gate ever runs.
+  if (
+    !channelScope.isDMChannel &&
+    !incoming.isStopResponse &&
+    (await getCachedBlacklistStatus(channelScope.serverDiscId, userDiscId))
+  ) {
+    return blocked("server_blacklisted_user");
+  }
 
   if (!channelScope.isDMChannel && "permissionsFor" in channel) {
     const permissions = client.user ? channel.permissionsFor(client.user) : null;

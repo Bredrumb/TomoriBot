@@ -168,7 +168,7 @@ describe("conditioning panel routes", () => {
 
     expect(interaction.wasDeferredUpdate()).toBe(false);
     expect(modalShown).toBe(true);
-    expect(modalFp).toBe(validFp);
+    expect<string | null>(modalFp).toBe(validFp);
   });
 
   it("deletes nothing when remove-submit has a stale fingerprint", async () => {

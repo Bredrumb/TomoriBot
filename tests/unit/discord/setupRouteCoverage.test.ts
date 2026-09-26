@@ -35,10 +35,8 @@ const NONCE = "nonce-abc-12345";
 const SETUP_ROUTES_SOURCE = readFileSync("src/utils/discord/interactions/setupRoutes.ts", "utf8");
 
 /**
- * Actions a control or a modal actually emits, which is narrower than the set the codec declares.
- *
- * A declared action with no producer is unreachable in a client, so the two lists are compared
- * separately below rather than assumed equal.
+ * Actions a control or a modal actually emits. The codec must declare exactly these: a declared
+ * action with no producer is unreachable in a client and only keeps a dead handler arm alive.
  */
 const EMITTED_ACTIONS: SetupWizardAction[] = [
   "cancel",
@@ -57,9 +55,10 @@ const EMITTED_ACTIONS: SetupWizardAction[] = [
 ];
 
 /** Members of the `SetupWizardAction` union, read from the declaration that defines the codec. */
-function declaredActions(): string[] {
+function declaredActions(): SetupWizardAction[] {
   const union = SETUP_ROUTES_SOURCE.match(/export type SetupWizardAction =([\s\S]*?);/);
-  return union ? [...union[1].matchAll(/"([a-z-]+)"/g)].map((match) => match[1]) : [];
+  // The declaration's own string literals are the union members by construction.
+  return union ? [...union[1].matchAll(/"([a-z-]+)"/g)].map((match) => match[1] as SetupWizardAction) : [];
 }
 
 /** Actions the dispatcher's switch handles, read from its own case labels. */
@@ -173,25 +172,18 @@ function terminalPayloads(): Array<[string, unknown]> {
 }
 
 /**
- * Route coverage for the `/setup` codec: every declared action round-trips, the dispatcher handles
- * every declared action, and the actions the real panels and modals emit are exactly a closed list.
- *
- * What this proves is the control surface plus build and parse agreement, so a removed control, a
- * renamed action, or an unhandled arm fails here. What it cannot prove is that every declared action
- * has a producer: `dashboard` is declared, dispatched, and emitted by no control, and asserting that
- * gap as an expected value would be a baseline entry rather than a gate. That orphan is reported to
- * the product owner for a decision (wire a control or delete the codec) rather than recorded as
- * acceptable here. If it is ever wired, `EMITTED_ACTIONS` has to grow by one and this file fails
- * until it does.
+ * Route coverage for the `/setup` codec: every declared action parses, the dispatcher handles
+ * every declared action, and the actions the real panels and modals emit are exactly the declared
+ * set, so a removed control, a renamed action, an unhandled arm, or an orphaned action fails here.
  */
 describe("setup wizard route coverage", () => {
   it("declares a codec whose actions the dispatcher all handles", () => {
     const declared = declaredActions();
-    expect(declared.length).toBeGreaterThanOrEqual(14);
+    expect([...declared].sort()).toEqual([...EMITTED_ACTIONS].sort());
     expect([...dispatchedActions()].sort()).toEqual([...declared].sort());
   });
 
-  it("round-trips every declared action through its own builder and parser", () => {
+  it("parses every declared action from its wire form", () => {
     const declared = declaredActions();
     expect(declared.length).toBeGreaterThan(0);
 

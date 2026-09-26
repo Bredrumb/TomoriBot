@@ -29,7 +29,6 @@ function createScopeData(overrides: Partial<ModerationScopeData> = {}): Moderati
     userBlacklist: {
       personalizationUserIds: [],
       personaBlocks: [],
-      personalMemoriesEnabled: true,
     },
     whitelist: {
       channels: [],
@@ -91,12 +90,16 @@ describe("buildPaginationRow", () => {
     expect(lastRow?.components.map((button) => button.disabled)).toEqual([false, true, true]);
 
     for (const row of [firstRow, middleRow, lastRow]) {
-      const ids = row?.components.map((button) => button.customId ?? "") ?? [];
+      const ids = row?.components.map((button) => ("customId" in button ? button.customId : "")) ?? [];
       expect(new Set(ids).size).toBe(3);
     }
-    expect(parseInteractionRoute(firstRow?.components[1]?.customId ?? "")).toBeNull();
+    const indicatorButton = firstRow?.components[1];
+    expect(
+      parseInteractionRoute(indicatorButton && "customId" in indicatorButton ? indicatorButton.customId : ""),
+    ).toBeNull();
 
-    const nextRoute = parseInteractionRoute(firstRow?.components[2]?.customId ?? "");
+    const nextButton = firstRow?.components[2];
+    const nextRoute = parseInteractionRoute(nextButton && "customId" in nextButton ? nextButton.customId : "");
     expect(nextRoute).not.toBeNull();
     if (!nextRoute) throw new Error("Expected a pagination route");
     expect(parseModerationPanelRoute(nextRoute)).toEqual({

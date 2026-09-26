@@ -59,7 +59,7 @@ describe("W6-18 Config Plugins structure", () => {
 
   it("keeps every Plugins page visible to the owner of a DM workspace", () => {
     const pluginPages = (CONFIG_PAGES_BY_CATEGORY as Record<string, readonly string[]>).plugins;
-    expect(
+    expect<readonly string[]>(
       visibleConfigPages("plugins" as ConfigCategory, {
         workspaceKind: "dm",
         isManager: true,

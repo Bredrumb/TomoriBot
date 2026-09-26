@@ -128,7 +128,6 @@ import { buildMcpsPanelComponents, type McpsPanelPage } from "@/utils/discord/ui
 import { buildStPresetsPanelComponents, type StPresetsPanelRenderInput } from "@/utils/discord/ui/stPresetsPanel";
 
 const RANDOM_TRIGGER_PAGE_SIZE = CONFIG_RANDOM_TRIGGER_CHECKBOX_CAPACITY;
-const CONFIG_MCP_PANEL_PAGE_SIZE = 4;
 
 export interface ConfigPanelPayload {
   components: TopLevelComponentData[];
@@ -4361,7 +4360,6 @@ export function buildConfigPanelPayload(input: ConfigPanelRenderInput): ConfigPa
         configs: mcpRead.configs,
         readStatus: mcpRead.status,
         page: input.mcpPage ?? { kind: "collection" },
-        pageSize: CONFIG_MCP_PANEL_PAGE_SIZE,
         routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
         headingLevel: 3,
       }),

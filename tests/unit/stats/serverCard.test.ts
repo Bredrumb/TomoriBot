@@ -37,6 +37,8 @@ const SAMPLE_EN: ServerCardData = {
   totalTokens: 96_618,
   estimatedCost: 4.27,
   totalTriggers: 8_230,
+  totalPersonas: 2,
+  serverUserCount: 128,
 };
 
 const SAMPLE_JA: ServerCardData = {

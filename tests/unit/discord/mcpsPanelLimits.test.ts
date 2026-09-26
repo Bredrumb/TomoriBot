@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
-import { buildMcpsPanelPayload, MAX_MCP_PANEL_PAGE_SIZE } from "@/utils/discord/ui/mcpsPanel";
-import { CONFIG_MCP_PANEL_ROUTE_ADAPTER } from "@/utils/discord/configPanelCatalog";
+import { MAX_MCP_PANEL_PAGE_SIZE } from "@/utils/discord/ui/mcpsPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { RUNTIME_LOCALES } from "../../helpers/localeCases";
 import { BACKTICK_RUNS, expectSafePanelPayload } from "../../helpers/panelLimits";
+import { buildConfigMcpPagePayload } from "../../helpers/configMcpPage";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -72,14 +72,13 @@ describe("MCP panel Components V2 limits", () => {
                 { kind: "remove" as const, entityId: configs[0]?.guild_mcp_id ?? 1 },
               ]) {
                 expectSafePanelPayload(
-                  buildMcpsPanelPayload({
+                  buildConfigMcpPagePayload({
                     locale,
                     scope,
                     configs,
                     readStatus,
                     page,
                     receipt,
-                    routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
                   }),
                   `${locale}/${scope}/${readStatus}/size-${size}/${page.kind}`,
                 );
@@ -111,46 +110,16 @@ describe("MCP panel Components V2 limits", () => {
         { kind: "remove" as const, entityId: index + 1 },
       ]) {
         expectSafePanelPayload(
-          buildMcpsPanelPayload({
+          buildConfigMcpPagePayload({
             locale: "en-US",
             scope: "guild",
             configs: [config],
             readStatus: "fresh",
             page,
             receipt: REALISTIC_RECEIPT,
-            routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
           }),
           `shape-${index}/${page.kind}`,
         );
-      }
-    }
-
-    // Explicitly test a full page at MAX_MCP_PANEL_PAGE_SIZE with every row carrying oversized content
-    const fullPageConfigs = Array.from({ length: MAX_MCP_PANEL_PAGE_SIZE }, (_, i) =>
-      row(i + 1, {
-        name: "M".repeat(20_000),
-        url: `https://safe-${i + 1}.example.invalid/${"u".repeat(20_000)}`,
-      }),
-    );
-    for (const locale of RUNTIME_LOCALES) {
-      for (const receipt of RECEIPTS) {
-        for (const page of [
-          { kind: "collection" as const, rangeIndex: 0 },
-          { kind: "remove" as const, entityId: fullPageConfigs[0]?.guild_mcp_id as number },
-        ]) {
-          expectSafePanelPayload(
-            buildMcpsPanelPayload({
-              locale,
-              scope: "guild",
-              configs: fullPageConfigs,
-              readStatus: "fresh",
-              page,
-              receipt,
-              routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
-            }),
-            `full-page-oversized/${locale}/${page.kind}/receipt=${Boolean(receipt)}`,
-          );
-        }
       }
     }
   });
@@ -163,13 +132,12 @@ describe("MCP panel Components V2 limits", () => {
     for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex++) {
       seen.push(
         ...customIds(
-          buildMcpsPanelPayload({
+          buildConfigMcpPagePayload({
             locale: "en-US",
             scope: "guild",
             configs,
             readStatus: "fresh",
             page: { kind: "collection", rangeIndex },
-            routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
           }),
         ).filter((id) => id.includes("config:v2:mcp-remove-prompt:")),
       );

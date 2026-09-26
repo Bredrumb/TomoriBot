@@ -23,6 +23,7 @@ import { sql } from "@/utils/db/client";
 import { log } from "@/utils/misc/logger";
 import { normalizeCustomEndpointUrlForStorage } from "@/utils/provider/customEndpointService";
 import { buildCustomProviderName, buildSyntheticCustomModelCodename } from "@/utils/provider/customProviderUtils";
+import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
 import { encryptApiKey } from "@/utils/security/crypto";
 import { keyManager } from "@/utils/security/keyManager";
@@ -818,19 +819,26 @@ class ServerRepository implements IRepository<ServerExportShape> {
 
         let finalLlmId: number | null = null;
         let finalDiffusionId: number | null = null;
+        let finalNaiDiffusionId: number | null = null;
         let finalEmbeddingId: number | null = null;
         let finalApiKey: Buffer | null = null;
         let finalKeyVersion = 1;
 
         if (resolvedAccess?.mode === "catalog") {
+          const imageGenerationStyle =
+            getStaticProviderInfo(resolvedAccess.provider)?.featureSupport.imageGeneration ?? "none";
           finalLlmId = selectedLlm?.llm_id ?? null;
-          finalDiffusionId = selectedDiffusionModel?.diffusion_model_id ?? null;
+          finalDiffusionId =
+            imageGenerationStyle === "chat-completion" ? (selectedDiffusionModel?.diffusion_model_id ?? null) : null;
+          finalNaiDiffusionId =
+            imageGenerationStyle === "nai-pipeline" ? (selectedDiffusionModel?.diffusion_model_id ?? null) : null;
           finalEmbeddingId = selectedEmbeddingModel?.embedding_model_id ?? null;
           finalApiKey = resolvedAccess.encryptedApiKey;
           finalKeyVersion = resolvedAccess.keyVersion ?? 1;
         } else if (resolvedAccess?.mode === "custom-endpoint") {
           finalLlmId = customLlmId;
           finalDiffusionId = null;
+          finalNaiDiffusionId = null;
           finalEmbeddingId = null;
           finalApiKey = customApiKey;
           finalKeyVersion = customKeyVersion;
@@ -873,7 +881,15 @@ class ServerRepository implements IRepository<ServerExportShape> {
         await tx`INSERT INTO server_trigger_behavior_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_auto_trigger_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_capabilities_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
-        await tx`INSERT INTO server_novelai_imagegen_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        if (finalNaiDiffusionId) {
+          await tx`
+            INSERT INTO server_novelai_imagegen_configs (server_id, nai_diffusion_model_id)
+            VALUES (${server.server_id}, ${finalNaiDiffusionId})
+            ON CONFLICT (server_id) DO UPDATE SET nai_diffusion_model_id = EXCLUDED.nai_diffusion_model_id
+          `;
+        } else {
+          await tx`INSERT INTO server_novelai_imagegen_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
+        }
         await tx`INSERT INTO server_nsfw_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_speech_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;
         await tx`INSERT INTO server_memory_configs (server_id) VALUES (${server.server_id}) ON CONFLICT (server_id) DO NOTHING`;

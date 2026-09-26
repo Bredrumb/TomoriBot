@@ -6,7 +6,7 @@
  * and a wrong one renders without throwing; only a literal assertion catches it.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ComponentType } from "discord.js";
+import { ComponentType, type ComponentInContainerData, type ContainerComponentData } from "discord.js";
 import type { PersonaSpriteRow, StmCategoryRow, TomoriState } from "@/types/db/schema";
 import type { ConditioningGroup } from "@/utils/db/repositories/ConditioningMemoryRepository";
 import {
@@ -21,12 +21,14 @@ import {
 } from "@/utils/discord/configPanelCatalog";
 import type { ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
 import type { ConfigPersonaMemoryView } from "@/utils/discord/interactions/configRouteContext";
+import type { ShortTermMemoryEntry } from "@/utils/cache/shortTermMemoryCache";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { RANDOM_TRIGGER_ADD_PERSONA_PAGE_SIZE } from "@/utils/discord/ui/configBehaviorModals";
 import { buildConfigModelsBody } from "@/utils/discord/ui/configModelsPanel";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -119,15 +121,16 @@ function actionRows(payload: unknown): string[][] {
   return rows;
 }
 
+/**
+ * The suite's personas share server 9, and the nickname is derived from the id because the panel
+ * renders it: a roster of fixed "Mirri" rows would let a nickname regression pass unnoticed.
+ */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_nickname: `Persona ${overrides.persona_id}`,
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
     ...overrides,
-  } as unknown as TomoriState;
+  });
 }
 
 const MAIN = makePersona({ persona_id: 55, persona_nickname: "Aphel", trigger_words: ["aphel", "hey aphel"] });
@@ -150,20 +153,22 @@ const MEMORY_CONDITIONING: ConditioningGroup = {
   conditioningIds: [1],
 };
 
+const MEMORY_ENTRY: ShortTermMemoryEntry = {
+  messages: [],
+  serverId: "guild-1",
+  channelId: "channel-1",
+  personaId: 55,
+  personaLineageId: 55,
+  categories: { summary: "A stored scene", people: "Mirri" },
+  lastUpdated: Date.now(),
+};
+
 const MEMORY_VIEW: ConfigPersonaMemoryView = {
   serverMemoryCount: 4,
   personalMemoryCount: 2,
   channelId: "channel-1",
   stmCategories: MEMORY_CATEGORIES,
-  stmEntry: {
-    messages: [],
-    serverId: "guild-1",
-    channelId: "channel-1",
-    personaId: 55,
-    personaLineageId: 55,
-    categories: { summary: "A stored scene", people: "Mirri" },
-    lastUpdated: Date.now(),
-  },
+  stmEntry: MEMORY_ENTRY,
   conditioningGroups: [MEMORY_CONDITIONING],
 };
 
@@ -377,7 +382,9 @@ describe("config panel shell", () => {
   it("embeds the ST panel with config routes and stays within the Components V2 budget", () => {
     const presets = Array.from({ length: 23 }, (_, index) => ({
       preset_id: index + 1,
+      server_id: 9,
       preset_name: `Preset ${index + 1}`,
+      raw_json: {},
       description: "A preset",
       is_active: index === 0,
     }));
@@ -1137,7 +1144,7 @@ describe("config Persona General collections", () => {
         suffixes: {},
         addressTerms: {},
       },
-    } as Partial<TomoriState> & { persona_id: number });
+    });
     const payload = build(GUILD_MANAGER, { personas: [persona], page: "naming" });
     const components = walk(payload);
 
@@ -1259,7 +1266,7 @@ describe("config Persona Memories body", () => {
     const summaryView = {
       ...MEMORY_VIEW,
       stmCategories: MEMORY_CATEGORIES.slice(0, 1),
-      stmEntry: { ...MEMORY_VIEW.stmEntry, summary: "Summary mode text", categories: undefined },
+      stmEntry: { ...MEMORY_ENTRY, summary: "Summary mode text", categories: undefined },
     };
     const seen = walk(build(GUILD_MANAGER, { page: "memories", personaMemoryView: summaryView }));
     expect(seen.some((component) => component.content?.includes("Summary mode text"))).toBe(true);
@@ -1270,7 +1277,7 @@ describe("config Persona Memories body", () => {
     const longView = {
       ...MEMORY_VIEW,
       stmEntry: {
-        ...MEMORY_VIEW.stmEntry,
+        ...MEMORY_ENTRY,
         categories: { summary: "x".repeat(10000) },
       },
     };
@@ -1321,16 +1328,16 @@ describe("config Persona Appearance and Advanced bodies", () => {
     context_note: "Prefer concise answers.",
     context_note_depth: 4,
     humanizer_degree_override: 2,
-    llm: {
+    llm: createLlmRow({
       llm_id: 10,
       llm_provider: "openrouter",
       llm_codename: "server-model",
-    },
-    persona_llm: {
+    }),
+    persona_llm: createLlmRow({
       llm_id: 11,
       llm_provider: "google",
       llm_codename: "persona-model",
-    },
+    }),
   });
 
   it("renders visual settings on Appearance without exposing the saved reference path", () => {
@@ -1386,13 +1393,15 @@ describe("config Persona Appearance and Advanced bodies", () => {
       selectedPersonaId: 55,
       selectedPersonaCharacterReferenceUrl: "attachment://persona_char_ref_55.png",
     });
-    const container = payload.components.find((component) => component.type === ComponentType.Container) as {
-      components: Array<Record<string, unknown>>;
-    };
+    const container = payload.components.find(
+      (component): component is ContainerComponentData<ComponentInContainerData> =>
+        component.type === ComponentType.Container,
+    );
+    if (!container) throw new Error("Expected a container component");
     const actionId = buildConfigRouteId({ action: "character-reference-open", locale: "en-US", personaId: 55 });
     const actionRowIndex = container.components.findIndex((component) => {
-      if (component.type !== ComponentType.ActionRow || !Array.isArray(component.components)) return false;
-      return (component.components as Array<Record<string, unknown>>).some((child) => child.customId === actionId);
+      if (component.type !== ComponentType.ActionRow || !("components" in component)) return false;
+      return component.components.some((child) => "customId" in child && child.customId === actionId);
     });
 
     expect(actionRowIndex).toBeGreaterThanOrEqual(0);
@@ -1409,13 +1418,11 @@ describe("config Persona Appearance and Advanced bodies", () => {
       personas: [advancedPersona],
       selectedPersonaId: 55,
     });
-    expect(
-      (
-        withoutAsset.components.find((component) => component.type === ComponentType.Container) as {
-          components: Array<Record<string, unknown>>;
-        }
-      ).components.some((component) => component.type === ComponentType.MediaGallery),
-    ).toBe(false);
+    const plainContainer = withoutAsset.components.find(
+      (component): component is ContainerComponentData<ComponentInContainerData> =>
+        component.type === ComponentType.Container,
+    );
+    expect(plainContainer?.components.some((component) => component.type === ComponentType.MediaGallery)).toBe(false);
   });
 
   it("renders prompt, context, and ATTG sections on Advanced", () => {

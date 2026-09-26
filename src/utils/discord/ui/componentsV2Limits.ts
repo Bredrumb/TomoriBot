@@ -798,20 +798,6 @@ export function validateComponentsV2MessageLimits(
 }
 
 /**
- * Asserts that a Components V2 message payload complies with Discord limits.
- * Throws ComponentsV2LimitError if violations are found.
- */
-export function assertComponentsV2MessageLimits(payload: ComponentsV2MessagePayload): void {
-  const result = validateComponentsV2MessageLimits(payload);
-  if (!result.valid) {
-    const summary = result.violations
-      .map((v) => `${v.path}: [${v.code}] observed ${v.observed} (limit ${v.limit})`)
-      .join("; ");
-    throw new ComponentsV2LimitError(`Components V2 payload exceeded Discord limits: ${summary}`, result.violations);
-  }
-}
-
-/**
  * Validates a raw modal wire payload against Discord limits.
  * Pure and non-mutating. Returns structured path-aware violations.
  */
@@ -1143,18 +1129,4 @@ export function validateRawModalLimits(payload: RawModalPayload): DiscordCompone
     valid: violations.length === 0,
     violations,
   };
-}
-
-/**
- * Asserts that a raw modal payload complies with Discord limits.
- * Throws ComponentsV2LimitError if violations are found.
- */
-export function assertRawModalLimits(payload: RawModalPayload): void {
-  const result = validateRawModalLimits(payload);
-  if (!result.valid) {
-    const summary = result.violations
-      .map((v) => `${v.path}: [${v.code}] observed ${v.observed} (limit ${v.limit})`)
-      .join("; ");
-    throw new ComponentsV2LimitError(`Raw modal payload exceeded Discord limits: ${summary}`, result.violations);
-  }
 }

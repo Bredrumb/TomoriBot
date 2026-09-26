@@ -106,7 +106,7 @@ function stubWorkspace(available: TomoriState[]): ReturnType<typeof spyOn> {
       null as unknown as Awaited<ReturnType<typeof spotlightCache.getCachedPersonalSpotlightStatus>>,
     ),
   );
-  track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue(undefined));
+  track(spyOn(tomoriChatModule, "tomoriChat").mockResolvedValue("run"));
   return track(spyOn(conditioningMemoryRepository, "recordEvent").mockResolvedValue(null));
 }
 

@@ -74,7 +74,7 @@ export type VectorizeMemoryResult =
   | { status: "partial-failure"; documentId: number; documentName: string; chunkCount: number };
 
 export type DocumentRemoveResult =
-  | { status: "teaching-disabled" | "not-found" | "write-failed" }
+  | { status: "blacklisted" | "teaching-disabled" | "not-found" | "write-failed" }
   | { status: "success"; documentName: string };
 
 export type ChunkEditResult =
@@ -198,10 +198,12 @@ export const serverDocumentsOperations = {
     personaId: number | null;
     documentId: number;
     workspaceId: string;
+    isBlacklisted: boolean;
     canManage: boolean;
     memteachingEnabled: boolean;
     historyOnly: boolean;
   }): Promise<DocumentRemoveResult> {
+    if (input.isBlacklisted && !input.canManage) return { status: "blacklisted" };
     if (!input.memteachingEnabled && !input.canManage) return { status: "teaching-disabled" };
     const documents = input.historyOnly
       ? await serverMemoryRepository.loadHistoryDocuments(input.serverId, input.personaId)

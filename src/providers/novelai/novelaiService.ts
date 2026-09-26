@@ -328,20 +328,19 @@ async function* novelaiGenerateStreamOpenAI(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
-      log.error(`NovelAI OpenAI streaming request failed: ${response.status} ${errorText}`);
+      log.warn(`NovelAI OpenAI streaming request failed: ${response.status} ${errorText}`);
 
-      yield {
-        error: `NovelAI API request failed with status ${response.status}: ${errorText}`,
-      };
-      return;
+      const error: Error & { statusCode?: number } = new Error(
+        `NovelAI API request failed with status ${response.status}: ${errorText}`,
+      );
+      error.statusCode = response.status;
+      throw error;
     }
 
     if (!response.body) {
-      log.error("NovelAI OpenAI streaming response has no body");
-      yield {
-        error: "Response has no body",
-      };
-      return;
+      log.warn("NovelAI OpenAI streaming response has no body");
+      const error: Error & { statusCode?: number } = new Error("NovelAI response body is null");
+      throw error;
     }
 
     // Read SSE stream with per-read inactivity timeout.
@@ -394,8 +393,27 @@ async function* novelaiGenerateStreamOpenAI(
               return;
             }
 
+            let parsed: unknown;
             try {
-              const chunk = JSON.parse(data) as OpenAIStreamChunk;
+              parsed = JSON.parse(data);
+            } catch (parseError) {
+              log.warn("NovelAI OpenAI: Failed to parse SSE chunk:", parseError);
+              continue;
+            }
+
+            if (parsed && typeof parsed === "object") {
+              const record = parsed as Record<string, unknown>;
+              if (record.error) {
+                const errorPayload = record.error;
+                const message =
+                  typeof errorPayload === "object" && errorPayload !== null && "message" in errorPayload
+                    ? String((errorPayload as { message: unknown }).message)
+                    : String(errorPayload);
+                log.warn(`NovelAI OpenAI stream returned error: ${message}`);
+                throw new Error(message);
+              }
+
+              const chunk = parsed as OpenAIStreamChunk;
               const finishReason = chunk.choices?.[0]?.finish_reason ?? undefined;
 
               if (chunk.choices?.[0]?.text) {
@@ -410,8 +428,6 @@ async function* novelaiGenerateStreamOpenAI(
                 yield { final: true, finishReason };
                 return;
               }
-            } catch (parseError) {
-              log.error("Failed to parse OpenAI SSE chunk:", parseError);
             }
           }
         }
@@ -422,10 +438,10 @@ async function* novelaiGenerateStreamOpenAI(
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        log.error(`NovelAI OpenAI streaming request timed out after ${timeout}ms`);
-        yield {
-          error: "Request timed out",
-        };
+        log.warn(`NovelAI OpenAI streaming request timed out after ${timeout}ms`);
+        const timeoutError: Error & { statusCode?: number } = new Error("Request timed out");
+        timeoutError.statusCode = 504;
+        throw timeoutError;
       } else if (error.message.includes("stream read timed out")) {
         // Per-read inactivity timeout because NAI stopped sending data mid-stream.
         // Yield a final chunk so the stream adapter can flush any buffered text
@@ -433,15 +449,11 @@ async function* novelaiGenerateStreamOpenAI(
         log.warn(`NovelAI OpenAI: ${error.message}; yielding final chunk to flush buffers`);
         yield { final: true };
       } else {
-        log.error("NovelAI OpenAI streaming error:", error);
-        yield {
-          error: error.message,
-        };
+        log.warn("NovelAI OpenAI streaming error:", error);
+        throw error;
       }
     } else {
-      yield {
-        error: "Unknown error occurred",
-      };
+      throw new Error("Unknown error occurred");
     }
   }
 }
@@ -478,20 +490,19 @@ async function* novelaiGenerateStreamNative(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "Unknown error");
-      log.error(`NovelAI streaming request failed: ${response.status} ${errorText}`);
+      log.warn(`NovelAI streaming request failed: ${response.status} ${errorText}`);
 
-      yield {
-        error: `NovelAI API request failed with status ${response.status}: ${errorText}`,
-      };
-      return;
+      const error: Error & { statusCode?: number } = new Error(
+        `NovelAI API request failed with status ${response.status}: ${errorText}`,
+      );
+      error.statusCode = response.status;
+      throw error;
     }
 
     if (!response.body) {
-      log.error("NovelAI streaming response has no body");
-      yield {
-        error: "Response body is empty",
-      };
-      return;
+      log.warn("NovelAI streaming response has no body");
+      const error: Error & { statusCode?: number } = new Error("Response body is empty");
+      throw error;
     }
 
     const reader = response.body.getReader();
@@ -535,21 +546,27 @@ async function* novelaiGenerateStreamNative(
           if (line.startsWith("data: ")) {
             const data = line.slice(6); // Remove "data: " prefix
 
+            let parsed: unknown;
             try {
-              const parsed = JSON.parse(data);
-
-              // NovelAI sends tokens as strings in the response
-              if (typeof parsed === "string") {
-                yield { token: parsed };
-              } else if (parsed.token) {
-                yield { token: parsed.token };
-              } else if (parsed.error) {
-                yield { error: parsed.error };
-                return;
-              }
+              parsed = JSON.parse(data);
             } catch (_parseError) {
               log.warn(`Failed to parse NovelAI SSE data: ${data}`);
               yield { token: data };
+              continue;
+            }
+
+            // NovelAI sends tokens as strings in the response
+            if (typeof parsed === "string") {
+              yield { token: parsed };
+            } else if (parsed && typeof parsed === "object") {
+              const record = parsed as Record<string, unknown>;
+              if (typeof record.token === "string") {
+                yield { token: record.token };
+              } else if (record.error) {
+                const errorMsg = typeof record.error === "string" ? record.error : JSON.stringify(record.error);
+                log.warn(`NovelAI stream returned error: ${errorMsg}`);
+                throw new Error(errorMsg);
+              }
             }
           }
         }
@@ -560,18 +577,20 @@ async function* novelaiGenerateStreamNative(
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        log.error("NovelAI streaming timed out");
-        yield { error: "Request timed out" };
+        log.warn("NovelAI streaming timed out");
+        const timeoutError: Error & { statusCode?: number } = new Error("Request timed out");
+        timeoutError.statusCode = 504;
+        throw timeoutError;
       } else if (error.message.includes("stream read timed out")) {
         // Per-read inactivity timeout because NAI stopped sending data mid-stream
         log.warn(`NovelAI Native: ${error.message}; yielding final chunk to flush buffers`);
         yield { final: true };
       } else {
-        log.error("NovelAI streaming failed:", error);
-        yield { error: error.message };
+        log.warn("NovelAI streaming failed:", error);
+        throw error;
       }
     } else {
-      yield { error: "Unknown error occurred" };
+      throw new Error("Unknown error occurred");
     }
   }
 }

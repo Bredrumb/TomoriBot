@@ -653,6 +653,9 @@ async function main(): Promise<void> {
   }
 
   console.log(pc.bold("\nTomoriBot Setup Wizard\n"));
+  if (!process.stdin.isTTY && !flags.has("--yes") && !flags.has("--defaults") && process.env.CI !== "true") {
+    log.warn("Input is not an interactive terminal. The setup wizard will use defaults where available.");
+  }
   const scan = await scanPrereqs();
 
   if (flags.has("--full")) {

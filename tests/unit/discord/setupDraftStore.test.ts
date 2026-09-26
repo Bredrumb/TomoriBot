@@ -131,15 +131,6 @@ describe("setup draft store", () => {
     expect(store.readSetupDraft("nonce-1234", "actor-1", "workspace-1", "guild").status).toBe("ok");
   });
 
-  it("keeps a draft available without a timeout", () => {
-    let currentTime = 1000;
-    const store = createSetupDraftStore(() => currentTime);
-    store.storeSetupDraft("nonce-1234", makeDraft());
-    currentTime += 365 * 24 * 60 * 60 * 1000;
-
-    expect(store.readSetupDraft("nonce-1234", "actor-1", "workspace-1", "guild")).toMatchObject({ status: "ok" });
-  });
-
   it("keeps a draft available after a state mutation", () => {
     let currentTime = 1000;
     const store = createSetupDraftStore(() => currentTime);
@@ -448,7 +439,7 @@ describe("setup draft store", () => {
         endpointUrl: "https://example.invalid/v1",
         encryptedAuthToken: oldTokenBuffer,
         keyVersion: 1,
-      };
+      } as const;
 
       store.storeSetupDraft(
         "nonce-1234",
@@ -460,7 +451,7 @@ describe("setup draft store", () => {
           mode: "custom-endpoint",
           connection: { ...connection, encryptedAuthToken: newTokenBuffer },
           textModel: null,
-        },
+        } as const,
       });
 
       expect(oldTokenBuffer.every((byte) => byte === 0)).toBe(true);

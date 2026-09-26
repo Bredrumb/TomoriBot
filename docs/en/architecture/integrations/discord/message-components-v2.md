@@ -773,10 +773,7 @@ lifecycle. Provider or persona cards, page navigation, loading states, secondary
 validation, progress, success, errors, timeouts, and final private controls all replace or
 edit that anchor message. A modal is not a message and does not change this count.
 
-Both entry points behave identically here: `runPersonaPickerWorkflow(...)` for persona
-pickers, and `beginAnchorPrivateWorkflow(...)` for everything else (imported from
-`src/utils/discord/ui/anchorWorkflow.ts`, which also exports neutral `Anchor*` aliases
-for the types named below). Each captures its message ID and exposes a
+The entry point is `runPersonaPickerWorkflow(...)`. It captures its message ID and exposes a
 `PersonaWorkflowMessageController` through selection, modal, in-place, and nested-button
 phases. Every controller operation verifies that it still targets that ID:
 

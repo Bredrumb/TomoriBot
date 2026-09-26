@@ -75,7 +75,9 @@ async function buildCharx(options: {
   for (const [name, content] of Object.entries(options.extraRootFiles ?? {})) {
     zip.file(name, content);
   }
-  return (await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" })) as Buffer;
+  // STORE, not DEFLATE: the reader takes sizes from the zip central directory and decompresses only the
+  // card, so compressing a fixture changes nothing except how long building it takes.
+  return (await zip.generateAsync({ type: "nodebuffer", compression: "STORE" })) as Buffer;
 }
 
 describe("charx archive reader", () => {

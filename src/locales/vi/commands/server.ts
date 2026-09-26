@@ -67,11 +67,5 @@ export default {
     "deliberate-tool-mode": {
       description: `Bật/tắt chế độ công cụ có chủ ý cho máy chủ này.`,
     },
-    "deliberate-tool-trigger": {
-      action_description: `Thêm, xóa hoặc liệt kê các từ kích hoạt công cụ tùy chỉnh.`,
-      action_add: `thêm`,
-      action_remove: `xóa`,
-      action_list: `liệt kê`,
-    },
   },
 };

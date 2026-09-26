@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `可以继续了`,
       modal_ready_description: `打开表单，继续你的选择。`,
       open_modal_button: `打开表单`,
-      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
-      // below is interpolated in, so remove/edit variants of a family reuse it.
-      filtered_notice: `只显示带有{items}的人格。`,
-      items: {
-        attributes: `属性`,
-        sample_dialogues: `示例对话`,
-        trigger_words: `触发词`,
-        persona_prompts: `人格提示词`,
-        voice_designs: `语音设计`,
-        documents: `文档`,
-        chat_history: `聊天记录`,
-        server_memories: `服务器记忆`,
-        personal_memories: `个人记忆`,
-        short_term_memories: `短期记忆`,
-        sprites: `立绘`,
-      },
     },
     errors: {
       outdated_panel: `这个面板已经过期。请再运行一次 {command}。`,
@@ -98,6 +82,8 @@ export default {
       api_key_error_description: `读取或解密已配置的提供方凭据时出了问题。请用 \`/providers\` 重新配置。`,
       database_unavailable_title: `连不上数据库`,
       database_unavailable_description: `我刚才连不上数据库，所以不知道这个服务器是怎么配置的。没有东西坏掉，设置也没有被改动。请稍后再试。`,
+      blacklisted_title: "你已被列入黑名单",
+      blacklisted_description: "服务器管理员已把你列入这个服务器的黑名单，所以我在这里不会回应你，也不会执行这个命令。",
       personal_provider_required_title: `需要个人提供方`,
       personal_provider_required_description: `先用 \`/personal providers\` 设置好你的提供方，再用 \`/personal config\` 选它来生成文本回复。这个服务器对用户触发的消息使用的是成员自备的 AI 访问权限。如果不知道怎么设置，打开 \`/help\` 里的 **功能介绍**，再看 **个人提供方**。`,
       personal_provider_credentials_error_title: `个人提供方出错`,

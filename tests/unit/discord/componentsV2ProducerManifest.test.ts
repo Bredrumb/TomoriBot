@@ -21,7 +21,7 @@ export type ProducerManifestEntry = FixturedProducerManifestEntry | DeclaredProd
 /**
  * Manifest of all modules producing Discord Components V2 payloads.
  *
- * Tier 1: Fixtured tier (the nine composed payload builders).
+ * Tier 1: Fixtured tier (the composed payload builders).
  * Tier 2: Declared tier (all other producers with explicit architectural reasons).
  */
 export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] = [
@@ -30,13 +30,12 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
     builderName: "buildConfigPanelPayload",
     coverage: {
       kind: "suite",
-      suites: ["tests/unit/discord/configPanel.test.ts", "tests/unit/discord/configPanelTextBudget.test.ts"],
+      suites: [
+        "tests/unit/discord/configPanel.test.ts",
+        "tests/unit/discord/configPanelTextBudget.test.ts",
+        "tests/unit/discord/mcpsPanelLimits.test.ts",
+      ],
     },
-  },
-  {
-    modulePath: "src/utils/discord/ui/mcpsPanel.ts",
-    builderName: "buildMcpsPanelPayload",
-    coverage: { kind: "suite", suites: ["tests/unit/discord/mcpsPanelLimits.test.ts"] },
   },
   {
     modulePath: "src/utils/discord/ui/memoriesPanel.ts",
@@ -295,7 +294,10 @@ describe("Components V2 Producer Manifest", () => {
   });
 
   it("requires every delivery entry to explain its boundary", () => {
-    const deliveryEntries = COMPONENTS_V2_PRODUCER_MANIFEST.filter((entry) => entry.coverage.kind === "delivery");
+    const deliveryEntries = COMPONENTS_V2_PRODUCER_MANIFEST.filter(
+      (entry): entry is ProducerManifestEntry & { coverage: Extract<ProducerCoverage, { kind: "delivery" }> } =>
+        entry.coverage.kind === "delivery",
+    );
     expect(deliveryEntries.every((entry) => entry.coverage.note.trim().length > 0)).toBe(true);
   });
 });

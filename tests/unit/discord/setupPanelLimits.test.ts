@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import {
   ButtonStyle,
-  ComponentType,
   type ActionRowData,
   type ButtonComponentData,
+  type ComponentInContainerData,
   type ContainerComponentData,
   type StringSelectMenuComponentData,
 } from "discord.js";
@@ -20,6 +20,7 @@ import {
 } from "@/utils/discord/ui/setupPanel";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { collectTextDisplays } from "../../helpers/panelLimits";
 
 beforeAll(async () => {
   await initializeLocalizer();
@@ -83,28 +84,10 @@ function createCompleteDraftInput(isHosted = false): {
   };
 }
 
-function extractAllText(payload: ReturnType<typeof buildSetupWizardPayload>): string[] {
-  const texts: string[] = [];
-  function visit(node: unknown): void {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) visit(item);
-      return;
-    }
-    const record = node as Record<string, unknown>;
-    if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-      texts.push(record.content);
-    }
-    for (const value of Object.values(record)) {
-      visit(value);
-    }
-  }
-  visit(payload);
-  return texts;
-}
-
-function getContainerComponents(payload: ReturnType<typeof buildSetupWizardPayload>): unknown[] {
-  const container = payload.components[0] as ContainerComponentData<unknown>;
+function getContainerComponents(
+  payload: ReturnType<typeof buildSetupWizardPayload>,
+): readonly ComponentInContainerData[] {
+  const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
   return container.components;
 }
 
@@ -117,7 +100,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       nonce: TEST_NONCE,
     });
 
-    const [header] = extractAllText(payload);
+    const [header] = collectTextDisplays(payload);
     expect(header).toStartWith("## Set Up TomoriBot\n");
     expect(header).not.toContain("## ##");
   });
@@ -139,8 +122,8 @@ describe("setupPanel Components V2 layout and limits", () => {
       nonce: TEST_NONCE,
     });
 
-    const hostedTexts = extractAllText(hostedPayload);
-    const nonHostedTexts = extractAllText(nonHostedPayload);
+    const hostedTexts = collectTextDisplays(hostedPayload);
+    const nonHostedTexts = collectTextDisplays(nonHostedPayload);
 
     expect(hostedTexts.some((t) => t.includes(localizer("en-US", "commands.setup.wizard.policies_name")))).toBe(true);
     expect(nonHostedTexts.some((t) => t.includes(localizer("en-US", "commands.setup.wizard.policies_name")))).toBe(
@@ -161,7 +144,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       isHosted: true,
       nonce: TEST_NONCE,
     });
-    const hostedTexts = extractAllText(hostedPending);
+    const hostedTexts = collectTextDisplays(hostedPending);
     expect(hostedTexts[0]).toContain("0 of 3");
 
     const nonHostedPending = buildSetupWizardPayload({
@@ -170,7 +153,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       isHosted: false,
       nonce: TEST_NONCE,
     });
-    const nonHostedTexts = extractAllText(nonHostedPending);
+    const nonHostedTexts = collectTextDisplays(nonHostedPending);
     expect(nonHostedTexts[0]).toContain("0 of 2");
     expect(nonHostedTexts[0]).not.toContain("0 of 3");
   });
@@ -556,7 +539,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       nonce: TEST_NONCE,
     });
 
-    const texts = extractAllText(payload);
+    const texts = collectTextDisplays(payload);
     for (const text of texts) {
       expect(text).not.toContain(SECRET_KEY_STRING);
       expect(text).not.toContain(TEST_NONCE);
@@ -680,7 +663,7 @@ describe("setupPanel Components V2 layout and limits", () => {
     });
 
     expect("embeds" in payload).toBe(false);
-    const texts = extractAllText(payload as unknown as ReturnType<typeof buildSetupWizardPayload>);
+    const texts = collectTextDisplays(payload);
     expect(texts.length).toBeGreaterThan(0);
     expect(texts[0]).toContain(localizer("en-US", "commands.setup.wizard.receipt_title"));
     expect(texts.join("\n")).toContain(localizer("en-US", "commands.setup.next_steps_title"));
@@ -694,7 +677,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       isHosted: false,
       nonce: TEST_NONCE,
     });
-    const pendingContainer = pendingPayload.components[0] as ContainerComponentData<unknown>;
+    const pendingContainer = pendingPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     expect(pendingContainer.accentColor).toBe(0xed4245);
 
     const readyInput = createCompleteDraftInput(false);
@@ -705,7 +688,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       nonce: TEST_NONCE,
       settingsCatalogs: readyInput.settingsCatalogs,
     });
-    const readyContainer = readyPayload.components[0] as ContainerComponentData<unknown>;
+    const readyContainer = readyPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     expect(readyContainer.accentColor).toBe(0x57f287);
 
     const successPayload = buildSetupSuccessPayload({
@@ -718,7 +701,7 @@ describe("setupPanel Components V2 layout and limits", () => {
       notes: [],
       learnMore: "Learn more",
     });
-    const successContainer = successPayload.components[0] as ContainerComponentData<unknown>;
+    const successContainer = successPayload.components[0] as ContainerComponentData<ComponentInContainerData>;
     expect(successContainer.accentColor).toBe(0x57f287);
   });
 });

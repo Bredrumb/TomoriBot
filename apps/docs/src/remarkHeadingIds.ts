@@ -1,4 +1,9 @@
-import type { RemarkPlugin } from "@astrojs/markdown-remark";
+/**
+ * Astro's remark plugin shape. Declared here rather than imported from `@astrojs/markdown-remark`,
+ * which `apps/docs` does not depend on: the type-only import was erased at build time, so it went
+ * unnoticed until `tests/` joined the root type check and could not resolve it.
+ */
+type RemarkPlugin = () => (tree: unknown) => void;
 
 const ANCHOR_COMMENT = /^\s*<!--\s*anchor:\s*([A-Za-z0-9_-]+)\s*-->\s*$/;
 // MDX rejects HTML comments, so `.mdx` pages write `{/* anchor: slug */}`, which parses as an

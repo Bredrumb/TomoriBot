@@ -10,7 +10,7 @@ Conventions and checks that apply to every change. The guide for each task is li
 ## Checks
 
 ```bash
-bun run check           # TypeScript strict
+bun run check           # TypeScript strict, including tests/
 bun run lint            # Biome; applies fixes in place
 bun run check-locales   # when locale keys or command metadata changed
 bun run find-stale-translations --reason=unfollowed --base=origin/main   # advisory translation follow-up

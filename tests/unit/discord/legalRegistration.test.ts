@@ -160,7 +160,10 @@ describe("hosted legal registration", () => {
     const rootDescription = async (): Promise<string> => {
       resetCommandDataCache();
       const { registrationData } = await loadCommandData();
-      return registrationData.find((command) => command.name === "legal")?.description ?? "";
+      const legal = registrationData.find((command) => command.name === "legal") as unknown as
+        | { description?: string }
+        | undefined;
+      return legal?.description ?? "";
     };
 
     setHostedEnvironment(true);

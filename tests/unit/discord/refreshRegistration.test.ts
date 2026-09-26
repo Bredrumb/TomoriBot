@@ -8,7 +8,8 @@
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { hasLocaleKey, initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { expectForEveryLocale } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -35,24 +36,21 @@ describe("/refresh registration", () => {
     expect(executionMap.get("refresh")?.has(ROOT_COMMAND_EXECUTION_KEY)).toBe(true);
   });
 
-  it("removes the old /tool refresh leaf while /tool keeps its other members", async () => {
+  it("removes the old /tool refresh leaf", async () => {
     const { executionMap } = await loadCommandData();
 
     const toolCommands = executionMap.get("tool");
     expect(toolCommands).toBeDefined();
-    if (!toolCommands) return;
-
-    expect(toolCommands.has("refresh")).toBe(false);
-    expect(toolCommands.size).toBeGreaterThan(0);
+    expect(toolCommands?.has("refresh")).toBe(false);
   });
 
-  it("keeps the reset-marker title resolvable in both locales", async () => {
-    // Three subsystems compare a stored embed title against this string. An unresolved key would
-    // return the key path itself, which matches no historical embed and silently stops resets.
-    for (const locale of ["en-US", "ja"]) {
-      const title = localizer(locale, "commands.refresh.title");
-      expect(title).not.toBe("commands.refresh.title");
-      expect(title.length).toBeGreaterThan(0);
-    }
+  it("keeps the reset-marker title defined in every locale", () => {
+    // `embedProtocol` builds its title table per locale and skips a missing key, so a locale without
+    // this title silently stops recognizing its own reset embeds. `localizer` would fall back to
+    // en-US and hide the gap, hence `hasLocaleKey`.
+    expectForEveryLocale((locale) => {
+      expect(hasLocaleKey(locale, "commands.refresh.title")).toBe(true);
+      expect(localizer(locale, "commands.refresh.title").length).toBeGreaterThan(0);
+    });
   });
 });

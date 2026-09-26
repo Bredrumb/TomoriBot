@@ -1,5 +1,11 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ComponentType, type Embed } from "discord.js";
+import {
+  ComponentType,
+  type ComponentInContainerData,
+  type ContainerComponentData,
+  type Embed,
+  type TopLevelComponentData,
+} from "discord.js";
 import { buildNoticeContainer } from "@/utils/discord/ui/statusComponents";
 import { ColorCode } from "@/utils/misc/logger";
 import { processEmbedsFromMessage } from "@/utils/chat/contextEmbeds";
@@ -19,6 +25,12 @@ function buildContext(embed: Embed): string {
     selfDebugEnabled: false,
     tomoriNickname: "Mirri",
   }).content;
+}
+
+function isContainerComponent(
+  component: TopLevelComponentData,
+): component is ContainerComponentData<ComponentInContainerData> {
+  return "components" in component && component.type === ComponentType.Container;
 }
 
 describe("update_user_info notice visibility", () => {
@@ -102,10 +114,20 @@ describe("update_user_info notice visibility", () => {
       description: "body",
       footerKey: "tools.user_info_update.success_footer",
       footerVars: { target_user: "Bau" },
-    }) as Array<{ components: Array<{ type: number; divider?: boolean }> }>;
+    });
 
-    const inner = components[0].components;
-    expect(inner.some((component) => component.type === ComponentType.Separator && component.divider)).toBe(true);
+    const [container] = components;
+    if (!container || !isContainerComponent(container)) {
+      throw new Error("Expected the notice to be wrapped in a container component");
+    }
+
+    const inner = container.components;
+    expect(
+      inner.some(
+        (component) =>
+          component.type === ComponentType.Separator && "divider" in component && Boolean(component.divider),
+      ),
+    ).toBe(true);
   });
 
   it("also recognizes user block and unblock notices", () => {

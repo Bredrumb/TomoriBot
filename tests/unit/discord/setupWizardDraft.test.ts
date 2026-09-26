@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
   SETUP_DRAFT_SCHEMA_VERSION,
-  isProviderAccessAllowedInContext,
   isSetupDraftComplete,
   isSetupDraftProviderAccessComplete,
   setupDraftCatalogAccessSchema,
@@ -153,15 +152,6 @@ describe("setup wizard draft schemas and invariants", () => {
 
     const missingFields = { schemaVersion: 1, actorDiscId: "actor-1" };
     expect(setupDraftRecordSchema.safeParse(missingFields).success).toBe(false);
-  });
-
-  it("rejects BYOK in DM context and permits it in guild context", () => {
-    expect(isProviderAccessAllowedInContext("user-byok", "dm")).toBe(false);
-    expect(isProviderAccessAllowedInContext("user-byok", "guild")).toBe(true);
-    expect(isProviderAccessAllowedInContext("catalog", "dm")).toBe(true);
-    expect(isProviderAccessAllowedInContext("catalog", "guild")).toBe(true);
-    expect(isProviderAccessAllowedInContext("custom-endpoint", "dm")).toBe(true);
-    expect(isProviderAccessAllowedInContext("custom-endpoint", "guild")).toBe(true);
   });
 
   it("derives provider access completeness correctly across all modes", () => {

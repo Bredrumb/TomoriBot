@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { PermissionsBitField, type Client } from "discord.js";
+import type { Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
 import * as crypto from "@/utils/security/crypto";
@@ -25,6 +25,7 @@ import {
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -86,10 +87,14 @@ interface Harness {
   state: TomoriState;
   includeElevenLabs: boolean;
   dependencies: Partial<ConfigRouteDependencies>;
-  edits: unknown[];
+  /** Payloads the current interaction has edited. */
+  readonly edits: unknown[];
+  /** Payloads the current interaction has replied or followed up with. */
+  readonly replies: unknown[];
   modals: unknown[];
   telemetry: string[];
   checkboxReads: string[];
+  setInteraction: (interaction: RouteInteraction) => void;
 }
 
 function makeHarness(options: HarnessOptions = {}): Harness {
@@ -105,19 +110,29 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     personas: [state],
     readStatus: "fresh",
   };
-  const edits: unknown[] = [];
   const modals: unknown[] = [];
   const telemetry: string[] = [];
   const checkboxReads: string[] = [];
   const checkboxValues = options.checkboxValues ?? new Map<string, string[] | undefined>();
+  let interaction: RouteInteraction | undefined;
 
   return {
     state,
     includeElevenLabs,
-    edits,
+    // The interaction owns both recording arrays, so the harness reads them back rather than
+    // keeping a second copy that could drift.
+    get edits(): unknown[] {
+      return interaction?.edits ?? [];
+    },
+    get replies(): unknown[] {
+      return interaction?.replies ?? [];
+    },
     modals,
     telemetry,
     checkboxReads,
+    setInteraction: (value: RouteInteraction) => {
+      interaction = value;
+    },
     dependencies: {
       resolveScope: async () => scope,
       getPersonaAvatarData: async () => ({ url: null, files: [] }),
@@ -162,58 +177,24 @@ function makeInteraction(
     inGuild?: boolean;
     isManager?: boolean;
   } = {},
-) {
-  let deferred = false;
-  let replied = false;
+): RouteInteraction {
   const kind = options.kind ?? "button";
-  const inGuild = options.inGuild ?? true;
-  return {
-    id: "interaction-1",
+  const interaction = createRouteInteraction({
     customId,
-    user: { id: "user-1", username: "Mirri" },
-    channelId: "channel-1",
-    channel: { name: "lounge" },
-    guildId: inGuild ? "guild-1" : null,
-    guild: inGuild ? { id: "guild-1" } : null,
-    client: { user: null },
-    memberPermissions: {
-      has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-    },
-    values: [],
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => false,
-    isModalSubmit: () => kind === "modal",
-    get deferred() {
-      return deferred;
-    },
-    get replied() {
-      return replied;
-    },
-    deferUpdate: async () => {
-      deferred = true;
-    },
-    editReply: async (payload: unknown) => {
-      harness.edits.push(payload);
-      return payload;
-    },
-    reply: async (payload: unknown) => {
-      replied = true;
-      harness.edits.push(payload);
-      return payload;
-    },
-    followUp: async (payload: unknown) => payload,
-    fields: {
-      fields: new Map(),
-      getTextInputValue: () => "",
-    },
-  } as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1] & {
-    deferred: boolean;
-  };
+    kind,
+    guildId: options.inGuild === false ? null : "guild-1",
+    isManager: options.isManager ?? true,
+  });
+  harness.setInteraction(interaction);
+  return interaction;
 }
 
-async function dispatch(harness: Harness, interaction: ReturnType<typeof makeInteraction>): Promise<void> {
+async function dispatch(harness: Harness, interaction: RouteInteraction): Promise<void> {
   const registry = new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]);
-  await registry.dispatch(CLIENT, interaction);
+  await registry.dispatch(
+    CLIENT,
+    interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1],
+  );
 }
 
 function allDefinitionValues(includeElevenLabs = true): string[] {

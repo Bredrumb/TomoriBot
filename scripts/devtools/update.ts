@@ -19,13 +19,14 @@ ${pc.bold("bun run update")} - backup-first TomoriBot updater
 ${pc.bold("Usage:")}
   bun run update                  Backup, git pull, bun install --frozen-lockfile
   bun run update --build          Also run bun run build after install
-  bun run update --docker         Backup, git pull, docker compose build, docker compose up -d
+  bun run update --docker         Docker backup, git pull, docker compose build, docker compose up -d
   bun run update --skip-backup    Skip the pre-update backup step
   bun run update --yes            Do not prompt before starting
 
 ${pc.bold("Notes:")}
   Stop TomoriBot before updating so the backup and migrations have a quiet database.
   This command uses: git pull --rebase --autostash
+  The --docker path still needs host Bun and git, but not host PostgreSQL tools.
   A pulled update may require a newer Bun. Run bun upgrade if this command asks for one.
   If Git reports "needs merge", resolve the listed files, run git add on them, then re-run update.
 `);
@@ -177,7 +178,11 @@ async function main(): Promise<void> {
   } else {
     log.section("Backup");
     try {
-      await run("bun", ["run", "backup"]);
+      if (docker) {
+        await run("docker", ["compose", "run", "--rm", "tomoribot", "bun", "run", "backup"]);
+      } else {
+        await run("bun", ["run", "backup"]);
+      }
     } catch (error) {
       log.error("Backup failed. Update aborted before changing code.", error);
       log.info("Fix the backup issue, or re-run with --skip-backup if you accept the risk.");

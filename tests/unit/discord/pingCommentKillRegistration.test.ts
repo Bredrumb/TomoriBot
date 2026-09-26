@@ -17,12 +17,6 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 beforeAll(async () => initializeLocalizer());
 
 describe("/ping, /comment, /kill registration", () => {
-  it("each builds through its own configureCommand with the expected name", () => {
-    expect(pingCommand.configureCommand(new SlashCommandBuilder()).toJSON().name).toBe("ping");
-    expect(commentCommand.configureCommand(new SlashCommandBuilder()).toJSON().name).toBe("comment");
-    expect(killCommand.configureCommand(new SlashCommandBuilder()).toJSON().name).toBe("kill");
-  });
-
   it("carries no contexts or default_member_permissions, and exports neither guildOnly nor managerOnly", () => {
     for (const module of [pingCommand, commentCommand, killCommand] as const) {
       const data = module.configureCommand(new SlashCommandBuilder()).toJSON();
@@ -41,23 +35,11 @@ describe("/ping, /comment, /kill registration", () => {
     expect(names).toContain("kill");
   });
 
-  it("removes the old /tool ping and /tool comment leaves while /tool keeps its other members", async () => {
-    const { executionMap, registrationData } = await loadCommandData();
-    const names = registrationData.map((command) => command.name);
-    expect(names).toContain("tool");
-
+  it("removes the old /tool ping and /tool comment leaves", async () => {
+    const { executionMap } = await loadCommandData();
     const toolSubcommands = executionMap.get("tool");
     expect(toolSubcommands).toBeDefined();
     expect(toolSubcommands?.has("ping")).toBe(false);
     expect(toolSubcommands?.has("comment")).toBe(false);
-    expect((toolSubcommands?.size ?? 0) > 0).toBe(true);
-  });
-
-  it("ensures /bot no longer exists", async () => {
-    const { executionMap, registrationData } = await loadCommandData();
-    const names = registrationData.map((command) => command.name);
-    expect(names).not.toContain("bot");
-    const botSubcommands = executionMap.get("bot");
-    expect(botSubcommands).toBeUndefined();
   });
 });

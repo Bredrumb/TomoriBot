@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { OpenAICompatibleStreamAdapter } from "@/providers/openaiCompatible/openaiCompatibleStreamAdapter";
 import type { OpenAICompatibleStreamConfig } from "@/providers/openaiCompatible/openaiCompatibleTypes";
+import { HumanizerDegree } from "@/types/db/schema";
 import type { RawStreamChunk, StreamContext } from "@/types/stream/interfaces";
 
 const originalFetch = globalThis.fetch;
@@ -41,7 +42,15 @@ function makeStreamConfig(): OpenAICompatibleStreamConfig {
     minP: 0.1,
     logitBias: { "123": -100 },
     inactivityTimeoutMs: 5_000,
-  } as OpenAICompatibleStreamConfig;
+    maxMessageLength: 2000,
+    flushBufferSize: 1000,
+    flushBufferSizeCodeBlock: 15000,
+    baseTypeSpeedMsPerChar: 0,
+    maxTypingTimeMs: 0,
+    minVisibleTypingDurationMs: 0,
+    humanizerDegree: HumanizerDegree.NONE,
+    emojiUsageEnabled: true,
+  };
 }
 
 function makeStreamContext(): StreamContext {
@@ -153,7 +162,7 @@ describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
     // A real outage says so, and every rung would fail identically. Burning the ladder here only
     // delays the key-rotation and model-fallback paths that can actually recover the turn.
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) => {
       fetchCalls += 1;
       return makeSseResponse([
         { error: { code: 503, message: "Service temporarily overloaded, please try again later" } },
@@ -194,7 +203,7 @@ describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
 
   it("does not restart an SSE error after visible content commits the stream", async () => {
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) => {
       fetchCalls += 1;
       return makeSseResponse([
         { choices: [{ index: 0, delta: { content: "Partial output" } }] },
@@ -211,7 +220,7 @@ describe("OpenAICompatibleStreamAdapter parameter degradation", () => {
 
   it("fails fast on a bare 502 outage instead of walking the ladder", async () => {
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_input: string | URL | Request, _init?: RequestInit) => {
       fetchCalls += 1;
       return new Response("Bad gateway", { status: 502, statusText: "Bad Gateway" });
     }) as typeof fetch;

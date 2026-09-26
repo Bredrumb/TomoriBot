@@ -1,6 +1,6 @@
 import type { Embed, TextBasedChannel } from "discord.js";
 import { PrivacyLevel } from "@/types/db/schema";
-import { getCachedPrivacyLevel } from "@/utils/cache/userCache";
+import { getCachedBlacklistStatus, getCachedPrivacyLevel } from "@/utils/cache/userCache";
 import { extractNoticeTextFromComponents } from "@/utils/discord/componentNoticeReader";
 import { MAX_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { classifyProtocolEmbed, classifyProtocolTitle } from "@/utils/discord/embedProtocol";
@@ -18,10 +18,12 @@ export async function buildConversationContext(
   const imageReferences: ImageReference[] = [];
   const userIdSet = new Set<string>();
   let imageCounter = 1;
+  const guildId = "guildId" in channel ? channel.guildId : null;
 
   for (const msg of relevantMessages) {
     const authorPrivacyLevel = await getCachedPrivacyLevel(msg.author.id);
     if (authorPrivacyLevel === PrivacyLevel.FULL) continue;
+    if (guildId && !msg.author.bot && (await getCachedBlacklistStatus(guildId, msg.author.id))) continue;
 
     userIdSet.add(msg.author.id);
     const authorName = msg.member?.displayName || msg.author.username;

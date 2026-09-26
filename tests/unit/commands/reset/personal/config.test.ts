@@ -4,6 +4,7 @@ import { execute, type ResetPersonalConfigDependencies } from "@/commands/reset/
 import type { UserRow } from "@/types/db/schema";
 import { commandRegistry } from "@/utils/discord/commandRegistry";
 import { ColorCode } from "@/utils/misc/logger";
+import { createUserRow } from "../../../../helpers/fixtures";
 
 const USER_ID = 51;
 const USER_DISC_ID = "510000000000000001";
@@ -18,15 +19,11 @@ function createMockInteraction(): ChatInputCommandInteraction {
   } as unknown as ChatInputCommandInteraction;
 }
 
-const mockUserData: UserRow = {
+const mockUserData: UserRow = createUserRow({
   user_id: USER_ID,
   user_disc_id: USER_DISC_ID,
-  language_pref: "en-US",
-  created_at: new Date(),
-  updated_at: new Date(),
-  privacy_level: 0,
   registration_locale: null,
-};
+});
 
 function createMockDeps(): {
   deps: ResetPersonalConfigDependencies;

@@ -65,7 +65,7 @@ export default {
     batch_limit_reached_heading: `空間不足`,
     batch_limit_reached_detail: "這個檔案有 {requested} 則新記憶， 但 {max} 則的額度只剩下 {available} 則。",
     blacklisted_error_heading: `使用者已被列入黑名單`,
-    blacklisted_error_detail: "你在這個伺服器已被列入黑名單， 無法教導伺服器記憶。",
+    blacklisted_error_detail: "你在這個伺服器已被列入黑名單，無法修改伺服器記憶或文件。",
     teaching_disabled_error_heading: `教導功能已停用`,
     teaching_disabled_error_detail: `這個伺服器已停用成員教導記憶。`,
     empty_memory_label: `（空白記憶）`,

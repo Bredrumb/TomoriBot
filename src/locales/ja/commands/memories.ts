@@ -67,7 +67,8 @@ export default {
     batch_limit_reached_detail:
       "そのファイルには新しい記憶が{requested}件ありますが、 上限{max}件のうち残り{available}件しか空きがありません。",
     blacklisted_error_heading: `ユーザーはブラックリスト登録済みです`,
-    blacklisted_error_detail: "あなたはこのサーバーでサーバーの記憶を 教えることをブラックリストで禁止されています。",
+    blacklisted_error_detail:
+      "あなたはこのサーバーでブラックリストに登録されているため、サーバーの記憶やドキュメントを変更できません。",
     teaching_disabled_error_heading: `記憶を教える機能は無効です`,
     teaching_disabled_error_detail: `このサーバーではメンバーによる記憶の教示が無効になっています。`,
     empty_memory_label: `（空の記憶）`,

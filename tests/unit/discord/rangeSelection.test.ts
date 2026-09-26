@@ -11,6 +11,11 @@ const testRouteSegments: PaginationRouteSegments = {
   page: (rangeIndex) => ["items", "page", String(rangeIndex)],
 };
 
+/** `ButtonComponentData` also covers the link variant, which carries no custom ID. */
+function buttonCustomId(button: ButtonComponentData | undefined): string {
+  return button && "customId" in button ? button.customId : "";
+}
+
 function createPaginationRow(
   rangeIndex: number,
   rangeCount: number,
@@ -162,22 +167,22 @@ describe("buildPaginationRow boundary states", () => {
     expect(row).not.toBeNull();
 
     const [prevBtn, indicatorBtn, nextBtn] = row?.components ?? [];
-    const ids = [prevBtn?.customId, indicatorBtn?.customId, nextBtn?.customId];
+    const ids = [buttonCustomId(prevBtn), buttonCustomId(indicatorBtn), buttonCustomId(nextBtn)];
     expect(new Set(ids).size).toBe(3);
 
-    const parsedPrev = parseInteractionRoute(prevBtn?.customId ?? "");
+    const parsedPrev = parseInteractionRoute(buttonCustomId(prevBtn));
     expect(parsedPrev).not.toBeNull();
     expect(parsedPrev?.namespace).toBe("test-panel");
     expect(parsedPrev?.version).toBe("v1");
     expect(parsedPrev?.segments).toEqual(["items", "page", "0"]);
 
-    const parsedNext = parseInteractionRoute(nextBtn?.customId ?? "");
+    const parsedNext = parseInteractionRoute(buttonCustomId(nextBtn));
     expect(parsedNext).not.toBeNull();
     expect(parsedNext?.namespace).toBe("test-panel");
     expect(parsedNext?.version).toBe("v1");
     expect(parsedNext?.segments).toEqual(["items", "page", "2"]);
 
-    expect(parseInteractionRoute(indicatorBtn?.customId ?? "")).toBeNull();
+    expect(parseInteractionRoute(buttonCustomId(indicatorBtn))).toBeNull();
   });
 });
 
@@ -264,7 +269,7 @@ describe("stale-state scenarios", () => {
   it("produces deterministic indicator IDs preventing churn across rapid stale repaints", () => {
     const rowA = createPaginationRow(1, 3);
     const rowB = createPaginationRow(1, 3);
-    expect(rowA?.components[1]?.customId).toBe(rowB?.components[1]?.customId);
+    expect(buttonCustomId(rowA?.components[1])).toBe(buttonCustomId(rowB?.components[1]));
   });
 });
 

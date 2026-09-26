@@ -51,6 +51,7 @@ describe("config voices route catalog & codecs", () => {
     for (const route of testRoutes) {
       const customId = buildConfigRouteId(route);
       const parsed = parseInteractionRoute(customId);
+      if (!parsed) throw new Error(`Failed to parse route for customId: ${customId}`);
       const decoded = parseConfigPanelRoute(parsed);
       expect(decoded).toEqual(route);
     }

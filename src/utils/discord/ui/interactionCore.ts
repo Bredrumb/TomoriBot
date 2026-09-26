@@ -1216,12 +1216,6 @@ interface PersonaPaginatedChoiceOptions {
   preserveSelectedInteraction?: boolean;
   /** Workflow-owned avatar cache shared across internal picker retries. */
   avatarSessionCache?: AvatarSessionCache;
-  /**
-   * Pre-localized notice appended under the picker description when the list has
-   * been narrowed by an eligibility filter. Rendered only when at least one
-   * persona was excluded so an unfiltered picker stays visually unchanged.
-   */
-  filteredNotice?: string;
 }
 
 type AccentColorInput = string | number | readonly [red: number, green: number, blue: number];
@@ -1788,36 +1782,6 @@ export async function replyComponentsV2Status(
   }
 }
 
-export async function updateButtonComponentsV2Status(
-  interaction: ButtonInteraction,
-  locale: string,
-  titleKey: string,
-  descriptionKey: string,
-  color: string | number,
-  descriptionVars?: Record<string, string | number | boolean>,
-  secondaryDescriptionKey?: string,
-  secondaryDescriptionVars?: Record<string, string | number | boolean>,
-): Promise<void> {
-  const components = buildV2StatusComponents(
-    locale,
-    titleKey,
-    descriptionKey,
-    color,
-    descriptionVars,
-    secondaryDescriptionKey,
-    secondaryDescriptionVars,
-  );
-
-  try {
-    await interaction.update({
-      components,
-      flags: MessageFlags.IsComponentsV2,
-    });
-  } catch (error) {
-    log.warn("Failed to update button interaction with Components V2 status:", error);
-  }
-}
-
 export async function acknowledgeModalSubmitForRefresh(interaction: ModalSubmitInteraction): Promise<void> {
   try {
     if (!interaction.deferred && !interaction.replied) {
@@ -2273,16 +2237,6 @@ function buildPersonaPageComponents(
     containerComponents.push({
       type: ComponentType.TextDisplay,
       content: localizer(locale, options.descriptionKey),
-    });
-  }
-
-  // Filtered-notice line. The workflow pre-localizes this and only supplies it
-  // when the eligibility filter actually excluded a persona, so an unfiltered
-  // picker never shows it. Rendered as muted subtext beneath the description.
-  if (options.filteredNotice) {
-    containerComponents.push({
-      type: ComponentType.TextDisplay,
-      content: `-# ${options.filteredNotice}`,
     });
   }
 

@@ -93,7 +93,7 @@ describe("StreamSegmentProcessor sprite group-break naming", () => {
   it("alternates clean/decorated so adjacent different sprites never share a username", () => {
     const resolve = makeResolver();
     const channel = makeChannel();
-    const send = (sprite: string): string => {
+    const send = (sprite: string): string | undefined => {
       const identity = resolve(cleanIdentity, decoratedFor(sprite), sprite, CHANNEL, channel.lastMessageId);
       channel.deliverWebhook(identity);
       return identity.username;
@@ -112,7 +112,7 @@ describe("StreamSegmentProcessor sprite group-break naming", () => {
   it("keeps a consecutive run of the same sprite on one identical username so Discord still groups it", () => {
     const resolve = makeResolver();
     const channel = makeChannel();
-    const send = (sprite: string): string => {
+    const send = (sprite: string): string | undefined => {
       const identity = resolve(cleanIdentity, decoratedFor(sprite), sprite, CHANNEL, channel.lastMessageId);
       channel.deliverWebhook(identity);
       return identity.username;

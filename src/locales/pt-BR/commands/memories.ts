@@ -68,7 +68,8 @@ export default {
     batch_limit_reached_detail:
       "Esse arquivo contém {requested} novas memórias mas restam apenas {available} espaços de {max}.",
     blacklisted_error_heading: `Usuário na Lista Negra`,
-    blacklisted_error_detail: "Você está na lista negra para ensinar memórias do servidor neste servidor.",
+    blacklisted_error_detail:
+      "Você está na lista negra deste servidor, então não pode alterar as memórias nem os documentos do servidor.",
     teaching_disabled_error_heading: `Ensino Desativado`,
     teaching_disabled_error_detail: `O ensino de memórias por membros está desativado neste servidor.`,
     empty_memory_label: `(memória vazia)`,

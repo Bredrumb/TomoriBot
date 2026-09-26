@@ -94,7 +94,7 @@ export default {
         memory_tagging: `Marcação de Memória (Avançado)`,
         memory_tagging_description: `Desperte uma memória apenas quando for relevante`,
         blacklisting: `Lista Negra`,
-        blacklisting_description: `Impeça um membro de me acionar`,
+        blacklisting_description: "Faça-me ignorar um membro completamente",
       },
     },
     breadcrumbs: {
@@ -538,7 +538,7 @@ Digite \`{project_id}::{location}\` usando {configSetup} ou {configApikeySet}
       blacklisting: {
         title: `Lista Negra`,
         description:
-          "Um membro na lista negra não pode me acionar em hipótese alguma, em nenhum canal, com nenhuma persona.\n\nAdicione um em {moderationBlacklist}. A mesma página lista todas as entradas atuais e as remove, uma por uma ou em massa.\n> A lista negra é sobre acesso, não sobre remoção. As memórias sobre o membro permanecem até alguém removê-las.",
+          "Ignoro completamente um membro na lista negra: ele não pode me acionar em nenhum canal, com nenhuma persona, suas mensagens nunca chegam ao meu contexto e recuso os comandos que me fariam agir por ele, como `/respond`, `/reward` e `/punish`. Ele também não pode alterar memórias do servidor, atributos ou diálogos de exemplo.\n\nAdicione um em {moderationBlacklist}. A mesma página lista todas as entradas atuais e as remove, uma por uma ou em massa.\n> A lista negra é sobre acesso, não sobre remoção. As memórias sobre o membro permanecem até alguém removê-las.",
         footer: "Para silenciar um canal inteiro em vez de uma pessoa, basta remover o canal da lista branca.",
       },
     },

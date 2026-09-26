@@ -26,15 +26,16 @@ describe("/learn registration", () => {
     expect(learnCommand.contexts).toBeUndefined();
     expect(learnCommand.default_member_permissions).toBeUndefined();
 
-    expect(learnCommand.options?.length).toBe(1);
-    const historySubcommand = learnCommand.options[0];
+    const learnOptions = learnCommand.options ?? [];
+    expect(learnOptions.length).toBe(1);
+    const historySubcommand = learnOptions[0];
     expect(historySubcommand.name).toBe("history");
     expect(historySubcommand.type).toBe(ApplicationCommandOptionType.Subcommand);
 
     // The seven options are the command's whole input surface, so a relocation that dropped
     // one would still register and still pass every other check here.
-    const options = historySubcommand.options;
-    expect(options?.length).toBe(7);
+    const options = historySubcommand.options ?? [];
+    expect(options.length).toBe(7);
     const optionNames = options.map((opt: RegistrationPayload) => opt.name);
     expect(optionNames).toContain("name");
     expect(optionNames).toContain("scope");

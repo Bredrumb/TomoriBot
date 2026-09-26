@@ -1,5 +1,11 @@
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import type { ChannelPersonaWhitelistRow, ChannelWhitelistRow, RoleWhitelistRow, TomoriState } from "@/types/db/schema";
+import type {
+  ChannelPersonaWhitelistRow,
+  ChannelWhitelistRow,
+  ErrorContext,
+  RoleWhitelistRow,
+  TomoriState,
+} from "@/types/db/schema";
 import { CooldownType } from "@/types/db/schema";
 import { whitelistRepository } from "@/utils/db/repositories";
 import { log } from "@/utils/misc/logger";
@@ -203,7 +209,7 @@ describe("moderationOperations loader", () => {
       server_id: 10,
       persona_id: 1,
       user_disc_id: "user-block-1",
-      block_type: "temporary",
+      block_type: "mute",
       reason: "test reason",
       expires_at: new Date(Date.now() + 100000),
       created_at: new Date(),
@@ -507,7 +513,7 @@ describe("updateMemberPermissions canonical operation", () => {
 
   it("writes exact patch to repository and invalidates cache once on success with write-before-invalidation ordering", async () => {
     const callOrder: string[] = [];
-    let receivedPatch: Record<string, unknown> | null = null;
+    const received: { patch: Record<string, unknown> | null } = { patch: null };
 
     const result = await updateMemberPermissions(
       {
@@ -524,7 +530,7 @@ describe("updateMemberPermissions canonical operation", () => {
       {
         updateConfig: async (serverId, patch) => {
           callOrder.push(`update:${serverId}`);
-          receivedPatch = patch;
+          received.patch = patch;
           return true;
         },
         invalidateCache: (guildId) => {
@@ -534,7 +540,7 @@ describe("updateMemberPermissions canonical operation", () => {
     );
 
     expect(result.status).toBe("success");
-    expect(receivedPatch).toEqual({
+    expect(received.patch).toEqual({
       server_memteaching_enabled: false,
       attribute_memteaching_enabled: true,
       prompt_snapshot_enabled: true,
@@ -599,7 +605,6 @@ describe("loadModerationUserBlacklistAddData lightweight resolver", () => {
       guildId: "1001",
       serverId: 10,
       readStatus: "fresh",
-      personalMemoriesEnabled: true,
     });
     expect(getStateCalled).toBe(1);
     expect(getLastDbErrorCalled).toBe(1);
@@ -616,7 +621,6 @@ describe("loadModerationUserBlacklistAddData lightweight resolver", () => {
       guildId: "1001",
       serverId: 10,
       readStatus: "stale",
-      personalMemoriesEnabled: false,
     });
   });
 
@@ -641,7 +645,6 @@ describe("loadModerationUserBlacklistAddData lightweight resolver", () => {
       guildId: "1001",
       serverId: 0,
       readStatus: "unavailable",
-      personalMemoriesEnabled: false,
     });
   });
 });
@@ -658,7 +661,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "bot-user-1",
         isBot: true,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async () => {
@@ -684,43 +686,6 @@ describe("addUserToBlacklist canonical operation", () => {
     expect(invalidateCalled).toBe(0);
   });
 
-  it("returns personalization_disabled status without querying repository when personalization is disabled", async () => {
-    let isBlacklistedCalled = 0;
-    let addBlacklistCalled = 0;
-    let invalidateCalled = 0;
-
-    const result = await addUserToBlacklist(
-      {
-        guildId: "1001",
-        serverId: 10,
-        targetUserId: "user-1",
-        isBot: false,
-        personalMemoriesEnabled: false,
-      },
-      {
-        isUserBlacklisted: async () => {
-          isBlacklistedCalled++;
-          return false;
-        },
-        addUserBlacklist: async () => {
-          addBlacklistCalled++;
-          return true;
-        },
-        invalidateCache: () => {
-          invalidateCalled++;
-        },
-      },
-    );
-
-    expect(result).toEqual({
-      status: "personalization_disabled",
-      targetUserId: "user-1",
-    });
-    expect(isBlacklistedCalled).toBe(0);
-    expect(addBlacklistCalled).toBe(0);
-    expect(invalidateCalled).toBe(0);
-  });
-
   it("returns already_blacklisted status without writing or invalidating cache when member is already blacklisted", async () => {
     let addBlacklistCalled = 0;
     let invalidateCalled = 0;
@@ -731,7 +696,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "user-dup",
         isBot: false,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async (serverId, targetUserId) => {
@@ -766,7 +730,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "user-new",
         isBot: false,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async (serverId, targetUserId) => {
@@ -799,7 +762,6 @@ describe("addUserToBlacklist canonical operation", () => {
         serverId: 10,
         targetUserId: "user-fail",
         isBot: false,
-        personalMemoriesEnabled: true,
       },
       {
         isUserBlacklisted: async (serverId, targetUserId) => {
@@ -1006,7 +968,7 @@ describe("removeUserBlacklistBatch legacy operation", () => {
       server_id: 10,
       persona_id: 3,
       user_disc_id: "u-block",
-      block_type: "temporary" as const,
+      block_type: "mute" as const,
       reason: "test",
       expires_at: new Date(),
       created_at: new Date(),
@@ -1495,7 +1457,7 @@ describe("moderation write failure reporting", () => {
   // The route reports only that the write failed, so the operation name and the row identifiers
   // have to reach the log at error level or the cause is lost in production.
   it("records the failing operation and its target identifiers", async () => {
-    const errorCalls: Array<{ msg: string; context?: { errorType?: string; metadata?: Record<string, unknown> } }> = [];
+    const errorCalls: Array<{ msg: string; context?: ErrorContext }> = [];
     const logSpy = spyOn(log, "error").mockImplementation((async (msg, _err, context) => {
       errorCalls.push({ msg: String(msg), context });
     }) as typeof log.error);
@@ -1526,7 +1488,7 @@ describe("moderation write failure reporting", () => {
   });
 
   it("keeps per-operation identifiers rather than one shared metadata shape", async () => {
-    const errorCalls: Array<{ metadata?: Record<string, unknown> }> = [];
+    const errorCalls: Array<{ metadata: ErrorContext["metadata"] }> = [];
     const logSpy = spyOn(log, "error").mockImplementation((async (_msg, _err, context) => {
       errorCalls.push({ metadata: context?.metadata });
     }) as typeof log.error);
@@ -1541,7 +1503,7 @@ describe("moderation write failure reporting", () => {
           availableChannelIds: ["channel-1"],
         },
         {
-          readPersonaWhitelistChannels: async () => [],
+          getPersonaWhitelistChannels: async () => [],
           replacePersonaWhitelistChannels: async () => {
             throw new Error("db down");
           },
@@ -1574,7 +1536,9 @@ describe("persona channel whitelist operations", () => {
       {
         getPersonaWhitelistChannels: async () =>
           ["channel-1", "channel-2"].map((channel_disc_id) => ({ channel_disc_id }) as ChannelPersonaWhitelistRow),
-        replacePersonaWhitelistChannels: async () => events.push("write"),
+        replacePersonaWhitelistChannels: async () => {
+          events.push("write");
+        },
         invalidateCache: () => events.push("invalidate"),
       },
     );

@@ -12,6 +12,7 @@ import { resolveCustomEndpointForProvider } from "@/utils/provider/customEndpoin
 import { decryptApiKey } from "@/utils/security/crypto";
 import { CUSTOM_ENDPOINT_PLACEHOLDER_KEY } from "@/utils/provider/legacyCustomProvider";
 import { isCustomProvider } from "@/utils/provider/customProviderUtils";
+import { getStaticProviderInfo } from "@/utils/provider/providerInfoRegistry";
 
 export type Capability = "text" | "embedding" | "image-standard" | "image-nai" | "video" | "vision";
 
@@ -136,6 +137,23 @@ async function loadCapabilityConfig(serverId: number): Promise<CapabilityConfigC
   return configRepository.loadModelCapabilityIds(serverId);
 }
 
+function providerSupportsCapability(provider: string, capability: Capability): boolean {
+  if (isCustomProvider(provider)) {
+    return capability !== "image-nai";
+  }
+  const info = getStaticProviderInfo(provider);
+  if (!info) {
+    return true;
+  }
+  if (capability === "image-standard") {
+    return info.featureSupport.imageGeneration === "chat-completion";
+  }
+  if (capability === "image-nai") {
+    return info.featureSupport.imageGeneration === "nai-pipeline";
+  }
+  return true;
+}
+
 async function resolveProviderForCapability(serverId: number, capability: Capability): Promise<string> {
   const config = await loadCapabilityConfig(serverId);
   if (!config) {
@@ -171,7 +189,11 @@ async function resolveProviderForCapability(serverId: number, capability: Capabi
       if (!diffModel?.provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(diffModel.provider).toLowerCase();
+      const provider = String(diffModel.provider).toLowerCase();
+      if (!providerSupportsCapability(provider, capability)) {
+        throw new CredentialUnavailableError(provider, capability, "missing_model_id");
+      }
+      return provider;
     }
     case "image-nai": {
       if (!config.nai_diffusion_model_id) {
@@ -181,7 +203,11 @@ async function resolveProviderForCapability(serverId: number, capability: Capabi
       if (!naiModel?.provider) {
         throw new CredentialUnavailableError("unknown", capability, "missing_model_id");
       }
-      return String(naiModel.provider).toLowerCase();
+      const provider = String(naiModel.provider).toLowerCase();
+      if (!providerSupportsCapability(provider, capability)) {
+        throw new CredentialUnavailableError(provider, capability, "missing_model_id");
+      }
+      return provider;
     }
     case "video": {
       if (!config.video_model_id) {
@@ -274,6 +300,7 @@ async function resolvePersonalCredentials(userId: number, capability: Capability
   const qualifyingRows = (await llmProviderRepo.loadUserSavedProviderConfigs(userId))
     .filter((row) => row.enabled_capabilities.includes(personalCapability))
     .filter((row) => getCapabilityModelId(row, capability) !== null)
+    .filter((row) => providerSupportsCapability(row.provider.toLowerCase(), capability))
     .sort((left, right) => left.provider.localeCompare(right.provider));
 
   if (qualifyingRows.length === 0) {

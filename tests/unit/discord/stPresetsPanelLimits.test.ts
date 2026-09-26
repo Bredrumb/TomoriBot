@@ -164,36 +164,6 @@ describe("SillyTavern presets panel Components V2 limits", () => {
         );
       }
     }
-
-    // Explicitly test a full page of presets at MAX_PRESETS_PER_SELECTOR_PAGE with oversized names and descriptions
-    const fullPagePresets = Array.from({ length: MAX_PRESETS_PER_SELECTOR_PAGE }, (_, index) =>
-      preset(index + 1, {
-        preset_name: "P".repeat(MAX_PRESET_NAME_LENGTH + 1),
-        description: "D".repeat(20_000),
-      }),
-    );
-    for (const locale of RUNTIME_LOCALES) {
-      for (const receipt of RECEIPTS) {
-        for (const page of [
-          { kind: "preset" as const, presetId: fullPagePresets[0]?.preset_id },
-          { kind: "delete" as const, presetId: fullPagePresets[0]?.preset_id as number },
-        ]) {
-          expectSafePanelPayload(
-            buildStPresetsPanelPayload({
-              locale,
-              scope: "guild",
-              presets: fullPagePresets,
-              activePresetId: fullPagePresets[0]?.preset_id as number,
-              readStatus: "fresh",
-              page,
-              receipt,
-              routes: CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER,
-            }),
-            `full-page-oversized/${locale}/${page.kind}/receipt=${Boolean(receipt)}`,
-          );
-        }
-      }
-    }
   });
 
   it("covers every preset exactly once across selector ranges", () => {

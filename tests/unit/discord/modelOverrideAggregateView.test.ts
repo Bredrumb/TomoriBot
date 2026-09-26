@@ -40,6 +40,7 @@ import {
 } from "@/utils/discord/interactions/textModelOverrideOperations";
 import * as channelLlmCacheStore from "@/utils/cache/channelLlmCacheStore";
 import * as tomoriStateCacheStore from "@/utils/cache/tomoriStateCacheStore";
+import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -51,15 +52,15 @@ const LLM_A: LlmRow = {
   llm_codename: "gemini-2.5-flash",
 } as unknown as LlmRow;
 
+/** Override browsing reads the persona's server, id, lineage, and nickname, so all four stay fixed. */
 function makePersona(overrides: Partial<TomoriState>): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_id: 55,
     persona_nickname: "Mirri",
     persona_lineage_id: 101,
-    config: {},
     ...overrides,
-  } as unknown as TomoriState;
+  });
 }
 
 function makeChannelEntry(channelDiscId: string, llm: LlmRow = LLM_A): ChannelOverrideEntry {
@@ -416,8 +417,7 @@ describe("/model override remove - (5) route button opens requested batch withou
         personasWithOverride: [],
         entries: allEntries,
       }),
-      deleteChannelOverride: async () => true,
-      clearPersonaOverride: async () => true,
+      setTextModelOverride: async () => false,
       showRemoveModal: async (_interaction, _locale, page, _fp, _nonce, entries) => {
         modalShown = true;
         presentedPage = page;
@@ -454,8 +454,7 @@ describe("/model override remove - (5) route button opens requested batch withou
         scopeResolved = true;
         return null;
       },
-      deleteChannelOverride: async () => true,
-      clearPersonaOverride: async () => true,
+      setTextModelOverride: async () => false,
       showRemoveModal: async () => {
         modalShown = true;
       },
@@ -758,7 +757,9 @@ describe("/model override remove - (7) combined scopes and ordered positions con
 
 describe("/model override remove global route wiring", () => {
   it("handles a stale model override route and directs the user to the registered command", async () => {
-    let replyPayload: { content?: string } | null = null;
+    // Initialized to an empty payload so the closure's assignment is what the assertion reads,
+    // not a `null` the compiler can still narrow to after the await.
+    let replyPayload: { content?: string } = {};
     const interaction = {
       id: "stale-interaction",
       customId: "model-overrides:v0:page:en-US:0",

@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `Pronto para Continuar`,
       modal_ready_description: `Abra o formulário para continuar com sua seleção.`,
       open_modal_button: `Abrir Formulário`,
-      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
-      // below is interpolated in, so remove/edit variants of a family reuse it.
-      filtered_notice: `Mostrando apenas personas que possuem {items}.`,
-      items: {
-        attributes: `atributos`,
-        sample_dialogues: `diálogos de exemplo`,
-        trigger_words: `palavras-gatilho`,
-        persona_prompts: `prompts da persona`,
-        voice_designs: `designs de voz`,
-        documents: `documentos`,
-        chat_history: `histórico de chat`,
-        server_memories: `memórias do servidor`,
-        personal_memories: `memórias pessoais`,
-        short_term_memories: `memórias de curto prazo`,
-        sprites: `sprites`,
-      },
     },
     errors: {
       outdated_panel: `Este painel está desatualizado. Execute {command} novamente.`,
@@ -98,6 +82,9 @@ export default {
       api_key_error_description: `Houve um problema ao acessar ou descriptografar as credenciais do provedor configurado. Por favor, reconfigure-as usando \`/providers\`.`,
       database_unavailable_title: `Banco de Dados Inacessível`,
       database_unavailable_description: `Não consegui acessar meu banco de dados agora, então não sei como este servidor está configurado. Nada está quebrado e nenhuma configuração foi alterada. Por favor, tente novamente em um momento.`,
+      blacklisted_title: "Você está na lista negra",
+      blacklisted_description:
+        "Um administrador do servidor colocou você na lista negra deste servidor, então aqui não vou responder a você nem executar este comando.",
       personal_provider_required_title: `Provedor Pessoal Necessário`,
       personal_provider_required_description: `Configure seu provedor com \`/personal providers\`, então use \`/personal config\` para escolhê-lo para respostas de texto. Este servidor está usando acesso de IA fornecido pelos membros para mensagens acionadas por usuários. Abra \`/help\` em **Features**, depois **Personal Providers** se precisar de ajuda.`,
       personal_provider_credentials_error_title: `Erro no Provedor Pessoal`,

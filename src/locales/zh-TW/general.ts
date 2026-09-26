@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `可以繼續了`,
       modal_ready_description: `開啟表單以繼續你的選擇。`,
       open_modal_button: `開啟表單`,
-      // 一句共用的篩選提示，不綁動詞。下方那個純項目名詞會被代入，
-      // 所以同一家族的移除或編輯版本都可以重複使用這句。
-      filtered_notice: `只顯示有{items}的人格。`,
-      items: {
-        attributes: `屬性`,
-        sample_dialogues: `範例對話`,
-        trigger_words: `觸發詞`,
-        persona_prompts: `人格提示詞`,
-        voice_designs: `語音設計`,
-        documents: `文件`,
-        chat_history: `對話紀錄`,
-        server_memories: `伺服器記憶`,
-        personal_memories: `個人記憶`,
-        short_term_memories: `短期記憶`,
-        sprites: `立繪`,
-      },
     },
     errors: {
       outdated_panel: `這個面板已過期。請再執行一次 {command}。`,
@@ -98,6 +82,8 @@ export default {
       api_key_error_description: `存取或解密已設定的供應商憑證時發生問題。請使用 \`/providers\` 重新設定。`,
       database_unavailable_title: `資料庫連不上`,
       database_unavailable_description: `我剛剛連不上資料庫，所以不知道這個伺服器的設定。沒有東西損壞，設定也沒有被更動。請稍後再試一次。`,
+      blacklisted_title: "你已被列入黑名單",
+      blacklisted_description: "伺服器管理員已將你列入這個伺服器的黑名單，所以我在這裡不會回應你，也不會執行這個指令。",
       personal_provider_required_title: `需要個人供應商`,
       personal_provider_required_description: `請用 \`/personal providers\` 設定你的供應商，再用 \`/personal config\` 選擇要用來產生文字回覆的供應商。這個伺服器對使用者觸發的訊息採用成員自備的 AI 存取。需要協助的話，可以開啟 \`/help\` 的 **功能**，再選 **個人供應商**。`,
       personal_provider_credentials_error_title: `個人供應商錯誤`,

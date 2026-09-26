@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `Sẵn sàng tiếp tục`,
       modal_ready_description: `Mở biểu mẫu để tiếp tục lựa chọn của bạn.`,
       open_modal_button: `Mở biểu mẫu`,
-      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
-      // below is interpolated in, so remove/edit variants of a family reuse it.
-      filtered_notice: `Chỉ hiển thị các persona có {items}.`,
-      items: {
-        attributes: `thuộc tính`,
-        sample_dialogues: `đối thoại mẫu`,
-        trigger_words: `từ kích hoạt`,
-        persona_prompts: `prompt persona`,
-        voice_designs: `thiết kế giọng nói`,
-        documents: `tài liệu`,
-        chat_history: `lịch sử trò chuyện`,
-        server_memories: `bộ nhớ máy chủ`,
-        personal_memories: `bộ nhớ cá nhân`,
-        short_term_memories: `bộ nhớ ngắn hạn`,
-        sprites: `sprite`,
-      },
     },
     errors: {
       outdated_panel: `Bảng điều khiển này đã cũ. Hãy chạy lại {command}.`,
@@ -98,6 +82,9 @@ export default {
       api_key_error_description: `Đã xảy ra sự cố khi truy cập hoặc giải mã thông tin xác thực nhà cung cấp. Vui lòng định cấu hình lại bằng \`/providers\`.`,
       database_unavailable_title: `Không thể kết nối cơ sở dữ liệu`,
       database_unavailable_description: `Mình vừa không thể kết nối tới cơ sở dữ liệu, nên không biết cấu hình của máy chủ này. Mọi thứ vẫn ổn và không có cài đặt nào bị thay đổi. Vui lòng thử lại sau giây lát.`,
+      blacklisted_title: "Bạn đang nằm trong blacklist",
+      blacklisted_description:
+        "Quản trị viên máy chủ đã thêm bạn vào blacklist của máy chủ này, nên mình sẽ không phản hồi bạn hay thực hiện lệnh này ở đây.",
       personal_provider_required_title: `Cần nhà cung cấp cá nhân`,
       personal_provider_required_description: `Thiết lập nhà cung cấp bằng \`/personal providers\`, sau đó dùng \`/personal config\` để chọn cho phản hồi văn bản. Máy chủ này dùng quyền truy cập AI do thành viên cung cấp cho tin nhắn do người dùng kích hoạt. Mở \`/help\` đến mục **Features**, rồi **Personal Providers** nếu bạn cần trợ giúp.`,
       personal_provider_credentials_error_title: `Lỗi nhà cung cấp cá nhân`,

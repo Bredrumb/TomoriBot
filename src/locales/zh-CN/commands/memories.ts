@@ -65,7 +65,7 @@ export default {
     batch_limit_reached_heading: `空间不足`,
     batch_limit_reached_detail: "这个文件有 {requested} 条新记忆， 但 {max} 条的上限只剩 {available} 条。",
     blacklisted_error_heading: `用户已被列入黑名单`,
-    blacklisted_error_detail: "你在服务器已被列入黑名单， 无法教导服务器记忆。",
+    blacklisted_error_detail: "你在这个服务器已被列入黑名单，无法修改服务器记忆或文档。",
     teaching_disabled_error_heading: `教导已关闭`,
     teaching_disabled_error_detail: `这个服务器已关闭成员教导记忆。`,
     empty_memory_label: `（空白记忆）`,

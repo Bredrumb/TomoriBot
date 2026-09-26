@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { ComponentType, MessageFlags } from "discord.js";
+import { ComponentType, MessageFlags, type TextDisplayComponentData } from "discord.js";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
@@ -33,9 +33,11 @@ describe("buildGeneratedImageComponentsV2Payload", () => {
   test("appends a referenced-identities subtext line when avatars were used", () => {
     const payload = buildGeneratedImageComponentsV2Payload("generated_123.png", 4242, "en-US", ["Aphel", "Miku"]);
 
-    const textComponent = payload.components.find((component) => component.type === ComponentType.TextDisplay) as {
-      content: string;
-    };
+    const textComponent = payload.components.find(
+      (component): component is TextDisplayComponentData & { content: string } =>
+        "type" in component && component.type === ComponentType.TextDisplay && "content" in component,
+    );
+    if (!textComponent) throw new Error("Generated image payload is missing its timing text display");
     const lines = textComponent.content.split("\n");
 
     // Timing stays on the first line; referenced users render on their own line.

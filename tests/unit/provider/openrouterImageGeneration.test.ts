@@ -10,13 +10,14 @@ interface CapturedCall {
 }
 
 function stubFetch(payload: unknown, captured: CapturedCall[], status = 200) {
-  return spyOn(globalThis, "fetch").mockImplementation(async (input: unknown, init?: RequestInit) => {
+  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
+  return spyOn(globalThis, "fetch").mockImplementation((async (input: string | URL | Request, init?: RequestInit) => {
     captured.push({ url: String(input), body: JSON.parse(String(init?.body ?? "{}")) });
     return new Response(JSON.stringify(payload), {
       status,
       headers: { "Content-Type": "application/json" },
     });
-  });
+  }) as typeof fetch);
 }
 
 const restore: Array<{ mockRestore: () => void }> = [];

@@ -223,38 +223,42 @@ function splitLocalePath(relativePath: string): { locale: string; file: string }
 /** Reads every locale file from one revision's tree. No working tree content is consulted. */
 export async function readRefSnapshot(git: GitRunner, cwd: string, ref: string): Promise<LocaleSnapshot> {
   const relativePaths = await listTrackedLocaleFiles(git, ref, cwd);
-
-  return collectSnapshot(async (relativePath) => {
-    try {
-      return await git(["show", `${ref}:${LOCALES_ROOT}/${relativePath}`], cwd);
-    } catch (error) {
-      throw new MissingBaseRefError(
-        `Could not read ${LOCALES_ROOT}/${relativePath} at ${ref} (${error instanceof Error ? error.message : String(error)}).`,
-      );
-    }
-  }, relativePaths);
+  return readSnapshotFiles(git, cwd, ref, relativePaths, MissingBaseRefError);
 }
 
 /**
  * Reads the branch under review from the committed `HEAD` tree. The working tree is never
  * consulted, so uncommitted edits cannot make the report describe something other than the branch
- * it names; `findUncommittedLocalePaths` is what discloses their existence.
+ * it names; {@link listDirtyLocalePaths} is what discloses their existence.
  *
  * An unreadable HEAD tree is a broken checkout rather than a missing base, so it exits as a script
  * error instead of sending the reader after a ref that exists.
  */
 export async function readHeadSnapshot(git: GitRunner, cwd: string): Promise<LocaleSnapshot> {
   const relativePaths = await listTrackedLocaleFiles(git, "HEAD", cwd, LocaleParseError);
+  return readSnapshotFiles(git, cwd, "HEAD", relativePaths, LocaleParseError);
+}
 
-  return collectSnapshot(async (relativePath) => {
-    try {
-      return await git(["show", `HEAD:${LOCALES_ROOT}/${relativePath}`], cwd);
-    } catch (error) {
-      throw new LocaleParseError(
-        `Could not read ${LOCALES_ROOT}/${relativePath} at HEAD (${error instanceof Error ? error.message : String(error)}).`,
-      );
-    }
-  }, relativePaths);
+/** Reads each path of one revision through `git show`, so no working tree content is consulted. */
+async function readSnapshotFiles(
+  git: GitRunner,
+  cwd: string,
+  ref: string,
+  relativePaths: readonly string[],
+  failure: new (message: string) => Error,
+): Promise<LocaleSnapshot> {
+  return collectSnapshot(
+    async (relativePath) => {
+      try {
+        return await git(["show", `${ref}:${LOCALES_ROOT}/${relativePath}`], cwd);
+      } catch (error) {
+        throw new failure(
+          `Could not read ${LOCALES_ROOT}/${relativePath} at ${ref} (${error instanceof Error ? error.message : String(error)}).`,
+        );
+      }
+    },
+    [...relativePaths],
+  );
 }
 
 /**
@@ -262,9 +266,18 @@ export async function readHeadSnapshot(git: GitRunner, cwd: string): Promise<Loc
  * A deleted tracked file is compared as its absence rather than dropped from the report, and an
  * uncommitted addition is compared as an addition because `--worktree` exists to show work in
  * progress.
+ *
+ * @param dirtyPaths The caller's {@link listDirtyLocalePaths} result, when it already has one, so the
+ *   working tree is not scanned twice.
  */
-export async function readWorkingTreeSnapshot(git: GitRunner, cwd: string): Promise<LocaleSnapshot> {
-  const relativePaths = await listWorktreeLocaleFiles(git, cwd);
+export async function readWorkingTreeSnapshot(
+  git: GitRunner,
+  cwd: string,
+  dirtyPaths?: readonly string[],
+): Promise<LocaleSnapshot> {
+  const tracked = await listTrackedLocaleFiles(git, "HEAD", cwd, LocaleParseError);
+  const dirty = dirtyPaths ?? (await listDirtyLocalePaths(git, cwd));
+  const relativePaths = [...new Set([...tracked, ...dirty])].sort();
   return collectSnapshot((relativePath) => readLocaleFile(cwd, relativePath), relativePaths);
 }
 
@@ -323,25 +336,6 @@ async function listDirtyLocalePaths(git: GitRunner, cwd: string): Promise<string
 /** Git quotes a path containing spaces or non-ASCII bytes; the quotes are not part of the name. */
 function unquoteGitPath(path: string): string {
   return path.replace(/^"|"$/g, "");
-}
-
-/** Locale files whose working tree content differs from `HEAD`, including untracked files. */
-export async function findUncommittedLocalePaths(git: GitRunner, cwd: string): Promise<string[]> {
-  const relative = await listDirtyLocalePaths(git, cwd);
-  return relative.map((path) => `${LOCALES_ROOT}/${path}`);
-}
-
-/**
- * Every locale file the working tree holds: the files `HEAD` tracks, plus untracked ones.
- *
- * `--worktree` promises to compare uncommitted work, and a new locale file that has not been added
- * yet is the most common shape of that work. Tracking the two lists separately is what lets the
- * committed default stay on `HEAD` while the explicit mode sees the whole tree.
- */
-export async function listWorktreeLocaleFiles(git: GitRunner, cwd: string): Promise<string[]> {
-  const tracked = await listTrackedLocaleFiles(git, "HEAD", cwd, LocaleParseError);
-  const dirty = await listDirtyLocalePaths(git, cwd);
-  return [...new Set([...tracked, ...dirty])].sort();
 }
 
 async function collectSnapshot(
@@ -857,6 +851,10 @@ async function isShallowCheckout(git: GitRunner, repoRoot: string): Promise<bool
   }
 }
 
+function fetchTargetForBase(base: string): string {
+  return base.startsWith("origin/") ? base.slice("origin/".length) : base;
+}
+
 async function assertGitCheckout(git: GitRunner, repoRoot: string): Promise<void> {
   try {
     await git(["rev-parse", "--git-dir"], repoRoot);
@@ -867,11 +865,11 @@ async function assertGitCheckout(git: GitRunner, repoRoot: string): Promise<void
   }
 }
 
-function fetchTargetForBase(base: string): string {
-  return base.startsWith("origin/") ? base.slice("origin/".length) : base;
-}
-
-async function assertUsableBase(git: GitRunner, repoRoot: string, base: string): Promise<void> {
+/**
+ * Verifies the base ref and returns the merge base, so the caller does not repeat the merge-base
+ * lookup it needs anyway.
+ */
+async function assertUsableBase(git: GitRunner, repoRoot: string, base: string): Promise<string> {
   try {
     await git(["rev-parse", "--verify", "--quiet", `${base}^{commit}`], repoRoot);
   } catch {
@@ -887,7 +885,7 @@ async function assertUsableBase(git: GitRunner, repoRoot: string, base: string):
   }
 
   try {
-    await git(["merge-base", base, "HEAD"], repoRoot);
+    return (await git(["merge-base", base, "HEAD"], repoRoot)).trim();
   } catch {
     throw new MissingBaseRefError(
       `"${base}" and HEAD share no merge base in this checkout, which an unrelated history produces. ` +
@@ -901,13 +899,13 @@ export async function checkLocaleStaleness(options: CheckLocaleStalenessOptions)
 
   await assertGitCheckout(git, repoRoot);
   const base = requested ?? (await resolveBaseRef(git, repoRoot));
-  await assertUsableBase(git, repoRoot, base);
+  const mergeBase = await assertUsableBase(git, repoRoot, base);
 
-  const mergeBase = (await git(["merge-base", base, "HEAD"], repoRoot)).trim();
   const headRevision = (await git(["rev-parse", "--short", "HEAD"], repoRoot)).trim();
   const baseSnapshot = await readRefSnapshot(git, repoRoot, mergeBase);
 
-  const uncommittedLocalePaths = await findUncommittedLocalePaths(git, repoRoot);
+  const dirtyPaths = await listDirtyLocalePaths(git, repoRoot);
+  const uncommittedLocalePaths = dirtyPaths.map((path) => `${LOCALES_ROOT}/${path}`);
   // Only uncommitted content earns the disclosure; asking for `--worktree` on a clean tree reads
   // exactly what `HEAD` holds, and claiming otherwise would be a false alarm.
   const includesUncommittedEdits = uncommittedLocalePaths.length > 0;
@@ -915,7 +913,9 @@ export async function checkLocaleStaleness(options: CheckLocaleStalenessOptions)
   // Exactly one source feeds the head side. Mixing committed content for missing files with working
   // tree content for edited ones would describe a tree that exists nowhere.
   const head =
-    source === "worktree" ? await readWorkingTreeSnapshot(git, repoRoot) : await readHeadSnapshot(git, repoRoot);
+    source === "worktree"
+      ? await readWorkingTreeSnapshot(git, repoRoot, dirtyPaths)
+      : await readHeadSnapshot(git, repoRoot);
 
   return buildStalenessReport({
     requestedBase: base,

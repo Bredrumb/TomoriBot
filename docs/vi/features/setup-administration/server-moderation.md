@@ -35,7 +35,8 @@ Các kênh trong danh sách trắng sẽ kế thừa cooldown toàn cục trừ 
 ## Kiểm soát học tập và quyền riêng tư
 
 - `/server memberpermissions`: kiểm soát ai có thể dạy bot những điều mới.
-- `/server blacklist`: ngăn bot học hỏi từ những người dùng cụ thể hoặc sử dụng bộ nhớ về họ.
+- `/moderation` > User Blacklist: khiến bot bỏ qua hoàn toàn những thành viên cụ thể. Họ không thể kích hoạt
+  bot hay dùng các lệnh tương tác, và tin nhắn của họ không bao giờ vào ngữ cảnh của bot.
 - `/config` > Channels > Channel Rules: đánh dấu các kênh nơi bộ nhớ ngắn hạn bị cô lập và nhật ký suy nghĩ bị ẩn.
 
 ## Tính minh bạch: Nhật ký suy nghĩ

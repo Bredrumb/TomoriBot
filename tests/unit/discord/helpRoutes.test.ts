@@ -189,14 +189,17 @@ describe("help global interaction route", () => {
     const container = (capturedPayload as { components: TopLevelComponentData[] })
       .components[0] as ContainerComponentData<ComponentInContainerData>;
     const variantRow = container.components.find(
-      (comp) =>
+      (comp): comp is ActionRowData<StringSelectMenuComponentData> =>
         comp.type === ComponentType.ActionRow &&
         "components" in comp &&
         comp.components.some(
           (child) =>
-            child.type === ComponentType.StringSelect && "customId" in child && child.customId?.includes(":variant:"),
+            "type" in child &&
+            child.type === ComponentType.StringSelect &&
+            "customId" in child &&
+            child.customId?.includes(":variant:"),
         ),
-    ) as ActionRowData<StringSelectMenuComponentData> | undefined;
+    );
 
     expect(variantRow).toBeDefined();
     const selectMenu = variantRow?.components[0];

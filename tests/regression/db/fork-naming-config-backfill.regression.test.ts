@@ -41,7 +41,11 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Fork naming config backfill", () => {
   let forkId: number;
   let pointerId: number;
   let editedId: number;
-  let presetConfig: { prefixes: object; suffixes: object; addressTerms: object };
+  let presetConfig: {
+    prefixes: Record<string, string>;
+    suffixes: Record<string, string>;
+    addressTerms: Record<string, string>;
+  };
 
   beforeAll(async () => {
     await setupTestDb();

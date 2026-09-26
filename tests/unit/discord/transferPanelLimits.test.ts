@@ -16,6 +16,7 @@ import {
   buildMemoryTransferPreviewPayload,
   buildTransferNoticePayload,
   type MemoryTransferDestination,
+  type MemoryTransferMapping,
 } from "@/utils/discord/ui/transferPanel";
 import { validateComponentsV2MessageLimits, validateRawModalLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
@@ -23,7 +24,7 @@ import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { ColorCode } from "@/utils/misc/logger";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { RUNTIME_LOCALES, localizedCopy, localizedProse } from "../../helpers/localeCases";
-import { BACKTICK_RUNS, LONE_SURROGATE } from "../../helpers/panelLimits";
+import { BACKTICK_RUNS, LONE_SURROGATE, collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -43,16 +44,6 @@ function visitComponents(value: unknown, visit: (record: Record<string, unknown>
   for (const child of Object.values(record)) visitComponents(child, visit);
 }
 
-function textDisplays(value: unknown): string[] {
-  const contents: string[] = [];
-  visitComponents(value, (record) => {
-    if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-      contents.push(record.content);
-    }
-  });
-  return contents;
-}
-
 function normalizePanelProse(value: string): string {
   return value
     .replace(/\r?\n(?:> |-# )?/gu, " ")
@@ -69,10 +60,9 @@ function buttonIds(value: unknown): string[] {
 }
 
 function assertSafePreview(payload: ReturnType<typeof buildConfigTransferPreviewPayload>, label: string): void {
-  const result = validateComponentsV2MessageLimits(payload);
-  expect(result.valid, `${label}: ${JSON.stringify(result.violations)}`).toBe(true);
-  for (const content of textDisplays(payload)) {
-    expect(LONE_SURROGATE.test(content), `${label} contains a lone surrogate`).toBe(false);
+  expectSafePanelPayload(payload, label);
+  for (const content of collectTextDisplays(payload)) {
+    // Stricter than the shared check, which only inspects a markdown fence body.
     expect(content, `${label} leaves an adjacent backtick run`).not.toMatch(/`{2,}/u);
   }
 }
@@ -95,8 +85,7 @@ function makeMemoryDestinations(count: number, labelPrefix = "Persona"): MemoryT
 }
 
 function assertMemoryPayload(payload: unknown, label: string): void {
-  const result = validateComponentsV2MessageLimits(payload as ReturnType<typeof buildMemoryMappingPayload>);
-  expect(result.valid, `${label}: ${JSON.stringify(result.violations)}`).toBe(true);
+  expectSafePanelPayload(payload as ReturnType<typeof buildMemoryMappingPayload>, label);
   visitComponents(payload, (record) => {
     if (record.type === ComponentType.Button) {
       expect(record.style, `${label} uses Primary`).not.toBe(ButtonStyle.Primary);
@@ -108,8 +97,8 @@ function assertMemoryPayload(payload: unknown, label: string): void {
       expect(options?.length ?? 0, `${label} exceeds the select option limit`).toBeLessThanOrEqual(25);
     }
   });
-  for (const content of textDisplays(payload)) {
-    expect(LONE_SURROGATE.test(content), `${label} contains a lone surrogate`).toBe(false);
+  for (const content of collectTextDisplays(payload)) {
+    // Stricter than the shared check, which only inspects a markdown fence body.
     expect(content, `${label} leaves an adjacent backtick run`).not.toMatch(/`{2,}/u);
   }
 }
@@ -214,7 +203,7 @@ describe("transfer panel Components V2 limits", () => {
         droppedFields: Object.keys(V2_CONFIG_EXCLUSIONS),
         nonce: `nonce-exclusions-${kind}`,
       });
-      const exclusionText = textDisplays(exclusionPayload).join("\n");
+      const exclusionText = collectTextDisplays(exclusionPayload).join("\n");
       for (const [field, exclusion] of Object.entries(V2_CONFIG_EXCLUSIONS)) {
         expect(exclusionText).toContain(field);
         expect(normalizePanelProse(exclusionText)).toContain(normalizePanelProse(exclusion.reason));
@@ -293,7 +282,7 @@ describe("transfer panel Components V2 limits", () => {
         droppedFields: [],
         nonce: `nonce-format-${kind}`,
       });
-      const [content] = textDisplays(payload);
+      const [content] = collectTextDisplays(payload);
       if (content === undefined) throw new Error(`Preview payload for ${kind} carries no TextDisplay`);
 
       expect({ kind, content }).toEqual({ kind, content: expectedBlocks[kind].join("\n") });
@@ -302,7 +291,7 @@ describe("transfer panel Components V2 limits", () => {
         blankLines: 0,
       });
 
-      const droppedContent = textDisplays(
+      const droppedContent = collectTextDisplays(
         buildConfigTransferPreviewPayload({
           locale: "en-US",
           kind,
@@ -331,7 +320,7 @@ describe("transfer panel Components V2 limits", () => {
     });
 
     expect(validateComponentsV2MessageLimits(cancelled).valid).toBe(true);
-    expect(textDisplays(cancelled).join("\n")).toBe(
+    expect(collectTextDisplays(cancelled).join("\n")).toBe(
       [
         `### ${localizer("en-US", "commands.transfer.cancelled_title")}`,
         localizer("en-US", "commands.transfer.cancelled_description"),
@@ -347,7 +336,7 @@ describe("transfer panel Components V2 limits", () => {
       descriptionVars: { sections: "Triggers", fields: 4 },
       color: ColorCode.SUCCESS,
     });
-    const successText = textDisplays(success).join("\n");
+    const successText = collectTextDisplays(success).join("\n");
     expect(successText).toContain("Sections applied: Triggers");
     expect(successText).toContain("Configuration fields updated: 4");
     expect(buttonIds(success)).toEqual([]);
@@ -449,7 +438,7 @@ describe("transfer panel Components V2 limits", () => {
       personaId: index + 1,
       label: `Persona ${"`".repeat(runLength)} 🌟 \uD800 ${index}`,
     }));
-    const mapping = Object.fromEntries(
+    const mapping: MemoryTransferMapping = Object.fromEntries(
       buckets.map((bucket, index) => {
         const destination = destinations[index];
         if (!destination) throw new Error("Special text fixture requires a matching destination");
@@ -524,7 +513,7 @@ describe("transfer panel Components V2 limits", () => {
     const destinations = makeMemoryDestinations(2);
     const firstDestination = destinations[0];
     if (!firstDestination) throw new Error("Action fixture requires a destination");
-    const mapping = { "bucket-0": firstDestination.lineageId, "bucket-1": "skip" };
+    const mapping: MemoryTransferMapping = { "bucket-0": firstDestination.lineageId, "bucket-1": "skip" };
 
     const previewActions = parsedTransferRoutes(
       buildMemoryTransferPreviewPayload({
@@ -592,8 +581,8 @@ describe("transfer panel Components V2 limits", () => {
       withLinePrefix("> ", localizer("en-US", "commands.transfer.memory_cross_ownership_source_line", noticeVars)),
       withLinePrefix("> ", localizer("en-US", "commands.transfer.memory_cross_ownership_destination_line", noticeVars)),
     ].join("\n");
-    expect(textDisplays(sameOwnership).join("\n")).not.toContain(notice);
-    expect(textDisplays(crossOwnership).join("\n")).toContain(notice);
+    expect(collectTextDisplays(sameOwnership).join("\n")).not.toContain(notice);
+    expect(collectTextDisplays(crossOwnership).join("\n")).toContain(notice);
     assertMemoryPayload(crossOwnership, "cross-ownership preview");
   });
 
@@ -606,7 +595,7 @@ describe("transfer panel Components V2 limits", () => {
     const firstDestination = destinations[0];
     if (!firstDestination) throw new Error("Compact block fixture requires a destination");
 
-    const previewBlock = textDisplays(
+    const previewBlock = collectTextDisplays(
       buildMemoryTransferPreviewPayload({
         locale: "en-US",
         kind: "workspace_memories",
@@ -625,7 +614,7 @@ describe("transfer panel Components V2 limits", () => {
       ].join("\n"),
     );
 
-    const mappingBlock = textDisplays(
+    const mappingBlock = collectTextDisplays(
       buildMemoryMappingPayload({
         locale: "en-US",
         nonce: "nonce-compact-mapping",
@@ -648,7 +637,7 @@ describe("transfer panel Components V2 limits", () => {
       ].join("\n"),
     );
 
-    const confirmationBlock = textDisplays(
+    const confirmationBlock = collectTextDisplays(
       buildMemoryReplaceConfirmationPayload({
         locale: "en-US",
         nonce: "nonce-compact-confirm",
@@ -670,7 +659,7 @@ describe("transfer panel Components V2 limits", () => {
     );
 
     // A heading with nothing under it reads as a rendering fault, so the empty group says so instead.
-    const emptySkippedBlock = textDisplays(
+    const emptySkippedBlock = collectTextDisplays(
       buildMemoryReplaceConfirmationPayload({
         locale: "en-US",
         nonce: "nonce-compact-confirm-none",
@@ -685,7 +674,7 @@ describe("transfer panel Components V2 limits", () => {
   });
 
   it("counts a single memory in the singular", () => {
-    const previewBlock = textDisplays(
+    const previewBlock = collectTextDisplays(
       buildMemoryTransferPreviewPayload({
         locale: "en-US",
         kind: "workspace_memories",
@@ -732,7 +721,7 @@ describe("transfer panel Components V2 limits", () => {
   it("renders complete memory mapping text, skip markers, and boundary route fields", () => {
     const buckets = makeMemoryBuckets(26);
     const destinations = makeMemoryDestinations(26);
-    const mapping = Object.fromEntries(
+    const mapping: MemoryTransferMapping = Object.fromEntries(
       buckets.map((bucket, index) => {
         const destination = destinations[index];
         if (!destination) throw new Error("Boundary fixture requires a matching destination");
@@ -791,7 +780,7 @@ describe("transfer panel Components V2 limits", () => {
       bucketIndex: 25,
       destPage: 1,
     });
-    const mappingText = textDisplays(payload).join("\n");
+    const mappingText = collectTextDisplays(payload).join("\n");
     expect(mappingText).toContain("Bucket 0 -> Persona 0");
     expect(mappingText).toContain("Bucket 25 -> (skipped)");
     expect(mappingText).toContain("Strategy: Replace");
@@ -802,7 +791,7 @@ describe("transfer panel Components V2 limits", () => {
       buckets: buckets.slice(0, 2),
       nonce: "mem-preview-fields",
     });
-    const previewText = textDisplays(preview).join("\n");
+    const previewText = collectTextDisplays(preview).join("\n");
     expect(previewText).toContain("Bucket 0");
     expect(previewText).toContain("Bucket 1");
     expect(previewText).toContain(localizedCopy("en-US", "commands.transfer.memory_preview_exclusions"));
@@ -814,7 +803,7 @@ describe("transfer panel Components V2 limits", () => {
       destinations,
       mapping: { "bucket-0": 100, "bucket-1": "skip" },
     });
-    const confirmationText = textDisplays(confirmation).join("\n");
+    const confirmationText = collectTextDisplays(confirmation).join("\n");
     expect(confirmationText).toContain("Persona 0");
     expect(confirmationText).toContain("Bucket 1");
     expect(confirmationText).toMatch(localizedProse("en-US", "commands.transfer.memory_skip_confirmation_line"));

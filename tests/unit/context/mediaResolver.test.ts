@@ -1,40 +1,31 @@
 import { describe, expect, test } from "bun:test";
-import type { AssembledServerConfig, LlmRow, TomoriState } from "@/types/db/schema";
+import type { LlmRow, TomoriState } from "@/types/db/schema";
 import type { StructuredContextItem } from "@/types/misc/context";
 import { resolveMediaForModel } from "@/utils/text/context/mediaResolver";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
+// A blind OpenRouter model, so `resolveEffectiveMediaCapabilities` takes its base-capability path
+// instead of consulting the live OpenRouter catalog.
 function makeLlm(overrides: Partial<LlmRow>): LlmRow {
-  return {
-    llm_id: 1,
+  return createLlmRow({
     llm_provider: "openrouter",
     llm_codename: "test-model",
-    is_scoped_registration: false,
-    is_smartest: false,
-    is_default: false,
-    is_reasoning: false,
-    is_deprecated: false,
-    is_free: false,
-    has_tools: true,
     sees_images: false,
     sees_videos: false,
-    sees_youtube: false,
-    is_uncensored: false,
-    supports_structoutput: false,
-    strict_role_alternation: false,
-    supports_prefix_completion: false,
     ...overrides,
-  };
+  });
 }
 
 function makeState(overrides: { seesImages?: boolean; seesVideos?: boolean; hasVisionTool?: boolean }): TomoriState {
-  const llm = makeLlm({
-    sees_images: overrides.seesImages ?? false,
-    sees_videos: overrides.seesVideos ?? false,
-  });
-  return {
-    server_id: 1,
-    llm,
+  return createPersona({
+    llm: makeLlm({
+      sees_images: overrides.seesImages ?? false,
+      sees_videos: overrides.seesVideos ?? false,
+    }),
     vision_llm: overrides.hasVisionTool ? makeLlm({ llm_id: 2, sees_images: true }) : undefined,
+    // `resolveMediaForModel` forwards these capability flags and model pointers to the prompt
+    // macro resolver, and the guidance text below is asserted verbatim, so the fixture keeps its
+    // all-off set rather than the shared defaults that enable most tool families.
     config: {
       diffusion_model_id: null,
       nai_diffusion_model_id: null,
@@ -47,8 +38,8 @@ function makeState(overrides: { seesImages?: boolean; seesVideos?: boolean; hasV
       videogen_enabled: false,
       voice_message_enabled: false,
       thread_creation_enabled: false,
-    } as AssembledServerConfig,
-  } as TomoriState;
+    },
+  });
 }
 
 function imageItem(overrides: Partial<StructuredContextItem> = {}): StructuredContextItem {
@@ -216,7 +207,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "image/png",
             mediaId: "media_8",
             withinWindow: false,
-            extendBy: 4,
             filename: "old.png",
           },
         ],
@@ -244,7 +234,6 @@ describe("resolveMediaForModel", () => {
             mimeType: "video/mp4",
             mediaId: "media_9",
             withinWindow: false,
-            extendBy: 3,
             filename: "old.mp4",
           },
         ],

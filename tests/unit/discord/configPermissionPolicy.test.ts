@@ -871,7 +871,7 @@ describe("isConfigRouteAuthorized", () => {
   it("covers every declared action, so a new route cannot default to authorized", () => {
     // A route added without a policy branch falls through to `false`; this pins that the suite
     // above actually names each action rather than leaving new ones silently denied and untested.
-    const covered = new Set<ConfigPanelRoute["action"]>([
+    const covered = new Set<string>([
       ...personaWriteRoutes.map((route) => route.action),
       ...triggerRoutes.map((route) => route.action),
       "attribute-select",

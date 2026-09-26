@@ -96,7 +96,9 @@ describe("configModelsPanel parameters block", () => {
     const selectRow = components.find(
       (component): component is ActionRowData<StringSelectMenuComponentData> =>
         component.type === ComponentType.ActionRow &&
+        "components" in component &&
         component.components.length === 1 &&
+        "type" in component.components[0] &&
         component.components[0].type === ComponentType.StringSelect,
     );
     expect(selectRow).toBeDefined();
@@ -105,6 +107,7 @@ describe("configModelsPanel parameters block", () => {
     const summaryDisplay = flat.find(
       (component): component is TextDisplayComponentData =>
         component.type === ComponentType.TextDisplay &&
+        "content" in component &&
         component.content.includes("Sampling:") &&
         component.content.includes("`0.7`") &&
         component.content.includes("Generation:") &&
@@ -115,12 +118,13 @@ describe("configModelsPanel parameters block", () => {
     const editorButtonRow = components.find(
       (component): component is ActionRowData<ButtonComponentData> =>
         component.type === ComponentType.ActionRow &&
+        "components" in component &&
         component.components.length === 2 &&
         component.components.some(
-          (btn) => typeof btn.customId === "string" && btn.customId.includes("sampling-open"),
+          (btn) => "customId" in btn && typeof btn.customId === "string" && btn.customId.includes("sampling-open"),
         ) &&
         component.components.some(
-          (btn) => typeof btn.customId === "string" && btn.customId.includes("generation-open"),
+          (btn) => "customId" in btn && typeof btn.customId === "string" && btn.customId.includes("generation-open"),
         ),
     );
     expect(editorButtonRow).toBeDefined();
@@ -128,12 +132,14 @@ describe("configModelsPanel parameters block", () => {
     const samplingButton = flat.find(
       (component): component is ButtonComponentData =>
         component.type === ComponentType.Button &&
+        "customId" in component &&
         typeof component.customId === "string" &&
         component.customId.includes("sampling-open"),
     );
     const generationButton = flat.find(
       (component): component is ButtonComponentData =>
         component.type === ComponentType.Button &&
+        "customId" in component &&
         typeof component.customId === "string" &&
         component.customId.includes("generation-open"),
     );
@@ -155,6 +161,7 @@ describe("configModelsPanel parameters block", () => {
     const staticProviderDisplay = flat.find(
       (component): component is TextDisplayComponentData =>
         component.type === ComponentType.TextDisplay &&
+        "content" in component &&
         component.content.startsWith("> ") &&
         component.content.includes(`\`${displayName}\``),
     );
@@ -166,12 +173,14 @@ describe("configModelsPanel parameters block", () => {
     const samplingButton = flat.find(
       (component): component is ButtonComponentData =>
         component.type === ComponentType.Button &&
+        "customId" in component &&
         typeof component.customId === "string" &&
         component.customId.includes("sampling-open"),
     );
     const generationButton = flat.find(
       (component): component is ButtonComponentData =>
         component.type === ComponentType.Button &&
+        "customId" in component &&
         typeof component.customId === "string" &&
         component.customId.includes("generation-open"),
     );
@@ -191,12 +200,14 @@ describe("configModelsPanel parameters block", () => {
     const samplingButton = flat.find(
       (component): component is ButtonComponentData =>
         component.type === ComponentType.Button &&
+        "customId" in component &&
         typeof component.customId === "string" &&
         component.customId.includes("sampling-open"),
     );
     const generationButton = flat.find(
       (component): component is ButtonComponentData =>
         component.type === ComponentType.Button &&
+        "customId" in component &&
         typeof component.customId === "string" &&
         component.customId.includes("generation-open"),
     );
@@ -206,7 +217,9 @@ describe("configModelsPanel parameters block", () => {
     const noProvidersMessage = localizer("en-US", "commands.config.panel.parameters_no_providers");
     const noProvidersDisplay = flat.find(
       (component): component is TextDisplayComponentData =>
-        component.type === ComponentType.TextDisplay && component.content === noProvidersMessage,
+        component.type === ComponentType.TextDisplay &&
+        "content" in component &&
+        component.content === noProvidersMessage,
     );
     expect(noProvidersDisplay).toBeDefined();
   });
@@ -235,13 +248,17 @@ describe("configModelsPanel parameters block", () => {
     const flat = flattenComponents(components);
     const presetText = flat.find(
       (component): component is TextDisplayComponentData =>
-        component.type === ComponentType.TextDisplay && component.content.includes("preset-24"),
+        component.type === ComponentType.TextDisplay &&
+        "content" in component &&
+        component.content.includes("preset-24"),
     );
     expect(presetText).toBeDefined();
 
     const presetSelect = flat.find(
       (component): component is StringSelectMenuComponentData =>
-        component.type === ComponentType.StringSelect && component.options.some((option) => option.value === "0"),
+        component.type === ComponentType.StringSelect &&
+        "options" in component &&
+        component.options.some((option) => option.value === "0"),
     );
     expect(presetSelect).toBeDefined();
     expect(presetSelect?.options).toHaveLength(25);
@@ -270,6 +287,7 @@ describe("configModelsPanel parameters block", () => {
       flat.some(
         (component) =>
           component.type === ComponentType.TextDisplay &&
+          "content" in component &&
           component.content.includes(localizer("en-US", "commands.config.panel.nai_preset.not_novelai_description")),
       ),
     ).toBe(false);
@@ -277,6 +295,7 @@ describe("configModelsPanel parameters block", () => {
       flat.some(
         (component) =>
           component.type === ComponentType.StringSelect &&
+          "options" in component &&
           component.options.some((option) => option.value === "__nai-preset-disabled__"),
       ),
     ).toBe(false);

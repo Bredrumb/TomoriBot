@@ -8,18 +8,32 @@ import {
 } from "@/utils/discord/interactions/routeRegistry";
 import {
   buildStatusCategoryButtonId,
+  buildStatusDashboardRouteId,
   buildStatusPageSelectorId,
-  buildStatusPersonaRangeId,
   buildStatusPersonaSelectorId,
 } from "@/utils/discord/statusDashboardCatalog";
 import { createStatusInteractionRoute } from "@/utils/discord/interactions/statusRoutes";
 import type { StatusPageCategory } from "@/utils/metrics/status/statusPageRenderer";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import {
+  createRouteInteraction,
+  type RouteInteraction,
+  type RouteInteractionOptions,
+} from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
 const state = { server_id: 9, config: {} } as TomoriState;
 const user = { user_id: 7, user_disc_id: "viewer" } as UserRow;
+
+/** The viewer the user row above describes, in the guild the persona state belongs to. */
+function makeStatusInteraction(options: RouteInteractionOptions): RouteInteraction {
+  return createRouteInteraction({
+    guildId: "guild-9",
+    ...options,
+    overrides: { user: { id: "viewer", username: "viewer", displayName: "viewer", globalName: "viewer" } },
+  });
+}
 
 function page(titleKey: string): StatusPageCategory["pages"][number] {
   return { titleKey, fields: [] };
@@ -55,41 +69,8 @@ function persona(personaId: number, personaNickname: string): TomoriState {
   return { persona_id: personaId, persona_nickname: personaNickname, persona_lineage_id: personaId } as TomoriState;
 }
 
-interface MockStatusInteraction {
-  customId: string;
-  guildId: string | null;
-  user: { id: string };
-  values: string[];
-  deferred: boolean;
-  replied: boolean;
-  deferUpdate(): Promise<void>;
-  editReply(payload: unknown): Promise<unknown>;
-  isButton(): boolean;
-  isStringSelectMenu(): boolean;
-}
-
-function makeInteraction(customId: string, kind: "button" | "string", values: string[] = []): MockStatusInteraction {
-  const calls = { deferred: false };
-  const interaction: MockStatusInteraction = {
-    customId,
-    guildId: "guild-9",
-    user: { id: "viewer" },
-    values,
-    deferred: false,
-    replied: false,
-    deferUpdate: async () => {
-      calls.deferred = true;
-      interaction.deferred = true;
-    },
-    editReply: async (payload) => payload,
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => kind === "string",
-  };
-  return interaction;
-}
-
 function makeRegistry(
-  interaction: MockStatusInteraction,
+  interaction: RouteInteraction,
   events: string[],
   resolve: () => Promise<StatusPageCategory[]>,
   personas: TomoriState[] = [],
@@ -133,47 +114,62 @@ function makeRegistry(
 
 describe("persistent status interaction route", () => {
   it("routes a category button through the registry after acknowledgement and repaints fresh data", async () => {
-    const interaction = makeInteraction(buildStatusCategoryButtonId("en-US", "models"), "button");
+    const interaction = makeStatusInteraction({
+      customId: buildStatusCategoryButtonId("en-US", "models"),
+      kind: "button",
+    });
     const events: string[] = [];
-    const replies: unknown[] = [];
-    interaction.editReply = async (payload) => {
-      replies.push(payload);
-      return payload;
-    };
     const registry = makeRegistry(interaction, events, async () => categories("-fresh"));
 
     const handled = await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(handled).toBe(true);
     expect(events).toEqual(["user", "state", "pages"]);
+    // Acknowledgement precedes every dependency read, which makeRegistry also asserts on entry.
+    expect(interaction.calls[0]?.method).toBe("deferUpdate");
     expect(interaction.deferred).toBe(true);
-    expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain(localizer("en-US", "commands.status.server_page4_title"));
+    expect(interaction.edits).toHaveLength(1);
+    expect(JSON.stringify(interaction.edits[0])).toContain(localizer("en-US", "commands.status.server_page4_title"));
   });
 
   it("routes a page selector with a bounded value and uses editReply rather than update", async () => {
-    const interaction = makeInteraction(buildStatusPageSelectorId("en-US", "behavior"), "string", ["1"]);
+    const interaction = makeStatusInteraction({
+      customId: buildStatusPageSelectorId("en-US", "behavior"),
+      kind: "string-select",
+      values: ["1"],
+    });
     const events: string[] = [];
-    const replies: unknown[] = [];
-    interaction.editReply = async (payload) => {
-      replies.push(payload);
-      return payload;
-    };
     const registry = makeRegistry(interaction, events, async () => categories("-fresh"));
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(events).toEqual(["user", "state", "pages"]);
-    expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain("server_page2_title-fresh");
-    expect(JSON.stringify(replies[0])).toContain(buildStatusPageSelectorId("en-US", "behavior"));
+    // The route must acknowledge with deferUpdate and repaint with editReply, never with update.
+    expect(interaction.calls.map((call) => call.method)).toEqual(["deferUpdate", "editReply"]);
+    expect(interaction.edits).toHaveLength(1);
+    expect(JSON.stringify(interaction.edits[0])).toContain("server_page2_title-fresh");
+    expect(JSON.stringify(interaction.edits[0])).toContain(buildStatusPageSelectorId("en-US", "behavior"));
   });
 
   it("requires concrete component types before type-specific access", async () => {
-    const buttonWithPageRoute = makeInteraction(buildStatusPageSelectorId("en-US", "behavior"), "button", ["0"]);
-    const selectWithCategoryRoute = makeInteraction(buildStatusCategoryButtonId("en-US", "behavior"), "string");
-    const buttonWithPersonaSelectorRoute = makeInteraction(buildStatusPersonaSelectorId("en-US", 2), "button", ["2"]);
-    const selectWithPersonaRangeRoute = makeInteraction(buildStatusPersonaRangeId("en-US", 2, 25), "string");
+    const buttonWithPageRoute = makeStatusInteraction({
+      customId: buildStatusPageSelectorId("en-US", "behavior"),
+      kind: "button",
+      values: ["0"],
+    });
+    const selectWithCategoryRoute = makeStatusInteraction({
+      customId: buildStatusCategoryButtonId("en-US", "behavior"),
+      kind: "string-select",
+    });
+    const buttonWithPersonaSelectorRoute = makeStatusInteraction({
+      customId: buildStatusPersonaSelectorId("en-US", 2),
+      kind: "button",
+      values: ["2"],
+    });
+    const selectWithPersonaRangeRoute = makeStatusInteraction({
+      customId: buildStatusDashboardRouteId({ action: "persona-page", locale: "en-US", personaId: 2, start: 25 }),
+      kind: "string-select",
+    });
     const events: string[] = [];
     const registry = makeRegistry(buttonWithPageRoute, events, async () => categories(""));
     const secondRegistry = makeRegistry(selectWithCategoryRoute, events, async () => categories(""));
@@ -196,49 +192,45 @@ describe("persistent status interaction route", () => {
   });
 
   it("rejects forged page values before user/workspace reads", async () => {
-    const interaction = makeInteraction(buildStatusPageSelectorId("en-US", "behavior"), "string", ["forged"]);
+    const interaction = makeStatusInteraction({
+      customId: buildStatusPageSelectorId("en-US", "behavior"),
+      kind: "string-select",
+      values: ["forged"],
+    });
     const events: string[] = [];
-    const replies: unknown[] = [];
-    interaction.editReply = async (payload) => {
-      replies.push(payload);
-      return payload;
-    };
     const registry = makeRegistry(interaction, events, async () => categories(""));
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(interaction.deferred).toBe(true);
     expect(events).toEqual([]);
-    expect(replies).toHaveLength(1);
+    expect(interaction.edits).toHaveLength(1);
   });
 
   it("opens Persona from a fresh roster and rebuilds its five pages", async () => {
-    const interaction = makeInteraction(buildStatusCategoryButtonId("en-US", "persona"), "button");
+    const interaction = makeStatusInteraction({
+      customId: buildStatusCategoryButtonId("en-US", "persona"),
+      kind: "button",
+    });
     const events: string[] = [];
-    const replies: unknown[] = [];
-    interaction.editReply = async (payload) => {
-      replies.push(payload);
-      return payload;
-    };
     const registry = makeRegistry(interaction, events, async () => categories(""), [persona(2, "Mirri")]);
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(interaction.deferred).toBe(true);
     expect(events).toEqual(["user", "state", "personas", "pages", "persona:2"]);
-    expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain("Mirri");
-    expect(JSON.stringify(replies[0])).toContain(buildStatusPersonaSelectorId("en-US", 2));
+    expect(interaction.edits).toHaveLength(1);
+    expect(JSON.stringify(interaction.edits[0])).toContain("Mirri");
+    expect(JSON.stringify(interaction.edits[0])).toContain(buildStatusPersonaSelectorId("en-US", 2));
   });
 
   it("validates the selected Persona against a fresh roster before repainting", async () => {
-    const interaction = makeInteraction(buildStatusPersonaSelectorId("en-US", 1), "string", ["2"]);
+    const interaction = makeStatusInteraction({
+      customId: buildStatusPersonaSelectorId("en-US", 1),
+      kind: "string-select",
+      values: ["2"],
+    });
     const events: string[] = [];
-    const replies: unknown[] = [];
-    interaction.editReply = async (payload) => {
-      replies.push(payload);
-      return payload;
-    };
     const registry = makeRegistry(interaction, events, async () => categories(""), [
       persona(1, "Main"),
       persona(2, "Mirri"),
@@ -247,43 +239,39 @@ describe("persistent status interaction route", () => {
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(events).toEqual(["user", "state", "personas", "pages", "persona:2"]);
-    expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain("Mirri");
+    expect(interaction.edits).toHaveLength(1);
+    expect(JSON.stringify(interaction.edits[0])).toContain("Mirri");
   });
 
   it("falls back safely when a selected Persona was deleted", async () => {
-    const interaction = makeInteraction(buildStatusPersonaRangeId("en-US", 99, 25), "button");
+    const interaction = makeStatusInteraction({
+      customId: buildStatusDashboardRouteId({ action: "persona-page", locale: "en-US", personaId: 99, start: 25 }),
+      kind: "button",
+    });
     const events: string[] = [];
-    const replies: unknown[] = [];
-    interaction.editReply = async (payload) => {
-      replies.push(payload);
-      return payload;
-    };
     const registry = makeRegistry(interaction, events, async () => categories(""), [persona(2, "Current")]);
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(events).toEqual(["user", "state", "personas", "pages", "persona:2"]);
-    expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain("Current");
+    expect(interaction.edits).toHaveLength(1);
+    expect(JSON.stringify(interaction.edits[0])).toContain("Current");
   });
 
   it("carries a validated selected Persona through non-Persona navigation", async () => {
-    const interaction = makeInteraction(buildStatusCategoryButtonId("en-US", "behavior", 2), "button");
+    const interaction = makeStatusInteraction({
+      customId: buildStatusCategoryButtonId("en-US", "behavior", 2),
+      kind: "button",
+    });
     const events: string[] = [];
-    const replies: unknown[] = [];
-    interaction.editReply = async (payload) => {
-      replies.push(payload);
-      return payload;
-    };
     const registry = makeRegistry(interaction, events, async () => categories(""), [persona(2, "Mirri")]);
 
     await registry.dispatch({} as Client, interaction as unknown as GlobalRoutableInteraction);
 
     expect(events).toEqual(["user", "state", "personas", "pages"]);
-    expect(replies).toHaveLength(1);
-    expect(JSON.stringify(replies[0])).toContain(buildStatusCategoryButtonId("en-US", "persona", 2));
-    expect(JSON.stringify(replies[0])).toContain(buildStatusPageSelectorId("en-US", "behavior", 2));
+    expect(interaction.edits).toHaveLength(1);
+    expect(JSON.stringify(interaction.edits[0])).toContain(buildStatusCategoryButtonId("en-US", "persona", 2));
+    expect(JSON.stringify(interaction.edits[0])).toContain(buildStatusPageSelectorId("en-US", "behavior", 2));
   });
 
   it("does not depend on the old command interaction ID", () => {

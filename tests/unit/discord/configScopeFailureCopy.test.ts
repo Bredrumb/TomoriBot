@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { PermissionsBitField, type ChatInputCommandInteraction, type Client } from "discord.js";
+import type { ChatInputCommandInteraction, Client } from "discord.js";
 import type { TomoriState } from "@/types/db/schema";
 import { buildConfigRouteId } from "@/utils/discord/configPanelCatalog";
 import {
@@ -11,6 +11,7 @@ import { createConfigInteractionRoute, executeConfigCommand } from "@/utils/disc
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -61,62 +62,40 @@ function makeScope(): ConfigScope {
 }
 
 interface Harness {
+  /** The single interaction this harness drives; it also owns the recording arrays read below. */
+  interaction: RouteInteraction;
   dependencies: Partial<ConfigRouteDependencies>;
-  replies: unknown[];
-  edits: unknown[];
+  readonly replies: unknown[];
+  readonly edits: unknown[];
 }
 
-function makeHarness(): Harness {
-  const replies: unknown[] = [];
-  const edits: unknown[] = [];
+function makeHarness(options: { customId: string; kind?: "button" | "modal" }): Harness {
+  const interaction = createRouteInteraction({
+    customId: options.customId,
+    guildId: GUILD_ID,
+    kind: options.kind,
+  });
+
   return {
-    replies,
-    edits,
+    interaction,
     dependencies: {
       createNonce: () => "nonce1234567",
       showModal: async () => undefined,
       takeSelectValue: () => "general",
     },
+    // Read through to the interaction so exactly one object owns each payload list.
+    get edits() {
+      return interaction.edits;
+    },
+    get replies() {
+      return interaction.replies;
+    },
   };
 }
 
-function makeInteraction(options: {
-  customId: string;
-  harness: Harness;
-  kind?: "button" | "modal";
-}): ChatInputCommandInteraction {
-  const kind = options.kind ?? "button";
-  return {
-    id: "interaction-1",
-    customId: options.customId,
-    user: { id: USER_ID, username: "Mirri" },
-    channelId: "channel-1",
-    guildId: GUILD_ID,
-    guild: { id: GUILD_ID },
-    memberPermissions: { has: (flag: bigint) => flag === PermissionsBitField.Flags.ManageGuild },
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => false,
-    isChannelSelectMenu: () => false,
-    isModalSubmit: () => kind === "modal",
-    deferred: true,
-    replied: false,
-    deferReply: async () => undefined,
-    deferUpdate: async () => undefined,
-    fields: { getTextInputValue: () => "" },
-    editReply: async (payload: unknown) => {
-      options.harness.edits.push(payload);
-      return payload;
-    },
-    reply: async (payload: unknown) => {
-      options.harness.replies.push(payload);
-      return payload;
-    },
-  } as unknown as ChatInputCommandInteraction;
-}
-
-async function dispatch(harness: Harness, interaction: ChatInputCommandInteraction): Promise<void> {
+async function dispatch(harness: Harness): Promise<void> {
   const registry = new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]);
-  await registry.dispatch(CLIENT, interaction as never);
+  await registry.dispatch(CLIENT, harness.interaction as never);
 }
 
 function contentOf(payload: unknown): string {
@@ -163,9 +142,9 @@ describe("config scope failure copy", () => {
   });
 
   it("tells an admin to run /setup from the bare command when nothing was recorded", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ customId: "config" });
 
-    await executeConfigCommand(makeInteraction({ customId: "config", harness }), "en-US", {
+    await executeConfigCommand(harness.interaction as unknown as ChatInputCommandInteraction, "en-US", {
       resolveScope: async () => null,
       getLastDbError: NO_RECORDED_FAILURE,
     });
@@ -174,9 +153,9 @@ describe("config scope failure copy", () => {
   });
 
   it("offers a retry rather than /setup when the workspace read failed", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ customId: "config" });
 
-    await executeConfigCommand(makeInteraction({ customId: "config", harness }), "en-US", {
+    await executeConfigCommand(harness.interaction as unknown as ChatInputCommandInteraction, "en-US", {
       resolveScope: async () => null,
       getLastDbError: RECORDED_FAILURE,
     });
@@ -187,31 +166,31 @@ describe("config scope failure copy", () => {
   });
 
   it("routes a panel button on an unset-up workspace to the setup instruction", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ customId: renameOpenRoute(55) });
     harness.dependencies.resolveScope = async () => null;
     harness.dependencies.getLastDbError = NO_RECORDED_FAILURE;
 
-    await dispatch(harness, makeInteraction({ customId: renameOpenRoute(55), harness }));
+    await dispatch(harness);
 
     expect(contentOf(harness.replies[0])).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
   });
 
   it("routes a panel button on a failed read to the transient copy", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ customId: renameOpenRoute(55) });
     harness.dependencies.resolveScope = async () => null;
     harness.dependencies.getLastDbError = RECORDED_FAILURE;
 
-    await dispatch(harness, makeInteraction({ customId: renameOpenRoute(55), harness }));
+    await dispatch(harness);
 
     expect(contentOf(harness.replies[0])).toContain(localizedCopy("en-US", "commands.config.panel.unavailable"));
   });
 
   it("sends a write whose persona is gone to a re-run of /config, not to /setup", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ customId: renameOpenRoute(999) });
     harness.dependencies.resolveScope = async () => makeScope();
     harness.dependencies.getLastDbError = NO_RECORDED_FAILURE;
 
-    await dispatch(harness, makeInteraction({ customId: renameOpenRoute(999), harness }));
+    await dispatch(harness);
 
     const rendered = contentOf(harness.replies[0]);
     expect(rendered).toContain(outdatedPanelCopy());
@@ -219,18 +198,14 @@ describe("config scope failure copy", () => {
   });
 
   it("never claims a setup gap when a resolved scope carries no persona (MCP add)", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({
+      customId: buildConfigRouteId({ action: "mcp-add-submit", locale: "en-US", nonce: "nonce1234567" }),
+      kind: "modal",
+    });
     harness.dependencies.resolveScope = async () => ({ ...makeScope(), personas: [] });
     harness.dependencies.getLastDbError = NO_RECORDED_FAILURE;
 
-    await dispatch(
-      harness,
-      makeInteraction({
-        customId: buildConfigRouteId({ action: "mcp-add-submit", locale: "en-US", nonce: "nonce1234567" }),
-        harness,
-        kind: "modal",
-      }),
-    );
+    await dispatch(harness);
 
     const rendered = contentOf(harness.edits.at(-1));
     expect(rendered).toContain(outdatedPanelCopy());
@@ -238,42 +213,34 @@ describe("config scope failure copy", () => {
   });
 
   it("never claims a setup gap when a resolved scope carries no persona (permissions modal open)", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({
+      customId: buildConfigRouteId({
+        action: "permissions-manage-open",
+        locale: "en-US",
+        page: "available-tools",
+      }),
+    });
     harness.dependencies.resolveScope = async () => ({ ...makeScope(), personas: [] });
     harness.dependencies.getLastDbError = NO_RECORDED_FAILURE;
 
-    await dispatch(
-      harness,
-      makeInteraction({
-        customId: buildConfigRouteId({
-          action: "permissions-manage-open",
-          locale: "en-US",
-          page: "available-tools",
-        }),
-        harness,
-      }),
-    );
+    await dispatch(harness);
 
     expect(contentOf(harness.replies[0])).toContain(outdatedPanelCopy());
     expect(contentOf(harness.replies[0])).not.toContain("/setup");
   });
 
   it("still reports the setup gap when that same handler has no scope at all", async () => {
-    const harness = makeHarness();
+    const harness = makeHarness({
+      customId: buildConfigRouteId({
+        action: "permissions-manage-open",
+        locale: "en-US",
+        page: "available-tools",
+      }),
+    });
     harness.dependencies.resolveScope = async () => null;
     harness.dependencies.getLastDbError = NO_RECORDED_FAILURE;
 
-    await dispatch(
-      harness,
-      makeInteraction({
-        customId: buildConfigRouteId({
-          action: "permissions-manage-open",
-          locale: "en-US",
-          page: "available-tools",
-        }),
-        harness,
-      }),
-    );
+    await dispatch(harness);
 
     expect(contentOf(harness.replies[0])).toContain(localizedCopy("en-US", "commands.config.panel.not_setup"));
   });

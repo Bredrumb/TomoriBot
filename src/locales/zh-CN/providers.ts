@@ -235,7 +235,8 @@ export default {
       server_memory_footer: `服务器管理员可以用 \`/memories\` 管理这条记忆。`,
       personal_memory_footer_manage: `你可以用 \`/personal memories\` 管理你的个人记忆。`,
       personal_memory_footer_personalization_disabled: `这条记忆已经保存，但这个服务器目前关闭了个性化功能，所以它在这里不会立刻生效。用 \`/export personal memories\` 可以查看它。你可以在 \`/personal config\` 里选择退出。`,
-      personal_memory_footer_user_blacklisted: `这条记忆已经保存，但相关用户目前被这个服务器挡在个性化功能之外，所以它在这里不会立刻生效。用 \`/export personal memories\` 可以查看它。你可以在 \`/personal config\` 里选择退出。`,
+      personal_memory_footer_user_blacklisted:
+        "这条记忆已经保存，但相关用户目前在这个服务器被列入黑名单，我在这里会忽略他们，所以它不会生效。用 `/export personal memories` 可以查看它。你可以在 `/personal config` 里选择退出。",
       expand_memory_button: `查看完整记忆`,
       expand_memory_title: `完整记忆内容`,
     },

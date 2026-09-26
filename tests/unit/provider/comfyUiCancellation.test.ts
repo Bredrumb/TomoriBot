@@ -15,12 +15,13 @@ interface CapturedCall {
 }
 
 function stubComfyUi(routes: Record<string, () => Response>, captured: CapturedCall[]) {
-  return spyOn(globalThis, "fetch").mockImplementation(async (input: unknown, init?: RequestInit) => {
+  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
+  return spyOn(globalThis, "fetch").mockImplementation((async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
     const method = init?.method ?? "GET";
     captured.push({ method, path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : undefined });
     return routes[`${method} ${url.pathname}`]?.() ?? new Response("not found", { status: 404 });
-  });
+  }) as typeof fetch);
 }
 
 function queueResponse(runningPromptIds: string[]): Response {

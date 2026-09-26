@@ -54,6 +54,7 @@ function providerEntry(id: string, name = "Google"): ProviderPanelEntry {
               supportsStructOutput: false,
               strictRoleAlternation: false,
               supportsPrefixCompletion: true,
+              verbatimToolCalling: false,
             },
           },
         ],
@@ -240,6 +241,8 @@ describe("providers panel rendering", () => {
           connectionId: 41,
           endpointUrl: "https://models.example.com/v1",
           apiStyle: "openai-compatible",
+          capability: "text",
+          vramHandoff: null,
         },
       ],
       capabilities: [
@@ -377,7 +380,9 @@ describe("providers panel rendering", () => {
       });
 
       const getRows = (payload: ReturnType<typeof buildProvidersPanelPayload>) => {
-        const container = payload.components.find((component) => component.type === ComponentType.Container) as {
+        const container = payload.components.find(
+          (component) => component.type === ComponentType.Container,
+        ) as unknown as {
           components: Array<{ type: number; components?: Array<Record<string, unknown>> }>;
         };
         return container.components.filter((component) => component.type === ComponentType.ActionRow);
@@ -419,7 +424,7 @@ describe("providers panel rendering", () => {
       readStatus: "stale",
       page: { kind: "entry" },
     });
-    const container = payload.components.find((component) => component.type === ComponentType.Container) as {
+    const container = payload.components.find((component) => component.type === ComponentType.Container) as unknown as {
       components: Array<{ type: number; components?: Array<{ disabled?: boolean }> }>;
     };
     const pagination = container.components.find(
@@ -439,7 +444,7 @@ describe("providers panel rendering", () => {
       rangeIndex: 0,
     });
 
-    const container = payload.components.find((component) => component.type === ComponentType.Container) as {
+    const container = payload.components.find((component) => component.type === ComponentType.Container) as unknown as {
       components: Array<{ type: number; components?: Array<{ label?: string; customId?: string }> }>;
     };
     const rows = container.components.filter((component) => component.type === ComponentType.ActionRow);
@@ -730,6 +735,7 @@ describe("providers panel rendering", () => {
         supportsStructOutput: false,
         strictRoleAlternation: false,
         supportsPrefixCompletion: true,
+        verbatimToolCalling: false,
       },
     });
     const codeInput = editModal.components[0]?.component;
@@ -859,6 +865,7 @@ describe("providers panel rendering", () => {
 describe("Provider entry body stays inside the TextDisplay budget", () => {
   it("caps a catalog-sized model list and states how many lines it hid", () => {
     const many = providerEntry("provider:openrouter", "OpenRouter");
+    if (many.kind !== "provider") throw new Error("Expected provider fixture");
     many.capabilities[0].models = Array.from({ length: 300 }, (_, index) => ({
       id: index + 1,
       codeName: `openrouter/some-fairly-long-model-identifier-${index}`,
@@ -873,6 +880,7 @@ describe("Provider entry body stays inside the TextDisplay budget", () => {
         supportsStructOutput: false,
         strictRoleAlternation: false,
         supportsPrefixCompletion: false,
+        verbatimToolCalling: false,
       },
     }));
 
@@ -887,7 +895,7 @@ describe("Provider entry body stays inside the TextDisplay budget", () => {
       footerCommand: { root: "personal", subcommandGroup: "provider", subcommand: "model-text" },
     });
 
-    const container = panel.components[0] as { components: Array<{ type: number; content?: string }> };
+    const container = panel.components[0] as unknown as { components: Array<{ type: number; content?: string }> };
     const texts = container.components.filter((component) => typeof component.content === "string");
     expect(texts.length).toBeGreaterThan(0);
     for (const text of texts) {
@@ -895,6 +903,10 @@ describe("Provider entry body stays inside the TextDisplay budget", () => {
       expect((text.content as string).length).toBeLessThanOrEqual(4000);
       expect((text.content as string).length).toBeGreaterThan(0);
     }
-    expect(JSON.stringify(panel)).toContain("Showing the first 3,500 of");
+    // The body takes whatever the rest of the message leaves, so the shown count moves with locale
+    // and receipt; the message-wide total is the bound that must hold.
+    const total = texts.reduce((sum, text) => sum + (text.content as string).length, 0);
+    expect(total).toBeLessThanOrEqual(4000);
+    expect(JSON.stringify(panel)).toMatch(/Showing the first [\d,]+ of 15,848 characters/);
   });
 });

@@ -67,7 +67,8 @@ export default {
     batch_limit_reached_heading: `Không đủ chỗ trống`,
     batch_limit_reached_detail: "Tệp đó chứa {requested} bộ nhớ mới nhưng chỉ còn trống {available}/{max} vị trí.",
     blacklisted_error_heading: `Người dùng bị blacklist`,
-    blacklisted_error_detail: "Bạn đã bị blacklist khỏi việc dạy bộ nhớ máy chủ trên máy chủ này.",
+    blacklisted_error_detail:
+      "Bạn đang nằm trong blacklist của máy chủ này, nên không thể thay đổi bộ nhớ hay tài liệu của máy chủ.",
     teaching_disabled_error_heading: `Tính năng dạy đang tắt`,
     teaching_disabled_error_detail: `Tính năng thành viên dạy bộ nhớ đang bị tắt trên máy chủ này.`,
     empty_memory_label: `(bộ nhớ trống)`,

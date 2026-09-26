@@ -56,8 +56,6 @@ export interface ParseResult {
   commentOnlyCount: number;
   /** Number of non-marker nodes disabled by the preset's prompt_order */
   disabledByPreset: number;
-  /** Number of synthetic nodes added from legacy prompt fields */
-  legacyNodeCount: number;
   /** Source format that was accepted by the importer */
   sourceKind: "modern" | "legacy_text_completion";
 }
@@ -68,7 +66,6 @@ type PresetSourceKind = "modern" | "legacy_text_completion";
 export interface NormalizedPresetShape {
   preset: RawSTPreset;
   sourceKind: PresetSourceKind;
-  syntheticNodeCount: number;
 }
 
 /**
@@ -181,7 +178,6 @@ function buildLegacyTextCompletionPreset(raw: RawSTPreset): NormalizedPresetShap
   }
 
   const prompts: RawSTPromptNode[] = [];
-  let syntheticNodeCount = 0;
   let contentNodeIndex = 0;
   const usedMarkers = new Set<string>();
 
@@ -195,7 +191,6 @@ function buildLegacyTextCompletionPreset(raw: RawSTPreset): NormalizedPresetShap
     }
 
     prompts.push(node);
-    syntheticNodeCount++;
   };
 
   const addMarkerNode = (identifier: string, name: string) => {
@@ -205,7 +200,6 @@ function buildLegacyTextCompletionPreset(raw: RawSTPreset): NormalizedPresetShap
 
     usedMarkers.add(identifier);
     prompts.push(createLegacyMarkerNode(identifier, name));
-    syntheticNodeCount++;
   };
 
   const insertPlaceholderNodes = (
@@ -327,7 +321,6 @@ function buildLegacyTextCompletionPreset(raw: RawSTPreset): NormalizedPresetShap
       ],
     },
     sourceKind: "legacy_text_completion",
-    syntheticNodeCount,
   };
 }
 
@@ -336,7 +329,6 @@ export function normalizePresetShape(raw: RawSTPreset): NormalizedPresetShape | 
     return {
       preset: raw,
       sourceKind: "modern",
-      syntheticNodeCount: 0,
     };
   }
 
@@ -509,19 +501,8 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
     nodes,
     commentOnlyCount,
     disabledByPreset,
-    legacyNodeCount: normalizedPreset.syntheticNodeCount + legacyPromptNodes.length,
     sourceKind: normalizedPreset.sourceKind,
   };
-}
-
-export function summarizeMacroLabels(labels: string[], maxLabels = 4): string {
-  const sorted = [...labels].sort((a, b) => a.localeCompare(b));
-  if (sorted.length <= maxLabels) {
-    return sorted.join(", ");
-  }
-
-  const remaining = sorted.length - maxLabels;
-  return `${sorted.slice(0, maxLabels).join(", ")} +${remaining} more`;
 }
 
 export function collectUnsupportedEnabledMacros(nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[]): string[] {

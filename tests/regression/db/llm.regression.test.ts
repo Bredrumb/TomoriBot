@@ -34,7 +34,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
 
   it("loadLlmById returns a known LLM", async () => {
     const allLlms = await llmModelRepo.loadAvailableLlms();
-    if (!allLlms?.[0]) throw new Error("No seeded LLMs found");
+    if (!allLlms?.[0] || allLlms[0].llm_id === undefined) throw new Error("No seeded LLMs found");
     const firstId = allLlms[0].llm_id;
 
     const llm = await llmModelRepo.loadById(firstId);
@@ -50,7 +50,10 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("LLM — regression", () => {
   it("getLlmsByIds returns multiple LLMs", async () => {
     const allLlms = await llmModelRepo.loadAvailableLlms();
     if (!allLlms) throw new Error("No seeded LLMs found");
-    const ids = allLlms.slice(0, 2).map((l) => l.llm_id);
+    const ids = allLlms.slice(0, 2).map((l) => {
+      if (l.llm_id === undefined) throw new Error("Seeded LLM row is missing llm_id");
+      return l.llm_id;
+    });
 
     const results = await llmModelRepo.getLlmsByIds(ids);
     expect(results).toHaveLength(ids.length);

@@ -1,19 +1,15 @@
 /**
- * Proves the /bot dissolution landed: /generate scene is reachable at its new path, the root is gone,
- * and the relocated locale namespace resolves.
+ * Proves the /bot dissolution landed: /generate scene is reachable at its new path and the root is gone.
+ * This file owns the /bot absence assertion; the per-command registration files do not restate it.
  *
- * The description assertions are the ones that matter: a namespace relocation that missed a tree
- * would register the literal key string as the Discord description, which check-locales cannot see
- * because the loader assembles subcommand description keys from tree position rather than referencing
- * them directly.
+ * The relocated `/generate scene` description is asserted by commandDescriptionRegistration.test.ts,
+ * which rejects any registered root, group, or subcommand description that is still a locale key path.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
-
-const RELOCATED_DESCRIPTION_KEYS = ["commands.generate.scene.description"];
 
 describe("Dissolved /bot subcommand registration", () => {
   it("registers /generate scene as a subcommand under /generate", async () => {
@@ -31,33 +27,5 @@ describe("Dissolved /bot subcommand registration", () => {
 
     expect(registrationData.find((command) => command.name === "bot")).toBeUndefined();
     expect(executionMap.get("bot")).toBeUndefined();
-  }, 30000);
-
-  it("resolves the relocated description key in both locales without returning the key path", () => {
-    for (const key of RELOCATED_DESCRIPTION_KEYS) {
-      for (const locale of ["en-US", "ja"]) {
-        const resolved = localizer(locale, key);
-
-        expect(resolved).not.toBe(key);
-        expect(resolved.startsWith("commands.")).toBe(false);
-        expect(resolved.length).toBeGreaterThan(0);
-      }
-    }
-  });
-
-  it("registers the relocated description as real text rather than a locale key", async () => {
-    const { registrationData } = await loadCommandData();
-
-    const registeredDescription = (rootName: string, subcommandName: string): string | undefined => {
-      const root = registrationData.find((command) => command.name === rootName);
-      const subcommand = root?.options?.find(
-        (option: import("discord.js").APIApplicationCommandOption) => option.name === subcommandName,
-      );
-      return (subcommand as { description?: string } | undefined)?.description;
-    };
-
-    const description = registeredDescription("generate", "scene");
-    expect(description).toBeDefined();
-    expect(description?.startsWith("commands.")).toBe(false);
   }, 30000);
 });

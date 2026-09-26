@@ -8,20 +8,17 @@ import {
 } from "@/utils/discord/interactions/configRouteContext";
 import { resolvePersonaPanelCharacterReference } from "@/utils/discord/personaPanelCharacterReference";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
 function makePersona(): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_id: 55,
     persona_nickname: "Aphel",
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
-    physical_appearance_tags: [],
     nai_char_ref_url: "data/charreferences/personas/55/reference.png",
-  } as unknown as TomoriState;
+  });
 }
 
 function makeScope(persona: TomoriState): ConfigScope {

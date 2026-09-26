@@ -5,7 +5,7 @@ import { CooldownType } from "@/types/db/schema";
 import { getCachedPersonalSpotlightStatus } from "@/utils/cache/personalSpotlightCache";
 import { getCachedActiveBlocksForUser } from "@/utils/cache/personaUserBlockCache";
 import { getCachedWhitelistStatus } from "@/utils/cache/channelWhitelistCache";
-import { getCachedUserRow } from "@/utils/cache/userCache";
+import { getCachedBlacklistStatus, getCachedUserRow } from "@/utils/cache/userCache";
 import { getLastDbError } from "@/utils/cache/tomoriStateCache";
 import { cooldownRepository } from "@/utils/db/repositories/CooldownRepository";
 import { isPersonaAllowedForTrigger } from "@/utils/persona/personaAccess";
@@ -396,6 +396,7 @@ export async function evaluateChatAccess(params: {
 async function resolveBlockedPersonaIdsForTrigger(params: {
   isDMChannel: boolean;
   isStopResponse: boolean;
+  guildDiscId: string;
   serverId: number;
   fallbackUserDiscId: string;
   allPersonas: TomoriState[];
@@ -404,14 +405,21 @@ async function resolveBlockedPersonaIdsForTrigger(params: {
     return new Set();
   }
 
+  const knownPersonaIds = new Set(
+    params.allPersonas.flatMap((persona) => (typeof persona.persona_id === "number" ? [persona.persona_id] : [])),
+  );
+
+  // A server blacklist entry is a block on every persona, so every trigger path that already
+  // honours persona blocks refuses a blacklisted member without a separate check.
+  if (params.guildDiscId && (await getCachedBlacklistStatus(params.guildDiscId, params.fallbackUserDiscId))) {
+    return knownPersonaIds;
+  }
+
   const activeBlocks = await getCachedActiveBlocksForUser(params.serverId, params.fallbackUserDiscId);
   if (activeBlocks.length === 0) {
     return new Set();
   }
 
-  const knownPersonaIds = new Set(
-    params.allPersonas.flatMap((persona) => (typeof persona.persona_id === "number" ? [persona.persona_id] : [])),
-  );
   return new Set(
     activeBlocks
       .map((block) => block.persona_id)

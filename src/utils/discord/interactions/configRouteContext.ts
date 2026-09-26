@@ -265,7 +265,7 @@ export interface ConfigRouteDependencies {
   loadSwitchModelsView(
     state: TomoriState,
     workspaceDiscId: string,
-    providerPage: { capability: ConfigCatalogModelCapability; start: number } | undefined,
+    providerPage: ConfigSwitchModelsProviderPage | undefined,
     endpointPage?: ConfigEndpointPage,
     loadCapabilityEndpoints?: LoadConfigCapabilityEndpoints,
   ): Promise<ConfigSwitchModelsView>;

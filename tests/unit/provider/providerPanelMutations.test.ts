@@ -67,7 +67,9 @@ function dependencies(calls: string[]): AddServerProviderDependencies {
       calls.push("activate-text");
       return { status: "activated", modelName: "model-one" };
     },
-    refresh: () => calls.push("refresh"),
+    refresh: () => {
+      calls.push("refresh");
+    },
   };
 }
 
@@ -169,7 +171,9 @@ describe("provider panel mutations", () => {
         calls.push("upsert-config");
         return true;
       },
-      refresh: () => calls.push("refresh"),
+      refresh: () => {
+        calls.push("refresh");
+      },
     };
     const result = await addCustomEndpointConnection(
       {
@@ -231,7 +235,20 @@ describe("provider panel mutations", () => {
           calls.push("validate");
           return { ok: true };
         },
-      } as AddCustomEndpointConnectionDependencies,
+        upsertConnection: async () => null,
+        deleteConnections: async () => true,
+        encrypt: async () => ({ encrypted: Buffer.from(""), version: 1 }),
+        buildSavedConfig: async () =>
+          ({
+            server_id: 1,
+            provider: "unused",
+            api_key: null,
+            key_version: 1,
+            llm_id: null,
+          }) as SavedProviderConfigUpsert,
+        upsertSavedConfig: async () => true,
+        refresh: () => undefined,
+      },
     );
 
     expect(result).toEqual({ status: "label-url-conflict" });
@@ -251,7 +268,20 @@ describe("provider panel mutations", () => {
       {
         loadConnections: async () => [],
         validateReachability: async () => ({ ok: false, reason: "HTTP 404 Not Found" }),
-      } as AddCustomEndpointConnectionDependencies,
+        upsertConnection: async () => null,
+        deleteConnections: async () => true,
+        encrypt: async () => ({ encrypted: Buffer.from(""), version: 1 }),
+        buildSavedConfig: async () =>
+          ({
+            server_id: 1,
+            provider: "unused",
+            api_key: null,
+            key_version: 1,
+            llm_id: null,
+          }) as SavedProviderConfigUpsert,
+        upsertSavedConfig: async () => true,
+        refresh: () => undefined,
+      },
     );
 
     expect(result).toEqual({ status: "unreachable", reason: "HTTP 404 Not Found" });
@@ -273,7 +303,21 @@ describe("provider panel mutations", () => {
           calls.push("validate");
           return { ok: true };
         },
-      } as AddCustomEndpointConnectionDependencies,
+        upsertConnection: async () => null,
+        deleteConnections: async () => true,
+        loadConnections: async () => [],
+        encrypt: async () => ({ encrypted: Buffer.from(""), version: 1 }),
+        buildSavedConfig: async () =>
+          ({
+            server_id: 1,
+            provider: "unused",
+            api_key: null,
+            key_version: 1,
+            llm_id: null,
+          }) as SavedProviderConfigUpsert,
+        upsertSavedConfig: async () => true,
+        refresh: () => undefined,
+      },
     );
 
     expect(result).toEqual({ status: "invalid-style" });

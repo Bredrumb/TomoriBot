@@ -8,15 +8,17 @@
  * or permission default to either root would take DM support away from the members already there,
  * and nothing in check, lint, or check-locales would notice.
  *
- * Keep this file separate from the per-command registration tests the dissolution edits, so
- * command-surface changes cannot also own the assertions proving they left the roots' restrictions
- * alone.
+ * The members each root keeps are asserted elsewhere: /tool's by configRegistration.test.ts's
+ * RETAINED_KEYS_BY_ROOT, /generate's by dissolvedBotRegistration.test.ts.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
+
+/** The raw snake_case permission field the registration payload carries onto the wire. */
+type RegistrationRestrictions = { default_member_permissions?: string };
 
 describe("/tool and /generate root registration restrictions", () => {
   it("registers /tool with no contexts and no default_member_permissions", async () => {
@@ -25,7 +27,7 @@ describe("/tool and /generate root registration restrictions", () => {
 
     expect(tool).toBeDefined();
     expect(tool?.contexts).toBeUndefined();
-    expect(tool?.default_member_permissions).toBeUndefined();
+    expect((tool as unknown as RegistrationRestrictions | undefined)?.default_member_permissions).toBeUndefined();
   }, 30000);
 
   it("registers /generate with no contexts and no default_member_permissions", async () => {
@@ -34,21 +36,6 @@ describe("/tool and /generate root registration restrictions", () => {
 
     expect(generate).toBeDefined();
     expect(generate?.contexts).toBeUndefined();
-    expect(generate?.default_member_permissions).toBeUndefined();
-  }, 30000);
-
-  it("keeps the members that predate the dissolution reachable under both roots", async () => {
-    const { executionMap } = await loadCommandData();
-
-    const toolCommands = executionMap.get("tool");
-    expect(toolCommands).toBeDefined();
-    expect(toolCommands?.has("delete.turn")).toBe(true);
-    expect(toolCommands?.has("estimate.cost")).toBe(true);
-    expect(toolCommands?.has("prompt.snapshot")).toBe(true);
-
-    const generateCommands = executionMap.get("generate");
-    expect(generateCommands).toBeDefined();
-    expect(generateCommands?.has("image")).toBe(true);
-    expect(generateCommands?.has("video")).toBe(true);
+    expect((generate as unknown as RegistrationRestrictions | undefined)?.default_member_permissions).toBeUndefined();
   }, 30000);
 });

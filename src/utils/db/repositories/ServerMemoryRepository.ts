@@ -86,40 +86,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 
   /**
-   * Returns the set of persona lineage ids that have at least one server memory
-   * in the given server. Batched eligibility source for `/memories` picker
-   * filters: it reproduces exactly the filters `loadServerMemoriesScoped` applies
-   * (server scope, plus the optional owner filter) so the filtered picker and the
-   * loader always agree.
-   *
-   * @param userId   - If provided, restricts to memories owned by this user, so a
-   *                   manager and a non-manager can receive different eligible sets
-   *                   for the same command in the same guild.
-   * @returns Set of eligible `persona_lineage_id` values.
-   */
-  async lineageIdsWithServerMemories(serverId: number, userId?: number): Promise<Set<number>> {
-    try {
-      const rows =
-        userId !== undefined
-          ? await sql<Array<{ persona_lineage_id: number | string }>>`
-              SELECT DISTINCT persona_lineage_id
-              FROM server_memories
-              WHERE server_id = ${serverId}
-                AND user_id = ${userId}
-            `
-          : await sql<Array<{ persona_lineage_id: number | string }>>`
-              SELECT DISTINCT persona_lineage_id
-              FROM server_memories
-              WHERE server_id = ${serverId}
-            `;
-      return new Set(rows.map((row) => Number(row.persona_lineage_id)));
-    } catch (error) {
-      log.error(`Error loading lineage ids with server memories for server ${serverId}:`, error);
-      return new Set();
-    }
-  }
-
-  /**
    * Server memory count per persona lineage, for the panel's persona selector.
    *
    * Omits a lineage with no memories rather than mapping it to zero, matching
@@ -157,9 +123,8 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
    * Document count per persona, plus the serverwide scope's own count.
    *
    * Serverwide is a separate field because `persona_id IS NULL` is a real scope here with its own
-   * rows, and null cannot key a Map. Applies no `source_type` filter, matching `loadDocuments` and
-   * `personaIdsWithDocuments`, so a history-sourced document counts exactly as it does in the list
-   * the user is reading.
+   * rows, and null cannot key a Map. Applies no `source_type` filter, matching `loadDocuments`, so a
+   * history-sourced document counts exactly as it does in the list the user is reading.
    */
   async documentCountsByPersona(serverId: number): Promise<{ byPersona: Map<number, number>; serverwide: number }> {
     try {
@@ -608,31 +573,6 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 
   /**
-   * Returns the set of persona ids that own at least one document in the given
-   * server. Batched eligibility source for the persona-scoped `/memories` (Documents)
-   * picker filters. Mirrors `loadDocuments` for persona scope, which deliberately
-   * applies **no** `source_type` filter: history-sourced documents count here
-   * exactly as they do in that loader. Serverwide documents (`persona_id IS NULL`)
-   * are excluded because the persona picker only concerns persona-owned rows.
-   *
-   * @returns Set of eligible `persona_id` values.
-   */
-  async personaIdsWithDocuments(serverId: number): Promise<Set<number>> {
-    try {
-      const rows = await sql<Array<{ persona_id: number | string }>>`
-        SELECT DISTINCT persona_id
-        FROM documents
-        WHERE server_id = ${serverId}
-          AND persona_id IS NOT NULL
-      `;
-      return new Set(rows.map((row) => Number(row.persona_id)));
-    } catch (error) {
-      log.error(`Error loading persona ids with documents for server ${serverId}:`, error);
-      return new Set();
-    }
-  }
-
-  /**
    * Delete a document (chunks cascade-delete via FK).
    *
    * @param serverId   - Internal server DB ID (ownership guard)
@@ -865,14 +805,12 @@ class ServerMemoryRepository implements IRepository<ServerMemoryExportShape> {
   }
 
   /**
-   * Returns the set of persona ids that own at least one history-sourced document
-   * in the given server. Batched eligibility source for the persona-scoped
-   * `/memory history` picker filter. Reproduces the `source_type = 'history'`
-   * filter `loadHistoryDocuments` applies, so a persona that has upload documents
-   * but no history documents is correctly excluded here even though it appears in
-   * {@link personaIdsWithDocuments}.
+   * Returns the set of persona ids that own at least one history-sourced document in the given
+   * server, for the Documents page's per-persona history marker. Reproduces the
+   * `source_type = 'history'` filter `loadHistoryDocuments` applies, so a persona with only
+   * uploaded documents is excluded.
    *
-   * @returns Set of eligible `persona_id` values.
+   * @returns Set of `persona_id` values with history documents.
    */
   async personaIdsWithHistoryDocuments(serverId: number): Promise<Set<number>> {
     try {

@@ -110,20 +110,20 @@ describe("contribution registry kernel", () => {
   });
 
   it("aborts an optional contribution at its bounded timeout", async () => {
-    let signal: AbortSignal | null = null;
+    const captured: { signal: AbortSignal | null } = { signal: null };
     const result = await executeContribution<readonly string[]>({
       descriptor: descriptor("slow"),
       timeoutMs: 5,
       outputCount: (output) => output.length,
       run: (abortSignal) => {
-        signal = abortSignal;
+        captured.signal = abortSignal;
         return new Promise(() => undefined);
       },
     });
 
     expect(result.value).toBeNull();
     expect(result.diagnostic.status).toBe("timed_out");
-    expect(signal?.aborted).toBe(true);
+    expect(captured.signal?.aborted).toBe(true);
   });
 });
 

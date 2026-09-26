@@ -557,7 +557,7 @@ Rules:
 
 **`>25`-option selector style (pre-anchor).** This applies to callers still on
 `promptWithPaginatedModal(...)`. Commands migrated to the anchor message workflow
-(Pattern 4A/4B) never set `selectorStyle`: their `>25` handling is chosen for them by the
+(Pattern 4A) never set `selectorStyle`: their `>25` handling is chosen for them by the
 engine's range-selector bridge, which always renders the Components V2 selector.
 
 `promptWithPaginatedModal(...)` accepts an optional
@@ -583,7 +583,7 @@ deferred/replied **legacy** message, since Discord cannot convert a legacy reply
 
 ### Pattern 4A: Anchor Message Workflow (persona picker)
 
-The **anchor message workflow** is the engine behind Patterns 4A and 4B. Its rule: one
+The **anchor message workflow** is the engine behind Pattern 4A. Its rule: one
 command invocation owns exactly **one** ephemeral message, edited in place through every
 stage: picker, `>25` range selector, modal, progress, and terminal result. Opening a modal
 is an acknowledgment, not a second message.
@@ -593,17 +593,6 @@ opens a modal and leaves its picker message behind therefore strands dead-but-cl
 buttons ("This interaction failed") until the modal's timeout. Rendering everything on one
 message makes that orphan impossible by construction, and *collapse-at-open* swaps the live
 controls for an inert notice the instant the modal opens.
-
-Two specializations share the engine:
-
-- **Pattern 4A** (below): the persona picker, via `runPersonaPickerWorkflow`.
-- **Pattern 4B**: one-shot picker → modal config commands, via
-  `beginAnchorPrivateWorkflow` plus the shared helpers in `anchorModelFlow.ts`.
-
-Non-persona callers import the engine from `src/utils/discord/ui/anchorWorkflow.ts`,
-which also exports neutral `Anchor*` aliases for the generic types. The implementation
-itself lives in `personaWorkflow.ts`, alongside the persona specialization it shares its
-internals with.
 
 Commands that begin with a persona picker use the single command-facing entry point in
 `src/utils/discord/ui/personaWorkflow.ts`:
@@ -630,10 +619,8 @@ results may also include the causal error.
 `AvatarSessionCache` for the complete invocation. Callers return
 `completePersonaWorkflow(value)` or `retryPersonaWorkflow(updatedPersonas?)`; they do not
 write their own outer picker loop. Picker outcomes remain discriminated as `selected`,
-`cancelled`, `timeout`, `empty`, `error`, and `fatal`. A fatal picker result exits before
-`onSelected` runs, so it cannot enter the retry path. The `empty` outcome
-(see the eligibility section) is a terminal state distinct from all others and is never
-retried.
+`cancelled`, `timeout`, `error`, and `fatal`. A fatal picker result exits before
+`onSelected` runs, so it cannot enter the retry path.
 
 Classify collector expiry with `isCollectorTimeoutError(error)` from `interactionCore`,
 never with a bare `error === "time"` check. discord.js uses two rejection shapes for the
@@ -644,119 +631,6 @@ same event: raw collectors reject with the end-reason string (`"time"` / `"idle"
 present as `fatal` with the generic unknown-error copy instead of the timeout notice. Other
 end reasons (`limit`, `messageDelete`) and dead-token errors are genuine failures and must
 stay classified as `error`/`fatal`.
-
-#### Eligibility filtering (item-scoped `remove` / `edit` / `view`)
-
-Item-scoped commands should only offer personas they can actually act on. Supplying an
-optional `eligibility` object to `runPersonaPickerWorkflow(...)` makes the picker show only
-qualifying personas, disclose that it is filtered, and reach a terminal `empty` outcome
-instead of ever rendering a zero-persona picker.
-
-```ts
-export interface PersonaWorkflowEligibility<TPersona extends TomoriState> {
-  isEligible: (persona: TPersona) => boolean; // synchronous — never per-persona queries
-  emptyTitleKey: string; // terminal state when no persona qualifies
-  emptyDescriptionKey: string;
-  itemsLabelKey: string; // bare item noun, interpolated into the shared filtered notice
-}
-```
-
-Rules:
-
-- **Filtering is a UX layer, never the correctness layer.** Every migrated command keeps its
-  existing post-selection emptiness guard as a concurrency backstop; the guard and the filter
-  must call the *same* predicate so they can never disagree. Shared predicates live in
-  `src/utils/discord/ui/personaEligibility.ts`.
-- **Filter only `remove` / `edit` / `view` verbs.** `add` / `set` / `assign` must always list
-  every persona and must not receive an `eligibility` object.
-- **`isEligible` is synchronous.** Class B commands resolve one batched query per invocation
-  into a `Set` of eligible keys and close over it (`personaIdIsEligible(set)` /
-  `lineageIdIsEligible(set)`); they never issue a query per persona.
-- **Refresh the set for mid-loop drains.** When a retry loop deletes items, refresh the
-  closed-over set in place with `refreshEligibilitySet(set, freshSet)` after each successful
-  write so a persona whose last item was removed drops out on the next retry and the last
-  such removal reaches the `empty` terminal state on the anchor message.
-- The caller renders its own pre-picker empty notice on its deferred reply (it already
-  computes the eligible set for its own guard) and returns before calling the workflow. The
-  workflow renders the `empty` terminal state in place only for the mid-loop case.
-
-##### Grouping Key Contract (Class B)
-
-Batched availability queries must key on the same column the loader keys on and reproduce
-every filter the loader applies:
-
-| Family | Loader | Grouping key | Extra filters to reproduce |
-|---|---|---|---|
-| Documents | `serverMemoryRepository.loadDocuments` | `documents.persona_id` | `server_id`; **no** `source_type` filter (history docs count too) |
-| History documents | `serverMemoryRepository.loadHistoryDocuments` | `documents.persona_id` | `server_id` **and** `source_type = 'history'` |
-| Server memories | `serverMemoryRepository.loadServerMemoriesScoped` | `server_memories.persona_lineage_id` | `server_id`, plus optional `user_id` (permission-dependent) |
-| Personal memories | `personalMemoryRepository.loadForUserLineage` | `personal_memories.persona_lineage_id` | `user_id`; lineage `0` excluded so a global memory never marks a specific persona eligible |
-| Sprites | `personaSpriteRepository.listForPersona` | **not** `persona_id` | resolves preset pointers first: a pointer persona has zero `persona_sprites` rows yet still has sprites, so a bare `GROUP BY persona_id` is wrong; reproduce the numeric `sprite_id` narrowing |
-
-Two traps are worth stating explicitly:
-
-- **Permission-dependent eligibility.** `/memories` Server category operations
-  scope their loads by `hasManagePermission ? undefined : userData.user_id`. The batched
-  availability query takes the same optional `userId`, so a manager and a non-manager can see
-  different eligible sets for the same command in the same guild.
-- **Sprite pointer trap.** `personaSpriteRepository.personaIdsWithSprites(personaIds)`
-  resolves pointers in bulk (own rows for materialized personas, shared `preset_sprites` for
-  live pointer personas); it must not be reduced to a `GROUP BY persona_id` over
-  `persona_sprites`.
-
-##### Class A example (field-backed predicate, no query)
-
-```ts
-import { hasAttributes } from "@/utils/discord/ui/personaEligibility";
-
-const eligible = allPersonas.filter(hasAttributes);
-if (eligible.length === 0) {
-  await replyInfoEmbed(interaction, locale, {
-    titleKey: "general.pagination.select_persona_title",
-    descriptionKey: "general.pagination.persona_no_attributes",
-    color: ColorCode.WARN,
-    flags: MessageFlags.Ephemeral,
-  });
-  return;
-}
-
-await runPersonaPickerWorkflow(interaction, locale, {
-  personas: allPersonas, // full list — the workflow filters for display
-  eligibility: {
-    isEligible: hasAttributes,
-    emptyTitleKey: "general.pagination.select_persona_title",
-    emptyDescriptionKey: "general.pagination.persona_no_attributes",
-    itemsLabelKey: "general.persona_workflow.items.attributes",
-  },
-  onSelected: async (selection) => {
-    if (!hasAttributes(selection.persona)) return retryPersonaWorkflow(); // backstop
-    // ...perform the acknowledged transaction...
-    return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
-  },
-});
-```
-
-##### Class B example (batched query + refreshed set)
-
-```ts
-import { personaIdIsEligible, refreshEligibilitySet } from "@/utils/discord/ui/personaEligibility";
-
-const eligibleIds = await serverMemoryRepository.personaIdsWithDocuments(serverId);
-const isEligible = personaIdIsEligible(eligibleIds);
-if (allPersonas.filter(isEligible).length === 0) {
-  /* render pre-picker empty notice and return */
-}
-
-await runPersonaPickerWorkflow(interaction, locale, {
-  personas: allPersonas,
-  eligibility: { isEligible, emptyTitleKey, emptyDescriptionKey, itemsLabelKey },
-  onSelected: async (selection) => {
-    // ...remove one document (post-selection load stays the backstop)...
-    await refreshEligibilitySet(eligibleIds, serverMemoryRepository.personaIdsWithDocuments(serverId));
-    return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
-  },
-});
-```
 
 Every same-visibility workflow owns one anchor ephemeral Components V2 message. Its
 message ID is exposed as `selection.message.anchorMessageId` and must remain unchanged
@@ -1041,60 +915,6 @@ must include all of the following:
 3. An update to this section documenting why the workflow API could not express the case.
 
 An exception must never weaken the repository-wide scanner or add a directory-wide bypass.
-
-### Pattern 4B: Anchor One-Shot Picker -> Modal
-
-Use for a config command shaped *pick a provider -> choose a value in a modal -> show the
-result*. The whole `/model *` family is built
-this way, plus `/config` > Models > Fallbacks & Randomizer.
-
-The command expresses only business intent: which model table to read, which column to
-write, which terminal copy to show. All lifecycle branching lives in the shared helpers in
-`src/utils/discord/ui/anchorModelFlow.ts`:
-
-```ts
-const initialPayload =
-  savedProviders.length === 0
-    ? buildNoProvidersPayload(locale, "personal")
-    : savedProviders.length === 1
-      ? buildOpenSelectorPayload(locale, `${ID_ROOT}_open`)
-      : buildProviderPickerPayload(locale, ID_ROOT, providers, currentSelections);
-
-const phase = await beginAnchorPrivateWorkflow(interaction, locale, initialPayload);
-anchorMessage = phase.message;                        // for the outer catch
-if (savedProviders.length === 0) return;
-
-const opener = await acquireModelModalOpener(phase, userId, locale, savedProviders, ID_ROOT);
-if (!opener) return;                                     // cancel/timeout already rendered
-
-const modalPhase = await openAnchorModal(phase, opener.button, locale, modalOptions);
-if (!modalPhase) return;                                 // dismiss/cancel already rendered
-
-const work = await modalPhase.beginInPlaceWork();        // acks the submit within 3s
-await work.message.replace(terminalPayload);             // terminal lands on the same message
-```
-
-Rules:
-
-- **Never** call `promptForSavedProvider`, `promptWithPaginatedModal`, `promptWithRawModal`,
-  or `replaceProviderPickerWithInfo` from a file that uses this pattern. List the file in
-  `MIGRATED_ANCHOR_CALLERS`; the audit in
-  `tests/unit/commands/anchorMigrationLockdown.test.ts` then fails the build if one of
-  those primitives reappears in it.
-- Every terminal (success, validation failure, write failure, and the outer `catch`)
-  renders through `work.message.replace(...)` or the tracked `anchorMessage`, never
-  `replyInfoEmbed`. Absence of the banned primitives is what transitively guarantees this.
-- `>25` options need no caller handling: `openAnchorModal` routes through the engine's
-  range-selector bridge automatically.
-- Single-provider flows still show an explicit "open selector" button. A modal must open from
-  an interaction the controller owns, so the slash command cannot open it directly.
-
-**When the bridge does not fit.** The bridge slices exactly one select component and assumes
-every entry is a selectable option. `/config` > Models > Fallbacks & Randomizer violates both: five selects over one
-shared option list, with one entry per page reserved for an explicit "None" choice. Such a
-command picks its range on the anchor message first via `acquireModalOptionRange(...)`
-(passing a `pageSize` below 25 to reserve entries), then hands `openAnchorModal` an
-already-sliced `<=25` list, which opens directly.
 
 ### Pattern 5: Manual Deferral Timing
 

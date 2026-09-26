@@ -37,17 +37,7 @@ describe("/moderation registration restrictions", () => {
 
     expect(moderation.contexts).toEqual([0]);
     expect(moderation.default_member_permissions).toBe(String(PermissionsBitField.Flags.ManageGuild));
-    // Quotas moved into this panel as a page, not as a subcommand, so the root stays bare.
+    // Quotas and the member server-model policy are panel pages, not subcommands, so the root stays bare.
     expect([...(executionMap.get("moderation")?.keys() ?? [])]).toEqual([ROOT_COMMAND_EXECUTION_KEY]);
-  });
-
-  it("dissolves the member server-model policy leaf into the panel", async () => {
-    const { executionMap, registrationData } = await loadCommandData();
-
-    // The destination stays a bare root: the policy is a panel action, never a subcommand.
-    expect([...(executionMap.get("moderation")?.keys() ?? [])]).toEqual([ROOT_COMMAND_EXECUTION_KEY]);
-    expect(findRegistration(registrationData, "moderation")?.default_member_permissions).toBe(
-      String(PermissionsBitField.Flags.ManageGuild),
-    );
   });
 });

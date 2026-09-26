@@ -62,22 +62,6 @@
       modal_ready_title: `続行できます`,
       modal_ready_description: `フォームを開いて、選択内容の設定を続けてください。`,
       open_modal_button: `フォームを開く`,
-      // 動詞に依存しない共通のフィルター通知文。下の名詞が差し込まれるため、
-      // 各機能の remove / edit では同じ文を再利用する。
-      filtered_notice: `{items}があるペルソナのみ表示しています。`,
-      items: {
-        attributes: `属性`,
-        sample_dialogues: `サンプル会話`,
-        trigger_words: `トリガーワード`,
-        persona_prompts: `ペルソナプロンプト`,
-        voice_designs: `ボイスデザイン`,
-        documents: `ドキュメント`,
-        chat_history: `チャット履歴`,
-        server_memories: `サーバーの記憶`,
-        personal_memories: `個人の記憶`,
-        short_term_memories: `短期記憶`,
-        sprites: `スプライト`,
-      },
     },
     errors: {
       outdated_panel: `このパネルは古くなっています。{command} をもう一度実行してください。`,
@@ -98,6 +82,9 @@
       api_key_error_description: `設定されたプロバイダー認証情報へのアクセスまたは復号化で問題が発生しました。\`/providers\`で再設定してください。`,
       database_unavailable_title: `データベースに接続できません`,
       database_unavailable_description: `ただいまデータベースに接続できず、このサーバーの設定を読み取れませんでした。故障ではなく、設定が変更されたわけでもありません。少し時間をおいてからもう一度お試しください。`,
+      blacklisted_title: "ブラックリストに登録されています",
+      blacklisted_description:
+        "サーバー管理者によってこのサーバーのブラックリストに登録されているため、ここではあなたに応答せず、このコマンドも実行しません。",
       personal_provider_required_title: `個人プロバイダーが必要です`,
       personal_provider_required_description: `まず \`/personal providers\` でプロバイダーを設定し、次に \`/personal config\` でテキスト返信用に選択してください。このサーバーでは、ユーザーが発言したメッセージに対してメンバー自身のAIプロバイダー設定を使用しています。手順が必要な場合は \`/help\` の **機能** から **個人プロバイダー** を確認してください。`,
       personal_provider_credentials_error_title: `個人プロバイダーエラー`,

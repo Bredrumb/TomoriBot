@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { ComponentType, type StringSelectMenuComponentData } from "discord.js";
-import type { TomoriState, UserRow, UserSavedProviderConfigRow } from "@/types/db/schema";
-import { PrivacyLevel } from "@/types/db/schema";
+import type { UserRow, UserSavedProviderConfigRow } from "@/types/db/schema";
 import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
 import {
   SPOTLIGHT_REMOVE_PAGE_SIZE,
@@ -11,7 +10,7 @@ import {
   type PersonalConfigManagedCapability,
   type PersonalConfigPage,
 } from "@/utils/discord/personalConfigPanelCatalog";
-import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
+import type { PersonalSpotlightStatus } from "@/utils/db/repositories/UserRepository";
 import {
   buildPersonalConfigPanelPayload,
   type PersonalConfigModelDisplayInfo,
@@ -21,7 +20,9 @@ import {
   type PersonalConfigSpotlightDisplayInfo,
 } from "@/utils/discord/ui/personalConfigPanel";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { createPersona, createUserRow, type UserFixtureOverrides } from "../../helpers/fixtures";
 import { RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -33,38 +34,24 @@ const REALISTIC_RECEIPT: PanelReceipt = {
   metadata: "trace: pcfg-op-789012 | user: 123456789012345678 | latency: 29ms",
 };
 
-function makeUser(overrides: Partial<UserRow> = {}): UserRow {
-  return {
-    user_id: 1,
-    user_disc_id: "user-123",
-    user_name: "testuser",
-    user_nickname: "Test User",
-    prefix_override: "!",
-    suffix_override: "~",
-    gender_identity: "non-binary",
-    pronouns: "they/them",
-    addressing_style: "casual",
-    language_pref: "en-US",
-    timezone_offset: 540,
-    physical_appearance_tags: ["tall", "glasses"],
-    privacy_level: PrivacyLevel.MINIMAL,
-    shortterm_cache_crossserver_opt_in: false,
-    impersonation_prompt: "A helpful and kind companion",
-    created_at: new Date(),
-    updated_at: new Date(),
-    ...overrides,
-  } as unknown as UserRow;
-}
+/** Every identity field the personal config panel renders, so the sweep sees a fully populated user. */
+const USER_OVERRIDES: UserFixtureOverrides = {
+  user_disc_id: "user-123",
+  user_nickname: "Test User",
+  prefix_override: "!",
+  suffix_override: "~",
+  gender_identity: "non-binary",
+  pronouns: "they/them",
+  addressing_style: "neutral",
+  timezone_offset: 540,
+  physical_appearance_tags: ["tall", "glasses"],
+  impersonation_prompt: "A helpful and kind companion",
+};
 
-function makePersona(id: number, lineageId: number, name: string): TomoriState {
-  return {
-    persona_id: id,
-    persona_lineage_id: lineageId,
-    persona_nickname: name,
-    is_alter: false,
-    server_id: 1,
-  } as unknown as TomoriState;
-}
+const USER: UserRow = createUserRow(USER_OVERRIDES);
+
+/** The single persona every case renders against. */
+const MAIN_PERSONA = createPersona({ persona_id: 1, persona_lineage_id: 10, persona_nickname: "Tomori" });
 
 function makeModelDisplayInfo(fallbackCount = 2, providerCount = 1): PersonalConfigModelDisplayInfo {
   const routingRow: PersonalConfigRoutingRow = {
@@ -129,11 +116,15 @@ function makeSpotlightDisplayInfo(activeCount = 2, personaCount = 5): PersonalCo
     name: `Persona ${i + 1}`,
     isAlter: false,
   }));
-  const activeSpotlights = Array.from({ length: activeCount }, (_, i) => ({
+  const activeSpotlights: PersonalSpotlightStatus[] = Array.from({ length: activeCount }, (_, i) => ({
+    serverId: 1,
+    userId: 1,
     channelDiscId: `12345678901234567${i}`,
     personaIds: [personas[0]?.id ?? 1],
     autoTriggerPersonaId: personas[0]?.id ?? 1,
     expiresAt: new Date(Date.now() + 3600 * 1000 * (i + 1)),
+    createdAt: null,
+    updatedAt: null,
   }));
   return { activeSpotlights, personas };
 }
@@ -148,20 +139,6 @@ function collectSelects(value: unknown): StringSelectMenuComponentData[] {
   }
   if (Array.isArray(record.components)) {
     list.push(...collectSelects(record.components));
-  }
-  return list;
-}
-
-function collectTextContents(value: unknown): string[] {
-  if (Array.isArray(value)) return value.flatMap(collectTextContents);
-  if (typeof value !== "object" || value === null) return [];
-  const record = value as Record<string, unknown>;
-  const list: string[] = [];
-  if (record.type === ComponentType.TextDisplay && typeof record.content === "string") {
-    list.push(record.content);
-  }
-  if (Array.isArray(record.components)) {
-    list.push(...collectTextContents(record.components));
   }
   return list;
 }
@@ -183,7 +160,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
     for (const locale of RUNTIME_LOCALES) {
       for (const receipt of receipts) {
         for (const readStatus of readStatuses) {
-          const user = makeUser();
+          const user = USER;
 
           for (const category of categories) {
             for (const page of pagesByCategory[category]) {
@@ -193,7 +170,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
                 page,
                 user,
                 resolvedNickname: "Tester",
-                personas: [makePersona(1, 10, "Tomori")],
+                personas: [MAIN_PERSONA],
                 guildId: "guild-123",
                 memoryCount: 5,
                 stmCount: 2,
@@ -202,19 +179,17 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
                 modelDisplayInfo: makeModelDisplayInfo(3),
                 spotlightDisplayInfo: makeSpotlightDisplayInfo(2, 5),
               };
-              const payload = buildPersonalConfigPanelPayload(input);
-              const result = validateComponentsV2MessageLimits(payload);
-              if (!result.valid) {
-                throw new Error(
-                  `PersonalConfig main (${category}/${page}, locale: ${locale}, status: ${readStatus}) violations: ${JSON.stringify(result.violations)}`,
-                );
-              }
-              expect(result.valid).toBe(true);
+              expectSafePanelPayload(
+                buildPersonalConfigPanelPayload(input),
+                `PersonalConfig main/${category}/${page}/${locale}/${readStatus}`,
+              );
             }
           }
 
           for (const pSize of personaSizes) {
-            const personas = Array.from({ length: pSize }, (_, i) => makePersona(i + 1, 100 + i, `Persona ${i + 1}`));
+            const personas = Array.from({ length: pSize }, (_, i) =>
+              createPersona({ persona_id: i + 1, persona_lineage_id: 100 + i, persona_nickname: `Persona ${i + 1}` }),
+            );
             const input: PersonalConfigPanelRenderInput = {
               locale,
               category: "profile",
@@ -228,14 +203,10 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
               readStatus,
               receipt,
             };
-            const payload = buildPersonalConfigPanelPayload(input);
-            const result = validateComponentsV2MessageLimits(payload);
-            if (!result.valid) {
-              throw new Error(
-                `PersonalConfig persona size sweep (pSize: ${pSize}) violations: ${JSON.stringify(result.violations)}`,
-              );
-            }
-            expect(result.valid).toBe(true);
+            expectSafePanelPayload(
+              buildPersonalConfigPanelPayload(input),
+              `PersonalConfig persona sizes/${locale}/${readStatus}/pSize-${pSize}`,
+            );
           }
 
           const subviews: Exclude<PersonalConfigPanelView, { kind: "main" }>[] = [
@@ -285,7 +256,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
               page: "spotlight",
               user,
               resolvedNickname: "Tester",
-              personas: [makePersona(1, 10, "Tomori")],
+              personas: [MAIN_PERSONA],
               guildId: "guild-123",
               memoryCount: 0,
               stmCount: 0,
@@ -294,12 +265,10 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
               view,
               spotlightDisplayInfo: makeSpotlightDisplayInfo(2, 10),
             };
-            const payload = buildPersonalConfigPanelPayload(input);
-            const result = validateComponentsV2MessageLimits(payload);
-            if (!result.valid) {
-              throw new Error(`PersonalConfig subview ${view.kind} violations: ${JSON.stringify(result.violations)}`);
-            }
-            expect(result.valid).toBe(true);
+            expectSafePanelPayload(
+              buildPersonalConfigPanelPayload(input),
+              `PersonalConfig subview/${view.kind}/${locale}/${readStatus}`,
+            );
           }
         }
       }
@@ -312,7 +281,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
       locale: "en-US",
       category: "advanced",
       page: "spotlight",
-      user: makeUser(),
+      user: USER,
       resolvedNickname: "Tester",
       personas: [],
       guildId: "guild-123",
@@ -339,13 +308,13 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
 
     const overflowPersonaCount = 26; // > PERSONA_SELECT_MAX_OPTIONS (25)
     const personas = Array.from({ length: overflowPersonaCount }, (_, i) =>
-      makePersona(i + 1, 1000 + i, `Persona ${i + 1}`),
+      createPersona({ persona_id: i + 1, persona_lineage_id: 1000 + i, persona_nickname: `Persona ${i + 1}` }),
     );
     const personaInput: PersonalConfigPanelRenderInput = {
       locale: "en-US",
       category: "profile",
       page: "persona",
-      user: makeUser(),
+      user: USER,
       resolvedNickname: "Tester",
       personas,
       guildId: "guild-123",
@@ -361,7 +330,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
     expect(personaSelect?.options.length).toBe(25);
 
     // Verify hidden count text display exists
-    const texts = collectTextContents(personaPayload.components);
+    const texts = collectTextDisplays(personaPayload);
     const hasHiddenNotice = texts.some((content) => content.includes("1"));
     expect(hasHiddenNotice).toBe(true);
   });
@@ -378,9 +347,9 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
             locale: "en-US",
             category: "models",
             page: "switch",
-            user: makeUser(),
+            user: USER,
             resolvedNickname: "Tester",
-            personas: [makePersona(1, 10, "Tomori")],
+            personas: [MAIN_PERSONA],
             guildId: "guild-123",
             memoryCount: 5,
             stmCount: 2,
@@ -388,14 +357,10 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
             receipt,
             modelDisplayInfo: makeModelDisplayInfo(2, providerCount),
           };
-          const payload = buildPersonalConfigPanelPayload(input);
-          const result = validateComponentsV2MessageLimits(payload);
-          if (!result.valid) {
-            throw new Error(
-              `PersonalConfig models/switch (providerCount: ${providerCount}, status: ${readStatus}, receipt: ${Boolean(receipt)}) violations: ${JSON.stringify(result.violations)}`,
-            );
-          }
-          expect(result.valid).toBe(true);
+          expectSafePanelPayload(
+            buildPersonalConfigPanelPayload(input),
+            `PersonalConfig models/switch/${providerCount}/${readStatus}/receipt=${Boolean(receipt)}`,
+          );
         }
       }
     }
@@ -406,9 +371,9 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
       locale: "en-US",
       category: "models",
       page: "switch",
-      user: makeUser(),
+      user: USER,
       resolvedNickname: "Tester",
-      personas: [makePersona(1, 10, "Tomori")],
+      personas: [MAIN_PERSONA],
       guildId: "guild-123",
       memoryCount: 5,
       stmCount: 2,
@@ -417,7 +382,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
     };
 
     const payload = buildPersonalConfigPanelPayload(input);
-    const texts = collectTextContents(payload.components);
+    const texts = collectTextDisplays(payload);
 
     expect(texts).toContain("-# Server-wide TTS/STT: `/config` > Models > Switch Models.");
   });
@@ -446,9 +411,9 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
         locale: "en-US",
         category: "models",
         page: "switch",
-        user: makeUser(),
+        user: USER,
         resolvedNickname: "Tester",
-        personas: [makePersona(1, 10, "Tomori")],
+        personas: [MAIN_PERSONA],
         guildId: "guild-123",
         memoryCount: 0,
         stmCount: 0,
@@ -459,8 +424,7 @@ describe("PersonalConfigPanel Limits & Boundary Sweeps", () => {
       };
 
       const payload = buildPersonalConfigPanelPayload(input);
-      const validation = validateComponentsV2MessageLimits(payload);
-      expect(validation.valid).toBe(true);
+      expectSafePanelPayload(payload, `PersonalConfig provider walk/${providerStart}`);
 
       const selects = collectSelects(payload.components);
       const textSelect = selects.find((s) => s.customId?.endsWith(":model-provider-select:en-US:text"));

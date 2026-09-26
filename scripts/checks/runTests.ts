@@ -343,9 +343,11 @@ async function runTestFiles(
 }
 
 async function main(): Promise<void> {
-  if (process.env.RUN_ENV === "production") {
-    throw new Error("[test-runner] Refusing to run with RUN_ENV=production.");
-  }
+  // Suites assume the self-hosted branch, and a workstation `.env` may be production-shaped to exercise
+  // hosted-only flows by hand. Pinning here instead of refusing keeps `bun run test` working as typed;
+  // `isLocalHost` is what keeps a production database out of reach, not this.
+  process.env.RUN_ENV = "development";
+  delete process.env.TEST_PRODUCTION;
 
   const requestedFiles = process.argv.slice(2).filter((argument) => !argument.startsWith("--"));
   const testFiles = requestedFiles.length > 0 ? requestedFiles : await discoverTestFiles();

@@ -105,6 +105,7 @@ Testing your changes:
 - [`contributing/testing/db-changes.md`](./en/contributing/testing/db-changes)
 - [`contributing/testing/chat-changes.md`](./en/contributing/testing/chat-changes)
 - [`contributing/testing/module-mocks.md`](./en/contributing/testing/module-mocks): leak-safe Bun module mocks
+- [`contributing/testing/maintainable-tests.md`](./en/contributing/testing/maintainable-tests): test patterns to avoid, with the reason for each
 
 ## Architecture (order 5)
 

@@ -2,8 +2,10 @@
  * `/bot respond` became the bare root `/respond`. `bot` sits in neither restriction list, so the
  * move must add no restriction, and the old leaf must be gone rather than coexisting.
  *
- * All three relocated namespaces must resolve in both locales, asserting the returned string is not
- * its own key path.
+ * The relocated namespaces must resolve, asserting the returned string is not its own key path.
+ * Only en-US is checked because `localizer` falls back to en-US per key, so any other locale passes
+ * whenever en-US does. `/bot` itself is asserted gone by dissolvedBotRegistration.test.ts, and the
+ * command description by commandDescriptionRegistration.test.ts.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
@@ -36,25 +38,14 @@ describe("/respond registration", () => {
     expect(executionMap.get("respond")?.has(ROOT_COMMAND_EXECUTION_KEY)).toBe(true);
   }, 30000);
 
-  it("ensures /bot no longer exists", async () => {
-    const { executionMap } = await loadCommandData();
-    const botCommands = executionMap.get("bot");
-    expect(botCommands).toBeUndefined();
-  }, 30000);
-
-  it("resolves all three relocated namespaces in both locales", async () => {
-    const testKeys = [
-      "commands.respond.description",
+  it("resolves the relocated namespaces", () => {
+    for (const key of [
       "general.errors.channel_missing_permissions_title",
       "commands.shared.persona_select.main_persona_description",
-    ];
-
-    for (const locale of ["en-US", "ja"]) {
-      for (const key of testKeys) {
-        const text = localizer(locale, key);
-        expect(text).not.toBe(key);
-        expect(text.length).toBeGreaterThan(0);
-      }
+    ]) {
+      const text = localizer("en-US", key);
+      expect(text).not.toBe(key);
+      expect(text.length).toBeGreaterThan(0);
     }
-  }, 30000);
+  });
 });

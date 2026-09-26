@@ -426,7 +426,9 @@ function renderMemoryBlock(locale: string, content: string, availableBudget: num
   const footerKey = textPreviewFooterKey(initialPreview);
   const footerVars = textPreviewFooterVars(initialPreview, locale);
   const initialFooter = footerKey ? `\n-# ${localizer(locale, footerKey, footerVars)}` : "";
-  const footerReserve = getDiscordTextLength(initialFooter);
+  // The panel boundary wraps prose after this block is built, and each wrapped `-# ` line gains its own
+  // prefix, so reserving the unwrapped length overflows the text-display cap whenever the footer wraps.
+  const footerReserve = measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content: initialFooter });
   const refinedBudget = Math.max(0, availableBudget - fenceOverhead - footerReserve);
   const preview = buildTextPreview(content, refinedBudget);
   const finalFooterKey = textPreviewFooterKey(preview);

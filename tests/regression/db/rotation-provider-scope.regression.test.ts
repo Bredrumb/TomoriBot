@@ -1,12 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import {
-  addRotationKey,
-  getRotationKeyCountForProvider,
-  isRotationActiveForProvider,
-  loadRotationKeysForProvider,
-} from "@/utils/security/keyRotation";
+import { addRotationKey, getRotationKeyCountForProvider } from "@/utils/security/keyRotation";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -45,12 +40,6 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Provider-scoped key rotation (Migration C)
 
     expect(await getRotationKeyCountForProvider(serverId, "GOOGLE")).toBe(1);
     expect(await getRotationKeyCountForProvider(serverId, "openrouter")).toBe(1);
-    expect(await isRotationActiveForProvider(serverId, "google")).toBe(true);
-    expect(await isRotationActiveForProvider(serverId, "openrouter")).toBe(true);
-    expect((await loadRotationKeysForProvider(serverId, "google")).map((row) => row.provider)).toEqual([
-      "google",
-      "google",
-    ]);
 
     const [beforeDown] = await testSql<[{ count: string }]>`
       SELECT COUNT(*) AS count FROM api_key_rotation

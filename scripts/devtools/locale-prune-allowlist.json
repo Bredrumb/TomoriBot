@@ -3,33 +3,15 @@
   "preservedPrefixes": [
     "commands.personal.deliberatetriggermode",
     "commands.personal.deliberatetoolmode",
-    "commands.personal.custom_models.remove",
-    "commands.config.custom_models.remove",
-    "commands.config.custom_models.capability_modal",
-    "commands.openrouter.models.remove",
-    "commands.help.speech",
-    "commands.help.transcription",
-    "commands.config.thinking-level",
-    "commands.personal.provider",
-    "commands.server.deliberate-tool-trigger",
     "genai.google",
     "genai.novelai"
   ],
   "preservedKeys": ["commands.config.cooldown.type.choice_strict_server_wide"],
   "_notes": {
-    "commands.personal.deliberatetriggermode": "Dynamic ${selectedMode}_title|description via getString('mode'); selectedMode flows through getString return value the scanner can't follow.",
-    "commands.personal.deliberatetoolmode": "Same pattern as deliberatetriggermode.",
-    "commands.personal.custom_models.remove": "checkbox_{capability}_label[_continued] built in customModelRemovalModal.ts via joined-string root ['commands','personal','custom_models','remove'].join('.').",
-    "commands.config.custom_models.remove": "Same as personal — different root, same joined-string pattern.",
-    "commands.config.custom_models.capability_modal": "${capability}_title and _edit_title built in custom-endpoint add/edit commands via getString/property access.",
-    "commands.openrouter.models.remove": "Same checkbox_{cap}_label[_continued] pattern in openrouterModelRemovalModal.ts.",
-    "commands.help.speech": "${engine}.description/steps_title/steps_description built in help/speech.ts; engine is a loop variable.",
-    "commands.help.transcription": "Same as help.speech but for transcription.",
-    "commands.config.thinking-level": "choice_${value} built in parameters.ts via array iteration.",
-    "commands.personal.provider": "capability_${capability} built in personal/provider/toggle-models.ts via function parameter.",
-    "commands.server.deliberate-tool-trigger": "action_${action} built via ACTIONS const + setStringOption value: ${action}; safety net since the pattern is fragile.",
+    "commands.personal.deliberatetriggermode": "${mode}_option built in metrics/status/personalPages.ts from the stored personal_dtm value; description aliased in commandLoader.ts.",
+    "commands.personal.deliberatetoolmode": "Same pattern as deliberatetriggermode, from personal_deliberate_tool_mode.",
     "genai.google": "${messageKey} for streaming error messages; key flows through provider adapter chains the scanner can't trace.",
     "genai.novelai": "Same as genai.google.",
-    "commands.config.cooldown.type.choice_strict_server_wide": "choice_${getCooldownTypeKey(type)} in whitelist/remove.ts:481. The option can no longer be selected, but whitelist rows already stored as cooldown type 4 still render through that path. Its only static reference was a commented-out choice block removed by the 2026-07-29 comment sweep."
+    "commands.config.cooldown.type.choice_strict_server_wide": "choice_${getCooldownTypeSuffix(type)} in ui/moderationPanel.ts. The option can no longer be selected, but whitelist rows already stored as cooldown type 4 still render through that path."
   }
 }

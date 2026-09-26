@@ -116,7 +116,7 @@ describe("ReunionClaimRegistry", () => {
     let finishRead: ((value: { lastPreviousDayAt: Date; seenToday: boolean }) => void) | undefined;
     const read = mock(
       () =>
-        new Promise((resolve) => {
+        new Promise<{ lastPreviousDayAt: Date; seenToday: boolean }>((resolve) => {
           finishRead = resolve;
         }),
     );

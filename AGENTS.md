@@ -111,6 +111,8 @@ proposed follow-up's premise in source before suggesting it.
     - Assert an exact count or a complete member list only when that exact count or list is what must
       not change.
     - Code kept alive only by a test import is dead code.
+    - Build fixtures with the factories in `tests/helpers/` (see its README), and only from values
+      production can produce. Patterns to avoid: `docs/en/contributing/testing/maintainable-tests.md`.
     - Gates: `bun run check`, `bun run lint`, and `bun run check-locales` when localization or command
       metadata changes. A passing gate says nothing about files it does not scan.
 

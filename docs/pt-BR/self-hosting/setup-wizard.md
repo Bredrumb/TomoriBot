@@ -14,6 +14,10 @@ Usuários que desejam usar Docker Compose devem pular este assistente, veja
 `bun run setup` é o caminho de hospedagem própria (self-hosting) recomendado para instalações locais baseadas no Bun. Ele cria seu `.env`, gera um `CRYPTO_SECRET`, pede o token do seu bot do Discord, configura o PostgreSQL e instala as dependências exatas do `bun.lock` interativamente, então apenas siga os comandos. É seguro
 executar novamente; os valores do `.env` existentes são mantidos, a menos que você escolha reconfigurá-los.
 
+Execute o assistente em um terminal interativo. Se a entrada padrão vier de um pipe ou o terminal
+não aceitar perguntas, o assistente avisa que usará os valores padrão disponíveis. Uma pergunta
+obrigatória sem valor padrão interrompe a configuração com um erro.
+
 ## Obter o código
 
 ```sh

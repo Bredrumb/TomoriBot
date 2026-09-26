@@ -202,9 +202,7 @@ beforeAll(async () => {
 
 describe("memory import operation", () => {
   it("classifies every memory format as the leaf's own, the other ownership's, or unsupported", async () => {
-    const { classifyMemoryImportSource, isMemoryImportSourceTypeForKind } = await import(
-      "@/commands/import/memoriesImportOperation"
-    );
+    const { classifyMemoryImportSource } = await import("@/commands/import/memoriesImportOperation");
 
     expect(classifyMemoryImportSource("workspace_memories", "workspace_memories")).toBe("same-ownership");
     expect(classifyMemoryImportSource("workspace_memories", "server_memories")).toBe("same-ownership");
@@ -222,9 +220,6 @@ describe("memory import operation", () => {
     expect(classifyMemoryImportSource("workspace_memories", "server")).toBe("unsupported");
     expect(classifyMemoryImportSource("personal_memories", "personal")).toBe("unsupported");
     expect(classifyMemoryImportSource("personal_memories", "unknown")).toBe("unsupported");
-
-    expect(isMemoryImportSourceTypeForKind("workspace_memories", "personal_memories")).toBe(true);
-    expect(isMemoryImportSourceTypeForKind("workspace_memories", "server")).toBe(false);
   });
 
   it("refuses a workspace import without Manage Server before downloading anything", async () => {

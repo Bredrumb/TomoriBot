@@ -184,6 +184,7 @@ type ServerMemoryEditResult =
   | { status: "success"; row: ServerMemoryRow };
 
 type ServerMemoryRemoveResult =
+  | { status: "blacklisted" }
   | { status: "teaching-disabled" }
   | { status: "not-found" }
   | { status: "write-failed" }
@@ -348,7 +349,19 @@ export const serverMemoriesOperations: ServerMemoriesOperations = {
     return { status: "success", row: { ...target, content: trimmed, tags } };
   },
 
-  async remove({ serverId, personaLineageId, taughtByUserId, memoryId, workspaceId, canManage, memteachingEnabled }) {
+  async remove({
+    serverId,
+    personaLineageId,
+    taughtByUserId,
+    memoryId,
+    workspaceId,
+    isBlacklisted,
+    canManage,
+    memteachingEnabled,
+  }) {
+    if (isBlacklisted && !canManage) {
+      return { status: "blacklisted" };
+    }
     if (!memteachingEnabled && !canManage) {
       return { status: "teaching-disabled" };
     }
@@ -1844,6 +1857,7 @@ export function createMemoriesInteractionRoute(
               personaId,
               documentId: route.documentId,
               workspaceId: scope.workspaceId,
+              isBlacklisted: scope.isBlacklisted,
               canManage: scope.canManage,
               memteachingEnabled: scope.memteachingEnabled,
               historyOnly: route.action === "history-remove-confirm",
@@ -2552,7 +2566,14 @@ export function createMemoriesInteractionRoute(
           { kind: "main" },
           result.status === "not-found"
             ? changedStateReceipt(route.locale)
-            : receipt(route.locale, result.status === "teaching-disabled" ? "teaching_disabled_error" : "write_failed"),
+            : receipt(
+                route.locale,
+                result.status === "blacklisted"
+                  ? "blacklisted_error"
+                  : result.status === "teaching-disabled"
+                    ? "teaching_disabled_error"
+                    : "write_failed",
+              ),
           dependencies,
         );
         return;

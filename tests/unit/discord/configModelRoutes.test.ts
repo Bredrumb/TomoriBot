@@ -7,7 +7,7 @@
  * exercising the code under test.
  */
 import { afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
-import { PermissionsBitField, type Client } from "discord.js";
+import type { Client } from "discord.js";
 import type { SavedProviderConfigRow, TomoriState } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
 import * as tomoriStateCache from "@/utils/cache/tomoriStateCache";
@@ -49,7 +49,7 @@ import type { ConfigRouteDependencies, ConfigScope } from "@/utils/discord/inter
 import type { NaiPresetRow } from "@/types/db/schema";
 import { providerPanelOperations } from "@/utils/provider/providerPanelOperations";
 import type { ConfigCapabilityEndpoint } from "@/utils/discord/interactions/configModelLoaders";
-import type { ConfigEndpointSlotView } from "@/utils/discord/ui/configModelsPanel";
+import type { ConfigEndpointSlotView, ConfigSwitchModelsProviderPage } from "@/utils/discord/ui/configModelsPanel";
 import { InteractionRouteRegistry } from "@/utils/discord/interactions/routeRegistry";
 import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { buildConfigFallbackSlotId } from "@/utils/discord/ui/configModelModals";
@@ -60,10 +60,13 @@ import {
 } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
+import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
 const CLIENT = {} as Client;
+
+type ConfigInteraction = Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
 const CATALOG_MODEL_CAPABILITIES: readonly ConfigCatalogModelCapability[] =
   CONFIG_MODEL_CAPABILITY_ORDER.filter(isConfigCatalogModelCapability);
 
@@ -192,20 +195,27 @@ interface HarnessOptions {
 interface Harness {
   dependencies: Partial<ConfigRouteDependencies>;
   telemetry: string[];
-  edits: unknown[];
-  replies: unknown[];
+  /** Payloads every interaction in this harness has edited, oldest first. */
+  readonly edits: unknown[];
+  /** Payloads every interaction in this harness has replied or followed up with, oldest first. */
+  readonly replies: unknown[];
   modals: unknown[];
   checkboxValues: Record<string, string[] | undefined>;
   selectValues: Record<string, string | undefined>;
+  /** Files the newest interaction's arrays behind the running `edits`/`replies` views. */
+  record: (interaction: RouteInteraction) => void;
 }
 
 function makeHarness(options: HarnessOptions = {}): Harness {
   const telemetry: string[] = [];
-  const edits: unknown[] = [];
-  const replies: unknown[] = [];
   const modals: unknown[] = [];
   const checkboxValues: Record<string, string[] | undefined> = {};
   const selectValues: Record<string, string | undefined> = {};
+  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
+  // the interactions it built and exposes their arrays in order.
+  const previousEdits: unknown[][] = [];
+  const previousReplies: unknown[][] = [];
+  let current: RouteInteraction | undefined;
 
   const buildScope = (forceRefresh: boolean): ConfigScope | null => {
     if (options.unavailable) return null;
@@ -225,11 +235,22 @@ function makeHarness(options: HarnessOptions = {}): Harness {
 
   return {
     telemetry,
-    edits,
-    replies,
+    get edits() {
+      return [...previousEdits, current?.edits ?? []].flat();
+    },
+    get replies() {
+      return [...previousReplies, current?.replies ?? []].flat();
+    },
     modals,
     checkboxValues,
     selectValues,
+    record: (interaction) => {
+      if (current) {
+        previousEdits.push(current.edits);
+        previousReplies.push(current.replies);
+      }
+      current = interaction;
+    },
     dependencies: {
       resolveScope: async (_interaction, forceRefresh = false) => buildScope(forceRefresh),
       getPersonaAvatarData: async () => ({ url: null, files: [] }),
@@ -244,7 +265,12 @@ function makeHarness(options: HarnessOptions = {}): Harness {
       takeCheckboxValues: (_interactionId, fieldId) => checkboxValues[fieldId],
       takeSelectValue: (_interactionId, fieldId) => selectValues[fieldId],
       takeFileUpload: () => undefined,
-      loadSwitchModelsView: async (state, _workspaceDiscId, providerPage, endpointPage) => ({
+      loadSwitchModelsView: async (
+        state,
+        _workspaceDiscId,
+        providerPage: ConfigSwitchModelsProviderPage | undefined,
+        endpointPage,
+      ) => ({
         slots: CATALOG_MODEL_CAPABILITIES.map((capability) => ({
           capability,
           currentModelName:
@@ -355,56 +381,23 @@ interface FakeInteractionOptions {
   harness: Harness;
 }
 
-function makeInteraction(options: FakeInteractionOptions) {
-  let deferred = false;
+function makeInteraction(options: FakeInteractionOptions): RouteInteraction {
   const kind = options.kind ?? "button";
-
-  const interaction = {
-    id: "interaction-1",
+  const interaction = createRouteInteraction({
     customId: options.customId,
-    user: { id: "user-1", username: "Mirri" },
-    channelId: "channel-1",
-    channel: { name: "lounge" },
+    kind: kind === "select" ? "string-select" : kind,
     guildId: options.inGuild === false ? null : "guild-1",
-    guild: options.inGuild === false ? null : { id: "guild-1" },
-    client: { user: null },
-    values: options.values ?? [],
-    memberPermissions: {
-      has: (flag: bigint) => (options.isManager ?? true) && flag === PermissionsBitField.Flags.ManageGuild,
-    },
-    isButton: () => kind === "button",
-    isStringSelectMenu: () => kind === "select",
-    isModalSubmit: () => kind === "modal",
-    get deferred() {
-      return deferred;
-    },
-    get replied() {
-      return false;
-    },
-    deferUpdate: async () => {
-      deferred = true;
-    },
-    editReply: async (payload: unknown) => {
-      options.harness.edits.push(payload);
-      return payload;
-    },
-    reply: async (payload: unknown) => {
-      options.harness.replies.push(payload);
-      return payload;
-    },
-    followUp: async (payload: unknown) => payload,
-    fields: {
-      fields: new Map(Object.entries(options.fields ?? {})),
-      getTextInputValue: (fieldId: string) => options.fields?.[fieldId] ?? "",
-    },
-  };
-
-  return interaction as unknown as Parameters<ReturnType<typeof createConfigInteractionRoute>["execute"]>[1];
+    isManager: options.isManager ?? true,
+    values: options.values,
+    fields: options.fields,
+  });
+  options.harness.record(interaction);
+  return interaction;
 }
 
-async function dispatch(harness: Harness, interaction: ReturnType<typeof makeInteraction>): Promise<void> {
+async function dispatch(harness: Harness, interaction: RouteInteraction): Promise<void> {
   const registry = new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]);
-  await registry.dispatch(CLIENT, interaction);
+  await registry.dispatch(CLIENT, interaction as unknown as ConfigInteraction);
 }
 
 function renderedText(payload: unknown): string {
@@ -1270,7 +1263,7 @@ describe("config models switch page", () => {
     }
 
     const resultCases = [
-      { status: "already-selected" as const },
+      { status: "already-selected" as const, modelName: "model-7" },
       { status: "success" as const, modelName: "model-7", reembedded: false },
       { status: "openrouter-moved" as const },
       { status: "write-failed" as const },
@@ -1514,7 +1507,7 @@ describe("config models capability writes", () => {
 
     await dispatch(harness, interaction);
 
-    expect(acknowledgedAtWrite).toBe(true);
+    expect<boolean | null>(acknowledgedAtWrite).toBe(true);
     expect(harness.telemetry).toContain("server-config.workspace.model.set");
     providers.mockRestore();
     models.mockRestore();
@@ -1752,7 +1745,7 @@ describe("config models parameters page", () => {
       return true;
     });
     await dispatch(harness, interaction);
-    expect(acknowledgedAtCatalogRead).toBe(true);
+    expect<boolean | null>(acknowledgedAtCatalogRead).toBe(true);
     expect(acknowledgedAtWrite).toBe(true);
     expect(apply).toHaveBeenCalledTimes(1);
     expect(apply.mock.calls[0]?.[1]?.preset_name).toBe("preset-2");
@@ -2247,7 +2240,9 @@ describe("config models view loaders", () => {
 
     const view = await loadConfigSwitchModelsView(makeState(), "guild-1", undefined);
     expect(view.slots).toHaveLength(6);
-    expect(view.slots.map((slot) => slot.capability)).toEqual(CATALOG_MODEL_CAPABILITIES);
+    expect<readonly ConfigCatalogModelCapability[]>(view.slots.map((slot) => slot.capability)).toEqual(
+      CATALOG_MODEL_CAPABILITIES,
+    );
     expect(providers).toHaveBeenCalledTimes(6);
     // A persona without a resolved override is an ordinary default, not an override row.
     expect(view.channelOverrides).toEqual([{ target: "<#111>", model: "kayra-v1 (novelai)" }]);

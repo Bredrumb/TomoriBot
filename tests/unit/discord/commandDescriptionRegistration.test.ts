@@ -29,11 +29,15 @@ function collectUnresolvedDescriptions(
 
   for (const command of commands) {
     const rootPath = command.name;
-    if (command.description && UNRESOLVED_LOCALE_KEY_PATTERN.test(command.description) && !allowlist.has(rootPath)) {
-      offending.push({ path: rootPath, description: command.description });
+    const rootDescription = "description" in command ? command.description : undefined;
+    if (rootDescription && UNRESOLVED_LOCALE_KEY_PATTERN.test(rootDescription) && !allowlist.has(rootPath)) {
+      offending.push({ path: rootPath, description: rootDescription });
     }
 
-    const options = Array.isArray(command.options) ? (command.options as CommandOption[]) : [];
+    // The loader hands back the builders' raw JSON, so the option tree carries the fields the
+    // registration payload really has rather than the narrower builder-facing union.
+    const rootOptions = "options" in command ? command.options : undefined;
+    const options = Array.isArray(rootOptions) ? (rootOptions as unknown as CommandOption[]) : [];
     for (const option of options) {
       if (!option.name) continue;
 

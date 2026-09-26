@@ -235,7 +235,8 @@ Model đã chọn yêu cầu cấp quyền dữ liệu để huấn luyện tr�
       server_memory_footer: `Quản lý máy chủ có thể quản lý bộ nhớ này bằng \`/memories\`.`,
       personal_memory_footer_manage: `Bạn có thể quản lý bộ nhớ cá nhân của mình bằng \`/personal memories\`.`,
       personal_memory_footer_personalization_disabled: `Bộ nhớ này đã được lưu, nhưng các tính năng cá nhân hóa hiện đang bị tắt trên máy chủ này, nên sẽ không có hiệu lực ngay tại đây. Dùng \`/export personal memories\` để xem. Bạn có thể chọn không tham gia bằng \`/personal config\`.`,
-      personal_memory_footer_user_blacklisted: `Bộ nhớ này đã được lưu, nhưng người dùng được nhắc tới hiện đang nằm trong danh sách đen của tính năng cá nhân hóa trên máy chủ này, nên sẽ không có hiệu lực ngay tại đây. Dùng \`/export personal memories\` để xem. Bạn có thể chọn không tham gia bằng \`/personal config\`.`,
+      personal_memory_footer_user_blacklisted:
+        "Bộ nhớ này đã được lưu, nhưng người dùng được nhắc tới đang nằm trong danh sách đen của máy chủ này, nên mình bỏ qua họ ở đây và bộ nhớ sẽ không có hiệu lực. Dùng `/export personal memories` để xem. Bạn có thể chọn không tham gia bằng `/personal config`.",
       expand_memory_button: `Xem toàn bộ bộ nhớ`,
       expand_memory_title: `Nội dung bộ nhớ đầy đủ`,
     },

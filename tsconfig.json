@@ -20,6 +20,12 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "scripts/**/*", "src/events/messageCreate/tomoriChat.ts", ".deprecated/formatSource.ts"],
+  "include": [
+    "src/**/*",
+    "scripts/**/*",
+    "src/events/messageCreate/tomoriChat.ts",
+    ".deprecated/formatSource.ts",
+    "tests/**/*"
+  ],
   "exclude": ["scripts/archived/**"]
 }

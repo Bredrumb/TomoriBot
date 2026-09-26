@@ -7,7 +7,7 @@ import {
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
 } from "discord.js";
-import type { ServerMemoryRow, TomoriState } from "@/types/db/schema";
+import type { SavedProviderConfigRow, ServerMemoryRow, TomoriState } from "@/types/db/schema";
 import {
   buildMemoriesRouteId,
   computeServerStmFingerprint,
@@ -45,6 +45,7 @@ import * as credentialResolver from "@/utils/provider/credentialResolver";
 import * as rateLimiter from "@/utils/security/rateLimiter";
 import * as safeDownloadModule from "@/utils/security/safeDownload";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -70,13 +71,12 @@ function makeMemory(id: number, overrides: Partial<ServerMemoryRow> = {}): Serve
 }
 
 function makePersona(id: number, lineageId: number, name: string, isAlter = false): TomoriState {
-  return {
+  return createPersona({
     persona_id: id,
     persona_lineage_id: lineageId,
     persona_nickname: name,
     is_alter: isAlter,
-    is_active: true,
-  } as unknown as TomoriState;
+  });
 }
 
 function collectSelects(
@@ -107,6 +107,24 @@ function collectTextDisplays(value: unknown): string[] {
   return [...self, ...Object.values(record).flatMap(collectTextDisplays)];
 }
 
+// Stored provider snapshot behind the stubbed credential resolution: the embedding capability points
+// at model 5, which is the row the document tests stub loadEmbeddingModelById to return.
+const SAVED_PROVIDER_CONFIG: SavedProviderConfigRow = {
+  server_id: 1,
+  provider: "google",
+  api_key: null,
+  key_version: 1,
+  llm_id: null,
+  diffusion_model_id: null,
+  embedding_model_id: 5,
+  nai_diffusion_model_id: null,
+  nai_preset_name: null,
+  llm_disabled_params: [],
+  llm_logit_biases: [],
+  thinking_level: "auto",
+  fallback_model_refs: [],
+};
+
 describe("short-term memory panel", () => {
   it("renders active entries together without component spacing", () => {
     const payload = buildMemoriesPanelPayload({
@@ -133,6 +151,11 @@ describe("short-term memory panel", () => {
 });
 
 describe("memories panel route catalog", () => {
+  /**
+   * Pins the memories v1 wire contract: a row is [literal custom ID, exact route it must decode to].
+   * Encoding and decoding through one shared codec cannot catch a field reordering, because both
+   * sides move together and a round trip still succeeds; only literal bytes can.
+   */
   const WIRE_CONTRACT_V1: ReadonlyArray<readonly [string, MemoriesPanelRoute]> = [
     ["memories:v1:category:en-US:memories", { action: "category", locale: "en-US", category: "memories" }],
     ["memories:v1:category:en-US:documents", { action: "category", locale: "en-US", category: "documents" }],
@@ -292,55 +315,57 @@ describe("memories panel route catalog", () => {
     ["memories:v1:refresh:en-US:stm", { action: "refresh", locale: "en-US", category: "stm" }],
   ];
 
-  it("decodes literal custom ID strings to exact typed routes", () => {
-    for (const [customId, expectedRoute] of WIRE_CONTRACT_V1) {
-      const parsed = requireRoute(customId);
-      const decoded = parseMemoriesPanelRoute(parsed);
-      expect(decoded).toEqual(expectedRoute);
+  it.each(WIRE_CONTRACT_V1)("decodes the pinned wire string %s to its exact route", (customId, expectedRoute) => {
+    const parsed = requireRoute(customId);
+    expect(parseMemoriesPanelRoute(parsed)).toEqual(expectedRoute);
+  });
+
+  /**
+   * Routes whose shorter legal form omits a field the longer form carries. A row is
+   * [field the parser must leave out, what the case is, custom ID carrying the shorter form], so a
+   * parser that fabricates the field names it.
+   */
+  const ABSENT_OPTIONAL_FIELDS: ReadonlyArray<readonly [string, string, string]> = [
+    ["rangeIndex", "a select route without a range", "memories:v1:select:en-US:1770"],
+    ["lineageId", "a retry route without a lineage", "memories:v1:retry:en-US:documents"],
+  ];
+
+  it.each(ABSENT_OPTIONAL_FIELDS)("leaves %s absent for %s", (absentField, _label, customId) => {
+    const parsed = parseMemoriesPanelRoute(requireRoute(customId));
+    expect(parsed).toBeDefined();
+    if (parsed) {
+      expect(absentField in parsed).toBe(false);
     }
   });
 
-  it("ensures optional properties are absent rather than undefined in parsed routes", () => {
-    const parsedSelectWithoutRange = parseMemoriesPanelRoute(requireRoute("memories:v1:select:en-US:1770"));
-    expect(parsedSelectWithoutRange).toBeDefined();
-    if (parsedSelectWithoutRange) {
-      expect("rangeIndex" in parsedSelectWithoutRange).toBe(false);
-    }
-
-    const parsedRetryWithoutLineage = parseMemoriesPanelRoute(requireRoute("memories:v1:retry:en-US:documents"));
-    expect(parsedRetryWithoutLineage).toBeDefined();
-    if (parsedRetryWithoutLineage) {
-      expect("lineageId" in parsedRetryWithoutLineage).toBe(false);
-    }
-  });
-
-  it("round trips every action through buildMemoriesRouteId and parseMemoriesPanelRoute", () => {
+  it("covers every catalog action in the wire contract", () => {
     const catalogActions = listMemoriesPanelActions().sort();
-    const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
+    const wireActions: string[] = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
     expect(wireActions).toEqual(catalogActions);
-
-    for (const [customId, expectedRoute] of WIRE_CONTRACT_V1) {
-      const encoded = buildMemoriesRouteId(expectedRoute);
-      expect(encoded).toBe(customId);
-      const parsed = requireRoute(encoded);
-      const decoded = parseMemoriesPanelRoute(parsed);
-      expect(decoded).toEqual(expectedRoute);
-    }
   });
 
-  it("keeps custom IDs within Discord's 100 character limit", () => {
-    for (const [customId] of WIRE_CONTRACT_V1) {
-      expect(customId.length).toBeLessThanOrEqual(100);
-    }
+  it.each(WIRE_CONTRACT_V1)("round-trips the %s wire string through the builder", (customId, expectedRoute) => {
+    const encoded = buildMemoriesRouteId(expectedRoute);
+    expect(encoded).toBe(customId);
+    const parsed = requireRoute(encoded);
+    expect(parseMemoriesPanelRoute(parsed)).toEqual(expectedRoute);
   });
 
-  it("rejects invalid namespaces and versions", () => {
-    expect(
-      parseMemoriesPanelRoute({ namespace: "other", version: "v1", segments: ["category", "en-US", "memories"] }),
-    ).toBeNull();
-    expect(
-      parseMemoriesPanelRoute({ namespace: "memories", version: "v99", segments: ["category", "en-US", "memories"] }),
-    ).toBeNull();
+  it.each(WIRE_CONTRACT_V1)("keeps the %s custom ID within Discord's 100 character limit", (customId) => {
+    expect(customId.length).toBeLessThanOrEqual(100);
+  });
+
+  /**
+   * Route envelopes the parser must refuse before it reads a segment. A row is
+   * [what the envelope gets wrong, parsed envelope handed straight to the decoder].
+   */
+  const REJECTED_ROUTE_ENVELOPES: ReadonlyArray<readonly [string, ParsedInteractionRoute]> = [
+    ["foreign namespace", { namespace: "other", version: "v1", segments: ["category", "en-US", "memories"] }],
+    ["retired version", { namespace: "memories", version: "v99", segments: ["category", "en-US", "memories"] }],
+  ];
+
+  it.each(REJECTED_ROUTE_ENVELOPES)("rejects a route envelope with a %s", (_label, envelope) => {
+    expect(parseMemoriesPanelRoute(envelope)).toBeNull();
   });
 });
 
@@ -489,8 +514,8 @@ describe("memories permissions and scoping", () => {
       showAddModal: async () => {
         calls.push("showAddModal");
       },
-      takeFileUpload: () => null,
-      takeDocumentFileUpload: () => null,
+      takeFileUpload: () => undefined,
+      takeDocumentFileUpload: () => undefined,
       readUploadedText: async () => ({ isValid: true, text: "" }),
       showEditModal: async () => {
         calls.push("showEditModal");
@@ -1156,120 +1181,96 @@ describe("memories permissions and scoping", () => {
     }
   });
 
-  it("renders document scope as a state-control row across serverwide, persona, and no-persona states", () => {
-    const personas = [makePersona(10, 100, "Tomori"), makePersona(20, 200, "Anon")];
-
-    // Serverwide scope selected (selectedDocumentPersonaId: 0)
-    const serverwidePayload = buildMemoriesPanelPayload({
+  /**
+   * The document-scope row for one panel state, as the serverwide and persona buttons in render
+   * order. The count is asserted here rather than assumed: a panel that dropped a scope button would
+   * otherwise read as the wrong kind of state instead of failing.
+   */
+  function documentScopeRow(input: {
+    selectedLineageId: number;
+    selectedDocumentPersonaId: number;
+    personas: TomoriState[];
+    readStatus: "fresh" | "stale";
+  }) {
+    const payload = buildMemoriesPanelPayload({
       locale: "en-US",
       category: "documents",
+      ...input,
+      memories: [],
+      documents: [],
+      canManage: true,
+      memteachingEnabled: true,
+      page: { kind: "documents" },
+    });
+    const buttons = collectButtons(payload.components).filter((b) => b.customId?.includes(":document-scope:"));
+    expect(buttons).toHaveLength(2);
+    return { serverwide: buttons[0], persona: buttons[1] };
+  }
+
+  it("marks the serverwide scope primary and disabled while serverwide documents are shown", () => {
+    const { serverwide, persona } = documentScopeRow({
       selectedLineageId: 100,
       selectedDocumentPersonaId: 0,
-      personas,
-      memories: [],
-      documents: [],
-      canManage: true,
-      memteachingEnabled: true,
+      personas: [makePersona(10, 100, "Tomori"), makePersona(20, 200, "Anon")],
       readStatus: "fresh",
-      page: { kind: "documents" },
     });
 
-    const serverwideButtons = collectButtons(serverwidePayload.components).filter((b) =>
-      b.customId?.includes(":document-scope:"),
-    );
-    expect(serverwideButtons).toHaveLength(2);
-    const [swBtn1, personaBtn1] = serverwideButtons;
+    expect(serverwide.customId).toBe("memories:v1:document-scope:en-US:0");
+    expect(serverwide.label).toBe(localizer("en-US", "commands.memories.document_scope_serverwide"));
+    expect(serverwide.style).toBe(ButtonStyle.Primary);
+    expect(serverwide.disabled).toBe(true);
 
-    expect(swBtn1.customId).toBe("memories:v1:document-scope:en-US:0");
-    expect(swBtn1.label).toBe(localizer("en-US", "commands.memories.document_scope_serverwide"));
-    expect(swBtn1.style).toBe(ButtonStyle.Primary);
-    expect(swBtn1.disabled).toBe(true);
+    expect(persona.customId).toBe("memories:v1:document-scope:en-US:10");
+    expect(persona.label).toBe(localizer("en-US", "commands.memories.document_scope_persona"));
+    expect(persona.style).toBe(ButtonStyle.Secondary);
+    expect(persona.disabled).toBe(false);
+  });
 
-    expect(personaBtn1.customId).toBe("memories:v1:document-scope:en-US:10");
-    expect(personaBtn1.label).toBe(localizer("en-US", "commands.memories.document_scope_persona"));
-    expect(personaBtn1.style).toBe(ButtonStyle.Secondary);
-    expect(personaBtn1.disabled).toBe(false);
-
-    // Persona scope selected (selectedDocumentPersonaId: 10)
-    const personaPayload = buildMemoriesPanelPayload({
-      locale: "en-US",
-      category: "documents",
+  it("marks the persona scope primary and disabled while persona documents are shown", () => {
+    const { serverwide, persona } = documentScopeRow({
       selectedLineageId: 100,
       selectedDocumentPersonaId: 10,
-      personas,
-      memories: [],
-      documents: [],
-      canManage: true,
-      memteachingEnabled: true,
+      personas: [makePersona(10, 100, "Tomori"), makePersona(20, 200, "Anon")],
       readStatus: "fresh",
-      page: { kind: "documents" },
     });
 
-    const personaButtons = collectButtons(personaPayload.components).filter((b) =>
-      b.customId?.includes(":document-scope:"),
-    );
-    expect(personaButtons).toHaveLength(2);
-    const [swBtn2, personaBtn2] = personaButtons;
+    expect(serverwide.style).toBe(ButtonStyle.Secondary);
+    expect(serverwide.disabled).toBe(false);
 
-    expect(swBtn2.style).toBe(ButtonStyle.Secondary);
-    expect(swBtn2.disabled).toBe(false);
+    expect(persona.style).toBe(ButtonStyle.Primary);
+    expect(persona.disabled).toBe(true);
+  });
 
-    expect(personaBtn2.style).toBe(ButtonStyle.Primary);
-    expect(personaBtn2.disabled).toBe(true);
-
-    // No persona carries a persona_id (firstPersonaId resolves to 0), so Persona choice is an unavailable alternative
-    const noPersonaPayload = buildMemoriesPanelPayload({
-      locale: "en-US",
-      category: "documents",
+  it("disables the persona scope when no persona carries an id", () => {
+    // firstPersonaId resolves to 0 with no real persona, so the Persona choice has no target and is
+    // rendered as an unavailable alternative rather than as a second live scope.
+    const { serverwide, persona } = documentScopeRow({
       selectedLineageId: 0,
       selectedDocumentPersonaId: 0,
       personas: [{ persona_id: 0, persona_lineage_id: 0, persona_nickname: "None" } as unknown as TomoriState],
-      memories: [],
-      documents: [],
-      canManage: true,
-      memteachingEnabled: true,
       readStatus: "fresh",
-      page: { kind: "documents" },
     });
 
-    const noPersonaButtons = collectButtons(noPersonaPayload.components).filter((b) =>
-      b.customId?.includes(":document-scope:"),
-    );
-    expect(noPersonaButtons).toHaveLength(2);
-    const [swBtn3, personaBtn3] = noPersonaButtons;
+    expect(serverwide.style).toBe(ButtonStyle.Primary);
+    expect(serverwide.disabled).toBe(true);
 
-    expect(swBtn3.style).toBe(ButtonStyle.Primary);
-    expect(swBtn3.disabled).toBe(true);
+    expect(persona.style).toBe(ButtonStyle.Secondary);
+    expect(persona.disabled).toBe(true);
+  });
 
-    expect(personaBtn3.style).toBe(ButtonStyle.Secondary);
-    expect(personaBtn3.disabled).toBe(true);
-
-    // Writes disabled (readStatus === "stale")
-    const stalePayload = buildMemoriesPanelPayload({
-      locale: "en-US",
-      category: "documents",
+  it("disables both scope buttons while the read is stale", () => {
+    const { serverwide, persona } = documentScopeRow({
       selectedLineageId: 100,
       selectedDocumentPersonaId: 0,
-      personas,
-      memories: [],
-      documents: [],
-      canManage: true,
-      memteachingEnabled: true,
+      personas: [makePersona(10, 100, "Tomori"), makePersona(20, 200, "Anon")],
       readStatus: "stale",
-      page: { kind: "documents" },
     });
 
-    const staleButtons = collectButtons(stalePayload.components).filter((b) =>
-      b.customId?.includes(":document-scope:"),
-    );
-    expect(staleButtons).toHaveLength(2);
-    const [swBtn4, personaBtn4] = staleButtons;
+    expect(serverwide.style).toBe(ButtonStyle.Primary);
+    expect(serverwide.disabled).toBe(true);
 
-    expect(swBtn4.style).toBe(ButtonStyle.Primary);
-    expect(swBtn4.disabled).toBe(true);
-
-    expect(personaBtn4.style).toBe(ButtonStyle.Secondary);
-    expect(personaBtn4.disabled).toBe(true);
+    expect(persona.style).toBe(ButtonStyle.Secondary);
+    expect(persona.disabled).toBe(true);
   });
 
   it("acknowledges via deferUpdate before executing write operations", async () => {
@@ -1495,7 +1496,7 @@ describe("memories permissions and scoping", () => {
       requireRoute(fakeInteraction.customId),
     );
 
-    expect(modalTags).toEqual(["#general"]);
+    expect<string[] | null>(modalTags).toEqual(["#general"]);
   });
 
   it("keeps the chunk removal prompt on its own document and addresses chunks by chunk_index", async () => {
@@ -1514,7 +1515,6 @@ describe("memories permissions and scoping", () => {
       loadDocuments: async () => documents,
       loadDocumentChunks: async (_serverId, _personaId, documentId) => (documentId === 77 ? chunks : []),
       getDocumentCounts: async () => ({ documents: 2, chunks: 3 }),
-      getEligibleDocumentPersonaIds: async () => new Set([10]),
     });
     const interaction = {
       id: "int-chunk-remove-prompt",
@@ -1616,7 +1616,7 @@ describe("memories permissions and scoping", () => {
    * acknowledge for itself.
    */
   it("answers a refused modal branch by repainting the panel, never by a separate reply", async () => {
-    const { dependencies } = createTestDependencies({
+    const { dependencies, calls } = createTestDependencies({
       resolveScope: async (interaction) => ({
         serverId: 1,
         workspaceId: "guild-123",
@@ -1669,6 +1669,7 @@ describe("memories permissions and scoping", () => {
       expect(interaction.deferred).toBe(true);
       expect(collectTextDisplays(edited).length).toBeGreaterThan(0);
     }
+    expect(calls.filter((call) => call.startsWith("show"))).toEqual([]);
   });
 
   it("refuses modal opening and writes when user is blacklisted and not manager", async () => {
@@ -1689,6 +1690,7 @@ describe("memories permissions and scoping", () => {
           canManage: false,
           isBlacklisted: true,
           memteachingEnabled: true,
+          configuredEmbeddingModelId: null,
           personas: [makePersona(10, 1770, "Tomori")],
           readStatus: "fresh",
         }),
@@ -1779,6 +1781,7 @@ describe("memories permissions and scoping", () => {
           canManage: false,
           isBlacklisted: false,
           memteachingEnabled: false,
+          configuredEmbeddingModelId: null,
           personas: [makePersona(10, 1770, "Tomori")],
           readStatus: "fresh",
         }),
@@ -1841,6 +1844,7 @@ describe("memories permissions and scoping", () => {
           canManage: true,
           isBlacklisted: false,
           memteachingEnabled: false,
+          configuredEmbeddingModelId: null,
           personas: [makePersona(10, 1770, "Tomori")],
           readStatus: "fresh",
         }),
@@ -2052,11 +2056,12 @@ describe("memories permissions and scoping", () => {
         workspaceId: "guild-123",
         isBlacklisted: false,
         canManage: true,
+        memteachingEnabled: false,
         content: "New edited content",
         tags: ["updated"],
       });
       expect(editResult.status).toBe("success");
-      expect(invalidatedWorkspace).toBe("guild-123");
+      expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
       // Test remove cache invalidation
       invalidatedWorkspace = null;
@@ -2068,9 +2073,10 @@ describe("memories permissions and scoping", () => {
         workspaceId: "guild-123",
         isBlacklisted: false,
         canManage: true,
+        memteachingEnabled: false,
       });
       expect(removeResult.status).toBe("success");
-      expect(invalidatedWorkspace).toBe("guild-123");
+      expect<string | null>(invalidatedWorkspace).toBe("guild-123");
 
       // Test addBatch cache invalidation
       invalidatedWorkspace = null;
@@ -2087,7 +2093,7 @@ describe("memories permissions and scoping", () => {
         tags: [],
       });
       expect(batchResult.status).toBe("success");
-      expect(invalidatedWorkspace).toBe("guild-123");
+      expect<string | null>(invalidatedWorkspace).toBe("guild-123");
     } finally {
       cacheSpy.mockRestore();
       editSpy.mockRestore();
@@ -2144,9 +2150,9 @@ describe("memories permissions and scoping", () => {
 
 describe("memories teaching gate on edit and remove", () => {
   /**
-   * Server memory edit and remove operations independently gate on `server_memteaching_enabled`,
-   * not just memory addition. Removal additionally has no blacklist check, so the two guards are
-   * asserted separately rather than assumed to travel together.
+   * Server memory edit and remove operations independently gate on `server_memteaching_enabled`
+   * and on the server blacklist, not just memory addition. The two guards are asserted separately
+   * rather than assumed to travel together.
    */
   it("refuses edit and remove for a non-manager when teaching is disabled", async () => {
     const editSpy = spyOn(serverMemoryRepository, "edit").mockImplementation(async () => true);
@@ -2181,6 +2187,35 @@ describe("memories teaching gate on edit and remove", () => {
       expect(removeSpy).toHaveBeenCalled();
     } finally {
       editSpy.mockRestore();
+      removeSpy.mockRestore();
+      loadSpy.mockRestore();
+    }
+  });
+
+  it("refuses remove for a blacklisted non-manager even when teaching is enabled", async () => {
+    const removeSpy = spyOn(serverMemoryRepository, "remove").mockImplementation(async () => true);
+    const loadSpy = spyOn(serverMemoryRepository, "loadServerMemoriesScoped").mockImplementation(async () => [
+      { server_memory_id: 7, content: "stored", tags: [] } as unknown as ServerMemoryRow,
+    ]);
+
+    try {
+      const blacklisted = {
+        serverId: 1,
+        personaLineageId: 1770,
+        taughtByUserId: 42,
+        memoryId: 7,
+        workspaceId: "guild-123",
+        isBlacklisted: true,
+        canManage: false,
+        memteachingEnabled: true,
+      };
+
+      expect((await serverMemoriesOperations.remove(blacklisted)).status).toBe("blacklisted");
+      expect(removeSpy).not.toHaveBeenCalled();
+
+      expect((await serverMemoriesOperations.remove({ ...blacklisted, canManage: true })).status).toBe("success");
+      expect(removeSpy).toHaveBeenCalled();
+    } finally {
       removeSpy.mockRestore();
       loadSpy.mockRestore();
     }
@@ -2227,54 +2262,84 @@ describe("memories document operation ordering", () => {
     }
   });
 
-  it("invalidates authoritative state after every successful document repository write", async () => {
-    const ragSpy = spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true);
-    const memoryGuardSpy = spyOn(rateLimiter.memoryGuard, "checkMemory").mockReturnValue({
-      status: "ok",
-      usagePercent: 0,
-      heapUsedMB: 1,
-      heapTotalMB: 2,
-      rssMB: 3,
-    });
-    const quotaSpy = spyOn(rateLimiter, "reserveDocumentQuota").mockReturnValue({ allowed: true });
-    const credentialSpy = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
-      apiKey: "test-key",
-    });
-    const modelIdSpy = spyOn(credentialResolver, "getResolvedCapabilityModelId").mockReturnValue(5);
-    const modelSpy = spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue({
-      embedding_model_id: 5,
-      provider: "google",
-      codename: "embedding-model",
-      model_family: "embedding-family",
-    });
-    const taskSpy = spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false);
-    const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]);
-    const downloadSpy = spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({
-      success: true,
-      buffer: Buffer.from("Document content"),
-    });
-    const extractSpy = spyOn(textExtractor, "extractTextFromBuffer").mockResolvedValue("Document content");
-    const normalizeSpy = spyOn(ragRepository, "normalizeText").mockImplementation((content) => content);
-    const chunkSpy = spyOn(ragRepository, "chunkText").mockReturnValue(["Document content"]);
-    const insertSpy = spyOn(ragRepository, "insertWithChunks").mockResolvedValue(91);
-    const duplicateSpy = spyOn(serverMemoryRepository, "documentExistsByName").mockResolvedValue(false);
-    const documentCountSpy = spyOn(serverMemoryRepository, "countDocumentsScoped").mockResolvedValue(0);
-    const chunkCountSpy = spyOn(serverMemoryRepository, "countChunksScoped").mockResolvedValue(0);
-    const loadDocumentsSpy = spyOn(serverMemoryRepository, "loadDocuments").mockResolvedValue([
-      { document_id: 91, document_name: "Guide", first_chunk: "Document content" },
-    ]);
-    const loadMetaSpy = spyOn(serverMemoryRepository, "loadDocumentMeta").mockResolvedValue({
-      document_name: "Guide",
-      channel_tags: [],
-    });
-    const loadChunksSpy = spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
-      { document_chunk_id: 8, chunk_index: 0, content: "Document content" },
-    ]);
-    const updateChunkSpy = spyOn(serverMemoryRepository, "updateChunk").mockResolvedValue(true);
-    const deleteChunkSpy = spyOn(serverMemoryRepository, "deleteChunk").mockResolvedValue(true);
-    const removeDocumentSpy = spyOn(serverMemoryRepository, "removeDocument").mockResolvedValue("Guide");
-    const rebuildSpy = spyOn(documentService, "rebuildDocumentTextContent").mockResolvedValue(undefined);
-    const invalidateSpy = spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {});
+  /**
+   * Every repository and provider read one document write makes, so a case only states the write it
+   * runs and the invalidation it expects. Returns the spies a case asserts on plus a restore for its
+   * finally block.
+   */
+  function stubDocumentWriteDependencies() {
+    // Keyed rather than positional: a case names the four spies it asserts on instead of an index,
+    // and restore walks every stub this helper installed.
+    const spies = {
+      rag: spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true),
+      memoryGuard: spyOn(rateLimiter.memoryGuard, "checkMemory").mockReturnValue({
+        status: "safe",
+        rssUsedMB: 1,
+        memoryLimitMB: 2,
+        percentUsed: 0,
+        shouldProcessMedia: true,
+      }),
+      quota: spyOn(rateLimiter, "reserveDocumentQuota").mockReturnValue({ allowed: true }),
+      credential: spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+        provider: "google",
+        apiKey: "test-key",
+        keyVersion: 1,
+        savedConfig: SAVED_PROVIDER_CONFIG,
+        source: "server",
+      }),
+      modelId: spyOn(credentialResolver, "getResolvedCapabilityModelId").mockReturnValue(5),
+      model: spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue({
+        embedding_model_id: 5,
+        provider: "google",
+        codename: "embedding-model",
+        model_family: "embedding-family",
+        is_scoped_registration: false,
+        is_default: false,
+        is_deprecated: false,
+      }),
+      task: spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false),
+      embedding: spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]),
+      download: spyOn(safeDownloadModule, "safeDownload").mockResolvedValue({
+        success: true,
+        buffer: Buffer.from("Document content"),
+      }),
+      extract: spyOn(textExtractor, "extractTextFromBuffer").mockResolvedValue("Document content"),
+      normalize: spyOn(ragRepository, "normalizeText").mockImplementation((content) => content),
+      chunk: spyOn(ragRepository, "chunkText").mockReturnValue(["Document content"]),
+      insert: spyOn(ragRepository, "insertWithChunks").mockResolvedValue(91),
+      duplicate: spyOn(serverMemoryRepository, "documentExistsByName").mockResolvedValue(false),
+      documentCount: spyOn(serverMemoryRepository, "countDocumentsScoped").mockResolvedValue(0),
+      chunkCount: spyOn(serverMemoryRepository, "countChunksScoped").mockResolvedValue(0),
+      loadDocuments: spyOn(serverMemoryRepository, "loadDocuments").mockResolvedValue([
+        { document_id: 91, document_name: "Guide", first_chunk: "Document content" },
+      ]),
+      loadMeta: spyOn(serverMemoryRepository, "loadDocumentMeta").mockResolvedValue({
+        document_name: "Guide",
+        channel_tags: [],
+      }),
+      loadChunks: spyOn(serverMemoryRepository, "loadDocumentChunks").mockResolvedValue([
+        { document_chunk_id: 8, chunk_index: 0, content: "Document content" },
+      ]),
+      updateChunk: spyOn(serverMemoryRepository, "updateChunk").mockResolvedValue(true),
+      deleteChunk: spyOn(serverMemoryRepository, "deleteChunk").mockResolvedValue(true),
+      removeDocument: spyOn(serverMemoryRepository, "removeDocument").mockResolvedValue("Guide"),
+      rebuild: spyOn(documentService, "rebuildDocumentTextContent").mockResolvedValue(undefined),
+      invalidate: spyOn(tomoriStateCache, "invalidateTomoriStateCache").mockImplementation(() => {}),
+    };
+
+    return {
+      updateChunkSpy: spies.updateChunk,
+      deleteChunkSpy: spies.deleteChunk,
+      rebuildSpy: spies.rebuild,
+      invalidateSpy: spies.invalidate,
+      restore: () => {
+        for (const spy of Object.values(spies)) spy.mockRestore();
+      },
+    };
+  }
+
+  it("invalidates authoritative state after a successful document add", async () => {
+    const stubs = stubDocumentWriteDependencies();
 
     try {
       expect(
@@ -2302,9 +2367,16 @@ describe("memories document operation ordering", () => {
           })
         ).status,
       ).toBe("success");
-      expect(invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+      expect(stubs.invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      stubs.restore();
+    }
+  });
 
-      invalidateSpy.mockClear();
+  it("regenerates the embedding and invalidates twice for an edited chunk", async () => {
+    const stubs = stubDocumentWriteDependencies();
+
+    try {
       expect(
         (
           await serverDocumentsOperations.editChunk({
@@ -2321,11 +2393,18 @@ describe("memories document operation ordering", () => {
           })
         ).status,
       ).toBe("success");
-      expect(updateChunkSpy).toHaveBeenCalled();
-      expect(rebuildSpy).toHaveBeenCalledWith(91);
-      expect(invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(stubs.updateChunkSpy).toHaveBeenCalled();
+      expect(stubs.rebuildSpy).toHaveBeenCalledWith(91);
+      expect(stubs.invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      stubs.restore();
+    }
+  });
 
-      invalidateSpy.mockClear();
+  it("invalidates authoritative state after a successful document removal", async () => {
+    const stubs = stubDocumentWriteDependencies();
+
+    try {
       expect(
         (
           await serverDocumentsOperations.remove({
@@ -2336,12 +2415,20 @@ describe("memories document operation ordering", () => {
             canManage: true,
             memteachingEnabled: true,
             historyOnly: false,
+            isBlacklisted: false,
           })
         ).status,
       ).toBe("success");
-      expect(invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+      expect(stubs.invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      stubs.restore();
+    }
+  });
 
-      invalidateSpy.mockClear();
+  it("regenerates the document and invalidates twice for a removed chunk", async () => {
+    const stubs = stubDocumentWriteDependencies();
+
+    try {
       expect(
         (
           await serverDocumentsOperations.removeChunk({
@@ -2354,33 +2441,10 @@ describe("memories document operation ordering", () => {
           })
         ).status,
       ).toBe("success");
-      expect(deleteChunkSpy).toHaveBeenCalled();
-      expect(invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(stubs.deleteChunkSpy).toHaveBeenCalled();
+      expect(stubs.invalidateSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     } finally {
-      ragSpy.mockRestore();
-      memoryGuardSpy.mockRestore();
-      quotaSpy.mockRestore();
-      credentialSpy.mockRestore();
-      modelIdSpy.mockRestore();
-      modelSpy.mockRestore();
-      taskSpy.mockRestore();
-      embeddingSpy.mockRestore();
-      downloadSpy.mockRestore();
-      extractSpy.mockRestore();
-      normalizeSpy.mockRestore();
-      chunkSpy.mockRestore();
-      insertSpy.mockRestore();
-      duplicateSpy.mockRestore();
-      documentCountSpy.mockRestore();
-      chunkCountSpy.mockRestore();
-      loadDocumentsSpy.mockRestore();
-      loadMetaSpy.mockRestore();
-      loadChunksSpy.mockRestore();
-      updateChunkSpy.mockRestore();
-      deleteChunkSpy.mockRestore();
-      removeDocumentSpy.mockRestore();
-      rebuildSpy.mockRestore();
-      invalidateSpy.mockRestore();
+      stubs.restore();
     }
   });
 
@@ -2388,15 +2452,19 @@ describe("memories document operation ordering", () => {
     const order: string[] = [];
     const ragSpy = spyOn(ragAvailability, "isRagAvailable").mockReturnValue(true);
     const memoryGuardSpy = spyOn(rateLimiter.memoryGuard, "checkMemory").mockReturnValue({
-      status: "ok",
-      usagePercent: 0,
-      heapUsedMB: 1,
-      heapTotalMB: 2,
-      rssMB: 3,
+      status: "safe",
+      rssUsedMB: 1,
+      memoryLimitMB: 2,
+      percentUsed: 0,
+      shouldProcessMedia: true,
     });
     const quotaSpy = spyOn(rateLimiter, "reserveDocumentQuota").mockReturnValue({ allowed: true });
     const credentialSpy = spyOn(credentialResolver, "resolveCapabilityCredentials").mockResolvedValue({
+      provider: "google",
       apiKey: "test-key",
+      keyVersion: 1,
+      savedConfig: SAVED_PROVIDER_CONFIG,
+      source: "server",
     });
     const modelIdSpy = spyOn(credentialResolver, "getResolvedCapabilityModelId").mockReturnValue(5);
     const modelSpy = spyOn(llmModelRepo, "loadEmbeddingModelById").mockResolvedValue({
@@ -2404,6 +2472,9 @@ describe("memories document operation ordering", () => {
       provider: "google",
       codename: "embedding-model",
       model_family: "embedding-family",
+      is_scoped_registration: false,
+      is_default: false,
+      is_deprecated: false,
     });
     const taskSpy = spyOn(embeddingProvider, "providerSupportsEmbeddingTaskType").mockResolvedValue(false);
     const embeddingSpy = spyOn(embeddingProvider, "generateEmbeddingsBatched").mockResolvedValue([[0.1, 0.2]]);

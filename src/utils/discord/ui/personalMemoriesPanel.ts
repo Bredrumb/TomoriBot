@@ -60,7 +60,7 @@ function renderMemoryBlock(locale: string, content: string, availableBudget: num
   const footerKey = textPreviewFooterKey(initialPreview);
   const footerVars = textPreviewFooterVars(initialPreview, locale);
   const initialFooter = footerKey ? `\n-# ${localizer(locale, footerKey, footerVars)}` : "";
-  const footerReserve = getDiscordTextLength(initialFooter);
+  const footerReserve = measureFormattedPanelTextLength({ type: ComponentType.TextDisplay, content: initialFooter });
   const refinedBudget = Math.max(0, availableBudget - fenceOverhead - footerReserve);
   const preview = buildTextPreview(content, refinedBudget);
   const finalFooterKey = textPreviewFooterKey(preview);

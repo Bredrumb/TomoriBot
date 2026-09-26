@@ -30,7 +30,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("StatRepository — regression", () => {
     await setupTestDb();
     refs = await insertFixtures(testSql);
     const altUser = await userRepository.register(FIXTURE_IDS.altUserDiscId, "_rt_alt_user", "en");
-    if (!altUser) throw new Error("Failed to register alt test user");
+    if (!altUser || altUser.user_id === undefined) throw new Error("Failed to register alt test user");
     altUserId = altUser.user_id;
     lineageA = refs.personaLineageId;
     lineageB = refs.personaLineageId + 1000; // distinct lineage (no FK on persona_lineage_id)

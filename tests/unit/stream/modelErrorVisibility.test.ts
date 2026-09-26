@@ -91,7 +91,7 @@ describe("StreamOrchestrator model-error visibility", () => {
   });
 
   it("renders a dedicated model configuration error embed for terminal model errors", async () => {
-    const send = mock(async () => undefined);
+    const send = mock(async (_payload: unknown) => undefined);
     const result = await new StreamOrchestrator().streamToDiscord(
       makeProvider(),
       makeConfig(),
@@ -138,7 +138,7 @@ describe("StreamOrchestrator model-error visibility", () => {
       },
     };
 
-    const send = mock(async () => undefined);
+    const send = mock(async (_payload: unknown) => undefined);
     const result = await new StreamOrchestrator().streamToDiscord(provider, makeConfig(), makeContext(send, false));
 
     expect(result.status).toBe("error");

@@ -7,6 +7,7 @@
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import type { CustomEndpointRow } from "@/types/db/schema";
+import { isModalRadioGroupField } from "@/types/discord/modal";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import {
   buildVoiceMessageModalComponents,
@@ -251,7 +252,7 @@ describe("buildVoiceMessageModalComponents radio options", () => {
     const sourceField = buildVoiceMessageModalComponents(input).find(
       (component) => component.customId === VOICE_MESSAGE_SOURCE_INPUT_ID,
     );
-    if (sourceField?.kind !== "radioGroup") throw new Error("expected a radio group");
+    if (!sourceField || !isModalRadioGroupField(sourceField)) throw new Error("expected a radio group");
 
     expect(sourceField.options.map((option) => option.value)).toEqual([
       "upload",
@@ -275,7 +276,7 @@ describe("buildVoiceMessageModalComponents radio options", () => {
     const field = buildVoiceMessageModalComponents(input).find(
       (component) => component.customId === VOICE_MESSAGE_EXPRESSIVENESS_INPUT_ID,
     );
-    if (field?.kind !== "radioGroup") throw new Error("expected a radio group");
+    if (!field || !isModalRadioGroupField(field)) throw new Error("expected a radio group");
 
     expect(field.options.map((option) => option.value)).toEqual([
       "subtle",
@@ -301,7 +302,7 @@ describe("buildVoiceMessageModalComponents radio options", () => {
     const field = buildVoiceMessageModalComponents(elevenLabsInput).find(
       (component) => component.customId === VOICE_MESSAGE_EXPRESSIVENESS_INPUT_ID,
     );
-    if (field?.kind !== "radioGroup") throw new Error("expected a radio group");
+    if (!field || !isModalRadioGroupField(field)) throw new Error("expected a radio group");
 
     expect(field.labelKey).toBe("commands.generate.voice-message.modal.stability_label");
     expect(field.options.map((option) => option.value)).toEqual(["stable", "natural", "creative"]);

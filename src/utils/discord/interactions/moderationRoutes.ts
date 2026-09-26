@@ -489,14 +489,6 @@ export function createModerationInteractionRoute(
           return;
         }
 
-        if (!scope.personalMemoriesEnabled) {
-          await interaction.reply({
-            content: localizer(route.locale, "commands.moderation.user_blacklist_add_personalization_disabled_detail"),
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
         const nonce = dependencies.createNonce();
         await dependencies.showUserBlacklistAddModal(interaction as ButtonInteraction, route.locale, nonce);
         return;
@@ -538,15 +530,6 @@ export function createModerationInteractionRoute(
           return;
         }
 
-        if (!scope.userBlacklist.personalMemoriesEnabled) {
-          await repaint(interaction, route.locale, "user-blacklist", "channels", 0, scope, {
-            tone: "warning",
-            heading: localizer(route.locale, "commands.moderation.user_blacklist_add_personalization_disabled"),
-            detail: localizer(route.locale, "commands.moderation.user_blacklist_add_personalization_disabled_detail"),
-          });
-          return;
-        }
-
         const targetUser = await dependencies.resolveUser(modal, rawTargetUserId);
         if (!targetUser) {
           await repaint(interaction, route.locale, "user-blacklist", "channels", 0, scope, {
@@ -574,7 +557,6 @@ export function createModerationInteractionRoute(
           serverId: scope.serverId,
           targetUserId: targetUser.id,
           isBot: targetUser.bot,
-          personalMemoriesEnabled: scope.userBlacklist.personalMemoriesEnabled,
         });
 
         const reloadedScope = await dependencies.resolveScope(interaction, false);
@@ -612,12 +594,6 @@ export function createModerationInteractionRoute(
               user_name: targetUser.username,
               user_id: targetUser.id,
             }),
-          };
-        } else if (result.status === "personalization_disabled") {
-          panelReceipt = {
-            tone: "warning",
-            heading: localizer(route.locale, "commands.moderation.user_blacklist_add_personalization_disabled"),
-            detail: localizer(route.locale, "commands.moderation.user_blacklist_add_personalization_disabled_detail"),
           };
         } else {
           panelReceipt = {
@@ -823,12 +799,18 @@ export function createModerationInteractionRoute(
             const userId = parts.at(-1) ?? "";
             const user = await dependencies.resolveUser(interaction, userId);
             if (parts[0] === "u")
-              return { value, label: formatGuildMemberLabel(user), description: "Personalization blacklist" };
+              return {
+                value,
+                label: formatGuildMemberLabel(user),
+                description: localizer(route.locale, "commands.moderation.user_blacklist_option_server"),
+              };
             const personaId = Number(parts[1]);
             return {
               value,
               label: formatGuildMemberLabel(user),
-              description: scope.whitelist.personaNames.get(personaId) ?? "Persona restriction",
+              description:
+                scope.whitelist.personaNames.get(personaId) ??
+                localizer(route.locale, "commands.moderation.user_blacklist_option_persona"),
             };
           }),
         );

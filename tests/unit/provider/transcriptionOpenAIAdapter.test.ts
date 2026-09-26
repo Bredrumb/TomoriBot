@@ -14,6 +14,14 @@ function buildTranscriptionEndpoint(endpointUrl: string): CustomEndpointRow {
     endpoint_url: endpointUrl,
     requires_auth: false,
     extra_config: { model: "whisper-1" },
+    has_tools: false,
+    sees_images: false,
+    sees_videos: false,
+    supports_structoutput: false,
+    strict_role_alternation: false,
+    supports_prefix_completion: false,
+    verbatim_tool_calling: false,
+    is_default: false,
   };
 }
 

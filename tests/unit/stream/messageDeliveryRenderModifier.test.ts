@@ -8,7 +8,7 @@ import {
   VisibleDeliveryMode,
 } from "@/types/stream/types";
 import { StreamMessageDelivery } from "@/utils/discord/stream/messageDelivery";
-import type { StreamSendPayload, StreamUiUpdater } from "@/utils/discord/stream/uiUpdater";
+import { StreamUiUpdater, type StreamSendPayload } from "@/utils/discord/stream/uiUpdater";
 
 function textConfig(visibleDeliveryMode = VisibleDeliveryMode.STREAMING): TextProcessingConfig {
   return {
@@ -39,17 +39,28 @@ const context = {
   },
 } as StreamContext;
 
+/**
+ * The real updater with only the send intercepted: the delivery calls nothing else on it, so the
+ * recorded calls are exactly what production would have handed to Discord.
+ */
+function makeDelivery(onPayload: (payload: StreamSendPayload, textForState: string) => void): StreamMessageDelivery {
+  const uiUpdater = new StreamUiUpdater({
+    hasStopRequest: () => false,
+    requestStop: () => true,
+    notifyStreamProgress: () => undefined,
+  });
+  uiUpdater.sendSinglePayload = async (payload, textForState) => {
+    onPayload(payload, textForState);
+    return null;
+  };
+  return new StreamMessageDelivery({ hasStopRequest: () => false, uiUpdater });
+}
+
 describe("StreamMessageDelivery copied-render options", () => {
   it("passes identity overrides and accumulated text prefixes to the UI updater", async () => {
     const sentPayloads: Array<{ payload: StreamSendPayload; textForState: string }> = [];
-    const delivery = new StreamMessageDelivery({
-      hasStopRequest: () => false,
-      uiUpdater: {
-        sendSinglePayload: async (payload, textForState) => {
-          sentPayloads.push({ payload, textForState });
-          return null;
-        },
-      } as StreamUiUpdater,
+    const delivery = makeDelivery((payload, textForState) => {
+      sentPayloads.push({ payload, textForState });
     });
 
     // Copied identities flip the Discord display name ("Obonya (Ren)") while
@@ -71,14 +82,8 @@ describe("StreamMessageDelivery copied-render options", () => {
 
   it("passes sprite records with a clean username and decorated accumulated prefix", async () => {
     const sentPayloads: Array<{ payload: StreamSendPayload; textForState: string }> = [];
-    const delivery = new StreamMessageDelivery({
-      hasStopRequest: () => false,
-      uiUpdater: {
-        sendSinglePayload: async (payload, textForState) => {
-          sentPayloads.push({ payload, textForState });
-          return null;
-        },
-      } as StreamUiUpdater,
+    const delivery = makeDelivery((payload, textForState) => {
+      sentPayloads.push({ payload, textForState });
     });
 
     // Sprite renders keep the webhook username clean ("Ren"); the decorated
@@ -101,14 +106,8 @@ describe("StreamMessageDelivery copied-render options", () => {
 
   it("flushes aggregate-mode bot text before sending a copied-render override", async () => {
     const sentPayloads: StreamSendPayload[] = [];
-    const delivery = new StreamMessageDelivery({
-      hasStopRequest: () => false,
-      uiUpdater: {
-        sendSinglePayload: async (payload) => {
-          sentPayloads.push(payload);
-          return null;
-        },
-      } as StreamUiUpdater,
+    const delivery = makeDelivery((payload) => {
+      sentPayloads.push(payload);
     });
     const state = createDefaultStreamState();
     state.pendingAggregatedText = "plain bot text";

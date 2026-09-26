@@ -4,6 +4,7 @@ import { llmModelRepo, llmProviderRepo } from "@/utils/db/repositories";
 import { applyPersonalProviderSelectionsToTomoriState } from "@/utils/provider/personalProviderRuntime";
 import { buildUserSavedProviderConfigFromExistingOrDefaults } from "@/utils/provider/savedProviderConfig";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
+import { createPersona } from "../../helpers/fixtures";
 
 const USER_DISC_A = "_rt_randomizer_user_a";
 const USER_DISC_B = "_rt_randomizer_user_b";
@@ -69,16 +70,17 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Personal model randomizer data layer (migr
   }
 
   function makeState(randomizerEnabled: boolean): TomoriState {
-    return {
+    return createPersona({
+      // The server id and the model row come from the provisioned test database, so both are
+      // overrides rather than shared factory defaults.
       server_id: serverId,
       persona_id: 1,
       persona_lineage_id: 1,
-      persona_name: "test-persona",
       persona_nickname: "test",
       is_alter: false,
       llm: sampleLlm,
       config: makeBaseConfig({ model_randomizer_enabled: randomizerEnabled }),
-    } as TomoriState;
+    });
   }
 
   it("overrides server true with personal false when an active personal text route has randomizer disabled", async () => {

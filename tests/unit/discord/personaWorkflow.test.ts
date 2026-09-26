@@ -21,6 +21,7 @@ import type {
 import * as realInteractionCore from "@/utils/discord/ui/interactionCore";
 import * as realLocalizer from "@/utils/text/localizer";
 import { createScopedModuleMocker, stubLogMembers } from "../../helpers/mockSurface";
+import { createPersona } from "../../helpers/fixtures";
 
 interface RecordedCall {
   method: string;
@@ -233,7 +234,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
 }));
 
 const {
-  beginAnchorPrivateWorkflow,
   completePersonaWorkflow,
   retryPersonaWorkflow,
   runPersonaPickerWorkflow,
@@ -259,13 +259,11 @@ interface WorkflowHarness {
 let interactionSequence = 0;
 
 function makePersona(personaId: number): TomoriState {
-  return {
+  return createPersona({
     persona_id: personaId,
     persona_nickname: `Persona ${personaId}`,
     persona_prompt: `Prompt ${personaId}`,
-    attribute_list: [],
-    is_alter: false,
-  } as unknown as TomoriState;
+  });
 }
 
 function makeComponentMessage(id: string, harness: WorkflowHarness): Message {
@@ -1026,40 +1024,6 @@ describe("workflow acknowledgment and modal phases", () => {
 });
 
 describe("anchor persona message controller", () => {
-  it("starts a non-persona sibling scope on the same anchor controller", async () => {
-    const harness = makeHarness();
-    const phase = await beginAnchorPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
-    const nested = makeButton(harness, "serverwide-next");
-
-    expect(phase.message.anchorMessageId).toBe(harness.anchorMessageId);
-    expect(phase.phaseId).toBe(harness.root.id);
-    await phase.useButton(nested).replace(v2Payload("next"));
-    await phase.message.disableControls();
-
-    const initial = getPayload(calls[0] ?? { method: "", source: "" });
-    expect(calls[0]?.method).toBe("root.reply");
-    expect(initial.flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
-    expect(initial.withResponse).toBe(true);
-    expect(calls.some((call) => call.method === "button.update" && call.source === nested.id)).toBe(true);
-    expect(calls.some((call) => call.method === "root.editReply")).toBe(true);
-  });
-
-  it("logs a fatal anchor-controller failure outside the persona runner", async () => {
-    const harness = makeHarness();
-    const phase = await beginAnchorPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
-    harness.rootEditError = { code: 50027, message: "Invalid webhook token" };
-    let failure: unknown;
-
-    try {
-      await phase.message.replace(v2Payload("unavailable"));
-    } catch (error) {
-      failure = error;
-    }
-
-    expectTypedError(failure, "anchor-message-unavailable");
-    expectFatalLog("root-edit");
-  });
-
   it("replaces, edits, fetches, disables controls, handles attachments, and deletes one anchor message", async () => {
     const harness = makeHarness();
     const selectedButton = makeButton(harness);
@@ -1489,6 +1453,32 @@ describe("retry cache and separate-public policy", () => {
     );
   });
 
+  it("keeps the avatar cache when a retry supplies the same personas in the same order", async () => {
+    const harness = makeHarness();
+    const firstButton = makeButton(harness);
+    const secondButton = makeButton(harness);
+    pickerQueue.push((options) => {
+      options.avatarSessionCache?.set(0, { type: "url", url: "cached-avatar" });
+      return { success: true, selectedIndex: 0, interaction: firstButton };
+    });
+    pickerQueue.push({ success: true, selectedIndex: 0, interaction: secondButton });
+    let callbackCount = 0;
+
+    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
+      personas: [makePersona(1), makePersona(2)],
+      onSelected: async () => {
+        callbackCount++;
+        return callbackCount === 1
+          ? retryPersonaWorkflow([makePersona(1), makePersona(2)])
+          : completePersonaWorkflow("finished");
+      },
+    });
+
+    expect(result.outcome).toBe("selected");
+    expect(pickerCalls).toHaveLength(2);
+    expect(pickerCalls[1]?.avatarSessionCache?.get(0)).toEqual({ type: "url", url: "cached-avatar" });
+  });
+
   it("compacts the private picker before creating exactly one public response", async () => {
     const harness = makeHarness();
     const selectedButton = makeButton(harness);
@@ -1524,174 +1514,5 @@ describe("retry cache and separate-public policy", () => {
     expectTypedError(ephemeralFailure, "public-reply-must-not-be-ephemeral");
     expectTypedError(duplicateFailure, "public-reply-already-sent");
     expectAllInPlacePayloadsAreV2();
-  });
-});
-
-describe("runPersonaPickerWorkflow eligibility filtering", () => {
-  // Mirrors the shared `hasAttributes` predicate: eligible personas carry at
-  // least one attribute. Using one function for both the picker filter and any
-  // post-selection guard is exactly the parity the eligibility feature enforces.
-  const hasAttr = (persona: TomoriState): boolean => (persona.attribute_list?.length ?? 0) > 0;
-
-  function makeEligPersona(personaId: number, eligible: boolean): TomoriState {
-    return { ...makePersona(personaId), attribute_list: eligible ? ["trait"] : [] } as TomoriState;
-  }
-
-  const eligibility = {
-    isEligible: hasAttr,
-    emptyTitleKey: "empty.title",
-    emptyDescriptionKey: "empty.description",
-    itemsLabelKey: "general.persona_workflow.items.attributes",
-  };
-
-  function filteredNoticeOf(index: number): unknown {
-    return (pickerCalls[index] as unknown as { filteredNotice?: unknown } | undefined)?.filteredNotice;
-  }
-
-  it("renders the full list with no filtered notice when every persona is eligible", async () => {
-    const harness = makeHarness();
-    pickerQueue.push({ success: false, reason: "cancelled" });
-    const personas = [makeEligPersona(1, true), makeEligPersona(2, true)];
-
-    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
-      personas,
-      eligibility,
-      onSelected: async () => completePersonaWorkflow(),
-    });
-
-    expect(result.outcome).toBe("cancelled");
-    expect(pickerCalls).toHaveLength(1);
-    expect(pickerCalls[0]?.personas.map((persona) => persona.persona_id)).toEqual([1, 2]);
-    expect(filteredNoticeOf(0)).toBeUndefined();
-  });
-
-  it("shows only eligible personas and appends the filtered notice when some are excluded", async () => {
-    const harness = makeHarness();
-    pickerQueue.push({ success: false, reason: "cancelled" });
-    const personas = [makeEligPersona(1, true), makeEligPersona(2, false), makeEligPersona(3, true)];
-
-    await runPersonaPickerWorkflow(harness.root, "en-US", {
-      personas,
-      eligibility,
-      onSelected: async () => completePersonaWorkflow(),
-    });
-
-    expect(pickerCalls[0]?.personas.map((persona) => persona.persona_id)).toEqual([1, 3]);
-    expect(filteredNoticeOf(0)).toBeDefined();
-  });
-
-  it("still renders a picker and requires an explicit click when exactly one persona is eligible", async () => {
-    const harness = makeHarness();
-    const selectedButton = makeButton(harness);
-    // The filtered list is [persona 2]; absolute index 0 must resolve to it.
-    queueSelection(selectedButton, 0);
-    const personas = [makeEligPersona(1, false), makeEligPersona(2, true)];
-
-    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
-      personas,
-      eligibility,
-      onSelected: async (selection) => {
-        expect(selection.persona.persona_id).toBe(2);
-        return completePersonaWorkflow("done");
-      },
-    });
-
-    expect(result.outcome).toBe("selected");
-    // A picker was rendered (no auto-selection of the lone eligible persona).
-    expect(pickerCalls).toHaveLength(1);
-    expect(pickerCalls[0]?.personas.map((persona) => persona.persona_id)).toEqual([2]);
-  });
-
-  it("returns the empty outcome without rendering a picker when no persona is eligible at entry", async () => {
-    const harness = makeHarness();
-    const personas = [makeEligPersona(1, false), makeEligPersona(2, false)];
-
-    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
-      personas,
-      eligibility,
-      onSelected: async () => completePersonaWorkflow(),
-    });
-
-    expect(result.outcome).toBe("empty");
-    expect(pickerCalls).toHaveLength(0);
-    // Distinct from cancelled/timeout/error/fatal.
-    expect(result.outcome).not.toBe("cancelled");
-  });
-
-  it("replaces the anchor message in place and returns empty when a retry filters to empty", async () => {
-    const harness = makeHarness();
-    const selectedButton = makeButton(harness);
-    queueSelection(selectedButton, 0);
-    const personas = [makeEligPersona(1, true)];
-    const freshAllIneligible = [makeEligPersona(1, false)];
-
-    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
-      personas,
-      eligibility,
-      onSelected: async () => retryPersonaWorkflow(freshAllIneligible),
-    });
-
-    expect(result.outcome).toBe("empty");
-    // Exactly one picker was rendered; the empty state did not open a second one.
-    expect(pickerCalls).toHaveLength(1);
-    // The selected button was acknowledged for the retry and the anchor message
-    // was replaced in place (root editReply), not via a new ephemeral message.
-    expect(calls.some((call) => call.method === "button.deferUpdate" && call.source === selectedButton.id)).toBe(true);
-    expect(calls.some((call) => call.method === "root.editReply")).toBe(true);
-    expect(calls.some((call) => call.method === "button.followUp")).toBe(false);
-    expectAllInPlacePayloadsAreV2();
-  });
-
-  it("maps an absolute index to the right persona when the filtered list crosses a page boundary", async () => {
-    const harness = makeHarness();
-    const selectedButton = makeButton(harness);
-    // 8 personas, alternating eligibility -> 6 eligible: ids [1,3,5,7,9,11].
-    // The persona pager holds 4 per page, so absolute index 5 (the 6th eligible,
-    // id 11) lands on page 2 and must resolve past the boundary.
-    const personas = Array.from({ length: 12 }, (_, i) => makeEligPersona(i, i % 2 === 1));
-    queueSelection(selectedButton, 5);
-
-    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
-      personas,
-      eligibility,
-      onSelected: async (selection) => {
-        expect(selection.persona.persona_id).toBe(11);
-        expect(selection.absoluteIndex).toBe(5);
-        return completePersonaWorkflow("done");
-      },
-    });
-
-    expect(result.outcome).toBe("selected");
-    expect(pickerCalls[0]?.personas.map((persona) => persona.persona_id)).toEqual([1, 3, 5, 7, 9, 11]);
-  });
-
-  it("does not clear the avatar cache when a retry returns the same eligible set in the same order", async () => {
-    const harness = makeHarness();
-    const firstButton = makeButton(harness);
-    const secondButton = makeButton(harness);
-    const personas = [makeEligPersona(1, true), makeEligPersona(2, true)];
-    pickerQueue.push((options) => {
-      options.avatarSessionCache?.set(0, { type: "url", url: "cached-avatar" });
-      return { success: true, selectedIndex: 0, interaction: firstButton };
-    });
-    pickerQueue.push({ success: true, selectedIndex: 0, interaction: secondButton });
-    let callbackCount = 0;
-
-    const result = await runPersonaPickerWorkflow(harness.root, "en-US", {
-      personas,
-      eligibility,
-      onSelected: async () => {
-        callbackCount++;
-        // Retry with a fresh array that filters to the same eligible set/order.
-        return callbackCount === 1
-          ? retryPersonaWorkflow([makeEligPersona(1, true), makeEligPersona(2, true)])
-          : completePersonaWorkflow("finished");
-      },
-    });
-
-    expect(result.outcome).toBe("selected");
-    expect(pickerCalls).toHaveLength(2);
-    // Comparing filtered-to-filtered keeps identity stable, so the cache survives.
-    expect(pickerCalls[1]?.avatarSessionCache?.get(0)).toEqual({ type: "url", url: "cached-avatar" });
   });
 });

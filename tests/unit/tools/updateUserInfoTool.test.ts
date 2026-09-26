@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, spyOn } from "bun:test";
-import type { ToolContext, ToolStateForContext } from "@/types/tool/interfaces";
+import type { ToolContext } from "@/types/tool/interfaces";
 import { stripRedundantAffixes, UpdateUserInfoTool } from "@/tools/functionCalls/updateUserInfoTool";
-import { getAvailableToolsForContext } from "@/tools/availability";
+import { getAvailableToolsForContext, type ToolStateForContext } from "@/tools/availability";
 import { PrivacyLevel } from "@/types/db/schema";
 import { EMPTY_PERSONA_NAMING_CONFIG, type PersonaNamingConfig } from "@/types/personaNaming";
 import { initializeLocalizer } from "@/utils/text/localizer";

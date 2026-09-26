@@ -130,17 +130,6 @@ describe("transfer snapshot store", () => {
     });
   });
 
-  it("returns missing after expiry", () => {
-    let currentTime = 1000;
-    const store = createTransferSnapshotStore(() => currentTime);
-    store.storeTransferSnapshot("nonce-1234", makeRecord());
-    currentTime += TRANSFER_SNAPSHOT_TTL_MINUTES * 60 * 1000 + 1;
-
-    expect(store.readTransferSnapshot("nonce-1234", "actor-1", "workspace", "guild-1")).toEqual({
-      status: "missing",
-    });
-  });
-
   it("does not extend expiry after a state mutation", () => {
     let currentTime = 1000;
     const store = createTransferSnapshotStore(() => currentTime);

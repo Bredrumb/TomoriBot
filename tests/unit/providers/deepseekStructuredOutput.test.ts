@@ -24,7 +24,8 @@ describe("DeepSeek structured output", () => {
       mimeType: "image/png",
     });
 
-    let capturedRequestBody: Record<string, unknown> | null = null;
+    // Written by the fetch stub below, which runs before the guarded read.
+    let capturedRequestBody: Record<string, unknown> | undefined;
     globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
       capturedRequestBody = JSON.parse(init?.body as string);
       return new Response(
@@ -90,7 +91,7 @@ describe("DeepSeek structured output", () => {
   });
 
   it("parses JSON wrapped in markdown fences and think tags", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string | URL | Request, _init?: RequestInit) => {
       const payload = '<think>Analyzing emotion...</think>\n```json\n{\n  "status": "ok"\n}\n```';
       return new Response(
         JSON.stringify({
@@ -123,7 +124,7 @@ describe("DeepSeek structured output", () => {
   });
 
   it("parses JSON arrays containing objects surrounded by conversational text", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string | URL | Request, _init?: RequestInit) => {
       const payload = 'Here is the extracted list:\n[ {"name": "foo", "score": 10} ]\nHope this helps!';
       return new Response(
         JSON.stringify({
@@ -155,8 +156,9 @@ describe("DeepSeek structured output", () => {
       mimeType: "image/jpeg",
     });
 
-    let requestedUrl: string | null = null;
-    let requestBody: Record<string, unknown> | null = null;
+    // Written by the fetch stub below, which runs before the guarded read.
+    let requestedUrl: string | undefined;
+    let requestBody: Record<string, unknown> | undefined;
 
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       requestedUrl = String(url);
@@ -197,8 +199,9 @@ describe("DeepSeek structured output", () => {
       mimeType: "image/png",
     });
 
-    let requestedUrl: string | null = null;
-    let requestBody: Record<string, unknown> | null = null;
+    // Written by the fetch stub below, which runs before the guarded read.
+    let requestedUrl: string | undefined;
+    let requestBody: Record<string, unknown> | undefined;
 
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       requestedUrl = String(url);

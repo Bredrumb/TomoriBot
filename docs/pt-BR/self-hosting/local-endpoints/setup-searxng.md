@@ -15,11 +15,11 @@ Use este caminho se você executar o TomoriBot com a pilha do Docker Compose do 
 ```sh
 docker compose --profile searxng up -d
 ```
-Isso inicia o serviço `searxng` junto com o TomoriBot: o bot o acessa em `http://searxng:8080/` automaticamente.
+Defina `SEARXNG_BASE_URL=http://searxng:8080/` em `.env` antes de iniciar o perfil. Deixe a variável vazia quando o perfil estiver desativado.
 
 Se você executa o TomoriBot diretamente com `bun run dev`, use o caminho autônomo (standalone) abaixo.
 
-Se estiver usando em produção, defina `SEARXNG_SECRET` em `.env` para qualquer string de mais de 32 caracteres (ela tem um padrão automático no ambiente de desenvolvimento).
+Defina `SEARXNG_SECRET` em `.env` com outro valor aleatório para a chave de assinatura do contêiner.
 
 ---
 
@@ -34,23 +34,28 @@ bun run launch --searxng
 
 Se preferir gerenciar o contêiner você mesmo, mantenha `SEARXNG_BASE_URL=http://localhost:8080/` em `.env` e execute:
 
+Primeiro, compile a imagem do repositório. Ela carrega as configurações de busca em JSON e define a chave de assinatura.
+
+```sh
+docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/searxng
+```
+
 **PowerShell:**
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
-  -v "${PWD}/servers/searxng:/etc/searxng:rw" `
-  -e SEARXNG_SECRET=dev-only-not-for-production `
-  searxng/searxng:latest
+  --tmpfs /etc/searxng `
+  tomoribot-searxng:latest
 ```
 
 **Bash (Linux/macOS):**
 ```bash
 docker run -d --name searxng -p 8080:8080 \
-  -v "${PWD}/servers/searxng:/etc/searxng:rw" \
-  -e SEARXNG_SECRET=dev-only-not-for-production \
-  searxng/searxng:latest
+  --tmpfs /etc/searxng \
+  tomoribot-searxng:latest
 ```
 
 Em seguida, execute `bun run dev` assim que o contêiner estiver íntegro (`docker ps` mostra `(healthy)`).
+Sem `SEARXNG_SECRET` no ambiente do contêiner, a imagem gera uma chave de assinatura temporária.
 
 ---
 

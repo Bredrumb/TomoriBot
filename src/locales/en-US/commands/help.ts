@@ -94,7 +94,7 @@
         memory_tagging: `Memory Tagging (Advanced)`,
         memory_tagging_description: `Wake a memory only when it is relevant`,
         blacklisting: `Blacklisting`,
-        blacklisting_description: `Stop one member from triggering me`,
+        blacklisting_description: "Make me ignore one member completely",
       },
     },
     breadcrumbs: {
@@ -533,7 +533,7 @@ Enter \`{project_id}::{location}\` using {configSetup} or {configApikeySet}
       blacklisting: {
         title: `Blacklisting`,
         description:
-          "A blacklisted member cannot trigger me at all, in any channel, with any persona.\n\nAdd one in {moderationBlacklist}. The same page lists every current entry and removes them, one at a time or in bulk.\n> Blacklisting is about access, not deletion. Memories about that member stay until someone removes them.",
+          "I ignore a blacklisted member completely. They cannot trigger me in any channel or with any persona, their messages never reach my context, and I refuse the commands that would have me act for them, such as `/respond`, `/reward`, and `/punish`. They also cannot change server memories, attributes, or sample dialogues.\n\nAdd one in {moderationBlacklist}. The same page lists every current entry and removes them, one at a time or in bulk.\n> Blacklisting is about access, not deletion. Memories about that member stay until someone removes them.",
         footer: "To silence a whole channel rather than a person, take the channel off the whitelist instead.",
       },
     },

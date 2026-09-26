@@ -8,6 +8,7 @@ import {
 } from "@/utils/cache/personalSpotlightCache";
 import { clearUserCache, getCachedUserRow, getUserCacheStats, invalidateUserCache } from "@/utils/cache/userCache";
 import { userRepository } from "@/utils/db/repositories/UserRepository";
+import { createUserRow } from "../../../helpers/fixtures";
 
 const USER_ID = 51;
 const USER_DISC_ID = "510000000000000001";
@@ -93,15 +94,9 @@ describe("personal reset post-commit operation", () => {
 
   it("evicts populated user and spotlight cache entries when real invalidators are wired", async () => {
     // Populate user cache entry
-    const loadSpy = spyOn(userRepository, "loadByDiscordId").mockResolvedValue({
-      user_id: USER_ID,
-      user_disc_id: USER_DISC_ID,
-      language_pref: "en-US",
-      created_at: new Date(),
-      updated_at: new Date(),
-      privacy_level: 0,
-      registration_locale: null,
-    });
+    const loadSpy = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(
+      createUserRow({ user_id: USER_ID, user_disc_id: USER_DISC_ID, registration_locale: null }),
+    );
     const privacySpy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(0);
 
     await getCachedUserRow(USER_DISC_ID);
@@ -110,9 +105,14 @@ describe("personal reset post-commit operation", () => {
     // Populate spotlight cache entry
     const hasSpotlightsSpy = spyOn(userRepository, "serverHasPersonalSpotlights").mockResolvedValue(true);
     const spotlightStatusSpy = spyOn(userRepository, "getPersonalSpotlightStatus").mockResolvedValue({
-      hasPersonalSpotlight: true,
-      allowedPersonaIds: [1],
+      serverId: SERVER_ID_A,
+      userId: USER_ID,
+      channelDiscId: "channel_1",
+      personaIds: [1],
       autoTriggerPersonaId: null,
+      expiresAt: null,
+      createdAt: null,
+      updatedAt: null,
     });
 
     await getCachedPersonalSpotlightStatus(SERVER_ID_A, USER_ID, "channel_1");

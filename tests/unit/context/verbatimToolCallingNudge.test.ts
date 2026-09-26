@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
 import { HumanizerDegree, type AssembledServerConfig, type TomoriState } from "@/types/db/schema";
+import type { StructuredContextItem } from "@/types/misc/context";
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { shouldInjectVerbatimToolCallingNudge } from "@/utils/tools/verbatimToolCalling";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
 
 function makeMessage(index: number): SimplifiedMessageForContext {
   return {
@@ -34,15 +36,17 @@ function makeTomoriState(options: {
   hasTools: boolean;
   llmProvider?: string;
 }): TomoriState {
-  return {
+  return createPersona({
     context_note: null,
     context_note_depth: 0,
-    llm: {
+    // The nudge is only parsed by the custom adapter, so the provider default stays "custom"
+    // rather than the shared factory's "google".
+    llm: createLlmRow({
       verbatim_tool_calling: options.verbatimToolCalling,
       has_tools: options.hasTools,
       llm_provider: options.llmProvider ?? "custom",
-    },
-  } as TomoriState;
+    }),
+  });
 }
 
 async function buildItems(options: {
@@ -51,7 +55,7 @@ async function buildItems(options: {
   llmProvider?: string;
   messageCount?: number;
 }) {
-  const contextItems = [];
+  const contextItems: StructuredContextItem[] = [];
   await appendDialogueHistoryContext({
     contextItems,
     client: {} as Client,
@@ -62,6 +66,7 @@ async function buildItems(options: {
     tomoriState: makeTomoriState(options),
     includeTimestamps: false,
     isUserImpersonation: false,
+    triggererFormattedName: `User ${(options.messageCount ?? 5) - 1}`,
     uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
     convertMentions: async (text) => text,
   });

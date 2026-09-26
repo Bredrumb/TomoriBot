@@ -78,7 +78,6 @@ function makeData(readStatus: PanelReadStatus, overrides: Partial<ModerationScop
     userBlacklist: {
       personalizationUserIds: ["personalized-user-1"],
       personaBlocks: [makeBlock(1)],
-      personalMemoriesEnabled: true,
     },
     whitelist: {
       channels: [makeChannel(1)],
@@ -145,7 +144,7 @@ describe("Moderation panel Components V2 limits", () => {
             const blocks = Array.from({ length: size }, (_, index) => makeBlock(index + 1));
             const personaNames = new Map(blocks.map((block) => [block.persona_id, block.persona_name]));
             const data = makeData(readStatus, {
-              userBlacklist: { personalizationUserIds: [], personaBlocks: blocks, personalMemoriesEnabled: true },
+              userBlacklist: { personalizationUserIds: [], personaBlocks: blocks },
               whitelist: { channels, personaChannels, roles, personaNames },
             });
             for (const whitelistPage of ["channels", "persona-channels", "roles"] as const) {
@@ -184,7 +183,6 @@ describe("Moderation panel Components V2 limits", () => {
       expectSafePanelPayload(
         buildModerationPanelPayload({
           locale: "en-US",
-          category: testCase.category,
           whitelistPage: testCase.page,
           rangeIndex: 0,
           data,
@@ -206,7 +204,7 @@ describe("Moderation panel Components V2 limits", () => {
     for (const [index, value] of shapeValues.entries()) {
       const block = makeBlock(index + 1, value);
       const data = makeData("fresh", {
-        userBlacklist: { personalizationUserIds: [], personaBlocks: [block], personalMemoriesEnabled: true },
+        userBlacklist: { personalizationUserIds: [], personaBlocks: [block] },
         whitelist: {
           channels: [],
           personaChannels: [makePersonaChannel(index + 1)],
@@ -274,7 +272,7 @@ describe("Moderation panel Components V2 limits", () => {
     const personaChannels = Array.from({ length: total }, (_, index) => makePersonaChannel(index + 1));
     const roles = Array.from({ length: total }, (_, index) => makeRole(index + 1));
     const data = makeData("fresh", {
-      userBlacklist: { personalizationUserIds: [], personaBlocks: blocks, personalMemoriesEnabled: true },
+      userBlacklist: { personalizationUserIds: [], personaBlocks: blocks },
       whitelist: {
         channels,
         personaChannels,
@@ -303,22 +301,26 @@ describe("Moderation panel Components V2 limits", () => {
     expect(
       collect("user-blacklist", "channels")
         .match(/blocked-user-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `blocked-user-${index + 1}`).sort());
     expect(
       collect("whitelist", "channels")
         .match(/channel-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `channel-${index + 1}`).sort());
     expect(
       collect("whitelist", "persona-channels")
         .match(/persona-channel-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `persona-channel-${index + 1}`).sort());
     expect(
       collect("whitelist", "roles")
         .match(/role-\d+/gu)
-        ?.sort(),
+        ?.slice()
+        .sort(),
     ).toEqual(Array.from({ length: total }, (_, index) => `role-${index + 1}`).sort());
   });
 });

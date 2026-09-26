@@ -40,7 +40,6 @@ import {
   DISCORD_SELECT_OPTION_VALUE_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
   DISCORD_SELECT_OPTIONS_MIN,
-  assertRawModalLimits,
   getDiscordTextLength,
   validateRawModalLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
@@ -48,22 +47,21 @@ import { buildConfigModalFieldId } from "@/utils/discord/ui/configModals";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import type { ToolNoticeDefinition, ToolNoticeKey } from "@/constants/toolNotices";
 import { RUNTIME_LOCALES } from "../../helpers/localeCases";
+import { createPersona } from "../../helpers/fixtures";
 
 const STRING_SELECT = 3;
 const LABEL = 18;
 const RADIO_GROUP = 21;
 const CHECKBOX_GROUP = 22;
 
+/** Server 9, the id-derived nickname, and "only the first entry is a main persona" are this suite's defaults. */
 function makePersona(personaId: number, nickname = `Persona ${personaId}`): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_id: personaId,
     persona_nickname: nickname,
     is_alter: personaId !== 1,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
-    config: {},
-  } as unknown as TomoriState;
+  });
 }
 
 function makePersonas(count: number): TomoriState[] {
@@ -88,7 +86,7 @@ function eachComponent(components: readonly RawDiscordComponent[], visit: (c: Ra
 }
 
 function assertWithinDiscordLimits(payload: RawModalPayload, label: string): void {
-  assertRawModalLimits(payload);
+  expect(validateRawModalLimits(payload).violations, `${label}: validator violations`).toEqual([]);
 
   expect(getDiscordTextLength(payload.title), `${label}: title length`).toBeLessThanOrEqual(DISCORD_MODAL_TITLE_MAX);
   expect(payload.components.length, `${label}: component count`).toBeGreaterThanOrEqual(DISCORD_MODAL_COMPONENTS_MIN);

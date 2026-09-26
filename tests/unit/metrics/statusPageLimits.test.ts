@@ -1,5 +1,12 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ButtonStyle, ComponentType, type Client } from "discord.js";
+import {
+  ButtonStyle,
+  ComponentType,
+  type Client,
+  type ComponentInContainerData,
+  type ContainerComponentData,
+  type TopLevelComponentData,
+} from "discord.js";
 import type { SummaryEmbedOptions } from "@/types/discord/embed";
 import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
 import { formatMcpServers } from "@/utils/metrics/mcpStatus";
@@ -31,7 +38,21 @@ function countComponents(component: unknown): number {
   if (Array.isArray(component)) return component.reduce((total, item) => total + countComponents(item), 0);
   if (!component || typeof component !== "object") return 0;
   const value = component as { components?: unknown[] };
-  return 1 + (value.components?.reduce((total, item) => total + countComponents(item), 0) ?? 0);
+  return 1 + (value.components?.reduce<number>((total, item) => total + countComponents(item), 0) ?? 0);
+}
+
+function isContainerComponent(
+  component: TopLevelComponentData,
+): component is ContainerComponentData<ComponentInContainerData> {
+  return "components" in component && component.type === ComponentType.Container;
+}
+
+function containerBody(payload: { components: TopLevelComponentData[] }): readonly ComponentInContainerData[] {
+  const [container] = payload.components;
+  if (!container || !isContainerComponent(container)) {
+    throw new Error("Expected the dashboard payload to start with a container component");
+  }
+  return container.components;
 }
 
 function buildPage(category: StatusCategory, populated: boolean): SummaryEmbedOptions {
@@ -126,7 +147,7 @@ describe("status Components V2 limits and redaction", () => {
         },
       ],
     });
-    const components = (payload.components[0] as { components: Array<{ type: ComponentType }> }).components;
+    const components = containerBody(payload);
 
     expect(components[0].type).toBe(ComponentType.ActionRow);
     expect(components[1].type).toBe(ComponentType.Separator);
@@ -155,7 +176,7 @@ describe("status Components V2 limits and redaction", () => {
       },
     ];
     const payload = buildStatsDashboardPayload("stats-test", tabs, 0, "en-US", true);
-    const components = (payload.components[0] as { components: Array<{ type: ComponentType }> }).components;
+    const components = containerBody(payload);
 
     expect(components[0].type).toBe(ComponentType.ActionRow);
     expect(components[1].type).toBe(ComponentType.Separator);
@@ -168,14 +189,24 @@ describe("status Components V2 limits and redaction", () => {
     const endpointText = formatCustomEndpoints(
       [
         {
+          connection_id: 1,
           label: "Juno",
           model_name: "juno-model",
           capability: "text",
-          api_style: "openai",
+          api_style: "openai-compatible",
+          endpoint_url: endpointSecret,
           requires_auth: true,
-          base_url: endpointSecret,
+          extra_config: {},
+          has_tools: false,
+          sees_images: false,
+          sees_videos: false,
+          supports_structoutput: false,
+          strict_role_alternation: false,
+          supports_prefix_completion: false,
+          verbatim_tool_calling: false,
+          is_default: false,
         },
-      ] as Parameters<typeof formatCustomEndpoints>[0],
+      ],
       "en-US",
     );
     const mcpText = formatMcpServers(

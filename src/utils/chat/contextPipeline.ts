@@ -12,6 +12,7 @@ import {
 import { getCachedPrivacyLevel, getCachedUserRow } from "@/utils/cache/userCache";
 import { getCachedActiveBlocksForPersona } from "@/utils/cache/personaUserBlockCache";
 import { formatBlockedUserNoticeContent } from "@/tools/functionCalls/userBlockToolShared";
+import { resolveBlacklistedAuthorIds } from "@/utils/moderation/serverBlacklist";
 import { loadEmojiStickerCache } from "@/utils/cache/emojiStickerCache";
 import { buildForcedMentionsForUser } from "@/utils/discord/mentionHelper";
 import { normalizeMessageFetchLimit } from "@/utils/discord/messageFetchLimit";
@@ -651,13 +652,23 @@ async function buildSimplifiedHistory(
     }
   }
   const blockedContextUserIds = new Set(blockedContextBlocksById.keys());
-  // visibleRawMessages excludes blocked authors entirely so they cannot leak into
-  // tool-intent scanning, voice transcription, or sprite priming. The blocked
+  const blacklistedAuthorIds = turn.isDMChannel
+    ? new Set<string>()
+    : await resolveBlacklistedAuthorIds(
+        turn.serverDiscId,
+        messages.flatMap((msg) => {
+          const candidateId = getBlacklistCandidateAuthorId(msg);
+          return candidateId ? [candidateId] : [];
+        }),
+      );
+  const hiddenAuthorIds = new Set([...blockedContextUserIds, ...blacklistedAuthorIds]);
+  // visibleRawMessages excludes hidden authors entirely so they cannot leak into
+  // tool-intent scanning, voice transcription, or sprite priming. Persona-blocked
   // messages are still surfaced as `[System: ...]` notices in the simplify loop
   // below, which iterates the full (unfiltered) `messages` list instead.
   const visibleRawMessages =
-    blockedContextUserIds.size > 0
-      ? messages.filter((msg) => !blockedContextUserIds.has(getBlockComparableAuthorId(msg)))
+    hiddenAuthorIds.size > 0
+      ? messages.filter((msg) => !hiddenAuthorIds.has(getBlockComparableAuthorId(msg)))
       : messages;
 
   // Pre-populate the voice transcript cache for historical audio messages (Fix #5).
@@ -706,9 +717,16 @@ async function buildSimplifiedHistory(
       continue;
     }
 
+    const blockComparableId = getBlockComparableAuthorId(msg);
+    // A server-blacklisted author is dropped without a notice, like a FULL privacy opt-out:
+    // the persona did not impose the restriction and cannot lift it, so a notice gives it
+    // nothing to act on.
+    if (blacklistedAuthorIds.has(blockComparableId)) {
+      continue;
+    }
+
     // Blocked-author short-circuit: replace this user's live message with a
     //    single system notice instead of running the full simplify pipeline.
-    const blockComparableId = getBlockComparableAuthorId(msg);
     const activeContextBlock = blockedContextBlocksById.get(blockComparableId);
     if (activeContextBlock) {
       if (previousBlockNoticeAuthorId === blockComparableId) {
@@ -739,7 +757,7 @@ async function buildSimplifiedHistory(
       syntheticUsers,
       matrixUsers,
       reactionBudgetState,
-      blockedContextUserIds,
+      hiddenAuthorIds,
     );
     if (!result) continue;
     const { message: simplified, isDebug } = result;
@@ -1134,6 +1152,17 @@ function getBlockComparableAuthorId(msg: Message): string {
     return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? msg.author.id;
   }
   return msg.author.id;
+}
+
+/**
+ * The member a message speaks for when checking the server blacklist, or null when it speaks for
+ * no member: the bot itself, other bots, and persona or relay webhooks.
+ */
+function getBlacklistCandidateAuthorId(msg: Message): string | null {
+  if (msg.webhookId) {
+    return getCachedImpersonatedUserIdForWebhook(msg.webhookId) ?? null;
+  }
+  return msg.author.bot ? null : msg.author.id;
 }
 
 /**

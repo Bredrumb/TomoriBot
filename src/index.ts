@@ -34,8 +34,6 @@ config({ quiet: true });
 
 const environment = resolveEnvironment();
 
-await initStartupBackup(environment);
-
 // Bind to PORT immediately so Cloud Run's startup probe passes before the rest of init runs
 if (environment === "production") {
   const healthPort = Number.parseInt(process.env.PORT ?? "8080", 10);
@@ -43,6 +41,8 @@ if (environment === "production") {
 }
 
 await loadSecrets(environment);
+
+await initStartupBackup(environment);
 
 registerHeapSnapshotHandler();
 

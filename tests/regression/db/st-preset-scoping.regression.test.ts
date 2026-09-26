@@ -198,6 +198,7 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("ST preset scoping and persistence - regres
     const preset = await presetRepository.insertPresetWithNodes(server1Id, "_rt_delete_target", {}, []);
     expect(preset).not.toBeNull();
     const presetId = preset?.preset_id;
+    if (presetId === undefined) throw new Error("Failed to insert the delete-target preset");
 
     const crossDeleteSuccess = await presetRepository.deletePreset(presetId ?? 0, server2Id);
     expect(crossDeleteSuccess).toBe(false);

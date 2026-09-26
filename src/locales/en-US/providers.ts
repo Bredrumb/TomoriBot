@@ -235,7 +235,8 @@ The selected model requires allowing data for paid model training, but your Open
       server_memory_footer: `Server managers can manage this memory using \`/memories\`.`,
       personal_memory_footer_manage: `You can manage your personal memories using \`/personal memories\`.`,
       personal_memory_footer_personalization_disabled: `This memory was saved, but personalization features are currently disabled on this server, so it will not have an immediate effect here. Use \`/export personal memories\` to view it. You can opt out with \`/personal config\`.`,
-      personal_memory_footer_user_blacklisted: `This memory was saved, but the user in question is currently blacklisted from personalization features on this server, so it will not have an immediate effect here. Use \`/export personal memories\` to view it. You can opt out with \`/personal config\`.`,
+      personal_memory_footer_user_blacklisted:
+        "This memory was saved, but the user in question is blacklisted on this server, so I ignore them here and it will not have an effect. Use `/export personal memories` to view it. You can opt out with `/personal config`.",
       expand_memory_button: `Show Full Memory`,
       expand_memory_title: `Full Memory Content`,
     },

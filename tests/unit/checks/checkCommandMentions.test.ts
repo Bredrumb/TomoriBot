@@ -45,7 +45,11 @@ const __probeMultiline = getCommandMention(
   });
 });
 
-import { findMentions } from "../../../scripts/checks/checkCommandMentions";
+import {
+  analyzeStaleBaseline,
+  findMentions,
+  formatStaleBaselineReport,
+} from "../../../scripts/checks/checkCommandMentions";
 import { join } from "node:path";
 import { spawn } from "bun";
 import { readFile, rm, writeFile } from "node:fs/promises";
@@ -58,6 +62,49 @@ describe("findMentions", () => {
       { file: "docs/en/test.md", line: 1, mention: "some old path" },
       { file: "docs/en/test.md", line: 2, mention: "command" },
     ]);
+  });
+});
+
+/**
+ * The two ways a baseline entry stops being owed a fix are decided here rather than through the
+ * CLI, because each CLI spawn loads the whole command graph. Both reasons share the one analysis and
+ * report path, so the single spawn in {@link runWithBaseline} proves the wiring for both.
+ */
+describe("stale baseline analysis", () => {
+  const finding = (mention: string) => ({ file: "src/locales/en-US/commands.ts", line: 1, mention });
+
+  it("reports an entry whose path is now registered", () => {
+    const entries = analyzeStaleBaseline([finding("setup"), finding("kill")], new Set(["setup"]), new Set(["setup"]));
+
+    expect(entries).toEqual([{ path: "setup", reason: "now a registered command" }]);
+  });
+
+  it("reports an entry whose mention no longer occurs anywhere", () => {
+    const entries = analyzeStaleBaseline([finding("kill")], new Set(["kill"]), new Set(["impersonate"]));
+
+    expect(entries).toEqual([{ path: "impersonate", reason: "no longer occurs anywhere" }]);
+  });
+
+  it("leaves an entry alone while its mention is still unregistered", () => {
+    expect(analyzeStaleBaseline([finding("natres")], new Set(["kill"]), new Set(["natres"]))).toEqual([]);
+  });
+
+  it("reports an entry once when both conditions hold", () => {
+    const entries = analyzeStaleBaseline([], new Set(["setup"]), new Set(["setup"]));
+
+    expect(entries).toEqual([{ path: "setup", reason: "now a registered command" }]);
+  });
+
+  it("renders each reported entry with its path and reason", () => {
+    const report = formatStaleBaselineReport([
+      { path: "impersonate", reason: "no longer occurs anywhere" },
+      { path: "setup", reason: "now a registered command" },
+    ]);
+
+    expect(report).toContain("STALE BASELINE ENTRIES");
+    expect(report).toContain("/impersonate   (no longer occurs anywhere)");
+    expect(report).toContain("/setup   (now a registered command)");
+    expect(formatStaleBaselineReport([])).toBe("");
   });
 });
 
@@ -97,16 +144,5 @@ describe("check-command-mentions CLI", () => {
     expect(stderr).toContain("no longer occurs anywhere");
     // Bun's 5s default is not enough: this spawns a subprocess that loads the entire command
     // graph, which alone takes ~6s uncontended and longer when vl runs its lanes in parallel.
-  }, 60000);
-
-  it("fails when a baselined entry has become a registered command", async () => {
-    // The other way an entry stops being owed a fix. It fired for real when /impersonate
-    // registered and its baseline entry had to go in the same change.
-    const { exitCode, stderr } = await runWithBaseline({ path: "setup", reason: "test" });
-
-    expect(exitCode).not.toBe(0);
-    expect(stderr).toContain("STALE BASELINE ENTRIES");
-    expect(stderr).toContain("/setup");
-    expect(stderr).toContain("now a registered command");
   }, 60000);
 });

@@ -22,6 +22,7 @@ import { StreamOrchestrator } from "@/utils/discord/streamOrchestrator";
 import { parseTriggerWordListInput } from "@/utils/text/triggerWords";
 import { ToolRegistry } from "@/tools/toolRegistry";
 import type { LLMProvider, StreamResult } from "@/types/provider/interfaces";
+import { createPersona } from "../../helpers/fixtures";
 
 type ProviderFixtureName = "google" | "openrouter" | "novelai";
 
@@ -99,7 +100,7 @@ function makeClient(): Client {
 }
 
 function makeTextChannel(): TextChannel {
-  const channel = Object.create(TextChannel.prototype) as TextChannel & {
+  const channel = Object.create(TextChannel.prototype) as {
     id: string;
     parentId: string | null;
     messages: { cache: Map<string, Message> };
@@ -111,7 +112,7 @@ function makeTextChannel(): TextChannel {
   channel.messages = { cache: new Map<string, Message>() };
   channel.isThread = () => false;
 
-  return channel;
+  return channel as unknown as TextChannel;
 }
 
 function makeMessage(fixture: ConversationFixture, client: Client): Message {
@@ -147,7 +148,7 @@ function makeMessage(fixture: ConversationFixture, client: Client): Message {
 }
 
 function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture): TomoriState {
-  return {
+  return createPersona({
     persona_id: persona.id,
     persona_nickname: persona.nickname,
     is_alter: persona.isAlter,
@@ -155,7 +156,6 @@ function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture):
     autoch_counter: fixture.state.autochCounter,
     autoch_next_target: fixture.state.autochNextTarget,
     config: {
-      trigger_words: persona.isAlter ? [] : persona.triggers,
       deliberate_trigger_mode: fixture.state.deliberateTriggerMode,
       always_reply_enabled: fixture.state.alwaysReplyEnabled,
       autoch_disc_ids: fixture.state.autochDiscIds,
@@ -165,9 +165,11 @@ function makeTomoriState(fixture: ConversationFixture, persona: PersonaFixture):
       })),
       autoch_threshold: 0,
       autoch_threshold_max: 0,
+      // `shouldBotReply` reads a zero cascade limit as "never reply to a self-message", so the
+      // fixture's zero has to survive the shared config default of 3.
       cascade_limit: 0,
     },
-  } as unknown as TomoriState;
+  });
 }
 
 describe("chat regression harness", () => {
@@ -616,9 +618,13 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
+    // The fixture always carries an id, but TomoriState types it optional.
+    const personaId = tomoriState.persona_id;
+    if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
+
     setActiveChannelTurnState(lockEntry, {
-      activePersonaId: tomoriState.persona_id,
-      triggeredPersonaIds: [tomoriState.persona_id],
+      activePersonaId: personaId,
+      triggeredPersonaIds: [personaId],
       followUpEligible: true,
       isUserImpersonation: false,
     });
@@ -704,9 +710,13 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
+    // The fixture always carries an id, but TomoriState types it optional.
+    const personaId = tomoriState.persona_id;
+    if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
+
     setActiveChannelTurnState(lockEntry, {
-      activePersonaId: tomoriState.persona_id,
-      triggeredPersonaIds: [tomoriState.persona_id],
+      activePersonaId: personaId,
+      triggeredPersonaIds: [personaId],
       followUpEligible: true,
       isUserImpersonation: false,
     });
@@ -798,9 +808,13 @@ describe("chat regression harness", () => {
       isPersonaJob: false,
       isCommandTriggered: false,
     });
+    // The fixture always carries an id, but TomoriState types it optional.
+    const personaId = tomoriState.persona_id;
+    if (personaId === undefined) throw new Error("Fixture persona is missing a persona_id");
+
     setActiveChannelTurnState(lockEntry, {
-      activePersonaId: tomoriState.persona_id,
-      triggeredPersonaIds: [tomoriState.persona_id],
+      activePersonaId: personaId,
+      triggeredPersonaIds: [personaId],
       followUpEligible: true,
     });
     StreamOrchestrator.requestStop(channelId, message.author.id);

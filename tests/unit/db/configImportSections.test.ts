@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import * as realDbClient from "@/utils/db/client";
 import * as realTomoriStateCacheStore from "@/utils/cache/tomoriStateCacheStore";
 import * as realUserCache from "@/utils/cache/userCache";
-import { adaptV1WorkspaceConfig } from "@/types/db/dataExport";
+import { adaptV1WorkspaceConfig, workspaceConfigExportDataSchema } from "@/types/db/dataExport";
 import { createScopedModuleMocker } from "../../helpers/mockSurface";
 
 type SqlCall = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<readonly Record<string, unknown>[]>;
@@ -93,11 +93,21 @@ beforeEach(() => {
   invalidatedDuringWrite = false;
 });
 
-const chatConfig = { llm_temperature: 0.4, llm_logit_biases: [], humanizer_degree: 1, timezone_offset: 8 };
+// Parsed through the section schema so the columns the import signature requires are the ones the
+// schema defaults declare, rather than a hand-copied literal that drifts from them.
+const chatConfig = workspaceConfigExportDataSchema.shape.chat.parse({
+  llm_temperature: 0.4,
+  llm_logit_biases: [],
+  humanizer_degree: 1,
+  timezone_offset: 8,
+});
+const capabilitiesConfig = workspaceConfigExportDataSchema.shape.capabilities.parse({});
 
 describe("section config imports", () => {
   it("does not open a write transaction for an absent section", async () => {
-    const result = await importRepository.importWorkspaceConfig("guild-7", { capabilities: {} }, ["chat"]);
+    const result = await importRepository.importWorkspaceConfig("guild-7", { capabilities: capabilitiesConfig }, [
+      "chat",
+    ]);
 
     expect(result.success).toBe(true);
     expect(beginCalls).toBe(0);

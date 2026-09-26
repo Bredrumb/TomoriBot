@@ -1,23 +1,34 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ButtonStyle, MessageFlags, type TopLevelComponentData } from "discord.js";
+import { type BaseMessageOptions, ButtonStyle, MessageFlags } from "discord.js";
 import { terminalPayload as buildConfigTerminalPayload } from "@/utils/discord/interactions/configRouteContext";
 import { terminalPayload as buildPersonalConfigTerminalPayload } from "@/utils/discord/interactions/personalConfigRouteContext";
 import { buildGeneratedImageComponentsV2Payload } from "@/utils/discord/generatedImageMessage";
 import { buildGeneratedVideoComponentsV2Payload } from "@/utils/discord/generatedVideoMessage";
 import { buildRangeSelectorPayload } from "@/utils/discord/ui/interactionCore";
 import { buildPersonaWorkflowNotice } from "@/utils/discord/ui/personaWorkflow";
-import { validateComponentsV2MessageLimits } from "@/utils/discord/ui/componentsV2Limits";
+import {
+  type ComponentsV2MessagePayload,
+  validateComponentsV2MessageLimits,
+} from "@/utils/discord/ui/componentsV2Limits";
 import { buildStatsDashboardPayload, type StatsTab } from "@/utils/stats/statsDashboard";
 import { initializeLocalizer } from "@/utils/text/localizer";
 
 beforeAll(async () => initializeLocalizer());
 
-function assertValidPayload(
-  payload: { components: TopLevelComponentData[]; flags: MessageFlags },
-  label: string,
-): void {
+/**
+ * What the declared producers return: Discord's own option types, whose `components` admit raw API
+ * JSON and builders and whose `flags` differ between the create and edit variants.
+ */
+interface ProducerComponentsV2Payload {
+  components?: BaseMessageOptions["components"];
+  flags?: unknown;
+}
+
+function assertValidPayload(payload: ProducerComponentsV2Payload, label: string): void {
   expect(payload.flags).toBe(MessageFlags.IsComponentsV2);
-  const result = validateComponentsV2MessageLimits(payload);
+  // Every producer here emits literal component data, so the payload narrows to the validator's
+  // contract at this boundary rather than carrying Discord's wider option types into it.
+  const result = validateComponentsV2MessageLimits(payload as ComponentsV2MessagePayload);
   expect(result.valid, `${label} violations: ${JSON.stringify(result.violations)}`).toBe(true);
 }
 

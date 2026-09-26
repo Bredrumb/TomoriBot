@@ -3,7 +3,7 @@ import { ApplicationCommandOptionType, PermissionsBitField } from "discord.js";
 import type { ChatInputCommandInteraction, Client, User } from "discord.js";
 import { execute as executeQuotaResetGlobal } from "@/commands/quota/reset/global";
 import { execute as executeQuotaResetUser } from "@/commands/quota/reset/user";
-import type { UserRow } from "@/types/db/schema";
+import { PrivacyLevel, type UserRow } from "@/types/db/schema";
 import { serverRepository } from "@/utils/db/repositories/ServerRepository";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import {
@@ -40,8 +40,16 @@ type CommandPayload = {
 const DUMMY_USER_ROW: UserRow = {
   user_id: 1,
   user_disc_id: "user-1",
-  user_name: "TestUser",
+  user_nickname: null,
+  registration_locale: "en-US",
   language_pref: "en-US",
+  privacy_level: PrivacyLevel.MINIMAL,
+  personal_memories: [],
+  physical_appearance_tags: [],
+  personal_dtm: "follow",
+  personal_deliberate_tool_mode: "follow",
+  personal_server_fallback_enabled: true,
+  shortterm_cache_crossserver_opt_in: false,
   created_at: new Date(),
   updated_at: new Date(),
 };

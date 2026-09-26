@@ -161,19 +161,27 @@ export async function buildSavedProviderConfigFromExistingOrDefaults(params: {
       ? await loadProviderDefaultSelectionIds(normalizedProvider)
       : null;
 
+  const imageGenerationStyle = getStaticProviderInfo(normalizedProvider)?.featureSupport.imageGeneration ?? "none";
+
   return {
     server_id: params.serverId,
     provider: normalizedProvider,
     api_key: params.apiKey,
     key_version: params.keyVersion,
     llm_id: refreshTextModel ? (defaults?.llm_id ?? null) : candidateLlmId,
-    diffusion_model_id: refreshDiffusionModel
-      ? (defaults?.diffusion_model_id ?? null)
-      : (existingConfig?.diffusion_model_id ?? null),
+    diffusion_model_id:
+      imageGenerationStyle === "chat-completion"
+        ? refreshDiffusionModel
+          ? (defaults?.diffusion_model_id ?? null)
+          : (existingConfig?.diffusion_model_id ?? null)
+        : null,
     embedding_model_id: existingConfig?.embedding_model_id ?? defaults?.embedding_model_id ?? null,
-    nai_diffusion_model_id: refreshNaiDiffusionModel
-      ? (defaults?.nai_diffusion_model_id ?? null)
-      : (existingConfig?.nai_diffusion_model_id ?? null),
+    nai_diffusion_model_id:
+      imageGenerationStyle === "nai-pipeline"
+        ? refreshNaiDiffusionModel
+          ? (defaults?.nai_diffusion_model_id ?? null)
+          : (existingConfig?.nai_diffusion_model_id ?? null)
+        : null,
     video_model_id: existingConfig?.video_model_id ?? defaults?.video_model_id ?? null,
     vision_llm_id: existingConfig?.vision_llm_id ?? null,
     nai_preset_name: existingConfig?.nai_preset_name ?? null,
@@ -215,19 +223,27 @@ export async function buildUserSavedProviderConfigFromExistingOrDefaults(params:
       : null;
   const enabledCapabilities = params.enabledCapabilities ?? existingConfig?.enabled_capabilities ?? [];
 
+  const imageGenerationStyle = getStaticProviderInfo(normalizedProvider)?.featureSupport.imageGeneration ?? "none";
+
   return {
     user_id: params.userId,
     provider: normalizedProvider,
     api_key: params.apiKey,
     key_version: params.keyVersion,
     llm_id: refreshTextModel ? (defaults?.llm_id ?? null) : candidateLlmId,
-    diffusion_model_id: refreshDiffusionModel
-      ? (defaults?.diffusion_model_id ?? null)
-      : (existingConfig?.diffusion_model_id ?? null),
+    diffusion_model_id:
+      imageGenerationStyle === "chat-completion"
+        ? refreshDiffusionModel
+          ? (defaults?.diffusion_model_id ?? null)
+          : (existingConfig?.diffusion_model_id ?? null)
+        : null,
     embedding_model_id: existingConfig?.embedding_model_id ?? defaults?.embedding_model_id ?? null,
-    nai_diffusion_model_id: refreshNaiDiffusionModel
-      ? (defaults?.nai_diffusion_model_id ?? null)
-      : (existingConfig?.nai_diffusion_model_id ?? null),
+    nai_diffusion_model_id:
+      imageGenerationStyle === "nai-pipeline"
+        ? refreshNaiDiffusionModel
+          ? (defaults?.nai_diffusion_model_id ?? null)
+          : (existingConfig?.nai_diffusion_model_id ?? null)
+        : null,
     video_model_id: existingConfig?.video_model_id ?? defaults?.video_model_id ?? null,
     vision_llm_id: existingConfig?.vision_llm_id ?? null,
     nai_preset_name: existingConfig?.nai_preset_name ?? null,

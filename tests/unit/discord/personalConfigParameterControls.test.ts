@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ComponentType } from "discord.js";
+import { ComponentType, type ComponentInContainerData } from "discord.js";
 import type { UserSavedProviderConfigRow } from "@/types/db/schema";
 import { buildParameters1Modal, buildParameters2Modal } from "@/utils/discord/ui/personalConfigModals";
 import {
@@ -46,6 +46,18 @@ const routes = {
   editGeneration: "generation-open",
 };
 
+/**
+ * The block always emits an action row in the positions these cases inspect, and its declared
+ * element type is the container-wide union, whose other members carry no `components` array.
+ */
+type ParameterRow = {
+  components: Array<{ type: number; customId?: string; options?: unknown[]; disabled?: boolean }>;
+};
+
+function asParameterRow(component: ComponentInContainerData | undefined): ParameterRow {
+  return component as unknown as ParameterRow;
+}
+
 function buildBlock(providerOptions: ProviderParameterBlockInput["providerOptions"], writesDisabled = false) {
   return buildProviderParameterBlock({ copy, values, routes, providerOptions, writesDisabled });
 }
@@ -64,7 +76,7 @@ describe("personal provider parameter controls", () => {
       ComponentType.ActionRow,
     ]);
 
-    const severalSelect = several[0] as { components: Array<{ type: number; customId?: string; options?: unknown[] }> };
+    const severalSelect = asParameterRow(several[0]);
     expect(severalSelect.components[0]).toMatchObject({
       type: ComponentType.StringSelect,
       customId: "provider-select",
@@ -100,10 +112,8 @@ describe("personal provider parameter controls", () => {
     );
     const disabledJson = JSON.stringify(disabled);
     expect(disabledJson).toContain("Max output `4096`");
-    expect((disabled[0] as { components: Array<{ disabled?: boolean }> }).components[0].disabled).toBe(true);
-    expect(
-      (disabled[2] as { components: Array<{ disabled?: boolean }> }).components.map((component) => component.disabled),
-    ).toEqual([true, true]);
+    expect(asParameterRow(disabled[0]).components[0].disabled).toBe(true);
+    expect(asParameterRow(disabled[2]).components.map((component) => component.disabled)).toEqual([true, true]);
   });
 
   /**

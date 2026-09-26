@@ -53,6 +53,49 @@ async function loadExceptions(path: string): Promise<Set<string>> {
   return new Set((parsed.exceptions ?? []).map((entry) => entry.path));
 }
 
+export interface UnusedBaselineEntry {
+  path: string;
+  /** Why the entry is no longer owed a fix. */
+  reason: string;
+}
+
+/**
+ * Baseline entries that no longer earn their place.
+ *
+ * A baseline entry exists to excuse a mention of a path that is not registered yet. It stops being
+ * owed a fix two ways: the path registers, or the mention disappears from every scanned file. Both
+ * are reported, because catching only the first leaves an entry claiming a break that is gone. An
+ * entry that did both reports the registration, which is the one a reader can act on.
+ */
+export function analyzeStaleBaseline(
+  findings: readonly Finding[],
+  validPaths: ReadonlySet<string>,
+  baseline: ReadonlySet<string>,
+): UnusedBaselineEntry[] {
+  const allMentionPaths = new Set(findings.map((finding) => finding.mention));
+  const unused: UnusedBaselineEntry[] = [];
+
+  // Iterating the baseline keeps the report in file order, which is the order a reader removes.
+  for (const path of baseline) {
+    if (validPaths.has(path)) {
+      unused.push({ path, reason: "now a registered command" });
+    } else if (!allMentionPaths.has(path)) {
+      unused.push({ path, reason: "no longer occurs anywhere" });
+    }
+  }
+
+  return unused;
+}
+
+/** The stale-baseline section of the failure report, or an empty string when every entry is owed. */
+export function formatStaleBaselineReport(entries: readonly UnusedBaselineEntry[]): string {
+  if (entries.length === 0) return "";
+
+  const lines = ["\nSTALE BASELINE ENTRIES (no longer owed a fix, please remove them):", "-".repeat(70)];
+  for (const entry of entries) lines.push(`  /${entry.path}   (${entry.reason})`);
+  return lines.join("\n");
+}
+
 export function findMentions(source: string, relativePath: string): Finding[] {
   const findings: Finding[] = [];
 
@@ -165,24 +208,15 @@ async function main(): Promise<void> {
   // Self-cleaning: a baseline entry earns removal two different ways, and catching only the
   // first leaves an entry claiming a path is broken after it has been fixed. /impersonate and
   // /natres are baselined today and both are planned to register in a later wave.
-  const allMentionPaths = new Set(findings.map((f) => f.mention));
-  const goneBaseline = [...baseline].filter((path) => !allMentionPaths.has(path));
-  const registeredBaseline = [...baseline].filter((path) => validPaths.has(path));
-  const unusedBaseline = [...new Set([...goneBaseline, ...registeredBaseline])];
+  const unusedBaseline = analyzeStaleBaseline(findings, validPaths, baseline);
 
   if (stale.length === 0 && unusedBaseline.length === 0) {
     console.log(`Command mentions OK (${findings.length} checked against ${validPaths.size} registered paths)`);
     process.exit(0);
   }
 
-  if (unusedBaseline.length > 0) {
-    console.error("\nSTALE BASELINE ENTRIES (no longer owed a fix, please remove them):");
-    console.error("-".repeat(70));
-    for (const path of unusedBaseline) {
-      const why = validPaths.has(path) ? "now a registered command" : "no longer occurs anywhere";
-      console.error(`  /${path}   (${why})`);
-    }
-  }
+  const baselineReport = formatStaleBaselineReport(unusedBaseline);
+  if (baselineReport) console.error(baselineReport);
 
   if (stale.length > 0) {
     console.error("\nSTALE COMMAND MENTIONS (named in locale prose, source, or docs but not registered):");

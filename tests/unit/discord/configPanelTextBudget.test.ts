@@ -2,13 +2,25 @@
  * Text budgeting coverage for Config pages:
  * asserts message-wide Text Display budgets at stored maxima, boundary Unicode handling,
  * and fence breakout immunity.
+ *
+ * The NovelAI preset and Switch Models matrices run on {@link BUDGET_LOCALE} rather than every
+ * locale, because they are the expensive sweeps and rendered length decides where the message-wide
+ * budget binds. With practical preset strings `es-419` renders the longest total of any locale and
+ * every locale stays far below the budget. With oversized strings, truncation fills a fixed budget,
+ * so every locale renders the identical total; the equality case in the NovelAI block pins that, and
+ * fails if a translation ever breaks it instead of silently narrowing the sweep.
+ *
+ * The stored-maxima sweep keeps every locale: its truncation-tightness check detects truncation by
+ * matching English marker text, so it only runs in `en-US`, and the sweep is cheap.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
-import { ComponentType } from "discord.js";
+import { ChannelType, ComponentType } from "discord.js";
 import type { LlmRow, NaiPresetRow, SavedProviderConfigRow, TomoriState, VoiceSampleRow } from "@/types/db/schema";
 import type { PanelReadStatus } from "@/types/discord/panel";
+import type { BlocklistChannelTarget, ChecklistChannelTarget } from "@/utils/discord/channelChecklistManager";
 import type { ConfigActor } from "@/utils/discord/interactions/configPermissionPolicy";
 import type {
+  ConfigBehaviorTriggerView,
   ConfigBehaviorView,
   ConfigChannelsView,
   ConfigPermissionsView,
@@ -38,26 +50,65 @@ import {
 import { buildConfigPanelPayload } from "@/utils/discord/ui/configPanel";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { getCapabilitiesManagePermissionDefinitions } from "@/utils/discord/manageConfigMapping";
+import { HUMANIZER_DEFAULT } from "@/utils/discord/humanizerOptions";
+import { DEFAULT_MESSAGE_FETCH_LIMIT } from "@/utils/discord/messageFetchLimit";
 import { withLinePrefix } from "@/utils/discord/ui/panel";
 import { getMemoryLimits } from "@/utils/misc/memoryLimits";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { collectCaseFailures, RUNTIME_LOCALES, localizedCopy } from "../../helpers/localeCases";
 import { BACKTICK_RUNS } from "../../helpers/panelLimits";
+import { createLlmRow, createPersona } from "../../helpers/fixtures";
+
+/** The locale whose rendered text is longest; see the file header for why one locale suffices. */
+const BUDGET_LOCALE = "es-419";
+
+/**
+ * Read statuses that render differently. `stale` sets the same `writesDisabled` flag as
+ * `unavailable` for every panel here, and only `unavailable` adds the notice that changes the
+ * rendered text, so sweeping it would rebuild identical payloads.
+ */
+const RENDERING_READ_STATUSES: readonly PanelReadStatus[] = ["fresh", "unavailable"];
 
 beforeAll(async () => initializeLocalizer());
 
 const GUILD_MANAGER: ConfigActor = { workspaceKind: "guild", isManager: true };
 
+/** Server 9 and the id-derived nickname are this suite's defaults, so both stay off the factory. */
 function makePersona(overrides: Partial<TomoriState> & { persona_id: number }): TomoriState {
-  return {
+  return createPersona({
     server_id: 9,
     persona_nickname: `Persona ${overrides.persona_id}`,
-    is_alter: false,
-    trigger_words: [],
-    naming_config: { prefixes: {}, suffixes: {}, addressTerms: {} },
     ...overrides,
-  } as unknown as TomoriState;
+  });
 }
+
+/**
+ * Trigger slice for behavior pages that never read it, carrying the loader's defaults so the view
+ * matches what a server with no stored trigger config produces.
+ */
+const BEHAVIOR_TRIGGER_VIEW: ConfigBehaviorTriggerView = {
+  randomTriggers: [],
+  cascadeLimit: 3,
+  matchLimit: 3,
+  deliberateTriggerMode: false,
+  alwaysReplyEnabled: false,
+  cooldownType: 0,
+  cooldownLength: 5,
+};
+
+/**
+ * A channels view whose every required slice is present and empty. A fixture spreads it and
+ * overrides the slice its own page renders, so the page still receives the slices it never reads.
+ */
+const EMPTY_CHANNELS_VIEW: ConfigChannelsView = {
+  destinations: { thoughtLogChannelId: null, welcomeChannelId: null, welcomePersonaId: null, welcomePrompt: null },
+  autoTrigger: { enabledChannels: [], personaOverrides: [], threshold: 0, maxThreshold: 0 },
+  rules: { privateChannels: [], roleplayChannels: [], crossChannelBlocklist: [] },
+  availableTextChannels: [],
+  availableBlocklistChannels: [],
+  availableOverrideChannels: [],
+  overrides: { selectedChannelId: null, prompt: null, contextNote: null, textModelOverride: null },
+};
 
 function makeSavedProvider(provider: string): SavedProviderConfigRow {
   return { provider } as unknown as SavedProviderConfigRow;
@@ -125,10 +176,23 @@ function makeSnowflake(n: number): string {
   return (1000000000000000000n + BigInt(n)).toString();
 }
 
-function makeChannelList(count: number): Array<{ id: string; name?: string }> {
+function makeChannelList(count: number): ChecklistChannelTarget[] {
   return Array.from({ length: count }, (_, i) => ({
     id: makeSnowflake(i + 1),
     name: `channel-${i + 1}`,
+    rawPosition: i,
+    parentRawPosition: -1,
+  }));
+}
+
+function makeBlocklistChannelList(count: number): BlocklistChannelTarget[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: makeSnowflake(i + 1),
+    name: `channel-${i + 1}`,
+    type: ChannelType.GuildText,
+    parentName: null,
+    rawPosition: i,
+    parentRawPosition: -1,
   }));
 }
 
@@ -444,10 +508,12 @@ describe("config page text budgeting at stored maxima", () => {
           general: {
             systemPrompt: "S".repeat(16000),
             contextNote: "G".repeat(2000),
+            contextNoteDepth: 0,
             humanizerDegree: 1,
             messageFetchLimit: 20,
             timezoneOffset: 0,
           },
+          trigger: BEHAVIOR_TRIGGER_VIEW,
         };
         return buildConfigPanelPayload({
           locale,
@@ -467,6 +533,15 @@ describe("config page text budgeting at stored maxima", () => {
       maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
       buildPayload: (locale: string, receipt: boolean) => {
         const behaviorView: ConfigBehaviorView = {
+          general: {
+            systemPrompt: null,
+            contextNote: null,
+            contextNoteDepth: 0,
+            humanizerDegree: HUMANIZER_DEFAULT,
+            messageFetchLimit: DEFAULT_MESSAGE_FETCH_LIMIT,
+            timezoneOffset: 0,
+          },
+          trigger: BEHAVIOR_TRIGGER_VIEW,
           memory: {
             memoryTaggingEnabled: true,
             channelMemoryEnabled: true,
@@ -535,9 +610,7 @@ describe("config page text budgeting at stored maxima", () => {
       maxTolerance: PREVIEW_TIGHTNESS_TOLERANCE,
       buildPayload: (locale: string, receipt: boolean) => {
         const channelsView: ConfigChannelsView = {
-          availableTextChannels: [],
-          availableBlocklistChannels: [],
-          availableOverrideChannels: [],
+          ...EMPTY_CHANNELS_VIEW,
           destinations: {
             thoughtLogChannelId: makeSnowflake(1),
             welcomeChannelId: makeSnowflake(2),
@@ -564,9 +637,8 @@ describe("config page text budgeting at stored maxima", () => {
       buildPayload: (locale: string, receipt: boolean) => {
         const channels = makeChannelList(220);
         const channelsView: ConfigChannelsView = {
+          ...EMPTY_CHANNELS_VIEW,
           availableTextChannels: channels,
-          availableBlocklistChannels: [],
-          availableOverrideChannels: [],
           autoTrigger: {
             enabledChannels: channels,
             personaOverrides: channels.map((channel) => ({ channel_disc_id: channel.id, persona_id: 55 })),
@@ -602,11 +674,11 @@ describe("config page text budgeting at stored maxima", () => {
       buildPayload: (locale: string, receipt: boolean) => {
         const privateChannels = makeChannelList(220);
         const roleplayChannels = makeChannelList(220);
-        const blocklistChannels = makeChannelList(220);
+        const blocklistChannels = makeBlocklistChannelList(220);
         const channelsView: ConfigChannelsView = {
+          ...EMPTY_CHANNELS_VIEW,
           availableTextChannels: privateChannels,
           availableBlocklistChannels: blocklistChannels,
-          availableOverrideChannels: [],
           rules: {
             privateChannels,
             roleplayChannels,
@@ -632,9 +704,16 @@ describe("config page text budgeting at stored maxima", () => {
       buildPayload: (locale: string, receipt: boolean) => {
         const selectedId = makeSnowflake(100);
         const channelsView: ConfigChannelsView = {
-          availableTextChannels: [],
-          availableBlocklistChannels: [],
-          availableOverrideChannels: [{ id: selectedId }],
+          ...EMPTY_CHANNELS_VIEW,
+          availableOverrideChannels: [
+            {
+              id: selectedId,
+              name: "channel-100",
+              type: ChannelType.GuildText,
+              rawPosition: 99,
+              parentRawPosition: -1,
+            },
+          ],
           overrides: {
             selectedChannelId: selectedId,
             prompt: { prompt: "P".repeat(4000), mode: "append" },
@@ -808,7 +887,6 @@ describe("Plugins and Channel Rules component budgeting", () => {
 });
 
 describe("NovelAI preset Parameters budgeting", () => {
-  const readStatuses: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
   const providerSets = [["novelai"], ["novelai", "google"]];
   const presetCounts = [0, 1, 24, 25, 26, 60];
   const stringProfiles = [
@@ -818,69 +896,65 @@ describe("NovelAI preset Parameters budgeting", () => {
 
   // One test per preset count: the full matrix takes about 10 s, past Bun's 5 s default timeout.
   for (const presetCount of presetCounts) {
-    it(`keeps every ${presetCount}-preset page valid across locales, receipts, reads, providers, and backtick runs`, () => {
+    it(`keeps every ${presetCount}-preset page valid across receipts, reads, providers, and backtick runs`, () => {
       const cases = collectCaseFailures();
-      for (const locale of RUNTIME_LOCALES) {
-        for (const receipt of [false, true]) {
-          for (const readStatus of readStatuses) {
-            for (const providers of providerSets) {
-              for (const runLength of BACKTICK_RUNS) {
-                for (const profile of stringProfiles) {
-                  cases.check(
-                    `${presetCount} ${profile.name} presets, ${providers.length} providers, ${readStatus}, receipt=${receipt} (${locale}, backticks=${runLength})`,
-                    () => {
-                      const presets = makeNaiPresetCatalog(presetCount, runLength, profile.oversized);
-                      const pageStarts = Array.from(
-                        { length: Math.max(1, Math.ceil(presetCount / CONFIG_NAI_PRESET_PAGE_SIZE)) },
-                        (_unused, page) => page * CONFIG_NAI_PRESET_PAGE_SIZE,
+      for (const receipt of [false, true]) {
+        for (const readStatus of RENDERING_READ_STATUSES) {
+          for (const providers of providerSets) {
+            for (const runLength of BACKTICK_RUNS) {
+              for (const profile of stringProfiles) {
+                cases.check(
+                  `${presetCount} ${profile.name} presets, ${providers.length} providers, ${readStatus}, receipt=${receipt} (backticks=${runLength})`,
+                  () => {
+                    const presets = makeNaiPresetCatalog(presetCount, runLength, profile.oversized);
+                    const pageStarts = Array.from(
+                      { length: Math.max(1, Math.ceil(presetCount / CONFIG_NAI_PRESET_PAGE_SIZE)) },
+                      (_unused, page) => page * CONFIG_NAI_PRESET_PAGE_SIZE,
+                    );
+                    const reachable = new Set<number>();
+                    let componentCeiling = 0;
+
+                    for (const pageStart of pageStarts) {
+                      const payload = buildNaiParametersPayload(
+                        BUDGET_LOCALE,
+                        readStatus,
+                        receipt,
+                        providers,
+                        presets,
+                        pageStart,
                       );
-                      const reachable = new Set<number>();
-                      let componentCeiling = 0;
+                      const validation = validateComponentsV2MessageLimits(payload);
+                      expect(
+                        validation.valid,
+                        `${BUDGET_LOCALE} ${readStatus} providers=${providers.length} presets=${presetCount} ` +
+                          `page=${pageStart} receipt=${receipt}: ${JSON.stringify(validation.violations)}`,
+                      ).toBe(true);
+                      expect(getPayloadTextTotal(payload)).toBeLessThanOrEqual(DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX);
+                      componentCeiling = Math.max(componentCeiling, countRenderedComponents(payload));
 
-                      for (const pageStart of pageStarts) {
-                        const payload = buildNaiParametersPayload(
-                          locale,
-                          readStatus,
-                          receipt,
-                          providers,
-                          presets,
-                          pageStart,
-                        );
-                        const validation = validateComponentsV2MessageLimits(payload);
-                        expect(
-                          validation.valid,
-                          `${locale} ${readStatus} providers=${providers.length} presets=${presetCount} ` +
-                            `page=${pageStart} receipt=${receipt}: ${JSON.stringify(validation.violations)}`,
-                        ).toBe(true);
-                        expect(getPayloadTextTotal(payload)).toBeLessThanOrEqual(
-                          DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
-                        );
-                        componentCeiling = Math.max(componentCeiling, countRenderedComponents(payload));
-
-                        for (const menu of getStringSelectMenus(payload)) {
-                          const options = Array.isArray(menu.options) ? menu.options : [];
-                          expect(options.length).toBeLessThanOrEqual(25);
-                          if (typeof menu.customId === "string" && menu.customId.includes("nai-preset-select")) {
-                            for (const option of options) {
-                              if (typeof option !== "object" || option === null) continue;
-                              const value = (option as Record<string, unknown>).value;
-                              if (typeof value === "string" && /^\d+$/.test(value)) reachable.add(Number(value));
-                              const description = (option as Record<string, unknown>).description;
-                              if (typeof description === "string") {
-                                expect(getDiscordTextLength(description)).toBeLessThanOrEqual(100);
-                              }
+                      for (const menu of getStringSelectMenus(payload)) {
+                        const options = Array.isArray(menu.options) ? menu.options : [];
+                        expect(options.length).toBeLessThanOrEqual(25);
+                        if (typeof menu.customId === "string" && menu.customId.includes("nai-preset-select")) {
+                          for (const option of options) {
+                            if (typeof option !== "object" || option === null) continue;
+                            const value = (option as Record<string, unknown>).value;
+                            if (typeof value === "string" && /^\d+$/.test(value)) reachable.add(Number(value));
+                            const description = (option as Record<string, unknown>).description;
+                            if (typeof description === "string") {
+                              expect(getDiscordTextLength(description)).toBeLessThanOrEqual(100);
                             }
                           }
                         }
                       }
+                    }
 
-                      if (readStatus !== "unavailable") {
-                        expect([...reachable]).toEqual(Array.from({ length: presetCount }, (_unused, index) => index));
-                      }
-                      expect(componentCeiling).toBeGreaterThan(0);
-                    },
-                  );
-                }
+                    if (readStatus !== "unavailable") {
+                      expect([...reachable]).toEqual(Array.from({ length: presetCount }, (_unused, index) => index));
+                    }
+                    expect(componentCeiling).toBeGreaterThan(0);
+                  },
+                );
               }
             }
           }
@@ -889,6 +963,19 @@ describe("NovelAI preset Parameters budgeting", () => {
       cases.expectNoFailures();
     });
   }
+
+  it("renders the oversized profile to the same total in every locale", () => {
+    // An oversized preset name is truncated into a fixed codepoint budget, and this panel's
+    // translations preserve key length, so every locale fills that budget exactly. Asserting the
+    // equality is what lets the profile sweep above run on one locale: if a translation ever
+    // changes that, this fails instead of silently narrowing the sweep.
+    const presets = makeNaiPresetCatalog(24, 3, true);
+    const totals = RUNTIME_LOCALES.map((locale) =>
+      getPayloadTextTotal(buildNaiParametersPayload(locale, "fresh", true, ["novelai", "google"], presets, 0)),
+    );
+
+    expect(new Set(totals).size).toBe(1);
+  });
 
   it("enforces the literal Parameters component ceiling and rejects an extra row", () => {
     const payload = buildNaiParametersPayload(
@@ -949,10 +1036,12 @@ describe("Persona Advanced and Overrides component budgeting", () => {
       humanizer_degree_override: index === 0 || index === 40 ? 2 : undefined,
       llm:
         index === 0 || index === 40
-          ? { llm_id: 10, llm_provider: "openrouter", llm_codename: "server-model" }
+          ? createLlmRow({ llm_id: 10, llm_provider: "openrouter", llm_codename: "server-model" })
           : undefined,
       persona_llm:
-        index === 0 || index === 40 ? { llm_id: 11, llm_provider: "google", llm_codename: "persona-model" } : undefined,
+        index === 0 || index === 40
+          ? createLlmRow({ llm_id: 11, llm_provider: "google", llm_codename: "persona-model" })
+          : undefined,
     }),
   );
   const models = Array.from(
@@ -1174,54 +1263,51 @@ describe("Switch Models capability notice budgeting", () => {
     expect(countRenderedComponents(payloadWithExtraTextDisplay)).toBeGreaterThan(28);
   });
 
-  it("budgets an explicit eight-slot matrix across locales, flags, reads, and endpoint boundaries", () => {
+  it("budgets an explicit eight-slot matrix across flags, reads, and endpoint boundaries", () => {
     const componentBudget = 32;
     const componentReserve = 8;
     const discordComponentLimit = 40;
-    const readStatuses: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
     const endpointCounts = [0, 1, 24, 25, 26, 60];
     let maximumReceiptComponentCount = 0;
 
-    for (const locale of RUNTIME_LOCALES) {
-      for (const receipt of [false, true]) {
-        for (const readStatus of readStatuses) {
-          for (const slotState of SWITCH_MODEL_SLOT_STATES) {
-            for (const flags of flagCombinations) {
-              for (const endpointCount of endpointCounts) {
-                const payload = buildConfigPanelPayload({
-                  locale,
-                  actor: GUILD_MANAGER,
-                  category: "models",
-                  page: "switch",
-                  personas: [makePersona({ persona_id: 55 })],
-                  selectedPersonaId: 55,
-                  readStatus,
-                  switchModelsView: makeExplicitEightSlotView(
-                    flags.imageGenerationEnabled,
-                    flags.videoGenerationEnabled,
-                    slotState.isUsable,
-                    endpointCount,
-                    true,
-                    -1,
-                  ),
-                  receipt: receipt
-                    ? { tone: "success", heading: "Saved", detail: "Configuration was saved." }
-                    : undefined,
-                });
-                const validation = validateComponentsV2MessageLimits(payload);
-                expect(
-                  validation.valid,
-                  `${locale} ${readStatus} ${slotState.name} endpoint=${endpointCount} ` +
-                    `${flags.imageGenerationEnabled}/${flags.videoGenerationEnabled}: ${JSON.stringify(validation.violations)}`,
-                ).toBe(true);
-                for (const menu of getStringSelectMenus(payload)) {
-                  const options = Array.isArray(menu.options) ? menu.options : [];
-                  expect(options.length).toBeLessThanOrEqual(25);
-                }
-                const componentCount = countRenderedComponents(payload);
-                expect(componentCount).toBeLessThanOrEqual(componentBudget);
-                if (receipt) maximumReceiptComponentCount = Math.max(maximumReceiptComponentCount, componentCount);
+    for (const receipt of [false, true]) {
+      for (const readStatus of RENDERING_READ_STATUSES) {
+        for (const slotState of SWITCH_MODEL_SLOT_STATES) {
+          for (const flags of flagCombinations) {
+            for (const endpointCount of endpointCounts) {
+              const payload = buildConfigPanelPayload({
+                locale: BUDGET_LOCALE,
+                actor: GUILD_MANAGER,
+                category: "models",
+                page: "switch",
+                personas: [makePersona({ persona_id: 55 })],
+                selectedPersonaId: 55,
+                readStatus,
+                switchModelsView: makeExplicitEightSlotView(
+                  flags.imageGenerationEnabled,
+                  flags.videoGenerationEnabled,
+                  slotState.isUsable,
+                  endpointCount,
+                  true,
+                  -1,
+                ),
+                receipt: receipt
+                  ? { tone: "success", heading: "Saved", detail: "Configuration was saved." }
+                  : undefined,
+              });
+              const validation = validateComponentsV2MessageLimits(payload);
+              expect(
+                validation.valid,
+                `${BUDGET_LOCALE} ${readStatus} ${slotState.name} endpoint=${endpointCount} ` +
+                  `${flags.imageGenerationEnabled}/${flags.videoGenerationEnabled}: ${JSON.stringify(validation.violations)}`,
+              ).toBe(true);
+              for (const menu of getStringSelectMenus(payload)) {
+                const options = Array.isArray(menu.options) ? menu.options : [];
+                expect(options.length).toBeLessThanOrEqual(25);
               }
+              const componentCount = countRenderedComponents(payload);
+              expect(componentCount).toBeLessThanOrEqual(componentBudget);
+              if (receipt) maximumReceiptComponentCount = Math.max(maximumReceiptComponentCount, componentCount);
             }
           }
         }
@@ -1260,8 +1346,8 @@ describe("Switch Models capability notice budgeting", () => {
       expect(placeholder).toContain(`${capability}-endpoint-1: ${capability}-model-1`);
       const options = menu?.options;
       expect(Array.isArray(options)).toBe(true);
-      for (const option of options ?? []) {
-        expect((option as Record<string, unknown>).default).not.toBe(true);
+      for (const option of (options ?? []) as Array<Record<string, unknown>>) {
+        expect(option.default).not.toBe(true);
       }
     }
 
@@ -1398,7 +1484,7 @@ describe("voices page text and component budgeting", () => {
       const options = menu.options;
       expect(Array.isArray(options)).toBe(true);
       expect(options).toHaveLength(1);
-      const option = options?.[0] as Record<string, unknown>;
+      const [option] = (options ?? []) as Array<Record<string, unknown>>;
       expect(option.value).toBe("none");
     }));
 
@@ -1759,10 +1845,13 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
         const behaviorView: ConfigBehaviorView = {
           general: {
             systemPrompt: content,
+            contextNote: null,
+            contextNoteDepth: 0,
             humanizerDegree: 0,
             messageFetchLimit: 10,
             timezoneOffset: 0,
           },
+          trigger: BEHAVIOR_TRIGGER_VIEW,
         };
         const payload = buildConfigPanelPayload({
           locale: "en-US",
@@ -1831,10 +1920,13 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
       behaviorView: {
         general: {
           systemPrompt: breakoutContent,
+          contextNote: null,
+          contextNoteDepth: 0,
           humanizerDegree: 0,
           messageFetchLimit: 10,
           timezoneOffset: 0,
         },
+        trigger: BEHAVIOR_TRIGGER_VIEW,
       },
     });
 
@@ -1895,10 +1987,13 @@ describe("bounded preview unicode and truncation boundary assertions", () => {
       behaviorView: {
         general: {
           systemPrompt: `before ${run} after`,
+          contextNote: null,
+          contextNoteDepth: 0,
           humanizerDegree: 0,
           messageFetchLimit: 10,
           timezoneOffset: 0,
         },
+        trigger: BEHAVIOR_TRIGGER_VIEW,
       },
     });
 
@@ -1928,9 +2023,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: channels,
-            availableBlocklistChannels: [],
-            availableOverrideChannels: [],
             autoTrigger: {
               enabledChannels: channels,
               personaOverrides: channels.map((c) => ({ channel_disc_id: c.id, persona_id: 55 })),
@@ -1956,9 +2050,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: channels,
-            availableBlocklistChannels: [],
-            availableOverrideChannels: [],
             rules: {
               privateChannels: channels,
               roleplayChannels: [],
@@ -1983,9 +2076,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: channels,
-            availableBlocklistChannels: [],
-            availableOverrideChannels: [],
             rules: {
               privateChannels: [],
               roleplayChannels: channels,
@@ -2000,7 +2092,7 @@ describe("channels collection bounds and truncation notices", () => {
     {
       name: "Rules cross-channel blocklist",
       buildPayload: (locale: string, count: number) => {
-        const channels = makeChannelList(count);
+        const channels = makeBlocklistChannelList(count);
         return buildConfigPanelPayload({
           locale,
           actor: GUILD_MANAGER,
@@ -2010,9 +2102,8 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
-            availableTextChannels: [],
+            ...EMPTY_CHANNELS_VIEW,
             availableBlocklistChannels: channels,
-            availableOverrideChannels: [],
             rules: {
               privateChannels: [],
               roleplayChannels: [],
@@ -2096,7 +2187,7 @@ describe("channels collection bounds and truncation notices", () => {
       cases.check(locale, () => {
         const privateChannels = makeChannelList(220);
         const roleplayChannels = makeChannelList(220);
-        const blocklistChannels = makeChannelList(220);
+        const blocklistChannels = makeBlocklistChannelList(220);
         const payload = buildConfigPanelPayload({
           locale,
           actor: GUILD_MANAGER,
@@ -2106,9 +2197,9 @@ describe("channels collection bounds and truncation notices", () => {
           selectedPersonaId: 55,
           readStatus: "fresh",
           channelsView: {
+            ...EMPTY_CHANNELS_VIEW,
             availableTextChannels: privateChannels,
             availableBlocklistChannels: blocklistChannels,
-            availableOverrideChannels: [],
             rules: {
               privateChannels,
               roleplayChannels,
@@ -2176,9 +2267,7 @@ describe("channels collection bounds and truncation notices", () => {
       selectedPersonaId: 55,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [],
+        ...EMPTY_CHANNELS_VIEW,
         destinations: {
           thoughtLogChannelId: null,
           welcomeChannelId: null,
@@ -2208,9 +2297,7 @@ describe("channels collection bounds and truncation notices", () => {
       selectedPersonaId: 55,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [],
+        ...EMPTY_CHANNELS_VIEW,
         destinations: {
           thoughtLogChannelId: null,
           welcomeChannelId: null,
@@ -2233,9 +2320,7 @@ describe("channels collection bounds and truncation notices", () => {
       selectedPersonaId: 55,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [],
+        ...EMPTY_CHANNELS_VIEW,
         destinations: {
           thoughtLogChannelId: null,
           welcomeChannelId: null,
@@ -2262,9 +2347,10 @@ describe("channels collection bounds and truncation notices", () => {
       channelsSelectedChannelId: selectedId,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [{ id: selectedId }],
+        ...EMPTY_CHANNELS_VIEW,
+        availableOverrideChannels: [
+          { id: selectedId, name: "channel-100", type: ChannelType.GuildText, rawPosition: 99, parentRawPosition: -1 },
+        ],
         overrides: {
           selectedChannelId: selectedId,
           prompt: { prompt: "Short prompt.", mode: "append" },
@@ -2286,9 +2372,10 @@ describe("channels collection bounds and truncation notices", () => {
       channelsSelectedChannelId: selectedId,
       readStatus: "fresh",
       channelsView: {
-        availableTextChannels: [],
-        availableBlocklistChannels: [],
-        availableOverrideChannels: [{ id: selectedId }],
+        ...EMPTY_CHANNELS_VIEW,
+        availableOverrideChannels: [
+          { id: selectedId, name: "channel-100", type: ChannelType.GuildText, rawPosition: 99, parentRawPosition: -1 },
+        ],
         overrides: {
           selectedChannelId: selectedId,
           prompt: { prompt: "P".repeat(4000), mode: "append" },

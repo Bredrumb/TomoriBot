@@ -1,8 +1,13 @@
 import { beforeAll, describe, expect, it } from "bun:test";
+import type {
+  ActionRowComponentData,
+  ActionRowData,
+  ComponentInContainerData,
+  ContainerComponentData,
+} from "discord.js";
 import {
   buildStatusCategoryButtonId,
   buildStatusDashboardRouteId,
-  buildStatusPersonaRangeId,
   buildStatusPersonaSelectorId,
   buildStatusPageSelectorId,
   parseStatusDashboardRoute,
@@ -14,8 +19,20 @@ import {
 import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistry";
 import { dashboardPayload, type StatusPageCategory } from "@/utils/metrics/status/statusPageRenderer";
 import { initializeLocalizer } from "@/utils/text/localizer";
+import { createPersona } from "../../helpers/fixtures";
 
 beforeAll(async () => initializeLocalizer());
+
+/** `dashboardPayload` always wraps its body in one container component, whatever its declared element type says. */
+function payloadContainerComponents(payload: ReturnType<typeof dashboardPayload>): readonly ComponentInContainerData[] {
+  const container = payload.components[0] as ContainerComponentData<ComponentInContainerData>;
+  return container.components;
+}
+
+/** Only the action-row member of the container union carries a child array. */
+function rowComponents(row: ComponentInContainerData | undefined): readonly unknown[] {
+  return (row as ActionRowData<ActionRowComponentData> | undefined)?.components ?? [];
+}
 
 describe("status dashboard route catalog", () => {
   it("round-trips the exact category and page wire contracts", () => {
@@ -79,15 +96,19 @@ describe("status dashboard route catalog", () => {
     }
     expect(buildStatusPersonaSelectorId("en-US", Number.MAX_SAFE_INTEGER).length).toBeLessThanOrEqual(100);
     expect(
-      buildStatusPersonaRangeId("en-US", Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER).length,
+      buildStatusDashboardRouteId({
+        action: "persona-page",
+        locale: "en-US",
+        personaId: Number.MAX_SAFE_INTEGER,
+        start: Number.MAX_SAFE_INTEGER,
+      }).length,
     ).toBeLessThanOrEqual(100);
   });
 
   it("renders a bounded Persona selector with reachable off-range selections", () => {
-    const personas = Array.from({ length: 51 }, (_, index) => ({
-      persona_id: index + 1,
-      persona_nickname: `Persona ${index + 1}`,
-    }));
+    const personas = Array.from({ length: 51 }, (_, index) =>
+      createPersona({ persona_id: index + 1, persona_nickname: `Persona ${index + 1}` }),
+    );
     const categories: StatusPageCategory[] = [
       {
         id: "persona",
@@ -107,20 +128,22 @@ describe("status dashboard route catalog", () => {
       personas,
       personaSelectStart: 0,
     });
-    const components = (payload.components[0] as { components: Array<{ components?: unknown[] }> }).components;
-    const selector = components[2]?.components?.[0] as {
+    const components = payloadContainerComponents(payload);
+    const selector = rowComponents(components[2])[0] as {
       customId: string;
       options: Array<{ value: string; default?: boolean }>;
       placeholder: string;
     };
-    const range = components[3]?.components?.[2] as { customId: string };
+    const range = rowComponents(components[3])[2] as { customId: string };
 
     expect(selector.customId).toBe(buildStatusPersonaSelectorId("en-US", 40));
     expect(selector.options).toHaveLength(25);
     expect(selector.options.some((option) => option.value === "40")).toBe(false);
     expect(selector.options.some((option) => option.default)).toBe(false);
     expect(selector.placeholder).toContain("Persona 40");
-    expect(range.customId).toBe(buildStatusPersonaRangeId("en-US", 40, 25));
+    expect(range.customId).toBe(
+      buildStatusDashboardRouteId({ action: "persona-page", locale: "en-US", personaId: 40, start: 25 }),
+    );
     expect(JSON.stringify(payload)).not.toContain("status-test");
   });
 
@@ -153,12 +176,10 @@ describe("status dashboard route catalog", () => {
     ];
     const behaviorPayload = dashboardPayload("legacy-id", "en-US", categories, "behavior", 0, false);
     const personaPayload = dashboardPayload("legacy-id", "en-US", categories, "persona", 0, false);
-    const behaviorComponents = (behaviorPayload.components[0] as { components: Array<{ components?: unknown[] }> })
-      .components;
-    const personaComponents = (personaPayload.components[0] as { components: Array<{ components?: unknown[] }> })
-      .components;
-    const behaviorOptions = (behaviorComponents[2]?.components?.[0] as { options?: unknown[] } | undefined)?.options;
-    const personaOptions = (personaComponents[2]?.components?.[0] as { options?: unknown[] } | undefined)?.options;
+    const behaviorComponents = payloadContainerComponents(behaviorPayload);
+    const personaComponents = payloadContainerComponents(personaPayload);
+    const behaviorOptions = (rowComponents(behaviorComponents[2])[0] as { options?: unknown[] } | undefined)?.options;
+    const personaOptions = (rowComponents(personaComponents[2])[0] as { options?: unknown[] } | undefined)?.options;
 
     expect(behaviorOptions).toEqual([
       { label: "General Behavior", value: "0", default: true },

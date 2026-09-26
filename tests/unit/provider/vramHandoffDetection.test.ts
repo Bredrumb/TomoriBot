@@ -5,10 +5,11 @@ import { detectVramHandoffBackend } from "@/utils/provider/textModelComfyUiHando
 const endpointUrl = "https://8.8.8.8:5001/v1";
 
 function stubServer(routes: Record<string, unknown>) {
-  return spyOn(globalThis, "fetch").mockImplementation(async (input: unknown) => {
+  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
+  return spyOn(globalThis, "fetch").mockImplementation((async (input: string | URL | Request) => {
     const { pathname } = new URL(String(input instanceof Request ? input.url : input));
     return pathname in routes ? Response.json(routes[pathname]) : new Response("not found", { status: 404 });
-  });
+  }) as typeof fetch);
 }
 
 const restore: Array<{ mockRestore: () => void }> = [];

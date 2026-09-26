@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { TomoriPresetRow } from "@/types/db/schema";
+import { EMPTY_PERSONA_NAMING_CONFIG } from "@/types/personaNaming";
 import { buildStatsPresetAvatarLookup, resolveStatsPersonaAvatarReference } from "@/utils/stats/personaAvatar";
 
 type StatsAvatarPersona = Parameters<typeof resolveStatsPersonaAvatarReference>[0];
@@ -19,6 +20,7 @@ function preset(overrides: Partial<TomoriPresetRow> = {}): TomoriPresetRow {
     preset_avatar_shared_url: "https://storage.googleapis.com/bucket/avatars/presets/4/en-US/avatar-hash.png",
     preset_avatar_hash: "hash",
     preset_trigger_words: [],
+    preset_naming_config: structuredClone(EMPTY_PERSONA_NAMING_CONFIG),
     ...overrides,
   };
 }

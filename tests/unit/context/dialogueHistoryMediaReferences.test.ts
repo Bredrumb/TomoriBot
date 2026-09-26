@@ -4,6 +4,7 @@ import { HumanizerDegree, type AssembledServerConfig, type TomoriState } from "@
 import { appendDialogueHistoryContext } from "@/utils/text/context/dialogueHistory";
 import type { SimplifiedMessageForContext } from "@/utils/text/context/types";
 import { MessageIdMap } from "@/utils/text/messageIdMap";
+import { createPersona } from "../../helpers/fixtures";
 
 function makeConfig(): AssembledServerConfig {
   return {
@@ -17,12 +18,13 @@ function makeConfig(): AssembledServerConfig {
   } as AssembledServerConfig;
 }
 
+// The shared factory's default row (google, tool-capable) covers every field this file set by
+// hand, so only the note fields are overridden.
 function makeTomoriState(): TomoriState {
-  return {
+  return createPersona({
     context_note: null,
     context_note_depth: 0,
-    llm: { has_tools: true, llm_provider: "google" },
-  } as TomoriState;
+  });
 }
 
 function makeRemoteImageMessage(
@@ -66,7 +68,7 @@ async function buildMediaReference(
     tomoriState: makeTomoriState(),
     includeTimestamps: false,
     isUserImpersonation: false,
-    mediaContextWindow: 1,
+    triggererFormattedName: "Alice",
     messageIdMap,
     uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
     convertMentions: async (text) => text,
@@ -117,7 +119,7 @@ describe("appendDialogueHistoryContext — remote media references", () => {
       tomoriState: makeTomoriState(),
       includeTimestamps: false,
       isUserImpersonation: false,
-      mediaContextWindow: 1,
+      triggererFormattedName: "Alice",
       messageIdMap,
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
       convertMentions: async (text) => text,
@@ -154,7 +156,7 @@ describe("appendDialogueHistoryContext — remote media references", () => {
       tomoriState: makeTomoriState(),
       includeTimestamps: false,
       isUserImpersonation: false,
-      mediaContextWindow: 1,
+      triggererFormattedName: "Alice",
       messageIdMap,
       uncensorInputOptions: { unicodeSpacesEnabled: false, sanitizeEnabled: false },
       convertMentions: async (text) => text,

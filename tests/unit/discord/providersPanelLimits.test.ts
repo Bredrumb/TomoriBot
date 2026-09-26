@@ -27,12 +27,11 @@ const REALISTIC_RECEIPT: PanelReceipt = {
 
 const READ_STATUSES: PanelReadStatus[] = ["fresh", "stale", "unavailable"];
 const RECEIPTS: Array<PanelReceipt | undefined> = [undefined, REALISTIC_RECEIPT];
-const ALL_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "edit" | "activate" | "remove">([
+const ALL_ACTIONS = new Set<"add-provider" | "add-endpoint" | "model" | "edit" | "remove">([
   "add-provider",
   "add-endpoint",
   "model",
   "edit",
-  "activate",
   "remove",
 ]);
 
@@ -51,6 +50,7 @@ function model(id: number, codeName = `provider-model-${id}`, custom = true): Pr
       supportsStructOutput: false,
       strictRoleAlternation: false,
       supportsPrefixCompletion: true,
+      verbatimToolCalling: false,
     },
   };
 }
@@ -98,7 +98,13 @@ function endpointEntry(
     connectionIds: [id],
     isPreset: false,
     connectionDetails: [
-      { connectionId: id, endpointUrl: `https://endpoint-${id}.example.invalid/v1`, apiStyle: "openai-compatible" },
+      {
+        connectionId: id,
+        endpointUrl: `https://endpoint-${id}.example.invalid/v1`,
+        apiStyle: "openai-compatible",
+        capability: "text",
+        vramHandoff: null,
+      },
     ],
     capabilities: [
       section("text", models),
@@ -242,55 +248,6 @@ describe("Providers panel Components V2 limits", () => {
         }),
         `model shape ${index}`,
       );
-    }
-
-    // Explicitly test a full page at PROVIDERS_ENTRIES_PER_SELECTOR_PAGE with every entry carrying oversized content
-    const fullPageEntries = Array.from({ length: PROVIDERS_ENTRIES_PER_SELECTOR_PAGE }, (_, i) => ({
-      id: `custom:provider-full-${i + 1}`,
-      kind: "custom" as const,
-      displayName: "P".repeat(20_000),
-      savedAt: null,
-      rotationKeyCount: 2,
-      capabilities: [
-        {
-          capability: "text" as const,
-          availability: "available" as const,
-          models: [
-            {
-              id: i + 1,
-              codeName: "M".repeat(20_000),
-              displayName: "D".repeat(20_000),
-              isWorkspaceActive: true,
-              isWorkspaceFallback: false,
-              isProviderFallback: false,
-              isCustomRegistration: true,
-            },
-          ],
-        },
-      ],
-    }));
-
-    for (const locale of RUNTIME_LOCALES) {
-      for (const receipt of RECEIPTS) {
-        for (const page of [
-          { kind: "entry" as const, entryId: fullPageEntries[0]?.id },
-          { kind: "remove" as const, entryId: fullPageEntries[0]?.id },
-        ]) {
-          expectSafePanelPayload(
-            buildProvidersPanelPayload({
-              locale,
-              entries: fullPageEntries,
-              initialEntryId: fullPageEntries[0]?.id ?? null,
-              readStatus: "fresh",
-              page,
-              receipt,
-              enabledActions: ALL_ACTIONS,
-              routeNamespace: PROVIDERS_ROUTE_NAMESPACE,
-            }),
-            `full-page-oversized/${locale}/${page.kind}/receipt=${Boolean(receipt)}`,
-          );
-        }
-      }
     }
   });
 

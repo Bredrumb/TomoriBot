@@ -1,7 +1,15 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, mock, spyOn } from "bun:test";
 import type { Message } from "discord.js";
-import { DMChannel } from "discord.js";
-import { resolveAdmissionChannelScope, shouldBlockReplyToOtherBot } from "@/utils/chat/admission";
+import { ChannelType, DMChannel } from "discord.js";
+import { PrivacyLevel } from "@/types/db/schema";
+import * as audioTranscription from "@/utils/audio/audioAttachmentTranscription";
+import { invalidateUserCache } from "@/utils/cache/userCache";
+import {
+  evaluateChatAdmission,
+  resolveAdmissionChannelScope,
+  shouldBlockReplyToOtherBot,
+} from "@/utils/chat/admission";
+import { userRepository } from "@/utils/db/repositories/UserRepository";
 import type { ChatIncoming } from "@/utils/chat/types";
 
 // Object.create skips the discord.js constructor (which demands a live client and a full
@@ -150,5 +158,43 @@ describe("resolveAdmissionChannelScope DM server key", () => {
     const scope = await resolveAdmissionChannelScope(incoming, incoming.systemTriggerIdentity.userDiscId);
 
     expect(scope?.serverDiscId).toBe("human-user");
+  });
+});
+
+describe("evaluateChatAdmission server blacklist", () => {
+  it("blocks a blacklisted member before audio transcription can run", async () => {
+    const memberId = "100000000000000021";
+    invalidateUserCache(memberId);
+    const rowSpy = spyOn(userRepository, "loadByDiscordId").mockResolvedValue(null);
+    const privacySpy = spyOn(userRepository, "getPrivacyLevel").mockResolvedValue(PrivacyLevel.MINIMAL);
+    const blacklistSpy = spyOn(userRepository, "isBlacklisted").mockResolvedValue(true);
+    const transcribeSpy = spyOn(audioTranscription, "transcribeMessageAudioAttachment");
+
+    try {
+      const incoming = {
+        client: { user: { id: "tomori" } },
+        message: {
+          id: "voice-message",
+          content: "",
+          webhookId: null,
+          interaction: null,
+          reference: null,
+          author: { id: memberId, bot: false, username: "member" },
+          guild: { id: "300000000000000031" },
+          channel: { id: "thread-1", type: ChannelType.PublicThread },
+        },
+        isManuallyTriggered: false,
+      } as unknown as ChatIncoming;
+
+      const admission = await evaluateChatAdmission(incoming);
+
+      expect(admission.disposition).toBe("blocked");
+      expect(admission.disposition === "run" ? null : admission.reason).toBe("server_blacklisted_user");
+      expect(blacklistSpy).toHaveBeenCalledWith("300000000000000031", memberId);
+      expect(transcribeSpy).not.toHaveBeenCalled();
+    } finally {
+      for (const spy of [rowSpy, privacySpy, blacklistSpy, transcribeSpy]) spy.mockRestore();
+      invalidateUserCache(memberId);
+    }
   });
 });

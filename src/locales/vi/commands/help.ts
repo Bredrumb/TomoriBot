@@ -94,7 +94,7 @@ export default {
         memory_tagging: `Gắn thẻ bộ nhớ (nâng cao)`,
         memory_tagging_description: `Chỉ gọi bộ nhớ dậy khi thực sự liên quan`,
         blacklisting: `Đưa vào danh sách đen`,
-        blacklisting_description: `Chặn một thành viên kích hoạt mình`,
+        blacklisting_description: "Khiến mình bỏ qua hoàn toàn một thành viên",
       },
     },
     breadcrumbs: {
@@ -531,7 +531,7 @@ Nhập \`{project_id}::{location}\` bằng {configSetup} hoặc {configApikeySet
       blacklisting: {
         title: `Đưa vào danh sách đen`,
         description:
-          "Thành viên trong danh sách đen không thể kích hoạt mình, ở bất kỳ kênh nào, với bất kỳ persona nào.\n\nThêm thành viên trong {moderationBlacklist}. Trang này cũng liệt kê các mục hiện có và xóa từng người hay hàng loạt.\n> Danh sách đen chỉ chặn truy cập, không xóa dữ liệu. Bộ nhớ về người đó vẫn còn cho đến khi có người xóa.",
+          "Mình bỏ qua hoàn toàn thành viên trong danh sách đen: họ không thể kích hoạt mình ở bất kỳ kênh nào, với bất kỳ persona nào, tin nhắn của họ không bao giờ vào ngữ cảnh của mình, và mình từ chối các lệnh khiến mình hành động thay họ, như `/respond`, `/reward` và `/punish`. Họ cũng không thể thay đổi bộ nhớ máy chủ, thuộc tính hay hội thoại mẫu.\n\nThêm thành viên trong {moderationBlacklist}. Trang này cũng liệt kê các mục hiện có và xóa từng người hay hàng loạt.\n> Danh sách đen chỉ chặn truy cập, không xóa dữ liệu. Bộ nhớ về người đó vẫn còn cho đến khi có người xóa.",
         footer: "Để tắt tiếng cả kênh thay vì một người, hãy đưa kênh đó ra khỏi danh sách trắng.",
       },
     },

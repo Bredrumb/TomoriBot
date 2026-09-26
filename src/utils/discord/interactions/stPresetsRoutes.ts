@@ -37,9 +37,11 @@ import { buildPanelContainer } from "@/utils/discord/ui/panel";
 import {
   loadStPresetToggleableNodes,
   stPresetOperations,
+  type ImportStPresetResult,
   type StPresetScopeData,
 } from "@/utils/stPreset/stPresetOperations";
 import { recordPanelActionStat, type RecordPanelActionInput } from "@/utils/stats/panelActionMetrics";
+import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import { localizer } from "@/utils/text/localizer";
 
 export interface StPresetsScope {
@@ -171,6 +173,54 @@ function resolveNodesPanelPage(presetId: number, totalCount: number, requestedRa
     nodeRangeCount: rangeCount,
     nodeTotalCount: totalCount,
   };
+}
+
+/** Macro labels quote preset text verbatim, so each one is capped before it reaches the receipt. */
+const MACRO_LABEL_DISPLAY_MAX = 40;
+const MACRO_LABELS_SHOWN = 4;
+
+function formatUnsupportedMacros(locale: string, labels: readonly string[]): string {
+  const sorted = [...labels].sort((a, b) => a.localeCompare(b));
+  const shown = sorted.slice(0, MACRO_LABELS_SHOWN).map((label) => {
+    const codePoints = Array.from(label);
+    const bounded =
+      codePoints.length > MACRO_LABEL_DISPLAY_MAX
+        ? `${codePoints.slice(0, MACRO_LABEL_DISPLAY_MAX - 1).join("")}…`
+        : label;
+    return escapeDiscordMarkdown(bounded);
+  });
+  const remaining = sorted.length - shown.length;
+  const list = shown.join(", ");
+  return remaining > 0
+    ? `${list} ${localizer(locale, "commands.st-presets.import_note_more_macros", { count: remaining })}`
+    : list;
+}
+
+/**
+ * The caveats an import carries beyond its node counts: what the preset holds that will not run as
+ * written here. Each is a separate receipt line so the success detail stays scannable.
+ */
+function buildImportNotes(locale: string, result: Extract<ImportStPresetResult, { status: "success" }>): string[] {
+  const notes: string[] = [];
+  if (result.commentOnlyCount > 0) {
+    notes.push(localizer(locale, "commands.st-presets.import_note_comment_only", { count: result.commentOnlyCount }));
+  }
+  if (result.disabledByPreset > 0) {
+    notes.push(
+      localizer(locale, "commands.st-presets.import_note_disabled_by_preset", { count: result.disabledByPreset }),
+    );
+  }
+  if (result.unsupportedEnabledMacros.length > 0) {
+    notes.push(
+      localizer(locale, "commands.st-presets.import_note_unsupported_macros", {
+        macros: formatUnsupportedMacros(locale, result.unsupportedEnabledMacros),
+      }),
+    );
+  }
+  if (result.sourceKind === "legacy_text_completion") {
+    notes.push(localizer(locale, "commands.st-presets.import_note_legacy_text_completion"));
+  }
+  return notes;
 }
 
 function importFailureReceipt(locale: string, status: string, maxSizeMB?: number): PanelReceipt {
@@ -804,11 +854,14 @@ export function createStPresetsInteractionRoute(
             {
               tone: "success",
               heading: localizer(route.locale, "commands.st-presets.added_receipt"),
-              detail: localizer(route.locale, "commands.st-presets.added_receipt_detail", {
-                name: result.presetName,
-                nodes: result.nodes.length,
-                enabled: result.enabledCount,
-              }),
+              detail: [
+                localizer(route.locale, "commands.st-presets.added_receipt_detail", {
+                  name: result.presetName,
+                  nodes: result.nodes.length,
+                  enabled: result.enabledCount,
+                }),
+                ...buildImportNotes(route.locale, result),
+              ].join("\n> "),
             },
           );
         } else {

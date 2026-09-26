@@ -44,7 +44,7 @@ TomoriBot 通过 `/config` 面板及其相关指令，把她在你服务器里�
 ## 学习与隐私控制
 
 - `/server memberpermissions`：控制谁能教导她东西。
-- `/server blacklist`：阻止她学习或使用关于特定用户的记忆。
+- `/moderation` > User Blacklist：让她完全忽略特定成员。这些成员无法触发她，也无法使用她的互动命令，他们的消息也不会进入她的上下文。
 - `/config` > 频道 > 频道规则：标记短期记忆被隔离、思考
   日志被抑制的频道。
 

@@ -19,12 +19,16 @@ sidebar:
 - `src/init/timers.ts`: health tracker, scheduled work, memory monitor, cache metrics, quota cleanup
 - `src/types/config.ts`: `AppConfig` interface + `resolveEnvironment()`
 
+The Docker Compose app service uses a process liveness healthcheck because the HTTP health server
+starts only in production mode. A running process can still be disconnected from Discord; inspect
+the bot log for gateway failures.
+
 ## Startup Sequence
 
 1. Load `.env` (`dotenv`); resolve `AppEnvironment`.
-2. In non-production: run the automatic data backup gate before secrets, Discord, or database initialization. It creates a full `backupData.ts`-compatible bundle when the latest data backup was made by another bot version or is older than `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (default 24). Only automatic bundles count toward `TOMORI_AUTO_BACKUP_MAX` retention (default 5); manual `bun run backup` bundles are never pruned by this gate.
-3. In production: bind health HTTP server on `$PORT` (default 8080); returns 503 until Discord ready.
-4. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
+2. In production: bind the health HTTP server on `$PORT` (default 8080); it returns 503 until Discord is ready.
+3. Load secrets via `getAppSecrets()`; populate `process.env` for downstream consumers; initialize `keyManager`.
+4. In non-production: run the automatic data backup gate before database initialization. It creates a full `backupData.ts`-compatible bundle when the latest data backup was made by another bot version or is older than `TOMORI_AUTO_BACKUP_INTERVAL_HOURS` (default 24). Only automatic bundles count toward `TOMORI_AUTO_BACKUP_MAX` retention (default 5); manual `bun run backup` bundles are never pruned by this gate.
 5. Construct Discord client with intents + sweepers; register process/client error handlers.
 6. Initialize database:
    - run narrow pre-schema legacy rename bridges for known table renames that would otherwise conflict with fresh `schema.sql`

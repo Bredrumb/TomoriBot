@@ -4,7 +4,6 @@ import type { StreamConfig, StreamContext } from "@/types/stream/interfaces";
 import {
   createDefaultStreamMetrics,
   createDefaultStreamState,
-  createTypingSimulationConfig,
   type TextProcessingConfig,
   VisibleDeliveryMode,
 } from "@/types/stream/types";
@@ -53,10 +52,20 @@ function makeLoopStopArgs(context: StreamContext, state: ReturnType<typeof creat
     registeredSpeakerNamesLower: new Set(),
     maxMessageLength: 2000,
   };
-  const config = {
+  const config: StreamConfig = {
+    model: "test-model",
+    apiKey: "",
+    temperature: 1,
+    maxMessageLength: 2000,
+    flushBufferSize: 1000,
+    flushBufferSizeCodeBlock: 15_000,
+    inactivityTimeoutMs: 10_000,
+    baseTypeSpeedMsPerChar: 0,
+    maxTypingTimeMs: 0,
+    minVisibleTypingDurationMs: 0,
     humanizerDegree: HumanizerDegree.NONE,
-    ...createTypingSimulationConfig(HumanizerDegree.NONE),
-  } as StreamConfig;
+    emojiUsageEnabled: false,
+  };
 
   return { state, config, context, textConfig, metrics: createDefaultStreamMetrics() };
 }

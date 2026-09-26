@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { extractHistoryWindowForProvider } from "@/providers/utils/providerFeatureExecutors";
+import {
+  extractHistoryWindowForProvider,
+  type HistoryExtractionOutcome,
+} from "@/providers/utils/providerFeatureExecutors";
 import { resolveStructuredOutputCapability } from "@/utils/provider/providerCapabilityResolver";
 
 /**
@@ -36,8 +39,10 @@ describe("history extraction outcome", () => {
   test("keeps an empty extraction distinguishable from a failed one", () => {
     // The whole point of the union: an empty result is still `ok`, so callers can only
     //    reach the "no facts" terminal when nothing actually went wrong.
-    const empty = { ok: true, entries: [] } as const;
-    const failed = { ok: false, reason: "failed", error: "Invalid response structure" } as const;
+    const empty: Extract<HistoryExtractionOutcome, { ok: true }> = { ok: true, entries: [], discarded: 0 };
+    // Asserted to the whole union: a plain annotation narrows to the literal arm, and the
+    //    comparison below then has no overlap to check.
+    const failed = { ok: false, reason: "failed", error: "Invalid response structure" } as HistoryExtractionOutcome;
 
     expect(empty.ok).toBe(true);
     expect(empty.entries).toHaveLength(0);

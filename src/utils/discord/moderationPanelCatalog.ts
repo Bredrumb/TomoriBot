@@ -338,48 +338,6 @@ const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<ModerationFixedAction, Moder
   MODERATION_ROUTE_CODECS,
 );
 
-const ACCEPTED_35_ACTIONS: readonly ModerationAction[] = [
-  "category",
-  "member-access-open",
-  "member-access-submit",
-  "model-access-set",
-  "page",
-  "persona-channel-add-open",
-  "persona-channel-add-submit",
-  "persona-channel-remove-open",
-  "persona-channel-remove-submit",
-  "quota-edit-open",
-  "quota-edit-submit",
-  "range",
-  "retry",
-  "select-page",
-  "user-blacklist-add-open",
-  "user-blacklist-add-submit",
-  "user-blacklist-remove-cancel",
-  "user-blacklist-remove-confirm",
-  "user-blacklist-remove-open",
-  "user-blacklist-remove-prompt",
-  "user-blacklist-remove-submit",
-  "whitelist-channel-add-open",
-  "whitelist-channel-add-submit",
-  "whitelist-channel-remove-cancel",
-  "whitelist-channel-remove-confirm",
-  "whitelist-channel-remove-open",
-  "whitelist-channel-remove-prompt",
-  "whitelist-channel-remove-submit",
-  "whitelist-role-add-open",
-  "whitelist-role-add-submit",
-  "whitelist-role-remove-cancel",
-  "whitelist-role-remove-confirm",
-  "whitelist-role-remove-open",
-  "whitelist-role-remove-prompt",
-  "whitelist-role-remove-submit",
-] as const;
-
-export function listModerationPanelActions(): ModerationAction[] {
-  return [...ACCEPTED_35_ACTIONS];
-}
-
 /**
  * Encodes a typed route object through the authoritative codec table or target variant builder into route segments.
  */
