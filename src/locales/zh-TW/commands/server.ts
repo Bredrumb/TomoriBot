@@ -67,11 +67,5 @@ export default {
     "deliberate-tool-mode": {
       description: `切換這個伺服器的明確工具模式。`,
     },
-    "deliberate-tool-trigger": {
-      action_description: `要新增、移除或列出自訂工具觸發詞。`,
-      action_add: `新增`,
-      action_remove: `移除`,
-      action_list: `列出`,
-    },
   },
 };

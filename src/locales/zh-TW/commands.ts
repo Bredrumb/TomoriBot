@@ -20,7 +20,6 @@ import support from "./commands/support";
 import contribute from "./commands/contribute";
 import donate from "./commands/donate";
 import nsfw from "./commands/nsfw";
-import openrouter from "./commands/openrouter";
 import config from "./commands/config";
 import optionalKey from "./commands/optional-key";
 import server from "./commands/server";
@@ -85,7 +84,6 @@ export default {
     ...contribute,
     ...donate,
     ...nsfw,
-    ...openrouter,
     ...config,
     ...optionalKey,
     ...server,

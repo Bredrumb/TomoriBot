@@ -100,6 +100,7 @@ describe("isBlacklistGatedCommand", () => {
     ["persona", null, "export"],
     ["scheduled-task", null, "remove"],
     ["responder", null, null],
+    ["comment", null, null],
   ])("leaves %s %s %s open", (command, group, subcommand) => {
     expect(isBlacklistGatedCommand(command, group, subcommand)).toBe(false);
   });

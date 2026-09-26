@@ -66,11 +66,5 @@ export default {
     "deliberate-tool-mode": {
       description: `切换这个服务器的明确工具模式。`,
     },
-    "deliberate-tool-trigger": {
-      action_description: `选择添加、移除还是列出自定义工具触发。`,
-      action_add: `add`,
-      action_remove: `remove`,
-      action_list: `list`,
-    },
   },
 };

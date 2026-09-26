@@ -1225,21 +1225,6 @@ CFG 權重：**{cfg_weight}**
       },
     },
     custom_models: {
-      remove: {
-        checkbox_description: `保持勾選即可保留端點註冊。取消勾選你想移除的端點。`,
-        checkbox_text_label: `已註冊的文字端點`,
-        checkbox_text_label_continued: `已註冊的文字端點（續）`,
-        checkbox_embedding_label: `已註冊的嵌入端點`,
-        checkbox_embedding_label_continued: `已註冊的嵌入端點（續）`,
-        checkbox_image_label: `已註冊的圖片端點`,
-        checkbox_image_label_continued: `已註冊的圖片端點（續）`,
-        checkbox_video_label: `已註冊的影片端點`,
-        checkbox_video_label_continued: `已註冊的影片端點（續）`,
-        checkbox_speech_label: `已註冊的語音端點`,
-        checkbox_speech_label_continued: `已註冊的語音端點（續）`,
-        checkbox_transcription_label: `已註冊的轉錄端點`,
-        checkbox_transcription_label_continued: `已註冊的轉錄端點（續）`,
-      },
       capability_modal: {
         workflow_supports_label: `圖片支援`,
         workflow_supports_description: `勾選這個端點支援的每一項圖片請求功能`,

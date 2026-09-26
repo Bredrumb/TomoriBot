@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `Pronto para Continuar`,
       modal_ready_description: `Abra o formulário para continuar com sua seleção.`,
       open_modal_button: `Abrir Formulário`,
-      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
-      // below is interpolated in, so remove/edit variants of a family reuse it.
-      filtered_notice: `Mostrando apenas personas que possuem {items}.`,
-      items: {
-        attributes: `atributos`,
-        sample_dialogues: `diálogos de exemplo`,
-        trigger_words: `palavras-gatilho`,
-        persona_prompts: `prompts da persona`,
-        voice_designs: `designs de voz`,
-        documents: `documentos`,
-        chat_history: `histórico de chat`,
-        server_memories: `memórias do servidor`,
-        personal_memories: `memórias pessoais`,
-        short_term_memories: `memórias de curto prazo`,
-        sprites: `sprites`,
-      },
     },
     errors: {
       outdated_panel: `Este painel está desatualizado. Execute {command} novamente.`,

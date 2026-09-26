@@ -41,6 +41,7 @@ your task.
 | Test database code | [`db-changes.md`](./testing/db-changes) |
 | Test chat pipeline code | [`chat-changes.md`](./testing/chat-changes) |
 | Mock a module in tests | [`module-mocks.md`](./testing/module-mocks) |
+| Keep tests small, fast, and honest | [`maintainable-tests.md`](./testing/maintainable-tests) |
 
 **Policies** (`policies/`)
 

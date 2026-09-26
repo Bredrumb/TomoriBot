@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   auditMockModuleSurfaces,
   FORBIDDEN_MOCK_MODULES,
-  HIGH_RISK_MOCK_MODULES,
+  isGuardedMockModule,
   scanMockModuleSurfaceSource,
   type MockModuleSurfaceViolationKind,
 } from "../../../scripts/checks/lib/mockModuleSurface";
@@ -12,7 +12,7 @@ function kinds(source: string): MockModuleSurfaceViolationKind[] {
 }
 
 describe("module mock surface scanner", () => {
-  it("flags a partial high-risk module mock", () => {
+  it("flags a partial module mock", () => {
     const source = `
       import { mock } from "bun:test";
       mock.module("@/utils/text/localizer", () => ({ log: fakeLog }));
@@ -68,7 +68,7 @@ describe("module mock surface scanner", () => {
     expect(kinds(source)).toEqual(["missing-real-spread", "unscoped-behavior"]);
   });
 
-  it("ignores local modules outside the curated set and text in comments", () => {
+  it("ignores relative modules and text in comments", () => {
     const source = `
       import { mock } from "bun:test";
       // mock.module("@/utils/text/localizer", () => ({ log: fakeLog }));
@@ -78,15 +78,22 @@ describe("module mock surface scanner", () => {
     expect(kinds(source)).toEqual([]);
   });
 
-  it("keeps the curated list focused on shared high-fanout modules", () => {
-    expect(HIGH_RISK_MOCK_MODULES).toContain("@/utils/text/localizer");
-    expect(HIGH_RISK_MOCK_MODULES).toContain("@/utils/db/repositories");
-    expect(HIGH_RISK_MOCK_MODULES).toContain("@/utils/discord/ui/personaWorkflow");
-    expect(HIGH_RISK_MOCK_MODULES.has("./localFixture")).toBe(false);
+  it("guards a low-fanout project module as strictly as a shared one", () => {
+    // A partial WhitelistRepository mock once broke autocomplete and blacklist suites that ran later
+    // in the same bare `bun test` process, though few files import it.
+    const source = `
+      import { mock } from "bun:test";
+      mock.module("@/utils/db/repositories/WhitelistRepository", () => ({
+        whitelistRepository: { getAllWhitelistPersonas: async () => [] },
+      }));
+    `;
+
+    expect(kinds(source)).toEqual(["missing-hoisted-real-import", "missing-real-spread", "unscoped-behavior"]);
+    expect(isGuardedMockModule("./localFixture")).toBe(false);
   });
 
   it("rejects a forbidden module mock even when it is full-surface and leak-scoped", () => {
-    // The shape below satisfies every high-risk rule, which is exactly why the forbidden set
+    // The shape below satisfies every surface and scope rule, which is exactly why the forbidden set
     // exists: scoping restores behavior but never the replaced module record.
     const source = `
       import { mock } from "bun:test";
@@ -103,12 +110,11 @@ describe("module mock surface scanner", () => {
 
     expect(kinds(source)).toEqual(["forbidden-module"]);
     expect(FORBIDDEN_MOCK_MODULES).toContain("@/utils/misc/logger");
-    expect(HIGH_RISK_MOCK_MODULES.has("@/utils/misc/logger")).toBe(false);
   });
 });
 
 describe("module mock surface guard on the real tree", () => {
-  it("keeps high-risk module mocks full-surface and leak-scoped", async () => {
+  it("keeps every project module mock full-surface and leak-scoped", async () => {
     const { violations, guardedMocks } = await auditMockModuleSurfaces();
     const detail = violations
       .map(

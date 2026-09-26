@@ -67,11 +67,5 @@ export default {
     "deliberate-tool-mode": {
       description: `Toggle deliberate tool mode for this server.`,
     },
-    "deliberate-tool-trigger": {
-      action_description: `Whether to add, remove, or list custom tool triggers.`,
-      action_add: `add`,
-      action_remove: `remove`,
-      action_list: `list`,
-    },
   },
 };

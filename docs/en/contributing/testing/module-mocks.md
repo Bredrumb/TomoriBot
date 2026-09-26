@@ -77,6 +77,7 @@ bun run test
 bun run check-mock-module-surfaces
 ```
 
-The guard audits curated high-fanout modules under `tests/**/*.test.ts`. It requires
+The guard audits every `@/` module mock under `tests/**/*.test.ts`, however few files import the
+module. It requires
 a matching hoisted namespace spread and requires behavioral overrides to use
 `createScopedModuleMocker`.

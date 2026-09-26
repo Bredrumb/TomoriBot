@@ -11,6 +11,16 @@ import {
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import * as realDbClient from "@/utils/db/client";
 import * as realRepositories from "@/utils/db/repositories";
+import * as realToolRepository from "@/utils/db/repositories/ToolRepository";
+import * as realPresetRepository from "@/utils/db/repositories/PresetRepository";
+import * as realWhitelistRepository from "@/utils/db/repositories/WhitelistRepository";
+import * as realNaiDiffusionModels from "@/utils/image/naiDiffusionModels";
+import * as realImageQuotaManager from "@/utils/quota/imageQuotaManager";
+import * as realTextQuotaManager from "@/utils/quota/textQuotaManager";
+import * as realVideoQuotaManager from "@/utils/quota/videoQuotaManager";
+import * as realSpeechEndpointResolver from "@/utils/provider/speechEndpointResolver";
+import * as realCustomEndpointService from "@/utils/provider/customEndpointService";
+import * as realDbStats from "@/utils/metrics/dbStats";
 import { createScopedModuleMocker, overrideMembers, stubLogMembers } from "../../helpers/mockSurface";
 import { createPersona, createServerConfig } from "../../helpers/fixtures";
 import { RUNTIME_LOCALES } from "../../helpers/localeCases";
@@ -26,6 +36,16 @@ const quotaConfig = {
 const scopedMock = createScopedModuleMocker(mock, {
   "@/utils/db/client": realDbClient,
   "@/utils/db/repositories": realRepositories,
+  "@/utils/db/repositories/ToolRepository": realToolRepository,
+  "@/utils/db/repositories/PresetRepository": realPresetRepository,
+  "@/utils/db/repositories/WhitelistRepository": realWhitelistRepository,
+  "@/utils/image/naiDiffusionModels": realNaiDiffusionModels,
+  "@/utils/quota/imageQuotaManager": realImageQuotaManager,
+  "@/utils/quota/textQuotaManager": realTextQuotaManager,
+  "@/utils/quota/videoQuotaManager": realVideoQuotaManager,
+  "@/utils/provider/speechEndpointResolver": realSpeechEndpointResolver,
+  "@/utils/provider/customEndpointService": realCustomEndpointService,
+  "@/utils/metrics/dbStats": realDbStats,
 });
 
 stubLogMembers({ warn: () => undefined });
@@ -53,27 +73,51 @@ scopedMock.module("@/utils/db/repositories", () => ({
   }),
   userRepository: overrideMembers(realRepositories.userRepository, { getBlacklistedMemberIds: emptyRows }),
 }));
-mock.module("@/utils/db/repositories/ToolRepository", () => ({ toolRepository: { loadMcpServers: emptyRows } }));
-mock.module("@/utils/db/repositories/PresetRepository", () => ({
-  presetRepository: { loadPresetsForServer: emptyRows, loadToggleableNodes: emptyRows },
+scopedMock.module("@/utils/db/repositories/ToolRepository", () => ({
+  ...realToolRepository,
+  toolRepository: overrideMembers(realToolRepository.toolRepository, { loadMcpServers: emptyRows }),
 }));
-mock.module("@/utils/db/repositories/WhitelistRepository", () => ({
-  whitelistRepository: {
+scopedMock.module("@/utils/db/repositories/PresetRepository", () => ({
+  ...realPresetRepository,
+  presetRepository: overrideMembers(realPresetRepository.presetRepository, {
+    loadPresetsForServer: emptyRows,
+    loadToggleableNodes: emptyRows,
+  }),
+}));
+scopedMock.module("@/utils/db/repositories/WhitelistRepository", () => ({
+  ...realWhitelistRepository,
+  whitelistRepository: overrideMembers(realWhitelistRepository.whitelistRepository, {
     getAllWhitelistPersonas: emptyRows,
     getAllWhitelistChannels: emptyRows,
     getAllWhitelistRoles: emptyRows,
-  },
+  }),
 }));
-mock.module("@/utils/image/naiDiffusionModels", () => ({ getDiffusionModelById: async () => null }));
-mock.module("@/utils/quota/imageQuotaManager", () => ({ getQuotaConfig: async () => quotaConfig }));
-mock.module("@/utils/quota/textQuotaManager", () => ({ getTextQuotaConfig: async () => quotaConfig }));
-mock.module("@/utils/quota/videoQuotaManager", () => ({ getVideoQuotaConfig: async () => quotaConfig }));
-mock.module("@/utils/provider/speechEndpointResolver", () => ({
+scopedMock.module("@/utils/image/naiDiffusionModels", () => ({
+  ...realNaiDiffusionModels,
+  getDiffusionModelById: async () => null,
+}));
+scopedMock.module("@/utils/quota/imageQuotaManager", () => ({
+  ...realImageQuotaManager,
+  getQuotaConfig: async () => quotaConfig,
+}));
+scopedMock.module("@/utils/quota/textQuotaManager", () => ({
+  ...realTextQuotaManager,
+  getTextQuotaConfig: async () => quotaConfig,
+}));
+scopedMock.module("@/utils/quota/videoQuotaManager", () => ({
+  ...realVideoQuotaManager,
+  getVideoQuotaConfig: async () => quotaConfig,
+}));
+scopedMock.module("@/utils/provider/speechEndpointResolver", () => ({
+  ...realSpeechEndpointResolver,
   resolveActiveSpeechEndpoint: async () => null,
   resolveActiveTranscriptionEndpoint: async () => null,
 }));
-mock.module("@/utils/provider/customEndpointService", () => ({ resolveCustomEndpointForProvider: async () => null }));
-mock.module("@/utils/metrics/dbStats", () => ({ loadVideoModelById: async () => null }));
+scopedMock.module("@/utils/provider/customEndpointService", () => ({
+  ...realCustomEndpointService,
+  resolveCustomEndpointForProvider: async () => null,
+}));
+scopedMock.module("@/utils/metrics/dbStats", () => ({ ...realDbStats, loadVideoModelById: async () => null }));
 const COMPONENT_BUDGET = 36;
 
 function normalizeSerializedPanelProse(value: string): string {

@@ -31,13 +31,13 @@ function makeMemory(id: number, overrides: Partial<ServerMemoryRow> = {}): Serve
     server_memory_id: id,
     server_id: 1,
     persona_lineage_id: 100,
-    user_id: "user-1",
+    user_id: 1,
     content: `Server memory sample content #${id} with realistic length and context.`,
     tags: ["important", "guidelines"],
     created_at: new Date(),
     updated_at: new Date(),
     ...overrides,
-  } as ServerMemoryRow;
+  };
 }
 
 function makeDocument(id: number, overrides: Partial<DocumentListRow> = {}): DocumentListRow {

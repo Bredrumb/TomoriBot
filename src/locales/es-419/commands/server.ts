@@ -67,11 +67,5 @@ export default {
     "deliberate-tool-mode": {
       description: `Alternar el modo de herramientas deliberado para este servidor.`,
     },
-    "deliberate-tool-trigger": {
-      action_description: `Si añadir, quitar o listar activadores de herramientas personalizados.`,
-      action_add: `añadir`,
-      action_remove: `quitar`,
-      action_list: `listar`,
-    },
   },
 };

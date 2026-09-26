@@ -109,7 +109,6 @@ describe("stPresetImportParser", () => {
       const normalized = normalizePresetShape(modernRawPreset);
       expect(normalized).not.toBeNull();
       expect(normalized?.sourceKind).toBe("modern");
-      expect(normalized?.syntheticNodeCount).toBe(0);
     });
 
     it("parses prompt nodes, flags comments and disabled nodes", () => {

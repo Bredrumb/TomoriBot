@@ -91,12 +91,9 @@ function makeDependencies(
           preset: imported,
           presetName: imported.preset_name,
           nodes: [node(1), node(2)],
-          markerCount: 0,
-          toggleableCount: 2,
           enabledCount: 2,
           commentOnlyCount: 0,
           disabledByPreset: 0,
-          legacyNodeCount: 0,
           sourceKind: "modern",
           unsupportedEnabledMacros: [],
         };

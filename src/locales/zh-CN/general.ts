@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `可以继续了`,
       modal_ready_description: `打开表单，继续你的选择。`,
       open_modal_button: `打开表单`,
-      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
-      // below is interpolated in, so remove/edit variants of a family reuse it.
-      filtered_notice: `只显示带有{items}的人格。`,
-      items: {
-        attributes: `属性`,
-        sample_dialogues: `示例对话`,
-        trigger_words: `触发词`,
-        persona_prompts: `人格提示词`,
-        voice_designs: `语音设计`,
-        documents: `文档`,
-        chat_history: `聊天记录`,
-        server_memories: `服务器记忆`,
-        personal_memories: `个人记忆`,
-        short_term_memories: `短期记忆`,
-        sprites: `立绘`,
-      },
     },
     errors: {
       outdated_panel: `这个面板已经过期。请再运行一次 {command}。`,

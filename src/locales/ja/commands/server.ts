@@ -66,11 +66,5 @@ export default {
     "deliberate-tool-mode": {
       description: `このサーバーの明示的ツールモードを切り替えます。`,
     },
-    "deliberate-tool-trigger": {
-      action_description: `カスタムツールトリガーを追加、削除、または一覧表示します。`,
-      action_add: `追加`,
-      action_remove: `削除`,
-      action_list: `一覧`,
-    },
   },
 };

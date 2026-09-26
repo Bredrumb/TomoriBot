@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `可以繼續了`,
       modal_ready_description: `開啟表單以繼續你的選擇。`,
       open_modal_button: `開啟表單`,
-      // 一句共用的篩選提示，不綁動詞。下方那個純項目名詞會被代入，
-      // 所以同一家族的移除或編輯版本都可以重複使用這句。
-      filtered_notice: `只顯示有{items}的人格。`,
-      items: {
-        attributes: `屬性`,
-        sample_dialogues: `範例對話`,
-        trigger_words: `觸發詞`,
-        persona_prompts: `人格提示詞`,
-        voice_designs: `語音設計`,
-        documents: `文件`,
-        chat_history: `對話紀錄`,
-        server_memories: `伺服器記憶`,
-        personal_memories: `個人記憶`,
-        short_term_memories: `短期記憶`,
-        sprites: `立繪`,
-      },
     },
     errors: {
       outdated_panel: `這個面板已過期。請再執行一次 {command}。`,

@@ -67,11 +67,5 @@ export default {
     "deliberate-tool-mode": {
       description: `Alternar modo de ferramenta deliberado para este servidor.`,
     },
-    "deliberate-tool-trigger": {
-      action_description: `Adicionar, remover ou listar gatilhos personalizados de ferramenta.`,
-      action_add: `adicionar`,
-      action_remove: `remover`,
-      action_list: `listar`,
-    },
   },
 };

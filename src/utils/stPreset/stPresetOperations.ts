@@ -40,12 +40,9 @@ export type ImportStPresetResult =
       preset: StPresetRow;
       nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[];
       presetName: string;
-      markerCount: number;
-      toggleableCount: number;
       enabledCount: number;
       commentOnlyCount: number;
       disabledByPreset: number;
-      legacyNodeCount: number;
       sourceKind: "modern" | "legacy_text_completion";
       unsupportedEnabledMacros: string[];
     }
@@ -226,8 +223,6 @@ export async function importStPreset(
     await deps.setActivePreset(input.serverId, preset.preset_id);
   }
 
-  const markerCount = parseResult.nodes.filter((n) => n.is_marker).length;
-  const toggleableCount = parseResult.nodes.filter((n) => !n.is_marker).length;
   const enabledCount = parseResult.nodes.filter((n) => n.is_enabled && !n.is_marker && !n.is_comment).length;
   const unsupportedEnabledMacros = collectUnsupportedEnabledMacros(parseResult.nodes);
 
@@ -236,12 +231,9 @@ export async function importStPreset(
     preset,
     nodes: parseResult.nodes,
     presetName,
-    markerCount,
-    toggleableCount,
     enabledCount,
     commentOnlyCount: parseResult.commentOnlyCount,
     disabledByPreset: parseResult.disabledByPreset,
-    legacyNodeCount: parseResult.legacyNodeCount,
     sourceKind: parseResult.sourceKind,
     unsupportedEnabledMacros,
   };

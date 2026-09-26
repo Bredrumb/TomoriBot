@@ -62,22 +62,6 @@ export default {
       modal_ready_title: `Sẵn sàng tiếp tục`,
       modal_ready_description: `Mở biểu mẫu để tiếp tục lựa chọn của bạn.`,
       open_modal_button: `Mở biểu mẫu`,
-      // One shared, verb-agnostic filtered-notice sentence. The bare item noun
-      // below is interpolated in, so remove/edit variants of a family reuse it.
-      filtered_notice: `Chỉ hiển thị các persona có {items}.`,
-      items: {
-        attributes: `thuộc tính`,
-        sample_dialogues: `đối thoại mẫu`,
-        trigger_words: `từ kích hoạt`,
-        persona_prompts: `prompt persona`,
-        voice_designs: `thiết kế giọng nói`,
-        documents: `tài liệu`,
-        chat_history: `lịch sử trò chuyện`,
-        server_memories: `bộ nhớ máy chủ`,
-        personal_memories: `bộ nhớ cá nhân`,
-        short_term_memories: `bộ nhớ ngắn hạn`,
-        sprites: `sprite`,
-      },
     },
     errors: {
       outdated_panel: `Bảng điều khiển này đã cũ. Hãy chạy lại {command}.`,

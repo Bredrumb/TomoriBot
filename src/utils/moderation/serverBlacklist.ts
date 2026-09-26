@@ -9,6 +9,9 @@ import { getCachedBlacklistStatus } from "@/utils/cache/userCache";
  * Space-joined command paths (category, optional group, subcommand) that make the bot generate,
  * speak, or change a conversation. A path matches when it equals a prefix or starts with it plus
  * a space, so `tool prompt` covers `tool prompt snapshot` while `tool estimate` stays open.
+ *
+ * `/comment` stays open: it posts a static user-attributed embed with no LLM generation, persona
+ * dialogue, or context ingestion.
  */
 const BLACKLIST_GATED_COMMAND_PREFIXES: readonly string[] = [
   "respond",

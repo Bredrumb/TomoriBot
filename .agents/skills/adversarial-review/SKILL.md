@@ -120,6 +120,11 @@ Follow the repository's proportionality rules. Do not request tests, abstraction
 
 Prefer an existing helper, registry, dependency, or project pattern over parallel implementation.
 
+For test changes, apply `docs/en/contributing/testing/maintainable-tests.md` and the fixture rules in `tests/helpers/README.md`, reporting a pattern only when the diff introduces it. Two of them hide real defects rather than cost, so check them on every test diff:
+
+- A fixture production cannot produce: a variant, field, or enum value the real type lacks, a cast that hides one, or a limits test on a payload the user never receives.
+- A diff that removes a helper's last production caller but keeps the helper and its tests, or leaves a migrated operation's result field with no reader.
+
 ## Check repository rules
 
 Read `AGENTS.md` and any contributor guide it points to for the changed area. Treat explicit repository

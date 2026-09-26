@@ -619,10 +619,8 @@ results may also include the causal error.
 `AvatarSessionCache` for the complete invocation. Callers return
 `completePersonaWorkflow(value)` or `retryPersonaWorkflow(updatedPersonas?)`; they do not
 write their own outer picker loop. Picker outcomes remain discriminated as `selected`,
-`cancelled`, `timeout`, `empty`, `error`, and `fatal`. A fatal picker result exits before
-`onSelected` runs, so it cannot enter the retry path. The `empty` outcome
-(see the eligibility section) is a terminal state distinct from all others and is never
-retried.
+`cancelled`, `timeout`, `error`, and `fatal`. A fatal picker result exits before
+`onSelected` runs, so it cannot enter the retry path.
 
 Classify collector expiry with `isCollectorTimeoutError(error)` from `interactionCore`,
 never with a bare `error === "time"` check. discord.js uses two rejection shapes for the
@@ -633,119 +631,6 @@ same event: raw collectors reject with the end-reason string (`"time"` / `"idle"
 present as `fatal` with the generic unknown-error copy instead of the timeout notice. Other
 end reasons (`limit`, `messageDelete`) and dead-token errors are genuine failures and must
 stay classified as `error`/`fatal`.
-
-#### Eligibility filtering (item-scoped `remove` / `edit` / `view`)
-
-Item-scoped commands should only offer personas they can actually act on. Supplying an
-optional `eligibility` object to `runPersonaPickerWorkflow(...)` makes the picker show only
-qualifying personas, disclose that it is filtered, and reach a terminal `empty` outcome
-instead of ever rendering a zero-persona picker.
-
-```ts
-export interface PersonaWorkflowEligibility<TPersona extends TomoriState> {
-  isEligible: (persona: TPersona) => boolean; // synchronous — never per-persona queries
-  emptyTitleKey: string; // terminal state when no persona qualifies
-  emptyDescriptionKey: string;
-  itemsLabelKey: string; // bare item noun, interpolated into the shared filtered notice
-}
-```
-
-Rules:
-
-- **Filtering is a UX layer, never the correctness layer.** Every migrated command keeps its
-  existing post-selection emptiness guard as a concurrency backstop; the guard and the filter
-  must call the *same* predicate so they can never disagree.
-- **Filter only `remove` / `edit` / `view` verbs.** `add` / `set` / `assign` must always list
-  every persona and must not receive an `eligibility` object.
-- **`isEligible` is synchronous.** Class B commands resolve one batched query per invocation
-  into a `Set` of eligible keys and close over it (`(persona) => set.has(persona.persona_id)`, or
-  `persona_lineage_id` for lineage-scoped families); they never issue a query per persona.
-- **Refresh the set for mid-loop drains.** When a retry loop deletes items, refresh the
-  closed-over set in place (clear it, then add the fresh keys) after each successful write,
-  never replace it, so a persona whose last item was removed drops out on the next retry and the last
-  such removal reaches the `empty` terminal state on the anchor message.
-- The caller renders its own pre-picker empty notice on its deferred reply (it already
-  computes the eligible set for its own guard) and returns before calling the workflow. The
-  workflow renders the `empty` terminal state in place only for the mid-loop case.
-
-##### Grouping Key Contract (Class B)
-
-Batched availability queries must key on the same column the loader keys on and reproduce
-every filter the loader applies:
-
-| Family | Loader | Grouping key | Extra filters to reproduce |
-|---|---|---|---|
-| Documents | `serverMemoryRepository.loadDocuments` | `documents.persona_id` | `server_id`; **no** `source_type` filter (history docs count too) |
-| History documents | `serverMemoryRepository.loadHistoryDocuments` | `documents.persona_id` | `server_id` **and** `source_type = 'history'` |
-| Server memories | `serverMemoryRepository.loadServerMemoriesScoped` | `server_memories.persona_lineage_id` | `server_id`, plus optional `user_id` (permission-dependent) |
-| Personal memories | `personalMemoryRepository.loadForUserLineage` | `personal_memories.persona_lineage_id` | `user_id`; lineage `0` excluded so a global memory never marks a specific persona eligible |
-| Sprites | `personaSpriteRepository.listForPersona` | **not** `persona_id` | resolves preset pointers first: a pointer persona has zero `persona_sprites` rows yet still has sprites, so a bare `GROUP BY persona_id` is wrong; reproduce the numeric `sprite_id` narrowing |
-
-Two traps are worth stating explicitly:
-
-- **Permission-dependent eligibility.** `/memories` Server category operations
-  scope their loads by `hasManagePermission ? undefined : userData.user_id`. The batched
-  availability query takes the same optional `userId`, so a manager and a non-manager can see
-  different eligible sets for the same command in the same guild.
-- **Sprite pointer trap.** `personaSpriteRepository.personaIdsWithSprites(personaIds)`
-  resolves pointers in bulk (own rows for materialized personas, shared `preset_sprites` for
-  live pointer personas); it must not be reduced to a `GROUP BY persona_id` over
-  `persona_sprites`.
-
-##### Class A example (field-backed predicate, no query)
-
-```ts
-const hasAttributes = (persona: TomoriState) => (persona.attribute_list?.length ?? 0) > 0;
-
-const eligible = allPersonas.filter(hasAttributes);
-if (eligible.length === 0) {
-  await replyInfoEmbed(interaction, locale, {
-    titleKey: "general.pagination.select_persona_title",
-    descriptionKey: "general.pagination.persona_no_attributes",
-    color: ColorCode.WARN,
-    flags: MessageFlags.Ephemeral,
-  });
-  return;
-}
-
-await runPersonaPickerWorkflow(interaction, locale, {
-  personas: allPersonas, // full list — the workflow filters for display
-  eligibility: {
-    isEligible: hasAttributes,
-    emptyTitleKey: "general.pagination.select_persona_title",
-    emptyDescriptionKey: "general.pagination.persona_no_attributes",
-    itemsLabelKey: "general.persona_workflow.items.attributes",
-  },
-  onSelected: async (selection) => {
-    if (!hasAttributes(selection.persona)) return retryPersonaWorkflow(); // backstop
-    // ...perform the acknowledged transaction...
-    return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
-  },
-});
-```
-
-##### Class B example (batched query + refreshed set)
-
-```ts
-const eligibleIds = await serverMemoryRepository.personaIdsWithDocuments(serverId);
-const isEligible = (persona: TomoriState) =>
-  persona.persona_id !== undefined && eligibleIds.has(persona.persona_id);
-if (allPersonas.filter(isEligible).length === 0) {
-  /* render pre-picker empty notice and return */
-}
-
-await runPersonaPickerWorkflow(interaction, locale, {
-  personas: allPersonas,
-  eligibility: { isEligible, emptyTitleKey, emptyDescriptionKey, itemsLabelKey },
-  onSelected: async (selection) => {
-    // ...remove one document (post-selection load stays the backstop)...
-    const fresh = await serverMemoryRepository.personaIdsWithDocuments(serverId);
-    eligibleIds.clear();
-    for (const id of fresh) eligibleIds.add(id);
-    return retryPersonaWorkflow(await personaRepository.loadAllForServer(serverDiscId));
-  },
-});
-```
 
 Every same-visibility workflow owns one anchor ephemeral Components V2 message. Its
 message ID is exposed as `selection.message.anchorMessageId` and must remain unchanged

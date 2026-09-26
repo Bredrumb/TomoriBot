@@ -1215,21 +1215,6 @@ export default {
       },
     },
     custom_models: {
-      remove: {
-        checkbox_description: `保持勾选即保留端点注册。取消勾选你想移除的端点。`,
-        checkbox_text_label: `已注册的文本端点`,
-        checkbox_text_label_continued: `已注册的文本端点（续）`,
-        checkbox_embedding_label: `已注册的嵌入端点`,
-        checkbox_embedding_label_continued: `已注册的嵌入端点（续）`,
-        checkbox_image_label: `已注册的图像端点`,
-        checkbox_image_label_continued: `已注册的图像端点（续）`,
-        checkbox_video_label: `已注册的视频端点`,
-        checkbox_video_label_continued: `已注册的视频端点（续）`,
-        checkbox_speech_label: `已注册的语音端点`,
-        checkbox_speech_label_continued: `已注册的语音端点（续）`,
-        checkbox_transcription_label: `已注册的转写端点`,
-        checkbox_transcription_label_continued: `已注册的转写端点（续）`,
-      },
       capability_modal: {
         workflow_supports_label: `图像支持`,
         workflow_supports_description: `勾选这个端点支持的每一项图像请求功能`,

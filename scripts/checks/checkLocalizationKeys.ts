@@ -1394,7 +1394,6 @@ const DYNAMIC_KEY_PATTERNS = [
   /^commands\.config\.thinking-level\.choice_/,
   /^commands\.config\.panel\./,
   /^commands\.config\.cooldown\.type\.choice_/,
-  /^commands\.config\.custom_models\.remove\.checkbox_/,
   /^commands\.help\.api-key\./,
   /^commands\.server\.stm\.categories-edit\.slot_/,
   /^commands\.data\.import\.error_/,
@@ -1405,10 +1404,6 @@ const DYNAMIC_KEY_PATTERNS = [
   /^commands\.personal\.config\.mode_/,
   /^commands\.personal\.deliberatetriggermode\./,
   /^commands\.personal\.deliberatetoolmode\./,
-  /^commands\.personal\.custom_models\.remove\.checkbox_/,
-  /^commands\.openrouter\.models\.remove\.checkbox_/,
-  /^commands\.personal\.provider\.capability_/,
-  /^commands\.server\.deliberate-tool-trigger\.action_/,
   /^commands\.personal\.profile\.about\.style_/,
   /^commands\.providers\.(?:api_|capabilities\.|edit_|endpoint_|entry_kind_|model_|remove_impact_|script_|voice_)/,
   /^commands\.setup\.(?:humanizer_option_|wizard\.)/,
@@ -1417,7 +1412,6 @@ const DYNAMIC_KEY_PATTERNS = [
   /^tools\.user_info_update\.field_/,
   /^tools\.intent_packs\./,
   /^general\.text_preview\./,
-  /^general\.persona_workflow\.items\./,
 ];
 
 const DYNAMIC_EXACT_KEYS = new Set([

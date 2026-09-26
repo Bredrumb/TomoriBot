@@ -66,11 +66,6 @@ async function buildCharx(options: {
   cardName?: string;
   assets?: Array<{ path: string; bytes: Buffer }>;
   extraRootFiles?: Record<string, string | Buffer>;
-  /**
-   * Stored by default: the reader takes sizes from the zip central directory and decompresses only
-   * the card, so compressing a fixture changes nothing except how long building it takes.
-   */
-  compression?: "STORE" | "DEFLATE";
 }): Promise<Buffer> {
   const zip = new JSZip();
   zip.file(options.cardName ?? "card.json", options.rawCardJson ?? JSON.stringify(options.card ?? v3Card()));
@@ -80,7 +75,9 @@ async function buildCharx(options: {
   for (const [name, content] of Object.entries(options.extraRootFiles ?? {})) {
     zip.file(name, content);
   }
-  return (await zip.generateAsync({ type: "nodebuffer", compression: options.compression ?? "STORE" })) as Buffer;
+  // STORE, not DEFLATE: the reader takes sizes from the zip central directory and decompresses only the
+  // card, so compressing a fixture changes nothing except how long building it takes.
+  return (await zip.generateAsync({ type: "nodebuffer", compression: "STORE" })) as Buffer;
 }
 
 describe("charx archive reader", () => {

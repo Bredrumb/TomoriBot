@@ -17,10 +17,10 @@ describe("createScopedModuleMocker", () => {
       },
     };
     const scopedMock = createScopedModuleMocker(registrar, {
-      "@/example/service": { service: realService },
+      "fixture:example-service": { service: realService },
     });
 
-    scopedMock.module("@/example/service", () => ({ service: mockedService }));
+    scopedMock.module("fixture:example-service", () => ({ service: mockedService }));
     const scopedModule = factory?.() as { service: typeof realService } | undefined;
 
     expect(scopedModule?.service).toBe(realService);
@@ -53,9 +53,9 @@ describe("createScopedModuleMocker", () => {
             scopedModule = registeredFactory() as typeof scopedModule;
           },
         },
-        { "@/example/service": { service: realService, format: realFormat } },
+        { "fixture:example-service": { service: realService, format: realFormat } },
       );
-      scopedMock.module("@/example/service", () => ({
+      scopedMock.module("fixture:example-service", () => ({
         service: { load: () => "mocked" },
         format: () => "mocked",
       }));
