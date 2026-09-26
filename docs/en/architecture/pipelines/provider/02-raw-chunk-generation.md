@@ -114,6 +114,9 @@ droppable: losing them falls back to the model's own thinking default, and NIM n
 A 400 or 422 whose message names a declared key present in the request also counts as a parameter
 rejection. Strict validators such as vLLM's pydantic models name the rejected key (`'loc': ('body',
 'reasoning_effort')`) without the "unsupported parameter" wording the shared classifier looks for.
+Custom endpoint requests with a context override send `options.num_ctx` and `max_context_length`.
+If a strict endpoint reports that either top-level field is unsupported, a targeted retry drops
+the named field before stream output starts.
 
 An SSE error can restart transparently only before the attempt commits. The commitment point is the
 first meaningful chunk yielded to the consumer: visible text, reasoning, a tool-call delta, or usage.

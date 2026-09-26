@@ -72,7 +72,8 @@ export class CustomStreamAdapter extends OpenAICompatibleStreamAdapter {
         const customConfig = config as CustomStreamConfig;
         if (customConfig.numCtx != null) {
           // Ollama reads options.num_ctx; KoboldCPP reads top-level max_context_length.
-          // Both are injected so each server picks up what it understands and ignores the other.
+          // Both are injected; strict servers may reject the unused field, which the
+          // pre-commit parameter degradation path then drops on a targeted retry.
           requestBody.options = {
             ...((requestBody.options as Record<string, unknown>) ?? {}),
             num_ctx: customConfig.numCtx,
