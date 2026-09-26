@@ -59,8 +59,8 @@ RUN test -x /app/node_modules/.bin/ddg-search-mcp
 # This is like moving TomoriBot's belongings into her new apartment
 COPY --chown=tomori:tomori src/ ./src/
 
-# Copy maintenance scripts so Docker Compose users can run backup/restore/update
-# helpers inside the app image without host Bun.
+# Copy maintenance scripts so Docker Compose users can run backup and restore
+# inside the app image without host Bun.
 COPY --chown=tomori:tomori scripts/ ./scripts/
 
 # Copy static images used by slash commands (banners)

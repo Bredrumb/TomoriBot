@@ -14,6 +14,10 @@ Users who want to use Docker Compose should skip this wizard, see
 `bun run setup` is the recommended self-host path for local Bun-based installs. It creates your `.env`, generates a `CRYPTO_SECRET`, asks for your Discord bot token, configures PostgreSQL, and installs the exact dependencies from `bun.lock` interactively, so just follow the prompts. It's safe
 to re-run; existing `.env` values are kept unless you choose to reconfigure them.
 
+Run the wizard in an interactive terminal. If stdin is piped or the terminal does not support
+prompts, the wizard announces that it will use defaults. A required question without a default
+then stops with an error.
+
 ## Get the code
 
 ```sh
@@ -135,8 +139,8 @@ re-opens the step until another is chosen.
 the workspace state, commits the whole draft in one transaction, and replaces the panel with the
 receipt. `Cancel` discards the draft and expires every control on the panel.
 
-A draft lives in the bot process, not in the database, so it ends only when it is cancelled,
-completed, or the process restarts. At most 200 drafts are held
+A draft lives in the bot process, so a restart discards it. Cancellation or completion also ends
+the draft. At most 200 drafts are held
 at once; the oldest is discarded at the cap. A control for a session that is no longer available writes nothing.
 
 ## Updating

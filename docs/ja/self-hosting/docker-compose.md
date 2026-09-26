@@ -9,11 +9,10 @@ Docker Composeは、TomoriBot**と**PostgreSQLをコンテナとしてビルド�
 ホストにBunやPostgreSQLをインストールするよりも、すべてをDockerで実行したい場合に選択してください。
 セットアップウィザードは使用し**ません**。データベース接続は自動的に設定されます。
 
-:::caution[ホスト側のスクリプトには依然としてホストツールが必要です]
-ボットとデータベースをDockerで実行しても、メンテナンススクリプトはコンテナ化されません。
-`bun run backup`、`bun run restore-backup`、`bun run update`、`bun run rotate-keys` などは、
-引き続きホストのBunとホストのPostgreSQLクライアントツールを通じて実行されます。
-Compose固有の手順については、[メンテナンスとバックアップ](/ja/self-hosting/maintenance/)を参照してください。
+:::caution[更新に必要なホストのツール]
+`bun run update --docker`は、コードを更新するためにホストのBunとGitが必要です。
+データベースのバックアップはアプリのイメージ内で実行します。手動バックアップと復元も
+Composeから実行できます。[メンテナンスとバックアップ](/ja/self-hosting/maintenance/)を参照してください。
 :::
 
 ## 1. コードを取得する
@@ -39,9 +38,13 @@ cp .env.example .env
 | `CRYPTO_SECRET` | 保存されたAPIキーを暗号化するために使用される32文字の暗号化キー。 |
 | `POSTGRES_PASSWORD` | データベースのパスワード。他のすべての `POSTGRES_*` の値は自動設定されます。 |
 
-セットアップウィザードとは異なり、Composeは `CRYPTO_SECRET` を自動生成しません。
-ご自身で（任意の32文字の文字列を）設定してください。
-オプションの調整値は `.env.optional.example` からコピーできます。
+Dockerで`CRYPTO_SECRET`用のランダムな32文字の値を生成し、`.env`にコピーします。
+
+```sh
+docker run --rm alpine:3.22 sh -c "head -c 24 /dev/urandom | base64"
+```
+
+`POSTGRES_PASSWORD`には別の値を生成します。オプションの設定は`.env.optional.example`からコピーできます。
 
 :::note[データベース接続は自動的に行われます]
 ComposeのPostgreSQLサービスは、内部のDockerネットワーク上で開発モード（SSLなし）で実行され、
@@ -50,6 +53,13 @@ ComposeのPostgreSQLサービスは、内部のDockerネットワーク上で開
 Compose用に `POSTGRES_HOST`、`POSTGRES_PORT`、`POSTGRES_USER`、または `POSTGRES_DB` を設定しないでください。
 これらは自動的に管理されます。
 :::
+
+Linuxでは、最初の起動前にホストのディレクトリを作成し、コンテナのユーザー（UID 1001）に所有権を付与します。Dockerが作成したディレクトリはroot所有となり、ボットがバックアップ、ログ、アップロードデータを書き込めません。
+
+```sh
+mkdir -p backups logs data
+sudo chown 1001:1001 backups logs data
+```
 
 ## 3. ビルドと実行
 
@@ -62,6 +72,8 @@ docker compose up      # ボットとデータベース
 ボットがオンラインになったら、Discordで `/setup` を実行してAIプロバイダーのキーを追加します。
 Discord側の操作については[クイックスタート](/ja/introduction/quickstart/)を参照してください。
 
+Composeは`RUN_ENV=development`を使用するため、`.env`の秘密情報とローカルHTTPエンドポイントを利用できます。アプリのヘルスチェックはプロセスの稼働を確認し、Discordとの接続は確認しません。`RUN_ENV=production`では秘密情報をマネージャーまたはマウントしたJSONファイルから読み込み、HTTPSを必須にしてプライベートネットワークのURLを制限します。コマンド登録も変わり、HTTPヘルスサーバーとメトリクス収集が有効になります。Composeは開発モードに固定されています。
+
 ## 4. オプションのローカルサーバー（Composeプロファイル）
 
 ローカルサーバーはComposeプロファイルを介してオプトインされるため、必要なものだけを実行できます。
@@ -70,6 +82,8 @@ Discord側の操作については[クイックスタート](/ja/introduction/qu
 # SearXNG（プライベートWeb検索）+ Crawl4AI（ブラウザレンダリングによるフェッチ）
 docker compose --profile searxng --profile fetch-crawl4ai up
 ```
+
+SearXNGプロファイルを有効にする場合は、`.env`に`SEARXNG_BASE_URL=http://searxng:8080/`を設定します。無効の場合は設定しません。署名キー用の別のランダムな値を`SEARXNG_SECRET`に設定します。
 
 各サーバーの詳細については、[SearXNG](/ja/self-hosting/local-endpoints/setup-searxng/)、
 [Crawl4AI](/ja/self-hosting/local-endpoints/setup-crawl4ai/)、

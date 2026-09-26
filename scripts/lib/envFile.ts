@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, readdirSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 
 interface RawLine {
   kind: "raw";
@@ -127,7 +127,13 @@ export function readEnvValues(path: string): Record<string, string> {
 
 export function seedFromExample(examplePath: string, destPath: string): boolean {
   if (existsSync(destPath)) {
-    return false;
+    if (!statSync(destPath).isDirectory()) {
+      return false;
+    }
+    if (readdirSync(destPath).length > 0) {
+      throw new Error(`${destPath} is a non-empty directory. Move its contents before running setup.`);
+    }
+    rmdirSync(destPath);
   }
   copyFileSync(examplePath, destPath);
   return true;

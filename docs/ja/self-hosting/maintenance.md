@@ -23,8 +23,9 @@ Discord内でのユーザーごとのエクスポート/インポート/削除�
 | `bun run nuke-db` | すべてのテーブルを削除します（その後ボットを起動して再初期化します）。 |
 | `bun run purge-commands` | 登録されているすべてのDiscordスラッシュコマンドをクリアします。 |
 | `bun run rotate-keys` | 暗号化されているすべてのフィールドを現在のキーバージョンに再暗号化します。 |
+| `bun run env-doctor` | 設定を変更せずに確認し、コードで読み取られない`.env`変数の名前を表示します。 |
 
-`bun run backup` および `bun run update` は、PATHにPostgreSQLクライアントツール（`pg_dump`、`psql`）が必要です。
+ホストの`bun run backup`には`pg_dump`、`bun run restore-backup`には`psql`がPATHに必要です。`bun run update`もバックアップに`pg_dump`を使用します。`--docker`の場合、バックアップはコンテナ内で実行されるため、ホストにはBun、Git、Dockerが必要で、PostgreSQLクライアントツールは不要です。
 
 ## 更新
 
@@ -48,7 +49,7 @@ bun install --frozen-lockfile
 `dist/` から実行していますか？
 その場合は `bun run update --build` を使用してください。
 Docker Composeを実行していますか？
-その場合は `bun run update --docker` を使用してください。
+その場合は `bun run update --docker` を使用してください。アップデーターは最初に`docker compose run --rm tomoribot bun run backup`を実行します。
 
 ### 削除された環境変数
 
@@ -333,8 +334,8 @@ docker compose run --rm tomoribot bun run restore-backup --latest
 docker compose up -d
 ```
 
-`bun run backup`、`bun run update`、`bun run nuke-db` などのホスト側のスクリプトは、Docker経由では自動的に実行されません。
-代わりにComposeデータベースに対してホストスクリプトを実行するには、BunとPostgreSQLクライアントツールがインストールされたホスト上で実行し、以下のように設定します。
+ホスト側のスクリプトはDocker経由では自動的に実行されません。
+Composeのデータベースに対してホストスクリプトを実行するには、以下の接続値をホストに設定します。バックアップと復元にはPostgreSQLクライアントツールも必要です。`nuke-db`にはBunのみが必要です。
 
 ```dotenv
 POSTGRES_HOST=localhost

@@ -36,9 +36,5 @@ services:
 volumes:
   grafana_data:
 
-# Joins the network created by docker-compose.yaml to reach the postgres container.
-# Run with: docker compose -f docker-compose.yaml -f docker/compose.monitor.yaml up
 networks:
   tomori-network:
-    external: true
-    name: tomoribot_tomori-network

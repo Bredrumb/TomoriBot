@@ -5,8 +5,8 @@ sidebar:
 ---
 
 Day-to-day operation of a self-hosted instance: the maintenance scripts, how to update, and
-how to back up and restore your database. These are host-side operations: you run them from a
-shell, not from Discord. For the in-Discord, per-user export/import/delete flows, see
+how to back up and restore your database. Run these operations from a shell. For the
+per-user export/import/delete flows in Discord, see
 [Data Handling](/features/knowledge/data-handling/) instead.
 
 If you're about to `git pull` a new version, read [Safe Migration](/self-hosting/safe-migration/) first:
@@ -26,8 +26,9 @@ it covers backing up *before* the on-boot migration runner touches your schema.
 | `bun run rotate-keys` | Re-encrypt all encrypted fields to the current key version. |
 | `bun run env-doctor` | Read-only check of your configuration: lists `.env` entries that nothing reads (names only, never values) and where each variable is used. |
 
-`bun run backup` and `bun run update` require the PostgreSQL client tools (`pg_dump`, `psql`)
-in your PATH.
+Host `bun run backup` needs `pg_dump`, and host `bun run restore-backup` needs `psql` in your
+PATH. `bun run update` needs `pg_dump` for its backup. The `--docker` update path runs the backup
+in the container, so it needs host Bun, Git, and Docker but no host PostgreSQL tools.
 
 ## Updating
 
@@ -48,7 +49,7 @@ bun install --frozen-lockfile
 ```
 
 Running from `dist/`? Use `bun run update --build`. Running Docker Compose? Use
-`bun run update --docker`.
+`bun run update --docker`; the updater first runs `docker compose run --rm tomoribot bun run backup`.
 
 ### Removed environment variables
 
@@ -352,9 +353,9 @@ docker compose run --rm tomoribot bun run restore-backup --latest
 docker compose up -d
 ```
 
-Host-side scripts such as `bun run backup`, `bun run update`, and `bun run nuke-db` do not
-automatically run through Docker. To run host scripts against the Compose database instead,
-run them on the host with Bun plus the PostgreSQL client tools installed, and set:
+Host-side scripts do not automatically run through Docker. To run them against the Compose
+database, set the following connection values on the host. Backup and restore also need the
+PostgreSQL client tools; `nuke-db` needs Bun only.
 
 ```dotenv
 POSTGRES_HOST=localhost

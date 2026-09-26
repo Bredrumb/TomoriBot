@@ -61,7 +61,7 @@ interface DockerLocalServer {
   kind: "docker";
   /** docker container name */
   containerName: string;
-  /** image to pull if container doesn't exist */
+  /** image used when creating a container */
   image: string;
   /** args passed after "docker run" when creating a fresh container */
   runArgs: string[];
@@ -97,7 +97,7 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
   searxng: {
     kind: "docker",
     containerName: "searxng",
-    image: "searxng/searxng:latest",
+    image: "tomoribot-searxng:latest",
     httpHealthUrl: "http://localhost:8080/healthz",
     runArgs: [
       "-d",
@@ -105,10 +105,10 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
       "searxng",
       "-p",
       "8080:8080",
-      "-v",
-      `${ROOT}/servers/searxng:/etc/searxng:rw`,
+      "--tmpfs",
+      "/etc/searxng",
       "-e",
-      "SEARXNG_SECRET=dev-only-not-for-production",
+      "SEARXNG_SECRET",
       "--health-cmd",
       "wget -q --spider http://localhost:8080/healthz || exit 1",
       "--health-interval",
@@ -119,7 +119,7 @@ const LOCAL_SERVERS: Record<string, LocalServerDef> = {
       "5",
       "--health-start-period",
       "15s",
-      "searxng/searxng:latest",
+      "tomoribot-searxng:latest",
     ],
   },
 
@@ -328,6 +328,18 @@ async function ensureDockerLocalServer(def: DockerLocalServer): Promise<void> {
 
   const state = await getContainerState(containerName);
 
+  if (containerName === "searxng" && state !== null) {
+    const containerImage = Bun.spawnSync(["docker", "inspect", "-f", "{{.Image}}", containerName]);
+    const builtImage = Bun.spawnSync(["docker", "image", "inspect", "-f", "{{.Id}}", def.image]);
+    if (
+      containerImage.exitCode !== 0 ||
+      builtImage.exitCode !== 0 ||
+      containerImage.stdout.toString().trim() !== builtImage.stdout.toString().trim()
+    ) {
+      throw new Error("The existing searxng container uses an older image. Stop and remove it, then run launch again.");
+    }
+  }
+
   if (state === null) {
     console.log(`${label} Container not found. Running docker run...`);
     const run = Bun.spawn(["docker", "run", ...def.runArgs], {
@@ -428,6 +440,21 @@ async function main(): Promise<void> {
     const def = LOCAL_SERVERS[flag];
     try {
       if (def.kind === "docker") {
+        if (flag === "searxng") {
+          const build = Bun.spawn(
+            [
+              "docker",
+              "build",
+              "-t",
+              "tomoribot-searxng:latest",
+              "-f",
+              "servers/searxng/Dockerfile",
+              "servers/searxng",
+            ],
+            { cwd: ROOT, stdout: "inherit", stderr: "inherit" },
+          );
+          if ((await build.exited) !== 0) throw new Error("SearXNG image build failed.");
+        }
         await ensureDockerLocalServer(def);
       } else {
         const proc = await startPythonLocalServer(def, flag);

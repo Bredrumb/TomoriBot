@@ -4,7 +4,7 @@ sidebar:
   order: 3
 ---
 
-The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → IAsk**. By running our own instance of SearXNG, we sidestep single-engine rate limits and scrape breakage, and unlock SearXNG-only categories: `science`, `it`, `files`, and `music`.
+The `web_search` tool routes through an engine chain: **Brave → SearXNG → DuckDuckGo → IAsk**. A local SearXNG instance provides another search source when an engine rate-limits or fails. It also provides the `science`, `it`, `files`, and `music` categories.
 
 Choose one SearXNG setup path:
 
@@ -15,11 +15,12 @@ Use this path if you run TomoriBot with the repo's Docker Compose stack. Then ru
 ```sh
 docker compose --profile searxng up -d
 ```
-This starts the `searxng` service alongside TomoriBot. The bot reaches it at `http://searxng:8080/` automatically.
+Set `SEARXNG_BASE_URL=http://searxng:8080/` in `.env` before starting this profile. The bot
+uses that address to reach the `searxng` service. Leave the variable unset when the profile is off.
 
 If you run TomoriBot directly with `bun run dev`, use the standalone path below instead.
 
-If using production, set `SEARXNG_SECRET` in `.env` to any 32+ char string (it's auto-defaulted in dev).
+Set `SEARXNG_SECRET` in `.env` to a separate random value for the container's signing key.
 
 ---
 
@@ -32,25 +33,31 @@ Then, instead of running TomoriBot directly with `bun run dev`, use `bun run lau
 bun run launch --searxng
 ```
 
-If you prefer to manage the container yourself, keep `SEARXNG_BASE_URL=http://localhost:8080/` in `.env` and run:
+If you prefer to manage the container yourself, keep `SEARXNG_BASE_URL=http://localhost:8080/` in `.env`.
+Build the repository's image first so it loads the JSON search settings and substitutes the signing key:
+
+```sh
+docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/searxng
+```
+
+Then run it:
 
 **PowerShell:**
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
-  -v "${PWD}/servers/searxng:/etc/searxng:rw" `
-  -e SEARXNG_SECRET=dev-only-not-for-production `
-  searxng/searxng:latest
+  --tmpfs /etc/searxng `
+  tomoribot-searxng:latest
 ```
 
 **Bash (Linux/macOS):**
 ```bash
 docker run -d --name searxng -p 8080:8080 \
-  -v "${PWD}/servers/searxng:/etc/searxng:rw" \
-  -e SEARXNG_SECRET=dev-only-not-for-production \
-  searxng/searxng:latest
+  --tmpfs /etc/searxng \
+  tomoribot-searxng:latest
 ```
 
 Then run `bun run dev` once the container is healthy (`docker ps` shows `(healthy)`).
+Without `SEARXNG_SECRET` in the container environment, the image generates an ephemeral signing key.
 
 ---
 

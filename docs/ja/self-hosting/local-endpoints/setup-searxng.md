@@ -15,11 +15,11 @@ SearXNGのセットアップパスを1つ選択してください。
 ```sh
 docker compose --profile searxng up -d
 ```
-これにより、TomoriBotと一緒に`searxng`サービスが開始されます：ボットは自動的に`http://searxng:8080/`でアクセスします。
+開始前に`.env`に`SEARXNG_BASE_URL=http://searxng:8080/`を設定します。プロファイルが無効な場合は設定しません。
 
 TomoriBotを`bun run dev`で直接実行している場合は、代わりに以下のスタンドアロンパスを使用してください。
 
-本番環境を使用している場合は、`.env`の`SEARXNG_SECRET`に任意の32文字以上の文字列を設定します（開発環境では自動的にデフォルト値が設定されます）。
+署名キー用の別のランダムな値を`.env`の`SEARXNG_SECRET`に設定します。
 
 ---
 
@@ -34,23 +34,28 @@ bun run launch --searxng
 
 コンテナを自分で管理したい場合は、`.env`の`SEARXNG_BASE_URL=http://localhost:8080/`を維持したまま、以下を実行します。
 
+先にリポジトリのイメージをビルドします。このイメージがJSON検索の設定を読み込み、署名キーを設定します。
+
+```sh
+docker build -t tomoribot-searxng:latest -f servers/searxng/Dockerfile servers/searxng
+```
+
 **PowerShell:**
 ```powershell
 docker run -d --name searxng -p 8080:8080 `
-  -v "${PWD}/servers/searxng:/etc/searxng:rw" `
-  -e SEARXNG_SECRET=dev-only-not-for-production `
-  searxng/searxng:latest
+  --tmpfs /etc/searxng `
+  tomoribot-searxng:latest
 ```
 
 **Bash (Linux/macOS):**
 ```bash
 docker run -d --name searxng -p 8080:8080 \
-  -v "${PWD}/servers/searxng:/etc/searxng:rw" \
-  -e SEARXNG_SECRET=dev-only-not-for-production \
-  searxng/searxng:latest
+  --tmpfs /etc/searxng \
+  tomoribot-searxng:latest
 ```
 
 その後、コンテナが正常に動作したら（`docker ps`で`(healthy)`と表示されたら）、`bun run dev`を実行します。
+コンテナ環境に`SEARXNG_SECRET`がない場合、イメージは一時的な署名キーを生成します。
 
 ---
 

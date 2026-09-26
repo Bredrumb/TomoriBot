@@ -21,8 +21,8 @@ services:
       # Initialize pg_cron extension on container startup
       - ./docker/init-pgcron.sql:/docker-entrypoint-initdb.d/init-pgcron.sql:ro
     ports:
-      # Only expose internally - not accessible from outside Docker network
-      - "15432:5432" # Expose on port 5433 to avoid conflict with your Windows PostgreSQL
+      # Publish on host port 15432 for maintenance tools.
+      - "15432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tomori -d tomodb"]
@@ -31,27 +31,21 @@ services:
       retries: 5
     networks:
       - tomori-network
-    # Note: Standard PostgreSQL Alpine image doesn't include pg_cron extension
-    # For production with pg_cron support, consider:
-    # - Using postgres:15 (non-alpine) with pg_cron installed via dockerfile
-    # - Using a managed database service with pg_cron support
-    # - TomoriBot includes app-level cooldown cleanup as fallback
-
   # SearXNG metasearch server - Tomori's library research assistant
   # Self-hosted JSON aggregator that fronts Google/Bing/DDG/Brave/Wikipedia.
   # Enable with: docker compose --profile searxng up
-  # Set SEARXNG_BASE_URL=http://searxng:8080/ in .env (already set in tomoribot service below).
+  # Set SEARXNG_BASE_URL=http://searxng:8080/ in .env when enabling this profile.
   # See servers/searxng/README.md for configuration + upgrade procedure.
   searxng:
-    image: searxng/searxng:latest
+    build:
+      context: ./servers/searxng
     container_name: tomoribot-searxng
     profiles:
       - searxng
-    volumes:
-      - ./servers/searxng:/etc/searxng:ro
+    tmpfs:
+      - /etc/searxng
     environment:
       SEARXNG_SECRET: ${SEARXNG_SECRET:-dev-only-not-for-production}
-      # SearXNG's startup script substitutes this into settings.yml.
       SEARXNG_BASE_URL: http://localhost:8080/
     restart: unless-stopped
     healthcheck:
@@ -97,7 +91,7 @@ services:
         condition: service_healthy
     env_file: .env
     environment:
-      # Docker-specific database connection — overrides .env values so the app
+      # Docker-specific database connection: overrides .env values so the app
       # connects to the compose postgres service instead of localhost or AWS RDS.
       # The app reads individual POSTGRES_* vars, NOT POSTGRES_URL.
       POSTGRES_HOST: postgres
@@ -106,12 +100,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_default_password}
       POSTGRES_DB: tomodb
       NODE_ENV: development
-      # Override RUN_ENV to 'development' for local compose to disable SSL verification
-      # Production deployments to AWS ECS will use RUN_ENV=production automatically
+      # Local HTTP endpoints and .env secrets require development mode in Compose.
       RUN_ENV: development
-      # Web-search SearXNG container (resolved via compose DNS)
-      SEARXNG_BASE_URL: http://searxng:8080/
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - tomori-network
     # Optional: Mount logs directory for debugging

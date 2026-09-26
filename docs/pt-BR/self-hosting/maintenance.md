@@ -20,8 +20,12 @@ Se você está prestes a fazer `git pull` de uma nova versão, leia [Migração 
 | `bun run nuke-db` | Remove todas as tabelas (inicie o bot depois para reinicializar). |
 | `bun run purge-commands` | Limpa todos os comandos de barra registrados do Discord. |
 | `bun run rotate-keys` | Recriptografa todos os campos criptografados para a versão atual da chave. |
+| `bun run env-doctor` | Verifica a configuração sem alterá-la e lista os nomes de variáveis `.env` sem leitores no código. |
 
-`bun run backup` e `bun run update` exigem as ferramentas de cliente do PostgreSQL (`pg_dump`, `psql`) no seu PATH.
+No host, `bun run backup` precisa de `pg_dump`, e `bun run restore-backup` precisa de `psql` no
+PATH. `bun run update` precisa de `pg_dump` para fazer o backup. Com `--docker`, o backup é executado
+no contêiner, então a atualização precisa de Bun, Git e Docker no host, mas dispensa as ferramentas
+do PostgreSQL no host.
 
 ## Atualizando
 
@@ -39,7 +43,8 @@ git pull --rebase --autostash
 bun install --frozen-lockfile
 ```
 
-Executando a partir de `dist/`? Use `bun run update --build`. Executando via Docker Compose? Use `bun run update --docker`.
+Executando a partir de `dist/`? Use `bun run update --build`. Executando via Docker Compose? Use
+`bun run update --docker`; o atualizador começa com `docker compose run --rm tomoribot bun run backup`.
 
 ### Variáveis de ambiente removidas
 
@@ -318,7 +323,9 @@ docker compose run --rm tomoribot bun run restore-backup --latest
 docker compose up -d
 ```
 
-Scripts do lado do host, como `bun run backup`, `bun run update` e `bun run nuke-db`, não são executados automaticamente através do Docker. Para executar scripts do host no banco de dados do Compose em vez disso, execute-os no host com Bun e as ferramentas de cliente do PostgreSQL instaladas, e defina:
+Os scripts do host não são executados automaticamente pelo Docker. Para usá-los com o banco do
+Compose, defina os valores de conexão abaixo no host. Backup e restauração também precisam das
+ferramentas de cliente do PostgreSQL; `nuke-db` precisa apenas do Bun.
 
 ```dotenv
 POSTGRES_HOST=localhost
