@@ -27,6 +27,17 @@ export const MAX_TARGETED_DEGRADATION_ATTEMPTS = 3;
 
 const REJECTABLE_PARAM_TOKENS = [...PARAM_DROP_PRIORITY, "stream_options", "max_context_length", "options"] as const;
 
+/**
+ * Tokens that are also ordinary English words, so only a quoted mention names the field. A bare
+ * "options" in prose would otherwise drop Ollama's `options.num_ctx` and silently shrink context.
+ */
+const QUOTED_ONLY_PARAM_TOKENS: ReadonlySet<string> = new Set(["options"]);
+
+function errorNamesParam(errorMessage: string, param: string): boolean {
+  const pattern = QUOTED_ONLY_PARAM_TOKENS.has(param) ? `['"\`]${param}['"\`]` : `\\b${param}\\b`;
+  return new RegExp(pattern, "i").test(errorMessage);
+}
+
 /** A request body paired with the label adapters use in recovery logs. */
 export interface DegradationAttempt {
   label: string;
@@ -137,7 +148,7 @@ function isParameterRejectionError(message: string): boolean {
 export function extractRejectedParams(errorMessage: string, requestBody: Record<string, unknown>): string[] {
   return REJECTABLE_PARAM_TOKENS.filter((param) => {
     if (!(param in requestBody)) return false;
-    return new RegExp(`\\b${param}\\b`, "i").test(errorMessage);
+    return errorNamesParam(errorMessage, param);
   });
 }
 
@@ -147,7 +158,7 @@ export function extractRejectedParams(errorMessage: string, requestBody: Record<
  * user-facing error copy needs: did the endpoint blame a parameter at all?
  */
 export function errorMessageNamesRejectableParam(errorMessage: string): boolean {
-  return REJECTABLE_PARAM_TOKENS.some((param) => new RegExp(`\\b${param}\\b`, "i").test(errorMessage));
+  return REJECTABLE_PARAM_TOKENS.some((param) => errorNamesParam(errorMessage, param));
 }
 
 /** Classify whether an HTTP response or SSE error can be retried with fewer parameters. */

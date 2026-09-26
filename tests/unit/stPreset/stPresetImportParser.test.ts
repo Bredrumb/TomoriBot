@@ -164,7 +164,7 @@ describe("stPresetImportParser", () => {
       for (const [field, value] of [
         ["injection_position", 3],
         ["injection_order", 1.5],
-        ["injection_depth", "4"],
+        ["injection_depth", "4.5"],
       ] as const) {
         const normalized = normalizePresetShape({
           prompts: [{ identifier: "badPrompt", name: "Bad Prompt", content: "Hello", [field]: value }],
@@ -173,6 +173,19 @@ describe("stPresetImportParser", () => {
         if (!normalized) continue;
         expect(() => parsePresetNodes(normalized)).toThrow(new InvalidPresetIntegerError("Bad Prompt", field));
       }
+    });
+
+    it("accepts whole numbers a preset stored as strings", () => {
+      const normalized = normalizePresetShape({
+        prompts: [
+          { identifier: "quoted", name: "Quoted", content: "Hello", injection_depth: "4", injection_order: " 90 " },
+        ],
+      } as unknown as RawSTPreset);
+      expect(normalized).not.toBeNull();
+      if (!normalized) return;
+      const node = parsePresetNodes(normalized)?.nodes[0];
+      expect(node?.injection_depth).toBe(4);
+      expect(node?.injection_order).toBe(90);
     });
 
     it("names an unnamed prompt by its identifier as text even when the file stores a number", () => {
