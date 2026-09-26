@@ -322,6 +322,8 @@ Cache invalidation is called from `stPresetDb.ts` after every successful write o
 | injection_depth | INT | Messages from end for depth-based insertion |
 | injection_order | INT | Priority for tie-breaking at same position+depth |
 
+Import validates numeric node fields before inserting them. Ordering values outside the signed 32-bit range are clamped; fractional values and numeric strings are rejected. `injection_position` accepts only `0` or `1`.
+
 **Unique constraint:** `(preset_id, identifier)`
 
 ## ST Preset Anatomy

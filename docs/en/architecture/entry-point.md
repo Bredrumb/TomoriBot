@@ -61,6 +61,7 @@ the bot log for gateway failures.
     - memory monitor init
     - cache metrics logger init
     - OpenRouter catalog refresher init
+    - preset sprite and avatar storage seed, followed by main-persona guild avatar reconciliation
 16. Initialize upload quota cleanup scheduler.
 17. `await client.login(DISCORD_TOKEN)`. Any failure exits the process, and the container restart policy retries with a fresh process. In-process retrying is not available: `Client#login` awaits `client.destroy()` on failure, which sets `ws.destroyed` permanently (initialized false in the WebSocket manager constructor and only ever set true in `destroy()`), drops `client.token`, and never restarts the cache sweepers. A second `login()` therefore leaves `isReady()` false for the life of the process, which the health endpoint reports as 503 and the runtime reads as a dead container. Rebuilding the client instead is not an option because the Matrix bridge closes over the instance it was handed. `isTransientGatewayError()` in `src/init/discord.ts` only chooses the message, because a transient gateway failure and a misconfiguration need different operator responses even though both exit. The failure is carried by the exit code and the log line rather than by `/health`: a failed login ends the process, so nothing recorded for it could be read by the probe that is meant to report it.
 

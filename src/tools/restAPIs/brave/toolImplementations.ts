@@ -27,19 +27,11 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import {
   buildImageSearchDeliveryMessage,
   buildImageSearchTextFallback,
+  IMAGE_COMPRESSION_TARGET_MB,
+  IMAGE_DISCORD_LIMIT_MB,
+  IMAGE_DOWNLOAD_MAX_MB,
   IMAGE_MIN_SIZE_BYTES,
 } from "@/tools/restAPIs/imageSearchResults";
-
-const BRAVE_IMAGE_DISCORD_LIMIT_MB = Math.max(
-  1,
-  Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
-);
-// Aims below the upload limit so an image that compresses slightly past its target still fits.
-const BRAVE_IMAGE_COMPRESSION_TARGET_MB = Math.max(1, BRAVE_IMAGE_DISCORD_LIMIT_MB - 1);
-const BRAVE_IMAGE_DOWNLOAD_MAX_MB = Math.max(
-  BRAVE_IMAGE_DISCORD_LIMIT_MB,
-  Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
-);
 
 /**
  * Extract server ID from tool context
@@ -269,7 +261,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
       ): Promise<{ success: boolean; buffer?: Buffer; reason?: string }> => {
         try {
           const response = await safeDownload(imageUrl, {
-            maxSizeMB: BRAVE_IMAGE_DOWNLOAD_MAX_MB,
+            maxSizeMB: IMAGE_DOWNLOAD_MAX_MB,
             timeoutMs: 5000,
             requestInit: {
               method: "GET",
@@ -289,7 +281,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
           const imageBuffer = response.buffer;
 
           // Compress with sharp - target 7MB max to leave safety margin
-          const targetSize = BRAVE_IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
+          const targetSize = IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
           let quality = 80; // Start with 80% quality
           let compressedBuffer: Buffer;
 
@@ -356,7 +348,7 @@ export async function brave_image_search(args: Record<string, unknown>, context?
 
           if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
             const contentLength = response.headers.get("content-length");
-            const discordLimit = BRAVE_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
+            const discordLimit = IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
 
             if (contentLength && parseInt(contentLength, 10) < IMAGE_MIN_SIZE_BYTES) {
               return { url: imageUrl, valid: false, reason: "too_small" };

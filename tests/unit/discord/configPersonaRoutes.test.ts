@@ -72,7 +72,11 @@ import {
 } from "@/utils/discord/ui/configModals";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { createPersona, type PersonaFixtureOverrides } from "../../helpers/fixtures";
-import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
+import {
+  createInteractionRecorder,
+  createRouteInteraction,
+  type RouteInteraction,
+} from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -209,12 +213,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
   const modals: unknown[] = [];
   const scopeLoads: boolean[] = [];
   const spriteLoads: number[] = [];
-  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
-  // the interactions it built and exposes their arrays in order.
-  const previousEdits: unknown[][] = [];
-  const previousReplies: unknown[][] = [];
-  const previousCalls: Array<RouteInteraction["calls"]> = [];
-  let current: RouteInteraction | undefined;
+  const recorder = createInteractionRecorder();
 
   const buildScope = (forceRefresh: boolean): ConfigScope => ({
     serverDiscId: options.inGuild === false ? "user-1" : "guild-1",
@@ -232,28 +231,18 @@ function makeHarness(options: HarnessOptions = {}): Harness {
   return {
     telemetry,
     get edits(): unknown[] {
-      return [...previousEdits, current?.edits ?? []].flat();
+      return recorder.edits;
     },
     get replies(): unknown[] {
-      return [...previousReplies, current?.replies ?? []].flat();
+      return recorder.replies;
     },
     get followUps(): unknown[] {
-      return [...previousCalls, current?.calls ?? []]
-        .flat()
-        .filter((call) => call.method === "followUp")
-        .map((call) => call.payload);
+      return recorder.calls.filter((call) => call.method === "followUp").map((call) => call.payload);
     },
     modals,
     scopeLoads,
     spriteLoads,
-    record: (interaction) => {
-      if (current) {
-        previousEdits.push(current.edits);
-        previousReplies.push(current.replies);
-        previousCalls.push(current.calls);
-      }
-      current = interaction;
-    },
+    record: recorder.record,
     dependencies: {
       resolveScope: async (_interaction, forceRefresh = false) => {
         scopeLoads.push(forceRefresh);
@@ -563,6 +552,10 @@ const WIRE_CONTRACT_V2: ReadonlyArray<readonly [string, ConfigPanelRoute]> = [
     { action: "refresh", locale: "en-US", category: "persona", page: "general" },
   ],
   ["config:v2:model-prov-select:en-US:text", { action: "model-provider-select", locale: "en-US", capability: "text" }],
+  [
+    "config:v2:model-modal-ready:en-US:nonce1234567",
+    { action: "model-modal-ready", locale: "en-US", nonce: "nonce1234567" },
+  ],
   ["config:v2:ep-select:en-US:tts", { action: "endpoint-select", locale: "en-US", capability: "tts" }],
   ["config:v2:ep-select:en-US:stt", { action: "endpoint-select", locale: "en-US", capability: "stt" }],
   [
@@ -2887,7 +2880,6 @@ describe("config persona collections", () => {
     });
     await dispatch(managerHarness, managerInteraction);
     expect(addSpy).toHaveBeenCalledWith(55, ["New"], false);
-    // A manager passes the gate before the blacklist is read, so the read count stays at zero.
     expect(blacklistSpy).not.toHaveBeenCalled();
     addSpy.mockRestore();
     limitSpy.mockRestore();

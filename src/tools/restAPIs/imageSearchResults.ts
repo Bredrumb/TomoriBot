@@ -16,7 +16,17 @@ import type { ToolResult } from "@/types/tool/interfaces";
  */
 export const IMAGE_MIN_SIZE_BYTES = 5 * 1024;
 
-export type ImageSearchProvider = "brave" | "searxng";
+/** Both engines read the `BRAVE_*` names, which the self-hosting docs publish as the knobs. */
+export const IMAGE_DISCORD_LIMIT_MB = Math.max(
+  1,
+  Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
+);
+// Aims below the upload limit so an image that compresses slightly past its target still fits.
+export const IMAGE_COMPRESSION_TARGET_MB = Math.max(1, IMAGE_DISCORD_LIMIT_MB - 1);
+export const IMAGE_DOWNLOAD_MAX_MB = Math.max(
+  IMAGE_DISCORD_LIMIT_MB,
+  Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
+);
 
 /**
  * The headline for an image search whose attachments Discord accepted.

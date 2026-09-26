@@ -1,5 +1,20 @@
 import { describe, expect, it } from "bun:test";
-import { describeUnmappedCardFields } from "@/commands/persona/import";
+import type { ChatInputCommandInteraction } from "discord.js";
+import { describeUnmappedCardFields, missingPublicImportPermission } from "@/commands/persona/import";
+
+it("checks attachment permission before posting an imported persona", async () => {
+  const member = { id: "bot" };
+  const interaction = {
+    guild: { members: { me: member } },
+    channel: {
+      isThread: () => false,
+      permissionsFor: () => ({ has: (permission: string) => permission !== "AttachFiles" }),
+    },
+  } as unknown as ChatInputCommandInteraction;
+  expect(await missingPublicImportPermission(interaction, true)).toBe("AttachFiles");
+  expect(await missingPublicImportPermission(interaction, false)).toBeNull();
+  expect(await missingPublicImportPermission({ guild: null } as ChatInputCommandInteraction, true)).toBeNull();
+});
 
 /**
  * Dropped-field reporting exists because a successful conversion is not the same

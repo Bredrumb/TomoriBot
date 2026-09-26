@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   MAX_PRESET_NAME_LENGTH,
+  InvalidPresetIntegerError,
   collectUnsupportedEnabledMacros,
   derivePresetName,
   isCommentOnly,
@@ -138,6 +139,56 @@ describe("stPresetImportParser", () => {
 
       const disabledNode = parsed.nodes.find((n) => n.identifier === "disabledPrompt");
       expect(disabledNode?.is_enabled).toBe(false);
+    });
+
+    it("keeps imported integer fields within PostgreSQL INT range", () => {
+      const normalized = normalizePresetShape({
+        prompts: [
+          {
+            identifier: "largeOrder",
+            name: "Large Order",
+            content: "Hello",
+            injection_order: 1e12,
+            injection_depth: -1e12,
+          },
+        ],
+      });
+      expect(normalized).not.toBeNull();
+      if (!normalized) return;
+      const node = parsePresetNodes(normalized)?.nodes[0];
+      expect(node?.injection_order).toBe(2_147_483_647);
+      expect(node?.injection_depth).toBe(-2_147_483_648);
+    });
+
+    it("identifies prompts with invalid integer fields", () => {
+      for (const [field, value] of [
+        ["injection_position", 3],
+        ["injection_order", 1.5],
+        ["injection_depth", "4"],
+      ] as const) {
+        const normalized = normalizePresetShape({
+          prompts: [{ identifier: "badPrompt", name: "Bad Prompt", content: "Hello", [field]: value }],
+        });
+        expect(normalized).not.toBeNull();
+        if (!normalized) continue;
+        expect(() => parsePresetNodes(normalized)).toThrow(new InvalidPresetIntegerError("Bad Prompt", field));
+      }
+    });
+
+    it("names an unnamed prompt by its identifier as text even when the file stores a number", () => {
+      const normalized = normalizePresetShape({
+        prompts: [{ identifier: 101, content: "Hello", injection_depth: 2.5 }],
+      } as unknown as RawSTPreset);
+      expect(normalized).not.toBeNull();
+      if (!normalized) return;
+      let thrown: unknown;
+      try {
+        parsePresetNodes(normalized);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(InvalidPresetIntegerError);
+      expect((thrown as InvalidPresetIntegerError).promptName).toBe("101");
     });
   });
 

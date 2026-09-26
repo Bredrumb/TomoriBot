@@ -276,6 +276,8 @@ result on one anchor ephemeral message through the shared helpers in
 below). `promptForSavedProvider()` is forbidden in those files, and the allow-list audit in
 `tests/unit/commands/anchorMigrationLockdown.test.ts` enforces it.
 
+The `/config` Models provider selector acknowledges with `deferUpdate()` before loading model choices, so a provider that expands in place still repaints the shared panel rather than a private copy. Once the choices are ready, it sends the actor a private follow-up button that opens the model modal on a fresh interaction. The prepared modal expires after five minutes and belongs to the actor who selected the provider. It is held in process memory, an exception to the custom-ID continuation rule above: rebuilding the modal on the click would put the slow catalog load back in front of `showModal()`. A restart inside the five minutes answers the button with the stale-panel notice, and the actor selects the provider again.
+
 Root commands are represented by top-level command files:
 
 - `src/commands/subscribe.ts` -> `/subscribe`

@@ -45,6 +45,8 @@ export default {
       model_provider_paged_detail:
         "{provider}にはこの機能向けのモデルが{count}件あり、1ページに 収まりません。上のセレクターでページを選んでください。",
       model_modal_title: `{capability}モデルを選択`,
+      model_modal_ready: `モデルの候補を読み込みました。選択画面を開いて続けてください。`,
+      model_modal_ready_button: `モデルを選択`,
       model_modal_select_label: `モデル`,
       model_modal_select_description: `{provider}のモデルから選んでください。`,
       fallback_provider_page_placeholder: `{provider}のモデルのページを選択...`,
@@ -1230,20 +1232,6 @@ Exaggeration: **{exaggeration}**`,
       nai_updated_heading: `NovelAIパラメーターを更新しました`,
       nai_updated_detail: `このサーバーのNovelAI画像デフォルトを保存しました。`,
       nai_invalid_detail: `NovelAIの値のいずれかが許容範囲外です。`,
-    },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `画像対応機能`,
-        workflow_supports_description: `この画像エンドポイントが対応しているリクエスト機能を選択してください`,
-        workflow_support_txt2img: `テキストから画像`,
-        workflow_support_txt2img_description: `参照画像なしで生成できる`,
-        workflow_support_img2img: `画像から画像`,
-        workflow_support_img2img_description: `インペイントなしで参照画像を使える`,
-        workflow_support_inpaint: `インペイント`,
-        workflow_support_inpaint_description: `参照画像のマスク領域を編集できる`,
-        workflow_support_negative_prompt: `ネガティブプロンプト`,
-        workflow_support_negative_prompt_description: `デフォルトのネガティブ画像タグを別のネガティブプロンプト欄で受け取れる`,
-      },
     },
     "notice-embeds": {
       visibility: {

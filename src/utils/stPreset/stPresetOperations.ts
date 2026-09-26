@@ -16,12 +16,14 @@ import { log } from "@/utils/misc/logger";
 import {
   MAX_PRESET_FILE_SIZE_MB,
   MAX_PRESET_NAME_LENGTH,
+  InvalidPresetIntegerError,
   collectUnsupportedEnabledMacros,
   derivePresetName,
   normalizePresetShape,
   parsePresetNodes,
   validateAttachment,
   type RawSTPreset,
+  type ParseResult,
 } from "./stPresetImportParser";
 
 export interface ImportStPresetInput {
@@ -65,6 +67,11 @@ export type ImportStPresetResult =
     }
   | {
       status: "no_nodes";
+    }
+  | {
+      status: "invalid_integer";
+      promptName: string;
+      field: string;
     }
   | {
       status: "insert_failed";
@@ -198,7 +205,15 @@ export async function importStPreset(
     return { status: "not_a_preset" };
   }
 
-  const parseResult = parsePresetNodes(normalizedPreset);
+  let parseResult: ParseResult | null;
+  try {
+    parseResult = parsePresetNodes(normalizedPreset);
+  } catch (error) {
+    if (error instanceof InvalidPresetIntegerError) {
+      return { status: "invalid_integer", promptName: error.promptName, field: error.field };
+    }
+    throw error;
+  }
   if (!parseResult) {
     return { status: "no_nodes" };
   }

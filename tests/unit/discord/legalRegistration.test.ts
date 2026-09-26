@@ -214,7 +214,8 @@ describe("hosted policy notices", () => {
       id: "guild-1",
       name: "Test Guild",
       preferredLocale: "en-US",
-      systemChannel: { name: "general" },
+      systemChannel: { name: "general", permissionsFor: () => ({ has: () => true }) },
+      members: { me: {} },
     } as unknown as Guild;
 
     const renderDescription = (): string => {

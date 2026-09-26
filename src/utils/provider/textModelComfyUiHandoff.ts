@@ -15,6 +15,7 @@ import { parseCustomProvider } from "@/utils/provider/customProviderUtils";
 import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 
 export interface TextModelHandoffLease {
+  /** Callers fire and forget, so a Discord upload is never held behind text-model readiness. */
   restore(): Promise<void>;
 }
 

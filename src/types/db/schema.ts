@@ -306,10 +306,9 @@ export type VramHandoffBackend = z.infer<typeof vramHandoffBackendSchema>;
  * `vram_handoff` records the backend detected when the option was enabled, so the runtime runs a
  * known unload strategy instead of guessing.
  */
-export const endpointBehaviorSchema = z.object({
+const endpointBehaviorSchema = z.object({
   vram_handoff: vramHandoffBackendSchema.optional(),
 });
-export type EndpointBehavior = z.infer<typeof endpointBehaviorSchema>;
 
 export const customEndpointConnectionSchema = z.object({
   connection_id: z.number().int().positive(),
@@ -1188,17 +1187,6 @@ export interface ErrorContext {
   errorType?: string;
   metadata?: Record<string, unknown> | null;
 }
-
-const optApiKeySchema = z.object({
-  opt_api_key_id: z.number().optional(), // Primary key, optional as it's generated
-  server_id: z.number(), // Foreign key to servers table
-  service_name: z.string(), // Service name identifier (e.g., 'brave-search', 'duckduckgo-search', 'fetch')
-  api_key: z.instanceof(Buffer).nullable(), // Encrypted API key using pgcrypto, nullable for free services
-  key_version: z.number().int().default(1).optional(), // Added November 2025 - Encryption key version for rotation
-  created_at: z.date().optional(), // Handled by DB default
-  updated_at: z.date().optional(), // Handled by DB default/trigger
-});
-export type OptApiKeyRow = z.infer<typeof optApiKeySchema>;
 
 export const reminderSchema = z.object({
   reminder_id: z.number().optional(), // Primary key, optional as it's generated

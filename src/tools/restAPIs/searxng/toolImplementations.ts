@@ -21,22 +21,15 @@ import { fetchUserRemoteUrl } from "@/utils/security/userRemoteFetch";
 import {
   buildImageSearchDeliveryMessage,
   buildImageSearchTextFallback,
+  IMAGE_COMPRESSION_TARGET_MB,
+  IMAGE_DISCORD_LIMIT_MB,
+  IMAGE_DOWNLOAD_MAX_MB,
   IMAGE_MIN_SIZE_BYTES,
 } from "@/tools/restAPIs/imageSearchResults";
 import sharp from "sharp";
 import { searxngSearch, formatSearxngResults, extractSearxngImageUrls } from "./searxngService";
 import type { SearxngCategory } from "./types";
 
-const SEARXNG_IMAGE_DISCORD_LIMIT_MB = Math.max(
-  1,
-  Number.parseInt(process.env.BRAVE_IMAGE_DISCORD_LIMIT_MB ?? "8", 10) || 8,
-);
-// Aims below the upload limit so an image that compresses slightly past its target still fits.
-const SEARXNG_IMAGE_COMPRESSION_TARGET_MB = Math.max(1, SEARXNG_IMAGE_DISCORD_LIMIT_MB - 1);
-const SEARXNG_IMAGE_DOWNLOAD_MAX_MB = Math.max(
-  SEARXNG_IMAGE_DISCORD_LIMIT_MB,
-  Number.parseInt(process.env.BRAVE_IMAGE_DOWNLOAD_MAX_MB ?? "25", 10) || 25,
-);
 // How many valid images to actually send to Discord (default 3, max 10).
 const SEARXNG_IMAGE_COUNT = Math.min(Math.max(1, Number.parseInt(process.env.SEARXNG_IMAGE_COUNT ?? "3", 10) || 3), 10);
 // How many candidate URLs to pull from SearXNG and validate (default 10, max 20).
@@ -132,7 +125,7 @@ export async function searxng_category_search(
 async function compressImage(imageUrl: string): Promise<{ success: boolean; buffer?: Buffer; reason?: string }> {
   try {
     const response = await safeDownload(imageUrl, {
-      maxSizeMB: SEARXNG_IMAGE_DOWNLOAD_MAX_MB,
+      maxSizeMB: IMAGE_DOWNLOAD_MAX_MB,
       timeoutMs: 5000,
       requestInit: {
         method: "GET",
@@ -142,7 +135,7 @@ async function compressImage(imageUrl: string): Promise<{ success: boolean; buff
     if (!response.success || !response.buffer) {
       return { success: false, reason: response.error ?? "fetch_failed" };
     }
-    const targetSize = SEARXNG_IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
+    const targetSize = IMAGE_COMPRESSION_TARGET_MB * 1024 * 1024;
     let quality = 80;
     let compressedBuffer: Buffer;
     do {
@@ -185,7 +178,7 @@ async function validateImageUrl(imageUrl: string): Promise<{
 
     if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
       const contentLength = response.headers.get("content-length");
-      const discordLimit = SEARXNG_IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
+      const discordLimit = IMAGE_DISCORD_LIMIT_MB * 1024 * 1024;
       if (contentLength && parseInt(contentLength, 10) < IMAGE_MIN_SIZE_BYTES) {
         return { url: imageUrl, valid: false, reason: "too_small" };
       }

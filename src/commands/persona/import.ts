@@ -20,7 +20,7 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { safeDownload } from "@/utils/security/safeDownload";
 import { dedupeTriggerWords, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
-import { isAvatarUpdateRateLimited } from "@/utils/discord/avatarRateLimit";
+import { setGuildBotAvatar, setGuildBotNickname } from "@/utils/discord/guildIdentity";
 import { importAlterPreset } from "@/utils/persona/importAlterPreset";
 import { readCharxCard, type CharxReadFailureReason } from "@/utils/persona/charxArchive";
 import {
@@ -33,6 +33,21 @@ const MAX_FILE_SIZE = IMPORT_LIMITS.MAX_PERSONA_IMPORT_SIZE_MB * 1024 * 1024;
 /** Byte budget for the `card.json` payload the archive reader will decompress. */
 const MAX_CHARX_CARD_BYTES = IMPORT_LIMITS.MAX_CHARX_CARD_SIZE_MB * 1024 * 1024;
 const MAX_CHARX_ASSET_TOTAL_BYTES = IMPORT_LIMITS.MAX_CHARX_ASSET_TOTAL_MB * 1024 * 1024;
+
+export async function missingPublicImportPermission(
+  interaction: ChatInputCommandInteraction,
+  includesAttachment: boolean,
+): Promise<string | null> {
+  if (!interaction.guild) return null;
+  if (!interaction.channel || !("permissionsFor" in interaction.channel)) return "ViewChannel";
+  const member = interaction.guild.members.me ?? (await interaction.guild.members.fetchMe().catch(() => null));
+  const permissions = member ? interaction.channel.permissionsFor(member) : null;
+  const sendPermission = interaction.channel.isThread() ? "SendMessagesInThreads" : "SendMessages";
+  const required = includesAttachment
+    ? (["ViewChannel", sendPermission, "EmbedLinks", "AttachFiles"] as const)
+    : (["ViewChannel", sendPermission, "EmbedLinks"] as const);
+  return required.find((permission) => !permissions?.has(permission)) ?? null;
+}
 const MAX_SILLY_TAVERN_DEBUG_BYTES = 1_000_000;
 
 type PersonaImportSource = "tomori-png" | "tomori-json" | "sillytavern-png" | "sillytavern-json" | "charx";
@@ -878,34 +893,17 @@ export async function execute(
       let nicknameUpdateRateLimited = false;
       let nicknameUpdateFailed = false;
       if (!isDM) {
-        const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
-
         const importedNickname = importResult.itemsImported?.nickname;
 
         if (importedNickname) {
           try {
-            const nicknameResponse = await fetch(endpoint, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                nick: importedNickname,
-              }),
-            });
+            const nicknameResponse = await setGuildBotNickname(interaction.guild.id, importedNickname);
 
-            if (nicknameResponse.ok) {
+            if (nicknameResponse.success) {
               nicknameUpdateSucceeded = true;
             } else {
-              const errorText = await nicknameResponse.text();
-              if (isAvatarUpdateRateLimited(nicknameResponse.status, errorText)) {
-                nicknameUpdateRateLimited = true;
-              }
+              nicknameUpdateRateLimited = nicknameResponse.error === "rate_limited";
               nicknameUpdateFailed = true;
-              log.warn(
-                `Failed to update bot's server nickname (non-fatal): ${nicknameResponse.status} ${nicknameResponse.statusText} - ${errorText}`,
-              );
             }
           } catch (nicknameError) {
             nicknameUpdateFailed = true;
@@ -922,29 +920,14 @@ export async function execute(
             const base64 = avatarImageBuffer.toString("base64");
             const avatarDataUri = `data:image/png;base64,${base64}`;
 
-            const avatarResponse = await fetch(endpoint, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                avatar: avatarDataUri,
-              }),
-            });
+            const avatarResponse = await setGuildBotAvatar(interaction.guild.id, avatarDataUri);
 
-            if (avatarResponse.ok) {
+            if (avatarResponse.success) {
               avatarUpdateSucceeded = true;
               log.success(`Successfully updated TomoriBot's server avatar for ${serverDiscId} during preset import`);
             } else {
-              const errorText = await avatarResponse.text();
-              if (isAvatarUpdateRateLimited(avatarResponse.status, errorText)) {
-                avatarUpdateRateLimited = true;
-              }
+              avatarUpdateRateLimited = avatarResponse.error === "rate_limited";
               avatarUpdateFailed = true;
-              log.warn(
-                `Failed to update bot's server avatar (non-fatal): ${avatarResponse.status} ${avatarResponse.statusText} - ${errorText}`,
-              );
             }
           } catch (avatarError) {
             avatarUpdateFailed = true;
@@ -1042,7 +1025,8 @@ export async function execute(
         return;
       }
 
-      if (avatarImageBuffer) {
+      const missingPostPermission = await missingPublicImportPermission(interaction, Boolean(avatarImageBuffer));
+      if (!missingPostPermission && avatarImageBuffer) {
         const sanitizedNickname = sanitizeAttachmentFilenamePart(itemsImported.nickname, {
           fallback: "persona",
           maxLength: 50,
@@ -1057,11 +1041,14 @@ export async function execute(
           embeds: [successEmbed],
           files: [avatarAttachment],
         });
-        await persistImportedMainAvatar(serverDiscId, avatarImageBuffer);
-      } else {
+      } else if (!missingPostPermission) {
         await interaction.channel.send({
           embeds: [successEmbed],
         });
+      }
+
+      if (avatarImageBuffer) {
+        await persistImportedMainAvatar(serverDiscId, avatarImageBuffer);
       }
 
       await interaction.editReply({
@@ -1069,9 +1056,13 @@ export async function execute(
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.persona.import.success_title"))
             .setDescription(
-              localizer(locale, "commands.persona.import.success_confirmation", {
-                nickname: itemsImported.nickname,
-              }),
+              missingPostPermission
+                ? localizer(locale, "commands.persona.import.post_missing_permission", {
+                    permission: missingPostPermission,
+                  })
+                : localizer(locale, "commands.persona.import.success_confirmation", {
+                    nickname: itemsImported.nickname,
+                  }),
             )
             .setColor(
               avatarUpdateSkippedNoImage ||
@@ -1175,7 +1166,8 @@ export async function execute(
       // Post the public confirmation in-channel, attaching the avatar image
       //      when one was supplied. The persona already exists, so a missing
       //      channel only skips the public notice (the invoker still gets one).
-      if (interaction.channel && "send" in interaction.channel) {
+      const missingAlterPostPermission = await missingPublicImportPermission(interaction, Boolean(avatarImageBuffer));
+      if (!missingAlterPostPermission && interaction.channel && "send" in interaction.channel) {
         if (avatarImageBuffer) {
           const sanitizedNickname = sanitizeAttachmentFilenamePart(alterResult.nickname, {
             fallback: "persona",
@@ -1201,10 +1193,14 @@ export async function execute(
           new EmbedBuilder()
             .setTitle(localizer(locale, "commands.persona.import.alter_success_title"))
             .setDescription(
-              localizer(locale, "commands.persona.import.alter_success_confirmation", {
-                nickname: alterResult.nickname,
-                trigger_count: alterResult.uniqueTriggerCount,
-              }),
+              missingAlterPostPermission
+                ? localizer(locale, "commands.persona.import.post_missing_permission", {
+                    permission: missingAlterPostPermission,
+                  })
+                : localizer(locale, "commands.persona.import.alter_success_confirmation", {
+                    nickname: alterResult.nickname,
+                    trigger_count: alterResult.uniqueTriggerCount,
+                  }),
             )
             .setColor(alterEmbedColor),
         ],

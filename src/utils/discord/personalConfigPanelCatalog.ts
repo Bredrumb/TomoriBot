@@ -19,12 +19,7 @@ export const PERSONAL_CONFIG_ROUTE_VERSION = "v2";
 
 export type PersonalConfigCategory = "profile" | "privacy" | "models" | "advanced";
 
-export const PERSONAL_CONFIG_CATEGORIES: readonly PersonalConfigCategory[] = [
-  "profile",
-  "privacy",
-  "models",
-  "advanced",
-];
+const PERSONAL_CONFIG_CATEGORIES: readonly PersonalConfigCategory[] = ["profile", "privacy", "models", "advanced"];
 
 type ProfilePage = "general" | "persona" | "appearance";
 type PrivacyPage = "controls";
@@ -431,7 +426,7 @@ export type PersonalConfigPanelRoute =
 
 export type PersonalConfigAction = PersonalConfigPanelRoute["action"];
 
-export type PersonalConfigRouteForAction<A extends PersonalConfigAction> = PersonalConfigPanelRoute extends infer R
+type PersonalConfigRouteForAction<A extends PersonalConfigAction> = PersonalConfigPanelRoute extends infer R
   ? R extends { action: string }
     ? A extends R["action"]
       ? R & { action: A }

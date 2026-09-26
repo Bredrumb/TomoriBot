@@ -1294,7 +1294,6 @@ export class GenerateImageTool extends BaseTool {
             throw err;
           }
         } finally {
-          // Reload continues independently so Discord upload is never held behind text-model readiness.
           void handoff?.restore();
         }
       } else if (nativeImageProvider) {

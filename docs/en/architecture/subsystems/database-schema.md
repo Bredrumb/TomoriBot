@@ -52,9 +52,10 @@ state is owned by `src/utils/cache/shortTermMemoryCache.ts` (write-through cache
 it is imported from its own module rather than the barrel, so the barrel keeps no edge into the cache layer.
 The former public DB god files (`dbRead.ts`, `dbWrite.ts`, `dataExport.ts`, `dataImportV2.ts`) have
 also been removed.
-`LlmModelRepository.loadDiffusionModelById()` retries transient connection and cached-plan errors
+Hot-path model, config, provider, and persona reads retry transient connection and cached-plan errors
 through the shared DB retry helper. A cached-plan retry resets the connection before rerunning the
-lookup; it does not make a query compatible with columns removed by a migration.
+read. Transaction-bound reads must retry the entire transaction, since a connection reset cannot
+resume one. A retry cannot make a query compatible with columns removed by a migration.
 
 ### SQL convention
 
@@ -434,7 +435,8 @@ TomoriBot has two complementary schema mechanisms:
 | Mechanism | File | Runs | Purpose |
 |---|---|---|---|
 | Pre-schema legacy rename bridge | Selected rename migrations called by `initializeDatabase.ts` | Before static schema, only when legacy tables are detected | Preserve data for table renames where the latest static schema would otherwise create the target table first |
-| Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, typed seed catalogs (`src/db/seed/catalog/`) | Every boot (idempotent) | Baseline tables, functions, reference seed data |
+| Static schema init | `schema.sql`, `schema_rag.sql`, `schema_stpreset.sql`, DB-only typed seed catalogs (`src/db/seed/catalog/`) | Every schema-managed boot | Baseline tables, functions, reference seed data |
+| Storage-backed catalog seed | Preset sprite and avatar catalog seeders | After bot gateway readiness | Upload shared preset art and refresh its database references |
 | Migration runner | `src/db/migrations/NNN_*.sql` | Once per version (tracked) | Structural changes that cannot be idempotent (DROP, RENAME, table splits) |
 
 `initializeDatabase.ts` first runs narrow legacy rename bridges for known table renames such as
@@ -538,18 +540,20 @@ bun run scripts/db/migrate.ts
 
 ### When to use migrations vs. seed catalogs
 
-Use **`src/db/seed/catalog/*.ts`** (idempotent, runs every boot through `initializeDatabase.ts`) for:
+Use **`src/db/seed/catalog/*.ts`** for idempotent catalog data:
 - Upserting lookup/reference data such as model catalogs, bundled persona presets, system prompts, and NovelAI presets
 - Maintaining derived reference fields that must track the bundled seed rows on every startup
 
 The catalog seeders render the same idempotent `INSERT … ON CONFLICT` upserts in code.
-Startup order is models (`seedModelsFromCatalog`) → personas (`seedPersonasFromCatalog`)
-→ preset sprites (`seedPersonaSpritesFromCatalog`) → preset avatars (`seedPersonaAvatarsFromCatalog`)
-→ system prompts (`seedSystemPromptsFromCatalog`) → NovelAI presets (`seedNaiPresetsFromCatalog`).
+The privileged schema path seeds models (`seedModelsFromCatalog`), personas (`seedPersonasFromCatalog`),
+system prompts (`seedSystemPromptsFromCatalog`), and NovelAI presets (`seedNaiPresetsFromCatalog`)
+before migrations. After bot gateway readiness, the runtime seeds preset sprites
+(`seedPersonaSpritesFromCatalog`) and then preset avatars (`seedPersonaAvatarsFromCatalog`).
+The runtime has storage credentials; the privileged migration container only needs database secrets.
 The avatar seed (migration 033) uploads each persona's avatar once to the shared `presets/`
 prefix and records `persona_presets.preset_avatar_shared_url` + `preset_avatar_hash`; pointer
 alters live-resolve the URL and the main-avatar reconciler gates guild-avatar PATCHes on the
-hash (`personas.applied_avatar_hash`). The order is enforced by `check-seed-catalogs`.
+hash (`personas.applied_avatar_hash`). The seed order is enforced by `check-seed-catalogs`.
 There are no startup seed `.sql` files; edit the typed catalog and the change is seeded on
 the next boot. Invariants are validated on startup and via `bun run check-seed-catalogs`.
 `seedPersonasFromCatalog()` also preserves the derived `official_attribute_flags` update

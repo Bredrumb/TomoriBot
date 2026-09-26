@@ -55,7 +55,7 @@ export type PersonalMemoriesPanelRoute =
   | { action: "stm-clear"; locale: string; category: PersonalMemoriesCategory; lineageId: number }
   | { action: "retry" | "refresh"; locale: string; category: PersonalMemoriesCategory; lineageId: number };
 
-export type PersonalMemoriesAction = PersonalMemoriesPanelRoute["action"];
+type PersonalMemoriesAction = PersonalMemoriesPanelRoute["action"];
 
 type PersonalMemoriesRouteForAction<A extends PersonalMemoriesAction> = PersonalMemoriesPanelRoute extends infer R
   ? R extends { action: string }

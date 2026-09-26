@@ -7,7 +7,7 @@
 // so this module never merges the two identity rules.
 
 /** A line the caller wants emitted when an upload produced no stored reference. */
-export type SharedPresetUploadLogger = (error?: unknown) => void;
+type SharedPresetUploadLogger = (error?: unknown) => void;
 
 interface SharedPresetAssetReferenceOptions {
   /** Storage key this asset's current bytes resolve to. Taken from the persona catalog. */

@@ -20,7 +20,7 @@
 
 import type { Client } from "discord.js";
 import { personaRepository, type UnsyncedMainPointer } from "@/utils/db/repositories";
-import { isAvatarUpdateRateLimited } from "@/utils/discord/avatarRateLimit";
+import { setGuildBotAvatar } from "@/utils/discord/guildIdentity";
 import { log } from "@/utils/misc/logger";
 import { loadStoredPersonaAvatarBuffer } from "@/utils/storage/avatarStorage";
 
@@ -66,37 +66,8 @@ function sleep(ms: number): Promise<void> {
  *   "failed" for any other non-2xx / network error (all retried on a later boot).
  */
 async function patchGuildAvatar(guildDiscId: string, avatarDataUri: string): Promise<"ok" | "rate_limited" | "failed"> {
-  const abortController = new AbortController();
-  const timeout = setTimeout(() => abortController.abort(), API_TIMEOUT_MS);
-  try {
-    const response = await fetch(`https://discord.com/api/v10/guilds/${guildDiscId}/members/@me`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ avatar: avatarDataUri }),
-      signal: abortController.signal,
-    });
-
-    if (response.ok) {
-      return "ok";
-    }
-
-    const errorText = await response.text();
-    if (isAvatarUpdateRateLimited(response.status, errorText)) {
-      return "rate_limited";
-    }
-    log.warn(
-      `[Preset Avatar Fanout] Guild ${guildDiscId} avatar PATCH failed (non-fatal): ${response.status} ${response.statusText} - ${errorText}`,
-    );
-    return "failed";
-  } catch (error) {
-    log.warn(`[Preset Avatar Fanout] Guild ${guildDiscId} avatar PATCH threw (non-fatal)`, error);
-    return "failed";
-  } finally {
-    clearTimeout(timeout);
-  }
+  const result = await setGuildBotAvatar(guildDiscId, avatarDataUri, API_TIMEOUT_MS);
+  return result.success ? "ok" : result.error === "rate_limited" ? "rate_limited" : "failed";
 }
 
 /**

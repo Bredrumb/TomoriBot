@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { stubLogMembers } from "../../helpers/mockSurface";
 import { createOpenRouterCatalog, parseOpenRouterCatalogModelList } from "@/utils/cache/openrouterCatalog";
+import { stubGlobalFetch } from "../../helpers/fetchStub";
 
 stubLogMembers({ info: () => undefined, warn: () => undefined, success: () => undefined, error: () => undefined });
 
@@ -36,12 +37,10 @@ function makeCatalog(settings: { minRefreshIntervalMs?: number; ttlMs?: number }
   });
 }
 
-let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, "fetch">>;
+let fetchSpy: ReturnType<typeof stubGlobalFetch>;
 
 beforeEach(() => {
-  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
-  fetchSpy = spyOn(globalThis, "fetch").mockImplementation((async (..._args: Parameters<typeof fetch>) =>
-    jsonResponse(["vendor/first"])) as typeof fetch);
+  fetchSpy = stubGlobalFetch(async () => jsonResponse(["vendor/first"]));
 });
 
 afterEach(() => {

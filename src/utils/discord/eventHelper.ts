@@ -27,7 +27,7 @@ export async function findBestChannel(guild: Guild, client: Client): Promise<Tex
         (ch): ch is TextChannel =>
           ch.isTextBased() &&
           // biome-ignore lint/style/noNonNullAssertion: Client user is guaranteed to exist here
-          !!ch.permissionsFor(client.user!)?.has("SendMessages"),
+          !!ch.permissionsFor(client.user!)?.has(["ViewChannel", "SendMessages", "EmbedLinks"]),
       )
       .sort((a, b) => a.position - b.position);
 

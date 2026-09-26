@@ -553,7 +553,6 @@ export class GenerateVideoTool extends BaseTool {
           videoData = result.videoData;
           videoFilename = result.filename ?? videoFilename;
         } finally {
-          // Reload continues independently so Discord upload is never held behind text-model readiness.
           void handoff?.restore();
         }
       } else if (videoImplementation === "google") {

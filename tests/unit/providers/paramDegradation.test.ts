@@ -33,6 +33,33 @@ describe("extractRejectedParams", () => {
     expect(extractRejectedParams("Unsupported parameter: temperature", body)).toEqual(["temperature"]);
   });
 
+  it("drops a rejected custom context field while retaining Ollama's option", () => {
+    const requestBody = {
+      model: "local-model",
+      messages: [],
+      stream: true,
+      options: { num_ctx: 8192 },
+      max_context_length: 8192,
+    };
+    const message = "property 'max_context_length' is unsupported";
+
+    expect(classifyDegradableError({ statusCode: 400, message })).toBe("parameter_rejection_400");
+    const rejected = extractRejectedParams(message, requestBody);
+    expect(rejected).toEqual(["max_context_length"]);
+    const retry = buildTargetedAttempt(requestBody, rejected);
+    expect(retry.body).not.toHaveProperty("max_context_length");
+    expect(retry.body.options).toEqual({ num_ctx: 8192 });
+    expect(
+      buildDegradationAttempts(requestBody, { mandatoryKeys: new Set(["model", "messages", "stream"]) })[0]?.body,
+    ).toEqual(requestBody);
+  });
+
+  it("can drop the Ollama options object when a strict endpoint names it", () => {
+    expect(extractRejectedParams("property 'options' is unsupported", { options: { num_ctx: 8192 } })).toEqual([
+      "options",
+    ]);
+  });
+
   it("excludes a named parameter that is absent from the request", () => {
     expect(extractRejectedParams("Unsupported parameter: top_p", body)).toEqual([]);
   });

@@ -41,6 +41,7 @@ export default {
     add_invalid_json: `El archivo adjunto no es un JSON válido.`,
     add_not_a_preset: `El archivo adjunto no es un preajuste válido de SillyTavern.`,
     add_no_nodes: `El preajuste no contiene ningún nodo de prompt utilizable.`,
+    add_invalid_integer: `El prompt **{name}** tiene un valor no válido para \`{field}\`. Usa un número entero dentro del rango admitido.`,
     add_insert_failed: `No se pudo guardar el preajuste en la base de datos.`,
     activated_receipt: `Preajuste activado`,
     activated_receipt_detail: `**{name}** ahora es el preajuste activo de finalización de chat.`,

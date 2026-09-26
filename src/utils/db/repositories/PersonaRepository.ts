@@ -2272,12 +2272,15 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
     const lineageIds = [...new Set(pointerRefs.map((row) => row.lineageId))];
     const languages = [...new Set(pointerRefs.map((row) => row.language))];
-    const presetRows = await sql<TomoriPresetRow[]>`
+    const presetRows = await withTransientDbRetry(
+      () => sql<TomoriPresetRow[]>`
       SELECT *
       FROM persona_presets
       WHERE preset_lineage_id = ANY(${sql.array(lineageIds, "int8")})
         AND preset_language = ANY(${sql.array(languages, "TEXT")})
-    `;
+    `,
+      "load pointer persona presets",
+    );
 
     const presetsByPointerKey = new Map<string, TomoriPresetRow>();
     for (const preset of presetRows) {
@@ -2432,7 +2435,8 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
 
   private async loadTomoriState(serverDiscId: string): Promise<TomoriState | null> {
     try {
-      const tomoriRows = await sql`
+      const tomoriRows = await withTransientDbRetry(
+        () => sql`
         SELECT
           t.*,
           pcnc.context_note AS split_context_note,
@@ -2457,7 +2461,9 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         WHERE s.server_disc_id = ${serverDiscId}
         ORDER BY t.is_alter ASC, t.updated_at DESC NULLS LAST, t.persona_id DESC
         LIMIT 1
-      `;
+      `,
+        "load main persona row",
+      );
 
       if (!tomoriRows.length) {
         log.warn(`No Tomori instance found for server ${serverDiscId}`);
@@ -2496,11 +2502,14 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         // Fallback to database if cache miss (cache not initialized or LLM not found)
         if (!cachedLlm) {
           log.info(`Cache miss for LLM ID ${configData.llm_id}, querying database`);
-          const llmRows = await sql`
+          const llmRows = await withTransientDbRetry(
+            () => sql`
             SELECT * FROM llms
             WHERE llm_id = ${configData.llm_id}
             LIMIT 1
-          `;
+          `,
+            "load main persona LLM",
+          );
 
           if (!llmRows.length) {
             log.error(`Found Tomori config but no LLM data for server ${serverDiscId}, llm_id: ${configData.llm_id}`);
@@ -2512,12 +2521,15 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
         }
       }
 
-      const personaConfigRows = await sql`
+      const personaConfigRows = await withTransientDbRetry(
+        () => sql`
         SELECT *
         FROM persona_configs
         WHERE persona_id = ${personaId}
         LIMIT 1
-      `;
+      `,
+        "load main persona config",
+      );
       let personaConfig: PersonaConfigRow | null = null;
       if (personaConfigRows.length > 0) {
         const parsedPersonaConfig = personaConfigSchema.safeParse(personaConfigRows[0]);
@@ -2591,11 +2603,14 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       let naiPreset: NaiPresetRow | undefined;
       const presetName = configData.nai_preset_name;
       if (presetName) {
-        const presetRows = await sql`
+        const presetRows = await withTransientDbRetry(
+          () => sql`
           SELECT * FROM nai_presets
           WHERE preset_name = ${presetName}
           LIMIT 1
-        `;
+        `,
+          "load main persona NAI preset",
+        );
         if (presetRows.length > 0) {
           const parsedPreset = naiPresetSchema.safeParse(presetRows[0]);
           if (parsedPreset.success) {
@@ -2650,9 +2665,12 @@ class PersonaRepository implements IRepository<PersonaExportShape> {
       if (configData.vision_llm_id) {
         visionLlm = getCachedLLM(configData.vision_llm_id) as LlmRow | undefined;
         if (!visionLlm) {
-          const visionLlmRows = await sql`
+          const visionLlmRows = await withTransientDbRetry(
+            () => sql`
             SELECT * FROM llms WHERE llm_id = ${configData.vision_llm_id} LIMIT 1
-          `;
+          `,
+            "load main persona vision LLM",
+          );
           if (visionLlmRows.length) {
             visionLlm = visionLlmRows[0] as LlmRow;
           }

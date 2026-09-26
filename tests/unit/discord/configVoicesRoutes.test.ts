@@ -24,7 +24,11 @@ import {
 } from "@/utils/discord/ui/configModals";
 import { addVoiceSample, type VoiceSampleAddDependencies } from "@/utils/speech/voiceSampleAddOperation";
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
-import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
+import {
+  createInteractionRecorder,
+  createRouteInteraction,
+  type RouteInteraction,
+} from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -219,19 +223,15 @@ function makeHarness(options: HarnessOptions = {}): Harness {
   if (options.useDefaultRemoveOperation) delete dependencies.removeVoiceSample;
   else dependencies.removeVoiceSample = async () => ({ storedFileRemoved: true });
 
-  let interaction: RouteInteraction | undefined;
-  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
-  // the interactions it built and exposes their arrays in order.
-  const previousEdits: unknown[][] = [];
-  const previousReplies: unknown[][] = [];
+  const recorder = createInteractionRecorder();
   const harness: Harness = {
     dependencies,
     modals,
     get edits(): unknown[] {
-      return [...previousEdits, interaction?.edits ?? []].flat();
+      return recorder.edits;
     },
     get replies(): unknown[] {
-      return [...previousReplies, interaction?.replies ?? []].flat();
+      return recorder.replies;
     },
     operationCalls,
     fileUploadCalls,
@@ -242,13 +242,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
     voiceSampleLoadCalls,
     voiceViews,
     samples,
-    setInteraction: (value: RouteInteraction) => {
-      if (interaction) {
-        previousEdits.push(interaction.edits);
-        previousReplies.push(interaction.replies);
-      }
-      interaction = value;
-    },
+    setInteraction: recorder.record,
   };
   currentInteraction = undefined;
   return harness;

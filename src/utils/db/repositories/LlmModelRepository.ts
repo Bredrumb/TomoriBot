@@ -55,9 +55,13 @@ class LlmModelRepository {
    */
   async loadAvailableLlms(includeDeprecated = false): Promise<LlmRow[] | null> {
     try {
-      const rows = includeDeprecated
-        ? await sql`SELECT * FROM llms ORDER BY llm_id ASC`
-        : await sql`SELECT * FROM llms WHERE is_deprecated = false ORDER BY llm_id ASC`;
+      const rows = await withTransientDbRetry(
+        async () =>
+          includeDeprecated
+            ? await sql`SELECT * FROM llms ORDER BY llm_id ASC`
+            : await sql`SELECT * FROM llms WHERE is_deprecated = false ORDER BY llm_id ASC`,
+        "load available LLMs",
+      );
 
       if (!rows || rows.length === 0) {
         log.warn("No LLM models found in the database.");
@@ -87,7 +91,10 @@ class LlmModelRepository {
 
     try {
       const { values, placeholders } = buildIntegerParameterList(ids);
-      const rows = await sql.unsafe(`SELECT * FROM llms WHERE llm_id IN (${placeholders})`, values);
+      const rows = await withTransientDbRetry(
+        () => sql.unsafe(`SELECT * FROM llms WHERE llm_id IN (${placeholders})`, values),
+        "load LLMs by IDs",
+      );
 
       const rowMap = new Map<number, LlmRow>();
       for (const row of rows) {
@@ -124,7 +131,10 @@ class LlmModelRepository {
     if (cached) return cached as LlmRow;
 
     try {
-      const rows = await sql`SELECT * FROM llms WHERE llm_id = ${llmId} LIMIT 1`;
+      const rows = await withTransientDbRetry(
+        () => sql`SELECT * FROM llms WHERE llm_id = ${llmId} LIMIT 1`,
+        "load LLM by ID",
+      );
       if (!rows.length) {
         log.warn(`No LLM found for llm_id ${llmId}`);
         return null;
@@ -164,12 +174,15 @@ class LlmModelRepository {
     if (!normalizedProvider || !normalizedCodename) return null;
 
     try {
-      const rows = await sql`
+      const rows = await withTransientDbRetry(
+        () => sql`
         SELECT * FROM llms
         WHERE llm_provider = ${normalizedProvider}
           AND llm_codename = ${normalizedCodename}
         LIMIT 1
-      `;
+      `,
+        "load LLM by provider and codename",
+      );
       if (!rows.length) return null;
 
       const parsed = llmSchema.safeParse(rows[0]);

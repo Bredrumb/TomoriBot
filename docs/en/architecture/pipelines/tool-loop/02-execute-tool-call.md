@@ -125,6 +125,8 @@ Steps in execution order:
      the current turn*, with an instruction not to retry it this turn. It must
      never be reported as a provider capability gap.
 
+   An unknown built-in tool name returns a model-visible error with the closest registered name and the available names, so the model can correct its next call.
+
    - **Timeout promise**: resolves after `TOOL_EXECUTION_TIMEOUT_MS` (default
      5 min) with a synthetic `{ success: false, error: "timed out" }` result.
      The timer is fresh per tool call, so a chain of fast tools is unaffected.

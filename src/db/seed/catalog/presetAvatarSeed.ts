@@ -28,12 +28,16 @@ const CONTENT_HASH_LENGTH = 12;
  *
  * @param client - Active DB client/transaction
  */
-export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> {
+export async function seedPersonaAvatarsFromCatalog(
+  client: SQL,
+): Promise<{ declarations: number; seeded: number; failed: number }> {
   const personas = personaSections.flatMap((section) => section.rows);
   const uploadedThisRun = new Map<string, string>();
+  let seeded = 0;
   for (const persona of personas) {
-    await seedOneAvatar(client, persona, uploadedThisRun);
+    if (await seedOneAvatar(client, persona, uploadedThisRun)) seeded += 1;
   }
+  return { declarations: personas.length, seeded, failed: personas.length - seeded };
 }
 
 /**
@@ -41,7 +45,11 @@ export async function seedPersonaAvatarsFromCatalog(client: SQL): Promise<void> 
  * when its content changed (content-addressed filename), and stamps the shared
  * URL + hash onto the preset row.
  */
-async function seedOneAvatar(client: SQL, persona: PersonaInput, uploadedThisRun: Map<string, string>): Promise<void> {
+async function seedOneAvatar(
+  client: SQL,
+  persona: PersonaInput,
+  uploadedThisRun: Map<string, string>,
+): Promise<boolean> {
   // Read + normalize the persona's avatar image to PNG. `avatarPath` is the
   //    persona's catalog directory; resolveAvatarPath picks the first image in it.
   let pngBuffer: Buffer;
@@ -50,7 +58,7 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput, uploadedThisRun
     pngBuffer = await convertToPNG(rawBuffer);
   } catch (error) {
     log.warn(`[Preset Avatars] Skipping ${persona.name}: cannot read/convert avatar at ${persona.avatarPath}`, error);
-    return;
+    return false;
   }
 
   const contentHash = createHash("sha1").update(pngBuffer).digest("hex").slice(0, CONTENT_HASH_LENGTH);
@@ -84,18 +92,20 @@ async function seedOneAvatar(client: SQL, persona: PersonaInput, uploadedThisRun
     },
   });
   if (!sharedUrl) {
-    return;
+    return false;
   }
 
   // Stamp the shared URL + version hash onto the preset row. The hash is the
   //    fan-out gate: a changed avatar yields a new hash, so the reconciler
   //    re-PATCHes only the servers that have not yet received it.
-  await client`
+  const updated = await client`
     UPDATE persona_presets
     SET
       preset_avatar_shared_url = ${sharedUrl},
       preset_avatar_hash = ${contentHash}
     WHERE preset_lineage_id = ${persona.lineageId}
       AND preset_language = ${persona.language}
+    RETURNING persona_preset_id
   `;
+  return updated.length > 0;
 }

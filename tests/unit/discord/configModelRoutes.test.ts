@@ -60,7 +60,11 @@ import {
 } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
-import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
+import {
+  createInteractionRecorder,
+  createRouteInteraction,
+  type RouteInteraction,
+} from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -211,11 +215,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
   const modals: unknown[] = [];
   const checkboxValues: Record<string, string[] | undefined> = {};
   const selectValues: Record<string, string | undefined> = {};
-  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
-  // the interactions it built and exposes their arrays in order.
-  const previousEdits: unknown[][] = [];
-  const previousReplies: unknown[][] = [];
-  let current: RouteInteraction | undefined;
+  const recorder = createInteractionRecorder();
 
   const buildScope = (forceRefresh: boolean): ConfigScope | null => {
     if (options.unavailable) return null;
@@ -236,21 +236,15 @@ function makeHarness(options: HarnessOptions = {}): Harness {
   return {
     telemetry,
     get edits() {
-      return [...previousEdits, current?.edits ?? []].flat();
+      return recorder.edits;
     },
     get replies() {
-      return [...previousReplies, current?.replies ?? []].flat();
+      return recorder.replies;
     },
     modals,
     checkboxValues,
     selectValues,
-    record: (interaction) => {
-      if (current) {
-        previousEdits.push(current.edits);
-        previousReplies.push(current.replies);
-      }
-      current = interaction;
-    },
+    record: recorder.record,
     dependencies: {
       resolveScope: async (_interaction, forceRefresh = false) => buildScope(forceRefresh),
       getPersonaAvatarData: async () => ({ url: null, files: [] }),
@@ -398,6 +392,16 @@ function makeInteraction(options: FakeInteractionOptions): RouteInteraction {
 async function dispatch(harness: Harness, interaction: RouteInteraction): Promise<void> {
   const registry = new InteractionRouteRegistry([createConfigInteractionRoute(harness.dependencies)]);
   await registry.dispatch(CLIENT, interaction as unknown as ConfigInteraction);
+}
+
+async function openPreparedModelModal(harness: Harness): Promise<void> {
+  await dispatch(
+    harness,
+    makeInteraction({
+      customId: buildConfigRouteId({ action: "model-modal-ready", locale: "en-US", nonce: "nonce1234567" }),
+      harness,
+    }),
+  );
 }
 
 function renderedText(payload: unknown): string {
@@ -1062,23 +1066,47 @@ describe("config models switch page", () => {
         }),
       );
       expect(harness.modals).toHaveLength(0);
-      expect(harness.replies.at(-1)).toBeDefined();
+      expect(harness.edits).toHaveLength(0);
+      expect(harness.replies).toHaveLength(1);
     }
+  });
+
+  it("repaints a stale receipt when an endpoint capability reaches the provider select", async () => {
+    const harness = makeHarness();
+    const selection = makeInteraction({
+      customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "tts" }),
+      kind: "select",
+      values: ["google"],
+      harness,
+    });
+    await dispatch(harness, selection);
+
+    expect(selection.calls.map((call) => call.method)).toEqual(["deferUpdate", "editReply"]);
+    expect(renderedText(harness.edits.at(-1))).toContain(localizedCopy("en-US", "commands.config.panel.stale_heading"));
   });
 
   it("opens the picker with one page of models rather than a second panel page", async () => {
     const harness = makeHarness({ models: [{ id: 7, name: "gemini-2.5-pro", description: "Pro" }] });
-    await dispatch(
+    const selection = makeInteraction({
+      customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "vision" }),
+      kind: "select",
+      values: [encodeConfigProviderPageValue("google", 0)],
       harness,
-      makeInteraction({
-        customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "vision" }),
-        kind: "select",
-        values: [encodeConfigProviderPageValue("google", 0)],
-        harness,
-      }),
-    );
+    });
+    await dispatch(harness, selection);
 
+    // The panel stays untouched and the ready button arrives privately, because an update defer
+    // points `editReply` at the shared panel rather than at a private placeholder.
+    expect(selection.calls.map((call) => call.method)).toEqual(["deferUpdate", "followUp"]);
     expect(harness.edits).toHaveLength(0);
+    const otherActor = makeInteraction({
+      customId: buildConfigRouteId({ action: "model-modal-ready", locale: "en-US", nonce: "nonce1234567" }),
+      harness,
+    });
+    otherActor.user.id = "different-user";
+    await dispatch(harness, otherActor);
+    expect(harness.modals).toHaveLength(0);
+    await openPreparedModelModal(harness);
     const modal = harness.modals.at(-1) as { custom_id: string };
     expect(modal.custom_id).toContain(":model-modal:");
     expect(modelModalOptions(modal).map((option) => option.value)).toEqual(["7"]);
@@ -1158,16 +1186,15 @@ describe("config models switch page", () => {
       const harness = makeHarness({ models });
       // A provider whose catalog overflows one modal page expands in place rather than opening a
       // picker that could only ever present its first 25 models.
-      await dispatch(
+      const selection = makeInteraction({
+        customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability }),
+        kind: "select",
+        values: ["google"],
         harness,
-        makeInteraction({
-          customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability }),
-          kind: "select",
-          values: ["google"],
-          harness,
-        }),
-      );
+      });
+      await dispatch(harness, selection);
       expect(harness.modals).toHaveLength(0);
+      expect(selection.calls.map((call) => call.method)).toEqual(["deferUpdate", "editReply"]);
       const expanded = harness.edits.at(-1);
       expectValidComponentsV2Payload(expanded);
 
@@ -1189,6 +1216,7 @@ describe("config models switch page", () => {
             harness: pageHarness,
           }),
         );
+        await openPreparedModelModal(pageHarness);
         for (const option of modelModalOptions(pageHarness.modals.at(-1))) reachable.add(option.value);
       }
 
@@ -1219,10 +1247,7 @@ describe("config models switch page", () => {
         harness: stale,
       }),
     );
-    // A retired provider is refused before the panel is touched, so it answers ephemerally rather
-    // than repainting a page whose selector never changed.
-    expect(stale.edits).toHaveLength(0);
-    expect(stale.replies.at(-1)).toBeDefined();
+    expect(stale.edits.at(-1)).toBeDefined();
 
     const staleRead = makeHarness({ readStatus: "stale" });
     await dispatch(
@@ -2356,6 +2381,7 @@ describe("config models view loaders", () => {
         harness,
       }),
     );
+    await openPreparedModelModal(harness);
 
     const options = modelModalOptions(harness.modals.at(-1)) as Array<{ value: string; default?: boolean }>;
     expect(options).toHaveLength(1);

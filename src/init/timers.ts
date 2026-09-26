@@ -1,4 +1,5 @@
 import type { Client } from "discord.js";
+import { seedStorageBackedCatalogs } from "@/init/database";
 import { log } from "@/utils/misc/logger";
 import { healthTracker } from "@/utils/misc/healthTracker";
 
@@ -66,24 +67,22 @@ export function initTimers(client: Client): void {
     log.error("Failed to initialize cache metrics logger", error as Error);
   }
 
-  log.section("Scheduling Preset Avatar Fan-out...");
+  log.section("Scheduling Preset Art Seed and Avatar Fan-out...");
   try {
-    // Background, best-effort reconcile of main-persona guild avatars to the
-    // latest preset art. Deferred to clientReady (needs guilds) and NOT awaited
-    // so it never blocks startup; it is throttled and resumes across boots.
+    // Storage uploads run after clientReady so a slow upload cannot delay login.
+    // Guild avatar updates wait for the seed's new content hashes.
     client.once("clientReady", () => {
-      import("@/utils/persona/presetAvatarReconciler")
+      void seedStorageBackedCatalogs()
+        .then(() => import("@/utils/persona/presetAvatarReconciler"))
         .then(({ reconcilePresetMainAvatars }) => {
-          void reconcilePresetMainAvatars(client).catch((error: Error) => {
-            log.error("Preset avatar fan-out reconcile failed", error);
-          });
+          return reconcilePresetMainAvatars(client);
         })
         .catch((error: Error) => {
-          log.error("Failed to load preset avatar reconciler", error);
+          log.error("Preset art seed or avatar fan-out failed", error);
         });
     });
   } catch (error) {
-    log.error("Failed to schedule preset avatar fan-out", error as Error);
+    log.error("Failed to schedule preset art seed and avatar fan-out", error as Error);
   }
 
   log.section("Initializing Upload Quota System...");

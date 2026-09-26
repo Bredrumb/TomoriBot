@@ -114,6 +114,7 @@ export default {
 示例对话：{dialogue_count}
 触发词：{trigger_word_count}`,
       success_confirmation: `已成功导入主人格 **{nickname}**！详细的导入信息已发到频道里。`,
+      post_missing_permission: `人格已导入，但我无法发布确认消息。请让管理员授予我此频道的 {permission} 权限。`,
       nickname_update_success: `服务器昵称已更新。`,
       nickname_update_failed: `🟡 服务器昵称没能更新，多半是碰到了 Discord 速率限制。请手动修改。`,
       avatar_update_success: `服务器头像已更新。`,

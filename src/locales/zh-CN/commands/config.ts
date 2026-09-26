@@ -871,6 +871,8 @@ export default {
       model_provider_paged_detail:
         "{provider} 在这项功能下有 {count} 个模型，超过一页 能放的数量。请在上面的选择器里选一页。",
       model_modal_title: `选择{capability}模型`,
+      model_modal_ready: `模型选项已准备好。打开选择窗口以继续。`,
+      model_modal_ready_button: `选择模型`,
       model_modal_select_label: `模型`,
       model_modal_select_description: `从 {provider} 中选择一个模型。`,
       model_updated_heading: `模型已更新`,
@@ -1212,20 +1214,6 @@ export default {
           confirm_remove_button: `确认移除`,
           cancel_remove_button: `取消`,
         },
-      },
-    },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `图像支持`,
-        workflow_supports_description: `勾选这个端点支持的每一项图像请求功能`,
-        workflow_support_txt2img: `文本转图像`,
-        workflow_support_txt2img_description: `可以在没有参考图的情况下生成`,
-        workflow_support_img2img: `图像转图像`,
-        workflow_support_img2img_description: `可以使用参考图，但不做局部重绘`,
-        workflow_support_inpaint: `局部重绘`,
-        workflow_support_inpaint_description: `可以编辑参考图中被遮罩的区域`,
-        workflow_support_negative_prompt: `负向提示词`,
-        workflow_support_negative_prompt_description: `可以通过单独的负向提示词字段接收默认的负向图像标签`,
       },
     },
     "notice-embeds": {

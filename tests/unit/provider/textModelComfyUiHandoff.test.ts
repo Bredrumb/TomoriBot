@@ -3,12 +3,12 @@ import type { CustomEndpointConnectionRow, TomoriState, VramHandoffBackend } fro
 import { llmProviderRepo } from "@/utils/db/repositories/LlmProviderRepository";
 import { acquireTextModelLease, beginTextModelHandoffBeforeComfyUi } from "@/utils/provider/textModelComfyUiHandoff";
 import { stubLogMembers } from "../../helpers/mockSurface";
+import { STUB_PUBLIC_HOST, stubGlobalFetch } from "../../helpers/fetchStub";
 
 stubLogMembers({ metric: () => {}, error: async () => {} });
 
-// An IP literal skips DNS in the SSRF gate, so the stubbed global fetch is the only network hop.
-const ENDPOINT_URL = "https://8.8.8.8:5001/v1";
-const COMFYUI = { endpointUrl: "https://8.8.8.8:8188", apiKey: "" };
+const ENDPOINT_URL = `https://${STUB_PUBLIC_HOST}:5001/v1`;
+const COMFYUI = { endpointUrl: `https://${STUB_PUBLIC_HOST}:8188`, apiKey: "" };
 
 let backend: VramHandoffBackend = "ollama";
 let nextConnectionId = 1;
@@ -38,11 +38,7 @@ function stubBackend(kobold: KoboldBehavior = {}) {
   const calls: string[] = [];
   let loaded = true;
   let comfyUiVramFree = 2_000;
-  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
-  const spy = spyOn(globalThis, "fetch").mockImplementation((async (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ) => {
+  const spy = stubGlobalFetch(async (input, init) => {
     const { pathname } = new URL(String(input instanceof Request ? input.url : input));
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
     if (pathname === "/free") {
@@ -71,7 +67,7 @@ function stubBackend(kobold: KoboldBehavior = {}) {
     }
     if (pathname === "/api/extra/version") return Response.json({ result: "KoboldCpp", llm: loaded });
     return new Response("not found", { status: 404 });
-  }) as typeof fetch);
+  });
   return { calls, spy, isLoaded: () => loaded };
 }
 

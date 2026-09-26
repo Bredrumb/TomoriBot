@@ -66,7 +66,7 @@ import type {
   WhitelistRolesReadResult,
 } from "@/utils/db/repositories/WhitelistRepository";
 
-export type ModerationWriteFailureOperation =
+type ModerationWriteFailureOperation =
   | "removeUserFromBlacklist"
   | "removePersonaUserBlock"
   | "removeUserBlacklistBatch"

@@ -56,7 +56,7 @@ export type ProvidersPanelRoute =
   | { action: "add-submit"; locale: string; nonce: string }
   | { action: "endpoint-submit"; locale: string; nonce: string };
 
-export type ProvidersAction = ProvidersPanelRoute["action"];
+type ProvidersAction = ProvidersPanelRoute["action"];
 
 type ProvidersRouteForAction<A extends ProvidersAction> = ProvidersPanelRoute extends infer R
   ? R extends { action: string }

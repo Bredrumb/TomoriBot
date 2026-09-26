@@ -25,7 +25,7 @@ const PARAM_DROP_PRIORITY = [
 /** Maximum number of message-derived attempts that an adapter may enqueue per request. */
 export const MAX_TARGETED_DEGRADATION_ATTEMPTS = 3;
 
-const REJECTABLE_PARAM_TOKENS = [...PARAM_DROP_PRIORITY, "stream_options"] as const;
+const REJECTABLE_PARAM_TOKENS = [...PARAM_DROP_PRIORITY, "stream_options", "max_context_length", "options"] as const;
 
 /** A request body paired with the label adapters use in recovery logs. */
 export interface DegradationAttempt {
@@ -125,7 +125,8 @@ function isParameterRejectionError(message: string): boolean {
     normalized.includes("unsupported parameter") ||
     normalized.includes("unknown parameter") ||
     normalized.includes("parameter not supported") ||
-    normalized.includes("parameters are not yet supported")
+    normalized.includes("parameters are not yet supported") ||
+    /property ['"][^'"]+['"] is unsupported/.test(normalized)
   );
 }
 
@@ -197,7 +198,7 @@ function describeDegradableErrorKind(kind: DegradableErrorKind): string {
 }
 
 /** Log label for whichever signal made a failed attempt eligible for a retry. */
-export function describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
+function describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
   if (kind) return describeDegradableErrorKind(kind);
   if (queuedImageStrip) return "a multimodal/image-input rejection";
   return "an error naming request parameters";

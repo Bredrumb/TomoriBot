@@ -1,15 +1,14 @@
-import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { detectVramHandoffBackend } from "@/utils/provider/textModelComfyUiHandoff";
+import { STUB_PUBLIC_HOST, stubGlobalFetch } from "../../helpers/fetchStub";
 
-// An IP literal skips DNS in the SSRF gate, so the stubbed global fetch is the only network hop.
-const endpointUrl = "https://8.8.8.8:5001/v1";
+const endpointUrl = `https://${STUB_PUBLIC_HOST}:5001/v1`;
 
 function stubServer(routes: Record<string, unknown>) {
-  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
-  return spyOn(globalThis, "fetch").mockImplementation((async (input: string | URL | Request) => {
+  return stubGlobalFetch(async (input) => {
     const { pathname } = new URL(String(input instanceof Request ? input.url : input));
     return pathname in routes ? Response.json(routes[pathname]) : new Response("not found", { status: 404 });
-  }) as typeof fetch);
+  });
 }
 
 const restore: Array<{ mockRestore: () => void }> = [];

@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import {
   generateOpenRouterImage,
   usesChatCompletionsImageGeneration,
 } from "@/providers/openrouter/openrouterImageGeneration";
+import { stubGlobalFetch } from "../../helpers/fetchStub";
 
 interface CapturedCall {
   url: string;
@@ -10,14 +11,13 @@ interface CapturedCall {
 }
 
 function stubFetch(payload: unknown, captured: CapturedCall[], status = 200) {
-  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
-  return spyOn(globalThis, "fetch").mockImplementation((async (input: string | URL | Request, init?: RequestInit) => {
+  return stubGlobalFetch(async (input, init) => {
     captured.push({ url: String(input), body: JSON.parse(String(init?.body ?? "{}")) });
     return new Response(JSON.stringify(payload), {
       status,
       headers: { "Content-Type": "application/json" },
     });
-  }) as typeof fetch);
+  });
 }
 
 const restore: Array<{ mockRestore: () => void }> = [];

@@ -9,16 +9,18 @@ import { createRouteInteraction } from "../../helpers/routeInteraction";
 
 describe("route interaction fake", () => {
   it("records each acknowledgement method in call order", async () => {
-    const interaction = createRouteInteraction();
+    const deferred = createRouteInteraction();
+    await deferred.deferUpdate();
+    await deferred.editReply({ content: "first" });
+    await deferred.followUp({ content: "second" });
 
-    await interaction.deferUpdate();
-    await interaction.editReply({ content: "first" });
-    await interaction.reply({ content: "second" });
-    await interaction.followUp({ content: "third" });
+    expect(deferred.calls.map((call) => call.method)).toEqual(["deferUpdate", "editReply", "followUp"]);
+    expect(deferred.edits).toEqual([{ content: "first" }]);
+    expect(deferred.replies).toEqual([{ content: "second" }]);
 
-    expect(interaction.calls.map((call) => call.method)).toEqual(["deferUpdate", "editReply", "reply", "followUp"]);
-    expect(interaction.edits).toEqual([{ content: "first" }]);
-    expect(interaction.replies).toEqual([{ content: "second" }, { content: "third" }]);
+    const replied = createRouteInteraction();
+    await replied.reply({ content: "third" });
+    expect(replied.replies).toEqual([{ content: "third" }]);
   });
 
   it("marks the interaction acknowledged so a route can probe it mid-write", async () => {
@@ -33,8 +35,19 @@ describe("route interaction fake", () => {
     expect(interaction.deferred).toBe(true);
     expect(interaction.replied).toBe(false);
 
-    await interaction.reply({ content: "ack" });
-    expect(interaction.replied).toBe(true);
+    const replied = createRouteInteraction();
+    await replied.reply({ content: "ack" });
+    expect(replied.replied).toBe(true);
+  });
+
+  it("rejects a second reply the way discord.js does", async () => {
+    const deferred = createRouteInteraction();
+    await deferred.deferUpdate();
+    await expect(deferred.reply({ content: "late" })).rejects.toThrow("already been sent or deferred");
+
+    const replied = createRouteInteraction();
+    await replied.reply({ content: "first" });
+    await expect(replied.reply({ content: "second" })).rejects.toThrow("already been sent or deferred");
   });
 
   it("answers component predicates from the requested kind alone", () => {

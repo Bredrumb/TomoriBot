@@ -279,8 +279,8 @@ const METERED_FIRST_PARTY_PROVIDERS = new Set<string>([
   "zaicoding",
 ]);
 
-// Active first-party rows that legitimately have no published price yet (the provider has not shipped one).
-// Remove a codename here once its official rate is filled into models.ts or the row is deprecated.
+// Active first-party rows whose provider has not published a price yet. A codename belongs here only
+// until its official rate lands in models.ts or the row is deprecated.
 const PRICING_PENDING_CODENAMES = new Set<string>();
 
 /**

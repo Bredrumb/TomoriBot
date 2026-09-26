@@ -3,8 +3,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { seedNaiPresetsFromCatalog } from "@/db/seed/catalog/naiSeed";
 import { seedPersonasFromCatalog } from "@/db/seed/catalog/personaSeed";
-import { seedPersonaSpritesFromCatalog } from "@/db/seed/catalog/presetSpriteSeed";
-import { seedPersonaAvatarsFromCatalog } from "@/db/seed/catalog/presetAvatarSeed";
 import { seedModelsFromCatalog } from "@/db/seed/catalog/modelSeed";
 import { seedSystemPromptsFromCatalog } from "@/db/seed/catalog/systemPromptSeed";
 import { markAllMigrationsApplied, runMigrations } from "@/db/migrationRunner";
@@ -60,7 +58,7 @@ async function executeSqlFile(client: SQL, filePath: string): Promise<void> {
   }
 }
 
-async function invalidatePresetPointerStateCaches(client: SQL): Promise<void> {
+export async function invalidatePresetPointerStateCaches(client: SQL): Promise<void> {
   const rows = await client<Array<{ server_disc_id: string }>>`
     SELECT DISTINCT s.server_disc_id
     FROM personas p
@@ -346,24 +344,6 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
 
       await seedPersonasFromCatalog(client);
       log.success("PostgreSQL persona catalog seeded");
-
-      // Preset sprites are seeded after personas (they share the preset lineage)
-      // and upload their shared images once to the immutable `presets/` prefix.
-      // The seeder logs its own zero-seed error, so this line carries the counts that separate a
-      // healthy boot from a damaged one. Each count is per preset variant, because every authored
-      // locale declares the full sprite set.
-      const spriteSeed = await seedPersonaSpritesFromCatalog(client);
-      log.success(
-        `PostgreSQL preset sprite catalog seeded (${spriteSeed.seeded}/${spriteSeed.declarations} declarations seeded, ` +
-          `${spriteSeed.failed} failed, ${spriteSeed.removed} removed, ${spriteSeed.presets} preset variants)`,
-      );
-
-      // Preset avatars follow the same shared-upload model: each persona's avatar
-      // is uploaded once and its URL + content hash recorded on the preset row,
-      // so pointer alters live-resolve it and the main-avatar reconciler can gate
-      // guild-avatar PATCHes on a real byte change.
-      await seedPersonaAvatarsFromCatalog(client);
-      log.success("PostgreSQL preset avatar catalog seeded");
 
       await seedSystemPromptsFromCatalog(client);
       log.success("PostgreSQL system prompt catalog seeded");

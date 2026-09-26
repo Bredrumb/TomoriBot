@@ -1,12 +1,12 @@
-import { afterEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { cancelComfyUiPrompt } from "@/providers/custom/customComfyUiEndpoint";
 import type { CustomEndpointRow } from "@/types/db/schema";
 import { stubLogMembers } from "../../helpers/mockSurface";
+import { STUB_PUBLIC_HOST, stubGlobalFetch } from "../../helpers/fetchStub";
 
 stubLogMembers({ metric: () => undefined });
 
-// An IP literal skips DNS in the SSRF gate, so the stubbed global fetch is the only network hop.
-const endpoint = { endpoint_url: "https://8.8.8.8:8188/" } as CustomEndpointRow;
+const endpoint = { endpoint_url: `https://${STUB_PUBLIC_HOST}:8188/` } as CustomEndpointRow;
 
 interface CapturedCall {
   method: string;
@@ -15,13 +15,12 @@ interface CapturedCall {
 }
 
 function stubComfyUi(routes: Record<string, () => Response>, captured: CapturedCall[]) {
-  // Bun's `typeof fetch` also carries the static `preconnect`, so the stub is asserted to the real signature.
-  return spyOn(globalThis, "fetch").mockImplementation((async (input: string | URL | Request, init?: RequestInit) => {
+  return stubGlobalFetch(async (input, init) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
     const method = init?.method ?? "GET";
     captured.push({ method, path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : undefined });
     return routes[`${method} ${url.pathname}`]?.() ?? new Response("not found", { status: 404 });
-  }) as typeof fetch);
+  });
 }
 
 function queueResponse(runningPromptIds: string[]): Response {

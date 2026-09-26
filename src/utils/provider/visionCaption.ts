@@ -70,7 +70,7 @@ const VISION_CAPTION_TIMEOUT_MS =
     : 60_000;
 
 /** Why a vision call could not produce text. Callers map these to their own user-facing copy. */
-export type VisionCallFailureReason =
+type VisionCallFailureReason =
   | "credentials_unavailable"
   | "no_vision_model"
   | "unsupported_provider"
@@ -94,7 +94,7 @@ export interface VisionCallResult {
  * the transport (chosen from the credentials) and the codename (sent to the transport) from
  * describing two different models.
  */
-export async function resolveVisionModelForCredentials(
+async function resolveVisionModelForCredentials(
   creds: Awaited<ReturnType<typeof resolveCapabilityCredentials>>,
   cachedVisionLlm: LlmRow | null | undefined,
 ): Promise<LlmRow | null> {
@@ -210,7 +210,7 @@ export async function analyzeImageWithVisionModel(input: {
 }
 
 /** Raised when a provider has no vision transport, so the caller can name it to the user. */
-export class UnsupportedVisionProviderError extends Error {
+class UnsupportedVisionProviderError extends Error {
   constructor(public provider: string) {
     super(`Provider "${provider}" has no vision transport.`);
     this.name = "UnsupportedVisionProviderError";
