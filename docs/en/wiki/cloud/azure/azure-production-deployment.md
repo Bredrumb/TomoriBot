@@ -133,7 +133,7 @@ code change. The destruction gate below still catches them.
 firewall rules, networking, and alerts.
 
 **The destructive-migration gate** scans changed migrations before database work. A destructive
-migration requires a backup opt-in: `(Checkpoint)` in the push commit or `create_db_backup=true` on
+migration requires a recovery point request: `(Checkpoint)` in the push commit or `create_db_backup=true` on
 manual dispatch. For a dropped table or column, it searches the last deployed commit's `src/` tree.
 If that source still names the object, manual dispatch also requires
 `allow_migration_downtime=true`. Other destructive statements require the same downtime opt-in.
@@ -264,13 +264,15 @@ new image. The run summary records this downtime path.
 A `(Checkpoint)` commit message, or `create_db_backup=true` on manual dispatch, requests a recovery
 point for destructive migrations. It does not bypass the source check or stop the bot. **Azure
 rejects customer on-demand backups on the Burstable tier**, which is what this server runs
-(`Standard_B1ms`), so the backup step reads the tier and, on Burstable, records the current UTC time as a
-**point-in-time restore target** in the run's notices instead of calling `backup create`.
+(`Standard_B1ms`). On Burstable, the workflow validates that the server is ready, backup retention
+is enabled, and the earliest available restore point precedes the current UTC target. It records the
+target and a restore command in the job summary. A failed check stops the deploy before migrations.
 
-That timestamp is the recovery point: restore from the automated backups (`backup_retention_days`, 7 by
-default) to a moment just before it. Take an explicit logical dump first if a migration is risky enough
-to want more than that. On General Purpose or Memory Optimized, the same step takes a real on-demand
-backup.
+The command creates a new server from automated backups (`backup_retention_days`, 7 by default).
+The metadata check confirms that the configured restore window contains the target; it does not
+perform a restore or prove that the most recent transactions have reached backup storage. Take an
+explicit logical dump before a migration that needs that guarantee. On General Purpose or Memory
+Optimized, the same step takes an on-demand backup.
 :::
 
 ### Recurring deployment
@@ -283,7 +285,12 @@ only these responsibilities:
 - authenticate to Docker Hub only long enough to pull the immutable image digests, then log out;
 - start the TomoriBot Compose service without an implicit pull; and
 - verify UID/GID `1001:1001`, a database query over verified TLS to the public Azure PostgreSQL
-  FQDN, root-owned configuration modes, and `http://localhost:8081/healthz`.
+  FQDN, root-owned configuration modes, and `http://localhost:8081/healthz`;
+- read one user through `UserRepository` and custom endpoint connections through
+  `LlmProviderRepository`, using the new image's code; and
+- wait until 45 seconds after the container's exact start time, then fail on a restart, lost health,
+  any new `error_logs` row, or an error record in the new container's JSON logs. If Compose reuses
+  an unchanged container, the error window starts when this deploy verifies it.
 
 The runtime container sets `DATABASE_SCHEMA_MANAGEMENT_ENABLED=false`, so startup verifies database
 connectivity but cannot execute migrations or `pg_cron` administration. Migrations are applied

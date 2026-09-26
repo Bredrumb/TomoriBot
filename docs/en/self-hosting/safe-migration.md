@@ -154,8 +154,13 @@ old bot running through migration.
 Other destructive statements, including renames, type changes, truncation, and unfiltered deletes,
 also require downtime because the gate cannot prove compatibility from an object-name search.
 When no successful deploy commit is reachable, the gate requires downtime for any destructive
-migration it detects. On the Azure Burstable database tier, the backup step records a point-in-time
-restore target because customer on-demand backups are unavailable.
+migration it detects. On the Azure Burstable database tier, the recovery point step records a point-in-time
+restore target because customer on-demand backups are unavailable. Before migration, it requires
+the server to be ready, backup retention to be enabled, and the earliest available restore time to
+precede the target. The job summary records the UTC target and an `az postgres flexible-server
+restore` command that creates a new server. Azure's automated backup and transaction log schedule
+can lag the clock, so this metadata check does not prove that every transaction at the target has
+already reached backup storage. Take a logical dump if the migration needs a stronger recovery point.
 
 ## What to do if a migration fails partway
 

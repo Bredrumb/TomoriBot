@@ -78,7 +78,7 @@ test("a dropped column still used by the deployed commit requires downtime", asy
     deployedRef,
     "--deployed-ref",
     deployedRef,
-    "--backup-opt-in",
+    "--recovery-point-opt-in",
   ];
   const blocked = await run(repo, args);
   expect(blocked.exitCode).toBe(1);
@@ -89,7 +89,7 @@ test("a dropped column still used by the deployed commit requires downtime", asy
   expect(authorized.output).toContain("Migration downtime authorized.");
 });
 
-test("an unreferenced dropped column needs a backup but not downtime", async () => {
+test("an unreferenced dropped column needs a recovery point but not downtime", async () => {
   const { repo, deployedRef } = await fixture(
     'export const query = "SELECT id FROM users";\n',
     "ALTER TABLE users DROP COLUMN IF EXISTS old_nickname;\n",
@@ -104,7 +104,7 @@ test("an unreferenced dropped column needs a backup but not downtime", async () 
     deployedRef,
   ];
   expect((await run(repo, args)).exitCode).toBe(1);
-  const allowed = await run(repo, [...args, "--backup-opt-in"]);
+  const allowed = await run(repo, [...args, "--recovery-point-opt-in"]);
   expect(allowed.exitCode).toBe(0);
   expect(allowed.output).toContain("Dropped objects are unreferenced by deployed source.");
 });

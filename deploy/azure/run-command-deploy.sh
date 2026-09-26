@@ -121,18 +121,47 @@ compose_env=(
   "SEARXNG_BASE_URL=$searxng_base_url"
 )
 
+previous_container_id=$(docker ps -aq \
+  --filter label=com.docker.compose.project=tomoribot-azure \
+  --filter label=com.docker.compose.service=tomoribot | head -1)
+previous_started_at=""
+previous_restart_count=0
+if [ -n "$previous_container_id" ]; then
+  previous_started_at=$(docker inspect --format '{{.State.StartedAt}}' "$previous_container_id")
+  previous_restart_count=$(docker inspect --format '{{.RestartCount}}' "$previous_container_id")
+fi
+
 env "${compose_env[@]}" \
   docker compose -f /etc/tomoribot/docker-compose.yml up \
     -d --pull never --remove-orphans "${compose_services[@]}" >/dev/null
 
 container_id=$(env "${compose_env[@]}" \
   docker compose -f /etc/tomoribot/docker-compose.yml ps -q tomoribot)
-if [ -z "$container_id" ] || \
-  [ "$(docker inspect --format '{{.Config.User}}' "$container_id")" != "1001:1001" ] || \
+if [ -z "$container_id" ]; then
+  echo "TomoriBot container is missing after Compose startup." >&2
+  exit 1
+fi
+if [ "$(docker inspect --format '{{.Image}}' "$container_id")" != \
+     "$(docker image inspect --format '{{.Id}}' "$tomoribotImage")" ]; then
+  echo "TomoriBot image digest check failed." >&2
+  exit 1
+fi
+if [ "$(docker inspect --format '{{.Config.User}}' "$container_id")" != "1001:1001" ] || \
   [ "$(docker exec "$container_id" id -u)" != "1001" ] || \
   [ "$(docker exec "$container_id" id -g)" != "1001" ]; then
   echo "TomoriBot container UID/GID invariant failed." >&2
   exit 1
+fi
+started_at=$(docker inspect --format '{{.State.StartedAt}}' "$container_id")
+restart_count=$(docker inspect --format '{{.RestartCount}}' "$container_id")
+if { [ "$container_id" != "$previous_container_id" ] && [ "$restart_count" -ne 0 ]; } || \
+  { [ "$container_id" = "$previous_container_id" ] && [ "$restart_count" -gt "$previous_restart_count" ]; }; then
+  echo "TomoriBot restarted during initial deployment startup." >&2
+  exit 1
+fi
+verification_since="$started_at"
+if [ "$container_id" = "$previous_container_id" ] && [ "$started_at" = "$previous_started_at" ]; then
+  verification_since=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
 fi
 
 # Verify the public PostgreSQL path with the same production client and
@@ -147,7 +176,7 @@ if ! docker exec "$container_id" bun -e '
   const { sql } = await import("./src/utils/db/client.ts");
   await sql`SELECT 1`;
   await sql.close();
-' >/dev/null; then
+' >"$stage_dir/db-connect.log" 2>&1; then
   echo "PostgreSQL public-FQDN TLS connectivity check failed." >&2
   exit 1
 fi
@@ -162,6 +191,101 @@ for attempt in $(seq 1 20); do
   fi
   sleep 30
 done
+
+# Exercise the repository queries that traverse the tables moved by migrations.
+# Capture all process output locally so a repository error cannot print user data
+# into the Run Command response.
+if ! docker exec "$container_id" bun -e '
+  const secrets = await Bun.file("/run/secrets/tomoribot.json").json();
+  for (const key of ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB"]) {
+    process.env[key] = String(secrets[key]);
+  }
+  process.env.RUN_ENV = "production";
+  let check = "user_repository";
+  try {
+    const { sql } = await import("./src/utils/db/client.ts");
+    const { userRepository } = await import("./src/utils/db/repositories/UserRepository.ts");
+    const userRows = await sql`SELECT user_disc_id FROM users ORDER BY user_id LIMIT 1`;
+    const user = await userRepository.loadByDiscordId(String(userRows[0]?.user_disc_id ?? "__deploy_probe_missing__"));
+    if (userRows.length > 0 && !user) throw new Error("user repository returned no existing user");
+
+    check = "custom_endpoint_repository";
+    const { llmProviderRepo } = await import("./src/utils/db/repositories/LlmProviderRepository.ts");
+    const serverRows = await sql`SELECT server_id FROM servers ORDER BY server_id LIMIT 1`;
+    const result = await llmProviderRepo.loadCustomEndpointConnectionsForServerResult(Number(serverRows[0]?.server_id ?? -1));
+    if (result.status !== "fresh") throw new Error("custom endpoint repository unavailable");
+    await sql.close();
+    console.log("SMOKE_OK");
+  } catch {
+    console.error(`SMOKE_FAILED:${check}`);
+    process.exit(1);
+  }
+' >"$stage_dir/repository-smoke.log" 2>&1; then
+  if grep -q 'SMOKE_FAILED:user_repository' "$stage_dir/repository-smoke.log"; then
+    echo "UserRepository smoke check failed." >&2
+  elif grep -q 'SMOKE_FAILED:custom_endpoint_repository' "$stage_dir/repository-smoke.log"; then
+    echo "Custom endpoint repository smoke check failed." >&2
+  else
+    echo "Repository smoke process failed." >&2
+  fi
+  exit 1
+fi
+if grep -Eq '"level":(50|60)' "$stage_dir/repository-smoke.log"; then
+  echo "Repository smoke emitted an error log." >&2
+  exit 1
+fi
+
+# A healthy HTTP listener can coexist with a failed gateway or repository read.
+# Use Docker's exact start timestamp for a newly started container. When Compose
+# reuses a running container, inspect errors from this deploy's verification time.
+verification_epoch=$(date -u -d "$verification_since" +%s)
+remaining=$((45 - ($(date -u +%s) - verification_epoch)))
+if [ "$remaining" -gt 0 ]; then sleep "$remaining"; fi
+if [ "$(docker inspect --format '{{.State.Running}}' "$container_id")" != true ] || \
+  [ "$(docker inspect --format '{{.State.StartedAt}}' "$container_id")" != "$started_at" ] || \
+  [ "$(docker inspect --format '{{.RestartCount}}' "$container_id")" != "$restart_count" ] || \
+  ! curl -fsS http://localhost:8081/healthz >/dev/null; then
+  echo "TomoriBot restarted or lost health during deployment verification." >&2
+  exit 1
+fi
+
+if ! error_count=$(docker exec "$container_id" bun -e '
+  const secrets = await Bun.file("/run/secrets/tomoribot.json").json();
+  for (const key of ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB"]) {
+    process.env[key] = String(secrets[key]);
+  }
+  process.env.RUN_ENV = "production";
+  const { sql } = await import("./src/utils/db/client.ts");
+  const startedAt = process.argv[1];
+  const rows = await sql`
+    SELECT COUNT(*)::int AS error_count FROM error_logs
+    WHERE created_at >= (${startedAt}::timestamptz AT TIME ZONE current_setting(${"TimeZone"}))
+  `;
+  console.log(rows[0].error_count);
+  await sql.close();
+' "$verification_since" 2>"$stage_dir/error-count.log"); then
+  echo "Post-start error log query failed." >&2
+  exit 1
+fi
+if [[ ! "$error_count" =~ ^[0-9]+$ ]]; then
+  echo "Post-start error log check returned an invalid count." >&2
+  exit 1
+fi
+if [ "$error_count" -gt 0 ]; then
+  echo "Post-start error log check failed: $error_count error(s)." >&2
+  exit 1
+fi
+
+if ! docker logs --since "$verification_since" "$container_id" >"$stage_dir/container-logs.jsonl" 2>&1; then
+  echo "New container log check failed." >&2
+  exit 1
+fi
+container_errors=$(jq -R -s '[split("\n")[] | fromjson? | objects | select(.level == 50 or .level == 60)] | length' "$stage_dir/container-logs.jsonl")
+if [ "$container_errors" -gt 0 ]; then
+  echo "New container emitted $container_errors error log(s)." >&2
+  exit 1
+fi
+echo "TomoriBot verification passed: repositories, startup errors, and health."
 
 assert_file() {
   local path=$1

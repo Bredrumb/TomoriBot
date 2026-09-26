@@ -8,8 +8,8 @@
  * (DROP, RENAME, TRUNCATE, unfiltered DELETE, ALTER COLUMN ... TYPE).
  *
  * Exit codes:
- *   0: no destructive migration, or required backup and downtime were authorized
- *   1: a destructive migration lacks its required backup or downtime opt-in
+ *   0: no destructive migration, or required recovery point and downtime were authorized
+ *   1: a destructive migration lacks its required recovery point or downtime opt-in
  *   2: script error (DB connection failed, migrations dir missing, etc.)
  *
  * Usage:
@@ -21,7 +21,7 @@
  * hold production DB credentials at the pre-Terraform stage. Local pre-push
  * hooks can use --all for a no-DB sanity check.
  *
- * A backup opt-in protects data recovery. A separate downtime opt-in is required
+ * A recovery point opt-in protects data recovery. A separate downtime opt-in is required
  * when the deployed source still references an object removed by a migration.
  */
 
@@ -240,7 +240,7 @@ async function main(): Promise<void> {
   const sinceRef = sinceIdx >= 0 ? argv[sinceIdx + 1] : undefined;
   const deployedIdx = argv.indexOf("--deployed-ref");
   const deployedRef = deployedIdx >= 0 ? argv[deployedIdx + 1] : undefined;
-  const backupOptIn = argv.includes("--backup-opt-in");
+  const recoveryPointOptIn = argv.includes("--recovery-point-opt-in");
   const allowDowntime = argv.includes("--allow-downtime");
 
   if ((sinceIdx >= 0 && !sinceRef) || (deployedIdx >= 0 && !deployedRef)) {
@@ -276,13 +276,17 @@ async function main(): Promise<void> {
     for (const reference of r.oldCodeReferences) console.log(`    - deployed source: ${reference}`);
   }
   const needsDowntime = destructive.some((result) => result.oldCodeReferences.length > 0);
-  if (!backupOptIn) console.error("A destructive migration requires (Checkpoint) or create_db_backup=true.");
+  if (!recoveryPointOptIn) {
+    console.error(
+      "A destructive migration requires a recovery point request via (Checkpoint) or create_db_backup=true.",
+    );
+  }
   if (needsDowntime && !allowDowntime) {
     console.error(
       "The deployed bot may use the old schema. Dispatch with allow_migration_downtime=true to stop it before migration.",
     );
   }
-  if (!backupOptIn || (needsDowntime && !allowDowntime)) process.exit(1);
+  if (!recoveryPointOptIn || (needsDowntime && !allowDowntime)) process.exit(1);
   console.log(
     allowDowntime ? "Migration downtime authorized." : "Dropped objects are unreferenced by deployed source.",
   );
