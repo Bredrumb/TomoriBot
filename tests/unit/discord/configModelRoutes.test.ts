@@ -394,16 +394,6 @@ async function dispatch(harness: Harness, interaction: RouteInteraction): Promis
   await registry.dispatch(CLIENT, interaction as unknown as ConfigInteraction);
 }
 
-async function openPreparedModelModal(harness: Harness): Promise<void> {
-  await dispatch(
-    harness,
-    makeInteraction({
-      customId: buildConfigRouteId({ action: "model-modal-ready", locale: "en-US", nonce: "nonce1234567" }),
-      harness,
-    }),
-  );
-}
-
 function renderedText(payload: unknown): string {
   return JSON.stringify(payload);
 }
@@ -1071,7 +1061,7 @@ describe("config models switch page", () => {
     }
   });
 
-  it("repaints a stale receipt when an endpoint capability reaches the provider select", async () => {
+  it("refuses an endpoint capability that reaches the provider select", async () => {
     const harness = makeHarness();
     const selection = makeInteraction({
       customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "tts" }),
@@ -1081,8 +1071,8 @@ describe("config models switch page", () => {
     });
     await dispatch(harness, selection);
 
-    expect(selection.calls.map((call) => call.method)).toEqual(["deferUpdate", "editReply"]);
-    expect(renderedText(harness.edits.at(-1))).toContain(localizedCopy("en-US", "commands.config.panel.stale_heading"));
+    expect(selection.calls.map((call) => call.method)).toEqual(["reply"]);
+    expect(harness.modals).toHaveLength(0);
   });
 
   it("opens the picker with one page of models rather than a second panel page", async () => {
@@ -1095,21 +1085,34 @@ describe("config models switch page", () => {
     });
     await dispatch(harness, selection);
 
-    // The panel stays untouched and the ready button arrives privately, because an update defer
-    // points `editReply` at the shared panel rather than at a private placeholder.
-    expect(selection.calls.map((call) => call.method)).toEqual(["deferUpdate", "followUp"]);
-    expect(harness.edits).toHaveLength(0);
-    const otherActor = makeInteraction({
-      customId: buildConfigRouteId({ action: "model-modal-ready", locale: "en-US", nonce: "nonce1234567" }),
-      harness,
-    });
-    otherActor.user.id = "different-user";
-    await dispatch(harness, otherActor);
-    expect(harness.modals).toHaveLength(0);
-    await openPreparedModelModal(harness);
+    // The modal is this interaction's acknowledgement, so any defer before it would make Discord
+    // reject the picker.
+    expect(selection.calls).toHaveLength(0);
+    expect(harness.modals).toHaveLength(1);
     const modal = harness.modals.at(-1) as { custom_id: string };
     expect(modal.custom_id).toContain(":model-modal:");
     expect(modelModalOptions(modal).map((option) => option.value)).toEqual(["7"]);
+  });
+
+  it("reads the catalog under the canonical provider name when the selection differs in case", async () => {
+    const harness = makeHarness();
+    const catalogReads: string[] = [];
+    harness.dependencies.loadModelChoices = async (_state, _capability, provider) => {
+      catalogReads.push(provider);
+      return provider === "google" ? [{ id: 7, name: "gemini-2.5-pro", description: "Pro" }] : [];
+    };
+    await dispatch(
+      harness,
+      makeInteraction({
+        customId: buildConfigRouteId({ action: "model-provider-select", locale: "en-US", capability: "text" }),
+        kind: "select",
+        values: ["Google"],
+        harness,
+      }),
+    );
+
+    expect(catalogReads).toEqual(["Google", "google"]);
+    expect(modelModalOptions(harness.modals.at(-1)).map((option) => option.value)).toEqual(["7"]);
   });
 
   it("keeps every eligible provider reachable for zero through sixty providers", async () => {
@@ -1216,7 +1219,6 @@ describe("config models switch page", () => {
             harness: pageHarness,
           }),
         );
-        await openPreparedModelModal(pageHarness);
         for (const option of modelModalOptions(pageHarness.modals.at(-1))) reachable.add(option.value);
       }
 
@@ -1247,7 +1249,10 @@ describe("config models switch page", () => {
         harness: stale,
       }),
     );
-    expect(stale.edits.at(-1)).toBeDefined();
+    // A retired provider is refused before the panel is touched, so it answers ephemerally rather
+    // than repainting a page whose selector never changed.
+    expect(stale.edits).toHaveLength(0);
+    expect(stale.replies.at(-1)).toBeDefined();
 
     const staleRead = makeHarness({ readStatus: "stale" });
     await dispatch(
@@ -2381,7 +2386,6 @@ describe("config models view loaders", () => {
         harness,
       }),
     );
-    await openPreparedModelModal(harness);
 
     const options = modelModalOptions(harness.modals.at(-1)) as Array<{ value: string; default?: boolean }>;
     expect(options).toHaveLength(1);

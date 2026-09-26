@@ -883,8 +883,6 @@ export default {
       model_provider_paged_detail:
         "{provider} tem {count} modelos para este recurso, ocupando mais de uma página. Escolha uma página no seletor acima.",
       model_modal_title: `Selecionar Modelo de {capability}`,
-      model_modal_ready: `Os modelos estão prontos. Abra o seletor para continuar.`,
-      model_modal_ready_button: `Escolher modelo`,
       model_modal_select_label: `Modelo`,
       model_modal_select_description: `Escolha um modelo de {provider}.`,
       model_updated_heading: `Modelo Atualizado`,

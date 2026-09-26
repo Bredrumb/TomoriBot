@@ -462,7 +462,6 @@ export type ConfigPanelRoute =
   | { action: "sprite-import-submit"; locale: string; personaId: number; nonce: string }
   | { action: "sprite-export"; locale: string; personaId: number }
   | { action: "model-provider-select"; locale: string; capability: ConfigModelCapability }
-  | { action: "model-modal-ready"; locale: string; nonce: string }
   | { action: "endpoint-select"; locale: string; capability: ConfigModelCapability }
   | {
       action: "model-modal-submit";
@@ -963,7 +962,6 @@ export const CONFIG_ROUTE_CODECS: ConfigRouteCodecs = {
   "sprite-import-submit": { wireToken: "sprite-import-sub", fields: [personaIdField, nonceField] },
   "sprite-export": { wireToken: "sprite-export", fields: [personaIdField] },
   "model-provider-select": { wireToken: "model-prov-select", fields: [capabilityField] },
-  "model-modal-ready": { wireToken: "model-modal-ready", fields: [nonceField] },
   "endpoint-select": { wireToken: "ep-select", fields: [capabilityField] },
   "model-modal-submit": { wireToken: "model-modal", fields: [capabilityField, providerField, nonceField] },
   "parameters-provider-select": { wireToken: "param-prov-select", fields: [] },

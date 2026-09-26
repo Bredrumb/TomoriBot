@@ -871,8 +871,6 @@ export default {
       model_provider_paged_detail:
         "{provider} 在這項功能有 {count} 個模型，超過一頁 能容納的數量。請用上方的選單挑選頁面。",
       model_modal_title: `選擇{capability}模型`,
-      model_modal_ready: `模型選項已準備好。開啟選擇視窗以繼續。`,
-      model_modal_ready_button: `選擇模型`,
       model_modal_select_label: `模型`,
       model_modal_select_description: `從 {provider} 選擇模型。`,
       model_updated_heading: `模型已更新`,
