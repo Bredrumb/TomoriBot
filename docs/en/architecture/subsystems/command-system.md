@@ -276,7 +276,7 @@ result on one anchor ephemeral message through the shared helpers in
 below). `promptForSavedProvider()` is forbidden in those files, and the allow-list audit in
 `tests/unit/commands/anchorMigrationLockdown.test.ts` enforces it.
 
-The `/config` Models provider selector acknowledges with `deferUpdate()` before loading model choices, so a provider that expands in place still repaints the shared panel rather than a private copy. Once the choices are ready, it sends the actor a private follow-up button that opens the model modal on a fresh interaction. The prepared modal expires after five minutes and belongs to the actor who selected the provider. It is held in process memory, an exception to the custom-ID continuation rule above: rebuilding the modal on the click would put the slow catalog load back in front of `showModal()`. A restart inside the five minutes answers the button with the stale-panel notice, and the actor selects the provider again.
+The `/config` Models provider selector answers with the model modal itself, so it must not defer first. It reads the provider list and that provider's model catalog in parallel to stay inside Discord's acknowledgement window. Only the branches that repaint the shared panel (range paging and expanding a provider with more models than one modal holds) call `deferUpdate()`.
 
 Root commands are represented by top-level command files:
 
