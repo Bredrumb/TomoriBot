@@ -27,6 +27,13 @@ const GIT_ENV = {
   GIT_COMMITTER_EMAIL: "fixture@example.invalid",
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
+  // A commit can start detached auto-maintenance, whose transient `maintenance.lock` vanishes while
+  // `cpSync` is copying the template repository and fails the copy with ENOENT.
+  GIT_CONFIG_COUNT: "2",
+  GIT_CONFIG_KEY_0: "maintenance.auto",
+  GIT_CONFIG_VALUE_0: "false",
+  GIT_CONFIG_KEY_1: "gc.auto",
+  GIT_CONFIG_VALUE_1: "0",
 };
 
 const temporaryRoots: string[] = [];
