@@ -8,8 +8,8 @@ import {
 } from "@/utils/discord/interactions/routeRegistry";
 import {
   buildStatusCategoryButtonId,
+  buildStatusDashboardRouteId,
   buildStatusPageSelectorId,
-  buildStatusPersonaRangeId,
   buildStatusPersonaSelectorId,
 } from "@/utils/discord/statusDashboardCatalog";
 import { createStatusInteractionRoute } from "@/utils/discord/interactions/statusRoutes";
@@ -167,7 +167,7 @@ describe("persistent status interaction route", () => {
       values: ["2"],
     });
     const selectWithPersonaRangeRoute = makeStatusInteraction({
-      customId: buildStatusPersonaRangeId("en-US", 2, 25),
+      customId: buildStatusDashboardRouteId({ action: "persona-page", locale: "en-US", personaId: 2, start: 25 }),
       kind: "string-select",
     });
     const events: string[] = [];
@@ -245,7 +245,7 @@ describe("persistent status interaction route", () => {
 
   it("falls back safely when a selected Persona was deleted", async () => {
     const interaction = makeStatusInteraction({
-      customId: buildStatusPersonaRangeId("en-US", 99, 25),
+      customId: buildStatusDashboardRouteId({ action: "persona-page", locale: "en-US", personaId: 99, start: 25 }),
       kind: "button",
     });
     const events: string[] = [];

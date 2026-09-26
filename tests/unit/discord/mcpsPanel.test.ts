@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { ButtonStyle, ComponentType } from "discord.js";
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import type { PanelReceipt } from "@/types/discord/panel";
-import { buildAddMcpModal, buildMcpsPanelPayload } from "@/utils/discord/ui/mcpsPanel";
+import { buildAddMcpModal } from "@/utils/discord/ui/mcpsPanel";
 import { CONFIG_MCP_PANEL_ROUTE_ADAPTER } from "@/utils/discord/configPanelCatalog";
 import {
   DISCORD_MESSAGE_TOTAL_COMPONENTS_MAX,
@@ -10,6 +10,7 @@ import {
 } from "@/utils/discord/ui/componentsV2Limits";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
+import { buildConfigMcpPagePayload } from "../../helpers/configMcpPage";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -34,13 +35,12 @@ function receipt(tone: PanelReceipt["tone"]): PanelReceipt {
 
 describe("MCP collection panel", () => {
   it("renders the compact healthy empty hierarchy and exact count", () => {
-    const payload = buildMcpsPanelPayload({
+    const payload = buildConfigMcpPagePayload({
       locale: "en-US",
       scope: "guild",
       configs: [],
       readStatus: "fresh",
       page: { kind: "collection" },
-      routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
     });
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("Registered MCPs `(0/10)`");
@@ -63,40 +63,38 @@ describe("MCP collection panel", () => {
       row(2, { name: "second", created_at: new Date(10), server_type: "web_search", auth_token: null }),
       row(1, { name: "first", created_at: new Date(5) }),
       row(4),
-      row(5),
     ];
-    const payload = buildMcpsPanelPayload({
+    const payload = buildConfigMcpPagePayload({
       locale: "en-US",
       scope: "dm",
       configs,
       readStatus: "fresh",
       page: { kind: "collection", selectedId: 3, rangeIndex: 8 },
-      routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
     });
     const serialized = JSON.stringify(payload);
-    expect(serialized).toContain("Registered MCPs `(5/10)`");
+    expect(serialized).toContain("Registered MCPs `(4/10)`");
     expect(serialized.indexOf("first")).toBeLessThan(serialized.indexOf("second"));
     expect(serialized.indexOf("second")).toBeLessThan(serialized.indexOf("third"));
-    for (const id of [1, 2, 3, 4, 5]) {
+    for (const id of [1, 2, 3, 4]) {
       expect(serialized).toContain(`config:v2:mcp-remove-prompt:en-US:${id}`);
       expect(serialized).toContain(`config:v2:mcp-set-enabled:en-US:${id}:`);
     }
     expect(serialized).toContain("- third (`https://example.com:3`)\\n> Disabled URL Fetcher Tool");
     expect(serialized).toContain("- second (`https://example.com:2`)\\n> Enabled Web Search Tool");
     const japanese = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "ja",
         scope: "dm",
         configs: [configs[0] as GuildMcpServerRow],
         readStatus: "fresh",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(japanese).toContain("> URL取得ツール（無効）");
     expect(serialized).not.toContain("config:v2:mcp-select");
     expect(serialized).not.toContain("config:v2:mcp-range");
-    expect(serialized).not.toContain(`"type":${ComponentType.StringSelect}`);
+    // The only select on the page is the /config page picker, not an MCP row selector.
+    expect(serialized).not.toMatch(new RegExp(`"type":${ComponentType.StringSelect},"customId":"config:v2:(?!page:)`));
     const result = validateComponentsV2MessageLimits(payload);
     expect(
       result.valid,
@@ -106,13 +104,12 @@ describe("MCP collection panel", () => {
 
   it("renders the compact row with a safe endpoint and no secret or auth metadata", () => {
     const serialized = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "guild",
         configs: [row(8443)],
         readStatus: "fresh",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(serialized).toContain("- server\\\\-8443 (`https://example.com:8443`)\\n> Enabled General Purpose Tool");
@@ -128,7 +125,7 @@ describe("MCP collection panel", () => {
 
   it("distinguishes unknown, known-zero, and sanitized persisted tool snapshots without connecting", () => {
     const serialized = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "guild",
         configs: [
@@ -138,7 +135,6 @@ describe("MCP collection panel", () => {
         ],
         readStatus: "fresh",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(serialized).toContain(localizedCopy("en-US", "commands.mcps.tools_unknown"));
@@ -149,13 +145,12 @@ describe("MCP collection panel", () => {
 
   it("disables all writes for stale rows while exposing only read-only Retry recovery", () => {
     const serialized = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "guild",
         configs: [row(1)],
         readStatus: "stale",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(serialized).toContain("out of date");
@@ -167,20 +162,19 @@ describe("MCP collection panel", () => {
   });
 
   it("paginates defensive overflow within the 40-component budget", () => {
-    const payload = buildMcpsPanelPayload({
+    const payload = buildConfigMcpPagePayload({
       locale: "en-US",
       scope: "guild",
       configs: Array.from({ length: 8 }, (_, index) => row(index + 1)),
       readStatus: "stale",
       page: { kind: "collection", rangeIndex: 99 },
       receipt: receipt("warning"),
-      routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
     });
     const serialized = JSON.stringify(payload);
     expect(serialized).toContain("Registered MCPs `(8/10)`");
     expect(serialized).toContain("Page 2 of 2");
     expect(serialized).toContain("config:v2:mcp-remove-prompt:en-US:7");
-    expect(serialized).not.toContain("config:v2:mcp-remove-prompt:en-US:6");
+    expect(serialized).not.toContain("config:v2:mcp-remove-prompt:en-US:4");
     expect(serialized).toContain('"customId":"config:v2:mcp-add-open:en-US","label":"+ Add MCP","disabled":true');
     const result = validateComponentsV2MessageLimits(payload);
     expect(
@@ -192,14 +186,13 @@ describe("MCP collection panel", () => {
   it("renders receipts as non-interactive top-level containers with semantic accents", () => {
     const accents = { success: 0x57f287, warning: 0xfee75c, error: 0xed4245, info: 0x65c6c5 } as const;
     for (const [tone, accent] of Object.entries(accents) as Array<[PanelReceipt["tone"], number]>) {
-      const payload = buildMcpsPanelPayload({
+      const payload = buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "dm",
         configs: [row(1)],
         readStatus: "fresh",
         page: { kind: "collection" },
         receipt: receipt(tone),
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       });
       expect(payload.components).toHaveLength(2);
       const serializedPanel = JSON.stringify(payload.components[0]);
@@ -214,13 +207,12 @@ describe("MCP collection panel", () => {
 
   it("shows invalid legacy endpoints as unavailable without leaking raw text", () => {
     const serialized = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "dm",
         configs: [row(1, { url: "not a URL", auth_token: null })],
         readStatus: "fresh",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(serialized).toContain("Unavailable");
@@ -229,13 +221,12 @@ describe("MCP collection panel", () => {
 
   it("disables Add at the configured limit without disabling entity actions", () => {
     const serialized = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "guild",
         configs: Array.from({ length: 10 }, (_, index) => row(index + 1)),
         readStatus: "fresh",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(serialized).toContain('"customId":"config:v2:mcp-add-open:en-US","label":"+ Add MCP","disabled":true');
@@ -244,13 +235,12 @@ describe("MCP collection panel", () => {
 
   it("never converts an absent Remove target into confirmation for a current row", () => {
     const serialized = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "guild",
         configs: [row(1)],
         readStatus: "fresh",
         page: { kind: "remove", entityId: 999 },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(serialized).toContain("config:v2:mcp-remove-prompt:en-US:1");
@@ -259,23 +249,21 @@ describe("MCP collection panel", () => {
 
   it("distinguishes unavailable reads from an authoritative empty collection", () => {
     const unavailable = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "dm",
         configs: [],
         readStatus: "unavailable",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     const empty = JSON.stringify(
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale: "en-US",
         scope: "dm",
         configs: [],
         readStatus: "fresh",
         page: { kind: "collection" },
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
     );
     expect(unavailable).toContain(localizedCopy("en-US", "commands.mcps.unavailable"));

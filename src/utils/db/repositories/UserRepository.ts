@@ -70,8 +70,6 @@ export type ContextReferenceEligibilityEvidence = {
   hasPendingTasks: boolean;
 };
 
-export const CONTEXT_REFERENCE_ELIGIBILITY_POLICY_VERSION = 1 as const;
-
 export interface ContextReferenceCandidate {
   userRow: UserRow;
   evidence: ContextReferenceEligibilityEvidence;

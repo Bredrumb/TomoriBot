@@ -10,7 +10,6 @@ import { parseInteractionRoute } from "@/utils/discord/interactions/routeRegistr
 import {
   buildProvidersRouteId,
   buildProvidersRouteSegments,
-  listProvidersPanelActions,
   parseProvidersPanelRoute,
   PERSONAL_PROVIDERS_ROUTE_NAMESPACE,
   PROVIDERS_ROUTE_CODECS,
@@ -261,7 +260,6 @@ describe("providers routes", () => {
       "select",
     ].sort();
 
-    const catalogActions = listProvidersPanelActions().sort();
     const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
     const codecTableActions = Object.keys(PROVIDERS_ROUTE_CODECS).sort();
 
@@ -271,7 +269,6 @@ describe("providers routes", () => {
     );
     const handlerActions = new Set([...routesSource.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1]));
 
-    expect(catalogActions).toEqual(ACCEPTED_20_ACTIONS);
     expect(wireActions).toEqual(ACCEPTED_20_ACTIONS);
     expect(codecTableActions).toEqual(ACCEPTED_20_ACTIONS);
 

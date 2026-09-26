@@ -2,8 +2,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import sharp from "sharp";
 import { renderCardToPng } from "@/utils/stats/cardRenderer";
-import { loadTomoriconDataUri } from "@/utils/stats/cardColor";
-import { extractPersonalCardPalette } from "@/utils/stats/personalCardGatherer";
+import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColor";
 import type { PersonalCardData } from "@/utils/stats/statsInfographic";
 import {
   CARD_W,
@@ -52,7 +51,7 @@ describe("renderPersonalCard", () => {
   });
 });
 
-describe("extractPersonalCardPalette", () => {
+describe("extractCardPalette", () => {
   it("derives a contrasting accent instead of only the avatar's dominant hue", async () => {
     const pixels = Buffer.alloc(16 * 16 * 4);
     for (let pixel = 0; pixel < 16 * 16; pixel++) {
@@ -66,7 +65,7 @@ describe("extractPersonalCardPalette", () => {
     const image = await sharp(pixels, { raw: { width: 16, height: 16, channels: 4 } })
       .png()
       .toBuffer();
-    const palette = await extractPersonalCardPalette(`data:image/png;base64,${image.toString("base64")}`);
+    const palette = await extractCardPalette(`data:image/png;base64,${image.toString("base64")}`);
     const accentRedChannel = Number.parseInt(palette.accent.slice(1, 3), 16);
     const accentBlueChannel = Number.parseInt(palette.accent.slice(5, 7), 16);
 

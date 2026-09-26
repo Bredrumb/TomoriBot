@@ -25,7 +25,6 @@ import {
 import * as setupDraftStoreModule from "@/utils/discord/interactions/setupDraftStore";
 import {
   buildSetupCancelRouteId,
-  buildSetupDashboardRouteId,
   buildSetupEndpointConnectionRouteId,
   buildSetupEndpointConnectionSubmitRouteId,
   buildSetupEndpointModelRouteId,
@@ -36,13 +35,10 @@ import {
   buildSetupProviderByokSubmitRouteId,
   buildSetupProviderCatalogSubmitRouteId,
   buildSetupProviderModeRouteId,
+  parseSetupRoute,
   buildSetupSettingsRouteId,
   buildSetupSettingsSubmitRouteId,
-  parseSetupPoliciesSubmitRoute,
-  parseSetupProviderByokSubmitRoute,
-  parseSetupSettingsSubmitRoute,
   startSetupWizard,
-  type SetupWizardRoute,
 } from "@/utils/discord/interactions/setupRoutes";
 import {
   SETUP_POLICY_CHOICE_VALUES,
@@ -60,6 +56,7 @@ import {
   buildSetupSettingsModalFieldId,
   buildSetupWizardPayload,
   getSetupCatalogProviderChoices,
+  toSetupSettingsCatalogs,
 } from "@/utils/discord/ui/setupPanel";
 import { formatPanelProse } from "@/utils/discord/ui/panelProse";
 import { buildLegalDocUrl } from "@/utils/misc/docsUrl";
@@ -268,7 +265,18 @@ function makeSettingsDraft(overrides: Partial<SetupDraftRecord> = {}): SetupDraf
 }
 
 /**
- * Repaints the dashboard for one drifted catalog and asserts the step re-pends with the other
+ * Every wizard repaint re-resolves the stored settings, so a provider-mode switch stands in for any
+ * repaint: it forces a fresh catalog read without touching the settings step.
+ */
+async function dispatchUnrelatedRepaint(nonce: string): Promise<ReturnType<typeof makeMockInteraction>> {
+  const customId = buildSetupProviderModeRouteId({ locale: "en-US", nonce });
+  const interaction = makeMockInteraction({ customId, kind: "string", values: ["custom-endpoint"] });
+  await dispatchGlobalInteraction({} as Client, interaction);
+  return interaction;
+}
+
+/**
+ * Repaints the wizard for one drifted catalog and asserts the step re-pends with the other
  * stored values intact.
  *
  * The step re-pends while the removed row reads as unavailable and every other stored value
@@ -281,10 +289,7 @@ async function expectRependAfterCatalogDrift(input: {
   summaryVariable: string;
   stored: SetupDraftStartingSettings;
 }): Promise<void> {
-  const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce: input.nonce });
-  const interaction = makeMockInteraction({ customId, kind: "button" });
-
-  await dispatchGlobalInteraction({} as Client, interaction);
+  const interaction = await dispatchUnrelatedRepaint(input.nonce);
 
   expect(interaction.updateCalls.length).toBe(1);
   const repainted = JSON.stringify(interaction.updateCalls[0]);
@@ -320,7 +325,6 @@ interface SetupSubmitModalCase {
   kind: "button" | "string";
   /** Select values the open route reads, for the steps reached through a select. */
   values?: string[];
-  parseSubmit: (customId: string) => SetupWizardRoute | null;
 }
 
 describe("setupWizardRoutes", () => {
@@ -342,7 +346,7 @@ describe("setupWizardRoutes", () => {
     const nonce = "nonce-live-1";
     storeSetupDraft(nonce, makeDraft());
 
-    const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
+    const customId = buildSetupCancelRouteId({ locale: "en-US", nonce });
     const interaction = makeMockInteraction({ customId });
 
     const handled = await dispatchGlobalInteraction({} as Client, interaction);
@@ -419,7 +423,7 @@ describe("setupWizardRoutes", () => {
   });
 
   it("returns terminal session-ended response for stale or forged nonce without repainting panel", async () => {
-    const forgedCustomId = buildSetupDashboardRouteId({ locale: "en-US", nonce: "forged-nonce-1" });
+    const forgedCustomId = buildSetupCancelRouteId({ locale: "en-US", nonce: "forged-nonce-1" });
     const interaction = makeMockInteraction({ customId: forgedCustomId });
 
     const handled = await dispatchGlobalInteraction({} as Client, interaction);
@@ -436,7 +440,7 @@ describe("setupWizardRoutes", () => {
     const nonce = "nonce-protect-1";
     storeSetupDraft(nonce, makeDraft({ actorDiscId: "actor-legit" }));
 
-    const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
+    const customId = buildSetupCancelRouteId({ locale: "en-US", nonce });
     const attackerInteraction = makeMockInteraction({
       customId,
       actorDiscId: "attacker-user-id",
@@ -454,7 +458,7 @@ describe("setupWizardRoutes", () => {
     const nonce = "nonce-workspace-1";
     storeSetupDraft(nonce, makeDraft({ workspaceKey: "guild-legit" }));
 
-    const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
+    const customId = buildSetupCancelRouteId({ locale: "en-US", nonce });
     const wrongWorkspaceInteraction = makeMockInteraction({
       customId,
       actorDiscId: "actor-1",
@@ -471,7 +475,7 @@ describe("setupWizardRoutes", () => {
     const nonce = "nonce-context-1";
     storeSetupDraft(nonce, makeDraft({ context: "guild", workspaceKey: "guild-1" }));
 
-    const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
+    const customId = buildSetupCancelRouteId({ locale: "en-US", nonce });
     const dmInteraction = makeMockInteraction({
       customId,
       actorDiscId: "actor-1",
@@ -488,7 +492,7 @@ describe("setupWizardRoutes", () => {
     const nonce = "nonce-lost-auth-1";
     storeSetupDraft(nonce, makeDraft({ actorDiscId: "actor-1", workspaceKey: "guild-1" }));
 
-    const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
+    const customId = buildSetupCancelRouteId({ locale: "en-US", nonce });
     const lostAuthInteraction = makeMockInteraction({
       customId,
       actorDiscId: "actor-1",
@@ -568,8 +572,8 @@ describe("setupWizardRoutes", () => {
       expect(openedModal).not.toBeNull();
       // Which submit route each step's modal carries is pinned per case in SETUP_SUBMIT_MODAL_ROUTES;
       // what stays here is that the modal this flow handed back parses at all.
-      const parsed = parseSetupProviderByokSubmitRoute(openedModal?.custom_id ?? "");
-      expect(parsed).not.toBeNull();
+      const parsed = parseSetupRoute(openedModal?.custom_id ?? "");
+      expect(parsed?.action).toBe("provider-byok-submit");
 
       const check = readSetupDraft(nonce, "actor-1", "guild-1", "guild");
       expect(check.status).toBe("ok");
@@ -2583,10 +2587,7 @@ describe("setupWizardRoutes", () => {
     const catalogs = stubSettingsCatalogs(null, null);
 
     try {
-      const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
-      const interaction = makeMockInteraction({ customId, kind: "button" });
-
-      await dispatchGlobalInteraction({} as Client, interaction);
+      const interaction = await dispatchUnrelatedRepaint(nonce);
 
       const repainted = JSON.stringify(interaction.updateCalls[0]);
       // A read that failed did not establish that the row is absent, so it must not say so.
@@ -2599,7 +2600,7 @@ describe("setupWizardRoutes", () => {
     }
   });
 
-  it("keeps the finish action disabled when a settings row re-pends, and enabled when it resolves", async () => {
+  it("keeps the finish action disabled when a settings row re-pends, and enabled when it resolves", () => {
     const build = (presetId: number) =>
       makeDraft({
         providerAccess: {
@@ -2622,75 +2623,29 @@ describe("setupWizardRoutes", () => {
       ["resolved", 1770, true],
       ["drifted", 9999, false],
     ] as const) {
-      const nonce = `finish-${label}`;
-      resetSetupDrafts();
-      storeSetupDraft(nonce, build(presetId));
-      const catalogs = stubSettingsCatalogs();
-
-      try {
-        const customId = buildSetupDashboardRouteId({ locale: "en-US", nonce });
-        const interaction = makeMockInteraction({ customId, kind: "button" });
-
-        await dispatchGlobalInteraction({} as Client, interaction);
-
-        const repainted = JSON.stringify(interaction.updateCalls[0]);
-        expect(repainted).toContain(
-          localizer("en-US", `commands.setup.wizard.settings_button_${settingsResolve ? "edit" : "start"}`),
-        );
-        // A panel that reads "1 of 2" while offering an enabled Finish contradicts itself.
-        expect(repainted).toContain(
-          `"label":"${localizer("en-US", "commands.setup.wizard.finish_label")}","disabled":${settingsResolve ? "false" : "true"}`,
-        );
-      } finally {
-        catalogs.restore();
-      }
-    }
-  });
-
-  it("re-pends the settings step on an unrelated repaint, not only on the dashboard", async () => {
-    const nonce = "drift-on-provider";
-    resetSetupDrafts();
-    storeSetupDraft(
-      nonce,
-      makeDraft({
-        startingSettings: {
-          presetId: 1770,
-          humanizer: 1,
-          timezoneOffset: 9,
-          systemPrompt: { kind: "preset", presetName: "Tomori Default" },
-        },
-      }),
-    );
-
-    const personaSpy = spyOn(configRepository, "loadPresetRowsByLocale").mockResolvedValue([
-      PERSONA_PRESET_ROWS[1],
-    ] as never);
-    const promptSpy = spyOn(configRepository, "loadSystemPromptPresets").mockResolvedValue([
-      ...SYSTEM_PROMPT_ROWS,
-    ] as never);
-
-    try {
-      // Every repaint resolves the catalogs, so a step that has drifted reads as pending even on a
-      // repaint that has nothing to do with settings.
-      const customId = buildSetupProviderModeRouteId({ locale: "en-US", nonce });
-      const interaction = makeMockInteraction({ customId, kind: "string", values: ["custom-endpoint"] });
-
-      await dispatchGlobalInteraction({} as Client, interaction);
-
-      expect(interaction.updateCalls.length).toBe(1);
-      const repainted = JSON.stringify(interaction.updateCalls[0]);
-      expect(repainted).toContain(localizer("en-US", "commands.setup.wizard.settings_button_start"));
-      expect(repainted).not.toContain(localizer("en-US", "commands.setup.wizard.settings_button_edit"));
-    } finally {
-      personaSpy.mockRestore();
-      promptSpy.mockRestore();
+      const repainted = JSON.stringify(
+        buildSetupWizardPayload({
+          draft: build(presetId),
+          locale: "en-US",
+          isHosted: false,
+          nonce: `finish-${label}`,
+          settingsCatalogs: toSetupSettingsCatalogs(PERSONA_PRESET_ROWS, SYSTEM_PROMPT_ROWS, "en-US"),
+        }),
+      );
+      expect(repainted).toContain(
+        localizer("en-US", `commands.setup.wizard.settings_button_${settingsResolve ? "edit" : "start"}`),
+      );
+      // A panel that reads "1 of 2" while offering an enabled Finish contradicts itself.
+      expect(repainted).toContain(
+        `"label":"${localizer("en-US", "commands.setup.wizard.finish_label")}","disabled":${settingsResolve ? "false" : "true"}`,
+      );
     }
   });
 
   /**
-   * The submit route each open route hands back. A row is one step: the draft it reads, the component
-   * that selects it, and the parser the modal's custom ID must survive. A row asserts route identity
-   * only (action and nonce), because which fields each step writes is the flow tests' subject.
+   * The submit route each open route hands back. A row is one step: the draft it reads and the
+   * component that selects it. A row asserts route identity only (action and nonce), because which
+   * fields each step writes is the flow tests' subject.
    */
   const SETUP_SUBMIT_MODAL_ROUTES: SetupSubmitModalCase[] = [
     {
@@ -2703,7 +2658,6 @@ describe("setupWizardRoutes", () => {
       openRoute: (locale, nonce) => buildSetupProviderModeRouteId({ locale, nonce }),
       kind: "string",
       values: ["user-byok"],
-      parseSubmit: parseSetupProviderByokSubmitRoute,
     },
     {
       label: "policies-submit",
@@ -2717,7 +2671,6 @@ describe("setupWizardRoutes", () => {
       },
       openRoute: (locale, nonce) => buildSetupPoliciesRouteId({ locale, nonce }),
       kind: "button",
-      parseSubmit: parseSetupPoliciesSubmitRoute,
     },
     {
       label: "settings-submit",
@@ -2729,7 +2682,6 @@ describe("setupWizardRoutes", () => {
       },
       openRoute: (locale, nonce) => buildSetupSettingsRouteId({ locale, nonce }),
       kind: "button",
-      parseSubmit: parseSetupSettingsSubmitRoute,
     },
   ];
 
@@ -2749,7 +2701,7 @@ describe("setupWizardRoutes", () => {
       await dispatchGlobalInteraction({} as Client, interaction);
 
       const openedModal = modalSpy.mock.calls[0]?.[1] as { custom_id?: string } | undefined;
-      const parsed = testCase.parseSubmit(openedModal?.custom_id ?? "");
+      const parsed = parseSetupRoute(openedModal?.custom_id ?? "");
       expect(parsed?.action).toBe(testCase.label);
       expect(parsed?.nonce).toBe(testCase.nonce);
     } finally {

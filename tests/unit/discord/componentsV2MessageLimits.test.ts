@@ -27,7 +27,6 @@ import {
   DISCORD_SELECT_OPTIONS_MAX,
   DISCORD_SELECT_OPTIONS_MIN,
   DISCORD_SELECT_PLACEHOLDER_MAX,
-  assertComponentsV2MessageLimits,
   getDiscordTextLength,
   truncateDiscordText,
   validateComponentsV2MessageLimits,
@@ -1109,17 +1108,5 @@ describe("componentsV2Limits rule mutations with exact path and code assertions"
       limit: DISCORD_MEDIA_DESCRIPTION_MAX,
       code: "MEDIA_DESCRIPTION_OVERSIZED",
     });
-  });
-});
-
-describe("assertComponentsV2MessageLimits error handling", () => {
-  it("does not throw for valid payload and throws ComponentsV2LimitError for invalid payload", () => {
-    const valid = createValidMessagePayload();
-    expect(() => assertComponentsV2MessageLimits(valid)).not.toThrow();
-
-    const invalid = { ...valid, flags: 0 };
-    expect(() => assertComponentsV2MessageLimits(invalid)).toThrowError(
-      /Components V2 payload exceeded Discord limits/,
-    );
   });
 });

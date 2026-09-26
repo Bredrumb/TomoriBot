@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import type { Client } from "discord.js";
 import { PrivacyLevel, type TomoriState, type UserRow } from "@/types/db/schema";
 import {
-  CONTEXT_REFERENCE_ELIGIBILITY_POLICY_VERSION,
   isEligibleContextReferenceUserV1,
   type ContextReferenceCandidate,
 } from "@/utils/db/repositories/UserRepository";
@@ -338,8 +337,7 @@ describe("participant candidate sources", () => {
 });
 
 describe("context reference eligibility policy v1", () => {
-  it("keeps the pure policy version explicit and preserves default-only rejection", () => {
-    expect(CONTEXT_REFERENCE_ELIGIBILITY_POLICY_VERSION).toBe(1);
+  it("rejects default-only rows and accepts rows with activity evidence", () => {
     expect(isEligibleContextReferenceUserV1(userRow("100", "Default"), INELIGIBLE_EVIDENCE)).toBe(false);
     expect(isEligibleContextReferenceUserV1(userRow("100", "Active"), ELIGIBLE_EVIDENCE)).toBe(true);
   });

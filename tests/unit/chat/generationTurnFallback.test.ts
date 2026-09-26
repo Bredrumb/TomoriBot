@@ -141,7 +141,6 @@ scopedMock.module("@/utils/cache/openrouterCapabilityCache", () => ({
   getOrFetchOpenRouterCapabilities: async () => undefined,
   initializeOpenRouterCapabilityCache: async () => undefined,
   isOpenRouterCapabilityCacheReady: () => false,
-  testAccountSettingModel: async () => ({ valid: false }),
 }));
 
 scopedMock.module("@/utils/db/repositories", () => ({
@@ -285,10 +284,8 @@ scopedMock.module("@/utils/security/crypto", () => ({
   ...realCrypto,
   decryptApiKey: async (key: string) => (key === "personal-encrypted-key" ? "personal-key" : "server-key"),
   encryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
-  reencryptApiKey: async () => ({ encrypted: Buffer.from(""), version: 1 }),
   storeOptApiKey: async () => true,
   getOptApiKey: async () => null,
-  getAllOptApiKeysForServer: async () => ({}),
   deleteOptApiKey: async () => true,
   hasOptApiKey: async () => false,
 }));

@@ -6,7 +6,6 @@ import {
   isCommentOnly,
   normalizePresetShape,
   parsePresetNodes,
-  summarizeMacroLabels,
   validateAttachment,
   type RawSTPreset,
 } from "@/utils/stPreset/stPresetImportParser";
@@ -214,11 +213,6 @@ describe("stPresetImportParser", () => {
       const macros = collectUnsupportedEnabledMacros(nodes);
       expect(macros).toContain("{{unsupported_macro_one}}");
       expect(macros).not.toContain("{{unsupported_macro_two}}");
-    });
-
-    it("summarizes macro labels with count truncation", () => {
-      expect(summarizeMacroLabels(["a", "b", "c"])).toBe("a, b, c");
-      expect(summarizeMacroLabels(["a", "b", "c", "d", "e", "f"], 3)).toBe("a, b, c +3 more");
     });
   });
 });

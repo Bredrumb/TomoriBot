@@ -1394,7 +1394,7 @@ const DYNAMIC_KEY_PATTERNS = [
   /^commands\.config\.thinking-level\.choice_/,
   /^commands\.config\.panel\./,
   /^commands\.config\.cooldown\.type\.choice_/,
-  /^commands\.config\.custom_models\.(?:remove\.checkbox_|capability_modal\.[a-z_]+(?:_edit)?_title$)/,
+  /^commands\.config\.custom_models\.remove\.checkbox_/,
   /^commands\.help\.api-key\./,
   /^commands\.server\.stm\.categories-edit\.slot_/,
   /^commands\.data\.import\.error_/,

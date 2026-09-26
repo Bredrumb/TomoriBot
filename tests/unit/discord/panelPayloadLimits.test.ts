@@ -4,17 +4,14 @@ import { PrivacyLevel } from "@/types/db/schema";
 import type { PanelReceipt } from "@/types/discord/panel";
 import type { ProviderPanelEntry } from "@/types/discord/providerPanel";
 import type { DocumentChunkRow, DocumentListRow } from "@/utils/discord/interactions/memoriesDocumentOperations";
-import {
-  CONFIG_MCP_PANEL_ROUTE_ADAPTER,
-  CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER,
-} from "@/utils/discord/configPanelCatalog";
+import { CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER } from "@/utils/discord/configPanelCatalog";
 import { PROVIDERS_ROUTE_NAMESPACE } from "@/utils/discord/providersPanelCatalog";
 import {
   type ComponentsV2MessagePayload,
   DISCORD_MESSAGE_TEXT_DISPLAY_TOTAL_MAX,
   getDiscordTextLength,
 } from "@/utils/discord/ui/componentsV2Limits";
-import { buildMcpsPanelPayload, MAX_MCP_PANEL_PAGE_SIZE } from "@/utils/discord/ui/mcpsPanel";
+import { MAX_MCP_PANEL_PAGE_SIZE } from "@/utils/discord/ui/mcpsPanel";
 import { buildMemoriesPanelPayload } from "@/utils/discord/ui/memoriesPanel";
 import { buildPersonalMemoriesPanelPayload } from "@/utils/discord/ui/personalMemoriesPanel";
 import { buildProvidersPanelPayload, PROVIDERS_ENTRIES_PER_SELECTOR_PAGE } from "@/utils/discord/ui/providersPanel";
@@ -24,6 +21,7 @@ import { initializeLocalizer } from "@/utils/text/localizer";
 import { createPersona } from "../../helpers/fixtures";
 import { collectCaseFailures, RUNTIME_LOCALES } from "../../helpers/localeCases";
 import { collectTextDisplays, expectSafePanelPayload } from "../../helpers/panelLimits";
+import { buildConfigMcpPagePayload } from "../../helpers/configMcpPage";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -194,28 +192,26 @@ const WORST_CASE_ROWS: PanelPayloadRow[] = [
     "MCP collection page",
     MCP_RECEIPT,
     (locale, receipt) =>
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale,
         scope: "guild",
         configs: OVERSIZED_MCP_CONFIGS,
         readStatus: "fresh",
         page: { kind: "collection", rangeIndex: 0 },
         receipt,
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
   ],
   [
     "MCP removal page",
     MCP_RECEIPT,
     (locale, receipt) =>
-      buildMcpsPanelPayload({
+      buildConfigMcpPagePayload({
         locale,
         scope: "guild",
         configs: OVERSIZED_MCP_CONFIGS,
         readStatus: "fresh",
         page: { kind: "remove", entityId: OVERSIZED_MCP_CONFIGS[0]?.guild_mcp_id ?? 1 },
         receipt,
-        routes: CONFIG_MCP_PANEL_ROUTE_ADAPTER,
       }),
   ],
   [

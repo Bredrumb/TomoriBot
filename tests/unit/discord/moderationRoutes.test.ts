@@ -21,7 +21,6 @@ import {
   buildModerationRouteId,
   buildModerationRouteSegments,
   buildQuotaModalFieldId,
-  listModerationPanelActions,
   parseModerationPanelRoute,
   type ModerationPanelRoute,
 } from "@/utils/discord/moderationPanelCatalog";
@@ -4098,6 +4097,44 @@ function parsedRoute(customId: string) {
   return route;
 }
 
+const ACCEPTED_35_ACTIONS: readonly ModerationAction[] = [
+  "category",
+  "member-access-open",
+  "member-access-submit",
+  "model-access-set",
+  "page",
+  "persona-channel-add-open",
+  "persona-channel-add-submit",
+  "persona-channel-remove-open",
+  "persona-channel-remove-submit",
+  "quota-edit-open",
+  "quota-edit-submit",
+  "range",
+  "retry",
+  "select-page",
+  "user-blacklist-add-open",
+  "user-blacklist-add-submit",
+  "user-blacklist-remove-cancel",
+  "user-blacklist-remove-confirm",
+  "user-blacklist-remove-open",
+  "user-blacklist-remove-prompt",
+  "user-blacklist-remove-submit",
+  "whitelist-channel-add-open",
+  "whitelist-channel-add-submit",
+  "whitelist-channel-remove-cancel",
+  "whitelist-channel-remove-confirm",
+  "whitelist-channel-remove-open",
+  "whitelist-channel-remove-prompt",
+  "whitelist-channel-remove-submit",
+  "whitelist-role-add-open",
+  "whitelist-role-add-submit",
+  "whitelist-role-remove-cancel",
+  "whitelist-role-remove-confirm",
+  "whitelist-role-remove-open",
+  "whitelist-role-remove-prompt",
+  "whitelist-role-remove-submit",
+];
+
 describe("moderation route codec wire contract, exhaustiveness, and producer coverage", () => {
   it.each(WIRE_CONTRACT_V1)("decodes the pinned wire string %s to its exact route object", (customId, expected) => {
     expect(parseModerationPanelRoute(parsedRoute(customId))).toEqual(expected);
@@ -4108,47 +4145,8 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     expect(buildModerationRouteSegments(expected)).toEqual(customId.split(":").slice(2));
   });
 
-  it("guarantees 35-action exhaustiveness across catalog, accepted actions, wire contract, and route handler comparisons", () => {
-    const ACCEPTED_35_ACTIONS: readonly ModerationAction[] = [
-      "category",
-      "member-access-open",
-      "member-access-submit",
-      "model-access-set",
-      "page",
-      "persona-channel-add-open",
-      "persona-channel-add-submit",
-      "persona-channel-remove-open",
-      "persona-channel-remove-submit",
-      "quota-edit-open",
-      "quota-edit-submit",
-      "range",
-      "retry",
-      "select-page",
-      "user-blacklist-add-open",
-      "user-blacklist-add-submit",
-      "user-blacklist-remove-cancel",
-      "user-blacklist-remove-confirm",
-      "user-blacklist-remove-open",
-      "user-blacklist-remove-prompt",
-      "user-blacklist-remove-submit",
-      "whitelist-channel-add-open",
-      "whitelist-channel-add-submit",
-      "whitelist-channel-remove-cancel",
-      "whitelist-channel-remove-confirm",
-      "whitelist-channel-remove-open",
-      "whitelist-channel-remove-prompt",
-      "whitelist-channel-remove-submit",
-      "whitelist-role-add-open",
-      "whitelist-role-add-submit",
-      "whitelist-role-remove-cancel",
-      "whitelist-role-remove-confirm",
-      "whitelist-role-remove-open",
-      "whitelist-role-remove-prompt",
-      "whitelist-role-remove-submit",
-    ];
-
+  it("guarantees 35-action exhaustiveness across accepted actions, wire contract, codecs, and route handlers", () => {
     const sortedAccepted = [...ACCEPTED_35_ACTIONS].sort();
-    const catalogActions = listModerationPanelActions().sort();
     const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
 
     const fixedCodecActions = Object.keys(MODERATION_ROUTE_CODECS);
@@ -4164,7 +4162,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     );
     const handlerActions = new Set([...routesSource.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1]));
 
-    expect(catalogActions).toEqual(sortedAccepted);
     expect(wireActions).toEqual(sortedAccepted);
     expect(allCodecActions).toEqual(sortedAccepted);
 
@@ -4439,7 +4436,7 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     const producedActions = collectedProducedActions(collectPanelSurfaceCustomIds());
 
     const unionedActions = [...new Set([...producedActions, ...PRODUCERLESS_ACTIONS])].sort();
-    expect(unionedActions).toEqual(listModerationPanelActions().sort());
+    expect(unionedActions).toEqual([...ACCEPTED_35_ACTIONS].sort());
   });
 
   it("enforces exact 97-character bound for the maximum persona-block removal route and all IDs under 100", () => {

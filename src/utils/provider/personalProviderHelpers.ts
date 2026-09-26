@@ -76,26 +76,6 @@ export function getStoredPersonalProviderForCapability(
 }
 
 /**
- * Whether writing a model for `capability` would newly move it off the server default and onto a
- * personal override. Switching models or providers inside an override that is already active
- * changes nothing about scope either way.
- */
-export function activatesNewPersonalOverride(
-  rows: UserSavedProviderConfigRow[],
-  capability: PersonalProviderCapability,
-): boolean {
-  return getActivePersonalProviderForCapability(rows, capability) === null;
-}
-
-/**
- * Whether saving `provider` only rotates the credential behind the personal text route the user
- * is already on. The routing is unchanged, so the activation confirmation would be noise.
- */
-export function isPersonalTextCredentialRotation(rows: UserSavedProviderConfigRow[], provider: string): boolean {
-  return getActivePersonalProviderForCapability(rows, "text")?.provider.toLowerCase() === provider.toLowerCase();
-}
-
-/**
  * Builds the upsert payload that promotes a text model to personal primary.
  *
  * The promoted model is pruned from the saved fallback chain: a fallback identical to the primary

@@ -131,8 +131,3 @@ export function isSetupDraftComplete(
   }
   return true;
 }
-
-/** User BYOK is guild-only: a DM has no membership for personal providers to key against. */
-export function isProviderAccessAllowedInContext(mode: SetupDraftProviderMode, context: SetupDraftContext): boolean {
-  return !(mode === "user-byok" && context === "dm");
-}

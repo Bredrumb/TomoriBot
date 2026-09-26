@@ -514,16 +514,6 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
   };
 }
 
-export function summarizeMacroLabels(labels: string[], maxLabels = 4): string {
-  const sorted = [...labels].sort((a, b) => a.localeCompare(b));
-  if (sorted.length <= maxLabels) {
-    return sorted.join(", ");
-  }
-
-  const remaining = sorted.length - maxLabels;
-  return `${sorted.slice(0, maxLabels).join(", ")} +${remaining} more`;
-}
-
 export function collectUnsupportedEnabledMacros(nodes: Omit<StPresetNodeRow, "node_id" | "preset_id">[]): string[] {
   const labels = new Set<string>();
 

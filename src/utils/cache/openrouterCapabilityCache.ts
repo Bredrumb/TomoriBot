@@ -11,8 +11,6 @@
  */
 
 import { createOpenRouterCatalog } from "@/utils/cache/openrouterCatalog";
-import { log } from "../misc/logger";
-import { buildOpenRouterAttributionHeaders } from "@/utils/provider/openrouterAttribution";
 
 /**
  * OpenRouter API model response structure
@@ -268,112 +266,6 @@ export function getAllOpenRouterPricing(): ReadonlyMap<string, ModelPricing> {
 
 export function resetOpenRouterCapabilityCache(): void {
   textCatalog.reset();
-}
-
-/**
- * Tests account-setting model by making a minimal request to detect the actual model
- *
- * When a user selects "account-setting" in OpenRouter, it resolves to their default model
- * at request time. This function makes a test request and extracts which model was actually
- * used, then fetches that model's real capabilities.
- *
- * @param apiKey - OpenRouter API key for the user
- * @returns Object with { actualModel, capabilities } or { error } if test fails
- */
-export async function testAccountSettingModel(apiKey: string): Promise<
-  | {
-      actualModel: string;
-      capabilities: ModelCapabilities;
-    }
-  | { error: string }
-> {
-  try {
-    log.info("Testing account-setting model to detect actual OpenRouter default...");
-
-    // Streaming is used because the first chunk names the resolved model, which a
-    // non-streaming call would only reveal after paying for the whole completion.
-    const testPayload = {
-      model: "account-setting",
-      messages: [{ role: "user", content: "hi" }],
-      stream: true,
-      temperature: 1.0,
-      max_tokens: 5,
-    };
-
-    const testResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        ...buildOpenRouterAttributionHeaders(),
-      },
-      body: JSON.stringify(testPayload),
-    });
-
-    if (!testResponse.ok) {
-      const errorText = await testResponse.text();
-      return {
-        error: `OpenRouter API error: ${testResponse.status} ${testResponse.statusText} | ${errorText}`,
-      };
-    }
-
-    const reader = testResponse.body?.getReader();
-    if (!reader) {
-      return {
-        error: "Response body is null",
-      };
-    }
-
-    const decoder = new TextDecoder();
-    let actualModel: string | undefined;
-
-    try {
-      const { value } = await reader.read();
-      const chunk = decoder.decode(value);
-
-      // Format: data: {"id":"...", "model":"actual-model-name", ...}
-      const lines = chunk.split("\n");
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try {
-            const jsonStr = line.substring(6);
-            const parsed = JSON.parse(jsonStr);
-            if (parsed.model) {
-              actualModel = parsed.model;
-              break;
-            }
-          } catch {}
-        }
-      }
-    } finally {
-      // This probe reads one chunk and abandons the rest, so the body always needs cancelling.
-      // Awaited and caught because an aborted or already-errored stream rejects here, and an
-      // unhandled rejection from a background capability probe would surface as a crash.
-      await reader.cancel().catch(() => undefined);
-    }
-
-    if (!actualModel) {
-      return {
-        error: "Could not determine actual model from OpenRouter streaming response",
-      };
-    }
-
-    log.info(`Detected account-setting resolves to: ${actualModel}`);
-
-    const capabilities = await getOrFetchOpenRouterCapabilities(actualModel);
-
-    if (!capabilities) {
-      return {
-        error: `Could not fetch capabilities for detected model: ${actualModel}`,
-      };
-    }
-
-    return { actualModel, capabilities };
-  } catch (error) {
-    return {
-      error: `Test request failed: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
 }
 
 /**

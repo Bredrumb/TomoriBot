@@ -55,10 +55,6 @@ export function classifyMemoryImportSource(
   return ownership === kind ? "same-ownership" : "cross-ownership";
 }
 
-export function isMemoryImportSourceTypeForKind(kind: MemoryTransferKind, sourceType: string): boolean {
-  return classifyMemoryImportSource(kind, sourceType) !== "unsupported";
-}
-
 export interface MemoryImportDependencies {
   downloadAttachment(attachment: Attachment): Promise<SafeDownloadResult>;
   createSnapshotNonce(): string;

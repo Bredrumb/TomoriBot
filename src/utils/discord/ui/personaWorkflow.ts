@@ -127,16 +127,6 @@ interface PersonaWorkflowNestedButtonPhase {
   delete(): Promise<void>;
 }
 
-/**
- * Anchor private-message phase for a non-persona sibling scope. Persona
- * branches must still enter through `runPersonaPickerWorkflow`.
- */
-export interface AnchorPrivateWorkflowPhase {
-  readonly phaseId: string;
-  readonly message: PersonaWorkflowMessageController;
-  useButton(button: ButtonInteraction): PersonaWorkflowNestedButtonPhase;
-}
-
 type PersonaWorkflowModalSource = ModalOptions | (() => Promise<ModalOptions>);
 
 interface PersonaWorkflowSelectionPhase<TPersona extends TomoriState> {
@@ -701,65 +691,6 @@ export function buildPersonaWorkflowNotice(options: NoticeContainerOptions): Per
   return {
     components: buildNoticeContainer(options),
     flags: MessageFlags.IsComponentsV2,
-  };
-}
-
-/**
- * Starts one ephemeral Components V2 message for a non-persona sibling scope.
- * This is intentionally a narrow adapter: it exposes the same typed controller
- * and nested-button phase used by persona workflows without adding a competing
- * persona-selection abstraction.
- */
-export async function beginAnchorPrivateWorkflow(
-  interaction: ChatInputCommandInteraction,
-  locale: string,
-  initialPayload: PersonaWorkflowComponentsV2Payload,
-): Promise<AnchorPrivateWorkflowPhase> {
-  assertComponentsV2Payload(initialPayload);
-  if (interaction.replied || interaction.deferred) {
-    throw new PersonaWorkflowUpdateError(
-      "already-acknowledged",
-      "The anchor private workflow must perform the command's first acknowledgment.",
-    );
-  }
-
-  let message: Message;
-  try {
-    const response = await interaction.reply({
-      ...initialPayload,
-      flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-      withResponse: true,
-    });
-    message = response.resource?.message ?? (await interaction.fetchReply());
-  } catch (error) {
-    const failure = classifyUpdateFailure("Failed to create the anchor private workflow message.", error);
-    if (failure.code === "anchor-message-unavailable") {
-      logWorkflowFatal("anchor-private-start", null, failure, { interactionId: interaction.id });
-    }
-    throw failure;
-  }
-
-  const ledger = new AcknowledgementLedger();
-  const controller = new AnchorMessageController(interaction, message.id, ledger);
-  const phaseId = interaction.id;
-  return {
-    phaseId,
-    message: controller,
-    useButton(button) {
-      return {
-        message: controller,
-        replace: (payload) => controller.replaceFrom(button, payload),
-        async beginInPlaceWork() {
-          await controller.acknowledgeInPlace(button);
-          return { deliveryPolicy: "replace-picker", message: controller };
-        },
-        openModal: (options) => openModalWithBridge(button, locale, options, controller),
-        async delete() {
-          await controller.acknowledgeInPlace(button);
-          await controller.delete();
-        },
-      };
-    },
   };
 }
 

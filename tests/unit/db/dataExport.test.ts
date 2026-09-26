@@ -11,9 +11,9 @@ import {
   adaptV1PersonalMemories,
   adaptV1WorkspaceConfig,
   adaptV1WorkspaceMemories,
-  areMemoryItemsEqual,
   getServerExportSchema,
   memoryItemSchema,
+  normalizeMemoryItem,
   parseExportFile,
   personalConfigExportSchema,
   serverConfigExportSchema,
@@ -443,14 +443,13 @@ describe("v2 memory bundles", () => {
     expect(result.success).toBe(true);
   });
 
-  it("compares normalized content and tag sets", () => {
-    expect(
-      areMemoryItemsEqual(
-        { content: "  hello\nworld  ", tags: ["'red'", "blue", "red"] },
-        { content: "hello world", tags: [" blue ", "red"] },
-      ),
-    ).toBe(true);
-    expect(areMemoryItemsEqual({ content: "hello", tags: ["red"] }, { content: "hello", tags: ["green"] })).toBe(false);
+  it("normalizes content whitespace and tag sets so equivalent memories compare equal", () => {
+    expect(normalizeMemoryItem({ content: "  hello\nworld  ", tags: ["'red'", "blue", "red"] })).toEqual(
+      normalizeMemoryItem({ content: "hello world", tags: [" blue ", "red"] }),
+    );
+    expect(normalizeMemoryItem({ content: "hello", tags: ["red"] })).not.toEqual(
+      normalizeMemoryItem({ content: "hello", tags: ["green"] }),
+    );
   });
 
   it("parses a v2 memory file through the explicit file entry point", () => {

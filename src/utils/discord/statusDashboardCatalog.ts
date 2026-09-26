@@ -113,10 +113,6 @@ export function buildStatusPersonaSelectorId(locale: string, personaId: number):
   return buildStatusDashboardRouteId({ action: "persona-select", locale, personaId });
 }
 
-export function buildStatusPersonaRangeId(locale: string, personaId: number, start: number): string {
-  return buildStatusDashboardRouteId({ action: "persona-page", locale, personaId, start });
-}
-
 export function buildStatusPersonaRangeSegments(locale: string, personaId: number, start: number): string[] {
   return buildStatusDashboardRouteSegments({ action: "persona-page", locale, personaId, start });
 }

@@ -1,24 +1,17 @@
 import {
   ButtonStyle,
   ComponentType,
-  MessageFlags,
   TextInputStyle,
   type ActionRowData,
   type ButtonComponentData,
   type ComponentInContainerData,
-  type TopLevelComponentData,
 } from "discord.js";
 import type { GuildMcpServerRow } from "@/types/db/schema";
 import type { RawDiscordComponent } from "@/types/discord/rawApiTypes";
-import type { PanelReadStatus, PanelReceipt } from "@/types/discord/panel";
+import type { PanelReadStatus } from "@/types/discord/panel";
 import { escapeDiscordMarkdown } from "@/utils/text/discordMarkdown";
 import type { McpsPanelRouteAdapter } from "@/utils/discord/mcpsPanelCatalog";
-import {
-  buildPaginationRow,
-  buildPanelContainer,
-  buildPanelReceiptContainer,
-  withLinePrefix,
-} from "@/utils/discord/ui/panel";
+import { buildPaginationRow, withLinePrefix } from "@/utils/discord/ui/panel";
 import { safeSelectOptionText } from "@/utils/discord/ui/modals";
 import { resolveRangeSelection } from "@/utils/discord/interactions/panelController";
 import { MAX_MCP_SERVERS_PER_WORKSPACE, safeMcpEndpoint } from "@/utils/mcp/mcpConfigOperations";
@@ -26,7 +19,7 @@ import { formatMcpToolNamesForDiscord } from "@/utils/mcp/mcpToolSnapshot";
 import { buildTextPreview, textPreviewFooterKey, textPreviewFooterVars } from "@/utils/text/textPreview";
 import { localizer } from "@/utils/text/localizer";
 
-export const MAX_MCP_PANEL_PAGE_SIZE = 6;
+export const MAX_MCP_PANEL_PAGE_SIZE = 4;
 const MCP_ROW_TEXT_PREVIEW_BUDGET = 300;
 
 function renderMcpName(locale: string, value: string): string {
@@ -41,19 +34,12 @@ export type McpsPanelPage =
   | { kind: "collection"; selectedId?: number; rangeIndex?: number; removedIndex?: number }
   | { kind: "remove"; entityId: number };
 
-export interface McpsPanelPayload {
-  components: TopLevelComponentData[];
-  flags: MessageFlags.IsComponentsV2;
-}
-
 export interface McpsPanelRenderInput {
   locale: string;
   scope: "guild" | "dm";
   configs: GuildMcpServerRow[];
   readStatus: PanelReadStatus;
   page: McpsPanelPage;
-  receipt?: PanelReceipt;
-  pageSize?: number;
   routes: McpsPanelRouteAdapter;
   headingLevel?: 2 | 3;
 }
@@ -127,13 +113,6 @@ function buildEmptyState(
   ];
 }
 
-function buildPayload(components: ComponentInContainerData[], receipt?: PanelReceipt): McpsPanelPayload {
-  return {
-    components: [buildPanelContainer(components), ...(receipt ? [buildPanelReceiptContainer(receipt)] : [])],
-    flags: MessageFlags.IsComponentsV2,
-  };
-}
-
 function buildAddArea(
   locale: string,
   configs: GuildMcpServerRow[],
@@ -162,7 +141,6 @@ function buildAddArea(
 
 export function buildMcpsPanelComponents(input: McpsPanelRenderInput): ComponentInContainerData[] {
   const routes = input.routes;
-  const pageSize = input.pageSize ?? MAX_MCP_PANEL_PAGE_SIZE;
   const configs = sortMcpConfigs(input.configs);
   const writesDisabled = input.readStatus !== "fresh";
   const components: ComponentInContainerData[] = [
@@ -241,7 +219,7 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
   // A remove page with a resolvable target returned above, so one reaching here has a target that
   // no longer exists and has no range of its own to restore.
   const requestedRangeIndex = input.page.kind === "collection" ? (input.page.rangeIndex ?? 0) : 0;
-  const selection = resolveRangeSelection(configs, requestedRangeIndex, pageSize);
+  const selection = resolveRangeSelection(configs, requestedRangeIndex, MAX_MCP_PANEL_PAGE_SIZE);
   const visibleConfigs = selection.visibleItems;
   for (const row of visibleConfigs) {
     const endpoint = safeMcpEndpoint(row.url) ?? localizer(input.locale, "commands.mcps.endpoint_unavailable");
@@ -325,10 +303,6 @@ export function buildMcpsPanelComponents(input: McpsPanelRenderInput): Component
   components.push(...buildAddArea(input.locale, configs, writesDisabled, routes));
 
   return components;
-}
-
-export function buildMcpsPanelPayload(input: McpsPanelRenderInput): McpsPanelPayload {
-  return buildPayload(buildMcpsPanelComponents(input), input.receipt);
 }
 
 export type McpsAddModalField = "name" | "url" | "auth-token" | "server-type";

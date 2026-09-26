@@ -7,7 +7,7 @@ import {
   type StPresetsRouteDependencies,
 } from "@/utils/discord/interactions/stPresetsRoutes";
 import { initializeLocalizer } from "@/utils/text/localizer";
-import { localizedCopy } from "../../helpers/localeCases";
+import { localizedCopy, localizedProse } from "../../helpers/localeCases";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -91,7 +91,14 @@ function makeDependencies(
           preset: imported,
           presetName: imported.preset_name,
           nodes: [node(1), node(2)],
+          markerCount: 0,
+          toggleableCount: 2,
           enabledCount: 2,
+          commentOnlyCount: 0,
+          disabledByPreset: 0,
+          legacyNodeCount: 0,
+          sourceKind: "modern",
+          unsupportedEnabledMacros: [],
         };
       },
       updateStPresetNodes: async (input) => {
@@ -625,6 +632,94 @@ describe("ST Presets interaction routes", () => {
       "resolveScope-fresh",
       "editReply",
     ]);
+  });
+
+  it("reports what an imported preset will not run as written in the success receipt", async () => {
+    const calls: string[] = [];
+    let editReplyPayload: unknown = null;
+    const base = makeDependencies(calls);
+    const route = createStPresetsInteractionRoute({
+      ...base,
+      operations: {
+        ...base.operations,
+        importStPreset: async (input) => {
+          const result = await base.operations.importStPreset(input);
+          if (result.status !== "success") return result;
+          return {
+            ...result,
+            commentOnlyCount: 2,
+            disabledByPreset: 3,
+            sourceKind: "legacy_text_completion",
+            unsupportedEnabledMacros: ["{{e}}", "{{d}}", "{{c}}", "{{b}}", "{{a}}"],
+          };
+        },
+      },
+    });
+    const modalInteraction = makeModalInteraction(
+      "modal-notes",
+      "config:v2:st-presets-add-submit:en-US:fixed-nonce-123",
+      calls,
+      {
+        editReply: async (opts: unknown) => {
+          calls.push("editReply");
+          editReplyPayload = opts;
+        },
+      },
+    );
+
+    await route.execute({} as Client, modalInteraction, {
+      namespace: "config",
+      version: "v2",
+      segments: ["st-presets-add-submit", "en-US", "fixed-nonce-123"],
+    });
+
+    const serialized = JSON.stringify(editReplyPayload);
+    for (const [key, variables] of [
+      ["commands.st-presets.import_note_comment_only", { count: 2 }],
+      ["commands.st-presets.import_note_disabled_by_preset", { count: 3 }],
+      ["commands.st-presets.import_note_unsupported_macros", {}],
+      ["commands.st-presets.import_note_legacy_text_completion", {}],
+    ] as const) {
+      expect(serialized).toMatch(localizedProse("en-US", key, variables));
+    }
+    // Labels are sorted, capped at four, and escaped because they quote preset text verbatim.
+    expect(serialized).toContain(String.raw`\\{\\{a\\}\\}, \\{\\{b\\}\\}, \\{\\{c\\}\\}, \\{\\{d\\}\\}`);
+    expect(serialized).not.toContain(String.raw`\\{\\{e\\}\\}`);
+    expect(serialized).toContain(localizedCopy("en-US", "commands.st-presets.import_note_more_macros", { count: 1 }));
+  });
+
+  it("imports a clean preset without any import notes", async () => {
+    const calls: string[] = [];
+    let editReplyPayload: unknown = null;
+    const route = createStPresetsInteractionRoute(makeDependencies(calls));
+    const modalInteraction = makeModalInteraction(
+      "modal-clean",
+      "config:v2:st-presets-add-submit:en-US:fixed-nonce-123",
+      calls,
+      {
+        editReply: async (opts: unknown) => {
+          calls.push("editReply");
+          editReplyPayload = opts;
+        },
+      },
+    );
+
+    await route.execute({} as Client, modalInteraction, {
+      namespace: "config",
+      version: "v2",
+      segments: ["st-presets-add-submit", "en-US", "fixed-nonce-123"],
+    });
+
+    const serialized = JSON.stringify(editReplyPayload);
+    expect(serialized).toContain(localizedCopy("en-US", "commands.st-presets.added_receipt"));
+    for (const key of [
+      "commands.st-presets.import_note_comment_only",
+      "commands.st-presets.import_note_disabled_by_preset",
+      "commands.st-presets.import_note_unsupported_macros",
+      "commands.st-presets.import_note_legacy_text_completion",
+    ]) {
+      expect(serialized).not.toMatch(localizedProse("en-US", key));
+    }
   });
 
   it("nodes-open with <= 50 nodes opens modal directly", async () => {

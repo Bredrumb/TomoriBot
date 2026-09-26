@@ -123,7 +123,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
   safeSelectOptionText: (text: string) => text,
   replySummaryEmbed: async () => undefined,
   replyComponentsV2Status: async () => undefined,
-  updateButtonComponentsV2Status: async () => undefined,
   acknowledgeModalSubmitForRefresh: async () => undefined,
   promptWithConfirmation: async () => ({ confirmed: false }),
   promptWithUnacknowledgedConfirmation: async () => ({ confirmed: false }),

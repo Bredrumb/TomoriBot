@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import {
   buildStatusCategoryButtonId,
   buildStatusDashboardRouteId,
-  buildStatusPersonaRangeId,
   buildStatusPersonaSelectorId,
   buildStatusPageSelectorId,
   parseStatusDashboardRoute,
@@ -79,7 +78,12 @@ describe("status dashboard route catalog", () => {
     }
     expect(buildStatusPersonaSelectorId("en-US", Number.MAX_SAFE_INTEGER).length).toBeLessThanOrEqual(100);
     expect(
-      buildStatusPersonaRangeId("en-US", Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER).length,
+      buildStatusDashboardRouteId({
+        action: "persona-page",
+        locale: "en-US",
+        personaId: Number.MAX_SAFE_INTEGER,
+        start: Number.MAX_SAFE_INTEGER,
+      }).length,
     ).toBeLessThanOrEqual(100);
   });
 
@@ -120,7 +124,9 @@ describe("status dashboard route catalog", () => {
     expect(selector.options.some((option) => option.value === "40")).toBe(false);
     expect(selector.options.some((option) => option.default)).toBe(false);
     expect(selector.placeholder).toContain("Persona 40");
-    expect(range.customId).toBe(buildStatusPersonaRangeId("en-US", 40, 25));
+    expect(range.customId).toBe(
+      buildStatusDashboardRouteId({ action: "persona-page", locale: "en-US", personaId: 40, start: 25 }),
+    );
     expect(JSON.stringify(payload)).not.toContain("status-test");
   });
 

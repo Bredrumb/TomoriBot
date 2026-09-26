@@ -238,10 +238,6 @@ export const PROVIDERS_ROUTE_CODECS: ProvidersRouteCodecs = {
 
 const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<ProvidersAction, ProvidersPanelRoute>(PROVIDERS_ROUTE_CODECS);
 
-export function listProvidersPanelActions(): ProvidersAction[] {
-  return Object.keys(PROVIDERS_ROUTE_CODECS) as ProvidersAction[];
-}
-
 /**
  * Encodes a typed route object through the authoritative codec table into route segments.
  */

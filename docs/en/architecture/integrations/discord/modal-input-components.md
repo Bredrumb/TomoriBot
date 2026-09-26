@@ -537,10 +537,6 @@ selected that means the selection phase from `runPersonaPickerWorkflow(...)`:
 const modal = await selection.openModal(modalOptions);
 ```
 
-Non-persona commands reach the same bridge through `openAnchorModal(...)`
-(`src/utils/discord/ui/anchorModelFlow.ts`), which wraps the call below and renders the
-error terminal for transport failures.
-
 When `modalOptions` are already in memory and the select has at most 25 choices,
 `openModal` calls `showModal()` as the selected button's first acknowledgment. Do not call
 `beginInPlaceWork()` first; a deferred button cannot open a modal.

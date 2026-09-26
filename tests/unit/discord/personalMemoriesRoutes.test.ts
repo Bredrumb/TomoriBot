@@ -22,7 +22,6 @@ import type { APIAttachment } from "discord.js";
 import {
   buildPersonalMemoriesRouteId,
   buildPersonalMemoriesRouteSegments,
-  listPersonalMemoriesPanelActions,
   parsePersonalMemoriesPanelRoute,
   PERSONAL_MEMORIES_ROUTE_CODECS,
   PERSONAL_MEMORIES_ROUTE_NAMESPACE,
@@ -311,7 +310,6 @@ describe("personal-memories panel route catalog", () => {
       "stm-clear",
     ].sort();
 
-    const catalogActions = listPersonalMemoriesPanelActions().sort();
     const wireActions = [...new Set(WIRE_CONTRACT_V1.map(([, route]) => route.action))].sort();
     const codecTableActions = Object.keys(PERSONAL_MEMORIES_ROUTE_CODECS).sort();
 
@@ -321,7 +319,6 @@ describe("personal-memories panel route catalog", () => {
     );
     const handlerActions = new Set([...routesSource.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1]));
 
-    expect(catalogActions).toEqual(ACCEPTED_17_ACTIONS);
     expect(wireActions).toEqual(ACCEPTED_17_ACTIONS);
     expect(codecTableActions).toEqual(ACCEPTED_17_ACTIONS);
 

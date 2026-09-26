@@ -1788,36 +1788,6 @@ export async function replyComponentsV2Status(
   }
 }
 
-export async function updateButtonComponentsV2Status(
-  interaction: ButtonInteraction,
-  locale: string,
-  titleKey: string,
-  descriptionKey: string,
-  color: string | number,
-  descriptionVars?: Record<string, string | number | boolean>,
-  secondaryDescriptionKey?: string,
-  secondaryDescriptionVars?: Record<string, string | number | boolean>,
-): Promise<void> {
-  const components = buildV2StatusComponents(
-    locale,
-    titleKey,
-    descriptionKey,
-    color,
-    descriptionVars,
-    secondaryDescriptionKey,
-    secondaryDescriptionVars,
-  );
-
-  try {
-    await interaction.update({
-      components,
-      flags: MessageFlags.IsComponentsV2,
-    });
-  } catch (error) {
-    log.warn("Failed to update button interaction with Components V2 status:", error);
-  }
-}
-
 export async function acknowledgeModalSubmitForRefresh(interaction: ModalSubmitInteraction): Promise<void> {
   try {
     if (!interaction.deferred && !interaction.replied) {

@@ -3,11 +3,6 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { splitSqlStatements } from "@/utils/db/sqlSplitter";
 import { llmProviderRepo } from "@/utils/db/repositories";
-import {
-  ModalFieldId,
-  buildCapabilityAddModalComponents,
-  parseCapabilityModalFields,
-} from "@/utils/provider/customEndpointCapabilityModal";
 import { formatCustomModelDisplay } from "@/utils/provider/customProviderUtils";
 import { DB_TESTS_AVAILABLE, setupTestDb, testSql } from "./setup/testDb";
 
@@ -201,39 +196,5 @@ describe.skipIf(!DB_TESTS_AVAILABLE)("Custom Endpoint display_name removal (Migr
         AND column_name = 'display_name'
     `;
     expect(Number(columnCheckAfterReplay.count)).toBe(0);
-  });
-
-  it("modal builder excludes display_name and requires model_name for text and embedding", () => {
-    const textComponents = buildCapabilityAddModalComponents("text", "en-US");
-    const textIds = textComponents.map((c) => c.customId);
-    expect(textIds).toContain(ModalFieldId.model_name);
-    expect(textIds).not.toContain("display_name");
-
-    const textModelField = textComponents.find((c) => c.customId === ModalFieldId.model_name);
-    expect(textModelField?.required).toBe(true);
-
-    const embeddingComponents = buildCapabilityAddModalComponents("embedding", "en-US");
-    const embeddingIds = embeddingComponents.map((c) => c.customId);
-    expect(embeddingIds).toContain(ModalFieldId.model_name);
-    expect(embeddingIds).not.toContain("display_name");
-
-    const embeddingModelField = embeddingComponents.find((c) => c.customId === ModalFieldId.model_name);
-    expect(embeddingModelField?.required).toBe(true);
-
-    const speechComponents = buildCapabilityAddModalComponents("speech", "en-US");
-    const speechIds = speechComponents.map((c) => c.customId);
-    expect(speechIds).not.toContain("display_name");
-    expect(speechIds).toContain(ModalFieldId.voice_mode);
-    expect(speechIds).toContain(ModalFieldId.script_markup);
-
-    const parsed = parseCapabilityModalFields(
-      {
-        [ModalFieldId.model_name]: "parsed-model",
-      },
-      {},
-      "text",
-    );
-    expect(parsed.modelName).toBe("parsed-model");
-    expect((parsed as Record<string, unknown>).displayName).toBeUndefined();
   });
 });

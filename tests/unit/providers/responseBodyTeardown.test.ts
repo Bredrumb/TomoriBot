@@ -1,7 +1,6 @@
 import { Glob } from "bun";
 import { afterEach, describe, expect, it } from "bun:test";
 import { streamOpenAICompatibleSseChunks } from "@/providers/openaiCompatible/openaiCompatibleSse";
-import { testAccountSettingModel } from "@/utils/cache/openrouterCapabilityCache";
 
 const originalFetch = globalThis.fetch;
 
@@ -55,28 +54,6 @@ describe("SSE consumer releases abandoned response bodies", () => {
 
     expect(chunks).toHaveLength(1);
     expect(wasCancelled()).toBe(false);
-  });
-});
-
-/**
- * This probe reads a single chunk to learn which model OpenRouter actually picks, then walks away
- * from the rest of the stream, so its body always needs cancelling: there is no completion path that
- * would release it.
- *
- * Scope worth knowing before trusting this: it asserts the body is cancelled, not that the cancel is
- * awaited and caught. The probe already cancelled before that hardening, so this test passes against
- * either version. What it catches is the cancel being dropped or swapped for `releaseLock`.
- */
-describe("the OpenRouter capability probe releases its body", () => {
-  it("cancels the body it abandons after one chunk", async () => {
-    // A payload without a `model` field ends the probe early, so it cannot issue follow-up requests
-    // that this stubbed fetch would have to serve.
-    const { response, wasCancelled } = sseResponse(['data: {"id":"probe"}\n\n'], false);
-    globalThis.fetch = (async () => response) as typeof fetch;
-
-    await testAccountSettingModel("test-key");
-
-    expect(wasCancelled()).toBe(true);
   });
 });
 

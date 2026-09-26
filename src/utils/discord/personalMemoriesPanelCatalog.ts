@@ -209,10 +209,6 @@ const CODECS_BY_WIRE_TOKEN = indexCodecsByWireToken<PersonalMemoriesAction, Pers
   PERSONAL_MEMORIES_ROUTE_CODECS,
 );
 
-export function listPersonalMemoriesPanelActions(): PersonalMemoriesAction[] {
-  return Object.keys(PERSONAL_MEMORIES_ROUTE_CODECS) as PersonalMemoriesAction[];
-}
-
 /**
  * Encodes a typed route object through the authoritative codec table into route segments.
  */

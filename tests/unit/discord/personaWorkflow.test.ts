@@ -234,7 +234,6 @@ scopedMock.module("@/utils/discord/ui/interactionCore", () => ({
 }));
 
 const {
-  beginAnchorPrivateWorkflow,
   completePersonaWorkflow,
   retryPersonaWorkflow,
   runPersonaPickerWorkflow,
@@ -1025,40 +1024,6 @@ describe("workflow acknowledgment and modal phases", () => {
 });
 
 describe("anchor persona message controller", () => {
-  it("starts a non-persona sibling scope on the same anchor controller", async () => {
-    const harness = makeHarness();
-    const phase = await beginAnchorPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
-    const nested = makeButton(harness, "serverwide-next");
-
-    expect(phase.message.anchorMessageId).toBe(harness.anchorMessageId);
-    expect(phase.phaseId).toBe(harness.root.id);
-    await phase.useButton(nested).replace(v2Payload("next"));
-    await phase.message.disableControls();
-
-    const initial = getPayload(calls[0] ?? { method: "", source: "" });
-    expect(calls[0]?.method).toBe("root.reply");
-    expect(initial.flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
-    expect(initial.withResponse).toBe(true);
-    expect(calls.some((call) => call.method === "button.update" && call.source === nested.id)).toBe(true);
-    expect(calls.some((call) => call.method === "root.editReply")).toBe(true);
-  });
-
-  it("logs a fatal anchor-controller failure outside the persona runner", async () => {
-    const harness = makeHarness();
-    const phase = await beginAnchorPrivateWorkflow(harness.root, "en-US", v2Payload("initial"));
-    harness.rootEditError = { code: 50027, message: "Invalid webhook token" };
-    let failure: unknown;
-
-    try {
-      await phase.message.replace(v2Payload("unavailable"));
-    } catch (error) {
-      failure = error;
-    }
-
-    expectTypedError(failure, "anchor-message-unavailable");
-    expectFatalLog("root-edit");
-  });
-
   it("replaces, edits, fetches, disables controls, handles attachments, and deletes one anchor message", async () => {
     const harness = makeHarness();
     const selectedButton = makeButton(harness);

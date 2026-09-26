@@ -21,7 +21,7 @@ export type ProducerManifestEntry = FixturedProducerManifestEntry | DeclaredProd
 /**
  * Manifest of all modules producing Discord Components V2 payloads.
  *
- * Tier 1: Fixtured tier (the nine composed payload builders).
+ * Tier 1: Fixtured tier (the composed payload builders).
  * Tier 2: Declared tier (all other producers with explicit architectural reasons).
  */
 export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] = [
@@ -30,13 +30,12 @@ export const COMPONENTS_V2_PRODUCER_MANIFEST: readonly ProducerManifestEntry[] =
     builderName: "buildConfigPanelPayload",
     coverage: {
       kind: "suite",
-      suites: ["tests/unit/discord/configPanel.test.ts", "tests/unit/discord/configPanelTextBudget.test.ts"],
+      suites: [
+        "tests/unit/discord/configPanel.test.ts",
+        "tests/unit/discord/configPanelTextBudget.test.ts",
+        "tests/unit/discord/mcpsPanelLimits.test.ts",
+      ],
     },
-  },
-  {
-    modulePath: "src/utils/discord/ui/mcpsPanel.ts",
-    builderName: "buildMcpsPanelPayload",
-    coverage: { kind: "suite", suites: ["tests/unit/discord/mcpsPanelLimits.test.ts"] },
   },
   {
     modulePath: "src/utils/discord/ui/memoriesPanel.ts",

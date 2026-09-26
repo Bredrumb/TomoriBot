@@ -60,15 +60,6 @@ export function normalizeMemoryItem(memory: MemoryItem): MemoryItem {
   };
 }
 
-export function areMemoryItemsEqual(left: MemoryItem, right: MemoryItem): boolean {
-  const normalizedLeft = normalizeMemoryItem(left);
-  const normalizedRight = normalizeMemoryItem(right);
-  return (
-    normalizedLeft.content === normalizedRight.content &&
-    normalizedLeft.tags.join("\u0000") === normalizedRight.tags.join("\u0000")
-  );
-}
-
 /**
  * Get personal data export schema with dynamic memory limits from environment
  * Validates the structure of exported personal user data

@@ -111,9 +111,7 @@ The palette + image helpers live in the shared gather-layer module
 `loadTomoriconDataUri`). Personal Wrapped feeds it the #1 persona avatar; Persona
 Affinity feeds it the selected persona avatar (or the invoking user's avatar when
 that is unavailable); Server Leaderboard feeds it the server icon. The renderer
-never imports it; it stays pure. `personalCardGatherer.ts` re-exports
-`extractPersonalCardPalette` as a backward-compatible alias of
-`extractCardPalette`.
+never imports it; it stays pure.
 
 Persona avatar resolution for stats lives in `personaAvatar.ts`. A persona-owned
 `webhook_avatar_url` wins; if a preset-pointer persona has no stored avatar (the

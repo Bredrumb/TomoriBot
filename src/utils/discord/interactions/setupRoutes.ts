@@ -113,7 +113,6 @@ export const SETUP_ROUTE_VERSION = "v1";
 type SetupHealthStatus = "ready" | "already-setup" | "broken";
 
 export type SetupWizardAction =
-  | "dashboard"
   | "cancel"
   | "policies"
   | "policies-submit"
@@ -129,7 +128,6 @@ export type SetupWizardAction =
   | "finish";
 
 const SETUP_WIZARD_ACTIONS = new Set<SetupWizardAction>([
-  "dashboard",
   "cancel",
   "policies",
   "policies-submit",
@@ -173,10 +171,6 @@ export function parseSetupRoute(input: ParsedInteractionRoute | string): SetupWi
   return { action: action as SetupWizardAction, locale, nonce };
 }
 
-export function buildSetupDashboardRouteId(input: { locale: string; nonce: string }): string {
-  return buildSetupRouteId({ action: "dashboard", locale: input.locale, nonce: input.nonce });
-}
-
 export function buildSetupCancelRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "cancel", locale: input.locale, nonce: input.nonce });
 }
@@ -189,22 +183,12 @@ export function buildSetupPoliciesSubmitRouteId(input: { locale: string; nonce: 
   return buildSetupRouteId({ action: "policies-submit", locale: input.locale, nonce: input.nonce });
 }
 
-export function parseSetupPoliciesSubmitRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "policies-submit" ? parsed : null;
-}
-
 export function buildSetupSettingsRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "settings", locale: input.locale, nonce: input.nonce });
 }
 
 export function buildSetupSettingsSubmitRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "settings-submit", locale: input.locale, nonce: input.nonce });
-}
-
-export function parseSetupSettingsSubmitRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "settings-submit" ? parsed : null;
 }
 
 export function buildSetupProviderModeRouteId(input: { locale: string; nonce: string }): string {
@@ -217,11 +201,6 @@ export function buildSetupProviderCatalogSubmitRouteId(input: { locale: string; 
 
 export function buildSetupProviderByokSubmitRouteId(input: { locale: string; nonce: string }): string {
   return buildSetupRouteId({ action: "provider-byok-submit", locale: input.locale, nonce: input.nonce });
-}
-
-export function parseSetupProviderByokSubmitRoute(route: ParsedInteractionRoute | string): SetupWizardRoute | null {
-  const parsed = parseSetupRoute(route);
-  return parsed?.action === "provider-byok-submit" ? parsed : null;
 }
 
 export function buildSetupEndpointConnectionRouteId(input: { locale: string; nonce: string }): string {
@@ -1268,11 +1247,6 @@ export const setupInteractionRoute: GlobalInteractionRoute = {
         consumeSetupDraft(nonce, actorDiscId, workspaceKey, context);
         const cancelledPayload = buildSetupCancelledPayload(locale);
         await deliverGuardedPanel(interaction, cancelledPayload, { locale, method: "update" });
-        break;
-      }
-
-      case "dashboard": {
-        await repaintSetupWizard(interaction, draft, locale, nonce, { method: "update" });
         break;
       }
 

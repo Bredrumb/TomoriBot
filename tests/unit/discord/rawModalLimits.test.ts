@@ -40,7 +40,6 @@ import {
   DISCORD_SELECT_OPTION_VALUE_MAX,
   DISCORD_SELECT_OPTIONS_MAX,
   DISCORD_SELECT_OPTIONS_MIN,
-  assertRawModalLimits,
   getDiscordTextLength,
   validateRawModalLimits,
 } from "@/utils/discord/ui/componentsV2Limits";
@@ -87,7 +86,7 @@ function eachComponent(components: readonly RawDiscordComponent[], visit: (c: Ra
 }
 
 function assertWithinDiscordLimits(payload: RawModalPayload, label: string): void {
-  assertRawModalLimits(payload);
+  expect(validateRawModalLimits(payload).violations, `${label}: validator violations`).toEqual([]);
 
   expect(getDiscordTextLength(payload.title), `${label}: title length`).toBeLessThanOrEqual(DISCORD_MODAL_TITLE_MAX);
   expect(payload.components.length, `${label}: component count`).toBeGreaterThanOrEqual(DISCORD_MODAL_COMPONENTS_MIN);

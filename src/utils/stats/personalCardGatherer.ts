@@ -24,14 +24,6 @@ import { extractCardPalette, loadTomoriconDataUri } from "@/utils/stats/cardColo
 import { loadStatsPersonaAvatarDataUri, loadStatsPresetAvatarLookup } from "@/utils/stats/personaAvatar";
 import type { PersonalCardData, PersonalFavoritePersona } from "@/utils/stats/statsInfographic";
 
-/**
- * Samples the leading persona avatar into a high-contrast light-mode palette.
- *
- * @deprecated Backward-compatible alias for {@link extractCardPalette}; the
- * palette logic now lives in `cardColor.ts` and is shared with the Server card.
- */
-export const extractPersonalCardPalette = extractCardPalette;
-
 /** Arguments for `gatherPersonalCardData`. */
 export interface GatherPersonalCardArgs {
   /** Internal `users` FK (not the Discord snowflake). */
