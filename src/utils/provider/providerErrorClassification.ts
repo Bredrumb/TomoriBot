@@ -35,6 +35,7 @@ const CONTEXT_LENGTH_ERROR_PATTERNS: RegExp[] = [
   /\bcontext_length_exceeded\b/i,
   /\bcontext\s+window\s+(?:is\s+)?exceeded\b/i,
   /\breduce\s+the\s+length\s+of\b/i,
+  /\btoo\s+much\s+context\b/i,
 ];
 
 // The account cannot afford the request at the requested max_tokens: a credit

@@ -352,6 +352,8 @@ interface PanelModelContext {
   scope: { kind: "server" | "personal"; ownerId: number };
   activeTextId: number | null;
   activeImageId: number | null;
+  /** NovelAI image models live in their own slot, so NovelAI rows are marked against this instead. */
+  activeNaiImageId: number | null;
   activeEmbeddingId: number | null;
   activeVideoId: number | null;
   scopeFallbacks: readonly FallbackModelRef[];
@@ -362,6 +364,7 @@ function serverModelContext(state: TomoriState): PanelModelContext {
     scope: { kind: "server", ownerId: state.server_id },
     activeTextId: state.config.llm_id,
     activeImageId: state.config.diffusion_model_id ?? null,
+    activeNaiImageId: state.config.nai_diffusion_model_id ?? null,
     activeEmbeddingId: state.config.embedding_model_id ?? null,
     activeVideoId: state.config.video_model_id ?? null,
     scopeFallbacks: state.config.fallback_model_refs ?? [],
@@ -377,6 +380,7 @@ function personalModelContext(userId: number, configs: UserSavedProviderConfigRo
       getActivePersonalProviderForCapability(configs, "image")?.diffusion_model_id ??
       getActivePersonalProviderForCapability(configs, "image")?.nai_diffusion_model_id ??
       null,
+    activeNaiImageId: getActivePersonalProviderForCapability(configs, "image")?.nai_diffusion_model_id ?? null,
     activeEmbeddingId: getActivePersonalProviderForCapability(configs, "embedding")?.embedding_model_id ?? null,
     activeVideoId: getActivePersonalProviderForCapability(configs, "video")?.video_model_id ?? null,
     scopeFallbacks: text?.fallback_model_refs ?? [],
@@ -424,7 +428,7 @@ async function buildCuratedCapabilities(
       const model = createModel(
         row.diffusion_model_id,
         row.codename,
-        context.activeImageId,
+        provider === "novelai" ? context.activeNaiImageId : context.activeImageId,
         [],
         [],
         "llm",

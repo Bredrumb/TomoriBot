@@ -686,6 +686,11 @@ describe("moderationPanel UI rendering", () => {
     expect(serialized).not.toContain("####");
     expect(serialized).toContain("> <@p-user-1>");
     expect(serialized).toContain("> <@p-user-2>");
+    const container = payload.components[0] as { components: { type: number; content?: string }[] };
+    const personalizationComponent = container.components.find(
+      (c) => c.type === ComponentType.TextDisplay && c.content?.includes("<@p-user-1>"),
+    );
+    expect(personalizationComponent?.content).toBe("> <@p-user-1>\n> <@p-user-2>");
     expect(serialized).not.toContain("(`p-user-1`)");
     expect(serialized).not.toContain("(`p-user-2`)");
     expect(serialized).toContain("**Persona User Blocks**");
@@ -1050,6 +1055,11 @@ describe("moderationPanel UI rendering", () => {
     expect(serialized).toContain(localizer("en-US", "commands.moderation.whitelist_roles_description"));
     expect(serialized).toContain("> <@&role-1>");
     expect(serialized).toContain("> <@&role-2>");
+    const roleContainer = payload.components[0] as { components: { type: number; content?: string }[] };
+    const roleComponent = roleContainer.components.find(
+      (c) => c.type === ComponentType.TextDisplay && c.content?.includes("<@&role-1>"),
+    );
+    expect(roleComponent?.content).toBe("> <@&role-1>\n> <@&role-2>");
     expect(serialized).toContain("moderation:v1:whitelist-role-remove-open:en-US");
     expect(serialized).not.toContain("whitelist-role-remove-prompt");
     expect(serialized).toContain("moderation:v1:whitelist-role-add-open:en-US");

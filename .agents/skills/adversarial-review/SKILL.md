@@ -120,6 +120,18 @@ Follow the repository's proportionality rules. Do not request tests, abstraction
 
 Prefer an existing helper, registry, dependency, or project pattern over parallel implementation.
 
+## Check repository rules
+
+Read `AGENTS.md` and any contributor guide it points to for the changed area. Treat explicit repository
+requirements as part of the review.
+
+Report a violation when the changed code conflicts with a concrete rule that applies to it, including
+coding conventions, localization, comments, dependency use, configuration placement, tests,
+documentation maintenance, and required validation.
+
+Do not duplicate formatter or type-checker output unless the violation reveals a behavioral or
+maintenance problem those tools do not explain. Do not report subjective style preferences.
+
 ## Prove findings
 
 A formal finding needs all of these:

@@ -437,8 +437,11 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
         type: ComponentType.TextDisplay,
         content: localizer(locale, "commands.moderation.personalization_blacklist_description"),
       });
-      for (const userId of visiblePersonalization) {
-        components.push({ type: ComponentType.TextDisplay, content: `> <@${userId}>` });
+      if (visiblePersonalization.length > 0) {
+        components.push({
+          type: ComponentType.TextDisplay,
+          content: visiblePersonalization.map((userId) => `> <@${userId}>`).join("\n"),
+        });
       }
     }
 
@@ -456,12 +459,15 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
         type: ComponentType.TextDisplay,
         content: localizer(locale, "commands.moderation.persona_blocks_description"),
       });
-      for (const block of visiblePersonaBlocks) {
-        const blockTypeKey = `tools.user_block.type_${block.block_type}`;
-        const typeLabel = localizer(locale, blockTypeKey);
+      if (visiblePersonaBlocks.length > 0) {
+        const lines = visiblePersonaBlocks.map((block) => {
+          const blockTypeKey = `tools.user_block.type_${block.block_type}`;
+          const typeLabel = localizer(locale, blockTypeKey);
+          return `> <@${block.user_disc_id}> for **${renderModerationName(locale, block.persona_name)}** (${typeLabel})`;
+        });
         components.push({
           type: ComponentType.TextDisplay,
-          content: `> <@${block.user_disc_id}> for **${renderModerationName(locale, block.persona_name)}** (${typeLabel})`,
+          content: lines.join("\n"),
         });
       }
     }
@@ -598,11 +604,14 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
 
           const selection = resolveRangeSelection(channels, rangeIndex, MODERATION_PANEL_RANGE_SIZE);
 
-          for (const channel of selection.visibleItems) {
-            const cooldown = formatChannelCooldown(locale, channel.cooldown_type, channel.cooldown_length);
+          if (selection.visibleItems.length > 0) {
+            const lines = selection.visibleItems.map((channel) => {
+              const cooldown = formatChannelCooldown(locale, channel.cooldown_type, channel.cooldown_length);
+              return `> <#${channel.channel_disc_id}>\n> ${cooldown}`;
+            });
             components.push({
               type: ComponentType.TextDisplay,
-              content: `> <#${channel.channel_disc_id}>\n> ${cooldown}`,
+              content: lines.join("\n"),
             });
           }
 
@@ -788,8 +797,11 @@ export function buildModerationPanelPayload(input: ModerationPanelRenderInput): 
           });
 
           const selection = resolveRangeSelection(roles, rangeIndex, MODERATION_PANEL_RANGE_SIZE);
-          for (const role of selection.visibleItems) {
-            components.push({ type: ComponentType.TextDisplay, content: `> <@&${role.role_disc_id}>` });
+          if (selection.visibleItems.length > 0) {
+            components.push({
+              type: ComponentType.TextDisplay,
+              content: selection.visibleItems.map((role) => `> <@&${role.role_disc_id}>`).join("\n"),
+            });
           }
 
           const paginationRow = buildPaginationRow({

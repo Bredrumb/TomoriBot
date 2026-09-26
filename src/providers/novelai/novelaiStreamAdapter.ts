@@ -19,7 +19,7 @@
 
 import type { FunctionCall, ThoughtLogEntry } from "@/types/provider/interfaces";
 import { ContextItemTag, type StructuredContextItem } from "@/types/misc/context";
-import { log } from "@/utils/misc/logger";
+import { log, sanitizeLogPayload } from "@/utils/misc/logger";
 import { localizer } from "@/utils/text/localizer";
 import { escapeRegExp } from "@/utils/text/processors/regexUtils";
 import { findMarkdownCodeRanges } from "@/utils/text/processors/llmOutputProcessor";
@@ -533,11 +533,7 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
       return withThoughts({
         type: "error",
-        error: {
-          type: "api_error",
-          message: novelaiChunk.error as unknown as string,
-          retryable: false,
-        },
+        error: this.handleProviderError(novelaiChunk.error),
       });
     }
 
@@ -2004,6 +2000,26 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
   }
 
   /**
+   * Records the failure detail as a metric in addition to the base `provider_error` counter.
+   *
+   * NovelAI's transport failures log at `warn`, which production drops, so without this the
+   * response body (e.g. the context-overflow numbers) is unrecoverable after the fact. `log.metric`
+   * does not sanitize its fields, so the message is redacted here before it is truncated.
+   */
+  protected override onProviderError(error: unknown, providerError: ProviderError, context?: StreamContext): void {
+    super.onProviderError(error, providerError, context);
+    const serverId = context?.tomoriState?.server_id;
+    log.metric("provider_error_detail", {
+      provider: "novelai",
+      code: providerError.code ?? "unknown",
+      type: providerError.type,
+      retryable: String(providerError.retryable),
+      message: String(sanitizeLogPayload(providerError.message)).slice(0, 500),
+      ...(serverId ? { server_id: serverId } : {}),
+    });
+  }
+
+  /**
    * Handle NovelAI-specific errors
    */
   handleProviderError(error: unknown): ProviderError {
@@ -2011,14 +2027,19 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
 
     let statusCode: number | undefined;
 
-    // First, check if error has statusCode property (from validateNovelAIApiKey)
-    if (error && typeof error === "object" && "statusCode" in error) {
-      statusCode = error.statusCode as number;
+    // First, check if error has statusCode or status property
+    if (error && typeof error === "object") {
+      if ("statusCode" in error && typeof error.statusCode === "number") {
+        statusCode = error.statusCode;
+      } else if ("status" in error && typeof error.status === "number") {
+        statusCode = error.status;
+      }
     }
 
     // Fallback: try to extract from error message
     if (!statusCode) {
-      const statusMatch = errorMessage.match(/\((\d{3})\)/);
+      // (?!\d) stops a longer number from yielding its first three digits: "(32826 tokens)" is not a 328.
+      const statusMatch = errorMessage.match(/(?:\bstatus(?:\s+code)?\s*[:=]?\s*|\bhttp\s+|\()(\d{3})(?!\d)/i);
       if (statusMatch) {
         statusCode = Number.parseInt(statusMatch[1], 10);
       }
@@ -2039,6 +2060,9 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
     } else if (statusCode === 429 || isNovelAIRateLimitError(errorMessage, statusCode)) {
       errorType = "rate_limit";
       retryable = true;
+    } else if (statusCode === 408) {
+      errorType = "timeout";
+      retryable = true;
     } else if (statusCode === 500 || statusCode === 502) {
       errorType = "api_error";
       retryable = true;
@@ -2053,9 +2077,13 @@ export class NovelaiStreamAdapter extends BaseStreamAdapter {
       retryable = false;
     }
 
+    const formattedMessage = errorMessage.startsWith("NovelAI API error")
+      ? errorMessage
+      : `NovelAI API error${statusCode ? ` (${statusCode})` : ""}: ${errorMessage}`;
+
     return {
       type: errorType,
-      message: `NovelAI API error${statusCode ? ` (${statusCode})` : ""}: ${errorMessage}`,
+      message: formattedMessage,
       code: statusCode?.toString() || "unknown",
       retryable,
       originalError: error,

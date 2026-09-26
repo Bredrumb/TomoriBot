@@ -23,7 +23,7 @@ import { personaRepository, llmModelRepo, statRepository } from "@/utils/db/repo
 import { replyInfoEmbed, promptWithRawModal } from "../../utils/discord/interactionHelper";
 import type { UserRow } from "../../types/db/schema";
 import { checkImageQuota, incrementImageQuota } from "../../utils/quota/imageQuotaManager";
-import { resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
+import { getProviderDisplayName, resolveProviderFeatureImplementation } from "@/utils/provider/providerInfoRegistry";
 import { resolveNativeImageGenerationCapability } from "@/utils/provider/providerCapabilityResolver";
 import { ZAI_CODING_IMAGES_GENERATIONS_URL, ZAI_GENERAL_IMAGES_GENERATIONS_URL } from "@/providers/zai/zaiShared";
 import { generateCustomImageViaEndpoint } from "@/providers/custom/customEndpointDispatcher";
@@ -103,6 +103,41 @@ async function convertAttachmentToBase64(attachment: APIAttachment): Promise<{ m
     mimeType: attachment.content_type,
     data: base64Data,
   };
+}
+
+type ImageCredentials = Awaited<ReturnType<typeof resolveCapabilityCredentials>>;
+
+type StandardImageRoute =
+  | { kind: "custom"; endpoint: NonNullable<ImageCredentials["customEndpoint"]> }
+  | { kind: "native"; provider: NonNullable<Awaited<ReturnType<typeof resolveNativeImageGenerationCapability>>> }
+  | { kind: "openrouter" | "google" | "zai" | "nvidia" };
+
+/**
+ * Picks the transport that runs a standard image request, or null when the provider has none.
+ *
+ * The pre-modal refusal and the modal-submit dispatcher both switch on this one value, so a
+ * provider cannot pass the check and then reach a dispatcher branch that does not exist.
+ */
+async function resolveStandardImageRoute(creds: ImageCredentials): Promise<StandardImageRoute | null> {
+  if (creds.customEndpoint) {
+    return { kind: "custom", endpoint: creds.customEndpoint };
+  }
+  if (creds.provider === "vertex" || creds.provider === "vertexexpress") {
+    const provider = await resolveNativeImageGenerationCapability(creds.provider);
+    if (provider) {
+      return { kind: "native", provider };
+    }
+  }
+  const implementation = resolveProviderFeatureImplementation(creds.provider, "imageGeneration");
+  switch (implementation) {
+    case "openrouter":
+    case "google":
+    case "zai":
+    case "nvidia":
+      return { kind: implementation };
+    default:
+      return null;
+  }
 }
 
 /**
@@ -205,6 +240,16 @@ export async function execute(
       }
 
       if (error.reason === "missing_model_id") {
+        if (error.provider === "novelai" || tomoriState.llm.llm_provider.toLowerCase() === "novelai") {
+          await replyInfoEmbed(interaction, locale, {
+            titleKey: "commands.generate.image.novelai_redirect_title",
+            descriptionKey: "commands.generate.image.novelai_redirect_description",
+            color: ColorCode.INFO,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
         await replyInfoEmbed(interaction, locale, {
           titleKey: "commands.generate.image.no_diffusion_model_title",
           descriptionKey: "commands.generate.image.no_diffusion_model_description",
@@ -248,6 +293,28 @@ export async function execute(
 
   const apiKey = imageCreds.apiKey;
   const executionProvider = imageCreds.provider;
+
+  const imageRoute = await resolveStandardImageRoute(imageCreds);
+  if (!imageRoute) {
+    if (executionProvider === "novelai") {
+      await replyInfoEmbed(interaction, locale, {
+        titleKey: "commands.generate.image.novelai_redirect_title",
+        descriptionKey: "commands.generate.image.novelai_redirect_description",
+        color: ColorCode.INFO,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await replyInfoEmbed(interaction, locale, {
+      titleKey: "commands.generate.image.unsupported_provider_title",
+      descriptionKey: "commands.generate.image.unsupported_provider_description",
+      descriptionVars: { provider: getProviderDisplayName(executionProvider) },
+      color: ColorCode.ERROR,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   // Check image generation quota BEFORE showing modal (personal-provider users bypass quota)
   if (imageCreds.source === "server") {
@@ -423,15 +490,9 @@ export async function execute(
 
     let generatedImageData: string | null = null;
     let generatedImageMimeType: string | null = null;
-    const imageGenerationImplementation = resolveProviderFeatureImplementation(executionProvider, "imageGeneration");
-    const nativeImageProvider =
-      executionProvider === "vertex" || executionProvider === "vertexexpress"
-        ? await resolveNativeImageGenerationCapability(executionProvider)
-        : null;
-
-    if (imageCreds.customEndpoint) {
+    if (imageRoute.kind === "custom") {
       const result = await generateCustomImageViaEndpoint({
-        endpoint: imageCreds.customEndpoint,
+        endpoint: imageRoute.endpoint,
         apiKey,
         prompt,
         aspectRatio,
@@ -439,8 +500,8 @@ export async function execute(
       });
       generatedImageData = result.imageData;
       generatedImageMimeType = result.mimeType;
-    } else if (nativeImageProvider) {
-      const result = await nativeImageProvider.generateNativeImage({
+    } else if (imageRoute.kind === "native") {
+      const result = await imageRoute.provider.generateNativeImage({
         apiKey,
         model: modelCodename,
         prompt,
@@ -449,7 +510,7 @@ export async function execute(
       });
       generatedImageData = result.imageData;
       generatedImageMimeType = result.mimeType;
-    } else if (imageGenerationImplementation === "openrouter") {
+    } else if (imageRoute.kind === "openrouter") {
       const result = await generateOpenRouterImage({
         apiKey,
         modelCodename,
@@ -459,7 +520,7 @@ export async function execute(
       });
       generatedImageData = result.imageData;
       generatedImageMimeType = result.mimeType;
-    } else if (imageGenerationImplementation === "google") {
+    } else if (imageRoute.kind === "google") {
       const ai = new GoogleGenAI({ apiKey });
       const chat = ai.chats.create({
         model: modelCodename,
@@ -486,7 +547,7 @@ export async function execute(
           }
         }
       }
-    } else if (imageGenerationImplementation === "zai") {
+    } else if (imageRoute.kind === "zai") {
       if (referenceImages.length > 0) {
         await interaction.followUp({
           content: localizer(locale, "commands.generate.image.zai_no_img2img_warning"),
@@ -503,7 +564,7 @@ export async function execute(
       });
       generatedImageData = result.imageData;
       generatedImageMimeType = result.mimeType;
-    } else if (imageGenerationImplementation === "nvidia") {
+    } else {
       if (referenceImages.length > 0) {
         await interaction.followUp({
           content: localizer(locale, "commands.generate.image.nvidia_no_img2img_warning"),
@@ -519,8 +580,6 @@ export async function execute(
       });
       generatedImageData = result.imageData;
       generatedImageMimeType = result.mimeType;
-    } else {
-      throw new Error(`Image generation is not implemented for provider ${executionProvider}`);
     }
 
     const endTime = performance.now();

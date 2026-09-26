@@ -67,7 +67,11 @@ scopedMock.module("@/utils/db/repositories", () => ({
     }),
   }),
   llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
-    loadDiffusionModelById: async (id: number) => ({ id, codename: `model-${id}`, provider: "server-img-provider" }),
+    loadDiffusionModelById: async (id: number) => ({
+      id,
+      codename: `model-${id}`,
+      provider: id === 99 ? "novelai" : "server-img-provider",
+    }),
   }),
   llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
     loadUserSavedProviderConfigs: async () => rows,
@@ -147,6 +151,57 @@ describe("personal credential resolution for capability split", () => {
 
     await expect(resolveCapabilityCredentials(1, "image-nai", { userId: 1 })).rejects.toThrow(
       "No usable credentials for server-img-provider (image-nai, server): no_saved_config",
+    );
+  });
+
+  it("does not resolve NovelAI personal row for image-standard even if image capability was enabled", async () => {
+    rows = [
+      makeSavedProviderConfigRow({
+        user_id: 1,
+        provider: "novelai",
+        api_key: Buffer.from("novelai-personal-key", "utf8"),
+        key_version: 1,
+        enabled_capabilities: ["image"],
+        assigned_capabilities: ["image"],
+        diffusion_model_id: 10,
+        nai_diffusion_model_id: null,
+      }),
+    ];
+
+    await expect(resolveCapabilityCredentials(1, "image-standard", { userId: 1 })).rejects.toThrow(
+      "No usable credentials for server-img-provider (image-standard, server): no_saved_config",
+    );
+  });
+
+  it("rejects server image-standard resolution when server diffusion model belongs to novelai", async () => {
+    scopedMock.module("@/utils/db/repositories", () => ({
+      ...realRepositories,
+      configRepository: overrideMembers(realRepositories.configRepository, {
+        loadModelCapabilityIds: async () => ({
+          user_byok_mode: false,
+          llm_id: 1,
+          embedding_model_id: 2,
+          diffusion_model_id: 99,
+          nai_diffusion_model_id: 4,
+          video_model_id: 5,
+          vision_llm_id: 6,
+        }),
+      }),
+      llmModelRepo: overrideMembers(realRepositories.llmModelRepo, {
+        loadDiffusionModelById: async (id: number) => ({
+          id,
+          codename: `model-${id}`,
+          provider: id === 99 ? "novelai" : "server-img-provider",
+        }),
+      }),
+      llmProviderRepo: overrideMembers(realRepositories.llmProviderRepo, {
+        loadUserSavedProviderConfigs: async () => [],
+        loadSavedProviderConfig: async () => null,
+      }),
+    }));
+
+    await expect(resolveCapabilityCredentials(1, "image-standard")).rejects.toThrow(
+      "No usable credentials for novelai (image-standard, server): missing_model_id",
     );
   });
 });
