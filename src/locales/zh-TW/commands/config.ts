@@ -1226,20 +1226,6 @@ CFG 權重：**{cfg_weight}**
         },
       },
     },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `圖片支援`,
-        workflow_supports_description: `勾選這個端點支援的每一項圖片請求功能`,
-        workflow_support_txt2img: `文字轉圖片`,
-        workflow_support_txt2img_description: `不需要參考圖也能生成`,
-        workflow_support_img2img: `圖片轉圖片`,
-        workflow_support_img2img_description: `可以使用參考圖，但不進行局部重繪`,
-        workflow_support_inpaint: `局部重繪`,
-        workflow_support_inpaint_description: `可以編輯參考圖中被遮罩的區域`,
-        workflow_support_negative_prompt: `負向提示詞`,
-        workflow_support_negative_prompt_description: `可以透過獨立的負向提示詞欄位接收預設負向圖片標籤`,
-      },
-    },
     "notice-embeds": {
       visibility: {
         checkbox_label: `顯示的通知嵌入`,

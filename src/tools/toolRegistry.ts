@@ -361,7 +361,9 @@ class ToolRegistryImpl implements ToolRegistryInterface {
     const tool = this.getTool(toolName);
 
     if (!tool) {
-      const available = Array.from(this.tools.keys());
+      // Suggesting a tool this turn cannot run only trades the unknown-name error for an
+      // availability rejection on the next loop iteration.
+      const available = this.getAvailableTools(context.provider, context).map((candidate) => candidate.name);
       const closest = closestToolName(toolName, available);
       const errorResult: ToolResult = {
         success: false,

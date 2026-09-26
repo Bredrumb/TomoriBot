@@ -59,12 +59,16 @@ function buttonIds(value: unknown): string[] {
   return ids;
 }
 
-function assertSafePreview(payload: ReturnType<typeof buildConfigTransferPreviewPayload>, label: string): void {
-  expectSafePanelPayload(payload, label);
+/** Stricter than the shared check, which only inspects a markdown fence body. */
+function expectNoAdjacentBacktickRun(payload: unknown, label: string): void {
   for (const content of collectTextDisplays(payload)) {
-    // Stricter than the shared check, which only inspects a markdown fence body.
     expect(content, `${label} leaves an adjacent backtick run`).not.toMatch(/`{2,}/u);
   }
+}
+
+function assertSafePreview(payload: ReturnType<typeof buildConfigTransferPreviewPayload>, label: string): void {
+  expectSafePanelPayload(payload, label);
+  expectNoAdjacentBacktickRun(payload, label);
 }
 
 function makeMemoryBuckets(count: number, labelPrefix = "Bucket"): MemoryBucket[] {
@@ -97,10 +101,7 @@ function assertMemoryPayload(payload: unknown, label: string): void {
       expect(options?.length ?? 0, `${label} exceeds the select option limit`).toBeLessThanOrEqual(25);
     }
   });
-  for (const content of collectTextDisplays(payload)) {
-    // Stricter than the shared check, which only inspects a markdown fence body.
-    expect(content, `${label} leaves an adjacent backtick run`).not.toMatch(/`{2,}/u);
-  }
+  expectNoAdjacentBacktickRun(payload, label);
 }
 
 function assertTransferCustomIds(payload: unknown, locale: string, nonce: string): void {

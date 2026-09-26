@@ -1248,20 +1248,6 @@ Exageración: **{exaggeration}**`,
         },
       },
     },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `Soporte de imagen`,
-        workflow_supports_description: `Marca cada función de imagen que este endpoint soporta`,
-        workflow_support_txt2img: `Texto a imagen`,
-        workflow_support_txt2img_description: `Puede generar sin una imagen de referencia`,
-        workflow_support_img2img: `Imagen a imagen`,
-        workflow_support_img2img_description: `Puede usar una imagen de referencia sin pintar por encima`,
-        workflow_support_inpaint: `Pintar por encima`,
-        workflow_support_inpaint_description: `Puede editar una región enmascarada de una referencia`,
-        workflow_support_negative_prompt: `Prompt negativo`,
-        workflow_support_negative_prompt_description: `Puede recibir etiquetas negativas predeterminadas`,
-      },
-    },
     "notice-embeds": {
       visibility: {
         checkbox_label: `Avisos visibles`,

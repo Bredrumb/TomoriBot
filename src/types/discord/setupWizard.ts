@@ -58,7 +58,6 @@ export const setupDraftProviderAccessSchema = z.discriminatedUnion("mode", [
   setupDraftUserByokAccessSchema,
 ]);
 export type SetupDraftProviderAccess = z.infer<typeof setupDraftProviderAccessSchema>;
-export type SetupDraftProviderMode = SetupDraftProviderAccess["mode"];
 
 const setupDraftSystemPromptBuiltInSchema = z
   .object({

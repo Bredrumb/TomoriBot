@@ -1233,20 +1233,6 @@ Exaggeration: **{exaggeration}**`,
       nai_updated_detail: `このサーバーのNovelAI画像デフォルトを保存しました。`,
       nai_invalid_detail: `NovelAIの値のいずれかが許容範囲外です。`,
     },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `画像対応機能`,
-        workflow_supports_description: `この画像エンドポイントが対応しているリクエスト機能を選択してください`,
-        workflow_support_txt2img: `テキストから画像`,
-        workflow_support_txt2img_description: `参照画像なしで生成できる`,
-        workflow_support_img2img: `画像から画像`,
-        workflow_support_img2img_description: `インペイントなしで参照画像を使える`,
-        workflow_support_inpaint: `インペイント`,
-        workflow_support_inpaint_description: `参照画像のマスク領域を編集できる`,
-        workflow_support_negative_prompt: `ネガティブプロンプト`,
-        workflow_support_negative_prompt_description: `デフォルトのネガティブ画像タグを別のネガティブプロンプト欄で受け取れる`,
-      },
-    },
     "notice-embeds": {
       visibility: {
         checkbox_label: `表示する通知埋め込み`,

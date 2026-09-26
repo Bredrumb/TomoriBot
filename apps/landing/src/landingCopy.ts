@@ -1,4 +1,4 @@
-export interface LandingFeatureCopy {
+interface LandingFeatureCopy {
   title: string;
   description: string;
 }

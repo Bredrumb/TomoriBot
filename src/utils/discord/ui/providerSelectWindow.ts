@@ -40,6 +40,9 @@ export function resolveProviderEntryStart(storedStart: number, expandedStartInde
  *
  * A window that does not hold every entry spends one option slot on its own advance entry, so it
  * shrinks by one rather than leaving the last entry of each window unreachable.
+ *
+ * A route that expands a provider rewrites options inside a selector the reader has already closed,
+ * so it must repaint with a receipt; without one the selection reads as a no-op and gets repeated.
  */
 export function buildProviderSelectWindow(input: ProviderSelectWindowInput): ProviderSelectWindow {
   const overflows = input.entries.length > input.directLimit;

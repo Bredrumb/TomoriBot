@@ -76,7 +76,7 @@ export type ModerationPanelRoute =
   | { action: "quota-edit-open"; locale: string; quotaType: QuotaType }
   | { action: "quota-edit-submit"; locale: string; quotaType: QuotaType; nonce: string };
 
-export type ModerationAction = ModerationPanelRoute["action"];
+type ModerationAction = ModerationPanelRoute["action"];
 
 type ModerationFixedAction = Exclude<
   ModerationAction,

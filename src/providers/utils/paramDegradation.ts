@@ -198,7 +198,7 @@ function describeDegradableErrorKind(kind: DegradableErrorKind): string {
 }
 
 /** Log label for whichever signal made a failed attempt eligible for a retry. */
-export function describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
+function describeDegradationTrigger(kind: DegradableErrorKind | null, queuedImageStrip: boolean): string {
   if (kind) return describeDegradableErrorKind(kind);
   if (queuedImageStrip) return "a multimodal/image-input rejection";
   return "an error naming request parameters";

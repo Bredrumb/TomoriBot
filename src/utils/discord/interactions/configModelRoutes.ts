@@ -95,7 +95,10 @@ const preparedModelModals = new Map<
   { actorId: string; guildId: string | null; payload: RawModalPayload; expiresAt: number }
 >();
 
-/** Routes that answer with a modal, which is its own acknowledgement and must not be deferred. */
+/**
+ * Routes handled before the panel controller defers. All but the provider select answer with a
+ * modal, which is its own acknowledgement and must not be deferred.
+ */
 export const CONFIG_MODEL_MODAL_OPEN_ACTIONS = new Set<ConfigPanelRoute["action"]>([
   "sampling-open",
   "generation-open",
@@ -170,6 +173,15 @@ function serverStateFromScope(scope: ConfigScope): TomoriState | null {
   return scope.personas[0] ?? null;
 }
 
+/**
+ * Sends a private notice whether or not the route has already acknowledged. After `deferUpdate`,
+ * `reply` throws and `editReply` would overwrite the Components V2 panel, which rejects `content`.
+ */
+async function replyPrivately(interaction: GlobalRoutableInteraction, content: string): Promise<void> {
+  const payload = { content, flags: MessageFlags.Ephemeral } as const;
+  await (interaction.deferred ? interaction.followUp(payload) : interaction.reply(payload));
+}
+
 function readSelectValue(context: ConfigModelRouteContext, fieldId: string): string | undefined {
   const modal = context.interaction as ModalSubmitInteraction;
   return context.dependencies.takeSelectValue(modal.id, fieldId);
@@ -215,7 +227,9 @@ function baseRepaint(
  * Modal-open half of the Models surface.
  *
  * Runs before the panel controller defers, because a modal is its own acknowledgement: deferring
- * first would consume the interaction and Discord would reject the modal.
+ * first would consume the interaction and Discord would reject the modal. The provider select is
+ * the exception. Loading its model catalog can outlast Discord's acknowledgement window, so it
+ * defers as an update and hands the modal to a `model-modal-ready` follow-up button.
  */
 export async function handleConfigModelModalOpen(
   interaction: GlobalRoutableInteraction,
@@ -269,36 +283,20 @@ export async function handleConfigModelModalOpen(
       ? (interaction.values[0] ?? null)
       : null;
   const providerRange = modelSelection ? decodeConfigProviderRangeValue(modelSelection) : null;
+  // An update defer keeps `editReply` pointed at the panel itself, which the expansion and stale
+  // branches repaint; a reply defer would retarget every repaint at a private copy of the panel.
   if (route.action === "model-provider-select") {
-    if (providerRange) {
-      await interaction.deferUpdate();
-    } else {
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    }
+    await interaction.deferUpdate();
   }
 
   const scope = await dependencies.resolveScope(interaction, false);
   if (!scope) {
-    await (route.action === "model-provider-select"
-      ? interaction.editReply({
-          content: localizer(locale, missingScopeMessageKey(interaction, dependencies)),
-        })
-      : interaction.reply({
-          content: localizer(locale, missingScopeMessageKey(interaction, dependencies)),
-          flags: MessageFlags.Ephemeral,
-        }));
+    await replyPrivately(interaction, localizer(locale, missingScopeMessageKey(interaction, dependencies)));
     return true;
   }
   const state = serverStateFromScope(scope);
   if (!state) {
-    await (route.action === "model-provider-select"
-      ? interaction.editReply({
-          content: outdatedConfigPanelMessage(locale),
-        })
-      : interaction.reply({
-          content: outdatedConfigPanelMessage(locale),
-          flags: MessageFlags.Ephemeral,
-        }));
+    await replyPrivately(interaction, outdatedConfigPanelMessage(locale));
     return true;
   }
 
@@ -433,11 +431,12 @@ export async function handleConfigModelModalOpen(
   }
 
   if (route.action === "model-provider-select") {
-    if (!isConfigCatalogModelCapability(route.capability)) {
-      await interaction.reply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-        flags: MessageFlags.Ephemeral,
+    const repaintStale = () =>
+      baseRepaint({ interaction, route, scope, dependencies, selectedValue: null }, "switch", {
+        receipt: staleReceipt(locale),
       });
+    if (!isConfigCatalogModelCapability(route.capability)) {
+      await repaintStale();
       return true;
     }
     const capability = route.capability;
@@ -468,19 +467,18 @@ export async function handleConfigModelModalOpen(
     const providers = await dependencies.loadModelProviders(state, capability);
     const provider = providers.find((candidate) => candidate.toLowerCase() === chosenProvider?.toLowerCase());
     if (!provider) {
-      await interaction.editReply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-      });
+      await repaintStale();
       return true;
     }
 
     const models = await dependencies.loadModelChoices(state, capability, provider, locale);
     if (models.length === 0) {
-      await interaction.editReply({
-        content: localizer(locale, "commands.model.text.no_models_description", {
+      await replyPrivately(
+        interaction,
+        localizer(locale, "commands.model.text.no_models_description", {
           provider: getProviderDisplayName(provider),
         }),
-      });
+      );
       return true;
     }
 
@@ -494,8 +492,6 @@ export async function handleConfigModelModalOpen(
         page: "switch",
         selectedPersonaId: null,
         modelProviderPage: { capability, provider, start: 0 },
-        // Expanding rewrites options inside a selector the reader has already closed, so without a
-        // receipt the selection reads as a no-op and gets repeated.
         receipt: receipt(
           locale,
           "info",
@@ -510,9 +506,7 @@ export async function handleConfigModelModalOpen(
 
     const sliceStart = chosenSlice?.start ?? 0;
     if (sliceStart % CONFIG_MODEL_PAGE_SIZE !== 0 || sliceStart >= models.length) {
-      await interaction.editReply({
-        content: localizer(locale, "commands.config.panel.stale_detail"),
-      });
+      await repaintStale();
       return true;
     }
 
@@ -533,14 +527,15 @@ export async function handleConfigModelModalOpen(
       payload,
       expiresAt: Date.now() + PREPARED_MODEL_MODAL_TTL_MS,
     });
-    await interaction.editReply({
+    await interaction.followUp({
+      flags: MessageFlags.Ephemeral,
       content: localizer(locale, "commands.config.panel.model_modal_ready"),
       components: [
         new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId(buildConfigRouteId({ action: "model-modal-ready", locale, nonce }))
             .setLabel(localizer(locale, "commands.config.panel.model_modal_ready_button"))
-            .setStyle(ButtonStyle.Primary),
+            .setStyle(ButtonStyle.Secondary),
         ),
       ],
     });

@@ -1777,7 +1777,6 @@ describe("personalMemoriesOperations enforces its own guards", () => {
       expect(edited.status).toBe("privacy-blocked");
       expect(addSpy).not.toHaveBeenCalled();
       expect(editSpy).not.toHaveBeenCalled();
-      // Opting out of personalization must never strip the ability to delete data already stored.
       expect(removed.status).toBe("success");
       expect(removeSpy).toHaveBeenCalled();
     } finally {

@@ -1235,20 +1235,6 @@ Exaggeration: **{exaggeration}**`,
         },
       },
     },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `Image Supports`,
-        workflow_supports_description: `Check every image request feature this endpoint supports`,
-        workflow_support_txt2img: `Text to Image`,
-        workflow_support_txt2img_description: `Can generate without a reference image`,
-        workflow_support_img2img: `Image to Image`,
-        workflow_support_img2img_description: `Can use a reference image without inpainting`,
-        workflow_support_inpaint: `Inpaint`,
-        workflow_support_inpaint_description: `Can edit a masked region of a reference image`,
-        workflow_support_negative_prompt: `Negative Prompt`,
-        workflow_support_negative_prompt_description: `Can receive default negative image tags through a separate negative prompt field`,
-      },
-    },
     "notice-embeds": {
       visibility: {
         checkbox_label: `Visible notice embeds`,

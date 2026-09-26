@@ -82,10 +82,10 @@ export class InvalidPresetIntegerError extends Error {
 function presetInteger(value: unknown, fallback: number, prompt: RawSTPromptNode, field: string): number {
   if (value === undefined || value === null) return fallback;
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-    throw new InvalidPresetIntegerError(prompt.name || prompt.identifier, field);
+    throw new InvalidPresetIntegerError(String(prompt.name || prompt.identifier), field);
   }
   if (field === "injection_position" && value !== 0 && value !== 1) {
-    throw new InvalidPresetIntegerError(prompt.name || prompt.identifier, field);
+    throw new InvalidPresetIntegerError(String(prompt.name || prompt.identifier), field);
   }
   return Math.min(INT32_MAX, Math.max(INT32_MIN, value));
 }
@@ -511,7 +511,7 @@ export function parsePresetNodes(normalizedPreset: NormalizedPresetShape): Parse
       is_marker: isMarker,
       is_enabled: entry.enabled,
       is_comment: isComment,
-      node_order: presetInteger(nodeOrder++, 0, prompt, "node_order"),
+      node_order: nodeOrder++,
       injection_position: presetInteger(prompt.injection_position, 0, prompt, "injection_position"),
       injection_depth: presetInteger(prompt.injection_depth, 4, prompt, "injection_depth"),
       injection_order: presetInteger(prompt.injection_order, 100, prompt, "injection_order"),

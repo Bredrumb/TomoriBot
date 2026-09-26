@@ -119,8 +119,6 @@ function makeHarness(options: HarnessOptions = {}): Harness {
   return {
     state,
     includeElevenLabs,
-    // The interaction owns both recording arrays, so the harness reads them back rather than
-    // keeping a second copy that could drift.
     get edits(): unknown[] {
       return interaction?.edits ?? [];
     },

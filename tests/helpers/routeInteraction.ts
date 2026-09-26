@@ -14,10 +14,10 @@
 import type { FakeCall } from "./fakeInteraction";
 
 /** Which component kind the route should think it received. */
-export type RouteInteractionKind = "button" | "string-select" | "channel-select" | "modal";
+type RouteInteractionKind = "button" | "string-select" | "channel-select" | "modal";
 
 /** One method call the fake recorded, widened with the payload the caller passed. */
-export interface RouteInteractionCall extends FakeCall {
+interface RouteInteractionCall extends FakeCall {
   /** First argument of the call, when the caller passed one. */
   payload?: unknown;
 }
@@ -29,7 +29,7 @@ export interface RouteGuildChannel {
 }
 
 /** Fields a raw modal submit reports; `fields.has` answers presence, not emptiness. */
-export interface RouteModalFields {
+interface RouteModalFields {
   fields: Map<string, boolean>;
   getTextInputValue: (fieldId: string) => string;
 }
@@ -241,6 +241,10 @@ export function createRouteInteraction(options: RouteInteractionOptions = {}): R
     },
     reply: async (payload?: unknown) => {
       calls.push({ method: "reply", args: [payload], payload });
+      // Mirrors discord.js InteractionAlreadyReplied, which a permissive fake let ship once.
+      if (interaction.deferred || interaction.replied) {
+        throw new Error("The reply to this interaction has already been sent or deferred.");
+      }
       replies.push(payload);
       interaction.replied = true;
       return payload;
@@ -274,4 +278,26 @@ export function createRouteInteraction(options: RouteInteractionOptions = {}): R
   Object.assign(interaction, overrides);
 
   return interaction;
+}
+
+/**
+ * Keeps every interaction a harness builds and exposes their recordings in dispatch order, because
+ * several tests dispatch more than once and then read the whole recording.
+ */
+export function createInteractionRecorder() {
+  const recorded: RouteInteraction[] = [];
+  return {
+    get edits(): unknown[] {
+      return recorded.flatMap((interaction) => interaction.edits);
+    },
+    get replies(): unknown[] {
+      return recorded.flatMap((interaction) => interaction.replies);
+    },
+    get calls(): RouteInteraction["calls"] {
+      return recorded.flatMap((interaction) => interaction.calls);
+    },
+    record(interaction: RouteInteraction): void {
+      recorded.push(interaction);
+    },
+  };
 }

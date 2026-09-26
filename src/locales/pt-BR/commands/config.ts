@@ -1240,20 +1240,6 @@ Exagero: **{exaggeration}**`,
         },
       },
     },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `Suportes de Imagem`,
-        workflow_supports_description: `Marque as capacidades de imagem suportadas por este endpoint`,
-        workflow_support_txt2img: `Texto para Imagem`,
-        workflow_support_txt2img_description: `Pode gerar sem uma imagem de referência`,
-        workflow_support_img2img: `Imagem para Imagem`,
-        workflow_support_img2img_description: `Pode usar uma imagem de referência sem inpainting`,
-        workflow_support_inpaint: `Inpaint`,
-        workflow_support_inpaint_description: `Pode editar uma região mascarada da imagem de referência`,
-        workflow_support_negative_prompt: `Prompt Negativo`,
-        workflow_support_negative_prompt_description: `Recebe tags negativas no campo prompt negativo separado`,
-      },
-    },
     "notice-embeds": {
       visibility: {
         checkbox_label: `Embeds de aviso visíveis`,

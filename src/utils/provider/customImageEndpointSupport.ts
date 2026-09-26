@@ -1,8 +1,4 @@
 import type { CustomEndpointApiStyle, CustomEndpointRow } from "@/types/db/schema";
-import type { ModalCheckboxGroupField } from "@/types/discord/modal";
-import { localizer } from "@/utils/text/localizer";
-
-export const IMAGE_ENDPOINT_SUPPORTS_ID = "workflow_supports";
 
 export interface ImageEndpointSupports {
   txt2img: boolean;
@@ -100,65 +96,5 @@ export function imageEndpointSupportsFromSubmittedValues(
     img2img: selected.has("img2img"),
     inpaint,
     negative_prompt: selected.has("negative_prompt"),
-  };
-}
-
-export function buildImageEndpointSupportsComponent(
-  locale: string,
-  apiStyle: CustomEndpointApiStyle,
-  supports: ImageEndpointSupports = getDefaultImageEndpointSupports(apiStyle),
-): ModalCheckboxGroupField {
-  const options: ModalCheckboxGroupField["options"] = [
-    {
-      value: "txt2img",
-      label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_txt2img"),
-      description: localizer(
-        locale,
-        "commands.config.custom_models.capability_modal.workflow_support_txt2img_description",
-      ),
-      default: supports.txt2img,
-    },
-    {
-      value: "img2img",
-      label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_img2img"),
-      description: localizer(
-        locale,
-        "commands.config.custom_models.capability_modal.workflow_support_img2img_description",
-      ),
-      default: supports.img2img,
-    },
-  ];
-
-  if (apiStyle === "comfyui") {
-    options.push({
-      value: "inpaint",
-      label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_inpaint"),
-      description: localizer(
-        locale,
-        "commands.config.custom_models.capability_modal.workflow_support_inpaint_description",
-      ),
-      default: supports.inpaint,
-    });
-  }
-
-  options.push({
-    value: "negative_prompt",
-    label: localizer(locale, "commands.config.custom_models.capability_modal.workflow_support_negative_prompt"),
-    description: localizer(
-      locale,
-      "commands.config.custom_models.capability_modal.workflow_support_negative_prompt_description",
-    ),
-    default: supports.negative_prompt,
-  });
-
-  return {
-    kind: "checkboxGroup",
-    customId: IMAGE_ENDPOINT_SUPPORTS_ID,
-    labelKey: "commands.config.custom_models.capability_modal.workflow_supports_label",
-    descriptionKey: "commands.config.custom_models.capability_modal.workflow_supports_description",
-    options,
-    minValues: 1,
-    maxValues: options.length,
-    required: true,
   };
 }

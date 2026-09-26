@@ -174,6 +174,22 @@ describe("stPresetImportParser", () => {
         expect(() => parsePresetNodes(normalized)).toThrow(new InvalidPresetIntegerError("Bad Prompt", field));
       }
     });
+
+    it("names an unnamed prompt by its identifier as text even when the file stores a number", () => {
+      const normalized = normalizePresetShape({
+        prompts: [{ identifier: 101, content: "Hello", injection_depth: 2.5 }],
+      } as unknown as RawSTPreset);
+      expect(normalized).not.toBeNull();
+      if (!normalized) return;
+      let thrown: unknown;
+      try {
+        parsePresetNodes(normalized);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(InvalidPresetIntegerError);
+      expect((thrown as InvalidPresetIntegerError).promptName).toBe("101");
+    });
   });
 
   describe("legacy text-completion conversion", () => {

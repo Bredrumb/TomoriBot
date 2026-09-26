@@ -156,7 +156,6 @@ describe("DeepSeek structured output", () => {
       mimeType: "image/jpeg",
     });
 
-    // Written by the fetch stub below, which runs before the guarded read.
     let requestedUrl: string | undefined;
     let requestBody: Record<string, unknown> | undefined;
 
@@ -199,7 +198,6 @@ describe("DeepSeek structured output", () => {
       mimeType: "image/png",
     });
 
-    // Written by the fetch stub below, which runs before the guarded read.
     let requestedUrl: string | undefined;
     let requestBody: Record<string, unknown> | undefined;
 

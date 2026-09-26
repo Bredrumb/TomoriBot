@@ -445,7 +445,6 @@ describe("stPresetOperations domain delegation", () => {
       const preset3 = makeMockPresetRow({ preset_id: 3, preset_name: "Preset 3", is_active: true });
 
       const allPresets = [preset1, preset2, preset3];
-      // Sentinel rather than a nullable union: the stub always assigns before the assertion reads it.
       let activatedPresetId = -1;
       const deletedPresetIds: number[] = [];
 
@@ -490,7 +489,6 @@ describe("stPresetOperations domain delegation", () => {
       const presetActive = makeMockPresetRow({ preset_id: 3, preset_name: "Active Preset", is_active: true });
 
       const allPresets = [preset1, preset2, presetActive];
-      // Sentinel rather than a nullable union: the stub always assigns before the assertion reads it.
       let activatedPresetId = -1;
 
       const deps: StPresetOperationsDependencies = {

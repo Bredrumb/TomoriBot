@@ -130,7 +130,7 @@ export interface ConfigEndpointSlotView {
  * One Text-scope override as the Switch page lists it: the target the assignment applies to and the
  * model that target actually generates with, matching the rows `/model override remove` presents.
  */
-export interface ConfigTextOverrideEntry {
+interface ConfigTextOverrideEntry {
   /** Channel mention or persona nickname the override applies to. */
   target: string;
   /** Effective model, formatted as `codename (provider)`. */

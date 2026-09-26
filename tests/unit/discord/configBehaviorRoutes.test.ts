@@ -53,7 +53,11 @@ import {
 import { initializeLocalizer, localizer } from "@/utils/text/localizer";
 import { TOOL_NOTICE_DEFINITIONS } from "@/constants/toolNotices";
 import { localizedCopy, localizedProse } from "../../helpers/localeCases";
-import { createRouteInteraction, type RouteInteraction } from "../../helpers/routeInteraction";
+import {
+  createInteractionRecorder,
+  createRouteInteraction,
+  type RouteInteraction,
+} from "../../helpers/routeInteraction";
 
 beforeAll(async () => initializeLocalizer());
 
@@ -134,18 +138,14 @@ function makeHarness(inGuild = true): Harness {
     personas: [state],
     readStatus: "fresh",
   };
-  // Several tests dispatch more than once and then read the whole recording, so the harness keeps
-  // the interactions it built and exposes their arrays in order.
-  const previousEdits: unknown[][] = [];
-  const previousReplies: unknown[][] = [];
-  let current: RouteInteraction | undefined;
+  const recorder = createInteractionRecorder();
   const harness: Harness = {
     scope,
     get edits() {
-      return [...previousEdits, current?.edits ?? []].flat();
+      return recorder.edits;
     },
     get replies() {
-      return [...previousReplies, current?.replies ?? []].flat();
+      return recorder.replies;
     },
     modals: [],
     deferredAtWrite: [],
@@ -190,13 +190,7 @@ function makeHarness(inGuild = true): Harness {
         privacy: { stmPrivacyBypass: false },
       }),
     },
-    record: (interaction) => {
-      if (current) {
-        previousEdits.push(current.edits);
-        previousReplies.push(current.replies);
-      }
-      current = interaction;
-    },
+    record: recorder.record,
   };
   return harness;
 }

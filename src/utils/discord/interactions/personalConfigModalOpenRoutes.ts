@@ -505,8 +505,6 @@ export async function handlePersonalConfigModalOpen(
           scope: cachedScope,
           category: "models",
           page: "switch",
-          // Expanding rewrites options inside a selector the reader has already closed, so without
-          // a receipt the selection reads as a no-op and gets repeated.
           panelReceipt: {
             tone: "info",
             heading: localizer(route.locale, "commands.personal.config.provider_paged_heading"),

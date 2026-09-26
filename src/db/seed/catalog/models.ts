@@ -6,31 +6,14 @@
 
 import type { EmbeddingInput, ImageInput, LlmInput, ModelSection, VideoInput } from "./types";
 
-// ── Per-model pricing sources (USD per million tokens, uncached/base input + output) ──────────────
-// inputPricePerMillion / outputPricePerMillion below are the official standard rates, verified 2026-06-10:
-//   - Google Gemini : https://ai.google.dev/gemini-api/docs/pricing (Pro tiers use the ≤200k-context rate;
-//                     TomoriBot contexts sit well under 200k). Gemma is an open model with no
-//                     paid tier → left undefined.
-//                     Vertex / Vertex Express reuse the same Gemini SKU prices.
-//   - Anthropic     : https://platform.claude.com/docs/en/about-claude/pricing
-//                     Claude Fable 5, Opus 4.8, and Sonnet 5 rates re-verified 2026-07-21.
-//   - DeepSeek      : https://api-docs.deepseek.com/quick_start/pricing, re-verified 2026-09-25. Rows carry
-//                     the off-peak rate; peak hours (weekday 01:00-04:00 and 06:00-10:00 UTC) bill double.
-//                     Every legacy Flash name (deepseek-chat/-reasoner, deepseek-v4-flash*) is served
-//                     and billed as deepseek-flash.
-//   - Z.ai          : https://docs.z.ai/guides/overview/pricing (direct-API rates; *-flash variants are free)
-// gemini-3.5-pro and gemini-3-flash were deprecated without Google ever publishing a rate, so they stay
-// undefined and resolve to "pricing unavailable".
-// gemini-3.7-flash carries an introductory rate that expires: 0.75/3.75 through December 31, 2026,
-// then 1.50/7.50 (its sibling gemini-3.6-flash rate) from January 1, 2027. Update the three rows
-// before that date or every cost read on the model under-reports by half.
-// Deprecated Gemini preview snapshots are priced to their stable SKU's verified rate (same model, alias),
-// so users still on a deprecated codename keep accurate costs now that the env fallback is gone.
-// OpenRouter rows are priced live from the OpenRouter API cache (authoritative, auto-updating). The
-// inputPricePerMillion / outputPricePerMillion below are a cache-miss fallback only, used solely when the
-// live cache has no entry. Researched 2026-06-11 from the OpenRouter model pages. Free/image/`:free` and
-// `other-model` rows stay undefined.
+// inputPricePerMillion / outputPricePerMillion are official standard USD rates per million tokens
+// (uncached base input and output). Vertex and Vertex Express reuse the Gemini SKU prices, and a
+// deprecated Gemini preview snapshot carries its stable SKU's rate so users still on the old codename
+// keep accurate costs. A deprecated row Google never priced (gemini-3.5-pro, gemini-3-flash) stays
+// undefined and reads as "pricing unavailable".
 export const llmSections: ModelSection<LlmInput>[] = [
+  // Pricing: https://ai.google.dev/gemini-api/docs/pricing (verified 2026-06-10). Pro tiers use the
+  // ≤200k-context rate because TomoriBot contexts stay under 200k. Gemma has no paid tier, so it stays unpriced.
   {
     comment: "Google Models (all Gemini models support vision, videos, YouTube, and structured output)",
     rows: [
@@ -291,6 +274,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
           "zh-CN": "快速高效、适合通用场景的 Gemini 3.6 Flash 模型",
         },
       },
+      // Introductory rate: 0.75/3.75 through December 31, 2026, then 1.50/7.50 (the gemini-3.6-flash rate).
+      // Update this row and its Vertex and Vertex Express twins before then, or every cost read on the
+      // model under-reports by half.
       {
         provider: "google",
         codename: "gemini-3.7-flash",
@@ -1133,6 +1119,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
+  // OpenRouter rows are priced live from the OpenRouter API cache. The prices here are a cache-miss
+  // fallback only (researched 2026-06-11); free, image, `:free`, and `other-model` rows stay unpriced.
   {
     comment: "OpenRouter Models (structured output support varies by model, user configures manually)",
     rows: [
@@ -2128,6 +2116,9 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
+  // Pricing: https://api-docs.deepseek.com/quick_start/pricing (verified 2026-09-25). Rows carry the
+  // off-peak rate; peak hours (weekday 01:00-04:00 and 06:00-10:00 UTC) bill double. Every legacy Flash
+  // name (deepseek-chat/-reasoner, deepseek-v4-flash*) is served and billed as deepseek-flash.
   {
     comment: "DeepSeek Models",
     rows: [
@@ -2619,6 +2610,8 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
+  // Pricing for both Z.ai sections: https://docs.z.ai/guides/overview/pricing (direct-API rates;
+  // *-flash variants are free).
   {
     comment: "Z.ai (Coding) Models (plain codenames preserved for backward compatibility)",
     rows: [
@@ -2971,6 +2964,7 @@ export const llmSections: ModelSection<LlmInput>[] = [
       },
     ],
   },
+  // Pricing: https://platform.claude.com/docs/en/about-claude/pricing (verified 2026-07-21).
   {
     comment: "Anthropic Models (vision + tools + structured output via forced tool use; no video/YouTube)",
     rows: [

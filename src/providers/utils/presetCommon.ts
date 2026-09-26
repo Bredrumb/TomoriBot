@@ -23,7 +23,7 @@ export type PresetContentPart = { type: "text"; text: string } | { type: "image_
  * to them. Lists are mutable because the accepted result is handed straight into
  * `PresetExportData`.
  */
-export interface PresetGenerationFields {
+interface PresetGenerationFields {
   attribute_list?: string[];
   sample_dialogues_in?: string[];
   sample_dialogues_out?: string[];

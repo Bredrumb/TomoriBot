@@ -1234,20 +1234,6 @@ Mức cường điệu: **{exaggeration}**`,
         },
       },
     },
-    custom_models: {
-      capability_modal: {
-        workflow_supports_label: `Tính năng hỗ trợ hình ảnh`,
-        workflow_supports_description: `Đánh dấu mọi tính năng yêu cầu hình ảnh mà endpoint hỗ trợ`,
-        workflow_support_txt2img: `Văn bản thành hình ảnh`,
-        workflow_support_txt2img_description: `Có thể tạo ảnh mà không cần ảnh tham chiếu`,
-        workflow_support_img2img: `Hình ảnh thành hình ảnh`,
-        workflow_support_img2img_description: `Có thể dùng ảnh tham chiếu mà không cần inpainting`,
-        workflow_support_inpaint: `Inpaint`,
-        workflow_support_inpaint_description: `Có thể chỉnh sửa vùng mặt nạ của ảnh tham chiếu`,
-        workflow_support_negative_prompt: `Prompt tiêu cực`,
-        workflow_support_negative_prompt_description: `Có thể nhận thẻ ảnh tiêu cực mặc định qua trường prompt tiêu cực riêng`,
-      },
-    },
     "notice-embeds": {
       visibility: {
         checkbox_label: `Embed thông báo hiển thị`,
