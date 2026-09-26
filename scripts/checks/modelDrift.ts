@@ -255,7 +255,10 @@ function renderRow(candidate: Candidate): string {
     }
   }
   row.desc = MODEL_DRIFT_TODO;
-  return `      {\n${Object.entries(row)
+  const reviewFlags = table === "videoSections" ? "isFree" : "isFree and isUncensored";
+  return `      {\n        // TODO: Review ${reviewFlags} manually; models.dev does not supply them.\n${Object.entries(
+    row,
+  )
     .map(([key, value]) => `        ${key}: ${JSON.stringify(value)},`)
     .join("\n")}\n      }`;
 }
@@ -358,6 +361,7 @@ function report(candidates: Candidate[], free: Candidate[], advisories: ReturnTy
     "Verify drafted fallback prices for fixed OpenRouter models. Floating aliases have no static price.",
     "",
     `Replace every ${MODEL_DRIFT_TODO} English description. Translations are optional and fall back to English. Remove unwanted rows, but keep their seen entries to decline them.`,
+    "Review the isFree and isUncensored TODO comment in each drafted row. Set any true flags, then remove the comment. New rows do not change the default or smartest model.",
     "",
     `Drafted rows: ${candidates.length}. Free variants for review: ${free.length}.`,
     "",

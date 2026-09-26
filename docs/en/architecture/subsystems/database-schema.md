@@ -563,7 +563,8 @@ the seen entries for declined rows to stop them returning in later runs. Closing
 leaves them eligible for the next run. Drafted rows require an English description; translations
 are optional and fall back to English.
 `check-seed-catalogs` rejects the `MODEL_DRIFT_TODO` markers. Review endpoint availability,
-capabilities, and official prices before merging. Fixed OpenRouter model IDs get draft fallback prices;
+capabilities, official prices, and the `isFree` and `isUncensored` TODO comments before merging.
+Fixed OpenRouter model IDs get draft fallback prices;
 floating aliases stay unpriced because their targets change. The action does not draft media rows
 for providers whose current generation implementation cannot serve them. Run
 `bun scripts/checks/modelDrift.ts` for a local read-only check against current models.dev data.
