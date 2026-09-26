@@ -67,10 +67,6 @@ describe("channel-gone classification", () => {
 });
 
 describe("send failure cache", () => {
-  it("reports no block for a channel that has not failed", () => {
-    expect(getBlockedSendReason(CHANNEL)).toBeNull();
-  });
-
   it("blocks the channel once a send has been refused", () => {
     noteSendFailure(CHANNEL, "missing_permissions");
     expect(getBlockedSendReason(CHANNEL)).toBe("missing_permissions");

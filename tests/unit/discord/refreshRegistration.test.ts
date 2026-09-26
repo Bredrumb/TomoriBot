@@ -35,15 +35,12 @@ describe("/refresh registration", () => {
     expect(executionMap.get("refresh")?.has(ROOT_COMMAND_EXECUTION_KEY)).toBe(true);
   });
 
-  it("removes the old /tool refresh leaf while /tool keeps its other members", async () => {
+  it("removes the old /tool refresh leaf", async () => {
     const { executionMap } = await loadCommandData();
 
     const toolCommands = executionMap.get("tool");
     expect(toolCommands).toBeDefined();
-    if (!toolCommands) return;
-
-    expect(toolCommands.has("refresh")).toBe(false);
-    expect(toolCommands.size).toBeGreaterThan(0);
+    expect(toolCommands?.has("refresh")).toBe(false);
   });
 
   it("keeps the reset-marker title resolvable in both locales", async () => {

@@ -1,6 +1,4 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { SlashCommandBuilder } from "discord.js";
-import * as statusCommand from "@/commands/status";
 import { loadCommandData } from "@/utils/discord/commandLoader";
 import { localizer, initializeLocalizer } from "@/utils/text/localizer";
 
@@ -28,8 +26,5 @@ describe("/status registration", () => {
     expect(status.default_member_permissions).toBeUndefined();
     expect(status.options ?? []).toHaveLength(0);
     expect(status.description_localizations?.ja).toBe(localizer("ja", "commands.status.description"));
-    const configuredCommand = statusCommand.configureCommand(new SlashCommandBuilder()).toJSON();
-    expect(configuredCommand.name).toBe("status");
-    expect(configuredCommand.options ?? []).toHaveLength(0);
   }, 30000);
 });

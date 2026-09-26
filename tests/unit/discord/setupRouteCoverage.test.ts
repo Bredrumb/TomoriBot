@@ -173,7 +173,7 @@ function terminalPayloads(): Array<[string, unknown]> {
 }
 
 /**
- * Route coverage for the `/setup` codec: every declared action round-trips, the dispatcher handles
+ * Route coverage for the `/setup` codec: every declared action parses, the dispatcher handles
  * every declared action, and the actions the real panels and modals emit are exactly a closed list.
  *
  * What this proves is the control surface plus build and parse agreement, so a removed control, a
@@ -191,7 +191,7 @@ describe("setup wizard route coverage", () => {
     expect([...dispatchedActions()].sort()).toEqual([...declared].sort());
   });
 
-  it("round-trips every declared action through its own builder and parser", () => {
+  it("parses every declared action from its wire form", () => {
     const declared = declaredActions();
     expect(declared.length).toBeGreaterThan(0);
 

@@ -102,20 +102,6 @@ function requireRoute(customId: string): ParsedInteractionRoute {
   return parsed;
 }
 
-/**
- * Source span between two anchors, for gates that parse the declarations a file contains.
- *
- * A missing anchor makes indexOf return -1, which slice() silently accepts as an offset from the
- * end, so the gate would keep passing over the wrong span. Fail on the anchor instead.
- */
-function sliceBetweenAnchors(source: string, startAnchor: string, endAnchor: string): string {
-  const start = source.indexOf(startAnchor);
-  const end = source.indexOf(endAnchor);
-  expect(start).toBeGreaterThanOrEqual(0);
-  expect(end).toBeGreaterThan(start);
-  return source.slice(start, end);
-}
-
 interface ObservedComponent {
   type?: number;
   customId?: string;
@@ -1019,23 +1005,12 @@ describe("personalConfigPanelCatalog", () => {
   });
 
   it("covers every personal-config action in the pinned wire contract", () => {
-    const pinned = new Set(WIRE_CONTRACT_V2.map(([, route]) => route.action));
-    const source = readFileSync(
-      new URL("../../../src/utils/discord/personalConfigPanelCatalog.ts", import.meta.url),
-      "utf8",
-    );
-    const union = sliceBetweenAnchors(
-      source,
-      "export type PersonalConfigPanelRoute",
-      "export type PersonalConfigAction",
-    );
-    const declared = new Set(
-      [...union.matchAll(/action: "([a-z0-9-]+)"(?:\s*\|\s*"([a-z0-9-]+)")?/g)].flatMap((m) =>
-        [m[1], m[2]].filter((v): v is string => Boolean(v)),
-      ),
-    );
-    expect(declared.size).toBeGreaterThan(0);
-    expect([...declared].filter((action) => !pinned.has(action))).toEqual([]);
+    const pinned = new Set<string>(WIRE_CONTRACT_V2.map(([, route]) => route.action));
+    // The codec table's mapped type requires one key per member of the action union, so its keys
+    // are the declared actions without reading the union's source text.
+    const declared = Object.keys(PERSONAL_CONFIG_ROUTE_CODECS);
+    expect(declared.length).toBe(76);
+    expect(declared.filter((action) => !pinned.has(action))).toEqual([]);
   });
 
   /**
@@ -1268,24 +1243,13 @@ describe("personalConfigPanelCatalog", () => {
   });
 
   it("proves table actions and handler comparisons in personalConfigRoutes agree", () => {
-    const catalogSource = readFileSync(
-      new URL("../../../src/utils/discord/personalConfigPanelCatalog.ts", import.meta.url),
-      "utf8",
-    );
     const handlerSources = PERSONAL_CONFIG_HANDLER_SOURCES.map((relativePath) => {
       const source = readFileSync(new URL(`../../../${relativePath}`, import.meta.url), "utf8");
       expect(source.length).toBeGreaterThan(0);
       return source;
     });
 
-    const tableBlock = sliceBetweenAnchors(
-      catalogSource,
-      "export const PERSONAL_CONFIG_ROUTE_CODECS",
-      "const CODECS_BY_WIRE_TOKEN",
-    );
-    const tableActions = new Set(
-      [...tableBlock.matchAll(/^\s*(?:"([a-z0-9-]+)"|([a-z0-9-]+)):\s*\{/gm)].map((m) => m[1] ?? m[2]),
-    );
+    const tableActions = new Set<string>(Object.keys(PERSONAL_CONFIG_ROUTE_CODECS));
     const handlerActions = new Set(
       handlerSources.flatMap((source) => [...source.matchAll(/route\.action === "([a-z0-9-]+)"/g)].map((m) => m[1])),
     );

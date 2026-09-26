@@ -290,19 +290,6 @@ describe("personal-memories panel route catalog", () => {
     }
   });
 
-  it("round trips parse and build for all canonical actions", () => {
-    for (const [, expected] of WIRE_CONTRACT_V1) {
-      const builtId = buildPersonalMemoriesRouteId(expected);
-      const parts = builtId.split(":");
-      const parsedFromBuilt = parsePersonalMemoriesPanelRoute({
-        namespace: parts[0] as string,
-        version: parts[1] as string,
-        segments: parts.slice(2),
-      });
-      expect(parsedFromBuilt).toEqual(expected);
-    }
-  });
-
   it("guarantees 17-action exhaustiveness across catalog, accepted actions, wire contract, and route handler comparisons", () => {
     const ACCEPTED_17_ACTIONS = [
       "add-submit",

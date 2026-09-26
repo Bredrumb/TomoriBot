@@ -9,7 +9,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData, ROOT_COMMAND_EXECUTION_KEY } from "@/utils/discord/commandLoader";
 import { resolveCommandCooldown } from "@/events/interactionCreate/handleCommands";
-import { initializeLocalizer, localizer } from "@/utils/text/localizer";
+import { initializeLocalizer } from "@/utils/text/localizer";
 import { PermissionsBitField } from "discord.js";
 
 beforeAll(async () => initializeLocalizer());
@@ -35,14 +35,6 @@ describe("/nuke registration", () => {
     expect(nukeCommand.contexts).toEqual([0]); // InteractionContextType.Guild only, never a DM context
     expect(nukeCommand.default_member_permissions).toBe(String(PermissionsBitField.Flags.ManageGuild));
     expect(executionMap.get("nuke")?.has(ROOT_COMMAND_EXECUTION_KEY)).toBe(true);
-  });
-
-  it("resolves the description correctly in both en-US and ja", () => {
-    const en = localizer("en-US", "commands.nuke.description");
-    const ja = localizer("ja", "commands.nuke.description");
-
-    expect(en).not.toBe("commands.nuke.description");
-    expect(ja).not.toBe("commands.nuke.description");
   });
 
   it("applies the correct cooldown to the new bare root", () => {

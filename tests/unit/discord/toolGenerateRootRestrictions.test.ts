@@ -8,9 +8,8 @@
  * or permission default to either root would take DM support away from the members already there,
  * and nothing in check, lint, or check-locales would notice.
  *
- * Keep this file separate from the per-command registration tests the dissolution edits, so
- * command-surface changes cannot also own the assertions proving they left the roots' restrictions
- * alone.
+ * The members each root keeps are asserted elsewhere: /tool's by configRegistration.test.ts's
+ * RETAINED_KEYS_BY_ROOT, /generate's by dissolvedBotRegistration.test.ts.
  */
 import { beforeAll, describe, expect, it } from "bun:test";
 import { loadCommandData } from "@/utils/discord/commandLoader";
@@ -35,20 +34,5 @@ describe("/tool and /generate root registration restrictions", () => {
     expect(generate).toBeDefined();
     expect(generate?.contexts).toBeUndefined();
     expect(generate?.default_member_permissions).toBeUndefined();
-  }, 30000);
-
-  it("keeps the members that predate the dissolution reachable under both roots", async () => {
-    const { executionMap } = await loadCommandData();
-
-    const toolCommands = executionMap.get("tool");
-    expect(toolCommands).toBeDefined();
-    expect(toolCommands?.has("delete.turn")).toBe(true);
-    expect(toolCommands?.has("estimate.cost")).toBe(true);
-    expect(toolCommands?.has("prompt.snapshot")).toBe(true);
-
-    const generateCommands = executionMap.get("generate");
-    expect(generateCommands).toBeDefined();
-    expect(generateCommands?.has("image")).toBe(true);
-    expect(generateCommands?.has("video")).toBe(true);
   }, 30000);
 });

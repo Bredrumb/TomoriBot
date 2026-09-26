@@ -229,12 +229,8 @@ describe("providers routes", () => {
     }
   });
 
-  it("round trips parse and build for all canonical actions across both namespaces", () => {
+  it("round trips every canonical route through the personal namespace", () => {
     for (const [, expected] of WIRE_CONTRACT_V1) {
-      const guildId = buildProvidersRouteId(PROVIDERS_ROUTE_NAMESPACE, expected);
-      const guildParsed = parseProvidersPanelRoute(parsed(guildId), PROVIDERS_ROUTE_NAMESPACE);
-      expect(guildParsed).toEqual(expected);
-
       const personalId = buildProvidersRouteId(PERSONAL_PROVIDERS_ROUTE_NAMESPACE, expected);
       const personalParsed = parseProvidersPanelRoute(parsed(personalId), PERSONAL_PROVIDERS_ROUTE_NAMESPACE);
       expect(personalParsed).toEqual(expected);

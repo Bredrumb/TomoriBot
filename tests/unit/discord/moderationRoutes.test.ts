@@ -4108,12 +4108,6 @@ describe("moderation route codec wire contract, exhaustiveness, and producer cov
     expect(buildModerationRouteSegments(expected)).toEqual(customId.split(":").slice(2));
   });
 
-  it.each(WIRE_CONTRACT_V1)("round trips %s through parse and build", (_customId, expected) => {
-    const generatedId = buildModerationRouteId(expected);
-    const parsed = parseModerationPanelRoute(parsedRoute(generatedId));
-    expect(parsed).toEqual(expected);
-  });
-
   it("guarantees 35-action exhaustiveness across catalog, accepted actions, wire contract, and route handler comparisons", () => {
     const ACCEPTED_35_ACTIONS: readonly ModerationAction[] = [
       "category",

@@ -1599,7 +1599,7 @@ describe("memories permissions and scoping", () => {
    * acknowledge for itself.
    */
   it("answers a refused modal branch by repainting the panel, never by a separate reply", async () => {
-    const { dependencies } = createTestDependencies({
+    const { dependencies, calls } = createTestDependencies({
       resolveScope: async (interaction) => ({
         serverId: 1,
         workspaceId: "guild-123",
@@ -1652,6 +1652,7 @@ describe("memories permissions and scoping", () => {
       expect(interaction.deferred).toBe(true);
       expect(collectTextDisplays(edited).length).toBeGreaterThan(0);
     }
+    expect(calls.filter((call) => call.startsWith("show"))).toEqual([]);
   });
 
   it("refuses modal opening and writes when user is blacklisted and not manager", async () => {

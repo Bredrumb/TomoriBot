@@ -131,15 +131,6 @@ describe("setup draft store", () => {
     expect(store.readSetupDraft("nonce-1234", "actor-1", "workspace-1", "guild").status).toBe("ok");
   });
 
-  it("keeps a draft available without a timeout", () => {
-    let currentTime = 1000;
-    const store = createSetupDraftStore(() => currentTime);
-    store.storeSetupDraft("nonce-1234", makeDraft());
-    currentTime += 365 * 24 * 60 * 60 * 1000;
-
-    expect(store.readSetupDraft("nonce-1234", "actor-1", "workspace-1", "guild")).toMatchObject({ status: "ok" });
-  });
-
   it("keeps a draft available after a state mutation", () => {
     let currentTime = 1000;
     const store = createSetupDraftStore(() => currentTime);

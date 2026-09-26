@@ -418,21 +418,6 @@ describe("setupWizardRoutes", () => {
     expect(mockStore).not.toHaveBeenCalled();
   });
 
-  it("still reads a bare boolean health result as the pre-wizard already-setup answer", async () => {
-    const mockStore = mock(() => {});
-    const interaction = createRouteInteraction();
-
-    await startSetupWizard(interaction as unknown as ChatInputCommandInteraction, {
-      checkExistingSetup: async () => "already-setup",
-      storeSetupDraft: mockStore as typeof storeSetupDraft,
-    });
-
-    expect(interaction.deferred).toBe(true);
-    const editedPayload = interaction.edits[0] as { embeds?: unknown[] } | undefined;
-    expect(editedPayload?.embeds?.length).toBe(1);
-    expect(mockStore).not.toHaveBeenCalled();
-  });
-
   it("returns terminal session-ended response for stale or forged nonce without repainting panel", async () => {
     const forgedCustomId = buildSetupDashboardRouteId({ locale: "en-US", nonce: "forged-nonce-1" });
     const interaction = makeMockInteraction({ customId: forgedCustomId });

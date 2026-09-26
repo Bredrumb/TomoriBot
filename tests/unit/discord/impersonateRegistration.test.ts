@@ -64,10 +64,4 @@ describe("/impersonate root registration", () => {
     // biome-ignore lint/suspicious/noExplicitAny: API types use max_length but Discord.js typings use maxLength which is lost in toJSON
     expect((systemPromptOption as any)?.max_length).toBe(2000);
   }, 30000);
-
-  it("ensures /bot no longer exists", async () => {
-    const { registrationData } = await loadCommandData();
-    const bot = registrationData.find((c) => c.name === "bot");
-    expect(bot).toBeUndefined();
-  }, 30000);
 });

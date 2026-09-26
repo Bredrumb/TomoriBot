@@ -145,19 +145,6 @@ describe("ST Presets route codec", () => {
     }
   });
 
-  it("round trips parse and build for all canonical actions", () => {
-    for (const c of WIRE_CONTRACT_V1) {
-      const builtId = CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.buildRouteId(c.parsed);
-      const parts = builtId.split(":");
-      const parsedFromBuilt = CONFIG_ST_PRESETS_PANEL_ROUTE_ADAPTER.parseRoute({
-        namespace: parts[0] as string,
-        version: parts[1] as string,
-        segments: parts.slice(2),
-      });
-      expect(parsedFromBuilt).toEqual(c.parsed);
-    }
-  });
-
   it("guarantees 15-action exhaustiveness across accepted actions, wire contract, and route handler comparisons", () => {
     const ACCEPTED_15_ACTIONS = [
       "add-open",

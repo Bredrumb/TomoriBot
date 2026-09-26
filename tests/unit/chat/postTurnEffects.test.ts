@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it, mock } from "bun:test";
-import type { ChatIncoming, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
+import type { TomoriState } from "@/types/db/schema";
+import type { ChatIncoming, ChatTurn, ChatTurnContext, GenerationTurnResult } from "@/utils/chat/types";
 import { runPostTurnEffects, shouldRetryEmptyResponse } from "@/utils/chat/postTurnEffects";
+import { recordReunionPresence, resolveReunionNote, type ReunionPresenceStore } from "@/utils/chat/reunionPresence";
 import { initializeLocalizer } from "@/utils/text/localizer";
 import { localizedCopy } from "../../helpers/localeCases";
 
@@ -120,5 +122,40 @@ describe("empty-response post-turn handling", () => {
       "User impersonation returned an empty response.",
     );
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("reunion presence post-turn phase", () => {
+  beforeAll(async () => {
+    await initializeLocalizer();
+  });
+
+  const presenceStore: ReunionPresenceStore = {
+    isTrackingEnabled: true,
+    getUserPersonaReunionInfo: async () => ({ lastPreviousDayAt: null, seenToday: false }),
+    recordPresenceSeen: async () => true,
+  };
+  const resolveArgs = {
+    turn: { userRow: { user_id: 4101, timezone_offset: 0 }, triggererName: "Alice" } as ChatTurn,
+    effectivePersona: {
+      server_id: 5,
+      persona_lineage_id: 4101,
+      config: { time_awareness_enabled: true, timezone_offset: 0 },
+    } as TomoriState,
+    isUserImpersonation: false,
+  };
+
+  it("releases the context-build claim when the turn ends without a response", async () => {
+    const claimed = await resolveReunionNote(resolveArgs, presenceStore);
+    expect(claimed.presence?.mode).toBe("claimed");
+
+    const { context } = makeContext({ shouldSurfaceUserErrors: false });
+    context.reunionPresence = claimed.presence;
+    await runPostTurnEffects(context, emptyResponseResult);
+
+    // Still held, the claim would defer this second build instead of letting it claim again.
+    const retry = await resolveReunionNote(resolveArgs, presenceStore);
+    expect(retry.presence?.mode).toBe("claimed");
+    await recordReunionPresence(retry.presence, emptyResponseResult, presenceStore);
   });
 });
