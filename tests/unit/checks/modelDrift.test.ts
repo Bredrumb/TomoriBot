@@ -57,13 +57,14 @@ describe("model drift", () => {
       (item) => item.provider === "openrouter" && item.codename === "~openai/gpt-latest",
     );
     const fixed = candidates.find((item) => item.provider === "openrouter" && item.codename === "z-ai/glm-5.2");
+    const zai = candidates.find((item) => item.provider === "zai" && item.codename === "zai/glm-5.2");
     const google = candidates.find(
       (item) => item.provider === "google" && item.codename === "gemini-3.1-pro-preview-customtools",
     );
-    if (!openrouter || !fixed || !google) throw new Error("Fixture candidates missing");
+    if (!openrouter || !fixed || !google || !zai) throw new Error("Fixture candidates missing");
     expect(openrouter.model.cost?.input).toBeDefined();
     const text = await Bun.file(catalog).text();
-    const inserted = insertRows(text, [openrouter, fixed, google]);
+    const inserted = insertRows(text, [openrouter, fixed, google, zai]);
     const draftedRow = (codename: string): string => {
       const start = inserted.indexOf(`codename: "${codename}"`);
       if (start < 0) throw new Error(`Drafted row missing: ${codename}`);
@@ -74,6 +75,10 @@ describe("model drift", () => {
     expect(draftedRow(fixed.codename)).toContain("inputPricePerMillion");
     expect(draftedRow(fixed.codename)).toContain("outputPricePerMillion");
     expect(draftedRow(google.codename)).toContain("inputPricePerMillion");
+    expect(draftedRow(google.codename)).toContain("\n        seesImages: true,");
+    expect(draftedRow(google.codename)).toContain("\n        seesVideos: true,");
+    expect(draftedRow(zai.codename)).toContain("// seesImages: true,");
+    expect(draftedRow(zai.codename)).toContain("// isUncensored: true,");
   });
 
   it("inserts in the selected section without changing adjacent catalog text", async () => {

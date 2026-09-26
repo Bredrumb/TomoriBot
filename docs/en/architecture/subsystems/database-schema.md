@@ -563,7 +563,9 @@ the seen entries for declined rows to stop them returning in later runs. Closing
 leaves them eligible for the next run. Drafted rows require an English description; translations
 are optional and fall back to English.
 `check-seed-catalogs` rejects the `MODEL_DRIFT_TODO` markers. Review endpoint availability,
-capabilities, official prices, and the `isFree` and `isUncensored` TODO comments before merging.
+capabilities, official prices, and the commented flag options before merging. Drafted text rows
+show every reviewable capability as an active or commented `true` property. `isFree` and
+`isUncensored` have no source metadata.
 Fixed OpenRouter model IDs get draft fallback prices;
 floating aliases stay unpriced because their targets change. The action does not draft media rows
 for providers whose current generation implementation cannot serve them. Run

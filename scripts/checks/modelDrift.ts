@@ -255,12 +255,26 @@ function renderRow(candidate: Candidate): string {
     }
   }
   row.desc = MODEL_DRIFT_TODO;
-  const reviewFlags = table === "videoSections" ? "isFree" : "isFree and isUncensored";
-  return `      {\n        // TODO: Review ${reviewFlags} manually; models.dev does not supply them.\n${Object.entries(
-    row,
-  )
-    .map(([key, value]) => `        ${key}: ${JSON.stringify(value)},`)
-    .join("\n")}\n      }`;
+  const reviewFlags =
+    table === "llmSections"
+      ? [
+          "isFree",
+          "isUncensored",
+          "hasTools",
+          "seesImages",
+          "seesVideos",
+          "seesYoutube",
+          "isReasoning",
+          "supportsStructoutput",
+        ]
+      : table === "imageSections"
+        ? ["isFree", "isUncensored"]
+        : ["isFree"];
+  const fields = Object.entries(row)
+    .filter(([key]) => !reviewFlags.includes(key))
+    .map(([key, value]) => `        ${key}: ${JSON.stringify(value)},`);
+  const reviewFields = reviewFlags.map((flag) => `        ${row[flag] === true ? "" : "// "}${flag}: true,`);
+  return `      {\n${[...fields.slice(0, 2), ...reviewFields, ...fields.slice(2)].join("\n")}\n      }`;
 }
 
 function sectionFor(table: ModelTable, provider: string): string {
@@ -361,7 +375,7 @@ function report(candidates: Candidate[], free: Candidate[], advisories: ReturnTy
     "Verify drafted fallback prices for fixed OpenRouter models. Floating aliases have no static price.",
     "",
     `Replace every ${MODEL_DRIFT_TODO} English description. Translations are optional and fall back to English. Remove unwanted rows, but keep their seen entries to decline them.`,
-    "Review the isFree and isUncensored TODO comment in each drafted row. Set any true flags, then remove the comment. New rows do not change the default or smartest model.",
+    "Each drafted row shows its reviewable flags. Active flags were inferred from models.dev or the provider; uncomment an omitted flag only after verifying it, and delete unused comment lines. isFree and isUncensored have no source metadata. New rows do not change the default or smartest model.",
     "",
     `Drafted rows: ${candidates.length}. Free variants for review: ${free.length}.`,
     "",
