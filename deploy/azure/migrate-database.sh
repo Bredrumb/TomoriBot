@@ -17,6 +17,11 @@ set -euo pipefail
 : "${dockerHubUsername:?dockerHubUsername is required}"
 : "${dockerHubTokenB64:?dockerHubTokenB64 is required}"
 : "${tomoribotImage:?tomoribotImage is required}"
+allowMigrationDowntime="${allowMigrationDowntime:-false}"
+if [[ "$allowMigrationDowntime" != true && "$allowMigrationDowntime" != false ]]; then
+  echo "allowMigrationDowntime must be true or false." >&2
+  exit 1
+fi
 
 # 1. The image must be an immutable digest reference (matches bootstrap-database.sh).
 if [[ ! "$tomoribotImage" =~ @sha256:[0-9a-f]{64}$ ]]; then
@@ -64,6 +69,36 @@ rm -f "$stage_dir/dockerhub-token"
 docker pull "$tomoribotImage" >/dev/null
 docker logout docker.io >/dev/null
 docker_authenticated=false
+
+# A destructive migration may remove fields the old process still uses. Compose
+# stop waits for exit and prevents its unless-stopped policy from restarting it.
+if [ "$allowMigrationDowntime" = true ]; then
+  if [ ! -f /etc/tomoribot/docker-compose.yml ]; then
+    echo "Cannot stop TomoriBot: the installed Compose file is missing." >&2
+    exit 1
+  fi
+  paused_timers=/etc/tomoribot/.migration-paused-timers
+  touch "$paused_timers"
+  for timer in tomoribot-watchdog.timer tomoribot-restart.timer; do
+    if systemctl is-active --quiet "$timer"; then
+      systemctl stop "$timer"
+      if ! grep -Fxq "$timer" "$paused_timers"; then
+        printf '%s\n' "$timer" >>"$paused_timers"
+      fi
+    fi
+    service="${timer%.timer}.service"
+    if systemctl is-active --quiet "$service"; then
+      systemctl stop "$service"
+    fi
+  done
+  env "TOMORIBOT_IMAGE=$tomoribotImage" \
+    docker compose -f /etc/tomoribot/docker-compose.yml stop -t 30 tomoribot
+  if [ -n "$(docker ps -q --filter label=com.docker.compose.service=tomoribot)" ]; then
+    echo "TomoriBot is still running; refusing to migrate." >&2
+    exit 1
+  fi
+  echo "TomoriBot stopped for migration downtime."
+fi
 
 # 5. Apply schema.sql + pending migrations via the same initializeCli the bot boot
 #    path uses locally. Idempotent: existing objects are IF NOT EXISTS, applied

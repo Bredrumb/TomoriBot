@@ -132,10 +132,12 @@ code change. The destruction gate below still catches them.
 **The destruction gate** in the deploy workflow, described below, which additionally protects the
 firewall rules, networking, and alerts.
 
-**The destructive-migration gate**, which blocks a deploy introducing `DROP TABLE`, `DROP COLUMN`,
-`DROP CONSTRAINT`, `ALTER COLUMN ... TYPE`, `TRUNCATE`, or an unfiltered `DELETE` unless the
-deployer opted into a pre-deploy backup, either with `(Checkpoint)` in the commit message or
-`create_db_backup=true` on manual dispatch.
+**The destructive-migration gate** scans changed migrations before database work. A destructive
+migration requires a backup opt-in: `(Checkpoint)` in the push commit or `create_db_backup=true` on
+manual dispatch. For a dropped table or column, it searches the last deployed commit's `src/` tree.
+If that source still names the object, manual dispatch also requires
+`allow_migration_downtime=true`. Other destructive statements require the same downtime opt-in.
+An unreferenced table or column can be removed after an earlier release has stopped using it.
 
 That gate compares migration files against **the last successful deploy**, not the previous push.
 The distinction is the whole correctness of it: the gate is git-delta-scoped while the migration
@@ -144,8 +146,9 @@ the destructive migrations stay pending in the database, but a push-scoped diff 
 finds no new migration files, passes, and the `DROP` statements then run at startup with no backup.
 Anchoring on the last green deploy keeps the window open until one actually succeeds. The base is
 read from this workflow's own run history, which is why the job requests `actions: read` and checks
-out with `fetch-depth: 0`. If no successful run is reachable it falls back to the push delta and
-emits a warning annotation rather than failing an otherwise valid deploy.
+out with `fetch-depth: 0`. If no successful run is reachable, it scans all migration files,
+emits a warning, and requires downtime for any destructive migration it finds because it cannot
+check the deployed source or know which migrations are pending.
 
 ### Destruction protection
 
@@ -250,12 +253,16 @@ is (re)started. It:
    `ALTER DEFAULT PRIVILEGES` rules `bootstrap-database.sh` installs for the administrator role; and
 3. fails the deploy (before the bot restarts) if migration does not report success.
 
-Destructive migrations (`DROP`, `ALTER COLUMN ... TYPE`, `TRUNCATE`, unfiltered `DELETE`, etc.) are still
-blocked upstream by the **Destructive migration gate**. Routine pushes genuinely apply migrations, so the
-gate is what catches an unguarded destructive change before it reaches the database.
+The gate runs before schema application. An additive migration applies while the old bot runs. With
+`allow_migration_downtime=true`, the migration script stops the old Compose bot before invoking
+`initializeCli` and pauses active host restart timers. The deploy step starts the new bot after
+migration succeeds and restores the timers after the health check. If migration or deploy fails
+after the stop, inspect the VM before retrying: the bot may still be stopped or may be running the
+new image. The run summary records this downtime path.
 
-:::caution[`(Checkpoint)` acknowledges the migration; it does not take a backup here]
-A `(Checkpoint)` commit message, or `create_db_backup=true` on manual dispatch, skips the gate. **Azure
+:::caution[`(Checkpoint)` does not authorize downtime]
+A `(Checkpoint)` commit message, or `create_db_backup=true` on manual dispatch, requests a recovery
+point for destructive migrations. It does not bypass the source check or stop the bot. **Azure
 rejects customer on-demand backups on the Burstable tier**, which is what this server runs
 (`Standard_B1ms`), so the backup step reads the tier and, on Burstable, records the current UTC time as a
 **point-in-time restore target** in the run's notices instead of calling `backup create`.

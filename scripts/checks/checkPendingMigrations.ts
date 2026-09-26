@@ -5,25 +5,24 @@
  * Scans the migrations directory, queries the target database's
  * `schema_migrations` table to determine which migrations are pending,
  * then inspects each pending up-migration for destructive SQL patterns
- * (DROP TABLE/COLUMN/CONSTRAINT/INDEX/TYPE, TRUNCATE, unfiltered DELETE,
- *  ALTER COLUMN ... TYPE).
+ * (DROP, RENAME, TRUNCATE, unfiltered DELETE, ALTER COLUMN ... TYPE).
  *
  * Exit codes:
- *   0: no pending migrations, or all pending migrations are non-destructive
- *   1: at least one pending migration contains a destructive pattern
+ *   0: no destructive migration, or required backup and downtime were authorized
+ *   1: a destructive migration lacks its required backup or downtime opt-in
  *   2: script error (DB connection failed, migrations dir missing, etc.)
  *
  * Usage:
  *   bun run scripts/checks/checkPendingMigrations.ts                       (DB-aware: pending only)
  *   bun run scripts/checks/checkPendingMigrations.ts --all                 (no DB: scan every up-migration)
- *   bun run scripts/checks/checkPendingMigrations.ts --changed-since REF   (no DB: only migrations added since REF)
+ *   bun run scripts/checks/checkPendingMigrations.ts --changed-since REF --deployed-ref REF
  *
  * The CI deploy gate uses --changed-since because GitHub-hosted runners don't
  * hold production DB credentials at the pre-Terraform stage. Local pre-push
  * hooks can use --all for a no-DB sanity check.
  *
- * See docs/en/self-hosting/safe-migration.md (the (Checkpoint) convention) for the
- * commit-message lever that satisfies this gate.
+ * A backup opt-in protects data recovery. A separate downtime opt-in is required
+ * when the deployed source still references an object removed by a migration.
  */
 
 import { readFile, readdir } from "node:fs/promises";
@@ -40,7 +39,7 @@ const MIGRATION_FILENAME = /^(\d{3})_[a-z0-9_]+\.sql$/;
  * - `DELETE FROM` is flagged only when no `WHERE` appears in the same statement.
  *   We approximate "same statement" as "before the next semicolon".
  * - `ALTER COLUMN ... TYPE` is flagged because changing a column type can
- *   silently truncate or fail to cast; routine ADD/RENAME is left alone.
+ *   silently truncate or fail to cast. A rename removes the old object name.
  * - `DROP CONSTRAINT IF EXISTS` is flagged because even idempotent drops change
  *   schema shape and may invalidate dependent code.
  */
@@ -53,6 +52,17 @@ const DESTRUCTIVE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   { label: "DROP FUNCTION", pattern: /\bDROP\s+FUNCTION\b/i },
   { label: "TRUNCATE", pattern: /\bTRUNCATE\b/i },
   { label: "ALTER COLUMN ... TYPE", pattern: /\bALTER\s+COLUMN\s+\w+\s+(?:SET\s+DATA\s+)?TYPE\b/i },
+  { label: "RENAME", pattern: /\bRENAME\b/i },
+  { label: "DROP VIEW", pattern: /\bDROP\s+(?:MATERIALIZED\s+)?VIEW\b/i },
+  { label: "DROP SCHEMA", pattern: /\bDROP\s+SCHEMA\b/i },
+  { label: "DROP SEQUENCE", pattern: /\bDROP\s+SEQUENCE\b/i },
+  { label: "DROP TRIGGER", pattern: /\bDROP\s+TRIGGER\b/i },
+  { label: "DROP POLICY", pattern: /\bDROP\s+POLICY\b/i },
+  {
+    label: "OTHER DROP",
+    pattern:
+      /\bDROP\s+(?!(?:TABLE|COLUMN|CONSTRAINT|INDEX|TYPE|FUNCTION|VIEW|MATERIALIZED|SCHEMA|SEQUENCE|TRIGGER|POLICY)\b)\w+/i,
+  },
 ];
 
 /**
@@ -129,9 +139,44 @@ async function listPendingMigrationsViaDb(allUp: PendingFile[]): Promise<Pending
 interface ScanResult {
   file: string;
   findings: string[];
+  oldCodeReferences: string[];
 }
 
-async function scanForDestructive(files: PendingFile[]): Promise<ScanResult[]> {
+async function findDeployedReference(ref: string, name: string): Promise<string | undefined> {
+  const proc = Bun.spawn(
+    ["git", "grep", "-l", "-i", "-w", "-F", "-e", name, ref, "--", "src", ":!src/db/migrations", ":!src/db/schema.sql"],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const stdout = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  if (exitCode === 1) return undefined;
+  if (exitCode !== 0) {
+    const stderr = await new Response(proc.stderr).text();
+    throw new Error(`git grep failed (exit ${exitCode}): ${stderr.trim()}`);
+  }
+  return stdout.trim().split("\n")[0]?.replace(`${ref}:`, "");
+}
+
+function droppedObjects(sql: string): { names: string[]; unclassified: boolean } {
+  const names: string[] = [];
+  let unclassified = false;
+  for (const statement of sql.split(";")) {
+    const columnDrops = [...statement.matchAll(/\bDROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?("[^"]+"|[a-z_][\w$]*)/gi)];
+    for (const match of columnDrops) names.push(match[1].replaceAll('"', ""));
+    if (/\bDROP\s+COLUMN\b/i.test(statement) && columnDrops.length === 0) unclassified = true;
+
+    if (/\bDROP\s+TABLE\b/i.test(statement)) {
+      const table = statement
+        .trim()
+        .match(/^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?("[^"]+"|[a-z_][\w$]*)(?:\s+(?:CASCADE|RESTRICT))?\s*$/i);
+      if (table) names.push(table[1].replaceAll('"', ""));
+      else unclassified = true;
+    }
+  }
+  return { names, unclassified };
+}
+
+async function scanForDestructive(files: PendingFile[], deployedRef?: string): Promise<ScanResult[]> {
   const results: ScanResult[] = [];
   for (const file of files) {
     const raw = await readFile(file.filePath, "utf8");
@@ -144,20 +189,29 @@ async function scanForDestructive(files: PendingFile[]): Promise<ScanResult[]> {
     findings.push(...findUnfilteredDeletes(sql));
 
     if (findings.length > 0) {
-      results.push({ file: file.name, findings });
+      const { names, unclassified } = droppedObjects(sql);
+      const oldCodeReferences: string[] = [];
+      for (const name of names) {
+        const reference = deployedRef ? await findDeployedReference(deployedRef, name) : undefined;
+        if (reference) oldCodeReferences.push(`${name}: ${reference}`);
+      }
+      const otherFindings = findings.filter((finding) => finding !== "DROP COLUMN" && finding !== "DROP TABLE");
+      if (unclassified || otherFindings.length > 0 || !deployedRef) {
+        oldCodeReferences.push("A destructive operation cannot be proven safe against the deployed source.");
+      }
+      results.push({ file: file.name, findings, oldCodeReferences });
     }
   }
   return results;
 }
 
 /**
- * Uses `git diff --diff-filter=A` to list up-migration files added between
- * `ref` and HEAD. Files renamed or modified are intentionally excluded because only
- * newly-added migrations matter to a pre-deploy gate.
+ * Includes edits and renames so a migration changed after a failed deploy
+ * remains visible to the gate.
  */
 async function listMigrationsAddedSince(ref: string, allUp: PendingFile[]): Promise<PendingFile[]> {
   const proc = Bun.spawn(
-    ["git", "diff", "--diff-filter=A", "--name-only", `${ref}...HEAD`, "--", "src/db/migrations/"],
+    ["git", "diff", "--diff-filter=ACMR", "--name-only", `${ref}...HEAD`, "--", "src/db/migrations/"],
     {
       stdout: "pipe",
       stderr: "pipe",
@@ -184,9 +238,13 @@ async function main(): Promise<void> {
   const useAll = argv.includes("--all");
   const sinceIdx = argv.indexOf("--changed-since");
   const sinceRef = sinceIdx >= 0 ? argv[sinceIdx + 1] : undefined;
+  const deployedIdx = argv.indexOf("--deployed-ref");
+  const deployedRef = deployedIdx >= 0 ? argv[deployedIdx + 1] : undefined;
+  const backupOptIn = argv.includes("--backup-opt-in");
+  const allowDowntime = argv.includes("--allow-downtime");
 
-  if (sinceIdx >= 0 && !sinceRef) {
-    console.error("--changed-since requires a git ref argument (e.g. --changed-since HEAD~1)");
+  if ((sinceIdx >= 0 && !sinceRef) || (deployedIdx >= 0 && !deployedRef)) {
+    console.error("--changed-since and --deployed-ref require git ref arguments.");
     process.exit(2);
   }
 
@@ -204,28 +262,30 @@ async function main(): Promise<void> {
 
   const modeLabel = sinceRef ? `added-since-${sinceRef}` : useAll ? "all" : "pending";
   console.log(`Scanning ${candidates.length} migration(s) [${modeLabel}] for destructive SQL...`);
-  const destructive = await scanForDestructive(candidates);
+  const destructive = await scanForDestructive(candidates, deployedRef);
 
   if (destructive.length === 0) {
     console.log("All migrations are non-destructive.");
     process.exit(0);
   }
 
-  console.error("\nDestructive pending migrations detected:\n");
+  console.log("\nDestructive pending migrations detected:\n");
   for (const r of destructive) {
-    console.error(`  ${r.file}`);
-    for (const f of r.findings) console.error(`    - ${f}`);
+    console.log(`  ${r.file}`);
+    for (const f of r.findings) console.log(`    - ${f}`);
+    for (const reference of r.oldCodeReferences) console.log(`    - deployed source: ${reference}`);
   }
-  console.error(
-    "\nDeploy gate failed: this deploy contains destructive migrations that nobody has acknowledged.",
-    "\nResolve by EITHER:",
-    "\n  - adding '(Checkpoint)' to the deploy commit message, OR",
-    "\n  - dispatching the deploy workflow manually with create_db_backup=true.",
-    "\nEither takes a pre-deploy backup where the database tier supports one; otherwise the deploy",
-    "\nrecords a point-in-time restore target instead.",
-    "\nSee docs/en/self-hosting/safe-migration.md for the full (Checkpoint) convention.",
+  const needsDowntime = destructive.some((result) => result.oldCodeReferences.length > 0);
+  if (!backupOptIn) console.error("A destructive migration requires (Checkpoint) or create_db_backup=true.");
+  if (needsDowntime && !allowDowntime) {
+    console.error(
+      "The deployed bot may use the old schema. Dispatch with allow_migration_downtime=true to stop it before migration.",
+    );
+  }
+  if (!backupOptIn || (needsDowntime && !allowDowntime)) process.exit(1);
+  console.log(
+    allowDowntime ? "Migration downtime authorized." : "Dropped objects are unreferenced by deployed source.",
   );
-  process.exit(1);
 }
 
 main().catch((err) => {

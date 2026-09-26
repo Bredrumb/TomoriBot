@@ -181,6 +181,22 @@ assert_file /etc/tomoribot/secrets.json 640 0 1001
 assert_file /etc/tomoribot/google-vertex-wif.json 640 0 1001
 assert_file /etc/tomoribot/docker-compose.yml 644 0 0
 
+paused_timers=/etc/tomoribot/.migration-paused-timers
+if [ -f "$paused_timers" ]; then
+  while IFS= read -r timer; do
+    case "$timer" in
+      tomoribot-watchdog.timer | tomoribot-restart.timer)
+        systemctl start "$timer"
+        ;;
+      *)
+        echo "Unexpected paused timer: $timer" >&2
+        exit 1
+        ;;
+    esac
+  done <"$paused_timers"
+  rm -f "$paused_timers"
+fi
+
 # After the health check so a failed deploy keeps the prior image for rollback. Never fatal: the
 # deploy has already succeeded here, so reclaiming disk must not fail it.
 docker image prune -f >/dev/null 2>&1 || echo "Image prune skipped; disk reclaim deferred." >&2

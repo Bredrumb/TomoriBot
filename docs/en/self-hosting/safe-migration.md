@@ -133,6 +133,30 @@ Snapshot is required because the migration is destructive.
 
 The `(Checkpoint)` token can appear anywhere in the subject or body: it's matched case-sensitively against the head commit's message. Manual workflow dispatch with the workflow's backup input enabled is the same lever for ad-hoc cases.
 
+### Azure release migrations
+
+The Azure `release` workflow applies schema changes in a separate migration container before it
+replaces the running bot. A backup request alone does not protect the old bot from a removed column.
+The workflow checks changed migration files against the last successfully deployed commit before
+database work begins. A `DROP COLUMN` or `DROP TABLE` can run while the old bot serves only when its
+source no longer names that object. Ship the new reader and any backfill first; leave the old object
+in place for at least one deployed release, then remove it in a later release.
+
+Destructive migrations require `(Checkpoint)` on a push or `create_db_backup=true` on manual
+dispatch. If the old code still references the object, dispatch the workflow manually with both
+`create_db_backup=true` and `allow_migration_downtime=true`. The latter stops the Compose
+`tomoribot` service and pauses active host restart timers before migration starts. The deploy step
+starts the new bot after migration and restores those timers after the health check.
+The run summary records the downtime path. A failed migration can leave the bot stopped, so inspect
+the Azure Run Command record before retrying. Additive migrations need neither opt-in and keep the
+old bot running through migration.
+
+Other destructive statements, including renames, type changes, truncation, and unfiltered deletes,
+also require downtime because the gate cannot prove compatibility from an object-name search.
+When no successful deploy commit is reachable, the gate requires downtime for any destructive
+migration it detects. On the Azure Burstable database tier, the backup step records a point-in-time
+restore target because customer on-demand backups are unavailable.
+
 ## What to do if a migration fails partway
 
 If the bot crashes or hangs during migration:

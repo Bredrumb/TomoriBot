@@ -14,6 +14,11 @@ on:
         required: false
         type: boolean
         default: false
+      allow_migration_downtime:
+        description: "Stop the running bot before schema migration and start the new bot afterward"
+        required: false
+        type: boolean
+        default: false
       run_database_bootstrap:
         description: "Run the idempotent migration/runtime-role bootstrap before deployment"
         required: false
@@ -561,22 +566,16 @@ jobs:
           rm -f "$error_file"
 
       - name: Destructive migration gate
-        # Blocks deploys that introduce destructive migrations (DROP TABLE / COLUMN /
-        # CONSTRAINT, ALTER COLUMN ... TYPE, TRUNCATE, unfiltered DELETE) unless the
-        # deployer opted into a pre-deploy backup via (Checkpoint) in the commit
-        # message or create_db_backup=true on manual dispatch. See OD-R-6 and
-        # docs/guides/safe-migration.md.
+        # A backup opt-in never authorizes the old bot to run against a changed schema.
+        # See docs/en/self-hosting/safe-migration.md.
         if: |
-          !(
-            steps.postgres_bootstrap.outputs.is_initial_bootstrap == 'true' ||
-            (github.event_name == 'workflow_dispatch' && inputs.run_database_bootstrap == true) ||
-            vars.RUN_DATABASE_BOOTSTRAP == 'true' ||
-            (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) ||
-            (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)'))
-          )
+          steps.postgres_bootstrap.outputs.is_initial_bootstrap != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKUP_OPT_IN: ${{ (github.event_name == 'workflow_dispatch' && inputs.create_db_backup == true) || (github.event_name == 'push' && contains(github.event.head_commit.message, '(Checkpoint)')) }}
+          ALLOW_MIGRATION_DOWNTIME: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_migration_downtime == true }}
         run: |
+          set -euo pipefail
           # The base must be the last SUCCESSFULLY DEPLOYED commit, not the previous push.
           # This gate is git-delta-scoped while the migration runner is database-state-scoped, so
           # the two desync on any failed run: if a deploy stops here, the destructive migrations
@@ -586,36 +585,23 @@ jobs:
           # Query params rather than repeated flags so this needs no line continuations.
           LAST_GREEN=$(gh api "repos/${{ github.repository }}/actions/workflows/deploy-tomoribot-azure.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=1" --jq '.workflow_runs[0].head_sha' 2>/dev/null || true)
           PREV_REF=""
-          if [ -n "$LAST_GREEN" ] && [ "$LAST_GREEN" != "null" ] && git cat-file -e "${LAST_GREEN}^{commit}" 2>/dev/null; then
+          if [ -n "$LAST_GREEN" ] && [ "$LAST_GREEN" != "null" ] && git cat-file -e "${LAST_GREEN}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$LAST_GREEN" HEAD; then
             PREV_REF="$LAST_GREEN"
             echo "Diffing migrations against the last successful deploy: $PREV_REF"
           fi
 
           if [ -z "$PREV_REF" ]; then
-            # No green deploy is reachable: either this is the first one, the run history has aged
-            # out, or the commit is not in this clone. Fall back to the push delta, which is the
-            # previous behaviour, and say so plainly rather than failing an otherwise fine deploy.
-            PREV_REF="${{ github.event.before }}"
-            if [ -n "$PREV_REF" ] && [ "$PREV_REF" != "0000000000000000000000000000000000000000" ]; then
-              echo "No reachable successful deploy; falling back to the push delta $PREV_REF."
-              echo "::warning::Destructive-migration gate fell back to the push delta. A migration that failed this gate on an earlier push will not be re-detected; deploy with (Checkpoint) if that is possible."
-            fi
+            # A push delta can omit a migration that failed this gate on an earlier run.
+            # Without a deployed ref, treat every migration as potentially pending.
+            echo "::warning::No reachable successful deploy. Scanning all migrations; destructive SQL requires downtime."
+            scan_args=(--all)
+          else
+            scan_args=(--changed-since "$PREV_REF" --deployed-ref "$PREV_REF")
           fi
 
-          if [ -z "$PREV_REF" ] || [ "$PREV_REF" = "0000000000000000000000000000000000000000" ]; then
-            # workflow_dispatch has no event.before. The repository is checked
-            # out with full history, so compare the selected commit to its
-            # parent rather than treating all historic migrations as pending.
-            PREV_REF=$(git rev-parse HEAD^ 2>/dev/null || true)
-            if [ -z "$PREV_REF" ]; then
-              echo "No parent commit available; scanning all up-migrations as a conservative fallback."
-              bun run scripts/checks/checkPendingMigrations.ts --all
-              exit 0
-            fi
-            echo "No event previous-ref available; scanning migrations changed since parent $PREV_REF."
-          fi
-
-          bun run scripts/checks/checkPendingMigrations.ts --changed-since "$PREV_REF"
+          if [ "$BACKUP_OPT_IN" = "true" ]; then scan_args+=(--backup-opt-in); fi
+          if [ "$ALLOW_MIGRATION_DOWNTIME" = "true" ]; then scan_args+=(--allow-downtime); fi
+          bun run scripts/checks/checkPendingMigrations.ts "${scan_args[@]}"
 
       - name: Optional Azure PostgreSQL backup (manual or (Checkpoint) commit)
         # Burstable tiers reject customer on-demand backups, so on those the step records a
@@ -894,10 +880,9 @@ jobs:
         # Runs on EVERY deploy (unlike the gated role bootstrap above). The runtime
         # bot role has no DDL privilege, so this privileged container is the only path
         # that applies idempotent schema.sql + pending NNN_*.sql migrations to the
-        # existing production database. Destructive migrations are still blocked
-        # upstream by the "Destructive migration gate" step unless a backup was opted
-        # into. New tables inherit runtime/Grafana grants via the ALTER DEFAULT
-        # PRIVILEGES rules the bootstrap step installs, so this step touches no roles.
+        # existing production database. The gate requires downtime when deployed
+        # code still references a removed object. New tables inherit runtime and
+        # Grafana grants via bootstrap's default privileges.
         env:
           VM_NAME: ${{ steps.tf_outputs.outputs.vm_name }}
           RESOURCE_GROUP: ${{ steps.tf_outputs.outputs.resource_group_name }}
@@ -908,8 +893,12 @@ jobs:
           TOMORI_SECRETS_JSON: ${{ secrets.TOMORI_SECRETS_JSON }}
           POSTGRES_ADMIN_LOGIN: ${{ steps.tf_outputs.outputs.postgres_admin_login }}
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+          ALLOW_MIGRATION_DOWNTIME: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_migration_downtime == true }}
         run: |
           set -euo pipefail
+          if [ "$ALLOW_MIGRATION_DOWNTIME" = "true" ]; then
+            echo "Migration downtime authorized. The bot will stop before schema changes; a failed migration may leave it stopped." >> "$GITHUB_STEP_SUMMARY"
+          fi
           # 1. Assemble the migration (admin) DB credential bundle, same shape as the
           #    role-bootstrap step (host/port/db from the runtime secret, admin login).
           # shellcheck disable=SC2016
@@ -948,6 +937,7 @@ jobs:
               "dockerHubUsername=$DOCKERHUB_USERNAME" \
               "dockerHubTokenB64=$DOCKERHUB_TOKEN_B64" \
               "tomoribotImage=$TOMORIBOT_IMAGE" \
+              "allowMigrationDowntime=$ALLOW_MIGRATION_DOWNTIME" \
             --query 'value[0].message' \
             --output tsv \
             --only-show-errors)
@@ -955,6 +945,9 @@ jobs:
           if [[ "$response_message" != *TOMORIBOT_DATABASE_MIGRATION_SUCCEEDED* ]]; then
             echo "Database migration failed; inspect the access-controlled Azure Run Command record." >&2
             exit 1
+          fi
+          if [ "$ALLOW_MIGRATION_DOWNTIME" = "true" ]; then
+            echo "Migration completed during downtime. The deploy step will start the new bot." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Deploy and verify through Azure VM Run Command
