@@ -8,6 +8,7 @@ import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { SQL } from "bun";
 import { DISCORD_LOCALES } from "@/constants/locales";
+import { withPresetAssetLock } from "@/db/seed/catalog/presetAssetLock";
 import { isSharedPresetAssetReference } from "@/utils/storage/avatarStorage";
 
 type StoredObject = { key: string; bytes: number; modified: Date };
@@ -180,13 +181,14 @@ export function normalizePresetReference(
 
 async function loadReferences(backend: Backend, client: SQL): Promise<Set<string>> {
   const queries = [
-    client<Array<{ reference: string | null }>>`SELECT avatar_url AS reference FROM preset_sprites`,
-    client<Array<{ reference: string | null }>>`SELECT preset_avatar_shared_url AS reference FROM persona_presets`,
-    client<Array<{ reference: string | null }>>`SELECT webhook_avatar_url AS reference FROM personas`,
-    client<Array<{ reference: string | null }>>`SELECT avatar_url AS reference FROM persona_sprites`,
+    await client<Array<{ reference: string | null }>>`SELECT avatar_url AS reference FROM preset_sprites`,
+    await client<
+      Array<{ reference: string | null }>
+    >`SELECT preset_avatar_shared_url AS reference FROM persona_presets`,
+    await client<Array<{ reference: string | null }>>`SELECT webhook_avatar_url AS reference FROM personas`,
+    await client<Array<{ reference: string | null }>>`SELECT avatar_url AS reference FROM persona_sprites`,
   ];
-  const rows = await Promise.all(queries);
-  return collectPresetReferences(rows, backend);
+  return collectPresetReferences(queries, backend);
 }
 
 export function collectPresetReferences(
@@ -240,6 +242,16 @@ export function planSweep(
   return { candidates, retiredObjects, retiredReferences, referencedObjects, recentObjects };
 }
 
+export function assertSweepCandidatesUnchanged(
+  reviewed: readonly StoredObject[],
+  current: readonly StoredObject[],
+): void {
+  const reviewedKeys = new Set(reviewed.map((object) => object.key));
+  if (current.length !== reviewedKeys.size || current.some((object) => !reviewedKeys.has(object.key))) {
+    throw new Error("Preset objects or references changed during the sweep. Run a new dry run.");
+  }
+}
+
 async function main(): Promise<void> {
   config({ quiet: true });
   const args = process.argv.slice(2);
@@ -283,12 +295,12 @@ async function main(): Promise<void> {
     console.log("Dry run. Re-run with --apply after reviewing the candidate list.");
     return;
   }
-  // Re-read references immediately before deletion so a recent materialization cannot be missed.
-  const currentReferences = await loadReferences(backend, sql);
-  if (currentReferences.size !== references.size || [...currentReferences].some((key) => !references.has(key))) {
-    throw new Error("Preset references changed during the sweep. Run a new dry run.");
-  }
-  for (const object of plan.candidates) await backend.delete(object.key);
+  await withPresetAssetLock(sql, async (client) => {
+    const currentReferences = await loadReferences(backend, client);
+    const currentPlan = planSweep(await backend.list(), currentReferences, backend.prefix, Date.now());
+    assertSweepCandidatesUnchanged(plan.candidates, currentPlan.candidates);
+    for (const object of currentPlan.candidates) await backend.delete(object.key);
+  });
   console.log(`Deleted ${plan.candidates.length} preset objects (${bytes} bytes).`);
 }
 

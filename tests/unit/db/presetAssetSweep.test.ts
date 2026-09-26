@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  assertSweepCandidatesUnchanged,
   collectPresetReferences,
   normalizePresetReference,
   planSweep,
@@ -35,6 +36,10 @@ describe("preset asset sweep", () => {
     );
     expect(plan.candidates.map((candidate) => candidate.key)).toEqual([key]);
     expect(plan.recentObjects).toBe(1);
+    const refreshed = planSweep([{ key, bytes: 100, modified: new Date(now - 1000) }], new Set(), prefix, now);
+    expect(() => assertSweepCandidatesUnchanged(plan.candidates.slice(0, 1), refreshed.candidates)).toThrow(
+      "changed during the sweep",
+    );
   });
 
   test("keeps a live retired-layout reference while listing another retired object", () => {

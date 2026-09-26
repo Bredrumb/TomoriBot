@@ -1,4 +1,5 @@
 import { PrivacyLevel } from "@/types/db/schema";
+import { ContextItemTag } from "@/types/misc/context";
 import { incrementStmTurnCounter, storeShortTermMemory } from "@/utils/cache/shortTermMemoryCache";
 import { sendStandardEmbed } from "@/utils/discord/embedHelper";
 import { hasThoughtLogContent, sendAttributionOnlyEmbed, sendThoughtLogEmbed } from "@/utils/discord/thoughtLog";
@@ -388,7 +389,10 @@ async function maybeScheduleEmptyResponseRetry(context: ChatTurnContext, result:
     typeof streamResultData?.emptyResponseReason === "string" ? streamResultData.emptyResponseReason : undefined;
   const speakerGuardRetryDirective =
     emptyResponseReason === "speaker_guard"
-      ? buildSpeakerGuardRetryDirective(context.currentPersona.persona_nickname ?? context.tomoriState.persona_nickname)
+      ? buildSpeakerGuardRetryDirective(
+          context.currentPersona.persona_nickname ?? context.tomoriState.persona_nickname,
+          context.contextItems.some((item) => item.metadataTag === ContextItemTag.KNOWLEDGE_PERSONA_SPRITES),
+        )
       : null;
   const retryInjectedContextItems = mergeInjectedContextItems(
     incoming.injectedContextItems,

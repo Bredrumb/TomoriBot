@@ -158,6 +158,11 @@ starting the line as:
 SourcePersona (target): message
 ```
 
+The stream also accepts a balanced Markdown code span or emphasis around the opening label, and
+full-width parentheses. This covers formatted copies of the sprite prompt's example. A list item or
+blockquote remains ordinary message text. When the opening speaker guard retries a turn that has a
+sprite prompt, its guidance permits both `SourcePersona:` and `SourcePersona (sprite):`.
+
 Resolution order is:
 
 1. **Persona sprite** on the active source persona. A matching `persona_sprites.sprite_key` sends the line through the managed webhook with the sprite image. The username depends on the sprite's `is_identity` flag:

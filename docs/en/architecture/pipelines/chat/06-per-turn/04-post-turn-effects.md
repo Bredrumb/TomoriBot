@@ -80,6 +80,9 @@ stage 06). The stream side reads `incoming.retryCount` (threaded through
 discarding once this retry budget is exhausted, so leak turns degrade to a
 label-stripped reply rather than silence.
 
+The speaker-guard retry directive allows a `Name (sprite):` opening when the discarded turn had a
+persona-sprite prompt. Without that prompt, it asks for `Name:` only.
+
 When the retry budget is exhausted:
 
 - Deliberate turns (`context.shouldSurfaceUserErrors === true`) receive the
