@@ -4,6 +4,28 @@ import { log } from "@/utils/misc/logger";
 
 const GUILD_IDENTITY_TIMEOUT_MS = 15000;
 
+function discordErrorFields(value: unknown, prefix = ""): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value).flatMap(([key, child]) => {
+    if (key === "_errors") return prefix ? [prefix] : [];
+    return discordErrorFields(child, prefix ? `${prefix}.${key}` : key);
+  });
+}
+
+function discordErrorSummary(body: string): { code: number | string; fields: string[] } {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return { code: "unknown", fields: [] };
+    const error = parsed as Record<string, unknown>;
+    return {
+      code: typeof error.code === "number" || typeof error.code === "string" ? error.code : "unknown",
+      fields: [...new Set(discordErrorFields(error.errors))].slice(0, 20),
+    };
+  } catch {
+    return { code: "unknown", fields: [] };
+  }
+}
+
 export interface GuildIdentityWriteResult {
   success: boolean;
   error?: "timeout" | "rate_limited" | "api_error";
@@ -18,9 +40,10 @@ async function patchGuildMemberSelf(
   guildId: string,
   payload: Record<string, unknown>,
   operation: string,
+  timeoutMs = GUILD_IDENTITY_TIMEOUT_MS,
 ): Promise<GuildIdentityWriteResult> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), GUILD_IDENTITY_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(guildMemberSelfEndpoint(guildId), {
@@ -37,18 +60,31 @@ async function patchGuildMemberSelf(
 
     if (!response.ok) {
       const errorText = await response.text();
+      const summary = discordErrorSummary(errorText);
 
       // Discord throttles guild identity changes far below its documented buckets, so this is an
       // expected outcome rather than a fault: keep it off the error sink and tell the user to wait
       // instead of showing them raw API JSON.
       if (isAvatarUpdateRateLimited(response.status, errorText)) {
-        log.warn(`Guild ${operation} rate limited for guild ${guildId}: ${response.status}`);
+        log.metric("guild_identity_patch_failure", {
+          guildId,
+          operation,
+          httpStatus: response.status,
+          discordCode: String(summary.code),
+          fields: summary.fields.join(",") || "none",
+        });
         return { success: false, error: "rate_limited" };
       }
 
       const context: ErrorContext = {
         errorType: "DiscordApiError",
-        metadata: { guildId, operation, httpStatus: response.status, body: errorText },
+        metadata: {
+          guildId,
+          operation,
+          httpStatus: response.status,
+          discordCode: summary.code,
+          fields: summary.fields,
+        },
       };
       await log.error(
         `Failed to update guild ${operation}: ${response.status} ${response.statusText}`,
@@ -58,7 +94,7 @@ async function patchGuildMemberSelf(
       return {
         success: false,
         error: "api_error",
-        details: `${response.status} ${response.statusText}: ${errorText}`,
+        details: `${response.status} ${response.statusText}`,
       };
     }
 
@@ -71,7 +107,7 @@ async function patchGuildMemberSelf(
       return {
         success: false,
         error: "timeout",
-        details: `Discord API call timed out after ${GUILD_IDENTITY_TIMEOUT_MS}ms`,
+        details: `Discord API call timed out after ${timeoutMs}ms`,
       };
     }
 
@@ -88,8 +124,12 @@ async function patchGuildMemberSelf(
 }
 
 /** Sets or clears the bot's per-guild avatar. A null data URI removes it. */
-export function setGuildBotAvatar(guildId: string, avatarDataUri: string | null): Promise<GuildIdentityWriteResult> {
-  return patchGuildMemberSelf(guildId, { avatar: avatarDataUri }, "avatar");
+export function setGuildBotAvatar(
+  guildId: string,
+  avatarDataUri: string | null,
+  timeoutMs?: number,
+): Promise<GuildIdentityWriteResult> {
+  return patchGuildMemberSelf(guildId, { avatar: avatarDataUri }, "avatar", timeoutMs);
 }
 
 export function setGuildBotNickname(guildId: string, nickname: string): Promise<GuildIdentityWriteResult> {

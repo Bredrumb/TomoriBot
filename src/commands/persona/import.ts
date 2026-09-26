@@ -20,7 +20,7 @@ import { sanitizeAttachmentFilenamePart } from "@/utils/discord/attachmentFilena
 import { safeDownload } from "@/utils/security/safeDownload";
 import { dedupeTriggerWords, parseTriggerWordListInput } from "@/utils/text/triggerWords";
 import { uploadPersonaAvatarToStorage } from "../../utils/storage/avatarStorage";
-import { isAvatarUpdateRateLimited } from "@/utils/discord/avatarRateLimit";
+import { setGuildBotAvatar, setGuildBotNickname } from "@/utils/discord/guildIdentity";
 import { importAlterPreset } from "@/utils/persona/importAlterPreset";
 import { readCharxCard, type CharxReadFailureReason } from "@/utils/persona/charxArchive";
 import {
@@ -878,34 +878,17 @@ export async function execute(
       let nicknameUpdateRateLimited = false;
       let nicknameUpdateFailed = false;
       if (!isDM) {
-        const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
-
         const importedNickname = importResult.itemsImported?.nickname;
 
         if (importedNickname) {
           try {
-            const nicknameResponse = await fetch(endpoint, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                nick: importedNickname,
-              }),
-            });
+            const nicknameResponse = await setGuildBotNickname(interaction.guild.id, importedNickname);
 
-            if (nicknameResponse.ok) {
+            if (nicknameResponse.success) {
               nicknameUpdateSucceeded = true;
             } else {
-              const errorText = await nicknameResponse.text();
-              if (isAvatarUpdateRateLimited(nicknameResponse.status, errorText)) {
-                nicknameUpdateRateLimited = true;
-              }
+              nicknameUpdateRateLimited = nicknameResponse.error === "rate_limited";
               nicknameUpdateFailed = true;
-              log.warn(
-                `Failed to update bot's server nickname (non-fatal): ${nicknameResponse.status} ${nicknameResponse.statusText} - ${errorText}`,
-              );
             }
           } catch (nicknameError) {
             nicknameUpdateFailed = true;
@@ -922,29 +905,14 @@ export async function execute(
             const base64 = avatarImageBuffer.toString("base64");
             const avatarDataUri = `data:image/png;base64,${base64}`;
 
-            const avatarResponse = await fetch(endpoint, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                avatar: avatarDataUri,
-              }),
-            });
+            const avatarResponse = await setGuildBotAvatar(interaction.guild.id, avatarDataUri);
 
-            if (avatarResponse.ok) {
+            if (avatarResponse.success) {
               avatarUpdateSucceeded = true;
               log.success(`Successfully updated TomoriBot's server avatar for ${serverDiscId} during preset import`);
             } else {
-              const errorText = await avatarResponse.text();
-              if (isAvatarUpdateRateLimited(avatarResponse.status, errorText)) {
-                avatarUpdateRateLimited = true;
-              }
+              avatarUpdateRateLimited = avatarResponse.error === "rate_limited";
               avatarUpdateFailed = true;
-              log.warn(
-                `Failed to update bot's server avatar (non-fatal): ${avatarResponse.status} ${avatarResponse.statusText} - ${errorText}`,
-              );
             }
           } catch (avatarError) {
             avatarUpdateFailed = true;

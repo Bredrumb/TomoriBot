@@ -7,6 +7,7 @@ import {
   type SlashCommandSubcommandBuilder,
 } from "discord.js";
 import { configRepository, personaRepository, personaSpriteRepository } from "@/utils/db/repositories";
+import { setGuildBotAvatar } from "@/utils/discord/guildIdentity";
 import { invalidatePersonaSpriteCache } from "@/utils/cache/personaSpriteCache";
 import { getCachedTomoriState, invalidateTomoriStateCache } from "../../utils/cache/tomoriStateCache";
 import { localizer, getBaseTriggerWords, getDefaultBotName } from "../../utils/text/localizer";
@@ -407,17 +408,9 @@ export async function execute(
             const avatarValue =
               cachedAvatar ??
               (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
-            const endpoint = `https://discord.com/api/v10/guilds/${interaction.guild.id}/members/@me`;
-            const response = await fetch(endpoint, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ avatar: avatarValue }),
-            });
+            const response = await setGuildBotAvatar(interaction.guild.id, avatarValue);
 
-            if (response.ok) {
+            if (response.success) {
               const actionDescription = avatarValue
                 ? `Set preset avatar for "${selectedPreset.persona_preset_name}"`
                 : "Reset guild avatar to bot default";
@@ -428,7 +421,6 @@ export async function execute(
               await personaRepository.markServerMainAvatarSynced(interaction.guild.id);
             } else {
               avatarUpdateFailed = true;
-              log.warn(`Failed to update guild avatar: ${response.status} ${response.statusText}`);
             }
           }
         } catch (avatarError) {

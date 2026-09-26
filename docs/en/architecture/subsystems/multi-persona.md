@@ -16,6 +16,8 @@ TomoriBot supports **one main persona** plus **multiple alter personas** per ser
 
 Official bundled character presets have their own pointer behavior for seeded text, sprites, and avatars. Pointer alters live-resolve a shared preset avatar; the main persona's guild avatar is fanned out by a hash-gated background reconciler. See [Persona Presets](/architecture/subsystems/persona-presets/).
 
+Guild avatar and nickname updates share one Discord member PATCH helper. Failed responses log the HTTP status, Discord error code, and invalid field names. Avatar image bytes and response body text stay out of logs.
+
 ### Participant context freshness
 
 Persona responses in the same locked chat turn share only active-independent participant

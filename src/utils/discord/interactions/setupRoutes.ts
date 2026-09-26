@@ -13,6 +13,7 @@ import {
   type SetupDraftRecord,
 } from "@/types/discord/setupWizard";
 import type { PanelReceipt } from "@/types/discord/panel";
+import { setGuildBotAvatar } from "@/utils/discord/guildIdentity";
 import {
   claimSetupDraft,
   consumeSetupDraft,
@@ -709,17 +710,9 @@ async function applySetupPresetAvatar(
     const avatarValue =
       cachedAvatar ?? (presetAvatarBuffer ? `data:image/png;base64,${presetAvatarBuffer.toString("base64")}` : null);
 
-    const response = await fetch(`https://discord.com/api/v10/guilds/${guild.id}/members/@me`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ avatar: avatarValue }),
-    });
+    const response = await setGuildBotAvatar(guild.id, avatarValue);
 
-    if (!response.ok) {
-      log.warn(`Failed to update guild avatar during setup: ${response.status} ${response.statusText}`);
+    if (!response.success) {
       return "failed";
     }
 
