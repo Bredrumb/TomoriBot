@@ -98,6 +98,13 @@ export function createScopedModuleMocker(
 
   return {
     module(specifier, factory) {
+      if (specifier.startsWith(".")) {
+        throw new Error(
+          `Scoped mock specifier "${specifier}" is relative: Bun resolves it from this helper, not the test file, ` +
+            "so it would mock nothing. Use an @/ alias or an absolute path.",
+        );
+      }
+
       const realModule = realModules[specifier];
       if (!realModule) {
         throw new Error(`Missing hoisted real module for scoped mock: ${specifier}`);
